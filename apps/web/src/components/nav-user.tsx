@@ -1,7 +1,5 @@
 import {
-  BriefcaseIcon,
   CheckmarkBadge01Icon,
-  CreditCardIcon,
   Logout01Icon,
   Moon01Icon,
   Notification02Icon,
@@ -12,7 +10,6 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { useTheme } from 'next-themes'
 
 import { signOut, useSession } from '@calibra-facil/auth/client'
-import { canAccessBackoffice } from '@calibra-facil/auth/access'
 import { useQueryClient } from '@tanstack/react-query'
 import { resolveSignOutWarning } from '@/runtime/sign-out-warning'
 import { useSyncStatus } from '@/runtime/sync-status'
@@ -35,23 +32,11 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { Skeleton } from '@/components/ui/skeleton'
-import { calibraApi } from '@/utils/api'
-import { getBackofficeAppUrl } from '@/app/config/runtime'
 import { markDesktopSignedOut } from '@/runtime/desktop-auth'
-
-function getStringProperty(source: unknown, key: string) {
-  if (!source || typeof source !== 'object' || Array.isArray(source)) {
-    return null
-  }
-
-  const value = Object.fromEntries(Object.entries(source))[key]
-  return typeof value === 'string' ? value : null
-}
 
 export function NavUser() {
   const { isMobile } = useSidebar()
   const { resolvedTheme, setTheme } = useTheme()
-  // The backoffice is its own app now; this lab nav always uses the lab session.
   const labSessionQuery = useSession()
   const session = labSessionQuery.data
   const sync = useSyncStatus()
@@ -90,13 +75,6 @@ export function NavUser() {
     window.location.replace('/sign-in')
   }
 
-  const handleStopImpersonating = async () => {
-    // Impersonation is initiated from the backoffice; returning ends the
-    // session back in that (now separate) app.
-    await calibraApi.backoffice.stopImpersonation()
-    window.location.assign(getBackofficeAppUrl())
-  }
-
   if (isPending) {
     return (
       <SidebarMenu>
@@ -118,9 +96,6 @@ export function NavUser() {
   }
 
   const user = session.user
-  const userRole = getStringProperty(user, 'role')
-  const impersonatedBy = getStringProperty(session.session, 'impersonatedBy')
-  const showBackoffice = !impersonatedBy && canAccessBackoffice(userRole)
 
   return (
     <SidebarMenu>
@@ -165,23 +140,11 @@ export function NavUser() {
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              {showBackoffice ? (
-                <DropdownMenuItem render={<a href={getBackofficeAppUrl()} />}>
-                  <HugeiconsIcon icon={BriefcaseIcon} />
-                  Backoffice
-                </DropdownMenuItem>
-              ) : null}
               <DropdownMenuItem
                 render={<Link to="/dashboard/settings/profile" />}
               >
                 <HugeiconsIcon icon={CheckmarkBadge01Icon} />
                 Conta
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                render={<Link to="/dashboard/settings/subscription" />}
-              >
-                <HugeiconsIcon icon={CreditCardIcon} />
-                Assinatura
               </DropdownMenuItem>
               <DropdownMenuItem
                 render={<Link to="/dashboard/settings/notifications" />}
@@ -202,15 +165,6 @@ export function NavUser() {
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            {impersonatedBy ? (
-              <>
-                <DropdownMenuItem onClick={handleStopImpersonating}>
-                  <HugeiconsIcon icon={BriefcaseIcon} />
-                  Parar impersonação
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-              </>
-            ) : null}
             <DropdownMenuItem onClick={handleSignOut}>
               <HugeiconsIcon icon={Logout01Icon} />
               Sair

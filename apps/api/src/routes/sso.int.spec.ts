@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { ssoRouter } from "./sso";
 import { db } from "@calibra-facil/db";
-import { ssoProvider, subscription } from "@calibra-facil/db/schema";
+import { ssoProvider } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
@@ -19,14 +19,14 @@ import { seedOrg } from "../../test/integration/seed";
 //   CONFIG MANAGEMENT (org-scoped + RBAC-gated) — the real tenant/RBAC boundary.
 //     - GET    /providers                                  FULLY reachable
 //       (no Better-Auth call; reads the org's own provider straight from the DB)
-//     - POST   /providers                                  guards + plan + 409 reachable
+//     - POST   /providers                                  guards + 409 reachable
 //     - POST   /providers/:id/request-domain-verification  guards + tenant 404 reachable
 //     - POST   /providers/:id/verify-domain                guards + tenant 404 reachable
 //     - DELETE /providers/:id                              guards + tenant 404 reachable
 //     For the mutating routes the actual Better-Auth call (registerSSOProvider,
 //     requestDomainVerification, verifyDomain, deleteSSOProvider) is the FIRST
 //     mocked-away surface — see the per-test notes. Everything BEFORE it (the
-//     RBAC chain, the plan gates, and the org-scoped lookups) runs for real and
+//     RBAC chain and the org-scoped lookups) runs for real and
 //     is what we assert.
 //
 //   HANDSHAKE — POST /start (the SSO sign-in / IdP redirect). FLAGGED unreachable:
@@ -34,7 +34,7 @@ import { seedOrg } from "../../test/integration/seed";
 //     getSession-only mock removes; a real assertion would need a live/mock IdP
 //     and a signed OIDC assertion. We DO cover every DB-observable early reject
 //     that fires BEFORE signInSSO (unknown org 404, no-provider 404,
-//     domain-unverified 403, no-plan 403) — see REQ-SSO-004 — and flag the
+//     domain-unverified 403) — see REQ-SSO-004 — and flag the
 //     redirect itself.
 
 const JSON_HEADERS = { "content-type": "application/json" };
@@ -42,16 +42,6 @@ const JSON_HEADERS = { "content-type": "application/json" };
 // ---------------------------------------------------------------------------
 // Inline seed helpers (NOT modifying shared seed.ts per the harness convention)
 // ---------------------------------------------------------------------------
-
-/** Seed an ENTERPRISE subscription so hasFeature(planId,"sso") is true. */
-async function seedEnterpriseSubscription(organizationId: string) {
-  await db.insert(subscription).values({
-    organizationId,
-    planId: "ENTERPRISE",
-    status: "ACTIVE",
-    renewalMode: "NONE",
-  });
-}
 
 /**
  * Seed an sso_provider row scoped to an org. The route cannot create one (the
@@ -202,7 +192,6 @@ describe("ssoRouter — real DB + real middleware", () => {
 
   it("REQ-SSO-002: POST /providers as role=member -> 403 (organization:update permission denied)", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "member" });
-    await seedEnterpriseSubscription(org.orgId);
 
     loginAs({ userId: org.userId, organizationId: org.orgId });
     const res = await ssoRouter.request("/providers", {
@@ -225,7 +214,6 @@ describe("ssoRouter — real DB + real middleware", () => {
     // mutating routes require role=owner. This is the exact discriminator that
     // separates the permission layer from the role layer.
     const org = await seedOrg({ orgId: "org-a", role: "admin" });
-    await seedEnterpriseSubscription(org.orgId);
 
     loginAs({ userId: org.userId, organizationId: org.orgId });
     const res = await ssoRouter.request("/providers", {
@@ -332,7 +320,6 @@ describe("ssoRouter — real DB + real middleware", () => {
   it("REQ-SSO-001: POST /providers/:id/verify-domain of another org's provider -> 404 (no cross-tenant domain verify)", async () => {
     const orgA = await seedOrg({ orgId: "org-a", role: "owner" });
     const orgB = await seedOrg({ orgId: "org-b", role: "owner" });
-    await seedEnterpriseSubscription(orgA.orgId);
 
     const bProviderId = await seedProvider({
       organizationId: orgB.orgId,
@@ -350,42 +337,13 @@ describe("ssoRouter — real DB + real middleware", () => {
     expect(res.status).toBe(404);
   });
 
-  // ===========================================================================
-  // Plan gate on the config WRITE (Enterprise-only feature)
-  // ===========================================================================
-  // With the owner gate satisfied, POST /providers checks getPlanAccessForOrg:
-  // no ENTERPRISE subscription -> hasSso=false -> 403 (sso is Enterprise-only),
-  // BEFORE the mocked registerSSOProvider call.
-  it("REQ-SSO-002: POST /providers as owner WITHOUT the SSO plan -> 403 (Enterprise-only feature)", async () => {
-    const org = await seedOrg({ orgId: "org-a", role: "owner" });
-    // No subscription seeded -> plan defaults to FREE -> hasSso=false.
-
-    loginAs({ userId: org.userId, organizationId: org.orgId });
-    const res = await ssoRouter.request("/providers", {
-      method: "POST",
-      headers: JSON_HEADERS,
-      body: JSON.stringify(VALID_CREATE_BODY),
-    });
-
-    expect(res.status).toBe(403);
-    const body = await res.json();
-    expect(body.error).toContain("Enterprise");
-    // Nothing persisted.
-    const rows = await db
-      .select({ id: ssoProvider.id })
-      .from(ssoProvider)
-      .where(eq(ssoProvider.organizationId, org.orgId));
-    expect(rows).toHaveLength(0);
-  });
-
-  // POST /providers as owner WITH the Enterprise plan, when a provider already
+  // POST /providers as owner, when a provider already
   // exists for the org -> 409. This reaches the org-scoped existing-provider
   // guard (getOrganizationProvider) which runs BEFORE the mocked Better-Auth
   // call, so it is a real DB-observable assertion of the one-provider-per-org
   // path.
-  it("REQ-SSO-002: POST /providers as owner with Enterprise plan + existing provider -> 409 (one provider per org)", async () => {
+  it("REQ-SSO-002: POST /providers as owner + existing provider -> 409 (one provider per org)", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "owner" });
-    await seedEnterpriseSubscription(org.orgId);
     await seedProvider({
       organizationId: org.orgId,
       userId: org.userId,
@@ -415,7 +373,7 @@ describe("ssoRouter — real DB + real middleware", () => {
 
   it("REQ-SSO-004: POST /start for an unknown organizationSlug -> 404 (org lookup, no IdP call)", async () => {
     // /start is NOT RBAC-gated; it takes a slug. Unknown slug -> 404 before
-    // any plan/provider/IdP logic.
+    // any provider/IdP logic.
     const res = await ssoRouter.request("/start", {
       method: "POST",
       headers: JSON_HEADERS,
@@ -429,7 +387,6 @@ describe("ssoRouter — real DB + real middleware", () => {
 
   it("REQ-SSO-004: POST /start for a known org without an SSO provider -> 404 (provider lookup, no IdP call)", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "owner" });
-    await seedEnterpriseSubscription(org.orgId);
     // No ssoProvider seeded for this org.
 
     const res = await ssoRouter.request("/start", {
@@ -445,7 +402,6 @@ describe("ssoRouter — real DB + real middleware", () => {
 
   it("REQ-SSO-004: POST /start when the org's SSO domain is unverified -> 403 (domain gate, no IdP call)", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "owner" });
-    await seedEnterpriseSubscription(org.orgId);
     await seedProvider({
       organizationId: org.orgId,
       userId: org.userId,
@@ -465,21 +421,6 @@ describe("ssoRouter — real DB + real middleware", () => {
     expect(body.error).toContain("dominio");
   });
 
-  it("REQ-SSO-004: POST /start for an org without the SSO plan -> 403 (plan gate, no IdP call)", async () => {
-    const org = await seedOrg({ orgId: "org-a", role: "owner" });
-    // No subscription -> FREE -> hasSso=false.
-
-    const res = await ssoRouter.request("/start", {
-      method: "POST",
-      headers: JSON_HEADERS,
-      body: JSON.stringify({ organizationSlug: org.orgId }),
-    });
-
-    expect(res.status).toBe(403);
-    const body = await res.json();
-    expect(body.error).toContain("SSO");
-  });
-
   // ===========================================================================
   // happy-path: config READ round-trip persists org-scoped
   // ===========================================================================
@@ -488,7 +429,6 @@ describe("ssoRouter — real DB + real middleware", () => {
   // a verified provider seeded for org A is read back, masked + org-scoped.
   it("happy-path: a seeded verified provider round-trips through GET /providers, org-scoped + secret-masked", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "owner" });
-    await seedEnterpriseSubscription(org.orgId);
     await seedProvider({
       organizationId: org.orgId,
       userId: org.userId,
@@ -513,8 +453,6 @@ describe("ssoRouter — real DB + real middleware", () => {
     // owner sees the management affordances.
     expect(body.access.canManage).toBe(true);
     expect(body.access.canDelete).toBe(true);
-    // Enterprise plan surfaced.
-    expect(body.billing.hasSso).toBe(true);
     // The clientId is masked to the last four — the full secret never leaves.
     expect(body.provider.oidcConfig.clientIdLastFour).toBe("7890");
   });

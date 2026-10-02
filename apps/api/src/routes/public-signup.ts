@@ -9,7 +9,6 @@ import { sendLabAccountSetupEmail } from "@calibra-facil/auth";
 import { db } from "@calibra-facil/db";
 import {
   member,
-  operatorAlert,
   organization,
   platformEventLog,
 } from "@calibra-facil/db/schema";
@@ -285,10 +284,6 @@ export const publicSignupRouter = new Hono()
       const reservationId = reservation;
 
       try {
-        // The account starts on FREE: paying is what promotes it, and the checkout
-        // webhook is the only thing that writes an ACTIVE plan. Provisioning on the
-        // chosen plan would hand out a paid tier for free, since a TRIAL
-        // subscription never expires today.
         const provisioned = await provisionLabAccount({
           lab: {
             name: input.labName,
@@ -297,7 +292,6 @@ export const publicSignupRouter = new Hono()
             email: emailCheck.email,
           },
           owner: { name: input.name, email: emailCheck.email },
-          planId: "FREE",
         });
 
         // Completed before the e-mail goes out: from here the organization
@@ -307,8 +301,6 @@ export const publicSignupRouter = new Hono()
           ownerUserId: provisioned.owner.id,
           organizationId: provisioned.organization.id,
           emailDomain: emailCheck.domain,
-          planId: input.planId,
-          billingCycle: input.billingCycle,
           mx,
         });
 
@@ -318,19 +310,16 @@ export const publicSignupRouter = new Hono()
             owner: provisioned.owner,
             organizationId: provisioned.organization.id,
             organizationName: provisioned.organization.name,
-            planId: input.planId,
-            billingCycle: input.billingCycle,
           });
         } catch (error) {
           // The organization is already committed, so this is not a failed
           // sign-up — it is a delivered account whose link did not arrive. Saying
           // "try again" would be a lie: the retry finds the account and refuses
-          // it. Tell the truth and put it in front of an operator.
-          console.error("Failed to send the self-serve claim e-mail", error);
-          await raiseUndeliveredClaimAlert({
+          // it. Tell the truth and log it for the instance operator.
+          console.error("Failed to send the self-serve claim e-mail", {
             email: provisioned.owner.email,
             organizationId: provisioned.organization.id,
-            organizationName: provisioned.organization.name,
+            error,
           });
 
           return c.json(
@@ -355,41 +344,6 @@ export const publicSignupRouter = new Hono()
   });
 
 /**
- * Put an undelivered claim link in front of a human.
- *
- * There is no public "resend my link" endpoint, and there should not be one:
- * unauthenticated, it would mail anyone's inbox on demand. So the recovery path
- * is an operator, and this is what tells them there is someone to recover.
- */
-async function raiseUndeliveredClaimAlert(params: {
-  email: string;
-  organizationId: string;
-  organizationName: string;
-}) {
-  try {
-    const now = new Date();
-    await db
-      .insert(operatorAlert)
-      .values({
-        organizationId: params.organizationId,
-        dedupeKey: `signup:claim_email_failed:${params.organizationId}`,
-        kind: "public_signup_claim_email_failed",
-        severity: "warning",
-        title: "Cadastro self-serve sem e-mail de acesso",
-        detail: `A conta de ${params.organizationName} foi criada pelo cadastro público, mas o e-mail com o link de acesso para ${params.email} não pôde ser enviado. Reenvie o convite pelo backoffice.`,
-        firstSeenAt: now,
-        lastSeenAt: now,
-      })
-      .onConflictDoUpdate({
-        target: operatorAlert.dedupeKey,
-        set: { lastSeenAt: now, updatedAt: now },
-      });
-  } catch (error) {
-    console.error("Failed to record an undelivered claim e-mail", error);
-  }
-}
-
-/**
  * Mint the claim token and mail it.
  *
  * Kept separate from provisioning because the two fail differently. The
@@ -403,8 +357,6 @@ async function sendClaimEmail(params: {
   owner: { id: string; name: string; email: string };
   organizationId: string;
   organizationName: string;
-  planId: string;
-  billingCycle: string;
 }) {
   const setupToken = await createLabAccountSetupToken({
     userId: params.owner.id,
@@ -414,17 +366,11 @@ async function sendClaimEmail(params: {
     source: "public.self_serve_signup",
   });
 
-  const claimUrl = new URL(buildLabClaimUrl(params.appUrl, setupToken.token));
-  // Carried through the claim so the plan chosen on the pricing page is still
-  // selected when the owner lands on billing.
-  claimUrl.searchParams.set("plano", params.planId);
-  claimUrl.searchParams.set("ciclo", params.billingCycle);
-
   await sendLabAccountSetupEmail({
     email: params.owner.email,
     recipientName: params.owner.name,
     organizationName: params.organizationName,
-    claimUrl: claimUrl.toString(),
+    claimUrl: buildLabClaimUrl(params.appUrl, setupToken.token),
   });
 }
 
@@ -442,8 +388,6 @@ async function completeSignupReservation(params: {
   ownerUserId: string;
   organizationId: string;
   emailDomain: string;
-  planId: string;
-  billingCycle: string;
   mx: string;
 }) {
   await db
@@ -454,8 +398,6 @@ async function completeSignupReservation(params: {
       entityId: params.organizationId,
       details: {
         emailDomain: params.emailDomain,
-        intendedPlanId: params.planId,
-        intendedBillingCycle: params.billingCycle,
         mxCheck: params.mx,
       },
     })

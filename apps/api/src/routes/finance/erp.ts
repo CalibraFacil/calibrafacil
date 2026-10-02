@@ -2,7 +2,6 @@ import { Hono } from "hono";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
 import { billingDocument, customer } from "@calibra-facil/db/schema";
-import { getOrganizationPlanAccess } from "../../lib/organization-plan";
 import {
   exportBillingDocumentToPrimaryIntegration,
   loadBillingDocumentExportPayload,
@@ -12,62 +11,44 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../../middleware/permission";
-import { requireFeature } from "../../middleware/tier-guard";
 import { buildUnitScopeCondition } from "../../lib/units";
 
 export const financeErpRouter = new Hono<{
   Variables: AuthVariables;
   Bindings: IntegrationsEnv;
 }>()
-  .get(
-    "/exports",
-    ...withLabPermission({ financial: ["read"] }),
-    requireFeature("financial"),
-    async (c) => {
-      const member = c.get("member");
-      const access = await getOrganizationPlanAccess(member.organizationId);
-      const documents = await db
-        .select({
-          id: billingDocument.id,
-          documentNumber: billingDocument.documentNumber,
-          customerName: customer.name,
-          status: billingDocument.status,
-          exportStatus: billingDocument.exportStatus,
-          exportedAt: billingDocument.exportedAt,
-          totalCents: billingDocument.totalCents,
-          currency: billingDocument.currency,
-          dueDate: billingDocument.dueDate,
-          issueDate: billingDocument.issueDate,
-        })
-        .from(billingDocument)
-        .innerJoin(customer, eq(billingDocument.customerId, customer.id))
-        .where(
-          and(
-            eq(billingDocument.organizationId, member.organizationId),
-            buildUnitScopeCondition(billingDocument.unitId, member),
-            inArray(billingDocument.status, ["ISSUED", "PAID", "OVERDUE"]),
-          ),
-        )
-        .orderBy(desc(billingDocument.updatedAt))
-        .limit(50);
+  .get("/exports", ...withLabPermission({ financial: ["read"] }), async (c) => {
+    const member = c.get("member");
+    const documents = await db
+      .select({
+        id: billingDocument.id,
+        documentNumber: billingDocument.documentNumber,
+        customerName: customer.name,
+        status: billingDocument.status,
+        exportStatus: billingDocument.exportStatus,
+        exportedAt: billingDocument.exportedAt,
+        totalCents: billingDocument.totalCents,
+        currency: billingDocument.currency,
+        dueDate: billingDocument.dueDate,
+        issueDate: billingDocument.issueDate,
+      })
+      .from(billingDocument)
+      .innerJoin(customer, eq(billingDocument.customerId, customer.id))
+      .where(
+        and(
+          eq(billingDocument.organizationId, member.organizationId),
+          buildUnitScopeCondition(billingDocument.unitId, member),
+          inArray(billingDocument.status, ["ISSUED", "PAID", "OVERDUE"]),
+        ),
+      )
+      .orderBy(desc(billingDocument.updatedAt))
+      .limit(50);
 
-      return c.json({
-        billing: {
-          planId: access.planId,
-          planName: access.planName,
-          hasFinancialIntegrations: access.entitlements.includes(
-            "financial_integrations",
-          ),
-        },
-        data: documents,
-      });
-    },
-  )
+    return c.json({ data: documents });
+  })
   .post(
     "/documents/:id/export",
     ...withLabPermission({ financial: ["export"] }),
-    requireFeature("financial"),
-    requireFeature("financial_integrations"),
     async (c) => {
       const member = c.get("member");
       const documentId = Number.parseInt(c.req.param("id"), 10);

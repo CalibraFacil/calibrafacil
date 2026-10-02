@@ -926,7 +926,7 @@ describe("drainServiceOrderEmailOutbox", () => {
   // The SELECT filters `attempts < maxAttempts`. A release increments attempts;
   // once that reaches maxAttempts the row is never selected again. On THAT
   // release the drain must stamp `dead_letter_at = now()` so the exhaustion is
-  // an explicit, queryable state (surfaced in backoffice + operator alert) —
+  // an explicit, queryable state —
   // not the previous silent stop.
   //
   // The release UPDATE is still a SINGLE db.execute (call[2]) so the existing

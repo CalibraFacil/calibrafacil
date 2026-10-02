@@ -139,7 +139,7 @@ When adding or renaming a dashboard route, check whether it needs metadata for:
 
 - navigation visibility
 - cloud-only blocking in desktop/offline mode
-- plan or role requirements
+- role requirements
 - prewarm eligibility
 - page `head` title metadata
 
@@ -179,7 +179,6 @@ Preserve behavior for:
 
 - web and desktop sessions
 - `/sign-in` redirects
-- backoffice redirects
 - LAB organization filtering
 - no-organization onboarding state
 - client-only restricted state

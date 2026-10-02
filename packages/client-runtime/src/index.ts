@@ -54,8 +54,6 @@ import { createAssetsApi } from "./modules/assets";
 import { createAssetTypesApi } from "./modules/asset-types";
 import { createCloudAttachmentsApi } from "./modules/attachments";
 import { createCloudSyncApi } from "./modules/sync";
-import { createBackofficeApi } from "./modules/backoffice";
-import { createBillingApi } from "./modules/billing";
 import { createOnboardingApi } from "./modules/onboarding";
 import { createCalibrationRequestsApi } from "./modules/calibration-requests";
 import { createVisitsApi } from "./modules/visits";
@@ -66,7 +64,6 @@ import {
 } from "./modules/proficiency-tests";
 import { createCertificateNumberingApi } from "./modules/certificate-numbering";
 import { createCompetencesApi } from "./modules/competences";
-import { createCustomerSuccessApi } from "./modules/customer-success";
 import { createCustomersApi } from "./modules/customers";
 import { createCustomerGroupsApi } from "./modules/customer-groups";
 import { createDashboardApi } from "./modules/dashboard";
@@ -84,9 +81,7 @@ import { createOrganizationMediaApi } from "./modules/organization-media";
 import { createPortalDomainsApi } from "./modules/portal-domains";
 import { createEmailDomainsApi } from "./modules/email-domains";
 import { createProfileMediaApi } from "./modules/profile-media";
-import { createPublicCheckoutApi } from "./modules/public-checkout";
 import { createPublicInvitationsApi } from "./modules/public-invitations";
-import { createPublicLeadsApi } from "./modules/public-leads";
 import { createPublicSignupApi } from "./modules/public-signup";
 import { createReportsApi } from "./modules/reports";
 import { createSessionsApi } from "./modules/sessions";
@@ -133,29 +128,6 @@ export function createCloudApiClient(
           $get(): Promise<Response>;
         };
       };
-      billing: {
-        access: {
-          $get(): Promise<Response>;
-        };
-        subscription: {
-          $get(): Promise<Response>;
-          $delete(): Promise<Response>;
-        };
-        "self-serve-checkout": {
-          $post(input: {
-            json: unknown;
-            query?: { pagamento?: string };
-          }): Promise<Response>;
-        };
-        payments: {
-          $get(input: {
-            query: {
-              limit?: string;
-              offset?: string;
-            };
-          }): Promise<Response>;
-        };
-      };
       finance: {
         access: {
           $get(): Promise<Response>;
@@ -177,16 +149,6 @@ export function createCloudApiClient(
           };
           "request-otp": {
             $post(input: { param: { token: string } }): Promise<Response>;
-          };
-        };
-      };
-      backoffice: {
-        access: {
-          $get(): Promise<Response>;
-        };
-        impersonation: {
-          stop: {
-            $post(): Promise<Response>;
           };
         };
       };
@@ -814,8 +776,6 @@ export function createCloudApiClient(
     onboarding: createOnboardingApi(rawCloudClient),
     sessions: createSessionsApi(rawCloudClient),
     finance: createFinanceApi(rawCloudClient),
-    billing: createBillingApi(rawCloudClient),
-    backoffice: createBackofficeApi(rawCloudClient),
     sso: createSsoApi(rawCloudClient),
     apiKeys: createApiKeysApi(rawCloudClient),
     entityLabels: createEntityLabelsApi(rawCloudClient),
@@ -843,9 +803,7 @@ export function createCloudApiClient(
     sync: createCloudSyncApi(),
     attachments: createCloudAttachmentsApi(),
     reports: createReportsApi(rawCloudClient),
-    publicCheckout: createPublicCheckoutApi(rawCloudClient),
     publicInvitations: createPublicInvitationsApi(rawCloudClient),
-    publicLeads: createPublicLeadsApi(rawCloudClient),
     publicSignup: createPublicSignupApi(rawCloudClient),
     labSetup: createLabSetupApi(rawCloudClient),
     nonConformances: createNonConformancesApi(rawCloudClient),
@@ -854,7 +812,6 @@ export function createCloudApiClient(
     spc: createSpcApi(rawCloudClient),
     competences: createCompetencesApi(rawCloudClient),
     trainingRecords: createTrainingRecordsApi(rawCloudClient),
-    customerSuccess: createCustomerSuccessApi(rawCloudClient),
     calibrationRequests: createCalibrationRequestsApi(rawCloudClient),
     visits: createVisitsApi(rawCloudClient),
   };

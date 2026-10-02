@@ -1,8 +1,6 @@
 import type {
   AccreditedScopeResponse,
   ApiKeysListResponse,
-  BillingPaymentsResponse,
-  BillingSubscriptionResponse,
   CertificateNumberingProfileResponse,
   EmailDomainResponse,
   EnvironmentalLimitsResponse,
@@ -42,10 +40,6 @@ export type SettingsEmailDomainData = EmailDomainResponse
 export type SettingsEnvironmentalLimitsData = EnvironmentalLimitsResponse
 
 export type SettingsAccreditedScopeData = AccreditedScopeResponse
-
-export type SettingsBillingSubscriptionData = BillingSubscriptionResponse
-
-export type SettingsBillingPaymentsData = BillingPaymentsResponse
 
 export type SettingsNotificationPreferencesData =
   NotificationPreferencesResponse
@@ -321,12 +315,6 @@ export type ContaAzulScheduleResponse = {
 }
 
 export type SettingsIntegrationsData = {
-  billing: {
-    planId: string
-    planName: string
-    status: string
-    hasFinancialIntegrations: boolean
-  }
   data: IntegrationSummary[]
 }
 

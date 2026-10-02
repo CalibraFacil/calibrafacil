@@ -87,7 +87,6 @@ import {
   requireOrgType,
   requireRole,
 } from "../middleware/permission";
-import { requireFeature } from "../middleware/tier-guard";
 import { createClientOrganizationAsServiceOwner } from "../lib/portal-service-account";
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
 import { deriveNextCalibrationDate } from "../lib/portal-asset-interval";
@@ -512,7 +511,6 @@ const requirePublicApiDocsAccess = [
   ...requireLabProtected,
   requireOrgType("LAB"),
   requireRole(["admin", "owner"]),
-  requireFeature("api"),
 ] as const;
 
 export const publicApiV2DocsRouter = new Hono<{

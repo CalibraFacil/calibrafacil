@@ -62,10 +62,8 @@ import { MetricTile, SectionTitle } from './shared'
 // ── New connector form ────────────────────────────────────────────────────────
 
 export function NewGenericConnectorForm({
-  hasEntitlement,
   onRefresh,
 }: {
-  hasEntitlement: boolean
   onRefresh: () => Promise<void>
 }) {
   const [draft, setDraft] = useState(defaultIntegrationDraft)
@@ -154,7 +152,6 @@ export function NewGenericConnectorForm({
           className="active:scale-[0.96]"
           onClick={() => createMutation.mutate()}
           disabled={
-            !hasEntitlement ||
             createMutation.isPending ||
             !draft.baseUrl ||
             !draft.authToken ||
@@ -171,11 +168,9 @@ export function NewGenericConnectorForm({
 // ── Generic connector card ─────────────────────────────────────────────────────
 
 export function GenericConnectorCard({
-  hasEntitlement,
   integration,
   onRefresh,
 }: {
-  hasEntitlement: boolean
   integration: IntegrationSummary
   onRefresh: () => Promise<void>
 }) {
@@ -254,7 +249,7 @@ export function GenericConnectorCard({
               size="sm"
               className="active:scale-[0.96]"
               onClick={() => connector.validate.mutate()}
-              disabled={!hasEntitlement || connector.validate.isPending}
+              disabled={connector.validate.isPending}
             >
               {connector.validate.isPending ? 'Validando…' : 'Validar'}
             </Button>
@@ -268,7 +263,6 @@ export function GenericConnectorCard({
                 })
               }
               disabled={
-                !hasEntitlement ||
                 connector.toggle.isPending ||
                 integration.status === 'ACTION_REQUIRED'
               }
@@ -339,7 +333,6 @@ export function GenericConnectorCard({
           <IntegrationTargetList
             integration={integration}
             targets={getIntegrationVisibleTargets(integration)}
-            hasEntitlement={hasEntitlement}
             sync={connector.sync}
             schedule={connector.schedule}
             renderExtra={(target) => (
@@ -347,7 +340,6 @@ export function GenericConnectorCard({
                 target={target}
                 mappings={mappings}
                 preview={previewByTarget[target] ?? null}
-                hasEntitlement={hasEntitlement}
                 isSaving={updateMutation.isPending}
                 isPreviewing={previewMutation.isPending}
                 onChange={(updater) =>
@@ -362,7 +354,6 @@ export function GenericConnectorCard({
 
         <IntegrationActivity
           integration={integration}
-          hasEntitlement={hasEntitlement}
           retry={connector.retry}
         />
       </CardContent>
@@ -373,7 +364,6 @@ export function GenericConnectorCard({
 // ── Mapping editor (generic only) ──────────────────────────────────────────────
 
 function MappingEditor({
-  hasEntitlement,
   isPreviewing,
   isSaving,
   mappings,
@@ -383,7 +373,6 @@ function MappingEditor({
   preview,
   target,
 }: {
-  hasEntitlement: boolean
   isPreviewing: boolean
   isSaving: boolean
   mappings: IntegrationMappingsConfig
@@ -599,7 +588,7 @@ function MappingEditor({
             variant="outline"
             className="active:scale-[0.96]"
             onClick={onPreview}
-            disabled={!hasEntitlement || isPreviewing}
+            disabled={isPreviewing}
           >
             {isPreviewing ? 'Validando…' : 'Prévia'}
           </Button>
@@ -608,7 +597,7 @@ function MappingEditor({
             variant="secondary"
             className="active:scale-[0.96]"
             onClick={onSave}
-            disabled={!hasEntitlement || isSaving}
+            disabled={isSaving}
           >
             {isSaving ? 'Salvando…' : 'Salvar mapeamento'}
           </Button>

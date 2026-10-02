@@ -2,8 +2,7 @@
  * Sender resolution for the lab-owned email domain (issue #584).
  *
  * A lab sends from its own domain only while EVERY gate holds:
- *   plan entitlement (email_sender_domain) + row active + Resend-verified +
- *   key not known-dead. Anything else resolves to `undefined` and the caller
+ *   row active + Resend-verified + key not known-dead. Anything else resolves to `undefined` and the caller
  *   uses the platform sender (`RESEND_FROM_EMAIL`) — an email is never blocked
  *   on a DNS or key lapse.
  *
@@ -16,10 +15,8 @@ import { db } from "@calibra-facil/db";
 import {
   organizationEmailDomain,
   organizationEventLog,
-  subscription,
   type OrganizationEmailDomainKeyStatus,
 } from "@calibra-facil/db/schema";
-import { hasEntitlement } from "@calibra-facil/shared";
 import { and, eq, ne } from "drizzle-orm";
 import {
   decryptResendApiKey,
@@ -39,18 +36,6 @@ export interface LabEmailCredential {
   apiKey: string;
   fromAddress: string;
   hostname: string;
-}
-
-async function organizationHasEmailSenderEntitlement(
-  organizationId: string,
-): Promise<boolean> {
-  const [sub] = await db
-    .select({ planId: subscription.planId })
-    .from(subscription)
-    .where(eq(subscription.organizationId, organizationId))
-    .limit(1);
-
-  return hasEntitlement(sub?.planId ?? "FREE", "email_sender_domain");
 }
 
 async function findUsableEmailDomainRow(organizationId: string) {
@@ -84,10 +69,6 @@ export async function resolveLabEmailSender(
     if (row.mode === "byok" && !getEmailDomainMasterKey()) return undefined;
     if (row.mode === "managed" && !process.env.RESEND_API_KEY) return undefined;
 
-    if (!(await organizationHasEmailSenderEntitlement(organizationId))) {
-      return undefined;
-    }
-
     return {
       organizationId,
       fromAddress: row.fromAddress,
@@ -104,9 +85,8 @@ export async function resolveLabEmailSender(
 
 /**
  * Resolve the decrypted sending credential at send time. Re-checks the row so
- * a deactivation/downgrade between brand build and send is honored. Returns
- * `undefined` on any lapse (missing master key, decrypt failure, entitlement
- * loss) — the caller then uses the platform sender.
+ * a deactivation between brand build and send is honored. Returns
+ * `undefined` on any lapse (missing master key, decrypt failure) — the caller then uses the platform sender.
  */
 export async function getLabEmailCredential(
   organizationId: string,
@@ -114,10 +94,6 @@ export async function getLabEmailCredential(
   try {
     const row = await findUsableEmailDomainRow(organizationId);
     if (!row) return undefined;
-
-    if (!(await organizationHasEmailSenderEntitlement(organizationId))) {
-      return undefined;
-    }
 
     // Managed: the domain lives in OUR Resend account, so the laboratory never
     // held a key and there is nothing to decrypt. This is the path every new

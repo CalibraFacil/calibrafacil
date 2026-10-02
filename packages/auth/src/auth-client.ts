@@ -5,7 +5,6 @@ import {
   emailOTPClient,
   magicLinkClient,
   organizationClient,
-  twoFactorClient,
 } from "better-auth/client/plugins";
 import { passkeyClient } from "@better-auth/passkey/client";
 import { createAuthClient as createBetterAuthClient } from "better-auth/react";
@@ -165,35 +164,6 @@ export const portalAuthClient = createBetterAuthClient({
   plugins: [magicLinkClient(), organizationPluginConfig],
 });
 
-/**
- * Backoffice Auth Client - for the internal operations workspace (apps/web /backoffice)
- * Connects to: /api/auth/backoffice/*
- */
-export const backofficeAuthClient = createBetterAuthClient({
-  baseURL: getApiBaseURL(),
-  basePath: "/api/auth/backoffice",
-  fetchOptions: {
-    credentials: "include",
-    customFetchImpl: desktopAuthFetch,
-  },
-  // Parity with the lab/portal clients: don't refetch the session on every tab
-  // refocus. Without this the backoffice fires /get-session on each refocus.
-  sessionOptions: {
-    refetchOnWindowFocus: false,
-  },
-  plugins: [
-    // Mandatory two-factor for internal operators. The form reads
-    // `data.twoFactorRedirect` from sign-in directly, so no redirect callback
-    // is configured here; the plugin's session-signal listeners keep
-    // `useBackofficeSession` in sync after enable/verify.
-    twoFactorClient(),
-    adminClient({
-      ac: platformAc,
-      roles: platformRoles,
-    }),
-  ],
-});
-
 // Keep the original 'authClient' export for backwards compatibility (uses lab auth)
 export const authClient = labAuthClient;
 
@@ -238,35 +208,6 @@ export const portalOrganization = portalAuthClient.organization;
 export const labAdmin = labAuthClient.admin;
 export const labPasskey = labAuthClient.passkey;
 export const labEmailOtp = labAuthClient.emailOtp;
-
-// Backoffice-specific exports (for apps/web /backoffice)
-export const backofficeSignIn = backofficeAuthClient.signIn;
-export const backofficeSignOut = backofficeAuthClient.signOut;
-export const useBackofficeSession = backofficeAuthClient.useSession;
-// SEC-09 (#669): the lab surface is passwordless — password/reset methods are
-// no longer exposed from labAuthClient. The backoffice operations surface
-// keeps password + mandatory TOTP, so its own password-reset request/consume
-// methods live here. The shared `apps/web/src/routes/reset-password` page
-// (linked from the backoffice sign-in form) binds to these, not to the lab
-// client.
-export const requestBackofficePasswordReset =
-  backofficeAuthClient.requestPasswordReset;
-export const resetBackofficePassword = backofficeAuthClient.resetPassword;
-let inflightBackofficeSession: ReturnType<
-  typeof backofficeAuthClient.getSession
-> | null = null;
-// Deduped one-off read so concurrent backoffice route guards share a single
-// /get-session request instead of each firing their own.
-export const getBackofficeSession = () => {
-  inflightBackofficeSession ??= backofficeAuthClient
-    .getSession()
-    .finally(() => {
-      inflightBackofficeSession = null;
-    });
-  return inflightBackofficeSession;
-};
-export const backofficeAdmin = backofficeAuthClient.admin;
-export const backofficeTwoFactor = backofficeAuthClient.twoFactor;
 
 // =============================================================================
 // PERMISSION CHECKING UTILITIES

@@ -18,7 +18,6 @@ import {
   requireRole,
   withLabPermission,
 } from "../middleware/permission";
-import { requireFeature } from "../middleware/tier-guard";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { writeOrganizationAuditEvent } from "../lib/audit";
 
@@ -100,7 +99,6 @@ export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
     "/",
     ...withLabPermission({ organization: ["update"] }),
     requireRole(["admin", "owner"]),
-    requireFeature("api"),
     zValidator("json", CreateApiKeySchema),
     async (c) => {
       const member = c.get("member");
@@ -164,7 +162,6 @@ export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
     "/:id/rotate",
     ...withLabPermission({ organization: ["update"] }),
     requireRole(["admin", "owner"]),
-    requireFeature("api"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");

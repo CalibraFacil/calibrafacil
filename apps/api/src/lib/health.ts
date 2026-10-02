@@ -20,8 +20,7 @@ import { createR2Client, type R2Env } from "./storage";
 //   - errors are redacted to the error NAME only (structural tag, never the
 //     message — a Postgres/S3 error message can embed hosts or bucket names);
 //   - every check runs under a short timeout so health can't hang;
-//   - queue depth is informational; alerting on FAILED jobs stays in the
-//     operator-alerts engine, and a deep backlog does not flip readiness.
+//   - queue depth is informational; a deep backlog does not flip readiness.
 
 const DEFAULT_CHECK_TIMEOUT_MS = 3_000;
 

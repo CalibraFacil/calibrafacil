@@ -115,7 +115,7 @@ import {
   SyncConflictReturnNotice,
   type SyncConflictReturnSearch,
 } from '@/runtime/sync-conflict-return'
-import { usePlanAccess } from '@/hooks/use-plan-access'
+import { isDesktopRuntime } from '@/runtime/desktop'
 
 function openServiceOrderIntakePreview(order: ServiceOrderDetail) {
   const previewWindow = window.open('', '_blank')
@@ -494,9 +494,8 @@ export function ServiceOrderDetailPage({
   conflictReturn,
 }: ServiceOrderDetailPageProps) {
   const orderQuery = useServiceOrderDetailData(publicId)
-  const accessQuery = usePlanAccess()
-  const hasFinancial =
-    accessQuery.data?.entitlements.includes('financial') ?? false
+  // Finance is a cloud-only module; the desktop shell does not show it.
+  const hasFinancial = !isDesktopRuntime()
   // Everything below the detail read still addresses the OS by its numeric id,
   // which only exists once the detail has loaded.
   const numericId = orderQuery.data ? String(orderQuery.data.id) : null

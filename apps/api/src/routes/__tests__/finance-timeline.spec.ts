@@ -7,7 +7,6 @@ const mocks = vi.hoisted(() => ({
   buildCustomerFinancialTimeline: vi.fn(),
   buildServiceOrderFinancialStatus: vi.fn(),
   resolveCustomerRouteId: vi.fn(),
-  entitlements: ["financial", "financial_integrations"],
   passMiddleware: vi.fn(async (_c: unknown, next: () => Promise<void>) => {
     await next();
   }),
@@ -24,20 +23,6 @@ vi.mock("../../lib/customer-route-id", () => ({
 
 vi.mock("../../middleware/permission", () => ({
   withLabPermission: () => [mocks.passMiddleware],
-}));
-
-vi.mock("../../middleware/tier-guard", () => ({
-  requireFeature:
-    (feature: string) =>
-    async (
-      c: { json: (body: unknown, status: number) => Response },
-      next: () => Promise<void>,
-    ) => {
-      if (!mocks.entitlements.includes(feature)) {
-        return c.json({ error: "Recurso indisponível no plano atual" }, 403);
-      }
-      await next();
-    },
 }));
 
 function createTestApp() {
@@ -68,7 +53,6 @@ function createTestApp() {
 describe("finance timeline routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.entitlements = ["financial", "financial_integrations"];
     mocks.resolveCustomerRouteId.mockImplementation(
       async (identifier: string) =>
         /^\d+$/.test(identifier) ? Number(identifier) : null,
@@ -133,28 +117,6 @@ describe("finance timeline routes", () => {
         includeProviderEvidence: true,
       }),
     );
-  });
-
-  it("rejects customer timeline without financial integration entitlement", async () => {
-    mocks.entitlements = ["financial"];
-
-    const response = await createTestApp().request(
-      "/api/finance/customers/5/timeline",
-    );
-
-    expect(response.status).toBe(403);
-    expect(mocks.buildCustomerFinancialTimeline).not.toHaveBeenCalled();
-  });
-
-  it("rejects service-order status without financial integration entitlement", async () => {
-    mocks.entitlements = ["financial"];
-
-    const response = await createTestApp().request(
-      "/api/finance/service-orders/42/status",
-    );
-
-    expect(response.status).toBe(403);
-    expect(mocks.buildServiceOrderFinancialStatus).not.toHaveBeenCalled();
   });
 
   it("resolves digit-prefixed customer route slugs before building the timeline", async () => {

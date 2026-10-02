@@ -23,18 +23,12 @@ async function loadDashboardSession(options: {
   const hasDesktopSession = vi.fn(async () => options.hasDesktopSession ?? true)
 
   vi.doMock('@tanstack/react-router', () => ({ redirect }))
-  vi.doMock('@calibra-facil/auth/access', () => ({
-    canAccessBackoffice: (role: string) => role === 'ADMIN',
-  }))
   vi.doMock('@calibra-facil/auth/client', () => ({
     authClient: { getSession },
   }))
   vi.doMock('@/runtime/desktop-auth', () => ({ hasDesktopSession }))
   vi.doMock('@/runtime/desktop', () => ({
     isDesktopRuntime: () => options.isDesktop ?? false,
-  }))
-  vi.doMock('@/app/config/runtime', () => ({
-    getBackofficeAppUrl: () => 'https://ops.test',
   }))
 
   const locationReplace = vi.fn()
@@ -109,31 +103,17 @@ describe('dashboard session guard', () => {
     expect(getSession).toHaveBeenCalledTimes(2)
   })
 
-  it('redirects non-impersonated backoffice users to the backoffice app', async () => {
+  it('keeps platform-role users in the dashboard', async () => {
     const { dashboardBeforeLoad, locationReplace } = await loadDashboardSession(
       {
         session: labSession({ role: 'ADMIN' }),
       },
     )
 
-    // beforeLoad intentionally never resolves after firing the cross-origin
-    // redirect (it blocks so the lab route never mounts), so we don't await it;
-    // poll until the redirect fires instead of awaiting the (never-settling) call.
-    void dashboardBeforeLoad({ location: { pathname: '/dashboard' } })
-
-    await vi.waitFor(() =>
-      expect(locationReplace).toHaveBeenCalledWith('https://ops.test'),
-    )
-  })
-
-  it('allows impersonated backoffice users to stay in the dashboard', async () => {
-    const { dashboardBeforeLoad } = await loadDashboardSession({
-      session: labSession({ role: 'ADMIN', impersonatedBy: 'owner-1' }),
-    })
-
     await expect(
       dashboardBeforeLoad({ location: { pathname: '/dashboard' } }),
     ).resolves.toBeUndefined()
+    expect(locationReplace).not.toHaveBeenCalled()
   })
 })
 

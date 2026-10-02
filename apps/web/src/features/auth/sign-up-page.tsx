@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Link } from '@tanstack/react-router'
 import { motion } from 'motion/react'
-import { formatPrice, PLAN_PRICES, PLANS } from '@calibra-facil/shared'
 import {
   AuthStatusMessage,
   type AuthStatus,
@@ -27,25 +26,15 @@ import {
   type SignUpFormField,
 } from './sign-up-forms'
 
-type SelfServePlanId = 'STANDARD' | 'PROFESSIONAL' | 'ADVANCED'
-
-type SignUpPageProps = {
-  planId: SelfServePlanId
-  billingCycle: 'MONTHLY' | 'YEARLY'
-}
-
 // Matches the sign-in scene spring, so moving between the two pages feels like
 // one surface rather than two screens.
 const revealSpring = { type: 'spring', duration: 0.5, bounce: 0 } as const
 
 /**
- * Self-serve account opening, on the same split canvas as sign-in.
- *
- * The account is created on the free tier and the chosen plan travels with the
- * access link, so nobody is asked for money before they have seen the product
- * — which is also why the price appears here as a reminder, not as a checkout.
+ * Self-serve account opening, on the same split canvas as sign-in. Every
+ * laboratory gets every feature: there are no plans to pick.
  */
-export function SignUpPage({ planId, billingCycle }: SignUpPageProps) {
+export function SignUpPage() {
   const [form, setForm] = useState<SignUpFormData>(emptySignUpForm)
   const [errors, setErrors] = useState<
     Partial<Record<SignUpFormField, string>>
@@ -56,11 +45,6 @@ export function SignUpPage({ planId, billingCycle }: SignUpPageProps) {
   const [deliveryFailure, setDeliveryFailure] = useState<string | null>(null)
   // Honeypot: hidden from people, filled by bots.
   const [website, setWebsite] = useState('')
-
-  const plan = PLANS[planId]
-  const prices = PLAN_PRICES[planId]
-  const monthlyEquivalent =
-    billingCycle === 'YEARLY' ? prices.yearly / 12 : prices.monthly
 
   function updateField(field: SignUpFormField, value: string) {
     setForm((current) => ({ ...current, [field]: value }))
@@ -73,7 +57,7 @@ export function SignUpPage({ planId, billingCycle }: SignUpPageProps) {
     setErrors({})
     setStatus(null)
 
-    const parsed = parseSignUpForm(form, { planId, billingCycle, website })
+    const parsed = parseSignUpForm(form, { website })
     if (!parsed.success) {
       setErrors(
         Object.fromEntries(
@@ -95,7 +79,7 @@ export function SignUpPage({ planId, billingCycle }: SignUpPageProps) {
       setDeliveryFailure(
         result.emailDelivered === false
           ? (result.error ??
-              'A conta foi criada, mas não conseguimos enviar o e-mail de acesso agora. Nossa equipe reenvia o link para você.')
+              'A conta foi criada, mas não conseguimos enviar o e-mail de acesso agora. Peça ao administrador desta instalação para reenviar o link.')
           : null,
       )
     } catch (error) {
@@ -141,10 +125,8 @@ export function SignUpPage({ planId, billingCycle }: SignUpPageProps) {
                       Criar a conta do laboratório
                     </h1>
                     <p className="text-muted-foreground text-sm text-balance">
-                      Plano {plan.name} ·{' '}
-                      {formatPrice(Math.round(monthlyEquivalent))}/mês{' '}
-                      {billingCycle === 'YEARLY' ? 'no anual' : 'no mensal'}. O
-                      pagamento é feito depois de entrar.
+                      Todos os recursos, sem planos nem limites. O link de
+                      acesso chega no seu e-mail.
                     </p>
                   </div>
 
@@ -313,7 +295,7 @@ export function SignUpPage({ planId, billingCycle }: SignUpPageProps) {
       <div className="hidden p-3 lg:block">
         <AuthShaderPanel
           title="Seu laboratório, funcionando hoje."
-          description="Cálculo de incerteza, certificado assinado em ICP-Brasil, revisão com papéis distintos e trilha de auditoria já no primeiro plano. A norma não fica em plano caro."
+          description="Cálculo de incerteza, certificado assinado em ICP-Brasil, revisão com papéis distintos e trilha de auditoria, com todos os recursos liberados."
         />
       </div>
     </div>

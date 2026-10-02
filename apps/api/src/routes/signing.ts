@@ -2,7 +2,6 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@calibra-facil/db";
-import { recordActivationMilestone } from "../services/activation-checklist";
 import {
   organizationSigningCertificate,
   organizationUnit,
@@ -292,11 +291,6 @@ export const signingRouter = new Hono<{
         if (!newCert) {
           return c.json({ error: "Erro ao inserir certificado" }, 500);
         }
-
-        void recordActivationMilestone(
-          memberData.organizationId,
-          "signingCertificate",
-        );
 
         return c.json({
           message: "Certificado adicionado com sucesso",

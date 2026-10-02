@@ -13,7 +13,6 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { useActiveOrganization } from '@calibra-facil/auth/client'
-import { usePlanAccess } from '@/hooks/use-plan-access'
 import { useSettings } from '@/contexts/settings-context'
 import { calibraApi, resolveCloudApiUrl } from '@/utils/api'
 import { Panel, PanelHeader } from '@/components/instrument-panel'
@@ -110,7 +109,6 @@ export function AuthenticationSettingsPage() {
 
 function ApiKeysCard() {
   const queryClient = useQueryClient()
-  const accessQuery = usePlanAccess()
   const [name, setName] = useState('')
   const [latestSecret, setLatestSecret] = useState<string | null>(null)
   const apiReferenceUrl = resolveCloudApiUrl('/api/public/v2/reference')
@@ -159,7 +157,6 @@ function ApiKeysCard() {
     },
   })
 
-  const hasApi = accessQuery.data?.hasApi ?? false
   const apiKeys = apiKeysQuery.data?.data ?? []
 
   return (
@@ -167,44 +164,30 @@ function ApiKeysCard() {
       <PanelHeader
         title="API keys"
         description="Crie chaves para integrar sistemas externos à API pública do laboratório."
-        action={
-          <Badge variant={hasApi ? 'default' : 'secondary'}>
-            {accessQuery.data?.planName ?? 'Plano atual'}
-          </Badge>
-        }
       />
       <div className="mt-4 space-y-6">
-        {!hasApi && (
-          <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-            O entitlement de API está disponível a partir do plano Professional.
+        <div className="flex flex-col gap-3 rounded-lg border p-4 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-1">
+            <p className="font-medium">Referência da API</p>
+            <p className="text-sm text-muted-foreground">
+              A documentação técnica interativa da API fica disponível para quem
+              tem uma sessão válida no laboratório.
+            </p>
           </div>
-        )}
-
-        {hasApi && (
-          <div className="flex flex-col gap-3 rounded-lg border p-4 md:flex-row md:items-center md:justify-between">
-            <div className="space-y-1">
-              <p className="font-medium">Referência da API</p>
-              <p className="text-sm text-muted-foreground">
-                A documentação técnica interativa da API fica disponível apenas
-                para organizações com entitlement ativo e sessão válida.
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              nativeButton={false}
-              render={
-                <a
-                  href={apiReferenceUrl}
-                  target="_blank"
-                  rel="noreferrer nofollow"
-                />
-              }
-            >
-              Abrir referência
-            </Button>
-          </div>
-        )}
-
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={
+              <a
+                href={apiReferenceUrl}
+                target="_blank"
+                rel="noreferrer nofollow"
+              />
+            }
+          >
+            Abrir referência
+          </Button>
+        </div>
         {latestSecret && (
           <div className="rounded-lg border p-4">
             <p className="font-medium">Guarde esta chave agora</p>
@@ -231,7 +214,7 @@ function ApiKeysCard() {
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="ERP principal"
-              disabled={!hasApi || createMutation.isPending}
+              disabled={createMutation.isPending}
             />
             <FieldDescription>
               A chave nasce com escopos de leitura para clientes, ativos, ordens
@@ -240,7 +223,7 @@ function ApiKeysCard() {
           </Field>
           <Button
             type="submit"
-            disabled={!hasApi || !name.trim() || createMutation.isPending}
+            disabled={!name.trim() || createMutation.isPending}
           >
             Criar API key
           </Button>
@@ -281,7 +264,7 @@ function ApiKeysCard() {
                         type="button"
                         variant="outline"
                         onClick={() => rotateMutation.mutate(key.id)}
-                        disabled={!hasApi || rotateMutation.isPending}
+                        disabled={rotateMutation.isPending}
                       >
                         Rotacionar
                       </Button>
@@ -480,7 +463,6 @@ function SsoSettingsCard({
 
   const provider = data.provider
   const canManage = data.access.canManage
-  const hasSso = data.billing.hasSso
 
   return (
     <Panel className="p-5 sm:p-6">
@@ -489,9 +471,6 @@ function SsoSettingsCard({
         description="Login corporativo via OIDC para o dashboard do laboratório."
         action={
           <div className="flex flex-wrap gap-2">
-            <Badge variant={hasSso ? 'default' : 'secondary'}>
-              {data.billing.planName}
-            </Badge>
             <Badge variant={provider?.domainVerified ? 'default' : 'secondary'}>
               {provider?.domainVerified ? 'Domínio verificado' : 'Pendente'}
             </Badge>
@@ -499,17 +478,7 @@ function SsoSettingsCard({
         }
       />
       <div className="mt-4 space-y-6">
-        <div className="grid gap-4 md:grid-cols-3">
-          <StatusTile
-            icon={Shield01Icon}
-            title="Plano"
-            value={hasSso ? 'Enterprise ativo' : 'Sem entitlement SSO'}
-            description={
-              hasSso
-                ? 'SSO liberado para esta organização.'
-                : 'A autenticação SSO está disponível apenas no plano Enterprise.'
-            }
-          />
+        <div className="grid gap-4 md:grid-cols-2">
           <StatusTile
             icon={SecurityCheckIcon}
             title="Relacionamento"
@@ -527,13 +496,6 @@ function SsoSettingsCard({
             description="Use esta URL no provedor OIDC como redirect/callback URI."
           />
         </div>
-
-        {!hasSso && !provider && (
-          <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-            Esta organização ainda não possui entitlement de SSO. Faça upgrade
-            para Enterprise antes de cadastrar um provedor.
-          </div>
-        )}
 
         {!canManage && (
           <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
@@ -674,7 +636,7 @@ function SsoSettingsCard({
                   value={providerId}
                   onChange={(event) => setProviderId(event.target.value)}
                   placeholder="laboratorio-oidc"
-                  disabled={!canManage || !hasSso}
+                  disabled={!canManage}
                   required
                 />
               </Field>
@@ -685,7 +647,7 @@ function SsoSettingsCard({
                   value={domain}
                   onChange={(event) => setDomain(event.target.value)}
                   placeholder="laboratorio.com.br"
-                  disabled={!canManage || !hasSso}
+                  disabled={!canManage}
                   required
                 />
                 <FieldDescription>
@@ -700,7 +662,7 @@ function SsoSettingsCard({
                   value={issuer}
                   onChange={(event) => setIssuer(event.target.value)}
                   placeholder="https://idp.empresa.com/realms/lab"
-                  disabled={!canManage || !hasSso}
+                  disabled={!canManage}
                   required
                 />
               </Field>
@@ -710,7 +672,7 @@ function SsoSettingsCard({
                   id="clientId"
                   value={clientId}
                   onChange={(event) => setClientId(event.target.value)}
-                  disabled={!canManage || !hasSso}
+                  disabled={!canManage}
                   required
                 />
               </Field>
@@ -724,7 +686,7 @@ function SsoSettingsCard({
                   type="password"
                   value={clientSecret}
                   onChange={(event) => setClientSecret(event.target.value)}
-                  disabled={!canManage || !hasSso}
+                  disabled={!canManage}
                   required
                 />
               </Field>
@@ -734,7 +696,7 @@ function SsoSettingsCard({
                   id="scopes"
                   value={scopes}
                   onChange={(event) => setScopes(event.target.value)}
-                  disabled={!canManage || !hasSso}
+                  disabled={!canManage}
                   rows={3}
                 />
                 <FieldDescription>
@@ -747,9 +709,7 @@ function SsoSettingsCard({
             <div className="flex flex-wrap gap-3">
               <Button
                 type="submit"
-                disabled={
-                  !canManage || !hasSso || createProviderMutation.isPending
-                }
+                disabled={!canManage || createProviderMutation.isPending}
               >
                 Configurar SSO
               </Button>

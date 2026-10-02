@@ -57,7 +57,7 @@ pass or fail on.
 - **Access-control criteria bind the REAL RBAC layer — never a new inline rule.**
   Phrase them against `packages/auth/src/access.ts` roles and the
   `apps/api/src/middleware/permission.ts` guards (`requirePermission`,
-  `requireRole`, `requireCalibrationAction`, `requireOrgType`, `requireFeature`)
+  `requireRole`, `requireCalibrationAction`, `requireOrgType`)
   and the org+unit scope (`resolveMemberUnitScope`). Name the role and the
   guard. These are almost always `[HIGH RISK]`.
   - Good: `REQ-ACCESS-002: IF a member without the admin or owner role calls

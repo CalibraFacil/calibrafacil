@@ -6,7 +6,6 @@ import {
   useActiveOrganization,
   useListOrganizations,
 } from '@calibra-facil/auth/client'
-import { canAccessBackoffice } from '@calibra-facil/auth/access'
 import { translateAuthErrorMessage } from '@calibra-facil/auth/error-messages'
 import { BrandLockup } from '@/components/brand'
 import { Button } from '@/components/ui/button'
@@ -26,7 +25,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { MaskedInput } from '@/components/ui/masked-input'
 import { setStoredDashboardOrganizationId } from '@/features/dashboard/dashboard-scope-storage'
-import { getBackofficeAppUrl } from '@/app/config/runtime'
 import { brazilPhoneMask, cnpjMask } from '@/lib/input-masks'
 import { getClientSession, readSessionWithRetry } from '@/lib/auth-session'
 
@@ -38,24 +36,11 @@ type OnboardingSession = NonNullable<
 
 type OnboardingSearch = {
   redirect?: string
-  /**
-   * The plan picked on the pricing page. Onboarding sits between the claim link
-   * and billing whenever a required field was left blank at sign-up, so without
-   * carrying these two the handoff from pricing to checkout is lost for
-   * everyone who did not fill in a phone number.
-   */
-  plano?: string
-  ciclo?: 'MONTHLY' | 'YEARLY'
 }
 
 export const Route = createFileRoute('/onboarding/organization')({
   validateSearch: (search: Record<string, unknown>): OnboardingSearch => ({
     redirect: typeof search.redirect === 'string' ? search.redirect : undefined,
-    plano: typeof search.plano === 'string' ? search.plano : undefined,
-    ciclo:
-      search.ciclo === 'MONTHLY' || search.ciclo === 'YEARLY'
-        ? search.ciclo
-        : undefined,
   }),
   beforeLoad: async () => {
     const { data: session } =
@@ -64,24 +49,13 @@ export const Route = createFileRoute('/onboarding/organization')({
     if (!session) {
       throw redirect({ to: '/sign-in' })
     }
-
-    if (
-      canAccessBackoffice(session.user.role) &&
-      !session.session.impersonatedBy &&
-      typeof window !== 'undefined'
-    ) {
-      // The backoffice is a separate cross-origin app now. Block here while the
-      // browser navigates so the onboarding route never mounts for platform users.
-      window.location.replace(getBackofficeAppUrl())
-      await new Promise<never>(() => {})
-    }
   },
   component: OrganizationOnboardingPage,
 })
 
 function OrganizationOnboardingPage() {
   const navigate = useNavigate()
-  const { redirect: redirectTo, plano, ciclo } = Route.useSearch()
+  const { redirect: redirectTo } = Route.useSearch()
   const { data: organizations, isPending: isLoadingOrganizations } =
     useListOrganizations()
   const { data: activeOrganization, isPending: isLoadingActiveOrganization } =
@@ -145,14 +119,6 @@ function OrganizationOnboardingPage() {
       }
 
       setStoredDashboardOrganizationId(labOrganization.id)
-
-      if (plano) {
-        navigate({
-          to: '/dashboard/settings/subscription',
-          search: { plano, ciclo },
-        })
-        return
-      }
 
       navigate({ to: redirectTo || '/dashboard' })
     } catch (err) {

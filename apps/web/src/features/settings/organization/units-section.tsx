@@ -51,7 +51,6 @@ import {
 
 export function OrganizationUnitsSection({
   activeOrg,
-  hasMultiUnit,
   canManageOrganizationUnits,
   canManageAssignments,
   canViewGovernance,
@@ -61,7 +60,6 @@ export function OrganizationUnitsSection({
   governanceMembersLoading,
 }: {
   activeOrg: ActiveOrganization
-  hasMultiUnit: boolean
   canManageOrganizationUnits: boolean
   canManageAssignments: boolean
   canViewGovernance: boolean
@@ -85,7 +83,7 @@ export function OrganizationUnitsSection({
 
   const governanceActivityQuery = useOrganizationGovernanceActivityData({
     organizationId: activeOrg.id,
-    enabled: hasMultiUnit,
+    enabled: true,
   })
 
   const baseUnitNameDrafts = useMemo<Record<number, string>>(
@@ -248,11 +246,7 @@ export function OrganizationUnitsSection({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {!hasMultiUnit ? (
-            <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-              A operação multi-unidade fica disponível no plano Enterprise.
-            </div>
-          ) : !canManageOrganizationUnits ? (
+          {!canManageOrganizationUnits ? (
             <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
               Você pode consultar as unidades e gerenciar atribuições dentro do
               seu escopo, mas a criação, edição estrutural e arquivamento de
@@ -260,7 +254,7 @@ export function OrganizationUnitsSection({
             </div>
           ) : null}
 
-          {hasMultiUnit && unitsLoading ? (
+          {unitsLoading ? (
             <div className="space-y-2">
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-12 w-full" />
@@ -375,9 +369,9 @@ export function OrganizationUnitsSection({
             </div>
           )}
 
-          {hasMultiUnit ? <Separator /> : null}
+          <Separator />
 
-          {hasMultiUnit && canManageOrganizationUnits ? (
+          {canManageOrganizationUnits ? (
             <form
               className="flex gap-2"
               onSubmit={(e) => {

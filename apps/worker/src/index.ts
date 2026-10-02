@@ -27,7 +27,6 @@ import { Workbook } from "@cj-tech-master/excelts";
 import React from "react";
 import QRCode from "qrcode";
 import {
-  processMarketingContactSync,
   processPortalDigest,
   processScheduledNotifications,
 } from "./scheduled.js";
@@ -125,11 +124,6 @@ export interface Env {
   INTEGRATIONS_MASTER_KEY?: string;
   RESEND_API_KEY?: string;
   RESEND_FROM_EMAIL?: string;
-  // Marketing-audience sync (Resend Contacts) — operator-set, optional.
-  RESEND_AUDIENCE_ID?: string;
-  RESEND_TOPIC_NOVIDADES_ID?: string;
-  RESEND_TOPIC_DICAS_ID?: string;
-  MARKETING_CONTACT_SYNC_ENABLED?: string;
   EMAIL_FROM?: string;
   EMAIL_LOGO_URL?: string;
   WEB_URL?: string;
@@ -438,28 +432,6 @@ async function updateJobWithCertificate(
       signatureVerdict ? JSON.stringify(signatureVerdict) : null,
     ],
   );
-
-  // The laboratory's first issued certificate is the moment activation is
-  // actually complete, and it happens here rather than at approval, because
-  // approval only moves a job to GENERATING_PDF. Written once, best-effort,
-  // and read only by customer-success analytics — never by anything the
-  // laboratory sees, so it must not be able to fail the certificate.
-  if (!isSuperseded) {
-    try {
-      await client.query(
-        `
-        UPDATE organization_success_profile
-        SET first_certificate_issued_at = COALESCE(first_certificate_issued_at, now())
-        WHERE organization_id = (
-          SELECT organization_id FROM calibration_job WHERE id = $1
-        )
-        `,
-        [jobId],
-      );
-    } catch (error) {
-      console.error("Failed to record first-certificate milestone", error);
-    }
-  }
 
   // Log appropriate action based on whether this is a watermark regeneration
   const action = isSuperseded
@@ -2833,11 +2805,6 @@ async function processBackgroundJobUnreported(
 
   if (message.type === "PORTAL_DIGEST") {
     await processPortalDigest();
-    return;
-  }
-
-  if (message.type === "MARKETING_CONTACT_SYNC") {
-    await processMarketingContactSync(env);
     return;
   }
 

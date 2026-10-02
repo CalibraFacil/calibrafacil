@@ -60,14 +60,12 @@ type ConfigChange = (input: ContaAzulConnectionConfigInput) => void
 export function ContaAzulOverviewTab({
   config,
   disabled,
-  hasEntitlement,
   integration,
   mutations,
   scheduleState,
 }: {
   config: ContaAzulConnectionConfig
   disabled: boolean
-  hasEntitlement: boolean
   integration: IntegrationSummary
   mutations: ContaAzulMutations
   scheduleState: {
@@ -174,12 +172,6 @@ export function ContaAzulOverviewTab({
               disabled={disabled || !config.enabledTargets.driftChecks}
             />
           </div>
-          {!hasEntitlement ? (
-            <p className="text-xs text-muted-foreground">
-              Reconciliação disponível com as integrações financeiras do plano
-              Professional.
-            </p>
-          ) : null}
         </section>
       </div>
     </div>
@@ -431,26 +423,22 @@ function formatScheduleTimestamp(value: string | null, future = false) {
 
 export function ContaAzulSyncTab({
   config,
-  hasEntitlement,
   integration,
   onConfigChange,
   schedule,
   sync,
 }: {
   config: ContaAzulConnectionConfig
-  hasEntitlement: boolean
   integration: IntegrationSummary
   onConfigChange: ConfigChange
   schedule: ConnectorMutations['schedule']
   sync: ConnectorMutations['sync']
 }) {
-  // Domain toggles only gate on entitlement. Reusing the broader busy flag
-  // (true while any config mutation is in flight) made every switch dim
-  // simultaneously when one toggle was clicked — users read that as
-  // "everything turned off". Each toggle's mutation is independent and the
-  // server merges partial enabledTargets onto the current state, so other
-  // toggles can stay clickable while one request is round-tripping.
-  const togglesDisabled = !hasEntitlement
+  // Domain toggles never reuse the broader busy flag (true while any config
+  // mutation is in flight): that dimmed every switch at once when one was
+  // clicked, which users read as "everything turned off". Each toggle's
+  // mutation is independent and the server merges partial enabledTargets onto
+  // the current state, so the others stay clickable mid-request.
   return (
     <div className="space-y-6">
       <section className="space-y-3">
@@ -461,7 +449,6 @@ export function ContaAzulSyncTab({
         <IntegrationTargetList
           integration={integration}
           targets={getIntegrationVisibleTargets(integration)}
-          hasEntitlement={hasEntitlement}
           sync={sync}
           schedule={schedule}
         />
@@ -503,7 +490,6 @@ export function ContaAzulSyncTab({
                         label={domain.label}
                         description={domain.description}
                         checked={config.enabledTargets[domain.key]}
-                        disabled={togglesDisabled}
                         onCheckedChange={(checked) =>
                           onConfigChange({
                             enabledTargets: { [domain.key]: checked },

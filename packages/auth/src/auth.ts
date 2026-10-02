@@ -8,8 +8,6 @@ import { and, asc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
 import { admin as adminPlugin, organization } from "better-auth/plugins";
 import { emailOTP } from "better-auth/plugins/email-otp";
 import { magicLink } from "better-auth/plugins/magic-link";
-import { oneTimeToken } from "better-auth/plugins/one-time-token";
-import { twoFactor } from "better-auth/plugins/two-factor";
 import { passkey } from "@better-auth/passkey";
 import { sso } from "@better-auth/sso";
 import { Resend } from "resend";
@@ -33,7 +31,6 @@ import {
   PortalMagicLinkEmail,
   type EmailBrand,
 } from "@calibra-facil/email";
-import { hasEntitlement } from "@calibra-facil/shared";
 import {
   PORTAL_ACCESS_ROLES,
   ac,
@@ -48,12 +45,6 @@ import {
   normalizeLabAccessEmail,
   validateLabAccountSetupToken,
 } from "./lab-access";
-import { assertOrganizationUserLimit } from "./plan-user-limit";
-
-export {
-  assertOrganizationUserLimit,
-  getOrganizationProvisionedUserCount,
-} from "./plan-user-limit";
 
 export type BetterAuthPasskeyPortableTypes =
   | AuthenticationResponseJSON
@@ -61,7 +52,6 @@ export type BetterAuthPasskeyPortableTypes =
   | PublicKeyCredentialRequestOptionsJSON;
 
 let devFallbackAuthSecret: string | null = null;
-const IMPERSONATION_HANDOFF_TOKEN_EXPIRES_IN_SECONDS = 60;
 
 function readEnv(name: string): string | undefined {
   const value = process.env[name]?.trim();
@@ -331,7 +321,7 @@ function getConfiguredTrustedOrigins(): string[] {
   ].filter((origin): origin is string => origin !== null);
 }
 
-type AuthSurface = "lab" | "backoffice" | "portal";
+type AuthSurface = "lab" | "portal";
 
 function isIpv4Address(hostname: string): boolean {
   const parts = hostname.split(".");
@@ -483,16 +473,7 @@ async function isActivePortalCustomOrigin(origin: string): Promise<boolean> {
       ),
     });
 
-    if (!record?.organizationId || !record.verifiedAt) {
-      return false;
-    }
-
-    const currentSubscription = await getDb().query.subscription.findFirst({
-      where: eq(schema.subscription.organizationId, record.organizationId),
-    });
-
-    const planId = currentSubscription?.planId ?? "FREE";
-    return hasEntitlement(planId, "custom_domain");
+    return Boolean(record?.organizationId && record.verifiedAt);
   } catch {
     return false;
   }
@@ -1244,8 +1225,9 @@ function createOrganizationPlugin() {
             },
           },
           // Legal-metrology repair authorization (RBMLQ-I oficina permissionária).
-          // Optional: existing createOrganization/createUser call sites (backoffice,
-          // portal-service-account) must not be forced to pass these.
+          // Optional: existing createOrganization/createUser call sites
+          // (lab provisioning, portal-service-account) must not be forced to
+          // pass these.
           permissionariaAuthorizationNumber: {
             type: "string",
             input: true,
@@ -1294,19 +1276,6 @@ function createOrganizationPlugin() {
             });
           }
         }
-      },
-      // DOM-07: enforce the plan's `users` limit on BOTH provisioning paths —
-      // sending an invitation and directly adding a member. Throws a 402
-      // LIMIT_EXCEEDED (assertOrganizationUserLimit) when the org is at/over its
-      // limit. LAB-only; CLIENT (portal) orgs are exempt (see helper). Pending
-      // invitations count as provisioned seats, so acceptance never exceeds the
-      // limit (accept-invitation adds the member directly and does not run
-      // beforeAddMember, so there is no double count).
-      beforeCreateInvitation: async ({ invitation }) => {
-        await assertOrganizationUserLimit(invitation.organizationId);
-      },
-      beforeAddMember: async ({ member }) => {
-        await assertOrganizationUserLimit(member.organizationId);
       },
     },
     async sendInvitationEmail(data) {
@@ -1523,7 +1492,7 @@ function createSharedConfig(surface: AuthSurface) {
       // organization.setActive, session revoke) refresh the cookie immediately.
       cookieCache: {
         enabled: true,
-        maxAge: 60 * 5, // 5 minutes (lab + portal; backoffice overrides shorter)
+        maxAge: 60 * 5, // 5 minutes
       },
       // Explicit lifetimes (previously implicit Better Auth defaults) for the
       // regulated context. expiresIn = absolute lifetime; updateAge = how often
@@ -1964,11 +1933,6 @@ export function createLabAuth() {
         roles: platformRoles,
         defaultRole: "user",
       }),
-      oneTimeToken({
-        disableClientRequest: true,
-        expiresIn: IMPERSONATION_HANDOFF_TOKEN_EXPIRES_IN_SECONDS,
-        storeToken: "hashed",
-      }),
       createOrganizationPlugin(),
       sso({
         providersLimit: 1,
@@ -1979,79 +1943,6 @@ export function createLabAuth() {
         domainVerification: {
           enabled: true,
         },
-      }),
-    ],
-  });
-}
-
-/**
- * Factory function to create Backoffice Auth instance
- * Call this inside request handlers to ensure env vars are available
- */
-export function createBackofficeAuth() {
-  const sharedConfig = createSharedConfig("backoffice");
-  const isProduction = isProductionRuntime();
-  const baseURL = createBaseUrlConfig(isProduction);
-
-  return betterAuth({
-    ...sharedConfig,
-    basePath: "/api/auth/backoffice",
-    baseURL,
-    // Tighter than lab/portal for the privileged operations surface: a short
-    // cookie-cache window bounds how long a revoked operator session stays live,
-    // and a 1-day absolute lifetime forces a daily re-login (2FA "trust device"
-    // still suppresses repeated TOTP prompts within its own window).
-    session: {
-      cookieCache: {
-        enabled: true,
-        maxAge: 60, // 1 minute
-      },
-      expiresIn: 60 * 60 * 24, // 1 day
-      updateAge: 60 * 60 * 24, // 1 day
-    },
-    emailAndPassword: {
-      ...sharedConfig.emailAndPassword,
-      disableSignUp: true,
-    },
-    databaseHooks: {
-      session: {
-        create: {
-          async after(session: CreatedAuthSessionRecord) {
-            await logAuthSessionCreated("backoffice", session);
-          },
-        },
-      },
-    },
-    advanced: {
-      ...sharedConfig.advanced,
-      cookiePrefix: "backoffice",
-    },
-    plugins: [
-      // Two-factor is mandatory for the internal operations surface. Enrollment
-      // is enforced client-side (apps/backoffice forces TOTP setup before any
-      // page loads); the plugin only intercepts sign-in once a user is enrolled.
-      // TOTP authenticator app + encrypted backup codes only — no email OTP.
-      twoFactor({
-        issuer: "CalibraFácil Ops",
-        backupCodeOptions: {
-          // Better Auth stores backup codes as plain JSON unless told
-          // otherwise (the TOTP secret is always encrypted). Encrypt them at
-          // rest under the auth secret so a database leak doesn't yield
-          // working 2FA bypass codes. Rows enrolled before this option must
-          // be re-encrypted (packages/auth/scripts/encrypt-two-factor-backup-codes.ts)
-          // or regenerated. Note: rotating BETTER_AUTH_SECRET invalidates them.
-          storeBackupCodes: "encrypted",
-        },
-      }),
-      adminPlugin({
-        ac: platformAc,
-        roles: platformRoles,
-        defaultRole: "user",
-      }),
-      oneTimeToken({
-        disableClientRequest: true,
-        expiresIn: IMPERSONATION_HANDOFF_TOKEN_EXPIRES_IN_SECONDS,
-        storeToken: "hashed",
       }),
     ],
   });
@@ -2127,7 +2018,6 @@ export function createPortalAuth() {
 // For backwards compatibility in non-Worker environments (like local dev with Bun)
 // These are lazily initialized on first use
 let _labAuth: ReturnType<typeof createLabAuth> | null = null;
-let _backofficeAuth: ReturnType<typeof createBackofficeAuth> | null = null;
 let _portalAuth: ReturnType<typeof createPortalAuth> | null = null;
 
 export function getLabAuth() {
@@ -2135,13 +2025,6 @@ export function getLabAuth() {
     _labAuth = createLabAuth();
   }
   return _labAuth;
-}
-
-export function getBackofficeAuth() {
-  if (!_backofficeAuth) {
-    _backofficeAuth = createBackofficeAuth();
-  }
-  return _backofficeAuth;
 }
 
 export function getPortalAuth() {
@@ -2153,7 +2036,6 @@ export function getPortalAuth() {
 
 // Type definitions for auth instances with organization plugin
 export type LabAuth = ReturnType<typeof createLabAuth>;
-export type BackofficeAuth = ReturnType<typeof createBackofficeAuth>;
 export type PortalAuth = ReturnType<typeof createPortalAuth>;
 
 // Legacy exports for backwards compatibility (lazy getters)
@@ -2163,15 +2045,6 @@ export const labAuth: Pick<LabAuth, "api" | "handler"> = {
   },
   get handler() {
     return getLabAuth().handler;
-  },
-};
-
-export const backofficeAuth: Pick<BackofficeAuth, "api" | "handler"> = {
-  get api() {
-    return getBackofficeAuth().api;
-  },
-  get handler() {
-    return getBackofficeAuth().handler;
   },
 };
 

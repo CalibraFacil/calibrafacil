@@ -57,15 +57,6 @@ export type PortalDigestBackgroundJobMessage = {
 };
 
 /**
- * Daily timer that syncs lab-org staff into the Resend marketing audience.
- * Like the other timers it carries no payload — the worker derives the member
- * set from the current DB state. Gated behind MARKETING_CONTACT_SYNC_ENABLED.
- */
-export type MarketingContactSyncBackgroundJobMessage = {
-  type: "MARKETING_CONTACT_SYNC";
-};
-
-/**
  * Nightly timer that re-evaluates every SPC control chart against its stored
  * check-standard readings (ISO/IEC 17025 §7.7.1, issue #60). No payload — the
  * worker sweeps all charts.
@@ -100,7 +91,6 @@ export type BackgroundJobMessage =
   | IntegrationSyncBackgroundJobMessage
   | ScheduledNotificationsBackgroundJobMessage
   | PortalDigestBackgroundJobMessage
-  | MarketingContactSyncBackgroundJobMessage
   | SpcRecomputeBackgroundJobMessage
   | EmailDomainHealthBackgroundJobMessage
   | AuditPackBackgroundJobMessage;
@@ -116,7 +106,6 @@ export function isBackgroundJobMessage(
   if (
     type === "SCHEDULED_NOTIFICATIONS" ||
     type === "PORTAL_DIGEST" ||
-    type === "MARKETING_CONTACT_SYNC" ||
     type === "SPC_RECOMPUTE" ||
     type === "EMAIL_DOMAIN_HEALTH"
   ) {

@@ -103,10 +103,6 @@ vi.mock("../../middleware/permission", async () => {
   };
 });
 
-vi.mock("../../middleware/tier-guard", () => ({
-  requireFeature: () => async (_c: Context, next: Next) => next(),
-}));
-
 vi.mock("../../lib/certificate-release", () => ({
   recomputeCertificateRelease: mocks.recomputeCertificateRelease,
   releaseByException: mocks.releaseByException,

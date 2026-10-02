@@ -1,4 +1,3 @@
-import { cn } from '@/lib/utils'
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import {
@@ -153,25 +152,16 @@ export function ContaAzulTextSetting({
 export function DomainSwitchRow({
   checked,
   description,
-  disabled,
   label,
   onCheckedChange,
 }: {
   checked: boolean
   description: string
-  disabled: boolean
   label: string
   onCheckedChange: (checked: boolean) => void
 }) {
   return (
-    <label
-      className={cn(
-        'flex items-start justify-between gap-3 rounded-lg bg-card px-3 py-2.5 ring-1 ring-inset ring-border/70 transition-colors',
-        !disabled &&
-          'hover:ring-border has-[button[data-checked]]:bg-primary/[0.03]',
-        disabled && 'opacity-60',
-      )}
-    >
+    <label className="flex items-start justify-between gap-3 rounded-lg bg-card px-3 py-2.5 ring-1 ring-inset ring-border/70 transition-colors hover:ring-border has-[button[data-checked]]:bg-primary/[0.03]">
       <span className="min-w-0">
         <span className="block text-sm font-medium leading-none">{label}</span>
         <span className="mt-1 block text-xs text-pretty text-muted-foreground">
@@ -180,7 +170,6 @@ export function DomainSwitchRow({
       </span>
       <Switch
         checked={checked}
-        disabled={disabled}
         onCheckedChange={(nextChecked) => onCheckedChange(nextChecked === true)}
         className="mt-0.5"
       />

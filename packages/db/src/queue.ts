@@ -12,9 +12,7 @@ import {
 
 export type QueueMessage = Exclude<
   BackgroundJobMessage,
-  | { type: "SCHEDULED_NOTIFICATIONS" }
-  | { type: "PORTAL_DIGEST" }
-  | { type: "MARKETING_CONTACT_SYNC" }
+  { type: "SCHEDULED_NOTIFICATIONS" } | { type: "PORTAL_DIGEST" }
 >;
 
 export type ClaimedQueueJob = {
@@ -49,8 +47,7 @@ function isQueueMessage(value: unknown): value is QueueMessage {
   return (
     isBackgroundJobMessage(value) &&
     value.type !== "SCHEDULED_NOTIFICATIONS" &&
-    value.type !== "PORTAL_DIGEST" &&
-    value.type !== "MARKETING_CONTACT_SYNC"
+    value.type !== "PORTAL_DIGEST"
   );
 }
 
@@ -230,8 +227,7 @@ export type QueueDepth = {
 };
 
 // Backlog snapshot by status for the /api/health readiness probe.
-// Cheap aggregate over the (small, pruned) queue table — informational only;
-// alerting on FAILED rows stays in the operator-alerts engine.
+// Cheap aggregate over the (small, pruned) queue table — informational only.
 export async function countQueueJobsByStatus(): Promise<QueueDepth> {
   const result = await db.execute(sql`
     select status, count(*)::int as count

@@ -16,7 +16,6 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../../middleware/permission";
-import { requireFeature } from "../../middleware/tier-guard";
 import { buildUnitScopeCondition } from "../../lib/units";
 import {
   recomputeCertificateRelease,
@@ -200,8 +199,6 @@ export const financeCertificateReleaseRouter = new Hono<{
   .get(
     "/:calibrationJobId",
     ...withLabPermission({ financial: ["read"] }),
-    requireFeature("financial"),
-    requireFeature("financial_integrations"),
     zValidator("param", JobIdParamSchema),
     async (c) => {
       const member = c.get("member");
@@ -236,8 +233,6 @@ export const financeCertificateReleaseRouter = new Hono<{
   .post(
     "/:calibrationJobId/release-by-exception",
     ...withLabPermission({ financial: ["export"] }),
-    requireFeature("financial"),
-    requireFeature("financial_integrations"),
     zValidator("param", JobIdParamSchema),
     zValidator("json", ReleaseByExceptionSchema),
     async (c) => {
@@ -282,58 +277,45 @@ export const financeCertificateReleaseRouter = new Hono<{
 export const settingsCertificateReleasePolicyRouter = new Hono<{
   Variables: AuthVariables;
 }>()
-  .get(
-    "/",
-    ...withLabPermission({ financial: ["read"] }),
-    requireFeature("financial"),
-    requireFeature("financial_integrations"),
-    async (c) => {
-      const member = c.get("member");
-      const rows = await db
-        .select({
-          id: certificateReleasePolicy.id,
-          mode: certificateReleasePolicy.mode,
-          customerId: certificateReleasePolicy.customerId,
-          customerName: customer.name,
-          commercialAgreementId: certificateReleasePolicy.commercialAgreementId,
-          serviceCategory: certificateReleasePolicy.serviceCategory,
-          priority: certificateReleasePolicy.priority,
-          archivedAt: certificateReleasePolicy.archivedAt,
-          createdAt: certificateReleasePolicy.createdAt,
-          updatedAt: certificateReleasePolicy.updatedAt,
-        })
-        .from(certificateReleasePolicy)
-        .leftJoin(
-          customer,
-          eq(customer.id, certificateReleasePolicy.customerId),
-        )
-        .where(
-          eq(certificateReleasePolicy.organizationId, member.organizationId),
-        )
-        .orderBy(certificateReleasePolicy.id);
+  .get("/", ...withLabPermission({ financial: ["read"] }), async (c) => {
+    const member = c.get("member");
+    const rows = await db
+      .select({
+        id: certificateReleasePolicy.id,
+        mode: certificateReleasePolicy.mode,
+        customerId: certificateReleasePolicy.customerId,
+        customerName: customer.name,
+        commercialAgreementId: certificateReleasePolicy.commercialAgreementId,
+        serviceCategory: certificateReleasePolicy.serviceCategory,
+        priority: certificateReleasePolicy.priority,
+        archivedAt: certificateReleasePolicy.archivedAt,
+        createdAt: certificateReleasePolicy.createdAt,
+        updatedAt: certificateReleasePolicy.updatedAt,
+      })
+      .from(certificateReleasePolicy)
+      .leftJoin(customer, eq(customer.id, certificateReleasePolicy.customerId))
+      .where(eq(certificateReleasePolicy.organizationId, member.organizationId))
+      .orderBy(certificateReleasePolicy.id);
 
-      const data: PolicyDTO[] = rows.map((row) => ({
-        id: row.id,
-        mode: row.mode,
-        customerId: row.customerId,
-        customerName: row.customerName ?? null,
-        commercialAgreementId: row.commercialAgreementId,
-        serviceCategory: row.serviceCategory,
-        priority: row.priority,
-        scope: policyScope(row),
-        archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
-        createdAt: row.createdAt.toISOString(),
-        updatedAt: row.updatedAt.toISOString(),
-      }));
+    const data: PolicyDTO[] = rows.map((row) => ({
+      id: row.id,
+      mode: row.mode,
+      customerId: row.customerId,
+      customerName: row.customerName ?? null,
+      commercialAgreementId: row.commercialAgreementId,
+      serviceCategory: row.serviceCategory,
+      priority: row.priority,
+      scope: policyScope(row),
+      archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    }));
 
-      return c.json({ data });
-    },
-  )
+    return c.json({ data });
+  })
   .post(
     "/",
     ...withLabPermission({ financial: ["contract_create"] }),
-    requireFeature("financial"),
-    requireFeature("financial_integrations"),
     zValidator("json", CreatePolicySchema),
     async (c) => {
       const member = c.get("member");
@@ -393,8 +375,6 @@ export const settingsCertificateReleasePolicyRouter = new Hono<{
   .put(
     "/:id",
     ...withLabPermission({ financial: ["contract_update"] }),
-    requireFeature("financial"),
-    requireFeature("financial_integrations"),
     zValidator("param", PolicyIdParamSchema),
     zValidator("json", UpdatePolicySchema),
     async (c) => {

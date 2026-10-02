@@ -176,5 +176,5 @@ compiler), `method-templates` (catalog of calibration methods), `certificate-dat
 `documents` (certificate/label data and templates), `signing` (PAdES / ICP-Brasil),
 `label-rendering` (ZPL/TSPL thermal labels), `email` (React Email), `email-sender`,
 `notifications`, `interval-analysis` (calibration intervals), `local-db` (SQLite offline
-store), `shared` (plans, config, public URLs, storage endpoints), `oxlint-plugin-calibra`
+store), `shared` (domain vocabularies, units, public URLs, storage endpoints), `oxlint-plugin-calibra`
 (architecture lint rules).

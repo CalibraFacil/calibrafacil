@@ -85,12 +85,10 @@ function dateToDraft(date: Date | undefined): string {
 export function OrganizationProfileSection({
   activeOrg,
   canManageOrganizationSettings,
-  hasMultiUnit,
   governanceViewer,
 }: {
   activeOrg: ActiveOrganization
   canManageOrganizationSettings: boolean
-  hasMultiUnit: boolean
   governanceViewer: GovernanceViewer | null
 }) {
   const identityDraft = createOrganizationIdentityDraft(activeOrg)
@@ -180,7 +178,7 @@ export function OrganizationProfileSection({
   const queryClient = useQueryClient()
   const unitContextQuery = useDashboardUnitsData({
     organizationId: activeOrg.id,
-    enabled: hasMultiUnit,
+    enabled: true,
   })
 
   const logoUploadMutation = useMutation({
@@ -344,17 +342,7 @@ export function OrganizationProfileSection({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {!hasMultiUnit ? (
-              <div className="rounded-xl border bg-muted/30 p-4">
-                <Badge variant="secondary">Unidade única</Badge>
-                <p className="mt-3 text-sm text-muted-foreground">
-                  Sua organização opera em uma única unidade — toda a operação
-                  usa o mesmo escopo. A governança multiunidade (escopos por
-                  unidade e visão consolidada) fica disponível no plano
-                  Enterprise.
-                </p>
-              </div>
-            ) : unitContextQuery.isPending ? (
+            {unitContextQuery.isPending ? (
               <div className="grid gap-4 md:grid-cols-3">
                 <Skeleton className="h-28 w-full" />
                 <Skeleton className="h-28 w-full" />

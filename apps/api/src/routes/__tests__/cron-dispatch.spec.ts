@@ -8,7 +8,6 @@ const mocks = vi.hoisted(() => ({
   processScheduledContaAzulIntegrationSyncs: vi.fn(),
   processScheduledContaAzulPolls: vi.fn(),
   processScheduledIntegrationSyncs: vi.fn(),
-  recomputeOperatorAlerts: vi.fn(),
 }));
 
 vi.mock("../../lib/auth-maintenance", () => ({
@@ -31,10 +30,6 @@ vi.mock("../../lib/integrations", () => ({
 
 vi.mock("@calibra-facil/worker/integrations", () => ({
   processScheduledIntegrationSyncs: mocks.processScheduledIntegrationSyncs,
-}));
-
-vi.mock("../../lib/operator-alerts", () => ({
-  recomputeOperatorAlerts: mocks.recomputeOperatorAlerts,
 }));
 
 // The runCron wrapper leases + heartbeats via db.execute. A row from the lease
@@ -63,7 +58,6 @@ beforeEach(() => {
     DATABASE_URL: "postgres://test",
   });
   mocks.enqueueBackgroundJob.mockResolvedValue({ enqueued: true });
-  mocks.recomputeOperatorAlerts.mockResolvedValue({ alerts: 0 });
   mocks.processScheduledIntegrationSyncs.mockResolvedValue({
     scheduledRuns: 1,
   });
@@ -97,7 +91,6 @@ describe("cron dispatch", () => {
       error: "Unknown cron job: bogus",
     });
     expect(mocks.enqueueBackgroundJob).not.toHaveBeenCalled();
-    expect(mocks.recomputeOperatorAlerts).not.toHaveBeenCalled();
   });
 });
 
@@ -218,42 +211,6 @@ describe("notifications cron", () => {
       error: "CRON_SECRET não configurado",
     });
     expect(mocks.enqueueBackgroundJob).not.toHaveBeenCalled();
-  });
-});
-
-describe("operator-alerts cron", () => {
-  it("recomputes operator alerts and returns the result", async () => {
-    mocks.recomputeOperatorAlerts.mockResolvedValue({ alerts: 3 });
-
-    const response = await GET(request("/api/cron/operator-alerts"));
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ alerts: 3 });
-    expect(mocks.recomputeOperatorAlerts).toHaveBeenCalledTimes(1);
-  });
-
-  it("rejects invalid cron credentials", async () => {
-    process.env.CRON_SECRET = "secret-1";
-
-    const response = await GET(
-      request("/api/cron/operator-alerts", { authorization: "Bearer wrong" }),
-    );
-
-    expect(response.status).toBe(401);
-    await expect(response.json()).resolves.toEqual({ error: "Unauthorized" });
-    expect(mocks.recomputeOperatorAlerts).not.toHaveBeenCalled();
-  });
-
-  it("fails closed without a CRON_SECRET on Vercel", async () => {
-    process.env.VERCEL = "1";
-
-    const response = await GET(request("/api/cron/operator-alerts"));
-
-    expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toEqual({
-      error: "CRON_SECRET não configurado",
-    });
-    expect(mocks.recomputeOperatorAlerts).not.toHaveBeenCalled();
   });
 });
 

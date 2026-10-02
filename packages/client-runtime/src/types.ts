@@ -1295,20 +1295,8 @@ export interface ReportsApi {
   getTrend<TResponse = unknown>(input?: ReportsQueryInput): Promise<TResponse>;
 }
 
-export interface PublicCheckoutApi {
-  getSnapshot<TResponse = unknown>(token: string): Promise<TResponse>;
-  getStatus<TResponse = unknown>(token: string): Promise<TResponse>;
-  start<TResponse = unknown>(token: string): Promise<TResponse>;
-}
-
 export interface PublicSignupApi {
   start<TInput = unknown>(input: TInput): Promise<SelfServeSignupResponse>;
-}
-
-export interface PublicLeadsApi {
-  create<TResponse = unknown, TInput = unknown>(
-    input: TInput,
-  ): Promise<TResponse>;
 }
 
 export type NonConformanceListInput = {
@@ -1769,27 +1757,6 @@ export interface TrainingRecordsApi {
   ): Promise<TResponse>;
 }
 
-export type CustomerSuccessRequestInput = {
-  category:
-    | "GENERAL"
-    | "TRAINING"
-    | "MIGRATION"
-    | "INTEGRATION"
-    | "BILLING"
-    | "INCIDENT";
-  priority: "LOW" | "NORMAL" | "HIGH" | "URGENT";
-  subject: string;
-  description: string;
-};
-
-export interface CustomerSuccessApi {
-  getProfile<TResponse = unknown>(): Promise<TResponse>;
-  listRequests<TResponse = unknown>(): Promise<TResponse>;
-  createRequest<TResponse = unknown>(
-    input: CustomerSuccessRequestInput,
-  ): Promise<TResponse>;
-}
-
 export type CalibrationRequestsListInput = {
   page: number;
   limit: number;
@@ -2173,34 +2140,7 @@ export interface UnitsApi {
   ): Promise<TResponse>;
 }
 
-export type PlanAccessResponse = {
-  planId: string;
-  planName: string;
-  status: string;
-  limits: {
-    certificates: number;
-    users: number;
-    storage: number;
-  };
-  entitlements: string[];
-  hasFinancial: boolean;
-  hasFinancialModule: boolean;
-  /** billing:["read"] — may see the plan, usage and invoices. */
-  canViewBilling: boolean;
-  /** billing:["update"] — may contract or cancel. Owner only today. */
-  canManageBilling: boolean;
-  hasApi: boolean;
-  hasCustomDomain: boolean;
-  hasSso: boolean;
-};
-
 export type FinanceAccessResponse = {
-  planId: string;
-  planName: string;
-  status: string;
-  entitlements: string[];
-  hasFinancialModule: boolean;
-  hasFinancialIntegrations: boolean;
   canReadFinancial: boolean;
   canManageFinancial: boolean;
   canExportFinancial: boolean;
@@ -2227,7 +2167,6 @@ export interface OnboardingApi {
 }
 
 export interface AccessApi {
-  getPlanAccess(): Promise<PlanAccessResponse>;
   getFinanceAccess(): Promise<FinanceAccessResponse>;
 }
 
@@ -2327,62 +2266,6 @@ export interface SessionsApi {
   revoke(sessionId: string): Promise<unknown>;
 }
 
-export type BillingSubscriptionSummary = {
-  id: number | string;
-  planId: string;
-  status: string;
-  billingCycle?: string | null;
-  currentPeriodStart?: string | Date | null;
-  currentPeriodEnd?: string | Date | null;
-  nextBillingDate?: string | Date | null;
-  canceledAt?: string | Date | null;
-  createdAt?: string | Date | null;
-};
-
-export type BillingPlanSummary = {
-  id: string;
-  name: string;
-  description?: string;
-  recommendedFor?: string;
-};
-
-export type BillingUsageSummary = {
-  jobsCreated: number;
-  users: number;
-  storage: number;
-};
-
-export type BillingLimitsSummary = {
-  certificates: number;
-  users: number;
-  storage: number;
-};
-
-export type BillingSubscriptionResponse = {
-  subscription: BillingSubscriptionSummary | null;
-  plan: BillingPlanSummary | null;
-  usage: BillingUsageSummary;
-  limits: BillingLimitsSummary;
-};
-
-export type BillingPaymentRecord = {
-  id: number;
-  amount: number;
-  status: string;
-  paymentMethod: string;
-  createdAt: string | Date;
-  invoiceUrl?: string | null;
-  bankSlipUrl?: string | null;
-};
-
-export type BillingPaymentsResponse = {
-  data: BillingPaymentRecord[];
-};
-
-export type BillingCancelSubscriptionResponse = {
-  subscription: BillingSubscriptionSummary | null;
-};
-
 export type SelfServeSignupResponse = {
   ok: true;
   email?: string;
@@ -2391,204 +2274,6 @@ export type SelfServeSignupResponse = {
   error?: string;
   code?: string;
 };
-
-export type SelfServeCheckoutResponse = {
-  /** Path of the public checkout page, e.g. "/checkout/<token>". */
-  checkoutPath: string;
-  offerId: string;
-  /** True when an open offer for the same plan was handed back. */
-  reused: boolean;
-};
-
-export interface BillingApi {
-  getSubscription(): Promise<BillingSubscriptionResponse>;
-  listPayments(input?: {
-    limit?: number;
-    offset?: number;
-  }): Promise<BillingPaymentsResponse>;
-  /** Mints (or reuses) a checkout for the plan the lab picked itself. */
-  startSelfServeCheckout(input: {
-    planId: "STANDARD" | "PROFESSIONAL" | "ADVANCED";
-    billingCycle: "MONTHLY" | "YEARLY";
-    paymentMethod?: "PIX" | "BOLETO" | "CREDIT_CARD";
-  }): Promise<SelfServeCheckoutResponse>;
-  /**
-   * Returns the subscription as it stands after cancelling — the endpoint
-   * answers with the row, not an acknowledgement flag.
-   */
-  cancelSubscription(): Promise<BillingCancelSubscriptionResponse>;
-}
-
-export type BackofficeAccessResponse = {
-  allowed: boolean;
-  roles?: string[];
-  bootstrapAvailable: boolean;
-  isImpersonating?: boolean;
-  session?: {
-    userId: string;
-    email: string;
-  };
-};
-
-export type BackofficeBootstrapInput = {
-  token: string;
-  name?: string;
-  email?: string;
-  password?: string;
-};
-
-export interface BackofficeApi {
-  getAccess(): Promise<BackofficeAccessResponse>;
-  bootstrap<TResponse = unknown>(
-    input: BackofficeBootstrapInput,
-  ): Promise<TResponse>;
-  listOrganizations<TResponse = unknown>(): Promise<TResponse>;
-  getOrganization<TResponse = unknown>(id: string): Promise<TResponse>;
-  getSupportQueue<TResponse = unknown>(): Promise<TResponse>;
-  listUsers<TResponse = unknown>(
-    input?: Record<string, unknown>,
-  ): Promise<TResponse>;
-  updateUserRole<TResponse = unknown>(
-    id: string,
-    role: string,
-  ): Promise<TResponse>;
-  banUser<TResponse = unknown>(id: string): Promise<TResponse>;
-  unbanUser<TResponse = unknown>(id: string): Promise<TResponse>;
-  impersonateUser<TResponse = unknown>(
-    id: string,
-    reason: string,
-  ): Promise<TResponse>;
-  createUser<TResponse = unknown>(input: unknown): Promise<TResponse>;
-  provisionLab<TResponse = unknown>(input: unknown): Promise<TResponse>;
-  requestUserPasswordReset<TResponse = unknown>(id: string): Promise<TResponse>;
-  getUser<TResponse = unknown>(id: string): Promise<TResponse>;
-  listUserSessions<TResponse = unknown>(id: string): Promise<TResponse>;
-  revokeUserSession<TResponse = unknown>(
-    id: string,
-    sessionId: string,
-  ): Promise<TResponse>;
-  listUserActivity<TResponse = unknown>(
-    id: string,
-    input?: Record<string, unknown>,
-  ): Promise<TResponse>;
-  getPresence<TResponse = unknown>(): Promise<TResponse>;
-  listAuditLog<TResponse = unknown>(
-    input?: Record<string, unknown>,
-  ): Promise<TResponse>;
-  getIntegrationHealth<TResponse = unknown>(): Promise<TResponse>;
-  getVitals<TResponse = unknown>(): Promise<TResponse>;
-  listOperatorAlerts<TResponse = unknown>(
-    input?: Record<string, unknown>,
-  ): Promise<TResponse>;
-  recomputeOperatorAlerts<TResponse = unknown>(): Promise<TResponse>;
-  acknowledgeOperatorAlert<TResponse = unknown>(
-    id: string | number,
-  ): Promise<TResponse>;
-  listAccountTasks<TResponse = unknown>(
-    input?: Record<string, unknown>,
-  ): Promise<TResponse>;
-  createAccountTask<TResponse = unknown>(input: unknown): Promise<TResponse>;
-  completeAccountTask<TResponse = unknown>(
-    id: string | number,
-  ): Promise<TResponse>;
-  updateOrganizationLifecycle<TResponse = unknown>(
-    id: string,
-    input: unknown,
-  ): Promise<TResponse>;
-  listInteractions<TResponse = unknown>(id: string): Promise<TResponse>;
-  createInteraction<TResponse = unknown>(
-    id: string,
-    input: unknown,
-  ): Promise<TResponse>;
-  manageSubscription<TResponse = unknown>(
-    id: string,
-    input: unknown,
-  ): Promise<TResponse>;
-  listEntitlementOverrides<TResponse = unknown>(id: string): Promise<TResponse>;
-  grantEntitlementOverride<TResponse = unknown>(
-    id: string,
-    input: unknown,
-  ): Promise<TResponse>;
-  revokeEntitlementOverride<TResponse = unknown>(
-    id: string | number,
-  ): Promise<TResponse>;
-  getOrganizationActivity<TResponse = unknown>(id: string): Promise<TResponse>;
-  listImportRuns<TResponse = unknown>(id: string): Promise<TResponse>;
-  parseImportFile<TResponse = unknown>(
-    id: string,
-    input: unknown,
-  ): Promise<TResponse>;
-  validateImportRun<TResponse = unknown>(
-    id: string,
-    input: unknown,
-  ): Promise<TResponse>;
-  listApprovals<TResponse = unknown>(
-    input?: Record<string, unknown>,
-  ): Promise<TResponse>;
-  createApprovalRequest<TResponse = unknown>(
-    input: unknown,
-  ): Promise<TResponse>;
-  decideApproval<TResponse = unknown>(
-    id: string | number,
-    input: unknown,
-  ): Promise<TResponse>;
-  commercial: {
-    listOrganizations<TResponse = unknown>(search?: string): Promise<TResponse>;
-    getContext<TResponse = unknown>(organizationId: string): Promise<TResponse>;
-    syncBillingCustomer<TResponse = unknown>(
-      input: unknown,
-    ): Promise<TResponse>;
-    createBillingContact<TResponse = unknown>(
-      input: unknown,
-    ): Promise<TResponse>;
-    previewOffer<TResponse = unknown>(input: unknown): Promise<TResponse>;
-    issueOffer<TResponse = unknown>(input: unknown): Promise<TResponse>;
-    cancelOffer<TResponse = unknown>(
-      offerId: string,
-      input: { reason: string; approvalRequestId?: number },
-    ): Promise<TResponse>;
-    reissueOffer<TResponse = unknown>(
-      offerId: string,
-      input: unknown,
-    ): Promise<TResponse>;
-  };
-  customerSuccess: {
-    listOrganizations<TResponse = unknown>(): Promise<TResponse>;
-    getProfile<TResponse = unknown>(organizationId: string): Promise<TResponse>;
-    getRequests<TResponse = unknown>(
-      organizationId: string,
-    ): Promise<TResponse>;
-    updateProfile<TResponse = unknown>(
-      organizationId: string,
-      input: unknown,
-    ): Promise<TResponse>;
-    updateRequestStatus<TResponse = unknown>(
-      requestId: string | number,
-      input: unknown,
-    ): Promise<TResponse>;
-    assignRequest<TResponse = unknown>(
-      requestId: string | number,
-      input: unknown,
-    ): Promise<TResponse>;
-    respondRequest<TResponse = unknown>(
-      requestId: string | number,
-      input: unknown,
-    ): Promise<TResponse>;
-    escalateRequest<TResponse = unknown>(
-      requestId: string | number,
-      input: unknown,
-    ): Promise<TResponse>;
-    updateNextAction<TResponse = unknown>(
-      organizationId: string,
-      input: unknown,
-    ): Promise<TResponse>;
-    updateBlocker<TResponse = unknown>(
-      organizationId: string,
-      input: unknown,
-    ): Promise<TResponse>;
-  };
-  stopImpersonation(): Promise<{ ok: true }>;
-}
 
 export type StartSsoInput = {
   organizationSlug: string;
@@ -2637,12 +2322,6 @@ export type SsoSettingsResponse = {
     canCreate: boolean;
     canManage: boolean;
     canDelete: boolean;
-  };
-  billing: {
-    planId: string;
-    planName: string;
-    status: string;
-    hasSso: boolean;
   };
 };
 
@@ -3108,8 +2787,6 @@ export interface CalibraApi {
   onboarding: OnboardingApi;
   sessions: SessionsApi;
   finance: FinanceApi;
-  billing: BillingApi;
-  backoffice: BackofficeApi;
   sso: SsoApi;
   apiKeys: ApiKeysApi;
   entityLabels: EntityLabelsApi;
@@ -3136,9 +2813,7 @@ export interface CalibraApi {
   environmentalLimits: EnvironmentalLimitsApi;
   accreditedScope: AccreditedScopeApi;
   reports: ReportsApi;
-  publicCheckout: PublicCheckoutApi;
   publicInvitations: PublicInvitationsApi;
-  publicLeads: PublicLeadsApi;
   publicSignup: PublicSignupApi;
   labSetup: LabSetupApi;
   nonConformances: NonConformancesApi;
@@ -3147,7 +2822,6 @@ export interface CalibraApi {
   spc: SpcApi;
   competences: CompetencesApi;
   trainingRecords: TrainingRecordsApi;
-  customerSuccess: CustomerSuccessApi;
   calibrationRequests: CalibrationRequestsApi;
   visits: VisitsApi;
   integrations: IntegrationsApi;

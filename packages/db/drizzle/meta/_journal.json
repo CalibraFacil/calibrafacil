@@ -778,6 +778,13 @@
       "when": 1784563609000,
       "tag": "0110_managed_email_domains",
       "breakpoints": true
+    },
+    {
+      "idx": 111,
+      "version": "7",
+      "when": 1790900000000,
+      "tag": "0111_free_open_source",
+      "breakpoints": true
     }
   ]
 }

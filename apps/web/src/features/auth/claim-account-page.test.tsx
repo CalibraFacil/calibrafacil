@@ -188,7 +188,6 @@ describe('ClaimAccountPage', () => {
     })
     expect(claimMocks.navigate).toHaveBeenCalledWith({
       to: '/onboarding/organization',
-      search: {},
     })
   })
 

@@ -60,11 +60,6 @@ const customers = await db
 - `referenceStandard` - Reference standards used in calibrations
 - `scheduledNotification` - Tracks sent compliance alerts
 
-### Billing
-
-- `subscription` - Organization subscriptions
-- `paymentHistory` - Invoice records
-
 ## Commands
 
 ```bash

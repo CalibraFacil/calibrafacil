@@ -3,7 +3,6 @@ import {
   labOrganization,
   mockDashboardOrganizations,
   mockLabSession,
-  mockPlanAccess,
 } from './helpers'
 
 test('command palette supports keyboard navigation and organization selection', async ({
@@ -29,7 +28,6 @@ test('command palette supports keyboard navigation and organization selection', 
       slug: 'matriz',
     }),
   })
-  await mockPlanAccess(page)
   await page.goto('/dashboard/jobs')
   await expect(
     page.getByRole('button', { name: 'Buscar... Ctrl+K' }),

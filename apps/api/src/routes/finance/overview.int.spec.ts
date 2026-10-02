@@ -5,7 +5,6 @@ import {
   billingDocument,
   customer,
   organization,
-  subscription,
 } from "@calibra-facil/db/schema";
 import { inArray } from "drizzle-orm";
 import { loginAs, logout } from "../../../test/integration/setup";
@@ -15,7 +14,7 @@ import { seedOrg } from "../../../test/integration/seed";
 // Real-DB + real-RBAC integration test for financeOverviewRouter (GET /finance/overview).
 //
 // Only the better-auth session is mocked (see test/integration/setup.ts).
-// withLabPermission({ financial: ["read"] }) + requireFeature("financial") run
+// withLabPermission({ financial: ["read"] }) runs
 // for real against the seeded Postgres.  This proves what the vi.mock(db) tier
 // cannot: money-data tenant isolation enforced by the handler's WHERE clauses.
 //
@@ -24,19 +23,12 @@ import { seedOrg } from "../../../test/integration/seed";
 //     "member"  → 403  (financial:read NOT granted; member role has no financial perms)
 //     "admin"   → pass (financial:read granted)
 //
-// Feature-gate surface:
-//   requireFeature("financial") checks the subscription row:
-//     no subscription / FREE / STANDARD → 403 (financial feature absent on these plans)
-//     PROFESSIONAL                      → pass-through
-//
 // Proven properties:
 //   REQ-FINOVW-001  GET / returns ONLY the authed org's financial totals —
 //                   two orgs each with billing documents; org B's data must not
 //                   appear in org A's counts or recent-documents list.
 //                   [HIGH VALUE — money data isolation]
 //   REQ-FINOVW-002  GET / as "member" → 403 (financial:read absent for member role)
-//   REQ-FINOVW-003  GET / as admin without a PROFESSIONAL subscription → 403
-//                   (feature gate fires before business logic)
 //   REQ-FINOVW-004  Unauthenticated → 401
 
 const JSON_HEADERS = { "content-type": "application/json" };
@@ -80,18 +72,6 @@ async function seedCustomer(params: {
 
   if (!row) throw new Error("seedCustomer: insert failed");
   return row.id;
-}
-
-/**
- * Seed a PROFESSIONAL subscription for an org so requireFeature("financial")
- * passes.  PROFESSIONAL plan has both "financial" and "financial_integrations".
- */
-async function seedProfessionalSubscription(orgId: string): Promise<void> {
-  await db.insert(subscription).values({
-    organizationId: orgId,
-    planId: "PROFESSIONAL",
-    status: "ACTIVE",
-  });
 }
 
 /**
@@ -140,11 +120,9 @@ describe("financeOverviewRouter — real DB + real RBAC + feature gate", () => {
   // [HIGH VALUE — money data isolation]
   // =========================================================================
   it("REQ-FINOVW-001: GET / returns only the authed org's financial totals — org B's documents excluded", async () => {
-    // Two independent labs, each with PROFESSIONAL subscription.
+    // Two independent labs.
     const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
     const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
-    await seedProfessionalSubscription(orgA.orgId);
-    await seedProfessionalSubscription(orgB.orgId);
 
     const custA = await seedCustomer({
       labOrgId: orgA.orgId,
@@ -242,27 +220,8 @@ describe("financeOverviewRouter — real DB + real RBAC + feature gate", () => {
   // REQ-FINOVW-002: GET / as "member" → 403 (financial:read absent)
   // =========================================================================
   it("REQ-FINOVW-002: GET / as member → 403 (financial:read not granted to member role)", async () => {
-    // Even with a valid subscription the "member" role has no financial perms
+    // The "member" role has no financial perms
     const org = await seedOrg({ orgId: "org-a", role: "member" });
-    await seedProfessionalSubscription(org.orgId);
-
-    loginAs({ userId: org.userId, organizationId: org.orgId });
-    const res = await financeOverviewRouter.request("/", {
-      headers: JSON_HEADERS,
-    });
-
-    expect(res.status).toBe(403);
-  });
-
-  // =========================================================================
-  // REQ-FINOVW-003: GET / as admin with FREE plan → 403 (feature gate)
-  // (no subscription row → tier defaults to FREE → "financial" feature absent)
-  // =========================================================================
-  it("REQ-FINOVW-003: GET / as admin with no subscription (FREE plan) → 403 (requireFeature blocks financial)", async () => {
-    // Admin role has financial:read permission, but no subscription row is
-    // seeded → tier-guard falls back to FREE plan → hasFeature("financial")=false
-    const org = await seedOrg({ orgId: "org-a", role: "admin" });
-    // Intentionally no subscription — defaults to FREE
 
     loginAs({ userId: org.userId, organizationId: org.orgId });
     const res = await financeOverviewRouter.request("/", {

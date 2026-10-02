@@ -73,7 +73,7 @@ covers the big-picture architecture; `CONTRIBUTING.md` covers the contribution f
 - Runtime constants, telemetry flags, and dashboard storage keys belong in
   `apps/web/src/app/config/runtime.ts` and
   `apps/web/src/features/dashboard/dashboard-scope-storage.ts`.
-- Route navigation, cloud-only state, sidebar visibility, and plan/role rules should use
+- Route navigation, cloud-only state, sidebar visibility, and role rules should use
   `apps/web/src/app/router/route-meta.ts` where possible.
 - Forms for regulated workflows should be schema-first. Prefer `@calibra-facil/schemas` for
   domain payloads and feature `forms.ts` files for UI-to-payload parsing.
@@ -83,7 +83,7 @@ covers the big-picture architecture; `CONTRIBUTING.md` covers the contribution f
 ## Guardrails for Regulated Code
 
 - Preserve tenant, organization, and unit scoping in every query.
-- Preserve Better Auth patterns, RBAC permission boundaries, and plan/entitlement checks.
+- Preserve Better Auth patterns and RBAC permission boundaries.
 - The math engine (`packages/math-engine`) is versioned: any change to a numeric result needs
   a new `ENGINE_VERSION` and a new dossier directory under `validation/math-engine/`. Never
   reformat it as part of a sweep.

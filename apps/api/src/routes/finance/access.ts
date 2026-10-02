@@ -4,7 +4,6 @@ import {
   requireOrgType,
   type AuthVariables,
 } from "../../middleware/permission";
-import { getOrganizationPlanAccess } from "../../lib/organization-plan";
 
 export const financeAccessRouter = new Hono<{ Variables: AuthVariables }>().get(
   "/",
@@ -12,19 +11,10 @@ export const financeAccessRouter = new Hono<{ Variables: AuthVariables }>().get(
   requireOrgType("LAB"),
   async (c) => {
     const member = c.get("member");
-    const access = await getOrganizationPlanAccess(member.organizationId);
     const canManageFinancial =
       member.role === "owner" || member.role === "admin";
 
     return c.json({
-      planId: access.planId,
-      planName: access.planName,
-      status: access.status,
-      entitlements: access.entitlements,
-      hasFinancialModule: access.entitlements.includes("financial"),
-      hasFinancialIntegrations: access.entitlements.includes(
-        "financial_integrations",
-      ),
       canReadFinancial: canManageFinancial,
       canManageFinancial,
       canExportFinancial: canManageFinancial,

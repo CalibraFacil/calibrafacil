@@ -1,13 +1,11 @@
-import { Link, Outlet } from '@tanstack/react-router'
+import { Outlet } from '@tanstack/react-router'
 import { CreditCardIcon, ShieldKeyIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { useFinanceAccess } from '@/hooks/use-finance-access'
 import { BlueprintOverlay, Panel } from '@/components/instrument-panel'
-import { Button } from '@/components/ui/button'
 import {
   Empty,
-  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
@@ -52,28 +50,6 @@ export function FinanceLayout() {
             Verifique sua sessão ou tente novamente em instantes.
           </EmptyDescription>
         </EmptyHeader>
-      </Empty>
-    )
-  }
-
-  if (!accessQuery.data.hasFinancialModule) {
-    return (
-      <Empty className="border">
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <HugeiconsIcon icon={CreditCardIcon} />
-          </EmptyMedia>
-          <EmptyTitle>Módulo financeiro indisponível no plano atual</EmptyTitle>
-          <EmptyDescription>
-            O Financeiro operacional fica disponível a partir dos planos
-            Professional e Enterprise.
-          </EmptyDescription>
-        </EmptyHeader>
-        <EmptyContent>
-          <Button render={<Link to="/dashboard/settings/subscription" />}>
-            Ver assinatura da plataforma
-          </Button>
-        </EmptyContent>
       </Empty>
     )
   }

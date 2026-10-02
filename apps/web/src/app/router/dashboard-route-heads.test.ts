@@ -14,8 +14,6 @@ const redirectOnlyDashboardRoutes = new Set([
   'clients/groups/$groupId/index.tsx',
   'finance/documents/index.tsx',
   'finance/receipts.tsx',
-  'internal/customer-success.tsx',
-  'settings/billing.tsx',
   'settings/branding.tsx',
 ])
 

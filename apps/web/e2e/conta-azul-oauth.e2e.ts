@@ -5,18 +5,14 @@ import {
   mockDashboardOrganizations,
   mockLabSession,
   mockNotifications,
-  mockPlanAccess,
 } from './helpers'
 
 const CONTA_AZUL_AUTH_URL =
   'https://auth.contaazul.com/login?client_id=test&redirect_uri=cb&state=abc'
 
-type SetupOptions = { hasEntitlement: boolean }
-
 async function setupIntegrationsPage(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   page: import('@playwright/test').Page,
-  { hasEntitlement }: SetupOptions,
 ) {
   const oauthStartCalls: Array<Record<string, unknown>> = []
 
@@ -33,7 +29,6 @@ async function setupIntegrationsPage(
     organizations: [org],
     activeOrganization: org,
   })
-  await mockPlanAccess(page)
   await mockNotifications(page)
 
   await page.addInitScript(() => {
@@ -66,13 +61,7 @@ async function setupIntegrationsPage(
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({
-          data: [],
-          billing: {
-            hasFinancialIntegrations: hasEntitlement,
-            planName: hasEntitlement ? 'Professional' : 'Standard',
-          },
-        }),
+        body: JSON.stringify({ data: [] }),
       })
       return
     }
@@ -97,27 +86,8 @@ async function setupIntegrationsPage(
 }
 
 test.describe('Conta Azul OAuth connect button', () => {
-  test('does nothing when the org lacks the financial_integrations entitlement', async ({
-    page,
-  }) => {
-    await setupIntegrationsPage(page, { hasEntitlement: false })
-
-    await page.goto('/dashboard/settings/integrations')
-
-    const connectButton = page.getByRole('button', {
-      name: /Conectar Conta Azul/i,
-    })
-    await expect(connectButton).toBeVisible()
-    // This is the reported "doesn't do anything": the button is disabled.
-    await expect(connectButton).toBeDisabled()
-  })
-
-  test('starts the OAuth flow and redirects when entitled', async ({
-    page,
-  }) => {
-    const { oauthStartCalls } = await setupIntegrationsPage(page, {
-      hasEntitlement: true,
-    })
+  test('starts the OAuth flow and redirects', async ({ page }) => {
+    const { oauthStartCalls } = await setupIntegrationsPage(page)
 
     await page.goto('/dashboard/settings/integrations')
 

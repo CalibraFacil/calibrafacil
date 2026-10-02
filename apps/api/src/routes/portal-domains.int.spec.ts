@@ -1,10 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { portalDomainsRouter } from "./portal-domains";
 import { db } from "@calibra-facil/db";
-import {
-  organizationCustomDomain,
-  subscription,
-} from "@calibra-facil/db/schema";
+import { organizationCustomDomain } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
@@ -20,10 +17,10 @@ import { seedOrg } from "../../test/integration/seed";
 //   GET  /         requireLabProtected + requireOrgType("LAB")
 //                  (= requireLabAuth + requireOrganization + requireOrgType)
 //   POST /         withLabPermission({ organization: ["update"] })
-//                  + requireRole(["admin","owner"]) + requireFeature("custom_domain")
+//                  + requireRole(["admin","owner"])
 //   POST /verify   same as POST /
 //   DELETE /       withLabPermission({ organization: ["update"] })
-//                  + requireRole(["admin","owner"])   (NO requireFeature)
+//                  + requireRole(["admin","owner"])
 //
 // The data model is ONE custom domain per org: organization_custom_domain has a
 // unique index on organization_id (org_custom_domain_org_uidx) and the route
@@ -65,25 +62,6 @@ async function seedDomain(params: {
     createdBy: params.createdBy,
   });
   return id;
-}
-
-/**
- * Seed an ACTIVE PROFESSIONAL subscription so requireFeature("custom_domain")
- * passes. PROFESSIONAL includes custom_domain; FREE (no subscription) does not.
- */
-async function seedProfessionalSubscription(
-  organizationId: string,
-): Promise<void> {
-  const now = new Date("2026-01-01T00:00:00.000Z");
-  const nextYear = new Date("2027-01-01T00:00:00.000Z");
-  await db.insert(subscription).values({
-    organizationId,
-    planId: "PROFESSIONAL",
-    status: "ACTIVE",
-    renewalMode: "NONE",
-    currentPeriodStart: now,
-    currentPeriodEnd: nextYear,
-  });
 }
 
 describe("portalDomainsRouter — real DB + real middleware (LAB router)", () => {
@@ -146,13 +124,11 @@ describe("portalDomainsRouter — real DB + real middleware (LAB router)", () =>
   //   owner/admin authorize organization:update; technician/operator/member do not.)
   //   This is mutation-distinguished below: widening requireRole to include
   //   "member" still yields 403, proving the permission gate is load-bearing.
-  // Part B: an admin with the custom_domain entitlement succeeds and the row is
+  // Part B: an admin succeeds and the row is
   //   DB-persisted under the org scope.
   it("REQ-PD-002: member is denied add/verify/delete (403); admin succeeds + persists", async () => {
     // --- member is blocked on every mutating route ---
     const memberOrg = await seedOrg({ orgId: "org-m", role: "member" });
-    // Entitlement present so the block is RBAC, not the feature gate.
-    await seedProfessionalSubscription(memberOrg.orgId);
     loginAs({ userId: memberOrg.userId, organizationId: memberOrg.orgId });
 
     const addAsMember = await portalDomainsRouter.request("/", {
@@ -181,9 +157,8 @@ describe("portalDomainsRouter — real DB + real middleware (LAB router)", () =>
       .where(eq(organizationCustomDomain.organizationId, memberOrg.orgId));
     expect(afterMember).toHaveLength(0);
 
-    // --- admin with custom_domain entitlement succeeds + persists ---
+    // --- admin succeeds + persists ---
     const adminOrg = await seedOrg({ orgId: "org-admin", role: "admin" });
-    await seedProfessionalSubscription(adminOrg.orgId);
     loginAs({ userId: adminOrg.userId, organizationId: adminOrg.orgId });
 
     const addAsAdmin = await portalDomainsRouter.request("/", {
@@ -256,7 +231,6 @@ describe("portalDomainsRouter — real DB + real middleware (LAB router)", () =>
   // admin/org. Proves the create -> read flow end to end through the real guards.
   it("PD happy-path: admin POST then GET returns the persisted domain (round-trip)", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "admin" });
-    await seedProfessionalSubscription(org.orgId);
     loginAs({ userId: org.userId, organizationId: org.orgId });
 
     const add = await portalDomainsRouter.request("/", {

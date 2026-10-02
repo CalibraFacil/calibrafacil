@@ -6,32 +6,22 @@ import { db } from "@calibra-facil/db";
 import {
   member,
   organization,
-  organizationSuccessProfile,
-  subscription,
   user as userTable,
 } from "@calibra-facil/db/schema";
-import type { PlanId } from "@calibra-facil/shared";
 
 import {
   authErrorSignals,
   userCreateErrorWasDuplicate,
 } from "../lib/auth-user-errors";
-import { platformUserFromUnknown } from "../routes/backoffice-shared";
 
 /**
  * Everything it takes to turn "a name and an e-mail" into a laboratory that
  * can log in and work.
  *
- * This used to live inside the backoffice route, reachable only by a platform
- * admin. Self-serve sign-up needs the identical sequence — same rows, same
- * ordering, same rollback — so it was extracted here rather than copied: two
- * provisioning paths that drift is how an organization ends up half-created.
- *
- * What this deliberately does NOT do is decide *who may call it*. The
- * backoffice route gates on `requirePlatformAdmin`; the public route gates on
- * the sign-up e-mail policy, a real MX record and a per-domain cap. Nor does it
- * send the claim e-mail or write the audit entry — those differ per caller
- * (purpose, source, actor) and stay at the call site.
+ * Self-serve sign-up is the only caller today. It does NOT decide *who may
+ * call it*: the public route gates on the sign-up e-mail policy, a real MX
+ * record and a per-domain cap. Nor does it send the claim e-mail or write the
+ * audit entry; those stay at the call site.
  */
 
 function recordFromUnknown(value: unknown): Record<string, unknown> {
@@ -40,6 +30,27 @@ function recordFromUnknown(value: unknown): Record<string, unknown> {
   }
 
   return Object.fromEntries(Object.entries(value));
+}
+
+function platformUserFromUnknown(value: unknown) {
+  const candidate = recordFromUnknown(value);
+  const nested = recordFromUnknown(candidate.user);
+  const user = Object.keys(nested).length > 0 ? nested : candidate;
+  if (
+    typeof user.id !== "string" ||
+    typeof user.email !== "string" ||
+    typeof user.name !== "string"
+  ) {
+    throw new HTTPException(502, {
+      message: "Auth returned an invalid user payload",
+    });
+  }
+
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+  };
 }
 
 export function slugifyLabName(value: string) {
@@ -272,15 +283,13 @@ export type ProvisionedLabAccount = {
 };
 
 /**
- * Owner user → organization → owner membership → subscription → success
- * profile, rolling the organization back if any step after it fails. The
- * caller still owns the claim e-mail and the audit entry.
+ * Owner user → organization → owner membership, rolling the organization
+ * back if any step after it fails. The caller still owns the claim e-mail and
+ * the audit entry.
  */
 export async function provisionLabAccount(input: {
   lab: LabProvisioningOrganization;
   owner: { name: string; email: string };
-  planId: PlanId;
-  supportContactEmail?: string;
 }): Promise<ProvisionedLabAccount> {
   const labAuth = createLabAuth();
   let createdOrganizationId: string | null = null;
@@ -300,31 +309,6 @@ export async function provisionLabAccount(input: {
       organizationId: org.id,
       userId: owner.user.id,
     });
-
-    await db
-      .insert(subscription)
-      .values({
-        organizationId: org.id,
-        planId: input.planId,
-        status: "TRIAL",
-      })
-      .onConflictDoNothing({ target: subscription.organizationId });
-
-    await db
-      .insert(organizationSuccessProfile)
-      .values({
-        organizationId: org.id,
-        accountOwnerUserId: owner.user.id,
-        accountOwnerName: owner.user.name,
-        accountOwnerEmail: owner.user.email,
-        supportContactEmail:
-          input.supportContactEmail ?? input.lab.email ?? owner.user.email,
-        onboardingStatus: "NOT_STARTED",
-        migrationStatus: "NOT_REQUIRED",
-      })
-      .onConflictDoNothing({
-        target: organizationSuccessProfile.organizationId,
-      });
 
     return {
       organization: { id: org.id, slug: org.slug, name: input.lab.name },

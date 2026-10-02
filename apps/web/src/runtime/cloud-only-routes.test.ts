@@ -13,8 +13,6 @@ describe('isCloudOnlyDashboardPath', () => {
     '/dashboard/capa/new',
     '/dashboard/finance/contracts/9',
     '/dashboard/settings/organization',
-    '/dashboard/customer-success',
-    '/dashboard/internal/customer-success',
   ])('marks %s as cloud-only', (pathname) => {
     expect(isCloudOnlyDashboardPath(pathname)).toBe(true)
   })

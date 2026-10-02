@@ -6,9 +6,6 @@ import type {
 
 export type BillingReadinessResponse = {
   billing: {
-    planId: string
-    planName: string
-    hasFinancialIntegrations: boolean
     integrationState: BillingIntegrationState
   }
   summary: BillingReadinessSummary
@@ -219,11 +216,6 @@ export type FinanceReceiptsData = {
 }
 
 export type ErpExportsResponse = {
-  billing: {
-    planId: string
-    planName: string
-    hasFinancialIntegrations: boolean
-  }
   data: Array<{
     id: number
     documentNumber: string | null

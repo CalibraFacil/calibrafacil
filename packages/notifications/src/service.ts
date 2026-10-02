@@ -9,7 +9,6 @@ import {
   customer,
   asset,
   referenceStandard,
-  paymentHistory,
   personnelCompetence,
   calibrationRequest,
   calibrationRequestItem,
@@ -63,10 +62,8 @@ import {
   CertificateReadyEmail,
   AssetOotEmail,
   ComplianceAlertEmail,
-  PaymentNotificationEmail,
   NCNotificationEmail,
   CompetenceNotificationEmail,
-  CustomerSuccessEmail,
   CalibrationRequestEmail,
   VisitNotificationEmail,
   PortalDueDigestEmail,
@@ -123,12 +120,6 @@ export interface ComplianceEmailContext {
   daysRemaining: number;
 }
 
-/** Context for payment email templates */
-export interface PaymentEmailContext {
-  amount?: string;
-  description?: string;
-}
-
 /** Context for NC email templates */
 export interface NCEmailContext {
   ncNumber: string;
@@ -176,12 +167,10 @@ export type EmailContext =
   | { type: "assetOot"; data: AssetOotEmailContext }
   | { type: "auditPack"; data: AuditPackEmailContext }
   | { type: "compliance"; data: ComplianceEmailContext }
-  | { type: "payment"; data: PaymentEmailContext }
   | { type: "nc"; data: NCEmailContext }
   | { type: "competence"; data: CompetenceEmailContext }
   | { type: "calibrationRequest"; data: CalibrationRequestEmailContext }
-  | { type: "visit"; data: VisitEmailContext }
-  | { type: "customerSuccess"; data: Record<string, never> };
+  | { type: "visit"; data: VisitEmailContext };
 
 export interface SendNotificationOptions {
   recipientUserId: string;
@@ -219,8 +208,6 @@ const DEFAULT_PREFERENCES: NotificationPreferenceMap = {
   STANDARD_EXPIRED: { inApp: true, email: true },
   SIGNING_CERTIFICATE_EXPIRING: { inApp: true, email: true },
   JOB_OVERDUE: { inApp: true, email: true },
-  PAYMENT_RECEIVED: { inApp: true, email: true },
-  PAYMENT_FAILED: { inApp: true, email: true },
   NC_CREATED: { inApp: true, email: true },
   NC_ESCALATED_TO_CAPA: { inApp: true, email: true },
   OOT_NOTIFICATION_ACKNOWLEDGED: { inApp: true, email: true },
@@ -228,13 +215,6 @@ const DEFAULT_PREFERENCES: NotificationPreferenceMap = {
   COMPETENCE_EXPIRED: { inApp: true, email: true },
   COMPETENCE_REQUESTED: { inApp: true, email: true },
   COMPETENCE_APPROVED: { inApp: true, email: true },
-  CUSTOMER_SUCCESS_WORKFLOW_BLOCKED: { inApp: true, email: true },
-  CUSTOMER_SUCCESS_GO_LIVE_AT_RISK: { inApp: true, email: true },
-  CUSTOMER_SUCCESS_NEXT_ACTION_OVERDUE: { inApp: true, email: true },
-  CUSTOMER_SUCCESS_SLA_DUE_SOON: { inApp: true, email: true },
-  CUSTOMER_SUCCESS_SLA_BREACHED: { inApp: true, email: true },
-  CUSTOMER_SUCCESS_ESCALATION_REQUIRED: { inApp: true, email: true },
-  SUPPORT_REQUEST_REPLIED: { inApp: true, email: true },
   CALIBRATION_REQUEST_SUBMITTED: { inApp: true, email: true },
   CALIBRATION_REQUEST_UNDER_REVIEW: { inApp: true, email: true },
   CALIBRATION_REQUEST_APPROVED: { inApp: true, email: true },
@@ -439,18 +419,6 @@ function getVisitEmailType(
     default:
       return "confirmed";
   }
-}
-
-function isCustomerSuccessType(
-  type: NotificationType,
-): type is
-  | "CUSTOMER_SUCCESS_WORKFLOW_BLOCKED"
-  | "CUSTOMER_SUCCESS_GO_LIVE_AT_RISK"
-  | "CUSTOMER_SUCCESS_NEXT_ACTION_OVERDUE"
-  | "CUSTOMER_SUCCESS_SLA_DUE_SOON"
-  | "CUSTOMER_SUCCESS_SLA_BREACHED"
-  | "CUSTOMER_SUCCESS_ESCALATION_REQUIRED" {
-  return type.startsWith("CUSTOMER_SUCCESS_");
 }
 
 function getEmailLogoSrc(): string {
@@ -764,23 +732,6 @@ function renderEmailTemplate(
     });
   }
 
-  // Payment notifications
-  if (
-    emailContext?.type === "payment" &&
-    ["PAYMENT_RECEIVED", "PAYMENT_FAILED"].includes(type)
-  ) {
-    const { amount, description } = emailContext.data;
-    return PaymentNotificationEmail({
-      recipientName,
-      type: type === "PAYMENT_RECEIVED" ? "received" : "failed",
-      amount,
-      description,
-      actionUrl,
-      logoSrc,
-      brand: emailBrand,
-    });
-  }
-
   // NC notifications
   if (
     emailContext?.type === "nc" &&
@@ -894,18 +845,6 @@ function renderEmailTemplate(
       labName,
       reason,
       actionUrl: actionUrl ?? "#",
-      logoSrc,
-      brand: emailBrand,
-    });
-  }
-
-  if (isCustomerSuccessType(type)) {
-    return CustomerSuccessEmail({
-      recipientName,
-      type,
-      title,
-      message,
-      actionUrl,
       logoSrc,
       brand: emailBrand,
     });
@@ -2934,142 +2873,6 @@ export async function notifyJobOverdue(jobId: number): Promise<void> {
         data: {
           jobId: jobData.jobIdentifier,
           jobInternalId: jobId,
-        },
-      },
-    });
-  }
-}
-
-// =============================================================================
-// PAYMENT NOTIFICATION TRIGGERS
-// =============================================================================
-
-/**
- * Format currency to Brazilian Real
- */
-function formatCurrencyBRL(amount: number): string {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(amount / 100); // Assuming amount is in cents
-}
-
-/**
- * Notify organization when a payment is received
- * Called from payment webhook handler
- */
-export async function notifyPaymentReceived(
-  paymentId: number,
-  organizationId: string,
-): Promise<void> {
-  // Get payment details
-  const [payment] = await db
-    .select({
-      amount: paymentHistory.amount,
-      paymentMethod: paymentHistory.paymentMethod,
-      paidAt: paymentHistory.paidAt,
-    })
-    .from(paymentHistory)
-    .where(eq(paymentHistory.id, paymentId))
-    .limit(1);
-
-  if (!payment) return;
-
-  const amount = payment.amount ? formatCurrencyBRL(payment.amount) : undefined;
-  const paidDate = payment.paidAt ? formatDateBR(payment.paidAt) : "hoje";
-
-  // Notify admins and owners
-  const recipients = await getRecipientsByRole(organizationId, [
-    "admin",
-    "owner",
-  ]);
-
-  for (const recipientId of recipients) {
-    await sendNotification({
-      recipientUserId: recipientId,
-      organizationId,
-      type: "PAYMENT_RECEIVED",
-      priority: "MEDIUM",
-      title: "Pagamento recebido",
-      message: amount
-        ? `Pagamento de ${amount} confirmado em ${paidDate}.`
-        : `Pagamento confirmado em ${paidDate}.`,
-      relatedEntity: {
-        entityType: "payment",
-        entityId: paymentId,
-      },
-      actionUrl: `/dashboard/settings/billing`,
-      emailContext: {
-        type: "payment",
-        data: {
-          amount,
-          description: payment.paymentMethod ?? undefined,
-        },
-      },
-    });
-  }
-}
-
-/**
- * Notify organization when a payment fails
- * Called from payment webhook handler
- */
-export async function notifyPaymentFailed(
-  paymentId: number,
-  organizationId: string,
-  failureReason?: string,
-): Promise<void> {
-  // Get payment details
-  const [payment] = await db
-    .select({
-      amount: paymentHistory.amount,
-      paymentMethod: paymentHistory.paymentMethod,
-      dueDate: paymentHistory.dueDate,
-    })
-    .from(paymentHistory)
-    .where(eq(paymentHistory.id, paymentId))
-    .limit(1);
-
-  if (!payment) return;
-
-  const amount = payment.amount ? formatCurrencyBRL(payment.amount) : undefined;
-  const dueDate = payment.dueDate ? formatDateBR(payment.dueDate) : undefined;
-
-  let message = "Não foi possível processar seu pagamento.";
-  if (amount && dueDate) {
-    message = `O pagamento de ${amount} com vencimento em ${dueDate} não foi processado.`;
-  } else if (amount) {
-    message = `O pagamento de ${amount} não foi processado.`;
-  }
-
-  if (failureReason) {
-    message += ` Motivo: ${failureReason}`;
-  }
-
-  // Notify admins and owners
-  const recipients = await getRecipientsByRole(organizationId, [
-    "admin",
-    "owner",
-  ]);
-
-  for (const recipientId of recipients) {
-    await sendNotification({
-      recipientUserId: recipientId,
-      organizationId,
-      type: "PAYMENT_FAILED",
-      priority: "HIGH",
-      title: "Pagamento não processado",
-      message,
-      relatedEntity: {
-        entityType: "payment",
-        entityId: paymentId,
-      },
-      actionUrl: `/dashboard/settings/billing`,
-      emailContext: {
-        type: "payment",
-        data: {
-          amount,
-          description: failureReason ?? undefined,
         },
       },
     });

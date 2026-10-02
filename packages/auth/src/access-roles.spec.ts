@@ -13,19 +13,15 @@
 import { describe, expect, it } from "vitest";
 import {
   type RoleName,
-  DEFAULT_PLATFORM_ROLE,
   DEFAULT_ROLE,
   INTERNAL_ROLES,
   PORTAL_ACCESS_ROLES,
   ROLE_HIERARCHY,
-  canAccessBackoffice,
   getRoleLevel,
   hasEqualOrHigherRole,
-  hasPlatformRole,
   isPortalAccessRole,
   isPortalManageableMemberRole,
   isPortalVisibleMemberRole,
-  parsePlatformRoles,
 } from "./access.js";
 
 // ---------------------------------------------------------------------------
@@ -179,140 +175,11 @@ describe("REQ-ROLE-004: portal access role predicates", () => {
 });
 
 // ---------------------------------------------------------------------------
-// REQ-ROLE-005: parsePlatformRoles falls back to ["user"] for empty inputs
+// DEFAULT_ROLE constant
 // ---------------------------------------------------------------------------
 
-// REQ-ROLE-005: parsePlatformRoles SHALL return ["user"] for null/undefined/
-// empty/whitespace inputs.
-describe("REQ-ROLE-005: parsePlatformRoles falls back to default for empty inputs", () => {
-  it("null → [user]", () => {
-    expect(parsePlatformRoles(null)).toStrictEqual(["user"]);
-  });
-
-  it("undefined → [user]", () => {
-    expect(parsePlatformRoles(undefined)).toStrictEqual(["user"]);
-  });
-
-  it('empty string "" → [user]', () => {
-    expect(parsePlatformRoles("")).toStrictEqual(["user"]);
-  });
-
-  it('whitespace "  " → [user]', () => {
-    expect(parsePlatformRoles("  ")).toStrictEqual(["user"]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// REQ-ROLE-006: parsePlatformRoles filters to valid roles, falls back if none
-// ---------------------------------------------------------------------------
-
-// REQ-ROLE-006 [HIGH RISK]: parsePlatformRoles SHALL keep only valid platform
-// role tokens, drop unknowns, and fall back to ["user"] if none remain.
-describe("REQ-ROLE-006: parsePlatformRoles filters invalid tokens", () => {
-  it('"platform_admin, bogus" → ["platform_admin"]', () => {
-    expect(parsePlatformRoles("platform_admin, bogus")).toStrictEqual([
-      "platform_admin",
-    ]);
-  });
-
-  it('"bogus" → ["user"]', () => {
-    expect(parsePlatformRoles("bogus")).toStrictEqual(["user"]);
-  });
-
-  it('"platform_operator" → ["platform_operator"]', () => {
-    expect(parsePlatformRoles("platform_operator")).toStrictEqual([
-      "platform_operator",
-    ]);
-  });
-
-  it('"user" → ["user"]', () => {
-    expect(parsePlatformRoles("user")).toStrictEqual(["user"]);
-  });
-
-  it('"platform_admin,platform_operator" → ["platform_admin","platform_operator"]', () => {
-    expect(
-      parsePlatformRoles("platform_admin,platform_operator"),
-    ).toStrictEqual(["platform_admin", "platform_operator"]);
-  });
-
-  it('"bogus1,bogus2" → ["user"]', () => {
-    expect(parsePlatformRoles("bogus1,bogus2")).toStrictEqual(["user"]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// REQ-ROLE-007: hasPlatformRole wraps parsePlatformRoles correctly
-// ---------------------------------------------------------------------------
-
-// REQ-ROLE-007: hasPlatformRole(raw, role) SHALL be true iff
-// parsePlatformRoles(raw) includes role.
-describe("REQ-ROLE-007: hasPlatformRole delegates to parsePlatformRoles", () => {
-  it("hasPlatformRole(null, user) → true (default fallback)", () => {
-    expect(hasPlatformRole(null, "user")).toBe(true);
-  });
-
-  it("hasPlatformRole(null, platform_admin) → false", () => {
-    expect(hasPlatformRole(null, "platform_admin")).toBe(false);
-  });
-
-  it("hasPlatformRole(platform_admin, platform_admin) → true", () => {
-    expect(hasPlatformRole("platform_admin", "platform_admin")).toBe(true);
-  });
-
-  it("hasPlatformRole(platform_admin, platform_operator) → false", () => {
-    expect(hasPlatformRole("platform_admin", "platform_operator")).toBe(false);
-  });
-
-  it("hasPlatformRole(platform_operator, platform_operator) → true", () => {
-    expect(hasPlatformRole("platform_operator", "platform_operator")).toBe(
-      true,
-    );
-  });
-});
-
-// ---------------------------------------------------------------------------
-// REQ-ROLE-008: canAccessBackoffice — true only for platform_admin or platform_operator
-// ---------------------------------------------------------------------------
-
-// REQ-ROLE-008 [HIGH RISK]: canAccessBackoffice SHALL return true ONLY for
-// platform_admin or platform_operator, and false for user-only, null/undefined,
-// and unknown roles.
-describe("REQ-ROLE-008: canAccessBackoffice gate", () => {
-  it("platform_admin → true", () => {
-    expect(canAccessBackoffice("platform_admin")).toBe(true);
-  });
-
-  it("platform_operator → true", () => {
-    expect(canAccessBackoffice("platform_operator")).toBe(true);
-  });
-
-  it("user → false", () => {
-    expect(canAccessBackoffice("user")).toBe(false);
-  });
-
-  it("null → false", () => {
-    expect(canAccessBackoffice(null)).toBe(false);
-  });
-
-  it("undefined → false", () => {
-    expect(canAccessBackoffice(undefined)).toBe(false);
-  });
-
-  it("unknown string → false", () => {
-    expect(canAccessBackoffice("some_other_role")).toBe(false);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// DEFAULT_ROLE and DEFAULT_PLATFORM_ROLE constants
-// ---------------------------------------------------------------------------
-
-describe("DEFAULT_ROLE and DEFAULT_PLATFORM_ROLE oracle values", () => {
+describe("DEFAULT_ROLE oracle value", () => {
   it('DEFAULT_ROLE === "member"', () => {
     expect(DEFAULT_ROLE).toBe("member");
-  });
-
-  it('DEFAULT_PLATFORM_ROLE === "user"', () => {
-    expect(DEFAULT_PLATFORM_ROLE).toBe("user");
   });
 });

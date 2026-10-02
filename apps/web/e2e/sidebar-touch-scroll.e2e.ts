@@ -5,7 +5,6 @@ import {
   labOrganization,
   mockDashboardOrganizations,
   mockLabSession,
-  mockPlanAccess,
 } from './helpers'
 
 test.use({
@@ -30,7 +29,6 @@ test('touch-drag starting on a sidebar link scrolls without closing the sheet', 
     organizations: [clientOrganization(), lab],
     activeOrganization: lab,
   })
-  await mockPlanAccess(page)
 
   await page.goto('/dashboard')
   await page.locator('[data-sidebar="trigger"]').click()

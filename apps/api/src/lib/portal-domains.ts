@@ -7,7 +7,6 @@ import {
   normalizeOrigin,
 } from "@calibra-facil/shared";
 import { and, eq } from "drizzle-orm";
-import { organizationHasEntitlement } from "./organization-plan";
 import { portalBaseUrl } from "@calibra-facil/shared/public-urls";
 
 function derivePortalBaseUrlFromAppUrl(appUrl: string): string | null {
@@ -60,13 +59,7 @@ export async function getActivePortalDomainForOrganization(
     ),
   });
 
-  if (!record) return null;
-
-  const hasCustomDomain = await organizationHasEntitlement(
-    organizationId,
-    "custom_domain",
-  );
-  if (!hasCustomDomain || !record.verifiedAt) return null;
+  if (!record?.verifiedAt) return null;
 
   return record;
 }
@@ -123,11 +116,7 @@ export async function resolveLabOrganizationIdByPortalHostname(
 
   if (!match?.organizationId || !match.verifiedAt) return null;
 
-  const hasCustomDomain = await organizationHasEntitlement(
-    match.organizationId,
-    "custom_domain",
-  );
-  return hasCustomDomain ? match.organizationId : null;
+  return match.organizationId;
 }
 
 export async function isAllowedPortalOrigin(origin: string): Promise<boolean> {

@@ -17,11 +17,7 @@ import { describe, it, expect } from "vitest";
 process.env.DATABASE_URL =
   process.env.DATABASE_URL ?? "postgres://user:pass@127.0.0.1:5432/testdb";
 
-import {
-  createLabAuth,
-  createPortalAuth,
-  createBackofficeAuth,
-} from "@calibra-facil/auth";
+import { createLabAuth, createPortalAuth } from "@calibra-facil/auth";
 
 const EMAIL_PASSWORD_DISABLED = "EMAIL_PASSWORD_DISABLED";
 const RESET_PASSWORD_DISABLED = "RESET_PASSWORD_DISABLED";
@@ -66,9 +62,7 @@ function attemptPasswordSignIn(
   );
 }
 
-// Request phase of the password-reset flow (the endpoint backoffice-users.ts
-// forwards to for new-operator provisioning and admin-triggered resets — see
-// backoffice-shared.spec.ts for the production-helper-level regression proof).
+// Request phase of the password-reset flow.
 function attemptRequestPasswordReset(
   auth: { handler: (req: Request) => Promise<Response> },
   basePath: string,
@@ -109,8 +103,7 @@ describe("SEC-09 lab passwordless auth surface", () => {
     expect(result.body).toContain(EMAIL_PASSWORD_DISABLED);
 
     // Password RESET is also dead on the lab surface (no sendResetPassword is
-    // configured for it) — this is what backoffice-users.ts used to forward
-    // to; see backoffice-shared.spec.ts for the production-helper-level proof.
+    // configured for it).
     const resetResult = await attemptRequestPasswordReset(lab, "/api/auth/lab");
     expect(resetResult.status).toBe(400);
     expect(resetResult.body).toContain(RESET_PASSWORD_DISABLED);
@@ -129,32 +122,5 @@ describe("SEC-09 lab passwordless auth surface", () => {
     const result = await attemptPasswordSignIn(portal, "/api/auth/portal");
     expect(result.status).toBe(400);
     expect(result.body).toContain(EMAIL_PASSWORD_DISABLED);
-  });
-
-  it("REQ-PWDLESS-003: backoffice keeps password sign-in + mandatory TOTP (non-regression)", async () => {
-    const backoffice = createBackofficeAuth();
-
-    // Password sign-in stays enabled for the internal operations surface.
-    expect(emailAndPasswordEnabled(backoffice)).toBe(true);
-
-    // The two-factor (TOTP) plugin remains configured.
-    expect(pluginIds(backoffice)).toContain("two-factor");
-
-    // Behaviour: the password endpoint is live — it does NOT short-circuit with
-    // the disabled contract (it proceeds to authenticate).
-    const result = await attemptPasswordSignIn(
-      backoffice,
-      "/api/auth/backoffice",
-    );
-    expect(result.body).not.toContain(EMAIL_PASSWORD_DISABLED);
-
-    // Password reset also stays live on the backoffice surface — this is the
-    // endpoint backoffice-users.ts now forwards new-operator/admin-triggered
-    // resets to (see backoffice-shared.spec.ts).
-    const resetResult = await attemptRequestPasswordReset(
-      backoffice,
-      "/api/auth/backoffice",
-    );
-    expect(resetResult.body).not.toContain(RESET_PASSWORD_DISABLED);
   });
 });

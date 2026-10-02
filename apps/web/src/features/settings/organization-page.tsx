@@ -2,7 +2,6 @@ import { Building06Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { useActiveOrganization } from '@calibra-facil/auth/client'
-import { usePlanAccess } from '@/hooks/use-plan-access'
 import {
   useOrganizationGovernanceMembersData,
   useOrganizationUnitsData,
@@ -65,7 +64,7 @@ export function OrganizationSettingsRoute({
 
 /**
  * Thin composition over the per-section modules in ./organization — the page
- * derives the shared permission flags (governance viewer, plan entitlements)
+ * derives the shared permission flags (governance viewer)
  * and hands each route section to the component that owns its state.
  */
 function OrganizationSettingsPage({
@@ -79,17 +78,13 @@ function OrganizationSettingsPage({
   const canManageOrganizationSettings =
     canManageOrganizationSettingsForRole(currentOrgRole)
 
-  const accessQuery = usePlanAccess()
-  const hasMultiUnit =
-    accessQuery.data?.entitlements.includes('multi_unit') ?? false
-
   const unitsQuery = useOrganizationUnitsData({
     organizationId: activeOrg.id,
-    enabled: hasMultiUnit,
+    enabled: true,
   })
   const governanceMembersQuery = useOrganizationGovernanceMembersData({
     organizationId: activeOrg.id,
-    enabled: hasMultiUnit,
+    enabled: true,
   })
 
   const governanceViewer =
@@ -119,7 +114,6 @@ function OrganizationSettingsPage({
         <OrganizationProfileSection
           activeOrg={activeOrg}
           canManageOrganizationSettings={canManageOrganizationSettings}
-          hasMultiUnit={hasMultiUnit}
           governanceViewer={governanceViewer}
         />
       )}
@@ -127,7 +121,6 @@ function OrganizationSettingsPage({
       {section === 'units' && (
         <OrganizationUnitsSection
           activeOrg={activeOrg}
-          hasMultiUnit={hasMultiUnit}
           canManageOrganizationUnits={canManageOrganizationUnits}
           canManageAssignments={canManageAssignments}
           canViewGovernance={canViewGovernance}

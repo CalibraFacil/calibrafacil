@@ -5,9 +5,7 @@
  * ONLY the better-auth session and notification side-effects are mocked (see
  * test/integration/setup.ts for the session mock). requireLabAuth →
  * requireOrganization → withLabPermission and buildUnitScopeCondition run for
- * real against the seeded Postgres. The plan-limit check runs for real against
- * the seeded DB (no subscription row → FREE plan → 10 certs/month → convert
- * of 1 item passes).
+ * real against the seeded Postgres.
  *
  * Proven properties (oracle):
  *   REQ-CREQ-001  [HIGH RISK] Tenant isolation: org A cannot approve/convert/GET

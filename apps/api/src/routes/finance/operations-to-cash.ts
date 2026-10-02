@@ -3,7 +3,6 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../../middleware/permission";
-import { requireFeature } from "../../middleware/tier-guard";
 import {
   buildOperationsToCash,
   OPERATIONS_TO_CASH_STAGES,
@@ -19,18 +18,13 @@ function parseStage(
 
 export const financeOperationsToCashRouter = new Hono<{
   Variables: AuthVariables;
-}>().get(
-  "/",
-  ...withLabPermission({ financial: ["read"] }),
-  requireFeature("financial"),
-  async (c) => {
-    const member = c.get("member");
-    const stageFilter = parseStage(c.req.query("stage"));
-    const envelope = await buildOperationsToCash({
-      organizationId: member.organizationId,
-      scope: member,
-      stageFilter,
-    });
-    return c.json(envelope);
-  },
-);
+}>().get("/", ...withLabPermission({ financial: ["read"] }), async (c) => {
+  const member = c.get("member");
+  const stageFilter = parseStage(c.req.query("stage"));
+  const envelope = await buildOperationsToCash({
+    organizationId: member.organizationId,
+    scope: member,
+    stageFilter,
+  });
+  return c.json(envelope);
+});

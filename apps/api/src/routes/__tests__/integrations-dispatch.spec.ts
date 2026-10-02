@@ -29,7 +29,6 @@ const mocks = vi.hoisted(() => ({
     },
   },
   buildIntegrationOverview: vi.fn(),
-  getOrganizationPlanAccess: vi.fn(),
   enqueueBackgroundJob: vi.fn(),
   failIntegrationSyncRun: vi.fn(),
   getContaAzulScheduleState: vi.fn(),
@@ -94,14 +93,6 @@ vi.mock("../../middleware/permission", () => ({
   requireLabProtected: [mocks.passMiddleware],
   requireOrgType: () => mocks.passMiddleware,
   requireRole: () => mocks.passMiddleware,
-}));
-
-vi.mock("../../middleware/tier-guard", () => ({
-  requireFeature: () => mocks.passMiddleware,
-}));
-
-vi.mock("../../lib/organization-plan", () => ({
-  getOrganizationPlanAccess: mocks.getOrganizationPlanAccess,
 }));
 
 vi.mock("@calibra-facil/db", () => ({
@@ -202,13 +193,6 @@ function emptyOverview(
 describe("integrations list route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getOrganizationPlanAccess.mockResolvedValue({
-      planId: "professional",
-      planName: "Professional",
-      status: "active",
-      isActive: true,
-      entitlements: ["financial_integrations"],
-    });
     mocks.db.query.integrationSyncRun.findMany.mockResolvedValue([]);
     mocks.db.query.integrationEventLog.findMany.mockResolvedValue([]);
   });

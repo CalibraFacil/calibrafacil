@@ -11,7 +11,6 @@
     "./calibration-format": "./src/calibration-format.ts",
     "./cnpj": "./src/cnpj.ts",
     "./mass-units": "./src/mass-units.ts",
-    "./plans": "./src/plans.ts",
     "./public-urls": "./src/public-urls.ts",
     "./storage-keys": "./src/storage-keys.ts",
     "./storage-endpoint": "./src/storage-endpoint.ts",

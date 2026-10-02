@@ -2,7 +2,6 @@ import {
   AlertDiamondIcon,
   ArrowDown01Icon,
   Building06Icon,
-  CreditCardIcon,
   HierarchyIcon,
   Key01Icon,
   LinkSquare02Icon,
@@ -168,17 +167,6 @@ const settingsNavGroups: Array<SettingsNavGroup> = [
         label: 'Integrações',
         href: '/dashboard/settings/integrations',
         icon: <HugeiconsIcon icon={LinkSquare02Icon} className="size-4" />,
-      },
-    ],
-  },
-  {
-    label: 'Plano',
-    items: [
-      {
-        value: 'subscription',
-        label: 'Plano e cobrança',
-        href: '/dashboard/settings/subscription',
-        icon: <HugeiconsIcon icon={CreditCardIcon} className="size-4" />,
       },
     ],
   },

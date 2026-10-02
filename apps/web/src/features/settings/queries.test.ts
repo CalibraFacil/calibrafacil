@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest'
 
 import {
   apiKeysQueryOptions,
-  billingPaymentsQueryOptions,
-  billingSubscriptionQueryOptions,
   certificateNumberingProfileQueryOptions,
   environmentalLimitsQueryOptions,
   integrationsQueryOptions,
@@ -65,15 +63,7 @@ describe('settings feature queries', () => {
     ])
   })
 
-  it('uses stable billing and integration setting keys', () => {
-    expect(billingSubscriptionQueryOptions().queryKey).toEqual([
-      'billing',
-      'subscription',
-    ])
-    expect(billingPaymentsQueryOptions().queryKey).toEqual([
-      'billing',
-      'payments',
-    ])
+  it('uses stable integration setting keys', () => {
     expect(integrationsQueryOptions().queryKey).toEqual(['integrations'])
   })
 

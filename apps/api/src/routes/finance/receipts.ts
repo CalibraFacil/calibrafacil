@@ -14,7 +14,6 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../../middleware/permission";
-import { requireFeature } from "../../middleware/tier-guard";
 import { buildUnitScopeCondition } from "../../lib/units";
 
 const RecordReceiptSchema = z.object({
@@ -34,54 +33,48 @@ const RecordReceiptSchema = z.object({
 
 export const financeReceiptsRouter = new Hono<{
   Variables: AuthVariables;
-}>().get(
-  "/",
-  ...withLabPermission({ financial: ["read"] }),
-  requireFeature("financial"),
-  async (c) => {
-    const member = c.get("member");
+}>().get("/", ...withLabPermission({ financial: ["read"] }), async (c) => {
+  const member = c.get("member");
 
-    const data = await db
-      .select({
-        installmentId: receivableInstallment.id,
-        documentId: billingDocument.id,
-        documentNumber: billingDocument.documentNumber,
-        documentStatus: billingDocument.status,
-        customerName: customer.name,
-        dueDate: receivableInstallment.dueDate,
-        amountCents: receivableInstallment.amountCents,
-        installmentStatus: receivableInstallment.status,
-        paidAt: receivableInstallment.paidAt,
-        paymentMethod: receivableInstallment.paymentMethod,
-        paymentReference: receivableInstallment.paymentReference,
-      })
-      .from(receivableInstallment)
-      .innerJoin(
-        billingDocument,
-        eq(receivableInstallment.documentId, billingDocument.id),
-      )
-      .innerJoin(customer, eq(billingDocument.customerId, customer.id))
-      .where(
-        and(
-          eq(billingDocument.organizationId, member.organizationId),
-          buildUnitScopeCondition(billingDocument.unitId, member),
-        ),
-      )
-      .orderBy(
-        desc(receivableInstallment.dueDate),
-        desc(receivableInstallment.id),
-      );
+  const data = await db
+    .select({
+      installmentId: receivableInstallment.id,
+      documentId: billingDocument.id,
+      documentNumber: billingDocument.documentNumber,
+      documentStatus: billingDocument.status,
+      customerName: customer.name,
+      dueDate: receivableInstallment.dueDate,
+      amountCents: receivableInstallment.amountCents,
+      installmentStatus: receivableInstallment.status,
+      paidAt: receivableInstallment.paidAt,
+      paymentMethod: receivableInstallment.paymentMethod,
+      paymentReference: receivableInstallment.paymentReference,
+    })
+    .from(receivableInstallment)
+    .innerJoin(
+      billingDocument,
+      eq(receivableInstallment.documentId, billingDocument.id),
+    )
+    .innerJoin(customer, eq(billingDocument.customerId, customer.id))
+    .where(
+      and(
+        eq(billingDocument.organizationId, member.organizationId),
+        buildUnitScopeCondition(billingDocument.unitId, member),
+      ),
+    )
+    .orderBy(
+      desc(receivableInstallment.dueDate),
+      desc(receivableInstallment.id),
+    );
 
-    return c.json({ data });
-  },
-);
+  return c.json({ data });
+});
 
 export const financeInstallmentsRouter = new Hono<{
   Variables: AuthVariables;
 }>().post(
   "/:id/receive",
   ...withLabPermission({ financial: ["receipt_record"] }),
-  requireFeature("financial"),
   zValidator("json", RecordReceiptSchema),
   async (c) => {
     const member = c.get("member");

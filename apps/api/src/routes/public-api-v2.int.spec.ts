@@ -6,7 +6,6 @@ import {
   assetAuditLog,
   assetType,
   customer,
-  entitlementOverride,
   organization,
   organizationApiKey,
 } from "@calibra-facil/db/schema";
@@ -17,10 +16,9 @@ import { seedOrg } from "../../test/integration/seed";
 
 // Real-DB integration test for the public API v2 router.
 // No session mock is needed — auth is entirely via API key, handled by
-// `requireApiKeyAuth` (hash lookup + entitlement check) and `requireApiScope`.
+// `requireApiKeyAuth` (hash lookup) and `requireApiScope`.
 // The following cut-line invariants are covered:
 //   REQ-PAPI-001  401 on missing / unknown key
-//   REQ-PAPI-002  403 on missing "api" entitlement (FREE plan, no subscription)
 //   REQ-PAPI-003  403 on missing scope; 200 on matching scope
 //   REQ-PAPI-004  Tenant isolation — org A key sees only org A customers
 //   REQ-PAPI-005  Cross-tenant by id — org A key + org B customer id → 404
@@ -58,16 +56,6 @@ async function seedApiKey(params: {
     revokedAt: params.revokedAt ?? null,
   });
   return { rawKey: key, keyId: params.keyId };
-}
-
-/** Seed an entitlement override granting "api" unconditionally (no plan needed). */
-async function seedApiEntitlement(params: { orgId: string }): Promise<void> {
-  await db.insert(entitlementOverride).values({
-    organizationId: params.orgId,
-    feature: "api",
-    reason: "test grant",
-    expiresAt: null,
-  });
 }
 
 /** Seed a minimal CLIENT org + customer row owned by a given lab org. */
@@ -205,33 +193,10 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
   });
 
   // =========================================================================
-  // REQ-PAPI-002  Plan gate: key exists, org has NO "api" entitlement → 403
-  // =========================================================================
-  it("REQ-PAPI-002: valid key on FREE-plan org (no subscription) → GET /customers → 403", async () => {
-    const orgA = await seedOrg({ orgId: "org-a" });
-    // No subscription seeded → FREE plan → no "api" entitlement
-    const { rawKey } = await seedApiKey({
-      orgId: orgA.orgId,
-      userId: orgA.userId,
-      keyId: "key-no-entitlement",
-      scopes: ["customers:read"],
-    });
-
-    const res = await publicApiV2Router.request("/customers", {
-      headers: { "x-api-key": rawKey },
-    });
-
-    expect(res.status).toBe(403);
-    const text = await res.text();
-    expect(text).toContain("plano");
-  });
-
-  // =========================================================================
   // REQ-PAPI-003  Scope gate: no customers:read → 403; with scope → 200
   // =========================================================================
-  it("REQ-PAPI-003: api-entitled key without customers:read → 403; with scope → 200", async () => {
+  it("REQ-PAPI-003: key without customers:read → 403; with scope → 200", async () => {
     const orgA = await seedOrg({ orgId: "org-a" });
-    await seedApiEntitlement({ orgId: orgA.orgId });
 
     // Key WITHOUT customers:read scope
     const { rawKey: keyNoScope } = await seedApiKey({
@@ -270,7 +235,6 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
     const orgA = await seedOrg({ orgId: "org-a" });
     const orgB = await seedOrg({ orgId: "org-b" });
 
-    await seedApiEntitlement({ orgId: orgA.orgId });
     const { rawKey } = await seedApiKey({
       orgId: orgA.orgId,
       userId: orgA.userId,
@@ -325,7 +289,6 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
     const orgA = await seedOrg({ orgId: "org-a" });
     const orgB = await seedOrg({ orgId: "org-b" });
 
-    await seedApiEntitlement({ orgId: orgA.orgId });
     const { rawKey } = await seedApiKey({
       orgId: orgA.orgId,
       userId: orgA.userId,
@@ -358,7 +321,6 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
   // =========================================================================
   it("REQ-PAPI-006: key with revokedAt set → GET /customers → 401", async () => {
     const orgA = await seedOrg({ orgId: "org-a" });
-    await seedApiEntitlement({ orgId: orgA.orgId });
 
     const { rawKey } = await seedApiKey({
       orgId: orgA.orgId,
@@ -386,7 +348,6 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
   // =========================================================================
   it("PUT /assets/:id ignores an integration-sent nextCalibrationDate and re-derives from the customer interval", async () => {
     const orgA = await seedOrg({ orgId: "org-a" });
-    await seedApiEntitlement({ orgId: orgA.orgId });
     const { rawKey } = await seedApiKey({
       orgId: orgA.orgId,
       userId: orgA.userId,
@@ -455,7 +416,6 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
   // REQ-SEC-TAG-003a (public API POST) --------------------------------------
   it("REQ-SEC-TAG-002/003a: POST /assets with a tag already used in the SAME org → 409 asset_tag_conflict", async () => {
     const orgA = await seedOrg({ orgId: "org-a" });
-    await seedApiEntitlement({ orgId: orgA.orgId });
     const { rawKey } = await seedApiKey({
       orgId: orgA.orgId,
       userId: orgA.userId,
@@ -500,7 +460,6 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
   // REQ-SEC-TAG-003a (public API PUT) ---------------------------------------
   it("REQ-SEC-TAG-002/003a: PUT /assets/:id changing to a tag already used in the SAME org → 409 asset_tag_conflict", async () => {
     const orgA = await seedOrg({ orgId: "org-a" });
-    await seedApiEntitlement({ orgId: orgA.orgId });
     const { rawKey } = await seedApiKey({
       orgId: orgA.orgId,
       userId: orgA.userId,
@@ -548,7 +507,6 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
   it("REQ-SEC-TAG-001: POST /assets with a tag used ONLY by another org → 201 (both orgs hold the tag)", async () => {
     const orgA = await seedOrg({ orgId: "org-a" });
     const orgB = await seedOrg({ orgId: "org-b" });
-    await seedApiEntitlement({ orgId: orgA.orgId });
     const { rawKey } = await seedApiKey({
       orgId: orgA.orgId,
       userId: orgA.userId,
@@ -614,7 +572,6 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
   it("REQ-SEC-TAG-001: PUT /assets/:id changing to a tag used ONLY by another org → 200 (per-org tag namespace)", async () => {
     const orgA = await seedOrg({ orgId: "org-a" });
     const orgB = await seedOrg({ orgId: "org-b" });
-    await seedApiEntitlement({ orgId: orgA.orgId });
     const { rawKey } = await seedApiKey({
       orgId: orgA.orgId,
       userId: orgA.userId,
@@ -683,7 +640,6 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
   // =========================================================================
   it("REQ-CMP-AUD-010a: DELETE /customers/:id (public API) keeps each asset's audit trail (+ fresh 'delete' row) after the cascade", async () => {
     const orgA = await seedOrg({ orgId: "org-a" });
-    await seedApiEntitlement({ orgId: orgA.orgId });
     const { rawKey } = await seedApiKey({
       orgId: orgA.orgId,
       userId: orgA.userId,
@@ -779,7 +735,6 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
   it("REQ-CMP-AUD-010a: DELETE /customers/:id (public API) cross-tenant — org A key on org B customer → 404, no asset audit rows written", async () => {
     const orgA = await seedOrg({ orgId: "org-a" });
     const orgB = await seedOrg({ orgId: "org-b" });
-    await seedApiEntitlement({ orgId: orgA.orgId });
     const { rawKey } = await seedApiKey({
       orgId: orgA.orgId,
       userId: orgA.userId,

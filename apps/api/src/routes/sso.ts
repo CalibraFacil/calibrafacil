@@ -2,20 +2,8 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@calibra-facil/db";
-import {
-  organization,
-  ssoProvider,
-  subscription,
-} from "@calibra-facil/db/schema";
+import { organization, ssoProvider } from "@calibra-facil/db/schema";
 import { createLabAuth } from "@calibra-facil/auth";
-import {
-  getPlan,
-  hasFeature,
-  subscriptionGrantsAccess,
-  isValidPlanId,
-  type PlanId,
-  type SubscriptionStatus,
-} from "@calibra-facil/shared";
 import { and, eq } from "drizzle-orm";
 import {
   requireRole,
@@ -180,33 +168,6 @@ function serializeProvider(provider: SsoProviderRow) {
   };
 }
 
-async function getPlanAccessForOrg(organizationId: string) {
-  const activeSubscription = await db.query.subscription.findFirst({
-    where: eq(subscription.organizationId, organizationId),
-  });
-
-  const planId = toPlanId(activeSubscription?.planId);
-  const status = toSubscriptionStatus(activeSubscription?.status);
-
-  return {
-    planId,
-    status,
-    plan: getPlan(planId),
-    hasSso: hasFeature(planId, "sso"),
-    // Honours a cancelled subscription until the period it already paid for
-    // runs out, the same rule the plan gates use. SSO is often the only way a
-    // laboratory's team signs in, so cancelling an annual plan here used to
-    // lock everyone out on the spot, months before the paid period ended.
-    isAccessible:
-      !activeSubscription ||
-      status === "PAST_DUE" ||
-      subscriptionGrantsAccess({
-        status,
-        currentPeriodEnd: activeSubscription.currentPeriodEnd,
-      }),
-  };
-}
-
 function buildAuthHeaders(requestHeaders: Headers, issuerOrigin?: string) {
   const headers = new Headers(requestHeaders);
 
@@ -271,8 +232,6 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const provider = await getOrganizationProvider(member.organizationId);
-      const planAccess = await getPlanAccessForOrg(member.organizationId);
-
       return c.json({
         provider: provider ? serializeProvider(provider) : null,
         access: {
@@ -280,12 +239,6 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
           canCreate: member.role === "owner",
           canManage: member.role === "owner",
           canDelete: member.role === "owner",
-        },
-        billing: {
-          planId: planAccess.planId,
-          planName: planAccess.plan.name,
-          status: planAccess.status,
-          hasSso: planAccess.hasSso,
         },
       });
     },
@@ -303,22 +256,6 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
 
       if (!normalizedDomain) {
         return c.json({ error: "Dominio invalido" }, 400);
-      }
-
-      const planAccess = await getPlanAccessForOrg(member.organizationId);
-
-      if (!planAccess.isAccessible) {
-        return c.json(
-          { error: "Assinatura inativa. Ative um plano para continuar." },
-          402,
-        );
-      }
-
-      if (!planAccess.hasSso) {
-        return c.json(
-          { error: "SSO esta disponivel apenas no plano Enterprise." },
-          403,
-        );
       }
 
       const existingProvider = await getOrganizationProvider(
@@ -421,22 +358,6 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Provedor SSO nao encontrado" }, 404);
       }
 
-      const planAccess = await getPlanAccessForOrg(member.organizationId);
-
-      if (!planAccess.isAccessible) {
-        return c.json(
-          { error: "Assinatura inativa. Ative um plano para continuar." },
-          402,
-        );
-      }
-
-      if (!planAccess.hasSso) {
-        return c.json(
-          { error: "SSO esta disponivel apenas no plano Enterprise." },
-          403,
-        );
-      }
-
       const auth = createLabAuth();
       const response = await auth.api.requestDomainVerification({
         body: { providerId },
@@ -497,22 +418,6 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
 
       if (!provider) {
         return c.json({ error: "Provedor SSO nao encontrado" }, 404);
-      }
-
-      const planAccess = await getPlanAccessForOrg(member.organizationId);
-
-      if (!planAccess.isAccessible) {
-        return c.json(
-          { error: "Assinatura inativa. Ative um plano para continuar." },
-          402,
-        );
-      }
-
-      if (!planAccess.hasSso) {
-        return c.json(
-          { error: "SSO esta disponivel apenas no plano Enterprise." },
-          403,
-        );
       }
 
       const auth = createLabAuth();
@@ -631,22 +536,6 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
       return c.json({ error: "Laboratorio nao encontrado" }, 404);
     }
 
-    const planAccess = await getPlanAccessForOrg(org.id);
-
-    if (!planAccess.isAccessible) {
-      return c.json(
-        { error: "Assinatura inativa. Ative um plano para continuar." },
-        402,
-      );
-    }
-
-    if (!planAccess.hasSso) {
-      return c.json(
-        { error: "SSO nao esta disponivel para esta organizacao." },
-        403,
-      );
-    }
-
     const provider = await getOrganizationProvider(org.id);
 
     if (!provider) {
@@ -687,19 +576,3 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
 
     return c.json(payload);
   });
-
-function toPlanId(value: unknown): PlanId {
-  return typeof value === "string" && isValidPlanId(value) ? value : "FREE";
-}
-
-function toSubscriptionStatus(value: unknown): SubscriptionStatus {
-  switch (value) {
-    case "ACTIVE":
-    case "PAST_DUE":
-    case "CANCELED":
-    case "TRIAL":
-      return value;
-    default:
-      return "TRIAL";
-  }
-}

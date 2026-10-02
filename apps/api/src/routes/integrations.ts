@@ -48,7 +48,6 @@ const DRIFT_TARGETS: ReadonlySet<string> = new Set<IntegrationObjectLinkTarget>(
 function isDriftTarget(value: string): value is IntegrationObjectLinkTarget {
   return DRIFT_TARGETS.has(value);
 }
-import { getOrganizationPlanAccess } from "../lib/organization-plan";
 import {
   buildEmptyRemoteDocumentSummary,
   buildInitialNextScheduledRunAt,
@@ -103,7 +102,6 @@ import {
   requireOrgType,
   requireRole,
 } from "../middleware/permission";
-import { requireFeature } from "../middleware/tier-guard";
 
 const BaseUrlSchema = z
   .string()
@@ -433,25 +431,10 @@ async function resolveContaAzulOAuthCallbackContext(state: {
     });
   }
 
-  const billing = await getOrganizationPlanAccess(record.organizationId);
-  if (!billing.isActive) {
-    throw new HTTPException(402, {
-      message: "Assinatura inativa. Ative um plano para continuar.",
-    });
-  }
-
-  if (!billing.entitlements.includes("financial_integrations")) {
-    throw new HTTPException(403, {
-      message:
-        "Integrações financeiras não disponíveis no plano atual. Faça upgrade para o plano Professional.",
-    });
-  }
-
   return record;
 }
 
 async function buildListPayload(organizationId: string) {
-  const billing = await getOrganizationPlanAccess(organizationId);
   const integrations = await listOrganizationIntegrations(organizationId);
 
   const data = await Promise.all(
@@ -526,17 +509,7 @@ async function buildListPayload(organizationId: string) {
     }),
   );
 
-  return {
-    billing: {
-      planId: billing.planId,
-      planName: billing.planName,
-      status: billing.status,
-      hasFinancialIntegrations: billing.entitlements.includes(
-        "financial_integrations",
-      ),
-    },
-    data,
-  };
+  return { data };
 }
 
 export async function dispatchSyncRun(params: {
@@ -782,7 +755,6 @@ export const integrationsRouter = new Hono<{
     ...requireLabProtected,
     requireOrgType("LAB"),
     requireRole(["admin", "owner"]),
-    requireFeature("financial_integrations"),
     zValidator("json", OAuthStartBodySchema),
     async (c) => {
       const member = c.get("member");
@@ -914,7 +886,6 @@ export const integrationsRouter = new Hono<{
     ...requireLabProtected,
     requireOrgType("LAB"),
     requireRole(["admin", "owner"]),
-    requireFeature("financial_integrations"),
     zValidator("json", IntegrationBodySchema),
     async (c) => {
       const member = c.get("member");
@@ -992,7 +963,6 @@ export const integrationsRouter = new Hono<{
     ...requireLabProtected,
     requireOrgType("LAB"),
     requireRole(["admin", "owner"]),
-    requireFeature("financial_integrations"),
     zValidator("json", UpdateIntegrationBodySchema),
     async (c) => {
       const member = c.get("member");
@@ -1094,7 +1064,6 @@ export const integrationsRouter = new Hono<{
     ...requireLabProtected,
     requireOrgType("LAB"),
     requireRole(["admin", "owner"]),
-    requireFeature("financial_integrations"),
     async (c) => {
       const member = c.get("member");
       const id = c.req.param("id");
@@ -1117,7 +1086,6 @@ export const integrationsRouter = new Hono<{
     ...requireLabProtected,
     requireOrgType("LAB"),
     requireRole(["admin", "owner"]),
-    requireFeature("financial_integrations"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
@@ -1227,7 +1195,6 @@ export const integrationsRouter = new Hono<{
     ...requireLabProtected,
     requireOrgType("LAB"),
     requireRole(["admin", "owner"]),
-    requireFeature("financial_integrations"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
@@ -1295,7 +1262,6 @@ export const integrationsRouter = new Hono<{
     ...requireLabProtected,
     requireOrgType("LAB"),
     requireRole(["admin", "owner"]),
-    requireFeature("financial_integrations"),
     async (c) => {
       const member = c.get("member");
       const id = c.req.param("id");
@@ -1332,7 +1298,6 @@ export const integrationsRouter = new Hono<{
     ...requireLabProtected,
     requireOrgType("LAB"),
     requireRole(["admin", "owner"]),
-    requireFeature("financial_integrations"),
     async (c) => {
       const member = c.get("member");
       const id = c.req.param("id");
@@ -1369,7 +1334,6 @@ export const integrationsRouter = new Hono<{
     ...requireLabProtected,
     requireOrgType("LAB"),
     requireRole(["admin", "owner"]),
-    requireFeature("financial_integrations"),
     async (c) => {
       const member = c.get("member");
       const id = c.req.param("id");
@@ -1406,7 +1370,6 @@ export const integrationsRouter = new Hono<{
     ...requireLabProtected,
     requireOrgType("LAB"),
     requireRole(["admin", "owner"]),
-    requireFeature("financial_integrations"),
     async (c) => {
       const member = c.get("member");
       const id = c.req.param("id");
@@ -1450,7 +1413,6 @@ export const integrationsRouter = new Hono<{
     ...requireLabProtected,
     requireOrgType("LAB"),
     requireRole(["admin", "owner"]),
-    requireFeature("financial_integrations"),
     zValidator("json", ContaAzulConfigBodySchema),
     async (c) => {
       const member = c.get("member");
@@ -1563,7 +1525,6 @@ export const integrationsRouter = new Hono<{
     ...requireLabProtected,
     requireOrgType("LAB"),
     requireRole(["admin", "owner"]),
-    requireFeature("financial_integrations"),
     zValidator("json", ContaAzulPollBodySchema),
     async (c) => {
       const member = c.get("member");
@@ -1624,7 +1585,6 @@ export const integrationsRouter = new Hono<{
     ...requireLabProtected,
     requireOrgType("LAB"),
     requireRole(["admin", "owner"]),
-    requireFeature("financial_integrations"),
     zValidator("json", ContaAzulPollBodySchema),
     async (c) => {
       const member = c.get("member");
@@ -1685,7 +1645,6 @@ export const integrationsRouter = new Hono<{
     ...requireLabProtected,
     requireOrgType("LAB"),
     requireRole(["admin", "owner"]),
-    requireFeature("financial_integrations"),
     zValidator("json", ContaAzulPollBodySchema),
     async (c) => {
       const member = c.get("member");
@@ -1746,7 +1705,6 @@ export const integrationsRouter = new Hono<{
     ...requireLabProtected,
     requireOrgType("LAB"),
     requireRole(["admin", "owner"]),
-    requireFeature("financial_integrations"),
     zValidator("json", ContaAzulMdfeLinkBodySchema),
     async (c) => {
       const member = c.get("member");
@@ -1813,7 +1771,6 @@ export const integrationsRouter = new Hono<{
     ...requireLabProtected,
     requireOrgType("LAB"),
     requireRole(["admin", "owner"]),
-    requireFeature("financial_integrations"),
     zValidator("json", ContaAzulPollBodySchema),
     async (c) => {
       const member = c.get("member");
@@ -1874,7 +1831,6 @@ export const integrationsRouter = new Hono<{
     ...requireLabProtected,
     requireOrgType("LAB"),
     requireRole(["admin", "owner"]),
-    requireFeature("financial_integrations"),
     zValidator("json", ContaAzulPollBodySchema),
     async (c) => {
       const member = c.get("member");
@@ -1935,7 +1891,6 @@ export const integrationsRouter = new Hono<{
     ...requireLabProtected,
     requireOrgType("LAB"),
     requireRole(["admin", "owner"]),
-    requireFeature("financial_integrations"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
@@ -2029,7 +1984,6 @@ export const integrationsRouter = new Hono<{
     ...requireLabProtected,
     requireOrgType("LAB"),
     requireRole(["admin", "owner"]),
-    requireFeature("financial_integrations"),
     zValidator("json", SyncRequestSchema),
     async (c) => {
       const member = c.get("member");
@@ -2061,7 +2015,6 @@ export const integrationsRouter = new Hono<{
     ...requireLabProtected,
     requireOrgType("LAB"),
     requireRole(["admin", "owner"]),
-    requireFeature("financial_integrations"),
     zValidator("json", SyncRequestSchema),
     async (c) => {
       const member = c.get("member");
@@ -2175,7 +2128,6 @@ export const integrationsRouter = new Hono<{
     ...requireLabProtected,
     requireOrgType("LAB"),
     requireRole(["admin", "owner"]),
-    requireFeature("financial_integrations"),
     zValidator("json", ScheduleSchema),
     async (c) => {
       const member = c.get("member");
@@ -2263,7 +2215,6 @@ export const integrationsRouter = new Hono<{
     ...requireLabProtected,
     requireOrgType("LAB"),
     requireRole(["admin", "owner"]),
-    requireFeature("financial_integrations"),
     zValidator("json", ToggleSchema),
     async (c) => {
       const member = c.get("member");
@@ -2408,7 +2359,6 @@ export const integrationsRouter = new Hono<{
     ...requireLabProtected,
     requireOrgType("LAB"),
     requireRole(["admin", "owner"]),
-    requireFeature("financial_integrations"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
@@ -2576,27 +2526,20 @@ export const integrationsRouter = new Hono<{
     },
   )
   // Phase 2 slice 3: remote drift detection queue.
-  .get(
-    "/drift",
-    ...requireLabProtected,
-    requireOrgType("LAB"),
-    requireFeature("financial_integrations"),
-    async (c) => {
-      const member = c.get("member");
-      const target = c.req.query("target");
-      const rows = await buildIntegrationDriftQueue({
-        organizationId: member.organizationId,
-        target: target && isDriftTarget(target) ? target : undefined,
-      });
-      return c.json({ data: rows });
-    },
-  )
+  .get("/drift", ...requireLabProtected, requireOrgType("LAB"), async (c) => {
+    const member = c.get("member");
+    const target = c.req.query("target");
+    const rows = await buildIntegrationDriftQueue({
+      organizationId: member.organizationId,
+      target: target && isDriftTarget(target) ? target : undefined,
+    });
+    return c.json({ data: rows });
+  })
   .post(
     "/drift/:linkId/acknowledge",
     ...requireLabProtected,
     requireOrgType("LAB"),
     requireRole(["admin", "owner"]),
-    requireFeature("financial_integrations"),
     zValidator(
       "json",
       z.object({

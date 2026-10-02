@@ -7,7 +7,6 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../../middleware/permission";
-import { requireFeature } from "../../middleware/tier-guard";
 import { resolveCustomerRouteId } from "../../lib/customer-route-id";
 import { parseLegacyNumericIdentifier } from "../../lib/route-identifiers";
 
@@ -24,8 +23,6 @@ export const financeTimelineRouter = new Hono<{
   .get(
     "/service-orders/:serviceOrderId/status",
     ...withLabPermission({ financial: ["read"] }),
-    requireFeature("financial"),
-    requireFeature("financial_integrations"),
     async (c) => {
       const member = c.get("member");
       const serviceOrderId = parseStrictPositiveInt(
@@ -52,8 +49,6 @@ export const financeTimelineRouter = new Hono<{
   .get(
     "/customers/:customerId/timeline",
     ...withLabPermission({ financial: ["read"] }),
-    requireFeature("financial"),
-    requireFeature("financial_integrations"),
     async (c) => {
       const member = c.get("member");
       const customerRouteId = c.req.param("customerId");

@@ -8,7 +8,6 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../../middleware/permission";
-import { requireFeature } from "../../middleware/tier-guard";
 import type { AutomaticSendMilestone } from "@calibra-facil/shared";
 
 const RuleIdParamSchema = z.object({
@@ -60,53 +59,45 @@ function ruleScope(row: {
 export const financeAutomaticSendRouter = new Hono<{
   Variables: AuthVariables;
 }>()
-  .get(
-    "/",
-    ...withLabPermission({ financial: ["read"] }),
-    requireFeature("financial"),
-    requireFeature("financial_integrations"),
-    async (c) => {
-      const member = c.get("member");
-      const rows = await db
-        .select({
-          id: automaticSendRule.id,
-          milestone: automaticSendRule.milestone,
-          customerId: automaticSendRule.customerId,
-          customerName: customer.name,
-          commercialAgreementId: automaticSendRule.commercialAgreementId,
-          serviceCategory: automaticSendRule.serviceCategory,
-          priority: automaticSendRule.priority,
-          archivedAt: automaticSendRule.archivedAt,
-          createdAt: automaticSendRule.createdAt,
-          updatedAt: automaticSendRule.updatedAt,
-        })
-        .from(automaticSendRule)
-        .leftJoin(customer, eq(customer.id, automaticSendRule.customerId))
-        .where(eq(automaticSendRule.organizationId, member.organizationId))
-        .orderBy(automaticSendRule.id);
+  .get("/", ...withLabPermission({ financial: ["read"] }), async (c) => {
+    const member = c.get("member");
+    const rows = await db
+      .select({
+        id: automaticSendRule.id,
+        milestone: automaticSendRule.milestone,
+        customerId: automaticSendRule.customerId,
+        customerName: customer.name,
+        commercialAgreementId: automaticSendRule.commercialAgreementId,
+        serviceCategory: automaticSendRule.serviceCategory,
+        priority: automaticSendRule.priority,
+        archivedAt: automaticSendRule.archivedAt,
+        createdAt: automaticSendRule.createdAt,
+        updatedAt: automaticSendRule.updatedAt,
+      })
+      .from(automaticSendRule)
+      .leftJoin(customer, eq(customer.id, automaticSendRule.customerId))
+      .where(eq(automaticSendRule.organizationId, member.organizationId))
+      .orderBy(automaticSendRule.id);
 
-      return c.json({
-        data: rows.map((row) => ({
-          id: row.id,
-          milestone: row.milestone,
-          customerId: row.customerId,
-          customerName: row.customerName ?? null,
-          commercialAgreementId: row.commercialAgreementId,
-          serviceCategory: row.serviceCategory,
-          priority: row.priority,
-          scope: ruleScope(row),
-          archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
-          createdAt: row.createdAt.toISOString(),
-          updatedAt: row.updatedAt.toISOString(),
-        })),
-      });
-    },
-  )
+    return c.json({
+      data: rows.map((row) => ({
+        id: row.id,
+        milestone: row.milestone,
+        customerId: row.customerId,
+        customerName: row.customerName ?? null,
+        commercialAgreementId: row.commercialAgreementId,
+        serviceCategory: row.serviceCategory,
+        priority: row.priority,
+        scope: ruleScope(row),
+        archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+      })),
+    });
+  })
   .post(
     "/",
     ...withLabPermission({ financial: ["contract_create"] }),
-    requireFeature("financial"),
-    requireFeature("financial_integrations"),
     zValidator("json", CreateRuleSchema),
     async (c) => {
       const member = c.get("member");
@@ -164,8 +155,6 @@ export const financeAutomaticSendRouter = new Hono<{
   .put(
     "/:id",
     ...withLabPermission({ financial: ["contract_update"] }),
-    requireFeature("financial"),
-    requireFeature("financial_integrations"),
     zValidator("param", RuleIdParamSchema),
     zValidator("json", UpdateRuleSchema),
     async (c) => {

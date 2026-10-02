@@ -38,7 +38,7 @@ and judge each EARS criterion.
 4. **Reason explicitly about every access-control criterion.** State, per access
    REQ ID: which role/permission is required, which real guard enforces it
    (`requirePermission` / `requireRole` / `requireCalibrationAction` /
-   `requireOrgType` / `requireFeature` in `apps/api/src/middleware/permission.ts`,
+   `requireOrgType` in `apps/api/src/middleware/permission.ts`,
    roles in `packages/auth/src/access.ts`), and whether `organizationId` + `unitId`
    tenant scoping is preserved. A negative/deny test must exist (a forbidden role
    is actually rejected). Missing deny test → REJECT. A new inline access rule

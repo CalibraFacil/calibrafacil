@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import type { EmailDomainResponse } from '@calibra-facil/client-runtime'
 
-import { usePlanAccess } from '@/hooks/use-plan-access'
 import { calibraApi } from '@/utils/api'
 import {
   normalizeEmailDnsRecords,
@@ -68,7 +67,6 @@ function statusLabel(status: EmailDomainResponse['statusSummary']['status']) {
 
 export function EmailDomainSettingsPage() {
   const queryClient = useQueryClient()
-  const accessQuery = usePlanAccess()
   const domainQuery = useEmailDomainData()
 
   const [hostname, setHostname] = useState('')
@@ -148,7 +146,7 @@ export function EmailDomainSettingsPage() {
     },
   })
 
-  if (domainQuery.isLoading || accessQuery.isLoading) {
+  if (domainQuery.isLoading) {
     return <EmailDomainSkeleton />
   }
 
@@ -172,8 +170,6 @@ export function EmailDomainSettingsPage() {
     return <EmailDomainSkeleton />
   }
 
-  const hasEntitlement =
-    accessQuery.data?.entitlements.includes('email_sender_domain') ?? false
   const domain = payload.domain
   const keyHealth = payload.statusSummary.keyHealth
   const dnsRecords = normalizeEmailDnsRecords(domain?.dnsRecords)
@@ -203,17 +199,7 @@ export function EmailDomainSettingsPage() {
                   : 'Limite de envio atingido'}
               </Badge>
             )}
-            {!hasEntitlement && <Badge variant="outline">Standard+</Badge>}
           </div>
-
-          {!hasEntitlement && (
-            <Alert>
-              <AlertDescription>
-                O envio pelo seu próprio domínio fica disponível a partir do
-                plano Standard.
-              </AlertDescription>
-            </Alert>
-          )}
 
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <StatusMetric
@@ -330,11 +316,7 @@ export function EmailDomainSettingsPage() {
                   placeholder="certificados.seulaboratorio.com.br"
                   autoComplete="off"
                   spellCheck={false}
-                  disabled={
-                    Boolean(domain) ||
-                    !hasEntitlement ||
-                    createMutation.isPending
-                  }
+                  disabled={Boolean(domain) || createMutation.isPending}
                 />
                 <FieldDescription>
                   Use um subdomínio dedicado ao envio. Assim a reputação dos
@@ -381,7 +363,6 @@ export function EmailDomainSettingsPage() {
               <Button
                 type="submit"
                 disabled={
-                  !hasEntitlement ||
                   !sendingHostname.trim() ||
                   !sendingLocalPart.trim() ||
                   createMutation.isPending
@@ -481,7 +462,7 @@ export function EmailDomainSettingsPage() {
                 type="button"
                 variant="outline"
                 onClick={() => verifyMutation.mutate()}
-                disabled={!hasEntitlement || verifyMutation.isPending}
+                disabled={verifyMutation.isPending}
               >
                 Verificar novamente
               </Button>
@@ -489,7 +470,6 @@ export function EmailDomainSettingsPage() {
                 type="button"
                 onClick={() => activateMutation.mutate()}
                 disabled={
-                  !hasEntitlement ||
                   !payload.statusSummary.canActivate ||
                   activateMutation.isPending
                 }

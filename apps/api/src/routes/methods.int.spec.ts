@@ -4,8 +4,8 @@
  * §7.2 Method Validation + §8.4 Control of Records).
  *
  * ONLY the better-auth session is mocked (see test/integration/setup.ts).
- * requireLabAuth → requireOrganization → withLabPermission + requireRole +
- * requireFeature all run for real against the seeded Postgres.
+ * requireLabAuth → requireOrganization → withLabPermission + requireRole
+ * all run for real against the seeded Postgres.
  *
  * Proven properties (oracle):
  *   REQ-METH-001  [HIGH RISK] Tenant isolation: org A cannot GET or transition
@@ -52,7 +52,6 @@ import {
   methodAuditLog,
   user,
   member,
-  subscription,
   type MethodInputField,
   type MethodFormula,
 } from "@calibra-facil/db/schema";
@@ -70,21 +69,6 @@ const JSON_HEADERS = { "content-type": "application/json" };
 // ---------------------------------------------------------------------------
 // Domain seed helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Seed a PROFESSIONAL subscription for an org. The method lifecycle itself is
- * no longer gated by plan (17025 requires review and approval, so it is
- * unconditional), but the seeding is kept so these tests run against a
- * realistic paid organization rather than a bare FREE one.
- */
-async function seedProfessionalSubscription(orgId: string): Promise<void> {
-  await db.insert(subscription).values({
-    organizationId: orgId,
-    planId: "PROFESSIONAL",
-    status: "ACTIVE",
-    renewalMode: "NONE",
-  });
-}
 
 /**
  * Minimal dataFields for a compilable method (one number input, no formulas).
@@ -162,7 +146,7 @@ async function seedMethod(params: {
 }
 
 /**
- * Seed a minimal org with a PROFESSIONAL subscription in one call.
+ * Seed a minimal org in one call.
  */
 async function seedOrgWithPro(params: {
   orgId: string;
@@ -174,7 +158,6 @@ async function seedOrgWithPro(params: {
     userId: params.userId,
     role: params.role ?? "admin",
   });
-  await seedProfessionalSubscription(params.orgId);
   return org;
 }
 
@@ -517,7 +500,6 @@ describe("methodsRouter — GUM method workflow (ISO/IEC 17025)", () => {
 
     // seedOrg creates the first user as owner
     await seedOrg({ orgId: "org-fe", userId: ownerAId, role: "owner" });
-    await seedProfessionalSubscription("org-fe");
     await seedExtraMember({ userId: ownerBId, orgId: "org-fe", role: "owner" });
 
     // Seed an asset type so compilation doesn't fail with "assetTypeId undefined".
@@ -594,7 +576,6 @@ describe("methodsRouter — GUM method workflow (ISO/IEC 17025)", () => {
 
     // seedOrg creates ownerA as owner; add ownerB as a second owner
     await seedOrg({ orgId: "org-pub", userId: ownerAId, role: "owner" });
-    await seedProfessionalSubscription("org-pub");
     await seedExtraMember({
       userId: ownerBId,
       orgId: "org-pub",
@@ -659,7 +640,6 @@ describe("methodsRouter — GUM method workflow (ISO/IEC 17025)", () => {
   it("REQ-METH-004-a: technical-review as technician (non-admin) → 403", async () => {
     const techId = "user-tech-rbac";
     await seedOrg({ orgId: "org-rbac", userId: techId, role: "technician" });
-    await seedProfessionalSubscription("org-rbac");
 
     const methodId = await seedMethod({
       orgId: "org-rbac",
@@ -679,7 +659,6 @@ describe("methodsRouter — GUM method workflow (ISO/IEC 17025)", () => {
   it("REQ-METH-004-b: technical-review as owner (non-admin) → 403", async () => {
     const ownerId = "user-owner-rbac2";
     await seedOrg({ orgId: "org-rbac2", userId: ownerId, role: "owner" });
-    await seedProfessionalSubscription("org-rbac2");
 
     const adminId = "user-admin-rbac2";
     await seedExtraMember({
@@ -707,7 +686,6 @@ describe("methodsRouter — GUM method workflow (ISO/IEC 17025)", () => {
   it("REQ-METH-004-c: quality-approve as admin (non-owner) → 403", async () => {
     const adminId = "user-admin-rbac3";
     await seedOrg({ orgId: "org-rbac3", userId: adminId, role: "admin" });
-    await seedProfessionalSubscription("org-rbac3");
 
     const ownerId = "user-owner-rbac3";
     await seedExtraMember({

@@ -28,7 +28,6 @@ import {
   requireRole,
   withLabPermission,
 } from "../middleware/permission";
-import { requireFeature } from "../middleware/tier-guard";
 import { eq } from "drizzle-orm";
 import {
   saveManagedEmailDomain,
@@ -131,7 +130,6 @@ export const emailDomainsRouter = new Hono<{ Variables: AuthVariables }>()
     "/",
     ...withLabPermission({ organization: ["update"] }),
     requireRole(["admin", "owner"]),
-    requireFeature("email_sender_domain"),
     zValidator("json", CreateEmailDomainSchema),
     async (c) => {
       const member = c.get("member");
@@ -172,7 +170,6 @@ export const emailDomainsRouter = new Hono<{ Variables: AuthVariables }>()
     "/verify",
     ...withLabPermission({ organization: ["update"] }),
     requireRole(["admin", "owner"]),
-    requireFeature("email_sender_domain"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
@@ -250,7 +247,6 @@ export const emailDomainsRouter = new Hono<{ Variables: AuthVariables }>()
     "/activate",
     ...withLabPermission({ organization: ["update"] }),
     requireRole(["admin", "owner"]),
-    requireFeature("email_sender_domain"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");

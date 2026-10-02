@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { HTTPException } from "hono/http-exception";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@calibra-facil/db";
@@ -64,10 +63,6 @@ import {
 } from "../middleware/permission";
 import { normalizeStandardsForOfficialExecution } from "@calibra-facil/shared";
 import { normalizeMethodDataForStorage } from "@calibra-facil/shared/units";
-import {
-  requirePlanLimit,
-  assertPlanLimitInTransaction,
-} from "../middleware/tier-guard";
 import { selectEffectiveEnvironmentalLimits } from "../lib/unit-operational-settings";
 import {
   eq,
@@ -1214,7 +1209,6 @@ export const jobsRouter = new Hono<{
   .post(
     "/",
     ...withLabPermission({ calibration: ["create"] }),
-    requirePlanLimit("certificates"), // Check plan limit before creating job
     zValidator("json", CreateJobSchema),
     async (c) => {
       const memberData = c.get("member");
@@ -1231,17 +1225,6 @@ export const jobsRouter = new Hono<{
 
       try {
         const newJob = await db.transaction(async (tx) => {
-          // The requirePlanLimit middleware above is a fast, non-transactional
-          // pre-check (good UX, but two concurrent requests can both pass it
-          // and both proceed to insert past the limit). Re-check the limit
-          // here under an advisory lock, inside the SAME transaction as the
-          // insert, closing that TOCTOU window (REQ-DOM-QTA-001) the same way
-          // calibration-requests.ts's POST /:id/convert already does.
-          await assertPlanLimitInTransaction(tx, {
-            organizationId: memberData.organizationId,
-            resource: "certificates",
-          });
-
           return createCalibrationJob({
             organizationId: memberData.organizationId,
             unitId: activeUnitId,
@@ -1278,14 +1261,6 @@ export const jobsRouter = new Hono<{
 
         return c.json(newJob, 201);
       } catch (error) {
-        // A plan-limit or subscription-status re-check failure inside the
-        // transaction throws HTTPException (same as the pre-check middleware
-        // above) — let Hono handle it identically rather than mapping it to
-        // the generic 500 below.
-        if (error instanceof HTTPException) {
-          throw error;
-        }
-
         console.error("Error creating job:", error);
         const message =
           error instanceof Error ? error.message : "Erro ao criar job";

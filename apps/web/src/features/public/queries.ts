@@ -2,17 +2,7 @@ import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 
 import { prewarmRouteQueries } from '@/lib/route-data'
 import { calibraApi } from '@/utils/api'
-import type {
-  InvitationData,
-  PublicCheckoutSnapshotData,
-  PublicCheckoutStatusData,
-} from './types'
-
-type CheckoutStatusPolling = (query: {
-  state: {
-    data: PublicCheckoutStatusData | { state: 'INVALID' } | undefined
-  }
-}) => number | false | undefined
+import type { InvitationData } from './types'
 
 type PublicInvitationResponse = {
   id: string
@@ -52,58 +42,10 @@ export function invitationQueryOptions(id: string) {
   })
 }
 
-export function publicCheckoutSnapshotQueryOptions(token: string) {
-  return queryOptions({
-    queryKey: ['public-commercial-checkout', token, 'snapshot'],
-    queryFn: () =>
-      calibraApi.publicCheckout.getSnapshot<PublicCheckoutSnapshotData>(token),
-  })
-}
-
-export function publicCheckoutStatusQueryOptions(token: string) {
-  return queryOptions({
-    queryKey: ['public-commercial-checkout', token, 'status'],
-    queryFn: () =>
-      calibraApi.publicCheckout.getStatus<
-        PublicCheckoutStatusData | { state: 'INVALID' }
-      >(token),
-  })
-}
-
 export async function prewarmInvitation(queryClient: QueryClient, id: string) {
   await prewarmRouteQueries(queryClient, [invitationQueryOptions(id)])
 }
 
-export async function prewarmPublicCheckout(
-  queryClient: QueryClient,
-  token: string,
-) {
-  await prewarmRouteQueries(queryClient, [
-    publicCheckoutSnapshotQueryOptions(token),
-    publicCheckoutStatusQueryOptions(token),
-  ])
-}
-
 export function useInvitationData(id: string) {
   return useQuery(invitationQueryOptions(id))
-}
-
-export function usePublicCheckoutSnapshotData(token: string) {
-  return useQuery(publicCheckoutSnapshotQueryOptions(token))
-}
-
-export function usePublicCheckoutStatusData({
-  enabled,
-  refetchInterval,
-  token,
-}: {
-  enabled: boolean
-  refetchInterval?: CheckoutStatusPolling
-  token: string
-}) {
-  return useQuery({
-    ...publicCheckoutStatusQueryOptions(token),
-    enabled,
-    refetchInterval,
-  })
 }
