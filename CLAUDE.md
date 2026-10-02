@@ -51,13 +51,17 @@ Database (Drizzle, in `packages/db`):
 
 ```bash
 cd packages/db
-pnpm db:migrate       # apply migrations
+pnpm db:bootstrap     # new DB: push schema + sql/schema-extras.sql; existing DB: migrate
+pnpm db:migrate       # apply pending migrations
 pnpm db:studio        # Drizzle Studio on :4000
 ```
 
 `drizzle-kit generate` does not produce usable migrations past the early snapshots:
 write new migrations by hand (`packages/db/drizzle/NNNN_name.sql`) and append the entry
-to `drizzle/meta/_journal.json`.
+to `drizzle/meta/_journal.json`. New databases are built from `src/schema.ts` (the historical
+chain is not replayable from scratch), so a migration that adds something schema.ts cannot
+express — an extension, function, partial/expression index or CHECK constraint — must also be
+added to `packages/db/sql/schema-extras.sql`.
 
 ## Tooling notes (non-obvious)
 

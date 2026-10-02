@@ -5,7 +5,7 @@
 //   2. creates apps/api/.env and packages/db/.env from their examples, with
 //      freshly generated secrets (existing files are never overwritten)
 //   3. starts docker-compose.yml (Postgres, S3, Mailpit, Resend relay, Gotenberg)
-//   4. applies the database migrations
+//   4. builds (new database) or migrates (existing database) the schema
 //   5. creates the storage buckets
 //   6. seeds the catalogs and a demo laboratory you can sign in to
 //
@@ -143,9 +143,34 @@ if (reset) {
 step("Starting Docker services");
 run("docker", ["compose", "up", "--detach", "--wait"]);
 
-// ── 4. migrations ─────────────────────────────────────────────────────────────
-step("Applying database migrations");
-run(isWindows ? "pnpm.cmd" : "pnpm", ["--dir", "packages/db", "db:migrate"], {
+// ── 4. schema ─────────────────────────────────────────────────────────────────
+step("Waiting for Postgres to accept connections");
+{
+  const requireFromDb = createRequire(
+    path.join(root, "packages/db/package.json"),
+  );
+  const postgres = requireFromDb("postgres");
+  let ready = false;
+  for (let attempt = 0; attempt < 60 && !ready; attempt += 1) {
+    const sql = postgres(dbEnv.DATABASE_URL, {
+      max: 1,
+      connect_timeout: 3,
+      onnotice: () => {},
+    });
+    try {
+      await sql`select 1`;
+      ready = true;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    } finally {
+      await sql.end({ timeout: 1 }).catch(() => {});
+    }
+  }
+  if (!ready)
+    fail(`Postgres did not become reachable at ${dbEnv.DATABASE_URL}`);
+}
+step("Preparing the database schema");
+run(isWindows ? "pnpm.cmd" : "pnpm", ["--dir", "packages/db", "db:bootstrap"], {
   env: { ...process.env, DATABASE_URL: dbEnv.DATABASE_URL },
 });
 

@@ -28,7 +28,8 @@ covers the big-picture architecture; `CONTRIBUTING.md` covers the contribution f
 - `pnpm check-types`: TypeScript type checks.
 - `pnpm turbo test`: run all tests (use Node 24 and `TZ=UTC`).
 - `pnpm turbo dev --filter=@calibra-facil/api`: run a single app.
-- `cd packages/db && pnpm db:migrate`: apply migrations. Migrations are hand-written SQL files
+- `cd packages/db && pnpm db:bootstrap`: build a new database (schema push + `sql/schema-extras.sql`)
+  or apply pending migrations to an existing one. Migrations are hand-written SQL files
   in `packages/db/drizzle/` plus an entry in `drizzle/meta/_journal.json`.
 
 ## Coding Style & Naming Conventions

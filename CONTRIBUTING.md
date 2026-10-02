@@ -56,8 +56,10 @@ Calibra Fácil produces regulated records. Changes in these areas get a stricter
 - **Access control and tenancy**: preserve organization/unit scoping and the RBAC layer in
   `packages/auth`.
 - **Database migrations**: add a hand-written SQL file in `packages/db/drizzle/` and append
-  it to `drizzle/meta/_journal.json`. Migrations must be forward-only and safe on existing
-  data.
+  it to `drizzle/meta/_journal.json`, and keep `src/schema.ts` in sync (new databases are
+  built from it). Objects schema.ts cannot express (extensions, partial or expression indexes,
+  CHECK constraints) also go into `packages/db/sql/schema-extras.sql`. Migrations must be
+  forward-only and safe on existing data.
 
 ## Historical references
 

@@ -70,7 +70,7 @@ Review the legal pages (`/termos-de-uso`, `/privacidade`) and the content-securi
 ## Database
 
 ```bash
-DATABASE_URL=… pnpm --dir packages/db db:migrate     # schema
+DATABASE_URL=… pnpm --dir packages/db db:bootstrap   # schema (new or existing database)
 DATABASE_URL=… bun packages/db/src/seed-asset-types.ts  # asset types + legal-metrology catalog
 ```
 
@@ -147,6 +147,6 @@ the background-job queue declared in `apps/api/vercel.json`.
 
 ## Updating
 
-Pull the new version, run `pnpm --dir packages/db db:migrate` **before** deploying the new code
+Pull the new version, run `pnpm --dir packages/db db:bootstrap` **before** deploying the new code
 (new columns are read as soon as the code ships), then deploy the API, worker and frontends
 together.

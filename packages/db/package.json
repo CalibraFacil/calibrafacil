@@ -15,6 +15,7 @@
     "build": "tsc",
     "test": "vitest run --exclude=dist/**",
     "db:generate": "drizzle-kit generate",
+    "db:bootstrap": "node ./scripts/bootstrap.mjs",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio --port 4000",
     "db:seed:legal-metrology-regulations": "tsx ./src/seed-legal-metrology-regulations.ts",
