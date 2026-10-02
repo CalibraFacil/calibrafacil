@@ -12,7 +12,9 @@ overrides:
   "@tanstack/start-plugin-core": 1.167.6
   "@tanstack/start-server-core": 1.167.2
   seroval: ^1.4.1
-  next: 16.3.3
+  # GHSA-vcvr-r3jv-pc5j: next >=16.2.0 <16.3.6 remote code execution in
+  # next/og ImageResponse. apps/site and apps/docs pin the same version.
+  next: 16.3.8
   fast-xml-parser: ^5.5.6
   fast-xml-builder: ^1.2.0
   # Held at ^0.25.12 for vite compatibility (vite 7.3.x pins esbuild ^0.27.0,
@@ -34,11 +36,11 @@ overrides:
   "nanoid@<3.3.18": ^3.3.18
   "picomatch@<2.3.2": ^2.3.2
   "picomatch@>=4.0.0 <4.0.4": ^4.0.4
-  # GHSA-vmh5-mc38-953g / GHSA-cq9c-5vqp-fhqr: undici TLS certificate-validation bypass
-  # via dropped requestTls in SOCKS5 ProxyAgent. Pulled transitively via Payload
-  # (apps/cms). Patch-bump the 7.x line to the patched 7.28.0 (supersedes the
-  # earlier ^7.24.0, which resolved inside the vulnerable range).
-  undici: ^7.29.0
+  # GHSA-rfgv-xxqx-mfg5 (DoS via an unrequested WebSocket subprotocol) and
+  # GHSA-w293-vg96-wgc3 (TLS certificate-validation bypass via dropped connect
+  # options): undici <7.29.1. Transitive via jsdom (test tooling). Supersedes
+  # the earlier ^7.29.0 bump for GHSA-vmh5-mc38-953g / GHSA-cq9c-5vqp-fhqr.
+  undici: ^7.29.1
   # GHSA-96hv-2xvq-fx4p: ws >=8.0.0 <8.21.0 memory-exhaustion DoS from many tiny
   # fragments. Pulled transitively via Payload (apps/cms). Patch-bump the 8.x
   # line to 8.21.0 (already resolved elsewhere in the tree).
@@ -80,11 +82,11 @@ overrides:
   # author ourselves), but the prod audit gate counts it.
   browserslist: ^4.28.7
   samlify: ^2.13.0
-  # GHSA-rgw5-rvv9-x895: brace-expansion >=4.0.0 <5.0.9 DoS via unbounded
-  # intermediate arrays (bypasses the CVE-2026-14257 mitigation). Transitive via
-  # @vercel/queue>minimatch. Scoped to the 4.x/5.x line so the 1.x/2.x users are
-  # untouched.
-  "brace-expansion@>=4.0.0 <5.0.9": ^5.0.9
+  # GHSA-rgw5-rvv9-x895, GHSA-6j4f-fj2g-mc7p and GHSA-qhr7-859c-m2p7:
+  # brace-expansion >=4.0.0 <5.0.11 DoS (unbounded intermediate arrays,
+  # uncontrolled recursion). Transitive via @vercel/queue>minimatch. Scoped to
+  # the 4.x/5.x line so the 1.x/2.x users are untouched.
+  "brace-expansion@>=4.0.0 <5.0.11": ^5.0.11
   # The same DoS family (GHSA-3jxr-9vmj-r5cp, GHSA-mh99-v99m-4gvg,
   # GHSA-rgw5-rvv9-x895) also lands on the 1.x and 2.x lines still present in
   # the tree via apps/desktop and apps/web tooling. Each line has its own
@@ -164,16 +166,15 @@ overrides:
 
 auditConfig:
   ignoreGhsas:
-    # image-size <=2.0.2 DoS: two advisories over the same unpatched code —
-    # GHSA-5p2g-fcmc-qvqq (JXL/HEIF parsers) and GHSA-w3rx-r6r6-pgpr (ICNS
-    # parser, infinite loop). There is NO patched release: both name >=2.0.3,
-    # but npm's latest is 2.0.2 and the only other dist-tag is legacy 1.2.1
-    # (re-checked 2026-09-04) — there is nothing to bump to. Reachable only through
-    # Payload's upload handler in apps/cms, whose admin has no public sign-up
-    # and is authored solely by the operator; impact is a CMS-only denial of
-    # service. Replace BOTH with an override the moment 2.0.3 ships.
-    - GHSA-5p2g-fcmc-qvqq
-    - GHSA-w3rx-r6r6-pgpr
+    # GHSA-86w9-cpqp-85rv: node-forge <=1.4.0 RSA PKCS#1 v1.5 signature
+    # verification accepts extra nested DigestAlgorithm elements. There is NO
+    # patched release: the advisory names >=1.4.1, but npm's latest is 1.4.0
+    # (re-checked 2026-10-01). Not reachable here: packages/signing uses
+    # node-forge only to parse A1 (P12) certificates and, through
+    # @signpdf/signer-p12, to create signatures; certificate-chain and CRL
+    # verification go through pkijs/WebCrypto. Replace with an override the
+    # moment a patched node-forge ships.
+    - GHSA-86w9-cpqp-85rv
 
 # Force pnpm to materialize ALL linux native optional binaries (glibc + musl,
 # x64 + arm64), not just the one matching the install machine. Vercel's
