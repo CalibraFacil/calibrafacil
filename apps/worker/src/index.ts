@@ -21,6 +21,7 @@ import {
   classifyFleetDueStatus,
   FLEET_DUE_SOON_DAYS,
   type FleetStatusAsset,
+  formatLabDateTime,
 } from "@calibra-facil/documents";
 import { zipSync, strToU8, type Zippable } from "fflate";
 import { Workbook } from "@cj-tech-master/excelts";
@@ -2351,7 +2352,7 @@ function renderAuditPackIndexHtml(params: {
         ${rows}
       </tbody>
     </table>
-    <p class="note">Gerado em ${escapeHtml(new Date(params.generatedAtIso).toISOString())} · ${params.certificates.length} certificado(s).</p>
+    <p class="note">Gerado em ${escapeHtml(formatLabDateTime(params.generatedAtIso))} · ${params.certificates.length} certificado(s).</p>
   </div>
 </body>
 </html>`;
@@ -2374,7 +2375,7 @@ function buildAuditPackReadme(params: {
     `Laboratório: ${params.labName}`,
     `Cliente: ${params.customerName}`,
     `Período (data de aprovação): ${formatBrDate(params.dateFrom)} a ${formatBrDate(params.dateTo)}`,
-    `Gerado em: ${params.generatedAtIso}`,
+    `Gerado em: ${formatLabDateTime(params.generatedAtIso)}`,
     "",
     "Conteúdo:",
   ];

@@ -1,4 +1,6 @@
 /** @jsxImportSource react */
+import { formatLabDate } from "./dates.js";
+
 // Types for label generation (standalone, does not depend on @calibra-facil/db)
 
 export type LabelData = {
@@ -107,16 +109,6 @@ const labelStyles = `
   }
 `;
 
-function formatShortDate(date: Date | string | null): string {
-  if (!date) return "-";
-  const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
 export function LabelHtml({ label }: { label: LabelData }) {
   return (
     <html lang="pt-BR">
@@ -141,7 +133,7 @@ export function LabelHtml({ label }: { label: LabelData }) {
               <div className="field">
                 <span className="field-label">DATA:</span>
                 <span className="field-value">
-                  {formatShortDate(label.calibrationDate)}
+                  {formatLabDate(label.calibrationDate, "-")}
                 </span>
               </div>
             </div>

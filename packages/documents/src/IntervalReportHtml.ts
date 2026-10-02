@@ -9,6 +9,8 @@
  * customer's decision; this is an indicative analysis only.
  */
 
+import { formatLabDate } from "./dates.js";
+
 export type IntervalReportData = {
   assetName: string;
   assetTag: string;
@@ -59,10 +61,7 @@ function pct(value: number | null): string {
 }
 
 export function renderIntervalReportHtml(data: IntervalReportData): string {
-  const d = new Date(data.generatedAtIso);
-  const generated = `${String(d.getUTCDate()).padStart(2, "0")}/${String(
-    d.getUTCMonth() + 1,
-  ).padStart(2, "0")}/${d.getUTCFullYear()}`;
+  const generated = formatLabDate(data.generatedAtIso);
   const current =
     data.currentIntervalMonths === null
       ? "não definida"

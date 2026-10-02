@@ -178,9 +178,10 @@ describe("REQ-SOEMAIL-011: nova OS email sent on service order creation", () => 
   });
 
   it("REQ-SOEMAIL-011: renderEmail passes intake date (pt-BR formatted) to ServiceOrderCreatedEmail", async () => {
-    // 2026-06-19 → "19/06/2026"
+    // 01:30 UTC on the 19th is 22:30 on the 18th at the lab, the day the
+    // intake PDF shows.
     const input = makeInput({
-      openedAt: new Date("2026-06-19T00:00:00.000Z"),
+      openedAt: new Date("2026-06-19T01:30:00.000Z"),
     });
     await dispatchNovaOsEmail(input);
 
@@ -204,11 +205,8 @@ describe("REQ-SOEMAIL-011: nova OS email sent on service order creation", () => 
       brand: undefined,
     };
     emailInput.renderEmail(ctx);
-    // intakeDate must be a pt-BR date string containing "2026" — the exact
-    // locale format depends on the TZ, but the year must be present.
     const callArgs = mockNovaOsEmail.mock.calls[0][0];
-    expect(callArgs.intakeDate).toMatch(/2026/);
-    expect(callArgs.intakeDate).toMatch(/19|06/); // day or month present
+    expect(callArgs.intakeDate).toBe("18/06/2026");
   });
 
   it("REQ-SOEMAIL-011: renderEmail passes claimedDefect to ServiceOrderCreatedEmail", async () => {

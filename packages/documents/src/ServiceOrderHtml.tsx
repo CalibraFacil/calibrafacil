@@ -1,6 +1,8 @@
 /** @jsxImportSource react */
 import type { ReactNode } from "react";
 
+import { formatLabDateTime } from "./dates.js";
+
 export type ServiceOrderDocumentItem = {
   description: string;
   quantity: number;
@@ -296,18 +298,6 @@ const pageStyles = `
   .sign-date-cells { white-space: nowrap; }
 `;
 
-function formatDate(value: Date | string | null | undefined) {
-  if (!value) return "—";
-  const date = typeof value === "string" ? new Date(value) : value;
-  return date.toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 function money(cents: number) {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -476,10 +466,10 @@ function Header({ data }: { data: ServiceOrderDocumentData }) {
                 <div className="meta-title">Número da OS</div>
                 <div className="os-number">{data.serviceOrderNumber}</div>
                 <div className="meta-line">
-                  Abertura: {formatDate(data.openedAt)}
+                  Abertura: {formatLabDateTime(data.openedAt)}
                 </div>
                 <div className="meta-line">
-                  Entrada: {formatDate(data.openedAt)}
+                  Entrada: {formatLabDateTime(data.openedAt)}
                 </div>
                 <div className="meta-line">
                   Previsão: <span className="fill-line" />
@@ -553,10 +543,10 @@ function ReceiptHeader({ data }: { data: ServiceOrderDeliveryReceiptData }) {
           {data.delivery.version}
         </div>
         <div className="receipt-meta-row">
-          Emissão: {formatDate(data.delivery.issuedAt)}
+          Emissão: {formatLabDateTime(data.delivery.issuedAt)}
         </div>
         <div className="receipt-meta-row">
-          Entrega: {formatDate(data.delivery.deliveredAt)}
+          Entrega: {formatLabDateTime(data.delivery.deliveredAt)}
         </div>
         {data.qrCodeDataUrl ? (
           <div className="receipt-qr-wrap">
@@ -704,11 +694,11 @@ function DeliveryReceiptCopy({
             <Cell label="Local do serviço" value={serviceLocation} />
             <Cell
               label="Concluído em"
-              value={formatDate(data.execution.finishedAt)}
+              value={formatLabDateTime(data.execution.finishedAt)}
             />
             <Cell
               label="Entregue em"
-              value={formatDate(data.delivery.deliveredAt)}
+              value={formatLabDateTime(data.delivery.deliveredAt)}
             />
           </tr>
           <tr>
@@ -801,7 +791,9 @@ function DeliveryReceiptCopy({
                 <Cell label="Marca de Reparo (nº)" value={sealNumber} mono />
                 <Cell
                   label="Emitida em"
-                  value={formatDate(data.delivery.inmetroRepairMarkIssuedAt)}
+                  value={formatLabDateTime(
+                    data.delivery.inmetroRepairMarkIssuedAt,
+                  )}
                 />
                 <td className="seal-cell" rowSpan={3}>
                   {copy === "lab" ? (
@@ -915,7 +907,9 @@ function LabCopy({ data }: { data: ServiceOrderDocumentData }) {
             <Cell
               label="Início da avaliação"
               value={
-                data.serviceStartedAt ? formatDate(data.serviceStartedAt) : null
+                data.serviceStartedAt
+                  ? formatLabDateTime(data.serviceStartedAt)
+                  : null
               }
               fillIn
             />
@@ -1170,7 +1164,10 @@ function ClientCopy({ data }: { data: ServiceOrderDocumentData }) {
         <tbody>
           <tr>
             <Cell label="Número da OS" value={data.serviceOrderNumber} mono />
-            <Cell label="Recebido em" value={formatDate(data.openedAt)} />
+            <Cell
+              label="Recebido em"
+              value={formatLabDateTime(data.openedAt)}
+            />
             <Cell label="Previsão" value={null} fillIn />
           </tr>
           <tr>
@@ -1298,7 +1295,7 @@ export function ServiceOrderTagHtml({ tag }: { tag: ServiceOrderTagData }) {
               label="Série/Patrimônio"
               value={tag.serialNumber ?? tag.patrimonyNumber}
             />
-            <Field label="Entrada" value={formatDate(tag.openedAt)} />
+            <Field label="Entrada" value={formatLabDateTime(tag.openedAt)} />
           </div>
           <div>
             {tag.qrCodeDataUrl ? (
@@ -1337,7 +1334,7 @@ export function ServiceOrderQuoteHtml({
               />
               <Field
                 label="Validade"
-                value={formatDate(data.quote.validUntil)}
+                value={formatLabDateTime(data.quote.validUntil)}
               />
             </div>
             <div>
