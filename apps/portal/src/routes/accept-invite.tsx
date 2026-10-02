@@ -338,6 +338,31 @@ function InviteMemberRedirectOnMount() {
   );
 }
 
+// React StrictMode mounts components twice in development. Share one accept
+// request per invitation so the two mounts do not race each other into a
+// duplicate membership insert. A failed request is dropped so a retry can run.
+const acceptRequests = new Map<
+  string,
+  ReturnType<typeof portalAuthClient.organization.acceptInvitation>
+>();
+
+function acceptInvitationOnce(invitationId: string) {
+  const pending = acceptRequests.get(invitationId);
+  if (pending) return pending;
+
+  const request = portalAuthClient.organization.acceptInvitation({
+    invitationId,
+  });
+  acceptRequests.set(invitationId, request);
+  void request.then(
+    (result) => {
+      if (result.error) acceptRequests.delete(invitationId);
+    },
+    () => acceptRequests.delete(invitationId),
+  );
+  return request;
+}
+
 function InviteAutoAcceptOnMount({
   invitation,
 }: {
@@ -350,9 +375,7 @@ function InviteAutoAcceptOnMount({
     let cancelled = false;
 
     void (async () => {
-      const result = await portalAuthClient.organization.acceptInvitation({
-        invitationId: invitation.id,
-      });
+      const result = await acceptInvitationOnce(invitation.id);
 
       if (cancelled) return;
 
