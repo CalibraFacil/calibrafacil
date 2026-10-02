@@ -1,34 +1,39 @@
-# Document-assembly queue worker, deployed as a Cloudflare Container
-# (services/document-worker). Drains `app_queue_job` render jobs — calibration
-# certificates, service-order PDFs, the PDF-label job — off the Vercel queue
-# function. Runs the HTTP drain server (apps/worker/src/serve.ts).
+# The document worker as an HTTP drain server (apps/worker/src/serve.ts): it
+# sleeps until the API pings POST /drain after enqueueing an `app_queue_job`
+# row, drains the queue and goes idle again, so the database is only touched
+# when there is work. Renders through Gotenberg (GOTENBERG_URL).
 #
-# Built from the repo ROOT: services/document-worker/wrangler.jsonc sets
-# image_build_context = ../../ so `COPY . .` brings in the whole pnpm monorepo.
-# Every dependency (incl. @calibra-facil/math-engine) is a workspace package, so
-# `pnpm install` needs no private-git auth — `wrangler deploy` builds this
-# directly, no BuildKit secret required.
+# services/document-worker deploys it as a Cloudflare Container: its
+# wrangler.jsonc builds this file with the repository root as the context.
+# Anywhere else, build from the repository root:
 #
-# node:24-bookworm-slim is glibc, so @resvg/resvg-js installs its prebuilt
-# binary cleanly — none of the musl pain the Vercel build has to externalize.
-FROM node:24-bookworm-slim
+#   docker build -f Dockerfile.document-worker -t calibrafacil-document-worker .
+FROM node:24-bookworm-slim AS build
 
-ENV PUPPETEER_SKIP_DOWNLOAD=true
-ENV CHROME_EXECUTABLE_PATH=/usr/bin/chromium
+# pnpm itself comes from the "packageManager" field of package.json.
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN corepack enable
+
+WORKDIR /repo
+COPY . .
+# pnpm-workspace.yaml asks for native binaries for every platform a hosted
+# build may run on; an image only needs its own.
+RUN sed -i '/^supportedArchitectures:/,/^[^ ]/{/^supportedArchitectures:/d;/^ /d}' pnpm-workspace.yaml
+# Only the worker and the workspace packages it imports, without dev tooling.
+RUN pnpm install --frozen-lockfile --prod --filter "@calibra-facil/worker..."
+
+FROM oven/bun:1-slim
+
 ENV NODE_ENV=production
 ENV PORT=8080
+WORKDIR /repo
 
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl unzip chromium fonts-liberation \
-  && rm -rf /var/lib/apt/lists/* \
-  && npm install -g pnpm@11.3.0 \
-  && curl -fsSL https://bun.sh/install | bash
+# Workspace packages ship TypeScript source, which Bun runs directly.
+COPY --from=build /repo/package.json ./
+COPY --from=build /repo/node_modules ./node_modules
+COPY --from=build /repo/packages ./packages
+COPY --from=build /repo/apps/worker ./apps/worker
 
-ENV PATH="/root/.bun/bin:${PATH}"
-WORKDIR /app
-
-COPY . .
-RUN pnpm install --frozen-lockfile
-
+WORKDIR /repo/apps/worker
 EXPOSE 8080
-CMD ["bun", "apps/worker/src/serve.ts"]
+CMD ["bun", "src/serve.ts"]

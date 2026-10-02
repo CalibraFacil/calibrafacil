@@ -1,64 +1,63 @@
+// Serves a built frontend (apps/web or apps/portal dist/) for Dockerfile.static.
+import { stat } from "node:fs/promises";
+import { extname, relative, resolve, sep } from "node:path";
+
 const port = Number(process.env.PORT ?? 8080);
-const staticDir = process.env.STATIC_DIR ?? "dist";
-const spaFallback = process.env.SPA_FALLBACK === "true";
+const root = resolve(process.env.STATIC_DIR ?? "dist");
+// Routes like /dashboard/clients only exist in the client-side router, so a
+// navigation to an unknown path gets index.html. SPA_FALLBACK=false turns
+// that into a 404.
+const spaFallback = process.env.SPA_FALLBACK !== "false";
 
-function getContentType(path: string) {
-  if (path.endsWith(".html")) return "text/html; charset=utf-8";
-  if (path.endsWith(".js")) return "text/javascript; charset=utf-8";
-  if (path.endsWith(".css")) return "text/css; charset=utf-8";
-  if (path.endsWith(".json")) return "application/json; charset=utf-8";
-  if (path.endsWith(".svg")) return "image/svg+xml";
-  if (path.endsWith(".png")) return "image/png";
-  if (path.endsWith(".jpg") || path.endsWith(".jpeg")) return "image/jpeg";
-  if (path.endsWith(".webp")) return "image/webp";
-  if (path.endsWith(".ico")) return "image/x-icon";
-  if (path.endsWith(".woff2")) return "font/woff2";
-  return "application/octet-stream";
-}
-
-function sanitizePath(pathname: string) {
-  const decoded = decodeURIComponent(pathname);
-  return decoded.replace(/^\/+/, "").replace(/\.\.(\/|\\)/g, "");
-}
-
-async function findFile(pathname: string) {
-  const cleaned = sanitizePath(pathname);
-  const candidatePath = cleaned === "" ? "index.html" : cleaned;
-  const candidate = Bun.file(`${staticDir}/${candidatePath}`);
-  if (await candidate.exists()) return { file: candidate, path: candidatePath };
-
-  const indexCandidate = Bun.file(`${staticDir}/${candidatePath}/index.html`);
-  if (await indexCandidate.exists()) {
-    return { file: indexCandidate, path: `${candidatePath}/index.html` };
+/** The file a request path names, if it is inside the root and exists. */
+async function findFile(pathname: string): Promise<string | null> {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return null;
   }
 
-  if (spaFallback) {
-    const fallback = Bun.file(`${staticDir}/index.html`);
-    if (await fallback.exists()) return { file: fallback, path: "index.html" };
-  }
+  const target = resolve(root, `.${decoded}`);
+  if (target !== root && !target.startsWith(root + sep)) return null;
 
+  for (const candidate of [target, resolve(target, "index.html")]) {
+    const info = await stat(candidate).catch(() => null);
+    if (info?.isFile()) return candidate;
+  }
   return null;
+}
+
+// Vite fingerprints everything it emits under assets/, so those never change.
+// Everything else (index.html, the service worker, theme-init.js, which
+// index.html pins by an integrity hash) must be revalidated on every load.
+function cacheControl(path: string): string {
+  return relative(root, path).startsWith(`assets${sep}`)
+    ? "public, max-age=31536000, immutable"
+    : "no-cache";
 }
 
 Bun.serve({
   port,
   async fetch(request) {
-    const url = new URL(request.url);
-    const result = await findFile(url.pathname);
-    if (!result) return new Response("Not Found", { status: 404 });
+    const { pathname } = new URL(request.url);
+    let path = await findFile(pathname);
 
-    const headers = new Headers({
-      "content-type": getContentType(result.path),
-    });
-
-    if (!result.path.endsWith("index.html")) {
-      headers.set("cache-control", "public, max-age=31536000, immutable");
-    } else {
-      headers.set("cache-control", "no-cache");
+    // Only navigations fall back: a missing script or image stays a 404
+    // instead of being answered with HTML.
+    if (!path && spaFallback && extname(pathname) === "") {
+      path = await findFile("/index.html");
     }
+    if (!path) return new Response("Not Found", { status: 404 });
 
-    return new Response(result.file, { headers });
+    // Bun sets Content-Type from the file extension.
+    return new Response(Bun.file(path), {
+      headers: {
+        "cache-control": cacheControl(path),
+        "x-content-type-options": "nosniff",
+      },
+    });
   },
 });
 
-console.info(`Static server listening on :${port} from ${staticDir}`);
+console.info(`Static server listening on :${port} from ${root}`);

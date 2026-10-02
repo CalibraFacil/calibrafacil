@@ -20,27 +20,23 @@
   "dependencies": {
     "@better-auth/passkey": "1.6.22",
     "@better-auth/sso": "1.6.22",
+    "@calibra-facil/db": "workspace:^",
     "@calibra-facil/email-sender": "workspace:^",
     "@calibra-facil/email": "workspace:^",
     "@calibra-facil/shared": "workspace:^",
     "@simplewebauthn/server": "13.3.1",
     "better-auth": "1.6.22",
+    "drizzle-orm": "^0.45.2",
     "next": "16.2.11",
     "react": "^19.2.7",
     "resend": "^6.12.4"
-  },
-  "peerDependencies": {
-    "@calibra-facil/db": "^1.0.0",
-    "drizzle-orm": "^0.45.2"
   },
   "keywords": [],
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "@calibra-facil/db": "workspace:^",
     "@repo/typescript-config": "workspace:^",
     "@types/node": "^24.13.0",
-    "drizzle-orm": "^0.45.2",
     "vitest": "^4.0.17"
   }
 }

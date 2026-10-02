@@ -23,11 +23,10 @@
     "QUEUE_BATCH_SIZE": "10",
     "QUEUE_STALE_AFTER_MS": "600000",
     // Replace the example.com values below with your deployment's.
-  // Non-secret runtime config — these MUST live here, not just in the
+    // Non-secret runtime config — these MUST live here, not just in the
     // dashboard: `wrangler deploy` treats `vars` as authoritative and wipes any
-    // dashboard-added plaintext var not listed here. GOTENBERG_URL is what
-    // routes XLSX/HTML → PDF to Gotenberg (without it the worker falls back to
-    // local LibreOffice, which the container does not have).
+    // dashboard-added plaintext var not listed here. Every document is rendered
+    // HTML → PDF by Gotenberg, so the worker fails without GOTENBERG_URL.
     "GOTENBERG_URL": "https://gotenberg.example.com",
     "APP_URL": "https://app.example.com",
     "RESEND_FROM_EMAIL": "no-reply@example.com",
