@@ -1,25 +1,15 @@
 import { useRef, useState } from 'react'
-import { Link, useNavigate } from '@tanstack/react-router'
+import { useNavigate } from '@tanstack/react-router'
 import { Building03Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import {
-  backofficeSignIn,
-  backofficeSignOut,
-  labAuthClient,
-  signIn,
-} from '@calibra-facil/auth/client'
+import { labAuthClient, signIn } from '@calibra-facil/auth/client'
 import { translateAuthErrorMessage } from '@calibra-facil/auth/error-messages'
-import { calibraApi } from '@/utils/api'
 import { useCountdown } from '@/hooks/use-countdown'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import { clearDesktopSignedOut } from '@/runtime/desktop-auth'
-import { getBackofficeAppUrl } from '@/app/config/runtime'
 import { cn } from '@/lib/utils'
-import {
-  sanitizeBackofficeRedirect,
-  sanitizeLabRedirect,
-} from '@/lib/auth-redirect'
+import { sanitizeLabRedirect } from '@/lib/auth-redirect'
 import {
   AuthStatusMessage,
   type AuthStatus,
@@ -54,21 +44,18 @@ const VERIFIED_HOLD_MS = 450
 
 interface SignInFormProps extends React.ComponentProps<'form'> {
   redirect?: string
-  mode?: 'lab' | 'backoffice'
   onSwitchToSso?: () => void
 }
 
 export function SignInForm({
   className,
   redirect,
-  mode = 'lab',
   onSwitchToSso,
   ...props
 }: SignInFormProps) {
   const navigate = useNavigate()
   const prefersReducedMotion = useReducedMotion()
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isMagicLinkLoading, setIsMagicLinkLoading] = useState(false)
@@ -83,11 +70,8 @@ export function SignInForm({
   const otpInputRef = useRef<HTMLInputElement>(null)
   const deferredRef = useRef<Array<ReturnType<typeof setTimeout>>>([])
 
-  const isLabMode = mode === 'lab'
-  const isCodeStep = isLabMode && codeSentTo !== null
-  const safeRedirect = isLabMode
-    ? sanitizeLabRedirect(redirect)
-    : sanitizeBackofficeRedirect(redirect)
+  const isCodeStep = codeSentTo !== null
+  const safeRedirect = sanitizeLabRedirect(redirect)
 
   useMountEffect(() => () => {
     for (const handle of deferredRef.current) clearTimeout(handle)
@@ -104,8 +88,6 @@ export function SignInForm({
   // This is what makes Apple, Google, 1Password and Bitwarden actually prompt on
   // page load. Best-effort: cancellations/absence of credentials are ignored.
   useMountEffect(() => {
-    if (!isLabMode) return
-
     let isActive = true
 
     void (async () => {
@@ -150,59 +132,7 @@ export function SignInForm({
       return
     }
 
-    if (isLabMode) {
-      await handlePasskeySignIn()
-      return
-    }
-
-    setAuthStatus(null)
-    setIsLoading(true)
-
-    try {
-      const { error: signInError } = await backofficeSignIn.email({
-        email,
-        password,
-      })
-
-      if (signInError) {
-        setAuthStatus({
-          tone: 'error',
-          title: translateAuthErrorMessage(
-            signInError.message,
-            'Não foi possível entrar. Verifique os dados e tente novamente.',
-          ),
-        })
-        return
-      }
-
-      clearDesktopSignedOut()
-
-      const access = await calibraApi.backoffice.getAccess()
-
-      if (access.allowed) {
-        window.location.assign(`${getBackofficeAppUrl()}${safeRedirect}`)
-        return
-      }
-
-      if (access.bootstrapAvailable) {
-        window.location.assign(`${getBackofficeAppUrl()}/bootstrap`)
-        return
-      }
-
-      await backofficeSignOut()
-      setAuthStatus({
-        tone: 'error',
-        title: 'Sua conta não possui acesso ao backoffice',
-      })
-    } catch {
-      setAuthStatus({
-        tone: 'error',
-        title:
-          'Não foi possível conectar ao servidor de autenticação. Verifique sua conexão e tente novamente.',
-      })
-    } finally {
-      setIsLoading(false)
-    }
+    await handlePasskeySignIn()
   }
 
   async function handlePasskeySignIn() {
@@ -374,11 +304,11 @@ export function SignInForm({
       <Input
         id="email"
         type="email"
-        autoComplete={isLabMode ? 'username webauthn' : 'username'}
+        autoComplete="username webauthn"
         placeholder="seu@email.com"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        required={!isLabMode || isMagicLinkLoading || isOtpRequesting}
+        required={isMagicLinkLoading || isOtpRequesting}
       />
     </Field>
   )
@@ -393,11 +323,7 @@ export function SignInForm({
         <div className="flex flex-col items-center gap-3 text-center">
           <BrandMark className="size-12" />
           <h1 className="text-2xl font-bold text-balance">
-            {isCodeStep
-              ? 'Verifique seu email'
-              : mode === 'backoffice'
-                ? 'Entrar no backoffice'
-                : 'Entre em sua conta'}
+            {isCodeStep ? 'Verifique seu email' : 'Entre em sua conta'}
           </h1>
           <p className="text-muted-foreground text-sm text-balance">
             {isCodeStep ? (
@@ -408,153 +334,112 @@ export function SignInForm({
                 </span>{' '}
                 tiver acesso LAB, o código chega em instantes.
               </>
-            ) : mode === 'backoffice' ? (
-              'Acesso interno da equipe CalibraFácil'
             ) : (
               'Use sua passkey ou um método seguro por email'
             )}
           </p>
         </div>
         {authStatus ? <AuthStatusMessage status={authStatus} /> : null}
-        {isLabMode ? (
-          <AnimatePresence mode="wait" initial={false}>
-            {isCodeStep ? (
-              <SignInCodeStep
-                key="code"
-                code={otp}
-                onCodeChange={setOtp}
-                onSubmit={() => void handleOtpSignIn(otp)}
-                onResend={() => void handleRequestOtp()}
-                onChangeEmail={handleChangeEmail}
-                status={otpStatus}
-                error={otpError}
-                errorNonce={otpErrorNonce}
-                resendSecondsLeft={resendCooldown.secondsLeft}
-                isResending={isOtpRequesting}
-                inputRef={otpInputRef}
-              />
-            ) : (
-              <motion.div
-                key="methods"
-                className="flex flex-col gap-6"
-                initial={false}
-                animate={{
-                  opacity: 1,
-                  transform: 'translateY(0px)',
-                  filter: 'blur(0px)',
-                }}
-                exit={
-                  prefersReducedMotion
-                    ? { opacity: 0 }
-                    : {
-                        opacity: 0,
-                        transform: 'translateY(-6px)',
-                        filter: 'blur(3px)',
-                      }
-                }
-                transition={{ duration: 0.14, ease: [0.23, 1, 0.32, 1] }}
-              >
-                {emailField}
-                <Field>
-                  <Button type="submit" disabled={isLoading}>
-                    {isLoading ? (
-                      <>
-                        <Spinner className="mr-2" />
-                        Entrando...
-                      </>
-                    ) : (
-                      'Entrar com passkey'
-                    )}
-                  </Button>
-                </Field>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={isMagicLinkLoading || !email.trim()}
-                    onClick={handleMagicLinkSignIn}
-                  >
-                    {isMagicLinkLoading ? (
-                      <>
-                        <Spinner className="mr-2" />
-                        Enviando...
-                      </>
-                    ) : (
-                      'Receber link de acesso'
-                    )}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={isOtpRequesting || !email.trim()}
-                    onClick={handleRequestOtp}
-                  >
-                    {isOtpRequesting ? (
-                      <>
-                        <Spinner className="mr-2" />
-                        Enviando...
-                      </>
-                    ) : (
-                      'Receber código'
-                    )}
-                  </Button>
-                </div>
-                {onSwitchToSso ? (
-                  <>
-                    <Separator />
-                    <Field>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={onSwitchToSso}
-                      >
-                        <HugeiconsIcon
-                          icon={Building03Icon}
-                          className="size-4"
-                        />
-                        Entrar com SSO corporativo
-                      </Button>
-                    </Field>
-                  </>
-                ) : null}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        ) : (
-          <>
-            {emailField}
-            <Field>
-              <div className="flex items-center">
-                <FieldLabel htmlFor="password">Senha</FieldLabel>
-                <Link
-                  to="/reset-password"
-                  className="ml-auto text-sm underline-offset-4 hover:underline"
+        <AnimatePresence mode="wait" initial={false}>
+          {isCodeStep ? (
+            <SignInCodeStep
+              key="code"
+              code={otp}
+              onCodeChange={setOtp}
+              onSubmit={() => void handleOtpSignIn(otp)}
+              onResend={() => void handleRequestOtp()}
+              onChangeEmail={handleChangeEmail}
+              status={otpStatus}
+              error={otpError}
+              errorNonce={otpErrorNonce}
+              resendSecondsLeft={resendCooldown.secondsLeft}
+              isResending={isOtpRequesting}
+              inputRef={otpInputRef}
+            />
+          ) : (
+            <motion.div
+              key="methods"
+              className="flex flex-col gap-6"
+              initial={false}
+              animate={{
+                opacity: 1,
+                transform: 'translateY(0px)',
+                filter: 'blur(0px)',
+              }}
+              exit={
+                prefersReducedMotion
+                  ? { opacity: 0 }
+                  : {
+                      opacity: 0,
+                      transform: 'translateY(-6px)',
+                      filter: 'blur(3px)',
+                    }
+              }
+              transition={{ duration: 0.14, ease: [0.23, 1, 0.32, 1] }}
+            >
+              {emailField}
+              <Field>
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading ? (
+                    <>
+                      <Spinner className="mr-2" />
+                      Entrando...
+                    </>
+                  ) : (
+                    'Entrar com passkey'
+                  )}
+                </Button>
+              </Field>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isMagicLinkLoading || !email.trim()}
+                  onClick={handleMagicLinkSignIn}
                 >
-                  Esqueceu sua senha?
-                </Link>
+                  {isMagicLinkLoading ? (
+                    <>
+                      <Spinner className="mr-2" />
+                      Enviando...
+                    </>
+                  ) : (
+                    'Receber link de acesso'
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isOtpRequesting || !email.trim()}
+                  onClick={handleRequestOtp}
+                >
+                  {isOtpRequesting ? (
+                    <>
+                      <Spinner className="mr-2" />
+                      Enviando...
+                    </>
+                  ) : (
+                    'Receber código'
+                  )}
+                </Button>
               </div>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </Field>
-            <Field>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading ? (
-                  <>
-                    <Spinner className="mr-2" />
-                    Entrando...
-                  </>
-                ) : (
-                  'Entrar'
-                )}
-              </Button>
-            </Field>
-          </>
-        )}
+              {onSwitchToSso ? (
+                <>
+                  <Separator />
+                  <Field>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={onSwitchToSso}
+                    >
+                      <HugeiconsIcon icon={Building03Icon} className="size-4" />
+                      Entrar com SSO corporativo
+                    </Button>
+                  </Field>
+                </>
+              ) : null}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </FieldGroup>
     </form>
   )

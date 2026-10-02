@@ -18,10 +18,7 @@ const authMocks = vi.hoisted(() => ({
   signInPasskey: vi.fn(),
   sendVerificationOtp: vi.fn(),
   signInEmailOtp: vi.fn(),
-  backofficeSignInEmail: vi.fn(),
-  backofficeSignOut: vi.fn(),
   clearDesktopSignedOut: vi.fn(),
-  getBackofficeAccess: vi.fn(),
   navigate: vi.fn(),
   ssoStart: vi.fn(),
   locationAssign: vi.fn(),
@@ -48,10 +45,6 @@ vi.mock('@calibra-facil/auth/client', () => ({
       sendVerificationOtp: authMocks.sendVerificationOtp,
     },
   },
-  backofficeSignIn: {
-    email: authMocks.backofficeSignInEmail,
-  },
-  backofficeSignOut: authMocks.backofficeSignOut,
 }))
 
 vi.mock('@/runtime/desktop-auth', () => ({
@@ -63,14 +56,7 @@ vi.mock('@/utils/api', () => ({
     sso: {
       start: authMocks.ssoStart,
     },
-    backoffice: {
-      getAccess: authMocks.getBackofficeAccess,
-    },
   },
-}))
-
-vi.mock('@/app/config/runtime', () => ({
-  getBackofficeAppUrl: () => 'https://ops.test',
 }))
 
 describe('startDesktopInitialSync', () => {
@@ -115,7 +101,7 @@ describe('SignInForm workflow', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.clearAllMocks()
     installResizeObserver()
-    // The backoffice is a separate app now; sign-in there navigates cross-origin.
+    // Sign-in flows that leave the app navigate with location.assign.
     Object.defineProperty(window, 'location', {
       configurable: true,
       value: { ...window.location, assign: authMocks.locationAssign },
@@ -337,84 +323,6 @@ describe('SignInForm workflow', () => {
     expect(screen.queryByLabelText('Código recebido')).toBeNull()
   })
 
-  it('translates invalid credential errors from the auth provider', async () => {
-    authMocks.backofficeSignInEmail.mockResolvedValue({
-      error: { message: 'Invalid email or password' },
-    })
-
-    render(<SignInForm mode="backoffice" redirect="/backoffice" />)
-
-    fillCredentials('tecnico@lab.test', 'senha-incorreta')
-    fireEvent.click(screen.getByRole('button', { name: 'Entrar' }))
-
-    expect(
-      await screen.findByText(
-        'Email ou senha inválidos. Verifique os dados e tente novamente.',
-      ),
-    ).toBeTruthy()
-    expect(authMocks.clearDesktopSignedOut).not.toHaveBeenCalled()
-    expect(authMocks.navigate).not.toHaveBeenCalled()
-  })
-
-  it('routes allowed backoffice users to the requested backoffice redirect', async () => {
-    authMocks.backofficeSignInEmail.mockResolvedValue({ error: null })
-    authMocks.getBackofficeAccess.mockResolvedValue({
-      allowed: true,
-      bootstrapAvailable: false,
-    })
-
-    render(<SignInForm mode="backoffice" redirect="/backoffice/support" />)
-
-    fillCredentials('operador@calibrafacil.test', 'senha-segura')
-    fireEvent.click(screen.getByRole('button', { name: 'Entrar' }))
-
-    await waitFor(() => {
-      expect(authMocks.locationAssign).toHaveBeenCalledWith(
-        'https://ops.test/backoffice/support',
-      )
-    })
-    expect(authMocks.backofficeSignOut).not.toHaveBeenCalled()
-  })
-
-  it('routes backoffice users to bootstrap when internal access can be created', async () => {
-    authMocks.backofficeSignInEmail.mockResolvedValue({ error: null })
-    authMocks.getBackofficeAccess.mockResolvedValue({
-      allowed: false,
-      bootstrapAvailable: true,
-    })
-
-    render(<SignInForm mode="backoffice" />)
-
-    fillCredentials('primeiro@calibrafacil.test', 'senha-segura')
-    fireEvent.click(screen.getByRole('button', { name: 'Entrar' }))
-
-    await waitFor(() => {
-      expect(authMocks.locationAssign).toHaveBeenCalledWith(
-        'https://ops.test/bootstrap',
-      )
-    })
-    expect(authMocks.backofficeSignOut).not.toHaveBeenCalled()
-  })
-
-  it('signs out backoffice users who do not have backoffice access', async () => {
-    authMocks.backofficeSignInEmail.mockResolvedValue({ error: null })
-    authMocks.getBackofficeAccess.mockResolvedValue({
-      allowed: false,
-      bootstrapAvailable: false,
-    })
-
-    render(<SignInForm mode="backoffice" />)
-
-    fillCredentials('operador@calibrafacil.test', 'senha-segura')
-    fireEvent.click(screen.getByRole('button', { name: 'Entrar' }))
-
-    expect(
-      await screen.findByText('Sua conta não possui acesso ao backoffice'),
-    ).toBeTruthy()
-    expect(authMocks.backofficeSignOut).toHaveBeenCalledTimes(1)
-    expect(authMocks.navigate).not.toHaveBeenCalled()
-  })
-
   it('offers the SSO scene switch instead of inline SSO fields in lab mode', () => {
     const onSwitchToSso = vi.fn()
 
@@ -428,15 +336,6 @@ describe('SignInForm workflow', () => {
     expect(onSwitchToSso).toHaveBeenCalledTimes(1)
   })
 })
-
-function fillCredentials(email: string, password: string) {
-  fireEvent.change(screen.getByLabelText('Email'), {
-    target: { value: email },
-  })
-  fireEvent.change(screen.getByLabelText('Senha'), {
-    target: { value: password },
-  })
-}
 
 function installBridge(bridge: { startSync: () => Promise<unknown> }) {
   Object.defineProperty(window, 'calibraBridge', {

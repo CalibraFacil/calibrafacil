@@ -18,20 +18,12 @@ type NotificationType =
   | 'STANDARD_EXPIRING'
   | 'STANDARD_EXPIRED'
   | 'JOB_OVERDUE'
-  | 'PAYMENT_RECEIVED'
-  | 'PAYMENT_FAILED'
   | 'NC_CREATED'
   | 'NC_ESCALATED_TO_CAPA'
   | 'COMPETENCE_EXPIRING'
   | 'COMPETENCE_EXPIRED'
   | 'COMPETENCE_REQUESTED'
   | 'COMPETENCE_APPROVED'
-  | 'CUSTOMER_SUCCESS_WORKFLOW_BLOCKED'
-  | 'CUSTOMER_SUCCESS_GO_LIVE_AT_RISK'
-  | 'CUSTOMER_SUCCESS_NEXT_ACTION_OVERDUE'
-  | 'CUSTOMER_SUCCESS_SLA_DUE_SOON'
-  | 'CUSTOMER_SUCCESS_SLA_BREACHED'
-  | 'CUSTOMER_SUCCESS_ESCALATION_REQUIRED'
   | 'CALIBRATION_REQUEST_SUBMITTED'
   | 'CALIBRATION_REQUEST_UNDER_REVIEW'
   | 'CALIBRATION_REQUEST_APPROVED'
@@ -58,7 +50,7 @@ interface NotificationSetting {
   id: NotificationType
   title: string
   description: string
-  category: 'operational' | 'compliance' | 'quality' | 'billing'
+  category: 'operational' | 'compliance' | 'quality'
 }
 
 const notificationSettings: NotificationSetting[] = [
@@ -174,43 +166,6 @@ const notificationSettings: NotificationSetting[] = [
       'Quando o cliente pede pelo portal para mudar a data de uma visita',
     category: 'operational',
   },
-  {
-    id: 'CUSTOMER_SUCCESS_WORKFLOW_BLOCKED',
-    title: 'Workflow bloqueado',
-    description:
-      'Quando onboarding, migração ou go-live entra em bloqueio ativo',
-    category: 'operational',
-  },
-  {
-    id: 'CUSTOMER_SUCCESS_GO_LIVE_AT_RISK',
-    title: 'Go-live em risco',
-    description: 'Quando a operação identifica risco relevante para o go-live',
-    category: 'operational',
-  },
-  {
-    id: 'CUSTOMER_SUCCESS_NEXT_ACTION_OVERDUE',
-    title: 'Próxima ação atrasada',
-    description: 'Quando o plano de acompanhamento fica com ação vencida',
-    category: 'operational',
-  },
-  {
-    id: 'CUSTOMER_SUCCESS_SLA_DUE_SOON',
-    title: 'SLA prestes a vencer',
-    description: 'Quando uma solicitação de suporte se aproxima do vencimento',
-    category: 'operational',
-  },
-  {
-    id: 'CUSTOMER_SUCCESS_SLA_BREACHED',
-    title: 'SLA violado',
-    description: 'Quando uma solicitação de suporte ultrapassa o SLA alvo',
-    category: 'operational',
-  },
-  {
-    id: 'CUSTOMER_SUCCESS_ESCALATION_REQUIRED',
-    title: 'Escalação necessária',
-    description: 'Quando o suporte entra em estado de escalação prioritária',
-    category: 'operational',
-  },
   // Compliance notifications
   {
     id: 'ASSET_DUE_FOR_RECALIBRATION',
@@ -273,19 +228,6 @@ const notificationSettings: NotificationSetting[] = [
     description: 'Quando uma NC é escalada para ação corretiva',
     category: 'quality',
   },
-  // Billing notifications
-  {
-    id: 'PAYMENT_RECEIVED',
-    title: 'Pagamento recebido',
-    description: 'Quando um pagamento é confirmado',
-    category: 'billing',
-  },
-  {
-    id: 'PAYMENT_FAILED',
-    title: 'Pagamento falhou',
-    description: 'Quando um pagamento não é processado',
-    category: 'billing',
-  },
 ]
 
 const defaultPreferences: NotificationPreferencesMap = {
@@ -310,14 +252,6 @@ const defaultPreferences: NotificationPreferencesMap = {
   COMPETENCE_EXPIRED: { inApp: true, email: true },
   COMPETENCE_REQUESTED: { inApp: true, email: true },
   COMPETENCE_APPROVED: { inApp: true, email: true },
-  CUSTOMER_SUCCESS_WORKFLOW_BLOCKED: { inApp: true, email: true },
-  CUSTOMER_SUCCESS_GO_LIVE_AT_RISK: { inApp: true, email: true },
-  CUSTOMER_SUCCESS_NEXT_ACTION_OVERDUE: { inApp: true, email: true },
-  CUSTOMER_SUCCESS_SLA_DUE_SOON: { inApp: true, email: true },
-  CUSTOMER_SUCCESS_SLA_BREACHED: { inApp: true, email: true },
-  CUSTOMER_SUCCESS_ESCALATION_REQUIRED: { inApp: true, email: true },
-  PAYMENT_RECEIVED: { inApp: true, email: true },
-  PAYMENT_FAILED: { inApp: true, email: true },
   VISIT_CUSTOMER_CONFIRMED: { inApp: true, email: false },
   VISIT_RESCHEDULE_REQUESTED: { inApp: true, email: true },
 }
@@ -425,15 +359,11 @@ export function NotificationsSettingsPage() {
   const qualitySettings = notificationSettings.filter(
     (s) => s.category === 'quality',
   )
-  const billingSettings = notificationSettings.filter(
-    (s) => s.category === 'billing',
-  )
 
   const groups = [
     { title: 'Operacionais', items: operationalSettings },
     { title: 'Conformidade', items: complianceSettings },
     { title: 'Qualidade', items: qualitySettings },
-    { title: 'Pagamentos', items: billingSettings },
   ]
 
   if (isLoading) {

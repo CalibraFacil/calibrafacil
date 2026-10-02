@@ -6,7 +6,6 @@ import {
   customerAuditLog,
   customerGroup,
   organization,
-  subscription,
 } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
@@ -16,16 +15,16 @@ import { seedOrg } from "../../test/integration/seed";
 // Real-DB + real-RBAC integration test for customer-groups (redes/grupos). Only
 // the better-auth session is mocked (see test/integration/setup.ts); the real
 // guard chain — requireLabAuth -> requireOrganization -> requireOrgType("LAB") ->
-// requirePermission({ client: [...] }) -> requireFeature("customer_group") — runs
+// requirePermission({ client: [...] }) — runs
 // against a seeded Postgres. This proves what the vi.mock(db) tier cannot: tenant
 // isolation enforced by the handler's WHERE clause (labOrganizationId) + the
 // permission gate.
 //
 // REAL CONTRACT (quoted from customer-groups.ts):
-//   GET /            withLabPermission({ client: ["read"] }) + requireFeature
+//   GET /            withLabPermission({ client: ["read"] })
 //                    filter: eq(customerGroup.labOrganizationId, memberData.organizationId)  (L181)
 //                    -> labOrganizationId is the SOLE discriminator on the list query.
-//   POST /:id/branches  withLabPermission({ client: ["update"] }) + requireFeature
+//   POST /:id/branches  withLabPermission({ client: ["update"] })
 //                    group lookup: eq(customerGroup.labOrganizationId, ...)  (L312-313)
 //                    branch lookup: eq(customer.labOrganizationId, ...)      (L328-329)
 //                    -> writes customer.groupId + a customer_audit_log row.
@@ -34,35 +33,13 @@ import { seedOrg } from "../../test/integration/seed";
 // SCOPING NOTE: customer_group and customer are org-scoped by labOrganizationId
 // ONLY — neither table has a unitId column (schema.ts), so unit-scope isolation
 // is structurally N/A for this router. groupId is the assignment target, not a
-// tenant boundary. The lab requireFeature("customer_group") gate (PROFESSIONAL+)
-// runs before the handler, so every authed test seeds an ACTIVE PROFESSIONAL
-// subscription; without it the gate 403s before the WHERE clause is reached.
+// tenant boundary.
 
 const JSON_HEADERS = { "content-type": "application/json" };
 
 // ---------------------------------------------------------------------------
 // Inline domain seed helpers — NOT in shared seed.ts to keep makers conflict-free.
 // ---------------------------------------------------------------------------
-
-/**
- * Seed an ACTIVE PROFESSIONAL subscription so requireFeature("customer_group")
- * passes. PROFESSIONAL includes customer_group; FREE (the no-subscription
- * default) does not (packages/shared/src/plans.ts).
- */
-async function seedProfessionalSubscription(
-  organizationId: string,
-): Promise<void> {
-  const now = new Date("2026-01-01T00:00:00.000Z");
-  const nextYear = new Date("2027-01-01T00:00:00.000Z");
-  await db.insert(subscription).values({
-    organizationId,
-    planId: "PROFESSIONAL",
-    status: "ACTIVE",
-    renewalMode: "NONE",
-    currentPeriodStart: now,
-    currentPeriodEnd: nextYear,
-  });
-}
 
 /**
  * Seed a customer_group owned by a lab org. The group is itself a CLIENT org
@@ -142,8 +119,6 @@ describe("customerGroupsRouter — real DB + real middleware", () => {
   it("REQ-CG-001: GET / returns only the authed lab org's groups (tenant read isolation)", async () => {
     const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
     const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
-    await seedProfessionalSubscription(orgA.orgId);
-    await seedProfessionalSubscription(orgB.orgId);
 
     await seedGroup({
       labOrgId: orgA.orgId,
@@ -179,7 +154,6 @@ describe("customerGroupsRouter — real DB + real middleware", () => {
   // through, so the 403 expectation goes red.
   it("REQ-CG-002a: POST /:id/branches as role=member -> 403 (client:update denied by real guard)", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "member" });
-    await seedProfessionalSubscription(org.orgId);
     const groupId = await seedGroup({
       labOrgId: org.orgId,
       clientOrgId: "client-a-grp",
@@ -213,7 +187,6 @@ describe("customerGroupsRouter — real DB + real middleware", () => {
   // not an unrelated failure on the same route.
   it("REQ-CG-002b: POST /:id/branches as admin -> 200, branch persisted + audit logged", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "admin" });
-    await seedProfessionalSubscription(org.orgId);
     const groupId = await seedGroup({
       labOrgId: org.orgId,
       clientOrgId: "client-a-grp",
@@ -265,8 +238,6 @@ describe("customerGroupsRouter — real DB + real middleware", () => {
   it("REQ-CG-003: POST /:id/branches against another org's group -> 404, no cross-tenant write", async () => {
     const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
     const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
-    await seedProfessionalSubscription(orgA.orgId);
-    await seedProfessionalSubscription(orgB.orgId);
 
     // Group owned by org B.
     const bGroupId = await seedGroup({
@@ -318,7 +289,6 @@ describe("customerGroupsRouter — real DB + real middleware", () => {
   // the same tenant scope.
   it("REQ-CG-005: POST /:id/branches then GET /:id round-trips the assigned branch", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "admin" });
-    await seedProfessionalSubscription(org.orgId);
     const groupId = await seedGroup({
       labOrgId: org.orgId,
       clientOrgId: "client-a-grp",

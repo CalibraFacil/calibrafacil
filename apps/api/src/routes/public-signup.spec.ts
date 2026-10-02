@@ -15,8 +15,6 @@ describe("self-serve signup contract", () => {
     labName: "Laboratório Exemplo",
     cnpj: "11.222.333/0001-81",
     phone: "51999998888",
-    planId: "PROFESSIONAL",
-    billingCycle: "YEARLY",
   };
 
   it("accepts a lab e-mail at its own domain and normalises the CNPJ", () => {
@@ -49,27 +47,5 @@ describe("self-serve signup contract", () => {
     });
 
     expect(result.success).toBe(false);
-  });
-
-  it("only admits paid plans a lab may contract by itself", () => {
-    expect(
-      SelfServeSignupSchema.safeParse({ ...valid, planId: "ENTERPRISE" })
-        .success,
-    ).toBe(false);
-    expect(
-      SelfServeSignupSchema.safeParse({ ...valid, planId: "FREE" }).success,
-    ).toBe(false);
-  });
-
-  it("defaults to the annual cycle on the entry plan", () => {
-    const parsed = SelfServeSignupSchema.parse({
-      name: valid.name,
-      email: valid.email,
-      labName: valid.labName,
-      cnpj: valid.cnpj,
-    });
-
-    expect(parsed.planId).toBe("STANDARD");
-    expect(parsed.billingCycle).toBe("YEARLY");
   });
 });

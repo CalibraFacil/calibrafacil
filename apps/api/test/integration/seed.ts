@@ -5,7 +5,6 @@ import {
   organizationUnit,
   member,
   organizationApiKey,
-  entitlementOverride,
   customer,
 } from "@calibra-facil/db/schema";
 import { createApiKeySecret } from "../../src/lib/api-keys";
@@ -261,7 +260,7 @@ export async function seedStandard(params: {
 // =============================================================================
 // These cover the auth path used by the public integrator routers
 // (`requireApiKeyAuth` -> sha-256 hash lookup of `organization_api_key` ->
-// `organizationHasEntitlement(orgId, "api")` -> `requireApiScope`). No session
+// `requireApiScope`). No session
 // mock is involved: the request authenticates purely from a real seeded key, so
 // the org-id discriminator is exercised end to end against the seeded DB.
 
@@ -302,25 +301,6 @@ export async function seedApiKey(params: {
     revokedAt: params.revokedAt ?? null,
   });
   return { rawKey: key, keyId, keyPrefix };
-}
-
-/**
- * Grant the "api" feature to an org via a backoffice entitlement override
- * (grant-only, no subscription/plan needed). `requireApiKeyAuth` calls
- * `organizationHasEntitlement(orgId, "api")`, which returns true when this row
- * is present and unexpired — so a seeded key on a FREE org can still pass the
- * plan gate without seeding a full subscription.
- */
-export async function seedApiEntitlement(params: {
-  organizationId: string;
-  feature?: string;
-}): Promise<void> {
-  await db.insert(entitlementOverride).values({
-    organizationId: params.organizationId,
-    feature: params.feature ?? "api",
-    reason: "integration test grant",
-    expiresAt: null,
-  });
 }
 
 /**

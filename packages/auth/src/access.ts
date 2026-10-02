@@ -1039,8 +1039,11 @@ export function getAllowedCalibrationActions(
 }
 
 // =============================================================================
-// PLATFORM / BACKOFFICE ACCESS CONTROL
+// PLATFORM ROLES (Better Auth admin plugin on the LAB instance)
 // =============================================================================
+// `user.role` holds one of these. Every account is a plain `user`; the operator
+// roles only unlock the admin plugin's user-management endpoints. The plugin
+// itself stays because the API creates accounts through it (`createUser`).
 
 export const platformStatements = {
   ...platformDefaultStatements,
@@ -1069,35 +1072,3 @@ export const platformRoles = {
 } as const;
 
 export type PlatformRole = keyof typeof platformRoles;
-
-export const DEFAULT_PLATFORM_ROLE: PlatformRole = "user";
-
-export function parsePlatformRoles(
-  rawRole: string | null | undefined,
-): PlatformRole[] {
-  if (!rawRole) {
-    return [DEFAULT_PLATFORM_ROLE];
-  }
-
-  const roles = rawRole
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean)
-    .filter((value): value is PlatformRole => value in platformRoles);
-
-  return roles.length > 0 ? roles : [DEFAULT_PLATFORM_ROLE];
-}
-
-export function hasPlatformRole(
-  rawRole: string | null | undefined,
-  role: PlatformRole,
-): boolean {
-  return parsePlatformRoles(rawRole).includes(role);
-}
-
-export function canAccessBackoffice(rawRole: string | null | undefined) {
-  const roles = parsePlatformRoles(rawRole);
-  return (
-    roles.includes("platform_admin") || roles.includes("platform_operator")
-  );
-}

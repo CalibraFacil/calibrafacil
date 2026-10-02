@@ -52,8 +52,6 @@ vi.mock("../../lib/portal-service-account", () => ({
   PortalServiceAccountError: class extends Error {},
 }));
 
-let featureEnabled = true;
-
 vi.mock("../../middleware/permission", () => {
   const labMiddleware = async (c: Context, next: Next) => {
     c.set("session", { user: { id: "lab-user-1" } });
@@ -65,22 +63,12 @@ vi.mock("../../middleware/permission", () => {
   };
 });
 
-vi.mock("../../middleware/tier-guard", () => ({
-  requireFeature: () => async (c: Context, next: Next) => {
-    if (!featureEnabled) {
-      return c.json({ error: "feature" }, 403);
-    }
-    return next();
-  },
-}));
-
 const { customerGroupsRouter } = await import("../customer-groups");
 
 const JSON_HEADERS = { "content-type": "application/json" };
 
 beforeEach(() => {
   dbQueue.length = 0;
-  featureEnabled = true;
   createClientOrganizationAsServiceOwner.mockClear();
   createPortalInvitationAsService.mockClear();
   cancelPortalInvitationAsService.mockClear();
@@ -117,17 +105,6 @@ describe("POST /customer-groups", () => {
     });
     expect(res.status).toBe(201);
     expect(createPortalInvitationAsService).toHaveBeenCalledOnce();
-  });
-
-  it("is gated by the customer_group entitlement", async () => {
-    featureEnabled = false;
-    const res = await customerGroupsRouter.request("/", {
-      method: "POST",
-      headers: JSON_HEADERS,
-      body: JSON.stringify({ name: "Rede X" }),
-    });
-    expect(res.status).toBe(403);
-    expect(createClientOrganizationAsServiceOwner).not.toHaveBeenCalled();
   });
 });
 
@@ -226,12 +203,6 @@ describe("GET /customer-groups/:id/members", () => {
     dbQueue.push([]); // resolveLabGroupOrg → null
     const res = await customerGroupsRouter.request("/5/members");
     expect(res.status).toBe(404);
-  });
-
-  it("is gated by the customer_group entitlement", async () => {
-    featureEnabled = false;
-    const res = await customerGroupsRouter.request("/5/members");
-    expect(res.status).toBe(403);
   });
 });
 

@@ -33,11 +33,7 @@ export const emptySignUpForm: SignUpFormData = {
  */
 export function parseSignUpForm(
   data: SignUpFormData,
-  extras: {
-    planId: SelfServeSignupInput['planId']
-    billingCycle: SelfServeSignupInput['billingCycle']
-    website: string
-  },
+  extras: { website: string },
 ): FeatureFormValidationResult<SelfServeSignupInput, SignUpFormField> {
   const parsed = SelfServeSignupSchema.safeParse({
     name: data.name,
@@ -45,8 +41,6 @@ export function parseSignUpForm(
     labName: data.labName,
     cnpj: data.cnpj,
     phone: data.phone,
-    planId: extras.planId,
-    billingCycle: extras.billingCycle,
     website: extras.website,
   })
 

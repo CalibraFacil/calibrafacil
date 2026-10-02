@@ -6,18 +6,9 @@ import {
 } from "../../src/lib/integrations";
 import { processScheduledIntegrationSyncs } from "@calibra-facil/worker/integrations";
 import { cleanupExpiredAuthRecords } from "../../src/lib/auth-maintenance";
-import { recomputeOperatorAlerts } from "../../src/lib/operator-alerts";
 import { drainOotEmailOutbox } from "../../src/lib/oot-email-drain";
 import { drainServiceOrderEmailOutbox } from "../../src/lib/service-order-email-drain";
 import { runStaleJobBackstop } from "../../src/lib/stale-job-backstop";
-import {
-  createAsaasReconciliationPort,
-  reconcileProviderSubscriptions,
-} from "../../src/services/commercial/reconcile-subscriptions";
-import {
-  createAsaasOfferReconciliationPort,
-  reconcilePendingOffers,
-} from "../../src/services/commercial/reconcile-offers";
 import { createWorkerRuntimeEnv } from "../../src/lib/runtime-env";
 import { runCron } from "./cron-run";
 import { runCertificateDriftCheck } from "../../src/lib/certificate-drift";
@@ -30,8 +21,8 @@ import {
 
 // One function serves all Vercel cron jobs so Vercel packages a single bundle
 // instead of one per job. The vercel.json crons hit the semantic paths
-// /api/cron/{integrations,notifications,portal-digest,operator-alerts,
-// auth-maintenance,service-order-emails}; the dynamic shim api/cron/[job].js
+// /api/cron/{integrations,notifications,portal-digest,auth-maintenance,
+// service-order-emails,…}; the dynamic shim api/cron/[job].js
 // routes them all here and we dispatch on the trailing path segment. (The
 // cron-routing-parity test asserts these paths <-> JOB_HANDLERS stay in sync
 // and that no vercel.json rewrite swallows them into the Hono app.)
@@ -175,29 +166,6 @@ async function handlePortalDigest(request: Request) {
   );
 }
 
-async function handleMarketingContactSync(request: Request) {
-  if (!isCronAuthorized(request)) {
-    return cronAuthFailureResponse();
-  }
-
-  return runCron("marketing-contact-sync", { leaseSeconds: 120 }, () =>
-    enqueueBackgroundJob(
-      { type: "MARKETING_CONTACT_SYNC" },
-      { idempotencyKey: `marketing-contact-sync-${todayKey()}` },
-    ),
-  );
-}
-
-async function handleOperatorAlerts(request: Request) {
-  if (!isCronAuthorized(request)) {
-    return cronAuthFailureResponse();
-  }
-
-  return runCron("operator-alerts", { leaseSeconds: 120 }, () =>
-    recomputeOperatorAlerts(),
-  );
-}
-
 async function handleAuthMaintenance(request: Request) {
   if (!isCronAuthorized(request)) {
     return cronAuthFailureResponse();
@@ -258,31 +226,6 @@ async function handleSpcRecompute(request: Request) {
       { type: "SPC_RECOMPUTE" },
       { idempotencyKey: `spc-recompute-${todayKey()}` },
     ),
-  );
-}
-
-async function handleSubscriptionReconciliation(request: Request) {
-  if (!isCronAuthorized(request)) {
-    return cronAuthFailureResponse();
-  }
-
-  // Backstop for lost/never-retried ASAAS webhooks: reconcile local subscription
-  // state against the provider and correct/alert on divergence (REQ-REL-ASA-002).
-  // One-off offers (setup fees, upfront plans) never create a subscription row,
-  // so they need their own pass or a lost webhook hides a paid charge forever.
-  return runCron(
-    "subscription-reconciliation",
-    { leaseSeconds: 120 },
-    async () => {
-      const subscriptions = await reconcileProviderSubscriptions(
-        createAsaasReconciliationPort(),
-      );
-      const offers = await reconcilePendingOffers(
-        createAsaasOfferReconciliationPort(),
-      );
-
-      return { subscriptions, offers };
-    },
   );
 }
 
@@ -370,13 +313,10 @@ export const JOB_HANDLERS: Record<
   integrations: handleIntegrations,
   notifications: handleNotifications,
   "portal-digest": handlePortalDigest,
-  "marketing-contact-sync": handleMarketingContactSync,
-  "operator-alerts": handleOperatorAlerts,
   "auth-maintenance": handleAuthMaintenance,
   "service-order-emails": handleServiceOrderEmails,
   "oot-emails": handleOotEmails,
   "queue-backstop": handleQueueBackstop,
-  "subscription-reconciliation": handleSubscriptionReconciliation,
   "spc-recompute": handleSpcRecompute,
   "email-domain-health": handleEmailDomainHealth,
   "certificate-drift": handleCertificateDrift,

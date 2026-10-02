@@ -11,7 +11,6 @@ import {
 import { formatFinanceDate, formatFinanceMoney } from '@/lib/finance-formatters'
 import { Money, exportStatusToneOf } from '@/features/finance/finance-display'
 import {
-  InfoHint,
   Panel,
   PanelHeader,
   SignalTile,
@@ -47,11 +46,9 @@ const EXPORT_FACETS: FacetConfig[] = [
 
 function makeErpColumns({
   onExport,
-  hasIntegration,
   exporting,
 }: {
   onExport: (id: number) => void
-  hasIntegration: boolean
   exporting: boolean
 }): ColumnDef<ErpRow, unknown>[] {
   return [
@@ -137,12 +134,7 @@ function makeErpColumns({
             <Button
               variant={isFailed ? 'default' : 'outline'}
               size="sm"
-              disabled={exporting || !hasIntegration}
-              title={
-                hasIntegration
-                  ? undefined
-                  : 'Requer integração financeira ativa'
-              }
+              disabled={exporting}
               onClick={() => onExport(row.original.id)}
             >
               {row.original.exportStatus === 'EXPORTED'
@@ -163,8 +155,6 @@ export function FinanceErpPage({ exportFilter }: { exportFilter?: string }) {
   const exportsQuery = useFinanceErpData()
   const exportMutation = useExportErpDocumentMutation()
 
-  const billing = exportsQuery.data?.billing
-  const hasIntegration = billing?.hasFinancialIntegrations ?? false
   const rows = exportsQuery.data?.data ?? []
 
   const pending = rows.filter((row) => PENDING_STATES.has(row.exportStatus))
@@ -187,7 +177,6 @@ export function FinanceErpPage({ exportFilter }: { exportFilter?: string }) {
   }
 
   const columns = makeErpColumns({
-    hasIntegration,
     exporting: exportMutation.isPending,
     onExport: (id) =>
       exportMutation.mutate(id, {
@@ -239,17 +228,11 @@ export function FinanceErpPage({ exportFilter }: { exportFilter?: string }) {
             title={
               <span className="inline-flex items-center gap-1.5">
                 Fila de exportação
-                {!hasIntegration ? (
-                  <InfoHint>
-                    O reenvio para o ERP exige uma integração financeira ativa
-                    no plano {billing?.planName ?? 'atual'}.
-                  </InfoHint>
-                ) : null}
               </span>
             }
             description="Documentos emitidos enviados à integração financeira."
             action={
-              hasIntegration && retryableIds.length > 0 ? (
+              retryableIds.length > 0 ? (
                 <Button
                   size="sm"
                   disabled={exportMutation.isPending}
@@ -271,7 +254,7 @@ export function FinanceErpPage({ exportFilter }: { exportFilter?: string }) {
               searchPlaceholder="Buscar por cliente ou número"
               facets={EXPORT_FACETS}
               initialColumnFilters={exportFilters}
-              enableRowSelection={hasIntegration}
+              enableRowSelection
               emptyState="Nada na fila de exportação."
               bulkActions={(selected, clear) => {
                 const ids = selected

@@ -1,8 +1,6 @@
 import { redirect } from '@tanstack/react-router'
-import { canAccessBackoffice } from '@calibra-facil/auth/access'
 import { authClient } from '@calibra-facil/auth/client'
 
-import { getBackofficeAppUrl } from '@/app/config/runtime'
 import { hasDesktopSession } from '@/runtime/desktop-auth'
 import { isDesktopRuntime } from '@/runtime/desktop'
 import { getClientSession, readSessionWithRetry } from '@/lib/auth-session'
@@ -60,20 +58,5 @@ export async function dashboardBeforeLoad({
       to: '/sign-in',
       search: { redirect: continuationHref(location) },
     })
-  }
-
-  if (
-    canAccessBackoffice(session.user.role) &&
-    !session.session.impersonatedBy &&
-    !isDesktopRuntime() &&
-    typeof window !== 'undefined'
-  ) {
-    // The backoffice is a separate cross-origin app now. Kick off the
-    // navigation, then block beforeLoad indefinitely so TanStack Router does
-    // not mount the dashboard route or run child loaders while the browser
-    // completes the cross-origin redirect (a bare return would let lab code
-    // render for a beat first).
-    window.location.replace(getBackofficeAppUrl())
-    await new Promise<never>(() => {})
   }
 }

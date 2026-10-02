@@ -52,20 +52,6 @@ export async function mockDashboardOrganizations(
   })
 }
 
-export async function mockPlanAccess(page: Page) {
-  await routeJson(page, '**/api/billing/access*', {
-    body: {
-      entitlements: [],
-      hasFinancial: false,
-      hasFinancialModule: false,
-      canManageBilling: false,
-      hasApi: false,
-      hasCustomDomain: false,
-      hasSso: false,
-    },
-  })
-}
-
 export async function mockNotifications(page: Page) {
   await routeJson(page, '**/api/notifications/unread-count*', {
     body: { count: 0 },
@@ -150,18 +136,6 @@ export async function installDesktopBridge(
               ) ?? activeOrganization
 
             return jsonResponse(target)
-          }
-
-          if (path.endsWith('/api/billing/access')) {
-            return jsonResponse({
-              entitlements: [],
-              hasFinancial: false,
-              hasFinancialModule: false,
-              canManageBilling: false,
-              hasApi: false,
-              hasCustomDomain: false,
-              hasSso: false,
-            })
           }
 
           if (path.endsWith('/api/notifications/unread-count')) {

@@ -130,9 +130,6 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
           ),
 
         // 2. Approved this month
-        // This is a dashboard KPI, not the subscription usage metric.
-        // Plan/certificate quota enforcement counts jobs created this month
-        // in tier guard and billing usage.
         db
           .select({ count: count() })
           .from(calibrationJob)

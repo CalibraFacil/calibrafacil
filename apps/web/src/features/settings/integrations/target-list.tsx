@@ -51,7 +51,6 @@ function activeScheduleLabel(mode: IntegrationRunMode, frequency: string) {
 
 export function IntegrationTargetList({
   className,
-  hasEntitlement,
   integration,
   renderExtra,
   schedule,
@@ -59,7 +58,6 @@ export function IntegrationTargetList({
   targets,
 }: {
   className?: string
-  hasEntitlement: boolean
   integration: IntegrationSummary
   /** Optional per-target slot (mapping editor + preview for the generic ERP). */
   renderExtra?: (target: SyncTarget) => ReactNode
@@ -105,7 +103,7 @@ export function IntegrationTargetList({
                       variant="outline"
                       size="sm"
                       className="h-7 shrink-0 gap-1 px-2 text-xs active:scale-[0.96]"
-                      disabled={!hasEntitlement || thisTargetRescheduling}
+                      disabled={thisTargetRescheduling}
                     />
                   }
                 >
@@ -212,9 +210,7 @@ export function IntegrationTargetList({
                 size="sm"
                 className="active:scale-[0.96]"
                 onClick={() => sync.mutate({ target })}
-                disabled={
-                  !hasEntitlement || thisTargetSyncing || summary.blocked
-                }
+                disabled={thisTargetSyncing || summary.blocked}
               >
                 {thisTargetSyncing ? (
                   <>

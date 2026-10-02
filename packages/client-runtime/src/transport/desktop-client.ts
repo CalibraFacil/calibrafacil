@@ -3,7 +3,6 @@ import type {
   AssetDetailData,
   AssetTypesListData,
   AssetsListData,
-  BillingSubscriptionResponse,
   CalibraApi,
   CertificateNumberingConfig,
   CertificateNumberingProfileResponse,
@@ -32,7 +31,6 @@ import type {
   MethodsListData,
   NonConformanceListInput,
   NotificationPreferencesResponse,
-  PlanAccessResponse,
   EmailDomainResponse,
   PortalDomainResponse,
   ReferenceStandardsResponse,
@@ -240,9 +238,6 @@ export function createDesktopApiClient(
       },
     },
     access: {
-      async getPlanAccess() {
-        return desktopPlanAccess();
-      },
       async getFinanceAccess() {
         return desktopFinanceAccess();
       },
@@ -256,137 +251,6 @@ export function createDesktopApiClient(
       action: "Gerenciamento de sessoes",
     }),
     finance: desktopCloudOnlyStubs("finance", { action: "Financeiro" }),
-    billing: {
-      // Contracting and cancelling a plan are cloud actions by definition:
-      // they talk to the payment provider, which the offline shell cannot.
-      ...desktopCloudOnlyStubs("billing", {
-        action: "Assinatura",
-        actionByMethod: {
-          startSelfServeCheckout: "Contratação de plano",
-          cancelSubscription: "Cancelamento de assinatura",
-        },
-      }),
-      async getSubscription() {
-        return desktopBillingSubscription();
-      },
-      async listPayments() {
-        return { data: [] };
-      },
-    },
-    backoffice: {
-      ...desktopCloudOnlyStubs("backoffice", {
-        action: "Backoffice",
-        actionByMethod: {
-          bootstrap: "Bootstrap backoffice",
-          listOrganizations: "Organizações backoffice",
-          getOrganization: "Organizações backoffice",
-          getSupportQueue: "Suporte backoffice",
-          listUsers: "Usuários backoffice",
-          updateUserRole: "Usuários backoffice",
-          banUser: "Usuários backoffice",
-          unbanUser: "Usuários backoffice",
-          impersonateUser: "Usuários backoffice",
-          createUser: "Usuários backoffice",
-          provisionLab: "Laboratórios backoffice",
-          requestUserPasswordReset: "Usuários backoffice",
-          getUser: "Usuários backoffice",
-          listUserSessions: "Sessões backoffice",
-          revokeUserSession: "Sessões backoffice",
-          listUserActivity: "Atividade backoffice",
-          getPresence: "Presença backoffice",
-          listAuditLog: "Auditoria backoffice",
-          getIntegrationHealth: "Integrações backoffice",
-          getVitals: "Indicadores backoffice",
-          listOperatorAlerts: "Alertas backoffice",
-          recomputeOperatorAlerts: "Alertas backoffice",
-          acknowledgeOperatorAlert: "Alertas backoffice",
-          listAccountTasks: "Tarefas backoffice",
-          createAccountTask: "Tarefas backoffice",
-          completeAccountTask: "Tarefas backoffice",
-          updateOrganizationLifecycle: "Ciclo de vida backoffice",
-          listInteractions: "Interações backoffice",
-          createInteraction: "Interações backoffice",
-          manageSubscription: "Assinatura backoffice",
-          listEntitlementOverrides: "Concessões backoffice",
-          grantEntitlementOverride: "Concessões backoffice",
-          revokeEntitlementOverride: "Concessões backoffice",
-          getOrganizationActivity: "Atividade backoffice",
-          listImportRuns: "Importações backoffice",
-          parseImportFile: "Importações backoffice",
-          validateImportRun: "Importações backoffice",
-          listApprovals: "Aprovações backoffice",
-          createApprovalRequest: "Aprovações backoffice",
-          decideApproval: "Aprovações backoffice",
-          stopImpersonation: "Impersonação backoffice",
-        },
-      }),
-      async getAccess() {
-        return {
-          allowed: false,
-          roles: [],
-          bootstrapAvailable: false,
-          isImpersonating: false,
-        };
-      },
-      commercial: {
-        async listOrganizations() {
-          throw desktopUnsupportedBackofficeAction("Comercial backoffice");
-        },
-        async getContext() {
-          throw desktopUnsupportedBackofficeAction("Comercial backoffice");
-        },
-        async syncBillingCustomer() {
-          throw desktopUnsupportedBackofficeAction("Comercial backoffice");
-        },
-        async createBillingContact() {
-          throw desktopUnsupportedBackofficeAction("Comercial backoffice");
-        },
-        async previewOffer() {
-          throw desktopUnsupportedBackofficeAction("Comercial backoffice");
-        },
-        async issueOffer() {
-          throw desktopUnsupportedBackofficeAction("Comercial backoffice");
-        },
-        async cancelOffer() {
-          throw desktopUnsupportedBackofficeAction("Comercial backoffice");
-        },
-        async reissueOffer() {
-          throw desktopUnsupportedBackofficeAction("Comercial backoffice");
-        },
-      },
-      customerSuccess: {
-        async listOrganizations() {
-          throw desktopUnsupportedBackofficeAction("Customer Success");
-        },
-        async getProfile() {
-          throw desktopUnsupportedBackofficeAction("Customer Success");
-        },
-        async getRequests() {
-          throw desktopUnsupportedBackofficeAction("Customer Success");
-        },
-        async updateProfile() {
-          throw desktopUnsupportedBackofficeAction("Customer Success");
-        },
-        async updateRequestStatus() {
-          throw desktopUnsupportedBackofficeAction("Customer Success");
-        },
-        async assignRequest() {
-          throw desktopUnsupportedBackofficeAction("Customer Success");
-        },
-        async respondRequest() {
-          throw desktopUnsupportedBackofficeAction("Customer Success");
-        },
-        async escalateRequest() {
-          throw desktopUnsupportedBackofficeAction("Customer Success");
-        },
-        async updateNextAction() {
-          throw desktopUnsupportedBackofficeAction("Customer Success");
-        },
-        async updateBlocker() {
-          throw desktopUnsupportedBackofficeAction("Customer Success");
-        },
-      },
-    },
     sso: {
       ...desktopCloudOnlyStubs("sso", {
         action: "Configuração SSO",
@@ -935,18 +799,12 @@ export function createDesktopApiClient(
     reports: desktopCloudOnlyStubs("reports", {
       action: "Relatórios consolidados",
     }),
-    publicCheckout: desktopCloudOnlyStubs("publicCheckout", {
-      action: "Checkout comercial",
-    }),
     publicInvitations: desktopCloudOnlyStubs("publicInvitations", {
       action: "Convites",
     }),
     // Opening an account happens on the cloud, before any desktop shell exists.
     publicSignup: desktopCloudOnlyStubs("publicSignup", {
       action: "Cadastro de laboratório",
-    }),
-    publicLeads: desktopCloudOnlyStubs("publicLeads", {
-      action: "Contato comercial",
     }),
     labSetup: desktopCloudOnlyStubs("labSetup", {
       action: "Configuração de acesso",
@@ -1010,9 +868,6 @@ export function createDesktopApiClient(
     }),
     trainingRecords: desktopCloudOnlyStubs("trainingRecords", {
       action: "Registros de treinamento",
-    }),
-    customerSuccess: desktopCloudOnlyStubs("customerSuccess", {
-      action: "Customer Success",
     }),
     calibrationRequests: desktopCloudOnlyStubs("calibrationRequests", {
       action: "Solicitações de calibração",
@@ -2400,36 +2255,8 @@ function roleLabel(role: string) {
   }
 }
 
-function desktopPlanAccess(): PlanAccessResponse {
-  return {
-    planId: "desktop-local",
-    planName: "Desktop local",
-    status: "active",
-    limits: {
-      certificates: -1,
-      users: -1,
-      storage: -1,
-    },
-    entitlements: ["desktop_local"],
-    hasFinancial: false,
-    hasFinancialModule: false,
-    // Desktop is offline: there is no billing surface to read or manage.
-    canViewBilling: false,
-    canManageBilling: false,
-    hasApi: false,
-    hasCustomDomain: false,
-    hasSso: false,
-  };
-}
-
 function desktopFinanceAccess(): FinanceAccessResponse {
   return {
-    planId: "desktop-local",
-    planName: "Desktop local",
-    status: "active",
-    entitlements: ["desktop_local"],
-    hasFinancialModule: false,
-    hasFinancialIntegrations: false,
     canReadFinancial: false,
     canManageFinancial: false,
     canExportFinancial: false,
@@ -2437,28 +2264,7 @@ function desktopFinanceAccess(): FinanceAccessResponse {
   };
 }
 
-function desktopBillingSubscription(): BillingSubscriptionResponse {
-  const access = desktopPlanAccess();
-
-  return {
-    subscription: null,
-    plan: {
-      id: access.planId,
-      name: access.planName,
-      description: "Plano local do aplicativo desktop",
-    },
-    usage: {
-      jobsCreated: 0,
-      users: 1,
-      storage: 0,
-    },
-    limits: access.limits,
-  };
-}
-
 function desktopSsoSettings(): SsoSettingsResponse {
-  const access = desktopPlanAccess();
-
   return {
     provider: null,
     access: {
@@ -2466,12 +2272,6 @@ function desktopSsoSettings(): SsoSettingsResponse {
       canCreate: false,
       canManage: false,
       canDelete: false,
-    },
-    billing: {
-      planId: access.planId,
-      planName: access.planName,
-      status: access.status,
-      hasSso: false,
     },
   };
 }
@@ -2599,13 +2399,6 @@ function desktopNotificationPreferences(): NotificationPreferencesResponse {
     notifySelfActions: false,
     digestFrequency: "NONE",
   };
-}
-
-// The backoffice namespace nests sub-objects (`commercial`, `customerSuccess`)
-// that the policy registry cannot describe (it registers function-valued
-// methods only), so their stubs stay hand-written on top of this helper.
-function desktopUnsupportedBackofficeAction(action: string) {
-  return desktopUnsupportedError(action, "web-api");
 }
 
 async function postDesktopMethodAction<TResponse = unknown>(

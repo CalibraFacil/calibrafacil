@@ -18,7 +18,6 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../../middleware/permission";
-import { requireFeature } from "../../middleware/tier-guard";
 
 const COMMERCIAL_AGREEMENT_STATUSES = [
   "DRAFT",
@@ -192,7 +191,6 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
   .get(
     "/",
     ...withLabPermission({ financial: ["read"] }),
-    requireFeature("financial"),
     zValidator("query", ListContractsQuerySchema),
     async (c) => {
       const member = c.get("member");
@@ -244,7 +242,6 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/",
     ...withLabPermission({ financial: ["contract_create"] }),
-    requireFeature("financial"),
     zValidator("json", CreateAgreementSchema),
     async (c) => {
       const member = c.get("member");
@@ -311,30 +308,24 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
       return c.json({ data: created }, 201);
     },
   )
-  .get(
-    "/:id",
-    ...withLabPermission({ financial: ["read"] }),
-    requireFeature("financial"),
-    async (c) => {
-      const member = c.get("member");
-      const id = Number.parseInt(c.req.param("id"), 10);
+  .get("/:id", ...withLabPermission({ financial: ["read"] }), async (c) => {
+    const member = c.get("member");
+    const id = Number.parseInt(c.req.param("id"), 10);
 
-      if (!Number.isInteger(id)) {
-        return c.json({ error: "ID invalido" }, 400);
-      }
+    if (!Number.isInteger(id)) {
+      return c.json({ error: "ID invalido" }, 400);
+    }
 
-      const agreement = await getAgreementById(member.organizationId, id);
-      if (!agreement) {
-        return c.json({ error: "Contrato nao encontrado" }, 404);
-      }
+    const agreement = await getAgreementById(member.organizationId, id);
+    if (!agreement) {
+      return c.json({ error: "Contrato nao encontrado" }, 404);
+    }
 
-      return c.json({ data: agreement });
-    },
-  )
+    return c.json({ data: agreement });
+  })
   .put(
     "/:id",
     ...withLabPermission({ financial: ["contract_update"] }),
-    requireFeature("financial"),
     zValidator("json", UpdateAgreementSchema),
     async (c) => {
       const member = c.get("member");
@@ -435,7 +426,6 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/activate",
     ...withLabPermission({ financial: ["contract_update"] }),
-    requireFeature("financial"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
@@ -483,7 +473,6 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/cancel",
     ...withLabPermission({ financial: ["contract_update"] }),
-    requireFeature("financial"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");

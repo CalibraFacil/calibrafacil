@@ -149,8 +149,8 @@ export function CustomerEditForm({
       email: email.trim() || undefined,
       phone: phone.trim() || undefined,
       address: hasAddressData ? address : undefined,
-      // Only labs with the customer_group entitlement edit this field; when the
-      // section is hidden, omit it so we never clobber an existing assignment.
+      // When the group section is hidden (desktop shell), omit the field so we
+      // never clobber an existing assignment.
       ...(showGroupField ? { groupId } : {}),
     })
   }

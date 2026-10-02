@@ -47,9 +47,8 @@ The app runs at `https://localhost:5173` (HTTPS required for auth cookies).
   /settings
     /profile               # User profile
     /organization          # Lab settings
-    /security              # Password, sessions
-    /authentication        # 2FA, providers
-    /billing               # Subscription, invoices
+    /security              # Active sessions
+    /authentication        # Sign-in methods, SSO, API keys
     /notifications         # Alert preferences
     /appearance            # Theme, locale
     /danger                # Delete account/org

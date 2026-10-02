@@ -6,7 +6,6 @@ import type {
   DashboardUnitsResponse,
 } from '@calibra-facil/client-runtime'
 import { calibraApi } from '@/utils/api'
-import { usePlanAccess } from '@/hooks/use-plan-access'
 import { isDesktopRuntime } from '@/runtime/desktop'
 
 type ActiveOrganization = {
@@ -34,7 +33,6 @@ function getCurrentOrganizationRole(activeOrg: ActiveOrganization | undefined) {
 export function useDashboardUnits() {
   const isDesktop = isDesktopRuntime()
   const { data: cloudActiveOrg } = useActiveOrganization()
-  const accessQuery = usePlanAccess()
   const desktopSessionQuery = useQuery({
     queryKey: ['desktop-local-session'],
     enabled: isDesktop,
@@ -58,9 +56,11 @@ export function useDashboardUnits() {
       }
     : undefined
   const activeOrg = cloudActiveOrg ?? desktopActiveOrg
+  // Every cloud laboratory can run several units; the desktop shell only
+  // knows the units its local session was granted.
   const hasMultiUnit = isDesktop
     ? desktopUnits.length > 1 || desktopCanAccessAllUnits
-    : (accessQuery.data?.entitlements.includes('multi_unit') ?? false)
+    : true
 
   const unitsQuery = useQuery({
     queryKey: [
@@ -74,11 +74,8 @@ export function useDashboardUnits() {
   })
 
   const data = hasMultiUnit ? unitsQuery.data : null
-  const isCheckingAccess = isDesktop
-    ? desktopSessionQuery.isPending
-    : Boolean(activeOrg?.id) && accessQuery.isPending
-  const canUseSingleUnitFallback =
-    Boolean(activeOrg) && !accessQuery.isPending && !hasMultiUnit
+  const isCheckingAccess = isDesktop ? desktopSessionQuery.isPending : false
+  const canUseSingleUnitFallback = Boolean(activeOrg) && !hasMultiUnit
   const currentUnitValue = data
     ? data.selectedUnitScope === 'all'
       ? 'all'
@@ -107,7 +104,6 @@ export function useDashboardUnits() {
 
   return {
     activeOrg,
-    accessQuery,
     unitsQuery,
     hasMultiUnit,
     isCheckingAccess,

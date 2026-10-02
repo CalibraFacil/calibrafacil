@@ -1,12 +1,10 @@
 export type DashboardIconId =
   | 'analytics'
   | 'assets'
-  | 'billing'
   | 'building'
   | 'clipboard'
   | 'creditCard'
   | 'customers'
-  | 'customerSuccess'
   | 'documentation'
   | 'file'
   | 'home'
@@ -65,8 +63,6 @@ export const dashboardRouteMeta = [
   { path: '/dashboard/finance', cloudOnly: 'prefix' },
   { path: '/dashboard/materials', cloudOnly: 'prefix' },
   { path: '/dashboard/settings', cloudOnly: 'prefix' },
-  { path: '/dashboard/customer-success', cloudOnly: true },
-  { path: '/dashboard/internal', cloudOnly: 'prefix' },
 ] satisfies DashboardRouteMeta[]
 
 export const dashboardRedirectRouteMeta = [
@@ -252,18 +248,6 @@ export const dashboardManagementNavItems = [
     url: '/dashboard/reports',
     icon: 'analytics',
     requiredRole: 'admin-or-owner',
-  },
-  {
-    title: 'Customer Success',
-    url: '/dashboard/customer-success',
-    icon: 'customerSuccess',
-    items: [
-      {
-        title: 'Área do laboratório',
-        url: '/dashboard/customer-success',
-        icon: 'customerSuccess',
-      },
-    ],
   },
   {
     title: 'Configurações',

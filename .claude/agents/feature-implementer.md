@@ -49,7 +49,7 @@ not push, do not open a PR, do not merge. Leave the worktree for a human/verifie
    mini-spec; no drive-by refactors.
 4. **Reuse the real RBAC layer — never modify it.** Access checks go through the
    existing guards in `apps/api/src/middleware/permission.ts` (`requirePermission`,
-   `requireRole`, `requireCalibrationAction`, `requireOrgType`, `requireFeature`)
+   `requireRole`, `requireCalibrationAction`, `requireOrgType`)
    and roles in `packages/auth/src/access.ts`. Preserve `organizationId` + `unitId`
    scoping (`resolveMemberUnitScope`). If a needed permission/role does not exist,
    STOP and report — do not add or weaken one.

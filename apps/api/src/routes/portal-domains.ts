@@ -18,7 +18,6 @@ import {
   requireRole,
   withLabPermission,
 } from "../middleware/permission";
-import { requireFeature } from "../middleware/tier-guard";
 import { and, eq, ne } from "drizzle-orm";
 
 const CreatePortalDomainSchema = z.object({
@@ -201,7 +200,6 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
     "/",
     ...withLabPermission({ organization: ["update"] }),
     requireRole(["admin", "owner"]),
-    requireFeature("custom_domain"),
     zValidator("json", CreatePortalDomainSchema),
     async (c) => {
       const member = c.get("member");
@@ -304,7 +302,6 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
     "/verify",
     ...withLabPermission({ organization: ["update"] }),
     requireRole(["admin", "owner"]),
-    requireFeature("custom_domain"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
@@ -366,7 +363,6 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
     "/activate",
     ...withLabPermission({ organization: ["update"] }),
     requireRole(["admin", "owner"]),
-    requireFeature("custom_domain"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");

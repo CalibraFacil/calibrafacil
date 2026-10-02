@@ -48,7 +48,6 @@ import {
   service,
   serviceOrder,
   serviceOrderCertificateLink,
-  subscription,
   user,
 } from "@calibra-facil/db/schema";
 import { eq, sql } from "drizzle-orm";
@@ -75,15 +74,6 @@ async function seedClientOrg(clientOrgId: string): Promise<void> {
     slug: clientOrgId,
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     type: "CLIENT",
-    status: "ACTIVE",
-  });
-}
-
-/** Seed a PROFESSIONAL subscription so requireFeature("financial") passes. */
-async function seedProfessionalSubscription(orgId: string): Promise<void> {
-  await db.insert(subscription).values({
-    organizationId: orgId,
-    planId: "PROFESSIONAL",
     status: "ACTIVE",
   });
 }
@@ -331,7 +321,7 @@ async function seedReleasePolicy(params: {
 
 /**
  * Seed a complete domain fixture for one org:
- * org + PROFESSIONAL subscription + customer + asset + service.
+ * org + customer + asset + service.
  */
 async function seedOrgFixture(params: {
   orgId: string;
@@ -342,7 +332,6 @@ async function seedOrgFixture(params: {
     orgId: params.orgId,
     role: params.role ?? "admin",
   });
-  await seedProfessionalSubscription(org.orgId);
 
   const customerId = await seedCustomer({
     labOrgId: org.orgId,

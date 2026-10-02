@@ -64,7 +64,7 @@ function buildFakeCalibraApi(tag: string, options: FakeApiOptions = {}) {
   }
 
   const fake: unknown = api;
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- the fake is built from the policy registry, which is type-total over every CalibraApi method the composition can touch; nested backoffice sub-objects are irrelevant to routing.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- the fake is built from the policy registry, which is type-total over every CalibraApi method the composition can touch.
   return fake as CalibraApi;
 }
 
@@ -113,9 +113,6 @@ describe("desktop policy parity", () => {
       invokeApiMethod(client, "signingCertificates", "setPolicy"),
     ).rejects.toThrow(
       "Política de assinatura requer sincronização com a nuvem neste momento.",
-    );
-    await expect(client.backoffice.stopImpersonation()).rejects.toThrow(
-      "Impersonação backoffice requer a API web/nuvem neste momento.",
     );
   });
 

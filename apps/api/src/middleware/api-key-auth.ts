@@ -8,7 +8,6 @@ import {
   hashApiKey,
 } from "../lib/api-keys";
 import { and, eq, isNull } from "drizzle-orm";
-import { organizationHasEntitlement } from "../lib/organization-plan";
 
 export interface ApiKeyAuthVariables {
   apiKey: {
@@ -48,16 +47,6 @@ export const requireApiKeyAuth = createMiddleware<{
 
   if (!keyRecord) {
     throw new HTTPException(401, { message: "API key inválida" });
-  }
-
-  const hasApi = await organizationHasEntitlement(
-    keyRecord.organizationId,
-    "api",
-  );
-  if (!hasApi) {
-    throw new HTTPException(403, {
-      message: "API não disponível no plano atual",
-    });
   }
 
   c.set("apiKey", {

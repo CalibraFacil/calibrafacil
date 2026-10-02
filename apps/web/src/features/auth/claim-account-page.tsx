@@ -34,9 +34,6 @@ type ClaimCompleteResponse = {
 type ClaimAccountPageProps = {
   token?: string
   error?: string
-  /** Set when the account came from self-serve sign-up. */
-  plano?: string
-  ciclo?: 'MONTHLY' | 'YEARLY'
 }
 
 function isWebAuthnSupported() {
@@ -75,12 +72,7 @@ function statusMessage(status: string | undefined) {
   return 'Este link de acesso é inválido.'
 }
 
-export function ClaimAccountPage({
-  token,
-  error,
-  plano,
-  ciclo,
-}: ClaimAccountPageProps) {
+export function ClaimAccountPage({ token, error }: ClaimAccountPageProps) {
   const navigate = useNavigate()
   const sessionQuery = useSession()
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(
@@ -123,24 +115,7 @@ export function ClaimAccountPage({
     startDesktopInitialSync()
 
     if (result.needsOnboarding) {
-      // Carry the chosen plan across onboarding rather than dropping it: this
-      // branch runs whenever a self-serve registrant left an optional field
-      // blank, which is most of them.
-      navigate({
-        to: '/onboarding/organization',
-        search: plano ? { plano, ciclo } : {},
-      })
-      return
-    }
-
-    // Someone who came from the pricing page picked a plan before they had an
-    // account. Land them on billing with that choice still selected instead of
-    // dropping them on the dashboard to find it again.
-    if (plano) {
-      navigate({
-        to: '/dashboard/settings/subscription',
-        search: { plano, ciclo },
-      })
+      navigate({ to: '/onboarding/organization' })
       return
     }
 

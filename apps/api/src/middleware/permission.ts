@@ -1,10 +1,6 @@
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
-import {
-  createBackofficeAuth,
-  createLabAuth,
-  createPortalAuth,
-} from "@calibra-facil/auth";
+import { createLabAuth, createPortalAuth } from "@calibra-facil/auth";
 import { db } from "@calibra-facil/db";
 import {
   member as memberTable,
@@ -17,13 +13,9 @@ import type {
   CalibrationState,
   CalibrationAction,
   RoleName,
-  PlatformRole,
 } from "@calibra-facil/auth/access";
 import {
-  canAccessBackoffice,
   canPerformCalibrationAction,
-  hasPlatformRole,
-  parsePlatformRoles,
   PORTAL_ACCESS_ROLES,
   roles,
 } from "@calibra-facil/auth/access";
@@ -87,7 +79,7 @@ export interface MemberData {
 
 export type GovernanceAccess = UnitGovernanceAccess;
 
-export type AuthSource = "lab" | "backoffice" | "portal";
+export type AuthSource = "lab" | "portal";
 
 /**
  * Context type extension for authenticated requests
@@ -96,10 +88,8 @@ export interface AuthVariables {
   session: SessionData;
   member: MemberData;
   authSource: AuthSource;
-  platformRoles?: PlatformRole[];
   serverTiming?: ServerTimingMetric[];
   requestLabAuth?: ReturnType<typeof createLabAuth>;
-  requestBackofficeAuth?: ReturnType<typeof createBackofficeAuth>;
   requestPortalAuth?: ReturnType<typeof createPortalAuth>;
 }
 
@@ -118,10 +108,6 @@ const requestPortalAuthCache = new WeakMap<
   object,
   ReturnType<typeof createPortalAuth>
 >();
-const requestBackofficeAuthCache = new WeakMap<
-  object,
-  ReturnType<typeof createBackofficeAuth>
->();
 const serverTimingCache = new WeakMap<object, ServerTimingMetric[]>();
 
 function recordFromUnknown(value: unknown): Record<string, unknown> {
@@ -130,17 +116,6 @@ function recordFromUnknown(value: unknown): Record<string, unknown> {
   }
 
   return Object.fromEntries(Object.entries(value));
-}
-
-function readProperty(value: unknown, key: string): unknown {
-  if (
-    value === null ||
-    (typeof value !== "object" && typeof value !== "function")
-  ) {
-    return undefined;
-  }
-
-  return Reflect.get(value, key);
 }
 
 function isDate(value: unknown): value is Date {
@@ -248,19 +223,6 @@ function getRequestPortalAuth(c: {
   return auth;
 }
 
-function getRequestBackofficeAuth(c: {
-  get: (key: string) => unknown;
-  set: (key: string, value: unknown) => void;
-}) {
-  const existing = requestBackofficeAuthCache.get(c);
-  if (existing) return existing;
-
-  const auth = createBackofficeAuth();
-  requestBackofficeAuthCache.set(c, auth);
-  c.set("requestBackofficeAuth", auth);
-  return auth;
-}
-
 function getServerTimingBuffer(c: {
   get: (key: string) => unknown;
   set: (key: string, value: unknown) => void;
@@ -305,20 +267,6 @@ function applyServerTimingHeader(c: {
     .join(", ");
 
   c.header("Server-Timing", value);
-}
-
-export function isInternalOperatorEmail(
-  email: string | null | undefined,
-  rawAllowlist: string | null | undefined,
-) {
-  const normalizedEmail = email?.trim().toLowerCase();
-  if (!normalizedEmail || !rawAllowlist) return false;
-
-  return rawAllowlist
-    .split(",")
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean)
-    .includes(normalizedEmail);
 }
 
 export function hasPermissionLocally(
@@ -476,34 +424,6 @@ export const requirePortalAuth = createMiddleware<{ Variables: AuthVariables }>(
 );
 
 /**
- * Middleware to require authentication using Backoffice auth.
- * For use on internal backoffice routes.
- * Sets `session` in the context.
- *
- * @example
- * app.use("*", requireBackofficeAuthSession);
- */
-export const requireBackofficeAuthSession = createMiddleware<{
-  Variables: AuthVariables;
-}>(async (c, next) => {
-  const authStartedAt = performance.now();
-  const backofficeAuth = getRequestBackofficeAuth(c);
-  const session = await backofficeAuth.api.getSession({
-    headers: c.req.raw.headers,
-  });
-
-  if (!session) {
-    throw new HTTPException(401, { message: "Unauthorized" });
-  }
-
-  c.set("session", requireSessionData(session));
-  c.set("authSource", "backoffice");
-  addServerTiming(c, "auth", authStartedAt, "backoffice");
-
-  await next();
-});
-
-/**
  * Middleware to require authentication (tries both auth instances).
  * For use on routes that should accept both lab and portal users.
  * Sets `session` in the context.
@@ -611,8 +531,8 @@ export const requireOrganization = createMiddleware<{
     });
   }
 
-  // Tenant lifecycle: a backoffice-suspended organization is blocked from all
-  // authenticated lab access (the operator can reactivate it). Free check — the
+  // Tenant lifecycle: a suspended organization (status set by the instance
+  // operator) is blocked from all authenticated lab access. Free check — the
   // organization row is already joined above.
   if (memberInfo.orgStatus === "SUSPENDED") {
     throw new HTTPException(403, {
@@ -722,10 +642,6 @@ export function requirePermission(permissions: PermissionCheck) {
       result = await portalAuth.api.hasPermission({
         headers: c.req.raw.headers,
         body: { permissions },
-      });
-    } else if (authSource === "backoffice") {
-      throw new HTTPException(403, {
-        message: "Organization permissions are unavailable in backoffice auth",
       });
     } else {
       // Fallback for legacy/misconfigured middleware chains
@@ -922,60 +838,6 @@ export const requirePortalProtected = [
   requireOrganization,
   requirePortalAccess,
 ] as const;
-
-export const requireInternalOperator = createMiddleware<{
-  Variables: AuthVariables;
-}>(async (c, next) => {
-  const session = c.get("session");
-  const envAllowlist =
-    readProperty(c.env, "INTERNAL_OPERATOR_EMAILS") ??
-    process.env.INTERNAL_OPERATOR_EMAILS;
-
-  if (
-    !isInternalOperatorEmail(
-      session?.user?.email,
-      typeof envAllowlist === "string" ? envAllowlist : undefined,
-    )
-  ) {
-    throw new HTTPException(403, {
-      message: "Internal operator access required",
-    });
-  }
-
-  await next();
-});
-
-export const requireBackofficeAccess = createMiddleware<{
-  Variables: AuthVariables;
-}>(async (c, next) => {
-  const session = c.get("session");
-  const roles = parsePlatformRoles(session?.user?.role);
-
-  if (!canAccessBackoffice(session?.user?.role)) {
-    throw new HTTPException(403, {
-      message: "Backoffice access required",
-    });
-  }
-
-  c.set("platformRoles", roles);
-  await next();
-});
-
-export const requirePlatformAdmin = createMiddleware<{
-  Variables: AuthVariables;
-}>(async (c, next) => {
-  const session = c.get("session");
-  const roles = parsePlatformRoles(session?.user?.role);
-
-  if (!hasPlatformRole(session?.user?.role, "platform_admin")) {
-    throw new HTTPException(403, {
-      message: "Platform admin access required",
-    });
-  }
-
-  c.set("platformRoles", roles);
-  await next();
-});
 
 /**
  * Create a protected route handler with permission check.

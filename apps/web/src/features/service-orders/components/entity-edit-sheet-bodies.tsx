@@ -9,7 +9,7 @@ import {
 } from '@/features/assets/components/asset-edit-form'
 import { useAssetDetailData } from '@/features/assets/queries'
 import { Skeleton } from '@/components/ui/skeleton'
-import { usePlanAccess } from '@/hooks/use-plan-access'
+import { isDesktopRuntime } from '@/runtime/desktop'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 import { useCustomerGroupsList } from '@/features/customer-groups/queries'
 
@@ -29,7 +29,7 @@ function SheetFormSkeleton() {
 }
 
 /**
- * Loads the full customer detail (+ entitlements/groups) by its route slug and
+ * Loads the full customer detail (+ groups) by its route slug and
  * renders the reusable edit form inside the Service Order sheet.
  */
 export function CustomerEditSheetBody({
@@ -42,10 +42,9 @@ export function CustomerEditSheetBody({
   onCancel: () => void
 }) {
   const { data: customer, isLoading } = useCustomerDetailData(customerSlug)
-  const accessQuery = usePlanAccess()
   const { activeOrganizationId } = useDashboardContextState()
-  const hasCustomerGroups =
-    accessQuery.data?.entitlements.includes('customer_group') ?? false
+  // Customer groups are a cloud-only feature; the desktop shell has none.
+  const hasCustomerGroups = !isDesktopRuntime()
   const groupsQuery = useCustomerGroupsList(
     activeOrganizationId,
     hasCustomerGroups,

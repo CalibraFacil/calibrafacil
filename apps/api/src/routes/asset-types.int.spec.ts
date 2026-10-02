@@ -107,8 +107,8 @@ describe("assetTypesRouter — real DB + real middleware", () => {
 
   // REQ-AT-001b ---------------------------------------------------------------
   // #637: no write route exists on the lab router at all — a CLIENT org (like
-  // any tenant) gets 404 on POST. The global catalog is mutable only via the
-  // platform-admin backoffice router.
+  // any tenant) gets 404 on POST. The global catalog is seeded centrally
+  // (`packages/db/src/seed-asset-types.ts`), never written by a tenant.
   it("REQ-AT-001b: POST / from a CLIENT org -> 404 (write routes removed)", async () => {
     const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
 
@@ -136,8 +136,8 @@ describe("assetTypesRouter — real DB + real middleware", () => {
   });
 
   // REQ-AT-002 (#637) -----------------------------------------------------
-  // The asset-type catalog is GLOBAL — per Pedro's decision (2026-07-05) it is
-  // curated CENTRALLY via the backoffice. The lab router no longer exposes any
+  // The asset-type catalog is GLOBAL — it is curated CENTRALLY in
+  // `packages/db/src/seed-asset-types.ts`. The lab router no longer exposes any
   // write route: a tenant admin (owner of org A) must not be able to mutate a
   // catalog shared with every other tenant. Hono returns 404 for the removed
   // routes; the security property is "no lab-side write path exists at all".

@@ -6,7 +6,6 @@ import {
   labOrganization,
   mockDashboardOrganizations,
   mockLabSession,
-  mockPlanAccess,
   routeJson,
 } from './helpers'
 
@@ -31,7 +30,6 @@ test.describe('dashboard bootstrap', () => {
       organizations: [clientOrganization(), labOne, labTwo],
       activeOrganization: labOne,
     })
-    await mockPlanAccess(page)
     await routeJson(page, '**/api/auth/lab/organization/set-active*', {
       body: labTwo,
       onRequest: (payload) => setActiveRequests.push(payload),

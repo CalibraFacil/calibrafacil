@@ -67,24 +67,16 @@ process.env.DATABASE_URL = workerUrl;
 // Step 5: mock better-auth sessions
 // ─────────────────────────────────────────────────────────────────────────────
 
-const { getSessionMock, backofficeGetSessionMock, portalGetSessionMock } =
-  vi.hoisted(() => ({
-    getSessionMock: vi.fn(),
-    backofficeGetSessionMock: vi.fn(),
-    portalGetSessionMock: vi.fn(),
-  }));
+const { getSessionMock, portalGetSessionMock } = vi.hoisted(() => ({
+  getSessionMock: vi.fn(),
+  portalGetSessionMock: vi.fn(),
+}));
 
 vi.mock("@calibra-facil/auth", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@calibra-facil/auth")>();
   return {
     ...actual,
     createLabAuth: () => ({ api: { getSession: getSessionMock } }),
-    // Backoffice routes use a SEPARATE Better-Auth instance (platform/operator,
-    // not a lab member). Mock its getSession too; the real requireBackofficeAccess
-    // / requirePlatformAdmin run against the mocked session's user.role.
-    createBackofficeAuth: () => ({
-      api: { getSession: backofficeGetSessionMock },
-    }),
     // The client portal uses its OWN Better-Auth instance (portal_session cookie).
     // Mock ONLY getSession (the single thing `requirePortalAuth` reads); the real
     // requireOrganization -> requirePortalAccess and the resolvePortalCustomerScope
@@ -165,38 +157,11 @@ export function logout() {
 }
 
 /**
- * Build a backoffice (platform) SessionData. `role` is the raw platform-role
- * string parsed by parsePlatformRoles (e.g. "platform_admin", "platform_operator",
- * "user", or a comma-separated set). Backoffice auth does not require an org, but
- * we reuse the valid SessionData shape so requireSessionData passes.
- */
-export function sessionForBackoffice(params: {
-  userId: string;
-  role: string;
-}): TestSession {
-  const base = sessionFor({
-    userId: params.userId,
-    organizationId: "platform",
-  });
-  return { ...base, user: { ...base.user, role: params.role } };
-}
-
-/** Authenticate subsequent backoffice requests as the given platform user. */
-export function loginAsBackoffice(params: { userId: string; role: string }) {
-  backofficeGetSessionMock.mockResolvedValue(sessionForBackoffice(params));
-}
-
-/** Make the next backoffice request unauthenticated (401). */
-export function logoutBackoffice() {
-  backofficeGetSessionMock.mockResolvedValue(null);
-}
-
-/**
  * Authenticate subsequent PORTAL requests as the given portal user, with the
  * given CLIENT organization active. `organizationId` is the customer's (or a
  * customer group's) CLIENT auth-org — the same id `resolvePortalCustomerScope`
  * maps back to the in-scope customer set via `customer.authOrganizationId`.
- * Mirrors loginAs / loginAsBackoffice; only `portalGetSession` is mocked, so
+ * Mirrors loginAs; only `portalGetSession` is mocked, so
  * requireOrganization -> requirePortalAccess and the scope resolver run for real.
  */
 export function loginAsPortal(params: {
@@ -213,6 +178,5 @@ export function logoutPortal() {
 
 beforeEach(() => {
   getSessionMock.mockReset();
-  backofficeGetSessionMock.mockReset();
   portalGetSessionMock.mockReset();
 });

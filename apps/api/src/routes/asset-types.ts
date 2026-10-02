@@ -12,8 +12,8 @@ import { withPermission, type AuthVariables } from "../middleware/permission";
  * `asset_type` has no organization_id — it is a platform-wide shared catalog,
  * so tenant RBAC must never gate writes to it (any lab admin could corrupt or
  * delete types used by every other tenant). Per Pedro's decision (2026-07-05)
- * the catalog is curated centrally: all mutations live in the backoffice
- * router (backoffice-asset-types.ts) under `requirePlatformAdmin`.
+ * the catalog is curated centrally: it is seeded by
+ * `packages/db/src/seed-asset-types.ts` and is read-only through the API.
  */
 export const assetTypesRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================

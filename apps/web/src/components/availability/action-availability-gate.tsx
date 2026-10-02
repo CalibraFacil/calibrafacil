@@ -25,8 +25,8 @@ import {
  * how "approve" became a button that threw an error telling the user to go
  * open the web app.
  *
- * This is availability only. Permission and entitlement gating stays with the
- * server and with the existing plan/role hooks — never fold them in here.
+ * This is availability only. Permission gating stays with the server and with
+ * the existing role hooks — never fold it in here.
  */
 export function ActionAvailabilityGate({
   availability,

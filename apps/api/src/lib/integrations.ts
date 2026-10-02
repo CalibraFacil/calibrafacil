@@ -97,7 +97,6 @@ import {
 } from "./conta-azul-reconciliation";
 import { mapContaAzulInstallmentStatus } from "./conta-azul-mappers";
 import { loadBillingDocumentPayloadsForIntegration } from "./finance";
-import { organizationHasEntitlement } from "./organization-plan";
 
 export interface IntegrationsEnv {
   APP_URL?: string;
@@ -3384,49 +3383,6 @@ async function processScheduledContaAzulPollKind(params: {
   for (const row of rows) {
     const config = normalizeContaAzulConnectionConfig(row.config);
 
-    try {
-      const entitled = await organizationHasEntitlement(
-        row.organizationId,
-        "financial_integrations",
-      );
-
-      if (!entitled) {
-        await writeIntegrationEvent({
-          integrationId: row.integrationId,
-          organizationId: row.organizationId,
-          level: "info",
-          event: "sync.skipped.entitlement_revoked",
-          message:
-            "Polling Conta Azul ignorado porque o plano atual não inclui integrações financeiras",
-          details: {
-            provider: "conta_azul",
-            pollKind: params.definition.kind,
-            cursorType: params.definition.cursorType,
-            trigger: "scheduled",
-          },
-        });
-        continue;
-      }
-    } catch (error) {
-      await writeIntegrationEvent({
-        integrationId: row.integrationId,
-        organizationId: row.organizationId,
-        level: "error",
-        event: "sync.skipped.error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Falha ao validar entitlement para polling Conta Azul",
-        details: {
-          provider: "conta_azul",
-          pollKind: params.definition.kind,
-          cursorType: params.definition.cursorType,
-          trigger: "scheduled",
-        },
-      });
-      continue;
-    }
-
     if (!isContaAzulPollEnabled(config, params.definition.kind)) {
       await writeIntegrationEvent({
         integrationId: row.integrationId,
@@ -4328,14 +4284,6 @@ export async function adjustMaterialErpStock(params: {
     throw new Error("Quantidade de estoque inválida");
   }
 
-  const entitled = await organizationHasEntitlement(
-    params.organizationId,
-    "financial_integrations",
-  );
-  if (!entitled) {
-    throw new Error("O plano atual não inclui integrações financeiras");
-  }
-
   const [integrationRow] = await db
     .select({ integrationId: organizationIntegration.id })
     .from(organizationIntegration)
@@ -5074,45 +5022,6 @@ export async function processScheduledContaAzulIntegrationSyncs(params: {
 
   for (const row of rows) {
     let currentConfig = normalizeContaAzulConnectionConfig(row.config);
-
-    try {
-      const entitled = await organizationHasEntitlement(
-        row.organizationId,
-        "financial_integrations",
-      );
-
-      if (!entitled) {
-        await writeIntegrationEvent({
-          integrationId: row.integrationId,
-          organizationId: row.organizationId,
-          level: "info",
-          event: "sync.skipped.entitlement_revoked",
-          message:
-            "Sincronização Conta Azul ignorada porque o plano atual não inclui integrações financeiras",
-          details: {
-            provider: "conta_azul",
-            trigger: "scheduled",
-          },
-        });
-        continue;
-      }
-    } catch (error) {
-      await writeIntegrationEvent({
-        integrationId: row.integrationId,
-        organizationId: row.organizationId,
-        level: "error",
-        event: "sync.skipped.error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Falha ao validar entitlement para sincronização Conta Azul",
-        details: {
-          provider: "conta_azul",
-          trigger: "scheduled",
-        },
-      });
-      continue;
-    }
 
     for (const target of CONTA_AZUL_SCHEDULED_SYNC_TARGETS) {
       const schedule = currentConfig.schedules[target];

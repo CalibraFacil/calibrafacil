@@ -42,9 +42,6 @@ describe("client runtime data policy registry", () => {
       "local-only",
     );
     expect(getCalibraApiDataPolicy("sync", "getSession")).toBe("local-only");
-    expect(getCalibraApiDataPolicy("billing", "getSubscription")).toBe(
-      "cloud-only",
-    );
     expect(getCalibraApiDataPolicy("jobs", "saveExecution")).toBe(
       "local-command-sync",
     );
@@ -121,11 +118,6 @@ describe("client runtime data policy registry", () => {
         {
           "method": "updateMemberRole",
           "namespace": "units",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "getPlanAccess",
-          "namespace": "access",
           "policy": "cloud-only",
         },
         {
@@ -306,236 +298,6 @@ describe("client runtime data policy registry", () => {
         {
           "method": "getMarginDashboards",
           "namespace": "finance",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "getSubscription",
-          "namespace": "billing",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "listPayments",
-          "namespace": "billing",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "startSelfServeCheckout",
-          "namespace": "billing",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "cancelSubscription",
-          "namespace": "billing",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "getAccess",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "bootstrap",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "listOrganizations",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "getOrganization",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "getSupportQueue",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "listUsers",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "updateUserRole",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "banUser",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "unbanUser",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "impersonateUser",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "createUser",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "provisionLab",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "requestUserPasswordReset",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "getUser",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "listUserSessions",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "revokeUserSession",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "listUserActivity",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "getPresence",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "listAuditLog",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "getIntegrationHealth",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "getVitals",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "listOperatorAlerts",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "recomputeOperatorAlerts",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "acknowledgeOperatorAlert",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "listAccountTasks",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "createAccountTask",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "completeAccountTask",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "updateOrganizationLifecycle",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "listInteractions",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "createInteraction",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "manageSubscription",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "listEntitlementOverrides",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "grantEntitlementOverride",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "revokeEntitlementOverride",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "getOrganizationActivity",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "listImportRuns",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "parseImportFile",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "validateImportRun",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "listApprovals",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "createApprovalRequest",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "decideApproval",
-          "namespace": "backoffice",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "stopImpersonation",
-          "namespace": "backoffice",
           "policy": "cloud-only",
         },
         {
@@ -1394,28 +1156,8 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
-          "method": "getSnapshot",
-          "namespace": "publicCheckout",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "getStatus",
-          "namespace": "publicCheckout",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "start",
-          "namespace": "publicCheckout",
-          "policy": "cloud-only",
-        },
-        {
           "method": "start",
           "namespace": "publicSignup",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "create",
-          "namespace": "publicLeads",
           "policy": "cloud-only",
         },
         {
@@ -1731,21 +1473,6 @@ describe("client runtime data policy registry", () => {
         {
           "method": "create",
           "namespace": "trainingRecords",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "getProfile",
-          "namespace": "customerSuccess",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "listRequests",
-          "namespace": "customerSuccess",
-          "policy": "cloud-only",
-        },
-        {
-          "method": "createRequest",
-          "namespace": "customerSuccess",
           "policy": "cloud-only",
         },
         {
@@ -2200,39 +1927,11 @@ describe("unit governance runtime adapter", () => {
 });
 
 describe("access runtime adapter", () => {
-  it("loads plan and finance access through the cloud API", async () => {
+  it("routes finance access through the cloud API", async () => {
     const fetchCalls: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
     const fetchMock: typeof fetch = async (input, init) => {
       fetchCalls.push([input, init]);
-      const url = String(input);
-
-      if (url.endsWith("/api/billing/access")) {
-        return Response.json({
-          planId: "professional",
-          planName: "Professional",
-          status: "active",
-          limits: {
-            certificates: 1000,
-            users: 20,
-            storage: 100,
-          },
-          entitlements: ["multi_unit", "financial"],
-          hasFinancial: true,
-          hasFinancialModule: true,
-          canManageBilling: true,
-          hasApi: true,
-          hasCustomDomain: true,
-          hasSso: false,
-        });
-      }
-
       return Response.json({
-        planId: "professional",
-        planName: "Professional",
-        status: "active",
-        entitlements: ["financial"],
-        hasFinancialModule: true,
-        hasFinancialIntegrations: false,
         canReadFinancial: true,
         canManageFinancial: true,
         canExportFinancial: true,
@@ -2244,21 +1943,16 @@ describe("access runtime adapter", () => {
       fetch: fetchMock,
     });
 
-    await expect(client.access.getPlanAccess()).resolves.toMatchObject({
-      planId: "professional",
-      hasFinancialModule: true,
-    });
     await expect(client.access.getFinanceAccess()).resolves.toMatchObject({
       role: "owner",
       canReadFinancial: true,
     });
     expect(fetchCalls.map(([input]) => String(input))).toEqual([
-      "https://api.example.test/api/billing/access",
       "https://api.example.test/api/finance/access",
     ]);
   });
 
-  it("returns desktop-local access fallbacks without calling fetch", async () => {
+  it("returns a desktop-local finance access fallback without calling fetch", async () => {
     const fetchMock: typeof fetch = async () => {
       throw new Error("fetch should not be called");
     };
@@ -2267,13 +1961,8 @@ describe("access runtime adapter", () => {
       fetch: fetchMock,
     });
 
-    await expect(client.access.getPlanAccess()).resolves.toMatchObject({
-      planId: "desktop-local",
-      hasFinancialModule: false,
-    });
     await expect(client.access.getFinanceAccess()).resolves.toMatchObject({
-      planId: "desktop-local",
-      hasFinancialModule: false,
+      role: "desktop",
       canReadFinancial: false,
     });
   });
@@ -2313,153 +2002,6 @@ describe("sessions runtime adapter", () => {
 
     await expect(client.sessions.revoke("session-1")).rejects.toThrow(
       "Gerenciamento de sessoes requer a API web/nuvem",
-    );
-  });
-});
-
-describe("billing runtime adapter", () => {
-  it("loads subscription and payments through the cloud API", async () => {
-    const fetchCalls: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
-    const fetchMock: typeof fetch = async (input, init) => {
-      fetchCalls.push([input, init]);
-      const url = String(input);
-
-      if (url.endsWith("/api/billing/subscription")) {
-        return Response.json({
-          subscription: {
-            id: 1,
-            planId: "professional",
-            status: "ACTIVE",
-            billingCycle: "MONTHLY",
-            nextBillingDate: "2026-06-09T12:00:00.000Z",
-          },
-          plan: {
-            id: "professional",
-            name: "Professional",
-            description: "Plano Professional",
-          },
-          usage: { jobsCreated: 8, users: 3, storage: 1024 },
-          limits: { certificates: 1000, users: 20, storage: 100 },
-        });
-      }
-
-      return Response.json({
-        data: [
-          {
-            id: 10,
-            amount: 19990,
-            status: "CONFIRMED",
-            paymentMethod: "PIX",
-            createdAt: "2026-05-09T12:00:00.000Z",
-            invoiceUrl: "https://billing.example.test/invoice/10",
-          },
-        ],
-      });
-    };
-    const client = createCloudApiClient({
-      baseUrl: "https://api.example.test",
-      fetch: fetchMock,
-    });
-
-    await expect(client.billing.getSubscription()).resolves.toMatchObject({
-      subscription: { status: "ACTIVE" },
-      usage: { jobsCreated: 8 },
-    });
-    await expect(
-      client.billing.listPayments({ limit: 10, offset: 0 }),
-    ).resolves.toMatchObject({
-      data: [{ id: 10, paymentMethod: "PIX" }],
-    });
-    expect(fetchCalls.map(([input]) => String(input))).toEqual([
-      "https://api.example.test/api/billing/subscription",
-      "https://api.example.test/api/billing/payments?limit=10&offset=0",
-    ]);
-  });
-
-  it("returns desktop-local billing fallbacks without calling fetch", async () => {
-    const fetchMock: typeof fetch = async () => {
-      throw new Error("fetch should not be called");
-    };
-    const client = createDesktopApiClient({
-      baseUrl: "http://127.0.0.1:4317",
-      fetch: fetchMock,
-    });
-
-    await expect(client.billing.getSubscription()).resolves.toMatchObject({
-      subscription: null,
-      plan: { id: "desktop-local" },
-      usage: { jobsCreated: 0, users: 1 },
-    });
-    await expect(client.billing.listPayments()).resolves.toEqual({
-      data: [],
-    });
-  });
-});
-
-describe("backoffice runtime adapter", () => {
-  it("routes backoffice access and impersonation through the cloud API", async () => {
-    const fetchCalls: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
-    const fetchMock: typeof fetch = async (input, init) => {
-      fetchCalls.push([input, init]);
-      const url = String(input);
-
-      if (url.endsWith("/api/backoffice/access")) {
-        return Response.json({
-          allowed: true,
-          roles: ["platform_admin"],
-          bootstrapAvailable: false,
-          isImpersonating: false,
-          session: {
-            userId: "user-1",
-            email: "admin@example.test",
-          },
-        });
-      }
-
-      return Response.json({ ok: true });
-    };
-    const client = createCloudApiClient({
-      baseUrl: "https://api.example.test",
-      fetch: fetchMock,
-    });
-
-    await expect(client.backoffice.getAccess()).resolves.toMatchObject({
-      allowed: true,
-      roles: ["platform_admin"],
-    });
-    await expect(client.backoffice.stopImpersonation()).resolves.toEqual({
-      ok: true,
-    });
-    await expect(
-      client.backoffice.provisionLab({
-        lab: { name: "Lab A" },
-        owner: { name: "Owner A", email: "owner@example.test" },
-      }),
-    ).resolves.toEqual({ ok: true });
-    expect(fetchCalls.map(([input]) => String(input))).toEqual([
-      "https://api.example.test/api/backoffice/access",
-      "https://api.example.test/api/backoffice/impersonation/stop",
-      "https://api.example.test/api/backoffice/labs",
-    ]);
-    expect(fetchCalls[1]?.[1]?.method).toBe("POST");
-    expect(fetchCalls[2]?.[1]?.method).toBe("POST");
-  });
-
-  it("keeps backoffice impersonation cloud-only in the desktop adapter", async () => {
-    const fetchMock: typeof fetch = async () => {
-      throw new Error("fetch should not be called");
-    };
-    const client = createDesktopApiClient({
-      baseUrl: "http://127.0.0.1:4317",
-      fetch: fetchMock,
-    });
-
-    await expect(client.backoffice.getAccess()).resolves.toMatchObject({
-      allowed: false,
-      bootstrapAvailable: false,
-    });
-    await expect(client.backoffice.stopImpersonation()).rejects.toThrow(
-      "Impersonação backoffice requer a API web/nuvem",
     );
   });
 });
@@ -2696,7 +2238,6 @@ describe("sso runtime adapter", () => {
     ).rejects.toThrow("Login SSO requer a API web/nuvem");
     await expect(client.sso.getProviders()).resolves.toMatchObject({
       provider: null,
-      billing: { hasSso: false },
     });
     await expect(
       client.sso.createProvider({

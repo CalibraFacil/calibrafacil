@@ -43,9 +43,6 @@ export const SelfServeSignupSchema = z.object({
       message: "Informe um CNPJ válido.",
     }),
   phone: z.string().trim().max(40).optional().default(""),
-  /** Plan the visitor picked on the pricing page; confirmed again at checkout. */
-  planId: z.enum(["STANDARD", "PROFESSIONAL", "ADVANCED"]).default("STANDARD"),
-  billingCycle: z.enum(["MONTHLY", "YEARLY"]).default("YEARLY"),
   /** Honeypot — bots fill it, the API accepts and discards so they learn nothing. */
   website: z.string().trim().max(200).optional().default(""),
 });

@@ -6,7 +6,7 @@ export default defineConfig({
   // The email package's tsconfig sets jsx:"preserve", which Vite 8's transformer
   // honors per-package, leaving that JSX untransformed (Vite 7's esbuild used to
   // transform it regardless). The React plugin transforms all .tsx regardless of
-  // per-package tsconfig — same approach web/portal/backoffice already use. Test-only:
+  // per-package tsconfig — same approach web/portal already use. Test-only:
   // the deployed API runs on Bun/Vercel, not Vite.
   plugins: [react()],
   test: {

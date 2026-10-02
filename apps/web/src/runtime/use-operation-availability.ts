@@ -23,9 +23,9 @@ import {
  * why". Replaces `!runtime.isDesktop` checks: those denied cloud actions on a
  * perfectly connected desktop, and gave the user no reason and no next step.
  *
- * This answers *availability* only. Permissions and entitlements stay where
- * they are — the server decides those, and this hook must never be read as a
- * substitute for them.
+ * This answers *availability* only. Permissions stay where they are — the
+ * server decides those, and this hook must never be read as a substitute for
+ * them.
  */
 export function useRuntimeHealth(): RuntimeHealthSnapshot {
   const sync = useOptionalSyncStatus()

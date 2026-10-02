@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, isNull } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
 import {
   calibrationJob,
@@ -22,11 +22,6 @@ import {
  * A step un-checking itself is therefore correct behaviour. If the only
  * published method is archived, publishing a method genuinely is outstanding
  * again.
- *
- * Separately, and only for activation analytics, the first time each step is
- * observed complete its timestamp is written once to
- * `organization_success_profile`. Those columns are never read back to drive
- * this response — see the migration for why they exist at all.
  */
 
 export type ActivationStepId =
@@ -41,16 +36,6 @@ export type ActivationChecklist = {
   steps: Array<{ id: ActivationStepId; done: boolean }>;
   /** True once every step is done, including the first issued certificate. */
   complete: boolean;
-};
-
-/** Milestone column per step, for the write-once analytics backfill. */
-const MILESTONE_COLUMN: Record<ActivationStepId, string> = {
-  organizationProfile: "organization_profile_completed_at",
-  methodPublished: "first_method_published_at",
-  referenceStandard: "first_reference_standard_at",
-  signingCertificate: "first_signing_certificate_at",
-  customer: "first_customer_created_at",
-  firstCertificate: "first_certificate_issued_at",
 };
 
 async function exists(query: Promise<Array<{ id: unknown }>>) {
@@ -181,61 +166,5 @@ export async function getActivationChecklist(
     { id: "firstCertificate", done: certificateIssued },
   ];
 
-  void recordObservedMilestones(
-    organizationId,
-    steps.filter((step) => step.done).map((step) => step.id),
-  );
-
   return { steps, complete: steps.every((step) => step.done) };
-}
-
-/**
- * Backfill the write-once milestone columns for steps observed complete.
- *
- * `COALESCE` so a later observation never moves an earlier timestamp, and
- * best-effort so a failure here can never turn a working checklist into an
- * error. The domain paths that complete each step record the accurate moment;
- * this catches organizations that got there before any of that existed.
- */
-async function recordObservedMilestones(
-  organizationId: string,
-  completedSteps: ActivationStepId[],
-): Promise<void> {
-  if (completedSteps.length === 0) return;
-
-  try {
-    const assignments = completedSteps
-      .map((step) => {
-        const column = MILESTONE_COLUMN[step];
-        return `${column} = COALESCE(${column}, now())`;
-      })
-      .join(", ");
-
-    await db.execute(
-      sql`update organization_success_profile set ${sql.raw(assignments)} where organization_id = ${organizationId}`,
-    );
-  } catch (error) {
-    console.error("Failed to record activation milestones", error);
-  }
-}
-
-/**
- * Record one milestone at the moment the domain step actually completes.
- *
- * Best-effort by design: a missed write costs a customer-success metric, never
- * anything the laboratory sees, so it must not be able to fail the mutation it
- * is attached to.
- */
-export async function recordActivationMilestone(
-  organizationId: string,
-  step: ActivationStepId,
-): Promise<void> {
-  try {
-    const column = MILESTONE_COLUMN[step];
-    await db.execute(
-      sql`update organization_success_profile set ${sql.raw(`${column} = COALESCE(${column}, now())`)} where organization_id = ${organizationId}`,
-    );
-  } catch (error) {
-    console.error(`Failed to record activation milestone ${step}`, error);
-  }
 }

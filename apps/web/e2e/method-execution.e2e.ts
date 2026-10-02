@@ -6,7 +6,6 @@ import {
   mockDashboardOrganizations,
   mockLabSession,
   mockNotifications,
-  mockPlanAccess,
   routeJson,
 } from './helpers'
 
@@ -24,7 +23,6 @@ test.describe('method execution', () => {
       organizations: [lab],
       activeOrganization: lab,
     })
-    await mockPlanAccess(page)
     await mockNotifications(page)
     await routeJson(page, '**/api/jobs/CAL-0007', {
       body: executableJob(),

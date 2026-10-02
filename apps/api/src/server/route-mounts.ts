@@ -3,8 +3,6 @@ import { accreditedScopeRouter } from "../routes/accredited-scope";
 import { apiKeysRouter } from "../routes/api-keys";
 import { assetTypesRouter } from "../routes/asset-types";
 import { assetsRouter } from "../routes/assets";
-import { backofficeRouter } from "../routes/backoffice";
-import { billingRouter } from "../routes/billing";
 import { onboardingRouter } from "../routes/onboarding";
 import { calibrationRequestsRouter } from "../routes/calibration-requests";
 import {
@@ -19,13 +17,11 @@ import { spcRouter } from "../routes/spc";
 import { certificateNumberingRouter } from "../routes/certificate-numbering";
 import { competencesRouter } from "../routes/competences";
 import { customerGroupsRouter } from "../routes/customer-groups";
-import { customerSuccessRouter } from "../routes/customer-success";
 import { customersRouter } from "../routes/customers";
 import { dashboardRouter } from "../routes/dashboard";
 import { environmentalLimitsRouter } from "../routes/environmental-limits";
 import { financeRouter } from "../routes/finance";
 import { integrationsRouter } from "../routes/integrations";
-import { internalCustomerSuccessRouter } from "../routes/internal-customer-success";
 import { invitationsRouter } from "../routes/invitations";
 import { labSetupRouter } from "../routes/lab-setup";
 import { legalMetrologyRegulationsRouter } from "../routes/legal-metrology-regulations";
@@ -48,9 +44,7 @@ import {
   publicApiV2DocsRouter,
   publicApiV2Router,
 } from "../routes/public-api-v2";
-import { publicCommercialCheckoutRouter } from "../routes/public-commercial-checkout";
 import { publicSignupRouter } from "../routes/public-signup";
-import { publicLeadsRouter } from "../routes/public-leads";
 import { reportsRouter } from "../routes/reports";
 import {
   portalServiceOrdersRouter,
@@ -126,7 +120,6 @@ export function mountApiRoutes(
       .route("/api/magic-link", magicLinkRouter)
       .route("/api/dashboard", dashboardRouter)
       .route("/api/reports", reportsRouter)
-      .route("/api/billing", billingRouter)
       .route("/api/onboarding", onboardingRouter)
       .route("/api/finance", financeRouter)
       .route("/api/webhooks", webhooksRouter)
@@ -151,13 +144,8 @@ export function mountApiRoutes(
       .route("/api/units", unitsRouter)
       .route("/api/integrations", integrationsRouter)
       .route("/api/sync", syncRouter)
-      .route("/api/customer-success", customerSuccessRouter)
-      .route("/api/backoffice", backofficeRouter)
-      .route("/api/internal/customer-success", internalCustomerSuccessRouter)
       .route("/api/organization-media", organizationMediaRouter)
       .route("/api/profile-media", profileMediaRouter)
-      .route("/api/public/commercial-checkout", publicCommercialCheckoutRouter)
-      .route("/api/public/leads", publicLeadsRouter)
       .route("/api/public/signup", publicSignupRouter)
       .route("/api/public/oot-ack", ootAckRouter)
       .route("/api/public/service-order-access", publicServiceOrderAccessRouter)

@@ -3,8 +3,6 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { ArrowDown01Icon, ServerStack01Icon } from '@hugeicons/core-free-icons'
 
 import { useActiveOrganization, useSession } from '@calibra-facil/auth/client'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
 import {
   Card,
   CardDescription,
@@ -92,7 +90,6 @@ export function IntegrationsSettingsPage() {
   }
 
   const payload = integrationsQuery.data
-  const hasEntitlement = payload.billing.hasFinancialIntegrations
   const contaAzulIntegration =
     payload.data.find((item) => item.provider === 'conta_azul') ?? null
   const genericIntegrations = payload.data.filter(
@@ -111,31 +108,14 @@ export function IntegrationsSettingsPage() {
             pessoas, catálogo, faturamento e fiscal.
           </p>
         </div>
-        <Badge variant={hasEntitlement ? 'default' : 'secondary'}>
-          {hasEntitlement
-            ? `${payload.billing.planName} ativo`
-            : 'Disponível no Professional'}
-        </Badge>
       </header>
-
-      {!hasEntitlement ? (
-        <Alert>
-          <AlertDescription>
-            As integrações financeiras com ERP fazem parte do plano
-            Professional. Você pode inspecionar conectores existentes, mas
-            precisa fazer upgrade para criar ou sincronizar novos.
-          </AlertDescription>
-        </Alert>
-      ) : null}
 
       <ContaAzulCard
         integration={contaAzulIntegration}
-        hasEntitlement={hasEntitlement}
         onRefresh={refreshIntegrations}
       />
 
       <GenericConnectorsSection
-        hasEntitlement={hasEntitlement}
         integrations={genericIntegrations}
         defaultOpen={genericIntegrations.length > 0 || !contaAzulIntegration}
         onRefresh={refreshIntegrations}
@@ -146,12 +126,10 @@ export function IntegrationsSettingsPage() {
 
 function GenericConnectorsSection({
   defaultOpen,
-  hasEntitlement,
   integrations,
   onRefresh,
 }: {
   defaultOpen: boolean
-  hasEntitlement: boolean
   integrations: IntegrationSummary[]
   onRefresh: () => Promise<void>
 }) {
@@ -192,17 +170,13 @@ function GenericConnectorsSection({
                 title="Novo conector"
                 description="Configure o endpoint HTTP que receberá os payloads normalizados."
               />
-              <NewGenericConnectorForm
-                hasEntitlement={hasEntitlement}
-                onRefresh={onRefresh}
-              />
+              <NewGenericConnectorForm onRefresh={onRefresh} />
             </section>
 
             {integrations.map((integration) => (
               <GenericConnectorCard
                 key={integration.id}
                 integration={integration}
-                hasEntitlement={hasEntitlement}
                 onRefresh={onRefresh}
               />
             ))}

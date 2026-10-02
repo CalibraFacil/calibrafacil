@@ -29,7 +29,7 @@ import {
   sendOotCustomerEmail,
 } from "@calibra-facil/notifications";
 import { and, asc, eq, isNull, lt, sql } from "drizzle-orm";
-import { isReleaseExhausting } from "./observability-alerts";
+import { isReleaseExhausting } from "./outbox-release";
 import {
   createR2Client,
   downloadFromR2,

@@ -1,89 +1,36 @@
 # @calibra-facil/shared
 
-Shared configuration, plan definitions, and utility types.
+Domain vocabularies and helpers shared by the API, the worker and the frontends.
 
 ## Overview
 
-This package provides centralized configuration for subscription plans, feature flags, and shared utilities used across the platform.
+The package has no runtime dependencies, so every module can be imported from any runtime (Bun,
+Node, the browser, the Electron renderer).
 
-## Installation
+## Modules
 
-```bash
-pnpm add @calibra-facil/shared
-```
-
-## Usage
-
-```typescript
-import {
-  getPlan,
-  hasFeature,
-  hasEntitlement,
-  getLimit,
-  isSubscriptionActive,
-} from "@calibra-facil/shared";
-
-// Get plan details
-const plan = getPlan("PROFESSIONAL");
-
-// Check entitlement access
-if (hasEntitlement(plan.id, "approval_workflow")) {
-  // Enable review flow
-}
-
-// Legacy helper still works
-if (hasFeature(plan.id, "portal")) {
-  // Enable portal feature
-}
-
-// Get resource limits
-const maxCertificates = getLimit(plan.id, "certificates");
-
-// Check subscription status
-if (isSubscriptionActive(subscription.status)) {
-  // Allow access
-}
-```
-
-## Plans
-
-| Plan         | Certificates/mo | Users | Storage | Features                                                                                             |
-| ------------ | --------------- | ----- | ------- | ---------------------------------------------------------------------------------------------------- |
-| FREE         | 10              | 1     | 100MB   | -                                                                                                    |
-| STANDARD     | 100             | 5     | 5GB     | math_engine, portal                                                                                  |
-| PROFESSIONAL | 800             | 999   | 50GB    | +financial, +api, +custom_domain, +approval_workflow                                                 |
-| ENTERPRISE   | Unlimited       | 999   | 1TB     | +advanced_audit_trail, +custom_templates, +priority_support, +sso, +multi_unit, +custom_integrations |
-
-## Feature Flags
-
-| Feature                | Description                         | Available     |
-| ---------------------- | ----------------------------------- | ------------- |
-| `math_engine`          | GUM uncertainty calculations        | Standard+     |
-| `portal`               | Client portal access                | Standard+     |
-| `financial`            | Invoicing and payments              | Professional+ |
-| `api`                  | API access                          | Professional+ |
-| `custom_domain`        | Custom domain support               | Professional+ |
-| `sso`                  | Corporate SSO for the lab dashboard | Enterprise    |
-| `approval_workflow`    | Review and approval flows           | Professional+ |
-| `advanced_audit_trail` | Detailed compliance history         | Professional+ |
-| `custom_templates`     | Custom certificate templates        | Professional+ |
-| `priority_support`     | Priority operational support        | Professional+ |
-| `multi_unit`           | Multi-unit operations               | Enterprise    |
-| `custom_integrations`  | Tailored integrations               | Enterprise    |
-
-## Helper Functions
-
-- `getPlan(planId)` - Get full plan configuration
-- `hasEntitlement(planId, feature)` - Check if plan has entitlement
-- `hasFeature(planId, feature)` - Check if plan has feature
-- `getLimit(planId, resource)` - Get resource limit for plan
-- `getEnabledEntitlements(planId)` - List enabled plan entitlements
-- `isValidPlanId(id)` - Type guard for plan IDs
-- `isSubscriptionActive(status)` - Check if subscription is active/trial
-- `getPlanPrice(planId, cycle)` - Get pricing for plan
-- `formatPrice(cents)` - Format BRL price
+| Module                                            | What it holds                                                   |
+| ------------------------------------------------- | --------------------------------------------------------------- |
+| `cnpj`                                            | CNPJ validation, including the 2026 alphanumeric format         |
+| `units`, `mass-units`                             | Measurement-unit registry and value conversion                  |
+| `calibration-format`, `format`                    | Calibration numbers, dates, currency and plurals                |
+| `format-specifications`                           | Instrument specifications for display                           |
+| `accreditation`                                   | Accreditation number and seal formatting                        |
+| `scope-compliance`                                | Accredited-scope (CMC) compliance evaluation                    |
+| `legal-metrology`                                 | Inmetro legal-metrology regulation category per asset type      |
+| `service-orders`                                  | Service-order statuses, priorities, intake and delivery methods |
+| `finance`                                         | Agreement, billing-document, receivable and release statuses    |
+| `integrations`                                    | Financial ERP (Conta Azul) provider types and capabilities      |
+| `background-jobs`                                 | Background job messages shared by the API and the worker        |
+| `portal-digest`                                   | Client-portal digest frequencies                                |
+| `public-api`                                      | Public integrator API resource types and webhook events         |
+| `signup-email-policy`                             | Corporate-domain rule for the self-service sign-up              |
+| `domain-utils`                                    | Hostname and origin normalization                               |
+| `public-urls`, `storage-keys`, `storage-endpoint` | Public URL builders and the object-storage layout               |
+| `telemetry`                                       | Logger and a dependency-free Sentry error reporter              |
 
 ## Exports
 
-- `@calibra-facil/shared` - Re-exports from plans
-- `@calibra-facil/shared/plans` - Plan definitions
+- `@calibra-facil/shared`: the root re-exports most modules.
+- Subpaths (`@calibra-facil/shared/units`, `/cnpj`, `/public-urls`, …) are listed in
+  `package.json` `exports`.

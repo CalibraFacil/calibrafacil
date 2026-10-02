@@ -15,7 +15,6 @@ const mocks = vi.hoisted(() => ({
   processScheduledContaAzulIntegrationSyncs: vi.fn(),
   processScheduledContaAzulPolls: vi.fn(),
   processScheduledIntegrationSyncs: vi.fn(),
-  recomputeOperatorAlerts: vi.fn(),
   drainServiceOrderEmailOutbox: vi.fn(),
   runStaleJobBackstop: vi.fn(),
 }));
@@ -40,10 +39,6 @@ vi.mock("../../lib/integrations", () => ({
 
 vi.mock("@calibra-facil/worker/integrations", () => ({
   processScheduledIntegrationSyncs: mocks.processScheduledIntegrationSyncs,
-}));
-
-vi.mock("../../lib/operator-alerts", () => ({
-  recomputeOperatorAlerts: mocks.recomputeOperatorAlerts,
 }));
 
 vi.mock("../../lib/service-order-email-drain", () => ({

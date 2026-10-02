@@ -13,10 +13,10 @@ const entries = [
   // Vercel's per-function packaging step.
   ["vercel-src/index.ts", "vercel-functions/index.js"],
   ["vercel-src/queues/background.ts", "vercel-functions/queues/background.js"],
-  // One dispatcher bundle for all six cron jobs (integrations, notifications,
-  // portal-digest, operator-alerts, auth-maintenance, service-order-emails).
-  // The dynamic shim api/cron/[job].js routes every /api/cron/* path to it, so
-  // Vercel packages one cron function instead of six.
+  // One dispatcher bundle for every cron job (integrations, notifications,
+  // portal-digest, auth-maintenance, service-order-emails, …). The dynamic
+  // shim api/cron/[job].js routes every /api/cron/* path to it, so Vercel
+  // packages one cron function instead of one per job.
   ["vercel-src/cron/dispatch.ts", "vercel-functions/cron/dispatch.js"],
 ];
 

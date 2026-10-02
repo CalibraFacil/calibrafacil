@@ -16,7 +16,6 @@ const mocks = vi.hoisted(() => {
     value: Record<string, unknown>;
   }> = [];
   const adapterPollProtocols = vi.fn();
-  const subscriptionFindFirst = vi.fn();
   let updateCallCount = 0;
   let failFirstScheduleUpdate = true;
   let activePollRuns: unknown[] = [];
@@ -80,10 +79,6 @@ const mocks = vi.hoisted(() => {
       cursor = null;
       errorEvents = [];
       integrationRecord = null;
-      subscriptionFindFirst.mockResolvedValue({
-        planId: "PROFESSIONAL",
-        status: "ACTIVE",
-      });
       updateCallCount = 0;
       failFirstScheduleUpdate = true;
       rows = [
@@ -148,9 +143,6 @@ const mocks = vi.hoisted(() => {
         },
         organizationIntegration: {
           findFirst: vi.fn(() => Promise.resolve(integrationRecord)),
-        },
-        subscription: {
-          findFirst: subscriptionFindFirst,
         },
       },
       select: vi.fn(() => createSelectQuery(rows)),
@@ -321,42 +313,6 @@ describe("Conta Azul scheduler", () => {
         target: "customer",
         trigger: "scheduled",
       }),
-    );
-  });
-
-  it("skips scheduled Conta Azul syncs when the organization no longer has the entitlement", async () => {
-    mocks.allowScheduleUpdate();
-    mocks.db.query.subscription.findFirst.mockResolvedValue({
-      planId: "STANDARD",
-      status: "ACTIVE",
-    });
-    const dispatch = vi.fn(() => Promise.resolve());
-
-    await expect(
-      processScheduledContaAzulIntegrationSyncs({
-        env: {
-          INTEGRATIONS_MASTER_KEY: "test-master-key",
-        },
-        now: new Date("2026-05-24T12:00:00.000Z"),
-        dispatch,
-      }),
-    ).resolves.toEqual({
-      completedRuns: 0,
-      dueRuns: 0,
-      failedRuns: 0,
-      queuedRuns: 0,
-      scannedIntegrations: 1,
-    });
-
-    expect(dispatch).not.toHaveBeenCalled();
-    expect(mocks.operations).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          value: expect.objectContaining({
-            event: "sync.skipped.entitlement_revoked",
-          }),
-        }),
-      ]),
     );
   });
 
@@ -584,71 +540,6 @@ describe("Conta Azul scheduled polling", () => {
         }),
       ]),
     );
-  });
-
-  it("skips polling when the organization no longer has the entitlement", async () => {
-    mocks.db.query.subscription.findFirst.mockResolvedValue({
-      planId: "STANDARD",
-      status: "ACTIVE",
-    });
-
-    await expect(
-      processScheduledContaAzulPolls({
-        env: {
-          INTEGRATIONS_MASTER_KEY: "test-master-key",
-        },
-        now: new Date("2026-05-24T12:00:00.000Z"),
-      }),
-    ).resolves.toMatchObject({
-      dueIntegrations: 0,
-      successfulPolls: 0,
-    });
-
-    expect(mocks.adapterPollProtocols).not.toHaveBeenCalled();
-    expect(mocks.operations).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          value: expect.objectContaining({
-            event: "sync.skipped.entitlement_revoked",
-          }),
-        }),
-      ]),
-    );
-  });
-
-  it("logs entitlement lookup failures as skipped errors without a run failure", async () => {
-    mocks.db.query.subscription.findFirst.mockRejectedValue(
-      new Error("subscription unavailable"),
-    );
-
-    await expect(
-      processScheduledContaAzulPolls({
-        env: {
-          INTEGRATIONS_MASTER_KEY: "test-master-key",
-        },
-        now: new Date("2026-05-24T12:00:00.000Z"),
-      }),
-    ).resolves.toMatchObject({
-      failedPolls: 0,
-      successfulPolls: 0,
-    });
-
-    expect(mocks.adapterPollProtocols).not.toHaveBeenCalled();
-    expect(mocks.operations).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          value: expect.objectContaining({
-            event: "sync.skipped.error",
-            message: "subscription unavailable",
-          }),
-        }),
-      ]),
-    );
-    expect(
-      mocks.operations.filter(
-        (operation) => operation.value.event === "sync.failed",
-      ),
-    ).toHaveLength(0);
   });
 
   it("does not dispatch a poll when a same-kind run is already active", async () => {

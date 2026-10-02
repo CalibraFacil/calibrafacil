@@ -5,7 +5,6 @@ import { db } from "@calibra-facil/db";
 import {
   organizationIntegration,
   integrationConnection,
-  subscription,
 } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
@@ -16,15 +15,14 @@ import { normalizeGenericFinancialErpConfig } from "@calibra-facil/shared";
 // Real-DB + real-RBAC integration tests for integrationsRouter.
 // Only the better-auth session is mocked (test/integration/setup.ts).
 // requireLabProtected -> requireOrganization -> requireOrgType("LAB") +
-// requireRole(["admin","owner"]) + requireFeature("financial_integrations")
+// requireRole(["admin","owner"])
 // all run for real against the seeded Postgres.
 //
 // Covered:
 //   REQ-INTG-001  GET /  tenant isolation — only authed org's integrations returned (definite count)
 //   REQ-INTG-002  Cross-tenant GET /:id/events -> 404, no data leak (no creds/tokens)
 //   REQ-INTG-003  POST /  as role=member -> 403 (RBAC: admin/owner only)
-//   REQ-INTG-004  POST /  as admin without financial_integrations plan -> 403 (requireFeature gate)
-//   REQ-INTG-005  POST /  as admin with PROFESSIONAL plan -> 201, row persisted in org scope
+//   REQ-INTG-005  POST /  as admin -> 201, row persisted in org scope
 //   REQ-INTG-006  GET /  unauthenticated -> 401
 //
 // Deferred/avoided (noted):
@@ -99,25 +97,6 @@ async function seedIntegration(params: {
   });
 
   return integrationId;
-}
-
-/**
- * Seed an ACTIVE PROFESSIONAL subscription so requireFeature("financial_integrations")
- * passes. PROFESSIONAL includes financial_integrations; FREE does not.
- */
-async function seedProfessionalSubscription(
-  organizationId: string,
-): Promise<void> {
-  const now = new Date("2026-01-01T00:00:00.000Z");
-  const nextYear = new Date("2027-01-01T00:00:00.000Z");
-  await db.insert(subscription).values({
-    organizationId,
-    planId: "PROFESSIONAL",
-    status: "ACTIVE",
-    renewalMode: "NONE",
-    currentPeriodStart: now,
-    currentPeriodEnd: nextYear,
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -209,36 +188,10 @@ describe("integrationsRouter — real DB + real middleware", () => {
     expect(res.status).toBe(403);
   });
 
-  // REQ-INTG-004: POST / as admin but FREE plan (no subscription) -> 403 because
-  // requireFeature("financial_integrations") fires before the handler.
-  it("REQ-INTG-004: POST / as admin without financial_integrations plan -> 403 (requireFeature gate)", async () => {
-    // No subscription seeded -> FREE plan -> no financial_integrations entitlement
+  // REQ-INTG-005: POST / as admin -> 201, row persisted.
+  // Confirms the RBAC + DB write chain works end-to-end.
+  it("REQ-INTG-005: POST / as admin -> 201, integration persisted in org scope", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "admin" });
-    loginAs({ userId: org.userId, organizationId: org.orgId });
-
-    const res = await integrationsRouter.request(
-      "/",
-      {
-        method: "POST",
-        headers: { ...JSON_HEADERS },
-        body: JSON.stringify({
-          name: "Blocked Integration",
-          baseUrl: "https://erp.example.com",
-          authToken: "my-secret-token-here",
-        }),
-      },
-      TEST_ENV,
-    );
-
-    // requireFeature("financial_integrations") rejects FREE plan with 403
-    expect(res.status).toBe(403);
-  });
-
-  // REQ-INTG-005: POST / as admin with PROFESSIONAL plan -> 201, row persisted.
-  // Confirms the RBAC + feature gate + DB write chain works end-to-end.
-  it("REQ-INTG-005: POST / as admin with PROFESSIONAL plan -> 201, integration persisted in org scope", async () => {
-    const org = await seedOrg({ orgId: "org-a", role: "admin" });
-    await seedProfessionalSubscription(org.orgId);
     loginAs({ userId: org.userId, organizationId: org.orgId });
 
     const res = await integrationsRouter.request(

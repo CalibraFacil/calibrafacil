@@ -70,16 +70,14 @@ function getContaAzulConfig(
 }
 
 export function ContaAzulCard({
-  hasEntitlement,
   integration,
   onRefresh,
 }: {
-  hasEntitlement: boolean
   integration: IntegrationSummary | null
   onRefresh: () => Promise<void>
 }) {
   if (!integration) {
-    return <ContaAzulConnect hasEntitlement={hasEntitlement} />
+    return <ContaAzulConnect />
   }
 
   const config = getContaAzulConfig(integration)
@@ -97,7 +95,7 @@ export function ContaAzulCard({
               </p>
             </div>
           </div>
-          <ContaAzulConnect hasEntitlement={hasEntitlement} compact />
+          <ContaAzulConnect compact />
         </CardContent>
       </Card>
     )
@@ -106,7 +104,6 @@ export function ContaAzulCard({
   return (
     <ContaAzulPanel
       config={config}
-      hasEntitlement={hasEntitlement}
       integration={integration}
       onRefresh={onRefresh}
     />
@@ -115,13 +112,7 @@ export function ContaAzulCard({
 
 // ── Disconnected hero ─────────────────────────────────────────────────────────
 
-function ContaAzulConnect({
-  compact,
-  hasEntitlement,
-}: {
-  compact?: boolean
-  hasEntitlement?: boolean
-}) {
+function ContaAzulConnect({ compact }: { compact?: boolean }) {
   const oauthMutation = useMutation({
     mutationFn: async () =>
       calibraApi.integrations.startContaAzulOAuth<ContaAzulOAuthStartResponse>({
@@ -142,7 +133,7 @@ function ContaAzulConnect({
   const connectButton = (
     <Button
       onClick={() => oauthMutation.mutate()}
-      disabled={!hasEntitlement || oauthMutation.isPending}
+      disabled={oauthMutation.isPending}
       className="bg-[#2687e9] text-white shadow-xs transition-[background-color,transform] hover:bg-[#1f6fc4] active:scale-[0.96] disabled:opacity-60"
     >
       <HugeiconsIcon icon={LinkForwardIcon} className="mr-2 size-4" />
@@ -232,15 +223,6 @@ function ContaAzulConnect({
             OAuth 2.0 oficial
           </span>
         </div>
-
-        {!hasEntitlement ? (
-          <Alert>
-            <AlertDescription>
-              A conexão Conta Azul faz parte das integrações financeiras do
-              plano Professional. Faça upgrade para conectar e sincronizar.
-            </AlertDescription>
-          </Alert>
-        ) : null}
       </CardContent>
     </Card>
   )
@@ -250,19 +232,17 @@ function ContaAzulConnect({
 
 function ContaAzulPanel({
   config,
-  hasEntitlement,
   integration,
   onRefresh,
 }: {
   config: ContaAzulConnectionConfig
-  hasEntitlement: boolean
   integration: IntegrationSummary
   onRefresh: () => Promise<void>
 }) {
   const queryClient = useQueryClient()
   const catalogs = useContaAzulCatalogs({
     integrationId: integration.id,
-    enabled: hasEntitlement,
+    enabled: true,
   })
 
   const refreshCatalogs = async () => {
@@ -286,7 +266,7 @@ function ContaAzulPanel({
       calibraApi.integrations.getContaAzulSchedule<ContaAzulScheduleResponse>(
         integration.id,
       ),
-    enabled: hasEntitlement && integration.status === 'ACTIVE',
+    enabled: integration.status === 'ACTIVE',
   })
 
   const isBusy =
@@ -300,7 +280,7 @@ function ContaAzulPanel({
     native.pollDrift.isPending ||
     native.refreshToken.isPending ||
     native.disconnect.isPending
-  const disabled = !hasEntitlement || isBusy
+  const disabled = isBusy
 
   const statusBadge = integrationStatusBadgeMeta(integration)
   const readiness = integration.overview.readiness.readinessStatus
@@ -377,7 +357,6 @@ function ContaAzulPanel({
                       variant="outline"
                       size="icon"
                       className="size-8 active:scale-[0.96]"
-                      disabled={!hasEntitlement}
                       aria-label="Ações da Conta Azul"
                     />
                   }
@@ -507,7 +486,6 @@ function ContaAzulPanel({
                 <ContaAzulOverviewTab
                   config={config}
                   disabled={disabled}
-                  hasEntitlement={hasEntitlement}
                   integration={integration}
                   mutations={native}
                   scheduleState={scheduleQuery}
@@ -516,7 +494,6 @@ function ContaAzulPanel({
               <TabsContent value="sync">
                 <ContaAzulSyncTab
                   config={config}
-                  hasEntitlement={hasEntitlement}
                   integration={integration}
                   onConfigChange={(input) => native.config.mutate(input)}
                   schedule={connector.schedule}
@@ -534,7 +511,6 @@ function ContaAzulPanel({
               <TabsContent value="activity">
                 <IntegrationActivity
                   integration={integration}
-                  hasEntitlement={hasEntitlement}
                   retry={connector.retry}
                 />
               </TabsContent>

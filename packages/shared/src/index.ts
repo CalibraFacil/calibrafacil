@@ -1,14 +1,8 @@
-// Re-export everything from plans
-export * from "./plans";
-export * from "./customer-success";
-export * from "./commercial";
 export * from "./domain-utils";
 export * from "./finance";
 export * from "./integrations";
 export * from "./cnpj";
-export * from "./leads";
 export * from "./signup-email-policy";
-export * from "./self-serve";
 export * from "./public-api";
 export * from "./calibration-format";
 // The kind-aware registry + value-conversion helpers are re-exported at the

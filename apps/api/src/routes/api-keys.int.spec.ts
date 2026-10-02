@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { apiKeysRouter } from "./api-keys";
 import { db } from "@calibra-facil/db";
-import { organizationApiKey, subscription } from "@calibra-facil/db/schema";
+import { organizationApiKey } from "@calibra-facil/db/schema";
 import { createApiKeySecret } from "../lib/api-keys";
 import { eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
@@ -11,7 +11,7 @@ import { seedOrg } from "../../test/integration/seed";
 // Real-DB + real-RBAC integration test for the API-key custody router.
 // Only the better-auth lab session is mocked (test/integration/setup.ts); the
 // full guard chain — requireLabAuth -> requireOrganization -> requireOrgType ->
-// requirePermission/requireRole (and requireFeature on mint) — runs for real
+// requirePermission/requireRole — runs for real
 // against a seeded Postgres. This proves what a vi.mock(db) tier cannot: the
 // SECURITY property that org A can never see/use/revoke org B's API keys.
 //
@@ -26,7 +26,7 @@ import { seedOrg } from "../../test/integration/seed";
 //                     requireRole(["admin","owner"])          [lines 76-78]
 //                     scope: eq(organizationApiKey.organizationId, member.org)  [line 93]
 //   POST /            withLabPermission({ organization:["update"] }),
-//                     requireRole(["admin","owner"]), requireFeature("api")  [lines 101-103]
+//                     requireRole(["admin","owner"])  [lines 101-103]
 //   POST /:id/revoke  withLabPermission({ organization:["update"] }),
 //                     requireRole(["admin","owner"])          [lines 233-234]
 //                     scope: and(eq(id), eq(organizationId))  [lines 241-244]
@@ -60,16 +60,6 @@ async function seedApiKey(params: {
     revokedAt: params.revokedAt ?? null,
   });
   return { id: params.id };
-}
-
-/** Grant the "api" feature by seeding an active PROFESSIONAL subscription
- * (requireFeature("api") reads the plan via the subscription row, not overrides). */
-async function seedApiPlan(orgId: string): Promise<void> {
-  await db.insert(subscription).values({
-    organizationId: orgId,
-    planId: "PROFESSIONAL",
-    status: "ACTIVE",
-  });
 }
 
 describe("apiKeysRouter — real DB + real middleware", () => {
@@ -110,9 +100,8 @@ describe("apiKeysRouter — real DB + real middleware", () => {
   // REQ-AK-002 [HIGH RISK] — the manage-permission/role gate.
   // A role lacking the manage permission (member) must be rejected by the real
   // guard chain; an authorized role (admin) succeeds and persists.
-  // Bound to POST /:id/revoke, which has the SAME role/permission gate but no
-  // requireFeature("api") — so the role result is not entangled with the tier
-  // guard. The mint route shares this exact gate (proven indirectly).
+  // Bound to POST /:id/revoke, which has the SAME role/permission gate.
+  // The mint route shares this exact gate (proven indirectly).
   it("REQ-AK-002: revoke as role=member -> 403; as admin -> success + DB-persisted", async () => {
     // --- member is denied by the real guard ---
     const memberOrg = await seedOrg({ orgId: "org-m", role: "member" });
@@ -196,10 +185,8 @@ describe("apiKeysRouter — real DB + real middleware", () => {
   });
 
   // Happy-path — mint -> list round-trip persists.
-  // requireFeature("api") on POST / is satisfied by an active PROFESSIONAL plan.
   it("happy-path: admin mints a key (201) then GET / lists it (round-trip persists)", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "admin" });
-    await seedApiPlan(org.orgId);
     loginAs({ userId: org.userId, organizationId: org.orgId });
 
     const mintRes = await apiKeysRouter.request("/", {

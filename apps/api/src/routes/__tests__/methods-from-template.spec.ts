@@ -87,10 +87,6 @@ vi.mock("../../middleware/permission", () => {
   };
 });
 
-vi.mock("../../middleware/tier-guard", () => ({
-  requireFeature: () => async (_c: Context, next: Next) => next(),
-}));
-
 const { methodsRouter } = await import("../methods");
 const { listTemplates } = await import("@calibra-facil/method-templates");
 

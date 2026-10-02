@@ -49,11 +49,3 @@ export function sanitizeLabRedirect(value: string | undefined): string {
     allowedPrefixes: ['/dashboard'],
   })
 }
-
-export function sanitizeBackofficeRedirect(value: string | undefined): string {
-  return sanitizeInternalRedirect(value, {
-    fallback: '/backoffice',
-    allowedPrefixes: ['/backoffice'],
-    blockedPrefixes: ['/backoffice/sign-in'],
-  })
-}

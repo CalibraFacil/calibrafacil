@@ -11,7 +11,6 @@ import {
   RepairIcon,
   Files01Icon,
   Wallet03Icon,
-  CustomerSupportIcon,
   Home01Icon,
   Notebook01Icon,
   RulerIcon,
@@ -35,10 +34,10 @@ import {
   type DashboardNavItem,
 } from '@/app/router/route-meta'
 import { OrganizationSwitcher } from './organization-switcher'
+import { isDesktopRuntime } from '@/runtime/desktop'
 import { NavMain } from './nav-main'
 import { NavUser } from './nav-user'
 import { SidebarSearch } from './sidebar-search'
-import { usePlanAccess } from '@/hooks/use-plan-access'
 
 import {
   Sidebar,
@@ -56,12 +55,10 @@ import {
 const dashboardIconMap = {
   analytics: Analytics01Icon,
   assets: Wrench01Icon,
-  billing: Wallet03Icon,
   building: Building02Icon,
   clipboard: ClipboardIcon,
   creditCard: CreditCardIcon,
   customers: UserIcon,
-  customerSuccess: CustomerSupportIcon,
   documentation: Book02Icon,
   file: File02Icon,
   home: Home01Icon,
@@ -94,15 +91,14 @@ function toNavMainItems(items: DashboardNavItem[]) {
 
 export function AppSidebar() {
   const { data: activeOrg } = useActiveOrganization()
-  const accessQuery = usePlanAccess()
   const currentRole =
     typeof activeOrg?.members?.[0]?.role === 'string'
       ? activeOrg.members[0].role
       : 'member'
   const canAccessAdminOrOwner =
     currentRole === 'owner' || currentRole === 'admin'
-  const canAccessFinance =
-    canAccessAdminOrOwner && Boolean(accessQuery.data?.hasFinancialModule)
+  // Finance is a cloud-only module; the desktop shell never lists it.
+  const canAccessFinance = canAccessAdminOrOwner && !isDesktopRuntime()
 
   const navAccess = { canAccessFinance, canAccessAdminOrOwner }
   const navMain = toNavMainItems(

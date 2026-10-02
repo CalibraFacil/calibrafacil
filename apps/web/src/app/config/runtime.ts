@@ -25,22 +25,6 @@ export function getDefaultCloudApiUrl() {
   return import.meta.env.VITE_API_URL?.trim() || DEFAULT_LOCAL_API_URL
 }
 
-// Platform operators used to be sent to a separate operations console. That
-// console is not part of the open-source distribution, so unless
-// VITE_BACKOFFICE_APP_URL points at one, operators land back on this app.
-export function getBackofficeAppUrl() {
-  const configured = import.meta.env.VITE_BACKOFFICE_APP_URL?.trim()
-  if (configured) {
-    return configured.replace(/\/+$/, '')
-  }
-
-  if (typeof window === 'undefined') {
-    return ''
-  }
-
-  return window.location.origin
-}
-
 export function getDefaultDesktopLocalApiUrl() {
   return DEFAULT_DESKTOP_LOCAL_API_URL
 }

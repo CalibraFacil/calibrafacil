@@ -23,7 +23,6 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../../middleware/permission";
-import { requireFeature } from "../../middleware/tier-guard";
 import {
   buildDefaultDueDate,
   ensureJobCommercialSnapshotFromJob,
@@ -219,7 +218,6 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
   .get(
     "/",
     ...withLabPermission({ financial: ["read"] }),
-    requireFeature("financial"),
     zValidator("query", ListDocumentsQuerySchema),
     async (c) => {
       const member = c.get("member");
@@ -282,7 +280,6 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
   .get(
     "/eligible-jobs",
     ...withLabPermission({ financial: ["document_create"] }),
-    requireFeature("financial"),
     zValidator("query", EligibleJobsQuerySchema),
     async (c) => {
       const member = c.get("member");
@@ -383,7 +380,6 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/",
     ...withLabPermission({ financial: ["document_create"] }),
-    requireFeature("financial"),
     zValidator("json", CreateDocumentSchema),
     async (c) => {
       const member = c.get("member");
@@ -578,36 +574,30 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
       return c.json({ data: created }, 201);
     },
   )
-  .get(
-    "/:id",
-    ...withLabPermission({ financial: ["read"] }),
-    requireFeature("financial"),
-    async (c) => {
-      const member = c.get("member");
-      const publicId = c.req.param("id");
+  .get("/:id", ...withLabPermission({ financial: ["read"] }), async (c) => {
+    const member = c.get("member");
+    const publicId = c.req.param("id");
 
-      const document = await getDocumentByPublicId(
-        member.organizationId,
-        publicId,
+    const document = await getDocumentByPublicId(
+      member.organizationId,
+      publicId,
+    );
+    if (!document) {
+      return c.json({ error: "Documento nao encontrado" }, 404);
+    }
+
+    if (isDocumentOutsideActiveUnitScope(member, document.unitId)) {
+      return c.json(
+        { error: "Documento fora do escopo da unidade ativa" },
+        403,
       );
-      if (!document) {
-        return c.json({ error: "Documento nao encontrado" }, 404);
-      }
+    }
 
-      if (isDocumentOutsideActiveUnitScope(member, document.unitId)) {
-        return c.json(
-          { error: "Documento fora do escopo da unidade ativa" },
-          403,
-        );
-      }
-
-      return c.json({ data: document });
-    },
-  )
+    return c.json({ data: document });
+  })
   .put(
     "/:id",
     ...withLabPermission({ financial: ["document_create"] }),
-    requireFeature("financial"),
     zValidator("json", UpdateDocumentSchema),
     async (c) => {
       const member = c.get("member");
@@ -734,7 +724,6 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/issue",
     ...withLabPermission({ financial: ["document_issue"] }),
-    requireFeature("financial"),
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
@@ -825,7 +814,6 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/void",
     ...withLabPermission({ financial: ["document_void"] }),
-    requireFeature("financial"),
     zValidator("json", VoidDocumentSchema),
     async (c) => {
       const member = c.get("member");

@@ -157,7 +157,7 @@ describe("portalRouter certificate routes — SUSPENDED org gate (SEC-05)", () =
       jobId: "CAL-SUSP-1",
     });
 
-    // Backoffice-suspend the portal session's active (CLIENT) organization.
+    // Suspend the portal session's active (CLIENT) organization.
     await db
       .update(organization)
       .set({ status: "SUSPENDED" })

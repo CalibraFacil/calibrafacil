@@ -5,7 +5,6 @@ import {
   member,
   organizationUnit,
   memberUnitAssignment,
-  subscription,
   user,
 } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
@@ -16,8 +15,7 @@ import { seedOrg } from "../../test/integration/seed";
 // Real-DB + real-RBAC integration tests for the unitsRouter.
 // Only the better-auth session is mocked (see test/integration/setup.ts);
 // requireLabAuth -> requireOrganization -> withLabPermission / requireLabProtected
-// + requireFeature("multi_unit") + the governance-access handler-level checks all
-// run for real against the seeded Postgres.
+// + the governance-access handler-level checks all run for real against the seeded Postgres.
 //
 // Proven properties:
 //  REQ-UNIT-001  GET /admin/units returns ONLY the authed org's units (tenant isolation)
@@ -39,16 +37,6 @@ const JSON_HEADERS = { "content-type": "application/json" };
 // ---------------------------------------------------------------------------
 // Inline seed helpers (NOT modifying shared seed.ts per the task instructions)
 // ---------------------------------------------------------------------------
-
-/** Seed an ENTERPRISE subscription so requireFeature("multi_unit") passes. */
-async function seedEnterpriseSubscription(organizationId: string) {
-  await db.insert(subscription).values({
-    organizationId,
-    planId: "ENTERPRISE",
-    status: "ACTIVE",
-    renewalMode: "NONE",
-  });
-}
 
 /** Seed a second unit in an existing org, returns its id. */
 async function seedUnit(params: {
@@ -118,9 +106,6 @@ describe("unitsRouter — real DB + real middleware", () => {
     const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
     const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
 
-    await seedEnterpriseSubscription(orgA.orgId);
-    await seedEnterpriseSubscription(orgB.orgId);
-
     // Seed an extra unit for org B (to ensure its presence is not leaked)
     await seedUnit({
       organizationId: orgB.orgId,
@@ -152,9 +137,6 @@ describe("unitsRouter — real DB + real middleware", () => {
     const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
     const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
 
-    await seedEnterpriseSubscription(orgA.orgId);
-    await seedEnterpriseSubscription(orgB.orgId);
-
     // PATCH org B's default unit (Matriz) from org A's session
     const bUnitId = orgB.unitId;
 
@@ -179,7 +161,6 @@ describe("unitsRouter — real DB + real middleware", () => {
   // REQ-UNIT-003: RBAC gate — POST /admin/units as role=member -> 403
   it("REQ-UNIT-003: POST /admin/units as role=member -> 403 (canManageOrganizationUnits denied)", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "member" });
-    await seedEnterpriseSubscription(org.orgId);
 
     loginAs({ userId: org.userId, organizationId: org.orgId });
     const res = await unitsRouter.request("/admin/units", {
@@ -196,7 +177,6 @@ describe("unitsRouter — real DB + real middleware", () => {
   // REQ-UNIT-004: Authorized create — POST /admin/units as admin -> 201, org-scoped
   it("REQ-UNIT-004: POST /admin/units as admin -> 201, persists unit scoped to org", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "admin" });
-    await seedEnterpriseSubscription(org.orgId);
 
     loginAs({ userId: org.userId, organizationId: org.orgId });
     const res = await unitsRouter.request("/admin/units", {
@@ -231,7 +211,6 @@ describe("unitsRouter — real DB + real middleware", () => {
   // REQ-UNIT-005: PATCH /admin/units/:id as admin -> 200, rename persists
   it("REQ-UNIT-005: PATCH /admin/units/:id as admin -> 200, renames unit and persists", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "admin" });
-    await seedEnterpriseSubscription(org.orgId);
 
     // Use the default "Matriz" unit (seeded by seedOrg) as the target
     const targetUnitId = org.unitId;
@@ -259,9 +238,6 @@ describe("unitsRouter — real DB + real middleware", () => {
   it("REQ-UNIT-006: GET /admin/units excludes other org units — definite count", async () => {
     const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
     const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
-
-    await seedEnterpriseSubscription(orgA.orgId);
-    await seedEnterpriseSubscription(orgB.orgId);
 
     // Seed 2 extra units for org B
     await seedUnit({
@@ -312,7 +288,6 @@ describe("unitsRouter — real DB + real middleware", () => {
   // REQ-UNIT-008: PUT /admin/members/:memberId/assignments as role=member -> 403
   it("REQ-UNIT-008: PUT /admin/members/:memberId/assignments as role=member -> 403 (canManageAssignments denied)", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "member" });
-    await seedEnterpriseSubscription(org.orgId);
 
     loginAs({ userId: org.userId, organizationId: org.orgId });
     const res = await unitsRouter.request(
@@ -332,7 +307,6 @@ describe("unitsRouter — real DB + real middleware", () => {
   // REQ-UNIT-009: PUT /admin/members/:memberId/assignments as admin -> 200, persists assignment
   it("REQ-UNIT-009: PUT /admin/members/:memberId/assignments as admin -> 200, persists unit assignment", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "admin" });
-    await seedEnterpriseSubscription(org.orgId);
 
     // Seed a second unit and a second member (technician) to assign
     const extraUnitId = await seedUnit({

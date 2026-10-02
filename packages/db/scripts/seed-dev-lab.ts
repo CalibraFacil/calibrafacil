@@ -5,7 +5,7 @@
  *
  * Creates (idempotently — safe to run again):
  *   - the portal service account (PORTAL_SERVICE_USER_ID=portal-service),
- *   - "Laboratório Demonstração" with its default unit and an unrestricted plan,
+ *   - "Laboratório Demonstração" with its default unit,
  *   - three members, so flows that need two people (e.g. method review and
  *     approval) can be exercised:
  *       admin@laboratorio.test    owner
@@ -20,13 +20,7 @@
 import { and, eq } from "drizzle-orm";
 
 import { db } from "../src/db";
-import {
-  member,
-  organization,
-  organizationUnit,
-  subscription,
-  user,
-} from "../src/schema";
+import { member, organization, organizationUnit, user } from "../src/schema";
 
 const LAB_ID = "demo-lab";
 const PORTAL_SERVICE_USER_ID = "portal-service";
@@ -136,19 +130,6 @@ async function seed() {
       })
       .onConflictDoNothing();
   }
-
-  // Unrestricted plan so every feature can be developed against; billing is a
-  // separate, optional integration.
-  await db
-    .insert(subscription)
-    .values({
-      organizationId: LAB_ID,
-      planId: "ENTERPRISE",
-      status: "ACTIVE",
-      currentPeriodStart: now,
-      currentPeriodEnd: new Date("2099-12-31T00:00:00.000Z"),
-    })
-    .onConflictDoNothing();
 
   console.log("Demo laboratory ready:");
   for (const demoUser of DEMO_USERS) {

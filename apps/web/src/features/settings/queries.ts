@@ -11,8 +11,6 @@ import type {
   OrganizationInvitation,
   OrganizationMember,
   OrganizationUnitsData,
-  SettingsBillingPaymentsData,
-  SettingsBillingSubscriptionData,
   SettingsCertificateNumberingData,
   SettingsEnvironmentalLimitsData,
   SettingsIntegrationsData,
@@ -143,29 +141,6 @@ export function settingsAssetTypesQueryOptions() {
     queryKey: ['asset-types'],
     queryFn: () => calibraApi.assetTypes.list(),
     staleTime: 60_000,
-  })
-}
-
-export function billingSubscriptionQueryOptions() {
-  return queryOptions({
-    queryKey: ['billing', 'subscription'],
-    queryFn: () =>
-      trustedApiResult<SettingsBillingSubscriptionData>(
-        calibraApi.billing.getSubscription(),
-      ),
-  })
-}
-
-export function billingPaymentsQueryOptions() {
-  return queryOptions({
-    queryKey: ['billing', 'payments'],
-    queryFn: () =>
-      trustedApiResult<SettingsBillingPaymentsData>(
-        calibraApi.billing.listPayments({
-          limit: 10,
-          offset: 0,
-        }),
-      ),
   })
 }
 
@@ -458,20 +433,6 @@ export function useAccreditedScopeData({
 
 export function useSettingsAssetTypesData() {
   return useQuery(settingsAssetTypesQueryOptions())
-}
-
-export function useBillingSubscriptionData({ enabled }: { enabled: boolean }) {
-  return useQuery({
-    ...billingSubscriptionQueryOptions(),
-    enabled,
-  })
-}
-
-export function useBillingPaymentsData({ enabled }: { enabled: boolean }) {
-  return useQuery({
-    ...billingPaymentsQueryOptions(),
-    enabled,
-  })
 }
 
 export function useNotificationPreferencesData() {

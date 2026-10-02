@@ -13,7 +13,6 @@ import {
   prewarmCustomersIndex,
   prewarmCustomerUsers,
 } from '@/features/customers/queries'
-import { prewarmCustomerSuccess } from '@/features/customer-success/queries'
 import {
   prewarmFinanceContracts,
   prewarmFinanceContractDetail,
@@ -54,10 +53,7 @@ import {
   prewarmRequestDetail,
   prewarmRequestsIndex,
 } from '@/features/requests/queries'
-import {
-  prewarmInvitation,
-  prewarmPublicCheckout,
-} from '@/features/public/queries'
+import { prewarmInvitation } from '@/features/public/queries'
 import { prewarmReportsIndex } from '@/features/reports/queries'
 import {
   prewarmNewServiceOrder,
@@ -233,11 +229,6 @@ const routePrewarmSpecs: RoutePrewarmSpec[] = [
     id: 'dashboard:capa:index',
     match: /^\/dashboard\/capa\/?$/,
     prewarm: ({ queryClient, url }) => prewarmCapasIndex(queryClient, url),
-  },
-  {
-    id: 'dashboard:customer-success',
-    match: /^\/dashboard\/customer-success\/?$/,
-    prewarm: ({ queryClient }) => prewarmCustomerSuccess(queryClient),
   },
   {
     id: 'dashboard:finance:index',
@@ -504,12 +495,6 @@ const routePrewarmSpecs: RoutePrewarmSpec[] = [
     match: /^\/accept-invitation\/([^/]+)\/?$/,
     prewarm: ({ queryClient, match }) =>
       prewarmInvitation(queryClient, segment(match)),
-  },
-  {
-    id: 'checkout',
-    match: /^\/checkout\/([^/]+)\/?$/,
-    prewarm: ({ queryClient, match }) =>
-      prewarmPublicCheckout(queryClient, segment(match)),
   },
 ]
 

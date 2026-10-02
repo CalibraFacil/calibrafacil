@@ -1,9 +1,5 @@
 import type { Context, Hono } from "hono";
-import {
-  createBackofficeAuth,
-  createLabAuth,
-  createPortalAuth,
-} from "@calibra-facil/auth";
+import { createLabAuth, createPortalAuth } from "@calibra-facil/auth";
 import { getCorsOrigin } from "./cors";
 import type { Env } from "./env";
 
@@ -29,12 +25,6 @@ export function mountAuthRoutes(app: Hono<{ Bindings: Env }>) {
   app.on(["GET", "POST"], "/api/auth/lab/*", async (c) => {
     const labAuth = createLabAuth();
     const res = await labAuth.handler(c.req.raw);
-    return await withCors(c, res);
-  });
-
-  app.on(["GET", "POST"], "/api/auth/backoffice/*", async (c) => {
-    const backofficeAuth = createBackofficeAuth();
-    const res = await backofficeAuth.handler(c.req.raw);
     return await withCors(c, res);
   });
 

@@ -41,7 +41,7 @@ const PORTAL_ORG_KEY = "portal-active-org";
 
 export const Route = createFileRoute("/_authenticated")({
   // Settle the session before any authenticated route renders (parity with
-  // apps/web and apps/backoffice). The component below keeps its own session
+  // apps/web). The component below keeps its own session
   // check as defense in depth for sessions lost after load.
   beforeLoad: async ({ location, preload }) => {
     if (preload) return;

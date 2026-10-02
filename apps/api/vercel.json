@@ -38,14 +38,6 @@
       "schedule": "0 9 * * *"
     },
     {
-      "path": "/api/cron/marketing-contact-sync",
-      "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/cron/operator-alerts",
-      "schedule": "*/30 * * * *"
-    },
-    {
       "path": "/api/cron/auth-maintenance",
       "schedule": "30 4 * * 1"
     },
@@ -56,10 +48,6 @@
     {
       "path": "/api/cron/oot-emails",
       "schedule": "*/30 * * * *"
-    },
-    {
-      "path": "/api/cron/subscription-reconciliation",
-      "schedule": "0 3 * * *"
     },
     {
       "path": "/api/cron/queue-backstop",

@@ -6,7 +6,7 @@
  * "Job was not acknowledged by worker" for every non-acked job, discarding the
  * REAL error the worker's queue handler caught. These tests prove the runtime
  * now forwards the real error to `failQueueJob` (which stores its `.message`),
- * so the backoffice can surface why a job actually failed.
+ * so `app_queue_job.last_error` shows why a job actually failed.
  *
  * Strategy: mock `@calibra-facil/db/queue` (the claim/fail/complete helpers) and
  * the worker's `queue` handler (`./index.js`) — the latter both avoids loading

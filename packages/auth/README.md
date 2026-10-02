@@ -11,12 +11,11 @@ This package provides authentication, session management, and role-based access 
 Calibra Facil uses separate Better Auth instances for each product surface:
 
 - LAB dashboard: mounted under `/api/auth/lab`
-- Backoffice: mounted under `/api/auth/backoffice`
 - Client portal: mounted under `/api/auth/portal`
 
-LAB access is invite/provisioning-only. Backoffice admins provision LAB owners or resend member setup links, and those emails point to `/claim-account?token=...`. The claim flow is passkey-first and only offers magic-link or email OTP fallback after the setup token proves the user is allowed to claim a LAB account. Raw setup tokens are never stored; only hashed token secrets are persisted.
+LAB access is passwordless. A new laboratory is provisioned by the self-service sign-up (off unless `PUBLIC_SIGNUP_ENABLED=true`) or by the dev seed, and its owner receives a setup link to `/claim-account?token=...`. The claim flow is passkey-first and only offers magic-link or email OTP fallback after the setup token proves the user is allowed to claim a LAB account. Raw setup tokens are never stored; only hashed token secrets are persisted.
 
-Self-service LAB registration is intentionally not exposed. New LAB users must enter through a provisioned owner link or a pending LAB invitation, while client portal users continue to use the portal-specific auth flow.
+Other LAB users enter through a pending LAB invitation, while client portal users continue to use the portal-specific auth flow.
 
 ## Installation
 
@@ -40,8 +39,8 @@ app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 ```typescript
 import { authClient } from "@calibra-facil/auth/client";
 
-// Sign in
-await authClient.signIn.email({ email, password });
+// Sign in (passwordless: passkey, magic link or email OTP)
+await authClient.signIn.magicLink({ email });
 
 // Get session
 const session = await authClient.getSession();

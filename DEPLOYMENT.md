@@ -17,7 +17,7 @@ This guide covers running your own production instance. For local development, s
 | Object storage | Any S3-compatible store (Cloudflare R2, AWS S3, MinIO, …) — two buckets      |
 | PDF rendering  | [Gotenberg](https://gotenberg.dev) 8 reachable from the API/worker           |
 | E-mail         | A [Resend](https://resend.com) account (the code uses the Resend API)        |
-| Optional       | Sentry (errors), Asaas (billing), Conta Azul (ERP)                           |
+| Optional       | Sentry (errors), Conta Azul (ERP)                                            |
 
 A typical layout uses one domain with three hosts:
 
@@ -52,9 +52,8 @@ A typical layout uses one domain with three hosts:
 | `BACKGROUND_JOBS_MODE`                                                                              | `local` (jobs run inside the API process) or `vercel` (Vercel Queue)                |
 
 Extra origins for CORS and auth can be listed in `CORS_ALLOWED_ORIGINS` and
-`AUTH_TRUSTED_ORIGINS`. Billing (`ASAAS_*`), the operator bootstrap token
-(`BACKOFFICE_BOOTSTRAP_TOKEN`) and the ERP integration (`CONTA_AZUL_*`) are optional: the
-features that need them stay unavailable until they are configured.
+`AUTH_TRUSTED_ORIGINS`. The Conta Azul ERP integration (`CONTA_AZUL_*`) is optional: it stays
+unavailable until it is configured.
 
 ### Frontends (build time)
 
@@ -82,15 +81,8 @@ VALUES ('portal-service', 'Portal service account', 'portal-service@example.com'
 ```
 
 The first laboratory can be created through the self-service sign-up (`PUBLIC_SIGNUP_ENABLED=true`
-on the API, then turn it off again). Plans and feature limits come from the original commercial
-service; to unlock everything for a laboratory:
-
-```sql
-INSERT INTO subscription (organization_id, plan_id, status, current_period_end)
-VALUES ('<organization id>', 'ENTERPRISE', 'ACTIVE', '2099-12-31')
-ON CONFLICT (organization_id)
-DO UPDATE SET plan_id = 'ENTERPRISE', status = 'ACTIVE', current_period_end = '2099-12-31';
-```
+on the API, then turn it off again). Every laboratory gets every feature: there are no plans or
+limits to configure.
 
 ## Scheduled jobs
 
@@ -98,21 +90,18 @@ The API serves its scheduled jobs at `/api/cron/<job>`, protected by
 `Authorization: Bearer $CRON_SECRET`. On Vercel they are declared in `apps/api/vercel.json`;
 anywhere else, trigger them with your scheduler of choice:
 
-| Job                           | Schedule (UTC) |
-| ----------------------------- | -------------- |
-| `integrations`                | `*/30 * * * *` |
-| `operator-alerts`             | `*/30 * * * *` |
-| `service-order-emails`        | `*/30 * * * *` |
-| `oot-emails`                  | `*/30 * * * *` |
-| `queue-backstop`              | `*/30 * * * *` |
-| `subscription-reconciliation` | `0 3 * * *`    |
-| `spc-recompute`               | `0 3 * * *`    |
-| `email-domain-health`         | `30 3 * * *`   |
-| `marketing-contact-sync`      | `0 6 * * *`    |
-| `certificate-drift`           | `0 6 * * *`    |
-| `notifications`               | `0 8 * * *`    |
-| `portal-digest`               | `0 9 * * *`    |
-| `auth-maintenance`            | `30 4 * * 1`   |
+| Job                    | Schedule (UTC) |
+| ---------------------- | -------------- |
+| `integrations`         | `*/30 * * * *` |
+| `service-order-emails` | `*/30 * * * *` |
+| `oot-emails`           | `*/30 * * * *` |
+| `queue-backstop`       | `*/30 * * * *` |
+| `spc-recompute`        | `0 3 * * *`    |
+| `email-domain-health`  | `30 3 * * *`   |
+| `certificate-drift`    | `0 6 * * *`    |
+| `notifications`        | `0 8 * * *`    |
+| `portal-digest`        | `0 9 * * *`    |
+| `auth-maintenance`     | `30 4 * * 1`   |
 
 Example crontab line:
 

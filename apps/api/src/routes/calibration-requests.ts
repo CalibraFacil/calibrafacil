@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { HTTPException } from "hono/http-exception";
 import { zValidator } from "@hono/zod-validator";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@calibra-facil/db";
@@ -37,10 +36,6 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
-import {
-  assertPlanLimit,
-  assertPlanLimitInTransaction,
-} from "../middleware/tier-guard";
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
 import {
   notifyCalibrationRequestApproved,
@@ -110,7 +105,7 @@ type ConvertRequestResult =
     }
   | {
       error: {
-        status: 400 | 402 | 404;
+        status: 400 | 404;
         body: string;
       };
     };
@@ -738,8 +733,6 @@ export const calibrationRequestsRouter = new Hono<{
         return c.json({ error: "ID invalido" }, 400);
       }
 
-      await assertPlanLimit(c, "certificates", input.items.length);
-
       let result: ConvertRequestResult;
       try {
         result = await db.transaction(async (tx) => {
@@ -779,28 +772,6 @@ export const calibrationRequestsRouter = new Hono<{
                 body: "Somente solicitacoes aprovadas podem ser convertidas",
               },
             };
-          }
-
-          // Advisory-lock + in-transaction re-check (shared with jobs.ts's
-          // POST / — see assertPlanLimitInTransaction) closes the TOCTOU
-          // window left by the fast, non-transactional assertPlanLimit
-          // pre-check above.
-          try {
-            await assertPlanLimitInTransaction(tx, {
-              organizationId: member.organizationId,
-              resource: "certificates",
-              requested: input.items.length,
-            });
-          } catch (error) {
-            if (error instanceof HTTPException) {
-              return {
-                error: {
-                  status: 402 as const,
-                  body: error.message,
-                },
-              };
-            }
-            throw error;
           }
 
           const requestItems = await tx

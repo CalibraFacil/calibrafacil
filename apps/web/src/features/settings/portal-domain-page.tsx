@@ -5,7 +5,6 @@ import { toast } from 'sonner'
 import type { PortalDomainResponse } from '@calibra-facil/client-runtime'
 import { useActiveOrganization } from '@calibra-facil/auth/client'
 
-import { usePlanAccess } from '@/hooks/use-plan-access'
 import { calibraApi } from '@/utils/api'
 import { usePortalDomainData } from '@/features/settings/queries'
 import {
@@ -66,7 +65,6 @@ function statusLabel(status: PortalDomainResponse['statusSummary']['status']) {
 
 export function PortalDomainSettingsPage() {
   const queryClient = useQueryClient()
-  const accessQuery = usePlanAccess()
   const [hostname, setHostname] = useState('')
 
   const domainQuery = usePortalDomainData()
@@ -135,7 +133,7 @@ export function PortalDomainSettingsPage() {
     },
   })
 
-  if (domainQuery.isLoading || accessQuery.isLoading) {
+  if (domainQuery.isLoading) {
     return <PortalDomainSkeleton />
   }
 
@@ -154,7 +152,6 @@ export function PortalDomainSettingsPage() {
     )
   }
 
-  const hasCustomDomain = accessQuery.data?.hasCustomDomain ?? false
   const payload = domainQuery.data
   if (!payload) {
     return <PortalDomainSkeleton />
@@ -194,17 +191,7 @@ export function PortalDomainSettingsPage() {
                   ? 'Pronto'
                   : 'Não pronto'}
             </Badge>
-            {!hasCustomDomain && <Badge variant="outline">Professional+</Badge>}
           </div>
-
-          {!hasCustomDomain && (
-            <Alert>
-              <AlertDescription>
-                Domínio personalizado do portal fica disponível a partir do
-                plano Professional.
-              </AlertDescription>
-            </Alert>
-          )}
 
           <div className="grid gap-4 lg:grid-cols-3">
             <StatusMetric
@@ -277,7 +264,7 @@ export function PortalDomainSettingsPage() {
                 value={hostname}
                 onChange={(event) => setHostname(event.target.value)}
                 placeholder={domain?.hostname ?? 'portal.suaempresa.com.br'}
-                disabled={!hasCustomDomain || createMutation.isPending}
+                disabled={createMutation.isPending}
               />
               <FieldDescription>
                 Use apenas o hostname do portal. Exemplo:{' '}
@@ -287,11 +274,7 @@ export function PortalDomainSettingsPage() {
             <div className="flex items-end">
               <Button
                 type="submit"
-                disabled={
-                  !hasCustomDomain ||
-                  !hostname.trim() ||
-                  createMutation.isPending
-                }
+                disabled={!hostname.trim() || createMutation.isPending}
               >
                 {domain ? 'Atualizar domínio' : 'Salvar domínio'}
               </Button>
@@ -374,7 +357,7 @@ export function PortalDomainSettingsPage() {
                       type="button"
                       variant="outline"
                       onClick={() => verifyMutation.mutate()}
-                      disabled={!hasCustomDomain || verifyMutation.isPending}
+                      disabled={verifyMutation.isPending}
                     >
                       Verificar DNS
                     </Button>
@@ -383,7 +366,6 @@ export function PortalDomainSettingsPage() {
                       variant="outline"
                       onClick={() => activateMutation.mutate()}
                       disabled={
-                        !hasCustomDomain ||
                         !payload.statusSummary.canActivate ||
                         activateMutation.isPending
                       }

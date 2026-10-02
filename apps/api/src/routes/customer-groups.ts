@@ -25,7 +25,6 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
-import { requireFeature } from "../middleware/tier-guard";
 import {
   cancelPortalInvitationAsService,
   createClientOrganizationAsServiceOwner,
@@ -101,8 +100,7 @@ function clientIp(c: {
  * Customer groups (redes/grupos) — a lab models a multi-unit client as a group
  * whose branches are individual `customer` rows. The group is itself a CLIENT
  * organization (its own portal tenant); the portal fans a group-org session
- * out to every branch (see lib/portal-customer-scope). Gated by the
- * `customer_group` entitlement (Professional+).
+ * out to every branch (see lib/portal-customer-scope).
  */
 export const customerGroupsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
@@ -111,7 +109,6 @@ export const customerGroupsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/",
     ...withLabPermission({ client: ["create"] }),
-    requireFeature("customer_group"),
     zValidator("json", CreateCustomerGroupSchema),
     async (c) => {
       const input = c.req.valid("json");
@@ -161,129 +158,119 @@ export const customerGroupsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET / - List the lab's groups, with branch counts
   // =========================================================================
-  .get(
-    "/",
-    ...withLabPermission({ client: ["read"] }),
-    requireFeature("customer_group"),
-    async (c) => {
-      const memberData = c.get("member");
+  .get("/", ...withLabPermission({ client: ["read"] }), async (c) => {
+    const memberData = c.get("member");
 
-      try {
-        const groups = await db
-          .select({
-            id: customerGroup.id,
-            name: customerGroup.name,
-            authOrganizationId: customerGroup.authOrganizationId,
-            createdAt: customerGroup.createdAt,
-            branchCount: sql<number>`cast((select count(*) from ${customer} where ${customer.groupId} = ${customerGroup.id}) as int)`,
-          })
-          .from(customerGroup)
-          .where(eq(customerGroup.labOrganizationId, memberData.organizationId))
-          .orderBy(desc(customerGroup.createdAt));
+    try {
+      const groups = await db
+        .select({
+          id: customerGroup.id,
+          name: customerGroup.name,
+          authOrganizationId: customerGroup.authOrganizationId,
+          createdAt: customerGroup.createdAt,
+          branchCount: sql<number>`cast((select count(*) from ${customer} where ${customer.groupId} = ${customerGroup.id}) as int)`,
+        })
+        .from(customerGroup)
+        .where(eq(customerGroup.labOrganizationId, memberData.organizationId))
+        .orderBy(desc(customerGroup.createdAt));
 
-        return c.json({ data: groups });
-      } catch (error) {
-        console.error("Error listing customer groups:", error);
-        return c.json({ error: "Erro ao listar grupos" }, 500);
-      }
-    },
-  )
+      return c.json({ data: groups });
+    } catch (error) {
+      console.error("Error listing customer groups:", error);
+      return c.json({ error: "Erro ao listar grupos" }, 500);
+    }
+  })
 
   // =========================================================================
   // GET /:id - Group detail with its branch customers
   // =========================================================================
-  .get(
-    "/:id",
-    ...withLabPermission({ client: ["read"] }),
-    requireFeature("customer_group"),
-    async (c) => {
-      const memberData = c.get("member");
-      const id = Number.parseInt(c.req.param("id"), 10);
-      if (Number.isNaN(id)) {
-        return c.json({ error: "ID invalido" }, 400);
+  .get("/:id", ...withLabPermission({ client: ["read"] }), async (c) => {
+    const memberData = c.get("member");
+    const id = Number.parseInt(c.req.param("id"), 10);
+    if (Number.isNaN(id)) {
+      return c.json({ error: "ID invalido" }, 400);
+    }
+
+    try {
+      const [group] = await db
+        .select({
+          id: customerGroup.id,
+          name: customerGroup.name,
+          authOrganizationId: customerGroup.authOrganizationId,
+          createdAt: customerGroup.createdAt,
+        })
+        .from(customerGroup)
+        .where(
+          and(
+            eq(customerGroup.id, id),
+            eq(customerGroup.labOrganizationId, memberData.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (!group) {
+        return c.json({ error: "Grupo nao encontrado" }, 404);
       }
 
-      try {
-        const [group] = await db
+      const branchRows = await db
+        .select({
+          id: customer.id,
+          name: customer.name,
+          taxId: customer.taxId,
+        })
+        .from(customer)
+        .where(eq(customer.groupId, group.id))
+        .orderBy(customer.name);
+
+      // Per-branch active-instrument counts (overview KPIs), one grouped query.
+      const branchIds = branchRows.map((branch) => branch.id);
+      const countsById = new Map<
+        number,
+        { total: number; overdue: number; dueSoon: number }
+      >();
+      if (branchIds.length > 0) {
+        const nowUtc = sql`(now() at time zone 'utc')`;
+        const soonUtc = sql`((now() at time zone 'utc') + interval '${sql.raw(String(DUE_SOON_DAYS))} days')`;
+        const counts = await db
           .select({
-            id: customerGroup.id,
-            name: customerGroup.name,
-            authOrganizationId: customerGroup.authOrganizationId,
-            createdAt: customerGroup.createdAt,
+            customerId: asset.customerId,
+            total: sql<number>`cast(count(*) as int)`,
+            overdue: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} < ${nowUtc}) as int)`,
+            dueSoon: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} >= ${nowUtc} and ${asset.nextCalibrationDate} <= ${soonUtc}) as int)`,
           })
-          .from(customerGroup)
+          .from(asset)
           .where(
             and(
-              eq(customerGroup.id, id),
-              eq(customerGroup.labOrganizationId, memberData.organizationId),
+              inArray(asset.customerId, branchIds),
+              eq(asset.status, "ACTIVE"),
+              isNull(asset.deletedAt),
             ),
           )
-          .limit(1);
-
-        if (!group) {
-          return c.json({ error: "Grupo nao encontrado" }, 404);
+          .groupBy(asset.customerId);
+        for (const row of counts) {
+          countsById.set(row.customerId, {
+            total: row.total,
+            overdue: row.overdue,
+            dueSoon: row.dueSoon,
+          });
         }
-
-        const branchRows = await db
-          .select({
-            id: customer.id,
-            name: customer.name,
-            taxId: customer.taxId,
-          })
-          .from(customer)
-          .where(eq(customer.groupId, group.id))
-          .orderBy(customer.name);
-
-        // Per-branch active-instrument counts (overview KPIs), one grouped query.
-        const branchIds = branchRows.map((branch) => branch.id);
-        const countsById = new Map<
-          number,
-          { total: number; overdue: number; dueSoon: number }
-        >();
-        if (branchIds.length > 0) {
-          const nowUtc = sql`(now() at time zone 'utc')`;
-          const soonUtc = sql`((now() at time zone 'utc') + interval '${sql.raw(String(DUE_SOON_DAYS))} days')`;
-          const counts = await db
-            .select({
-              customerId: asset.customerId,
-              total: sql<number>`cast(count(*) as int)`,
-              overdue: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} < ${nowUtc}) as int)`,
-              dueSoon: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} >= ${nowUtc} and ${asset.nextCalibrationDate} <= ${soonUtc}) as int)`,
-            })
-            .from(asset)
-            .where(
-              and(
-                inArray(asset.customerId, branchIds),
-                eq(asset.status, "ACTIVE"),
-                isNull(asset.deletedAt),
-              ),
-            )
-            .groupBy(asset.customerId);
-          for (const row of counts) {
-            countsById.set(row.customerId, {
-              total: row.total,
-              overdue: row.overdue,
-              dueSoon: row.dueSoon,
-            });
-          }
-        }
-
-        const branches = branchRows.map((branch) => ({
-          ...branch,
-          ...(countsById.get(branch.id) ?? {
-            total: 0,
-            overdue: 0,
-            dueSoon: 0,
-          }),
-        }));
-
-        return c.json({ ...group, branches });
-      } catch (error) {
-        console.error("Error fetching customer group:", error);
-        return c.json({ error: "Erro ao buscar grupo" }, 500);
       }
-    },
-  )
+
+      const branches = branchRows.map((branch) => ({
+        ...branch,
+        ...(countsById.get(branch.id) ?? {
+          total: 0,
+          overdue: 0,
+          dueSoon: 0,
+        }),
+      }));
+
+      return c.json({ ...group, branches });
+    } catch (error) {
+      console.error("Error fetching customer group:", error);
+      return c.json({ error: "Erro ao buscar grupo" }, 500);
+    }
+  })
 
   // =========================================================================
   // POST /:id/branches - Assign a branch customer to the group
@@ -291,7 +278,6 @@ export const customerGroupsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/branches",
     ...withLabPermission({ client: ["update"] }),
-    requireFeature("customer_group"),
     zValidator("json", AssignCustomerGroupBranchSchema),
     async (c) => {
       const memberData = c.get("member");
@@ -361,7 +347,6 @@ export const customerGroupsRouter = new Hono<{ Variables: AuthVariables }>()
   .delete(
     "/:id/branches/:customerId",
     ...withLabPermission({ client: ["update"] }),
-    requireFeature("customer_group"),
     async (c) => {
       const memberData = c.get("member");
       const session = c.get("session");
@@ -414,7 +399,6 @@ export const customerGroupsRouter = new Hono<{ Variables: AuthVariables }>()
   .get(
     "/:id/members",
     ...withLabPermission({ client: ["manage_portal"] }),
-    requireFeature("customer_group"),
     async (c) => {
       const memberData = c.get("member");
       const id = Number.parseInt(c.req.param("id"), 10);
@@ -458,7 +442,6 @@ export const customerGroupsRouter = new Hono<{ Variables: AuthVariables }>()
   .get(
     "/:id/invitations",
     ...withLabPermission({ client: ["manage_portal"] }),
-    requireFeature("customer_group"),
     async (c) => {
       const memberData = c.get("member");
       const id = Number.parseInt(c.req.param("id"), 10);
@@ -499,7 +482,6 @@ export const customerGroupsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/invitations",
     ...withLabPermission({ client: ["manage_portal"] }),
-    requireFeature("customer_group"),
     zValidator("json", CreatePortalInvitationSchema),
     async (c) => {
       const { email, role } = c.req.valid("json");
@@ -545,7 +527,6 @@ export const customerGroupsRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/invitations/:invId/resend",
     ...withLabPermission({ client: ["manage_portal"] }),
-    requireFeature("customer_group"),
     async (c) => {
       const invId = c.req.param("invId");
       const memberData = c.get("member");
@@ -612,7 +593,6 @@ export const customerGroupsRouter = new Hono<{ Variables: AuthVariables }>()
   .delete(
     "/:id/invitations/:invId",
     ...withLabPermission({ client: ["manage_portal"] }),
-    requireFeature("customer_group"),
     async (c) => {
       const invId = c.req.param("invId");
       const memberData = c.get("member");
@@ -671,7 +651,6 @@ export const customerGroupsRouter = new Hono<{ Variables: AuthVariables }>()
   .delete(
     "/:id/members/:memberId",
     ...withLabPermission({ client: ["manage_portal"] }),
-    requireFeature("customer_group"),
     async (c) => {
       const memberId = c.req.param("memberId");
       const memberData = c.get("member");

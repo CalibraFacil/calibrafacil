@@ -199,7 +199,7 @@ export function FinanceBillingReadinessPage({
   const data = queueQuery.data
   const items = data?.data ?? []
   const connected = data?.billing.integrationState === 'connected'
-  const canSend = Boolean(data?.billing.hasFinancialIntegrations && connected)
+  const canSend = connected
 
   const sendMutation = useMutation({
     mutationFn: async (serviceOrderIds: number[]) =>
@@ -259,9 +259,7 @@ export function FinanceBillingReadinessPage({
         <Alert>
           <AlertTitle>Envio ao financeiro indisponível</AlertTitle>
           <AlertDescription>
-            {data.billing.hasFinancialIntegrations
-              ? 'Conecte uma integração financeira para enviar as ordens prontas.'
-              : 'As integrações financeiras fazem parte do plano Professional. Faça upgrade para enviar ao financeiro.'}
+            Conecte uma integração financeira para enviar as ordens prontas.
           </AlertDescription>
         </Alert>
       ) : null}

@@ -36,7 +36,7 @@ import {
   SyncConflictReturnNotice,
   type SyncConflictReturnSearch,
 } from '@/runtime/sync-conflict-return'
-import { usePlanAccess } from '@/hooks/use-plan-access'
+import { isDesktopRuntime } from '@/runtime/desktop'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 import { useCustomerGroupsList } from '@/features/customer-groups/queries'
 
@@ -249,12 +249,10 @@ function ClientInfoForm({
   conflictReturn: SyncConflictReturnSearch
 }) {
   const navigate = useNavigate()
-  const accessQuery = usePlanAccess()
   const { activeOrganizationId } = useDashboardContextState()
-  const hasFinancial =
-    accessQuery.data?.entitlements.includes('financial') ?? false
-  const hasCustomerGroups =
-    accessQuery.data?.entitlements.includes('customer_group') ?? false
+  // Finance and customer groups are cloud-only; the desktop shell has neither.
+  const hasFinancial = !isDesktopRuntime()
+  const hasCustomerGroups = !isDesktopRuntime()
   const financialTimelineQuery = useCustomerFinancialTimelineData({
     enabled: hasFinancial,
     id: customerId,

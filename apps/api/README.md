@@ -32,7 +32,6 @@ The API runs at `http://localhost:3000`.
 | `/api/standards`     | Reference standards management        |
 | `/api/jobs`          | Calibration job workflow              |
 | `/api/dashboard`     | Analytics and metrics                 |
-| `/api/billing/*`     | Subscription and payments             |
 | `/api/webhooks`      | External service webhooks             |
 | `/api/verify`        | Public certificate verification       |
 | `/api/invitations`   | Team member invitations               |
@@ -85,7 +84,7 @@ src/
 │   ├── customers.ts
 │   ├── assets.ts
 │   ├── jobs.ts
-│   ├── billing/
+│   ├── finance/
 │   └── ...
 ├── services/          # Business logic
 └── lib/               # Utilities

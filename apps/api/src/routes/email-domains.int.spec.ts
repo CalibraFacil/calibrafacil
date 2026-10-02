@@ -16,7 +16,6 @@ import { db } from "@calibra-facil/db";
 import {
   organization,
   organizationEmailDomain,
-  subscription,
 } from "@calibra-facil/db/schema";
 import {
   encryptResendApiKey,
@@ -68,17 +67,8 @@ function request(path: string, method = "GET", body?: unknown) {
 function createBody(host = hostname) {
   return { hostname: host, fromLocalPart: "os" };
 }
-async function setupOrg(orgId = "org-a", role = "admin", entitled = true) {
+async function setupOrg(orgId = "org-a", role = "admin") {
   const org = await seedOrg({ orgId, role });
-  if (entitled)
-    await db.insert(subscription).values({
-      organizationId: org.orgId,
-      planId: "STANDARD",
-      status: "ACTIVE",
-      renewalMode: "NONE",
-      currentPeriodStart: new Date("2026-01-01"),
-      currentPeriodEnd: new Date("2027-01-01"),
-    });
   loginAs({ userId: org.userId, organizationId: org.orgId });
   return org;
 }
@@ -184,12 +174,6 @@ describe("emailDomainsRouter — managed lifecycle and legacy reads", () => {
     expect(body.statusSummary.status).toBe("waiting_verification");
   });
 
-  it("REQ-ED-006: denies provisioning without entitlement", async () => {
-    await setupOrg("org-free", "admin", false);
-    expect((await request("/", "POST", createBody())).status).toBe(403);
-    expect(provider.createResendDomain).not.toHaveBeenCalled();
-  });
-
   it("verifies and activates managed senders without an encryption master key", async () => {
     const org = await setupOrg();
     await request("/", "POST", createBody());
@@ -256,11 +240,8 @@ describe("emailDomainsRouter — managed lifecycle and legacy reads", () => {
   });
 
   it("keeps the row on provider deletion failure, then permits removal and recreation", async () => {
-    const org = await setupOrg();
+    await setupOrg();
     await request("/", "POST", createBody());
-    await db
-      .delete(subscription)
-      .where(eq(subscription.organizationId, org.orgId));
     provider.deleteResendDomain.mockResolvedValueOnce(failure);
     expect((await request("/", "DELETE")).status).toBe(502);
     expect((await record())?.resendDomainId).toBe(details.id);

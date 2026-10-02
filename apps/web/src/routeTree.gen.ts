@@ -17,12 +17,9 @@ import { Route as DashboardRouteRouteImport } from './routes/dashboard/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SignUpIndexRouteImport } from './routes/sign-up/index'
 import { Route as SignInIndexRouteImport } from './routes/sign-in/index'
-import { Route as ResetPasswordIndexRouteImport } from './routes/reset-password/index'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
 import { Route as OnboardingOrganizationRouteImport } from './routes/onboarding/organization'
 import { Route as DashboardReportsRouteImport } from './routes/dashboard/reports'
-import { Route as DashboardCustomerSuccessRouteImport } from './routes/dashboard/customer-success'
-import { Route as CheckoutTokenRouteImport } from './routes/checkout/$token'
 import { Route as AcceptInvitationIdRouteImport } from './routes/accept-invitation/$id'
 import { Route as DashboardStandardsRouteRouteImport } from './routes/dashboard/standards/route'
 import { Route as DashboardSpcRouteRouteImport } from './routes/dashboard/spc/route'
@@ -36,7 +33,6 @@ import { Route as DashboardNcRouteRouteImport } from './routes/dashboard/nc/rout
 import { Route as DashboardMethodsRouteRouteImport } from './routes/dashboard/methods/route'
 import { Route as DashboardMaterialsRouteRouteImport } from './routes/dashboard/materials/route'
 import { Route as DashboardJobsRouteRouteImport } from './routes/dashboard/jobs/route'
-import { Route as DashboardInternalRouteRouteImport } from './routes/dashboard/internal/route'
 import { Route as DashboardFinanceRouteRouteImport } from './routes/dashboard/finance/route'
 import { Route as DashboardClientsRouteRouteImport } from './routes/dashboard/clients/route'
 import { Route as DashboardCapaRouteRouteImport } from './routes/dashboard/capa/route'
@@ -61,7 +57,6 @@ import { Route as DashboardSyncConflictsRouteImport } from './routes/dashboard/s
 import { Route as DashboardStandardsNewRouteImport } from './routes/dashboard/standards/new'
 import { Route as DashboardStandardsCompositionProfilesRouteImport } from './routes/dashboard/standards/composition-profiles'
 import { Route as DashboardSettingsUnitsRouteImport } from './routes/dashboard/settings/units'
-import { Route as DashboardSettingsSubscriptionRouteImport } from './routes/dashboard/settings/subscription'
 import { Route as DashboardSettingsSignatureRouteImport } from './routes/dashboard/settings/signature'
 import { Route as DashboardSettingsSecurityRouteImport } from './routes/dashboard/settings/security'
 import { Route as DashboardSettingsProfileRouteImport } from './routes/dashboard/settings/profile'
@@ -78,7 +73,6 @@ import { Route as DashboardSettingsCertificatesRouteImport } from './routes/dash
 import { Route as DashboardSettingsCertificateReleaseRouteImport } from './routes/dashboard/settings/certificate-release'
 import { Route as DashboardSettingsCertificateNumberingRouteImport } from './routes/dashboard/settings/certificate-numbering'
 import { Route as DashboardSettingsBrandingRouteImport } from './routes/dashboard/settings/branding'
-import { Route as DashboardSettingsBillingRouteImport } from './routes/dashboard/settings/billing'
 import { Route as DashboardSettingsAutomaticSendRouteImport } from './routes/dashboard/settings/automatic-send'
 import { Route as DashboardSettingsAuthenticationRouteImport } from './routes/dashboard/settings/authentication'
 import { Route as DashboardSettingsAppearanceRouteImport } from './routes/dashboard/settings/appearance'
@@ -94,7 +88,6 @@ import { Route as DashboardMethodsNewRouteImport } from './routes/dashboard/meth
 import { Route as DashboardMethodsFromTemplateRouteImport } from './routes/dashboard/methods/from-template'
 import { Route as DashboardMaterialsNewRouteImport } from './routes/dashboard/materials/new'
 import { Route as DashboardJobsNewRouteImport } from './routes/dashboard/jobs/new'
-import { Route as DashboardInternalCustomerSuccessRouteImport } from './routes/dashboard/internal/customer-success'
 import { Route as DashboardFinanceRevenueLeakageRouteImport } from './routes/dashboard/finance/revenue-leakage'
 import { Route as DashboardFinanceReceiptsRouteImport } from './routes/dashboard/finance/receipts'
 import { Route as DashboardFinanceOperationsToCashRouteImport } from './routes/dashboard/finance/operations-to-cash'
@@ -194,11 +187,6 @@ const SignInIndexRoute = SignInIndexRouteImport.update({
   path: '/sign-in/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ResetPasswordIndexRoute = ResetPasswordIndexRouteImport.update({
-  id: '/reset-password/',
-  path: '/reset-password/',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const DashboardIndexRoute = DashboardIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -213,17 +201,6 @@ const DashboardReportsRoute = DashboardReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
   getParentRoute: () => DashboardRouteRoute,
-} as any)
-const DashboardCustomerSuccessRoute =
-  DashboardCustomerSuccessRouteImport.update({
-    id: '/customer-success',
-    path: '/customer-success',
-    getParentRoute: () => DashboardRouteRoute,
-  } as any)
-const CheckoutTokenRoute = CheckoutTokenRouteImport.update({
-  id: '/checkout/$token',
-  path: '/checkout/$token',
-  getParentRoute: () => rootRouteImport,
 } as any)
 const AcceptInvitationIdRoute = AcceptInvitationIdRouteImport.update({
   id: '/accept-invitation/$id',
@@ -290,11 +267,6 @@ const DashboardMaterialsRouteRoute = DashboardMaterialsRouteRouteImport.update({
 const DashboardJobsRouteRoute = DashboardJobsRouteRouteImport.update({
   id: '/jobs',
   path: '/jobs',
-  getParentRoute: () => DashboardRouteRoute,
-} as any)
-const DashboardInternalRouteRoute = DashboardInternalRouteRouteImport.update({
-  id: '/internal',
-  path: '/internal',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
 const DashboardFinanceRouteRoute = DashboardFinanceRouteRouteImport.update({
@@ -420,12 +392,6 @@ const DashboardSettingsUnitsRoute = DashboardSettingsUnitsRouteImport.update({
   path: '/units',
   getParentRoute: () => DashboardSettingsRouteRoute,
 } as any)
-const DashboardSettingsSubscriptionRoute =
-  DashboardSettingsSubscriptionRouteImport.update({
-    id: '/subscription',
-    path: '/subscription',
-    getParentRoute: () => DashboardSettingsRouteRoute,
-  } as any)
 const DashboardSettingsSignatureRoute =
   DashboardSettingsSignatureRouteImport.update({
     id: '/signature',
@@ -521,12 +487,6 @@ const DashboardSettingsBrandingRoute =
     path: '/branding',
     getParentRoute: () => DashboardSettingsRouteRoute,
   } as any)
-const DashboardSettingsBillingRoute =
-  DashboardSettingsBillingRouteImport.update({
-    id: '/billing',
-    path: '/billing',
-    getParentRoute: () => DashboardSettingsRouteRoute,
-  } as any)
 const DashboardSettingsAutomaticSendRoute =
   DashboardSettingsAutomaticSendRouteImport.update({
     id: '/automatic-send',
@@ -611,12 +571,6 @@ const DashboardJobsNewRoute = DashboardJobsNewRouteImport.update({
   path: '/new',
   getParentRoute: () => DashboardJobsRouteRoute,
 } as any)
-const DashboardInternalCustomerSuccessRoute =
-  DashboardInternalCustomerSuccessRouteImport.update({
-    id: '/customer-success',
-    path: '/customer-success',
-    getParentRoute: () => DashboardInternalRouteRoute,
-  } as any)
 const DashboardFinanceRevenueLeakageRoute =
   DashboardFinanceRevenueLeakageRouteImport.update({
     id: '/revenue-leakage',
@@ -957,7 +911,6 @@ export interface FileRoutesByFullPath {
   '/dashboard/capa': typeof DashboardCapaRouteRouteWithChildren
   '/dashboard/clients': typeof DashboardClientsRouteRouteWithChildren
   '/dashboard/finance': typeof DashboardFinanceRouteRouteWithChildren
-  '/dashboard/internal': typeof DashboardInternalRouteRouteWithChildren
   '/dashboard/jobs': typeof DashboardJobsRouteRouteWithChildren
   '/dashboard/materials': typeof DashboardMaterialsRouteRouteWithChildren
   '/dashboard/methods': typeof DashboardMethodsRouteRouteWithChildren
@@ -971,12 +924,9 @@ export interface FileRoutesByFullPath {
   '/dashboard/spc': typeof DashboardSpcRouteRouteWithChildren
   '/dashboard/standards': typeof DashboardStandardsRouteRouteWithChildren
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
-  '/checkout/$token': typeof CheckoutTokenRoute
-  '/dashboard/customer-success': typeof DashboardCustomerSuccessRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/onboarding/organization': typeof OnboardingOrganizationRoute
   '/dashboard/': typeof DashboardIndexRoute
-  '/reset-password/': typeof ResetPasswordIndexRoute
   '/sign-in/': typeof SignInIndexRoute
   '/sign-up/': typeof SignUpIndexRoute
   '/dashboard/assets/$id': typeof DashboardAssetsIdRouteRouteWithChildren
@@ -996,7 +946,6 @@ export interface FileRoutesByFullPath {
   '/dashboard/finance/operations-to-cash': typeof DashboardFinanceOperationsToCashRoute
   '/dashboard/finance/receipts': typeof DashboardFinanceReceiptsRoute
   '/dashboard/finance/revenue-leakage': typeof DashboardFinanceRevenueLeakageRoute
-  '/dashboard/internal/customer-success': typeof DashboardInternalCustomerSuccessRoute
   '/dashboard/jobs/new': typeof DashboardJobsNewRoute
   '/dashboard/materials/new': typeof DashboardMaterialsNewRoute
   '/dashboard/methods/from-template': typeof DashboardMethodsFromTemplateRoute
@@ -1012,7 +961,6 @@ export interface FileRoutesByFullPath {
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
   '/dashboard/settings/automatic-send': typeof DashboardSettingsAutomaticSendRoute
-  '/dashboard/settings/billing': typeof DashboardSettingsBillingRoute
   '/dashboard/settings/branding': typeof DashboardSettingsBrandingRoute
   '/dashboard/settings/certificate-numbering': typeof DashboardSettingsCertificateNumberingRoute
   '/dashboard/settings/certificate-release': typeof DashboardSettingsCertificateReleaseRoute
@@ -1029,7 +977,6 @@ export interface FileRoutesByFullPath {
   '/dashboard/settings/profile': typeof DashboardSettingsProfileRoute
   '/dashboard/settings/security': typeof DashboardSettingsSecurityRoute
   '/dashboard/settings/signature': typeof DashboardSettingsSignatureRoute
-  '/dashboard/settings/subscription': typeof DashboardSettingsSubscriptionRoute
   '/dashboard/settings/units': typeof DashboardSettingsUnitsRoute
   '/dashboard/standards/composition-profiles': typeof DashboardStandardsCompositionProfilesRoute
   '/dashboard/standards/new': typeof DashboardStandardsNewRoute
@@ -1098,15 +1045,11 @@ export interface FileRoutesByTo {
   '/magic-link': typeof MagicLinkRoute
   '/privacidade': typeof PrivacidadeRoute
   '/termos-de-uso': typeof TermosDeUsoRoute
-  '/dashboard/internal': typeof DashboardInternalRouteRouteWithChildren
   '/dashboard/settings': typeof DashboardSettingsRouteRouteWithChildren
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
-  '/checkout/$token': typeof CheckoutTokenRoute
-  '/dashboard/customer-success': typeof DashboardCustomerSuccessRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/onboarding/organization': typeof OnboardingOrganizationRoute
   '/dashboard': typeof DashboardIndexRoute
-  '/reset-password': typeof ResetPasswordIndexRoute
   '/sign-in': typeof SignInIndexRoute
   '/sign-up': typeof SignUpIndexRoute
   '/dashboard/assets/new': typeof DashboardAssetsNewRoute
@@ -1121,7 +1064,6 @@ export interface FileRoutesByTo {
   '/dashboard/finance/operations-to-cash': typeof DashboardFinanceOperationsToCashRoute
   '/dashboard/finance/receipts': typeof DashboardFinanceReceiptsRoute
   '/dashboard/finance/revenue-leakage': typeof DashboardFinanceRevenueLeakageRoute
-  '/dashboard/internal/customer-success': typeof DashboardInternalCustomerSuccessRoute
   '/dashboard/jobs/new': typeof DashboardJobsNewRoute
   '/dashboard/materials/new': typeof DashboardMaterialsNewRoute
   '/dashboard/methods/from-template': typeof DashboardMethodsFromTemplateRoute
@@ -1137,7 +1079,6 @@ export interface FileRoutesByTo {
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
   '/dashboard/settings/automatic-send': typeof DashboardSettingsAutomaticSendRoute
-  '/dashboard/settings/billing': typeof DashboardSettingsBillingRoute
   '/dashboard/settings/branding': typeof DashboardSettingsBrandingRoute
   '/dashboard/settings/certificate-numbering': typeof DashboardSettingsCertificateNumberingRoute
   '/dashboard/settings/certificate-release': typeof DashboardSettingsCertificateReleaseRoute
@@ -1154,7 +1095,6 @@ export interface FileRoutesByTo {
   '/dashboard/settings/profile': typeof DashboardSettingsProfileRoute
   '/dashboard/settings/security': typeof DashboardSettingsSecurityRoute
   '/dashboard/settings/signature': typeof DashboardSettingsSignatureRoute
-  '/dashboard/settings/subscription': typeof DashboardSettingsSubscriptionRoute
   '/dashboard/settings/units': typeof DashboardSettingsUnitsRoute
   '/dashboard/standards/composition-profiles': typeof DashboardStandardsCompositionProfilesRoute
   '/dashboard/standards/new': typeof DashboardStandardsNewRoute
@@ -1228,7 +1168,6 @@ export interface FileRoutesById {
   '/dashboard/capa': typeof DashboardCapaRouteRouteWithChildren
   '/dashboard/clients': typeof DashboardClientsRouteRouteWithChildren
   '/dashboard/finance': typeof DashboardFinanceRouteRouteWithChildren
-  '/dashboard/internal': typeof DashboardInternalRouteRouteWithChildren
   '/dashboard/jobs': typeof DashboardJobsRouteRouteWithChildren
   '/dashboard/materials': typeof DashboardMaterialsRouteRouteWithChildren
   '/dashboard/methods': typeof DashboardMethodsRouteRouteWithChildren
@@ -1242,12 +1181,9 @@ export interface FileRoutesById {
   '/dashboard/spc': typeof DashboardSpcRouteRouteWithChildren
   '/dashboard/standards': typeof DashboardStandardsRouteRouteWithChildren
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
-  '/checkout/$token': typeof CheckoutTokenRoute
-  '/dashboard/customer-success': typeof DashboardCustomerSuccessRoute
   '/dashboard/reports': typeof DashboardReportsRoute
   '/onboarding/organization': typeof OnboardingOrganizationRoute
   '/dashboard/': typeof DashboardIndexRoute
-  '/reset-password/': typeof ResetPasswordIndexRoute
   '/sign-in/': typeof SignInIndexRoute
   '/sign-up/': typeof SignUpIndexRoute
   '/dashboard/assets/$id': typeof DashboardAssetsIdRouteRouteWithChildren
@@ -1267,7 +1203,6 @@ export interface FileRoutesById {
   '/dashboard/finance/operations-to-cash': typeof DashboardFinanceOperationsToCashRoute
   '/dashboard/finance/receipts': typeof DashboardFinanceReceiptsRoute
   '/dashboard/finance/revenue-leakage': typeof DashboardFinanceRevenueLeakageRoute
-  '/dashboard/internal/customer-success': typeof DashboardInternalCustomerSuccessRoute
   '/dashboard/jobs/new': typeof DashboardJobsNewRoute
   '/dashboard/materials/new': typeof DashboardMaterialsNewRoute
   '/dashboard/methods/from-template': typeof DashboardMethodsFromTemplateRoute
@@ -1283,7 +1218,6 @@ export interface FileRoutesById {
   '/dashboard/settings/appearance': typeof DashboardSettingsAppearanceRoute
   '/dashboard/settings/authentication': typeof DashboardSettingsAuthenticationRoute
   '/dashboard/settings/automatic-send': typeof DashboardSettingsAutomaticSendRoute
-  '/dashboard/settings/billing': typeof DashboardSettingsBillingRoute
   '/dashboard/settings/branding': typeof DashboardSettingsBrandingRoute
   '/dashboard/settings/certificate-numbering': typeof DashboardSettingsCertificateNumberingRoute
   '/dashboard/settings/certificate-release': typeof DashboardSettingsCertificateReleaseRoute
@@ -1300,7 +1234,6 @@ export interface FileRoutesById {
   '/dashboard/settings/profile': typeof DashboardSettingsProfileRoute
   '/dashboard/settings/security': typeof DashboardSettingsSecurityRoute
   '/dashboard/settings/signature': typeof DashboardSettingsSignatureRoute
-  '/dashboard/settings/subscription': typeof DashboardSettingsSubscriptionRoute
   '/dashboard/settings/units': typeof DashboardSettingsUnitsRoute
   '/dashboard/standards/composition-profiles': typeof DashboardStandardsCompositionProfilesRoute
   '/dashboard/standards/new': typeof DashboardStandardsNewRoute
@@ -1376,7 +1309,6 @@ export interface FileRouteTypes {
     | '/dashboard/capa'
     | '/dashboard/clients'
     | '/dashboard/finance'
-    | '/dashboard/internal'
     | '/dashboard/jobs'
     | '/dashboard/materials'
     | '/dashboard/methods'
@@ -1390,12 +1322,9 @@ export interface FileRouteTypes {
     | '/dashboard/spc'
     | '/dashboard/standards'
     | '/accept-invitation/$id'
-    | '/checkout/$token'
-    | '/dashboard/customer-success'
     | '/dashboard/reports'
     | '/onboarding/organization'
     | '/dashboard/'
-    | '/reset-password/'
     | '/sign-in/'
     | '/sign-up/'
     | '/dashboard/assets/$id'
@@ -1415,7 +1344,6 @@ export interface FileRouteTypes {
     | '/dashboard/finance/operations-to-cash'
     | '/dashboard/finance/receipts'
     | '/dashboard/finance/revenue-leakage'
-    | '/dashboard/internal/customer-success'
     | '/dashboard/jobs/new'
     | '/dashboard/materials/new'
     | '/dashboard/methods/from-template'
@@ -1431,7 +1359,6 @@ export interface FileRouteTypes {
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
     | '/dashboard/settings/automatic-send'
-    | '/dashboard/settings/billing'
     | '/dashboard/settings/branding'
     | '/dashboard/settings/certificate-numbering'
     | '/dashboard/settings/certificate-release'
@@ -1448,7 +1375,6 @@ export interface FileRouteTypes {
     | '/dashboard/settings/profile'
     | '/dashboard/settings/security'
     | '/dashboard/settings/signature'
-    | '/dashboard/settings/subscription'
     | '/dashboard/settings/units'
     | '/dashboard/standards/composition-profiles'
     | '/dashboard/standards/new'
@@ -1517,15 +1443,11 @@ export interface FileRouteTypes {
     | '/magic-link'
     | '/privacidade'
     | '/termos-de-uso'
-    | '/dashboard/internal'
     | '/dashboard/settings'
     | '/accept-invitation/$id'
-    | '/checkout/$token'
-    | '/dashboard/customer-success'
     | '/dashboard/reports'
     | '/onboarding/organization'
     | '/dashboard'
-    | '/reset-password'
     | '/sign-in'
     | '/sign-up'
     | '/dashboard/assets/new'
@@ -1540,7 +1462,6 @@ export interface FileRouteTypes {
     | '/dashboard/finance/operations-to-cash'
     | '/dashboard/finance/receipts'
     | '/dashboard/finance/revenue-leakage'
-    | '/dashboard/internal/customer-success'
     | '/dashboard/jobs/new'
     | '/dashboard/materials/new'
     | '/dashboard/methods/from-template'
@@ -1556,7 +1477,6 @@ export interface FileRouteTypes {
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
     | '/dashboard/settings/automatic-send'
-    | '/dashboard/settings/billing'
     | '/dashboard/settings/branding'
     | '/dashboard/settings/certificate-numbering'
     | '/dashboard/settings/certificate-release'
@@ -1573,7 +1493,6 @@ export interface FileRouteTypes {
     | '/dashboard/settings/profile'
     | '/dashboard/settings/security'
     | '/dashboard/settings/signature'
-    | '/dashboard/settings/subscription'
     | '/dashboard/settings/units'
     | '/dashboard/standards/composition-profiles'
     | '/dashboard/standards/new'
@@ -1646,7 +1565,6 @@ export interface FileRouteTypes {
     | '/dashboard/capa'
     | '/dashboard/clients'
     | '/dashboard/finance'
-    | '/dashboard/internal'
     | '/dashboard/jobs'
     | '/dashboard/materials'
     | '/dashboard/methods'
@@ -1660,12 +1578,9 @@ export interface FileRouteTypes {
     | '/dashboard/spc'
     | '/dashboard/standards'
     | '/accept-invitation/$id'
-    | '/checkout/$token'
-    | '/dashboard/customer-success'
     | '/dashboard/reports'
     | '/onboarding/organization'
     | '/dashboard/'
-    | '/reset-password/'
     | '/sign-in/'
     | '/sign-up/'
     | '/dashboard/assets/$id'
@@ -1685,7 +1600,6 @@ export interface FileRouteTypes {
     | '/dashboard/finance/operations-to-cash'
     | '/dashboard/finance/receipts'
     | '/dashboard/finance/revenue-leakage'
-    | '/dashboard/internal/customer-success'
     | '/dashboard/jobs/new'
     | '/dashboard/materials/new'
     | '/dashboard/methods/from-template'
@@ -1701,7 +1615,6 @@ export interface FileRouteTypes {
     | '/dashboard/settings/appearance'
     | '/dashboard/settings/authentication'
     | '/dashboard/settings/automatic-send'
-    | '/dashboard/settings/billing'
     | '/dashboard/settings/branding'
     | '/dashboard/settings/certificate-numbering'
     | '/dashboard/settings/certificate-release'
@@ -1718,7 +1631,6 @@ export interface FileRouteTypes {
     | '/dashboard/settings/profile'
     | '/dashboard/settings/security'
     | '/dashboard/settings/signature'
-    | '/dashboard/settings/subscription'
     | '/dashboard/settings/units'
     | '/dashboard/standards/composition-profiles'
     | '/dashboard/standards/new'
@@ -1790,9 +1702,7 @@ export interface RootRouteChildren {
   PrivacidadeRoute: typeof PrivacidadeRoute
   TermosDeUsoRoute: typeof TermosDeUsoRoute
   AcceptInvitationIdRoute: typeof AcceptInvitationIdRoute
-  CheckoutTokenRoute: typeof CheckoutTokenRoute
   OnboardingOrganizationRoute: typeof OnboardingOrganizationRoute
-  ResetPasswordIndexRoute: typeof ResetPasswordIndexRoute
   SignInIndexRoute: typeof SignInIndexRoute
   SignUpIndexRoute: typeof SignUpIndexRoute
 }
@@ -1855,13 +1765,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignInIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/reset-password/': {
-      id: '/reset-password/'
-      path: '/reset-password'
-      fullPath: '/reset-password/'
-      preLoaderRoute: typeof ResetPasswordIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/dashboard/': {
       id: '/dashboard/'
       path: '/'
@@ -1882,20 +1785,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/dashboard/reports'
       preLoaderRoute: typeof DashboardReportsRouteImport
       parentRoute: typeof DashboardRouteRoute
-    }
-    '/dashboard/customer-success': {
-      id: '/dashboard/customer-success'
-      path: '/customer-success'
-      fullPath: '/dashboard/customer-success'
-      preLoaderRoute: typeof DashboardCustomerSuccessRouteImport
-      parentRoute: typeof DashboardRouteRoute
-    }
-    '/checkout/$token': {
-      id: '/checkout/$token'
-      path: '/checkout/$token'
-      fullPath: '/checkout/$token'
-      preLoaderRoute: typeof CheckoutTokenRouteImport
-      parentRoute: typeof rootRouteImport
     }
     '/accept-invitation/$id': {
       id: '/accept-invitation/$id'
@@ -1986,13 +1875,6 @@ declare module '@tanstack/react-router' {
       path: '/jobs'
       fullPath: '/dashboard/jobs'
       preLoaderRoute: typeof DashboardJobsRouteRouteImport
-      parentRoute: typeof DashboardRouteRoute
-    }
-    '/dashboard/internal': {
-      id: '/dashboard/internal'
-      path: '/internal'
-      fullPath: '/dashboard/internal'
-      preLoaderRoute: typeof DashboardInternalRouteRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
     '/dashboard/finance': {
@@ -2163,13 +2045,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardSettingsUnitsRouteImport
       parentRoute: typeof DashboardSettingsRouteRoute
     }
-    '/dashboard/settings/subscription': {
-      id: '/dashboard/settings/subscription'
-      path: '/subscription'
-      fullPath: '/dashboard/settings/subscription'
-      preLoaderRoute: typeof DashboardSettingsSubscriptionRouteImport
-      parentRoute: typeof DashboardSettingsRouteRoute
-    }
     '/dashboard/settings/signature': {
       id: '/dashboard/settings/signature'
       path: '/signature'
@@ -2282,13 +2157,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardSettingsBrandingRouteImport
       parentRoute: typeof DashboardSettingsRouteRoute
     }
-    '/dashboard/settings/billing': {
-      id: '/dashboard/settings/billing'
-      path: '/billing'
-      fullPath: '/dashboard/settings/billing'
-      preLoaderRoute: typeof DashboardSettingsBillingRouteImport
-      parentRoute: typeof DashboardSettingsRouteRoute
-    }
     '/dashboard/settings/automatic-send': {
       id: '/dashboard/settings/automatic-send'
       path: '/automatic-send'
@@ -2393,13 +2261,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/dashboard/jobs/new'
       preLoaderRoute: typeof DashboardJobsNewRouteImport
       parentRoute: typeof DashboardJobsRouteRoute
-    }
-    '/dashboard/internal/customer-success': {
-      id: '/dashboard/internal/customer-success'
-      path: '/customer-success'
-      fullPath: '/dashboard/internal/customer-success'
-      preLoaderRoute: typeof DashboardInternalCustomerSuccessRouteImport
-      parentRoute: typeof DashboardInternalRouteRoute
     }
     '/dashboard/finance/revenue-leakage': {
       id: '/dashboard/finance/revenue-leakage'
@@ -3003,21 +2864,6 @@ const DashboardFinanceRouteRouteWithChildren =
     DashboardFinanceRouteRouteChildren,
   )
 
-interface DashboardInternalRouteRouteChildren {
-  DashboardInternalCustomerSuccessRoute: typeof DashboardInternalCustomerSuccessRoute
-}
-
-const DashboardInternalRouteRouteChildren: DashboardInternalRouteRouteChildren =
-  {
-    DashboardInternalCustomerSuccessRoute:
-      DashboardInternalCustomerSuccessRoute,
-  }
-
-const DashboardInternalRouteRouteWithChildren =
-  DashboardInternalRouteRoute._addFileChildren(
-    DashboardInternalRouteRouteChildren,
-  )
-
 interface DashboardJobsRouteRouteChildren {
   DashboardJobsNewRoute: typeof DashboardJobsNewRoute
   DashboardJobsIndexRoute: typeof DashboardJobsIndexRoute
@@ -3220,7 +3066,6 @@ interface DashboardSettingsRouteRouteChildren {
   DashboardSettingsAppearanceRoute: typeof DashboardSettingsAppearanceRoute
   DashboardSettingsAuthenticationRoute: typeof DashboardSettingsAuthenticationRoute
   DashboardSettingsAutomaticSendRoute: typeof DashboardSettingsAutomaticSendRoute
-  DashboardSettingsBillingRoute: typeof DashboardSettingsBillingRoute
   DashboardSettingsBrandingRoute: typeof DashboardSettingsBrandingRoute
   DashboardSettingsCertificateNumberingRoute: typeof DashboardSettingsCertificateNumberingRoute
   DashboardSettingsCertificateReleaseRoute: typeof DashboardSettingsCertificateReleaseRoute
@@ -3237,7 +3082,6 @@ interface DashboardSettingsRouteRouteChildren {
   DashboardSettingsProfileRoute: typeof DashboardSettingsProfileRoute
   DashboardSettingsSecurityRoute: typeof DashboardSettingsSecurityRoute
   DashboardSettingsSignatureRoute: typeof DashboardSettingsSignatureRoute
-  DashboardSettingsSubscriptionRoute: typeof DashboardSettingsSubscriptionRoute
   DashboardSettingsUnitsRoute: typeof DashboardSettingsUnitsRoute
 }
 
@@ -3248,7 +3092,6 @@ const DashboardSettingsRouteRouteChildren: DashboardSettingsRouteRouteChildren =
     DashboardSettingsAppearanceRoute: DashboardSettingsAppearanceRoute,
     DashboardSettingsAuthenticationRoute: DashboardSettingsAuthenticationRoute,
     DashboardSettingsAutomaticSendRoute: DashboardSettingsAutomaticSendRoute,
-    DashboardSettingsBillingRoute: DashboardSettingsBillingRoute,
     DashboardSettingsBrandingRoute: DashboardSettingsBrandingRoute,
     DashboardSettingsCertificateNumberingRoute:
       DashboardSettingsCertificateNumberingRoute,
@@ -3268,7 +3111,6 @@ const DashboardSettingsRouteRouteChildren: DashboardSettingsRouteRouteChildren =
     DashboardSettingsProfileRoute: DashboardSettingsProfileRoute,
     DashboardSettingsSecurityRoute: DashboardSettingsSecurityRoute,
     DashboardSettingsSignatureRoute: DashboardSettingsSignatureRoute,
-    DashboardSettingsSubscriptionRoute: DashboardSettingsSubscriptionRoute,
     DashboardSettingsUnitsRoute: DashboardSettingsUnitsRoute,
   }
 
@@ -3318,7 +3160,6 @@ interface DashboardRouteRouteChildren {
   DashboardCapaRouteRoute: typeof DashboardCapaRouteRouteWithChildren
   DashboardClientsRouteRoute: typeof DashboardClientsRouteRouteWithChildren
   DashboardFinanceRouteRoute: typeof DashboardFinanceRouteRouteWithChildren
-  DashboardInternalRouteRoute: typeof DashboardInternalRouteRouteWithChildren
   DashboardJobsRouteRoute: typeof DashboardJobsRouteRouteWithChildren
   DashboardMaterialsRouteRoute: typeof DashboardMaterialsRouteRouteWithChildren
   DashboardMethodsRouteRoute: typeof DashboardMethodsRouteRouteWithChildren
@@ -3331,7 +3172,6 @@ interface DashboardRouteRouteChildren {
   DashboardSettingsRouteRoute: typeof DashboardSettingsRouteRouteWithChildren
   DashboardSpcRouteRoute: typeof DashboardSpcRouteRouteWithChildren
   DashboardStandardsRouteRoute: typeof DashboardStandardsRouteRouteWithChildren
-  DashboardCustomerSuccessRoute: typeof DashboardCustomerSuccessRoute
   DashboardReportsRoute: typeof DashboardReportsRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
   DashboardSyncConflictsRoute: typeof DashboardSyncConflictsRoute
@@ -3344,7 +3184,6 @@ const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardCapaRouteRoute: DashboardCapaRouteRouteWithChildren,
   DashboardClientsRouteRoute: DashboardClientsRouteRouteWithChildren,
   DashboardFinanceRouteRoute: DashboardFinanceRouteRouteWithChildren,
-  DashboardInternalRouteRoute: DashboardInternalRouteRouteWithChildren,
   DashboardJobsRouteRoute: DashboardJobsRouteRouteWithChildren,
   DashboardMaterialsRouteRoute: DashboardMaterialsRouteRouteWithChildren,
   DashboardMethodsRouteRoute: DashboardMethodsRouteRouteWithChildren,
@@ -3359,7 +3198,6 @@ const DashboardRouteRouteChildren: DashboardRouteRouteChildren = {
   DashboardSettingsRouteRoute: DashboardSettingsRouteRouteWithChildren,
   DashboardSpcRouteRoute: DashboardSpcRouteRouteWithChildren,
   DashboardStandardsRouteRoute: DashboardStandardsRouteRouteWithChildren,
-  DashboardCustomerSuccessRoute: DashboardCustomerSuccessRoute,
   DashboardReportsRoute: DashboardReportsRoute,
   DashboardIndexRoute: DashboardIndexRoute,
   DashboardSyncConflictsRoute: DashboardSyncConflictsRoute,
@@ -3379,9 +3217,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacidadeRoute: PrivacidadeRoute,
   TermosDeUsoRoute: TermosDeUsoRoute,
   AcceptInvitationIdRoute: AcceptInvitationIdRoute,
-  CheckoutTokenRoute: CheckoutTokenRoute,
   OnboardingOrganizationRoute: OnboardingOrganizationRoute,
-  ResetPasswordIndexRoute: ResetPasswordIndexRoute,
   SignInIndexRoute: SignInIndexRoute,
   SignUpIndexRoute: SignUpIndexRoute,
 }

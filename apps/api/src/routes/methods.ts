@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@calibra-facil/db";
-import { recordActivationMilestone } from "../services/activation-checklist";
 import {
   calibrationMethod,
   methodAuditLog,
@@ -2651,11 +2650,6 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           performedBy: session.user.id,
           ipAddress: c.req.header("x-forwarded-for") || null,
         });
-
-        void recordActivationMilestone(
-          member.organizationId,
-          "methodPublished",
-        );
 
         return c.json(published);
       } catch (error) {

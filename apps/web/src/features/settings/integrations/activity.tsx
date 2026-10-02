@@ -15,11 +15,9 @@ import type { IntegrationSummary } from '@/features/settings/types'
 import type { ConnectorMutations } from './mutations'
 
 export function IntegrationActivity({
-  hasEntitlement,
   integration,
   retry,
 }: {
-  hasEntitlement: boolean
   integration: IntegrationSummary
   retry: ConnectorMutations['retry']
 }) {
@@ -83,7 +81,7 @@ export function IntegrationActivity({
                             variant="outline"
                             className="h-7 px-2 text-xs active:scale-[0.96]"
                             onClick={() => retry.mutate({ runId: run.id })}
-                            disabled={!hasEntitlement || retry.isPending}
+                            disabled={retry.isPending}
                           >
                             {retry.isPending ? 'Reprocessando…' : 'Reprocessar'}
                           </Button>
