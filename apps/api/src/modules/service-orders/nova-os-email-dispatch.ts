@@ -14,6 +14,7 @@ import {
   sendServiceOrderCustomerEmail,
   getLabEmailBrand,
 } from "@calibra-facil/notifications";
+import { formatLabDate } from "@calibra-facil/documents";
 import { ServiceOrderCreatedEmail } from "@calibra-facil/email";
 
 // ---------------------------------------------------------------------------
@@ -63,20 +64,6 @@ export interface NovaOsEmailDispatchInput {
 // Formatting helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Format a date as a Brazilian-locale date string (DD/MM/YYYY).
- * Uses UTC interpretation so tests using `new Date("2026-06-19T00:00:00.000Z")`
- * produce "19/06/2026" regardless of server TZ.
- */
-function formatDateBR(date: Date): string {
-  return date.toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-}
-
 // ---------------------------------------------------------------------------
 // Main dispatcher
 // ---------------------------------------------------------------------------
@@ -106,7 +93,7 @@ export async function dispatchNovaOsEmail(
     // Wrapped here because getLabEmailBrand can fail if the DB is unavailable.
     const brand = await getLabEmailBrand(input.organizationId);
 
-    const intakeDate = formatDateBR(input.openedAt);
+    const intakeDate = formatLabDate(input.openedAt);
 
     return await sendServiceOrderCustomerEmail({
       serviceOrder: {

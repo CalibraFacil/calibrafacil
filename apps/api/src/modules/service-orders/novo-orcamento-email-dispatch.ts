@@ -23,6 +23,7 @@ import {
   getLabEmailBrand,
 } from "@calibra-facil/notifications";
 import type { ServiceOrderCustomerEmailResult } from "@calibra-facil/notifications";
+import { formatLabDate } from "@calibra-facil/documents";
 import { QuoteEmail } from "@calibra-facil/email";
 import type { QuoteEmailItem } from "@calibra-facil/email";
 
@@ -139,19 +140,6 @@ export interface NovoOrcamentoEmailDispatchInput {
 // Formatting helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Format a Date as a Brazilian locale date string (DD/MM/YYYY).
- * Uses UTC to be consistent with test assertions using new Date("...T00:00:00.000Z").
- */
-function formatDateBR(date: Date): string {
-  return date.toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-}
-
 // ---------------------------------------------------------------------------
 // Main dispatcher
 // ---------------------------------------------------------------------------
@@ -174,7 +162,7 @@ export async function dispatchNovoOrcamentoEmail(
     // Resolve the lab white-label brand (REQ-SOEMAIL-003).
     const brand = await getLabEmailBrand(input.organizationId);
 
-    const intakeDate = formatDateBR(input.openedAt);
+    const intakeDate = formatLabDate(input.openedAt);
 
     // REQ-SOEMAIL-023 [HIGH RISK]: build approval URL from the captured token.
     // The token was returned by createPublicServiceOrderAccessToken inside

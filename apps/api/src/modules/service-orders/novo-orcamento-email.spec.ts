@@ -202,14 +202,14 @@ describe("REQ-SOEMAIL-021: novo orçamento email dispatched with header fields",
     expect(props.assetModel).toBe("BX-520");
   });
 
-  it("template receives intakeDate formatted as pt-BR", async () => {
+  it("template receives the intake date as the lab sees it", async () => {
+    // 01:30 UTC on the 19th is 22:30 on the 18th at the lab.
     const input = makeInput({
-      openedAt: new Date("2026-06-19T00:00:00.000Z"),
+      openedAt: new Date("2026-06-19T01:30:00.000Z"),
     });
     await dispatchNovoOrcamentoEmail(input);
     const props = getTemplateProps(input);
-    expect(props.intakeDate).toMatch(/2026/);
-    expect(props.intakeDate).toMatch(/19|06/);
+    expect(props.intakeDate).toBe("18/06/2026");
   });
 
   it("template receives assetSerialNumber", async () => {

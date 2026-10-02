@@ -11,6 +11,8 @@
  * interval is the customer's decision).
  */
 
+import { formatLabDate } from "./dates.js";
+
 export type FleetDueStatus = "OVERDUE" | "DUE_SOON" | "OK" | "UNSCHEDULED";
 
 export type FleetStatusClassification = {
@@ -116,9 +118,7 @@ export function renderFleetStatusReportHtml(
   data: FleetStatusReportData,
 ): string {
   const now = new Date(data.generatedAtIso);
-  const generated = `${String(now.getUTCDate()).padStart(2, "0")}/${String(
-    now.getUTCMonth() + 1,
-  ).padStart(2, "0")}/${now.getUTCFullYear()}`;
+  const generated = formatLabDate(now);
   const showUnit = data.assets.some((asset) => asset.unitName);
 
   const counts = { OVERDUE: 0, DUE_SOON: 0, OK: 0, UNSCHEDULED: 0 };

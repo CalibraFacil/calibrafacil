@@ -1,4 +1,5 @@
 /** @jsxImportSource react */
+import { formatCalendarDate, formatLabDate } from "./dates.js";
 
 /**
  * Out-of-tolerance customer notification (ABNT NBR ISO/IEC 17025:2017 §7.10 —
@@ -97,15 +98,6 @@ const pageStyles = `
   .disclaimer { margin-top: 6mm; padding: 2.2mm 2.8mm; border: 1px solid #000; background: #f7f7f7; font-size: 7.8pt; line-height: 1.35; text-align: justify; break-inside: avoid; }
 `;
 
-function formatDate(value: Date | null | undefined) {
-  if (!value) return "—";
-  return value.toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
 function text(value: unknown, fallback = "—") {
   if (value === null || value === undefined || value === "") return fallback;
   return String(value);
@@ -147,7 +139,7 @@ function Header({ data }: { data: OotNotificationDocumentData }) {
             <div className="meta-title">Não conformidade</div>
             <div className="nc-number">{data.ncNumber}</div>
             <div className="meta-line">
-              Emissão: {formatDate(data.issuedAt)}
+              Emissão: {formatLabDate(data.issuedAt)}
             </div>
           </td>
         </tr>
@@ -186,7 +178,7 @@ export function OotNotificationHtml({
             ABNT NBR ISO/IEC 17025:2017 — §7.10 Trabalho não conforme
             {isStandardRecall ? " · Recall de padrão de referência" : ""} · Não
             conformidade {data.ncNumber} · Emitida em{" "}
-            {formatDate(data.issuedAt)}
+            {formatLabDate(data.issuedAt)}
           </p>
 
           <div className="addressee">
@@ -241,13 +233,13 @@ export function OotNotificationHtml({
               </tr>
               <tr>
                 <th>Data da calibração</th>
-                <td>{formatDate(data.calibrationDate)}</td>
+                <td>{formatLabDate(data.calibrationDate)}</td>
               </tr>
               <tr>
                 <th>
                   Calibração anterior (início do período potencialmente afetado)
                 </th>
-                <td>{formatDate(data.previousCalibrationDate)}</td>
+                <td>{formatLabDate(data.previousCalibrationDate)}</td>
               </tr>
               {isStandardRecall ? (
                 <>
@@ -274,7 +266,9 @@ export function OotNotificationHtml({
                   </tr>
                   <tr>
                     <th>Calibração do padrão</th>
-                    <td>{formatDate(data.standard?.calibrationDate)}</td>
+                    <td>
+                      {formatCalendarDate(data.standard?.calibrationDate)}
+                    </td>
                   </tr>
                 </>
               ) : (

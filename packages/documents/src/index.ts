@@ -1,5 +1,11 @@
 export { LabelHtml, type LabelData } from "./LabelHtml.js";
 export {
+  LAB_TIME_ZONE,
+  formatCalendarDate,
+  formatLabDate,
+  formatLabDateTime,
+} from "./dates.js";
+export {
   renderIntervalReportHtml,
   type IntervalReportData,
 } from "./IntervalReportHtml.js";
