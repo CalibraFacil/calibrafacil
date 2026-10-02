@@ -1,9 +1,8 @@
-import Image from "next/image";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowUpRight01Icon } from "@hugeicons/core-free-icons";
 
 import { Button } from "@/components/ui/button";
-import { OPEN_SOURCE_URL, REPOSITORY_URL } from "@/lib/site";
+import { REPOSITORY_URL, RUN_LOCALLY_URL } from "@/lib/site";
 
 export function Hero() {
   return (
@@ -25,14 +24,14 @@ export function Hero() {
       <div className="mx-auto max-w-[1200px] px-6 pt-20 md:px-8 md:pt-28">
         <div className="mx-auto max-w-[820px] text-center">
           <h1 className="text-[clamp(38px,5.6vw,66px)] leading-[1.04] font-semibold tracking-[-0.032em] text-balance text-foreground motion-safe:animate-hero-rise">
-            Calibração, incerteza e certificado no mesmo registro.
+            Gestão de laboratório de calibração, em código aberto.
           </h1>
           <p className="mx-auto mt-6 max-w-[60ch] text-[17px] leading-relaxed text-pretty text-muted-foreground motion-safe:animate-hero-rise motion-safe:[animation-delay:60ms] md:text-lg">
-            O CalibraFácil é um software de código aberto que acompanha cada
-            calibração do cadastro do equipamento à aprovação do certificado,
-            com cálculo de incerteza, assinatura ICP-Brasil e portal do cliente.
-            Feito para laboratórios sob a ISO/IEC 17025, acreditados ou em
-            implantação.
+            O CalibraFácil acompanha cada calibração do cadastro do equipamento
+            ao certificado assinado em ICP-Brasil, com incerteza calculada
+            conforme o GUM, portal do cliente e um aplicativo desktop que
+            funciona offline. Licença MIT, feito para laboratórios sob a ISO/IEC
+            17025 e mantido pela comunidade.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3 motion-safe:animate-hero-rise motion-safe:[animation-delay:120ms]">
             <Button
@@ -53,7 +52,7 @@ export function Hero() {
               variant="outline"
               size="lg"
               className="shadow-[0_1px_2px_rgba(15,23,42,0.06)]"
-              render={<a href={OPEN_SOURCE_URL} />}
+              render={<a href={RUN_LOCALLY_URL} />}
             >
               Rodar localmente
             </Button>
@@ -82,13 +81,12 @@ function HeroVisual() {
             width={780}
             height={1688}
           />
-          <Image
+          <img
             src="/dashboard-preview-light.png"
             alt="Painel do CalibraFácil com indicadores da operação, pipeline de calibração por etapa e fila de calibrações a vencer."
             width={3420}
             height={2146}
-            priority
-            sizes="(min-width: 1200px) 1120px, 100vw"
+            fetchPriority="high"
             draggable={false}
             className="block h-auto w-full select-none"
           />
@@ -100,12 +98,12 @@ function HeroVisual() {
             width={780}
             height={1688}
           />
-          <Image
+          <img
             src="/dashboard-preview-dark.png"
             alt="Painel do CalibraFácil com indicadores da operação, pipeline de calibração por etapa e fila de calibrações a vencer."
             width={3420}
             height={2146}
-            sizes="(min-width: 1200px) 1120px, 100vw"
+            loading="lazy"
             draggable={false}
             className="block h-auto w-full select-none"
           />

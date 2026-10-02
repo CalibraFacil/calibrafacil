@@ -1,0 +1,10 @@
+/recursos / 301
+/recursos/* / 301
+/solucoes / 301
+/solucoes/* / 301
+/calibracao / 301
+/calibracao/* / 301
+/ferramentas / 301
+/ferramentas/* / 301
+/docs https://github.com/CalibraFacil/calibrafacil/tree/main/apps/docs/content/docs 302
+/docs/* https://github.com/CalibraFacil/calibrafacil/tree/main/apps/docs/content/docs 302

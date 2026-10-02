@@ -112,10 +112,9 @@ const legacyRedirects = [
 
 const config: NextConfig = {
   reactStrictMode: true,
-  // Docs live under /docs so they can share a host with the project site
-  // (apps/site rewrites /docs/* here when DOCS_ORIGIN is set). basePath prefixes
-  // every route, asset and Next <Link> (Fumadocs uses Next Link, so
-  // source.baseUrl stays "/").
+  // Docs live under /docs so they can share a host with the project site.
+  // basePath prefixes every route, asset and Next <Link> (Fumadocs uses Next
+  // Link, so source.baseUrl stays "/").
   basePath: "/docs",
   // Extra origins (a tunnel, another device) allowed to talk to `next dev`,
   // comma-separated in NEXT_DEV_ALLOWED_ORIGINS. Without them Next blocks

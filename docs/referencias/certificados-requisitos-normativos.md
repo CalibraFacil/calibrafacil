@@ -201,14 +201,13 @@ Cruzando as citações do código com as das transcrições, estas aparecem **no
 praticamente **não aparecem na pesquisa** — são as citações mais arriscadas que existem, porque
 já estão em produção e ninguém registrou de onde vieram:
 
-| Norma                          | Onde está no código                                                                           | Peso      |
-| ------------------------------ | --------------------------------------------------------------------------------------------- | --------- |
-| **EA-4/02 M:2022**             | `packages/method-templates/src/templates/*` — 46 referências com §, é o framework GUM adotado | altíssimo |
-| ISO 376                        | `force-indication.ts`                                                                         | alto      |
-| ISO 4787:2010                  | `volume-glassware.ts` (origem da Eq. 1)                                                       | alto      |
-| UKAS LAB 14 ed. 8 (dez/2025)   | `weighing-instrument.ts`, `mass-balance.ts` — corroboração; §1.2 remete à cg-18               | médio     |
-| ISO 7500-1                     | `force-indication.ts`                                                                         | médio     |
-| ISO 8655 · ISO 6789 · ISO 6506 | `apps/site/src/lib/grandezas.ts` (catálogo público)                                           | baixo     |
+| Norma                        | Onde está no código                                                                           | Peso      |
+| ---------------------------- | --------------------------------------------------------------------------------------------- | --------- |
+| **EA-4/02 M:2022**           | `packages/method-templates/src/templates/*` — 46 referências com §, é o framework GUM adotado | altíssimo |
+| ISO 376                      | `force-indication.ts`                                                                         | alto      |
+| ISO 4787:2010                | `volume-glassware.ts` (origem da Eq. 1)                                                       | alto      |
+| UKAS LAB 14 ed. 8 (dez/2025) | `weighing-instrument.ts`, `mass-balance.ts` — corroboração; §1.2 remete à cg-18               | médio     |
+| ISO 7500-1                   | `force-indication.ts`                                                                         | médio     |
 
 ---
 

@@ -1,8 +1,0 @@
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "nextjs",
-  "regions": ["gru1"],
-  "installCommand": "pnpm install --frozen-lockfile --filter \"@calibra-facil/site...\"",
-  "buildCommand": "pnpm build",
-  "ignoreCommand": "node ../../scripts/vercel-ignore-build.mjs site"
-}

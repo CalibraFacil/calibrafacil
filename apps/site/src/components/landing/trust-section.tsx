@@ -10,7 +10,7 @@ import {
 
 import { SectionHeading } from "./surfaces";
 
-// Mechanisms the product enforces at runtime, stated as mechanisms.
+// Mechanisms the code enforces at runtime, stated as mechanisms.
 const PILLARS: { icon: IconSvgElement; title: string; body: string }[] = [
   {
     icon: LockIcon,
@@ -47,12 +47,12 @@ const PILLARS: { icon: IconSvgElement; title: string; body: string }[] = [
 export function TrustSection() {
   return (
     <section
-      id="fundamentos"
+      id="principios"
       className="scroll-mt-20 border-t border-border bg-[linear-gradient(180deg,var(--muted)_0%,var(--background)_100%)] py-24 md:py-32"
     >
       <div className="mx-auto max-w-[1200px] px-6 md:px-8">
         <SectionHeading
-          title="Confiança vem do mecanismo."
+          title="Princípios que o código garante."
           body="O CalibraFácil não substitui o responsável técnico, o sistema de gestão da qualidade nem a decisão técnica. Ele estrutura o registro para que essas decisões fiquem documentadas, rastreáveis e reproduzíveis."
         />
 

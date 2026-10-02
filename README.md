@@ -76,7 +76,7 @@ browser ──▶ │  apps/web     │   │  apps/portal  │   │  apps/desk
 | `apps/desktop`         | Electron desktop shell                                            |
 | `apps/local-server`    | Local API for the desktop app, backed by SQLite                   |
 | `apps/docs`            | User documentation (Fumadocs on Next.js)                          |
-| `apps/site`            | Project website and public uncertainty calculator                 |
+| `apps/site`            | Project website (static Vite build, served by Cloudflare)         |
 | `packages/math-engine` | GUM uncertainty engine (versioned, with validation dossiers)      |
 | `packages/db`          | Drizzle schema, SQL migrations and seeds                          |
 | `packages/auth`        | Better Auth configuration, roles and permissions                  |
