@@ -41,6 +41,10 @@ import {
 // REQ-QPUB-033  non-approvable quote status → POST 409, no mutation [HIGH RISK]
 
 const JSON_HEADERS = { "content-type": "application/json" };
+// Deployed handlers always receive the runtime env (`app.fetch(req, env)`),
+// but Hono's `request()` only passes one when given, and the send route
+// builds the customer's portal link from it.
+const RUNTIME_ENV = { PORTAL_APP_URL: "https://portal.example.test" };
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
@@ -254,8 +258,15 @@ describe("public quote-access token lifecycle (real DB)", () => {
     const res = await serviceOrdersRouter.request(
       `/${world.serviceOrderId}/quotes/${world.quoteId}/send`,
       { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({}) },
+      RUNTIME_ENV,
     );
     expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+    expect(body).toMatchObject({
+      publicUrl: expect.stringMatching(
+        /^https:\/\/portal\.example\.test\/service-order-access\//,
+      ),
+    });
 
     const [token] = await tokenRows(world.quoteId);
     expect(token?.expiresAt?.getTime()).toBe(
@@ -271,6 +282,7 @@ describe("public quote-access token lifecycle (real DB)", () => {
     const res = await serviceOrdersRouter.request(
       `/${world.serviceOrderId}/quotes/${world.quoteId}/send`,
       { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({}) },
+      RUNTIME_ENV,
     );
     const after = Date.now();
     expect(res.status).toBe(200);
@@ -297,6 +309,7 @@ describe("public quote-access token lifecycle (real DB)", () => {
         headers: JSON_HEADERS,
         body: JSON.stringify({ expiresAt: explicit }),
       },
+      RUNTIME_ENV,
     );
     expect(res.status).toBe(200);
 
@@ -469,6 +482,7 @@ describe("public quote-access token lifecycle (real DB)", () => {
     const res = await serviceOrdersRouter.request(
       `/${world.serviceOrderId}/quotes/${v2QuoteId}/send`,
       { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({}) },
+      RUNTIME_ENV,
     );
     expect(res.status).toBe(200);
 
