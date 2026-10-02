@@ -1,10 +1,15 @@
 import {
   CONTRIBUTING_URL,
+  DEPLOYMENT_URL,
   DISCUSSIONS_URL,
   DOCS_URL,
+  ISSUES_URL,
   LICENSE_URL,
-  OPEN_SOURCE_URL,
+  README_URL,
   REPOSITORY_URL,
+  RUN_LOCALLY_URL,
+  SECURITY_URL,
+  VALIDATION_URL,
 } from "@/lib/site";
 
 import { BrandLockup } from "./brand";
@@ -14,31 +19,32 @@ type FooterColumn = { heading: string; links: FooterLink[] };
 
 const footerColumns: FooterColumn[] = [
   {
-    heading: "Produto",
+    heading: "Projeto",
     links: [
       { label: "O fluxo", href: "/#fluxo" },
-      { label: "Portal do cliente", href: "/#portal" },
-      { label: "Cobertura", href: "/#cobertura" },
-      { label: "Como é construído", href: "/#fundamentos" },
-      { label: "Documentação", href: DOCS_URL },
+      { label: "Módulos", href: "/#modulos" },
+      { label: "Arquitetura", href: "/#arquitetura" },
+      { label: "Princípios", href: "/#principios" },
+      { label: "Rodar localmente", href: RUN_LOCALLY_URL },
     ],
   },
   {
-    heading: "Conteúdo",
+    heading: "Documentação",
     links: [
-      { label: "Recursos", href: "/recursos" },
-      { label: "Soluções por segmento", href: "/solucoes" },
-      { label: "Calibração por grandeza", href: "/calibracao" },
-      { label: "Ferramentas", href: "/ferramentas" },
+      { label: "README", href: README_URL, external: true },
+      { label: "Guia de uso", href: DOCS_URL, external: true },
+      { label: "Hospedagem", href: DEPLOYMENT_URL, external: true },
+      { label: "Dossiês de validação", href: VALIDATION_URL, external: true },
     ],
   },
   {
-    heading: "Código aberto",
+    heading: "Comunidade",
     links: [
       { label: "Repositório no GitHub", href: REPOSITORY_URL, external: true },
-      { label: "Rodar localmente", href: OPEN_SOURCE_URL },
       { label: "Como contribuir", href: CONTRIBUTING_URL, external: true },
       { label: "Discussões", href: DISCUSSIONS_URL, external: true },
+      { label: "Issues", href: ISSUES_URL, external: true },
+      { label: "Segurança", href: SECURITY_URL, external: true },
       { label: "Licença MIT", href: LICENSE_URL, external: true },
     ],
   },
@@ -63,12 +69,14 @@ export function LandingFooter() {
               <img
                 src="/icp-brasil.svg"
                 alt="ICP-Brasil"
+                loading="lazy"
                 className="h-7 w-auto shrink-0 dark:hidden"
                 draggable={false}
               />
               <img
                 src="/icp-brasil-dark.svg"
                 alt="ICP-Brasil"
+                loading="lazy"
                 className="hidden h-7 w-auto shrink-0 dark:block"
                 draggable={false}
               />

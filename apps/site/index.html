@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      CalibraFácil · software de código aberto para laboratórios de calibração
+    </title>
+    <meta
+      name="description"
+      content="Software de código aberto (licença MIT) para laboratórios de calibração sob a ISO/IEC 17025: incerteza conforme o GUM, certificados assinados em ICP-Brasil, portal do cliente e aplicativo desktop que funciona offline."
+    />
+    <link rel="canonical" href="%SITE_URL%/" />
+    <link rel="icon" type="image/svg+xml" href="/logo-mark-light.svg" />
+    <meta name="theme-color" content="#4f46e5" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:site_name" content="CalibraFácil" />
+    <meta property="og:url" content="%SITE_URL%/" />
+    <meta
+      property="og:title"
+      content="CalibraFácil · software de código aberto para laboratórios de calibração"
+    />
+    <meta
+      property="og:description"
+      content="Fluxo de calibração, incerteza conforme o GUM, certificados assinados em ICP-Brasil e portal do cliente. Licença MIT."
+    />
+    <meta
+      property="og:image"
+      content="%SITE_URL%/dashboard-preview-light.png"
+    />
+    <meta property="og:image:width" content="3420" />
+    <meta property="og:image:height" content="2146" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareSourceCode",
+        "name": "CalibraFácil",
+        "url": "%SITE_URL%/",
+        "codeRepository": "https://github.com/CalibraFacil/calibrafacil",
+        "license": "https://github.com/CalibraFacil/calibrafacil/blob/main/LICENSE",
+        "programmingLanguage": "TypeScript",
+        "description": "Software de código aberto para laboratórios de calibração: cálculo de incerteza conforme o GUM, certificados com revisão e aprovação, assinatura ICP-Brasil e portal do cliente."
+      }
+    </script>
+
+    <!-- Follows the OS color scheme. Sets .dark before paint so there is no flash. -->
+    <script>
+      (function () {
+        try {
+          var m = window.matchMedia("(prefers-color-scheme: dark)");
+          function apply() {
+            document.documentElement.classList.toggle("dark", m.matches);
+          }
+          apply();
+          m.addEventListener("change", apply);
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"><!--app-html--></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

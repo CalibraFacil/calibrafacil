@@ -129,7 +129,7 @@ The repository root also contains Dockerfiles: `Dockerfile.api`, `Dockerfile.wor
 
 ### Vercel
 
-`apps/api`, `apps/web`, `apps/portal`, `apps/docs` and `apps/site` each ship a `vercel.json`.
+`apps/api`, `apps/web`, `apps/portal` and `apps/docs` each ship a `vercel.json`.
 Create one Vercel project per app with the app directory as its root, set the environment
 variables above (`BACKGROUND_JOBS_MODE=vercel` for the API), and Vercel runs the crons and
 the background-job queue declared in `apps/api/vercel.json`.

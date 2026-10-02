@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   CONTRIBUTING_URL,
+  DEPLOYMENT_URL,
   DISCUSSIONS_URL,
   DOCS_URL,
   LICENSE_URL,
@@ -25,8 +26,8 @@ const STEPS = [
     command: `git clone ${REPOSITORY_URL}.git`,
   },
   {
-    label: "Suba a infraestrutura e o laboratório de demonstração",
-    command: "pnpm install && pnpm setup:dev",
+    label: "Suba os serviços no Docker e o laboratório de demonstração",
+    command: "cd calibrafacil && pnpm install && pnpm setup:dev",
   },
   {
     label: "Rode a API, o sistema do laboratório e o portal",
@@ -52,7 +53,8 @@ const FACTS: {
     icon: ServerStack01Icon,
     title: "Hospede você mesmo",
     body: "PostgreSQL, armazenamento compatível com S3 e um serviço de e-mail. Nenhuma conta proprietária é obrigatória.",
-    href: DOCS_URL,
+    href: DEPLOYMENT_URL,
+    external: true,
   },
   {
     icon: GitForkIcon,
@@ -73,15 +75,15 @@ const FACTS: {
 export function OpenSourceSection() {
   return (
     <section
-      id="codigo-aberto"
+      id="rodar"
       className="scroll-mt-20 border-t border-border py-24 md:py-32"
     >
       <div className="mx-auto max-w-[1200px] px-6 md:px-8">
         <div className="grid items-start gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-16">
           <div>
             <SectionHeading
-              title="Código aberto, do motor de cálculo ao certificado."
-              body="Todo o sistema está no GitHub: o motor de incerteza com os seus dossiês de validação, a assinatura ICP-Brasil, o portal do cliente e o aplicativo desktop com operação offline. Três comandos colocam uma cópia completa para rodar na sua máquina."
+              title="Uma cópia completa na sua máquina."
+              body="Requer Node.js 24, pnpm, Bun e Docker; nenhuma conta na nuvem. O Docker sobe PostgreSQL, armazenamento S3, Gotenberg e uma caixa de entrada local, e o laboratório de demonstração entra com admin@laboratorio.test, sem senha: o link de acesso chega em localhost:8025."
             />
             <div className="mt-8 flex flex-wrap gap-3">
               <Button
@@ -103,7 +105,13 @@ export function OpenSourceSection() {
               <Button
                 variant="outline"
                 size="lg"
-                render={<a href={DOCS_URL} />}
+                render={
+                  <a
+                    href={DOCS_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  />
+                }
               >
                 <HugeiconsIcon icon={Book02Icon} data-icon="inline-start" />
                 Documentação

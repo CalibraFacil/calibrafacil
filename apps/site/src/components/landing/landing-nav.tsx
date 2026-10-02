@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -9,20 +7,22 @@ import {
 } from "@hugeicons/core-free-icons";
 
 import { Button } from "@/components/ui/button";
-import { DOCS_URL, OPEN_SOURCE_URL, REPOSITORY_URL } from "@/lib/site";
+import { CONTRIBUTING_URL, REPOSITORY_URL, RUN_LOCALLY_URL } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 import { BrandLockup } from "./brand";
 
-const navLinks = [
-  { label: "Produto", href: "/#fluxo" },
-  { label: "Portal do cliente", href: "/#portal" },
-  { label: "Cobertura", href: "/#cobertura" },
-  { label: "Código aberto", href: OPEN_SOURCE_URL },
-  { label: "Ferramentas", href: "/ferramentas" },
-  { label: "Recursos", href: "/recursos" },
-  { label: "Documentação", href: DOCS_URL },
+const navLinks: { label: string; href: string; external?: boolean }[] = [
+  { label: "O fluxo", href: "/#fluxo" },
+  { label: "Módulos", href: "/#modulos" },
+  { label: "Arquitetura", href: "/#arquitetura" },
+  { label: "Rodar localmente", href: RUN_LOCALLY_URL },
+  { label: "Contribuir", href: CONTRIBUTING_URL, external: true },
 ];
+
+function externalProps(external?: boolean) {
+  return external ? { target: "_blank", rel: "noopener noreferrer" } : {};
+}
 
 export function LandingNav() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -39,6 +39,7 @@ export function LandingNav() {
             <a
               key={link.href}
               href={link.href}
+              {...externalProps(link.external)}
               className="rounded-md px-2.5 py-1.5 text-[13.5px] text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground"
             >
               {link.label}
@@ -89,6 +90,7 @@ export function LandingNav() {
             <a
               key={link.href}
               href={link.href}
+              {...externalProps(link.external)}
               className="rounded-md px-3 py-2.5 text-[15px] text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground"
               onClick={() => setMobileOpen(false)}
             >

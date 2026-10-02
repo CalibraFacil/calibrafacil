@@ -73,8 +73,8 @@ added to `packages/db/sql/schema-extras.sql`.
   `satisfies`, or schema parsing instead.
 - **`check-types` runs the native Go compiler** — `tsc` from `typescript@7` (TypeScript 7.0, the
   10x native port; GA'd, replaced the old `@typescript/native-preview`/`tsgo` beta). Exception:
-  the Next.js apps (`apps/site`, `apps/docs`) stay pinned to `typescript@6.0.3` — the classic
-  JS build — because their tooling (`next typegen`) imports the TypeScript compiler _API_, which
+  the Next.js app (`apps/docs`) stays pinned to `typescript@6.0.3` — the classic
+  JS build — because its tooling (`next typegen`) imports the TypeScript compiler _API_, which
   the native `typescript@7` package does not ship (it exposes only the `tsc` binary plus an
   `unstable/*` API). The API `dev`/`start` and worker run under
   **Bun**; the web/portal/local-server run under Node + Vite/tsx.

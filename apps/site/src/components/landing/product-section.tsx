@@ -39,8 +39,8 @@ export function ProductSection() {
     <section id="fluxo" className="scroll-mt-20 py-24 md:py-32">
       <div className="mx-auto max-w-[1200px] px-6 md:px-8">
         <SectionHeading
-          title="Uma calibração, do começo ao fim."
-          body="Leituras, padrões, incerteza, revisão, aprovação e entrega ficam ligados ao mesmo número. Nenhuma etapa recomeça em outra planilha."
+          title="O fluxo de uma calibração."
+          body="Leituras, padrões, incerteza, revisão, aprovação e entrega ficam ligados ao mesmo registro, do pedido do cliente ao certificado assinado."
         />
 
         <div className="mt-12 grid gap-4 md:grid-cols-12">

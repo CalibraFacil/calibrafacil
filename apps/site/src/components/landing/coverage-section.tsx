@@ -1,6 +1,7 @@
 import type { ComponentType, SVGProps } from "react";
 
 import {
+  ApiIcon,
   CapaIcon,
   CompetenceIcon,
   ControlChartIcon,
@@ -8,16 +9,19 @@ import {
   LabelIcon,
   MethodIcon,
   OfflineIcon,
+  PortalIcon,
   ProficiencyIcon,
   RecallIcon,
+  SealIcon,
   UnitsIcon,
+  VerifyIcon,
   WeightIcon,
   WorkOrderIcon,
 } from "./coverage-icons";
 import { SectionHeading } from "./surfaces";
 
 // Everything the lab carries besides the calibration itself. Each item is a
-// module that exists in the product today.
+// module that exists in the codebase today.
 const MODULES: {
   icon: ComponentType<SVGProps<SVGSVGElement>>;
   title: string;
@@ -83,15 +87,35 @@ const MODULES: {
     title: "Trabalho sem internet",
     body: "Aplicativo para desktop com banco local e sincronização ao reconectar.",
   },
+  {
+    icon: PortalIcon,
+    title: "Portal do cliente",
+    body: "Equipamentos, vencimentos e certificados do cliente, pedidos de calibração e aprovação de orçamentos.",
+  },
+  {
+    icon: SealIcon,
+    title: "Metrologia legal",
+    body: "Regulamentos do Inmetro, marcas de selagem e reparo e comprovante de entrega para oficinas permissionárias.",
+  },
+  {
+    icon: VerifyIcon,
+    title: "Verificação pública",
+    body: "Página e QR code que conferem a assinatura, a cadeia e a revogação de cada certificado emitido.",
+  },
+  {
+    icon: ApiIcon,
+    title: "API e webhooks",
+    body: "API pública com chaves por escopo e webhooks assinados para integrar outros sistemas.",
+  },
 ];
 
 export function CoverageSection() {
   return (
-    <section id="cobertura" className="scroll-mt-20 py-24 md:py-32">
+    <section id="modulos" className="scroll-mt-20 py-24 md:py-32">
       <div className="mx-auto max-w-[1200px] px-6 md:px-8">
         <SectionHeading
-          title="O que mais o laboratório carrega, no mesmo sistema."
-          body="A calibração é o centro, não o limite. Padrões, vencimentos, qualidade, pessoal, financeiro e o trabalho em campo entram no mesmo registro operacional."
+          title="Os módulos do sistema."
+          body="A calibração é o centro, não o limite. Padrões, vencimentos, qualidade, pessoal, financeiro, o portal do cliente e o trabalho em campo usam o mesmo registro."
         />
 
         <ul className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">

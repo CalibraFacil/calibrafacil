@@ -162,3 +162,49 @@ export function OfflineIcon(props: IconProps) {
     </Svg>
   );
 }
+
+/** Client portal: a browser window with a person. */
+export function PortalIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M3.5 6.5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-11Z" />
+      <path d="M3.5 8.5h17" />
+      <circle cx="12" cy="12" r="1.9" />
+      <path d="M8.5 18a3.5 3.5 0 0 1 7 0" />
+    </Svg>
+  );
+}
+
+/** Legal metrology: a seal with its ribbons. */
+export function SealIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="9.5" r="5.5" />
+      <path d="m9.6 9.6 1.6 1.6 3.2-3.2" />
+      <path d="M8.5 14v6.5l3.5-2 3.5 2V14" />
+    </Svg>
+  );
+}
+
+/** Public verification: a QR code. */
+export function VerifyIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <rect x="4" y="4" width="6" height="6" rx="1" />
+      <rect x="14" y="4" width="6" height="6" rx="1" />
+      <rect x="4" y="14" width="6" height="6" rx="1" />
+      <path d="M14 14h2.5v2.5H14zM18 18h2v2h-2zM14 19.5h1.5M19.5 14v2" />
+    </Svg>
+  );
+}
+
+/** API and webhooks: code brackets. */
+export function ApiIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="m8.5 7.5-4.5 4.5 4.5 4.5" />
+      <path d="m15.5 7.5 4.5 4.5-4.5 4.5" />
+      <path d="m13.5 5.5-3 13" />
+    </Svg>
+  );
+}
