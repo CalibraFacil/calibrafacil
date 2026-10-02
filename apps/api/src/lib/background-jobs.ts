@@ -1,5 +1,9 @@
 import { send } from "@vercel/queue";
-import { enqueueQueueJob, type QueueMessage } from "@calibra-facil/db/queue";
+import {
+  enqueueQueueJob,
+  isQueueMessage,
+  type QueueMessage,
+} from "@calibra-facil/db/queue";
 import type {
   BackgroundJobMessage,
   IntegrationSyncBackgroundJobMessage,
@@ -207,6 +211,28 @@ export async function wakeDocumentWorker(baseUrl: string): Promise<void> {
     : new Error("Failed to wake document worker");
 }
 
+// --- database queue (self-hosted worker) ------------------------------------
+//
+// BACKGROUND_JOBS_MODE=queue writes every queue job to `app_queue_job` for a
+// separate process to drain: the polling worker (apps/worker/src/bun.ts), or
+// the document worker's drain server, which DOCUMENT_WORKER_URL wakes after
+// each enqueue. Conta Azul syncs need this process's integration code and the
+// cron-only messages are not queue jobs, so both still run here.
+async function enqueueToDatabaseQueue(message: BackgroundJobMessage) {
+  if (isContaAzulSyncMessage(message) || !isQueueMessage(message)) {
+    runLocalBackgroundJob(message);
+    return { messageId: `local-${Date.now()}` };
+  }
+
+  const documentWorkerUrl = getDocumentWorkerUrl();
+  if (documentWorkerUrl) {
+    return enqueueViaDocumentWorker(message, documentWorkerUrl);
+  }
+
+  const jobId = await enqueueQueueJob(message);
+  return { messageId: `app-queue-${jobId}` };
+}
+
 async function enqueueViaDocumentWorker(
   message: QueueMessage,
   baseUrl: string,
@@ -236,6 +262,10 @@ export async function enqueueBackgroundJob(
   if (mode === "local") {
     runLocalBackgroundJob(message);
     return { messageId: `local-${Date.now()}` };
+  }
+
+  if (mode === "queue") {
+    return enqueueToDatabaseQueue(message);
   }
 
   if (mode === "inline") {

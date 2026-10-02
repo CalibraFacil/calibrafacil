@@ -22,18 +22,14 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@calibra-facil/db": "workspace:*",
     "@calibra-facil/shared": "workspace:*",
+    "drizzle-orm": "^0.45.2",
     "resend": "^6.12.4"
   },
-  "peerDependencies": {
-    "@calibra-facil/db": "^1.0.0",
-    "drizzle-orm": "^0.45.2"
-  },
   "devDependencies": {
-    "@calibra-facil/db": "workspace:*",
     "@repo/typescript-config": "workspace:^",
     "@types/node": "^24.13.0",
-    "drizzle-orm": "^0.45.2",
     "typescript": "^7.0.2",
     "vitest": "^4.0.17"
   }

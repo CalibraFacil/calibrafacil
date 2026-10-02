@@ -43,7 +43,8 @@ function getInsertedQueueJobId(result: unknown): number | null {
   return typeof id === "number" && Number.isFinite(id) ? id : null;
 }
 
-function isQueueMessage(value: unknown): value is QueueMessage {
+/** Whether a message can be written to `app_queue_job` (cron-only ones cannot). */
+export function isQueueMessage(value: unknown): value is QueueMessage {
   return (
     isBackgroundJobMessage(value) &&
     value.type !== "SCHEDULED_NOTIFICATIONS" &&

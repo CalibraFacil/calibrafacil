@@ -1,28 +1,35 @@
-FROM node:24-bookworm-slim AS deploy
+# The API: the Hono app on Bun (apps/api/src/bun.ts), which also serves the
+# scheduled jobs under /api/cron/*. Build from the repository root:
+#
+#   docker build -f Dockerfile.api -t calibrafacil-api .
+#
+# Configure it with the environment variables listed in DEPLOYMENT.md.
+FROM node:24-bookworm-slim AS build
 
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates \
-  && rm -rf /var/lib/apt/lists/* \
-  && npm install -g pnpm@9
+# pnpm itself comes from the "packageManager" field of package.json.
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN corepack enable
+
+WORKDIR /repo
+COPY . .
+# pnpm-workspace.yaml asks for native binaries for every platform a hosted
+# build may run on; an image only needs its own.
+RUN sed -i '/^supportedArchitectures:/,/^[^ ]/{/^supportedArchitectures:/d;/^ /d}' pnpm-workspace.yaml
+# Only the API and the workspace packages it imports, without dev tooling.
+RUN pnpm install --frozen-lockfile --prod --filter "@calibra-facil/api..."
+
+FROM oven/bun:1-slim
 
 ENV NODE_ENV=production
 WORKDIR /repo
 
-COPY . .
-RUN pnpm --filter @calibra-facil/api deploy --prod --frozen-lockfile /app
+# Workspace packages ship TypeScript source, which Bun runs directly.
+COPY --from=build /repo/package.json ./
+COPY --from=build /repo/node_modules ./node_modules
+COPY --from=build /repo/packages ./packages
+COPY --from=build /repo/apps/api ./apps/api
+COPY --from=build /repo/apps/worker ./apps/worker
 
-FROM node:24-bookworm-slim
-
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl unzip \
-  && rm -rf /var/lib/apt/lists/* \
-  && curl -fsSL https://bun.sh/install | bash
-
-ENV PATH="/root/.bun/bin:${PATH}"
-ENV NODE_ENV=production
-WORKDIR /app
-
-COPY --from=deploy /app ./
-
+WORKDIR /repo/apps/api
 EXPOSE 3000
 CMD ["bun", "src/bun.ts"]

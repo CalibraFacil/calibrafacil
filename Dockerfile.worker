@@ -1,19 +1,33 @@
-FROM node:24-bookworm-slim
+# The background worker (apps/worker/src/bun.ts): polls the database job queue,
+# renders certificates and documents through Gotenberg (GOTENBERG_URL), sends
+# the queued e-mails and runs the integration syncs. Build from the repository
+# root:
+#
+#   docker build -f Dockerfile.worker -t calibrafacil-worker .
+FROM node:24-bookworm-slim AS build
 
-ENV PUPPETEER_SKIP_DOWNLOAD=true
-ENV CHROME_EXECUTABLE_PATH=/usr/bin/chromium
-ENV NODE_ENV=production
+# pnpm itself comes from the "packageManager" field of package.json.
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN corepack enable
 
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl unzip chromium fonts-liberation \
-  && rm -rf /var/lib/apt/lists/* \
-  && npm install -g pnpm@9 \
-  && curl -fsSL https://bun.sh/install | bash
-
-ENV PATH="/root/.bun/bin:${PATH}"
-WORKDIR /app
-
+WORKDIR /repo
 COPY . .
-RUN pnpm install --frozen-lockfile
+# pnpm-workspace.yaml asks for native binaries for every platform a hosted
+# build may run on; an image only needs its own.
+RUN sed -i '/^supportedArchitectures:/,/^[^ ]/{/^supportedArchitectures:/d;/^ /d}' pnpm-workspace.yaml
+# Only the worker and the workspace packages it imports, without dev tooling.
+RUN pnpm install --frozen-lockfile --prod --filter "@calibra-facil/worker..."
 
-CMD ["bun", "apps/worker/src/bun.ts"]
+FROM oven/bun:1-slim
+
+ENV NODE_ENV=production
+WORKDIR /repo
+
+# Workspace packages ship TypeScript source, which Bun runs directly.
+COPY --from=build /repo/package.json ./
+COPY --from=build /repo/node_modules ./node_modules
+COPY --from=build /repo/packages ./packages
+COPY --from=build /repo/apps/worker ./apps/worker
+
+WORKDIR /repo/apps/worker
+CMD ["bun", "src/bun.ts"]

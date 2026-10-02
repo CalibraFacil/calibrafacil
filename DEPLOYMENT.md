@@ -49,7 +49,7 @@ A typical layout uses one domain with three hosts:
 | `SIGNING_MASTER_KEY`, `INTEGRATIONS_MASTER_KEY`, `PUBLIC_API_MASTER_KEY`, `EMAIL_DOMAIN_MASTER_KEY` | 32 random bytes each, base64 (`openssl rand -base64 32`); never reuse one key twice |
 | `QUOTE_APPROVAL_CODE_PEPPER`, `CRON_SECRET`                                                         | Random strings                                                                      |
 | `PORTAL_SERVICE_USER_ID`                                                                            | Id of a `user` row that owns client-portal organizations (see below)                |
-| `BACKGROUND_JOBS_MODE`                                                                              | `local` (jobs run inside the API process) or `vercel` (Vercel Queue)                |
+| `BACKGROUND_JOBS_MODE`                                                                              | `local` (inside the API process), `queue` (a separate worker) or `vercel`           |
 
 Extra origins for CORS and auth can be listed in `CORS_ALLOWED_ORIGINS` and
 `AUTH_TRUSTED_ORIGINS`. The Conta Azul ERP integration (`CONTA_AZUL_*`) is optional: it stays
@@ -120,12 +120,28 @@ VITE_API_URL=https://api.example.com pnpm turbo build --filter=@calibra-facil/we
 # serve apps/web/dist and apps/portal/dist as static SPAs
 ```
 
-With `BACKGROUND_JOBS_MODE=local` the API process also renders PDFs and runs integration
-jobs. To move that work to a separate process, run the worker (`bun apps/worker/src/bun.ts`),
-which polls the database job queue.
+With `BACKGROUND_JOBS_MODE=local` the API process also renders PDFs and runs the background
+jobs. To move that work to a separate process, set `BACKGROUND_JOBS_MODE=queue` on the API and
+run the worker (`bun apps/worker/src/bun.ts`), which polls the database job queue. It needs the
+API's database, storage, Gotenberg, e-mail and encryption settings (see
+`apps/worker/.env.example`).
 
-The repository root also contains Dockerfiles: `Dockerfile.api`, `Dockerfile.worker`,
-`Dockerfile.document-worker` and `Dockerfile.static` (build arg `APP_NAME=web|portal`).
+### Docker
+
+The repository root has one Dockerfile per process. Build each from the root, e.g.
+`docker build -f Dockerfile.api -t calibrafacil-api .`, and pass the environment above with
+`--env-file`.
+
+- `Dockerfile.api`: the API, on port 3000.
+- `Dockerfile.worker`: the polling worker, for `BACKGROUND_JOBS_MODE=queue`.
+- `Dockerfile.document-worker`: the same worker as an HTTP server on port 8080 that sleeps until
+  woken. Point the API's `DOCUMENT_WORKER_URL` at it and the API wakes it after each enqueue
+  instead of it polling. `services/document-worker` deploys it as a Cloudflare Container.
+- `Dockerfile.static`: the lab app (`--build-arg APP_NAME=web`) or the client portal
+  (`APP_NAME=portal`) on port 8080. `--build-arg VITE_API_URL=https://api.example.com` bakes in
+  the API's address; leave it out when a reverse proxy serves the API under `/api` on the same
+  origin. The server sets cache headers only, so add the security headers from
+  `apps/web/public/_headers` in the proxy.
 
 ### Vercel
 

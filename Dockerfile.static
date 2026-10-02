@@ -1,35 +1,40 @@
+# A frontend (APP_NAME=web for the lab app, portal for the client portal),
+# built with Vite and served by a small Bun server. Build from the repository
+# root:
+#
+#   docker build -f Dockerfile.static --build-arg APP_NAME=web \
+#     --build-arg VITE_API_URL=https://api.example.com -t calibrafacil-web .
+#
+# VITE_API_URL is baked into the bundle. Leave it out when a reverse proxy
+# serves the API under /api on the app's own origin.
 FROM node:24-bookworm-slim AS build
 
 ARG APP_NAME
-# Public URL of the API the app calls, e.g. https://api.example.com (required).
 ARG VITE_API_URL
-
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl unzip \
-  && rm -rf /var/lib/apt/lists/* \
-  && npm install -g pnpm@9 \
-  && curl -fsSL https://bun.sh/install | bash
-
-ENV PATH="/root/.bun/bin:${PATH}"
 ENV VITE_API_URL=${VITE_API_URL}
-WORKDIR /app
 
+# pnpm itself comes from the "packageManager" field of package.json.
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN corepack enable
+
+WORKDIR /repo
 COPY . .
-RUN pnpm install --frozen-lockfile
-RUN pnpm turbo build --filter=@calibra-facil/${APP_NAME}
+# pnpm-workspace.yaml asks for native binaries for every platform a hosted
+# build may run on; an image only needs its own.
+RUN sed -i '/^supportedArchitectures:/,/^[^ ]/{/^supportedArchitectures:/d;/^ /d}' pnpm-workspace.yaml
+RUN test -n "$APP_NAME" || (echo "Pass --build-arg APP_NAME=web or APP_NAME=portal" && false)
+RUN pnpm install --frozen-lockfile --filter "@calibra-facil/${APP_NAME}..."
+RUN pnpm --filter "@calibra-facil/${APP_NAME}" build
 
-FROM oven/bun:1
+FROM oven/bun:1-slim
 
 ARG APP_NAME
-ARG SPA_FALLBACK=false
-
-WORKDIR /app
 ENV PORT=8080
 ENV STATIC_DIR=/app/dist
-ENV SPA_FALLBACK=${SPA_FALLBACK}
+WORKDIR /app
 
-COPY --from=build /app/scripts/static-server.ts /app/scripts/static-server.ts
-COPY --from=build /app/apps/${APP_NAME}/dist /app/dist
+COPY --from=build /repo/scripts/static-server.ts ./static-server.ts
+COPY --from=build /repo/apps/${APP_NAME}/dist ./dist
 
 EXPOSE 8080
-CMD ["bun", "scripts/static-server.ts"]
+CMD ["bun", "static-server.ts"]

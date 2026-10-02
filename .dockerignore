@@ -1,9 +1,8 @@
-# Docker build context excludes. The container Dockerfiles
-# (Dockerfile.document-worker, Dockerfile.worker) run `COPY . .` followed by
+# Docker build context excludes. Every Dockerfile runs `COPY . .` followed by
 # `pnpm install --frozen-lockfile`, so host install/build artifacts must NOT
 # leak into the context or image — they bloat the upload and can bake in
-# wrong-arch native binaries (e.g. @resvg/resvg-js). Both bare and **/ forms
-# are kept so root-level dirs are excluded on every Docker/BuildKit version.
+# wrong-arch native binaries. Both bare and **/ forms are kept so root-level
+# dirs are excluded on every Docker/BuildKit version.
 .git
 .github
 node_modules

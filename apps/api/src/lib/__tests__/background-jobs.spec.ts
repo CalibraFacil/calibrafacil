@@ -4,14 +4,28 @@ import type { BackgroundJobMessage } from "@calibra-facil/shared";
 const mocks = vi.hoisted(() => ({
   send: vi.fn(),
   enqueueQueueJob: vi.fn(),
+  processBackgroundJob: vi.fn(),
+  runIntegrationSync: vi.fn(),
 }));
 
 vi.mock("@vercel/queue", () => ({
   send: mocks.send,
 }));
 
-vi.mock("@calibra-facil/db/queue", () => ({
+vi.mock("@calibra-facil/db/queue", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@calibra-facil/db/queue")>()),
   enqueueQueueJob: mocks.enqueueQueueJob,
+}));
+
+// The in-process runners load these lazily.
+vi.mock("../worker-modules", () => ({
+  importWorkerModule: async () => ({
+    processBackgroundJob: mocks.processBackgroundJob,
+  }),
+}));
+
+vi.mock("../integrations", () => ({
+  runIntegrationSync: mocks.runIntegrationSync,
 }));
 
 vi.mock("../runtime-env", () => ({
@@ -228,5 +242,103 @@ describe("enqueueBackgroundJob — document-worker routing", () => {
     await wakeDocumentWorker("https://dw.example.com");
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("enqueueBackgroundJob — database queue mode", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    for (const key of DOCUMENT_WORKER_ENV_KEYS) {
+      savedEnv[key] = process.env[key];
+      delete process.env[key];
+    }
+    process.env.BACKGROUND_JOBS_MODE = "queue";
+    process.env.DOCUMENT_WORKER_WAKE_ATTEMPTS = "1";
+    process.env.DOCUMENT_WORKER_WAKE_RETRY_DELAY_MS = "0";
+    mocks.enqueueQueueJob.mockResolvedValue(42);
+    mocks.processBackgroundJob.mockResolvedValue(undefined);
+    mocks.runIntegrationSync.mockResolvedValue(undefined);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null)));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    for (const key of DOCUMENT_WORKER_ENV_KEYS) {
+      if (savedEnv[key] === undefined) delete process.env[key];
+      else process.env[key] = savedEnv[key];
+    }
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("writes every queue job to app_queue_job, never to Vercel Queue", async () => {
+    for (const message of [
+      documentWorkerMessage,
+      certificateMessage,
+      serviceOrderQuoteMessage,
+    ]) {
+      const result = await enqueueBackgroundJob(message);
+      expect(result.messageId).toBe("app-queue-42");
+      expect(mocks.enqueueQueueJob).toHaveBeenLastCalledWith(message);
+    }
+
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
+  it("wakes the document worker when DOCUMENT_WORKER_URL is set", async () => {
+    process.env.DOCUMENT_WORKER_URL = "https://dw.example.com";
+
+    const result = await enqueueBackgroundJob(serviceOrderQuoteMessage);
+
+    expect(result.messageId).toBe("app-queue-42");
+    expect(mocks.enqueueQueueJob).toHaveBeenCalledWith(
+      serviceOrderQuoteMessage,
+    );
+    await vi.waitFor(() =>
+      expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+        new URL("https://dw.example.com/drain"),
+        expect.objectContaining({ method: "POST" }),
+      ),
+    );
+  });
+
+  it("runs the cron-only messages in this process", async () => {
+    const message: BackgroundJobMessage = { type: "SCHEDULED_NOTIFICATIONS" };
+
+    const result = await enqueueBackgroundJob(message);
+
+    expect(result.messageId).toMatch(/^local-/);
+    expect(mocks.enqueueQueueJob).not.toHaveBeenCalled();
+    expect(mocks.send).not.toHaveBeenCalled();
+    await vi.waitFor(() =>
+      expect(mocks.processBackgroundJob).toHaveBeenCalledWith(
+        expect.anything(),
+        message,
+      ),
+    );
+  });
+
+  it("runs Conta Azul syncs in this process, where their client lives", async () => {
+    const message: BackgroundJobMessage = {
+      type: "INTEGRATION_SYNC",
+      provider: "conta_azul",
+      integrationId: "integration-1",
+      organizationId: "org-1",
+      runId: "run-1",
+      target: "customer",
+      limit: 50,
+      trigger: "manual",
+    };
+
+    const result = await enqueueBackgroundJob(message);
+
+    expect(result.messageId).toMatch(/^local-/);
+    expect(mocks.enqueueQueueJob).not.toHaveBeenCalled();
+    await vi.waitFor(() =>
+      expect(mocks.runIntegrationSync).toHaveBeenCalledWith(
+        expect.objectContaining({ integrationId: "integration-1" }),
+      ),
+    );
   });
 });
