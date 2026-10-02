@@ -10,4 +10,7 @@
     "directory": "./dist",
     "not_found_handling": "404-page",
   },
+  // Pull-request builds run `wrangler preview`, which needs this block, even
+  // empty; previews get their own URL and never touch production.
+  "previews": {},
 }
