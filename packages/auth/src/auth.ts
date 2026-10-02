@@ -200,9 +200,13 @@ function isProductionRuntime(): boolean {
   return false;
 }
 
-function createBaseUrlConfig(
-  isProduction: boolean,
-): string | { allowedHosts: string[]; protocol?: "http" | "https" | "auto" } {
+function createBaseUrlConfig(isProduction: boolean):
+  | string
+  | {
+      allowedHosts: string[];
+      fallback?: string;
+      protocol?: "http" | "https" | "auto";
+    } {
   if (isProduction) {
     return getRequiredEnv("API_URL");
   }
@@ -212,13 +216,16 @@ function createBaseUrlConfig(
   // so magic-link URLs and origin trust both derive from the hostname the user
   // actually hit, with no extra rewriting. AUTH_DEV_ALLOWED_HOSTS adds extra
   // hosts (comma-separated, wildcards allowed) for tunnels or LAN testing.
+  // `fallback` serves direct `auth.api.*` calls made without request headers
+  // (e.g. creating a customer's CLIENT organization), which have no host to
+  // resolve from.
   return {
     allowedHosts: [
-      "localhost:3000",
-      "localhost:5173",
-      "localhost:5174",
+      "localhost:*",
+      "127.0.0.1:*",
       ...readEnvList("AUTH_DEV_ALLOWED_HOSTS"),
     ],
+    fallback: resolveApiBaseUrl("http://localhost:3000"),
     protocol: "auto",
   };
 }
