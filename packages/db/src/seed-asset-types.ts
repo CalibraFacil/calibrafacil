@@ -2,7 +2,7 @@
  * Seed script for ISO 17025 / RBC / Inmetro equipment types.
  * Run this after migration to populate the asset_type table with common calibration instruments.
  *
- * Usage: bun run src/seed-asset-types.ts
+ * Usage: bun run src/seed-asset-types.ts (also run by apps/api's `init`)
  */
 
 import { db } from "./db";
@@ -1131,8 +1131,15 @@ export const ASSET_TYPE_SEED: AssetTypeSeed[] = [
   },
 ];
 
-async function seed() {
-  console.log("Seeding asset types...");
+/**
+ * Insert the catalog (and the legal-metrology regulations it relies on).
+ * Idempotent: existing slugs are left untouched.
+ */
+export async function seedAssetTypes(
+  options: { verbose?: boolean } = {},
+): Promise<void> {
+  const log = options.verbose ? console.log : () => {};
+  log("Seeding asset types...");
 
   for (const type of ASSET_TYPE_SEED) {
     try {
@@ -1140,7 +1147,7 @@ async function seed() {
         .insert(assetType)
         .values(type)
         .onConflictDoNothing({ target: assetType.slug });
-      console.log(`  ✓ ${type.name}`);
+      log(`  ✓ ${type.name}`);
     } catch (error) {
       console.error(`  ✗ ${type.name}:`, error);
     }
@@ -1148,10 +1155,13 @@ async function seed() {
 
   // Also seed the GLOBAL legal-metrology regulation catalog (deferred #3 of #423).
   // Idempotent + data-only (ON CONFLICT DO NOTHING on `category`; touches no asset row).
-  console.log("Seeding legal-metrology regulations...");
+  log("Seeding legal-metrology regulations...");
   await seedLegalMetrologyRegulations(db);
-  console.log("  ✓ legal-metrology regulation catalog");
+  log("  ✓ legal-metrology regulation catalog");
+}
 
+async function seed() {
+  await seedAssetTypes({ verbose: true });
   console.log("\nDone! Seeded", ASSET_TYPE_SEED.length, "asset types.");
   process.exit(0);
 }

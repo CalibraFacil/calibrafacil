@@ -8,11 +8,12 @@
   "scripts": {
     "dev": "bun --watch src/bun.ts",
     "dev:bun": "bun --watch src/bun.ts",
-    "dev:checkout-offer": "bun scripts/dev-checkout-offer.ts",
     "build": "tsc --project tsconfig.build.json --noEmit && node scripts/build-vercel-functions.mjs",
     "build:vercel-functions": "node scripts/build-vercel-functions.mjs",
     "typecheck": "tsc --noEmit",
     "start": "bun src/bun.ts",
+    "init": "bun src/cli/init.ts",
+    "create-lab": "bun src/cli/create-lab.ts",
     "deploy": "pnpm dlx vercel deploy --prod",
     "test": "vitest",
     "test:run": "vitest run",

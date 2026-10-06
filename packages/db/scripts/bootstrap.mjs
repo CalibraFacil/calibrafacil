@@ -8,10 +8,13 @@
 //  - Existing database: pending migrations are applied with `drizzle-kit migrate`.
 //
 // Reads DATABASE_URL (packages/db/.env is loaded by drizzle.config.ts and here).
+// Runs under Node or Bun; drizzle-kit runs under whichever started this script,
+// so it also works in the Bun-only API image.
 import "dotenv/config";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import postgres from "postgres";
@@ -26,18 +29,17 @@ if (!databaseUrl) {
   process.exit(1);
 }
 
-const isWindows = process.platform === "win32";
+// drizzle-kit's CLI entry point (its package exports only the library).
+const drizzleKitBin = path.join(
+  path.dirname(createRequire(import.meta.url).resolve("drizzle-kit")),
+  "bin.cjs",
+);
 function drizzleKit(args) {
-  execFileSync(
-    isWindows ? "pnpm.cmd" : "pnpm",
-    ["exec", "drizzle-kit", ...args],
-    {
-      cwd: packageDir,
-      stdio: "inherit",
-      env: { ...process.env, DATABASE_URL: databaseUrl },
-      shell: isWindows,
-    },
-  );
+  execFileSync(process.execPath, [drizzleKitBin, ...args], {
+    cwd: packageDir,
+    stdio: "inherit",
+    env: { ...process.env, DATABASE_URL: databaseUrl },
+  });
 }
 
 const sql = postgres(databaseUrl, { max: 1, onnotice: () => {} });
