@@ -90,6 +90,9 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,svg,png,woff,woff2}'],
+        // Written per container at startup (scripts/static-server.ts), so it
+        // must come from the network, never from the precache.
+        globIgnores: ['runtime-env.js'],
         // A reverse proxy may serve the API under /api on this origin
         // (including the Better Auth and magic-link GETs a user opens from an
         // e-mail); the SPA navigation fallback must never answer those.
