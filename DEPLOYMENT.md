@@ -87,8 +87,10 @@ limits to configure.
 ## Scheduled jobs
 
 The API serves its scheduled jobs at `/api/cron/<job>`, protected by
-`Authorization: Bearer $CRON_SECRET`. On Vercel they are declared in `apps/api/vercel.json`;
-anywhere else, trigger them with your scheduler of choice:
+`Authorization: Bearer $CRON_SECRET`. On Vercel they are declared in `apps/api/vercel.json`.
+Anywhere else, the simplest option is `CRON_SCHEDULER=internal` on the API: it runs the same
+schedule in-process (the Docker setup turns it on), and a lease keeps two replicas from running
+a job twice. Or trigger them with your scheduler of choice:
 
 | Job                    | Schedule (UTC) |
 | ---------------------- | -------------- |

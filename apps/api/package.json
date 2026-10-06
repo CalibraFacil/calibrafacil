@@ -48,6 +48,7 @@
     "@resvg/resvg-js": "2.6.2",
     "@scalar/hono-api-reference": "^0.10.20",
     "@vercel/queue": "^0.2.0",
+    "croner": "^10.0.1",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.12.34",
     "hono-openapi": "^1.3.0",

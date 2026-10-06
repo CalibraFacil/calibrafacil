@@ -1,6 +1,7 @@
 import { resolvePlatformEmailTransport } from "@calibra-facil/email-sender";
 import app from "./index";
 import { GET as dispatchCron } from "../vercel-src/cron/dispatch";
+import { readCronEntries, startCronScheduler } from "./lib/cron-scheduler";
 
 type BunServer = {
   hostname: string;
@@ -172,3 +173,18 @@ const server = Bun.serve({
 console.info(
   `Calibra Facil API listening on http://${server.hostname}:${server.port}`,
 );
+
+// CRON_SCHEDULER=internal runs the vercel.json schedule in this process, for
+// installs without an external scheduler (the Docker setup turns it on).
+if (Bun.env.CRON_SCHEDULER === "internal") {
+  const jobs = startCronScheduler({
+    entries: readCronEntries(
+      JSON.parse(
+        await Bun.file(new URL("../vercel.json", import.meta.url)).text(),
+      ),
+    ),
+    dispatch: dispatchCron,
+    secret: Bun.env.CRON_SECRET,
+  });
+  console.info(`Scheduled ${jobs.length} cron jobs in-process (UTC)`);
+}
