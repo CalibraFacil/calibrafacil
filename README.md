@@ -133,7 +133,8 @@ pnpm --dir apps/api test:integration        # real-Postgres integration tests (D
 
 Database migrations are plain SQL in `packages/db/drizzle/`; apply them with
 `pnpm --dir packages/db db:bootstrap` (a new database is built from the schema; an existing one
-receives the pending migrations).
+receives the pending migrations). The real-Postgres integration tests run in CI after every
+merge to `main` and nightly.
 
 ## Self-hosting
 
