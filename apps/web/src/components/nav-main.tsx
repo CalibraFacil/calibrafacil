@@ -23,6 +23,8 @@ import { usePathPrewarmIntent } from '@/lib/use-route-prewarm-intent'
 export type NavMainItem = {
   title: string
   url: string
+  /** `data-tour` value for the guided tour. */
+  tourId?: string
   icon?: ReactNode
   items?: Array<{
     icon?: ReactNode
@@ -153,7 +155,7 @@ function NavMainItem({
   }
 
   return (
-    <SidebarMenuItem>
+    <SidebarMenuItem data-tour={item.tourId}>
       <NavMainLink
         isActive={matchesPath(item.url)}
         icon={item.icon}
@@ -179,7 +181,7 @@ function NavMainCollapsible({
     <Collapsible
       className="group/collapsible"
       defaultOpen={isActive}
-      render={<SidebarMenuItem />}
+      render={<SidebarMenuItem data-tour={item.tourId} />}
     >
       <CollapsibleTrigger render={<SidebarMenuButton tooltip={item.title} />}>
         {item.icon}

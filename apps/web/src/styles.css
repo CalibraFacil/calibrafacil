@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
+@import 'driver.js/dist/driver.css';
 
 /* Figtree — the app's primary sans (the `font-sans` utility / body default). */
 @font-face {
@@ -202,4 +203,67 @@
   @media (prefers-reduced-motion: reduce) {
     animation: none;
   }
+}
+
+/* Guided tours (driver.js, features/onboarding/tour.ts), dressed as the app's
+   own popover and buttons. Unlayered and two classes deep so they win over
+   the library's stylesheet, which resets its elements with `all: unset`. */
+.driver-popover.calibra-tour {
+  @apply bg-popover text-popover-foreground ring-foreground/10 rounded-md p-4 font-sans text-sm shadow-md ring-1;
+  width: 18rem;
+  min-width: 0;
+  max-width: calc(100vw - 2rem);
+}
+
+.calibra-tour .driver-popover-title {
+  @apply pr-6 text-sm leading-snug font-semibold;
+}
+
+.calibra-tour .driver-popover-description {
+  @apply text-muted-foreground mt-1 text-sm leading-relaxed;
+}
+
+.calibra-tour .driver-popover-close-btn {
+  @apply text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-ring/50 top-2 right-2 flex size-7 items-center justify-center rounded-md text-base focus-visible:ring-[3px];
+}
+
+.calibra-tour .driver-popover-footer {
+  @apply mt-4 gap-3;
+}
+
+.calibra-tour .driver-popover-progress-text {
+  @apply text-muted-foreground font-mono text-xs tabular-nums;
+}
+
+.calibra-tour .driver-popover-navigation-btns {
+  @apply gap-2;
+}
+
+.calibra-tour .driver-popover-navigation-btns button + button {
+  margin-left: 0;
+}
+
+.calibra-tour .driver-popover-footer-btn {
+  @apply border-border bg-background text-foreground hover:bg-muted focus-visible:ring-ring/50 dark:bg-input/30 dark:border-input dark:hover:bg-input/50 inline-flex h-8 items-center rounded-md border px-2.5 text-sm font-medium shadow-xs transition-colors focus-visible:ring-[3px];
+  text-shadow: none;
+}
+
+.calibra-tour .driver-popover-next-btn {
+  @apply bg-primary text-primary-foreground hover:bg-primary/80 dark:bg-primary dark:hover:bg-primary/80 border-transparent dark:border-transparent;
+}
+
+.calibra-tour .driver-popover-arrow-side-left {
+  border-left-color: var(--popover);
+}
+
+.calibra-tour .driver-popover-arrow-side-right {
+  border-right-color: var(--popover);
+}
+
+.calibra-tour .driver-popover-arrow-side-top {
+  border-top-color: var(--popover);
+}
+
+.calibra-tour .driver-popover-arrow-side-bottom {
+  border-bottom-color: var(--popover);
 }

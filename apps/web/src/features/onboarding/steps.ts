@@ -25,6 +25,11 @@ export type ActivationStep = {
   to: string
   /** Steps that must be done first. Empty for everything but the last. */
   requires: ActivationStepId[]
+  /**
+   * The control on the destination screen that starts the step (its
+   * `data-tour` value) and what to do with it, pointed at on arrival.
+   */
+  pointer?: { target: string; description: string }
 }
 
 export const ACTIVATION_STEPS: ActivationStep[] = [
@@ -41,6 +46,11 @@ export const ACTIVATION_STEPS: ActivationStep[] = [
     help: 'Adote um método do catálogo e resolva os itens marcados [VERIFICAR] antes de publicar.',
     to: '/dashboard/methods',
     requires: [],
+    pointer: {
+      target: 'methods-from-template',
+      description:
+        'Comece por um modelo do catálogo: grandezas, fórmulas e orçamento de incerteza já vêm prontos para revisar.',
+    },
   },
   {
     id: 'referenceStandard',
@@ -48,6 +58,11 @@ export const ACTIVATION_STEPS: ActivationStep[] = [
     help: 'Só o padrão que a sua primeira calibração vai usar. Os demais podem entrar depois.',
     to: '/dashboard/standards',
     requires: [],
+    pointer: {
+      target: 'standards-new',
+      description:
+        'Cadastre o padrão com os dados do certificado de calibração dele: valores, incertezas e validade.',
+    },
   },
   {
     id: 'signingCertificate',
@@ -55,6 +70,11 @@ export const ACTIVATION_STEPS: ActivationStep[] = [
     help: 'É o que assina o laudo. Os dados do titular e a validade são lidos do próprio arquivo.',
     to: '/dashboard/settings/certificates',
     requires: [],
+    pointer: {
+      target: 'signing-certificate-add',
+      description:
+        'Envie o arquivo .p12 ou .pfx com a senha dele. A chave fica guardada criptografada.',
+    },
   },
   {
     id: 'customer',
@@ -62,6 +82,11 @@ export const ACTIVATION_STEPS: ActivationStep[] = [
     help: 'O CNPJ preenche razão social, endereço e contato.',
     to: '/dashboard/clients',
     requires: [],
+    pointer: {
+      target: 'customers-new',
+      description:
+        'Informe o CNPJ do cliente: razão social, endereço e contato vêm preenchidos.',
+    },
   },
   {
     id: 'firstCertificate',

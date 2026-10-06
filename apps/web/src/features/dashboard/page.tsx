@@ -213,6 +213,7 @@ export function DashboardIndex() {
           <Button
             className={ACTION_BUTTON_CLASS}
             render={<Link to="/dashboard/jobs/new" />}
+            data-tour="new-calibration"
           >
             <HugeiconsIcon icon={PlusSignIcon} className="size-4" />
             Nova calibração

@@ -25,6 +25,7 @@ export function SidebarSearch() {
       <SidebarMenuItem>
         <SidebarMenuButton
           onClick={() => setOpen(true)}
+          data-tour="search"
           className="h-8 cursor-pointer justify-between"
           tooltip={isCollapsed ? 'Buscar (Ctrl+K)' : undefined}
         >

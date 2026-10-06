@@ -80,6 +80,8 @@ function toNavMainItems(items: DashboardNavItem[]) {
   return items.map((item) => ({
     title: item.title,
     url: item.url,
+    // What the guided tour points at (features/onboarding/interface-tour.ts).
+    tourId: `nav-${item.icon}`,
     icon: <HugeiconsIcon icon={dashboardIconMap[item.icon]} />,
     items: item.items?.map((subItem) => ({
       title: subItem.title,
@@ -124,7 +126,7 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {secondaryItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
+                <SidebarMenuItem key={item.title} data-tour={item.tourId}>
                   <SidebarMenuButton
                     render={
                       item.url.startsWith('http') ? (

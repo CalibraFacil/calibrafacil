@@ -224,7 +224,10 @@ export function CertificatesSettingsPage({
               description="Certificados digitais A1 (.p12/.pfx) para assinar os certificados de calibração."
               action={
                 <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
-                  <DialogTrigger render={<Button size="sm" />}>
+                  <DialogTrigger
+                    render={<Button size="sm" />}
+                    data-tour="signing-certificate-add"
+                  >
                     <HugeiconsIcon icon={Add01Icon} className="mr-1.5 size-4" />
                     Adicionar certificado
                   </DialogTrigger>

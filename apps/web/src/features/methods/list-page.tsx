@@ -188,6 +188,7 @@ export function MethodsListPage({
                 }
                 disabled={disabled}
                 className={ACTION_BUTTON_CLASS}
+                data-tour="methods-from-template"
               >
                 <HugeiconsIcon icon={Add01Icon} className="mr-2 size-4" />A
                 partir de modelo

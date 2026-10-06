@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
 
+import { startInterfaceTour } from './interface-tour'
 import { useActivationChecklist } from './queries'
 import { buildActivationChecklistView, type ActivationStepView } from './steps'
 
@@ -80,7 +81,7 @@ export function ActivationChecklist({
     // the rest of the dashboard uses instead of appearing in one frame.
     <StaggerGroup>
       <StaggerItem>
-        <Panel className="p-4 sm:p-5">
+        <Panel className="p-4 sm:p-5" data-tour="activation-checklist">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h2 className="text-balance text-base font-semibold sm:text-lg">
@@ -95,16 +96,31 @@ export function ActivationChecklist({
                 into a ragged wrap, so it collapses to the close affordance and
                 keeps its label everywhere there is space. Negative margins pull
                 the ghost padding out to the panel edge for optical alignment. */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={dismiss}
-              aria-label="Ocultar"
-              className="-mr-2 -mt-1.5 size-8 shrink-0 p-0 text-muted-foreground sm:size-auto sm:px-2.5"
-            >
-              <HugeiconsIcon icon={Cancel01Icon} className="size-4 sm:hidden" />
-              <span className="sr-only sm:not-sr-only">Ocultar</span>
-            </Button>
+            <div className="-mr-2 -mt-1.5 flex shrink-0 items-center gap-1">
+              {/* The tour points at the sidebar, which a phone keeps closed:
+                  offered where it has something to show. */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={startInterfaceTour}
+                className="hidden text-muted-foreground sm:inline-flex"
+              >
+                Conhecer o sistema
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={dismiss}
+                aria-label="Ocultar"
+                className="size-8 p-0 text-muted-foreground sm:size-auto sm:px-2.5"
+              >
+                <HugeiconsIcon
+                  icon={Cancel01Icon}
+                  className="size-4 sm:hidden"
+                />
+                <span className="sr-only sm:not-sr-only">Ocultar</span>
+              </Button>
+            </div>
           </div>
 
           {/* Capped on wide screens: a hairline stretched across 1100px puts
