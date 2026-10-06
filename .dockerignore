@@ -29,6 +29,7 @@ test-results
 # Local env + logs (never bake secrets into an image)
 .env
 .env.*
+**/.env
 .dev.vars
 *.log
 .DS_Store

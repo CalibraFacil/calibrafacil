@@ -6,7 +6,10 @@ import {
   HeadObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { resolveS3EndpointConfigFromProcess } from "@calibra-facil/shared/storage-endpoint";
+import {
+  resolveS3EndpointConfig,
+  resolveS3EndpointConfigFromProcess,
+} from "@calibra-facil/shared/storage-endpoint";
 import type { StorageBucket } from "@calibra-facil/shared/storage-keys";
 
 export interface R2Env {
@@ -115,6 +118,36 @@ export function createR2Client(env: R2Env): R2S3Client {
   }) as R2S3Client;
 }
 
+let publicPresignClient: { endpoint: string; client: R2S3Client } | undefined;
+
+/**
+ * The client presigned URLs are signed with. Browsers open those URLs
+ * directly, so when the API reaches the store at an internal address
+ * (R2_ENDPOINT=http://s3:7070 in docker-compose.prod.yml), R2_PUBLIC_ENDPOINT
+ * names the address browsers use instead. Signing is local: nothing is sent
+ * to that address from here.
+ */
+export function presignClientFor(client: R2S3Client): R2S3Client {
+  const endpoint = process.env.R2_PUBLIC_ENDPOINT?.trim().replace(/\/+$/, "");
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+  if (!endpoint || !accessKeyId || !secretAccessKey) return client;
+
+  if (publicPresignClient?.endpoint !== endpoint) {
+    const config = resolveS3EndpointConfig({
+      R2_ENDPOINT: endpoint,
+      R2_REGION: process.env.R2_REGION,
+    });
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- AWS S3Client exposes command-specific send overloads through the concrete client.
+    const presigner = new S3Client({
+      ...config,
+      credentials: { accessKeyId, secretAccessKey },
+    }) as R2S3Client;
+    publicPresignClient = { endpoint, client: presigner };
+  }
+  return publicPresignClient.client;
+}
+
 export interface PresignedUrlOptions {
   expiresIn?: number; // seconds; default 900 (15 minutes)
   /** Sets Content-Disposition on the response (e.g. a descriptive filename). */
@@ -134,7 +167,9 @@ export async function generatePresignedUrl(
     Key: key,
     ResponseContentDisposition: opts.responseContentDisposition,
   });
-  return getSignedUrl(client, command, { expiresIn: opts.expiresIn ?? 900 });
+  return getSignedUrl(presignClientFor(client), command, {
+    expiresIn: opts.expiresIn ?? 900,
+  });
 }
 
 export async function generatePresignedUploadUrl(
@@ -149,7 +184,7 @@ export async function generatePresignedUploadUrl(
     Key: key,
     ContentType: contentType,
   });
-  return getSignedUrl(client, command, { expiresIn });
+  return getSignedUrl(presignClientFor(client), command, { expiresIn });
 }
 
 /**

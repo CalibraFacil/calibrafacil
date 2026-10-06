@@ -135,11 +135,21 @@ Database migrations are plain SQL in `packages/db/drizzle/`; apply them with
 `pnpm --dir packages/db db:bootstrap` (a new database is built from the schema; an existing one
 receives the pending migrations).
 
-## Deployment
+## Self-hosting
 
-Calibra Fácil can be self-hosted on any infrastructure that runs Node/Bun, PostgreSQL and an
-S3-compatible store, or on Vercel with the included `vercel.json` files. See
-[`DEPLOYMENT.md`](./DEPLOYMENT.md).
+One server with Docker runs the whole system, HTTPS included:
+
+```bash
+git clone --depth 1 https://github.com/CalibraFacil/calibrafacil.git
+cd calibrafacil/deploy
+./setup.sh               # .env with fresh secrets; then set your domains and SMTP in it
+docker compose up -d
+docker compose exec api bun src/cli/create-lab.ts --name "Meu Laboratório" --email voce@example.com
+```
+
+Images for x86-64 and ARM64 are published with every [release](https://github.com/CalibraFacil/calibrafacil/releases).
+[`DEPLOYMENT.md`](./DEPLOYMENT.md) covers updates, backups, hosted databases and storage, plain
+Bun servers and Vercel.
 
 ## Contributing
 

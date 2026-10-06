@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "setup:dev": "node scripts/dev-setup.mjs",
+    "setup:prod": "sh deploy/setup.sh",
     "services:up": "docker compose up --detach --wait",
     "services:down": "docker compose down",
     "services:logs": "docker compose logs --follow",

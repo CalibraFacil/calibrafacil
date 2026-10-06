@@ -1,0 +1,44 @@
+# Three addresses, all served by this Caddy (see compose.yaml). With https://
+# URLs Caddy obtains and renews certificates from Let's Encrypt on its own; the
+# DNS records must point at this machine and ports 80 and 443 must be open.
+
+(common) {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
+# Lab app. Its API calls go to /api on the same address.
+{$APP_URL} {
+	import common
+	header X-Frame-Options "DENY"
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+	handle {
+		reverse_proxy web:8080
+	}
+}
+
+# Client portal, also with the API under /api.
+{$PORTAL_URL} {
+	import common
+	header X-Frame-Options "DENY"
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+	handle {
+		reverse_proxy portal:8080
+	}
+}
+
+# File storage. Links to certificates and uploads are presigned for this
+# address, so the Host header must reach the store unchanged (Caddy's default).
+{$FILES_URL} {
+	import common
+	reverse_proxy s3:7070
+}

@@ -1,0 +1,183 @@
+# Calibra Fácil, self-hosted: everything on one machine with Docker.
+#
+#   ./setup.sh                  # once: writes .env (domains, e-mail, secrets)
+#   docker compose up -d        # start; https certificates come from Let's Encrypt
+#   docker compose exec api bun src/cli/create-lab.ts --name "…" --email you@…
+#
+# Services:
+#   caddy     HTTPS for the three addresses in .env, routes /api to the API
+#   init      one-shot: schema, catalogs, buckets, portal service account
+#   api       Hono API on Bun; also runs the scheduled jobs (CRON_SCHEDULER)
+#   worker    renders certificates and documents, sends queued e-mails
+#   web       lab app          (APP_URL)
+#   portal    client portal    (PORTAL_URL)
+#   postgres  PostgreSQL 17
+#   s3        S3-compatible file storage (FILES_URL)
+#   gotenberg HTML → PDF
+#   mailpit   optional test inbox: COMPOSE_PROFILES=mailpit (see .env.example)
+#
+# Images come from GHCR. To build them from this checkout instead:
+#   docker compose -f compose.yaml -f compose.build.yaml up -d --build
+#
+# See DEPLOYMENT.md for updates, backups and using hosted services instead.
+name: calibrafacil
+
+x-app-env: &app-env
+  NODE_ENV: production
+  DATABASE_URL: postgres://calibra:${POSTGRES_PASSWORD:?run ./setup.sh first}@postgres:5432/calibra
+  API_URL: ${APP_URL:?set APP_URL in .env}
+  APP_URL: ${APP_URL}
+  PORTAL_APP_URL: ${PORTAL_URL:?set PORTAL_URL in .env}
+  BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?run ./setup.sh first}
+  PORTAL_SERVICE_USER_ID: portal-service
+  # File storage: the API and worker use the internal address; links handed
+  # to browsers are signed for FILES_URL, which Caddy serves.
+  R2_ENDPOINT: http://s3:7070
+  R2_PUBLIC_ENDPOINT: ${FILES_URL:?set FILES_URL in .env}
+  R2_REGION: us-east-1
+  R2_ACCESS_KEY_ID: calibra
+  R2_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:?run ./setup.sh first}
+  R2_BUCKET_NAME: calibra-documents
+  R2_MEDIA_BUCKET_NAME: calibra-media
+  GOTENBERG_URL: http://gotenberg:3000
+  # Background jobs wait in the database for the worker.
+  BACKGROUND_JOBS_MODE: queue
+  CRON_SCHEDULER: internal
+  CRON_SECRET: ${CRON_SECRET:?run ./setup.sh first}
+  SIGNING_MASTER_KEY: ${SIGNING_MASTER_KEY:?run ./setup.sh first}
+  INTEGRATIONS_MASTER_KEY: ${INTEGRATIONS_MASTER_KEY:?run ./setup.sh first}
+  PUBLIC_API_MASTER_KEY: ${PUBLIC_API_MASTER_KEY:?run ./setup.sh first}
+  EMAIL_DOMAIN_MASTER_KEY: ${EMAIL_DOMAIN_MASTER_KEY:?run ./setup.sh first}
+  QUOTE_APPROVAL_CODE_PEPPER: ${QUOTE_APPROVAL_CODE_PEPPER:?run ./setup.sh first}
+  EMAIL_FROM: ${EMAIL_FROM:?set EMAIL_FROM in .env}
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-}
+  SMTP_SECURE: ${SMTP_SECURE:-}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  RESEND_API_KEY: ${RESEND_API_KEY:-}
+  SENTRY_DSN: ${SENTRY_DSN:-}
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - "${HTTP_BIND:-80}:80"
+      - "${HTTPS_BIND:-443}:443"
+      - "${HTTPS_BIND:-443}:443/udp"
+    environment:
+      APP_URL: ${APP_URL}
+      PORTAL_URL: ${PORTAL_URL}
+      FILES_URL: ${FILES_URL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - api
+      - web
+      - portal
+      - s3
+
+  init:
+    image: ghcr.io/calibrafacil/calibrafacil-api:${CALIBRA_VERSION:-latest}
+    command: ["bun", "src/cli/init.ts"]
+    environment: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      s3:
+        condition: service_started
+
+  api:
+    image: ghcr.io/calibrafacil/calibrafacil-api:${CALIBRA_VERSION:-latest}
+    restart: unless-stopped
+    environment: *app-env
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - "fetch('http://localhost:3000/api').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      gotenberg:
+        condition: service_started
+
+  worker:
+    image: ghcr.io/calibrafacil/calibrafacil-worker:${CALIBRA_VERSION:-latest}
+    restart: unless-stopped
+    environment: *app-env
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      gotenberg:
+        condition: service_started
+
+  web:
+    image: ghcr.io/calibrafacil/calibrafacil-web:${CALIBRA_VERSION:-latest}
+    restart: unless-stopped
+    # Read by the browser at startup (public values only).
+    environment:
+      VITE_PORTAL_APP_URL: ${PORTAL_URL}
+      VITE_OPERATOR_LEGAL_NAME: ${OPERATOR_LEGAL_NAME:-}
+      VITE_OPERATOR_CNPJ: ${OPERATOR_CNPJ:-}
+      VITE_OPERATOR_ADDRESS: ${OPERATOR_ADDRESS:-}
+      VITE_OPERATOR_EMAIL: ${OPERATOR_EMAIL:-}
+
+  portal:
+    image: ghcr.io/calibrafacil/calibrafacil-portal:${CALIBRA_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      VITE_WEB_URL: ${APP_URL}
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: calibra
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: calibra
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U calibra -d calibra"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  s3:
+    # Versity S3 Gateway (Apache-2.0): a plain directory served over the S3 API.
+    image: versity/versitygw:v1.8.0
+    restart: unless-stopped
+    environment:
+      ROOT_ACCESS_KEY: calibra
+      ROOT_SECRET_KEY: ${S3_SECRET_KEY}
+    # Browsers download and upload with presigned links; CORS lets the app do
+    # it from script.
+    command: ["--port", ":7070", "--cors-allow-origin", "*", "posix", "/data"]
+    volumes:
+      - s3-data:/data
+
+  gotenberg:
+    image: gotenberg/gotenberg:8.37.0
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:v1.31.3
+    profiles: ["mailpit"]
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_BIND:-127.0.0.1:8025}:8025"
+
+volumes:
+  postgres-data:
+  s3-data:
+  caddy-data:
+  caddy-config:

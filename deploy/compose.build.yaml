@@ -1,0 +1,28 @@
+# Build the images from this checkout instead of pulling them from GHCR:
+#
+#   docker compose -f compose.yaml -f compose.build.yaml up -d --build
+services:
+  init:
+    build:
+      context: ..
+      dockerfile: Dockerfile.api
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile.api
+  worker:
+    build:
+      context: ..
+      dockerfile: Dockerfile.worker
+  web:
+    build:
+      context: ..
+      dockerfile: Dockerfile.static
+      args:
+        APP_NAME: web
+  portal:
+    build:
+      context: ..
+      dockerfile: Dockerfile.static
+      args:
+        APP_NAME: portal
