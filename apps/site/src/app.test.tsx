@@ -29,9 +29,14 @@ describe("home page", () => {
     expect(anchors.filter((anchor) => !sections.has(anchor))).toEqual([]);
   });
 
-  it("only links within the page or out to absolute URLs", () => {
+  it("only links within the page, to the docs or out to absolute URLs", () => {
     const internalPaths = linkTargets(html).filter(
-      (href) => href.startsWith("/") && !href.startsWith("/#") && href !== "/",
+      (href) =>
+        href.startsWith("/") &&
+        !href.startsWith("/#") &&
+        href !== "/" &&
+        // apps/docs, published at /docs by scripts/build-docs.mjs.
+        href !== "/docs/",
     );
 
     expect(internalPaths).toEqual([]);

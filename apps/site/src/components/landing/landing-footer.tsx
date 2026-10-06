@@ -32,7 +32,7 @@ const footerColumns: FooterColumn[] = [
     heading: "Documentação",
     links: [
       { label: "README", href: README_URL, external: true },
-      { label: "Guia de uso", href: DOCS_URL, external: true },
+      { label: "Guia de uso", href: DOCS_URL },
       { label: "Hospedagem", href: DEPLOYMENT_URL, external: true },
       { label: "Dossiês de validação", href: VALIDATION_URL, external: true },
     ],

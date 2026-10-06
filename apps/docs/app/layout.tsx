@@ -3,6 +3,7 @@ import { RootProvider } from "fumadocs-ui/provider/next";
 import { Inter } from "next/font/google";
 import type { Metadata, Viewport } from "next";
 import { site } from "@/lib/site";
+import { DocsSearchDialog } from "@/components/search-dialog";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -44,13 +45,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="flex flex-col min-h-screen">
-        <RootProvider
-          search={{
-            options: {
-              type: "fetch",
-            },
-          }}
-        >
+        <RootProvider search={{ SearchDialog: DocsSearchDialog }}>
           {children}
         </RootProvider>
       </body>

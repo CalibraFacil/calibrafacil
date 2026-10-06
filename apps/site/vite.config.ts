@@ -23,7 +23,7 @@ function siteUrl(): Plugin {
       this.emitFile({
         type: "asset",
         fileName: "robots.txt",
-        source: `User-agent: *\nAllow: /\n\nSitemap: ${SITE_URL}/sitemap.xml\n`,
+        source: `User-agent: *\nAllow: /\n\nSitemap: ${SITE_URL}/sitemap.xml\nSitemap: ${SITE_URL}/docs/sitemap.xml\n`,
       });
       this.emitFile({
         type: "asset",

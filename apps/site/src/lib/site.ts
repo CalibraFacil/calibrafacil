@@ -12,8 +12,9 @@ export const LICENSE_URL = `${BLOB_URL}/LICENSE`;
 export const DISCUSSIONS_URL = `${REPOSITORY_URL}/discussions`;
 export const ISSUES_URL = `${REPOSITORY_URL}/issues`;
 
-// User documentation: the MDX sources of apps/docs.
-export const DOCS_URL = `${REPOSITORY_URL}/tree/main/apps/docs/content/docs`;
+// User documentation: apps/docs, built into this site at /docs
+// (scripts/build-docs.mjs).
+export const DOCS_URL = "/docs/";
 
 // Validation dossiers of the uncertainty engine, one per released version.
 export const VALIDATION_URL = `${REPOSITORY_URL}/tree/main/validation/math-engine`;
