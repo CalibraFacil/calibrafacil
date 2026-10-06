@@ -119,6 +119,10 @@ so review and approval flows that need two people can be exercised.
 `pnpm services:down` stops the containers (data is kept); `pnpm setup:dev --reset` wipes them
 and starts over.
 
+Or skip the local setup: [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/CalibraFacil/calibrafacil)
+The dev container ([`.devcontainer/`](./.devcontainer)) installs everything and seeds the demo
+laboratory; run `pnpm dev` and open the forwarded port 5173.
+
 ## Development
 
 ```bash

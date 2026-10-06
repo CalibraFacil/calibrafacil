@@ -1,0 +1,42 @@
+// Dev Container / GitHub Codespaces: Node 24, pnpm, Bun and Docker, with the
+// local services and the demo laboratory set up on first start. Then run
+// `pnpm dev` and open the forwarded port 5173 (sign in as
+// admin@laboratorio.test; the sign-in e-mail lands in Mailpit, port 8025).
+{
+  "name": "Calibra Fácil",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:4-24-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "8gb"
+  },
+  // Codespaces serves forwarded ports on *.app.github.dev: let the Vite dev
+  // servers and the dev auth accept those hostnames.
+  "containerEnv": {
+    "VITE_DEV_ALLOWED_HOSTS": ".app.github.dev",
+    "AUTH_DEV_ALLOWED_HOSTS": "*.app.github.dev",
+    "TZ": "UTC"
+  },
+  "postCreateCommand": "sh .devcontainer/post-create.sh",
+  "postStartCommand": "pnpm services:up",
+  "forwardPorts": [5173, 5174, 3000, 8025, 59000],
+  "portsAttributes": {
+    "5173": { "label": "Lab app", "onAutoForward": "openBrowserOnce" },
+    "5174": { "label": "Client portal", "onAutoForward": "silent" },
+    "3000": { "label": "API", "onAutoForward": "silent" },
+    "8025": { "label": "Mailpit (e-mails)", "onAutoForward": "silent" },
+    "59000": { "label": "File storage", "onAutoForward": "silent" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "oxc.oxc-vscode",
+        "esbenp.prettier-vscode",
+        "vitest.explorer",
+        "bradlc.vscode-tailwindcss"
+      ]
+    }
+  }
+}
