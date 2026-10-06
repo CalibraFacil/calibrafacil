@@ -35,6 +35,12 @@ concurrency:
 env:
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+  # The server the installer signs in to. A fork that runs its own instance
+  # sets these repository variables; unset, the app points at localhost and
+  # CALIBRA_DESKTOP_AUTH_API_URL / CALIBRA_DESKTOP_AUTH_ORIGIN pick a server
+  # at run time (docs/desktop-auto-update.md).
+  VITE_DESKTOP_AUTH_API_URL: ${{ vars.DESKTOP_AUTH_API_URL }}
+  VITE_DESKTOP_AUTH_ORIGIN: ${{ vars.DESKTOP_AUTH_ORIGIN }}
 
 jobs:
   build-windows:
