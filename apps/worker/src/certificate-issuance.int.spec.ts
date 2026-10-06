@@ -191,8 +191,10 @@ describe("fixed-layout certificate issuance (worker real-DB integration)", () =>
 
     const after = await jobRow(job.jobId);
     expect(after.status).toBe("APPROVED");
+    // Stored documents are addressed by their storage key (storedObjectUrl in
+    // @calibra-facil/shared/public-urls); files are only served presigned.
     expect(asString(after.certificate_url)).toMatch(
-      /^https:\/\/certificates\.calibrafacil\.com\//,
+      /^https:\/\/storage\.invalid\/org\//,
     );
 
     const generated = (await auditRows(job.jobId)).filter(
