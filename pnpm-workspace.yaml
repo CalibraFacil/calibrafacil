@@ -11,7 +11,9 @@ overrides:
   "@tanstack/start-client-core": 1.167.2
   "@tanstack/start-plugin-core": 1.167.6
   "@tanstack/start-server-core": 1.167.2
-  seroval: ^1.4.1
+  # GHSA-p6vx-979v-rg4c (critical, <=1.6.0) and GHSA-jp82-f5mq-hwhp (high,
+  # <=1.6.2): seroval's JSON deserialization; reached through TanStack Router.
+  seroval: ^1.6.3
   # GHSA-vcvr-r3jv-pc5j: next >=16.2.0 <16.3.6 remote code execution in
   # next/og ImageResponse. apps/docs pins the same version.
   next: 16.3.8
@@ -34,6 +36,9 @@ overrides:
   # under vite (48 paths, all build tooling). postcss declares nanoid ^3.3.17,
   # so the patched 3.3.18 lands inside the range it already expects.
   "nanoid@<3.3.18": ^3.3.18
+  # GHSA-68fv-2mgg-jv7q: source-map-js <1.2.2 event-loop DoS on crafted
+  # indexed source maps. Build tooling only (postcss).
+  "source-map-js@<1.2.2": ^1.2.2
   "picomatch@<2.3.2": ^2.3.2
   "picomatch@>=4.0.0 <4.0.4": ^4.0.4
   # GHSA-rfgv-xxqx-mfg5 (DoS via an unrequested WebSocket subprotocol) and
@@ -104,7 +109,8 @@ overrides:
   postcss: ^8.5.18
   # GHSA-f88m-g3jw-g9cj: sharp <0.35.0 inherits four libvips CVEs. GHSA-rgj7-g3m4-5g8c
   # adds two more libheif CVEs against <0.35.4.
-  sharp: ^0.35.4
+  # GHSA-wq5f-xc86-pv6w: sharp <0.35.5 bundles a vulnerable librsvg.
+  sharp: ^0.35.5
   # GHSA-28wg-ghj8-5hjv: nanoid >=4.0.0 <5.1.16 can loop indefinitely on a
   # negative size. Transitive via @scalar/hono-api-reference (apps/api). Scoped
   # to the 5.x line so the 3.3.x users elsewhere in the tree are untouched.
