@@ -3,7 +3,6 @@ import { RootProvider } from "fumadocs-ui/provider/next";
 import { Inter } from "next/font/google";
 import type { Metadata, Viewport } from "next";
 import { site } from "@/lib/site";
-import { Analytics } from "@vercel/analytics/next";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -54,7 +53,6 @@ export default function RootLayout({
         >
           {children}
         </RootProvider>
-        <Analytics />
       </body>
     </html>
   );
