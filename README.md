@@ -107,6 +107,13 @@ passwordless: the magic link arrives in the local inbox at <http://localhost:802
 also creates `revisor@laboratorio.test` (admin) and `tecnico@laboratorio.test` (technician),
 so review and approval flows that need two people can be exercised.
 
+The demo laboratory is not empty: setup fills it with a made-up customer base, instrument park,
+about 130 calibrations across every workflow stage, quality records, service orders, requests and
+visits, so the dashboard looks like a working lab. The 40 most recent approvals come with their
+certificate PDF (`--all-certificates` renders every one). It takes about two minutes
+(`pnpm setup:dev --no-demo` skips it; `pnpm --dir apps/api seed:demo` runs it later, `--quick` for
+a smaller history). All names, e-mails and documents are fictional.
+
 `docker-compose.yml` stands in for every cloud dependency:
 
 | Service     | Replaces                        | Address                                |

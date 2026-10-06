@@ -14,6 +14,7 @@
     "start": "bun src/bun.ts",
     "init": "bun src/cli/init.ts",
     "create-lab": "bun src/cli/create-lab.ts",
+    "seed:demo": "bun src/cli/seed-demo.ts",
     "deploy": "pnpm dlx vercel deploy --prod",
     "test": "vitest",
     "test:run": "vitest run",
