@@ -1264,7 +1264,7 @@ export function ServiceOrderIntakeDocumentHtml({
     <html lang="pt-BR" data-pdf-layout="full-page">
       <head>
         <meta charSet="UTF-8" />
-        <title>Comprovante de recebimento - {data.serviceOrderNumber}</title>
+        <title>{`Comprovante de recebimento - ${data.serviceOrderNumber}`}</title>
         <style dangerouslySetInnerHTML={{ __html: pageStyles }} />
       </head>
       <body>
@@ -1282,7 +1282,7 @@ export function ServiceOrderTagHtml({ tag }: { tag: ServiceOrderTagData }) {
     <html lang="pt-BR">
       <head>
         <meta charSet="UTF-8" />
-        <title>Etiqueta OS - {tag.serviceOrderNumber}</title>
+        <title>{`Etiqueta OS - ${tag.serviceOrderNumber}`}</title>
         <style dangerouslySetInnerHTML={{ __html: pageStyles }} />
       </head>
       <body>
@@ -1317,9 +1317,7 @@ export function ServiceOrderQuoteHtml({
     <html lang="pt-BR">
       <head>
         <meta charSet="UTF-8" />
-        <title>
-          Orçamento - {data.quote.quoteNumber} v{data.quote.version}
-        </title>
+        <title>{`Orçamento - ${data.quote.quoteNumber} v${data.quote.version}`}</title>
         <style dangerouslySetInnerHTML={{ __html: pageStyles }} />
       </head>
       <body>
@@ -1425,7 +1423,7 @@ export function ServiceOrderDeliveryReceiptHtml({
     <html lang="pt-BR">
       <head>
         <meta charSet="UTF-8" />
-        <title>Comprovante de entrega - {data.serviceOrderNumber}</title>
+        <title>{`Comprovante de entrega - ${data.serviceOrderNumber}`}</title>
         <style dangerouslySetInnerHTML={{ __html: pageStyles }} />
       </head>
       <body>

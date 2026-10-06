@@ -162,9 +162,7 @@ export function OotNotificationHtml({
     <html lang="pt-BR" data-pdf-layout="full-page">
       <head>
         <meta charSet="UTF-8" />
-        <title>
-          Notificação de Resultado Fora de Tolerância - {data.ncNumber}
-        </title>
+        <title>{`Notificação de Resultado Fora de Tolerância - ${data.ncNumber}`}</title>
         <style dangerouslySetInnerHTML={{ __html: pageStyles }} />
       </head>
       <body>
