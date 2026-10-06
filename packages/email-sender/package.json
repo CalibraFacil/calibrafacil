@@ -2,7 +2,7 @@
   "name": "@calibra-facil/email-sender",
   "type": "module",
   "version": "1.0.0",
-  "description": "Lab-owned email sending domain (BYOK Resend): key custody, domain wrapper, sender resolution and send-with-fallback",
+  "description": "Platform e-mail transport (SMTP or Resend) plus lab-owned sender domains: key custody, domain wrapper, sender resolution and send-with-fallback",
   "exports": {
     ".": "./src/index.ts"
   },
@@ -16,6 +16,7 @@
   },
   "keywords": [
     "email",
+    "smtp",
     "resend",
     "white-label"
   ],
@@ -24,7 +25,9 @@
   "dependencies": {
     "@calibra-facil/db": "workspace:*",
     "@calibra-facil/shared": "workspace:*",
+    "@react-email/render": "^2.0.8",
     "drizzle-orm": "^0.45.2",
+    "nodemailer": "^10.0.15",
     "resend": "^6.12.4"
   },
   "devDependencies": {

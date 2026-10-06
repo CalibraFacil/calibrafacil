@@ -63,7 +63,7 @@ browser ──▶ │  apps/web     │   │  apps/portal  │   │  apps/desk
                               │                             │
           ┌───────────────────┼───────────────┬─────────────┴──────┐
           ▼                   ▼               ▼                    ▼
-     PostgreSQL       S3-compatible      Gotenberg            Resend API
+     PostgreSQL       S3-compatible      Gotenberg            SMTP or Resend
      (Drizzle)        object storage     (HTML → PDF)         (e-mail)
 ```
 
@@ -109,13 +109,12 @@ so review and approval flows that need two people can be exercised.
 
 `docker-compose.yml` stands in for every cloud dependency:
 
-| Service        | Replaces                    | Address                  |
-| -------------- | --------------------------- | ------------------------ |
-| `postgres`     | managed PostgreSQL          | `localhost:55432`        |
-| `s3`           | Cloudflare R2 / S3          | `http://localhost:59000` |
-| `mailpit`      | inbox for every e-mail sent | <http://localhost:8025>  |
-| `resend-relay` | the Resend API (→ Mailpit)  | `http://localhost:3025`  |
-| `gotenberg`    | PDF rendering               | `http://localhost:3001`  |
+| Service     | Replaces                        | Address                                |
+| ----------- | ------------------------------- | -------------------------------------- |
+| `postgres`  | managed PostgreSQL              | `localhost:55432`                      |
+| `s3`        | Cloudflare R2 / S3              | `http://localhost:59000`               |
+| `mailpit`   | SMTP server + inbox for e-mails | <http://localhost:8025> (SMTP `:1025`) |
+| `gotenberg` | PDF rendering                   | `http://localhost:3001`                |
 
 `pnpm services:down` stops the containers (data is kept); `pnpm setup:dev --reset` wipes them
 and starts over.

@@ -6,12 +6,14 @@
  * the platform sender (fall-back-now), so a dead lab key can never stall a
  * queue or lose an email. Only genuinely transient failures (network/5xx)
  * surface as retryable — the service-order outbox drain's release/retry path
- * then handles them exactly as before.
+ * then handles them exactly as before. The platform sender is whichever
+ * transport (SMTP or Resend) transport.ts resolves from the environment.
  */
 
 import { Resend, type CreateEmailOptions } from "resend";
 import { getLabEmailCredential, markLabEmailKeyFailure } from "./sender";
 import { classifyResendErrorName } from "./resend-domains";
+import { sendPlatformEmail } from "./transport";
 
 /** Passed to the payload builder when the lab variant is being rendered. */
 export interface LabSenderContext {
@@ -78,13 +80,10 @@ async function sendOnce(
  *
  * @param params.organizationId lab org whose sender should be tried; pass
  *   `undefined` to send via the platform directly (non-white-label mail).
- * @param params.platformApiKey the global RESEND_API_KEY (callers already
- *   guard on it being configured).
  * @param params.buildPayload see {@link EmailPayloadBuilder}.
  */
 export async function sendEmailWithLabSender(params: {
   organizationId: string | undefined;
-  platformApiKey: string;
   buildPayload: EmailPayloadBuilder;
 }): Promise<SendEmailOutcome> {
   const credential = params.organizationId
@@ -145,7 +144,7 @@ export async function sendEmailWithLabSender(params: {
     return { sent: false, retryable: false, error: message };
   }
 
-  const platformResult = await sendOnce(params.platformApiKey, platformPayload);
+  const platformResult = await sendPlatformEmail(platformPayload);
   if (platformResult.ok) {
     return {
       sent: true,
@@ -155,10 +154,9 @@ export async function sendEmailWithLabSender(params: {
     };
   }
 
-  const failureClass = classifyResendErrorName(platformResult.errorName);
   return {
     sent: false,
-    retryable: failureClass === "transient" || failureClass === "rate_limited",
-    error: platformResult.message,
+    retryable: platformResult.retryable,
+    error: platformResult.error,
   };
 }

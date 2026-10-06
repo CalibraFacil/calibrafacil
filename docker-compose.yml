@@ -8,8 +8,8 @@
 #
 #   postgres       PostgreSQL 17 (production: any managed Postgres)
 #   s3             S3-compatible object storage (production: Cloudflare R2)
-#   mailpit        Inbox for every email the app sends — http://localhost:8025
-#   resend-relay   Accepts Resend API calls and hands them to Mailpit
+#   mailpit        SMTP server + inbox for every email the app sends —
+#                  http://localhost:8025
 #   gotenberg      HTML → PDF rendering for certificates and documents
 #
 # Host ports are deliberately uncommon to avoid clashing with services you may
@@ -60,19 +60,7 @@ services:
       MP_MAX_MESSAGES: 2000
     ports:
       - "${CALIBRA_MAILPIT_PORT:-8025}:8025"
-
-  resend-relay:
-    image: node:24-alpine
-    command: ["node", "/relay/server.mjs"]
-    environment:
-      PORT: 3025
-      MAILPIT_URL: http://mailpit:8025
-    volumes:
-      - ./docker/resend-relay:/relay:ro
-    ports:
-      - "${CALIBRA_RESEND_RELAY_PORT:-3025}:3025"
-    depends_on:
-      - mailpit
+      - "${CALIBRA_MAILPIT_SMTP_PORT:-1025}:1025"
 
   gotenberg:
     image: gotenberg/gotenberg:8.37.0

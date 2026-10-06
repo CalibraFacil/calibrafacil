@@ -1,6 +1,3 @@
-// Internal lead-capture notification (marketing site)
-export { notifyNewLead, type NewLeadNotification } from "./lead";
-
 // Notification Service - Core exports
 export {
   sendNotification,

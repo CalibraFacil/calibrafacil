@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const emailsSendMock = vi.hoisted(() => vi.fn());
 const resendCtorMock = vi.hoisted(() => vi.fn());
@@ -45,6 +45,14 @@ beforeEach(() => {
   resendCtorMock.mockReset();
   getLabEmailCredentialMock.mockReset();
   markLabEmailKeyFailureMock.mockReset().mockResolvedValue(undefined);
+  // The platform sender is the Resend transport, resolved from the environment.
+  vi.stubEnv("EMAIL_TRANSPORT", "");
+  vi.stubEnv("SMTP_HOST", "");
+  vi.stubEnv("RESEND_API_KEY", "re_platform");
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe("formatLabFromHeader", () => {
@@ -68,7 +76,6 @@ describe("sendEmailWithLabSender", () => {
 
     const outcome = await sendEmailWithLabSender({
       organizationId: undefined,
-      platformApiKey: "re_platform",
       buildPayload,
     });
 
@@ -89,7 +96,6 @@ describe("sendEmailWithLabSender", () => {
 
     const outcome = await sendEmailWithLabSender({
       organizationId: "org-1",
-      platformApiKey: "re_platform",
       buildPayload: buildPayloadSpy(),
     });
 
@@ -109,7 +115,6 @@ describe("sendEmailWithLabSender", () => {
 
     const outcome = await sendEmailWithLabSender({
       organizationId: "org-1",
-      platformApiKey: "re_platform",
       buildPayload,
     });
 
@@ -139,7 +144,6 @@ describe("sendEmailWithLabSender", () => {
 
     const outcome = await sendEmailWithLabSender({
       organizationId: "org-1",
-      platformApiKey: "re_platform",
       buildPayload,
     });
 
@@ -174,7 +178,6 @@ describe("sendEmailWithLabSender", () => {
 
     const outcome = await sendEmailWithLabSender({
       organizationId: "org-1",
-      platformApiKey: "re_platform",
       buildPayload: buildPayloadSpy(),
     });
 
@@ -202,7 +205,6 @@ describe("sendEmailWithLabSender", () => {
 
     const outcome = await sendEmailWithLabSender({
       organizationId: "org-1",
-      platformApiKey: "re_platform",
       buildPayload: buildPayloadSpy(),
     });
 
@@ -230,7 +232,6 @@ describe("sendEmailWithLabSender", () => {
 
     const outcome = await sendEmailWithLabSender({
       organizationId: "org-1",
-      platformApiKey: "re_platform",
       buildPayload: buildPayloadSpy(),
     });
 
@@ -245,7 +246,6 @@ describe("sendEmailWithLabSender", () => {
 
     const outcome = await sendEmailWithLabSender({
       organizationId: "org-1",
-      platformApiKey: "re_platform",
       buildPayload: buildPayloadSpy(),
     });
 
@@ -266,7 +266,6 @@ describe("sendEmailWithLabSender", () => {
 
     const outcome = await sendEmailWithLabSender({
       organizationId: "org-1",
-      platformApiKey: "re_platform",
       buildPayload: buildPayloadSpy(),
     });
 

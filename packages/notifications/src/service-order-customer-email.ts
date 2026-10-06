@@ -11,13 +11,15 @@
  *  - Brand is supplied by the caller (resolved via
  *    getLabEmailBrand(serviceOrder.organizationId) before calling here) so
  *    the dispatcher never fetches data from another org (REQ-SOEMAIL-003, 004).
- *  - Resend transport errors are caught and returned as a failure result;
- *    they never propagate to the caller (REQ-SOEMAIL-005).
+ *  - Transport errors are caught and returned as a failure result; they
+ *    never propagate to the caller (REQ-SOEMAIL-005).
  */
 
 import { render } from "@react-email/render";
 import {
   formatLabFromHeader,
+  getPlatformFromEmail,
+  isPlatformEmailConfigured,
   sendEmailWithLabSender,
 } from "@calibra-facil/email-sender";
 import type { EmailBrand } from "@calibra-facil/email";
@@ -194,7 +196,7 @@ function stripBrandSender(
  * - REQ-SOEMAIL-002: no valid address → returns skipped result, no throw.
  * - REQ-SOEMAIL-003: brand applied via renderEmail context (caller resolved it).
  * - REQ-SOEMAIL-004: only data from the service order's own org/customer.
- * - REQ-SOEMAIL-005: Resend transport error → returns failure result, no throw.
+ * - REQ-SOEMAIL-005: transport error → returns failure result, no throw.
  *
  * Never throws — always returns a ServiceOrderCustomerEmailResult.
  */
@@ -216,13 +218,12 @@ export async function sendServiceOrderCustomerEmail(
     } satisfies ServiceOrderCustomerEmailResult;
   }
 
-  // Check Resend configuration
-  const resendApiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.RESEND_FROM_EMAIL;
+  // Check e-mail configuration
+  const fromEmail = getPlatformFromEmail();
 
-  if (!resendApiKey || !fromEmail) {
+  if (!isPlatformEmailConfigured() || !fromEmail) {
     console.error(
-      "[ServiceOrderEmail] EMAIL MISCONFIGURED: RESEND_API_KEY or RESEND_FROM_EMAIL not set.",
+      "[ServiceOrderEmail] EMAIL MISCONFIGURED: no e-mail transport (SMTP_HOST or RESEND_API_KEY) or no sender (EMAIL_FROM).",
     );
     return {
       sent: false,
@@ -261,7 +262,6 @@ export async function sendServiceOrderCustomerEmail(
   try {
     const outcome = await sendEmailWithLabSender({
       organizationId: brand?.sender?.organizationId,
-      platformApiKey: resendApiKey,
       buildPayload: async (sender) => {
         const brandVariant = sender ? brand : stripBrandSender(brand);
         const element =

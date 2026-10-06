@@ -44,8 +44,8 @@ Create `.env` from `.env.example`:
 
 ```env
 BETTER_AUTH_SECRET=     # Auth secret key
-RESEND_API_KEY=         # Resend email service
-RESEND_FROM_EMAIL=      # Sender email address
+SMTP_HOST=              # SMTP server (or RESEND_API_KEY for the Resend API)
+EMAIL_FROM=             # Sender email address
 API_URL=                # API base URL
 APP_URL=                # Web app URL
 NODE_ENV=               # development/production

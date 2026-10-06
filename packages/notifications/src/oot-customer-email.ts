@@ -12,8 +12,12 @@
  *  - Supports attaching the generated notification PDF (the §7.10 letter).
  */
 
-import { Resend } from "resend";
 import { render } from "@react-email/render";
+import {
+  getPlatformFromEmail,
+  isPlatformEmailConfigured,
+  sendPlatformEmail,
+} from "@calibra-facil/email-sender";
 import type { EmailBrand } from "@calibra-facil/email";
 
 export interface OotCustomerEmailInput {
@@ -62,12 +66,11 @@ export async function sendOotCustomerEmail(
 ): Promise<OotCustomerEmailResult> {
   const { recipientEmail, brand, subject, email, attachment } = input;
 
-  const resendApiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.RESEND_FROM_EMAIL;
+  const fromEmail = getPlatformFromEmail();
 
-  if (!resendApiKey || !fromEmail) {
+  if (!isPlatformEmailConfigured() || !fromEmail) {
     console.error(
-      "[OotEmail] EMAIL MISCONFIGURED: RESEND_API_KEY or RESEND_FROM_EMAIL not set.",
+      "[OotEmail] EMAIL MISCONFIGURED: no e-mail transport (SMTP_HOST or RESEND_API_KEY) or no sender (EMAIL_FROM).",
     );
     return {
       sent: false,
@@ -78,9 +81,8 @@ export async function sendOotCustomerEmail(
 
   try {
     const html = await render(email);
-    const resend = new Resend(resendApiKey);
 
-    const response = await resend.emails.send({
+    const delivery = await sendPlatformEmail({
       from: formatFromEmail(fromEmail, brand),
       to: recipientEmail,
       subject: sanitizeMailHeader(subject),
@@ -96,14 +98,21 @@ export async function sendOotCustomerEmail(
         : undefined,
     });
 
-    const emailId =
-      response.data &&
-      typeof response.data === "object" &&
-      "id" in response.data
-        ? String(response.data.id)
-        : undefined;
+    if (!delivery.ok) {
+      console.error(
+        "[OotEmail] Failed to send notification email:",
+        delivery.error,
+      );
+      return {
+        sent: false,
+        error: delivery.error,
+      } satisfies OotCustomerEmailResult;
+    }
 
-    return { sent: true, emailId } satisfies OotCustomerEmailResult;
+    return {
+      sent: true,
+      emailId: delivery.emailId,
+    } satisfies OotCustomerEmailResult;
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown transport error";

@@ -208,7 +208,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: ^4.1.8
-        version: 4.1.8(@types/node@24.13.0)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1(@noble/hashes@2.2.0))(msw@2.14.6(@types/node@24.13.0)(typescript@7.0.2))(vite@8.0.16(@types/node@24.13.0)(esbuild@0.25.12)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4))
+        version: 4.1.8(@types/node@24.13.0)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1(@noble/hashes@2.2.0))(msw@2.14.6(@types/node@24.13.0)(typescript@7.0.2))(vite@7.3.5(@types/node@24.13.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.4))
 
   apps/desktop:
     dependencies:
@@ -905,7 +905,7 @@ importers:
         version: 6.0.2(vite@8.0.16(@types/node@24.13.0)(esbuild@0.25.12)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4))
       vitest:
         specifier: ^4.1.8
-        version: 4.1.8(@types/node@24.13.0)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1(@noble/hashes@2.2.0))(msw@2.14.6(@types/node@24.13.0)(typescript@7.0.2))(vite@8.0.16(@types/node@24.13.0)(esbuild@0.25.12)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4))
+        version: 4.1.8(@types/node@24.13.0)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1(@noble/hashes@2.2.0))(msw@2.14.6(@types/node@24.13.0)(typescript@7.0.2))(vite@7.3.5(@types/node@24.13.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.4))
 
   packages/auth:
     dependencies:
@@ -1131,7 +1131,7 @@ importers:
         version: 6.5.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       vitest:
         specifier: ^4.1.8
-        version: 4.1.8(@types/node@24.13.0)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1(@noble/hashes@2.2.0))(msw@2.14.6(@types/node@24.13.0)(typescript@7.0.2))(vite@8.0.16(@types/node@24.13.0)(esbuild@0.25.12)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4))
+        version: 4.1.8(@types/node@24.13.0)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1(@noble/hashes@2.2.0))(msw@2.14.6(@types/node@24.13.0)(typescript@7.0.2))(vite@7.3.5(@types/node@24.13.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.4))
 
   packages/email-sender:
     dependencies:
@@ -1141,9 +1141,15 @@ importers:
       '@calibra-facil/shared':
         specifier: workspace:*
         version: link:../shared
+      '@react-email/render':
+        specifier: ^2.0.8
+        version: 2.0.8(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@cloudflare/workers-types@4.20260603.1)(@neondatabase/serverless@1.1.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@12.11.1)(kysely@0.28.17)(pg@8.21.0)(postgres@3.4.9)
+      nodemailer:
+        specifier: ^10.0.15
+        version: 10.0.15
       resend:
         specifier: ^6.12.4
         version: 6.12.4(@react-email/render@2.0.8(react-dom@19.2.7(react@19.2.7))(react@19.2.7))
@@ -1337,7 +1343,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: ^4.1.8
-        version: 4.1.8(@types/node@24.13.0)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1(@noble/hashes@2.2.0))(msw@2.14.6(@types/node@24.13.0)(typescript@7.0.2))(vite@8.0.16(@types/node@24.13.0)(esbuild@0.25.12)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4))
+        version: 4.1.8(@types/node@24.13.0)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1(@noble/hashes@2.2.0))(msw@2.14.6(@types/node@24.13.0)(typescript@7.0.2))(vite@7.3.5(@types/node@24.13.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.48.0)(tsx@4.22.4))
 
   packages/oxlint-plugin-calibra:
     devDependencies:
@@ -8370,6 +8376,10 @@ packages:
 
   node-rsa@1.1.1:
     resolution: {integrity: sha512-Jd4cvbJMryN21r5HgxQOpMEqv+ooke/korixNNK3mGqfGJmy0M77WDDzo/05969+OkMy3XW1UuZsSmW9KQm7Fw==}
+
+  nodemailer@10.0.15:
+    resolution: {integrity: sha512-EUqp5PhtcsYXs9Fq/lS7s/8zlTrnBqmzZWzFFROrNikMiz+om/YRKMwqN907t+0A1KKyT8jd39CBUbFZmaZmcA==}
+    engines: {node: '>=20.0.0'}
 
   nopt@9.0.0:
     resolution: {integrity: sha512-Zhq3a+yFKrYwSBluL4H9XP3m3y5uvQkB/09CwDruCiRmR/UJYnn9W4R48ry0uGC70aeTPKLynBtscP9efFFcPw==}
@@ -17508,6 +17518,8 @@ snapshots:
   node-rsa@1.1.1:
     dependencies:
       asn1: 0.2.6
+
+  nodemailer@10.0.15: {}
 
   nopt@9.0.0:
     dependencies:

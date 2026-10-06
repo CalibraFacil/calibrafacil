@@ -3,6 +3,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+import { resolvePlatformEmailTransport } from "@calibra-facil/email-sender";
 import { resolveS3EndpointConfigFromProcess } from "@calibra-facil/shared/storage-endpoint";
 
 export type ApiRuntimeEnv = Record<string, unknown>;
@@ -51,7 +52,6 @@ const requiredProductionEnv = [
   "R2_SECRET_ACCESS_KEY",
   "R2_BUCKET_NAME",
   "R2_MEDIA_BUCKET_NAME",
-  "RESEND_API_KEY",
 ] as const;
 
 function requiredEnv(name: string) {
@@ -125,6 +125,9 @@ export function createApiRuntimeEnv(): ApiRuntimeEnv {
     }
     if (!process.env.R2_ACCOUNT_ID && !process.env.R2_ENDPOINT) {
       throw new Error("R2_ACCOUNT_ID or R2_ENDPOINT is required");
+    }
+    if (!resolvePlatformEmailTransport()) {
+      throw new Error("SMTP_HOST or RESEND_API_KEY is required");
     }
   }
 
