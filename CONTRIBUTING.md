@@ -18,7 +18,9 @@ documentation and translations of the docs.
 ## Getting started
 
 Follow the [Quick start](./README.md#quick-start): `pnpm install`, `pnpm setup:dev`,
-`pnpm dev`. Everything runs locally with Docker; no cloud account is needed.
+`pnpm dev`. Everything runs locally with Docker; no cloud account is needed. Or open the
+repository in GitHub Codespaces (or any Dev Containers tool): [`.devcontainer/`](./.devcontainer)
+sets all of it up.
 
 Before your first change, skim [`CLAUDE.md`](./CLAUDE.md) and [`AGENTS.md`](./AGENTS.md):
 several architecture rules are enforced by lint (no server imports in frontends, no `as`
@@ -38,9 +40,21 @@ assertions, no `useEffect`, thin route files).
    ```
 
 5. Commit with [Conventional Commits](https://www.conventionalcommits.org/)
-   (`fix(portal): …`, `feat(math-engine): …`).
+   (`fix(portal): …`, `feat(math-engine): …`). Releases are cut from these messages:
+   `feat` and `fix` commits (and `!` for breaking changes) decide the next version and
+   become the [changelog](./CHANGELOG.md).
 6. Open a pull request describing **what** changed, **why**, and **how you tested it**.
    Include screenshots (light and dark mode) for UI changes.
+
+CI runs lint, types and the unit tests on every pull request; the real-Postgres integration
+tests (`pnpm --dir apps/api test:integration`, same for `apps/worker`) run after each merge
+and nightly, so run them locally when you touch queries or migrations.
+
+## Releases
+
+`release-please` keeps a release pull request open on `main` with the next version and its
+changelog. Merging it tags `vX.Y.Z`, publishes the Docker images to GHCR (amd64 and arm64)
+and attaches the Windows desktop installer to the GitHub release.
 
 ## Areas that need extra care
 
