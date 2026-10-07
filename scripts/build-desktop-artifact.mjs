@@ -15,7 +15,17 @@ const rendererManifestPath = path.join(
 );
 const localServerBundle = path.join(root, "apps/local-server/dist/server.cjs");
 const stagedLocalServerDir = path.join(desktopDir, "dist/local-server");
-const electronBuilderArgs = process.argv.slice(2);
+// electron-builder looks for the repository only in apps/desktop (its
+// package.json or a .git directory there), so in this monorepo it finds none
+// and cannot write the update feed into the app. Name it here instead: the
+// GitHub repository CI builds in, else this checkout's origin, so a fork's
+// installers update from the fork's own releases. The release workflow uploads
+// the files itself, so electron-builder never publishes.
+const electronBuilderArgs = [
+  ...process.argv.slice(2),
+  ...updateFeedArgs(),
+  "--publish=never",
+];
 const requireFromDesktop = createRequire(path.join(desktopDir, "package.json"));
 const rendererBuildStartedAt = new Date().toISOString();
 const pnpmCommand = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
@@ -71,6 +81,29 @@ try {
 
 if (builderError) {
   throw builderError;
+}
+
+function updateFeedArgs() {
+  const [owner, repo] = (
+    process.env.GITHUB_REPOSITORY ||
+    originRepository() ||
+    ""
+  ).split("/");
+  if (!owner || !repo) return [];
+
+  return [`-c.publish.owner=${owner}`, `-c.publish.repo=${repo}`];
+}
+
+function originRepository() {
+  try {
+    const url = execFileSync("git", ["remote", "get-url", "origin"], {
+      cwd: root,
+      encoding: "utf8",
+    }).trim();
+    return url.match(/github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/)?.[1] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function run(command, args, options = {}) {
