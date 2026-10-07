@@ -19,7 +19,7 @@ name: calibra-facil
 
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_USER: calibra
       POSTGRES_PASSWORD: calibra
@@ -55,7 +55,7 @@ services:
       - s3-data:/data
 
   mailpit:
-    image: axllent/mailpit:v1.31.3
+    image: axllent/mailpit:v1.31.4
     environment:
       MP_MAX_MESSAGES: 2000
     ports:
