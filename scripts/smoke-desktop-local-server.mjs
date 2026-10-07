@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { readdirSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import Database from "better-sqlite3";
 import net from "node:net";
@@ -15,7 +16,12 @@ const readinessPath = "/.well-known/calibra/local-environment";
 const localToken = "local-smoke-token";
 const desktopRunId = "desktop-smoke-run";
 const localServerRunId = "local-server-smoke-run";
-const expectedLocalDbSchemaVersion = 5;
+// A fresh database must reach the newest local migration.
+const expectedLocalDbSchemaVersion = Math.max(
+  ...readdirSync(path.join(root, "packages/local-db/src/migrations")).map(
+    (name) => Number(name.match(/^(\d{4})_/)?.[1] ?? 0),
+  ),
+);
 
 const checks = [
   {
@@ -186,7 +192,9 @@ async function waitForReadiness(url) {
     }
 
     try {
-      const response = await fetch(url);
+      // The bootstrap names the signed-in user, so it takes the same token as
+      // /api/* (the desktop main process sends it on its readiness probe).
+      const response = await fetch(url, { headers: authHeaders() });
       if (response.ok) {
         return response.json();
       }
