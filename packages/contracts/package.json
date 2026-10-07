@@ -16,12 +16,12 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "hono": "^4.12.34",
+    "hono": "^4.13.7",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:^",
     "typescript": "^7.0.2",
-    "vitest": "^4.0.17"
+    "vitest": "^4.1.11"
   }
 }

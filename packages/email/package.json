@@ -26,6 +26,6 @@
     "@types/react-dom": "^19.0.1",
     "@vitejs/plugin-react": "6.0.2",
     "react-email": "6.5.0",
-    "vitest": "^4.0.17"
+    "vitest": "^4.1.11"
   }
 }

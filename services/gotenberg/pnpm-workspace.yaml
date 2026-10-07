@@ -9,3 +9,12 @@ allowBuilds:
   esbuild: true
   sharp: true
   workerd: true
+
+# Transitive via wrangler > miniflare, under the same advisories as the root
+# workspace's overrides: sharp <0.35.5 bundles vulnerable libvips, libheif and
+# librsvg (GHSA-f88m-g3jw-g9cj, GHSA-rgj7-g3m4-5g8c, GHSA-wq5f-xc86-pv6w), and
+# undici <7.29.1 has a WebSocket DoS and a TLS validation bypass
+# (GHSA-rfgv-xxqx-mfg5, GHSA-w293-vg96-wgc3).
+overrides:
+  "sharp@<0.35.5": ^0.35.5
+  "undici@>=7.0.0 <7.29.1": ^7.29.1

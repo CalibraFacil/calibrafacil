@@ -57,11 +57,12 @@ overrides:
   # 7.x line to the patched 7.3.5 to keep the prod audit gate clean. Supersedes
   # the earlier >=7.0.0 <=7.3.1 bump.
   "vite@>=7.0.0 <=7.3.4": ^7.3.5
-  # GHSA-5xrq-8626-4rwp: vitest <4.1.0 UI-server arbitrary file read. Bump the
-  # 4.0.x line (pulled transitively via better-auth) to the patched 4.1.x. Scoped
-  # so the 3.2.x users (web/portal) aren't forced to a major bump.
-  "vitest@>=4.0.0 <4.1.0": ^4.1.8
-  "@vitest/coverage-v8@>=4.0.0 <4.1.0": ^4.1.8
+  # GHSA-5xrq-8626-4rwp: vitest <4.1.0 UI-server arbitrary file read, and
+  # GHSA-82fw-gwwq-j7x9: vitest/@vitest/mocker <4.1.11 arbitrary file read through
+  # a redirected mock. Lift the 4.x line (also pulled transitively via
+  # better-auth) to 4.1.11 without crossing to 5.x.
+  "vitest@>=4.0.0 <4.1.11": ^4.1.11
+  "@vitest/coverage-v8@>=4.0.0 <4.1.11": ^4.1.11
   "path-to-regexp@>=8.0.0 <8.4.0": ^8.4.0
   diff: ^8.0.3
   basic-ftp: ^5.3.1
@@ -79,7 +80,9 @@ overrides:
   # line — ajv depends on ^3.x, and npm's `latest` is 4.1.4 — so this resolves
   # to 3.1.7 off the `three` dist-tag. Supersedes the earlier ^3.1.5, which now
   # sits inside the vulnerable range.
-  fast-uri: ^3.1.6
+  # GHSA-hrr3-gc8f-f4qj (host case normalization via percent-encoded octets)
+  # needs 3.1.8.
+  fast-uri: ^3.1.8
   # GHSA-73wf-gq98-2v4g + GHSA-c83g-rgw3-j3cx: browserslist <=4.28.6 crashes /
   # writes to Object.prototype on an untrusted browserslist-stats.json, and
   # grows its query cache without eviction. Build-time only (transitive via
@@ -96,8 +99,10 @@ overrides:
   # GHSA-rgw5-rvv9-x895) also lands on the 1.x and 2.x lines still present in
   # the tree via apps/desktop and apps/web tooling. Each line has its own
   # patched release; scope per line so no consumer is forced across a major.
-  "brace-expansion@<1.1.18": ^1.1.18
-  "brace-expansion@>=2.0.0 <2.1.4": ^2.1.4
+  # GHSA-q2hr-2g5m-vwhr (quadratic `{a},b}` rewrite) then moved both floors
+  # again: 1.1.21 and 2.1.7.
+  "brace-expansion@<1.1.21": ^1.1.21
+  "brace-expansion@>=2.0.0 <2.1.7": ^2.1.7
   # GHSA advisories on js-yaml <4.3.2 and immutable <4.3.9, both transitive.
   "js-yaml@>=4.0.0 <4.3.2": ^4.3.2
   "immutable@>=4.0.0 <4.3.9": ^4.3.9
@@ -126,10 +131,12 @@ overrides:
   # tooling; scope it so local-server's 2.x is untouched.
   "@hono/node-server@<1.19.15": ^1.19.15
   # Seven advisories against hono <4.12.34 (body-limit bypass, proxy header
-  # trust, path-normalisation confusion). Every workspace package declares
-  # ^4.12.34 directly, but the shadcn CLI pulls its own older 4.12.x through
-  # @modelcontextprotocol/sdk, so the range is forced tree-wide.
-  "hono@<4.12.34": ^4.12.34
+  # trust, path-normalisation confusion), then GHSA-hxh3-vqpv-xpqv: hono/jsx
+  # renders plain strings unescaped in boundary components (<4.13.7). Every
+  # workspace package declares ^4.13.7 directly, but the shadcn CLI pulls its
+  # own older 4.x through @modelcontextprotocol/sdk, so the range is forced
+  # tree-wide.
+  "hono@<4.13.7": ^4.13.7
   # 18 advisories (14 moderate, 4 low) against dompurify — a long tail of
   # mXSS sanitizer bypasses, all superseded by 3.4.13. Transitive via Payload
   # (apps/cms) for the rich-text editor.
@@ -141,16 +148,18 @@ overrides:
   # GHSA-mwp4-54f8-5fhr (high) + GHSA-4xrf-jv44-h6hh + GHSA-22jq-vg5j-6vgg:
   # ip-address <=10.3.0 parses malformed addresses permissively, which defeats
   # SSRF allow/deny lists built on it.
-  "ip-address@<10.3.1": ^10.3.1
+  # GHSA-h3mg-xc3c-68pw and GHSA-j6r3-76f7-8jcv (unbounded parse diagnostics,
+  # cross-family isInSubnet) need 10.7.1.
+  "ip-address@<10.7.1": ^10.7.1
   # GHSA-w9m9-85wc-3x92: postcss-selector-parser <7.1.3 ReDoS. Build-time only.
   "postcss-selector-parser@>=7.1.0 <7.1.3": ^7.1.3
   # GHSA-4mjr-xmp4-gh2g + GHSA-x5fp-wj9c-mxmx: qs prototype-pollution and
   # parameter-parsing DoS. 6.16.0 clears both.
   "qs@>=6.14.2 <6.16.0": ^6.16.0
   # GHSA-395f-4hp3-45gv: shell-quote <=1.8.4 command injection through crafted
-  # quoting. There is no 1.8.5 — the 1.8 line stops at 1.8.4 — so the patched
-  # release is the 1.9 minor.
-  "shell-quote@<1.9.0": ^1.9.0
+  # quoting, then GHSA-pqg4-j6r4-53mv (critical): quote() command injection via
+  # a line terminator after a { comment } token, below 1.11.0.
+  "shell-quote@<1.11.0": ^1.11.0
   # GHSA-2m8v-j782-fhvr: socket.io-parser <4.2.7 prototype pollution while
   # decoding untrusted packets. Transitive via packages/email's preview server.
   "socket.io-parser@>=4.0.0 <4.2.7": ^4.2.7
@@ -161,6 +170,24 @@ overrides:
   # GHSA-ph9p-34f9-6g65: tmp <0.2.6 symlink-following lets a local attacker
   # write outside the temp dir. Transitive via electron-builder.
   "tmp@<0.2.6": ^0.2.6
+  # GHSA-jqcg-44mw-7w3h (critical): proxy-addr <2.0.8 lets an IPv4-mapped IPv6
+  # address spoof a trusted subnet. Transitive via express in the shadcn CLI's
+  # @modelcontextprotocol/sdk (apps/web build tooling).
+  "proxy-addr@<2.0.8": ^2.0.8
+  # GHSA-6qxp-vccf-f47h: @modelcontextprotocol/sdk >=1.12.0 <1.31.0 OAuth client
+  # can send credentials to the wrong authorization server. Same shadcn path.
+  "@modelcontextprotocol/sdk@>=1.12.0 <1.31.0": ^1.31.0
+  # GHSA-2gc4-cqfq-p2gv: engine.io >=6.6.0 <6.6.10 protocol-revision DoS.
+  # Transitive via react-email's preview server (packages/email).
+  "engine.io@>=6.6.0 <6.6.10": ^6.6.10
+  # GHSA-6hxq-p678-4hr2: @simplewebauthn/server <=13.3.1 doesn't check that
+  # attestation certificates chain to a trusted root. packages/auth declares
+  # 13.3.2; @better-auth/passkey pins 13.3.1 exactly.
+  "@simplewebauthn/server@<13.3.2": 13.3.2
+  # GHSA-238p-pmpm-9mq7: katex <0.18.2 lets existing prototype pollution bypass
+  # its trust restrictions. apps/docs declares ^0.18.2; remark-math and
+  # rehype-katex still ask for 0.16.
+  "katex@>=0.11.0 <0.18.2": ^0.18.2
   # Not an advisory. Every workspace package declares zod ^4.4.3 and the tree
   # had settled on 4.4.3, but declaring it in apps/desktop re-resolved the range
   # and moved better-auth's `better-call` peer slot to 4.5.4. From there

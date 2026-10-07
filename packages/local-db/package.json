@@ -23,6 +23,6 @@
     "@repo/typescript-config": "workspace:^",
     "@types/better-sqlite3": "^7.6.13",
     "typescript": "^7.0.2",
-    "vitest": "^4.0.17"
+    "vitest": "^4.1.11"
   }
 }
