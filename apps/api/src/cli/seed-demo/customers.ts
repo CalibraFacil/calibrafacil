@@ -1,5 +1,5 @@
 import { db } from "@calibra-facil/db";
-import { customer } from "@calibra-facil/db/schema";
+import { customer, member, user } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 
 import { LAB_ID, numberField } from "./api";
@@ -27,7 +27,10 @@ export type DemoCustomer = {
   weight: number;
 };
 
-/** Invented companies; e-mails live on the reserved `.example` TLD. */
+/**
+ * Invented companies; e-mails live on the reserved `.example` TLD. Each
+ * contact can sign in to the client portal with that e-mail.
+ */
 export const DEMO_CUSTOMERS: readonly DemoCustomer[] = [
   {
     code: "LCB",
@@ -139,6 +142,51 @@ export function customerCnpj(entry: DemoCustomer): string {
   return makeCnpj(entry.cnpjRoot);
 }
 
+/** The portal account of a customer's quality contact. */
+export function portalUserId(entry: DemoCustomer): string {
+  return `portal-${entry.code.toLowerCase()}`;
+}
+
+/**
+ * Gives a customer's quality contact the client portal: they sign in there
+ * with the customer's e-mail. Plain writes, because an invitation would e-mail
+ * a mailbox that does not exist.
+ */
+async function ensurePortalUser(
+  ctx: SeedContext,
+  entry: DemoCustomer,
+  customerId: number,
+): Promise<void> {
+  const [row] = await db
+    .select({ authOrganizationId: customer.authOrganizationId })
+    .from(customer)
+    .where(eq(customer.id, customerId))
+    .limit(1);
+  if (!row?.authOrganizationId) {
+    throw new Error(`Customer ${customerId} has no portal organization`);
+  }
+  const userId = portalUserId(entry);
+  await db
+    .insert(user)
+    .values({
+      id: userId,
+      name: `Responsável da qualidade (${entry.tradeName})`,
+      email: entry.email,
+      emailVerified: true,
+    })
+    .onConflictDoNothing();
+  await db
+    .insert(member)
+    .values({
+      id: `member-${row.authOrganizationId}-${userId}`,
+      organizationId: row.authOrganizationId,
+      userId,
+      role: "client_user",
+      createdAt: ctx.now,
+    })
+    .onConflictDoNothing();
+}
+
 /** customer.id by DemoCustomer.code. */
 export type CustomerIds = Map<string, number>;
 
@@ -161,6 +209,7 @@ export async function seedCustomers(ctx: SeedContext): Promise<CustomerIds> {
       .limit(1);
     if (existing) {
       ids.set(entry.code, existing.id);
+      await ensurePortalUser(ctx, entry, existing.id);
       continue;
     }
     const created = await ctx.api.call("owner", "POST", "/api/customers", {
@@ -176,6 +225,7 @@ export async function seedCustomers(ctx: SeedContext): Promise<CustomerIds> {
       .set({ email: entry.email })
       .where(eq(customer.id, id));
     ids.set(entry.code, id);
+    await ensurePortalUser(ctx, entry, id);
     ctx.log(`  customer ${entry.code} -> #${id} ${entry.name}`);
   }
   return ids;
