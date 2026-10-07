@@ -26,6 +26,6 @@
     "@calibra-facil/schemas": "workspace:^",
     "@repo/typescript-config": "workspace:^",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.3"
+    "vitest": "^4.1.11"
   }
 }
