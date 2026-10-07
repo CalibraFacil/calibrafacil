@@ -61,12 +61,20 @@ test.describe('sync conflicts', () => {
     await page.goto('/#/dashboard/sync/conflicts')
 
     await expect(page.getByText('Cliente · customer:local-1')).toBeVisible()
-    await expect(page.getByText('Nome')).toBeVisible()
-    await expect(page.getByText('Laboratório Exemplo')).toBeVisible()
-    await expect(page.getByText('Laboratório Exemplo Ltda')).toBeVisible()
-    await expect(page.getByText('Payload bruto · Local')).toBeVisible()
+    // The raw JSON payloads below the diff repeat these values, so match the
+    // diff cells by their whole text.
+    await expect(page.getByText('Nome', { exact: true })).toBeVisible()
     await expect(
-      page.getByRole('link', { name: 'Editar antes de tentar' }),
+      page.getByText('Laboratório Exemplo', { exact: true }),
+    ).toBeVisible()
+    await expect(
+      page.getByText('Laboratório Exemplo Ltda', { exact: true }),
+    ).toBeVisible()
+    await expect(page.getByText('Payload bruto · Local')).toBeVisible()
+    // The edit action is a router link rendered through the Button component,
+    // which exposes it with the `button` role.
+    await expect(
+      page.getByRole('button', { name: 'Editar antes de tentar' }),
     ).toHaveAttribute(
       'href',
       /\/dashboard\/clients\/customer%3Alocal-1\/info.*syncConflictId=/,

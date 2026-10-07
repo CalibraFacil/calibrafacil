@@ -56,7 +56,11 @@ test.describe('certificate distribution', () => {
     await page.goto('/dashboard/jobs/CAL-0007')
 
     await expect(page.getByRole('heading', { name: 'CAL-0007' })).toBeVisible()
-    await expect(page.getByText('Registro aprovado')).toBeVisible()
+    // The approval status badge in the record header; the history list below
+    // also contains an "Aprovado" entry, so match the badge itself.
+    await expect(
+      page.locator('[data-slot="badge"]', { hasText: /^Aprovado$/ }),
+    ).toBeVisible()
 
     const downloadButton = page.getByRole('button', {
       name: /baixar certificado/i,
