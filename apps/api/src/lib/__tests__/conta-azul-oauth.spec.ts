@@ -2,12 +2,16 @@ import { describe, expect, it } from "vitest";
 import {
   buildContaAzulAuthorizationUrl,
   buildContaAzulRefreshFailurePolicy,
+  checkContaAzulAppCredentials,
+  ContaAzulAppMissingError,
   ContaAzulOAuthError,
   exchangeContaAzulAuthorizationCode,
   getContaAzulOAuthConfig,
+  getServerContaAzulCredentials,
   isContaAzulInvalidGrantError,
   parseContaAzulTokenBundle,
   refreshContaAzulAccessToken,
+  resolveContaAzulRedirectUri,
   serializeContaAzulTokenBundle,
   verifyContaAzulOAuthState,
 } from "../conta-azul-oauth";
@@ -290,5 +294,100 @@ describe("Conta Azul OAuth helpers", () => {
         INTEGRATIONS_MASTER_KEY: "state-secret",
       }),
     ).not.toThrow();
+  });
+
+  it("derives the redirect URL from the API's address unless one is configured", () => {
+    expect(
+      resolveContaAzulRedirectUri({ API_URL: "https://lab.example.com/" }),
+    ).toBe(
+      "https://lab.example.com/api/integrations/conta-azul/oauth/callback",
+    );
+    expect(
+      resolveContaAzulRedirectUri({
+        API_URL: "https://lab.example.com",
+        CONTA_AZUL_OAUTH_REDIRECT_URI: " https://proxy.example.com/cb ",
+      }),
+    ).toBe("https://proxy.example.com/cb");
+    expect(resolveContaAzulRedirectUri({})).toBe(
+      "http://localhost:3000/api/integrations/conta-azul/oauth/callback",
+    );
+  });
+
+  it("supplies the server's own application only when both values are set", () => {
+    expect(getServerContaAzulCredentials({})).toBeNull();
+    expect(
+      getServerContaAzulCredentials({ CONTA_AZUL_CLIENT_ID: "client-id" }),
+    ).toBeNull();
+    expect(
+      getServerContaAzulCredentials({
+        CONTA_AZUL_CLIENT_ID: " client-id ",
+        CONTA_AZUL_CLIENT_SECRET: "client-secret",
+      }),
+    ).toEqual({ clientId: "client-id", clientSecret: "client-secret" });
+  });
+
+  it("checks credentials by redeeming a code that cannot exist", async () => {
+    const requests: Array<{ authorization: string | null; body: string }> = [];
+    const answer =
+      (status: number, body: unknown): typeof fetch =>
+      async (_url, init) => {
+        requests.push({
+          authorization: new Headers(init?.headers).get("authorization"),
+          body: String(init?.body),
+        });
+        return Response.json(body, { status });
+      };
+    const credentials = { clientId: "client-id", clientSecret: "secret" };
+    const redirectUri = config.redirectUri;
+
+    await expect(
+      checkContaAzulAppCredentials({
+        credentials,
+        redirectUri,
+        fetchImpl: answer(400, { error: "invalid_client" }),
+      }),
+    ).resolves.toBe("rejected");
+    await expect(
+      checkContaAzulAppCredentials({
+        credentials,
+        redirectUri,
+        fetchImpl: answer(400, { error: "invalid_grant" }),
+      }),
+    ).resolves.toBe("accepted");
+    await expect(
+      checkContaAzulAppCredentials({
+        credentials,
+        redirectUri,
+        fetchImpl: answer(503, { message: "unavailable" }),
+      }),
+    ).resolves.toBe("unverified");
+    await expect(
+      checkContaAzulAppCredentials({
+        credentials,
+        redirectUri,
+        fetchImpl: async () => {
+          throw new TypeError("fetch failed");
+        },
+      }),
+    ).resolves.toBe("unverified");
+
+    expect(requests[0]?.authorization).toBe(
+      `Basic ${btoa("client-id:secret")}`,
+    );
+    const body = new URLSearchParams(requests[0]?.body);
+    expect(body.get("grant_type")).toBe("authorization_code");
+    expect(body.get("code")).toBe("calibrafacil-credential-check");
+    expect(body.get("redirect_uri")).toBe(redirectUri);
+  });
+
+  it("asks for the application again when a refresh finds none", () => {
+    expect(
+      buildContaAzulRefreshFailurePolicy(new ContaAzulAppMissingError()),
+    ).toEqual({
+      status: "ACTION_REQUIRED",
+      reason: "app_missing",
+      message:
+        "Nenhum aplicativo Conta Azul configurado. Cadastre o Client ID e o Client Secret em Configurações → Integrações. Depois, reconecte a integração.",
+    });
   });
 });

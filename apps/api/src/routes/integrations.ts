@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { and, desc, eq, gt, sql } from "drizzle-orm";
+import { and, desc, eq, gt, ne, sql } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
 import {
@@ -63,6 +63,7 @@ import {
   getRequestedLimitFromRun,
   hasActiveSyncRun,
   getTargetScheduleConfig,
+  markContaAzulReconnectRequired,
   updateTargetScheduleConfig,
   listOrganizationIntegrations,
   listContaAzulCatalog,
@@ -81,14 +82,26 @@ import {
 import {
   buildContaAzulAuthorizationUrl,
   buildContaAzulRefreshFailurePolicy,
+  checkContaAzulAppCredentials,
   ContaAzulOAuthError,
   exchangeContaAzulAuthorizationCode,
-  getContaAzulOAuthConfig,
+  getContaAzulStateSecret,
+  getServerContaAzulCredentials,
   parseContaAzulTokenBundle,
   refreshContaAzulAccessToken,
+  resolveContaAzulRedirectUri,
   serializeContaAzulTokenBundle,
   verifyContaAzulOAuthState,
 } from "../lib/conta-azul-oauth";
+import {
+  ContaAzulAppMissingError,
+  deleteContaAzulAppCredentials,
+  getContaAzulAppSummary,
+  requireContaAzulOAuthConfig,
+  resolveContaAzulOAuthConfig,
+  saveContaAzulAppCredentials,
+} from "../lib/conta-azul-app";
+import { ContaAzulAppCredentialsSchema } from "@calibra-facil/schemas";
 import {
   assertActiveContaAzulIntegration,
   assertProviderSupportsSyncTarget,
@@ -377,6 +390,52 @@ const OAuthCallbackQuerySchema = z.object({
   code: z.string().trim().min(1),
   state: z.string().trim().min(1),
 });
+
+/** The Client ID OAuth uses for a laboratory: its own, else the server's. */
+function effectiveContaAzulClientId(
+  app: Awaited<ReturnType<typeof getContaAzulAppSummary>>,
+  env: IntegrationsBindings,
+) {
+  return app.source === "organization"
+    ? app.clientId
+    : (getServerContaAzulCredentials(env)?.clientId ?? null);
+}
+
+/**
+ * Tokens belong to the application that issued them, so a connection made with
+ * another Client ID cannot be refreshed: say so now rather than when the next
+ * sync fails. A new secret for the same Client ID keeps the connection.
+ */
+async function requireContaAzulReconnectAfterAppChange(params: {
+  organizationId: string;
+  clientIdBefore: string | null;
+  clientIdAfter: string | null;
+}) {
+  if (params.clientIdBefore === params.clientIdAfter) return;
+
+  const connected = await db
+    .select({ id: organizationIntegration.id })
+    .from(organizationIntegration)
+    .where(
+      and(
+        eq(organizationIntegration.organizationId, params.organizationId),
+        eq(organizationIntegration.provider, "conta_azul"),
+        ne(organizationIntegration.status, "DISABLED"),
+      ),
+    );
+
+  await Promise.all(
+    connected.map((integration) =>
+      markContaAzulReconnectRequired({
+        integrationId: integration.id,
+        organizationId: params.organizationId,
+        message:
+          "O aplicativo Conta Azul mudou. Reconecte a conta para continuar sincronizando.",
+        details: { reason: "app_changed" },
+      }),
+    ),
+  );
+}
 
 async function resolveContaAzulOAuthCallbackContext(state: {
   organizationId: string;
@@ -750,6 +809,126 @@ export const integrationsRouter = new Hono<{
       return c.json(await buildListPayload(member.organizationId));
     },
   )
+  .get(
+    "/conta-azul/app",
+    ...requireLabProtected,
+    requireOrgType("LAB"),
+    requireRole(["admin", "owner"]),
+    async (c) => {
+      const member = c.get("member");
+      return c.json(
+        await getContaAzulAppSummary({
+          organizationId: member.organizationId,
+          env: c.env,
+        }),
+      );
+    },
+  )
+  .put(
+    "/conta-azul/app",
+    ...requireLabProtected,
+    requireOrgType("LAB"),
+    requireRole(["admin", "owner"]),
+    zValidator("json", ContaAzulAppCredentialsSchema),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const credentials = c.req.valid("json");
+
+      // Conta Azul answers a made-up code differently for a wrong pair, so a
+      // typo is caught here instead of after a round trip through its login.
+      const check = await checkContaAzulAppCredentials({
+        credentials,
+        redirectUri: resolveContaAzulRedirectUri(c.env),
+      });
+      if (check === "rejected") {
+        return c.json(
+          {
+            error:
+              "O Conta Azul recusou este Client ID e Client Secret. Copie os dois de novo do seu aplicativo no Portal do Desenvolvedor.",
+            check,
+          },
+          422,
+        );
+      }
+
+      const before = await getContaAzulAppSummary({
+        organizationId: member.organizationId,
+        env: c.env,
+      });
+      await saveContaAzulAppCredentials({
+        organizationId: member.organizationId,
+        actorUserId: session.user.id,
+        credentials,
+        env: c.env,
+      });
+      await requireContaAzulReconnectAfterAppChange({
+        organizationId: member.organizationId,
+        clientIdBefore: effectiveContaAzulClientId(before, c.env),
+        clientIdAfter: credentials.clientId,
+      });
+      await writeOrganizationIntegrationEvent({
+        organizationId: member.organizationId,
+        actorUserId: session.user.id,
+        actorMemberId: member.id,
+        action: "integration.conta_azul.app_saved",
+        entityId: "conta_azul",
+        details: {
+          provider: "conta_azul",
+          clientId: credentials.clientId,
+          check,
+        },
+      });
+
+      return c.json({
+        app: await getContaAzulAppSummary({
+          organizationId: member.organizationId,
+          env: c.env,
+        }),
+        check,
+      });
+    },
+  )
+  .delete(
+    "/conta-azul/app",
+    ...requireLabProtected,
+    requireOrgType("LAB"),
+    requireRole(["admin", "owner"]),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const before = await getContaAzulAppSummary({
+        organizationId: member.organizationId,
+        env: c.env,
+      });
+      const removed = await deleteContaAzulAppCredentials({
+        organizationId: member.organizationId,
+      });
+
+      if (removed) {
+        await requireContaAzulReconnectAfterAppChange({
+          organizationId: member.organizationId,
+          clientIdBefore: effectiveContaAzulClientId(before, c.env),
+          clientIdAfter: getServerContaAzulCredentials(c.env)?.clientId ?? null,
+        });
+        await writeOrganizationIntegrationEvent({
+          organizationId: member.organizationId,
+          actorUserId: session.user.id,
+          actorMemberId: member.id,
+          action: "integration.conta_azul.app_removed",
+          entityId: "conta_azul",
+          details: { provider: "conta_azul" },
+        });
+      }
+
+      return c.json(
+        await getContaAzulAppSummary({
+          organizationId: member.organizationId,
+          env: c.env,
+        }),
+      );
+    },
+  )
   .post(
     "/conta-azul/oauth/start",
     ...requireLabProtected,
@@ -760,13 +939,16 @@ export const integrationsRouter = new Hono<{
       const member = c.get("member");
       const session = c.get("session");
       const input = c.req.valid("json");
-      let config: ReturnType<typeof getContaAzulOAuthConfig>;
+      let config: Awaited<ReturnType<typeof requireContaAzulOAuthConfig>>;
       let authorization: Awaited<
         ReturnType<typeof buildContaAzulAuthorizationUrl>
       >;
 
       try {
-        config = getContaAzulOAuthConfig(c.env);
+        config = await requireContaAzulOAuthConfig({
+          organizationId: member.organizationId,
+          env: c.env,
+        });
         authorization = await buildContaAzulAuthorizationUrl({
           config,
           organizationId: member.organizationId,
@@ -775,6 +957,12 @@ export const integrationsRouter = new Hono<{
           returnTo: input.returnTo,
         });
       } catch (error) {
+        if (error instanceof ContaAzulAppMissingError) {
+          return c.json(
+            { error: error.message, code: "conta_azul_app_missing" },
+            409,
+          );
+        }
         return c.json(
           {
             error:
@@ -810,13 +998,13 @@ export const integrationsRouter = new Hono<{
     zValidator("query", OAuthCallbackQuerySchema),
     async (c) => {
       const input = c.req.valid("query");
-      const config = getContaAzulOAuthConfig(c.env);
+      const stateSecret = getContaAzulStateSecret(c.env);
 
       let state: Awaited<ReturnType<typeof verifyContaAzulOAuthState>>;
       try {
         state = await verifyContaAzulOAuthState({
           state: input.state,
-          stateSecret: config.stateSecret,
+          stateSecret,
         });
       } catch {
         // Expired/tampered/replayed state is a client error, not a server fault.
@@ -826,6 +1014,17 @@ export const integrationsRouter = new Hono<{
       }
 
       const callbackContext = await resolveContaAzulOAuthCallbackContext(state);
+      // The laboratory's application; removed since the flow started → nothing
+      // can redeem the code.
+      const config = await resolveContaAzulOAuthConfig({
+        organizationId: callbackContext.organizationId,
+        env: c.env,
+      });
+      if (!config) {
+        return c.redirect(
+          buildContaAzulOAuthErrorUrl(c.env, state.returnTo, "app_missing"),
+        );
+      }
 
       let tokenBundle: Awaited<
         ReturnType<typeof exchangeContaAzulAuthorizationCode>
@@ -1103,7 +1302,10 @@ export const integrationsRouter = new Hono<{
           env: c.env,
         });
         const refreshed = await refreshContaAzulAccessToken(
-          getContaAzulOAuthConfig(c.env),
+          await requireContaAzulOAuthConfig({
+            organizationId: member.organizationId,
+            env: c.env,
+          }),
           {
             refreshToken: tokenBundle.refreshToken,
           },

@@ -1091,6 +1091,40 @@ export const organizationIntegration = pgTable(
   ],
 );
 
+// The OAuth application a laboratory registered with a provider (today only
+// Conta Azul), for servers that do not supply one in their environment. One
+// per laboratory and provider; the secret is encrypted with
+// INTEGRATIONS_MASTER_KEY, like the tokens in integration_connection.
+export const integrationOAuthApp = pgTable(
+  "integration_oauth_app",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    provider: text("provider").$type<IntegrationProvider>().notNull(),
+    clientId: text("client_id").notNull(),
+    encryptedClientSecret: text("encrypted_client_secret").notNull(),
+    clientSecretIv: text("client_secret_iv").notNull(),
+    // Shown in settings so an admin can tell which secret is stored.
+    clientSecretLast4: text("client_secret_last4").notNull(),
+    updatedBy: text("updated_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("integration_oauth_app_org_provider_uidx").on(
+      table.organizationId,
+      table.provider,
+    ),
+  ],
+);
+
 export const integrationConnection = pgTable(
   "integration_connection",
   {

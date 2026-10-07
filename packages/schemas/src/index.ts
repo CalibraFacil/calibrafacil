@@ -1,5 +1,6 @@
 import { z } from "zod";
 export * from "./self-serve-signup";
+export * from "./integrations";
 export * from "./portal-fleet";
 export * from "./printing";
 export * from "./proficiency-tests";

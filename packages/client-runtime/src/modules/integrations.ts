@@ -23,6 +23,26 @@ export function createIntegrationsApi(rawCloudClient: any): IntegrationsApi {
         "Falha ao iniciar OAuth da Conta Azul",
       );
     },
+    async getContaAzulApp<TResponse = unknown>() {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.integrations["conta-azul"].app.$get(),
+        "Falha ao carregar o aplicativo Conta Azul",
+      );
+    },
+    async saveContaAzulApp<TResponse = unknown>(input: unknown) {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.integrations["conta-azul"].app.$put({
+          json: input,
+        }),
+        "Falha ao salvar o aplicativo Conta Azul",
+      );
+    },
+    async removeContaAzulApp<TResponse = unknown>() {
+      return readJsonResponse<TResponse>(
+        await rawCloudClient.api.integrations["conta-azul"].app.$delete(),
+        "Falha ao remover o aplicativo Conta Azul",
+      );
+    },
     async validate<TResponse = unknown>(id: string) {
       return readJsonResponse<TResponse>(
         await rawCloudClient.api.integrations[":id"].validate.$post({

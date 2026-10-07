@@ -1893,6 +1893,9 @@ export interface IntegrationsApi {
   list<TResponse = unknown>(): Promise<TResponse>;
   create<TResponse = unknown>(input: unknown): Promise<TResponse>;
   startContaAzulOAuth<TResponse = unknown>(input: unknown): Promise<TResponse>;
+  getContaAzulApp<TResponse = unknown>(): Promise<TResponse>;
+  saveContaAzulApp<TResponse = unknown>(input: unknown): Promise<TResponse>;
+  removeContaAzulApp<TResponse = unknown>(): Promise<TResponse>;
   validate<TResponse = unknown>(id: string): Promise<TResponse>;
   update<TResponse = unknown>(id: string, input: unknown): Promise<TResponse>;
   updateContaAzulConfig<TResponse = unknown>(

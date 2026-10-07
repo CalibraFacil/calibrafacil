@@ -68,7 +68,7 @@ export function buildContaAzulOAuthReturnUrl(
 export function buildContaAzulOAuthErrorUrl(
   env: IntegrationsBindings,
   returnTo: string | null,
-  reason: "invalid_state" | "exchange_failed",
+  reason: "invalid_state" | "exchange_failed" | "app_missing",
 ) {
   const appUrl = typeof env.APP_URL === "string" ? env.APP_URL.trim() : "";
   const baseUrl = appUrl || "http://localhost:5173";

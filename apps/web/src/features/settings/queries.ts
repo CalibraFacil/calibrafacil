@@ -14,6 +14,7 @@ import type {
   SettingsCertificateNumberingData,
   SettingsEnvironmentalLimitsData,
   SettingsIntegrationsData,
+  ContaAzulAppSummary,
   ContaAzulCatalogResponse,
   SettingsNotificationPreferencesData,
   SettingsEmailDomainData,
@@ -158,6 +159,14 @@ export function integrationsQueryOptions() {
   return queryOptions({
     queryKey: ['integrations'],
     queryFn: () => calibraApi.integrations.list<SettingsIntegrationsData>(),
+  })
+}
+
+export function contaAzulAppQueryOptions() {
+  return queryOptions({
+    queryKey: ['integrations', 'conta-azul', 'app'],
+    queryFn: () =>
+      calibraApi.integrations.getContaAzulApp<ContaAzulAppSummary>(),
   })
 }
 

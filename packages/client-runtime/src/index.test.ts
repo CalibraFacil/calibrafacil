@@ -1576,6 +1576,21 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "getContaAzulApp",
+          "namespace": "integrations",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "saveContaAzulApp",
+          "namespace": "integrations",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "removeContaAzulApp",
+          "namespace": "integrations",
+          "policy": "cloud-only",
+        },
+        {
           "method": "validate",
           "namespace": "integrations",
           "policy": "cloud-only",
@@ -3520,6 +3535,69 @@ describe("environmental limits runtime adapter", () => {
 });
 
 describe("integrations runtime adapter", () => {
+  it("reads, saves and removes the laboratory's Conta Azul application", async () => {
+    const calls: Array<{ method: string; url: string; body: unknown }> = [];
+    const fetchMock: typeof fetch = async (input, init) => {
+      const method = init?.method ?? "GET";
+      const body =
+        typeof init?.body === "string" ? JSON.parse(init.body) : null;
+      calls.push({ method, url: String(input), body });
+
+      if (method === "PUT" && body?.clientSecret === "wrong-secret") {
+        return Response.json(
+          {
+            error: "O Conta Azul recusou este Client ID e Client Secret.",
+            check: "rejected",
+          },
+          { status: 422 },
+        );
+      }
+      if (method === "PUT") {
+        return Response.json({
+          app: { source: "organization" },
+          check: "accepted",
+        });
+      }
+      return Response.json({
+        source: method === "DELETE" ? null : "organization",
+      });
+    };
+    const client = createCloudApiClient({
+      baseUrl: "https://api.example.test",
+      fetch: fetchMock,
+    });
+
+    await expect(client.integrations.getContaAzulApp()).resolves.toEqual({
+      source: "organization",
+    });
+    await expect(
+      client.integrations.saveContaAzulApp({
+        clientId: "client-id",
+        clientSecret: "client-secret",
+      }),
+    ).resolves.toEqual({ app: { source: "organization" }, check: "accepted" });
+    await expect(
+      client.integrations.saveContaAzulApp({
+        clientId: "client-id",
+        clientSecret: "wrong-secret",
+      }),
+    ).rejects.toThrow("O Conta Azul recusou este Client ID e Client Secret.");
+    await expect(client.integrations.removeContaAzulApp()).resolves.toEqual({
+      source: null,
+    });
+
+    expect(calls.map((call) => [call.method, call.url])).toEqual([
+      ["GET", "https://api.example.test/api/integrations/conta-azul/app"],
+      ["PUT", "https://api.example.test/api/integrations/conta-azul/app"],
+      ["PUT", "https://api.example.test/api/integrations/conta-azul/app"],
+      ["DELETE", "https://api.example.test/api/integrations/conta-azul/app"],
+    ]);
+    expect(calls[1]?.body).toEqual({
+      clientId: "client-id",
+      clientSecret: "client-secret",
+    });
+  });
+
   it("routes integration operations through the cloud API", async () => {
     const fetchCalls: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
     const fetchMock: typeof fetch = async (input, init) => {

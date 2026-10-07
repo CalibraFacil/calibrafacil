@@ -3,12 +3,13 @@ title: Visão Geral de Integrações
 description: Como o CalibraFácil se conecta a sistemas externos — API pública, webhooks e conectores HTTP para ERP e automações operacionais.
 ---
 
-O CalibraFácil expõe três camadas de integração, projetadas para casos de uso distintos:
+O CalibraFácil expõe quatro camadas de integração, projetadas para casos de uso distintos:
 
 | Camada | Para que serve | Quando usar |
 | :--- | :--- | :--- |
 | [**API pública**](/integracoes/api/conceitos) | Acesso programático aos recursos operacionais | Automações próprias, dashboards corporativos, sincronização com sistemas internos |
 | [**Webhooks**](/integracoes/api/webhooks) | Notificação assíncrona de eventos | Reagir a eventos em tempo real sem polling |
+| [**Conta Azul**](/integracoes/conta-azul) | Integração nativa por OAuth com o ERP Conta Azul | Laboratórios que usam o Conta Azul como ERP financeiro |
 | [**Conectores ERP**](/integracoes/conectores-erp) | Sincronização HTTP genérica com mapeamento de campos | Integração com ERP financeiro, sistemas de faturamento |
 
 ## API pública
@@ -23,6 +24,12 @@ Subscrição de eventos com entrega via HTTP POST assinado. Inclui retry automá
 
 Detalhes em [Webhooks](/integracoes/api/webhooks).
 
+## Conta Azul
+
+Integração nativa com o ERP Conta Azul: pessoas, catálogo, comercial, financeiro, fiscal, documentos e reconciliação, conectados por OAuth. Antes de conectar, o laboratório cadastra o próprio aplicativo no Portal do Desenvolvedor do Conta Azul, em cerca de 10 minutos.
+
+Detalhes em [Conta Azul](/integracoes/conta-azul).
+
 ## Conectores ERP
 
 Conector HTTP genérico com mapeamento de campos configurável. Permite sincronizar clientes, ordens de serviço e documentos financeiros com sistemas externos sem código personalizado. Gatilhos suportam execução manual, por evento ou agendada.
@@ -36,5 +43,5 @@ Toda integração é escopada à organização. Chaves de API, webhooks e conect
 ## Onde gerenciar
 
 - **Configurações → Autenticação** — chaves de API.
-- **Configurações → Integrações** — webhooks e conectores ERP.
+- **Configurações → Integrações** — Conta Azul, webhooks e conectores ERP.
 - **Configurações → Notificações** — preferências de email/in-app (não confundir com webhooks).
