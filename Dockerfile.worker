@@ -4,7 +4,7 @@
 # root:
 #
 #   docker build -f Dockerfile.worker -t calibrafacil-worker .
-FROM node:24-bookworm-slim AS build
+FROM node:25-bookworm-slim AS build
 
 # pnpm itself comes from the "packageManager" field of package.json.
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0

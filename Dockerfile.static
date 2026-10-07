@@ -7,7 +7,7 @@
 #
 # VITE_API_URL is baked into the bundle. Leave it out when a reverse proxy
 # serves the API under /api on the app's own origin.
-FROM node:24-bookworm-slim AS build
+FROM node:25-bookworm-slim AS build
 
 ARG APP_NAME
 ARG VITE_API_URL
