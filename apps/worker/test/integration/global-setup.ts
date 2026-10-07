@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
 import type { GlobalSetupContext } from "vitest/node";
@@ -25,6 +26,21 @@ const dbDir = fileURLToPath(
 
 let startedContainer: string | null = null;
 
+// The Postgres image this tier runs is the one docker-compose.yml pins for
+// development, so an update to it (Dependabot bumps it there) is exercised here
+// before it merges. TEST_POSTGRES_IMAGE overrides it.
+function postgresImage(): string {
+  const override = process.env.TEST_POSTGRES_IMAGE;
+  if (override) return override;
+  const compose = readFileSync(
+    new URL("../../../../docker-compose.yml", import.meta.url),
+    "utf8",
+  );
+  const pinned = compose.match(/^\s*image:\s*(postgres:\S+)/m)?.[1];
+  if (!pinned) throw new Error("docker-compose.yml pins no postgres image");
+  return pinned;
+}
+
 function tryExec(cmd: string) {
   try {
     execSync(cmd, { stdio: "ignore" });
@@ -40,7 +56,7 @@ export async function setup({ provide }: GlobalSetupContext) {
   if (!url) {
     // Let Docker assign a free host port (-p 0:5432) so concurrent runs don't clash.
     execSync(
-      `docker run -d --name ${CONTAINER} -e POSTGRES_PASSWORD=test -e POSTGRES_DB=calibra -p 0:5432 postgres:16`,
+      `docker run -d --name ${CONTAINER} -e POSTGRES_PASSWORD=test -e POSTGRES_DB=calibra -p 0:5432 ${postgresImage()}`,
       { stdio: "ignore" },
     );
     startedContainer = CONTAINER;
@@ -61,7 +77,7 @@ export async function setup({ provide }: GlobalSetupContext) {
     }
     if (!ready) throw new Error("integration Postgres did not become ready");
 
-    // The postgres:16 image does a fast-shutdown + restart after initdb: pg_isready
+    // The official postgres image does a fast-shutdown + restart after initdb: pg_isready
     // passes during the init phase, the server bounces, then comes up in main mode.
     // Without waiting out that cycle, the first real query hits ECONNREFUSED. Wait
     // for the restart, then re-verify.
