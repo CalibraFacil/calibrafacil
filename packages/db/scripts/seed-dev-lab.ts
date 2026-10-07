@@ -5,7 +5,7 @@
  *
  * Creates (idempotently — safe to run again):
  *   - the portal service account (PORTAL_SERVICE_USER_ID=portal-service),
- *   - "Laboratório Demonstração" with its default unit,
+ *   - the demo laboratory, "Laboratório Modelo", with its default unit,
  *   - three members, so flows that need two people (e.g. method review and
  *     approval) can be exercised:
  *       admin@laboratorio.test    owner
@@ -92,7 +92,7 @@ async function seed() {
     .insert(organization)
     .values({
       id: LAB_ID,
-      name: "Laboratório Demonstração",
+      name: "Laboratório Modelo",
       slug: "laboratorio-demonstracao",
       createdAt: now,
       type: "LAB",
