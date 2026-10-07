@@ -65,14 +65,10 @@ export function Hero() {
   );
 }
 
-/**
- * The product, framed once and dissolving into the page, with two real
- * moments of a calibration floating over it: the approved certificate and
- * the expanded uncertainty behind it.
- */
+/** The product, framed once and dissolving into the page. */
 function HeroVisual() {
   return (
-    <div className="relative mx-auto mt-14 max-w-[1120px] motion-safe:animate-hero-rise motion-safe:[animation-delay:180ms] md:mt-20">
+    <div className="mx-auto mt-14 max-w-[1120px] motion-safe:animate-hero-rise motion-safe:[animation-delay:180ms] md:mt-20">
       <div className="relative mx-auto aspect-[390/844] max-w-[430px] overflow-hidden rounded-t-2xl border border-b-0 border-border bg-card shadow-[0_0_0_1px_rgba(255,255,255,0.6)_inset,0_2px_6px_rgba(15,23,42,0.04),0_40px_80px_-32px_rgba(15,23,42,0.28)] dark:shadow-[0_0_0_1px_rgba(255,255,255,0.04)_inset,0_40px_80px_-32px_rgba(0,0,0,0.7)] [mask-image:linear-gradient(180deg,#000_62%,transparent_100%)] md:aspect-auto md:h-[560px] md:max-w-none">
         <picture className="block dark:hidden">
           <source
@@ -108,107 +104,6 @@ function HeroVisual() {
             className="block h-auto w-full select-none"
           />
         </picture>
-      </div>
-
-      <CertificateCard className="absolute bottom-6 left-0 hidden w-[300px] md:block lg:-left-6" />
-      <UncertaintyCard className="absolute top-10 right-0 hidden w-[288px] md:block lg:-right-6" />
-
-      {/* Below md the two cards sit under the frame instead of over it. */}
-      <div className="mt-4 grid gap-3 md:hidden">
-        <CertificateCard />
-        <UncertaintyCard />
-      </div>
-    </div>
-  );
-}
-
-const floating =
-  "rounded-xl border border-border bg-card/95 shadow-[0_1px_2px_rgba(15,23,42,0.05),0_20px_40px_-16px_rgba(15,23,42,0.28)] backdrop-blur-sm";
-
-function CertificateCard({ className = "" }: { className?: string }) {
-  return (
-    <div className={`${floating} ${className}`}>
-      <div className="flex items-center justify-between gap-3 px-4 pt-3.5">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-500/12 px-2 py-0.5 text-[12px] font-medium text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-600/15 dark:ring-emerald-400/20 ring-inset">
-          <span aria-hidden className="size-1.5 rounded-full bg-emerald-500" />
-          Aprovado
-        </span>
-        <span className="font-mono text-[12px] tabular-nums text-muted-foreground">
-          CAL-2026-0231
-        </span>
-      </div>
-      <div className="px-4 pt-2.5 pb-3.5">
-        <p className="text-[14px] font-medium text-foreground">
-          Balança analítica{" "}
-          <span className="font-normal text-muted-foreground">· BAL-07</span>
-        </p>
-        <p className="mt-0.5 text-[12.5px] text-muted-foreground">
-          Certificado assinado com ICP-Brasil A1 · 14/08/2026
-        </p>
-        <div className="mt-3 flex items-center gap-2.5 border-t border-border pt-3">
-          <span
-            aria-hidden
-            className="flex size-6 items-center justify-center rounded-full bg-[linear-gradient(135deg,#4f46e5,#1447e6)] text-[10px] font-semibold text-white"
-          >
-            CM
-          </span>
-          <span className="text-[12.5px] text-foreground">
-            Carla Menezes{" "}
-            <span className="text-muted-foreground">· Responsável técnica</span>
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-const BUDGET = [
-  ["Repetibilidade", 100],
-  ["Resolução", 40],
-  ["Excentricidade", 60],
-  ["Padrão", 30],
-  ["Deriva", 12],
-  ["Empuxo", 10],
-] as const;
-
-function UncertaintyCard({ className = "" }: { className?: string }) {
-  return (
-    <div className={`${floating} ${className}`}>
-      <div className="flex items-center justify-between gap-3 px-4 pt-3.5">
-        <span className="text-[12.5px] font-medium text-foreground">
-          Incerteza expandida{" "}
-          <span className="font-normal text-muted-foreground">· 200 g</span>
-        </span>
-        <span className="text-[11.5px] text-muted-foreground">GUM</span>
-      </div>
-      <div className="px-4 pt-2 pb-4">
-        <div className="flex items-baseline gap-3">
-          <span className="text-[26px] font-semibold tracking-[-0.02em] tabular-nums text-foreground">
-            U = 0,25 mg
-          </span>
-          <span className="text-[13px] tabular-nums text-muted-foreground">
-            k = 2,00
-          </span>
-        </div>
-        <ul
-          className="mt-3 grid gap-1.5"
-          aria-label="Contribuições do orçamento de incerteza"
-        >
-          {BUDGET.map(([label, value]) => (
-            <li
-              key={label}
-              className="grid grid-cols-[92px_1fr] items-center gap-2 text-[11.5px] text-muted-foreground"
-            >
-              <span className="truncate">{label}</span>
-              <span className="h-1.5 overflow-hidden rounded-full bg-border">
-                <span
-                  className="block h-full rounded-full bg-[linear-gradient(90deg,#4f46e5,#1447e6)]"
-                  style={{ width: `${value}%` }}
-                />
-              </span>
-            </li>
-          ))}
-        </ul>
       </div>
     </div>
   );
