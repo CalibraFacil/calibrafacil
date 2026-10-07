@@ -170,7 +170,7 @@ services:
     restart: unless-stopped
 
   mailpit:
-    image: axllent/mailpit:v1.31.3
+    image: axllent/mailpit:v1.31.4
     profiles: ["mailpit"]
     restart: unless-stopped
     ports:
