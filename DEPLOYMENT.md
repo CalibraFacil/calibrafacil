@@ -164,8 +164,12 @@ then set `AUTH_COOKIE_DOMAIN` and build the frontends with `VITE_API_URL`.
 | `CRON_SCHEDULER=internal`                                                                           | Run the scheduled jobs inside the API (see below)                                    |
 
 Extra origins for CORS and auth can be listed in `CORS_ALLOWED_ORIGINS` and
-`AUTH_TRUSTED_ORIGINS`. The Conta Azul ERP integration (`CONTA_AZUL_*`) is optional: it stays
-unavailable until it is configured.
+`AUTH_TRUSTED_ORIGINS`. The Conta Azul ERP integration needs no server setup: each laboratory
+registers its own application on Conta Azul's developer portal and pastes the Client ID and
+Secret in **Configurações → Integrações**, which shows the redirect URL to register
+(`API_URL` + `/api/integrations/conta-azul/oauth/callback`). To supply one application to every
+laboratory instead, set `CONTA_AZUL_CLIENT_ID` and `CONTA_AZUL_CLIENT_SECRET`
+(`CONTA_AZUL_OAUTH_REDIRECT_URI` overrides the redirect URL).
 
 ### Frontends
 
