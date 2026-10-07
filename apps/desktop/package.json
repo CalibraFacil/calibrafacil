@@ -27,7 +27,7 @@
     "better-sqlite3": "^12.11.1",
     "electron-updater": "^6.8.3",
     "serialport": "^13.0.0",
-    "usb": "^2.16.0",
+    "usb": "^2.19.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
