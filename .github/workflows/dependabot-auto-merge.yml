@@ -1,0 +1,32 @@
+name: Dependabot auto-merge
+
+# Dependabot's patch, minor and security pull requests merge themselves once
+# every required check passes: CI, the dependency review and the Safety net.
+# Major versions wait for a maintainer.
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    name: Auto-merge
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'CalibraFacil/calibrafacil'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Read the update
+        id: metadata
+        uses: dependabot/fetch-metadata@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Only patch and minor updates. A major, or an update whose kind is
+      # unknown (some image tags are not versions), waits for a maintainer.
+      - name: Merge once the required checks pass
+        if: contains(fromJSON('["version-update:semver-patch", "version-update:semver-minor"]'), steps.metadata.outputs.update-type)
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr merge --auto --squash "$PR_URL"

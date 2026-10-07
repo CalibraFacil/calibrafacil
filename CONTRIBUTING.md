@@ -61,6 +61,28 @@ Dependency, lockfile, toolchain and workflow changes run all of them, and so do 
 changelog. Merging it tags `vX.Y.Z`, publishes the Docker images to GHCR (amd64 and arm64)
 and attaches the Windows desktop installer to the GitHub release.
 
+## Dependencies
+
+[Dependabot](./.github/dependabot.yml) keeps GitHub Actions, the Dockerfiles' base images, the
+Compose services and the dev container features current, and opens a pull request as soon as
+a security advisory affects an npm package.
+
+- Updates arrive on Mondays, one grouped pull request per kind. A release is proposed three
+  days after it is published; security fixes do not wait. pnpm itself refuses anything
+  published in the last 24 hours.
+- Patch, minor and security pull requests merge themselves once CI, the dependency review and
+  the Safety net pass. Major versions wait for a maintainer. Node.js and PostgreSQL majors are
+  not proposed at all: moving to a new LTS, or dumping and restoring the database, is a
+  deliberate change.
+- npm version updates are made by hand: on this workspace a Dependabot version-update run
+  regenerates the lockfile once per outdated package and runs out of time. Upgrade in a
+  focused pull request (`pnpm outdated -r` lists what is behind) and let the Safety net check
+  the result.
+- A pull request that adds a dependency with a high or critical advisory fails the dependency
+  review.
+- Some versions are held on purpose, with the reason next to the override in
+  `pnpm-workspace.yaml`. Lift a hold in its own pull request.
+
 ## Areas that need extra care
 
 Calibra Fácil produces regulated records. Changes in these areas get a stricter review:

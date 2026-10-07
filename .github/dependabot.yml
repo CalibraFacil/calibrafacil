@@ -1,38 +1,109 @@
-# Monthly, grouped updates keep the volunteer review load predictable.
+# Dependabot keeps GitHub Actions, the Dockerfiles' base images, the Compose
+# services and the dev container features current, and opens a pull request
+# as soon as a security advisory affects an npm package. npm version updates
+# are made by hand: on this pnpm workspace a version-update run regenerates
+# the lockfile once per outdated package and runs out of time. See
+# CONTRIBUTING.md ("Dependencies").
+#
+# A release is proposed three days after it is published (cooldown); security
+# fixes do not wait. Patch, minor and security pull requests merge themselves
+# once every required check passes (workflows/dependabot-auto-merge.yml).
 version: 2
 updates:
+  # Security fixes only. A limit of 0 turns version updates off, while
+  # security updates still use the group below: one pull request per run.
   - package-ecosystem: npm
-    directory: /
+    directories:
+      - /
+      - /services/document-worker
+      - /services/gotenberg
     schedule:
-      interval: monthly
-    open-pull-requests-limit: 5
+      interval: weekly
+    open-pull-requests-limit: 0
+    commit-message:
+      prefix: fix
+      prefix-development: chore
+      include: scope
     groups:
-      production:
-        dependency-type: production
-        update-types: [minor, patch]
-      development:
-        dependency-type: development
-        update-types: [minor, patch]
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: monthly
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Sao_Paulo
+    cooldown:
+      default-days: 3
+    commit-message:
+      prefix: chore
+      include: scope
     groups:
       actions:
         patterns: ["*"]
-  # Base images of the Dockerfiles and the services pinned in the Compose files
-  # (docker-compose.yml for development, deploy/ for self-hosting).
+
+  # Node.js majors are left out: odd majors never become LTS, and moving to a
+  # new LTS (.nvmrc, @types/node, the images) is a deliberate change.
   - package-ecosystem: docker
-    directory: /
+    directories:
+      - /
+      - /services/gotenberg
     schedule:
-      interval: monthly
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Sao_Paulo
+    cooldown:
+      default-days: 3
+    ignore:
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
+    commit-message:
+      prefix: chore
+      include: scope
     groups:
       images:
         patterns: ["*"]
+
+  # docker-compose.yml for development, deploy/ for self-hosting. A new
+  # PostgreSQL major cannot open an older data directory: it needs a dump and
+  # restore (DEPLOYMENT.md, Backups), so it is left out too.
   - package-ecosystem: docker-compose
-    directories: ["/", "/deploy"]
+    directories:
+      - /
+      - /deploy
     schedule:
-      interval: monthly
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Sao_Paulo
+    cooldown:
+      default-days: 3
+    ignore:
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
+    commit-message:
+      prefix: chore
+      include: scope
     groups:
       compose:
+        patterns: ["*"]
+
+  - package-ecosystem: devcontainers
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Sao_Paulo
+    cooldown:
+      default-days: 3
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      devcontainer:
         patterns: ["*"]
