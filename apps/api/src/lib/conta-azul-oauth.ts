@@ -5,10 +5,20 @@ export const CONTA_AZUL_AUTHORIZATION_URL = "https://auth.contaazul.com/login";
 export const CONTA_AZUL_TOKEN_URL = "https://auth.contaazul.com/oauth2/token";
 
 export interface ContaAzulOAuthEnv {
+  API_URL?: string;
   CONTA_AZUL_CLIENT_ID?: string;
   CONTA_AZUL_CLIENT_SECRET?: string;
   CONTA_AZUL_OAUTH_REDIRECT_URI?: string;
   INTEGRATIONS_MASTER_KEY?: string;
+}
+
+/** Where Conta Azul sends the browser back after the laboratory approves. */
+export const CONTA_AZUL_OAUTH_CALLBACK_PATH =
+  "/api/integrations/conta-azul/oauth/callback";
+
+export interface ContaAzulAppCredentials {
+  clientId: string;
+  clientSecret: string;
 }
 
 export interface ContaAzulOAuthConfig {
@@ -111,11 +121,25 @@ export class ContaAzulOAuthError extends Error {
   }
 }
 
+export const CONTA_AZUL_APP_MISSING_MESSAGE =
+  "Nenhum aplicativo Conta Azul configurado. Cadastre o Client ID e o Client Secret em Configurações → Integrações.";
+
+/** The laboratory has no application of its own and the server supplies none. */
+export class ContaAzulAppMissingError extends Error {
+  constructor() {
+    super(CONTA_AZUL_APP_MISSING_MESSAGE);
+    this.name = "ContaAzulAppMissingError";
+  }
+}
+
 export function isContaAzulInvalidGrantError(error: unknown) {
   return error instanceof ContaAzulOAuthError && error.code === "invalid_grant";
 }
 
-export type ContaAzulRefreshFailureReason = "invalid_grant" | "refresh_failed";
+export type ContaAzulRefreshFailureReason =
+  | "invalid_grant"
+  | "app_missing"
+  | "refresh_failed";
 
 export interface ContaAzulRefreshFailurePolicy {
   status: "ACTION_REQUIRED";
@@ -132,6 +156,14 @@ export function buildContaAzulRefreshFailurePolicy(
       message:
         "Conta Azul revogou ou expirou o refresh token. Reconecte a integração.",
       reason: "invalid_grant",
+    };
+  }
+
+  if (error instanceof ContaAzulAppMissingError) {
+    return {
+      status: "ACTION_REQUIRED",
+      message: `${CONTA_AZUL_APP_MISSING_MESSAGE} Depois, reconecte a integração.`,
+      reason: "app_missing",
     };
   }
 
@@ -158,24 +190,66 @@ function requireEnvValue(
   return trimmed;
 }
 
-export function getContaAzulOAuthConfig(
+/**
+ * The redirect URL to register on Conta Azul: CONTA_AZUL_OAUTH_REDIRECT_URI when
+ * set, otherwise the callback route under the API's public address.
+ */
+export function resolveContaAzulRedirectUri(env: ContaAzulOAuthEnv): string {
+  const configured = env.CONTA_AZUL_OAUTH_REDIRECT_URI?.trim();
+  if (configured) {
+    return configured;
+  }
+
+  const apiUrl = env.API_URL?.trim() || "http://localhost:3000";
+  return `${apiUrl.replace(/\/+$/, "")}${CONTA_AZUL_OAUTH_CALLBACK_PATH}`;
+}
+
+/** Signs the OAuth state; server-wide, so it is known before the laboratory. */
+export function getContaAzulStateSecret(env: ContaAzulOAuthEnv): string {
+  return requireEnvValue(
+    "INTEGRATIONS_MASTER_KEY",
+    env.INTEGRATIONS_MASTER_KEY,
+  );
+}
+
+/** The application the server itself supplies, if its environment names one. */
+export function getServerContaAzulCredentials(
+  env: ContaAzulOAuthEnv,
+): ContaAzulAppCredentials | null {
+  const clientId = env.CONTA_AZUL_CLIENT_ID?.trim();
+  const clientSecret = env.CONTA_AZUL_CLIENT_SECRET?.trim();
+  return clientId && clientSecret ? { clientId, clientSecret } : null;
+}
+
+export function buildContaAzulOAuthConfig(
+  credentials: ContaAzulAppCredentials,
   env: ContaAzulOAuthEnv,
 ): ContaAzulOAuthConfig {
   return {
-    clientId: requireEnvValue("CONTA_AZUL_CLIENT_ID", env.CONTA_AZUL_CLIENT_ID),
-    clientSecret: requireEnvValue(
-      "CONTA_AZUL_CLIENT_SECRET",
-      env.CONTA_AZUL_CLIENT_SECRET,
-    ),
-    redirectUri: requireEnvValue(
-      "CONTA_AZUL_OAUTH_REDIRECT_URI",
-      env.CONTA_AZUL_OAUTH_REDIRECT_URI,
-    ),
-    stateSecret: requireEnvValue(
-      "INTEGRATIONS_MASTER_KEY",
-      env.INTEGRATIONS_MASTER_KEY,
-    ),
+    clientId: credentials.clientId,
+    clientSecret: credentials.clientSecret,
+    redirectUri: resolveContaAzulRedirectUri(env),
+    stateSecret: getContaAzulStateSecret(env),
   };
+}
+
+/** The server-supplied application only; throws when the environment lacks it. */
+export function getContaAzulOAuthConfig(
+  env: ContaAzulOAuthEnv,
+): ContaAzulOAuthConfig {
+  return buildContaAzulOAuthConfig(
+    {
+      clientId: requireEnvValue(
+        "CONTA_AZUL_CLIENT_ID",
+        env.CONTA_AZUL_CLIENT_ID,
+      ),
+      clientSecret: requireEnvValue(
+        "CONTA_AZUL_CLIENT_SECRET",
+        env.CONTA_AZUL_CLIENT_SECRET,
+      ),
+    },
+    env,
+  );
 }
 
 function base64UrlEncode(bytes: Uint8Array): string {
@@ -382,8 +456,8 @@ export async function buildContaAzulAuthorizationUrl(params: {
   };
 }
 
-function buildBasicAuthorizationHeader(config: ContaAzulOAuthConfig) {
-  return `Basic ${btoa(`${config.clientId}:${config.clientSecret}`)}`;
+function buildBasicAuthorizationHeader(credentials: ContaAzulAppCredentials) {
+  return `Basic ${btoa(`${credentials.clientId}:${credentials.clientSecret}`)}`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -437,7 +511,7 @@ function parseTokenResponse(
 }
 
 async function requestContaAzulToken(params: {
-  config: ContaAzulOAuthConfig;
+  config: ContaAzulAppCredentials;
   body: URLSearchParams;
   fetchImpl?: typeof fetch;
   now?: Date;
@@ -504,4 +578,42 @@ export function refreshContaAzulAccessToken(
     fetchImpl: params.fetchImpl,
     now: params.now,
   });
+}
+
+export type ContaAzulAppCredentialCheck =
+  | "accepted"
+  | "rejected"
+  | "unverified";
+
+/**
+ * Checks a Client ID and Secret without a laboratory login: asks Conta Azul's
+ * token endpoint to redeem a code that cannot exist. The endpoint (AWS Cognito)
+ * authenticates the client before it looks at the code, so it answers
+ * `invalid_client` when the pair is wrong and `invalid_grant` (unknown code)
+ * when it is right. Any other answer, or no answer, proves nothing either way.
+ */
+export async function checkContaAzulAppCredentials(params: {
+  credentials: ContaAzulAppCredentials;
+  redirectUri: string;
+  fetchImpl?: typeof fetch;
+}): Promise<ContaAzulAppCredentialCheck> {
+  const body = new URLSearchParams();
+  body.set("grant_type", "authorization_code");
+  body.set("code", "calibrafacil-credential-check");
+  body.set("redirect_uri", params.redirectUri);
+
+  try {
+    await requestContaAzulToken({
+      config: params.credentials,
+      body,
+      fetchImpl: params.fetchImpl,
+    });
+    return "unverified";
+  } catch (error) {
+    if (error instanceof ContaAzulOAuthError) {
+      if (error.code === "invalid_client") return "rejected";
+      if (error.code === "invalid_grant") return "accepted";
+    }
+    return "unverified";
+  }
 }

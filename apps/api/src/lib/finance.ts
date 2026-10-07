@@ -54,11 +54,11 @@ import { decryptPassword, encryptPassword } from "@calibra-facil/signing";
 import { createFinancialErpAdapter } from "./financial-erp-adapters";
 import {
   buildContaAzulRefreshFailurePolicy,
-  getContaAzulOAuthConfig,
   parseContaAzulTokenBundle,
   refreshContaAzulAccessToken,
   serializeContaAzulTokenBundle,
 } from "./conta-azul-oauth";
+import { requireContaAzulOAuthConfig } from "./conta-azul-app";
 
 type FinanceDbExecutor = Pick<
   typeof db,
@@ -1220,7 +1220,10 @@ export async function exportBillingDocumentToPrimaryIntegration(params: {
       async onUnauthorized() {
         try {
           const refreshed = await refreshContaAzulAccessToken(
-            getContaAzulOAuthConfig(params.env),
+            await requireContaAzulOAuthConfig({
+              organizationId: params.organizationId,
+              env: params.env,
+            }),
             {
               refreshToken: tokenBundle.refreshToken,
             },

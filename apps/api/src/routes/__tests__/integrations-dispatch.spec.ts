@@ -10,8 +10,10 @@ import {
 } from "@calibra-facil/shared";
 import {
   buildContaAzulAuthorizationUrl,
-  getContaAzulOAuthConfig,
+  CONTA_AZUL_APP_MISSING_MESSAGE,
+  ContaAzulAppMissingError,
 } from "../../lib/conta-azul-oauth";
+import { requireContaAzulOAuthConfig } from "../../lib/conta-azul-app";
 
 const mocks = vi.hoisted(() => ({
   db: {
@@ -78,15 +80,21 @@ vi.mock("../../lib/integrations", () => ({
   writeOrganizationIntegrationEvent: vi.fn(),
 }));
 
-vi.mock("../../lib/conta-azul-oauth", () => ({
+vi.mock("../../lib/conta-azul-oauth", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/conta-azul-oauth")>()),
   buildContaAzulAuthorizationUrl: vi.fn(),
   buildContaAzulRefreshFailurePolicy: vi.fn(),
   exchangeContaAzulAuthorizationCode: vi.fn(),
-  getContaAzulOAuthConfig: vi.fn(),
   parseContaAzulTokenBundle: vi.fn(),
   refreshContaAzulAccessToken: vi.fn(),
   serializeContaAzulTokenBundle: vi.fn(),
   verifyContaAzulOAuthState: vi.fn(),
+}));
+
+vi.mock("../../lib/conta-azul-app", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../lib/conta-azul-app")>()),
+  requireContaAzulOAuthConfig: vi.fn(),
+  resolveContaAzulOAuthConfig: vi.fn(),
 }));
 
 vi.mock("../../middleware/permission", () => ({
@@ -818,12 +826,8 @@ describe("Conta Azul OAuth start route", () => {
     vi.clearAllMocks();
   });
 
-  it("surfaces missing OAuth environment configuration as an actionable JSON error", async () => {
-    vi.mocked(getContaAzulOAuthConfig).mockImplementation(() => {
-      throw new Error("CONTA_AZUL_CLIENT_ID não configurado");
-    });
-
-    const response = await createTestApp().request(
+  const startOAuth = () =>
+    createTestApp().request(
       "/api/integrations/conta-azul/oauth/start",
       {
         method: "POST",
@@ -837,8 +841,30 @@ describe("Conta Azul OAuth start route", () => {
       env,
     );
 
+  it("asks for the laboratory's Conta Azul application when it has none", async () => {
+    vi.mocked(requireContaAzulOAuthConfig).mockRejectedValue(
+      new ContaAzulAppMissingError(),
+    );
+
+    const response = await startOAuth();
+
     await expect(response.json()).resolves.toEqual({
-      error: "CONTA_AZUL_CLIENT_ID não configurado",
+      error: CONTA_AZUL_APP_MISSING_MESSAGE,
+      code: "conta_azul_app_missing",
+    });
+    expect(response.status).toBe(409);
+    expect(buildContaAzulAuthorizationUrl).not.toHaveBeenCalled();
+  });
+
+  it("surfaces other OAuth configuration failures as an actionable JSON error", async () => {
+    vi.mocked(requireContaAzulOAuthConfig).mockRejectedValue(
+      new Error("INTEGRATIONS_MASTER_KEY não configurada"),
+    );
+
+    const response = await startOAuth();
+
+    await expect(response.json()).resolves.toEqual({
+      error: "INTEGRATIONS_MASTER_KEY não configurada",
     });
     expect(response.status).toBe(503);
     expect(buildContaAzulAuthorizationUrl).not.toHaveBeenCalled();

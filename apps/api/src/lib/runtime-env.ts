@@ -30,6 +30,12 @@ export type WorkerRuntimeEnv = {
   GOTENBERG_TOKEN?: string;
   SIGNING_MASTER_KEY?: string;
   INTEGRATIONS_MASTER_KEY?: string;
+  // Conta Azul syncs run with this environment and may refresh a token with
+  // the server-supplied application (laboratories' own come from the database).
+  API_URL?: string;
+  CONTA_AZUL_CLIENT_ID?: string;
+  CONTA_AZUL_CLIENT_SECRET?: string;
+  CONTA_AZUL_OAUTH_REDIRECT_URI?: string;
   // Pepper for public quote approval-code HMACs (REQ-QPUB-011).
   QUOTE_APPROVAL_CODE_PEPPER?: string;
   RESEND_API_KEY?: string;
@@ -166,6 +172,10 @@ export function createWorkerRuntimeEnv(): WorkerRuntimeEnv {
     GOTENBERG_TOKEN: process.env.GOTENBERG_TOKEN,
     SIGNING_MASTER_KEY: requiredEnv("SIGNING_MASTER_KEY"),
     INTEGRATIONS_MASTER_KEY: requiredEnv("INTEGRATIONS_MASTER_KEY"),
+    API_URL: process.env.API_URL,
+    CONTA_AZUL_CLIENT_ID: process.env.CONTA_AZUL_CLIENT_ID,
+    CONTA_AZUL_CLIENT_SECRET: process.env.CONTA_AZUL_CLIENT_SECRET,
+    CONTA_AZUL_OAUTH_REDIRECT_URI: process.env.CONTA_AZUL_OAUTH_REDIRECT_URI,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
     EMAIL_FROM: process.env.EMAIL_FROM,

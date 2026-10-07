@@ -26,6 +26,7 @@ import {
   serviceOrderExecutionItem,
 } from "@calibra-facil/db/schema";
 import { decryptPassword, encryptPassword } from "@calibra-facil/signing";
+import { requireContaAzulOAuthConfig } from "./conta-azul-app";
 import { recomputeCertificateReleasesForBillingDocument } from "./certificate-release-reconciliation";
 import {
   applyIntegrationMappings,
@@ -82,7 +83,6 @@ import {
 import { createFinancialErpAdapter } from "./financial-erp-adapters";
 import {
   buildContaAzulRefreshFailurePolicy,
-  getContaAzulOAuthConfig,
   parseContaAzulTokenBundle,
   refreshContaAzulAccessToken,
   serializeContaAzulTokenBundle,
@@ -99,6 +99,7 @@ import { mapContaAzulInstallmentStatus } from "./conta-azul-mappers";
 import { loadBillingDocumentPayloadsForIntegration } from "./finance";
 
 export interface IntegrationsEnv {
+  API_URL?: string;
   APP_URL?: string;
   INTEGRATIONS_MASTER_KEY?: string;
   CONTA_AZUL_CLIENT_ID?: string;
@@ -511,7 +512,7 @@ export async function writeIntegrationEvent(params: {
   });
 }
 
-async function markContaAzulReconnectRequired(params: {
+export async function markContaAzulReconnectRequired(params: {
   integrationId: string;
   organizationId: string;
   message: string;
@@ -2635,7 +2636,10 @@ async function refreshContaAzulTokenForConnection(params: {
   let refreshed;
   try {
     refreshed = await refreshContaAzulAccessToken(
-      getContaAzulOAuthConfig(params.env),
+      await requireContaAzulOAuthConfig({
+        organizationId: params.record.integration.organizationId,
+        env: params.env,
+      }),
       {
         refreshToken: tokenBundle.refreshToken,
       },
