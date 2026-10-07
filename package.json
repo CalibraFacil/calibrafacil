@@ -41,7 +41,7 @@
     "check-types": "turbo run check-types"
   },
   "devDependencies": {
-    "@shadcn/lint": "^0.1.0",
+    "@shadcn/lint": "^0.2.0",
     "better-sqlite3": "^12.11.1",
     "oxlint": "^1.83.0",
     "prettier": "^3.8.3",
