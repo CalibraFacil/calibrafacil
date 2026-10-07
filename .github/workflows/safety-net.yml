@@ -253,6 +253,7 @@ jobs:
         run: pnpm --dir apps/desktop package
 
       - name: Smoke-test the package
+        timeout-minutes: 10
         run: |
           pnpm smoke:desktop:artifact
           pnpm smoke:desktop:local-server
