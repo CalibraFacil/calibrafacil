@@ -55,7 +55,7 @@ services:
       - s3-data:/data
 
   mailpit:
-    image: axllent/mailpit:v1.31.3
+    image: axllent/mailpit:v1.31.4
     environment:
       MP_MAX_MESSAGES: 2000
     ports:
