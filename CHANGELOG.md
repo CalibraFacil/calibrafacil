@@ -5,6 +5,18 @@ Every release of Calibra Fácil, newest first. Entries are written by
 [Conventional Commits](https://www.conventionalcommits.org/) merged to `main`; see
 [`DEPLOYMENT.md`](./DEPLOYMENT.md#updating) before updating an instance.
 
+## [0.2.0](https://github.com/CalibraFacil/calibrafacil/compare/v0.1.1...v0.2.0) (2026-10-07)
+
+
+### Features
+
+* connect Conta Azul with the laboratory's own application ([#40](https://github.com/CalibraFacil/calibrafacil/issues/40)) ([cb53d5f](https://github.com/CalibraFacil/calibrafacil/commit/cb53d5fe9c50e3145e3f480420620ddd87d8ad65))
+
+
+### Bug fixes
+
+* **deps:** remove the packages behind the open security alerts ([#41](https://github.com/CalibraFacil/calibrafacil/issues/41)) ([181f04a](https://github.com/CalibraFacil/calibrafacil/commit/181f04ab2be8f3ad8d692a9bd208f8ae6ee8f084))
+
 ## [0.1.1](https://github.com/CalibraFacil/calibrafacil/compare/v0.1.0...v0.1.1) (2026-10-07)
 
 
