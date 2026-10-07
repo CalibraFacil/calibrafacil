@@ -46,9 +46,14 @@ assertions, no `useEffect`, thin route files).
 6. Open a pull request describing **what** changed, **why**, and **how you tested it**.
    Include screenshots (light and dark mode) for UI changes.
 
-CI runs lint, types and the unit tests on every pull request; the real-Postgres integration
-tests (`pnpm --dir apps/api test:integration`, same for `apps/worker`) run after each merge
-and nightly, so run them locally when you touch queries or migrations.
+CI runs lint, types and the unit tests on every pull request. The **Safety net** workflow
+adds the checks that only a running system can fail, each one when the pull request touches
+its inputs: the real-Postgres integration tests (`pnpm --dir apps/api test:integration`, same
+for `apps/worker`), the development stack with the demo laboratory driven in a browser
+(`pnpm --dir apps/web test:stack` against a running `pnpm dev`), the self-hosted stack built
+from the Dockerfiles, the packaged desktop app, the web e2e suite and the site build.
+Dependency, lockfile, toolchain and workflow changes run all of them, and so do pushes to
+`main` and a nightly run.
 
 ## Releases
 

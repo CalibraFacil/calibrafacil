@@ -1,0 +1,341 @@
+name: Safety net
+
+# Everything a dependency or infrastructure change can break that the CI job
+# cannot see: the real-database integration tier, the development stack with
+# the demo laboratory exercised in a browser, the self-hosted stack built from
+# the Dockerfiles, the desktop app, the web e2e suite and the site build.
+#
+# A pull request runs only the checks whose inputs it touches; dependency,
+# lockfile, toolchain and workflow changes run them all, and so do main and the
+# nightly run (which also catches drift in images and registries). The final
+# "Safety net" job is the one branch protection requires: it fails if any check
+# failed or was cancelled, and passes when the rest had nothing to check.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      integration: ${{ steps.diff.outputs.integration }}
+      dev_stack: ${{ steps.diff.outputs.dev_stack }}
+      self_host: ${{ steps.diff.outputs.self_host }}
+      desktop: ${{ steps.diff.outputs.desktop }}
+      web_e2e: ${{ steps.diff.outputs.web_e2e }}
+      site: ${{ steps.diff.outputs.site }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Decide which checks to run
+        id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          areas="integration dev_stack self_host desktop web_e2e site"
+          if [ "$EVENT" != "pull_request" ]; then
+            for area in $areas; do echo "$area=true" >> "$GITHUB_OUTPUT"; done
+            exit 0
+          fi
+
+          git diff --name-only "origin/$BASE_REF...HEAD" > changed.txt
+          echo "Changed files:"
+          cat changed.txt
+
+          # Dependencies, the lockfile, toolchain pins and CI itself can break
+          # any of the checks.
+          everything='(^|/)package\.json$|^pnpm-(lock|workspace)\.yaml$|^\.nvmrc$|^turbo\.json$|^\.github/workflows/'
+          decide() {
+            if grep -qE "$everything|$2" changed.txt; then echo "$1=true"; else echo "$1=false"; fi >> "$GITHUB_OUTPUT"
+          }
+          decide integration '^(apps/api|apps/worker|packages)/|^docker-compose\.yml$'
+          decide dev_stack '^(apps/api|apps/web|apps/portal|apps/worker|packages)/|^docker-compose\.yml$|^scripts/dev-setup\.mjs$'
+          decide self_host '^Dockerfile|^\.dockerignore$|^deploy/|^scripts/static-server\.ts$|^apps/api/src/cli/'
+          decide desktop '^(apps/desktop|apps/local-server|packages/local-db)/|^scripts/(build-desktop-artifact|smoke-desktop-)'
+          decide web_e2e '^(apps/web|packages/client-runtime|packages/contracts)/'
+          decide site '^(apps/site|apps/docs)/'
+          cat "$GITHUB_OUTPUT"
+
+  integration:
+    name: Integration
+    needs: changes
+    if: needs.changes.outputs.integration == 'true'
+    uses: ./.github/workflows/integration.yml
+
+  dev-stack:
+    name: Dev stack
+    needs: changes
+    if: needs.changes.outputs.dev_stack == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: "pnpm"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Compose services, schema, catalogs and the demo laboratory, which is
+      # filled through the real API routes and has its certificates rendered by
+      # the worker through Gotenberg. Under CI a failed demo seed fails here.
+      - name: Set up the development stack
+        run: pnpm setup:dev
+
+      - name: Start the app
+        run: |
+          pnpm dev > dev.log 2>&1 &
+          for _ in $(seq 1 90); do
+            if curl -fs http://localhost:3000/api/health > /dev/null &&
+              curl -fs http://localhost:5173/ > /dev/null &&
+              curl -fs http://localhost:5174/ > /dev/null; then
+              curl -fsS http://localhost:3000/api/health
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "The app did not come up"
+          tail -n 100 dev.log
+          exit 1
+
+      - name: Install Chromium for Playwright
+        run: pnpm --dir apps/web exec playwright install --with-deps chromium
+
+      # Sign in to the lab and the portal through the e-mailed links, open every
+      # main page, and download an issued certificate.
+      - name: Browser checks against the stack
+        run: pnpm --dir apps/web test:stack
+
+      - name: Keep the reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dev-stack
+          path: |
+            dev.log
+            apps/web/playwright-report/stack
+            apps/web/test-results/stack
+          retention-days: 7
+
+  self-host:
+    name: Self-hosted stack
+    needs: changes
+    if: needs.changes.outputs.self_host == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # The trial configuration from DEPLOYMENT.md: http://*.localhost
+      # addresses and a Mailpit inbox on :8025.
+      - name: Configure a local trial
+        working-directory: deploy
+        run: ./setup.sh --local
+
+      - name: Build the images and start the stack
+        working-directory: deploy
+        run: docker compose -f compose.yaml -f compose.build.yaml up --detach --build
+
+      # Through Caddy, once `init` has prepared the database and storage.
+      - name: Wait for the API
+        run: |
+          for _ in $(seq 1 90); do
+            if curl -fs --resolve app.localhost:80:127.0.0.1 http://app.localhost/api/health; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "The API did not come up"
+          exit 1
+
+      - name: Create a laboratory
+        working-directory: deploy
+        run: docker compose exec -T api bun src/cli/create-lab.ts --name "Laboratório CI" --email admin@ci.example
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: "pnpm"
+
+      - name: Install the browser checks
+        run: |
+          pnpm install --frozen-lockfile --filter @calibra-facil/web
+          pnpm --dir apps/web exec playwright install --with-deps chromium
+
+      - name: Sign in to the new laboratory
+        env:
+          STACK_WEB_URL: http://app.localhost
+          STACK_LAB_EMAIL: admin@ci.example
+        run: pnpm --dir apps/web test:stack --project sign-in
+
+      - name: Service logs
+        if: failure()
+        working-directory: deploy
+        run: docker compose logs --no-color --tail 200
+
+  desktop:
+    name: Desktop
+    needs: changes
+    if: needs.changes.outputs.desktop == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: "pnpm"
+
+      # A virtual display for Electron, the headers the usb module compiles
+      # against, and the user namespaces Ubuntu's AppArmor withholds from
+      # Chromium's sandbox by default.
+      - name: Desktop build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libudev-dev
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Bundles the local server, builds main, preload and the web renderer,
+      # and rebuilds the native modules for Electron.
+      - name: Package the desktop app
+        run: pnpm --dir apps/desktop package
+
+      - name: Smoke-test the package
+        run: |
+          pnpm smoke:desktop:artifact
+          pnpm smoke:desktop:local-server
+          pnpm smoke:desktop:electron
+
+  web-e2e:
+    name: Web e2e
+    needs: changes
+    if: needs.changes.outputs.web_e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium for Playwright
+        run: pnpm --dir apps/web exec playwright install --with-deps chromium
+
+      - name: Web e2e (mocked API)
+        run: pnpm --dir apps/web test:e2e
+
+      - name: Keep the report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-e2e
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          retention-days: 7
+
+  site:
+    name: Site
+    needs: changes
+    if: needs.changes.outputs.site == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The site build also exports the documentation into dist/docs.
+      - name: Build the site
+        run: pnpm --dir apps/site build
+
+  safety-net:
+    name: Safety net
+    if: always()
+    needs: [changes, integration, dev-stack, self-host, desktop, web-e2e, site]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every check passed or had nothing to check
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$RESULTS" | jq -e 'all(.[]; .result == "success" or .result == "skipped")' > /dev/null

@@ -1,27 +1,20 @@
 name: Integration tests
 
 # The real-database tier: every *.int.spec.ts in apps/api and apps/worker runs
-# against a throwaway PostgreSQL the test setup starts in Docker. It takes about
-# a quarter of an hour, so it runs after each merge to main, nightly (to catch
-# drift such as a new image or dependency), and on demand instead of on every
-# pull request.
+# against a throwaway PostgreSQL the test setup starts in Docker, from the same
+# image docker-compose.yml pins. It takes about a quarter of an hour, so the
+# Safety net workflow calls it only for pull requests that touch what it
+# covers, and always on main and nightly. It can also be run on its own.
 on:
-  push:
-    branches: [main]
-  schedule:
-    - cron: "17 5 * * *"
+  workflow_call:
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   integration:
-    name: ${{ matrix.app }}
+    name: Integration (${{ matrix.app }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -41,7 +34,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version-file: .nvmrc
           cache: "pnpm"
 
       - name: Install dependencies
