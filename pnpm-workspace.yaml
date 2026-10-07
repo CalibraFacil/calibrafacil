@@ -196,6 +196,12 @@ overrides:
   # fails to type-check (TS2883). Hold the line at the version the auth package
   # is known to work with; lift it deliberately, with those annotations added.
   zod: 4.4.3
+  # GHSA-hp3w-g68c-fv3c: sprintf-js <=1.1.3 DoS through unbounded precision
+  # specifiers, with no patched release. Its only path in is electron-builder ->
+  # @electron/get 3 -> global-agent -> roarr. @electron/get loads global-agent
+  # inside a try/catch, solely for GLOBAL_AGENT_* proxy support that our desktop
+  # builds don't use, so the optional dependency is dropped instead.
+  "@electron/get>global-agent": "-"
 
 auditConfig:
   ignoreGhsas:
