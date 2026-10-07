@@ -28,7 +28,8 @@ files:
 extraMetadata:
   main: dist/main/main.cjs
 # Auto-update feed: the installers attached to this repository's GitHub
-# releases (see docs/desktop-auto-update.md).
+# releases (see docs/desktop-auto-update.md). scripts/build-desktop-artifact.mjs
+# passes the owner and repo, which electron-builder cannot find in a monorepo.
 publish:
   provider: github
 # calibrafacil:// deep links. Windows registers the scheme from NSIS, macOS

@@ -14,8 +14,11 @@ installers attached to this repository's **GitHub releases**.
     provider: github
   ```
 
-  electron-builder infers the owner/repository from the git remote at build time. On the
-  **stable** channel the app only considers regular releases; on **beta**
+  `scripts/build-desktop-artifact.mjs` names the repository at build time: the one CI
+  builds in (`GITHUB_REPOSITORY`), else the checkout's `origin` remote, so a fork's installers
+  update from the fork's own releases. (electron-builder looks for it only in `apps/desktop`,
+  where a monorepo has none.) On the **stable** channel the app only considers regular
+  releases; on **beta**
   (`updateChannel = "beta"` in the desktop settings) it also accepts pre-releases
   (`allowPrerelease`). Downloads are verified against the `sha512` in the release's
   `latest*.yml` manifest.
