@@ -142,6 +142,7 @@ pnpm format           # Prettier
 pnpm check-types      # TypeScript (native tsc 7)
 TZ=UTC pnpm turbo test                      # unit tests
 pnpm --dir apps/api test:integration        # real-Postgres integration tests (Docker)
+pnpm --dir apps/web test:stack              # browser checks against a running `pnpm dev`
 ```
 
 Database migrations are plain SQL in `packages/db/drizzle/`; apply them with

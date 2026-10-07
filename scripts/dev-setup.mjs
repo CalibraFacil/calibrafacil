@@ -244,6 +244,8 @@ if (skipDemo) {
     shell: isWindows,
   });
   if (demo.status !== 0) {
+    // CI runs this setup to test the stack end to end, so there it must fail.
+    if (process.env.CI) fail("The sample data could not be created.");
     console.warn(
       "\n! The sample data could not be created; the laboratory is still usable, just empty.\n" +
         "  Retry with: pnpm --dir apps/api seed:demo",
