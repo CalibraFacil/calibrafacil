@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'motion/react'
 import { toast } from 'sonner'
@@ -6,6 +7,7 @@ import {
   ArrowDown01Icon,
   CheckmarkBadge01Icon,
   CloudDownloadIcon,
+  Key01Icon,
   LinkForwardIcon,
   Logout03Icon,
   MoreHorizontalIcon,
@@ -17,6 +19,7 @@ import type { ContaAzulConnectionConfig } from '@calibra-facil/shared'
 import { calibraApi } from '@/utils/api'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import {
@@ -38,11 +41,18 @@ import {
   integrationReadinessBadgeVariant,
   integrationStatusBadgeMeta,
 } from '@/features/settings/integrations-model'
+import { contaAzulAppQueryOptions } from '@/features/settings/queries'
 import type {
   ContaAzulScheduleResponse,
   ContaAzulOAuthStartResponse,
   IntegrationSummary,
 } from '@/features/settings/types'
+import {
+  ContaAzulAppDialog,
+  ContaAzulAppSetup,
+  ContaAzulAppStatus,
+} from './conta-azul-app-setup'
+import { contaAzulOAuthErrorMessage } from './conta-azul-app-form'
 import { useContaAzulCatalogs } from './conta-azul-catalogs'
 import { useContaAzulMutations } from './conta-azul-mutations'
 import { useConnectorMutations } from './mutations'
@@ -72,12 +82,36 @@ function getContaAzulConfig(
 export function ContaAzulCard({
   integration,
   onRefresh,
+  oauthError = null,
+}: {
+  integration: IntegrationSummary | null
+  onRefresh: () => Promise<void>
+  /** Set when the OAuth callback sent the browser back with an error. */
+  oauthError?: { reason: string | null } | null
+}) {
+  return (
+    <div className="space-y-3">
+      {oauthError ? (
+        <Alert variant="destructive">
+          <AlertDescription className="text-pretty">
+            {contaAzulOAuthErrorMessage(oauthError.reason)}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      <ContaAzulCardBody integration={integration} onRefresh={onRefresh} />
+    </div>
+  )
+}
+
+function ContaAzulCardBody({
+  integration,
+  onRefresh,
 }: {
   integration: IntegrationSummary | null
   onRefresh: () => Promise<void>
 }) {
   if (!integration) {
-    return <ContaAzulConnect />
+    return <ContaAzulConnect onRefresh={onRefresh} />
   }
 
   const config = getContaAzulConfig(integration)
@@ -95,7 +129,7 @@ export function ContaAzulCard({
               </p>
             </div>
           </div>
-          <ContaAzulConnect compact />
+          <ContaAzulConnect compact onRefresh={onRefresh} />
         </CardContent>
       </Card>
     )
@@ -112,7 +146,14 @@ export function ContaAzulCard({
 
 // ── Disconnected hero ─────────────────────────────────────────────────────────
 
-function ContaAzulConnect({ compact }: { compact?: boolean }) {
+function ContaAzulConnect({
+  compact,
+  onRefresh,
+}: {
+  compact?: boolean
+  onRefresh: () => Promise<void>
+}) {
+  const appQuery = useQuery(contaAzulAppQueryOptions())
   const oauthMutation = useMutation({
     mutationFn: async () =>
       calibraApi.integrations.startContaAzulOAuth<ContaAzulOAuthStartResponse>({
@@ -216,13 +257,27 @@ function ContaAzulConnect({ compact }: { compact?: boolean }) {
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          {connectButton}
-          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-            <HugeiconsIcon icon={CheckmarkBadge01Icon} className="size-3.5" />
-            OAuth 2.0 oficial
-          </span>
-        </div>
+        {appQuery.isPending ? (
+          <Skeleton className="h-9 w-48" />
+        ) : appQuery.data?.source === null ? (
+          <ContaAzulAppSetup app={appQuery.data} onChanged={onRefresh} />
+        ) : (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+              {connectButton}
+              <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                <HugeiconsIcon
+                  icon={CheckmarkBadge01Icon}
+                  className="size-3.5"
+                />
+                OAuth 2.0 oficial
+              </span>
+            </div>
+            {appQuery.data ? (
+              <ContaAzulAppStatus app={appQuery.data} onChanged={onRefresh} />
+            ) : null}
+          </div>
+        )}
       </CardContent>
     </Card>
   )
@@ -240,6 +295,11 @@ function ContaAzulPanel({
   onRefresh: () => Promise<void>
 }) {
   const queryClient = useQueryClient()
+  const [appDialogOpen, setAppDialogOpen] = useState(false)
+  const appQuery = useQuery({
+    ...contaAzulAppQueryOptions(),
+    enabled: appDialogOpen,
+  })
   const catalogs = useContaAzulCatalogs({
     integrationId: integration.id,
     enabled: true,
@@ -399,6 +459,10 @@ function ContaAzulPanel({
                     <HugeiconsIcon icon={CloudDownloadIcon} />
                     Recarregar catálogos
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setAppDialogOpen(true)}>
+                    <HugeiconsIcon icon={Key01Icon} />
+                    Aplicativo Conta Azul
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     variant="destructive"
@@ -410,6 +474,13 @@ function ContaAzulPanel({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              <ContaAzulAppDialog
+                app={appQuery.data}
+                connected
+                open={appDialogOpen}
+                onOpenChange={setAppDialogOpen}
+                onChanged={onRefresh}
+              />
               <CollapsibleTrigger
                 render={
                   <button

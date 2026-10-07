@@ -297,6 +297,23 @@ export type ContaAzulOAuthStartResponse = {
   expiresInSeconds: number
 }
 
+/**
+ * The Conta Azul application a laboratory connects through: its own (saved in
+ * settings), the one its server supplies, or none yet.
+ */
+export type ContaAzulAppSummary = {
+  source: 'organization' | 'server' | null
+  clientId: string | null
+  clientSecretLast4: string | null
+  redirectUri: string
+  updatedAt: string | null
+}
+
+export type ContaAzulAppSaveResponse = {
+  app: ContaAzulAppSummary
+  check: 'accepted' | 'unverified'
+}
+
 export type ContaAzulScheduleRow = {
   enabled: boolean
   lastSuccessAt: string | null

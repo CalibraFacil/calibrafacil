@@ -28,7 +28,12 @@ import {
 } from './integrations/generic-connector'
 import { SectionTitle } from './integrations/shared'
 
-export function IntegrationsSettingsPage() {
+export function IntegrationsSettingsPage({
+  contaAzulOAuthError = null,
+}: {
+  /** Set when the Conta Azul OAuth callback sent the browser back with an error. */
+  contaAzulOAuthError?: { reason: string | null } | null
+} = {}) {
   const queryClient = useQueryClient()
   const { data: session, isPending: isLoadingSession } = useSession()
   const { data: activeOrg, isPending: isLoadingOrg } = useActiveOrganization()
@@ -113,6 +118,7 @@ export function IntegrationsSettingsPage() {
       <ContaAzulCard
         integration={contaAzulIntegration}
         onRefresh={refreshIntegrations}
+        oauthError={contaAzulOAuthError}
       />
 
       <GenericConnectorsSection

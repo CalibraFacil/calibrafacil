@@ -157,6 +157,7 @@ type ApiRoutePath =
   | "/api/integrations/:id/sync/preview"
   | "/api/integrations/:id/toggle"
   | "/api/integrations/:id/validate"
+  | "/api/integrations/conta-azul/app"
   | "/api/integrations/conta-azul/oauth/callback"
   | "/api/integrations/conta-azul/oauth/start"
   | "/api/invitations/:id/request-setup-link"
