@@ -9,7 +9,10 @@ const root = path.resolve(import.meta.dirname, "..");
 const tempDir = await mkdtemp(
   path.join(os.tmpdir(), "calibra-electron-smoke-"),
 );
+// The same surface apps/desktop/src/preload/preload.test.ts pins: this checks
+// that the built preload exposes it, and nothing more.
 const expectedBridgeKeys = [
+  "activateLocalPartition",
   "authFetch",
   "checkForUpdate",
   "deleteSecret",
@@ -23,18 +26,25 @@ const expectedBridgeKeys = [
   "getSyncStatus",
   "getUpdateState",
   "installUpdate",
+  "notifyDeepLinkReady",
+  "onDeepLink",
+  "onHistoryCommand",
   "onSyncStatus",
   "onUpdateState",
   "openExternal",
   "pauseSync",
   "pickFile",
   "pickFolder",
+  "publishNotifications",
+  "resumeSync",
   "retrySync",
+  "revealFile",
   "saveCertificatePdf",
   "saveFile",
   "setSecret",
   "setSettings",
   "startSync",
+  "wakeSync",
 ].sort();
 const expectedLocalDbSchemaVersion = 5;
 
