@@ -38,7 +38,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version-file: .nvmrc
           cache: "pnpm"
 
       - name: Setup Bun
@@ -76,6 +76,34 @@ jobs:
           bun apps/api/scripts/build-vercel-functions.mjs
           bun apps/api/scripts/assert-vercel-fn-shape.mjs
 
-      # Pull requests test the packages they touch; pushes to main test all.
+      # Pull requests test the packages they touch; pushes to main test all, and
+      # so does any change to dependencies or to the toolchain pins, since a new
+      # version can break a package the diff never mentions.
       - name: Test
-        run: bunx turbo test ${{ github.event_name == 'pull_request' && '--filter="[origin/main...HEAD]"' || '' }}
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          filter=""
+          if [ "$EVENT" = "pull_request" ] && ! git diff --name-only origin/main...HEAD |
+            grep -qE '(^|/)package\.json$|^pnpm-(lock|workspace)\.yaml$|^\.nvmrc$'; then
+            filter="--filter=[origin/main...HEAD]"
+          fi
+          bunx turbo test ${filter:+"$filter"}
+
+  # A pull request that adds or bumps a dependency with a known high or critical
+  # vulnerability fails here, before it can merge.
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: high

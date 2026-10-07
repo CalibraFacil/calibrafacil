@@ -16,13 +16,22 @@ test.describe('sign-in', () => {
 
     await page.goto('/sign-in?redirect=/dashboard/jobs')
 
-    await expect(
-      page.getByRole('button', { name: 'Entrar com SSO' }),
-    ).toBeDisabled()
+    // The SSO form lives in its own scene, reached from the credentials form.
+    await page
+      .getByRole('button', { name: 'Entrar com SSO corporativo' })
+      .click()
+
+    // `exact` tells the submit button apart from the scene toggle above, whose
+    // name also contains "Entrar com SSO".
+    const submitButton = page.getByRole('button', {
+      name: 'Entrar com SSO',
+      exact: true,
+    })
+    await expect(submitButton).toBeDisabled()
 
     await page.getByLabel('Slug da organização').fill('lab-acreditado')
     await page.getByLabel('Email corporativo').fill('tecnico@lab.test')
-    await page.getByRole('button', { name: 'Entrar com SSO' }).click()
+    await submitButton.click()
 
     await expectRequestPayload(ssoRequests, {
       organizationSlug: 'lab-acreditado',

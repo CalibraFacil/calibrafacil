@@ -3,16 +3,14 @@ import {
   calibrationJob,
   calibrationRequest,
   customer,
-  member,
   serviceOrder,
-  user,
 } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 
 import { LAB_ID, isRecord, numberField, recordOf } from "./api";
 import type { SeededAsset } from "./assets";
 import type { SeedContext } from "./context";
-import { DEMO_CUSTOMERS, type CustomerIds } from "./customers";
+import { DEMO_CUSTOMERS, portalUserId, type CustomerIds } from "./customers";
 import { isCalibratable } from "./job-plan";
 import { DEMO_SERVICES, type ServiceIds } from "./services";
 import { labTimeOnDay } from "./dates";
@@ -152,29 +150,10 @@ export async function seedRequests(
       .where(eq(customer.id, customerId))
       .limit(1);
     if (!customerRow) throw new Error(`Customer ${customerId} vanished`);
-    const portalUserId = `portal-${code.toLowerCase()}`;
-    await db
-      .insert(user)
-      .values({
-        id: portalUserId,
-        name: `Responsável da qualidade (${entry.tradeName})`,
-        email: entry.email,
-        emailVerified: true,
-      })
-      .onConflictDoNothing();
-    await db
-      .insert(member)
-      .values({
-        id: `member-${customerRow.authOrganizationId}-${portalUserId}`,
-        organizationId: customerRow.authOrganizationId,
-        userId: portalUserId,
-        role: "client_user",
-        createdAt: ctx.now,
-      })
-      .onConflictDoNothing();
+    const portalUser = portalUserId(entry);
 
     const filed = await ctx.api.portalCall(
-      { userId: portalUserId, organizationId: customerRow.authOrganizationId },
+      { userId: portalUser, organizationId: customerRow.authOrganizationId },
       "POST",
       "/api/portal/requests",
       {

@@ -138,6 +138,19 @@ export async function installDesktopBridge(
             return jsonResponse(target)
           }
 
+          // `units.getDashboardUnits` is cloud-only, so the hybrid desktop
+          // client asks the cloud for it through this bridge. The shell reads
+          // `data` straight away, so the fallback `{}` below would crash it.
+          if (path.endsWith('/api/units')) {
+            return jsonResponse({
+              activeUnitId: null,
+              activeUnitName: null,
+              selectedUnitScope: 'all',
+              canAccessAllUnits: true,
+              data: [],
+            })
+          }
+
           if (path.endsWith('/api/notifications/unread-count')) {
             return jsonResponse({ count: 0 })
           }

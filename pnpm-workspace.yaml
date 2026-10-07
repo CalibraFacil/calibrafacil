@@ -226,6 +226,9 @@ allowBuilds:
   workerd: true
 
 minimumReleaseAgeExclude:
+  # usb 2.19.1 builds with C++17, which node-addon-api 8.8+ needs; 2.17 broke
+  # the Electron packaging. Reviewed: same install script and dependencies.
+  - usb@2.19.1
   - "@vitest/coverage-v8@4.1.8"
   - "@vitest/expect@4.1.8"
   - "@vitest/mocker@4.1.8"

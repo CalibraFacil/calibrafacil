@@ -15,6 +15,7 @@
     "test": "vitest run --passWithNoTests",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
+    "test:stack": "playwright test --config playwright.stack.config.ts",
     "lint": "oxlint",
     "check-types": "tsc --noEmit",
     "format": "prettier",

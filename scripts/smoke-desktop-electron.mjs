@@ -9,7 +9,10 @@ const root = path.resolve(import.meta.dirname, "..");
 const tempDir = await mkdtemp(
   path.join(os.tmpdir(), "calibra-electron-smoke-"),
 );
+// The same surface apps/desktop/src/preload/preload.test.ts pins: this checks
+// that the built preload exposes it, and nothing more.
 const expectedBridgeKeys = [
+  "activateLocalPartition",
   "authFetch",
   "checkForUpdate",
   "deleteSecret",
@@ -23,18 +26,25 @@ const expectedBridgeKeys = [
   "getSyncStatus",
   "getUpdateState",
   "installUpdate",
+  "notifyDeepLinkReady",
+  "onDeepLink",
+  "onHistoryCommand",
   "onSyncStatus",
   "onUpdateState",
   "openExternal",
   "pauseSync",
   "pickFile",
   "pickFolder",
+  "publishNotifications",
+  "resumeSync",
   "retrySync",
+  "revealFile",
   "saveCertificatePdf",
   "saveFile",
   "setSecret",
   "setSettings",
   "startSync",
+  "wakeSync",
 ].sort();
 const expectedLocalDbSchemaVersion = 5;
 
@@ -230,7 +240,7 @@ try {
   );
 } finally {
   if (electron && electron.exitCode === null) {
-    electron.kill();
+    stopProcessTree(electron);
     await new Promise((resolve) => {
       electron.once("exit", resolve);
       setTimeout(resolve, 1000).unref();
@@ -266,6 +276,9 @@ function spawnElectron(extraEnv) {
       ...extraEnv,
     },
     stdio: ["ignore", "pipe", "pipe"],
+    // A process group of its own, so stopping it reaches everything it started
+    // (xvfb-run, Xvfb, pnpm and Electron), not just the wrapper.
+    detached: process.platform !== "win32",
   });
 
   const logChunks = [];
@@ -283,6 +296,22 @@ function spawnElectron(extraEnv) {
   });
 
   return child;
+}
+
+// Killing only the direct child would leave Electron and Xvfb running under
+// xvfb-run, holding the smoke servers' connections open, and the script would
+// never exit.
+function stopProcessTree(child) {
+  if (process.platform === "win32") {
+    child.kill();
+    return;
+  }
+
+  try {
+    process.kill(-child.pid, "SIGTERM");
+  } catch {
+    child.kill();
+  }
 }
 
 function maybeWrapWithXvfb(command) {
@@ -416,6 +445,7 @@ function listen(server, port) {
 }
 
 function closeServer(server) {
+  server.closeAllConnections();
   return new Promise((resolve) => server.close(resolve));
 }
 

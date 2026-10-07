@@ -40,7 +40,19 @@ test.describe('method execution', () => {
     await expect(page.getByRole('heading', { name: 'CAL-0007' })).toBeVisible()
     await expect(page.getByText('Cliente Exemplo · Balança')).toBeVisible()
 
-    await page.getByRole('button', { name: /enviar para revisão/i }).click()
+    // Submitting requires the execution date, which a fresh draft does not have.
+    await page.getByRole('button', { name: 'Abrir calendário' }).click()
+    await page.getByRole('button', { name: 'Hoje' }).click()
+    await expect(page.getByRole('textbox', { name: 'Data' })).not.toHaveValue(
+      '',
+    )
+    await page.keyboard.press('Escape')
+
+    const submitButton = page.getByRole('button', {
+      name: 'Enviar para Revisão',
+    })
+    await expect(submitButton).toBeEnabled()
+    await submitButton.click()
 
     await expectRequestPayload(submitRequests, {
       selectedStandardIds: [],
@@ -51,6 +63,7 @@ test.describe('method execution', () => {
         addressText: 'Rua Laboratório',
         notes: null,
       },
+      performedAt: expect.any(String),
     })
     await expect(page).toHaveURL(/\/dashboard\/jobs/)
   })

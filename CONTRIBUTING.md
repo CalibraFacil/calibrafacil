@@ -46,15 +46,42 @@ assertions, no `useEffect`, thin route files).
 6. Open a pull request describing **what** changed, **why**, and **how you tested it**.
    Include screenshots (light and dark mode) for UI changes.
 
-CI runs lint, types and the unit tests on every pull request; the real-Postgres integration
-tests (`pnpm --dir apps/api test:integration`, same for `apps/worker`) run after each merge
-and nightly, so run them locally when you touch queries or migrations.
+CI runs lint, types and the unit tests on every pull request. The **Safety net** workflow
+adds the checks that only a running system can fail, each one when the pull request touches
+its inputs: the real-Postgres integration tests (`pnpm --dir apps/api test:integration`, same
+for `apps/worker`), the development stack with the demo laboratory driven in a browser
+(`pnpm --dir apps/web test:stack` against a running `pnpm dev`), the self-hosted stack built
+from the Dockerfiles, the packaged desktop app, the web e2e suite and the site build.
+Dependency, lockfile, toolchain and workflow changes run all of them, and so do pushes to
+`main` and a nightly run.
 
 ## Releases
 
 `release-please` keeps a release pull request open on `main` with the next version and its
 changelog. Merging it tags `vX.Y.Z`, publishes the Docker images to GHCR (amd64 and arm64)
 and attaches the Windows desktop installer to the GitHub release.
+
+## Dependencies
+
+[Dependabot](./.github/dependabot.yml) keeps GitHub Actions, the Dockerfiles' base images, the
+Compose services and the dev container features current, and opens a pull request as soon as
+a security advisory affects an npm package.
+
+- Updates arrive on Mondays, one grouped pull request per kind. A release is proposed three
+  days after it is published; security fixes do not wait. pnpm itself refuses anything
+  published in the last 24 hours.
+- Patch, minor and security pull requests merge themselves once CI, the dependency review and
+  the Safety net pass. Major versions wait for a maintainer. Node.js and PostgreSQL majors are
+  not proposed at all: moving to a new LTS, or dumping and restoring the database, is a
+  deliberate change.
+- npm version updates are made by hand: on this workspace a Dependabot version-update run
+  regenerates the lockfile once per outdated package and runs out of time. Upgrade in a
+  focused pull request (`pnpm outdated -r` lists what is behind) and let the Safety net check
+  the result.
+- A pull request that adds a dependency with a high or critical advisory fails the dependency
+  review.
+- Some versions are held on purpose, with the reason next to the override in
+  `pnpm-workspace.yaml`. Lift a hold in its own pull request.
 
 ## Areas that need extra care
 

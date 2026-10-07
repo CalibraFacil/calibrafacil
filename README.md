@@ -105,7 +105,9 @@ pnpm dev         # API :3000, lab app :5173, portal :5174
 Then open <http://localhost:5173> and sign in as **`admin@laboratorio.test`**. Sign-in is
 passwordless: the magic link arrives in the local inbox at <http://localhost:8025>. The seed
 also creates `revisor@laboratorio.test` (admin) and `tecnico@laboratorio.test` (technician),
-so review and approval flows that need two people can be exercised.
+so review and approval flows that need two people can be exercised. The client portal at
+<http://localhost:5174> signs in each demo customer's contact the same way, for example
+`qualidade@coxilhabranca.example`.
 
 The demo laboratory is not empty: setup fills it with a made-up customer base, instrument park,
 about 130 calibrations across every workflow stage, quality records, service orders, requests and
@@ -140,6 +142,7 @@ pnpm format           # Prettier
 pnpm check-types      # TypeScript (native tsc 7)
 TZ=UTC pnpm turbo test                      # unit tests
 pnpm --dir apps/api test:integration        # real-Postgres integration tests (Docker)
+pnpm --dir apps/web test:stack              # browser checks against a running `pnpm dev`
 ```
 
 Database migrations are plain SQL in `packages/db/drizzle/`; apply them with
