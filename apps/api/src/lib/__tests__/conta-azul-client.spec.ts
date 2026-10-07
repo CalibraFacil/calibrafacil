@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   ContaAzulApiError,
   ContaAzulClient,
@@ -767,35 +767,44 @@ describe("ContaAzulClient", () => {
   });
 
   it("paces concurrent requests that share a rate limit key", async () => {
-    const startedAt: number[] = [];
-    const fetchImpl: typeof fetch = async () => {
-      startedAt.push(Date.now());
-      return Response.json({ ok: true });
-    };
-    const client = new ContaAzulClient({
-      accessToken: "access-1",
-      fetchImpl,
-      minRequestIntervalMs: 20,
-      rateLimitKey: `test-rate-limit-${crypto.randomUUID()}`,
-    });
+    // A fake clock: on a busy machine the first request can reach fetch late,
+    // which made the real-time gaps look shorter than the limiter's interval.
+    vi.useFakeTimers();
+    try {
+      const startedAt: number[] = [];
+      const fetchImpl: typeof fetch = async () => {
+        startedAt.push(Date.now());
+        return Response.json({ ok: true });
+      };
+      const client = new ContaAzulClient({
+        accessToken: "access-1",
+        fetchImpl,
+        minRequestIntervalMs: 20,
+        rateLimitKey: `test-rate-limit-${crypto.randomUUID()}`,
+      });
 
-    await Promise.all([
-      client.getPessoa("pessoa-1"),
-      client.getPessoa("pessoa-2"),
-      client.getPessoa("pessoa-3"),
-    ]);
+      const requests = Promise.all([
+        client.getPessoa("pessoa-1"),
+        client.getPessoa("pessoa-2"),
+        client.getPessoa("pessoa-3"),
+      ]);
+      await vi.advanceTimersByTimeAsync(100);
+      await requests;
 
-    expect(startedAt).toHaveLength(3);
-    const [firstRequestAt, secondRequestAt, thirdRequestAt] = startedAt;
-    if (
-      firstRequestAt === undefined ||
-      secondRequestAt === undefined ||
-      thirdRequestAt === undefined
-    ) {
-      throw new Error("expected three request timestamps");
+      expect(startedAt).toHaveLength(3);
+      const [firstRequestAt, secondRequestAt, thirdRequestAt] = startedAt;
+      if (
+        firstRequestAt === undefined ||
+        secondRequestAt === undefined ||
+        thirdRequestAt === undefined
+      ) {
+        throw new Error("expected three request timestamps");
+      }
+      expect(secondRequestAt - firstRequestAt).toBeGreaterThanOrEqual(20);
+      expect(thirdRequestAt - secondRequestAt).toBeGreaterThanOrEqual(20);
+    } finally {
+      vi.useRealTimers();
     }
-    expect(secondRequestAt - firstRequestAt).toBeGreaterThanOrEqual(15);
-    expect(thirdRequestAt - secondRequestAt).toBeGreaterThanOrEqual(15);
   });
 
   it("normalizes API errors without leaking tokens", async () => {
