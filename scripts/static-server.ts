@@ -9,6 +9,15 @@ const root = resolve(process.env.STATIC_DIR ?? "dist");
 // that into a 404.
 const spaFallback = process.env.SPA_FALLBACK !== "false";
 
+// The frontends read their VITE_* settings from /runtime-env.js before falling
+// back to the values baked in at build time, so the container's VITE_*
+// variables configure a prebuilt image (e.g. VITE_PORTAL_APP_URL).
+const runtimeEnvScript = `window.calibraRuntimeEnv = ${JSON.stringify(
+  Object.fromEntries(
+    Object.entries(process.env).filter(([name]) => name.startsWith("VITE_")),
+  ),
+)};\n`;
+
 /** The file a request path names, if it is inside the root and exists. */
 async function findFile(pathname: string): Promise<string | null> {
   let decoded: string;
@@ -41,6 +50,16 @@ Bun.serve({
   port,
   async fetch(request) {
     const { pathname } = new URL(request.url);
+    if (pathname === "/runtime-env.js") {
+      return new Response(runtimeEnvScript, {
+        headers: {
+          "content-type": "text/javascript; charset=utf-8",
+          "cache-control": "no-cache",
+          "x-content-type-options": "nosniff",
+        },
+      });
+    }
+
     let path = await findFile(pathname);
 
     // Only navigations fall back: a missing script or image stays a 404

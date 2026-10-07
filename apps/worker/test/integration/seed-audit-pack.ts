@@ -11,6 +11,7 @@ import {
   type PortalAuditPackParams,
 } from "@calibra-facil/db/schema";
 import type { CertificateReleaseStatus } from "@calibra-facil/shared";
+import { storedObjectUrl } from "@calibra-facil/shared/public-urls";
 
 // Seed helpers SPECIFIC to the worker's AUDIT_PACK handler (#738,
 // processAuditPackJob). The handler reads: a portal_export_job row (whose
@@ -135,7 +136,7 @@ export async function seedApprovedCertificate(params: {
       serviceId: serviceRow.id,
       methodSnapshot: minimalMethodSnapshot(),
       status: "APPROVED",
-      certificateUrl: `https://certificates.calibrafacil.com/${certificateR2Key}`,
+      certificateUrl: storedObjectUrl(certificateR2Key),
       performedAt: approvedAt,
       approvedAt,
       approvedBy: params.userId,

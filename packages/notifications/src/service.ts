@@ -49,10 +49,12 @@ import { buildCertificateAmendedLinks } from "./portal-links";
 import { isEmailSuppressed } from "./suppression";
 import {
   formatLabFromHeader,
+  getPlatformFromEmail,
+  isPlatformEmailConfigured,
   resolveLabEmailSender,
   sendEmailWithLabSender,
+  sendPlatformEmail,
 } from "@calibra-facil/email-sender";
-import { Resend } from "resend";
 import { render } from "@react-email/render";
 import {
   NotificationEmail,
@@ -863,7 +865,7 @@ function renderEmailTemplate(
 }
 
 /**
- * Send notification email using Resend and React Email templates
+ * Send notification email using the platform transport and React Email templates
  */
 async function sendNotificationEmail(options: {
   recipientUserId: string;
@@ -884,14 +886,13 @@ async function sendNotificationEmail(options: {
     emailBrand,
   } = options;
 
-  // Check if Resend is configured - log warning once per session
-  const resendApiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.RESEND_FROM_EMAIL;
+  // Check if e-mail is configured - log warning once per session
+  const fromEmail = getPlatformFromEmail();
 
-  if (!resendApiKey || !fromEmail) {
+  if (!isPlatformEmailConfigured() || !fromEmail) {
     if (!emailMisconfigWarningLogged) {
       console.error(
-        "[Notifications] EMAIL MISCONFIGURED: RESEND_API_KEY or RESEND_FROM_EMAIL not set. " +
+        "[Notifications] EMAIL MISCONFIGURED: no e-mail transport (SMTP_HOST or RESEND_API_KEY) or no sender (EMAIL_FROM). " +
           "Users will only receive in-app notifications, no emails will be sent.",
       );
       emailMisconfigWarningLogged = true;
@@ -926,7 +927,6 @@ async function sendNotificationEmail(options: {
     // (re-)rendered per variant so the HTML matches the actual envelope.
     const outcome = await sendEmailWithLabSender({
       organizationId: emailBrand?.sender?.organizationId,
-      platformApiKey: resendApiKey,
       buildPayload: async (sender) => {
         const brandVariant = sender ? emailBrand : stripBrandSender(emailBrand);
         const emailElement = renderEmailTemplate(
@@ -3397,11 +3397,10 @@ export async function sendPortalDueDigests(
     errors: 0,
   };
 
-  const resendApiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.RESEND_FROM_EMAIL;
-  if (!resendApiKey || !fromEmail) {
+  const fromEmail = getPlatformFromEmail();
+  if (!isPlatformEmailConfigured() || !fromEmail) {
     console.error(
-      "[PortalDigest] EMAIL MISCONFIGURED: RESEND_API_KEY or RESEND_FROM_EMAIL not set; skipping run.",
+      "[PortalDigest] EMAIL MISCONFIGURED: no e-mail transport (SMTP_HOST or RESEND_API_KEY) or no sender (EMAIL_FROM); skipping run.",
     );
     return result;
   }
@@ -3519,7 +3518,6 @@ export async function sendPortalDueDigests(
   result.recipients = recipients.length;
   if (recipients.length === 0) return result;
 
-  const resend = new Resend(resendApiKey);
   const logoSrc = getEmailLogoSrc();
   const brandByLab = new Map<string, EmailBrand | undefined>();
   const portalUrlByLab = new Map<string, string>();
@@ -3640,7 +3638,7 @@ export async function sendPortalDueDigests(
       ].filter(Boolean);
 
       // oxlint-disable-next-line eslint/no-await-in-loop -- sequential per recipient (see above).
-      await resend.emails.send({
+      const delivery = await sendPlatformEmail({
         from: formatFromEmail(fromEmail, emailBrand),
         to: recipient.email,
         subject: `Resumo de calibrações: ${subjectParts.join(" · ")}`,
@@ -3650,6 +3648,7 @@ export async function sendPortalDueDigests(
           "List-Unsubscribe": `<${unsubscribeUrl}>`,
         },
       });
+      if (!delivery.ok) throw new Error(delivery.error);
 
       result.sent += 1;
     } catch (error) {

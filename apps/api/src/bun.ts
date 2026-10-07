@@ -1,5 +1,7 @@
+import { resolvePlatformEmailTransport } from "@calibra-facil/email-sender";
 import app from "./index";
 import { GET as dispatchCron } from "../vercel-src/cron/dispatch";
+import { readCronEntries, startCronScheduler } from "./lib/cron-scheduler";
 
 type BunServer = {
   hostname: string;
@@ -120,7 +122,6 @@ async function createEnv(): Promise<BunApiEnv> {
       "R2_SECRET_ACCESS_KEY",
       "R2_BUCKET_NAME",
       "R2_MEDIA_BUCKET_NAME",
-      "RESEND_API_KEY",
     ]) {
       if (typeof env[key] !== "string" || env[key].length === 0) {
         throw new Error(`${key} is required in production`);
@@ -128,6 +129,12 @@ async function createEnv(): Promise<BunApiEnv> {
     }
     if (!env.R2_ACCOUNT_ID && !env.R2_ENDPOINT) {
       throw new Error("R2_ACCOUNT_ID or R2_ENDPOINT is required in production");
+    }
+    // Sign-in is passwordless, so production cannot run without e-mail.
+    if (!resolvePlatformEmailTransport(Bun.env)) {
+      throw new Error(
+        "E-mail is required in production: set SMTP_HOST (SMTP) or RESEND_API_KEY (Resend)",
+      );
     }
   }
 
@@ -166,3 +173,18 @@ const server = Bun.serve({
 console.info(
   `Calibra Facil API listening on http://${server.hostname}:${server.port}`,
 );
+
+// CRON_SCHEDULER=internal runs the vercel.json schedule in this process, for
+// installs without an external scheduler (the Docker setup turns it on).
+if (Bun.env.CRON_SCHEDULER === "internal") {
+  const jobs = startCronScheduler({
+    entries: readCronEntries(
+      JSON.parse(
+        await Bun.file(new URL("../vercel.json", import.meta.url)).text(),
+      ),
+    ),
+    dispatch: dispatchCron,
+    secret: Bun.env.CRON_SECRET,
+  });
+  console.info(`Scheduled ${jobs.length} cron jobs in-process (UTC)`);
+}

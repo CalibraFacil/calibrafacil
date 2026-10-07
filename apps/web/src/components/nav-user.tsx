@@ -1,5 +1,6 @@
 import {
   CheckmarkBadge01Icon,
+  Compass01Icon,
   Logout01Icon,
   Moon01Icon,
   Notification02Icon,
@@ -32,6 +33,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { Skeleton } from '@/components/ui/skeleton'
+import { startInterfaceTour } from '@/features/onboarding/interface-tour'
 import { markDesktopSignedOut } from '@/runtime/desktop-auth'
 
 export function NavUser() {
@@ -152,6 +154,13 @@ export function NavUser() {
                 <HugeiconsIcon icon={Notification02Icon} />
                 Notificações
               </DropdownMenuItem>
+              {/* The tour points at the sidebar, which a phone keeps closed. */}
+              {!isMobile ? (
+                <DropdownMenuItem onClick={startInterfaceTour}>
+                  <HugeiconsIcon icon={Compass01Icon} />
+                  Conhecer o sistema
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem
                 closeOnClick={false}
                 onClick={() =>

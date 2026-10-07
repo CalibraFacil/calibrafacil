@@ -26,20 +26,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { shortcutLabel } from "@/lib/platform";
-
-function getWebAppUrl(): string {
-  if (import.meta.env.VITE_WEB_URL) {
-    return import.meta.env.VITE_WEB_URL;
-  }
-  const host =
-    typeof window !== "undefined" ? window.location.hostname : "localhost";
-  if (host === "localhost" || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) {
-    return `http://${host}:5173`;
-  }
-  // Convention when VITE_WEB_URL is unset: the portal is served on the
-  // "portal." subdomain of the lab app's domain.
-  return `${window.location.protocol}//${host.replace(/^portal\./, "")}`;
-}
+import { getWebAppUrl } from "@/lib/runtime-env";
 
 export function PortalOrgSwitcher() {
   const { isMobile } = useSidebar();

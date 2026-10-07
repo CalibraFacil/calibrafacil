@@ -1,3 +1,5 @@
+import { runtimeEnv } from './runtime-env'
+
 export const DASHBOARD_ORG_KEY = 'dashboard-active-org'
 export const DASHBOARD_UNIT_KEY_PREFIX = 'dashboard-active-unit:'
 
@@ -30,7 +32,10 @@ export function getDefaultDesktopLocalApiUrl() {
 }
 
 export function getPortalBaseUrl() {
-  const configuredPortalUrl = import.meta.env.VITE_PORTAL_APP_URL?.trim()
+  const configuredPortalUrl = runtimeEnv(
+    'VITE_PORTAL_APP_URL',
+    import.meta.env.VITE_PORTAL_APP_URL,
+  )?.trim()
   if (configuredPortalUrl) {
     return configuredPortalUrl.replace(/\/+$/, '')
   }
@@ -51,7 +56,7 @@ export function getPortalBaseUrl() {
 }
 
 export function getSentryDsn() {
-  return import.meta.env.VITE_SENTRY_DSN || null
+  return runtimeEnv('VITE_SENTRY_DSN', import.meta.env.VITE_SENTRY_DSN) || null
 }
 
 export function shouldEnableTelemetry() {
@@ -59,12 +64,20 @@ export function shouldEnableTelemetry() {
 }
 
 export function shouldSendSentryPii() {
-  return import.meta.env.VITE_SENTRY_SEND_DEFAULT_PII === 'true'
+  return (
+    runtimeEnv(
+      'VITE_SENTRY_SEND_DEFAULT_PII',
+      import.meta.env.VITE_SENTRY_SEND_DEFAULT_PII,
+    ) === 'true'
+  )
 }
 
 export function shouldEnableSentryReplay(pathname: string) {
   return (
-    import.meta.env.VITE_SENTRY_REPLAY_ENABLED === 'true' &&
+    runtimeEnv(
+      'VITE_SENTRY_REPLAY_ENABLED',
+      import.meta.env.VITE_SENTRY_REPLAY_ENABLED,
+    ) === 'true' &&
     SENTRY_REPLAY_ENABLED_PREFIXES.some((prefix) => pathname.startsWith(prefix))
   )
 }

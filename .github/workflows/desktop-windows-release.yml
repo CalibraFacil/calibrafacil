@@ -1,12 +1,23 @@
 name: Desktop Windows Release
 
+# Builds the Windows installer and attaches it to an existing GitHub release.
+# release.yml calls it for every release; run it by hand for an older one.
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       tag:
         description: "Existing GitHub release tag to upload Windows assets to"
         required: true
-        default: "desktop-v0.0.0-20260510.1"
+        type: string
+      ref:
+        description: "Git ref to build from"
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing GitHub release tag to upload Windows assets to (e.g. v0.1.0)"
+        required: true
         type: string
       ref:
         description: "Git ref to build from"
@@ -24,6 +35,12 @@ concurrency:
 env:
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+  # The server the installer signs in to. A fork that runs its own instance
+  # sets these repository variables; unset, the app points at localhost and
+  # CALIBRA_DESKTOP_AUTH_API_URL / CALIBRA_DESKTOP_AUTH_ORIGIN pick a server
+  # at run time (docs/desktop-auto-update.md).
+  VITE_DESKTOP_AUTH_API_URL: ${{ vars.DESKTOP_AUTH_API_URL }}
+  VITE_DESKTOP_AUTH_ORIGIN: ${{ vars.DESKTOP_AUTH_ORIGIN }}
 
 jobs:
   build-windows:

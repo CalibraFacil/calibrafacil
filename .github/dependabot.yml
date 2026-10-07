@@ -20,3 +20,19 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+  # Base images of the Dockerfiles and the services pinned in the Compose files
+  # (docker-compose.yml for development, deploy/ for self-hosting).
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      images:
+        patterns: ["*"]
+  - package-ecosystem: docker-compose
+    directories: ["/", "/deploy"]
+    schedule:
+      interval: monthly
+    groups:
+      compose:
+        patterns: ["*"]

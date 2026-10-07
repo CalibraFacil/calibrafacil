@@ -1,0 +1,139 @@
+name: Docker images
+
+# Publishes the four images deploy/compose.yaml runs to GHCR, for amd64 and
+# arm64, tagged X.Y.Z, X.Y and latest. release.yml calls this for every
+# release; run it by hand to rebuild an existing version.
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version to publish, without the v (e.g. 0.1.0)"
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish, without the v (e.g. 0.1.0); builds tag v<version>"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY_IMAGE_PREFIX: ghcr.io/calibrafacil/calibrafacil
+  SOURCE_URL: https://github.com/${{ github.repository }}
+
+jobs:
+  build:
+    name: ${{ matrix.image }} (${{ matrix.arch }})
+    # Native runners for each architecture: emulating arm64 would take far
+    # longer for the pnpm install and the Vite builds.
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [api, worker, web, portal]
+        arch: [amd64, arm64]
+
+    steps:
+      - name: Checkout v${{ inputs.version }}
+        uses: actions/checkout@v7
+        with:
+          ref: v${{ inputs.version }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.image == 'api' && 'Dockerfile.api' || matrix.image == 'worker' && 'Dockerfile.worker' || 'Dockerfile.static' }}
+          build-args: ${{ (matrix.image == 'web' || matrix.image == 'portal') && format('APP_NAME={0}', matrix.image) || '' }}
+          platforms: linux/${{ matrix.arch }}
+          labels: |
+            org.opencontainers.image.source=${{ env.SOURCE_URL }}
+            org.opencontainers.image.version=${{ inputs.version }}
+            org.opencontainers.image.licenses=MIT
+          outputs: type=image,name=${{ env.REGISTRY_IMAGE_PREFIX }}-${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.arch }}
+          cache-to: type=gha,scope=${{ matrix.image }}-${{ matrix.arch }},mode=max
+
+      - name: Export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v7
+        with:
+          name: digests-${{ matrix.image }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: ${{ matrix.image }} (manifest)
+    needs: build
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [api, worker, web, portal]
+
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-${{ matrix.image }}-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image tags
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY_IMAGE_PREFIX }}-${{ matrix.image }}
+          tags: |
+            type=semver,pattern={{version}},value=v${{ inputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ inputs.version }}
+            type=raw,value=latest
+
+      - name: Create the multi-arch manifest
+        working-directory: ${{ runner.temp }}/digests
+        env:
+          IMAGE: ${{ env.REGISTRY_IMAGE_PREFIX }}-${{ matrix.image }}
+        # Word splitting is intended: one -t per tag, one argument per digest.
+        run: |
+          # shellcheck disable=SC2046
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            --annotation "index:org.opencontainers.image.source=$SOURCE_URL" \
+            --annotation "index:org.opencontainers.image.licenses=MIT" \
+            $(printf "$IMAGE@sha256:%s " *)
+
+      - name: Inspect
+        run: docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE_PREFIX }}-${{ matrix.image }}:${{ inputs.version }}

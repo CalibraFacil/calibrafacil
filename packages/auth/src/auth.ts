@@ -10,11 +10,14 @@ import { emailOTP } from "better-auth/plugins/email-otp";
 import { magicLink } from "better-auth/plugins/magic-link";
 import { passkey } from "@better-auth/passkey";
 import { sso } from "@better-auth/sso";
-import { Resend } from "resend";
+import type { CreateEmailOptions } from "resend";
 import {
   formatLabFromHeader,
+  getPlatformFromEmail,
+  isPlatformEmailConfigured,
   resolveLabEmailSender,
   sendEmailWithLabSender,
+  sendPlatformEmail,
 } from "@calibra-facil/email-sender";
 import type {
   AuthenticationResponseJSON,
@@ -501,25 +504,28 @@ function getReplyToEmail(brand: EmailBrand | undefined): string | undefined {
 }
 
 /**
- * Send a transactional email through Resend and FAIL LOUDLY on a provider error.
+ * Send a transactional email through the platform transport (SMTP or Resend)
+ * and FAIL LOUDLY on a delivery error.
  *
- * The Resend SDK resolves `emails.send()` with `{ data, error }` rather than
- * throwing when the Resend API rejects a message (invalid/rotated key, unverified
- * sender domain, suppressed recipient, quota/rate limit). Every auth email below
- * previously discarded that result, so a total delivery outage surfaced as a
- * silent HTTP 200 with nothing logged — undetectable until users reported it.
- * Surfacing the error (log + throw → 5xx) makes a provider rejection observable
- * instead of invisible.
+ * Providers report a rejected message (invalid/rotated key, unverified sender
+ * domain, suppressed recipient, quota/rate limit) as a result, not an
+ * exception. Every auth email below once discarded that result, so a total
+ * delivery outage surfaced as a silent HTTP 200 with nothing logged —
+ * undetectable until users reported it. Surfacing the error (log + throw →
+ * 5xx) makes a rejection observable instead of invisible.
  */
-async function sendResend(
-  resend: Resend,
-  payload: Parameters<Resend["emails"]["send"]>[0],
-): Promise<void> {
-  const { error } = await resend.emails.send(payload);
-  if (error) {
-    console.error("[Resend] Email delivery failed", error);
-    throw new Error(`Resend email delivery failed: ${error.message}`);
+async function sendAuthEmail(payload: CreateEmailOptions): Promise<void> {
+  const result = await sendPlatformEmail(payload);
+  if (!result.ok) {
+    console.error("[Email] Delivery failed", result.error);
+    throw new Error(`Email delivery failed: ${result.error}`);
   }
+}
+
+function emailNotConfiguredError(what: string): Error {
+  return new Error(
+    `E-mail is not configured (set SMTP_HOST or RESEND_API_KEY); cannot send ${what}`,
+  );
 }
 
 function readCallbackUrlFromMagicLinkContext(ctx: unknown): string | null {
@@ -779,7 +785,6 @@ async function sendPortalMagicLink(
     return;
   }
 
-  const apiKey = process.env.RESEND_API_KEY;
   const subject = pendingInvitation
     ? sanitizeMailHeader(`Convite para ${pendingInvitation.organizationName}`)
     : "Acesse o Portal CalibraFácil";
@@ -808,9 +813,9 @@ async function sendPortalMagicLink(
     : undefined;
   const labName = labBrand?.name ?? null;
 
-  if (!apiKey) {
+  if (!isPlatformEmailConfigured()) {
     if (isProductionRuntime()) {
-      throw new Error("RESEND_API_KEY is required to send portal magic links");
+      throw emailNotConfiguredError("portal magic links");
     }
 
     console.info(
@@ -819,10 +824,7 @@ async function sendPortalMagicLink(
     return;
   }
 
-  const fromEmail =
-    process.env.RESEND_FROM_EMAIL ||
-    process.env.EMAIL_FROM ||
-    DEFAULT_EMAIL_FROM;
+  const fromEmail = getPlatformFromEmail() ?? DEFAULT_EMAIL_FROM;
 
   if (pendingInvitation) {
     // #584: the portal INVITATION is lab-branded and may leave through the
@@ -832,7 +834,6 @@ async function sendPortalMagicLink(
     const invitation = pendingInvitation;
     const outcome = await sendEmailWithLabSender({
       organizationId: labBrand?.sender?.organizationId,
-      platformApiKey: apiKey,
       buildPayload: (sender) => {
         const brandVariant = sender ? labBrand : stripBrandSender(labBrand);
         return {
@@ -865,16 +866,15 @@ async function sendPortalMagicLink(
     });
 
     if (!outcome.sent) {
-      // Same fail-loud contract as sendResend: a provider rejection must
+      // Same fail-loud contract as sendAuthEmail: a provider rejection must
       // surface instead of returning a silent 200.
-      console.error("[Resend] Email delivery failed", outcome.error);
-      throw new Error(`Resend email delivery failed: ${outcome.error}`);
+      console.error("[Email] Delivery failed", outcome.error);
+      throw new Error(`Email delivery failed: ${outcome.error}`);
     }
     return;
   }
 
-  const resend = new Resend(apiKey);
-  await sendResend(resend, {
+  await sendAuthEmail({
     from: formatFromEmail(fromEmail, undefined),
     to: normalizedEmail,
     subject,
@@ -958,11 +958,9 @@ async function sendLabMagicLink(
     return;
   }
 
-  const apiKey = process.env.RESEND_API_KEY;
-
-  if (!apiKey) {
+  if (!isPlatformEmailConfigured()) {
     if (isProductionRuntime()) {
-      throw new Error("RESEND_API_KEY is required to send LAB magic links");
+      throw emailNotConfiguredError("LAB magic links");
     }
 
     console.info(
@@ -971,15 +969,11 @@ async function sendLabMagicLink(
     return;
   }
 
-  const resend = new Resend(apiKey);
-  const fromEmail =
-    process.env.RESEND_FROM_EMAIL ||
-    process.env.EMAIL_FROM ||
-    DEFAULT_EMAIL_FROM;
+  const fromEmail = getPlatformFromEmail() ?? DEFAULT_EMAIL_FROM;
 
   const accessUrl = buildLabMagicLinkAccessUrl(data);
 
-  await sendResend(resend, {
+  await sendAuthEmail({
     from: fromEmail,
     to: normalizedEmail,
     subject: "Acesse o CalibraFácil",
@@ -1016,11 +1010,9 @@ async function sendLabVerificationOtp(data: {
     return;
   }
 
-  const apiKey = process.env.RESEND_API_KEY;
-
-  if (!apiKey) {
+  if (!isPlatformEmailConfigured()) {
     if (isProductionRuntime()) {
-      throw new Error("RESEND_API_KEY is required to send LAB OTP emails");
+      throw emailNotConfiguredError("LAB OTP emails");
     }
 
     console.info(
@@ -1029,13 +1021,9 @@ async function sendLabVerificationOtp(data: {
     return;
   }
 
-  const resend = new Resend(apiKey);
-  const fromEmail =
-    process.env.RESEND_FROM_EMAIL ||
-    process.env.EMAIL_FROM ||
-    DEFAULT_EMAIL_FROM;
+  const fromEmail = getPlatformFromEmail() ?? DEFAULT_EMAIL_FROM;
 
-  await sendResend(resend, {
+  await sendAuthEmail({
     from: fromEmail,
     to: normalizedEmail,
     subject: "Código de acesso ao CalibraFácil",
@@ -1061,11 +1049,9 @@ export async function sendLabAccountSetupEmail(input: {
   claimUrl: string;
 }) {
   const normalizedEmail = normalizeLabAccessEmail(input.email);
-  const apiKey = process.env.RESEND_API_KEY;
-
-  if (!apiKey) {
+  if (!isPlatformEmailConfigured()) {
     if (isProductionRuntime()) {
-      throw new Error("RESEND_API_KEY is required to send LAB setup links");
+      throw emailNotConfiguredError("LAB setup links");
     }
 
     console.info(
@@ -1074,13 +1060,9 @@ export async function sendLabAccountSetupEmail(input: {
     return;
   }
 
-  const resend = new Resend(apiKey);
-  const fromEmail =
-    process.env.RESEND_FROM_EMAIL ||
-    process.env.EMAIL_FROM ||
-    DEFAULT_EMAIL_FROM;
+  const fromEmail = getPlatformFromEmail() ?? DEFAULT_EMAIL_FROM;
 
-  await sendResend(resend, {
+  await sendAuthEmail({
     from: fromEmail,
     to: normalizedEmail,
     subject: `Configure seu acesso a ${sanitizeMailHeader(input.organizationName)}`,
@@ -1301,17 +1283,12 @@ function createOrganizationPlugin() {
 
       const appUrl = process.env.APP_URL || "http://localhost:5173";
       const inviteLink = `${appUrl}/accept-invitation/${data.id}`;
-      const apiKey = process.env.RESEND_API_KEY;
-      if (!apiKey) {
-        throw new Error("RESEND_API_KEY is not configured");
+      if (!isPlatformEmailConfigured()) {
+        throw emailNotConfiguredError("organization invitations");
       }
-      const resend = new Resend(apiKey);
-      const fromEmail =
-        process.env.RESEND_FROM_EMAIL ||
-        process.env.EMAIL_FROM ||
-        DEFAULT_EMAIL_FROM;
+      const fromEmail = getPlatformFromEmail() ?? DEFAULT_EMAIL_FROM;
 
-      await sendResend(resend, {
+      await sendAuthEmail({
         from: fromEmail,
         to: data.email,
         subject: `Convite para ${data.organization.name}`,
@@ -1365,11 +1342,9 @@ function createSharedConfig(surface: AuthSurface) {
         user: { email: string };
         url: string;
       }) => {
-        const apiKey = process.env.RESEND_API_KEY;
-
-        if (!apiKey) {
+        if (!isPlatformEmailConfigured()) {
           if (isProduction) {
-            throw new Error("RESEND_API_KEY is required to send reset emails");
+            throw emailNotConfiguredError("reset emails");
           }
 
           console.info(
@@ -1378,13 +1353,9 @@ function createSharedConfig(surface: AuthSurface) {
           return;
         }
 
-        const resend = new Resend(apiKey);
-        const fromEmail =
-          process.env.RESEND_FROM_EMAIL ||
-          process.env.EMAIL_FROM ||
-          DEFAULT_EMAIL_FROM;
+        const fromEmail = getPlatformFromEmail() ?? DEFAULT_EMAIL_FROM;
 
-        await sendResend(resend, {
+        await sendAuthEmail({
           from: fromEmail,
           to: user.email,
           subject: "Defina sua senha no CalibraFácil",
@@ -1422,13 +1393,9 @@ function createSharedConfig(surface: AuthSurface) {
           url,
           resolveWebBaseUrl(isProduction),
         );
-        const apiKey = process.env.RESEND_API_KEY;
-
-        if (!apiKey) {
+        if (!isPlatformEmailConfigured()) {
           if (isProduction) {
-            throw new Error(
-              "RESEND_API_KEY is required to send verification emails",
-            );
+            throw emailNotConfiguredError("verification emails");
           }
 
           console.info(
@@ -1437,13 +1404,9 @@ function createSharedConfig(surface: AuthSurface) {
           return;
         }
 
-        const resend = new Resend(apiKey);
-        const fromEmail =
-          process.env.RESEND_FROM_EMAIL ||
-          process.env.EMAIL_FROM ||
-          DEFAULT_EMAIL_FROM;
+        const fromEmail = getPlatformFromEmail() ?? DEFAULT_EMAIL_FROM;
 
-        await sendResend(resend, {
+        await sendAuthEmail({
           from: fromEmail,
           to: user.email,
           subject: "Confirme seu e-mail no CalibraFácil",

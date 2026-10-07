@@ -29,6 +29,32 @@ export class PortalServiceAccountError extends Error {
   }
 }
 
+/**
+ * Create the portal service account if it does not exist yet. Client
+ * organizations are owned by this user, so the portal cannot work without it;
+ * `init` and `create-lab` (src/cli) call this so no install inserts it by hand.
+ */
+export async function ensurePortalServiceUser(): Promise<{
+  id: string;
+  created: boolean;
+}> {
+  const userId = getPortalServiceUserId();
+  const inserted = await db
+    .insert(user)
+    .values({
+      id: userId,
+      name: "Conta de serviço do portal",
+      // .invalid is reserved (RFC 2606): this account can never receive mail,
+      // so nobody can sign in as it.
+      email: `${userId}@calibrafacil.invalid`,
+      emailVerified: true,
+    })
+    .onConflictDoNothing()
+    .returning();
+
+  return { id: userId, created: inserted.length > 0 };
+}
+
 function getPortalServiceUserId(): string {
   const userId = process.env.PORTAL_SERVICE_USER_ID?.trim();
   if (!userId) {

@@ -4,7 +4,7 @@ Email templates built with React Email for transactional emails.
 
 ## Overview
 
-This package provides React-based email templates that are rendered to HTML and sent via Resend.
+This package provides React-based email templates that are rendered to HTML and sent over SMTP or the Resend API.
 
 ## Installation
 

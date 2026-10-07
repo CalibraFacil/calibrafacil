@@ -33,7 +33,7 @@ export function getLocalApiBaseURL(): string {
 
 export function getCloudApiBaseUrl(): string {
   if (isDesktopRuntime()) {
-    return import.meta.env.VITE_DESKTOP_AUTH_API_URL ?? getDefaultCloudApiUrl()
+    return import.meta.env.VITE_DESKTOP_AUTH_API_URL || getDefaultCloudApiUrl()
   }
 
   if (import.meta.env.VITE_API_URL) {

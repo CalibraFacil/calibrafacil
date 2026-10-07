@@ -63,7 +63,7 @@ browser ──▶ │  apps/web     │   │  apps/portal  │   │  apps/desk
                               │                             │
           ┌───────────────────┼───────────────┬─────────────┴──────┐
           ▼                   ▼               ▼                    ▼
-     PostgreSQL       S3-compatible      Gotenberg            Resend API
+     PostgreSQL       S3-compatible      Gotenberg            SMTP or Resend
      (Drizzle)        object storage     (HTML → PDF)         (e-mail)
 ```
 
@@ -107,18 +107,28 @@ passwordless: the magic link arrives in the local inbox at <http://localhost:802
 also creates `revisor@laboratorio.test` (admin) and `tecnico@laboratorio.test` (technician),
 so review and approval flows that need two people can be exercised.
 
+The demo laboratory is not empty: setup fills it with a made-up customer base, instrument park,
+about 130 calibrations across every workflow stage, quality records, service orders, requests and
+visits, so the dashboard looks like a working lab. The 40 most recent approvals come with their
+certificate PDF (`--all-certificates` renders every one). It takes about two minutes
+(`pnpm setup:dev --no-demo` skips it; `pnpm --dir apps/api seed:demo` runs it later, `--quick` for
+a smaller history). All names, e-mails and documents are fictional.
+
 `docker-compose.yml` stands in for every cloud dependency:
 
-| Service        | Replaces                    | Address                  |
-| -------------- | --------------------------- | ------------------------ |
-| `postgres`     | managed PostgreSQL          | `localhost:55432`        |
-| `s3`           | Cloudflare R2 / S3          | `http://localhost:59000` |
-| `mailpit`      | inbox for every e-mail sent | <http://localhost:8025>  |
-| `resend-relay` | the Resend API (→ Mailpit)  | `http://localhost:3025`  |
-| `gotenberg`    | PDF rendering               | `http://localhost:3001`  |
+| Service     | Replaces                        | Address                                |
+| ----------- | ------------------------------- | -------------------------------------- |
+| `postgres`  | managed PostgreSQL              | `localhost:55432`                      |
+| `s3`        | Cloudflare R2 / S3              | `http://localhost:59000`               |
+| `mailpit`   | SMTP server + inbox for e-mails | <http://localhost:8025> (SMTP `:1025`) |
+| `gotenberg` | PDF rendering                   | `http://localhost:3001`                |
 
 `pnpm services:down` stops the containers (data is kept); `pnpm setup:dev --reset` wipes them
 and starts over.
+
+Or skip the local setup: [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/CalibraFacil/calibrafacil)
+The dev container ([`.devcontainer/`](./.devcontainer)) installs everything and seeds the demo
+laboratory; run `pnpm dev` and open the forwarded port 5173.
 
 ## Development
 
@@ -134,13 +144,24 @@ pnpm --dir apps/api test:integration        # real-Postgres integration tests (D
 
 Database migrations are plain SQL in `packages/db/drizzle/`; apply them with
 `pnpm --dir packages/db db:bootstrap` (a new database is built from the schema; an existing one
-receives the pending migrations).
+receives the pending migrations). The real-Postgres integration tests run in CI after every
+merge to `main` and nightly.
 
-## Deployment
+## Self-hosting
 
-Calibra Fácil can be self-hosted on any infrastructure that runs Node/Bun, PostgreSQL and an
-S3-compatible store, or on Vercel with the included `vercel.json` files. See
-[`DEPLOYMENT.md`](./DEPLOYMENT.md).
+One server with Docker runs the whole system, HTTPS included:
+
+```bash
+git clone --depth 1 https://github.com/CalibraFacil/calibrafacil.git
+cd calibrafacil/deploy
+./setup.sh               # .env with fresh secrets; then set your domains and SMTP in it
+docker compose up -d
+docker compose exec api bun src/cli/create-lab.ts --name "Meu Laboratório" --email voce@example.com
+```
+
+Images for x86-64 and ARM64 are published with every [release](https://github.com/CalibraFacil/calibrafacil/releases).
+[`DEPLOYMENT.md`](./DEPLOYMENT.md) covers updates, backups, hosted databases and storage, plain
+Bun servers and Vercel.
 
 ## Contributing
 

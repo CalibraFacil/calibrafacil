@@ -1,3 +1,7 @@
+// Path the docs are served under (next.config.ts basePath): the project site
+// publishes them at calibrafacil.com/docs.
+export const docsBasePath = "/docs";
+
 // Public URLs of the documentation and the project site. Forks that host their
 // own copy override them at build time.
 export const site = {

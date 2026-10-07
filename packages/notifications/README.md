@@ -4,7 +4,7 @@ Notification service for in-app and email notifications.
 
 ## Overview
 
-This package orchestrates notifications across multiple channels (in-app database storage and email via Resend).
+This package orchestrates notifications across multiple channels (in-app database storage and email over SMTP or the Resend API).
 
 ## Installation
 
@@ -53,7 +53,7 @@ await notifyCertificateReady({
 ## Channels
 
 - **inApp** - Stored in database notifications table
-- **email** - Sent via Resend service
+- **email** - Sent through the platform transport (SMTP or Resend)
 
 ## Default Preferences
 

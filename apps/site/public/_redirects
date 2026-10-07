@@ -1,10 +1,45 @@
+# Retired pages of the old product site.
 /recursos / 301
-/recursos/* / 301
 /solucoes / 301
-/solucoes/* / 301
 /calibracao / 301
-/calibracao/* / 301
 /ferramentas / 301
+
+# Old documentation URLs (apps/docs is published at /docs by the build).
+/docs/definicoes /docs/conceitos/glossario 301
+/docs/portal /docs/plataforma/portal-do-cliente 301
+/docs/motor-matematico /docs/incerteza/motor-matematico 301
+/docs/rastreabilidade-iso17025 /docs/conceitos/iso-17025 301
+/docs/validacao-motor-matematico /docs/incerteza/validacao 301
+/docs/referencias-normativas /docs/incerteza/referencias-normativas 301
+/docs/historico-alteracoes /docs/ 301
+/docs/guia/customer-success /docs/ 301
+/docs/guia/painel /docs/primeiros-passos/painel 301
+/docs/guia/autenticacao-sso-api /docs/primeiros-passos/acesso-e-sso 301
+/docs/guia/clientes /docs/operacao-comercial/clientes 301
+/docs/guia/ativos /docs/calibracao/ativos 301
+/docs/guia/padroes /docs/calibracao/padroes 301
+/docs/guia/servicos /docs/operacao-comercial/servicos 301
+/docs/guia/governanca-multiunidade /docs/plataforma/multiunidade 301
+/docs/guia/relatorios-consolidados /docs/plataforma/multiunidade#relatorios-consolidados 301
+/docs/guia/integracoes-api-publica /docs/integracoes/visao-geral 301
+/docs/guia/competencias-pessoal /docs/qualidade/competencias 301
+/docs/guia/ordens /docs/calibracao/ordens-de-calibracao/visao-geral 301
+/docs/guia/ordens/execucao /docs/calibracao/ordens-de-calibracao/execucao 301
+/docs/guia/ordens/aprovacao /docs/calibracao/ordens-de-calibracao/aprovacao-e-certificado 301
+/docs/guia/qualidade/nc /docs/qualidade/nao-conformidades 301
+/docs/guia/qualidade/capa /docs/qualidade/capa 301
+/docs/guia/monitoramento-ambiental /docs/calibracao/monitoramento-ambiental 301
+/docs/guia/configuracoes /docs/plataforma/permissoes 301
+/docs/metodos /docs/metodos/visao-geral 301
+/docs/calibracao/clientes /docs/operacao-comercial/clientes 301
+/docs/calibracao/servicos /docs/operacao-comercial/servicos 301
+/docs/calibracao/ordens/visao-geral /docs/calibracao/ordens-de-calibracao/visao-geral 301
+/docs/calibracao/ordens/execucao /docs/calibracao/ordens-de-calibracao/execucao 301
+/docs/calibracao/ordens/aprovacao /docs/calibracao/ordens-de-calibracao/aprovacao-e-certificado 301
+/docs/plataforma/certificados-assinatura /docs/certificados/assinatura-digital 301
+
+# Rules with splats come last: Cloudflare matches the exact ones faster.
+/recursos/* / 301
+/solucoes/* / 301
+/calibracao/* / 301
 /ferramentas/* / 301
-/docs https://github.com/CalibraFacil/calibrafacil/tree/main/apps/docs/content/docs 302
-/docs/* https://github.com/CalibraFacil/calibrafacil/tree/main/apps/docs/content/docs 302

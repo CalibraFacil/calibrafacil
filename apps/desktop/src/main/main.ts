@@ -140,11 +140,12 @@ let notificationScope: {
 const desktopAppScheme = "app";
 const desktopAppHost = "calibra-facil";
 // Cloud API and web origin this desktop build talks to, baked in at build time
-// (see build-env.d.ts); runtime env vars below can still override them.
+// (see build-env.d.ts); runtime env vars below can still override them. An
+// empty value (an unset CI variable) counts as unset.
 const defaultCloudApiUrl =
-  import.meta.env.VITE_DESKTOP_AUTH_API_URL ?? "http://localhost:3000";
+  import.meta.env.VITE_DESKTOP_AUTH_API_URL || "http://localhost:3000";
 const defaultCloudWebOrigin =
-  import.meta.env.VITE_DESKTOP_AUTH_ORIGIN ?? "http://localhost:5173";
+  import.meta.env.VITE_DESKTOP_AUTH_ORIGIN || "http://localhost:5173";
 const packagedRendererUrl = `${desktopAppScheme}://${desktopAppHost}/`;
 const localServer = new LocalServerManager();
 

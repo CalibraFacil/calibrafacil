@@ -26,8 +26,8 @@ pnpm check-types      # type-check all packages
 ```
 
 Local development needs no cloud account: `docker-compose.yml` runs Postgres, an
-S3-compatible store, Mailpit (every email, magic links included, lands at
-http://localhost:8025 through a local Resend-compatible relay) and Gotenberg. The seed
+S3-compatible store, Mailpit (the app sends over SMTP; every email, magic links included,
+lands at http://localhost:8025) and Gotenberg. The seed
 creates a demo lab; sign in as `admin@laboratorio.test` (passwordless).
 
 Single app / package:
@@ -88,7 +88,8 @@ The same React frontend (`apps/web`) runs in two modes, and most of the architec
 keep these in parity:
 
 - **Cloud:** `apps/api` (Hono) → PostgreSQL + S3-compatible object storage (Cloudflare R2 in
-  the original deployment), Gotenberg for PDFs and Resend for email. Background work (PDF
+  the original deployment), Gotenberg for PDFs and SMTP or Resend for email
+  (`packages/email-sender/src/transport.ts`). Background work (PDF
   generation, compliance checks, syncs) runs in `apps/worker`: in-process in development, via
   Vercel Queue + Cron or the always-on worker in production. On Vercel the API entrypoints are
   the generated functions in `apps/api/api/` (`[...route].js`, `cron/`, `queues/`); elsewhere

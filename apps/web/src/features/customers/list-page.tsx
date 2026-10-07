@@ -77,6 +77,7 @@ export function ClientsPage({
         <Button
           render={<Link to="/dashboard/clients/new" />}
           className={`${ACTION_BUTTON_CLASS} shrink-0`}
+          data-tour="customers-new"
         >
           <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
           Novo Cliente

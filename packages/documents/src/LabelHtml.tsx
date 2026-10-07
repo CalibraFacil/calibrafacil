@@ -114,7 +114,7 @@ export function LabelHtml({ label }: { label: LabelData }) {
     <html lang="pt-BR">
       <head>
         <meta charSet="UTF-8" />
-        <title>Etiqueta - {label.jobId}</title>
+        <title>{`Etiqueta - ${label.jobId}`}</title>
         <style dangerouslySetInnerHTML={{ __html: labelStyles }} />
       </head>
       <body>

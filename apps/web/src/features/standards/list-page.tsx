@@ -148,6 +148,7 @@ export function StandardsListPage({
           <Button
             render={<Link to="/dashboard/standards/new" />}
             className={ACTION_BUTTON_CLASS}
+            data-tour="standards-new"
           >
             <HugeiconsIcon icon={PlusSignIcon} className="mr-2 size-4" />
             Novo Padrão

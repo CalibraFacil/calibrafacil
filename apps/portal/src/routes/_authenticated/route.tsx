@@ -22,6 +22,7 @@ import { PortalSidebar } from "@/components/portal-sidebar";
 import { PortalHeader } from "@/components/portal-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { Spinner } from "@/components/ui/spinner";
+import { getWebAppUrl } from "@/lib/runtime-env";
 import {
   Card,
   CardContent,
@@ -57,20 +58,6 @@ export const Route = createFileRoute("/_authenticated")({
   },
   component: PortalLayout,
 });
-
-function getWebAppUrl(): string {
-  if (import.meta.env.VITE_WEB_URL) {
-    return import.meta.env.VITE_WEB_URL;
-  }
-  const host =
-    typeof window !== "undefined" ? window.location.hostname : "localhost";
-  if (host === "localhost" || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) {
-    return `http://${host}:5173`;
-  }
-  // Convention when VITE_WEB_URL is unset: the portal is served on the
-  // "portal." subdomain of the lab app's domain.
-  return `${window.location.protocol}//${host.replace(/^portal\./, "")}`;
-}
 
 type PortalOrganization = {
   id: string;

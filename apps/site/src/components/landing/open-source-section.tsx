@@ -105,13 +105,7 @@ export function OpenSourceSection() {
               <Button
                 variant="outline"
                 size="lg"
-                render={
-                  <a
-                    href={DOCS_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  />
-                }
+                render={<a href={DOCS_URL} />}
               >
                 <HugeiconsIcon icon={Book02Icon} data-icon="inline-start" />
                 Documentação

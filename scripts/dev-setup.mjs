@@ -4,10 +4,13 @@
 //   1. checks the toolchain (Node 24+, pnpm, Bun, Docker Compose)
 //   2. creates apps/api/.env and packages/db/.env from their examples, with
 //      freshly generated secrets (existing files are never overwritten)
-//   3. starts docker-compose.yml (Postgres, S3, Mailpit, Resend relay, Gotenberg)
+//   3. starts docker-compose.yml (Postgres, S3, Mailpit, Gotenberg)
 //   4. builds (new database) or migrates (existing database) the schema
 //   5. creates the storage buckets
-//   6. seeds the catalogs and a demo laboratory you can sign in to
+//   6. seeds the catalogs and a demo laboratory you can sign in to, filled with
+//      made-up work (customers, instruments, three months of calibrations with
+//      issued certificates, quality records; about two minutes — `--no-demo`
+//      skips it)
 //
 // Safe to re-run: every step is idempotent.
 import { execFileSync, spawnSync } from "node:child_process";
@@ -19,6 +22,7 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const reset = process.argv.includes("--reset");
+const skipDemo = process.argv.includes("--no-demo");
 const isWindows = process.platform === "win32";
 
 const step = (message) => console.log(`\n▸ ${message}`);
@@ -226,6 +230,26 @@ run("bun", ["scripts/seed-dev-lab.ts"], {
   cwd: path.join(root, "packages/db"),
   env: seedEnv,
 });
+
+if (skipDemo) {
+  console.log("  --no-demo: leaving the demo laboratory empty.");
+} else {
+  // Optional by nature (it needs the PDF service and takes a couple of
+  // minutes): a failure must not break the setup that already worked.
+  step("Filling the demo laboratory with sample work (about two minutes)");
+  const demo = spawnSync("bun", ["src/cli/seed-demo.ts"], {
+    cwd: path.join(root, "apps/api"),
+    env: seedEnv,
+    stdio: "inherit",
+    shell: isWindows,
+  });
+  if (demo.status !== 0) {
+    console.warn(
+      "\n! The sample data could not be created; the laboratory is still usable, just empty.\n" +
+        "  Retry with: pnpm --dir apps/api seed:demo",
+    );
+  }
+}
 
 console.log(`
 ✓ Local environment ready.

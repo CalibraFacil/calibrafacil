@@ -29,17 +29,23 @@ installers attached to this repository's **GitHub releases**.
   | `VITE_DESKTOP_AUTH_ORIGIN`  | Web origin presented to that API's auth layer | `http://localhost:5173` |
 
   `CALIBRA_DESKTOP_AUTH_API_URL` / `CALIBRA_DESKTOP_AUTH_ORIGIN` still override them at
-  runtime, which is handy when testing a build against another environment.
+  runtime, which is handy when testing a build against another environment. The release
+  workflow reads them from the repository variables `DESKTOP_AUTH_API_URL` and
+  `DESKTOP_AUTH_ORIGIN`: a fork that runs its own instance sets those, and its releases
+  ship installers that sign in there. This repository leaves them unset, so its installers
+  point at `localhost` until those environment variables say otherwise.
 
 ## Publishing a release
 
-1. Create a GitHub release (draft or pre-release) with a tag such as
-   `desktop-v0.1.0-20261001.1`.
-2. Run the **Desktop Windows Release** workflow with that tag: it builds the installer, runs
-   the artifact smoke test and uploads the installer, its `.blockmap` and `latest.yml` to
-   the release.
-3. Publish the release (or mark it as a pre-release for the beta channel). Installed apps
-   pick it up on their next update check.
+Every project release attaches the Windows installer on its own: merging the release pull
+request (see [`CONTRIBUTING.md`](../CONTRIBUTING.md#releases)) tags `vX.Y.Z`, bumps
+`apps/desktop/package.json` to the same version, and runs the **Desktop Windows Release**
+workflow, which builds the installer, runs the artifact smoke test and uploads the
+installer, its `.blockmap` and `latest.yml` to the release. Installed apps pick it up on
+their next update check.
+
+To (re)build the installer for an existing release, run that workflow by hand with the
+release's tag.
 
 Building for other platforms works the same way locally:
 

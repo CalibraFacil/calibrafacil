@@ -35,3 +35,11 @@ export {
   type LabSenderContext,
   type SendEmailOutcome,
 } from "./send";
+export {
+  getPlatformFromEmail,
+  isPlatformEmailConfigured,
+  resolvePlatformEmailTransport,
+  sendPlatformEmail,
+  type EmailDeliveryResult,
+  type PlatformEmailTransport,
+} from "./transport";

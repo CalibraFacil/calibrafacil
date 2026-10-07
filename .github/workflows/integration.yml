@@ -1,0 +1,55 @@
+name: Integration tests
+
+# The real-database tier: every *.int.spec.ts in apps/api and apps/worker runs
+# against a throwaway PostgreSQL the test setup starts in Docker. It takes about
+# a quarter of an hour, so it runs after each merge to main, nightly (to catch
+# drift such as a new image or dependency), and on demand instead of on every
+# pull request.
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    name: ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [api, worker]
+    env:
+      TZ: UTC
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The test setup runs psql against the container it starts.
+      - name: Ensure psql
+        run: command -v psql || (sudo apt-get update && sudo apt-get install -y postgresql-client)
+
+      - name: Integration tests (apps/${{ matrix.app }})
+        run: pnpm --dir apps/${{ matrix.app }} test:integration
