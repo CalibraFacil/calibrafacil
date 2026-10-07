@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 
 import tanstackRouter from "@tanstack/router-plugin/vite";
 import viteReact from "@vitejs/plugin-react";
@@ -20,6 +20,9 @@ const httpsConfig =
     : undefined;
 
 export default defineConfig({
+  test: {
+    setupFiles: ["./vitest.setup.ts"],
+  },
   server: {
     host: true,
     // Overridable so scripts/dev-runner.mjs can give each git
