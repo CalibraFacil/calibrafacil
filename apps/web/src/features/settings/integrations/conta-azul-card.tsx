@@ -203,13 +203,6 @@ function ContaAzulConnect({
           <div className="flex items-center gap-3.5">
             <ContaAzulLogo />
             <div className="space-y-1">
-              <span
-                className="inline-flex items-center gap-1.5 text-xs font-semibold tracking-wide"
-                style={{ color: CONTA_AZUL_BRAND }}
-              >
-                <HugeiconsIcon icon={PowerSocket02Icon} className="size-3.5" />
-                Integração nativa
-              </span>
               <h2 className="text-base font-semibold tracking-tight text-balance">
                 Conta Azul
               </h2>
@@ -375,16 +368,6 @@ function ContaAzulPanel({
             >
               <ContaAzulLogo />
               <div className="space-y-1">
-                <span
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold tracking-wide"
-                  style={{ color: CONTA_AZUL_BRAND }}
-                >
-                  <HugeiconsIcon
-                    icon={PowerSocket02Icon}
-                    className="size-3.5"
-                  />
-                  Integração nativa
-                </span>
                 <span className="block text-base font-semibold tracking-tight text-balance">
                   {companyName}
                 </span>
