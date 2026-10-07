@@ -17,3 +17,7 @@ apps/*/src/routeTree.gen.ts
 
 # fumadocs codegen (gitignored) — keep local `format:check` runs clean.
 apps/docs/.source/
+
+# Written by release-please in its own markdown style; formatting it would
+# fail every release pull request and fight the next release's entry.
+CHANGELOG.md
