@@ -11,7 +11,6 @@ Every release of Calibra Fácil, newest first. Entries are written by
 ### Bug fixes
 
 * **deps:** patch the open security advisories ([#36](https://github.com/CalibraFacil/calibrafacil/issues/36)) ([4a96999](https://github.com/CalibraFacil/calibrafacil/commit/4a969993e43b8baf082c356410a42d418485523f))
-* **desktop:** name the repository for the update feed ([068af12](https://github.com/CalibraFacil/calibrafacil/commit/068af1228c728b24d782793f7878c0432a079156))
 * **desktop:** name the repository for the update feed ([b9822f6](https://github.com/CalibraFacil/calibrafacil/commit/b9822f697199b57c565de5f4bdb8ee8bd7143a93))
 
 ## 0.1.0 (2026-10-07)
