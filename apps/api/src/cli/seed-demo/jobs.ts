@@ -63,7 +63,7 @@ function calculationErrors(body: unknown): unknown[] {
 }
 
 const LAB_ADDRESS =
-  "Laboratório Demonstração, Rua das Calibrações, 1250, Centro Cívico, Curitiba/PR";
+  "Laboratório Modelo, Rua das Calibrações, 1250, Centro Cívico, Curitiba/PR";
 
 export type SeedJob = {
   planned: PlannedJob;
