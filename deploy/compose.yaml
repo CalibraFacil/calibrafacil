@@ -60,7 +60,7 @@ x-app-env: &app-env
 
 services:
   caddy:
-    image: caddy:2.10-alpine
+    image: caddy:2.11-alpine
     restart: unless-stopped
     ports:
       - "${HTTP_BIND:-80}:80"
