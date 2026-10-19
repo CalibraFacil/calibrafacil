@@ -154,7 +154,7 @@ services:
 
   s3:
     # Versity S3 Gateway (Apache-2.0): a plain directory served over the S3 API.
-    image: versity/versitygw:v1.8.0
+    image: versity/versitygw:v1.9.0
     restart: unless-stopped
     environment:
       ROOT_ACCESS_KEY: calibra
@@ -166,11 +166,11 @@ services:
       - s3-data:/data
 
   gotenberg:
-    image: gotenberg/gotenberg:8.37.0
+    image: gotenberg/gotenberg:8.38.1
     restart: unless-stopped
 
   mailpit:
-    image: axllent/mailpit:v1.31.4
+    image: axllent/mailpit:v1.31.6
     profiles: ["mailpit"]
     restart: unless-stopped
     ports:

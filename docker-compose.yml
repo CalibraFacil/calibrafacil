@@ -38,7 +38,7 @@ services:
 
   s3:
     # Versity S3 Gateway (Apache-2.0) serving a plain directory over the S3 API.
-    image: versity/versitygw:v1.8.0
+    image: versity/versitygw:v1.9.0
     environment:
       ROOT_ACCESS_KEY: calibra
       ROOT_SECRET_KEY: calibra-dev-secret
@@ -55,7 +55,7 @@ services:
       - s3-data:/data
 
   mailpit:
-    image: axllent/mailpit:v1.31.4
+    image: axllent/mailpit:v1.31.6
     environment:
       MP_MAX_MESSAGES: 2000
     ports:
@@ -63,7 +63,7 @@ services:
       - "${CALIBRA_MAILPIT_SMTP_PORT:-1025}:1025"
 
   gotenberg:
-    image: gotenberg/gotenberg:8.37.0
+    image: gotenberg/gotenberg:8.38.1
     ports:
       - "${CALIBRA_GOTENBERG_PORT:-3001}:3000"
 
