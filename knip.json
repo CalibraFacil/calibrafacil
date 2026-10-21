@@ -17,10 +17,22 @@
   // Postgres client and drizzle-kit (run by the integration test setup against a
   // disposable database, resolved from packages/db), the CI runner, the Linux loader cache, Playwright's CLI
   // (installed by the workflow itself) and `package` (a workflow step name).
-  "ignoreBinaries": ["psql", "drizzle-kit", "ldconfig", "playwright", "package"],
+  "ignoreBinaries": [
+    "psql",
+    "drizzle-kit",
+    "ldconfig",
+    "playwright",
+    "package"
+  ],
   // Dynamic specifiers a static analysis cannot follow.
   "ignoreUnresolved": ["src/cli/seed-demo.ts"],
   "workspaces": {
+    // apps/docs imports the Fumadocs-generated `.source/` through the tsconfig
+    // alias `collections/*`; the folder only exists after `fumadocs-mdx` runs, so a
+    // fresh CI checkout reports it as an unlisted dependency.
+    "apps/docs": {
+      "ignoreDependencies": ["collections"]
+    },
     ".": {
       "entry": ["scripts/*.{mjs,ts}"],
       "project": ["scripts/**/*.{mjs,ts}"],
@@ -69,11 +81,7 @@
         "e2e-stack/**/*.ts",
         "vitest.*.js"
       ],
-      "project": [
-        "src/**/*.{ts,tsx,css}",
-        "scripts/*.mjs",
-        "e2e*/**/*.ts"
-      ]
+      "project": ["src/**/*.{ts,tsx,css}", "scripts/*.mjs", "e2e*/**/*.ts"]
     },
     "apps/portal": {
       "entry": ["src/routes/**/*.{ts,tsx}", "scripts/*.mjs"],
@@ -93,7 +101,10 @@
     "packages/auth": {
       // Declared but not imported; left for the branch that owns packages/auth.
       // vite-env.d.ts imports a type from @calibra-facil/contracts.
-      "ignoreDependencies": ["@calibra-facil/shared", "@calibra-facil/contracts"]
+      "ignoreDependencies": [
+        "@calibra-facil/shared",
+        "@calibra-facil/contracts"
+      ]
     },
     "packages/db": {
       "entry": ["scripts/*.{mjs,ts}", "src/seed-*.ts"],
