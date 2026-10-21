@@ -90,6 +90,10 @@ import {
   withLabPermission,
 } from "../middleware/permission";
 import { buildUnitScopeCondition } from "../lib/units";
+import {
+  isAssignableTechnician,
+  serviceOrderBelongsToOrganization,
+} from "../lib/tenant-refs";
 import { reconcileMethodSnapshotEngine } from "../lib/method-snapshot-engine";
 import { resolveAssetRegimeWrite } from "../lib/asset-regime";
 import { deriveRegulatedNextDate } from "../lib/regulated-interval";
@@ -3133,6 +3137,37 @@ async function applyCreateLocalServiceOrderIntake(
       ok: false,
       code: "DOMAIN_VALIDATION_FAILED",
       reason: "Ativo ou cliente invalido para esta OS",
+    };
+  }
+
+  // The responsible technician and source OS are payload-supplied ids: they
+  // must belong to the pushing member's organization (same guard as the cloud
+  // `POST /service-orders`).
+  if (
+    values.responsibleTechnicianId &&
+    !(await isAssignableTechnician({
+      organizationId: input.memberData.organizationId,
+      userId: values.responsibleTechnicianId,
+      unitId,
+    }))
+  ) {
+    return {
+      ok: false,
+      code: "DOMAIN_VALIDATION_FAILED",
+      reason: "Tecnico nao encontrado ou sem permissao",
+    };
+  }
+  if (
+    values.sourceServiceOrderId &&
+    !(await serviceOrderBelongsToOrganization(
+      input.memberData.organizationId,
+      values.sourceServiceOrderId,
+    ))
+  ) {
+    return {
+      ok: false,
+      code: "DOMAIN_VALIDATION_FAILED",
+      reason: "OS de origem nao encontrada",
     };
   }
 

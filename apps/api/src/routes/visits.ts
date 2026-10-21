@@ -38,6 +38,7 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { buildUnitScopeCondition } from "../lib/units";
+import { isAssignableTechnician } from "../lib/tenant-refs";
 import {
   notifyVisitCancelled,
   notifyVisitConfirmed,
@@ -64,6 +65,14 @@ const technicianUser = alias(user, "calibrationVisitTechnician");
  */
 
 const VISIT_TERMINAL = new Set(["COMPLETED", "CANCELLED"]);
+
+/**
+ * The technician named in the body must be a member of the caller's
+ * organization who can work in the visit's unit (same rule as
+ * `POST /jobs/:id/assign`). One generic answer for "does not exist" and "belongs
+ * to another tenant" so the response is not an existence oracle for user ids.
+ */
+const TECHNICIAN_REFUSED = "Tecnico nao encontrado ou sem permissao";
 
 /** Load one visit scoped to the org + unit, or null. */
 async function getScopedVisit(id: number, member: AuthVariables["member"]) {
@@ -354,6 +363,16 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
       if (VISIT_TERMINAL.has(visit.status)) {
         return c.json({ error: "Visita ja finalizada ou cancelada" }, 409);
       }
+      if (
+        technicianId !== visit.technicianId &&
+        !(await isAssignableTechnician({
+          organizationId: member.organizationId,
+          userId: technicianId,
+          unitId: visit.unitId,
+        }))
+      ) {
+        return c.json({ error: TECHNICIAN_REFUSED }, 400);
+      }
 
       const [updated] = await db
         .update(calibrationVisit)
@@ -401,6 +420,16 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
           { error: "Defina a data e o técnico para confirmar a visita" },
           400,
         );
+      }
+      if (
+        technicianId !== visit.technicianId &&
+        !(await isAssignableTechnician({
+          organizationId: member.organizationId,
+          userId: technicianId,
+          unitId: visit.unitId,
+        }))
+      ) {
+        return c.json({ error: TECHNICIAN_REFUSED }, 400);
       }
 
       const confirmDateChanged =

@@ -7,8 +7,10 @@ import {
   calibrationJob,
   customer,
   organization,
+  organizationUnit,
   serviceOrder,
   serviceOrderCertificateLink,
+  serviceOrderEvaluation,
   serviceOrderQuote,
 } from "@calibra-facil/db/schema";
 import type { ServiceOrderQuoteStatus } from "@calibra-facil/shared";
@@ -16,6 +18,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg, seedService } from "../../test/integration/seed";
+import { seedExtraMember } from "../../test/integration/tenant-refs";
 
 // SEC-01 — cross-tenant IDOR regression suite for the lab serviceOrdersRouter.
 //
@@ -583,5 +586,398 @@ describe("serviceOrdersRouter — SEC-01 cross-tenant IDORs (real DB + real RBAC
         ),
       );
     expect(links).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Foreign-id (tenant-refs) guards: ids named in the request BODY / PATH that
+// point at another tenant's user, service order or certificate job. The target
+// OS itself is already scoped (SEC-01); these prove the ids it is linked to are
+// scoped too, and that the refusal never reveals whether the id exists.
+// ---------------------------------------------------------------------------
+describe("serviceOrdersRouter — request-supplied foreign ids are tenant-scoped", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  /** Org A (admin) with one OS ready for evaluation, plus org B with an OS + cert job. */
+  async function seedFixture() {
+    const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+    const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
+    const typeId = await seedAssetType("type-foreign-ids");
+    const custA = await seedCustomer({
+      labOrganizationId: orgA.orgId,
+      clientOrgId: "client-a-fid",
+    });
+    const custB = await seedCustomer({
+      labOrganizationId: orgB.orgId,
+      clientOrgId: "client-b-fid",
+    });
+    const assetA = await seedAsset({
+      unitId: orgA.unitId,
+      customerId: custA,
+      assetTypeId: typeId,
+      tag: "TAG-A-FID",
+    });
+    const assetB = await seedAsset({
+      unitId: orgB.unitId,
+      customerId: custB,
+      assetTypeId: typeId,
+      tag: "TAG-B-FID",
+    });
+    const serviceA = await seedService({
+      organizationId: orgA.orgId,
+      unitId: orgA.unitId,
+      name: "Calibração A",
+    });
+    const serviceB = await seedService({
+      organizationId: orgB.orgId,
+      unitId: orgB.unitId,
+      name: "Calibração B",
+    });
+    const orderA = await seedServiceOrder({
+      organizationId: orgA.orgId,
+      unitId: orgA.unitId,
+      customerId: custA,
+      assetId: assetA,
+      openedByUserId: orgA.userId,
+      serviceOrderNumber: "OS-A-FID",
+      status: "awaiting_tech_evaluation",
+    });
+    const orderB = await seedServiceOrder({
+      organizationId: orgB.orgId,
+      unitId: orgB.unitId,
+      customerId: custB,
+      assetId: assetB,
+      openedByUserId: orgB.userId,
+      serviceOrderNumber: "OS-B-FID",
+      status: "awaiting_tech_evaluation",
+    });
+    const jobB = await seedCalibrationJob({
+      jobId: "JOB-B-FID",
+      organizationId: orgB.orgId,
+      unitId: orgB.unitId,
+      customerId: custB,
+      assetId: assetB,
+      serviceId: serviceB,
+      createdBy: orgB.userId,
+    });
+    return {
+      orgA,
+      orgB,
+      custA,
+      assetA,
+      serviceA,
+      orderA,
+      orderB,
+      jobB,
+    };
+  }
+
+  async function responsibleOf(orderId: number) {
+    const [row] = await db
+      .select({
+        responsibleTechnicianId: serviceOrder.responsibleTechnicianId,
+        sourceServiceOrderId: serviceOrder.sourceServiceOrderId,
+        status: serviceOrder.status,
+      })
+      .from(serviceOrder)
+      .where(eq(serviceOrder.id, orderId));
+    return row;
+  }
+
+  function intakeBody(
+    fx: Awaited<ReturnType<typeof seedFixture>>,
+    extra: Record<string, unknown>,
+  ) {
+    return JSON.stringify({
+      customerId: fx.custA,
+      assetId: fx.assetA,
+      claimedDefect: "Defeito relatado",
+      intakeCondition: "Bom estado",
+      ...extra,
+    });
+  }
+
+  it("REQ-TENANT-SO-001 [HIGH RISK]: assign-technician with another org's user → 400, responsible technician not written", async () => {
+    const fx = await seedFixture();
+
+    loginAs({ userId: fx.orgA.userId, organizationId: fx.orgA.orgId });
+    const res = await serviceOrdersRouter.request(
+      `/${fx.orderA}/assign-technician`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ technicianId: fx.orgB.userId }),
+      },
+    );
+
+    expect(res.status).toBe(400);
+    expect(
+      (await responsibleOf(fx.orderA))?.responsibleTechnicianId,
+    ).toBeNull();
+  });
+
+  it("REQ-TENANT-SO-002: assign-technician with a same-org technician assigned to the unit → 200 and persisted", async () => {
+    const fx = await seedFixture();
+    const tech = await seedExtraMember({
+      orgId: fx.orgA.orgId,
+      userId: "tech-a",
+      role: "technician",
+      unitId: fx.orgA.unitId,
+      unitRole: "technician",
+    });
+
+    loginAs({ userId: fx.orgA.userId, organizationId: fx.orgA.orgId });
+    const res = await serviceOrdersRouter.request(
+      `/${fx.orderA}/assign-technician`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ technicianId: tech.userId }),
+      },
+    );
+
+    expect(res.status).toBe(200);
+    expect((await responsibleOf(fx.orderA))?.responsibleTechnicianId).toBe(
+      tech.userId,
+    );
+  });
+
+  it("REQ-TENANT-SO-003 [HIGH RISK]: POST / with another org's responsibleTechnicianId → 400, no OS created", async () => {
+    const fx = await seedFixture();
+    const before = await db.select({ id: serviceOrder.id }).from(serviceOrder);
+
+    loginAs({ userId: fx.orgA.userId, organizationId: fx.orgA.orgId });
+    const res = await serviceOrdersRouter.request("/", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: intakeBody(fx, { responsibleTechnicianId: fx.orgB.userId }),
+    });
+
+    expect(res.status).toBe(400);
+    const after = await db.select({ id: serviceOrder.id }).from(serviceOrder);
+    expect(after).toHaveLength(before.length);
+  });
+
+  it("REQ-TENANT-SO-004: POST / pointing sourceServiceOrderId at another org's OS → 400, no OS created", async () => {
+    const fx = await seedFixture();
+    const before = await db.select({ id: serviceOrder.id }).from(serviceOrder);
+
+    loginAs({ userId: fx.orgA.userId, organizationId: fx.orgA.orgId });
+    const res = await serviceOrdersRouter.request("/", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: intakeBody(fx, {
+        intakeType: "warranty_return",
+        sourceServiceOrderId: fx.orderB,
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    const after = await db.select({ id: serviceOrder.id }).from(serviceOrder);
+    expect(after).toHaveLength(before.length);
+  });
+
+  it("REQ-TENANT-SO-005 [HIGH RISK]: PATCH /:id with another org's responsibleTechnicianId → 400, nothing written", async () => {
+    const fx = await seedFixture();
+
+    loginAs({ userId: fx.orgA.userId, organizationId: fx.orgA.orgId });
+    const res = await serviceOrdersRouter.request(`/${fx.orderA}`, {
+      method: "PATCH",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ responsibleTechnicianId: fx.orgB.userId }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(
+      (await responsibleOf(fx.orderA))?.responsibleTechnicianId,
+    ).toBeNull();
+  });
+
+  it("REQ-TENANT-SO-006: PATCH /:id pointing sourceServiceOrderId at another org's OS → 400, nothing written", async () => {
+    const fx = await seedFixture();
+
+    loginAs({ userId: fx.orgA.userId, organizationId: fx.orgA.orgId });
+    const res = await serviceOrdersRouter.request(`/${fx.orderA}`, {
+      method: "PATCH",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ sourceServiceOrderId: fx.orderB }),
+    });
+
+    expect(res.status).toBe(400);
+    expect((await responsibleOf(fx.orderA))?.sourceServiceOrderId).toBeNull();
+  });
+
+  it("REQ-TENANT-SO-007 [HIGH RISK]: POST /:id/evaluations naming another org's technician → 400, no evaluation, status unchanged", async () => {
+    const fx = await seedFixture();
+
+    loginAs({ userId: fx.orgA.userId, organizationId: fx.orgA.orgId });
+    const res = await serviceOrdersRouter.request(`/${fx.orderA}/evaluations`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        technicianId: fx.orgB.userId,
+        diagnosis: "Display apagado",
+        recommendedAction: "repair",
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    const evaluations = await db
+      .select({ id: serviceOrderEvaluation.id })
+      .from(serviceOrderEvaluation)
+      .where(eq(serviceOrderEvaluation.serviceOrderId, fx.orderA));
+    expect(evaluations).toHaveLength(0);
+    expect((await responsibleOf(fx.orderA))?.status).toBe(
+      "awaiting_tech_evaluation",
+    );
+  });
+
+  it("REQ-TENANT-SO-008: PATCH /:id/evaluations/:evaluationId naming another org's technician → 400, evaluation technician unchanged", async () => {
+    const fx = await seedFixture();
+    const [evaluation] = await db
+      .insert(serviceOrderEvaluation)
+      .values({
+        serviceOrderId: fx.orderA,
+        technicianId: fx.orgA.userId,
+        diagnosis: "Diagnóstico inicial",
+        recommendedAction: "repair",
+      })
+      .returning({ id: serviceOrderEvaluation.id });
+    if (!evaluation) throw new Error("seed evaluation failed");
+
+    loginAs({ userId: fx.orgA.userId, organizationId: fx.orgA.orgId });
+    const res = await serviceOrdersRouter.request(
+      `/${fx.orderA}/evaluations/${evaluation.id}`,
+      {
+        method: "PATCH",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ technicianId: fx.orgB.userId }),
+      },
+    );
+
+    expect(res.status).toBe(400);
+    const [row] = await db
+      .select({ technicianId: serviceOrderEvaluation.technicianId })
+      .from(serviceOrderEvaluation)
+      .where(eq(serviceOrderEvaluation.id, evaluation.id));
+    expect(row?.technicianId).toBe(fx.orgA.userId);
+  });
+
+  it("REQ-TENANT-SO-009: POST / for an asset in a unit the member cannot access → 400 (no asset-snapshot read across units)", async () => {
+    const fx = await seedFixture();
+    const [otherUnit] = await db
+      .insert(organizationUnit)
+      .values({
+        organizationId: fx.orgA.orgId,
+        name: "Filial",
+        slug: "filial",
+        status: "ACTIVE",
+        isDefault: false,
+      })
+      .returning({ id: organizationUnit.id });
+    if (!otherUnit) throw new Error("seed unit failed");
+    const typeId = await seedAssetType("type-foreign-unit");
+    const assetOtherUnit = await seedAsset({
+      unitId: otherUnit.id,
+      customerId: fx.custA,
+      assetTypeId: typeId,
+      tag: "TAG-A-FILIAL",
+    });
+    // An operator is unit-scoped: it only reaches its own default unit.
+    await seedExtraMember({
+      orgId: fx.orgA.orgId,
+      userId: "operator-a",
+      role: "operator",
+      unitId: fx.orgA.unitId,
+      unitRole: "member",
+    });
+    const before = await db.select({ id: serviceOrder.id }).from(serviceOrder);
+
+    loginAs({ userId: "operator-a", organizationId: fx.orgA.orgId });
+    const res = await serviceOrdersRouter.request("/", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        customerId: fx.custA,
+        assetId: assetOtherUnit,
+        claimedDefect: "Defeito relatado",
+        intakeCondition: "Bom estado",
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    const after = await db.select({ id: serviceOrder.id }).from(serviceOrder);
+    expect(after).toHaveLength(before.length);
+  });
+
+  it("REQ-TENANT-SO-010: link refuses another org's certificate job exactly like a non-existent one (404, no existence oracle)", async () => {
+    const fx = await seedFixture();
+
+    loginAs({ userId: fx.orgA.userId, organizationId: fx.orgA.orgId });
+    const foreign = await serviceOrdersRouter.request(
+      `/${fx.orderA}/certificates/${fx.jobB}/link`,
+      { method: "POST", headers: JSON_HEADERS },
+    );
+    const missing = await serviceOrdersRouter.request(
+      `/${fx.orderA}/certificates/999999/link`,
+      { method: "POST", headers: JSON_HEADERS },
+    );
+
+    expect(missing.status).toBe(404);
+    expect(foreign.status).toBe(404);
+    expect(await foreign.json()).toEqual(await missing.json());
+    const links = await db
+      .select({ id: serviceOrderCertificateLink.id })
+      .from(serviceOrderCertificateLink);
+    expect(links).toHaveLength(0);
+  });
+
+  it("REQ-TENANT-SO-011: link on another org's OS answers exactly like a non-existent OS (404, no existence oracle)", async () => {
+    const fx = await seedFixture();
+
+    loginAs({ userId: fx.orgA.userId, organizationId: fx.orgA.orgId });
+    const foreign = await serviceOrdersRouter.request(
+      `/${fx.orderB}/certificates/${fx.jobB}/link`,
+      { method: "POST", headers: JSON_HEADERS },
+    );
+    const missing = await serviceOrdersRouter.request(
+      `/999999/certificates/${fx.jobB}/link`,
+      { method: "POST", headers: JSON_HEADERS },
+    );
+
+    expect(missing.status).toBe(404);
+    expect(foreign.status).toBe(404);
+    expect(await foreign.json()).toEqual(await missing.json());
+  });
+
+  it("REQ-TENANT-SO-012: quote send answers identically for another org's (OS, real quote) and (OS, unknown quote) (no existence oracle)", async () => {
+    const fx = await seedFixture();
+    const quoteB = await seedQuote({
+      serviceOrderId: fx.orderB,
+      createdByUserId: fx.orgB.userId,
+      serviceOrderNumber: "OS-B-FID",
+      status: "draft",
+    });
+
+    loginAs({ userId: fx.orgA.userId, organizationId: fx.orgA.orgId });
+    const realQuote = await serviceOrdersRouter.request(
+      `/${fx.orderB}/quotes/${quoteB}/send`,
+      { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({}) },
+    );
+    const unknownQuote = await serviceOrdersRouter.request(
+      `/${fx.orderB}/quotes/999999/send`,
+      { method: "POST", headers: JSON_HEADERS, body: JSON.stringify({}) },
+    );
+
+    expect(realQuote.status).toBe(404);
+    expect(unknownQuote.status).toBe(404);
+    expect(await realQuote.json()).toEqual(await unknownQuote.json());
+    const [quoteRow] = await db
+      .select({ status: serviceOrderQuote.status })
+      .from(serviceOrderQuote)
+      .where(eq(serviceOrderQuote.id, quoteB));
+    expect(quoteRow?.status).toBe("draft");
   });
 });

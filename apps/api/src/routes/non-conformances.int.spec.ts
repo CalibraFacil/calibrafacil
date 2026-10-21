@@ -699,4 +699,48 @@ describe("nonConformancesRouter — ISO 17025 §8.7 NC workflow", () => {
     });
     expect(resolveRes.status).toBe(401);
   });
+
+  // =========================================================================
+  // REQ-TENANT-NC-001 [HIGH RISK] escalate: responsibleId is tenant-scoped
+  // =========================================================================
+  it("REQ-TENANT-NC-001 [HIGH RISK]: escalate-to-capa naming another org's responsibleId → 400, no CAPA created, NC stays unlinked", async () => {
+    const orgA = await seedOrg({
+      orgId: "org-a",
+      userId: "user-admin",
+      role: "admin",
+    });
+    await seedOrg({ orgId: "org-b", userId: "user-b", role: "admin" });
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+
+    const ncId = await seedNC({
+      orgId: "org-a",
+      detectedByUserId: "user-admin",
+      status: "open",
+      ncNumberSuffix: "TENANT1",
+    });
+
+    const res = await nonConformancesRouter.request(
+      `/${ncId}/escalate-to-capa`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          rootCauseAnalysis: "Falha no procedimento de verificacao",
+          actionPlan: "Revisar e atualizar procedimento operacional",
+          responsibleId: "user-b",
+        }),
+      },
+    );
+
+    expect(res.status).toBe(400);
+    const [ncRow] = await db
+      .select({ capaId: nonConformance.capaId })
+      .from(nonConformance)
+      .where(eq(nonConformance.id, ncId));
+    expect(ncRow?.capaId).toBeNull();
+    const capas = await db
+      .select({ id: correctiveAction.id })
+      .from(correctiveAction);
+    expect(capas).toHaveLength(0);
+  });
 });

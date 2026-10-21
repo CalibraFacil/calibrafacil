@@ -9,6 +9,7 @@ import {
   type AuthVariables,
 } from "../../middleware/permission";
 import type { AutomaticSendMilestone } from "@calibra-facil/shared";
+import { agreementBelongsToOrganization } from "../../lib/tenant-refs";
 
 const RuleIdParamSchema = z.object({
   id: z.coerce.number().int().positive(),
@@ -116,6 +117,17 @@ export const financeAutomaticSendRouter = new Hono<{
           )
           .limit(1);
         if (!matched) return c.json({ error: "Cliente inválido" }, 400);
+      }
+
+      // Same cross-tenant guard for the agreement the override is pinned to.
+      if (
+        body.commercialAgreementId != null &&
+        !(await agreementBelongsToOrganization(
+          member.organizationId,
+          body.commercialAgreementId,
+        ))
+      ) {
+        return c.json({ error: "Contrato inválido" }, 400);
       }
 
       const inserted = await db

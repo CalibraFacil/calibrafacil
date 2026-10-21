@@ -31,6 +31,7 @@ import { eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { seedExtraMember } from "../../test/integration/tenant-refs";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -638,5 +639,82 @@ describe("capaRouter — ISO 17025 §8.2 CAPA workflow (real DB + real RBAC)", (
       body: JSON.stringify({ reason: "Unauthenticated close attempt." }),
     });
     expect(closeRes.status).toBe(401);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Foreign-id (tenant-refs) guard: the CAPA responsible must be a member of the
+// caller's organization — otherwise GET /:id would resolve (and return) another
+// tenant's user name through `responsibleName`.
+// ---------------------------------------------------------------------------
+describe("capaRouter — responsibleId is tenant-scoped", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  it("REQ-TENANT-CAPA-001 [HIGH RISK]: POST / with another org's responsibleId → 400, no CAPA created", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", userId: "user-a" });
+    const orgB = await seedOrg({ orgId: "org-b", userId: "user-b" });
+
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const res = await capaRouter.request("/", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(makeCreatePayload({ responsibleId: orgB.userId })),
+    });
+
+    expect(res.status).toBe(400);
+    const rows = await db
+      .select({ id: correctiveAction.id })
+      .from(correctiveAction);
+    expect(rows).toHaveLength(0);
+  });
+
+  it("REQ-TENANT-CAPA-002: POST / with a same-org responsibleId → 201 and the responsible persists", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", userId: "user-a" });
+    const colleague = await seedExtraMember({
+      orgId: orgA.orgId,
+      userId: "colleague-a",
+      role: "technician",
+    });
+
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const res = await capaRouter.request("/", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(
+        makeCreatePayload({ responsibleId: colleague.userId }),
+      ),
+    });
+
+    expect(res.status).toBe(201);
+    const [row] = await db
+      .select({ responsibleId: correctiveAction.responsibleId })
+      .from(correctiveAction);
+    expect(row?.responsibleId).toBe(colleague.userId);
+  });
+
+  it("REQ-TENANT-CAPA-003 [HIGH RISK]: PUT /:id with another org's responsibleId → 400, responsible unchanged", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", userId: "user-a" });
+    const orgB = await seedOrg({ orgId: "org-b", userId: "user-b" });
+    const capaId = await seedCapa({
+      capaNumber: "CAPA-A-0001",
+      organizationId: orgA.orgId,
+      createdBy: orgA.userId,
+    });
+
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const res = await capaRouter.request(`/${capaId}`, {
+      method: "PUT",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ responsibleId: orgB.userId }),
+    });
+
+    expect(res.status).toBe(400);
+    const [row] = await db
+      .select({ responsibleId: correctiveAction.responsibleId })
+      .from(correctiveAction)
+      .where(eq(correctiveAction.id, capaId));
+    expect(row?.responsibleId).toBeNull();
   });
 });

@@ -21,6 +21,7 @@ import { eq, sql } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { seedExtraMember } from "../../test/integration/tenant-refs";
 
 // Real-DB + real-RBAC integration tests for the visits router.
 // Only the better-auth session is mocked (see test/integration/setup.ts);
@@ -981,5 +982,141 @@ describe("visitRescheduleRequestsRouter (#739) — real DB + real RBAC middlewar
     const filteredBody = await filtered.json();
     expect(filteredBody.data).toHaveLength(1);
     expect(filteredBody.data[0].id).toBe(fx.visitId);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Foreign-id (tenant-refs) guard: the technician named in the body must be a
+// member of the caller's organization (and assignable in the visit's unit),
+// never another tenant's user.
+// ---------------------------------------------------------------------------
+describe("visitsRouter — request-supplied technicianId is tenant-scoped", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  async function seedTwoOrgsWithVisit() {
+    const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+    const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
+    const cust = await seedCustomer({
+      labOrgId: orgA.orgId,
+      clientOrgId: "client-a1",
+    });
+    const visitId = await seedVisit({
+      organizationId: orgA.orgId,
+      unitId: orgA.unitId,
+      customerId: cust,
+      createdBy: orgA.userId,
+      status: "PROPOSED",
+      scheduledAt: new Date("2026-08-15T10:00:00.000Z"),
+    });
+    return { orgA, orgB, visitId };
+  }
+
+  it("REQ-TENANT-VISIT-001 [HIGH RISK]: POST /:id/assign with another org's technician → 400, visit technician unchanged", async () => {
+    const { orgA, orgB, visitId } = await seedTwoOrgsWithVisit();
+
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const res = await visitsRouter.request(`/${visitId}/assign`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ technicianId: orgB.userId }),
+    });
+
+    expect(res.status).toBe(400);
+    const [row] = await db
+      .select({ technicianId: calibrationVisit.technicianId })
+      .from(calibrationVisit)
+      .where(eq(calibrationVisit.id, visitId));
+    expect(row?.technicianId).toBeNull();
+  });
+
+  it("REQ-TENANT-VISIT-002 [HIGH RISK]: POST /:id/confirm with another org's technician → 400, visit stays PROPOSED", async () => {
+    const { orgA, orgB, visitId } = await seedTwoOrgsWithVisit();
+
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const res = await visitsRouter.request(`/${visitId}/confirm`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ technicianId: orgB.userId }),
+    });
+
+    expect(res.status).toBe(400);
+    const [row] = await db
+      .select({
+        status: calibrationVisit.status,
+        technicianId: calibrationVisit.technicianId,
+      })
+      .from(calibrationVisit)
+      .where(eq(calibrationVisit.id, visitId));
+    expect(row?.status).toBe("PROPOSED");
+    expect(row?.technicianId).toBeNull();
+  });
+
+  it("REQ-TENANT-VISIT-003: the refusal is identical for a foreign and a non-existent technician (no existence oracle)", async () => {
+    const { orgA, orgB, visitId } = await seedTwoOrgsWithVisit();
+
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const foreign = await visitsRouter.request(`/${visitId}/assign`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ technicianId: orgB.userId }),
+    });
+    const missing = await visitsRouter.request(`/${visitId}/assign`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ technicianId: "no-such-user" }),
+    });
+
+    expect(foreign.status).toBe(missing.status);
+    expect(await foreign.json()).toEqual(await missing.json());
+  });
+
+  it("REQ-TENANT-VISIT-004: assign with a same-org technician assigned to the visit's unit → 200 and persisted", async () => {
+    const { orgA, visitId } = await seedTwoOrgsWithVisit();
+    const tech = await seedExtraMember({
+      orgId: orgA.orgId,
+      userId: "tech-a",
+      role: "technician",
+      unitId: orgA.unitId,
+      unitRole: "technician",
+    });
+
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const res = await visitsRouter.request(`/${visitId}/assign`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ technicianId: tech.userId }),
+    });
+
+    expect(res.status).toBe(200);
+    const [row] = await db
+      .select({ technicianId: calibrationVisit.technicianId })
+      .from(calibrationVisit)
+      .where(eq(calibrationVisit.id, visitId));
+    expect(row?.technicianId).toBe(tech.userId);
+  });
+
+  it("REQ-TENANT-VISIT-005: a same-org technician with no assignment to the visit's unit is refused (same rule as POST /jobs/:id/assign)", async () => {
+    const { orgA, visitId } = await seedTwoOrgsWithVisit();
+    const tech = await seedExtraMember({
+      orgId: orgA.orgId,
+      userId: "tech-unassigned",
+      role: "technician",
+    });
+
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const res = await visitsRouter.request(`/${visitId}/assign`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ technicianId: tech.userId }),
+    });
+
+    expect(res.status).toBe(400);
+    const [row] = await db
+      .select({ technicianId: calibrationVisit.technicianId })
+      .from(calibrationVisit)
+      .where(eq(calibrationVisit.id, visitId));
+    expect(row?.technicianId).toBeNull();
   });
 });

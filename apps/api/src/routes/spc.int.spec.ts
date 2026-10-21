@@ -13,11 +13,16 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { spcRouter } from "./spc";
 import { db } from "@calibra-facil/db";
-import { correctiveAction, controlChart } from "@calibra-facil/db/schema";
+import {
+  checkStandardReading,
+  correctiveAction,
+  controlChart,
+} from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg, seedStandard } from "../../test/integration/seed";
+import { seedJobForOrg } from "../../test/integration/tenant-refs";
 
 const JSON_HEADERS = { "content-type": "application/json" } as const;
 
@@ -219,5 +224,90 @@ describe("spc router (integration)", () => {
       }),
     });
     expect(readingRes.status).toBe(403);
+  });
+
+  it("REQ-TENANT-SPC-001 [HIGH RISK]: POST /charts naming another org's unitId → 403, no chart created", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", userId: "user-a" });
+    const orgB = await seedOrg({ orgId: "org-b", userId: "user-b" });
+    const standardA = await seedStandard({
+      organizationId: orgA.orgId,
+      unitId: orgA.unitId,
+      createdBy: orgA.userId,
+    });
+
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const res = await spcRouter.request("/charts", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        standardId: standardA,
+        parameter: "100 g",
+        unitId: orgB.unitId,
+      }),
+    });
+
+    expect(res.status).toBe(403);
+    const charts = await db.select({ id: controlChart.id }).from(controlChart);
+    expect(charts).toHaveLength(0);
+  });
+
+  it("REQ-TENANT-SPC-002: POST /charts naming the caller's own unit → 201 with that unit persisted", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", userId: "user-a" });
+    const standardA = await seedStandard({
+      organizationId: orgA.orgId,
+      unitId: orgA.unitId,
+      createdBy: orgA.userId,
+    });
+
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const res = await spcRouter.request("/charts", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        standardId: standardA,
+        parameter: "100 g",
+        unitId: orgA.unitId,
+      }),
+    });
+
+    expect(res.status).toBe(201);
+    const [chart] = await db
+      .select({ unitId: controlChart.unitId })
+      .from(controlChart);
+    expect(chart?.unitId).toBe(orgA.unitId);
+  });
+
+  it("REQ-TENANT-SPC-003 [HIGH RISK]: POST /readings linking another org's sourceJobId → 404, no reading stored", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", userId: "user-a" });
+    const orgB = await seedOrg({ orgId: "org-b", userId: "user-b" });
+    const standardA = await seedStandard({
+      organizationId: orgA.orgId,
+      unitId: orgA.unitId,
+      createdBy: orgA.userId,
+    });
+    const { jobId: jobB } = await seedJobForOrg({
+      orgId: orgB.orgId,
+      unitId: orgB.unitId,
+      createdBy: orgB.userId,
+    });
+
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const res = await spcRouter.request("/readings", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        standardId: standardA,
+        parameter: "100 g",
+        value: 100.01,
+        measuredAt: "2026-01-02T00:00:00.000Z",
+        sourceJobId: jobB,
+      }),
+    });
+
+    expect(res.status).toBe(404);
+    const readings = await db
+      .select({ id: checkStandardReading.id })
+      .from(checkStandardReading);
+    expect(readings).toHaveLength(0);
   });
 });

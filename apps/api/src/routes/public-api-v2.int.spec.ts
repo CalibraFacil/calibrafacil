@@ -5,6 +5,7 @@ import {
   asset,
   assetAuditLog,
   assetType,
+  calibrationJob,
   customer,
   organization,
   organizationApiKey,
@@ -13,6 +14,10 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { createApiKeySecret } from "../lib/api-keys";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import {
+  seedExtraMember,
+  seedJobForOrg,
+} from "../../test/integration/tenant-refs";
 
 // Real-DB integration test for the public API v2 router.
 // No session mock is needed — auth is entirely via API key, handled by
@@ -787,5 +792,72 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
       .from(assetAuditLog)
       .where(eq(assetAuditLog.assetId, assetB));
     expect(logs).toHaveLength(0);
+  });
+
+  // =========================================================================
+  // Foreign-id (tenant-refs) guard: PATCH /jobs/:id technicianId
+  // =========================================================================
+  it("REQ-TENANT-PAPI-001 [HIGH RISK]: PATCH /jobs/:id assigning another org's user as technician → 400, job technician unchanged", async () => {
+    const orgA = await seedOrg({ orgId: "org-a" });
+    const orgB = await seedOrg({ orgId: "org-b" });
+    const { rawKey } = await seedApiKey({
+      orgId: orgA.orgId,
+      userId: orgA.userId,
+      keyId: "key-jobs-write",
+      scopes: ["jobs:write"],
+    });
+    const { jobId: jobA } = await seedJobForOrg({
+      orgId: orgA.orgId,
+      unitId: orgA.unitId,
+      createdBy: orgA.userId,
+    });
+
+    const res = await publicApiV2Router.request(`/jobs/${jobA}`, {
+      method: "PATCH",
+      headers: { "x-api-key": rawKey, "content-type": "application/json" },
+      body: JSON.stringify({ technicianId: orgB.userId }),
+    });
+
+    expect(res.status).toBe(400);
+    const [row] = await db
+      .select({ technicianId: calibrationJob.technicianId })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, jobA));
+    expect(row?.technicianId).toBeNull();
+  });
+
+  it("REQ-TENANT-PAPI-002: PATCH /jobs/:id assigning a same-org technician assigned to the job's unit → 200 and persisted", async () => {
+    const orgA = await seedOrg({ orgId: "org-a" });
+    const { rawKey } = await seedApiKey({
+      orgId: orgA.orgId,
+      userId: orgA.userId,
+      keyId: "key-jobs-write",
+      scopes: ["jobs:write"],
+    });
+    const { jobId: jobA } = await seedJobForOrg({
+      orgId: orgA.orgId,
+      unitId: orgA.unitId,
+      createdBy: orgA.userId,
+    });
+    const tech = await seedExtraMember({
+      orgId: orgA.orgId,
+      userId: "tech-a",
+      role: "technician",
+      unitId: orgA.unitId,
+      unitRole: "technician",
+    });
+
+    const res = await publicApiV2Router.request(`/jobs/${jobA}`, {
+      method: "PATCH",
+      headers: { "x-api-key": rawKey, "content-type": "application/json" },
+      body: JSON.stringify({ technicianId: tech.userId }),
+    });
+
+    expect(res.status).toBe(200);
+    const [row] = await db
+      .select({ technicianId: calibrationJob.technicianId })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, jobA));
+    expect(row?.technicianId).toBe(tech.userId);
   });
 });

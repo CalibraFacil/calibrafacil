@@ -24,6 +24,8 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { createCorrectiveActionRecord } from "../lib/corrective-actions";
+import { calibrationJobBelongsToOrganization } from "../lib/tenant-refs";
+import { resolveAccessibleUnitContext } from "../lib/unit-operational-settings";
 import { eq, and, asc, desc, count } from "drizzle-orm";
 
 /**
@@ -239,6 +241,13 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Padrão de referência não encontrado" }, 404);
       }
 
+      // A body-supplied unit must be one the caller can access (throws 403
+      // otherwise — identical for another tenant's unit and an unknown one).
+      const chartUnitId =
+        input.unitId == null
+          ? null
+          : resolveAccessibleUnitContext(member, input.unitId).unitId;
+
       const [existing] = await db
         .select({ id: controlChart.id })
         .from(controlChart)
@@ -260,7 +269,7 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
         .insert(controlChart)
         .values({
           organizationId: member.organizationId,
-          unitId: input.unitId ?? null,
+          unitId: chartUnitId,
           standardId: input.standardId,
           parameter: input.parameter,
           chartType: input.chartType,
@@ -568,6 +577,16 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
         .limit(1);
       if (!standard) {
         return c.json({ error: "Padrão de referência não encontrado" }, 404);
+      }
+
+      if (
+        input.sourceJobId != null &&
+        !(await calibrationJobBelongsToOrganization(
+          member.organizationId,
+          input.sourceJobId,
+        ))
+      ) {
+        return c.json({ error: "Calibração de origem não encontrada" }, 404);
       }
 
       const [created] = await db

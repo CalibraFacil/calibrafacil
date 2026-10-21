@@ -20,6 +20,7 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { createCorrectiveActionRecord } from "../lib/corrective-actions";
+import { userIsOrganizationMember } from "../lib/tenant-refs";
 import { eq, and, or, ilike, desc, count, lte, sql } from "drizzle-orm";
 
 /**
@@ -38,6 +39,9 @@ import { eq, and, or, ilike, desc, count, lte, sql } from "drizzle-orm";
  * - POST /:id/close: capa:close (admin, owner)
  * - GET /:id/audit-log: capa:read (all roles)
  */
+const RESPONSIBLE_REFUSED =
+  "Responsavel nao encontrado ou nao pertence a organizacao";
+
 export const capaRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   // GET / - List CAPAs with pagination and filtering
@@ -417,6 +421,18 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
       const session = c.get("session");
       const input = c.req.valid("json");
 
+      // The responsible is a body-supplied user id: a member of THIS org only
+      // (otherwise GET /:id would resolve another tenant's user name).
+      if (
+        input.responsibleId &&
+        !(await userIsOrganizationMember(
+          member.organizationId,
+          input.responsibleId,
+        ))
+      ) {
+        return c.json({ error: RESPONSIBLE_REFUSED }, 400);
+      }
+
       const newCapa = await createCorrectiveActionRecord({
         organizationId: member.organizationId,
         actorUserId: session.user.id,
@@ -476,6 +492,17 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
 
       if (existing.status === "CLOSED") {
         return c.json({ error: "CAPA fechada nao pode ser editada" }, 400);
+      }
+
+      if (
+        input.responsibleId &&
+        input.responsibleId !== existing.responsibleId &&
+        !(await userIsOrganizationMember(
+          member.organizationId,
+          input.responsibleId,
+        ))
+      ) {
+        return c.json({ error: RESPONSIBLE_REFUSED }, 400);
       }
 
       const updateData: Record<string, unknown> = {};

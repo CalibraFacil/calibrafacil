@@ -295,4 +295,59 @@ describe("proficiency-tests router (integration)", () => {
     const summary = await summaryRes.json();
     expect(summary.planItems).toBe(1);
   });
+
+  it("REQ-TENANT-PT-001 [HIGH RISK]: POST / naming another org's unitId → 403, no PT round created", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", userId: "user-a" });
+    const orgB = await seedOrg({ orgId: "org-b", userId: "user-b" });
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+
+    const res = await proficiencyTestsRouter.request("/", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(makeCreatePayload({ unitId: orgB.unitId })),
+    });
+
+    expect(res.status).toBe(403);
+    const rows = await db
+      .select({ id: proficiencyTest.id })
+      .from(proficiencyTest);
+    expect(rows).toHaveLength(0);
+  });
+
+  it("REQ-TENANT-PT-002 [HIGH RISK]: POST /plan naming another org's unitId → 403, no plan item created", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", userId: "user-a" });
+    const orgB = await seedOrg({ orgId: "org-b", userId: "user-b" });
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+
+    const res = await proficiencyTestsRouter.request("/plan", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        scopePart: "Dimensional — blocos padrão",
+        frequencyMonths: 24,
+        unitId: orgB.unitId,
+      }),
+    });
+
+    expect(res.status).toBe(403);
+    const rows = await db.select({ id: ptPlanItem.id }).from(ptPlanItem);
+    expect(rows).toHaveLength(0);
+  });
+
+  it("REQ-TENANT-PT-003: POST / naming the caller's own unit → 201 with that unit persisted", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", userId: "user-a" });
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+
+    const res = await proficiencyTestsRouter.request("/", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(makeCreatePayload({ unitId: orgA.unitId })),
+    });
+
+    expect(res.status).toBe(201);
+    const [row] = await db
+      .select({ unitId: proficiencyTest.unitId })
+      .from(proficiencyTest);
+    expect(row?.unitId).toBe(orgA.unitId);
+  });
 });
