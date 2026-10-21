@@ -168,9 +168,12 @@ See `docs/architecture/portal-frontend.md`. `apps/portal` is the cloud-only clie
 ## Other guards to be aware of
 
 - **`useEffect` is banned.** The oxlint `no-restricted-imports` rule (in `.oxlintrc.json`, part of
-  `pnpm lint`) fails on any `useEffect` import from `react`. Use derived state, event handlers, data
-  hooks, keyed remounts, or the `use-mount-effect.ts` wrapper. Only the `apps/*/src/hooks/use-mount-effect.ts`
-  wrappers may import raw `useEffect` (allowed via an `overrides` entry in `.oxlintrc.json`).
+  `pnpm lint`) fails on any `useEffect` import from `react`, and `no-restricted-properties` fails on
+  `React.useEffect` through the default import. A default import under another name
+  (`import R from "react"`) still passes: closing that needs a rule in `oxlint-plugin-calibra`. Use
+  derived state, event handlers, data hooks, keyed remounts, or the `use-mount-effect.ts` wrapper.
+  Only the `apps/*/src/hooks/use-mount-effect.ts` wrappers may import raw `useEffect` (allowed via an
+  `overrides` entry in `.oxlintrc.json`).
 - **The math engine is source-pinned.** `packages/math-engine/src/audit/engine-source-pin.spec.ts`
   compares a SHA-256 of the engine sources (and five golden GUM results) with the current
   dossier's `validation/math-engine/v<version>/manifest.json`. Any byte change to engine code,

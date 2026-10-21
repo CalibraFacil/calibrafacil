@@ -38,6 +38,16 @@
         ]
       }
     ],
+    // The same ban through the default import: `import React from "react"` then
+    // `React.useEffect(...)` never names `useEffect` in an import specifier.
+    "no-restricted-properties": [
+      "error",
+      {
+        "object": "React",
+        "property": "useEffect",
+        "message": "Direct useEffect is banned. Use derived state, event handlers, data-fetching hooks, keyed remounts, or useMountEffect (apps/<app>/src/hooks/use-mount-effect.ts)."
+      }
+    ],
     // React Compiler diagnostic, not a defect: it fires on third-party APIs
     // whose return values the compiler cannot memoize (TanStack Table's
     // `useReactTable`, react-hook-form's `watch`). There is no call-site fix,
@@ -62,7 +72,8 @@
     {
       "files": ["apps/*/src/hooks/use-mount-effect.ts"],
       "rules": {
-        "no-restricted-imports": "off"
+        "no-restricted-imports": "off",
+        "no-restricted-properties": "off"
       }
     }
   ],
