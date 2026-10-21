@@ -290,6 +290,11 @@ describe("jobs endpoints: real responses honor the contract schemas (REQ-TC-5)",
     // An open job has no frozen asset snapshot: the handler derives one.
     expect(detail.assetSnapshot?.baseMeasurementUnit).toBe("g");
     expect(detail.methodSnapshot.methodName).toBe("Erro de indicação");
+    // The web needs the unit (environmental limits lookup) and the as-found
+    // verdict (out-of-tolerance badge): the detail must carry both keys.
+    expect(detail.unitId).toBe(lab.unitId);
+    expect(detail).toHaveProperty("asFoundConformity", null);
+    expect(detail).toHaveProperty("asFoundMargins", null);
 
     await parsedBody(
       await jobsRouter.request("/technicians/list"),
@@ -369,6 +374,29 @@ describe("jobs endpoints: real responses honor the contract schemas (REQ-TC-5)",
       await jobsRouter.request(`/${amended.amendedJob.id}`),
       jobDetailSchema,
     );
+  });
+
+  it("REQ-TC-5: the detail of an approved job returns its as-found verdict and margins", async () => {
+    const lab = await seedLab();
+    const id = await seedJob(lab, "JOB-TC-ASFOUND", "REVIEW");
+    await db
+      .update(calibrationJob)
+      .set({ results: { margem_conformidade_antes: [0.5, -0.1, 0.3] } })
+      .where(eq(calibrationJob.id, id));
+    loginAs({ userId: APPROVER, organizationId: ORG });
+
+    await parsedBody(
+      await post(`/${id}/approve`, { reason: "Conforme" }),
+      jobMutationResponseSchema,
+    );
+    const detail = await parsedBody(
+      await jobsRouter.request(`/${id}`),
+      jobDetailSchema,
+    );
+
+    expect(detail.asFoundConformity).toBe("NON_CONFORMING");
+    expect(detail.asFoundMargins).toEqual([0.5, -0.1, 0.3]);
+    expect(detail.unitId).toBe(lab.unitId);
   });
 
   it("REQ-TC-5: reject, cancel and assign responses parse", async () => {

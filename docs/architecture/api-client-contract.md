@@ -162,9 +162,7 @@ technicians list, certificate/label download links) and `GET /api/portal/overvie
 **Opaque by design, for now:** `methodSnapshot.compiledMethod` is `unknown` in the
 job schema because the database column is; the worksheet reads it through
 `compiledMethodSnapshotSchema.safeParse` (see `readCompiledMethodSnapshot` in
-`apps/web/src/features/jobs/execution.ts`). The detail schema also declares
-`unitId`, `asFoundConformity` and `asFoundMargins` as optional: the web reads them
-but `GET /api/jobs/:id` does not select them (known defect, noted in the schema).
+`apps/web/src/features/jobs/execution.ts`).
 
 **Follow-ups (remaining domains, in rough priority):** `POST /api/jobs` create,
 `flag-oot`, `generate-label`; `standards` (incl. `jobs.listStandards`) and

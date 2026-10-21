@@ -139,9 +139,12 @@ export function buildJobDetail(overrides: Partial<JobDetail> = {}): JobDetail {
     certificateName: "CAL-0007",
     certificateNumberingSnapshot: null,
     organizationId: "org-1",
+    unitId: 1,
     status: "IN_PROGRESS",
     dueDate: "2026-06-30T00:00:00.000Z",
     performedAt: null,
+    asFoundConformity: null,
+    asFoundMargins: null,
     data: { load: 10 },
     results: null,
     standardsSnapshot: [

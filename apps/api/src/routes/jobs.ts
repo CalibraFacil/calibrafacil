@@ -1135,9 +1135,12 @@ export const jobsRouter = new Hono<{
         certificateNumberingSnapshot:
           calibrationJob.certificateNumberingSnapshot,
         organizationId: calibrationJob.organizationId,
+        unitId: calibrationJob.unitId,
         status: calibrationJob.status,
         dueDate: calibrationJob.dueDate,
         performedAt: calibrationJob.performedAt,
+        asFoundConformity: calibrationJob.asFoundConformity,
+        asFoundMargins: calibrationJob.asFoundMargins,
         data: calibrationJob.data,
         results: calibrationJob.results,
         standardsSnapshot: calibrationJob.standardsSnapshot,

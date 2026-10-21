@@ -710,16 +710,9 @@ export const jobDetailSchema = z.object({
   isOverdue: z.boolean().nullable(),
   daysUntilDue: nullableNumber,
   ...jobFinancialContextShape,
-  // KNOWN DEFECT (not fixed here: this contract must not change API output).
-  // The web reads these three off the detail response, but the GET /:id
-  // handler does not select them, so today they are always absent. They are
-  // declared optional so the contract tells the truth. Fix: select them in the
-  // handler, then make them required (`unitId` number, the other two nullable).
-  // Until then the execute page never loads the environmental limits (it needs
-  // `unitId`) and the as-found "fora de tolerância" badge never shows.
-  unitId: z.number().optional(),
-  asFoundConformity: asFoundConformitySchema.nullable().optional(),
-  asFoundMargins: z.array(z.number()).nullable().optional(),
+  unitId: z.number(),
+  asFoundConformity: asFoundConformitySchema.nullable(),
+  asFoundMargins: z.array(z.number()).nullable(),
 });
 export type JobDetail = z.infer<typeof jobDetailSchema>;
 
