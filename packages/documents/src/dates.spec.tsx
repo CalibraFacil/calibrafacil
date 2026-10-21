@@ -5,6 +5,8 @@ import {
   formatCalendarDate,
   formatLabDate,
   formatLabDateTime,
+  getLabCalendarDay,
+  startOfLabMonth,
 } from "./dates.js";
 import { LabelHtml } from "./LabelHtml.js";
 
@@ -46,5 +48,22 @@ describe("document dates", () => {
 
     expect(html).toContain("02/10/2026");
     expect(html).not.toContain("03/10/2026");
+  });
+
+  it("names the laboratory's calendar day of a moment as YYYY-MM-DD", () => {
+    expect(getLabCalendarDay(new Date(LATE_EVENING))).toBe("2026-10-02");
+    expect(getLabCalendarDay(new Date("2026-10-03T03:00:00.000Z"))).toBe(
+      "2026-10-03",
+    );
+  });
+
+  it("starts the month at midnight in the laboratory, not at UTC midnight", () => {
+    // 01:30 UTC on 1 June is still 22:30 on 31 May at the laboratory: May.
+    expect(startOfLabMonth(new Date("2026-06-01T01:30:00.000Z"))).toEqual(
+      new Date("2026-05-01T03:00:00.000Z"),
+    );
+    expect(startOfLabMonth(new Date("2026-05-20T15:00:00.000Z"))).toEqual(
+      new Date("2026-05-01T03:00:00.000Z"),
+    );
   });
 });

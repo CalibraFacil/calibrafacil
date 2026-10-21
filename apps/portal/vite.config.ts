@@ -21,6 +21,7 @@ const httpsConfig =
 
 export default defineConfig({
   test: {
+    globalSetup: ["./vitest.global-setup.js"],
     setupFiles: ["./vitest.setup.ts"],
   },
   server: {

@@ -95,10 +95,21 @@ describe('reports model', () => {
     expect(formatReportRange(null)).toBe('Período selecionado')
     expect(
       formatReportRange({
-        startDate: '2026-05-01T00:00:00.000Z',
-        endDate: '2026-05-20T00:00:00.000Z',
+        // The API starts the month at midnight at the laboratory (UTC-3).
+        startDate: '2026-05-01T03:00:00.000Z',
+        endDate: '2026-05-20T15:00:00.000Z',
       }),
     ).toBe('1 de mai. de 2026 até 20 de mai. de 2026')
+  })
+
+  it('reads report range days at the laboratory, whatever the browser zone', () => {
+    // 01:30 UTC on 1 June is still the evening of 31 May in Sao Paulo.
+    expect(
+      formatReportRange({
+        startDate: '2026-06-01T01:30:00.000Z',
+        endDate: '2026-06-01T01:30:00.000Z',
+      }),
+    ).toBe('31 de mai. de 2026 até 31 de mai. de 2026')
   })
 })
 
