@@ -76,7 +76,8 @@ jobs:
           bun apps/api/scripts/build-vercel-functions.mjs
           bun apps/api/scripts/assert-vercel-fn-shape.mjs
 
-      # Pull requests test the packages they touch; pushes to main test all, and
+      # Pull requests test the packages they touch and the packages that depend
+      # on them (the leading "..." in the filter); pushes to main test all, and
       # so does any change to dependencies or to the toolchain pins, since a new
       # version can break a package the diff never mentions.
       - name: Test
@@ -86,7 +87,7 @@ jobs:
           filter=""
           if [ "$EVENT" = "pull_request" ] && ! git diff --name-only origin/main...HEAD |
             grep -qE '(^|/)package\.json$|^pnpm-(lock|workspace)\.yaml$|^\.nvmrc$'; then
-            filter="--filter=[origin/main...HEAD]"
+            filter="--filter=...[origin/main...HEAD]"
           fi
           bunx turbo test ${filter:+"$filter"}
 
