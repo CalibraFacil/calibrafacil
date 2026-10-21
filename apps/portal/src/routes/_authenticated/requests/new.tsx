@@ -28,6 +28,7 @@ import { StatusPill } from "@/components/status-pill";
 import { getCalibrationStatus } from "@/lib/calibration-status";
 import { pluralize } from "@/lib/format";
 import { cn, getApiBaseUrl } from "@/lib/utils";
+import { usePortalQueryKey } from "@/lib/portal-org-context";
 
 type NewRequestSearch = {
   /** Self-service recall: instruments to preselect (e.g. from asset detail). */
@@ -125,6 +126,7 @@ function getCreatedRequestIds(result: unknown): Array<number> {
 
 function NewRequestPage() {
   const navigate = useNavigate();
+  const key = usePortalQueryKey();
   const queryClient = useQueryClient();
   const { assetIds } = Route.useSearch();
 
@@ -139,7 +141,7 @@ function NewRequestPage() {
       ? [...assetIds].sort((a, b) => a - b).join(",")
       : null;
   const preselectQuery = useQuery({
-    queryKey: ["portal-request-preselect", preselectKey],
+    queryKey: key("portal-request-preselect", preselectKey),
     enabled: preselectKey !== null,
     staleTime: Infinity,
     queryFn: async (): Promise<AssetsResponse> => {
@@ -206,7 +208,7 @@ function NewRequestPage() {
   }
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["portal-request-assets", page, limit, deferredSearch],
+    queryKey: key("portal-request-assets", page, limit, deferredSearch),
     queryFn: async (): Promise<AssetsResponse> => {
       const params = new URLSearchParams({
         page: String(page),
@@ -286,8 +288,8 @@ function NewRequestPage() {
       return { ids: getCreatedRequestIds(result) };
     },
     onSuccess: async (result) => {
-      await queryClient.invalidateQueries({ queryKey: ["portal-requests"] });
-      await queryClient.invalidateQueries({ queryKey: ["portal-overview"] });
+      await queryClient.invalidateQueries({ queryKey: key("portal-requests") });
+      await queryClient.invalidateQueries({ queryKey: key("portal-overview") });
       // A cross-unit selection becomes one request per unit. Land on the detail
       // page for a single request; otherwise go to the list.
       if (result.ids.length === 1) {

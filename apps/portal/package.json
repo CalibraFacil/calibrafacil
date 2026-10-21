@@ -7,6 +7,8 @@
     "dev": "vite dev --host",
     "dev:bun": "bun node_modules/vite/bin/vite.js dev --port 5174 --host",
     "build": "vite build",
+    "build:ci": "vite build && node ./scripts/check-bundle-size.mjs",
+    "check:bundle": "node ./scripts/check-bundle-size.mjs",
     "preview": "vite preview",
     "test": "vitest run --passWithNoTests",
     "lint": "oxlint",

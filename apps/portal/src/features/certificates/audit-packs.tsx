@@ -24,6 +24,7 @@ import { StatusPill } from "@/components/status-pill";
 import type { SignalTone } from "@/components/instrument-panel";
 import { usePortalUnits } from "@/features/fleet/queries";
 import { getApiBaseUrl } from "@/lib/utils";
+import { usePortalQueryKey } from "@/lib/portal-org-context";
 
 type AuditPackStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
 
@@ -56,15 +57,16 @@ type AuditPackRequest = {
   include: AuditPack["include"];
 };
 
-const AUDIT_PACKS_QUERY_KEY = ["portal-audit-packs"];
+const AUDIT_PACKS_SCOPE = "portal-audit-packs";
 
 function isInFlight(pack: AuditPack): boolean {
   return pack.status === "PENDING" || pack.status === "PROCESSING";
 }
 
 export function useAuditPacks() {
+  const key = usePortalQueryKey();
   return useQuery({
-    queryKey: AUDIT_PACKS_QUERY_KEY,
+    queryKey: key(AUDIT_PACKS_SCOPE),
     queryFn: async (): Promise<AuditPacksResponse> => {
       const response = await fetch(
         `${getApiBaseUrl()}/api/portal/audit-packs`,
@@ -190,6 +192,7 @@ function AuditPackDownloadButton({ pack }: { pack: AuditPack }) {
 
 function AuditPackDialog() {
   const queryClient = useQueryClient();
+  const key = usePortalQueryKey();
   const unitsQuery = usePortalUnits();
   const units = unitsQuery.data?.units ?? [];
   const showUnitFilter = units.length > 1;
@@ -227,7 +230,7 @@ function AuditPackDialog() {
       toast.success(
         "Pacote em preparação. Você receberá um e-mail quando estiver pronto.",
       );
-      await queryClient.invalidateQueries({ queryKey: AUDIT_PACKS_QUERY_KEY });
+      await queryClient.invalidateQueries({ queryKey: key(AUDIT_PACKS_SCOPE) });
     },
     onError: (error) => {
       toast.error(

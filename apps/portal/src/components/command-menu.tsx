@@ -17,6 +17,7 @@ import {
 import type { IconSvgElement } from "@hugeicons/react";
 
 import { cn } from "@/lib/utils";
+import { usePortalQueryKey } from "@/lib/portal-org-context";
 import { getApiBaseUrl } from "@/lib/utils";
 import { getCalibrationStatus } from "@/lib/calibration-status";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -61,15 +62,16 @@ export function CommandMenu({
   const term = query.trim();
   const isSearching = term.length >= 2;
 
+  const key = usePortalQueryKey();
   const { data: assets = [] } = useQuery({
-    queryKey: ["cmd-assets", term],
+    queryKey: key("cmd-assets", term),
     enabled: open && isSearching,
     queryFn: () => searchEntity<AssetHit>("assets", term),
     staleTime: 30_000,
   });
 
   const { data: certificates = [] } = useQuery({
-    queryKey: ["cmd-certificates", term],
+    queryKey: key("cmd-certificates", term),
     enabled: open && isSearching,
     queryFn: () => searchEntity<CertificateHit>("certificates", term),
     staleTime: 30_000,

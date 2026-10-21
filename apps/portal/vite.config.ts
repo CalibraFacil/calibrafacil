@@ -51,7 +51,43 @@ export default defineConfig({
       projects: ["./tsconfig.json"],
     }),
     tailwindcss(),
-    tanstackRouter(),
+    tanstackRouter({
+      autoCodeSplitting: true,
+    }),
     viteReact(),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        // Same policy as apps/web (see its vite.config.ts): Rolldown captures a
+        // matching module's whole dependency tree into the first group that
+        // reaches it, so shared helpers (clsx, imported by recharts too) need a
+        // higher-priority group of their own or they end up inside
+        // vendor-charts and every page preloads recharts/d3.
+        codeSplitting: {
+          groups: [
+            {
+              name: "vendor-ui-utils",
+              test: /\/node_modules\/(?:\.pnpm\/[^/]+\/node_modules\/)?(?:clsx|tailwind-merge|class-variance-authority)\//,
+              priority: 60,
+            },
+            {
+              name: "vendor-react",
+              test: /\/node_modules\/(?:\.pnpm\/[^/]+\/node_modules\/)?(?:react|react-dom|scheduler)\//,
+              priority: 50,
+            },
+            { name: "vendor-motion", test: /\/motion\//, priority: 40 },
+            // Only chart routes import recharts (lazily, via drift-chart /
+            // trend-bar-chart), so it must stay out of the initial graph.
+            {
+              name: "vendor-charts",
+              test: /\/recharts\/|\/d3-/,
+              includeDependenciesRecursively: false,
+              priority: 30,
+            },
+          ],
+        },
+      },
+    },
+  },
 });

@@ -105,28 +105,44 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks(id) {
-          if (!id.includes('/node_modules/')) return undefined
-
-          if (id.includes('/@tanstack/')) return 'vendor-tanstack'
-          if (id.includes('/@base-ui/')) return 'vendor-base-ui'
-          if (id.includes('/@sentry/')) return 'vendor-sentry'
-          if (id.includes('/recharts/') || id.includes('/d3-')) {
-            return 'vendor-charts'
-          }
-          if (id.includes('/motion/')) return 'vendor-motion'
-          if (id.includes('/@calibra-facil/math-engine/')) {
-            return 'vendor-math-engine'
-          }
-          if (
-            id.includes('/node_modules/react/') ||
-            id.includes('/node_modules/react-dom/') ||
-            id.includes('/node_modules/scheduler/')
-          ) {
-            return 'vendor-react'
-          }
-
-          return undefined
+        // Rolldown code-splitting groups (the Rollup `manualChunks` shim
+        // captures each matching module's whole dependency tree into the
+        // first group that reaches it: clsx, imported by recharts, was
+        // swallowed by vendor-charts, so every page modulepreloaded the
+        // recharts/d3 chunk). Priority decides which group claims a module
+        // that several of them could capture.
+        codeSplitting: {
+          groups: [
+            {
+              // `cn()`/`cva` helpers: imported by nearly every component and
+              // by recharts. Highest priority so it is never part of charts.
+              name: 'vendor-ui-utils',
+              test: /\/node_modules\/(?:\.pnpm\/[^/]+\/node_modules\/)?(?:clsx|tailwind-merge|class-variance-authority)\//,
+              priority: 60,
+            },
+            {
+              name: 'vendor-react',
+              test: /\/node_modules\/(?:\.pnpm\/[^/]+\/node_modules\/)?(?:react|react-dom|scheduler)\//,
+              priority: 50,
+            },
+            { name: 'vendor-tanstack', test: /\/@tanstack\//, priority: 40 },
+            { name: 'vendor-base-ui', test: /\/@base-ui\//, priority: 40 },
+            { name: 'vendor-sentry', test: /\/@sentry\//, priority: 40 },
+            { name: 'vendor-motion', test: /\/motion\//, priority: 40 },
+            {
+              name: 'vendor-math-engine',
+              test: /\/@calibra-facil\/math-engine\//,
+              priority: 40,
+            },
+            // Only chart routes import recharts, so this chunk must stay out of
+            // the initial graph (checked by scripts/check-bundle-size.mjs).
+            {
+              name: 'vendor-charts',
+              test: /\/recharts\/|\/d3-/,
+              includeDependenciesRecursively: false,
+              priority: 30,
+            },
+          ],
         },
       },
     },

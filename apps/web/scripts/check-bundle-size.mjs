@@ -2,7 +2,10 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
-import { readBundleMetricsFromDist } from './bundle-metrics.mjs'
+import {
+  evaluateInitialGraph,
+  readBundleMetricsFromDist,
+} from './bundle-metrics.mjs'
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const appDir = path.resolve(scriptDir, '..')
@@ -20,6 +23,19 @@ const appChunkBudget = Number(
   process.env.WEB_BUNDLE_BUDGET_APP_CHUNK ?? 180_000,
 )
 const failAppChunkBudget = process.env.WEB_BUNDLE_FAIL_APP_CHUNKS === 'true'
+// The initial graph is everything index.html loads before any route code runs:
+// the entry module plus its modulepreload closure. Measured after splitting
+// recharts/d3 out of it (2256 -> 1908 KiB raw, 662 -> 562 KiB gzip); the
+// budgets sit ~1.5-2% above that so a shared helper leaking a heavy chunk into
+// the closure again fails the build.
+const initialJsBudget = Number(
+  process.env.WEB_BUNDLE_BUDGET_INITIAL_JS ?? 1_980_000,
+)
+const initialJsGzipBudget = Number(
+  process.env.WEB_BUNDLE_BUDGET_INITIAL_JS_GZIP ?? 585_000,
+)
+// Chunks that must only be fetched by the routes that use them.
+const forbiddenInitialChunks = ['vendor-charts', 'vendor-sentry']
 
 function fail(message) {
   console.error(`\n[bundle-budget] ${message}`)
@@ -41,9 +57,16 @@ try {
 
 const { jsBytes, cssBytes, jsChunks, appChunks } = metrics
 
+const initialGraph = evaluateInitialGraph(metrics, {
+  jsBudget: initialJsBudget,
+  jsGzipBudget: initialJsGzipBudget,
+  forbiddenChunks: forbiddenInitialChunks,
+})
+
 const checks = [
   { name: 'entry-js', bytes: jsBytes, budget: jsBudget },
   { name: 'entry-css', bytes: cssBytes, budget: cssBudget },
+  ...initialGraph.checks,
 ]
 const chunkFailures = jsChunks
   .filter((chunk) => chunk.bytes > jsChunkBudget)
@@ -60,8 +83,13 @@ const appChunkFailures = appChunks
     budget: appChunkBudget,
   }))
 
+const forbiddenFailures = initialGraph.forbidden.map((name) => ({
+  name: `initial-graph-includes:${name}`,
+}))
+
 const failures = [
   ...checks.filter((check) => check.bytes > check.budget),
+  ...forbiddenFailures,
   ...chunkFailures,
   ...(failAppChunkBudget ? appChunkFailures : []),
 ]
@@ -84,6 +112,22 @@ for (const check of appChunkFailures) {
     `[bundle-budget] ${failAppChunkBudget ? 'FAIL' : 'WARN'} ${check.name}: ${toKb(check.bytes)} (budget ${toKb(check.budget)})`,
   )
 }
+
+for (const failure of forbiddenFailures) {
+  console.log(
+    `[bundle-budget] FAIL ${failure.name}: loaded by index.html on every page`,
+  )
+}
+
+console.log(
+  `[bundle-budget] initial-graph: ${metrics.initialJs.files.length} JS files, ${toKb(metrics.initialJs.bytes)} raw / ${toKb(metrics.initialJs.gzipBytes)} gzip`,
+)
+console.log(
+  `[bundle-budget] largest-initial-js: ${metrics.initialJs.files
+    .slice(0, 5)
+    .map((file) => `${file.name}=${toKb(file.bytes)}`)
+    .join(', ')}`,
+)
 
 console.log(
   `[bundle-budget] largest-js-chunks: ${jsChunks

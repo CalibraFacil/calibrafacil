@@ -102,8 +102,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   releaseStaleQueueJobs.mockResolvedValue({ released: 0, deadLettered: [] });
   rejectDeadLetteredCertificateRenders.mockResolvedValue(0);
-  completeQueueJob.mockResolvedValue(undefined);
-  failQueueJob.mockResolvedValue(undefined);
+  completeQueueJob.mockResolvedValue(true);
+  failQueueJob.mockResolvedValue(true);
   // The failure-recording suite predates the receipt ledger — run it with the
   // ledger off; the receipt suite below drives shadow/enforce explicitly.
   readQueueReceiptsMode.mockReturnValue("off");
@@ -126,10 +126,11 @@ describe("queue-runtime failure recording (REQ-REL-OBS-002)", () => {
 
     // The REAL error object reaches failQueueJob (which stores error.message).
     expect(failQueueJob).toHaveBeenCalledTimes(1);
-    expect(failQueueJob).toHaveBeenCalledWith(1, realError);
+    expect(failQueueJob).toHaveBeenCalledWith(1, CONFIG.workerId, realError);
     // MUTATION CHECK: reinstating the generic-string clobber makes this go RED.
     expect(failQueueJob).not.toHaveBeenCalledWith(
       1,
+      CONFIG.workerId,
       "Job was not acknowledged by worker",
     );
     expect(completeQueueJob).not.toHaveBeenCalled();
@@ -144,7 +145,7 @@ describe("queue-runtime failure recording (REQ-REL-OBS-002)", () => {
 
     await drainQueue(fakeEnv, CONFIG);
 
-    expect(completeQueueJob).toHaveBeenCalledWith(2);
+    expect(completeQueueJob).toHaveBeenCalledWith(2, CONFIG.workerId);
     expect(failQueueJob).not.toHaveBeenCalled();
   });
 
@@ -159,6 +160,7 @@ describe("queue-runtime failure recording (REQ-REL-OBS-002)", () => {
 
     expect(failQueueJob).toHaveBeenCalledWith(
       3,
+      CONFIG.workerId,
       "Job was not acknowledged by worker",
     );
   });
@@ -171,7 +173,7 @@ describe("queue-runtime failure recording (REQ-REL-OBS-002)", () => {
 
     await drainQueue(fakeEnv, CONFIG);
 
-    expect(failQueueJob).toHaveBeenCalledWith(4, batchError);
+    expect(failQueueJob).toHaveBeenCalledWith(4, CONFIG.workerId, batchError);
   });
 });
 
@@ -205,7 +207,7 @@ describe("queue-runtime idempotency receipts", () => {
 
     expect(claimQueueReceipt).not.toHaveBeenCalled();
     expect(completeQueueReceipt).not.toHaveBeenCalled();
-    expect(completeQueueJob).toHaveBeenCalledWith(10);
+    expect(completeQueueJob).toHaveBeenCalledWith(10, CONFIG.workerId);
   });
 
   it("claims a receipt per job (key = app_queue_job row id) and completes it on ack", async () => {
@@ -226,7 +228,7 @@ describe("queue-runtime idempotency receipts", () => {
       jobType: "CERTIFICATE",
       idempotencyKey: "app-queue-11",
     });
-    expect(completeQueueJob).toHaveBeenCalledWith(11);
+    expect(completeQueueJob).toHaveBeenCalledWith(11, CONFIG.workerId);
     expect(releaseQueueReceipt).not.toHaveBeenCalled();
   });
 
@@ -246,7 +248,7 @@ describe("queue-runtime idempotency receipts", () => {
       idempotencyKey: "app-queue-12",
     });
     expect(completeQueueReceipt).not.toHaveBeenCalled();
-    expect(failQueueJob).toHaveBeenCalledWith(12, realError);
+    expect(failQueueJob).toHaveBeenCalledWith(12, CONFIG.workerId, realError);
   });
 
   it("enforce: a duplicate-completed delivery settles the row WITHOUT re-running the work", async () => {
@@ -260,7 +262,7 @@ describe("queue-runtime idempotency receipts", () => {
     await drainQueue(fakeEnv, CONFIG);
 
     expect(workerQueue).not.toHaveBeenCalled();
-    expect(completeQueueJob).toHaveBeenCalledWith(13);
+    expect(completeQueueJob).toHaveBeenCalledWith(13, CONFIG.workerId);
     expect(failQueueJob).not.toHaveBeenCalled();
     // Not the claim owner: the receipt must not be settled by this worker.
     expect(completeQueueReceipt).not.toHaveBeenCalled();
@@ -279,8 +281,45 @@ describe("queue-runtime idempotency receipts", () => {
     expect(completeQueueJob).not.toHaveBeenCalled();
     expect(failQueueJob).toHaveBeenCalledWith(
       14,
+      CONFIG.workerId,
       "queue receipt lease held by another worker",
     );
+  });
+
+  it("REQ-QFENCE-005: a fenced-out completion does not settle the receipt the new owner holds", async () => {
+    const job = makeJob(18);
+    claimOnce(job);
+    readQueueReceiptsMode.mockReturnValue("enforce");
+    completeQueueJob.mockResolvedValueOnce(false);
+    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
+      batch.messages[0]?.ack();
+    });
+
+    await drainQueue(fakeEnv, CONFIG);
+
+    expect(completeQueueJob).toHaveBeenCalledWith(18, CONFIG.workerId);
+    expect(completeQueueReceipt).not.toHaveBeenCalled();
+    expect(releaseQueueReceipt).not.toHaveBeenCalled();
+  });
+
+  it("REQ-QFENCE-005: a fenced-out failure does not release the receipt the new owner holds", async () => {
+    const job = makeJob(19);
+    claimOnce(job);
+    readQueueReceiptsMode.mockReturnValue("enforce");
+    failQueueJob.mockResolvedValueOnce(false);
+    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
+      batch.messages[0]?.retry(new Error("late"));
+    });
+
+    await drainQueue(fakeEnv, CONFIG);
+
+    expect(failQueueJob).toHaveBeenCalledWith(
+      19,
+      CONFIG.workerId,
+      expect.any(Error),
+    );
+    expect(completeQueueReceipt).not.toHaveBeenCalled();
+    expect(releaseQueueReceipt).not.toHaveBeenCalled();
   });
 
   it("shadow: a duplicate is logged but still runs, and the unowned receipt is never settled", async () => {
@@ -297,7 +336,7 @@ describe("queue-runtime idempotency receipts", () => {
     await drainQueue(fakeEnv, CONFIG);
 
     expect(workerQueue).toHaveBeenCalledTimes(1);
-    expect(completeQueueJob).toHaveBeenCalledWith(15);
+    expect(completeQueueJob).toHaveBeenCalledWith(15, CONFIG.workerId);
     expect(completeQueueReceipt).not.toHaveBeenCalled();
     expect(releaseQueueReceipt).not.toHaveBeenCalled();
   });
@@ -316,7 +355,7 @@ describe("queue-runtime idempotency receipts", () => {
     await drainQueue(fakeEnv, CONFIG);
 
     expect(workerQueue).toHaveBeenCalledTimes(1);
-    expect(completeQueueJob).toHaveBeenCalledWith(16);
+    expect(completeQueueJob).toHaveBeenCalledWith(16, CONFIG.workerId);
     expect(completeQueueReceipt).not.toHaveBeenCalled();
   });
 
@@ -333,7 +372,7 @@ describe("queue-runtime idempotency receipts", () => {
       jobType: "CERTIFICATE",
       idempotencyKey: "app-queue-17",
     });
-    expect(failQueueJob).toHaveBeenCalledWith(17, batchError);
+    expect(failQueueJob).toHaveBeenCalledWith(17, CONFIG.workerId, batchError);
   });
 });
 
@@ -368,7 +407,7 @@ describe("queue-runtime dead-letter handling (REQ-QDL-001, REQ-QDL-002)", () => 
     });
 
     await expect(drainQueue(fakeEnv, CONFIG)).resolves.toBe(1);
-    expect(completeQueueJob).toHaveBeenCalledWith(50);
+    expect(completeQueueJob).toHaveBeenCalledWith(50, CONFIG.workerId);
   });
 
   it("REQ-QDL-001: nothing is rejected when the reclaim dead-lettered no row", async () => {
@@ -401,6 +440,7 @@ describe("queue-runtime claims one row at a time (REQ-QDL-001)", () => {
     );
     completeQueueJob.mockImplementation(async (id: number) => {
       status.delete(id);
+      return true;
     });
     return status;
   }
@@ -421,8 +461,8 @@ describe("queue-runtime claims one row at a time (REQ-QDL-001)", () => {
     // While the first job ran, the second row was still PENDING and unclaimed.
     expect(secondWhileFirstRuns).toBe("PENDING");
     expect(workerQueue).toHaveBeenCalledTimes(2);
-    expect(completeQueueJob).toHaveBeenNthCalledWith(1, 80);
-    expect(completeQueueJob).toHaveBeenNthCalledWith(2, 81);
+    expect(completeQueueJob).toHaveBeenNthCalledWith(1, 80, CONFIG.workerId);
+    expect(completeQueueJob).toHaveBeenNthCalledWith(2, 81, CONFIG.workerId);
   });
 
   it("REQ-QDL-001: every claim asks for exactly one row", async () => {
@@ -450,7 +490,7 @@ describe("queue-runtime claims one row at a time (REQ-QDL-001)", () => {
     ).resolves.toBe(2);
 
     expect(workerQueue).toHaveBeenCalledTimes(2);
-    expect(completeQueueJob).not.toHaveBeenCalledWith(87);
+    expect(completeQueueJob).not.toHaveBeenCalledWith(87, CONFIG.workerId);
   });
 
   it("REQ-QDL-001: one job's failure does not fail the rows behind it", async () => {
@@ -464,9 +504,13 @@ describe("queue-runtime claims one row at a time (REQ-QDL-001)", () => {
 
     await drainQueue(fakeEnv, CONFIG);
 
-    expect(failQueueJob).toHaveBeenCalledWith(88, boom);
-    expect(completeQueueJob).toHaveBeenCalledWith(89);
-    expect(failQueueJob).not.toHaveBeenCalledWith(89, expect.anything());
+    expect(failQueueJob).toHaveBeenCalledWith(88, CONFIG.workerId, boom);
+    expect(completeQueueJob).toHaveBeenCalledWith(89, CONFIG.workerId);
+    expect(failQueueJob).not.toHaveBeenCalledWith(
+      89,
+      CONFIG.workerId,
+      expect.anything(),
+    );
   });
 });
 

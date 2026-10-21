@@ -113,6 +113,15 @@ imports `client-runtime` or `@calibra-facil/api`. Only business data under
 - `getApiBaseUrl()` (`lib/utils.ts`) resolves the API origin per host
   (localhost:3000 in dev, `VITE_API_URL` when set, else the same origin). Always go through it; never hardcode the origin.
 - Wrap reads in `useQuery` with a stable `queryKey` and a sensible `staleTime`.
+- **Authenticated query keys are scoped to the active client organization.** The
+  API answers for whichever org the session names, and a customer can belong to
+  several, so a key without the org id would serve one org's cache to another.
+  Build every key with `usePortalQueryKey()` (`lib/portal-org-context.tsx`, backed
+  by `portalQueryKey` in `lib/portal-query-keys.ts`) — for `useQuery` and for
+  `invalidateQueries` alike. Only public/pre-auth queries (verification, invites,
+  magic link, branding) and the user-level org list stay unscoped. The org
+  switcher also cancels in-flight portal queries and removes the previous
+  org's entries when it switches.
 - The dashboard is powered by `GET /api/portal/overview` (an aggregation endpoint
   in `apps/api/src/routes/portal.ts`) via `features/dashboard/queries.ts:useOverview`;
   the sidebar badges reuse the same hook so counts cannot drift.
@@ -161,6 +170,24 @@ carries `min-w-0 overflow-x-hidden` so the inset frame keeps its rounded corners
 - OS-aware shortcut hints: render `⌘K` / `Ctrl K` via `lib/platform.ts`
   (`shortcutLabel`), never a hardcoded `⌘`.
 - Copy is **pt-BR**.
+
+## Bundle Budget
+
+The router plugin runs with `autoCodeSplitting: true`, so every route's page is
+its own chunk and `index.html` only loads the shell. Keep it that way:
+
+- Heavy, decorative or chart-only code is imported with `React.lazy` where it is
+  used (`SignInShaderPanel`, `DriftChart`, `TrendBarChartBody`) — never from a
+  module the entry or layout imports statically.
+- `vite.config.ts` pins vendor chunks (`vendor-react`, `vendor-ui-utils`,
+  `vendor-motion`, `vendor-charts`). `clsx`/`tailwind-merge`/`cva` have their own
+  higher-priority chunk because recharts imports `clsx` too: without it Rolldown
+  folds them into `vendor-charts` and every page preloads recharts/d3.
+- `pnpm --filter @calibra-facil/portal build:ci` builds and runs
+  `scripts/check-bundle-size.mjs`, which measures the **initial graph** (entry +
+  every `modulepreload` in `index.html`, raw and gzip), fails if
+  `vendor-charts`/`vendor-motion`/the shader panel appear in it, and enforces
+  budgets just above the current size. Raise a budget only with a reason.
 
 ## Scope
 

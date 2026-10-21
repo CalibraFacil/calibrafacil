@@ -31,6 +31,7 @@ import {
 import { getServiceOrderStatus } from "@/lib/status-labels";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 import { getApiBaseUrl } from "@/lib/utils";
+import { usePortalQueryKey } from "@/lib/portal-org-context";
 
 export const Route = createFileRoute("/_authenticated/service-orders/$id")({
   component: ServiceOrderDetailPage,
@@ -224,11 +225,12 @@ const EVENT_META: Record<string, { label: string; tone: SignalTone }> = {
 
 function ServiceOrderDetailPage() {
   const { id } = Route.useParams();
+  const key = usePortalQueryKey();
   const queryClient = useQueryClient();
   const [rejectionReason, setRejectionReason] = useState("");
 
   const orderQuery = useQuery({
-    queryKey: ["portal-service-order", id],
+    queryKey: key("portal-service-order", id),
     queryFn: async (): Promise<ServiceOrderDetail> => {
       const response = await fetch(
         `${getApiBaseUrl()}/api/portal/service-orders/${id}`,
@@ -247,7 +249,7 @@ function ServiceOrderDetailPage() {
   });
 
   const financialSummaryQuery = useQuery({
-    queryKey: ["portal-service-order", id, "financial-summary"],
+    queryKey: key("portal-service-order", id, "financial-summary"),
     queryFn: async (): Promise<PortalFinancialSummary> => {
       const response = await fetch(
         `${getApiBaseUrl()}/api/portal/service-orders/${id}/financial-summary`,
@@ -285,9 +287,9 @@ function ServiceOrderDetailPage() {
     onSuccess: async () => {
       toast.success("Orçamento aprovado.");
       await queryClient.invalidateQueries({
-        queryKey: ["portal-service-order", id],
+        queryKey: key("portal-service-order", id),
       });
-      await queryClient.invalidateQueries({ queryKey: ["portal-overview"] });
+      await queryClient.invalidateQueries({ queryKey: key("portal-overview") });
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : "Erro ao aprovar.");
@@ -312,9 +314,9 @@ function ServiceOrderDetailPage() {
       toast.success("Orçamento recusado.");
       setRejectionReason("");
       await queryClient.invalidateQueries({
-        queryKey: ["portal-service-order", id],
+        queryKey: key("portal-service-order", id),
       });
-      await queryClient.invalidateQueries({ queryKey: ["portal-overview"] });
+      await queryClient.invalidateQueries({ queryKey: key("portal-overview") });
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : "Erro ao recusar.");

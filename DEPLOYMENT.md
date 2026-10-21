@@ -163,6 +163,7 @@ then set `AUTH_COOKIE_DOMAIN` and build the frontends with `VITE_API_URL`.
 | `BACKGROUND_JOBS_MODE`                                                                              | `local` (inside the API process), `queue` (a separate worker) or `vercel`            |
 | `BACKGROUND_JOBS_MAX_DELIVERIES`                                                                    | Optional, default `3`: Vercel deliveries before a certificate is rejected            |
 | `STUCK_RENDER_AFTER_MS`                                                                             | Optional, default `3600000` (60 min): see _Certificates stuck in generation_ below   |
+| `QUEUE_RECEIPTS_MODE`                                                                               | Optional, default `enforce`; `shadow`/`off` opt out: see _Queue idempotency_ below   |
 | `CRON_SCHEDULER=internal`                                                                           | Run the scheduled jobs inside the API (see below)                                    |
 
 Extra origins for CORS and auth can be listed in `CORS_ALLOWED_ORIGINS` and
@@ -226,6 +227,28 @@ Example crontab line:
 ```cron
 */30 * * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://api.example.com/api/cron/queue-backstop
 ```
+
+#### Queue idempotency and lease fencing
+
+Queue delivery is at-least-once: Vercel Queue redelivers a message until it is acknowledged, and a
+`PROCESSING` row whose lease expired (`QUEUE_STALE_AFTER_MS`) is handed to another worker. Two
+guards keep a duplicate or a slow worker from doing harm:
+
+- **Lease fencing.** A worker may complete or fail a queue row only while it still holds the lease
+  (`locked_by` is its `WORKER_ID` and the row is `PROCESSING`). A worker whose lease expired and
+  whose row was reclaimed can no longer overwrite the new owner's state: its late completion or
+  failure is ignored and logged as `[Queue] fenced out ...`, never retried. Nothing to configure.
+- **Idempotency receipts** (`QUEUE_RECEIPTS_MODE`). Each delivery unit claims a receipt before it runs.
+  - `enforce` (default, also for an unset or unrecognised value): a duplicate of a unit that already
+    completed is skipped, and a unit whose lease another worker holds is retried later instead of
+    running twice.
+  - `shadow`: duplicates are only logged (`[QueueReceipt] duplicate delivery`) and still run. Use it
+    to observe duplicates without trusting the ledger.
+  - `off`: no receipts at all.
+
+Existing deployments that did not set `QUEUE_RECEIPTS_MODE` ran in `shadow` and now enforce. Set
+`QUEUE_RECEIPTS_MODE=shadow` to keep the old behaviour. If the ledger table is unreachable the unit
+runs anyway (fail open), so enforcement never blocks a job on bookkeeping.
 
 #### Certificates stuck in generation
 

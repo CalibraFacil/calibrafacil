@@ -252,6 +252,8 @@ export interface JobData {
   status: string
   /** ISO timestamp of the recorded calibration execution date, if set. */
   performedAt?: string | null
+  /** ISO timestamp of the server's last write to the job. */
+  updatedAt?: string | null
   customerName: string
   customerAddress?: AddressData | null
   labName?: string | null

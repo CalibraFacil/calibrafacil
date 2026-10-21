@@ -17,6 +17,7 @@ import {
   PanelHeader,
 } from "@/components/instrument-panel";
 import { getApiBaseUrl } from "@/lib/utils";
+import { usePortalQueryKey } from "@/lib/portal-org-context";
 import type { AssetDetail } from "./types";
 
 /**
@@ -29,6 +30,7 @@ import type { AssetDetail } from "./types";
  */
 export function IntervalEditorPanel({ asset }: { asset: AssetDetail }) {
   const queryClient = useQueryClient();
+  const key = usePortalQueryKey();
   const [months, setMonths] = useState(
     asset.calibrationIntervalMonths != null
       ? String(asset.calibrationIntervalMonths)
@@ -57,8 +59,8 @@ export function IntervalEditorPanel({ asset }: { asset: AssetDetail }) {
     onSuccess: () => {
       toast.success("Periodicidade atualizada.");
       setRationale("");
-      queryClient.invalidateQueries({ queryKey: ["portal-asset"] });
-      queryClient.invalidateQueries({ queryKey: ["portal-assets"] });
+      queryClient.invalidateQueries({ queryKey: key("portal-asset") });
+      queryClient.invalidateQueries({ queryKey: key("portal-assets") });
     },
     onError: (error: Error) => {
       toast.error(error.message);

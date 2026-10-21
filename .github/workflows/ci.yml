@@ -44,7 +44,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: .bun-version
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check blocked dependencies
@@ -92,10 +92,58 @@ jobs:
         run: |
           filter=""
           if [ "$EVENT" = "pull_request" ] && ! git diff --name-only origin/main...HEAD |
-            grep -qE '(^|/)package\.json$|^pnpm-(lock|workspace)\.yaml$|^\.nvmrc$'; then
+            grep -qE '(^|/)package\.json$|^pnpm-(lock|workspace)\.yaml$|^\.nvmrc$|^\.bun-version$'; then
             filter="--filter=...[origin/main...HEAD]"
           fi
           bunx turbo test ${filter:+"$filter"}
+
+  # Every app and package must still build: lint, types and tests do not catch a
+  # broken bundle or a failing prerender (the email templates once broke `email
+  # build` on main unnoticed). It is its own job so the build runs beside, not
+  # after, the checks above. A cold full build takes about 4 minutes locally and
+  # needs no secrets or env files, so nothing is stubbed here.
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: "pnpm"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Same scoping as the Test step: a pull request builds the packages it
+      # touches and the ones that depend on them; pushes to main build all, and
+      # so does any change to dependencies or to the toolchain pins.
+      - name: Build
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          filter=""
+          if [ "$EVENT" = "pull_request" ] && ! git diff --name-only origin/main...HEAD |
+            grep -qE '(^|/)package\.json$|^pnpm-(lock|workspace)\.yaml$|^\.nvmrc$|^\.bun-version$|^turbo\.json$'; then
+            filter="--filter=...[origin/main...HEAD]"
+          fi
+          bunx turbo build ${filter:+"$filter"}
 
   # A pull request that adds or bumps a dependency with a known high or critical
   # vulnerability fails here, before it can merge.

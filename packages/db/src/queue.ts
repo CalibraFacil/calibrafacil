@@ -1,4 +1,4 @@
-import { sql, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "./db.js";
 import {
   appQueueJob,
@@ -165,8 +165,42 @@ export async function claimQueueJobs(
   });
 }
 
-export async function completeQueueJob(id: number) {
-  await db
+// Lease fencing. `claimQueueJobs` stamps `locked_by` with the claiming worker,
+// and the stale-lease reclaim (`releaseStaleQueueJobs`) hands a PROCESSING row
+// whose lease expired to the NEXT claimant. A worker that was merely slower than
+// the lease still believes it owns the row, so settling by `id` alone would let
+// it overwrite the new owner's state (complete a row another worker is still
+// rendering, or send a healthy row back to PENDING). Settling therefore requires
+// the caller to STILL be the lock holder of a PROCESSING row. A fenced-out
+// settlement is a logged no-op returning `false` — never an error, because a
+// throw would make the caller retry a job it no longer owns.
+function ownedProcessingRow(id: number, workerId: string) {
+  return and(
+    eq(appQueueJob.id, id),
+    eq(appQueueJob.status, "PROCESSING"),
+    eq(appQueueJob.lockedBy, workerId),
+  );
+}
+
+function logFencedOut(
+  action: "complete" | "fail",
+  id: number,
+  workerId: string,
+) {
+  console.warn(
+    `[Queue] fenced out: worker ${workerId} no longer holds the lease on queue job ${id}; ${action} ignored`,
+  );
+}
+
+/**
+ * Mark a claimed row COMPLETED. Only the current lock holder of a PROCESSING
+ * row may do so; otherwise nothing is written. Returns whether it applied.
+ */
+export async function completeQueueJob(
+  id: number,
+  workerId: string,
+): Promise<boolean> {
+  const updated = await db
     .update(appQueueJob)
     .set({
       status: "COMPLETED",
@@ -175,20 +209,39 @@ export async function completeQueueJob(id: number) {
       lastError: null,
       updatedAt: new Date(),
     })
-    .where(eq(appQueueJob.id, id));
+    .where(ownedProcessingRow(id, workerId))
+    .returning();
+
+  if (updated.length === 0) {
+    logFencedOut("complete", id, workerId);
+    return false;
+  }
+  return true;
 }
 
-export async function failQueueJob(id: number, error: unknown) {
+/**
+ * Settle a claimed row as failed: back to PENDING with backoff, or FAILED once
+ * attempts are exhausted. Only the current lock holder of a PROCESSING row may
+ * do so; otherwise nothing is written. Returns whether it applied.
+ */
+export async function failQueueJob(
+  id: number,
+  workerId: string,
+  error: unknown,
+): Promise<boolean> {
   const [job] = await db
     .select({
       attempts: appQueueJob.attempts,
       maxAttempts: appQueueJob.maxAttempts,
     })
     .from(appQueueJob)
-    .where(eq(appQueueJob.id, id))
+    .where(ownedProcessingRow(id, workerId))
     .limit(1);
 
-  if (!job) return;
+  if (!job) {
+    logFencedOut("fail", id, workerId);
+    return false;
+  }
 
   const exhausted = job.attempts >= job.maxAttempts;
   const lastError = error instanceof Error ? error.message : String(error);
@@ -197,7 +250,9 @@ export async function failQueueJob(id: number, error: unknown) {
     ? new Date()
     : new Date(Date.now() + getRetryDelayMs(job.attempts));
 
-  await db
+  // The same fence on the write: the lease can be reclaimed between the read
+  // above and this update, and `attempts` is only valid for the claim we read.
+  const updated = await db
     .update(appQueueJob)
     .set({
       status,
@@ -205,6 +260,36 @@ export async function failQueueJob(id: number, error: unknown) {
       lockedBy: null,
       lockedAt: null,
       lastError,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        ownedProcessingRow(id, workerId),
+        eq(appQueueJob.attempts, job.attempts),
+      ),
+    )
+    .returning();
+
+  if (updated.length === 0) {
+    logFencedOut("fail", id, workerId);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Unfenced settle for rows that were never claimed by a worker — the demo seed
+ * runs queued jobs inline and marks them done. Worker code must use the fenced
+ * `completeQueueJob`; this one deliberately ignores the lease.
+ */
+export async function forceCompleteQueueJob(id: number): Promise<void> {
+  await db
+    .update(appQueueJob)
+    .set({
+      status: "COMPLETED",
+      lockedBy: null,
+      lockedAt: null,
+      lastError: null,
       updatedAt: new Date(),
     })
     .where(eq(appQueueJob.id, id));

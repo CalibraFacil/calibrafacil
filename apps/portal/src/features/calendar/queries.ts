@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { getApiBaseUrl } from "@/lib/utils";
+import { usePortalQueryKey } from "@/lib/portal-org-context";
 
 export type CalendarDueAsset = {
   id: number;
@@ -35,8 +36,9 @@ async function fetchCalendar(
 
 /** Instruments coming due inside [from, to] (inclusive, YYYY-MM-DD). */
 export function useCalendarDues(from: string, to: string, unitId?: number) {
+  const key = usePortalQueryKey();
   return useQuery({
-    queryKey: ["portal-calendar", from, to, unitId ?? null],
+    queryKey: key("portal-calendar", from, to, unitId ?? null),
     queryFn: () => fetchCalendar(from, to, unitId),
     staleTime: 60_000,
   });

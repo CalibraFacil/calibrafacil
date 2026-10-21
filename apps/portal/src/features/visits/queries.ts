@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getApiBaseUrl } from "@/lib/utils";
+import { usePortalQueryKey } from "@/lib/portal-org-context";
 
 export type PortalVisitStatus =
   | "PROPOSED"
@@ -58,7 +59,7 @@ type PortalVisitsResponse = {
   data: Array<PortalVisit>;
 };
 
-export const PORTAL_VISITS_QUERY_KEY = ["portal-visits"] as const;
+const PORTAL_VISITS_SCOPE = "portal-visits";
 
 async function fetchVisits(): Promise<PortalVisitsResponse> {
   const response = await fetch(`${getApiBaseUrl()}/api/portal/visits`, {
@@ -72,8 +73,9 @@ async function fetchVisits(): Promise<PortalVisitsResponse> {
 
 /** On-site visits scheduled for the customer (excludes cancelled). */
 export function usePortalVisits() {
+  const key = usePortalQueryKey();
   return useQuery({
-    queryKey: PORTAL_VISITS_QUERY_KEY,
+    queryKey: key(PORTAL_VISITS_SCOPE),
     queryFn: fetchVisits,
     staleTime: 60_000,
   });
@@ -96,9 +98,10 @@ async function throwResponseError(
 }
 
 function useInvalidateVisits() {
+  const key = usePortalQueryKey();
   const queryClient = useQueryClient();
   return async () => {
-    await queryClient.invalidateQueries({ queryKey: PORTAL_VISITS_QUERY_KEY });
+    await queryClient.invalidateQueries({ queryKey: key(PORTAL_VISITS_SCOPE) });
   };
 }
 

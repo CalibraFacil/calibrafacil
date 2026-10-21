@@ -26,11 +26,12 @@ function mockSelectJob(job: { attempts: number; maxAttempts: number } | null) {
   return { from, where, limit };
 }
 
-function mockUpdate() {
-  const where = vi.fn().mockResolvedValue(undefined);
+function mockUpdate(rows: Array<{ id: number }> = [{ id: 7 }]) {
+  const returning = vi.fn().mockResolvedValue(rows);
+  const where = vi.fn(() => ({ returning }));
   const set = vi.fn(() => ({ where }));
   dbMock.update.mockReturnValue({ set });
-  return { set, where };
+  return { set, where, returning };
 }
 
 describe("Postgres queue helpers", () => {
@@ -76,8 +77,8 @@ describe("Postgres queue helpers", () => {
   it("marks completion idempotently", async () => {
     const { set } = mockUpdate();
 
-    await completeQueueJob(7);
-    await completeQueueJob(7);
+    await completeQueueJob(7, "worker-a");
+    await completeQueueJob(7, "worker-a");
 
     expect(set).toHaveBeenCalledTimes(2);
     expect(set).toHaveBeenLastCalledWith(
@@ -90,13 +91,54 @@ describe("Postgres queue helpers", () => {
     );
   });
 
+  it("REQ-QFENCE-001 completion that matches no owned PROCESSING row is a logged no-op returning false", async () => {
+    mockUpdate([]);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await expect(completeQueueJob(7, "worker-a")).resolves.toBe(false);
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("fenced out"));
+    warn.mockRestore();
+  });
+
+  it("REQ-QFENCE-002 failure for a row the worker no longer owns writes nothing and returns false", async () => {
+    mockSelectJob(null);
+    const { set } = mockUpdate();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await expect(failQueueJob(7, "worker-a", "late")).resolves.toBe(false);
+
+    expect(set).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("fenced out"));
+    warn.mockRestore();
+  });
+
+  it("REQ-QFENCE-002 failure whose lease is reclaimed between the read and the write is also a no-op", async () => {
+    mockSelectJob({ attempts: 1, maxAttempts: 3 });
+    mockUpdate([]);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await expect(failQueueJob(7, "worker-a", "late")).resolves.toBe(false);
+
+    warn.mockRestore();
+  });
+
+  it("REQ-QFENCE-003 the lock holder's completion and failure report they applied", async () => {
+    mockUpdate();
+    await expect(completeQueueJob(7, "worker-a")).resolves.toBe(true);
+
+    mockSelectJob({ attempts: 1, maxAttempts: 3 });
+    mockUpdate();
+    await expect(failQueueJob(7, "worker-a", "boom")).resolves.toBe(true);
+  });
+
   it("releases failed jobs for retry with backoff", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-01T00:00:00.000Z"));
     mockSelectJob({ attempts: 1, maxAttempts: 3 });
     const { set } = mockUpdate();
 
-    await failQueueJob(7, new Error("temporary failure"));
+    await failQueueJob(7, "worker-a", new Error("temporary failure"));
 
     expect(set).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -115,7 +157,7 @@ describe("Postgres queue helpers", () => {
     mockSelectJob({ attempts: 3, maxAttempts: 3 });
     const { set } = mockUpdate();
 
-    await failQueueJob(7, "permanent failure");
+    await failQueueJob(7, "worker-a", "permanent failure");
 
     expect(set).toHaveBeenCalledWith(
       expect.objectContaining({
