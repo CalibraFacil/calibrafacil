@@ -28,6 +28,12 @@ covers the big-picture architecture; `CONTRIBUTING.md` covers the contribution f
 - `pnpm check-types`: TypeScript type checks with `tsrs` (Rust port of the TS 7 compiler; falls
   back to `tsc` where it has no binary). `pnpm check-types:tsc` runs the same checks on native `tsc`.
 - `pnpm turbo test`: run all tests (use Node 24 and `TZ=UTC`).
+- `pnpm knip`: unused files, dependencies, unlisted dependencies and unresolved imports fail
+  (config in `knip.json`; unused exports and types are report-only). A file reached only through a
+  variable `import()` specifier or a script path needs an `entry` there.
+- `pnpm check:cycles`: `madge --circular` over every workspace's `src` (through `pnpm dlx`, with its
+  own TypeScript 5). Break a new cycle by moving the shared piece into a third module and
+  re-exporting it from the old one so public exports stay stable.
 - `pnpm turbo dev --filter=@calibra-facil/api`: run a single app.
 - `cd packages/db && pnpm db:bootstrap`: build a new database (schema push + `sql/schema-extras.sql`)
   or apply pending migrations to an existing one. Migrations are hand-written SQL files
