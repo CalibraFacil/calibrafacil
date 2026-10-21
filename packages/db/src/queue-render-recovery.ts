@@ -21,6 +21,16 @@ import type { DeadLetteredQueueJob } from "./queue.js";
 
 const REASON_PREFIX = "Erro ao gerar certificado: ";
 
+/**
+ * Why the backstop rejected a render. Written to the audit row so an auditor can
+ * tell an automatic rejection from the approver's own action: `rejected_by` /
+ * `performed_by` carry the approver (job_audit_log.performed_by is a NOT NULL FK
+ * to user and there is no system user), so the marker is the only difference.
+ */
+export type RenderRejectionTrigger = "dead-lettered" | "stuck-render";
+
+export const RENDER_REJECTION_SOURCE = "queue-backstop";
+
 /** Human-readable (pt-BR) reason a dead-lettered render was rejected. */
 const DEAD_LETTER_REASON =
   "o processo de geração foi interrompido de forma inesperada na última tentativa e a fila desistiu do trabalho. Envie o certificado para aprovação novamente.";
@@ -50,11 +60,14 @@ function liveRenderRowFor(jobId: number) {
  * was approved, cancelled or re-released in the meantime is never flipped by a
  * late recovery. Returns whether this call rejected the job.
  */
-async function rejectRender(params: {
+export async function rejectCertificateRender(params: {
   jobId: number;
   organizationId: string;
   rejectedBy: string;
   reason: string;
+  trigger: RenderRejectionTrigger;
+  /** The dead-lettered app_queue_job row, when that is what triggered this. */
+  queueJobId?: number;
   /** Only reject a job not touched since this instant (the stuck sweep). */
   notUpdatedSince?: Date;
 }): Promise<boolean> {
@@ -89,7 +102,14 @@ async function rejectRender(params: {
     await tx.insert(jobAuditLog).values({
       jobId: params.jobId,
       action: "certificate_error",
-      changes: { status: { old: "GENERATING_PDF", new: "REJECTED" } },
+      changes: {
+        status: { old: "GENERATING_PDF", new: "REJECTED" },
+        source: RENDER_REJECTION_SOURCE,
+        reason: params.trigger,
+        ...(params.queueJobId === undefined
+          ? {}
+          : { queueJobId: params.queueJobId }),
+      },
       performedBy: params.rejectedBy,
       performedAt: now,
       reason: params.reason,
@@ -138,11 +158,13 @@ export async function rejectDeadLetteredCertificateRenders(
       if (!job) continue;
 
       // oxlint-disable-next-line eslint/no-await-in-loop -- see above.
-      const done = await rejectRender({
+      const done = await rejectCertificateRender({
         jobId: payload.jobId,
         organizationId: job.organizationId,
         rejectedBy: payload.userId,
         reason: DEAD_LETTER_REASON,
+        trigger: "dead-lettered",
+        queueJobId: queueJob.id,
       });
       if (done) rejected += 1;
     } catch (error) {
@@ -230,11 +252,12 @@ export async function rejectStuckCertificateRenders(
 
     try {
       // oxlint-disable-next-line eslint/no-await-in-loop -- one short transaction per job, kept sequential so a failure stays isolated and logged.
-      const done = await rejectRender({
+      const done = await rejectCertificateRender({
         jobId: candidate.id,
         organizationId: candidate.organizationId,
         rejectedBy: candidate.actor,
         reason: stuckRenderReason(stuckAfterMs),
+        trigger: "stuck-render",
         notUpdatedSince: stuckBefore,
       });
       if (done) rejected += 1;

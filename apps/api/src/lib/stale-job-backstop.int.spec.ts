@@ -1,14 +1,19 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { eq, sql } from "drizzle-orm";
 import { releaseStaleQueueJobs } from "@calibra-facil/db/queue";
+import { rejectCertificateRender } from "@calibra-facil/db/queue-render-recovery";
 import {
   appQueueJob,
   asset,
   assetType,
   calibrationJob,
+  certificateNumberingProfile,
+  certificateNumberingSequence,
   customer,
+  issuedCertificateSnapshot,
   jobAuditLog,
   service,
+  user,
   type AppQueueJobStatus,
   type JobStatus,
 } from "@calibra-facil/db/schema";
@@ -34,6 +39,10 @@ beforeEach(async () => {
   await truncateAll();
 });
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 async function seedJob(
   org: SeededOrg,
   params: {
@@ -41,6 +50,8 @@ async function seedJob(
     status?: JobStatus;
     updatedAt?: Date;
     approvedBy?: string | null;
+    createdBy?: string;
+    rejectionReason?: string;
   },
 ) {
   const [customerRow] = await db
@@ -108,9 +119,10 @@ async function seedJob(
       },
       status: params.status ?? "GENERATING_PDF",
       performedAt: EPOCH,
-      createdBy: org.userId,
+      createdBy: params.createdBy ?? org.userId,
       approvedBy:
         params.approvedBy === undefined ? org.userId : params.approvedBy,
+      rejectionReason: params.rejectionReason,
       createdAt: EPOCH,
       updatedAt: params.updatedAt ?? new Date(),
     })
@@ -168,6 +180,108 @@ async function jobRow(id: number) {
 
 async function auditRows(jobId: number) {
   return db.select().from(jobAuditLog).where(eq(jobAuditLog.jobId, jobId));
+}
+
+/** Issued snapshot for a job (a GENERATING_PDF job should have none: it must stay put). */
+async function seedSnapshot(org: SeededOrg, jobId: number) {
+  const [row] = await db
+    .insert(issuedCertificateSnapshot)
+    .values({
+      organizationId: org.orgId,
+      jobId,
+      certificateNumber: `CAL-${jobId}`,
+      pdfR2Key: `certs/${jobId}.pdf`,
+      pdfSha256: "a".repeat(64),
+      renderPipeline: "FIXED_LAYOUT",
+      layoutKey: "calibration-certificate-fixed",
+      layoutVersion: "1.0.0",
+      rendererVersion: "worker/1",
+      renderPolicy: {
+        converter: "gotenberg-chromium",
+        layoutKey: "calibration-certificate-fixed",
+        layoutVersion: "1.0.0",
+      },
+      inputDataSnapshot: {},
+      status: "ISSUED",
+    })
+    .returning();
+  return row!;
+}
+
+async function seedNumbering(org: SeededOrg) {
+  const [profile] = await db
+    .insert(certificateNumberingProfile)
+    .values({
+      organizationId: org.orgId,
+      config: {
+        labCode: "LAB",
+        numberTemplate: "{labCode}-{sequence}",
+        certificateNameTemplate: "{labCode}-{sequence}",
+        sequence: {
+          resetScope: "never",
+          startAt: 1,
+          increment: 1,
+          padding: 4,
+        },
+      },
+    })
+    .returning();
+  await db.insert(certificateNumberingSequence).values({
+    organizationId: org.orgId,
+    profileId: profile!.id,
+    sequenceKey: "never",
+    currentValue: 7,
+  });
+}
+
+/** What REQ-QDL-004 says must never move: issued snapshots and numbering state. */
+async function evidenceState() {
+  return {
+    snapshots: await db.select().from(issuedCertificateSnapshot),
+    profiles: await db.select().from(certificateNumberingProfile),
+    sequences: await db.select().from(certificateNumberingSequence),
+  };
+}
+
+/**
+ * Makes every job_audit_log insert fail, to prove the status change and its
+ * audit row commit or roll back together. Returns the function that removes it.
+ */
+async function refuseAuditInserts() {
+  await db.execute(sql`
+    create function qdl_refuse_audit() returns trigger language plpgsql as $$
+    begin raise exception 'audit insert refused'; end $$
+  `);
+  await db.execute(sql`
+    create trigger qdl_refuse_audit before insert on job_audit_log
+    for each row execute function qdl_refuse_audit()
+  `);
+  return async () => {
+    await db.execute(sql`drop trigger qdl_refuse_audit on job_audit_log`);
+    await db.execute(sql`drop function qdl_refuse_audit()`);
+  };
+}
+
+/**
+ * Makes the COMMIT of any calibration_job -> REJECTED update fail (a deferred
+ * constraint trigger fires at commit). The audit row is written before that, so
+ * it is only rolled back if it shares the status change's transaction.
+ */
+async function refuseRejectionCommit() {
+  await db.execute(sql`
+    create function qdl_refuse_commit() returns trigger language plpgsql as $$
+    begin raise exception 'commit refused'; end $$
+  `);
+  await db.execute(sql`
+    create constraint trigger qdl_refuse_commit after update on calibration_job
+    deferrable initially deferred for each row
+    when (new.status = 'REJECTED')
+    execute function qdl_refuse_commit()
+  `);
+  return async () => {
+    await db.execute(sql`drop trigger qdl_refuse_commit on calibration_job`);
+    await db.execute(sql`drop function qdl_refuse_commit()`);
+  };
 }
 
 const backstopOverrides = {
@@ -240,7 +354,10 @@ describe("runStaleJobBackstop dead-letter handling (real Postgres)", () => {
   it("REQ-QDL-002 a dead-lettered certificate job goes GENERATING_PDF -> REJECTED with an audit row", async () => {
     const org = await seedOrg();
     const job = await seedJob(org, { jobNumber: "CAL-QDL-0001" });
-    await seedQueueRow({
+    await seedSnapshot(org, job.id);
+    await seedNumbering(org);
+    const evidenceBefore = await evidenceState();
+    const queued = await seedQueueRow({
       jobId: job.id,
       userId: org.userId,
       status: "PROCESSING",
@@ -251,6 +368,8 @@ describe("runStaleJobBackstop dead-letter handling (real Postgres)", () => {
 
     expect(result.deadLettered).toBe(1);
     expect(result.rejectedRenders).toBe(1);
+    // REQ-QDL-004: the issued snapshot and the numbering state do not move.
+    expect(await evidenceState()).toEqual(evidenceBefore);
 
     const rejected = await jobRow(job.id);
     expect(rejected.status).toBe("REJECTED");
@@ -263,7 +382,13 @@ describe("runStaleJobBackstop dead-letter handling (real Postgres)", () => {
     expect(audit[0]).toMatchObject({
       action: "certificate_error",
       performedBy: org.userId,
-      changes: { status: { old: "GENERATING_PDF", new: "REJECTED" } },
+      // The marker tells an automatic rejection from the approver's own action.
+      changes: {
+        status: { old: "GENERATING_PDF", new: "REJECTED" },
+        source: "queue-backstop",
+        reason: "dead-lettered",
+        queueJobId: queued.id,
+      },
     });
     expect(audit[0]?.reason).toBeTruthy();
   });
@@ -343,6 +468,9 @@ describe("runStaleJobBackstop stuck-render sweep (real Postgres)", () => {
       jobNumber: "CAL-QDL-0010",
       updatedAt: new Date(Date.now() - 2 * HOUR_MS),
     });
+    await seedSnapshot(org, job.id);
+    await seedNumbering(org);
+    const evidenceBefore = await evidenceState();
     // A finished/failed queue row is not "live".
     await seedQueueRow({
       jobId: job.id,
@@ -354,6 +482,7 @@ describe("runStaleJobBackstop stuck-render sweep (real Postgres)", () => {
     const result = await runStaleJobBackstop(backstopOverrides);
 
     expect(result.stuckRendersRejected).toBe(1);
+    expect(await evidenceState()).toEqual(evidenceBefore);
     const rejected = await jobRow(job.id);
     expect(rejected.status).toBe("REJECTED");
     expect(rejected.rejectionReason).toMatch(/^Erro ao gerar certificado: .+/);
@@ -364,8 +493,55 @@ describe("runStaleJobBackstop stuck-render sweep (real Postgres)", () => {
     expect(audit[0]).toMatchObject({
       action: "certificate_error",
       performedBy: org.userId,
-      changes: { status: { old: "GENERATING_PDF", new: "REJECTED" } },
+      changes: {
+        status: { old: "GENERATING_PDF", new: "REJECTED" },
+        source: "queue-backstop",
+        reason: "stuck-render",
+      },
     });
+  });
+
+  it("REQ-QDL-003 the actor falls back to the job's creator when no approver is recorded", async () => {
+    const org = await seedOrg();
+    await db.insert(user).values({
+      id: "creator-1",
+      name: "Criador",
+      email: "creator-1@lab.test",
+    });
+    const job = await seedJob(org, {
+      jobNumber: "CAL-QDL-0017",
+      updatedAt: new Date(Date.now() - 2 * HOUR_MS),
+      approvedBy: null,
+      createdBy: "creator-1",
+    });
+
+    const result = await runStaleJobBackstop(backstopOverrides);
+
+    expect(result.stuckRendersRejected).toBe(1);
+    const rejected = await jobRow(job.id);
+    expect(rejected.status).toBe("REJECTED");
+    expect(rejected.rejectedBy).toBe("creator-1");
+    const audit = await auditRows(job.id);
+    expect(audit).toHaveLength(1);
+    expect(audit[0]?.performedBy).toBe("creator-1");
+  });
+
+  it("REQ-QDL-003 the actor is the approver, not the creator, when both are recorded", async () => {
+    const org = await seedOrg();
+    await db.insert(user).values({
+      id: "creator-2",
+      name: "Criador",
+      email: "creator-2@lab.test",
+    });
+    const job = await seedJob(org, {
+      jobNumber: "CAL-QDL-0018",
+      updatedAt: new Date(Date.now() - 2 * HOUR_MS),
+      createdBy: "creator-2",
+    });
+
+    await runStaleJobBackstop(backstopOverrides);
+
+    expect((await jobRow(job.id)).rejectedBy).toBe(org.userId);
   });
 
   it("REQ-QDL-003 a job with a live PENDING or PROCESSING queue row is left alone", async () => {
@@ -442,5 +618,221 @@ describe("runStaleJobBackstop stuck-render sweep (real Postgres)", () => {
     expect(rejectedA.rejectedBy).toBe("user-a");
     expect(rejectedB.status).toBe("REJECTED");
     expect(rejectedB.rejectedBy).toBe("user-b");
+  });
+});
+
+// REQ-QDL-002 / REQ-QDL-004: the rejection is a compare-and-set on the job's
+// status. REVIEW / CANCELED / REJECTED jobs are NOT protected by the 0115
+// immutability trigger, so only the status predicate keeps them out of reach.
+const NOT_GENERATING = [
+  "REVIEW",
+  "CANCELED",
+  "REJECTED",
+  "SUPERSEDED",
+] as const;
+
+describe.each(NOT_GENERATING)(
+  "a job that is %s is never rejected by the backstop (real Postgres)",
+  (status) => {
+    async function seedNotGenerating(org: SeededOrg, jobNumber: string) {
+      const job = await seedJob(org, {
+        jobNumber,
+        status,
+        updatedAt: new Date(Date.now() - 2 * HOUR_MS),
+        rejectionReason:
+          status === "REJECTED" ? "Reprovado pelo revisor" : undefined,
+      });
+      await seedSnapshot(org, job.id);
+      await seedNumbering(org);
+      return job;
+    }
+
+    it(`REQ-QDL-002 REQ-QDL-004 a dead-lettered certificate row pointing at a ${status} job leaves the job, its audit log, the snapshot and the numbering unchanged`, async () => {
+      const org = await seedOrg();
+      const job = await seedNotGenerating(org, "CAL-QDL-0100");
+      await seedQueueRow({
+        jobId: job.id,
+        userId: org.userId,
+        status: "PROCESSING",
+        attempts: 3,
+      });
+      const jobBefore = await jobRow(job.id);
+      const evidenceBefore = await evidenceState();
+
+      const result = await runStaleJobBackstop(backstopOverrides);
+
+      expect(result.deadLettered).toBe(1);
+      expect(result.rejectedRenders).toBe(0);
+      expect(await jobRow(job.id)).toEqual(jobBefore);
+      expect(await auditRows(job.id)).toEqual([]);
+      expect(await evidenceState()).toEqual(evidenceBefore);
+    });
+
+    it(`REQ-QDL-003 REQ-QDL-004 the stuck-render sweep leaves a ${status} job, its audit log, the snapshot and the numbering unchanged`, async () => {
+      const org = await seedOrg();
+      const job = await seedNotGenerating(org, "CAL-QDL-0101");
+      const jobBefore = await jobRow(job.id);
+      const evidenceBefore = await evidenceState();
+
+      const result = await runStaleJobBackstop(backstopOverrides);
+
+      expect(result.stuckRendersRejected).toBe(0);
+      expect(await jobRow(job.id)).toEqual(jobBefore);
+      expect(await auditRows(job.id)).toEqual([]);
+      expect(await evidenceState()).toEqual(evidenceBefore);
+    });
+
+    it(`REQ-QDL-002 the rejection itself is a compare-and-set on status: ${status} is refused even when it is addressed directly`, async () => {
+      const org = await seedOrg();
+      const job = await seedNotGenerating(org, "CAL-QDL-0102");
+      const jobBefore = await jobRow(job.id);
+
+      await expect(
+        rejectCertificateRender({
+          jobId: job.id,
+          organizationId: org.orgId,
+          rejectedBy: org.userId,
+          reason: "teste",
+          trigger: "stuck-render",
+        }),
+      ).resolves.toBe(false);
+
+      expect(await jobRow(job.id)).toEqual(jobBefore);
+      expect(await auditRows(job.id)).toEqual([]);
+    });
+  },
+);
+
+describe("rejectCertificateRender guards (real Postgres)", () => {
+  const request = (org: SeededOrg, jobId: number) => ({
+    jobId,
+    organizationId: org.orgId,
+    rejectedBy: org.userId,
+    reason: "teste",
+    trigger: "dead-lettered" as const,
+  });
+
+  it("REQ-QDL-002 rejects a GENERATING_PDF job of the organization", async () => {
+    const org = await seedOrg();
+    const job = await seedJob(org, { jobNumber: "CAL-QDL-0110" });
+
+    await expect(rejectCertificateRender(request(org, job.id))).resolves.toBe(
+      true,
+    );
+    expect((await jobRow(job.id)).status).toBe("REJECTED");
+  });
+
+  it("REQ-QDL-002 another organization's id never rejects the job", async () => {
+    const orgA = await seedOrg({ orgId: "org-a", userId: "user-a" });
+    const orgB = await seedOrg({ orgId: "org-b", userId: "user-b" });
+    const job = await seedJob(orgA, { jobNumber: "CAL-QDL-0111" });
+
+    await expect(
+      rejectCertificateRender({ ...request(orgB, job.id) }),
+    ).resolves.toBe(false);
+    expect((await jobRow(job.id)).status).toBe("GENERATING_PDF");
+    expect(await auditRows(job.id)).toEqual([]);
+  });
+
+  it("REQ-QDL-003 a job touched after the sweep read it is not rejected", async () => {
+    const org = await seedOrg();
+    const job = await seedJob(org, { jobNumber: "CAL-QDL-0112" });
+
+    await expect(
+      rejectCertificateRender({
+        ...request(org, job.id),
+        notUpdatedSince: new Date(Date.now() - HOUR_MS),
+      }),
+    ).resolves.toBe(false);
+    expect((await jobRow(job.id)).status).toBe("GENERATING_PDF");
+  });
+
+  it("REQ-QDL-002 a live queue row for the job blocks the rejection", async () => {
+    const org = await seedOrg();
+    const job = await seedJob(org, { jobNumber: "CAL-QDL-0113" });
+    await seedQueueRow({
+      jobId: job.id,
+      userId: org.userId,
+      status: "PENDING",
+      attempts: 0,
+    });
+
+    await expect(rejectCertificateRender(request(org, job.id))).resolves.toBe(
+      false,
+    );
+    expect((await jobRow(job.id)).status).toBe("GENERATING_PDF");
+  });
+});
+
+describe("the rejection and its audit row are one transaction (real Postgres)", () => {
+  it("REQ-QDL-002 a failing audit insert rolls back the status change of a dead-lettered render", async () => {
+    const org = await seedOrg();
+    const job = await seedJob(org, { jobNumber: "CAL-QDL-0120" });
+    await seedQueueRow({
+      jobId: job.id,
+      userId: org.userId,
+      status: "PROCESSING",
+      attempts: 3,
+    });
+    const jobBefore = await jobRow(job.id);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const restore = await refuseAuditInserts();
+
+    try {
+      const result = await runStaleJobBackstop(backstopOverrides);
+      expect(result.deadLettered).toBe(1);
+      expect(result.rejectedRenders).toBe(0);
+    } finally {
+      await restore();
+    }
+
+    // Neither half survived: the job is still GENERATING_PDF, untouched.
+    expect(await jobRow(job.id)).toEqual(jobBefore);
+    expect(await auditRows(job.id)).toEqual([]);
+  });
+
+  it("REQ-QDL-002 an audit row written before a failed commit does not outlive the rolled-back status change", async () => {
+    const org = await seedOrg();
+    const job = await seedJob(org, { jobNumber: "CAL-QDL-0122" });
+    await seedQueueRow({
+      jobId: job.id,
+      userId: org.userId,
+      status: "PROCESSING",
+      attempts: 3,
+    });
+    const jobBefore = await jobRow(job.id);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const restore = await refuseRejectionCommit();
+
+    try {
+      const result = await runStaleJobBackstop(backstopOverrides);
+      expect(result.rejectedRenders).toBe(0);
+    } finally {
+      await restore();
+    }
+
+    expect(await jobRow(job.id)).toEqual(jobBefore);
+    expect(await auditRows(job.id)).toEqual([]);
+  });
+
+  it("REQ-QDL-003 a failing audit insert rolls back the status change of a stuck render", async () => {
+    const org = await seedOrg();
+    const job = await seedJob(org, {
+      jobNumber: "CAL-QDL-0121",
+      updatedAt: new Date(Date.now() - 2 * HOUR_MS),
+    });
+    const jobBefore = await jobRow(job.id);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const restore = await refuseAuditInserts();
+
+    try {
+      const result = await runStaleJobBackstop(backstopOverrides);
+      expect(result.stuckRendersRejected).toBe(0);
+    } finally {
+      await restore();
+    }
+
+    expect(await jobRow(job.id)).toEqual(jobBefore);
+    expect(await auditRows(job.id)).toEqual([]);
   });
 });
