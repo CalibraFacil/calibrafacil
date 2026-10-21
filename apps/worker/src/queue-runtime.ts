@@ -18,7 +18,6 @@ import {
   completeQueueJob,
   failQueueJob,
   releaseStaleQueueJobs,
-  renewQueueJobLease,
   type ClaimedQueueJob,
 } from "@calibra-facil/db/queue";
 import { rejectDeadLetteredCertificateRenders } from "@calibra-facil/db/queue-render-recovery";
@@ -224,36 +223,40 @@ async function settleReceipt(
   }
 }
 
-// Claim and process a single batch. Returns the number of jobs claimed so
-// callers can loop (drain) or schedule the next poll. Does NOT release stale
+// Claim and process up to `batchSize` jobs. Returns the number of jobs claimed
+// so callers can loop (drain) or schedule the next poll. Does NOT release stale
 // jobs — callers decide when to do that (once per poll tick / once per drain).
+//
+// Rows are claimed ONE AT A TIME and each is processed before the next is
+// claimed. Claiming a whole batch up front stamps every row with the same
+// `locked_at`, so a row queued behind slow jobs would hold an aging lease it is
+// not using — long enough for another drainer or the backstop cron to reclaim it
+// and, on its final attempt, dead-letter (and reject) a healthy certificate. A
+// row still waiting is PENDING and untouched; its lease starts when its turn does.
 async function claimAndProcessBatch(
   env: WorkerEnv,
   workerId: string,
   batchSize: number,
 ): Promise<number> {
-  const claimed = await claimQueueJobs(workerId, batchSize);
-  if (claimed.length === 0) return 0;
-
   const mode = readQueueReceiptsMode();
-  const decisions: ReceiptDecision[] = [];
-  for (const job of claimed) {
-    // oxlint-disable-next-line eslint/no-await-in-loop -- receipt claims are cheap single-row upserts; sequential keeps log ordering deterministic.
-    decisions.push(await decideWithReceipt(job, mode));
-  }
-  const runnable = decisions.filter((decision) => decision.run);
-  if (runnable.length === 0) return claimed.length;
+  let claimedCount = 0;
 
-  console.log(`[Worker] Claimed ${runnable.length} queue job(s)`);
-  // One job at a time, each in its own batch: the lease of the NEXT row is
-  // renewed only when its turn comes, so a row queued behind slow jobs is never
-  // reclaimed (and, on its final attempt, dead-lettered) before it even starts.
-  for (const decision of runnable) {
-    // oxlint-disable-next-line eslint/no-await-in-loop -- jobs run sequentially by design; each lease is renewed right before its job starts.
-    await processClaimedJob(env, workerId, decision);
+  for (let slot = 0; slot < batchSize; slot += 1) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- one row is claimed only once the previous one is settled; see above.
+    const [job] = await claimQueueJobs(workerId, 1);
+    if (!job) break;
+    claimedCount += 1;
+
+    // oxlint-disable-next-line eslint/no-await-in-loop -- receipt claims are cheap single-row upserts.
+    const decision = await decideWithReceipt(job, mode);
+    if (!decision.run) continue;
+
+    console.log(`[Worker] Claimed queue job ${job.id}`);
+    // oxlint-disable-next-line eslint/no-await-in-loop -- jobs run sequentially by design.
+    await processClaimedJob(env, decision);
   }
 
-  return claimed.length;
+  return claimedCount;
 }
 
 const executionContext: ExecutionContext = {
@@ -270,32 +273,9 @@ const executionContext: ExecutionContext = {
 
 async function processClaimedJob(
   env: WorkerEnv,
-  workerId: string,
   decision: ReceiptDecision,
 ): Promise<void> {
   const { job } = decision;
-
-  let leaseHeld = true;
-  try {
-    leaseHeld = await renewQueueJobLease(job.id, workerId);
-  } catch (error) {
-    // Fail open, like the receipt ledger: a renewal that cannot be recorded is
-    // not proof the lease was lost, and the receipt still guards duplicates.
-    console.error(
-      `[Worker] Could not renew the lease of queue job ${job.id}`,
-      error,
-    );
-  }
-  if (!leaseHeld) {
-    // Reclaimed or taken over while an earlier job ran: someone else owns the
-    // row now. Neither process nor fail it — only free the receipt we took.
-    console.warn(
-      `[Worker] Lease of queue job ${job.id} was lost before it started; skipping it`,
-    );
-    await settleReceipt(decision, false);
-    return;
-  }
-
   const { batch, states, errors } = createBatch([job]);
 
   try {

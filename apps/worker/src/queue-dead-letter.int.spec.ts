@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
+import { releaseStaleQueueJobs } from "@calibra-facil/db/queue";
 import {
   appQueueJob,
   calibrationJob,
@@ -184,106 +185,108 @@ describe("drainQueue dead-letters a worker crash on the final attempt", () => {
   });
 });
 
-describe("drainQueue renews each lease right before its job starts", () => {
-  async function seedPending(jobId: number, userId: string) {
-    const [row] = await db
-      .insert(appQueueJob)
-      .values({
-        type: "CERTIFICATE",
-        payload: { type: "CERTIFICATE", jobId, userId },
-        status: "PENDING",
-        attempts: 0,
-        maxAttempts: 3,
-      })
-      .returning();
-    return row!;
-  }
+// Rows are claimed one at a time: a row queued behind a slow job must stay
+// PENDING (no lease at all) until its own turn, so the lease reclaim can never
+// dead-letter it — and reject a healthy certificate — while it merely waits.
+async function seedPending(
+  jobId: number,
+  userId: string,
+  attempts = 0,
+): Promise<{ id: number }> {
+  const [row] = await db
+    .insert(appQueueJob)
+    .values({
+      type: "CERTIFICATE",
+      payload: { type: "CERTIFICATE", jobId, userId },
+      status: "PENDING",
+      attempts,
+      maxAttempts: 3,
+    })
+    .returning();
+  return row!;
+}
 
-  async function queueRow(id: number) {
-    const [row] = await db
-      .select()
-      .from(appQueueJob)
-      .where(eq(appQueueJob.id, id));
-    return row!;
-  }
+async function queueRow(id: number) {
+  const [row] = await db
+    .select()
+    .from(appQueueJob)
+    .where(eq(appQueueJob.id, id));
+  return row!;
+}
 
-  type MessageBatchLike = { messages: Array<{ ack: () => void }> };
+type MessageBatchLike = { messages: Array<{ ack: () => void }> };
 
-  it("REQ-QDL-001 a row that aged behind a slow job has a fresh lease when its turn comes", async () => {
+describe("drainQueue claims one row at a time", () => {
+  it("REQ-QDL-001 a slow first job leaves the second row PENDING and unclaimed while it runs", async () => {
     const org = await seedOrg({ orgId: "org-1", userId: "user-org-1" });
     const first = await seedPending(1, org.userId);
     const second = await seedPending(2, org.userId);
-    let leaseAgeWhenStarted: number | null = null;
+    let secondWhileFirstRuns: Awaited<ReturnType<typeof queueRow>> | undefined;
 
     workerQueue
       .mockImplementationOnce(async (batch: MessageBatchLike) => {
-        // The first job is slow: the second row's lease ages in the meantime.
-        await db
-          .update(appQueueJob)
-          .set({ lockedAt: new Date(Date.now() - 60 * 60_000) })
-          .where(eq(appQueueJob.id, second.id));
+        secondWhileFirstRuns = await queueRow(second.id);
         for (const message of batch.messages) message.ack();
       })
       .mockImplementationOnce(async (batch: MessageBatchLike) => {
-        const row = await queueRow(second.id);
-        leaseAgeWhenStarted = Date.now() - (row.lockedAt?.getTime() ?? 0);
+        // Its own turn: only now is the row claimed.
+        expect((await queueRow(second.id)).status).toBe("PROCESSING");
         for (const message of batch.messages) message.ack();
       });
 
     await drainQueue(makeTestEnv(), CONFIG);
 
+    expect(secondWhileFirstRuns?.status).toBe("PENDING");
+    expect(secondWhileFirstRuns?.lockedBy).toBeNull();
+    expect(secondWhileFirstRuns?.lockedAt).toBeNull();
+    expect(secondWhileFirstRuns?.attempts).toBe(0);
     expect(workerQueue).toHaveBeenCalledTimes(2);
-    expect(leaseAgeWhenStarted).not.toBeNull();
-    expect(leaseAgeWhenStarted!).toBeLessThan(60_000);
     expect((await queueRow(first.id)).status).toBe("COMPLETED");
-    expect((await queueRow(second.id)).status).toBe("COMPLETED");
+    const done = await queueRow(second.id);
+    expect(done.status).toBe("COMPLETED");
+    expect(done.attempts).toBe(1);
   });
 
-  it("REQ-QDL-001 a row taken over by another worker is skipped: not processed, not failed, not completed", async () => {
+  it("REQ-QDL-001 a final-attempt row waiting behind a slow job is not dead-lettered by a concurrent reclaim", async () => {
     const org = await seedOrg({ orgId: "org-1", userId: "user-org-1" });
-    const first = await seedPending(1, org.userId);
-    const second = await seedPending(2, org.userId);
-
-    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
-      // While the first job runs, another drainer reclaims and re-claims row 2.
-      await db
-        .update(appQueueJob)
-        .set({ lockedBy: "other-worker", lockedAt: new Date() })
-        .where(eq(appQueueJob.id, second.id));
-      for (const message of batch.messages) message.ack();
+    const job = await seedIssuableJob({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      userId: org.userId,
     });
+    await seedPending(1, org.userId);
+    // Claiming this row makes attempts 3 of 3: its final attempt.
+    const waiting = await seedPending(job.jobId, org.userId, 2);
+    let reclaimed: { released: number; deadLettered: unknown[] } | undefined;
+    let waitingDuring: Awaited<ReturnType<typeof queueRow>> | undefined;
+
+    workerQueue
+      .mockImplementationOnce(async (batch: MessageBatchLike) => {
+        // The first job is slow. Another drainer / the backstop cron reclaims
+        // meanwhile, long after the whole batch would have been claimed.
+        reclaimed = await releaseStaleQueueJobs(0);
+        waitingDuring = await queueRow(waiting.id);
+        for (const message of batch.messages) message.ack();
+      })
+      .mockImplementationOnce(async (batch: MessageBatchLike) => {
+        for (const message of batch.messages) message.ack();
+      });
 
     await drainQueue(makeTestEnv(), CONFIG);
 
-    expect(workerQueue).toHaveBeenCalledTimes(1);
-    expect((await queueRow(first.id)).status).toBe("COMPLETED");
-    const taken = await queueRow(second.id);
-    expect(taken.status).toBe("PROCESSING");
-    expect(taken.lockedBy).toBe("other-worker");
-    expect(taken.attempts).toBe(1);
-    expect(taken.lastError).toBeNull();
-  });
-
-  it("REQ-QDL-001 a row reclaimed to PENDING while it waited is skipped too, and keeps its retry state", async () => {
-    const org = await seedOrg({ orgId: "org-1", userId: "user-org-1" });
-    await seedPending(1, org.userId);
-    const second = await seedPending(2, org.userId);
-
-    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
-      await db
-        .update(appQueueJob)
-        .set({ status: "PENDING", lockedBy: null, lockedAt: null })
-        .where(eq(appQueueJob.id, second.id));
-      for (const message of batch.messages) message.ack();
-    });
-
-    // maxBatches = 1: look at the state right after the batch, before a later
-    // claim would legitimately pick the PENDING row up again.
-    await drainQueue(makeTestEnv(), CONFIG, 1);
-
-    expect(workerQueue).toHaveBeenCalledTimes(1);
-    const reclaimed = await queueRow(second.id);
-    expect(reclaimed.status).toBe("PENDING");
-    expect(reclaimed.lastError).toBeNull();
+    // The reclaim only touched the running first row (a 0ms lease counts it as
+    // expired, and it has attempts left); the waiting row was PENDING, so it was
+    // never dead-lettered.
+    expect(reclaimed?.deadLettered).toEqual([]);
+    expect(waitingDuring?.status).toBe("PENDING");
+    const finished = await queueRow(waiting.id);
+    expect(finished.status).toBe("COMPLETED");
+    expect(finished.attempts).toBe(3);
+    // Its certificate was not rejected.
+    const [certificate] = await db
+      .select()
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, job.jobId));
+    expect(certificate?.status).toBe("GENERATING_PDF");
   });
 });
