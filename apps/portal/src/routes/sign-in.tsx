@@ -1,16 +1,24 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { Suspense, lazy, useState } from "react";
 import { portalAuthClient } from "@calibra-facil/auth/client";
 import { translateAuthErrorMessage } from "@calibra-facil/auth/error-messages";
 import { z } from "zod";
 
 import { BrandLockup } from "@/components/brand";
-import { SignInShaderPanel } from "@/components/sign-in-shader-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
+import { useIsLargeScreen } from "@/hooks/use-large-screen";
 import { sanitizePortalRedirect } from "@/lib/auth-redirect";
+
+// The WebGL mesh gradient (@paper-design/shaders-react + motion) is purely
+// decorative, so it loads after the form instead of inside the entry bundle.
+const SignInShaderPanel = lazy(() =>
+  import("@/components/sign-in-shader-panel").then((module) => ({
+    default: module.SignInShaderPanel,
+  })),
+);
 
 const searchSchema = z.object({
   redirect: z.string().optional(),
@@ -24,6 +32,8 @@ export const Route = createFileRoute("/sign-in")({
 
 function SignInPage() {
   const { redirect, error: magicLinkError } = Route.useSearch();
+  // The shader panel is hidden below `lg`; don't even fetch it there.
+  const isLargeScreen = useIsLargeScreen();
 
   const [email, setEmail] = useState("");
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -152,7 +162,15 @@ function SignInPage() {
       </div>
 
       <div aria-hidden="true" className="hidden p-3 lg:block">
-        <SignInShaderPanel />
+        {isLargeScreen ? (
+          <Suspense
+            fallback={
+              <div className="size-full rounded-3xl bg-linear-to-br from-[#1447E6] via-[#2B6AF3] to-[#4F46E5]" />
+            }
+          >
+            <SignInShaderPanel />
+          </Suspense>
+        ) : null}
       </div>
     </div>
   );
