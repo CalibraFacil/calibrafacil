@@ -66,24 +66,27 @@ vi.mock("@calibra-facil/db", () => {
     };
   }
 
-  return {
-    db: {
-      select: (projection?: unknown) => ({
-        from: () => ({
-          where: () => ({
-            limit: async () =>
-              projection === undefined ? state.jobRows : state.memberRows,
-          }),
+  const mockDb = {
+    select: (projection?: unknown) => ({
+      from: () => ({
+        where: () => ({
+          limit: async () =>
+            projection === undefined ? state.jobRows : state.memberRows,
         }),
       }),
-      update: () => ({ set: awaitableUpdate }),
-      insert: () => ({
-        values: async (values: Record<string, unknown>) => {
-          state.insertCalls.push(values);
-        },
-      }),
-    },
+    }),
+    update: () => ({ set: awaitableUpdate }),
+    insert: () => ({
+      values: async (values: Record<string, unknown>) => {
+        state.insertCalls.push(values);
+      },
+    }),
+    // The approval transition + audit row run in one transaction; the
+    // harness runs the callback against the same recording db.
+    transaction: async <T>(run: (tx: unknown) => Promise<T>) => run(mockDb),
   };
+
+  return { db: mockDb };
 });
 
 vi.mock("../../lib/signatory", () => ({
@@ -114,13 +117,18 @@ vi.mock("../../lib/units", () => ({
 
 import { approveJob } from "./approve-job";
 
-type Member = Parameters<typeof approveJob>[0]["member"];
+type UserCommand = Extract<
+  Parameters<typeof approveJob>[0],
+  { actor: { kind: "user" } }
+>;
+type Member = UserCommand["actor"]["member"];
 
 function testMember(): Member {
   const value: unknown = {
     organizationId: "org-1",
     activeUnitId: 1,
     accessibleUnitIds: [1],
+    userId: "approver-1",
     role: "admin",
   };
   // oxlint-disable-next-line typescript/consistent-type-assertions -- tests build the minimal member scope the command reads.
@@ -147,12 +155,14 @@ function reviewJob(overrides: Record<string, unknown> = {}) {
 function callApprove(values: Record<string, unknown> = {}) {
   return approveJob({
     jobId: 10,
-    member: testMember(),
-    approverId: "approver-1",
+    actor: { kind: "user", member: testMember() },
     // oxlint-disable-next-line typescript/consistent-type-assertions -- schema input narrowed for the paths under test.
-    values: values as Parameters<typeof approveJob>[0]["values"],
+    values: values as UserCommand["values"],
     metadata: { ipAddress: "10.0.0.1" },
-    sendServiceOrdersToFinance: async () => [],
+    completion: {
+      kind: "generate_certificate_pdf",
+      sendServiceOrdersToFinance: async () => [],
+    },
   });
 }
 
@@ -305,5 +315,117 @@ describe("approveJob transition effects", () => {
     expect(mockCreateOotEvent).toHaveBeenCalledWith(
       expect.objectContaining({ jobId: 10, assetId: 55, customerId: 9 }),
     );
+  });
+});
+
+describe("approveJob actor, role gate and compare-and-set", () => {
+  function callAs(
+    memberOverrides: Record<string, unknown>,
+    actorKind: "user" | "api_key" = "user",
+  ) {
+    const base: unknown = { ...testMember(), ...memberOverrides };
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- tests build the minimal member scope the command reads.
+    const member = base as Member;
+    return approveJob({
+      jobId: 10,
+      actor:
+        actorKind === "user"
+          ? { kind: "user", member }
+          : {
+              kind: "api_key",
+              apiKey: { id: "key-1", name: "ERP", keyPrefix: "cf_live_ab" },
+              member,
+            },
+      values: {},
+      metadata: {},
+      completion: {
+        kind: "generate_certificate_pdf",
+        sendServiceOrdersToFinance: async () => [],
+      },
+    });
+  }
+
+  it.each([
+    ["technician", null],
+    ["operator", null],
+    ["member", null],
+    ["member", "technician"],
+  ])(
+    "refuses role %s (unitRole %s): it cannot approve in the in_review state",
+    async (role, unitRole) => {
+      state.jobRows = [reviewJob()];
+      await expect(callAs({ role, unitRole })).resolves.toEqual({
+        status: "role_not_permitted",
+      });
+      expect(state.updateCalls).toHaveLength(0);
+      expect(state.insertCalls).toHaveLength(0);
+    },
+  );
+
+  it.each([
+    ["admin", null],
+    ["owner", null],
+    ["member", "unit_admin"],
+  ])("allows role %s (unitRole %s)", async (role, unitRole) => {
+    state.jobRows = [reviewJob()];
+    state.updateReturning = [reviewJob({ status: "GENERATING_PDF" })];
+    const result = await callAs({ role, unitRole });
+    expect(result.status).toBe("approved");
+  });
+
+  it("refuses an API key whose creator is no longer a member, reading nothing", async () => {
+    state.jobRows = [reviewJob()];
+    const result = await approveJob({
+      jobId: 10,
+      actor: {
+        kind: "api_key",
+        apiKey: { id: "key-1", name: "ERP", keyPrefix: "cf_live_ab" },
+        member: null,
+      },
+      values: {},
+      metadata: {},
+      completion: {
+        kind: "generate_certificate_pdf",
+        sendServiceOrdersToFinance: async () => [],
+      },
+    });
+    expect(result).toEqual({ status: "approval_requires_signatory" });
+    expect(state.updateCalls).toHaveLength(0);
+  });
+
+  it("an API-key approval runs the same gates against its creator (self-approval)", async () => {
+    state.jobRows = [reviewJob({ technicianId: "approver-1" })];
+    state.memberRows = [{ id: "member-2" }];
+    await expect(callAs({}, "api_key")).resolves.toEqual({
+      status: "self_approval_blocked",
+    });
+  });
+
+  it("records the key next to the creator in the audit row", async () => {
+    state.jobRows = [reviewJob()];
+    state.updateReturning = [reviewJob({ status: "GENERATING_PDF" })];
+    await callAs({}, "api_key");
+    expect(state.insertCalls[0]).toMatchObject({
+      performedBy: "approver-1",
+      changes: {
+        approvedVia: {
+          channel: "api_key",
+          apiKeyId: "key-1",
+          apiKeyName: "ERP",
+          apiKeyPrefix: "cf_live_ab",
+        },
+      },
+    });
+  });
+
+  it("returns concurrent_approval and writes no audit row when the compare-and-set matches nothing", async () => {
+    state.jobRows = [reviewJob()];
+    state.updateReturning = [];
+    await expect(callAs({})).resolves.toEqual({
+      status: "concurrent_approval",
+    });
+    expect(state.insertCalls).toHaveLength(0);
+    expect(mockEnqueueBackgroundJob).not.toHaveBeenCalled();
+    expect(mockNotifyJobApproved).not.toHaveBeenCalled();
   });
 });

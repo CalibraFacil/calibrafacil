@@ -9,6 +9,15 @@ import type {
   IntegrationSyncBackgroundJobMessage,
 } from "@calibra-facil/shared";
 import { createWorkerRuntimeEnv } from "./runtime-env";
+import {
+  getBackgroundJobsMode,
+  getDocumentWorkerUrl,
+  isContaAzulSyncMessage,
+  isDocumentWorkerJobType,
+  resolveQueueJobType,
+} from "./background-job-routing";
+
+export { resolveQueueJobType };
 
 export const BACKGROUND_JOBS_TOPIC =
   process.env.BACKGROUND_JOBS_TOPIC ?? "calibra-facil-background-jobs";
@@ -17,25 +26,10 @@ type EnqueueBackgroundJobOptions = {
   idempotencyKey?: string;
 };
 
-function getBackgroundJobsMode() {
-  return (
-    process.env.BACKGROUND_JOBS_MODE ??
-    (process.env.VERCEL ? "vercel" : "local")
-  );
-}
-
 async function importLocalWorkerModule() {
   const modulePath = "./worker-modules";
   const { importWorkerModule } = await import(modulePath);
   return importWorkerModule();
-}
-
-function isContaAzulSyncMessage(
-  message: BackgroundJobMessage,
-): message is IntegrationSyncBackgroundJobMessage & { provider: "conta_azul" } {
-  return (
-    message.type === "INTEGRATION_SYNC" && message.provider === "conta_azul"
-  );
 }
 
 async function processContaAzulSyncMessage(
@@ -88,56 +82,6 @@ function runLocalBackgroundJob(message: BackgroundJobMessage) {
 // `services/document-worker/README.md`.
 
 const DOCUMENT_WORKER_DRAIN_PATH = "/drain";
-
-function getDocumentWorkerUrl(): string | null {
-  const url = process.env.DOCUMENT_WORKER_URL?.trim();
-  return url ? url : null;
-}
-
-function getDocumentWorkerJobTypes(): ReadonlySet<string> {
-  return new Set(
-    (process.env.DOCUMENT_WORKER_JOB_TYPES ?? "")
-      .split(",")
-      .map((value) => value.trim())
-      .filter((value) => value.length > 0),
-  );
-}
-
-// Mirror packages/db/src/queue.ts:getMessageType so a CERTIFICATE/LABEL job
-// dispatched with `type` omitted (the optional-type variant) still resolves to
-// its canonical app_queue_job type name for the allowlist check. Exported for
-// the Vercel Queue consumer's receipt ledger (vercel-src/queues/background.ts).
-export function resolveQueueJobType(message: BackgroundJobMessage): string {
-  switch (message.type) {
-    case "LABEL":
-    case "SERVICE_ORDER_INTAKE_DOCUMENT":
-    case "SERVICE_ORDER_TAG":
-    case "SERVICE_ORDER_QUOTE":
-    case "SERVICE_ORDER_DELIVERY_RECEIPT":
-    case "INTEGRATION_SYNC":
-    case "AUDIT_PACK":
-    case "OOT_NOTIFICATION":
-    case "SCHEDULED_NOTIFICATIONS":
-    case "PORTAL_DIGEST":
-      return message.type;
-    default:
-      return "CERTIFICATE";
-  }
-}
-
-function isDocumentWorkerJobType(
-  message: BackgroundJobMessage,
-): message is QueueMessage {
-  // SCHEDULED_NOTIFICATIONS and PORTAL_DIGEST are timer-only messages, not app_queue_job types, so they can never route to
-  // the container.
-  if (
-    message.type === "SCHEDULED_NOTIFICATIONS" ||
-    message.type === "PORTAL_DIGEST"
-  ) {
-    return false;
-  }
-  return getDocumentWorkerJobTypes().has(resolveQueueJobType(message));
-}
 
 // The container scales to zero after 15m idle, so the first drain ping after an
 // idle period has to outlast a cold start: Cloudflare holds the request open

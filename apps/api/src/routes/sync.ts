@@ -98,9 +98,7 @@ import { reconcileMethodSnapshotEngine } from "../lib/method-snapshot-engine";
 import { resolveAssetRegimeWrite } from "../lib/asset-regime";
 import { deriveRegulatedNextDate } from "../lib/regulated-interval";
 import { deriveNextCalibrationDate } from "../lib/portal-asset-interval";
-import { buildAsFoundReliabilityVerdict } from "../lib/as-found-reliability-verdict";
-import { classifyJobScopeCompliance } from "../lib/scope-compliance";
-import { advanceAssetCalibrationDatesOnApproval } from "../lib/asset-calibration-advance";
+import { approveJob } from "../modules/jobs/approve-job";
 import {
   asRecord,
   buildSyncAttachmentObjectKey,
@@ -1421,6 +1419,30 @@ async function applyDesktopCertificatePdfUpload(
     });
   }
 
+  // A desktop publish is an approval (it releases the certificate), so the
+  // approver is the AUTHENTICATED pushing user — nothing in the multipart
+  // payload can name someone else. The device holds no per-user signing
+  // credential and the cloud keeps no device registry, so a different
+  // `actorUserId` cannot be verified; it is refused instead of re-attributed
+  // (an approval must never be recorded against, or checked as, a person who
+  // did not authenticate it). The offline approver signs in on the device and
+  // pushes under their own session.
+  const claimedApprover = getClaimedSyncActorUserId(upload.actorUserId);
+  if (claimedApprover !== null && claimedApprover !== input.sessionUserId) {
+    return syncPushResponseSchema.parse({
+      accepted: [],
+      rejected: [
+        {
+          eventId: upload.eventId,
+          code: "APPROVAL_ACTOR_MISMATCH",
+          reason:
+            "Offline approvals must be pushed by the authenticated user who approved; the claimed actor differs from the session.",
+        },
+      ],
+      conflicts: [],
+    });
+  }
+
   try {
     const existingRemoteKey = await findDesktopSyncRemoteEntityId(
       input.memberData.organizationId,
@@ -1544,15 +1566,7 @@ async function applyDesktopCertificatePdfUpload(
     });
     const certificateUrl = storedObjectUrl(remoteKey);
     const r2Client = createR2Client(input.env);
-    const actorUserId = getSyncActorUserId(
-      buildCertificatePdfUploadSyncEvent(upload, {
-        contentHash,
-        remoteKey,
-        sizeBytes: bytes.byteLength,
-      }),
-      input.sessionUserId,
-    );
-    const approvedAt = job.approvedAt ?? new Date();
+    const actorUserId = input.sessionUserId;
     // A pre-redesign desktop build may arrive with a template snapshot frozen
     // onto the job. It is accepted and preserved as the historical evidence it
     // is, but nothing FABRICATES one any more: the previous version wrote a
@@ -1566,90 +1580,54 @@ async function applyDesktopCertificatePdfUpload(
     // would lose them. That is not a claim that desktop issuance still works —
     // generateLocalCertificateDraft (apps/local-server/src/certificates.ts)
     // throws unconditionally, so nothing offline renders a certificate today.
+    // The release RULES (below) are not optional, though: a refused approval
+    // comes back as a rejected op and the desktop surfaces it.
 
-    await uploadToR2(
-      r2Client,
-      input.env.R2_BUCKET_NAME,
-      remoteKey,
-      bytes,
-      "application/pdf",
-    );
-
-    // AS-FOUND (pre-adjustment) reliability verdict — mirrors the cloud
-    // approval route so a desktop-approved cycle feeds the ILAC-G24 / NCSL
-    // RP-1 interval analysis instead of staying permanently UNKNOWN.
-    // Read-only over the frozen `results`; recomputing is idempotent.
-    const asFoundVerdict = buildAsFoundReliabilityVerdict({
-      results: job.results,
-    });
-
-    // Accredited-scope (CMC) classification — mirrors the cloud approval
-    // route (#427) so a desktop-published certificate carries the same frozen
-    // verdict instead of staying permanently unclassified. Warn-only here:
-    // this path is a trusted publish mirror for work already released on the
-    // desktop; whether enforce mode should reject the publish outright is a
-    // separate product decision.
-    const { compliance: scopeCompliance } = await classifyJobScopeCompliance({
-      organizationId: input.memberData.organizationId,
-      unitId: job.unitId,
-      methodSnapshot: job.methodSnapshot,
-      assetSnapshot: job.assetSnapshot,
-      data: job.data,
-      results: job.results,
-      atDate: approvedAt,
-    });
-
-    await db
-      .update(calibrationJob)
-      .set({
-        status: "APPROVED",
-        certificateUrl,
-        approvedBy: job.approvedBy ?? actorUserId,
-        approvedAt,
-        asFoundConformity: asFoundVerdict.conformity,
-        asFoundMargins: asFoundVerdict.margins,
-        scopeComplianceStatus: scopeCompliance?.status ?? null,
-        scopeComplianceFindings: scopeCompliance?.findings ?? null,
-        certificateTemplateSnapshot: job.certificateTemplateSnapshot ?? null,
-        updatedAt: new Date(),
-      })
-      .where(eq(calibrationJob.id, job.id));
-
-    // Advance the asset's calibration dates from the published work — same
-    // rule as the cloud approval route (forward-only, never fails the sync).
-    await advanceAssetCalibrationDatesOnApproval({
-      assetId: job.assetId,
-      calibrationDate: job.performedAt ?? approvedAt,
-      performedBy: actorUserId,
-      source: "desktop_certificate_publish",
-    });
-
-    await db.insert(jobAuditLog).values({
+    // The release itself is the shared approval command — the same gates
+    // (role, separation of duties, authorized signatory, environmental
+    // justification, accredited scope), compare-and-set transition and audit
+    // as the cloud route. The PDF is uploaded only once the policy passed.
+    const approval = await approveJob({
       jobId: job.id,
-      action: "certificate_published_from_desktop",
-      changes: {
-        source: "desktop_sync",
-        status: { old: job.status, new: "APPROVED" },
-        ...(job.scopeComplianceStatus !== (scopeCompliance?.status ?? null)
-          ? {
-              scopeComplianceStatus: {
-                old: job.scopeComplianceStatus,
-                new: scopeCompliance?.status ?? null,
-              },
-            }
-          : {}),
-        approvedBy: { old: job.approvedBy, new: job.approvedBy ?? actorUserId },
-        approvedAt: {
-          old: job.approvedAt?.toISOString?.() ?? job.approvedAt,
-          new: approvedAt.toISOString(),
+      actor: { kind: "user", member: input.memberData },
+      values: {},
+      metadata: {},
+      completion: {
+        kind: "publish_desktop_certificate",
+        publish: async () => {
+          await uploadToR2(
+            r2Client,
+            input.env.R2_BUCKET_NAME,
+            remoteKey,
+            bytes,
+            "application/pdf",
+          );
+          return {
+            certificateUrl,
+            auditChanges: {
+              contentHash,
+              sizeBytes: bytes.byteLength,
+              remoteKey,
+            },
+          };
         },
-        certificateUrl: { old: job.certificateUrl, new: certificateUrl },
-        contentHash,
-        sizeBytes: bytes.byteLength,
-        remoteKey,
       },
-      performedBy: actorUserId,
     });
+
+    if (approval.status !== "approved") {
+      return syncPushResponseSchema.parse({
+        accepted: [],
+        rejected: [
+          {
+            eventId: upload.eventId,
+            ...describeRefusedDesktopApproval(approval),
+          },
+        ],
+        conflicts: [],
+      });
+    }
+
+    const approvedAt = approval.job?.approvedAt ?? new Date();
 
     await writeOrganizationAuditEvent({
       organizationId: input.memberData.organizationId,
@@ -1671,11 +1649,6 @@ async function applyDesktopCertificatePdfUpload(
         portalVisible: true,
         contentHash,
         sizeBytes: bytes.byteLength,
-        // Keep the offline-actor vs pushing-user discrepancy visible in the
-        // audit trail (the actor was validated as an org member at push time).
-        ...(actorUserId !== input.sessionUserId
-          ? { pushedByUserId: input.sessionUserId }
-          : {}),
       },
     });
 
@@ -1720,7 +1693,12 @@ async function applyDesktopCertificatePdfUpload(
 async function applyDesktopSyncEvent(
   input: ApplyDesktopSyncEventInput,
 ): Promise<ApplyDesktopSyncEventResult> {
-  const actorUserId = getSyncActorUserId(input.event, input.sessionUserId);
+  // The recorded actor (performedBy / createdBy / approver) is ALWAYS the
+  // authenticated pushing user. The actor id inside the pushed event is a
+  // client assertion the server cannot verify, so it never becomes an identity
+  // in the regulated trail; it is kept only as audit metadata
+  // (`claimedActorUserId`, see writeDesktopSyncAudit).
+  const actorUserId = input.sessionUserId;
 
   try {
     if (
@@ -4000,23 +3978,75 @@ type CertificatePdfUploadFields = {
   file: File;
 };
 
-function buildCertificatePdfUploadSyncEvent(
-  upload: CertificatePdfUploadFields,
-  payload: Record<string, unknown>,
-): SyncEvent {
-  return {
-    eventId: upload.eventId,
-    entityType: "certificate_draft",
-    entityId: upload.entityId,
-    operation: upload.operation,
-    payload,
-    occurredAt: upload.occurredAt,
-    actorUserId: upload.actorUserId,
-    organizationId: upload.organizationId,
-    unitId: upload.unitId,
-    idempotencyKey: upload.idempotencyKey,
-    localVersion: upload.localVersion,
-  };
+type RefusedDesktopApproval = Exclude<
+  Awaited<ReturnType<typeof approveJob>>,
+  { status: "approved" }
+>;
+
+/**
+ * Maps a refusal from the shared approval command to the rejected-op shape the
+ * desktop outbox stores (`code: reason` in `last_error`). Always a rejection —
+ * never `accepted`, never silently dropped.
+ */
+function describeRefusedDesktopApproval(refusal: RefusedDesktopApproval): {
+  code: string;
+  reason: string;
+} {
+  switch (refusal.status) {
+    case "not_found":
+      return {
+        code: "REMOTE_ENTITY_NOT_FOUND",
+        reason: "Cloud job for desktop certificate PDF was not found.",
+      };
+    case "invalid_status":
+      return {
+        code: "INVALID_STATUS_TRANSITION",
+        reason: `Cannot publish desktop certificate PDF for job with status ${refusal.currentStatus}.`,
+      };
+    case "approval_requires_signatory":
+    case "role_not_permitted":
+      return {
+        code: "APPROVAL_ROLE_NOT_PERMITTED",
+        reason:
+          "The authenticated user is not allowed to approve calibrations; the offline approval was not applied.",
+      };
+    case "self_approval_blocked":
+      return {
+        code: "SELF_APPROVAL_BLOCKED",
+        reason:
+          "Separation of duties (ISO/IEC 17025): the user who executed or created the calibration cannot approve it; the offline approval was not applied.",
+      };
+    case "not_authorized_signatory":
+      return {
+        code: "APPROVER_NOT_AUTHORIZED_SIGNATORY",
+        reason:
+          "The approver is not an authorized signatory for this instrument type (ISO/IEC 17025 6.2.6); the offline approval was not applied.",
+      };
+    case "environmental_justification_required":
+      return {
+        code: "ENVIRONMENTAL_JUSTIFICATION_REQUIRED",
+        reason:
+          "Environmental conditions were out of limits and no justification is recorded; approve the job in the cloud app with a justification.",
+      };
+    case "scope_violation":
+      return {
+        code: "SCOPE_VIOLATION",
+        reason:
+          "Accredited-scope (CMC) violation blocks accredited issuance; approve the job in the cloud app with a documented justification.",
+      };
+    case "dispatch_failed":
+      return {
+        code: "APPROVAL_DISPATCH_FAILED",
+        reason:
+          "The certificate job could not be dispatched; the approval was reverted.",
+      };
+    case "concurrent_approval":
+      return {
+        code: "APPROVAL_CONFLICT",
+        reason:
+          "The cloud job changed (another approval or review) while this offline approval was being applied; nothing was written.",
+      };
+  }
 }
 
 function readCertificatePdfUploadFields(
@@ -4244,6 +4274,7 @@ async function writeDesktopSyncAudit(
   actorUserId: string,
   details: Record<string, unknown> = {},
 ) {
+  const claimedActorUserId = getClaimedSyncActorUserId(input.event.actorUserId);
   await writeOrganizationAuditEvent({
     organizationId: input.memberData.organizationId,
     unitId: input.event.unitId,
@@ -4260,20 +4291,14 @@ async function writeDesktopSyncAudit(
       localVersion: input.event.localVersion,
       payload: input.event.payload,
       localEntityId: input.event.entityId,
-      // Keep the offline-actor vs pushing-user discrepancy visible in the
-      // audit trail (the actor was validated as an org member at push time).
-      ...(actorUserId !== input.sessionUserId
-        ? { pushedByUserId: input.sessionUserId }
+      // The offline-actor claim is metadata only (validated as an org member
+      // at push time, never trusted as identity): keep any discrepancy visible.
+      ...(claimedActorUserId !== null && claimedActorUserId !== actorUserId
+        ? { claimedActorUserId }
         : {}),
       ...details,
     },
   });
-}
-
-function getSyncActorUserId(event: SyncEvent, fallbackUserId: string) {
-  return event.actorUserId && event.actorUserId !== "local"
-    ? event.actorUserId
-    : fallbackUserId;
 }
 
 function getClaimedSyncActorUserId(actorUserId: string | null | undefined) {

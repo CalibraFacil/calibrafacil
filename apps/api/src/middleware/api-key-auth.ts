@@ -15,6 +15,7 @@ export interface ApiKeyAuthVariables {
     organizationId: string;
     scopes: string[];
     name: string;
+    keyPrefix: string;
     createdBy: string;
   };
 }
@@ -54,6 +55,7 @@ export const requireApiKeyAuth = createMiddleware<{
     organizationId: keyRecord.organizationId,
     scopes: keyRecord.scopes,
     name: keyRecord.name,
+    keyPrefix: keyRecord.keyPrefix,
     createdBy: keyRecord.createdBy,
   });
 

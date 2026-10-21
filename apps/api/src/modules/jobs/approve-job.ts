@@ -1,10 +1,18 @@
+import { canPerformCalibrationAction } from "@calibra-facil/auth/access";
 import { db } from "@calibra-facil/db";
 import { calibrationJob, jobAuditLog, member } from "@calibra-facil/db/schema";
 import type { ApproveJobSchema } from "@calibra-facil/schemas";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import type { z } from "zod";
-import type { AuthVariables } from "../../middleware/permission";
+import {
+  getCalibrationAuthorizationRole,
+  type AuthVariables,
+} from "../../middleware/permission";
 import { enqueueBackgroundJob } from "../../lib/background-jobs";
+import {
+  dispatchStagedBackgroundJob,
+  stageBackgroundJob,
+} from "../../lib/background-job-outbox";
 import { buildAsFoundReliabilityVerdict } from "../../lib/as-found-reliability-verdict";
 import {
   classifyJobScopeCompliance,
@@ -24,6 +32,63 @@ import { notifyJobApproved } from "@calibra-facil/notifications";
 type JobRow = typeof calibrationJob.$inferSelect;
 type ApproveJobInput = z.infer<typeof ApproveJobSchema>;
 
+/**
+ * WHO is approving. Every entry point that can release a calibration builds
+ * one of these explicitly, so the policy never infers an approver from a
+ * transport (session cookie, API key, desktop push). The policy always runs
+ * against a PERSON (`member`): the role gate, separation of duties and the
+ * signatory roster are properties of people, never of a credential.
+ *
+ * - `user`: an authenticated lab member. Cloud routes pass the session's
+ *   member; the desktop sync passes the member of the AUTHENTICATED pushing
+ *   session — never an actor id claimed in the pushed payload.
+ * - `api_key`: an organization API key acting for its creator, who is the
+ *   accountable approver (`member` = the creator's CURRENT membership, null if
+ *   they left the organization, which refuses the approval). The key identity
+ *   is recorded in the job audit row so the trail reads "creator X approved
+ *   through key Y", not "in a session". Revoked keys never reach this point
+ *   (API-key auth rejects them).
+ */
+export type ApprovalActor =
+  | { kind: "user"; member: AuthVariables["member"] }
+  | {
+      kind: "api_key";
+      apiKey: { id: string; name: string; keyPrefix: string };
+      member: AuthVariables["member"] | null;
+    };
+
+/** What a successful approval does to the job. */
+export type ApprovalCompletion =
+  | {
+      /** Cloud: REVIEW → GENERATING_PDF, the worker renders the certificate. */
+      kind: "generate_certificate_pdf";
+      /**
+       * Env-bound financial dispatch, injected by the route: the command owns
+       * the "which service orders, which milestone" flow while the transport
+       * to the finance engine stays with the caller.
+       */
+      sendServiceOrdersToFinance: (params: {
+        organizationId: string;
+        serviceOrderIds: number[];
+        actorUserId: string;
+      }) => Promise<ReadonlyArray<FinanceSendResult>>;
+    }
+  | {
+      /**
+       * Desktop sync: the certificate PDF was rendered offline and is
+       * published as the release. REVIEW → APPROVED.
+       */
+      kind: "publish_desktop_certificate";
+      /**
+       * Stores the PDF. Called only AFTER the approval policy passed (nothing
+       * is uploaded for a refused approval) and before the state transition.
+       */
+      publish: () => Promise<{
+        certificateUrl: string;
+        auditChanges: Record<string, unknown>;
+      }>;
+    };
+
 export type FinanceSendResult = {
   ok: boolean;
   billingDocumentId?: number | null;
@@ -33,8 +98,28 @@ export type FinanceSendResult = {
 export type ApproveJobResult =
   | { status: "not_found" }
   | { status: "invalid_status"; currentStatus: JobRow["status"] }
+  /** An API key whose creator is no longer a member: nobody is accountable. */
+  | { status: "approval_requires_signatory" }
+  /** The actor's role may not approve (`calibrationWorkflowPermissions`). */
+  | { status: "role_not_permitted" }
   | { status: "self_approval_blocked" }
   | { status: "not_authorized_signatory" }
+  | {
+      /**
+       * The certificate job could not be dispatched after the approval
+       * committed; the approval was reverted to REVIEW (with an audit row) so
+       * the job is not stranded in GENERATING_PDF. Retry the approval.
+       */
+      status: "dispatch_failed";
+    }
+  | {
+      /**
+       * Compare-and-set lost: the job left the status this approval was
+       * evaluated against between the read and the write (a concurrent
+       * approval/rejection). Nothing was written.
+       */
+      status: "concurrent_approval";
+    }
   | {
       status: "environmental_justification_required";
       environmentalSnapshot: JobRow["environmentalSnapshot"];
@@ -54,30 +139,132 @@ export type ApproveJobResult =
       scopeCompliance: JobRow["scopeComplianceStatus"];
     };
 
-/**
- * Approve a calibration job: the ISO/IEC 17025 release gates, the
- * REVIEW → GENERATING_PDF transition, the audit trail, and the post-approval
- * side effects, callable without the HTTP pipeline. The route adapter maps
- * each result status to its response.
- */
-export async function approveJob(input: {
+export type ApproveJobCommand = {
   jobId: number;
-  member: AuthVariables["member"];
-  approverId: string;
+  actor: ApprovalActor;
   values: ApproveJobInput;
   metadata: { ipAddress?: string | null };
-  /**
-   * Env-bound financial dispatch, injected by the route: the command owns the
-   * "which service orders, which milestone" flow while the transport to the
-   * finance engine stays with the caller.
-   */
-  sendServiceOrdersToFinance: (params: {
-    organizationId: string;
-    serviceOrderIds: number[];
-    actorUserId: string;
-  }) => Promise<ReadonlyArray<FinanceSendResult>>;
-}): Promise<ApproveJobResult> {
-  const { jobId, member: memberData, approverId, values } = input;
+  completion: ApprovalCompletion;
+};
+
+type ReleaseEvaluation =
+  | { status: "scope_violation"; scopeCompliance: ScopeComplianceResult }
+  | {
+      status: "ok";
+      asFound: ReturnType<typeof buildAsFoundReliabilityVerdict>;
+      scopeCompliance: {
+        status: JobRow["scopeComplianceStatus"];
+        findings: JobRow["scopeComplianceFindings"];
+      };
+      appliedScopeOverride: string | null;
+      /** Snapshot with the approver's justification, when one applies. */
+      environmentalSnapshot: JobRow["environmentalSnapshot"] | undefined;
+    };
+
+async function evaluateRelease(params: {
+  existing: JobRow;
+  organizationId: string;
+  values: ApproveJobInput;
+  approvedAt: Date;
+}): Promise<ReleaseEvaluation> {
+  const { existing, values } = params;
+
+  // The environmental justification is persisted by the same compare-and-set
+  // write as the transition, so a refused/raced approval never leaves a
+  // justification behind on a job that was not released.
+  const environmentalSnapshot =
+    values.environmentalJustification &&
+    existing.environmentalSnapshot &&
+    !existing.environmentalSnapshot.withinLimits
+      ? {
+          ...existing.environmentalSnapshot,
+          outOfLimitsJustification: values.environmentalJustification,
+        }
+      : undefined;
+
+  // Derive the AS-FOUND (pre-adjustment) reliability verdict from the frozen
+  // results, for ILAC-G24 / NCSL RP-1 interval analysis. Read-only over
+  // `results`; it does NOT influence approval, conformity, or the certificate.
+  const asFound = buildAsFoundReliabilityVerdict({ results: existing.results });
+
+  // Accredited-scope (CMC) guard — ISO/IEC 17025 §7.6/§7.8.3, ILAC P14
+  // (#427). Re-classified here at the emission date so the frozen record is
+  // authoritative even if scope lines changed since submit. In 'warn' mode
+  // the classification never blocks; in 'enforce' mode an adverse result
+  // blocks accredited issuance unless a documented override downgrades the
+  // certificate to non-accredited (seal suppressed at every render site).
+  const { compliance, enforcementMode } = await classifyJobScopeCompliance({
+    organizationId: params.organizationId,
+    unitId: existing.unitId,
+    methodSnapshot: existing.methodSnapshot,
+    assetSnapshot: existing.assetSnapshot,
+    data: existing.data,
+    results: existing.results,
+    atDate: params.approvedAt,
+  });
+
+  const scopeOverrideJustification =
+    values.scopeOverrideJustification?.trim() || null;
+  const scopeBlocked =
+    enforcementMode === "enforce" && isAdverseScopeCompliance(compliance);
+  if (scopeBlocked && compliance && !scopeOverrideJustification) {
+    return { status: "scope_violation", scopeCompliance: compliance };
+  }
+
+  return {
+    status: "ok",
+    asFound,
+    scopeCompliance: {
+      status: compliance?.status ?? null,
+      findings: compliance?.findings ?? null,
+    },
+    // The override is only meaningful when it is actually unblocking an
+    // enforced violation — never let a stray justification downgrade a
+    // passing (or warn-mode) certificate.
+    appliedScopeOverride: scopeBlocked ? scopeOverrideJustification : null,
+    environmentalSnapshot,
+  };
+}
+
+/**
+ * Approve a calibration job — the ONE implementation behind every entry point
+ * (cloud route, public API, desktop sync). It owns the ISO/IEC 17025 release
+ * gates, the compare-and-set status transition, the audit trail and the
+ * post-approval side effects, callable without the HTTP pipeline. Route
+ * adapters only build the actor and map each result status to a response.
+ *
+ * Concurrency: the job row is written with
+ * `WHERE id AND organization_id AND status = <status evaluated>` inside a
+ * transaction together with its audit row, so a concurrent or repeated
+ * approval matches zero rows and yields `concurrent_approval` instead of
+ * double-releasing. Fire-and-forget side effects run after the commit.
+ */
+export async function approveJob(
+  input: ApproveJobCommand,
+): Promise<ApproveJobResult> {
+  const { jobId, actor, values, completion } = input;
+
+  // The accountable person. A key whose creator left the organization has
+  // nobody to hold the approval, so it is refused before anything is read.
+  const memberData = actor.member;
+  if (!memberData) {
+    return { status: "approval_requires_signatory" };
+  }
+  const approverId = memberData.userId;
+
+  // Role gate: the workflow matrix (`calibrationWorkflowPermissions`) — REVIEW
+  // is the `in_review` workflow state. Same effective-role mapping as the
+  // `requireCalibrationAction` guard, so a caller that bypassed (or never had)
+  // the route guard — desktop sync, a future entry point — is still held to it.
+  if (
+    !canPerformCalibrationAction(
+      getCalibrationAuthorizationRole(memberData),
+      "in_review",
+      "approve",
+    )
+  ) {
+    return { status: "role_not_permitted" };
+  }
 
   const [existing] = await db
     .select()
@@ -95,8 +282,15 @@ export async function approveJob(input: {
     return { status: "not_found" };
   }
 
+  // A desktop-published certificate for a job the cloud already released
+  // (GENERATING_PDF is reachable only through this command) is not a second
+  // approval: the gates ran when it was released and the approver stays.
+  const publishOnly =
+    completion.kind === "publish_desktop_certificate" &&
+    existing.status === "GENERATING_PDF";
+
   // Can only approve from REVIEW status
-  if (existing.status !== "REVIEW") {
+  if (existing.status !== "REVIEW" && !publishOnly) {
     return { status: "invalid_status", currentStatus: existing.status };
   }
 
@@ -112,8 +306,8 @@ export async function approveJob(input: {
   // member can access the job's unit by construction (no unit-scope join
   // needed here).
   if (
-    existing.technicianId === approverId ||
-    existing.createdBy === approverId
+    !publishOnly &&
+    (existing.technicianId === approverId || existing.createdBy === approverId)
   ) {
     const [alternateApprover] = await db
       .select({ id: member.id })
@@ -138,13 +332,15 @@ export async function approveJob(input: {
   // — skipped when the org has no signatory records. Distinct from execution
   // competence (which gates the technician at assignment) and from the
   // self-approval gate above — four-eyes by identity vs. signatory scope.
-  const signatoryGate = await checkApproverIsAuthorizedSignatory({
-    organizationId: memberData.organizationId,
-    approverId,
-    assetId: existing.assetId,
-  });
-  if (!signatoryGate.ok) {
-    return { status: "not_authorized_signatory" };
+  if (!publishOnly) {
+    const signatoryGate = await checkApproverIsAuthorizedSignatory({
+      organizationId: memberData.organizationId,
+      approverId,
+      assetId: existing.assetId,
+    });
+    if (!signatoryGate.ok) {
+      return { status: "not_authorized_signatory" };
+    }
   }
 
   // Check environmental conditions - block approval if out of limits without justification
@@ -152,7 +348,8 @@ export async function approveJob(input: {
     existing.environmentalSnapshot &&
     !existing.environmentalSnapshot.withinLimits &&
     !existing.environmentalSnapshot.outOfLimitsJustification &&
-    !values.environmentalJustification
+    !values.environmentalJustification &&
+    !publishOnly
   ) {
     return {
       status: "environmental_justification_required",
@@ -160,117 +357,220 @@ export async function approveJob(input: {
     };
   }
 
-  // Save environmental justification if provided
-  if (
-    values.environmentalJustification &&
-    existing.environmentalSnapshot &&
-    !existing.environmentalSnapshot.withinLimits
-  ) {
-    await db
+  // The release evaluation below (as-found verdict, accredited-scope
+  // classification and its documented override) is frozen at the moment of
+  // release. It is NOT recomputed for a publish-only desktop push on a job the
+  // cloud already released: that would re-derive it from `values: {}` and erase
+  // the override justification recorded with the original approval (the
+  // seal-suppression record), so the stored record is kept as is.
+  const approvedAt =
+    completion.kind === "publish_desktop_certificate"
+      ? (existing.approvedAt ?? new Date())
+      : new Date();
+  const evaluation = publishOnly
+    ? null
+    : await evaluateRelease({
+        existing,
+        organizationId: memberData.organizationId,
+        values,
+        approvedAt,
+      });
+  if (evaluation?.status === "scope_violation") {
+    return evaluation;
+  }
+
+  // Every gate passed. A desktop certificate is stored only now, so a refused
+  // approval uploads nothing.
+  const published =
+    completion.kind === "publish_desktop_certificate"
+      ? await completion.publish()
+      : null;
+
+  const scopeChanges =
+    evaluation &&
+    existing.scopeComplianceStatus !== evaluation.scopeCompliance.status
+      ? {
+          scopeComplianceStatus: {
+            old: existing.scopeComplianceStatus,
+            new: evaluation.scopeCompliance.status,
+          },
+        }
+      : {};
+  const appliedScopeOverride = evaluation?.appliedScopeOverride ?? null;
+
+  // Status transition + audit row in ONE transaction, compare-and-set on the
+  // status that was evaluated: a concurrent or repeated approval matches zero
+  // rows and writes nothing (no double release, no orphan audit row), and an
+  // audit failure rolls the approval back instead of releasing unaudited.
+  // Approval through an API key: record the credential next to the person it
+  // acted for (`performedBy`), so the trail shows creator X approved via key Y.
+  const approvedVia =
+    actor.kind === "api_key"
+      ? {
+          approvedVia: {
+            channel: "api_key",
+            apiKeyId: actor.apiKey.id,
+            apiKeyName: actor.apiKey.name,
+            apiKeyPrefix: actor.apiKey.keyPrefix,
+          },
+        }
+      : {};
+
+  const transition: Partial<typeof calibrationJob.$inferInsert> = published
+    ? {
+        status: "APPROVED",
+        certificateUrl: published.certificateUrl,
+        approvedBy: existing.approvedBy ?? approverId,
+        certificateTemplateSnapshot:
+          existing.certificateTemplateSnapshot ?? null,
+        updatedAt: new Date(),
+      }
+    : {
+        // We set approved_by now so the PDF worker can fetch it.
+        status: "GENERATING_PDF",
+        approvedBy: approverId,
+      };
+
+  const outcome = await db.transaction(async (tx) => {
+    const [updated] = await tx
       .update(calibrationJob)
       .set({
-        environmentalSnapshot: {
-          ...existing.environmentalSnapshot,
-          outOfLimitsJustification: values.environmentalJustification,
-        },
+        ...transition,
+        // Publish-only keeps every field the original approval wrote
+        // (approver, time, as-found, scope verdict and override).
+        ...(evaluation
+          ? {
+              approvedAt,
+              ...(evaluation.environmentalSnapshot
+                ? { environmentalSnapshot: evaluation.environmentalSnapshot }
+                : {}),
+              asFoundConformity: evaluation.asFound.conformity,
+              asFoundMargins: evaluation.asFound.margins,
+              scopeComplianceStatus: evaluation.scopeCompliance.status,
+              scopeComplianceFindings: evaluation.scopeCompliance.findings,
+              scopeOverrideJustification: evaluation.appliedScopeOverride,
+              // A resubmitted (previously rejected) job is released clean:
+              // the stale rejection must not read as the current state.
+              rejectedBy: null,
+              rejectedAt: null,
+              rejectionReason: null,
+            }
+          : {}),
       })
-      .where(eq(calibrationJob.id, jobId));
-  }
+      .where(
+        and(
+          eq(calibrationJob.id, jobId),
+          eq(calibrationJob.organizationId, memberData.organizationId),
+          eq(calibrationJob.status, existing.status),
+        ),
+      )
+      .returning();
 
-  // Derive the AS-FOUND (pre-adjustment) reliability verdict from the frozen
-  // results, for ILAC-G24 / NCSL RP-1 interval analysis. Read-only over
-  // `results`; it does NOT influence approval, conformity, or the certificate.
-  const asFoundVerdict = buildAsFoundReliabilityVerdict({
-    results: existing.results,
+    if (!updated) {
+      return null;
+    }
+
+    await tx.insert(jobAuditLog).values(
+      published
+        ? {
+            jobId,
+            action: "certificate_published_from_desktop",
+            changes: {
+              source: "desktop_sync",
+              ...approvedVia,
+              status: { old: existing.status, new: "APPROVED" },
+              ...scopeChanges,
+              approvedBy: {
+                old: existing.approvedBy,
+                new: existing.approvedBy ?? approverId,
+              },
+              approvedAt: {
+                old: existing.approvedAt?.toISOString() ?? null,
+                new: approvedAt.toISOString(),
+              },
+              certificateUrl: {
+                old: existing.certificateUrl,
+                new: published.certificateUrl,
+              },
+              ...published.auditChanges,
+            },
+            performedBy: approverId,
+            ipAddress: input.metadata.ipAddress ?? null,
+          }
+        : {
+            jobId,
+            action: "approve",
+            changes: {
+              status: { old: existing.status, new: "GENERATING_PDF" },
+              ...approvedVia,
+              // Recorded on ANY transition — including adverse → null when the
+              // guard stopped applying (scope lines deleted, vigência lapsed).
+              // Erasing a previously frozen verdict without an audit entry
+              // would leave a §8.4 gap and make bypass-by-deleting-scope-lines
+              // invisible.
+              ...scopeChanges,
+              ...(appliedScopeOverride
+                ? {
+                    scopeOverrideJustification: {
+                      old: existing.scopeOverrideJustification,
+                      new: appliedScopeOverride,
+                    },
+                  }
+                : {}),
+            },
+            performedBy: approverId,
+            ipAddress: input.metadata.ipAddress ?? null,
+            // Keep the approver's own notes alongside the override record —
+            // the downgrade must not erase the supplied approval reason from
+            // the trail.
+            reason: appliedScopeOverride
+              ? [
+                  `Aprovado SEM selo de acreditação (violação de escopo/CMC documentada): ${appliedScopeOverride}`,
+                  values.reason?.trim() || null,
+                ]
+                  .filter(Boolean)
+                  .join(" | ")
+              : values.reason || "Aprovado - Gerando PDF",
+          },
+    );
+
+    // Outbox: when certificate jobs are dispatched through `app_queue_job`
+    // (same Postgres) the queue row commits atomically with the approval, so a
+    // dispatch failure can never strand the job in GENERATING_PDF — the
+    // stale-lease backstop owns every row that exists.
+    const staged =
+      completion.kind === "generate_certificate_pdf"
+        ? await stageBackgroundJob(tx, { jobId, userId: approverId })
+        : null;
+
+    return { updated, staged };
   });
 
-  // Accredited-scope (CMC) guard — ISO/IEC 17025 §7.6/§7.8.3, ILAC P14
-  // (#427). Re-classified here at the emission date so the frozen record is
-  // authoritative even if scope lines changed since submit. In 'warn' mode
-  // the classification never blocks; in 'enforce' mode an adverse result
-  // blocks accredited issuance unless a documented override downgrades the
-  // certificate to non-accredited (seal suppressed at every render site).
-  const approvedAt = new Date();
-  const { compliance: scopeCompliance, enforcementMode } =
-    await classifyJobScopeCompliance({
-      organizationId: memberData.organizationId,
-      unitId: existing.unitId,
-      methodSnapshot: existing.methodSnapshot,
-      assetSnapshot: existing.assetSnapshot,
-      data: existing.data,
-      results: existing.results,
-      atDate: approvedAt,
-    });
-
-  const scopeOverrideJustification =
-    values.scopeOverrideJustification?.trim() || null;
-  const scopeBlocked =
-    enforcementMode === "enforce" && isAdverseScopeCompliance(scopeCompliance);
-  if (scopeBlocked && scopeCompliance && !scopeOverrideJustification) {
-    return { status: "scope_violation", scopeCompliance };
+  if (!outcome) {
+    return { status: "concurrent_approval" };
   }
-  // The override is only meaningful when it is actually unblocking an
-  // enforced violation — never let a stray justification downgrade a
-  // passing (or warn-mode) certificate.
-  const appliedScopeOverride = scopeBlocked ? scopeOverrideJustification : null;
+  const { updated, staged } = outcome;
 
-  // Update job status to GENERATING_PDF and set approver info
-  // (we set approved_by now so the PDF worker can fetch it)
-  const [updated] = await db
-    .update(calibrationJob)
-    .set({
-      status: "GENERATING_PDF",
-      approvedBy: approverId,
-      approvedAt,
-      asFoundConformity: asFoundVerdict.conformity,
-      asFoundMargins: asFoundVerdict.margins,
-      scopeComplianceStatus: scopeCompliance?.status ?? null,
-      scopeComplianceFindings: scopeCompliance?.findings ?? null,
-      scopeOverrideJustification: appliedScopeOverride,
-    })
-    .where(eq(calibrationJob.id, jobId))
-    .returning();
-
-  // Audit log
-  await db.insert(jobAuditLog).values({
-    jobId,
-    action: "approve",
-    changes: {
-      status: { old: existing.status, new: "GENERATING_PDF" },
-      // Recorded on ANY transition — including adverse → null when the guard
-      // stopped applying (scope lines deleted, vigência lapsed). Erasing a
-      // previously frozen verdict without an audit entry would leave a §8.4
-      // gap and make bypass-by-deleting-scope-lines invisible.
-      ...(existing.scopeComplianceStatus !== (scopeCompliance?.status ?? null)
-        ? {
-            scopeComplianceStatus: {
-              old: existing.scopeComplianceStatus,
-              new: scopeCompliance?.status ?? null,
-            },
-          }
-        : {}),
-      ...(appliedScopeOverride
-        ? {
-            scopeOverrideJustification: {
-              old: existing.scopeOverrideJustification,
-              new: appliedScopeOverride,
-            },
-          }
-        : {}),
-    },
-    performedBy: approverId,
-    ipAddress: input.metadata.ipAddress ?? null,
-    // Keep the approver's own notes alongside the override record — the
-    // downgrade must not erase the supplied approval reason from the trail.
-    reason: appliedScopeOverride
-      ? [
-          `Aprovado SEM selo de acreditação (violação de escopo/CMC documentada): ${appliedScopeOverride}`,
-          values.reason?.trim() || null,
-        ]
-          .filter(Boolean)
-          .join(" | ")
-      : values.reason || "Aprovado - Gerando PDF",
-  });
+  if (completion.kind === "generate_certificate_pdf") {
+    if (staged) {
+      await dispatchStagedBackgroundJob();
+    } else {
+      try {
+        await enqueueBackgroundJob({ jobId, userId: approverId });
+      } catch (error) {
+        // Not durable in our database (Vercel Queue / in-process): nothing
+        // would ever pick the job up. Compensate instead of leaving it in
+        // GENERATING_PDF forever.
+        await revertApprovalAfterDispatchFailure({
+          existing,
+          approverId,
+          error,
+          ipAddress: input.metadata.ipAddress ?? null,
+        });
+        return { status: "dispatch_failed" };
+      }
+    }
+  }
 
   // Advance the asset's calibration dates from the approved work
   // (last_calibration_date + the derived next dates) — forward-only and
@@ -278,15 +578,112 @@ export async function approveJob(input: {
   // an instrument that was just calibrated.
   await advanceAssetCalibrationDatesOnApproval({
     assetId: existing.assetId,
-    calibrationDate: existing.performedAt ?? updated?.approvedAt ?? null,
+    calibrationDate: existing.performedAt ?? updated.approvedAt ?? null,
     performedBy: approverId,
-    source: "job_approval",
+    source: published ? "desktop_certificate_publish" : "job_approval",
   });
 
-  await enqueueBackgroundJob({
-    jobId,
-    userId: approverId,
-  });
+  if (completion.kind === "generate_certificate_pdf") {
+    runCloudApprovalSideEffects({
+      existing,
+      updated,
+      approverId,
+      organizationId: memberData.organizationId,
+      conformity: evaluation?.asFound.conformity ?? null,
+      sendServiceOrdersToFinance: completion.sendServiceOrdersToFinance,
+    });
+  }
+
+  return {
+    status: "approved",
+    job: updated,
+    scopeCompliance:
+      evaluation?.scopeCompliance.status ?? existing.scopeComplianceStatus,
+  };
+}
+
+/**
+ * Compensation for a dispatch that failed after the approval committed:
+ * compare-and-set the job back to the status it was approved from (only if it
+ * is still the approval this call made), restore what the approval wrote, and
+ * leave an audit row saying why. Never throws — a failed revert is logged
+ * loudly, the caller still reports the dispatch failure.
+ */
+async function revertApprovalAfterDispatchFailure(params: {
+  existing: JobRow;
+  approverId: string;
+  error: unknown;
+  ipAddress: string | null;
+}) {
+  const { existing, approverId } = params;
+  const message =
+    params.error instanceof Error ? params.error.message : "unknown error";
+  try {
+    await db.transaction(async (tx) => {
+      const [reverted] = await tx
+        .update(calibrationJob)
+        .set({
+          status: existing.status,
+          approvedBy: existing.approvedBy,
+          approvedAt: existing.approvedAt,
+          environmentalSnapshot: existing.environmentalSnapshot,
+          asFoundConformity: existing.asFoundConformity,
+          asFoundMargins: existing.asFoundMargins,
+          scopeComplianceStatus: existing.scopeComplianceStatus,
+          scopeComplianceFindings: existing.scopeComplianceFindings,
+          scopeOverrideJustification: existing.scopeOverrideJustification,
+          rejectedBy: existing.rejectedBy,
+          rejectedAt: existing.rejectedAt,
+          rejectionReason: existing.rejectionReason,
+        })
+        .where(
+          and(
+            eq(calibrationJob.id, existing.id),
+            eq(calibrationJob.organizationId, existing.organizationId),
+            eq(calibrationJob.status, "GENERATING_PDF"),
+            eq(calibrationJob.approvedBy, approverId),
+          ),
+        )
+        .returning();
+
+      if (!reverted) return;
+
+      await tx.insert(jobAuditLog).values({
+        jobId: existing.id,
+        action: "approve_reverted",
+        changes: {
+          status: { old: "GENERATING_PDF", new: existing.status },
+        },
+        performedBy: approverId,
+        ipAddress: params.ipAddress,
+        reason: `Aprovação revertida: falha ao enfileirar a geração do certificado (${message})`,
+      });
+    });
+  } catch (revertError) {
+    console.error(
+      "[Jobs] Approval dispatch failed AND the revert failed; job may be stuck in GENERATING_PDF",
+      { jobId: existing.id, dispatchError: message, revertError },
+    );
+  }
+}
+
+/**
+ * Post-commit, fire-and-forget effects of a cloud approval. Never blocks or
+ * fails the approval response.
+ */
+function runCloudApprovalSideEffects(params: {
+  existing: JobRow;
+  updated: JobRow;
+  approverId: string;
+  organizationId: string;
+  conformity: JobRow["asFoundConformity"];
+  sendServiceOrdersToFinance: Extract<
+    ApprovalCompletion,
+    { kind: "generate_certificate_pdf" }
+  >["sendServiceOrdersToFinance"];
+}) {
+  const { existing, updated, approverId, organizationId } = params;
+  const jobId = existing.id;
 
   // Send notification to technician (fire and forget)
   notifyJobApproved(jobId, approverId).catch((err) => {
@@ -296,13 +693,13 @@ export async function approveJob(input: {
   // #740 Track B: as-found non-conforming → customer-facing OOT event +
   // "avaliar impacto" alert (ISO 9001 §7.1.5.2). Idempotent per job;
   // fire-and-forget — never blocks the approval.
-  if (asFoundVerdict.conformity === "NON_CONFORMING") {
+  if (params.conformity === "NON_CONFORMING") {
     createAssetOotEventForApprovedJob({
       jobId,
       assetId: existing.assetId,
       customerId: existing.customerId,
-      labOrganizationId: memberData.organizationId,
-      detectedAt: updated?.approvedAt ?? new Date(),
+      labOrganizationId: organizationId,
+      detectedAt: updated.approvedAt ?? new Date(),
       actorUserId: approverId,
     }).catch((err) => {
       console.error("[Jobs] Failed to create asset OOT event:", err);
@@ -315,25 +712,24 @@ export async function approveJob(input: {
   // call regardless of outcome.
   void (async () => {
     try {
-      const orgId = memberData.organizationId;
       const linkedSoIds = await findServiceOrdersForCalibrationJob(
         jobId,
-        orgId,
+        organizationId,
       );
       for (const serviceOrderId of linkedSoIds) {
         await triggerAutomaticSendForMilestone({
           event: {
             event: "certificate_approved",
             serviceOrderId,
-            organizationId: orgId,
+            organizationId,
           },
           actorUserId: approverId,
-          invoker: async (params) => {
+          invoker: async (invokerParams) => {
             try {
-              const results = await input.sendServiceOrdersToFinance({
-                organizationId: params.organizationId,
-                serviceOrderIds: [params.serviceOrderId],
-                actorUserId: params.actorUserId,
+              const results = await params.sendServiceOrdersToFinance({
+                organizationId: invokerParams.organizationId,
+                serviceOrderIds: [invokerParams.serviceOrderId],
+                actorUserId: invokerParams.actorUserId,
               });
               const first = results[0];
               if (!first) {
@@ -360,10 +756,4 @@ export async function approveJob(input: {
       console.error("[Jobs] Automatic-send wire-up failed:", error);
     }
   })();
-
-  return {
-    status: "approved",
-    job: updated,
-    scopeCompliance: scopeCompliance?.status ?? null,
-  };
 }

@@ -151,6 +151,19 @@ export function loginAs(params: { userId: string; organizationId: string }) {
   getSessionMock.mockResolvedValue(sessionFor(params));
 }
 
+/**
+ * Resolve the session PER REQUEST from the `x-test-user-id` header instead of a
+ * single global user, so two requests in flight (e.g. a `Promise.all` race
+ * between two approvers) really run as two different users. Send the header on
+ * every request; a missing header is unauthenticated.
+ */
+export function loginPerRequestHeader(organizationId: string) {
+  getSessionMock.mockImplementation(async (input: { headers: Headers }) => {
+    const userId = input.headers.get("x-test-user-id");
+    return userId ? sessionFor({ userId, organizationId }) : null;
+  });
+}
+
 /** Make the next request unauthenticated (getSession -> null -> 401). */
 export function logout() {
   getSessionMock.mockResolvedValue(null);

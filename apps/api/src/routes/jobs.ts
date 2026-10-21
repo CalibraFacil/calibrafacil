@@ -2212,7 +2212,6 @@ export const jobsRouter = new Hono<{
     zValidator("json", ApproveJobSchema),
     async (c) => {
       const memberData = c.get("member");
-      const session = c.get("session");
       const id = await resolveJobRouteId(c.req.param("id"), memberData);
       const input = c.req.valid("json");
 
@@ -2222,16 +2221,18 @@ export const jobsRouter = new Hono<{
 
       const result = await approveJob({
         jobId: id,
-        member: memberData,
-        approverId: session.user.id,
+        actor: { kind: "user", member: memberData },
         values: input,
         metadata: { ipAddress: c.req.header("x-forwarded-for") || null },
-        sendServiceOrdersToFinance: (params) =>
-          sendServiceOrdersToFinance({
-            ...params,
-            scope: memberData,
-            env: c.env,
-          }),
+        completion: {
+          kind: "generate_certificate_pdf",
+          sendServiceOrdersToFinance: (params) =>
+            sendServiceOrdersToFinance({
+              ...params,
+              scope: memberData,
+              env: c.env,
+            }),
+        },
       });
 
       switch (result.status) {
@@ -2243,6 +2244,41 @@ export const jobsRouter = new Hono<{
               error: `Nao e possivel aprovar um job com status ${result.currentStatus}. O job deve estar em REVIEW.`,
             },
             400,
+          );
+        case "approval_requires_signatory":
+          return c.json(
+            {
+              error:
+                "Apenas um signatário autorizado pode aprovar a calibração.",
+              code: "approval_requires_signatory",
+            },
+            403,
+          );
+        case "role_not_permitted":
+          return c.json(
+            {
+              error: "Seu papel não permite aprovar calibrações.",
+              code: "APPROVAL_ROLE_NOT_PERMITTED",
+            },
+            403,
+          );
+        case "dispatch_failed":
+          return c.json(
+            {
+              error:
+                "Não foi possível enfileirar a geração do certificado. A aprovação foi revertida; tente novamente.",
+              code: "APPROVAL_DISPATCH_FAILED",
+            },
+            503,
+          );
+        case "concurrent_approval":
+          return c.json(
+            {
+              error:
+                "A calibração foi alterada por outra aprovação ou revisão em andamento. Atualize e tente novamente.",
+              code: "APPROVAL_CONFLICT",
+            },
+            409,
           );
         case "self_approval_blocked":
           return c.json(

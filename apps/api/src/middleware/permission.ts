@@ -338,7 +338,7 @@ function getEffectivePermissionRole(
   return member.role;
 }
 
-function getCalibrationAuthorizationRole(
+export function getCalibrationAuthorizationRole(
   member: Pick<MemberData, "role" | "unitRole">,
 ): RoleName {
   if (member.role === "owner" || member.role === "admin") {
