@@ -16,7 +16,7 @@
     "dev": "pnpm run build && electron .",
     "start": "electron .",
     "build": "vite build --config vite.main.config.ts && vite build --config vite.preload.config.ts",
-    "check-types": "tsc --noEmit",
+    "check-types": "node ../../scripts/typecheck.mjs --noEmit",
     "lint": "oxlint",
     "test": "vitest run --passWithNoTests",
     "package": "node ../../scripts/build-desktop-artifact.mjs --dir",

@@ -8,7 +8,7 @@
   "main": "./src/index.ts",
   "scripts": {
     "test": "vitest run",
-    "check-types": "tsc --noEmit",
+    "check-types": "node ../../scripts/typecheck.mjs --noEmit",
     "lint": "oxlint"
   },
   "devDependencies": {

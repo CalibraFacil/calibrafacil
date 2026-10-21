@@ -25,7 +25,8 @@ covers the big-picture architecture; `CONTRIBUTING.md` covers the contribution f
 - `pnpm build`: build all apps/packages.
 - `pnpm lint`: run oxlint across the monorepo.
 - `pnpm format`: format `*.ts`, `*.tsx`, `*.md` with Prettier.
-- `pnpm check-types`: TypeScript type checks.
+- `pnpm check-types`: TypeScript type checks with `tsrs` (Rust port of the TS 7 compiler; falls
+  back to `tsc` where it has no binary). `pnpm check-types:tsc` runs the same checks on native `tsc`.
 - `pnpm turbo test`: run all tests (use Node 24 and `TZ=UTC`).
 - `pnpm turbo dev --filter=@calibra-facil/api`: run a single app.
 - `cd packages/db && pnpm db:bootstrap`: build a new database (schema push + `sql/schema-extras.sql`)

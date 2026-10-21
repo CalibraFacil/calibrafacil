@@ -17,7 +17,7 @@
     "test:e2e:ui": "playwright test --ui",
     "test:stack": "playwright test --config playwright.stack.config.ts",
     "lint": "oxlint",
-    "check-types": "tsc --noEmit",
+    "check-types": "node ../../scripts/typecheck.mjs --noEmit",
     "format": "prettier",
     "check": "prettier --write . && oxlint --fix"
   },

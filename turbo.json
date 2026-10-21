@@ -16,7 +16,8 @@
       "dependsOn": ["^lint"]
     },
     "check-types": {
-      "dependsOn": ["^check-types"]
+      "dependsOn": ["^check-types"],
+      "env": ["CHECK_TYPES_CHECKER"]
     },
     "test": {
       "inputs": ["$TURBO_DEFAULT$", "**/*.test.ts", "**/*.test.tsx"],
