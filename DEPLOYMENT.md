@@ -247,7 +247,17 @@ plus a `job_audit_log` entry) and can be sent for approval again, instead of sta
   protecting a certificate that is still being retried.
 
 Only a job still in `GENERATING_PDF` is rejected. An `APPROVED` or `SUPERSEDED` certificate, its
-issued snapshot and its number are never touched.
+issued snapshot and its number are never touched. Every automatic rejection is recorded in
+`job_audit_log` with `changes.source = "queue-backstop"` and `changes.reason` set to
+`dead-lettered` or `stuck-render`. `rejected_by` and the audit `performed_by` name the user who
+released the certificate (there is no system user), so that marker is how an automatic rejection
+is told apart from the approver's own action.
+
+The backstop runs on the `queue-backstop` cron, every 30 minutes (`apps/api/vercel.json`), so
+recovery is not immediate: a crashed job is dead-lettered after its lease expires (default 10
+minutes) plus up to 30 minutes until the next run, and a dropped Vercel message is rejected at
+`STUCK_RENDER_AFTER_MS` plus up to 30 minutes. The drain on the always-on worker also
+dead-letters expired leases each time it wakes, so it can be faster there.
 
 ### A server with Bun
 
