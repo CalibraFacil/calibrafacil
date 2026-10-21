@@ -25,6 +25,8 @@ import {
   validateResponsePayload,
 } from "./response-validation";
 
+const holdAs = (value: ServerShape<JobDetail>) => value;
+
 describe("jobs response schemas", () => {
   it("REQ-TC-1: the list response schema accepts a list and rejects an unknown status", () => {
     const list = buildJobsList();
@@ -121,7 +123,6 @@ describe("jobs response schemas", () => {
     } satisfies ServerShape<JobDetail>;
     expect(held.createdAt).toBeInstanceOf(Date);
 
-    const holdAs = (value: ServerShape<JobDetail>) => value;
     // @ts-expect-error daysUntilDue is number | null in the contract, not a string
     holdAs({ ...serialized, daysUntilDue: "12" });
   });
