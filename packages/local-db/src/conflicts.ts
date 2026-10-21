@@ -3,6 +3,7 @@ import {
   type LocalSyncConflict,
 } from "@calibra-facil/contracts";
 import type { LocalDatabase } from "./database";
+import { releaseSettledSkippedRows } from "./skipped-rows";
 
 export type ListSyncConflictsInput = {
   status?: "open" | "resolved" | "ignored";
@@ -81,6 +82,10 @@ WHERE id = @id
         lastError: null,
       });
     }
+
+    // Ignoring a conflict keeps the cloud's version: if a pull skipped that row
+    // while the local change was queued, it must be fetched again now.
+    releaseSettledSkippedRows(database);
   })();
 
   return getSyncConflict(database, id);

@@ -2579,12 +2579,40 @@ INSERT INTO environmental_limits (
     );
     expect(executeResponse.status).toBe(200);
 
-    const submitResponse = await app.request(`/api/jobs/${createdId}/submit`, {
-      method: "POST",
-      body: JSON.stringify({
-        data: { indication: "10.03", reference: "10" },
-      }),
-      headers: { "Content-Type": "application/json" },
+    // The cloud's rules for the performed date apply to the desktop submit.
+    const submitWith = (extra: Record<string, unknown>) =>
+      app.request(`/api/jobs/${createdId}/submit`, {
+        method: "POST",
+        body: JSON.stringify({
+          data: { indication: "10.03", reference: "10" },
+          ...extra,
+        }),
+        headers: { "Content-Type": "application/json" },
+      });
+    const futureSubmit = await submitWith({
+      performedAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    });
+    expect(futureSubmit.status).toBe(400);
+    await expect(futureSubmit.json()).resolves.toEqual({
+      error: "A data de execução não pode estar no futuro",
+    });
+    const tenDaysAgo = new Date(
+      Date.now() - 10 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    const missingReasonSubmit = await submitWith({ performedAt: tenDaysAgo });
+    expect(missingReasonSubmit.status).toBe(400);
+    await expect(missingReasonSubmit.json()).resolves.toEqual({
+      error: "Motivo obrigatório para lançamentos com mais de 7 dias",
+    });
+    const afterRejected = await app.request(`/api/jobs/${createdId}`);
+    await expect(afterRejected.json()).resolves.toMatchObject({
+      status: "IN_PROGRESS",
+      performedAt: null,
+    });
+
+    const submitResponse = await submitWith({
+      performedAt: tenDaysAgo,
+      backdateReason: "Equipamento só chegou ao laboratório hoje",
     });
     expect(submitResponse.status).toBe(200);
 
@@ -2600,6 +2628,7 @@ INSERT INTO environmental_limits (
       serviceId: 654,
       serviceName: "Mass calibration",
       submittedAt: expect.any(String),
+      performedAt: tenDaysAgo,
       syncState: "local",
       results: {
         error: expect.anything(),

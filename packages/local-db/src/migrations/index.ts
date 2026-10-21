@@ -18,6 +18,7 @@ import { migration0017ServiceOrderPublicId } from "./0017_service_order_public_i
 import { migration0018CalibrationJobMethodDeviations } from "./0018_calibration_job_method_deviations";
 
 import { migration0019LocalDatabaseOwner } from "./0019_local_database_owner";
+import { migration0020SyncSkippedRows } from "./0020_sync_skipped_rows";
 
 export type LocalDbMigration = {
   id: number;
@@ -45,6 +46,7 @@ export const localDbMigrations: LocalDbMigration[] = [
   migration0017ServiceOrderPublicId,
   migration0018CalibrationJobMethodDeviations,
   migration0019LocalDatabaseOwner,
+  migration0020SyncSkippedRows,
 ];
 
 export const currentLocalDbSchemaVersion =

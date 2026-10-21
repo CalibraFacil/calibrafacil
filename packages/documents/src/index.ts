@@ -5,6 +5,7 @@ export {
   formatLabDate,
   formatLabDateTime,
   getLabCalendarDay,
+  formatLabDayKey,
   startOfLabMonth,
 } from "./dates.js";
 export {

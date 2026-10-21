@@ -1336,11 +1336,11 @@ WHERE outbox.event_id = 'event-conflict'
       outbox_status: "conflict",
       sync_state: "conflict",
     });
+    // Behaviour change: the push response's newCursor is a batch marker, not a
+    // pull position, so applying a push result no longer writes sync_cursors.
     expect(
       database.prepare("SELECT cursor FROM sync_cursors").get(),
-    ).toMatchObject({
-      cursor: "cursor-conflict",
-    });
+    ).toBeUndefined();
 
     database.close();
   });

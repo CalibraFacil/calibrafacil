@@ -7,6 +7,7 @@ import {
   organization,
   type CertificateNumberingConfig,
 } from "@calibra-facil/db/schema";
+import { getLabCalendarDay } from "@calibra-facil/documents";
 import { UpdateCertificateNumberingProfileSchema } from "@calibra-facil/schemas";
 import { and, desc, eq } from "drizzle-orm";
 import {
@@ -231,8 +232,9 @@ function buildPreview(
     { organizationId: "preview", generatedAt, projectCode: config.projectCode },
     config,
   );
-  const yyyy = String(generatedAt.getFullYear());
-  const month = generatedAt.getMonth() + 1;
+  const labDay = getLabCalendarDay(generatedAt);
+  const yyyy = String(labDay.year);
+  const month = labDay.month;
   const sequence = String(123).padStart(config.sequence.padding, "0");
   const tokens = {
     number: "",
@@ -263,7 +265,7 @@ function buildPreview(
         "NOV",
         "DEC",
       ][month - 1] ?? "",
-    dd: String(generatedAt.getDate()).padStart(2, "0"),
+    dd: String(labDay.day).padStart(2, "0"),
     seq: sequence,
   };
   const number = renderCertificateTemplate(config.numberTemplate, tokens);

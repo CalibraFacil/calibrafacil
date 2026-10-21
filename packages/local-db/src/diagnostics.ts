@@ -1,6 +1,10 @@
 import type { LocalDatabase } from "./database";
 import { getLocalSchemaVersion } from "./database";
-import { countOpenSyncConflicts, countPendingOutbox } from "./outbox";
+import {
+  countOpenSyncConflicts,
+  countPendingOutbox,
+  countPendingOutboxForOtherUsers,
+} from "./outbox";
 
 export type LocalDatabaseDiagnostics = {
   schemaVersion: number;
@@ -9,6 +13,7 @@ export type LocalDatabaseDiagnostics = {
     messages: string[];
   };
   pendingOutboxCount: number;
+  pendingForOtherUserCount: number;
   conflictCount: number;
   activeCalibrationJobCount: number;
   activeServiceOrderWorkflowCount: number;
@@ -16,6 +21,7 @@ export type LocalDatabaseDiagnostics = {
 
 export function getLocalDatabaseDiagnostics(
   database: LocalDatabase,
+  signedInUserId: string | null = null,
 ): LocalDatabaseDiagnostics {
   const rawRows = database.pragma("integrity_check");
   const rows = Array.isArray(rawRows) ? rawRows.map(toRecord) : [];
@@ -33,6 +39,10 @@ export function getLocalDatabaseDiagnostics(
       messages,
     },
     pendingOutboxCount: countPendingOutbox(database),
+    pendingForOtherUserCount: countPendingOutboxForOtherUsers(
+      database,
+      signedInUserId,
+    ),
     conflictCount: countOpenSyncConflicts(database),
     activeCalibrationJobCount: countActiveCalibrationJobs(database),
     activeServiceOrderWorkflowCount: countActiveServiceOrderWorkflows(database),

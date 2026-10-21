@@ -792,6 +792,13 @@
       "when": 1791382541282,
       "tag": "0112_integration_oauth_app",
       "breakpoints": true
+    },
+    {
+      "idx": 114,
+      "version": "7",
+      "when": 1791600000000,
+      "tag": "0114_sync_applied_event",
+      "breakpoints": true
     }
   ]
 }

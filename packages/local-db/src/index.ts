@@ -34,6 +34,7 @@ export {
   applySyncPushResult,
   countOpenSyncConflicts,
   countPendingOutbox,
+  countPendingOutboxForOtherUsers,
   getSyncCursor,
   getSyncCursorUpdatedAt,
   listPendingOutboxEvents,
@@ -150,6 +151,7 @@ export {
   localDbMigrations,
   type LocalDbMigration,
 } from "./migrations";
+export { countSkippedRows, releaseSettledSkippedRows } from "./skipped-rows";
 export {
   applySyncBootstrap,
   applySyncPullResponse,

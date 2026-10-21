@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { resolveExecutionPerformedAt } from "@calibra-facil/schemas";
 import type { LocalDatabase } from "./database";
 import { getLocalEffectiveEnvironmentalLimits } from "./environmental-limits";
 import { stableLocalNumericId } from "./ids";
@@ -48,6 +49,14 @@ export type SaveLocalExecutionInput = LocalJobCommandInput & {
    * null clears it. Mirrors the cloud POST /jobs/:id/execute contract.
    */
   methodDeviations?: string | null;
+  /**
+   * When the calibration was actually performed (ISO). Same rules as the cloud
+   * `POST /jobs/:id/submit`: on a submit it defaults to now, may not be in the
+   * future, and needs `backdateReason` once it is more than 7 days back. On a
+   * draft save a valid value is just remembered (an invalid one is ignored).
+   */
+  performedAt?: string;
+  backdateReason?: string;
   requireResults?: boolean;
 };
 
@@ -252,6 +261,10 @@ export function saveLocalJobExecution(
       : existing.status === "DRAFT"
         ? "IN_PROGRESS"
         : existing.status;
+  const executionTime = resolveLocalExecutionTime(
+    nextStatus === "REVIEW",
+    input,
+  );
   const standardsSnapshot = buildLocalStandardsSnapshot(
     database,
     input.selectedStandardIds,
@@ -287,6 +300,7 @@ SET
   method_deviations = @methodDeviations,
   status = @status,
   submitted_at = @submittedAt,
+  performed_at = COALESCE(@performedAt, performed_at),
   updated_at = @updatedAt,
   sync_state = 'local'
 WHERE id = @id
@@ -294,6 +308,7 @@ WHERE id = @id
       )
       .run({
         id: existing.id,
+        performedAt: executionTime.performedAt,
         dataJson: JSON.stringify(input.data),
         resultsJson: JSON.stringify(input.results ?? null),
         standardsSnapshotJson:
@@ -324,6 +339,12 @@ WHERE id = @id
       details: {
         status: { old: existing.status, new: nextStatus },
         resultKeys: Object.keys(input.results ?? {}),
+        ...(executionTime.performedAt
+          ? { performedAt: executionTime.performedAt }
+          : {}),
+        ...(executionTime.backdateReason
+          ? { backdateReason: executionTime.backdateReason }
+          : {}),
       },
       createdAt: now,
     });
@@ -343,6 +364,12 @@ WHERE id = @id
     if (existing.remote_id !== null) {
       payload.remoteId = existing.remote_id;
     }
+    if (executionTime.performedAt) {
+      payload.performedAt = executionTime.performedAt;
+    }
+    if (executionTime.backdateReason) {
+      payload.backdateReason = executionTime.backdateReason;
+    }
 
     appendOutboxEvent(database, {
       entityType: "calibration_job",
@@ -359,6 +386,33 @@ WHERE id = @id
   })();
 
   return getLocalJobDetail(database, input.routeId);
+}
+
+function resolveLocalExecutionTime(
+  isSubmit: boolean,
+  input: Pick<SaveLocalExecutionInput, "performedAt" | "backdateReason">,
+): { performedAt: string | null; backdateReason: string | null } {
+  if (isSubmit) {
+    const resolved = resolveExecutionPerformedAt({
+      performedAt: input.performedAt,
+      backdateReason: input.backdateReason,
+    });
+    if (!resolved.ok) throw new Error(resolved.message);
+
+    return {
+      performedAt: resolved.performedAt.toISOString(),
+      backdateReason: resolved.backdateReason,
+    };
+  }
+
+  // A draft save only remembers the date (the cloud's /execute does the same);
+  // the strict checks run on submit.
+  const parsed = input.performedAt ? new Date(input.performedAt) : null;
+  return {
+    performedAt:
+      parsed && !Number.isNaN(parsed.getTime()) ? parsed.toISOString() : null,
+    backdateReason: null,
+  };
 }
 
 export function createLocalCertificateDraft(
