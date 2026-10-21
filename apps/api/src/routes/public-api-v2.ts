@@ -89,6 +89,7 @@ import {
 } from "../middleware/permission";
 import { createClientOrganizationAsServiceOwner } from "../lib/portal-service-account";
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
+import { isAssignableTechnician } from "../lib/tenant-refs";
 import { deriveNextCalibrationDate } from "../lib/portal-asset-interval";
 import { resolveAssetRegimeWrite } from "../lib/asset-regime";
 import { deriveRegulatedNextDate } from "../lib/regulated-interval";
@@ -3444,6 +3445,24 @@ publicApiV2Router
             message: `Não é possível atualizar uma OS com status ${existing.status}`,
           }),
           409,
+        );
+      }
+
+      if (
+        input.technicianId &&
+        input.technicianId !== existing.technicianId &&
+        !(await isAssignableTechnician({
+          organizationId: apiKey.organizationId,
+          userId: input.technicianId,
+          unitId: existing.unitId,
+        }))
+      ) {
+        return c.json(
+          buildPublicApiError({
+            code: "technician_not_found",
+            message: "Técnico não encontrado ou sem permissão",
+          }),
+          400,
         );
       }
 

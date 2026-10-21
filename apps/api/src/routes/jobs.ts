@@ -1272,10 +1272,6 @@ export const jobsRouter = new Hono<{
           return c.json({ error: message }, 404);
         }
 
-        if (message === "Ativo nao pertence a esta organizacao") {
-          return c.json({ error: message }, 403);
-        }
-
         if (jobCreationClientErrors.has(message)) {
           return c.json({ error: message }, 400);
         }

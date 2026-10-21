@@ -48,6 +48,7 @@ import {
 } from "@calibra-facil/notifications";
 import { buildUnitScopeCondition } from "../lib/units";
 import { formatOnsiteAddressText } from "../lib/onsite-address";
+import { isAssignableTechnician } from "../lib/tenant-refs";
 
 const submitterUser = alias(user, "calibrationRequestSubmitter");
 const reviewerUser = alias(user, "calibrationRequestReviewer");
@@ -834,6 +835,26 @@ export const calibrationRequestsRouter = new Hono<{
               ? new Date(input.visit.scheduledAt)
               : null;
             const visitTechnicianId = input.visit?.technicianId ?? null;
+            // The visit technician is a body-supplied user id: it must be a
+            // member of this organization, assignable in the request's unit.
+            if (
+              visitTechnicianId &&
+              !(await isAssignableTechnician(
+                {
+                  organizationId: member.organizationId,
+                  userId: visitTechnicianId,
+                  unitId: request.unitId,
+                },
+                tx,
+              ))
+            ) {
+              return {
+                error: {
+                  status: 400 as const,
+                  body: "Tecnico nao encontrado ou sem permissao",
+                },
+              };
+            }
             const scheduled = Boolean(scheduledAt && visitTechnicianId);
             const [visit] = await tx
               .insert(calibrationVisit)

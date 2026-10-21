@@ -109,6 +109,11 @@ import {
 type ServiceOrderEnv = ServiceOrderDocumentEnv;
 
 const IdParamSchema = z.object({ id: z.coerce.number().int().positive() });
+
+// One generic refusal for "unknown" and "belongs to another tenant" ids.
+const SERVICE_ORDER_TECHNICIAN_REFUSED =
+  "Tecnico nao encontrado ou sem permissao";
+const SERVICE_ORDER_SOURCE_REFUSED = "OS de origem nao encontrada";
 const QuoteParamSchema = z.object({
   id: z.coerce.number().int().positive(),
   quoteId: z.coerce.number().int().positive(),
@@ -181,6 +186,12 @@ export const serviceOrdersRouter = new Hono<{
       }
       if (result.status === "invalid_asset") {
         return c.json({ error: "Ativo ou cliente invalido para esta OS" }, 400);
+      }
+      if (result.status === "invalid_technician") {
+        return c.json({ error: SERVICE_ORDER_TECHNICIAN_REFUSED }, 400);
+      }
+      if (result.status === "invalid_source_order") {
+        return c.json({ error: SERVICE_ORDER_SOURCE_REFUSED }, 400);
       }
       return c.json({ data: result.data }, 201);
     },
@@ -307,6 +318,12 @@ export const serviceOrdersRouter = new Hono<{
       }
       if (result.status === "invalid_transition") {
         return c.json({ error: "Transicao de status invalida" }, 400);
+      }
+      if (result.status === "invalid_technician") {
+        return c.json({ error: SERVICE_ORDER_TECHNICIAN_REFUSED }, 400);
+      }
+      if (result.status === "invalid_source_order") {
+        return c.json({ error: SERVICE_ORDER_SOURCE_REFUSED }, 400);
       }
       return c.json({ data: result.data });
     },
@@ -448,14 +465,19 @@ export const serviceOrdersRouter = new Hono<{
       const session = c.get("session");
       const { id } = c.req.valid("param");
       const { technicianId } = c.req.valid("json");
-      const updated = await assignServiceOrderTechnician({
+      const result = await assignServiceOrderTechnician({
         serviceOrderId: id,
         member,
         actorUserId: session.user.id,
         technicianId,
       });
-      if (!updated) return c.json({ error: "OS nao encontrada" }, 404);
-      return c.json({ data: updated });
+      if (result.status === "not_found") {
+        return c.json({ error: "OS nao encontrada" }, 404);
+      }
+      if (result.status === "invalid_technician") {
+        return c.json({ error: SERVICE_ORDER_TECHNICIAN_REFUSED }, 400);
+      }
+      return c.json({ data: result.data });
     },
   )
   .post(
@@ -482,6 +504,9 @@ export const serviceOrdersRouter = new Hono<{
           { error: "Avaliacao ja registrada. Edite a avaliacao existente." },
           409,
         );
+      }
+      if (result.status === "invalid_technician") {
+        return c.json({ error: SERVICE_ORDER_TECHNICIAN_REFUSED }, 400);
       }
       return c.json({ data: result.data });
     },
@@ -514,6 +539,9 @@ export const serviceOrdersRouter = new Hono<{
       });
       if (result.status === "not_found") {
         return c.json({ error: "Avaliacao nao encontrada" }, 404);
+      }
+      if (result.status === "invalid_technician") {
+        return c.json({ error: SERVICE_ORDER_TECHNICIAN_REFUSED }, 400);
       }
       if (result.status === "reason_required") {
         return c.json(

@@ -13,22 +13,33 @@ export async function linkServiceOrderCertificate(input: {
   organizationId: string;
   actorUserId: string;
 }) {
+  // Both ids are request-supplied: resolve each INSIDE the caller's
+  // organization so "exists in another tenant" is indistinguishable from
+  // "does not exist" (no 400-vs-404 existence oracle).
   const [order] = await db
     .select()
     .from(serviceOrder)
-    .where(eq(serviceOrder.id, input.serviceOrderId))
+    .where(
+      and(
+        eq(serviceOrder.id, input.serviceOrderId),
+        eq(serviceOrder.organizationId, input.organizationId),
+      ),
+    )
     .limit(1);
   const [job] = await db
     .select()
     .from(calibrationJob)
-    .where(eq(calibrationJob.id, input.certificateJobId))
+    .where(
+      and(
+        eq(calibrationJob.id, input.certificateJobId),
+        eq(calibrationJob.organizationId, input.organizationId),
+      ),
+    )
     .limit(1);
 
   if (!order || !job) return { status: "not_found" as const };
 
   if (
-    order.organizationId !== input.organizationId ||
-    job.organizationId !== order.organizationId ||
     job.unitId !== order.unitId ||
     job.customerId !== order.customerId ||
     job.assetId !== order.assetId

@@ -26,6 +26,7 @@ import {
 } from "../middleware/permission";
 import { createNonConformanceRecord } from "../lib/non-conformances";
 import { createCorrectiveActionRecord } from "../lib/corrective-actions";
+import { userIsOrganizationMember } from "../lib/tenant-refs";
 import { eq, and, or, ilike, desc, count, gte, lte, sql } from "drizzle-orm";
 
 /**
@@ -636,6 +637,19 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
       if (existing.capaId) {
         return c.json(
           { error: "Nao conformidade ja possui CAPA vinculada" },
+          400,
+        );
+      }
+
+      if (
+        input.responsibleId &&
+        !(await userIsOrganizationMember(
+          member.organizationId,
+          input.responsibleId,
+        ))
+      ) {
+        return c.json(
+          { error: "Responsavel nao encontrado ou nao pertence a organizacao" },
           400,
         );
       }

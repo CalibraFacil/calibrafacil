@@ -55,7 +55,6 @@ type CreateCalibrationJobParams = {
 export const jobCreationClientErrors = new Set([
   "Ativo nao encontrado",
   "Ativo foi removido",
-  "Ativo nao pertence a esta organizacao",
   "Ativo nao pertence a esta unidade",
   "Servico nao encontrado",
   "Servico nao pertence a esta unidade",
@@ -206,8 +205,10 @@ async function persistCalibrationJob(
     throw new Error("Ativo foi removido");
   }
 
+  // Another tenant's asset answers exactly like a missing one: the sequential
+  // asset id must not be an existence oracle across organizations.
   if (assetData.labOrganizationId !== params.organizationId) {
-    throw new Error("Ativo nao pertence a esta organizacao");
+    throw new Error("Ativo nao encontrado");
   }
 
   if (assetData.unitId !== params.unitId) {

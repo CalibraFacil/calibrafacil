@@ -46,6 +46,7 @@ import {
   calibrationRequest,
   calibrationRequestItem,
   calibrationJob,
+  calibrationVisit,
   organization,
   customer,
   assetType,
@@ -59,6 +60,7 @@ import { eq, sql } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { seedExtraMember } from "../../test/integration/tenant-refs";
 import { ENGINE_VERSION } from "@calibra-facil/math-engine";
 
 // ---------------------------------------------------------------------------
@@ -889,5 +891,116 @@ describe("calibrationRequestsRouter — request → job workflow", () => {
       }),
     });
     expect(convertRes.status).toBe(401);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Foreign-id (tenant-refs) guard: the on-site visit technician named in the
+// convert body must be a member of the caller's organization.
+// ---------------------------------------------------------------------------
+describe("calibrationRequestsRouter — convert: visit.technicianId is tenant-scoped", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  async function seedOnsiteApprovedRequest() {
+    const fixture = await seedRequestFixture({
+      orgId: "org-a",
+      userId: "user-a",
+      tagSuffix: "a",
+    });
+    const [reqRow] = await db
+      .insert(calibrationRequest)
+      .values({
+        organizationId: "org-a",
+        unitId: fixture.unitId,
+        customerId: fixture.customerId,
+        authOrganizationId: fixture.clientOrgId,
+        status: "APPROVED",
+        deliveryMethod: "onsite",
+        submittedBy: "user-a",
+        submittedAt: new Date("2026-01-15T10:00:00.000Z"),
+      })
+      .returning({ id: calibrationRequest.id });
+    if (!reqRow) throw new Error("seed onsite request failed");
+    const [itemRow] = await db
+      .insert(calibrationRequestItem)
+      .values({ requestId: reqRow.id, assetId: fixture.assetId })
+      .returning({ id: calibrationRequestItem.id });
+    if (!itemRow) throw new Error("seed onsite item failed");
+    return { fixture, requestId: reqRow.id, itemId: itemRow.id };
+  }
+
+  it("REQ-TENANT-CREQ-001 [HIGH RISK]: convert with another org's visit technician → 400, no visit/job created, request stays APPROVED", async () => {
+    const { fixture, requestId, itemId } = await seedOnsiteApprovedRequest();
+    await seedOrg({ orgId: "org-b", userId: "user-b", role: "admin" });
+
+    loginAs({ userId: "user-a", organizationId: "org-a" });
+    const res = await calibrationRequestsRouter.request(
+      `/${requestId}/convert`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          items: [{ itemId, serviceId: fixture.serviceId, technicianId: null }],
+          visit: {
+            scheduledAt: "2026-08-15T10:00:00.000Z",
+            technicianId: "user-b",
+          },
+        }),
+      },
+    );
+
+    expect(res.status).toBe(400);
+    const visits = await db
+      .select({ id: calibrationVisit.id })
+      .from(calibrationVisit);
+    expect(visits).toHaveLength(0);
+    const jobs = await db
+      .select({ id: calibrationJob.id })
+      .from(calibrationJob);
+    expect(jobs).toHaveLength(0);
+    const [row] = await db
+      .select({ status: calibrationRequest.status })
+      .from(calibrationRequest)
+      .where(eq(calibrationRequest.id, requestId));
+    expect(row?.status).toBe("APPROVED");
+  });
+
+  it("REQ-TENANT-CREQ-002: convert with a same-org technician assigned to the unit → 200 and the visit carries that technician", async () => {
+    const { fixture, requestId, itemId } = await seedOnsiteApprovedRequest();
+    const tech = await seedExtraMember({
+      orgId: "org-a",
+      userId: "tech-a",
+      role: "technician",
+      unitId: fixture.unitId,
+      unitRole: "technician",
+    });
+
+    loginAs({ userId: "user-a", organizationId: "org-a" });
+    const res = await calibrationRequestsRouter.request(
+      `/${requestId}/convert`,
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          items: [{ itemId, serviceId: fixture.serviceId, technicianId: null }],
+          visit: {
+            scheduledAt: "2026-08-15T10:00:00.000Z",
+            technicianId: tech.userId,
+          },
+        }),
+      },
+    );
+
+    expect(res.status).toBe(200);
+    const [visit] = await db
+      .select({
+        technicianId: calibrationVisit.technicianId,
+        status: calibrationVisit.status,
+      })
+      .from(calibrationVisit);
+    expect(visit?.technicianId).toBe(tech.userId);
+    expect(visit?.status).toBe("CONFIRMED");
   });
 });
