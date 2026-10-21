@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { getApiBaseUrl } from "@/lib/utils";
+import { usePortalQueryKey } from "@/lib/portal-org-context";
 import {
   CertificateDetailView,
   type Certificate,
@@ -18,13 +19,14 @@ export const Route = createFileRoute("/_authenticated/certificates/$id")({
 
 function CertificateDetailPage() {
   const { id } = Route.useParams();
+  const key = usePortalQueryKey();
 
   const {
     data: certificate,
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["portal-certificate", id],
+    queryKey: key("portal-certificate", id),
     queryFn: async (): Promise<Certificate> => {
       const response = await fetch(
         `${getApiBaseUrl()}/api/portal/certificates/${encodeURIComponent(id)}`,

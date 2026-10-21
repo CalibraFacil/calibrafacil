@@ -35,6 +35,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { DataTable } from "@/components/ui/data-table";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { getApiBaseUrl } from "@/lib/utils";
+import { usePortalQueryKey } from "@/lib/portal-org-context";
 import { AuditPacksPanel } from "@/features/certificates/audit-packs";
 
 type CertificatesSearch = {
@@ -247,8 +248,10 @@ function CertificatesPage() {
   const dateTo = toDateParam(dateRange?.to);
   const hasFilters = Boolean(search || dateFrom || dateTo || assetId);
 
+  const key = usePortalQueryKey();
+
   const { data, isLoading, error } = useQuery({
-    queryKey: [
+    queryKey: key(
       "portal-certificates",
       page,
       limit,
@@ -256,7 +259,7 @@ function CertificatesPage() {
       dateFrom,
       dateTo,
       assetId ?? null,
-    ],
+    ),
     queryFn: async (): Promise<CertificatesResponse> => {
       const params = new URLSearchParams({
         page: String(page),

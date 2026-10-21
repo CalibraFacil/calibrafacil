@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { getApiBaseUrl } from "@/lib/utils";
+import { usePortalQueryKey } from "@/lib/portal-org-context";
 import type { CalibrationFilter } from "@/lib/calibration-status";
 import type { FleetAssetsResponse, FleetSortBy } from "./types";
 
@@ -39,8 +40,9 @@ async function fetchFleetAssets(
 }
 
 export function useFleetAssets(params: FleetAssetsParams) {
+  const key = usePortalQueryKey();
   return useQuery({
-    queryKey: ["portal-assets", params],
+    queryKey: key("portal-assets", params),
     queryFn: () => fetchFleetAssets(params),
   });
 }
@@ -54,8 +56,9 @@ type PortalUnitsResponse = {
 
 /** Units (branch customers) in the active scope; more than one only in group mode. */
 export function usePortalUnits() {
+  const key = usePortalQueryKey();
   return useQuery({
-    queryKey: ["portal-units"],
+    queryKey: key("portal-units"),
     queryFn: async (): Promise<PortalUnitsResponse> => {
       const response = await fetch(`${getApiBaseUrl()}/api/portal/units`, {
         credentials: "include",

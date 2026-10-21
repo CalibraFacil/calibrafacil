@@ -25,6 +25,7 @@ import {
   type SignalTone,
 } from "@/components/instrument-panel";
 import { getApiBaseUrl } from "@/lib/utils";
+import { usePortalQueryKey } from "@/lib/portal-org-context";
 import { useIntervalInsight } from "./queries";
 import type { IntervalInsight } from "./types";
 
@@ -60,6 +61,7 @@ export function IntervalInsightPanel({
   currentIntervalMonths: number | null;
 }) {
   const queryClient = useQueryClient();
+  const key = usePortalQueryKey();
   const query = useIntervalInsight(assetId);
   const insight = query.data;
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -91,8 +93,10 @@ export function IntervalInsightPanel({
     onSuccess: () => {
       setConfirmOpen(false);
       toast.success("Periodicidade atualizada a partir da sugestão.");
-      queryClient.invalidateQueries({ queryKey: ["portal-asset"] });
-      queryClient.invalidateQueries({ queryKey: ["portal-interval-insight"] });
+      queryClient.invalidateQueries({ queryKey: key("portal-asset") });
+      queryClient.invalidateQueries({
+        queryKey: key("portal-interval-insight"),
+      });
     },
     onError: (error: Error) => toast.error(error.message),
   });

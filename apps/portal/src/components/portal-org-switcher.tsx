@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Building02Icon, UnfoldMoreIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
@@ -26,10 +27,15 @@ import {
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { shortcutLabel } from "@/lib/platform";
+import {
+  cancelPortalQueries,
+  removePortalQueries,
+} from "@/lib/portal-query-keys";
 import { getWebAppUrl } from "@/lib/runtime-env";
 
 export function PortalOrgSwitcher() {
   const { isMobile } = useSidebar();
+  const queryClient = useQueryClient();
   const { data: allOrganizations, isPending: isLoadingOrgs } =
     usePortalListOrganizations();
   const { data: activeOrg } = usePortalActiveOrganization();
@@ -45,7 +51,14 @@ export function PortalOrgSwitcher() {
   }, [allOrganizations]);
 
   const handleSetActiveOrganization = async (orgId: string) => {
+    // Stop requests still in flight for the organization being left, so their
+    // answers cannot land in the cache once the session points elsewhere.
+    await cancelPortalQueries(queryClient);
     await portalOrganization.setActive({ organizationId: orgId });
+    // Cache keys already carry the org id; dropping the entries as well means
+    // nothing fetched for the previous organization survives the switch. The
+    // new org's own entries are kept: its queries may already be in flight.
+    removePortalQueries(queryClient, orgId);
     // Store preference for portal to avoid conflicts with dashboard
     localStorage.setItem("portal-active-org", orgId);
   };

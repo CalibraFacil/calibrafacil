@@ -19,6 +19,7 @@ import { CommandMenu } from "@/components/command-menu";
 import { NotificationBell } from "@/features/notifications/notification-bell";
 import { useMountEffect } from "@/hooks/use-mount-effect";
 import { shortcutLabel } from "@/lib/platform";
+import { usePortalQueryKey } from "@/lib/portal-org-context";
 
 // Breadcrumbs are built from the URL path (not route matches) so a crumb's
 // parent always appears even when a section has no layout route.tsx — e.g.
@@ -63,8 +64,9 @@ export function PortalHeader() {
   // name comes from the page's own query cache: same key, skipToken — the
   // header never fetches, it only mirrors what the page already loaded.
   const assetParam = /^\/assets\/([^/]+)/.exec(pathname)?.[1] ?? null;
+  const key = usePortalQueryKey();
   const assetCrumbQuery = useQuery<{ name?: string }>({
-    queryKey: ["portal-asset", assetParam ?? "__none__"],
+    queryKey: key("portal-asset", assetParam ?? "__none__"),
     queryFn: skipToken,
   });
   const assetName = assetParam ? assetCrumbQuery.data?.name : undefined;

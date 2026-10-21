@@ -36,6 +36,7 @@ import { Label } from "@/components/ui/label";
 import { useMountEffect } from "@/hooks/use-mount-effect";
 import { sanitizePortalRedirect } from "@/lib/auth-redirect";
 import { readSessionWithRetry } from "@/lib/auth-session";
+import { PortalOrgProvider } from "@/lib/portal-org-context";
 import { getApiBaseUrl } from "@/lib/utils";
 
 const PORTAL_ORG_KEY = "portal-active-org";
@@ -175,22 +176,26 @@ function PortalLayout() {
   }
 
   return (
-    <SidebarProvider>
-      {targetOrg ? (
-        <PersistPortalOrgSelection
-          key={targetOrg.id}
-          organizationId={targetOrg.id}
-        />
-      ) : null}
-      <PortalSidebar />
-      <SidebarInset>
-        <PortalHeader />
-        <main className="flex-1 space-y-4 p-4 2xl:p-6 3xl:px-8">
-          {session.user.name.trim() ? null : <CompleteProfilePrompt />}
-          <Outlet />
-        </main>
-      </SidebarInset>
-    </SidebarProvider>
+    // Every portal query key is scoped to this id (see portal-query-keys.ts),
+    // so one client org's cached data can never be served to another.
+    <PortalOrgProvider organizationId={activeOrg?.id ?? null}>
+      <SidebarProvider>
+        {targetOrg ? (
+          <PersistPortalOrgSelection
+            key={targetOrg.id}
+            organizationId={targetOrg.id}
+          />
+        ) : null}
+        <PortalSidebar />
+        <SidebarInset>
+          <PortalHeader />
+          <main className="flex-1 space-y-4 p-4 2xl:p-6 3xl:px-8">
+            {session.user.name.trim() ? null : <CompleteProfilePrompt />}
+            <Outlet />
+          </main>
+        </SidebarInset>
+      </SidebarProvider>
+    </PortalOrgProvider>
   );
 }
 
