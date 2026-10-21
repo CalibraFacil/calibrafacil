@@ -6,6 +6,7 @@ import type { SyncBootstrapResponse } from "@calibra-facil/contracts";
 import {
   applySyncBootstrap,
   listLocalStandards,
+  listPendingOutboxEvents,
   openLocalDatabase,
   saveLocalJobExecution,
 } from "./index";
@@ -119,6 +120,7 @@ describe("offline standard validity at the performed date (REQ-CAL-004)", () => 
     // 23:30 on VALID_THROUGH in Sao Paulo (UTC-3) is 02:30Z the next day.
     const performedAt = atUtc(VALID_THROUGH, 1, "02:30:00.000");
 
+    // A draft save is advisory: no reason is asked until the submit.
     const job = saveLocalJobExecution(database, {
       ...baseInput,
       performedAt,
@@ -127,6 +129,64 @@ describe("offline standard validity at the performed date (REQ-CAL-004)", () => 
     expect(job?.standardsSnapshot).toEqual([
       expect.objectContaining({ id: 999, name: "Massa Padrao" }),
     ]);
+    database.close();
+  });
+
+  it("REQ-CAL-004 A4: a submit refuses, offline, the bypass the cloud refuses (back-dated draft, then submit with no standards and no date)", () => {
+    const database = createDatabase();
+    // The draft is saved with a date inside the standard's validity ...
+    saveLocalJobExecution(database, {
+      ...baseInput,
+      performedAt: atUtc(VALID_THROUGH, 0, "15:00:00.000"),
+    });
+
+    // ... then submitted naming no standards and no date: recorded as
+    // performed now, with a standard that expired three days ago.
+    expect(() =>
+      saveLocalJobExecution(database, {
+        routeId: "789",
+        actorUserId: "user-1",
+        deviceId: "device-1",
+        data: { reading: 1 },
+        requireResults: true,
+      }),
+    ).toThrow(/certificado vencido/);
+    expect(
+      database
+        .prepare<
+          [],
+          { status: string }
+        >("SELECT status FROM calibration_jobs WHERE id = 'job:789'")
+        .get()?.status,
+    ).toBe("IN_PROGRESS");
+    database.close();
+  });
+
+  it("REQ-CAL-004 A4: a submit valid only because it is back-dated needs the written reason, even within 7 days, and queues it", () => {
+    const database = createDatabase();
+    const performedAt = atUtc(VALID_THROUGH, 1, "02:30:00.000");
+
+    expect(() =>
+      saveLocalJobExecution(database, {
+        ...baseInput,
+        performedAt,
+        requireResults: true,
+      }),
+    ).toThrow(/justific/);
+
+    saveLocalJobExecution(database, {
+      ...baseInput,
+      performedAt,
+      requireResults: true,
+      backdateReason: "  Registro do dia da calibracao  ",
+    });
+    const [event] = listPendingOutboxEvents(database).filter(
+      (entry) => entry.operation === "submit_local_execution",
+    );
+    expect(event?.payload).toMatchObject({
+      performedAt,
+      backdateReason: "Registro do dia da calibracao",
+    });
     database.close();
   });
 

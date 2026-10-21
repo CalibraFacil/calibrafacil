@@ -52,6 +52,7 @@ import {
   ExecuteJobSchema,
   AmendJobSchema,
   FlagJobOutOfToleranceSchema,
+  assessStandardValidity,
   isStandardValidOn,
 } from "@calibra-facil/schemas";
 import { flagJobOutOfTolerance } from "../lib/oot-notifications";
@@ -611,6 +612,76 @@ function standardsPerformedAt(
     }
   }
   return saved ?? now;
+}
+
+/**
+ * Submit-time judgement of the standards a job will be recorded with (Q12).
+ * Every standard of the FINAL snapshot is read from the standards table and
+ * judged on the laboratory day of the FINAL performed date:
+ *  - expired on that day: refused;
+ *  - valid on that day but expired as of today (the record depends on being
+ *    back-dated): refused unless a written justification came with it, even
+ *    when the backdate is within the usual 7 days.
+ */
+async function judgeSnapshotStandards(input: {
+  standardsSnapshot: StandardSnapshot[] | null;
+  organizationId: string;
+  performedAt: Date;
+  now: Date;
+  backdateReason: string | undefined;
+}): Promise<
+  | { ok: true; standardIds: number[]; validOnlyBecauseBackdated: string[] }
+  | { ok: false; error: string }
+> {
+  const standardIds = [
+    ...new Set((input.standardsSnapshot ?? []).map((standard) => standard.id)),
+  ];
+  if (standardIds.length === 0) {
+    return { ok: true, standardIds: [], validOnlyBecauseBackdated: [] };
+  }
+
+  const rows = await db
+    .select({
+      id: referenceStandard.id,
+      name: referenceStandard.name,
+      nextCalibrationDate: referenceStandard.nextCalibrationDate,
+    })
+    .from(referenceStandard)
+    .where(
+      and(
+        inArray(referenceStandard.id, standardIds),
+        eq(referenceStandard.organizationId, input.organizationId),
+      ),
+    );
+  if (rows.length !== standardIds.length) {
+    const found = new Set(rows.map((row) => row.id));
+    return {
+      ok: false,
+      error: `Padroes nao encontrados ou nao pertencem a organizacao: ${standardIds.filter((id) => !found.has(id)).join(", ")}`,
+    };
+  }
+
+  const assessment = assessStandardValidity(rows, input.performedAt, input.now);
+  if (assessment.expiredAtPerformed.length > 0) {
+    return {
+      ok: false,
+      error: `Os seguintes padroes estao com certificado vencido: ${assessment.expiredAtPerformed.join(", ")}`,
+    };
+  }
+  if (
+    assessment.validOnlyBecauseBackdated.length > 0 &&
+    !input.backdateReason
+  ) {
+    return {
+      ok: false,
+      error: `O certificado de ${assessment.validOnlyBecauseBackdated.join(", ")} venceu apos a data de execucao; e necessario justificar o lancamento retroativo (motivo do registro retroativo)`,
+    };
+  }
+  return {
+    ok: true,
+    standardIds,
+    validOnlyBecauseBackdated: assessment.validOnlyBecauseBackdated,
+  };
 }
 
 async function buildStandardsSnapshot(
@@ -1808,6 +1879,19 @@ export const jobsRouter = new Hono<{
           400,
         );
       }
+      // The draft-time standards check is advisory. Every standard of the FINAL
+      // snapshot (whether or not this request names standards) is re-judged,
+      // from the standards table, at the final performed day.
+      const standardsJudgement = await judgeSnapshotStandards({
+        standardsSnapshot: nextStandardsSnapshot,
+        organizationId: memberData.organizationId,
+        performedAt,
+        now,
+        backdateReason: normalizedBackdateReason,
+      });
+      if (!standardsJudgement.ok) {
+        return c.json({ error: standardsJudgement.error }, 400);
+      }
       const executionData = normalizedData.data ?? {};
       // An engine release recompiles the published method but never rewrites
       // the copies frozen into open jobs; adopt the recompiled method here when
@@ -1961,6 +2045,17 @@ export const jobsRouter = new Hono<{
             assetSnapshot: existing.assetSnapshot
               ? undefined
               : { old: null, new: nextAssetSnapshot },
+            // Every standard of the final snapshot was judged at the day the
+            // work is recorded as performed, not at the day it is submitted.
+            standardsJudgedAt:
+              standardsJudgement.standardIds.length > 0
+                ? {
+                    performedAt: performedAt.toISOString(),
+                    standardIds: standardsJudgement.standardIds,
+                    validOnlyBecauseBackdated:
+                      standardsJudgement.validOnlyBecauseBackdated,
+                  }
+                : undefined,
           },
           performedBy: session.user.id,
           ipAddress: c.req.header("x-forwarded-for") || null,
@@ -1975,8 +2070,12 @@ export const jobsRouter = new Hono<{
                 : scopeCompliance?.status === "U_BELOW_CMC"
                   ? "Submetido com incerteza menor que a CMC acreditada"
                   : null,
-              diffDays > BACKDATE_REASON_THRESHOLD_DAYS
+              diffDays > BACKDATE_REASON_THRESHOLD_DAYS ||
+              standardsJudgement.validOnlyBecauseBackdated.length > 0
                 ? `Registro retroativo (${diffDays} dias): ${normalizedBackdateReason}`
+                : null,
+              standardsJudgement.validOnlyBecauseBackdated.length > 0
+                ? `Padroes julgados na data de execucao (${performedAt.toISOString()}): ${standardsJudgement.validOnlyBecauseBackdated.join(", ")} venceu apos essa data`
                 : null,
             ]
               .filter(Boolean)

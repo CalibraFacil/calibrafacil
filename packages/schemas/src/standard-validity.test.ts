@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { isStandardValidOn, standardDaysUntilExpiry } from "./index";
+import {
+  assessStandardValidity,
+  isStandardValidOn,
+  standardDaysUntilExpiry,
+} from "./index";
 
 // A reference standard is valid THROUGH the calendar day its certificate names
 // (next_calibration_date), judged on the Sao Paulo day the work was performed.
@@ -86,5 +90,54 @@ describe("isStandardValidOn (REQ-CAL-004)", () => {
     expect(isStandardValidOn("not a date", performedAt)).toBe(false);
     expect(isStandardValidOn("", performedAt)).toBe(false);
     expect(isStandardValidOn(new Date(Number.NaN), performedAt)).toBe(false);
+  });
+});
+
+describe("assessStandardValidity (REQ-CAL-004)", () => {
+  const standard = (name: string, next: string) => ({
+    name,
+    nextCalibrationDate: next,
+  });
+  // Performed on the 13th (noon in Sao Paulo), judged on the 16th at 10:00.
+  const performedAt = new Date("2026-10-13T15:00:00.000Z");
+  const now = new Date("2026-10-16T13:00:00.000Z");
+
+  it("separates a standard expired at the performed day from one that expired only afterwards", () => {
+    const result = assessStandardValidity(
+      [
+        standard("valid today", "2026-10-20"),
+        standard("expired after the work", "2026-10-14"),
+        standard("expired before the work", "2026-10-12"),
+      ],
+      performedAt,
+      now,
+    );
+    expect(result.expiredAtPerformed).toEqual(["expired before the work"]);
+    expect(result.validOnlyBecauseBackdated).toEqual([
+      "expired after the work",
+    ]);
+  });
+
+  it("is not backdate-dependent on the standard's last valid day, until that day is over", () => {
+    const lastDay = [standard("last day", "2026-10-16")];
+    expect(
+      assessStandardValidity(lastDay, performedAt, now)
+        .validOnlyBecauseBackdated,
+    ).toEqual([]);
+    // 00:10 on the 17th in Sao Paulo: it expired after the work was done.
+    expect(
+      assessStandardValidity(
+        lastDay,
+        performedAt,
+        new Date("2026-10-17T03:10:00.000Z"),
+      ).validOnlyBecauseBackdated,
+    ).toEqual(["last day"]);
+  });
+
+  it("treats an unreadable validity as expired at the performed day", () => {
+    expect(
+      assessStandardValidity([standard("broken", "nope")], performedAt, now)
+        .expiredAtPerformed,
+    ).toEqual(["broken"]);
   });
 });

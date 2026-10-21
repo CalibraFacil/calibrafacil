@@ -49,7 +49,7 @@ const VALID_THROUGH_KEY = calendarDateKey(VALID_THROUGH);
 const DAY_AFTER_KEY = calendarDateKey(addCalendarDays(VALID_THROUGH, 1));
 const DAY_BEFORE_KEY = calendarDateKey(addCalendarDays(VALID_THROUGH, -1));
 
-async function seedWorld() {
+async function seedWorld(options: { validThrough?: Date } = {}) {
   const org = await seedOrg({
     orgId: "org-sv",
     userId: "user-sv",
@@ -125,7 +125,7 @@ async function seedWorld() {
       serialNumber: "SN-STD-SV",
       certificateNumber: "CERT-SV",
       calibrationDate: new Date("2025-01-10T15:00:00.000Z"),
-      nextCalibrationDate: VALID_THROUGH,
+      nextCalibrationDate: options.validThrough ?? VALID_THROUGH,
       coverageFactor: 2,
       distribution: "normal",
       status: "ACTIVE",
@@ -133,14 +133,24 @@ async function seedWorld() {
       uncertainty: 0.01,
     })
     .returning({ id: referenceStandard.id });
-  return { org, jobId: job?.id ?? 0, standardId: standard?.id ?? 0 };
+  return {
+    org,
+    jobId: job?.id ?? 0,
+    standardId: standard?.id ?? 0,
+    validThrough: options.validThrough ?? VALID_THROUGH,
+  };
 }
 
 type World = Awaited<ReturnType<typeof seedWorld>>;
 
 async function pushSubmit(
   world: World,
-  options: { occurredAt: string; performedAt?: string; eventId: string },
+  options: {
+    occurredAt: string;
+    performedAt?: string;
+    backdateReason?: string;
+    eventId: string;
+  },
 ) {
   loginAs({ userId: world.org.userId, organizationId: world.org.orgId });
   const res = await syncRouter.request("/push", {
@@ -163,13 +173,16 @@ async function pushSubmit(
             ...(options.performedAt
               ? { performedAt: options.performedAt }
               : {}),
+            ...(options.backdateReason
+              ? { backdateReason: options.backdateReason }
+              : {}),
             standardsSnapshot: [
               {
                 id: world.standardId,
                 name: "Massa Padrao",
                 certificateNumber: "CERT-SV",
                 calibrationDate: "2025-01-10T00:00:00.000Z",
-                nextCalibrationDate: `${VALID_THROUGH_KEY}T00:00:00.000Z`,
+                nextCalibrationDate: `${calendarDateKey(world.validThrough)}T00:00:00.000Z`,
                 uncertainty: 0.01,
                 uncertaintyUnit: "g",
                 coverageFactor: 2,
@@ -214,20 +227,39 @@ describe("syncRouter — desktop execution judges a standard by the performed da
     await truncateAll();
   });
 
-  it("REQ-CAL-004 [HIGH RISK]: an event performed the day before the standard expired is accepted although it is synced days after", async () => {
+  it("REQ-CAL-004 A3 [HIGH RISK]: an explicit performed date before the standard expired needs the written reason, even within 7 days", async () => {
     const world = await seedWorld();
+    const performedAt = `${DAY_BEFORE_KEY}T15:00:00.000Z`;
 
-    const body = await pushSubmit(world, {
-      eventId: "evt-before",
-      occurredAt: `${DAY_BEFORE_KEY}T15:00:00.000Z`,
+    const refused = await pushSubmit(world, {
+      eventId: "evt-before-no-reason",
+      occurredAt: performedAt,
+      performedAt,
     });
+    expect(refused.accepted).toEqual([]);
+    expect(refused.rejected).toEqual([
+      expect.objectContaining({
+        eventId: "evt-before-no-reason",
+        code: "STANDARD_BACKDATE_REASON_REQUIRED",
+      }),
+    ]);
+    expect(refused.rejected[0]?.reason).toContain("Massa Padrao");
+    expect(await statusOf(world.jobId)).toBe("IN_PROGRESS");
 
-    expect(body.rejected).toEqual([]);
-    expect(body.accepted.map((event) => event.eventId)).toEqual(["evt-before"]);
+    const accepted = await pushSubmit(world, {
+      eventId: "evt-before-reason",
+      occurredAt: performedAt,
+      performedAt,
+      backdateReason: "Lancamento tardio da calibracao",
+    });
+    expect(accepted.rejected).toEqual([]);
+    expect(accepted.accepted.map((event) => event.eventId)).toEqual([
+      "evt-before-reason",
+    ]);
     expect(await statusOf(world.jobId)).toBe("REVIEW");
   });
 
-  it("REQ-CAL-004 [HIGH RISK]: an event performed on the last valid day at 23:30 in Sao Paulo is accepted", async () => {
+  it("REQ-CAL-004 A3 [HIGH RISK]: an event performed on the last valid day at 23:30 in Sao Paulo is accepted with its reason", async () => {
     const world = await seedWorld();
     const performedAt = new Date(`${VALID_THROUGH_KEY}T23:30:00-03:00`);
 
@@ -235,13 +267,14 @@ describe("syncRouter — desktop execution judges a standard by the performed da
       eventId: "evt-last-evening",
       occurredAt: performedAt.toISOString(),
       performedAt: performedAt.toISOString(),
+      backdateReason: "Registro do dia da calibracao",
     });
 
     expect(body.rejected).toEqual([]);
     expect(await statusOf(world.jobId)).toBe("REVIEW");
   });
 
-  it("REQ-CAL-004 [HIGH RISK]: an event performed after the standard expired (00:10 the next day) is refused STANDARD_EXPIRED and the job is untouched", async () => {
+  it("REQ-CAL-004 [HIGH RISK]: an event performed after the standard expired (00:10 the next day) is refused STANDARD_EXPIRED, reason or not, and the job is untouched", async () => {
     const world = await seedWorld();
     const performedAt = new Date(`${DAY_AFTER_KEY}T00:10:00-03:00`);
 
@@ -249,6 +282,7 @@ describe("syncRouter — desktop execution judges a standard by the performed da
       eventId: "evt-after",
       occurredAt: performedAt.toISOString(),
       performedAt: performedAt.toISOString(),
+      backdateReason: "Tentativa com justificativa",
     });
 
     expect(body.accepted).toEqual([]);
@@ -261,18 +295,32 @@ describe("syncRouter — desktop execution judges a standard by the performed da
     expect(await statusOf(world.jobId)).toBe("IN_PROGRESS");
   });
 
-  it("REQ-CAL-004: with no explicit performed date the event time (not the sync time) decides", async () => {
+  it("REQ-CAL-004 A3 [HIGH RISK]: a legacy event without an explicit performed date is judged at SYNC time, as before: a standard that has expired since is refused although the event time was inside its validity", async () => {
     const world = await seedWorld();
 
-    // Recorded on the day after the standard expired, synced today.
     const body = await pushSubmit(world, {
-      eventId: "evt-recorded-after",
-      occurredAt: `${DAY_AFTER_KEY}T15:00:00.000Z`,
+      eventId: "evt-legacy-before",
+      occurredAt: `${DAY_BEFORE_KEY}T15:00:00.000Z`,
     });
 
+    expect(body.accepted).toEqual([]);
     expect(body.rejected).toEqual([
       expect.objectContaining({ code: "STANDARD_EXPIRED" }),
     ]);
     expect(await statusOf(world.jobId)).toBe("IN_PROGRESS");
+  });
+
+  it("REQ-CAL-004 A3: a legacy event on a standard that is still valid at sync time is accepted with no reason", async () => {
+    const world = await seedWorld({
+      validThrough: addCalendarDays(labToday(), 60),
+    });
+
+    const body = await pushSubmit(world, {
+      eventId: "evt-legacy-valid",
+      occurredAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    });
+
+    expect(body.rejected).toEqual([]);
+    expect(await statusOf(world.jobId)).toBe("REVIEW");
   });
 });

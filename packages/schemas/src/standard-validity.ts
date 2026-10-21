@@ -41,6 +41,41 @@ export function isStandardValidOn(
   return labCalendarDayKey(performedAt) <= calendarDateKey(validThrough);
 }
 
+export type StandardValidityAssessment = {
+  /** Expired on the day the work was performed: never acceptable. */
+  expiredAtPerformed: string[];
+  /**
+   * Valid on the performed day but expired as of `now`: acceptable only as a
+   * justified backdated record, so the submission needs a written reason even
+   * when the backdate is within the usual 7 days.
+   */
+  validOnlyBecauseBackdated: string[];
+};
+
+/**
+ * Judge every standard of a calibration at the performed day, and tell which
+ * of them are valid ONLY because the work is dated in the past.
+ */
+export function assessStandardValidity(
+  standards: ReadonlyArray<{
+    name: string;
+    nextCalibrationDate: Date | string;
+  }>,
+  performedAt: Date,
+  now: Date = new Date(),
+): StandardValidityAssessment {
+  const expiredAtPerformed: string[] = [];
+  const validOnlyBecauseBackdated: string[] = [];
+  for (const standard of standards) {
+    if (!isStandardValidOn(standard.nextCalibrationDate, performedAt)) {
+      expiredAtPerformed.push(standard.name);
+    } else if (!isStandardValidOn(standard.nextCalibrationDate, now)) {
+      validOnlyBecauseBackdated.push(standard.name);
+    }
+  }
+  return { expiredAtPerformed, validOnlyBecauseBackdated };
+}
+
 /**
  * Whole laboratory days from today (the day of `now`) to the last valid day of
  * a standard: 0 on that day, negative once it has expired. Null when the date

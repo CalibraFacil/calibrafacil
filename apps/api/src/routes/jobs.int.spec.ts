@@ -1646,7 +1646,12 @@ describe("jobsRouter — reference standard validity at the performed date (REQ-
     return { id, standardId: standard?.id ?? 0 };
   }
 
-  function submit(id: number, standardId: number, performedAt: Date) {
+  function submit(
+    id: number,
+    standardId: number,
+    performedAt: Date,
+    backdateReason?: string,
+  ) {
     return jobsRouter.request(`/${id}/submit`, {
       method: "POST",
       headers: JSON_HEADERS,
@@ -1655,6 +1660,20 @@ describe("jobsRouter — reference standard validity at the performed date (REQ-
         data: { indication: "10", reference: "9" },
         selectedStandardIds: [standardId],
         performedAt: performedAt.toISOString(),
+        ...(backdateReason ? { backdateReason } : {}),
+      }),
+    });
+  }
+
+  /** A submit that names no standards and no date: it records "now". */
+  function submitWithoutStandardsOrDate(id: number, backdateReason?: string) {
+    return jobsRouter.request(`/${id}/submit`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        calibrationLocation: { type: "lab", addressText: "Laboratório" },
+        data: { indication: "10", reference: "9" },
+        ...(backdateReason ? { backdateReason } : {}),
       }),
     });
   }
@@ -1674,7 +1693,14 @@ describe("jobsRouter — reference standard validity at the performed date (REQ-
   it("REQ-CAL-004 [HIGH RISK]: submit accepts the standard for work performed on its last valid day at 23:30 in Sao Paulo", async () => {
     const { id, standardId } = await seedJobWithStandard("IN_PROGRESS");
 
-    const res = await submit(id, standardId, lastEvening);
+    // Three days back and the standard has expired since: valid at the
+    // performed day, so accepted, with the justification A2 requires.
+    const res = await submit(
+      id,
+      standardId,
+      lastEvening,
+      "Lancamento tardio do dia da execucao",
+    );
 
     expect(res.status).toBe(200);
     expect(await statusOf(id)).toBe("REVIEW");
@@ -1685,6 +1711,95 @@ describe("jobsRouter — reference standard validity at the performed date (REQ-
     expect(row?.standardsSnapshot?.map((standard) => standard.id)).toEqual([
       standardId,
     ]);
+  });
+
+  it("REQ-CAL-004 [HIGH RISK] A1: the verifier's bypass is refused at submit (execute back-dated, then submit with no standards and no date)", async () => {
+    const { id, standardId } = await seedJobWithStandard("DRAFT");
+
+    // 1. A draft saved with a performed date 30 days back and the standard,
+    //    which was still valid then: advisory check passes.
+    const thirtyDaysBack = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    expect((await execute(id, standardId, thirtyDaysBack)).status).toBe(200);
+
+    // 2. Submit names neither standards nor a date: the job is recorded as
+    //    performed today, with a standard that expired three days ago.
+    const res = await submitWithoutStandardsOrDate(id);
+
+    // 3. Refused: the final snapshot is re-judged at the final performed day.
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain("certificado vencido");
+    expect(await statusOf(id)).toBe("IN_PROGRESS");
+    expect(await auditActions(id)).not.toContain("submit");
+  });
+
+  it("REQ-CAL-004 A1: a standard of the saved snapshot is re-judged at submit even when it is valid on the day it was saved", async () => {
+    const { id, standardId } = await seedJobWithStandard("DRAFT");
+    expect((await execute(id, standardId, lastEvening)).status).toBe(200);
+
+    // Submit with no standards but dated back to the standard's last day (3
+    // days): still valid then, so it needs the A2 reason, not a refusal.
+    const without = await jobsRouter.request(`/${id}/submit`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        calibrationLocation: { type: "lab", addressText: "Laboratório" },
+        data: { indication: "10", reference: "9" },
+        performedAt: lastEvening.toISOString(),
+      }),
+    });
+    expect(without.status).toBe(400);
+    expect((await without.json()).error).toContain("justific");
+    expect(await statusOf(id)).toBe("IN_PROGRESS");
+  });
+
+  it("REQ-CAL-004 A2: a standard that expired after the performed date needs a written reason even within 7 days, and the audit row records the judgement", async () => {
+    const { id, standardId } = await seedJobWithStandard("IN_PROGRESS");
+
+    const refused = await submit(id, standardId, lastEvening);
+    expect(refused.status).toBe(400);
+    const message: string = (await refused.json()).error;
+    expect(message).toContain("Massa Padrao");
+    expect(message).toContain("venceu apos a data de execucao");
+    expect(message).toContain("justific");
+    expect(await statusOf(id)).toBe("IN_PROGRESS");
+
+    const accepted = await submit(
+      id,
+      standardId,
+      lastEvening,
+      "Registro do dia da calibracao",
+    );
+    expect(accepted.status).toBe(200);
+
+    const auditRows = await db
+      .select({
+        action: jobAuditLog.action,
+        reason: jobAuditLog.reason,
+        changes: jobAuditLog.changes,
+      })
+      .from(jobAuditLog)
+      .where(eq(jobAuditLog.jobId, id));
+    const row = auditRows.find((entry) => entry.action === "submit");
+    expect(row?.reason).toContain("Registro do dia da calibracao");
+    expect(row?.reason).toContain("Massa Padrao");
+    expect(row?.reason).toContain("julgados na data de execucao");
+    expect(JSON.stringify(row?.changes)).toContain("standardsJudgedAt");
+  });
+
+  it("REQ-CAL-004 A2: a standard still valid today needs no reason within 7 days", async () => {
+    const { id, standardId } = await seedJobWithStandard("IN_PROGRESS");
+    await db
+      .update(referenceStandard)
+      .set({ nextCalibrationDate: addCalendarDays(labToday(), 90) })
+      .where(eq(referenceStandard.id, standardId));
+
+    const res = await submit(
+      id,
+      standardId,
+      new Date(Date.now() - 24 * 60 * 60 * 1000),
+    );
+
+    expect(res.status).toBe(200);
   });
 
   it("REQ-CAL-004 [HIGH RISK]: submit refuses the standard for work performed at 00:10 the day after, and the job stays IN_PROGRESS", async () => {

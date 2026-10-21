@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  assessStandardValidity,
   isStandardValidOn,
   resolveExecutionPerformedAt,
 } from "@calibra-facil/schemas";
@@ -278,6 +279,27 @@ export function saveLocalJobExecution(
       nextStatus === "REVIEW" ? null : existing.performed_at,
     ),
   );
+  // A submit re-judges EVERY standard of the final snapshot (also one saved
+  // earlier and not named again) at the final performed day, like the cloud.
+  const standardsJudgement =
+    nextStatus === "REVIEW"
+      ? judgeSubmittedLocalStandards(database, {
+          standardsSnapshot: standardsSnapshot
+            ? standardsSnapshot.map((standard) => ({
+                id: standard.id,
+                name: standard.name,
+                nextCalibrationDate:
+                  typeof standard.nextCalibrationDate === "string"
+                    ? standard.nextCalibrationDate
+                    : null,
+              }))
+            : parseSnapshotStandardRefs(existing.standards_snapshot_json),
+          performedAt: executionTime.performedAt
+            ? new Date(executionTime.performedAt)
+            : new Date(),
+          backdateReason: input.backdateReason?.trim() || null,
+        })
+      : { validOnlyBecauseBackdated: [] as string[] };
   const environmentalSnapshot = input.environment
     ? buildEnvironmentalSnapshot(database, existing, input.environment, {
         recordedAt: now,
@@ -375,8 +397,15 @@ WHERE id = @id
     if (executionTime.performedAt) {
       payload.performedAt = executionTime.performedAt;
     }
-    if (executionTime.backdateReason) {
-      payload.backdateReason = executionTime.backdateReason;
+    // The written reason travels with the event when the submission needed it:
+    // past 7 days, or because a standard is valid only on the performed day.
+    const submittedReason =
+      executionTime.backdateReason ??
+      (standardsJudgement.validOnlyBecauseBackdated.length > 0
+        ? input.backdateReason?.trim() || null
+        : null);
+    if (submittedReason) {
+      payload.backdateReason = submittedReason;
     }
 
     appendOutboxEvent(database, {
@@ -882,6 +911,105 @@ export function localStandardsPerformedAt(
     return parsed;
   }
   return now;
+}
+
+type StandardRef = {
+  id: number;
+  name: string;
+  nextCalibrationDate: string | null;
+};
+
+/** The standards (id, name, validity) a saved snapshot JSON refers to. */
+function parseSnapshotStandardRefs(snapshotJson: string | null): StandardRef[] {
+  if (!snapshotJson) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(snapshotJson);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  const refs: StandardRef[] = [];
+  for (const entry of parsed) {
+    if (!isJsonObject(entry)) continue;
+    const id = getNumber(entry, "id");
+    if (id === null) continue;
+    refs.push({
+      id,
+      name: getString(entry, "name") ?? String(id),
+      nextCalibrationDate: getString(entry, "nextCalibrationDate") ?? null,
+    });
+  }
+  return refs;
+}
+
+/**
+ * Submit-time judgement of the standards a job is recorded with (Q12), offline.
+ * Mirrors the cloud: each standard is read from the local standards table (the
+ * saved snapshot only supplies the ids, and a validity if the row is gone) and
+ * judged on the laboratory day of the final performed date. Expired then: refused.
+ * Valid then but expired today: refused unless a written reason came with it.
+ */
+function judgeSubmittedLocalStandards(
+  database: LocalDatabase,
+  input: {
+    standardsSnapshot: StandardRef[];
+    performedAt: Date;
+    backdateReason: string | null;
+  },
+): { validOnlyBecauseBackdated: string[] } {
+  const ids = [
+    ...new Set(input.standardsSnapshot.map((standard) => standard.id)),
+  ];
+  if (ids.length === 0) return { validOnlyBecauseBackdated: [] };
+
+  const rows = database
+    .prepare<number[], LocalReferenceStandardRow>(
+      `
+SELECT *
+FROM reference_standards
+WHERE remote_id IN (${ids.map(() => "?").join(",")})
+`,
+    )
+    .all(...ids);
+  const rowsByRemoteId = new Map(rows.map((row) => [row.remote_id, row]));
+  const savedById = new Map(
+    input.standardsSnapshot.map((standard) => [standard.id, standard]),
+  );
+
+  const judged = ids.map((id) => {
+    const row = rowsByRemoteId.get(id);
+    const saved = savedById.get(id);
+    const rowSnapshot = row ? parseJsonRecord(row.snapshot_json) : {};
+    return {
+      name: row?.name ?? saved?.name ?? String(id),
+      nextCalibrationDate:
+        getString(rowSnapshot, "nextCalibrationDate") ??
+        row?.next_calibration_date ??
+        saved?.nextCalibrationDate ??
+        "",
+    };
+  });
+
+  const assessment = assessStandardValidity(
+    judged,
+    input.performedAt,
+    new Date(),
+  );
+  if (assessment.expiredAtPerformed.length > 0) {
+    throw new Error(
+      `Padrao ${assessment.expiredAtPerformed.join(", ")} esta com certificado vencido`,
+    );
+  }
+  if (
+    assessment.validOnlyBecauseBackdated.length > 0 &&
+    !input.backdateReason
+  ) {
+    throw new Error(
+      `O certificado de ${assessment.validOnlyBecauseBackdated.join(", ")} venceu apos a data de execucao; e necessario justificar o lancamento retroativo (motivo do registro retroativo)`,
+    );
+  }
+  return { validOnlyBecauseBackdated: assessment.validOnlyBecauseBackdated };
 }
 
 export function buildLocalStandardsSnapshot(
