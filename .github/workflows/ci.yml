@@ -68,6 +68,11 @@ jobs:
       - name: Type Check
         run: bun run check-types
 
+      # Node-only tests for the repo scripts (dev runner, desktop release gate).
+      # No workspace package owns them, so `turbo test` never runs them.
+      - name: Script tests
+        run: pnpm test:dev-runner && pnpm test:desktop-release-gate
+
       # Build the real Vercel function bundles and assert their structural
       # shape (shim default-export form, cron dispatch table, every mounted
       # route surviving into the built artifact). Guards against cron routes
