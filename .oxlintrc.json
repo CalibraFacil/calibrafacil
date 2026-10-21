@@ -67,6 +67,7 @@
     "calibra/no-api-import-in-frontend": "error",
     "calibra/no-hono-client-outside-client-runtime": "error",
     "calibra/no-raw-locale-formatting": "error",
+    "calibra/no-json-error-body-in-routes": "error",
     "calibra/no-router-coupling-in-features": "error"
   },
   "overrides": [

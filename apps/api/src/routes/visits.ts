@@ -13,6 +13,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
+import { conflict, domainErrorResponse } from "../lib/domain-errors";
 import {
   asset,
   calibrationJob,
@@ -49,7 +50,7 @@ import {
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
 import { formatOnsiteAddressText } from "../lib/onsite-address";
 import {
-  buildJobStatusConflict,
+  jobStatusConflict,
   isCancelableJobStatus,
 } from "../modules/jobs/job-status-transitions";
 import {
@@ -733,11 +734,12 @@ export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
       // The guard above allows DRAFT only; keep the status machine's own
       // allow-list as the final word, so a status added later never slips in.
       if (!isCancelableJobStatus(foundJob.status)) {
-        return c.json(
-          {
-            error: "Apenas jobs com status DRAFT podem ser removidos da visita",
-          },
-          409,
+        return domainErrorResponse(
+          c,
+          conflict(
+            "job_not_cancelable",
+            "Apenas jobs com status DRAFT podem ser removidos da visita",
+          ),
         );
       }
 
@@ -772,7 +774,7 @@ export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
         return row;
       });
       if (!updatedJob) {
-        return c.json(await buildJobStatusConflict(jobId), 409);
+        return domainErrorResponse(c, await jobStatusConflict(jobId));
       }
 
       return c.json(updatedJob);
