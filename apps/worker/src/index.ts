@@ -143,6 +143,22 @@ export interface Env {
 export type QueueMessage = BackgroundJobMessage;
 
 /**
+ * The slice of a Workers-style execution context the handlers below accept.
+ * Declared here so the worker does not need `@cloudflare/workers-types`: no
+ * handler reads from it, the DB-queue runtime passes a stub.
+ */
+export interface ExecutionContext {
+  readonly props?: unknown;
+  waitUntil(promise: Promise<unknown>): void;
+  passThroughOnException(): void;
+}
+
+/** The slice of a Workers-style cron event the `scheduled` handler reads. */
+export interface ScheduledEvent {
+  readonly cron: string;
+}
+
+/**
  * Which delivery of a queue message this is. Runtimes that redeliver a failed
  * message (Vercel Queue, the DB queue) supply it; runtimes that never redeliver
  * (in-process local/inline dev) leave it out, which means "this is the only

@@ -1,6 +1,6 @@
 import type { QuantityKind } from "@calibra-facil/shared/units";
 
-import type { ReferenceStandardKind } from "./index";
+import type { ReferenceStandardKind } from "./reference-standard-kind";
 
 /**
  * Reconciles the two parallel metrology vocabularies that exist in the codebase:

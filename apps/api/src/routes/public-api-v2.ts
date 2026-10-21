@@ -74,7 +74,7 @@ import {
   storeIdempotencyRecord,
   upsertResourceExternalId,
 } from "../lib/public-api";
-import { isUniqueViolation } from "../lib/db-errors";
+import { isReferencedRowViolation, isUniqueViolation } from "../lib/db-errors";
 import {
   createR2Client,
   extractKeyFromUrl,
@@ -927,39 +927,58 @@ publicApiV2Router
 
       const ipAddress = getPublicApiRequestIp(c.req.raw.headers);
 
-      await db.insert(customerAuditLog).values({
-        customerId: existing.id,
-        action: "delete",
-        changes: { customer: { old: existing, new: null } },
-        performedBy: apiKey.createdBy,
-        ipAddress,
-      });
-
-      // CMP-07 (#692): deleting the customer cascades its assets
-      // (asset.customer_id → customer, intentional). Record a 'delete' audit row
-      // for EACH asset first — the asset_audit_log.asset_id FK no longer cascades,
-      // so these rows survive the delete and the ISO/IEC 17025 trail is preserved.
-      const customerAssets = await db
-        .select()
-        .from(asset)
-        .where(eq(asset.customerId, existing.id));
-      if (customerAssets.length > 0) {
-        await db.insert(assetAuditLog).values(
-          customerAssets.map((assetRow) => ({
-            assetId: assetRow.id,
+      // Retention (decision Q16): a customer that still has regulated records
+      // cannot be deleted (those foreign keys are RESTRICT). The audit rows share
+      // the transaction, so a refused delete leaves no "delete" entry behind.
+      try {
+        await db.transaction(async (tx) => {
+          await tx.insert(customerAuditLog).values({
+            customerId: existing.id,
             action: "delete",
-            changes: { asset: { old: assetRow, new: null } },
+            changes: { customer: { old: existing, new: null } },
             performedBy: apiKey.createdBy,
             ipAddress,
-            reason: "Cliente excluído",
-          })),
-        );
-      }
+          });
 
-      await db.delete(customer).where(eq(customer.id, existing.id));
-      await db
-        .delete(organization)
-        .where(eq(organization.id, existing.authOrganizationId));
+          // CMP-07 (#692): deleting the customer cascades its assets
+          // (asset.customer_id → customer, intentional). Record a 'delete' audit row
+          // for EACH asset first — the asset_audit_log.asset_id FK no longer cascades,
+          // so these rows survive the delete and the ISO/IEC 17025 trail is preserved.
+          const customerAssets = await tx
+            .select()
+            .from(asset)
+            .where(eq(asset.customerId, existing.id));
+          if (customerAssets.length > 0) {
+            await tx.insert(assetAuditLog).values(
+              customerAssets.map((assetRow) => ({
+                assetId: assetRow.id,
+                action: "delete",
+                changes: { asset: { old: assetRow, new: null } },
+                performedBy: apiKey.createdBy,
+                ipAddress,
+                reason: "Cliente excluído",
+              })),
+            );
+          }
+
+          await tx.delete(customer).where(eq(customer.id, existing.id));
+          await tx
+            .delete(organization)
+            .where(eq(organization.id, existing.authOrganizationId));
+        });
+      } catch (error) {
+        if (isReferencedRowViolation(error)) {
+          return {
+            status: 409,
+            body: buildPublicApiError({
+              code: "customer_has_retained_records",
+              message:
+                "Cliente possui registros regulados retidos e não pode ser excluído",
+            }),
+          };
+        }
+        throw error;
+      }
 
       const body = { data: { id: existing.id, deleted: true } };
 

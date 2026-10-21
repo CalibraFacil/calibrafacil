@@ -32,7 +32,6 @@
     "@calibra-facil/shared": "workspace:^",
     "@calibra-facil/signing": "workspace:^",
     "@cj-tech-master/excelts": "^9.6.0",
-    "@resvg/resvg-js": "2.6.2",
     "drizzle-orm": "^0.45.2",
     "fflate": "^0.8.3",
     "pg": "^8.21.0",
@@ -41,8 +40,6 @@
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260603.1",
-    "@repo/typescript-config": "workspace:^",
     "@types/node": "^24.13.0",
     "@types/pg": "^8.20.0",
     "@types/qrcode": "^1.5.5",

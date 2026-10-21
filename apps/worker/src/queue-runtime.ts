@@ -31,7 +31,7 @@ import {
   type QueueReceiptsMode,
 } from "@calibra-facil/db/queue-receipts";
 import { resolveS3EndpointConfigFromProcess } from "@calibra-facil/shared/storage-endpoint";
-import worker from "./index.js";
+import worker, { type ExecutionContext } from "./index.js";
 
 export type WorkerEnv = Parameters<typeof worker.queue>[1];
 

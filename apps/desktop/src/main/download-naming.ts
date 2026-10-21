@@ -36,33 +36,6 @@ const WINDOWS_RESERVED_NAMES = new Set([
  */
 const MAX_STEM_BYTES = 180;
 
-export type CertificateFileNameInput = {
-  certificateNumber?: string | null;
-  jobId?: string | number | null;
-  customerName?: string | null;
-};
-
-/**
- * `Certificado_R-0001-2026_Laboratorio-Exemplo.pdf` rather than `12.pdf`.
- *
- * Falls back through certificate number → job id → a bare label, so a draft
- * with no number yet still produces something sane.
- */
-export function buildCertificateFileName(
-  input: CertificateFileNameInput,
-): string {
-  const identifier =
-    sanitizeSegment(input.certificateNumber) ||
-    sanitizeSegment(input.jobId == null ? null : String(input.jobId));
-  const customer = sanitizeSegment(input.customerName);
-
-  const stem = ["Certificado", identifier, customer]
-    .filter((part) => part.length > 0)
-    .join("_");
-
-  return `${finalizeStem(stem, "Certificado")}.pdf`;
-}
-
 export function buildSupportBundleFileName(now: Date = new Date()): string {
   // Sortable, filename-safe instant: the operator is usually attaching the
   // newest bundle to a ticket.
@@ -101,8 +74,8 @@ export function sanitizeSegment(value: string | null | undefined): string {
  * Applies the whole-name rules: length, Windows device names, and the
  * trailing dot/space the Windows shell would strip behind our back.
  *
- * Exported because the device-name guard cannot fire through the builders
- * above — both prefix a constant, so their stems are never a bare `CON`. It
+ * Exported because the device-name guard cannot fire through the builder
+ * above — it prefixes a constant, so its stem is never a bare `CON`. It
  * belongs to *this* helper's contract, for any caller that composes a name
  * without a prefix, and is tested here directly rather than left as a branch
  * nothing reaches.

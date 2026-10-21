@@ -1165,6 +1165,10 @@ function createOrganizationPlugin() {
     roles,
     defaultMemberRole: "member",
     creatorRole: "owner",
+    // Records retention (decision Q16): an organization that holds regulated
+    // records is never hard-deleted through the API. Soft delete is a platform
+    // operation (softDeleteLabOrganization), and Postgres refuses the DELETE.
+    disableOrganizationDeletion: true,
     schema: {
       organization: {
         additionalFields: {
@@ -1651,7 +1655,7 @@ async function logAuthSessionCreated(
   }
 }
 
-async function findDefaultActiveOrganizationId(
+export async function findDefaultActiveOrganizationId(
   userId: string,
   organizationType: "CLIENT" | "LAB",
 ): Promise<string | null> {
@@ -1668,6 +1672,8 @@ async function findDefaultActiveOrganizationId(
       and(
         eq(schema.member.userId, userId),
         eq(schema.organization.type, organizationType),
+        // A soft-deleted organization (records retention) is never a default.
+        isNull(schema.organization.deletedAt),
       ),
     )
     .orderBy(asc(schema.member.createdAt))

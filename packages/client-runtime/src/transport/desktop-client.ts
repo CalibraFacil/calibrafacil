@@ -265,6 +265,9 @@ export function createDesktopApiClient(
         return { data: [] };
       },
     },
+    organizationLifecycle: desktopCloudOnlyStubs("organizationLifecycle", {
+      action: "Exclusão da organização",
+    }),
     entityLabels: {
       async getNonConformance() {
         return null;

@@ -59,6 +59,19 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      # Unused files, dependencies, devDependencies, unlisted dependencies and
+      # binaries, and unresolved imports fail the build (see knip.json). Unused
+      # exports and exported types are report-only for now: they print as
+      # warnings and do not affect the exit code.
+      - name: Unused code and dependencies (knip)
+        run: bun run knip
+
+      # madge --circular over every workspace's src, run through `pnpm dlx` with
+      # its own TypeScript 5 (madge needs the compiler API that TypeScript 7 does
+      # not ship). A new import cycle inside a package fails the build.
+      - name: Import cycles (madge)
+        run: bun run check:cycles
+
       # Keep it flat: `pnpm format` locally; `.prettierignore` carries the
       # byte-stable exclusions (math-engine, generated files).
       - name: Format check
