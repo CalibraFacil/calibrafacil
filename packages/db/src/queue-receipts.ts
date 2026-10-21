@@ -20,8 +20,9 @@ import { db } from "./db.js";
 // Rollout is gated by QUEUE_RECEIPTS_MODE:
 //   - "off"      — no receipts at all.
 //   - "shadow"   — record receipts and LOG would-be duplicates, always run
-//                  (the default: shadow-compare before trusting enforcement).
-//   - "enforce"  — skip COMPLETED duplicates; defer while a lease is held.
+//                  (explicit opt-out: observe without trusting enforcement).
+//   - "enforce"  — skip COMPLETED duplicates; defer while a lease is held
+//                  (the default, also for an unset or unrecognised value).
 
 export type QueueReceiptsMode = "off" | "shadow" | "enforce";
 
@@ -29,8 +30,8 @@ const DEFAULT_LEASE_MS = 10 * 60_000; // matches the app_queue_job stale-lease r
 
 export function readQueueReceiptsMode(): QueueReceiptsMode {
   const raw = process.env.QUEUE_RECEIPTS_MODE?.trim().toLowerCase();
-  if (raw === "off" || raw === "enforce") return raw;
-  return "shadow";
+  if (raw === "off" || raw === "shadow") return raw;
+  return "enforce";
 }
 
 function readLeaseMs(): number {

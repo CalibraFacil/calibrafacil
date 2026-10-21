@@ -1,5 +1,5 @@
 import { db } from "@calibra-facil/db";
-import { completeQueueJob, isQueueMessage } from "@calibra-facil/db/queue";
+import { forceCompleteQueueJob, isQueueMessage } from "@calibra-facil/db/queue";
 import {
   appQueueJob,
   serviceOrder,
@@ -62,7 +62,7 @@ export async function renderServiceOrderDocuments(
       continue;
     }
     await processBackgroundJob(env, message);
-    await completeQueueJob(row.id);
+    await forceCompleteQueueJob(row.id);
     rendered += 1;
   }
   ctx.log(`  service-order documents: ${rendered} rendered`);

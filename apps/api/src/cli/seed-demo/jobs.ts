@@ -1,6 +1,6 @@
 import { db } from "@calibra-facil/db";
 import { calibrationJob, notification } from "@calibra-facil/db/schema";
-import { completeQueueJob } from "@calibra-facil/db/queue";
+import { forceCompleteQueueJob } from "@calibra-facil/db/queue";
 import { processBackgroundJob } from "@calibra-facil/worker";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
@@ -404,7 +404,7 @@ async function completeQueuedCertificate(jobId: number): Promise<void> {
     const id: unknown = Reflect.get(queuedRow, "id");
     if (typeof id === "number") {
       // eslint-disable-next-line no-await-in-loop
-      await completeQueueJob(id);
+      await forceCompleteQueueJob(id);
     }
   }
 }

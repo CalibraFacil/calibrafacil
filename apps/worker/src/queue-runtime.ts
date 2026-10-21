@@ -166,6 +166,7 @@ type ReceiptDecision = {
 
 async function decideWithReceipt(
   job: ClaimedQueueJob,
+  workerId: string,
   mode: QueueReceiptsMode,
 ): Promise<ReceiptDecision> {
   if (mode === "off") return { job, run: true, owned: false };
@@ -191,11 +192,15 @@ async function decideWithReceipt(
 
   // Enforce mode: settle the row without re-running the work.
   if (claim.outcome === "duplicate-completed") {
-    await completeQueueJob(job.id);
+    await completeQueueJob(job.id, workerId);
   } else {
     // Another worker holds a live lease (stale reclaim raced a slow run):
     // back off through the normal retry path instead of running twice.
-    await failQueueJob(job.id, "queue receipt lease held by another worker");
+    await failQueueJob(
+      job.id,
+      workerId,
+      "queue receipt lease held by another worker",
+    );
   }
   return { job, run: false, owned: false };
 }
@@ -248,12 +253,12 @@ async function claimAndProcessBatch(
     claimedCount += 1;
 
     // oxlint-disable-next-line eslint/no-await-in-loop -- receipt claims are cheap single-row upserts.
-    const decision = await decideWithReceipt(job, mode);
+    const decision = await decideWithReceipt(job, workerId, mode);
     if (!decision.run) continue;
 
     console.log(`[Worker] Claimed queue job ${job.id}`);
     // oxlint-disable-next-line eslint/no-await-in-loop -- jobs run sequentially by design.
-    await processClaimedJob(env, decision);
+    await processClaimedJob(env, decision, workerId);
   }
 
   return claimedCount;
@@ -271,9 +276,15 @@ const executionContext: ExecutionContext = {
   },
 };
 
+// Settle the row FIRST, fenced by this worker's lease, and settle the receipt
+// only when that applied. A fenced-out worker (its lease expired and the row was
+// reclaimed) no longer owns the row — and by extension not the receipt the new
+// owner claimed — so it must not complete or release either, or it would
+// clobber the new owner's state.
 async function processClaimedJob(
   env: WorkerEnv,
   decision: ReceiptDecision,
+  workerId: string,
 ): Promise<void> {
   const { job } = decision;
   const { batch, states, errors } = createBatch([job]);
@@ -281,24 +292,27 @@ async function processClaimedJob(
   try {
     await worker.queue(batch, env, executionContext);
   } catch (error) {
-    await settleReceipt(decision, false);
-    await failQueueJob(job.id, error);
+    if (await failQueueJob(job.id, workerId, error)) {
+      await settleReceipt(decision, false);
+    }
     return;
   }
 
-  const acked = states.get(job.id) === "acked";
-  await settleReceipt(decision, acked);
-  if (acked) {
-    await completeQueueJob(job.id);
+  if (states.get(job.id) === "acked") {
+    if (await completeQueueJob(job.id, workerId)) {
+      await settleReceipt(decision, true);
+    }
     return;
   }
-  await failQueueJob(
+  const applied = await failQueueJob(
     job.id,
+    workerId,
     // Prefer the real error the handler retried with; the generic string
     // is only a fallback for a job that was neither acked nor retried
     // with an error (should not happen, but never lose the failure).
     errors.get(job.id) ?? "Job was not acknowledged by worker",
   );
+  if (applied) await settleReceipt(decision, false);
 }
 
 // Reclaim expired PROCESSING leases. A row whose lease expired on its final
