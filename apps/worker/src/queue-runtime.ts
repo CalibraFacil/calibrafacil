@@ -18,6 +18,7 @@ import {
   completeQueueJob,
   failQueueJob,
   releaseStaleQueueJobs,
+  renewQueueJobLease,
   type ClaimedQueueJob,
 } from "@calibra-facil/db/queue";
 import { rejectDeadLetteredCertificateRenders } from "@calibra-facil/db/queue-render-recovery";
@@ -241,54 +242,83 @@ async function claimAndProcessBatch(
     decisions.push(await decideWithReceipt(job, mode));
   }
   const runnable = decisions.filter((decision) => decision.run);
-  const jobs = runnable.map((decision) => decision.job);
-  if (jobs.length === 0) return claimed.length;
+  if (runnable.length === 0) return claimed.length;
 
-  console.log(`[Worker] Claimed ${jobs.length} queue job(s)`);
-  const { batch, states, errors } = createBatch(jobs);
-  const executionContext: ExecutionContext = {
-    props: {},
-    waitUntil(promise) {
-      void promise.catch((error) => {
-        console.error("[Worker] waitUntil task failed", error);
-      });
-    },
-    passThroughOnException() {
-      // Local queue processing has no upstream request to pass through.
-    },
-  };
+  console.log(`[Worker] Claimed ${runnable.length} queue job(s)`);
+  // One job at a time, each in its own batch: the lease of the NEXT row is
+  // renewed only when its turn comes, so a row queued behind slow jobs is never
+  // reclaimed (and, on its final attempt, dead-lettered) before it even starts.
+  for (const decision of runnable) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- jobs run sequentially by design; each lease is renewed right before its job starts.
+    await processClaimedJob(env, workerId, decision);
+  }
+
+  return claimed.length;
+}
+
+const executionContext: ExecutionContext = {
+  props: {},
+  waitUntil(promise) {
+    void promise.catch((error) => {
+      console.error("[Worker] waitUntil task failed", error);
+    });
+  },
+  passThroughOnException() {
+    // Local queue processing has no upstream request to pass through.
+  },
+};
+
+async function processClaimedJob(
+  env: WorkerEnv,
+  workerId: string,
+  decision: ReceiptDecision,
+): Promise<void> {
+  const { job } = decision;
+
+  let leaseHeld = true;
+  try {
+    leaseHeld = await renewQueueJobLease(job.id, workerId);
+  } catch (error) {
+    // Fail open, like the receipt ledger: a renewal that cannot be recorded is
+    // not proof the lease was lost, and the receipt still guards duplicates.
+    console.error(
+      `[Worker] Could not renew the lease of queue job ${job.id}`,
+      error,
+    );
+  }
+  if (!leaseHeld) {
+    // Reclaimed or taken over while an earlier job ran: someone else owns the
+    // row now. Neither process nor fail it — only free the receipt we took.
+    console.warn(
+      `[Worker] Lease of queue job ${job.id} was lost before it started; skipping it`,
+    );
+    await settleReceipt(decision, false);
+    return;
+  }
+
+  const { batch, states, errors } = createBatch([job]);
 
   try {
     await worker.queue(batch, env, executionContext);
   } catch (error) {
-    await Promise.all(
-      runnable.map(async (decision) => {
-        await settleReceipt(decision, false);
-        await failQueueJob(decision.job.id, error);
-      }),
-    );
-    return claimed.length;
+    await settleReceipt(decision, false);
+    await failQueueJob(job.id, error);
+    return;
   }
 
-  await Promise.all(
-    runnable.map(async (decision) => {
-      const acked = states.get(decision.job.id) === "acked";
-      await settleReceipt(decision, acked);
-      if (acked) {
-        await completeQueueJob(decision.job.id);
-        return;
-      }
-      await failQueueJob(
-        decision.job.id,
-        // Prefer the real error the handler retried with; the generic string
-        // is only a fallback for a job that was neither acked nor retried
-        // with an error (should not happen, but never lose the failure).
-        errors.get(decision.job.id) ?? "Job was not acknowledged by worker",
-      );
-    }),
+  const acked = states.get(job.id) === "acked";
+  await settleReceipt(decision, acked);
+  if (acked) {
+    await completeQueueJob(job.id);
+    return;
+  }
+  await failQueueJob(
+    job.id,
+    // Prefer the real error the handler retried with; the generic string
+    // is only a fallback for a job that was neither acked nor retried
+    // with an error (should not happen, but never lose the failure).
+    errors.get(job.id) ?? "Job was not acknowledged by worker",
   );
-
-  return claimed.length;
 }
 
 // Reclaim expired PROCESSING leases. A row whose lease expired on its final

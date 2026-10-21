@@ -21,6 +21,7 @@ const {
   completeQueueJob,
   failQueueJob,
   releaseStaleQueueJobs,
+  renewQueueJobLease,
   workerQueue,
   claimQueueReceipt,
   completeQueueReceipt,
@@ -32,6 +33,7 @@ const {
   completeQueueJob: vi.fn(),
   failQueueJob: vi.fn(),
   releaseStaleQueueJobs: vi.fn(),
+  renewQueueJobLease: vi.fn(),
   workerQueue: vi.fn(),
   claimQueueReceipt: vi.fn(),
   completeQueueReceipt: vi.fn(),
@@ -49,6 +51,7 @@ vi.mock("@calibra-facil/db/queue", () => ({
   completeQueueJob,
   failQueueJob,
   releaseStaleQueueJobs,
+  renewQueueJobLease,
 }));
 
 // The idempotency ledger is mocked so the unit tier never touches
@@ -102,6 +105,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   releaseStaleQueueJobs.mockResolvedValue({ released: 0, deadLettered: [] });
   rejectDeadLetteredCertificateRenders.mockResolvedValue(0);
+  renewQueueJobLease.mockResolvedValue(true);
   completeQueueJob.mockResolvedValue(undefined);
   failQueueJob.mockResolvedValue(undefined);
   // The failure-recording suite predates the receipt ledger — run it with the
@@ -377,6 +381,93 @@ describe("queue-runtime dead-letter handling (REQ-QDL-001, REQ-QDL-002)", () => 
     await drainQueue(fakeEnv, CONFIG);
 
     expect(rejectDeadLetteredCertificateRenders).not.toHaveBeenCalled();
+  });
+});
+
+describe("queue-runtime lease renewal (REQ-QDL-001)", () => {
+  function claimMany(...jobs: Array<ReturnType<typeof makeJob>>) {
+    claimQueueJobs.mockResolvedValueOnce(jobs).mockResolvedValue([]);
+  }
+
+  it("REQ-QDL-001: renews each claimed row's lease right before that row is processed", async () => {
+    const order: string[] = [];
+    claimMany(makeJob(60), makeJob(61));
+    renewQueueJobLease.mockImplementation(async (id: number) => {
+      order.push(`renew-${id}`);
+      return true;
+    });
+    workerQueue.mockImplementation(async (batch: MessageBatchLike) => {
+      order.push(`run-${batch.messages.length}`);
+      batch.messages[0]?.ack();
+    });
+
+    await drainQueue(fakeEnv, CONFIG);
+
+    // Interleaved: the second lease is renewed only after the first job ran.
+    expect(order).toEqual(["renew-60", "run-1", "renew-61", "run-1"]);
+    expect(renewQueueJobLease).toHaveBeenCalledWith(60, CONFIG.workerId);
+    expect(renewQueueJobLease).toHaveBeenCalledWith(61, CONFIG.workerId);
+    expect(completeQueueJob).toHaveBeenCalledWith(60);
+    expect(completeQueueJob).toHaveBeenCalledWith(61);
+  });
+
+  it("REQ-QDL-001: a row whose lease was lost is neither processed nor failed nor completed", async () => {
+    claimMany(makeJob(70), makeJob(71));
+    renewQueueJobLease.mockImplementation(async (id: number) => id !== 71);
+    workerQueue.mockImplementation(async (batch: MessageBatchLike) => {
+      batch.messages[0]?.ack();
+    });
+
+    await drainQueue(fakeEnv, CONFIG);
+
+    expect(workerQueue).toHaveBeenCalledTimes(1);
+    expect(completeQueueJob).toHaveBeenCalledTimes(1);
+    expect(completeQueueJob).toHaveBeenCalledWith(70);
+    expect(failQueueJob).not.toHaveBeenCalled();
+  });
+
+  it("REQ-QDL-001: releases the idempotency receipt of a row whose lease was lost", async () => {
+    claimMany(makeJob(72));
+    readQueueReceiptsMode.mockReturnValue("enforce");
+    renewQueueJobLease.mockResolvedValue(false);
+
+    await drainQueue(fakeEnv, CONFIG);
+
+    expect(workerQueue).not.toHaveBeenCalled();
+    expect(releaseQueueReceipt).toHaveBeenCalledWith({
+      jobType: "CERTIFICATE",
+      idempotencyKey: "app-queue-72",
+    });
+    expect(failQueueJob).not.toHaveBeenCalled();
+  });
+
+  it("REQ-QDL-001: a renewal that cannot be recorded does not block the job (fail open)", async () => {
+    claimMany(makeJob(73));
+    renewQueueJobLease.mockRejectedValue(new Error("db blip"));
+    workerQueue.mockImplementation(async (batch: MessageBatchLike) => {
+      batch.messages[0]?.ack();
+    });
+
+    await drainQueue(fakeEnv, CONFIG);
+
+    expect(workerQueue).toHaveBeenCalledTimes(1);
+    expect(completeQueueJob).toHaveBeenCalledWith(73);
+  });
+
+  it("REQ-QDL-001: one job's batch failure no longer fails the rows queued behind it", async () => {
+    claimMany(makeJob(74), makeJob(75));
+    const boom = new Error("worker.queue exploded");
+    workerQueue
+      .mockRejectedValueOnce(boom)
+      .mockImplementationOnce(async (batch: MessageBatchLike) => {
+        batch.messages[0]?.ack();
+      });
+
+    await drainQueue(fakeEnv, CONFIG);
+
+    expect(failQueueJob).toHaveBeenCalledWith(74, boom);
+    expect(completeQueueJob).toHaveBeenCalledWith(75);
+    expect(failQueueJob).not.toHaveBeenCalledWith(75, expect.anything());
   });
 });
 

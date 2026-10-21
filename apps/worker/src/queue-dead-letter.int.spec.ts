@@ -183,3 +183,107 @@ describe("drainQueue dead-letters a worker crash on the final attempt", () => {
     ).toHaveLength(0);
   });
 });
+
+describe("drainQueue renews each lease right before its job starts", () => {
+  async function seedPending(jobId: number, userId: string) {
+    const [row] = await db
+      .insert(appQueueJob)
+      .values({
+        type: "CERTIFICATE",
+        payload: { type: "CERTIFICATE", jobId, userId },
+        status: "PENDING",
+        attempts: 0,
+        maxAttempts: 3,
+      })
+      .returning();
+    return row!;
+  }
+
+  async function queueRow(id: number) {
+    const [row] = await db
+      .select()
+      .from(appQueueJob)
+      .where(eq(appQueueJob.id, id));
+    return row!;
+  }
+
+  type MessageBatchLike = { messages: Array<{ ack: () => void }> };
+
+  it("REQ-QDL-001 a row that aged behind a slow job has a fresh lease when its turn comes", async () => {
+    const org = await seedOrg({ orgId: "org-1", userId: "user-org-1" });
+    const first = await seedPending(1, org.userId);
+    const second = await seedPending(2, org.userId);
+    let leaseAgeWhenStarted: number | null = null;
+
+    workerQueue
+      .mockImplementationOnce(async (batch: MessageBatchLike) => {
+        // The first job is slow: the second row's lease ages in the meantime.
+        await db
+          .update(appQueueJob)
+          .set({ lockedAt: new Date(Date.now() - 60 * 60_000) })
+          .where(eq(appQueueJob.id, second.id));
+        for (const message of batch.messages) message.ack();
+      })
+      .mockImplementationOnce(async (batch: MessageBatchLike) => {
+        const row = await queueRow(second.id);
+        leaseAgeWhenStarted = Date.now() - (row.lockedAt?.getTime() ?? 0);
+        for (const message of batch.messages) message.ack();
+      });
+
+    await drainQueue(makeTestEnv(), CONFIG);
+
+    expect(workerQueue).toHaveBeenCalledTimes(2);
+    expect(leaseAgeWhenStarted).not.toBeNull();
+    expect(leaseAgeWhenStarted!).toBeLessThan(60_000);
+    expect((await queueRow(first.id)).status).toBe("COMPLETED");
+    expect((await queueRow(second.id)).status).toBe("COMPLETED");
+  });
+
+  it("REQ-QDL-001 a row taken over by another worker is skipped: not processed, not failed, not completed", async () => {
+    const org = await seedOrg({ orgId: "org-1", userId: "user-org-1" });
+    const first = await seedPending(1, org.userId);
+    const second = await seedPending(2, org.userId);
+
+    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
+      // While the first job runs, another drainer reclaims and re-claims row 2.
+      await db
+        .update(appQueueJob)
+        .set({ lockedBy: "other-worker", lockedAt: new Date() })
+        .where(eq(appQueueJob.id, second.id));
+      for (const message of batch.messages) message.ack();
+    });
+
+    await drainQueue(makeTestEnv(), CONFIG);
+
+    expect(workerQueue).toHaveBeenCalledTimes(1);
+    expect((await queueRow(first.id)).status).toBe("COMPLETED");
+    const taken = await queueRow(second.id);
+    expect(taken.status).toBe("PROCESSING");
+    expect(taken.lockedBy).toBe("other-worker");
+    expect(taken.attempts).toBe(1);
+    expect(taken.lastError).toBeNull();
+  });
+
+  it("REQ-QDL-001 a row reclaimed to PENDING while it waited is skipped too, and keeps its retry state", async () => {
+    const org = await seedOrg({ orgId: "org-1", userId: "user-org-1" });
+    await seedPending(1, org.userId);
+    const second = await seedPending(2, org.userId);
+
+    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
+      await db
+        .update(appQueueJob)
+        .set({ status: "PENDING", lockedBy: null, lockedAt: null })
+        .where(eq(appQueueJob.id, second.id));
+      for (const message of batch.messages) message.ack();
+    });
+
+    // maxBatches = 1: look at the state right after the batch, before a later
+    // claim would legitimately pick the PENDING row up again.
+    await drainQueue(makeTestEnv(), CONFIG, 1);
+
+    expect(workerQueue).toHaveBeenCalledTimes(1);
+    const reclaimed = await queueRow(second.id);
+    expect(reclaimed.status).toBe("PENDING");
+    expect(reclaimed.lastError).toBeNull();
+  });
+});

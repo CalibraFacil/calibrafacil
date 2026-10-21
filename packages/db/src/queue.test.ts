@@ -16,6 +16,7 @@ import {
   enqueueQueueJob,
   failQueueJob,
   releaseStaleQueueJobs,
+  renewQueueJobLease,
 } from "./queue.js";
 
 function mockSelectJob(job: { attempts: number; maxAttempts: number } | null) {
@@ -134,6 +135,14 @@ describe("Postgres queue helpers", () => {
     await releaseStaleQueueJobs(60_000);
 
     expect(dbMock.execute).toHaveBeenCalledOnce();
+  });
+
+  it("REQ-QDL-001 renewQueueJobLease reports whether the lease is still held by this worker", async () => {
+    dbMock.execute.mockResolvedValueOnce({ rows: [{ id: 5 }] });
+    await expect(renewQueueJobLease(5, "worker-a")).resolves.toBe(true);
+
+    dbMock.execute.mockResolvedValueOnce({ rows: [] });
+    await expect(renewQueueJobLease(5, "worker-a")).resolves.toBe(false);
   });
 
   it("REQ-QDL-001 splits the reclaimed rows into released (PENDING) and dead-lettered (FAILED)", async () => {

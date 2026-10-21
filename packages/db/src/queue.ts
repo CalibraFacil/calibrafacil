@@ -165,6 +165,32 @@ export async function claimQueueJobs(
   });
 }
 
+/**
+ * Renew the PROCESSING lease of a row this worker claimed, just before it is
+ * processed. `claimQueueJobs` stamps every row of a batch with the same
+ * `locked_at` and the batch then runs sequentially, so a row queued behind slow
+ * jobs can see its lease expire before it starts — and the reclaim would
+ * dead-letter a healthy certificate on its final attempt. Returns whether the
+ * lease is still ours: `false` means the row was reclaimed or taken over (its
+ * `locked_by` / status changed), and the caller must neither process nor fail it.
+ */
+export async function renewQueueJobLease(
+  id: number,
+  workerId: string,
+): Promise<boolean> {
+  const result = await db.execute(sql`
+    update app_queue_job
+    set locked_at = now(),
+        updated_at = now()
+    where id = ${id}
+      and locked_by = ${workerId}
+      and status = 'PROCESSING'
+    returning id
+  `);
+
+  return getExecuteRows(result).length > 0;
+}
+
 export async function completeQueueJob(id: number) {
   await db
     .update(appQueueJob)
