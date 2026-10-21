@@ -13,8 +13,8 @@ import {
   type ReferentialAction,
 } from "./tenancy";
 
-export const TENANCY_BEGIN = "<!-- BEGIN GENERATED: tenancy -->";
-export const TENANCY_END = "<!-- END GENERATED: tenancy -->";
+const TENANCY_BEGIN = "<!-- BEGIN GENERATED: tenancy -->";
+const TENANCY_END = "<!-- END GENERATED: tenancy -->";
 
 const ACTION_LABEL: Record<ReferentialAction, string> = {
   cascade: "CASCADE",
@@ -130,7 +130,7 @@ function renderPairs(): string[] {
   return lines;
 }
 
-export function renderTenancyBlock(): string {
+function renderTenancyBlock(): string {
   const { tenant, global } = classifyTables();
   const total = listTenancy().length;
   const lines: string[] = [

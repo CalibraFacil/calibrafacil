@@ -414,13 +414,11 @@ describe("portalRequestsRouter — real DB + real portal middleware", () => {
       submittedBy: ctx.portalUserId,
       observations: "Minha solicitação",
     });
-    await db
-      .insert(calibrationRequestItem)
-      .values({
-        organizationId: organizationOf("calibration_request", reqId),
-        requestId: reqId,
-        assetId,
-      });
+    await db.insert(calibrationRequestItem).values({
+      organizationId: organizationOf("calibration_request", reqId),
+      requestId: reqId,
+      assetId,
+    });
 
     loginAsPortal({
       userId: ctx.portalUserId,

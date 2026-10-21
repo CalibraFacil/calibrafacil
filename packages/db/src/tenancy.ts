@@ -489,11 +489,9 @@ function readTenancy(): readonly TableTenancy[] {
   );
   return tables
     .map((table) =>
-      pairingParents.has(table.name)
-        ? table
-        : { ...table, orgIdUniques: [] },
+      pairingParents.has(table.name) ? table : { ...table, orgIdUniques: [] },
     )
-    .toSorted((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 const TABLES = readTenancy();
@@ -583,7 +581,7 @@ export function unpairedPointers(): readonly {
       });
     }
   }
-  return pointers.toSorted(
+  return pointers.sort(
     (a, b) =>
       a.table.localeCompare(b.table) || a.column.localeCompare(b.column),
   );
