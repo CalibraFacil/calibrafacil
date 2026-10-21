@@ -55,7 +55,7 @@
 // public API results route moves a REJECTED job to IN_PROGRESS). Changing
 // them is a product decision made here, in one place, with the tests beside it.
 
-import type { JobStatus } from "./index";
+import type { JobStatus } from "./job-status";
 
 export const JOB_COMMANDS = [
   "create",
