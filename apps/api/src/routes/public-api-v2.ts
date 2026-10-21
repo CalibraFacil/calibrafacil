@@ -52,6 +52,7 @@ import {
   isNull,
   lt,
   lte,
+  notInArray,
   or,
   sql,
 } from "drizzle-orm";
@@ -524,6 +525,19 @@ const PublicUpdateJobSchema = UpdateJobSchema.omit({ status: true }).extend({
     })
     .optional(),
 });
+
+/**
+ * Body of the 409 returned when a job write's compare-and-set matched no row:
+ * the job changed status (or left the key's organization) between the route's
+ * read and its write. Same code and message as the cancel route.
+ */
+function jobStatusConflictBody() {
+  return buildPublicApiError({
+    code: "job_status_conflict",
+    message:
+      "O status da OS mudou durante a operação. Recarregue e tente novamente.",
+  });
+}
 
 export const publicApiV2Router = new Hono<{
   Variables: ApiKeyAuthVariables;
@@ -3501,30 +3515,49 @@ publicApiV2Router
         );
       }
 
-      const [updated] = await db
-        .update(calibrationJob)
-        .set({
-          technicianId:
-            input.technicianId === undefined
-              ? existing.technicianId
-              : input.technicianId,
-          dueDate:
-            input.dueDate === undefined
-              ? existing.dueDate
-              : input.dueDate
-                ? new Date(input.dueDate)
-                : null,
-        })
-        .where(eq(calibrationJob.id, existing.id))
-        .returning();
+      // The write matches only the statuses this route allows (the pre-check
+      // above) in the key's organization; the audit row commits with it.
+      const updated = await db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(calibrationJob)
+          .set({
+            technicianId:
+              input.technicianId === undefined
+                ? existing.technicianId
+                : input.technicianId,
+            dueDate:
+              input.dueDate === undefined
+                ? existing.dueDate
+                : input.dueDate
+                  ? new Date(input.dueDate)
+                  : null,
+          })
+          .where(
+            and(
+              eq(calibrationJob.id, existing.id),
+              eq(calibrationJob.organizationId, apiKey.organizationId),
+              notInArray(calibrationJob.status, [
+                "APPROVED",
+                "SUPERSEDED",
+                "CANCELED",
+              ]),
+            ),
+          )
+          .returning();
+        if (!row) return null;
 
-      await db.insert(jobAuditLog).values({
-        jobId: existing.id,
-        action: "update",
-        changes: { job: { old: existing, new: updated } },
-        performedBy: apiKey.createdBy,
-        ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+        await tx.insert(jobAuditLog).values({
+          jobId: existing.id,
+          action: "update",
+          changes: { job: { old: existing, new: row } },
+          performedBy: apiKey.createdBy,
+          ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+        });
+        return row;
       });
+      if (!updated) {
+        return c.json(jobStatusConflictBody(), 409);
+      }
 
       const externalId = input.externalId?.trim();
       if (externalId) {
@@ -3615,31 +3648,46 @@ publicApiV2Router
           };
         }
 
-        const [updated] = await db
-          .update(calibrationJob)
-          .set({
-            status: "IN_PROGRESS",
-            data: input.data,
-            results: input.results ?? existing.results,
-          })
-          .where(eq(calibrationJob.id, existing.id))
-          .returning();
+        // Compare-and-set on the status the pre-check validated, in the key's
+        // organization; the audit row commits with it.
+        const updated = await db.transaction(async (tx) => {
+          const [row] = await tx
+            .update(calibrationJob)
+            .set({
+              status: "IN_PROGRESS",
+              data: input.data,
+              results: input.results ?? existing.results,
+            })
+            .where(
+              and(
+                eq(calibrationJob.id, existing.id),
+                eq(calibrationJob.organizationId, apiKey.organizationId),
+                eq(calibrationJob.status, existing.status),
+              ),
+            )
+            .returning();
+          if (!row) return null;
 
-        await db.insert(jobAuditLog).values({
-          jobId: existing.id,
-          action: "execute",
-          changes: {
-            data: { old: existing.data, new: input.data },
-            results: {
-              old: existing.results,
-              new: input.results ?? existing.results,
+          await tx.insert(jobAuditLog).values({
+            jobId: existing.id,
+            action: "execute",
+            changes: {
+              data: { old: existing.data, new: input.data },
+              results: {
+                old: existing.results,
+                new: input.results ?? existing.results,
+              },
             },
-          },
-          performedBy: apiKey.createdBy,
-          ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+            performedBy: apiKey.createdBy,
+            ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+          });
+          return row;
         });
+        if (!updated) {
+          return { status: 409, body: jobStatusConflictBody() };
+        }
 
-        const body = { data: updated! };
+        const body = { data: updated };
 
         await emitPublicApiWebhookEvent({
           organizationId: apiKey.organizationId,
@@ -3652,7 +3700,7 @@ publicApiV2Router
           status: 200,
           body,
           resourceType: "job" as const,
-          resourceId: updated!.id,
+          resourceId: updated.id,
         };
       });
     },
@@ -3733,32 +3781,47 @@ publicApiV2Router
           };
         }
 
-        const [updated] = await db
-          .update(calibrationJob)
-          .set({
-            data: input.data,
-            status: "REVIEW",
-            performedAt,
-          })
-          .where(eq(calibrationJob.id, existing.id))
-          .returning();
+        // Compare-and-set on the status the pre-check validated, in the key's
+        // organization; the audit row commits with it.
+        const updated = await db.transaction(async (tx) => {
+          const [row] = await tx
+            .update(calibrationJob)
+            .set({
+              data: input.data,
+              status: "REVIEW",
+              performedAt,
+            })
+            .where(
+              and(
+                eq(calibrationJob.id, existing.id),
+                eq(calibrationJob.organizationId, apiKey.organizationId),
+                eq(calibrationJob.status, existing.status),
+              ),
+            )
+            .returning();
+          if (!row) return null;
 
-        await db.insert(jobAuditLog).values({
-          jobId: existing.id,
-          action: "submit",
-          changes: {
-            status: { old: existing.status, new: "REVIEW" },
-            data: { old: existing.data, new: input.data },
-          },
-          performedBy: apiKey.createdBy,
-          ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+          await tx.insert(jobAuditLog).values({
+            jobId: existing.id,
+            action: "submit",
+            changes: {
+              status: { old: existing.status, new: "REVIEW" },
+              data: { old: existing.data, new: input.data },
+            },
+            performedBy: apiKey.createdBy,
+            ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+          });
+          return row;
         });
+        if (!updated) {
+          return { status: 409, body: jobStatusConflictBody() };
+        }
 
         return {
           status: 200,
-          body: { data: updated! },
+          body: { data: updated },
           resourceType: "job" as const,
-          resourceId: updated!.id,
+          resourceId: updated.id,
         };
       });
     },
@@ -4003,31 +4066,46 @@ publicApiV2Router
           };
         }
 
-        const [updated] = await db
-          .update(calibrationJob)
-          .set({
-            status: "REJECTED",
-            rejectedBy: apiKey.createdBy,
-            rejectedAt: new Date(),
-            rejectionReason: input.reason,
-          })
-          .where(eq(calibrationJob.id, existing.id))
-          .returning();
+        // Compare-and-set REVIEW -> REJECTED in the key's organization; the
+        // audit row commits with it.
+        const updated = await db.transaction(async (tx) => {
+          const [row] = await tx
+            .update(calibrationJob)
+            .set({
+              status: "REJECTED",
+              rejectedBy: apiKey.createdBy,
+              rejectedAt: new Date(),
+              rejectionReason: input.reason,
+            })
+            .where(
+              and(
+                eq(calibrationJob.id, existing.id),
+                eq(calibrationJob.organizationId, apiKey.organizationId),
+                eq(calibrationJob.status, "REVIEW"),
+              ),
+            )
+            .returning();
+          if (!row) return null;
 
-        await db.insert(jobAuditLog).values({
-          jobId: existing.id,
-          action: "reject",
-          changes: { status: { old: existing.status, new: "REJECTED" } },
-          performedBy: apiKey.createdBy,
-          ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-          reason: input.reason,
+          await tx.insert(jobAuditLog).values({
+            jobId: existing.id,
+            action: "reject",
+            changes: { status: { old: existing.status, new: "REJECTED" } },
+            performedBy: apiKey.createdBy,
+            ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+            reason: input.reason,
+          });
+          return row;
         });
+        if (!updated) {
+          return { status: 409, body: jobStatusConflictBody() };
+        }
 
         return {
           status: 200,
-          body: { data: updated! },
+          body: { data: updated },
           resourceType: "job" as const,
-          resourceId: updated!.id,
+          resourceId: updated.id,
         };
       });
     },
