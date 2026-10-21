@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
 import { beforeEach, inject, vi } from "vitest";
 import { assertEphemeralTestDb } from "./guard";
+import { installTenantSqlGuard } from "./tenant-sql-guard";
 
 // Per-worker setup for the integration tier. Runs before any test file in this
 // worker process. Each worker gets its OWN copy of the schema (calibra_w<id>)
@@ -193,3 +194,7 @@ beforeEach(() => {
   getSessionMock.mockReset();
   portalGetSessionMock.mockReset();
 });
+
+// Tenancy guard: every statement the app issues against a tenant-scoped table
+// must carry an organization predicate (see tenant-sql-guard.ts).
+installTenantSqlGuard();

@@ -525,7 +525,12 @@ export async function markContaAzulReconnectRequired(params: {
       lastValidationError: params.message,
       updatedAt: new Date(),
     })
-    .where(eq(organizationIntegration.id, params.integrationId));
+    .where(
+      and(
+        eq(organizationIntegration.id, params.integrationId),
+        eq(organizationIntegration.organizationId, params.organizationId),
+      ),
+    );
 
   await writeIntegrationEvent({
     integrationId: params.integrationId,

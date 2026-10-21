@@ -100,6 +100,7 @@ export async function claimDesktopSyncEvent(
       .set({ claimedAt: sql`now()` })
       .where(
         and(
+          eq(syncAppliedEvent.organizationId, organizationId),
           eq(syncAppliedEvent.id, existing.id),
           isNull(syncAppliedEvent.appliedAt),
           sql`${syncAppliedEvent.claimedAt} < now() - make_interval(secs => ${SYNC_EVENT_CLAIM_LEASE_SECONDS})`,
@@ -112,7 +113,7 @@ export async function claimDesktopSyncEvent(
       // over blindly would apply the op a second time.
       const legacy = await findLegacyApplied();
       if (legacy) {
-        await completeDesktopSyncClaim(takenOver.id, legacy);
+        await completeDesktopSyncClaim(organizationId, takenOver.id, legacy);
         return { state: "applied", ...legacy };
       }
       return { state: "claimed", claimId: takenOver.id };
@@ -125,6 +126,7 @@ export async function claimDesktopSyncEvent(
 }
 
 export async function completeDesktopSyncClaim(
+  organizationId: string,
   claimId: number,
   result: { remoteEntityId?: number | string; remoteEntity?: unknown },
 ) {
@@ -137,13 +139,25 @@ export async function completeDesktopSyncClaim(
         remoteEntity: result.remoteEntity,
       },
     })
-    .where(eq(syncAppliedEvent.id, claimId));
+    .where(
+      and(
+        eq(syncAppliedEvent.organizationId, organizationId),
+        eq(syncAppliedEvent.id, claimId),
+      ),
+    );
 }
 
-export async function releaseDesktopSyncClaim(claimId: number) {
+export async function releaseDesktopSyncClaim(
+  organizationId: string,
+  claimId: number,
+) {
   await db
     .delete(syncAppliedEvent)
     .where(
-      and(eq(syncAppliedEvent.id, claimId), isNull(syncAppliedEvent.appliedAt)),
+      and(
+        eq(syncAppliedEvent.organizationId, organizationId),
+        eq(syncAppliedEvent.id, claimId),
+        isNull(syncAppliedEvent.appliedAt),
+      ),
     );
 }

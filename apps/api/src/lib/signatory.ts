@@ -68,7 +68,12 @@ export async function checkApproverIsAuthorizedSignatory(params: {
   const [assetRow] = await db
     .select({ assetTypeId: asset.assetTypeId })
     .from(asset)
-    .where(eq(asset.id, params.assetId))
+    .where(
+      and(
+        eq(asset.id, params.assetId),
+        eq(asset.labOrganizationId, params.organizationId),
+      ),
+    )
     .limit(1);
 
   const records = await db
