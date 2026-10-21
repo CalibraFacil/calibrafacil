@@ -111,7 +111,6 @@ function preloadSourcePaths() {
 function localServerSourcePaths() {
   return [
     "apps/local-server/src/server.ts",
-    "apps/local-server/src/certificates.ts",
     "apps/local-server/src/sync.ts",
     "packages/local-db/src/index.ts",
   ].map((relativePath) => path.join(root, relativePath));
