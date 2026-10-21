@@ -38,6 +38,20 @@ function postgresImage(): string {
   return pinned;
 }
 
+/**
+ * The whole sql/schema-extras.sql: the objects drizzle-kit push cannot create from
+ * schema.ts (extensions + immutable_unaccent, partial/NULLS NOT DISTINCT unique
+ * indexes, CHECK constraints, the regulated-invariant triggers). Production gets
+ * the same file from `db:bootstrap`, so the test template carries every constraint
+ * production enforces, not a subset.
+ */
+function schemaExtrasSql(): string {
+  return readFileSync(
+    new URL("../../../../packages/db/sql/schema-extras.sql", import.meta.url),
+    "utf8",
+  );
+}
+
 let startedContainer: string | null = null;
 
 function tryExec(cmd: string) {
@@ -143,14 +157,14 @@ export async function setup({ provide }: GlobalSetupContext) {
   });
 
   // Apply the migration-only DB objects that `drizzle-kit push` can't create from
-  // the schema: the unaccent/pg_trgm extensions + the IMMUTABLE unaccent wrapper that
-  // accent-insensitive customer search depends on (migration 0071).
-  const extensionsSql = fileURLToPath(
-    new URL("./extensions.sql", import.meta.url),
-  );
-  execSync(`psql -d ${TEMPLATE_DB} -f "${extensionsSql}"`, {
+  // the schema, from the same sql/schema-extras.sql `db:bootstrap` applies in
+  // production. The template therefore enforces what production enforces: the
+  // one-default-per-organization partial unique indexes (migrations 0029/0031)
+  // included. Tests that assume those constraints are absent are bugs to fix.
+  execSync(`psql -v ON_ERROR_STOP=1 -d ${TEMPLATE_DB}`, {
     env: { ...pgEnv, PGDATABASE: TEMPLATE_DB },
-    stdio: "ignore",
+    input: schemaExtrasSql(),
+    stdio: ["pipe", "ignore", "inherit"],
   });
 
   // Provide base connection URL (no db name) and template name so per-worker

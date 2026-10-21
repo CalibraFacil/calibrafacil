@@ -3456,7 +3456,11 @@ publicApiV2Router
         );
       }
 
-      if (existing.status === "APPROVED" || existing.status === "CANCELED") {
+      if (
+        existing.status === "APPROVED" ||
+        existing.status === "SUPERSEDED" ||
+        existing.status === "CANCELED"
+      ) {
         return c.json(
           buildPublicApiError({
             code: "job_not_editable",

@@ -357,9 +357,9 @@ export const certificateNumberingAuditLog = pgTable(
   "certificate_numbering_audit_log",
   {
     id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+    // Evidence trail: a soft reference on purpose (no FK, mirrors the CMP-07
+    // #692 audit tables), so the row survives deletion of its organization.
+    organizationId: text("organization_id").notNull(),
     profileId: integer("profile_id").references(
       () => certificateNumberingProfile.id,
       { onDelete: "set null" },
@@ -482,9 +482,9 @@ export const organizationEventLog = pgTable(
   "organization_event_log",
   {
     id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+    // Evidence trail: a soft reference on purpose (no FK, mirrors the CMP-07
+    // #692 audit tables), so the row survives deletion of its organization.
+    organizationId: text("organization_id").notNull(),
     unitId: integer("unit_id").references(() => organizationUnit.id, {
       onDelete: "set null",
     }),
@@ -1427,15 +1427,12 @@ export const integrationEventLog = pgTable(
   "integration_event_log",
   {
     id: serial("id").primaryKey(),
-    integrationId: text("integration_id")
-      .notNull()
-      .references(() => organizationIntegration.id, { onDelete: "cascade" }),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
-    runId: text("run_id").references(() => integrationSyncRun.id, {
-      onDelete: "cascade",
-    }),
+    // Soft reference (no FK): the trail outlives the integration and its runs.
+    integrationId: text("integration_id").notNull(),
+    // Evidence trail: a soft reference on purpose (no FK, mirrors the CMP-07
+    // #692 audit tables), so the row survives deletion of its organization.
+    organizationId: text("organization_id").notNull(),
+    runId: text("run_id"),
     level: text("level")
       .$type<IntegrationEventLevel>()
       .default("info")
@@ -1450,14 +1447,6 @@ export const integrationEventLog = pgTable(
     index("integration_event_log_org_idx").on(table.organizationId),
     index("integration_event_log_run_idx").on(table.runId),
     index("integration_event_log_created_at_idx").on(table.createdAt),
-    foreignKey({
-      columns: [table.integrationId, table.organizationId],
-      foreignColumns: [
-        organizationIntegration.id,
-        organizationIntegration.organizationId,
-      ],
-      name: "integration_event_log_integration_org_fk",
-    }).onDelete("cascade"),
   ],
 );
 
@@ -4145,9 +4134,9 @@ export const financialAuditLog = pgTable(
   "financial_audit_log",
   {
     id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+    // Evidence trail: a soft reference on purpose (no FK, mirrors the CMP-07
+    // #692 audit tables), so the row survives deletion of its organization.
+    organizationId: text("organization_id").notNull(),
     entityType: text("entity_type").$type<FinancialAuditEntityType>().notNull(),
     entityId: text("entity_id").notNull(),
     action: text("action").notNull(),
@@ -4310,9 +4299,9 @@ export const automaticSendAuditLog = pgTable(
   "automatic_send_audit_log",
   {
     id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+    // Evidence trail: a soft reference on purpose (no FK, mirrors the CMP-07
+    // #692 audit tables), so the row survives deletion of its organization.
+    organizationId: text("organization_id").notNull(),
     serviceOrderId: integer("service_order_id").references(
       () => serviceOrder.id,
       { onDelete: "set null" },
@@ -4989,15 +4978,12 @@ export const serviceOrderEventLog = pgTable(
   "service_order_event_log",
   {
     id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
-    unitId: integer("unit_id")
-      .notNull()
-      .references(() => organizationUnit.id, { onDelete: "cascade" }),
-    serviceOrderId: integer("service_order_id")
-      .notNull()
-      .references(() => serviceOrder.id, { onDelete: "cascade" }),
+    // Evidence trail: a soft reference on purpose (no FK, mirrors the CMP-07
+    // #692 audit tables), so the row survives deletion of its organization.
+    organizationId: text("organization_id").notNull(),
+    // Soft references (no FK): the event trail outlives the order and its unit.
+    unitId: integer("unit_id").notNull(),
+    serviceOrderId: integer("service_order_id").notNull(),
     actorType: text("actor_type").$type<ServiceOrderActorType>().notNull(),
     actorId: text("actor_id"),
     eventType: text("event_type").$type<ServiceOrderEventType>().notNull(),
@@ -6178,9 +6164,9 @@ export const accreditedScopeLineAuditLog = pgTable(
     // Null for org-level scope events (e.g. enforcement-mode changes) that
     // are not tied to a single line.
     scopeLineId: integer("scope_line_id"),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+    // Evidence trail: a soft reference on purpose (no FK, mirrors the CMP-07
+    // #692 audit tables), so the row survives deletion of its organization.
+    organizationId: text("organization_id").notNull(),
     action: text("action").notNull(), // 'create', 'update', 'delete'
     changes: jsonb("changes"), // { field: { old: x, new: y } }
     performedBy: text("performed_by")
@@ -7785,7 +7771,7 @@ export const personnelCompetence = pgTable(
     // declaration is therefore an APPROXIMATION for drizzle-kit's benefit
     // (keeps the object named/documented); the real WHERE + NULLS NOT
     // DISTINCT DDL is applied by migration 0083 (prod/dev) and by
-    // `apps/api/test/integration/extensions.sql` (test harness, run once
+    // `packages/db/sql/schema-extras.sql` (test harness, run once
     // after `drizzle-kit push` builds the per-run template DB).
     uniqueIndex("competence_org_user_asset_type_uidx")
       .on(table.organizationId, table.userId, table.assetTypeId)
@@ -7970,7 +7956,7 @@ export const authorizedSignatory = pgTable(
     // CMP-07 rework (#692): same partial-unique-index rationale as
     // personnel_competence above — see that comment for the full explanation
     // of why drizzle-orm/drizzle-kit cannot express `NULLS NOT DISTINCT` on a
-    // partial `uniqueIndex()`. Real DDL: migration 0083 + extensions.sql.
+    // partial `uniqueIndex()`. Real DDL: migration 0083 + packages/db/sql/schema-extras.sql.
     uniqueIndex("authorized_signatory_org_user_asset_type_uidx")
       .on(table.organizationId, table.userId, table.assetTypeId)
       .where(sql`${table.userId} is not null`),

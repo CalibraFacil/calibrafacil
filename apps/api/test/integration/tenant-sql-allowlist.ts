@@ -376,4 +376,16 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     reason:
       "Notification context loaders: callers pass the id of the entity they just operated on after their own scoped lookup; the recipients' organization is derived from the loaded row itself.",
   },
+  {
+    category: "provisioning",
+    file: "apps/api/src/cli/seed-demo/history-rewrite.ts",
+    tables: [
+      "calibration_job",
+      "job_commercial_snapshot",
+      "issued_certificate_snapshot",
+    ],
+    kinds: ["update"],
+    reason:
+      "Demo seed only: back-dates the jobs it just created, by id, inside the calibra.allow_audit_rewrite transaction. No route reaches it.",
+  },
 ];

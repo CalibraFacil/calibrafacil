@@ -652,13 +652,17 @@ export async function cancelServiceOrder(input: {
  * Returns null for orders closed before that value was recorded, or when the
  * remembered status is no longer one the app knows.
  */
-async function readStatusBeforeClose(serviceOrderId: number) {
+async function readStatusBeforeClose(
+  serviceOrderId: number,
+  organizationId: string,
+) {
   const [lastClosure] = await db
     .select({ oldValue: serviceOrderEventLog.oldValue })
     .from(serviceOrderEventLog)
     .where(
       and(
         eq(serviceOrderEventLog.serviceOrderId, serviceOrderId),
+        eq(serviceOrderEventLog.organizationId, organizationId),
         inArray(serviceOrderEventLog.eventType, [
           "service_order.closed",
           "service_order.canceled",
@@ -693,7 +697,7 @@ export async function reopenServiceOrder(input: {
   // Back to where it was; awaiting_tech_evaluation only when nothing was
   // recorded (orders closed before this was tracked).
   const restoredStatus =
-    (await readStatusBeforeClose(input.serviceOrderId)) ??
+    (await readStatusBeforeClose(input.serviceOrderId, order.organizationId)) ??
     "awaiting_tech_evaluation";
 
   const [updated] = await db

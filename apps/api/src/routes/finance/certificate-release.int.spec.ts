@@ -26,6 +26,9 @@
  *                 exception-release; member lacking financial:contract_create →
  *                 403 on POST /settings/; admin succeeds.
  *   REQ-CREL-005  Unauthenticated GET and exception-release → 401.
+ *   REQ-CREL-006  One org-wide default policy per organization: a second
+ *                 default POST → 409 (pt-BR error, race-safe via the partial
+ *                 unique index); scoped policies alongside the default → 200.
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
@@ -50,7 +53,7 @@ import {
   serviceOrderCertificateLink,
   user,
 } from "@calibra-facil/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { loginAs, logout } from "../../../test/integration/setup";
 import { truncateAll } from "../../../test/integration/db";
 import { seedOrg } from "../../../test/integration/seed";
@@ -727,13 +730,18 @@ describe("financeCertificateReleaseRouter — payment gate + RBAC (real DB)", ()
     expect(memberPolicyRes.status).toBe(403);
 
     // --- Admin: has financial:contract_create → 200 on POST /settings/ ---
+    // The org already has its seeded org-wide default, so the admin's valid
+    // request is a scoped policy (one org-wide default per organization).
     loginAs({ userId: adminOrg.userId, organizationId: adminOrg.orgId });
     const adminPolicyRes = await settingsCertificateReleasePolicyRouter.request(
       "/",
       {
         method: "POST",
         headers: JSON_HEADERS,
-        body: JSON.stringify({ mode: "trusted_customer" }),
+        body: JSON.stringify({
+          mode: "trusted_customer",
+          serviceCategory: "calibracao-rbac",
+        }),
       },
     );
     expect(adminPolicyRes.status).toBe(200);
@@ -755,6 +763,88 @@ describe("financeCertificateReleaseRouter — payment gate + RBAC (real DB)", ()
     expect((await adminExcRes.json()).data.status).toBe(
       "RELEASED_BY_EXCEPTION",
     );
+  });
+
+  // =======================================================================
+  // REQ-CREL-006: one org-wide default policy per organization
+  // =======================================================================
+  it("REQ-CREL-006: POST /settings/ second org-wide default → 409 (pt-BR); scoped policies alongside the default → 200", async () => {
+    const fx = await seedOrgFixture({
+      orgId: "org-default-409",
+      role: "admin",
+      tagSuffix: "def409",
+    });
+    await seedReleasePolicy({
+      orgId: fx.orgId,
+      createdByUserId: fx.userId,
+      mode: "release_after_full_payment",
+    });
+    loginAs({ userId: fx.userId, organizationId: fx.orgId });
+
+    const postPolicy = (body: Record<string, unknown>) =>
+      settingsCertificateReleasePolicyRouter.request("/", {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify(body),
+      });
+
+    // Second org-wide default (no scope) → 409, not a 500 from the unique index.
+    const second = await postPolicy({ mode: "trusted_customer" });
+    expect(second.status).toBe(409);
+    expect((await second.json()).error).toBe(
+      "Já existe uma política padrão para a organização",
+    );
+
+    // Scoped alongside the default → 200 (customer, then service category).
+    const byCustomer = await postPolicy({
+      mode: "trusted_customer",
+      customerId: fx.customerId,
+    });
+    expect(byCustomer.status).toBe(200);
+    const byCategory = await postPolicy({
+      mode: "manual_only",
+      serviceCategory: "calibracao-dimensional",
+    });
+    expect(byCategory.status).toBe(200);
+
+    // Exactly one org-wide default row survives.
+    const defaults = await db
+      .select({ id: certificateReleasePolicy.id })
+      .from(certificateReleasePolicy)
+      .where(
+        and(
+          eq(certificateReleasePolicy.organizationId, fx.orgId),
+          isNull(certificateReleasePolicy.customerId),
+          isNull(certificateReleasePolicy.commercialAgreementId),
+          isNull(certificateReleasePolicy.serviceCategory),
+          isNull(certificateReleasePolicy.archivedAt),
+        ),
+      );
+    expect(defaults).toHaveLength(1);
+  });
+
+  it("REQ-CREL-006: two concurrent first org-wide defaults → exactly one 200 and one 409 (race-safe)", async () => {
+    const fx = await seedOrgFixture({
+      orgId: "org-default-race",
+      role: "admin",
+      tagSuffix: "race",
+    });
+    loginAs({ userId: fx.userId, organizationId: fx.orgId });
+
+    const attempt = () =>
+      settingsCertificateReleasePolicyRouter.request("/", {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ mode: "trusted_customer" }),
+      });
+    const [a, b] = await Promise.all([attempt(), attempt()]);
+    expect([a.status, b.status].sort()).toEqual([200, 409]);
+
+    const defaults = await db
+      .select({ id: certificateReleasePolicy.id })
+      .from(certificateReleasePolicy)
+      .where(eq(certificateReleasePolicy.organizationId, fx.orgId));
+    expect(defaults).toHaveLength(1);
   });
 
   // =======================================================================
