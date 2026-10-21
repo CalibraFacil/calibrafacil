@@ -28,6 +28,7 @@
     "@calibra-facil/email-sender": "workspace:^",
     "@calibra-facil/interval-analysis": "workspace:^",
     "@calibra-facil/notifications": "workspace:^",
+    "@calibra-facil/schemas": "workspace:^",
     "@calibra-facil/shared": "workspace:^",
     "@calibra-facil/signing": "workspace:^",
     "@cj-tech-master/excelts": "^9.6.0",

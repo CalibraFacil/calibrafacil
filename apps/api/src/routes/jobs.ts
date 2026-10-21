@@ -89,7 +89,6 @@ import {
   like,
   lt,
   not,
-  notInArray,
   or,
   sql,
 } from "drizzle-orm";
@@ -131,6 +130,11 @@ import {
   findMissingRequiredAssetSpecs,
   stripAssetSpecData,
 } from "../modules/jobs/helpers";
+import {
+  allowedFrom,
+  canTransition,
+  requireTargetOf,
+} from "@calibra-facil/schemas/job-transitions";
 import { approveJob } from "../modules/jobs/approve-job";
 import {
   jobStatusConflict,
@@ -1367,11 +1371,7 @@ export const jobsRouter = new Hono<{
 
       // Cannot update approved, superseded or canceled jobs: a SUPERSEDED job is
       // an issued certificate that an amendment replaced, as frozen as APPROVED.
-      if (
-        existing.status === "APPROVED" ||
-        existing.status === "SUPERSEDED" ||
-        existing.status === "CANCELED"
-      ) {
+      if (!canTransition(existing.status, "edit")) {
         return domainErrorResponse(
           c,
           invalid(
@@ -1480,11 +1480,7 @@ export const jobsRouter = new Hono<{
             and(
               eq(calibrationJob.id, id),
               eq(calibrationJob.organizationId, memberData.organizationId),
-              notInArray(calibrationJob.status, [
-                "APPROVED",
-                "SUPERSEDED",
-                "CANCELED",
-              ]),
+              inArray(calibrationJob.status, allowedFrom("edit")),
             ),
           )
           .returning();
@@ -1553,7 +1549,7 @@ export const jobsRouter = new Hono<{
 
       // The technician is part of an issued certificate's record: no new
       // assignment once the job is approved, and none after it was superseded.
-      if (existing.status === "APPROVED" || existing.status === "SUPERSEDED") {
+      if (!canTransition(existing.status, "assign")) {
         return c.json(
           {
             error: `Nao e possivel atribuir tecnico a um job com status ${existing.status}`,
@@ -1689,7 +1685,7 @@ export const jobsRouter = new Hono<{
             and(
               eq(calibrationJob.id, id),
               eq(calibrationJob.organizationId, memberData.organizationId),
-              notInArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
+              inArray(calibrationJob.status, allowedFrom("assign")),
             ),
           )
           .returning();
@@ -1764,8 +1760,8 @@ export const jobsRouter = new Hono<{
         return c.json({ error: "Job nao encontrado" }, 404);
       }
 
-      // Can only submit from DRAFT, IN_PROGRESS, or REJECTED
-      if (!["DRAFT", "IN_PROGRESS", "REJECTED"].includes(existing.status)) {
+      // Can only submit from the statuses the transition table allows
+      if (!canTransition(existing.status, "submit")) {
         return domainErrorResponse(
           c,
           invalid(
@@ -1939,6 +1935,7 @@ export const jobsRouter = new Hono<{
 
       // Update job with execution data and set status to REVIEW. The status
       // change and its audit row commit together or not at all.
+      const submittedStatus = requireTargetOf(existing.status, "submit");
       const updated = await db.transaction(async (tx) => {
         const [row] = await tx
           .update(calibrationJob)
@@ -1958,7 +1955,7 @@ export const jobsRouter = new Hono<{
             environmentalSnapshot: nextEnvironmentalSnapshot,
             calibrationLocationSnapshot: nextCalibrationLocationSnapshot,
             calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
-            status: "REVIEW",
+            status: submittedStatus,
             performedAt,
           })
           .where(
@@ -1979,7 +1976,7 @@ export const jobsRouter = new Hono<{
           jobId: id,
           action: "submit",
           changes: {
-            status: { old: existing.status, new: "REVIEW" },
+            status: { old: existing.status, new: submittedStatus },
             // Evidence that the frozen compiled method was re-pointed at the
             // method's current compilation (same definition, new engine).
             methodSnapshotEngine: reconciledMethod.adopted
@@ -2133,8 +2130,8 @@ export const jobsRouter = new Hono<{
         return c.json({ error: "Job nao encontrado" }, 404);
       }
 
-      // Can only execute from DRAFT, IN_PROGRESS, or REJECTED
-      if (!["DRAFT", "IN_PROGRESS", "REJECTED"].includes(existing.status)) {
+      // Can only execute from the statuses the transition table allows
+      if (!canTransition(existing.status, "execute")) {
         return domainErrorResponse(
           c,
           invalid(
@@ -2238,8 +2235,7 @@ export const jobsRouter = new Hono<{
         : (input.results ?? null);
 
       // Determine new status
-      const newStatus =
-        existing.status === "DRAFT" ? "IN_PROGRESS" : existing.status;
+      const newStatus = requireTargetOf(existing.status, "execute");
 
       // Persist the chosen execution date on draft saves so it survives a
       // reload. Only updated when a valid value is sent (never cleared here);
@@ -2560,7 +2556,7 @@ export const jobsRouter = new Hono<{
       }
 
       // Can only reject from REVIEW status
-      if (existing.status !== "REVIEW") {
+      if (!canTransition(existing.status, "reject")) {
         return domainErrorResponse(
           c,
           invalid(
@@ -2571,11 +2567,12 @@ export const jobsRouter = new Hono<{
       }
 
       // Compare-and-set REVIEW -> REJECTED; the audit row commits with it.
+      const rejectedStatus = requireTargetOf(existing.status, "reject");
       const updated = await db.transaction(async (tx) => {
         const [row] = await tx
           .update(calibrationJob)
           .set({
-            status: "REJECTED",
+            status: rejectedStatus,
             rejectedBy: session.user.id,
             rejectedAt: new Date(),
             rejectionReason: input.reason,
@@ -2584,7 +2581,7 @@ export const jobsRouter = new Hono<{
             and(
               eq(calibrationJob.id, id),
               eq(calibrationJob.organizationId, memberData.organizationId),
-              eq(calibrationJob.status, "REVIEW"),
+              inArray(calibrationJob.status, allowedFrom("reject")),
             ),
           )
           .returning();
@@ -2594,7 +2591,7 @@ export const jobsRouter = new Hono<{
           jobId: id,
           action: "reject",
           changes: {
-            status: { old: "REVIEW", new: "REJECTED" },
+            status: { old: existing.status, new: rejectedStatus },
           },
           performedBy: session.user.id,
           ipAddress: c.req.header("x-forwarded-for") || null,
@@ -2742,8 +2739,8 @@ export const jobsRouter = new Hono<{
         );
       }
 
-      // Explicit allow-list: anything else (GENERATING_PDF = approval in
-      // progress, SUPERSEDED, ...) is refused.
+      // The transition table is the allow-list: anything else (GENERATING_PDF =
+      // approval in progress, SUPERSEDED, ...) is refused.
       if (!isCancelableJobStatus(existing.status)) {
         return domainErrorResponse(
           c,
@@ -2755,10 +2752,11 @@ export const jobsRouter = new Hono<{
       }
 
       // Compare-and-set on the validated status; the audit row commits with it.
+      const canceledStatus = requireTargetOf(existing.status, "cancel");
       const updated = await db.transaction(async (tx) => {
         const [row] = await tx
           .update(calibrationJob)
-          .set({ status: "CANCELED" })
+          .set({ status: canceledStatus })
           .where(
             and(
               eq(calibrationJob.id, id),
@@ -2773,7 +2771,7 @@ export const jobsRouter = new Hono<{
           jobId: id,
           action: "cancel",
           changes: {
-            status: { old: existing.status, new: "CANCELED" },
+            status: { old: existing.status, new: canceledStatus },
           },
           performedBy: session.user.id,
           ipAddress: c.req.header("x-forwarded-for") || null,
@@ -2835,7 +2833,7 @@ export const jobsRouter = new Hono<{
           }
 
           // Can only amend APPROVED jobs
-          if (originalJob.status !== "APPROVED") {
+          if (!canTransition(originalJob.status, "amend")) {
             return {
               kind: "invalid_status" as const,
               status: originalJob.status,
@@ -2888,7 +2886,7 @@ export const jobsRouter = new Hono<{
               // then, not with the original's XLSX template.
               certificateTemplateSnapshot:
                 originalJob.certificateTemplateSnapshot,
-              status: "DRAFT", // Start in DRAFT for corrections
+              status: requireTargetOf(null, "create"), // Start in DRAFT for corrections
               dueDate: originalJob.dueDate,
               data: originalJob.data, // Clone calibration data
               results: originalJob.results, // Clone results
@@ -2906,10 +2904,11 @@ export const jobsRouter = new Hono<{
           // Update original job to SUPERSEDED (compare-and-set on APPROVED).
           // Store the reason on the original job so it's visible when viewing the
           // superseded certificate.
+          const supersededStatus = requireTargetOf(originalJob.status, "amend");
           const [superseded] = await tx
             .update(calibrationJob)
             .set({
-              status: "SUPERSEDED",
+              status: supersededStatus,
               supersededById: amendedJob.id,
               supersededAt: new Date(),
               amendmentReason: input.reason, // Store reason on original job too
@@ -2918,7 +2917,7 @@ export const jobsRouter = new Hono<{
               and(
                 eq(calibrationJob.id, originalJob.id),
                 eq(calibrationJob.organizationId, memberData.organizationId),
-                eq(calibrationJob.status, "APPROVED"),
+                inArray(calibrationJob.status, allowedFrom("amend")),
                 isNull(calibrationJob.supersededById),
               ),
             )
@@ -2933,7 +2932,7 @@ export const jobsRouter = new Hono<{
             jobId: originalJob.id,
             action: "supersede",
             changes: {
-              status: { old: "APPROVED", new: "SUPERSEDED" },
+              status: { old: originalJob.status, new: supersededStatus },
               supersededById: amendedJob.id,
             },
             performedBy: session.user.id,

@@ -849,6 +849,9 @@ importers:
       '@calibra-facil/notifications':
         specifier: workspace:^
         version: link:../../packages/notifications
+      '@calibra-facil/schemas':
+        specifier: workspace:^
+        version: link:../../packages/schemas
       '@calibra-facil/shared':
         specifier: workspace:^
         version: link:../../packages/shared

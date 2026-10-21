@@ -1,10 +1,13 @@
 import { db } from "@calibra-facil/db";
 import { calibrationJob, type JobStatus } from "@calibra-facil/db/schema";
+import { canTransition } from "@calibra-facil/schemas/job-transitions";
 import { eq } from "drizzle-orm";
 import { conflict } from "../../lib/domain-errors";
 
 /**
- * Job status machine (calibration_job.status), as enforced by the API:
+ * Job status machine (calibration_job.status), as enforced by the API. The
+ * machine itself is DATA: packages/schemas/src/job-transitions.ts. This is a
+ * picture of it:
  *
  *   DRAFT ──execute──▶ IN_PROGRESS ──submit──▶ REVIEW ──approve──▶ GENERATING_PDF
  *     │ └──────────submit───────────▶ REVIEW        │                  │ (worker)
@@ -21,19 +24,12 @@ import { conflict } from "../../lib/domain-errors";
  */
 
 /**
- * Explicit allow-list of the states a job may be cancelled from. Deliberately
- * NOT a deny-list: any status added to the machine later is non-cancellable
- * until someone decides otherwise.
+ * The states a job may be cancelled from: a view of the transition table
+ * (`@calibra-facil/schemas/job-transitions`), not a list of its own. A status
+ * added to the machine later is non-cancellable until the table says so.
  */
-const CANCELABLE_JOB_STATUSES: ReadonlySet<JobStatus> = new Set<JobStatus>([
-  "DRAFT",
-  "IN_PROGRESS",
-  "REVIEW",
-  "REJECTED",
-]);
-
 export function isCancelableJobStatus(status: JobStatus): boolean {
-  return CANCELABLE_JOB_STATUSES.has(status);
+  return canTransition(status, "cancel");
 }
 
 /** Thrown inside a transaction to roll it back when a compare-and-set loses. */

@@ -26,6 +26,12 @@ import {
   formatCalendarDate,
   formatInstant,
 } from "@calibra-facil/shared/format";
+import {
+  allowedFrom,
+  canTransition,
+  requireTargetOf,
+  targetOf,
+} from "@calibra-facil/schemas/job-transitions";
 import { zipSync, strToU8, type Zippable } from "fflate";
 import { Workbook } from "@cj-tech-master/excelts";
 import React from "react";
@@ -485,10 +491,12 @@ async function updateJobWithCertificate(
     [jobId],
   );
   const currentStatus = statusResult.rows[0]?.status ?? null;
-  const isSuperseded = currentStatus === "SUPERSEDED";
-  if (currentStatus !== "GENERATING_PDF" && !isSuperseded) {
+  const renderedStatus = targetOf(currentStatus, "complete_render");
+  if (renderedStatus === null) {
     return { outcome: "skipped", currentStatus };
   }
+  // A SUPERSEDED job keeps its status: only its PDF is regenerated (watermark).
+  const isSuperseded = currentStatus === "SUPERSEDED";
   const shouldPreserveSignatureMetadata =
     options.preserveSignatureMetadata === true &&
     signatureMetadata === undefined;
@@ -526,7 +534,7 @@ async function updateJobWithCertificate(
       shouldPreserveSignatureMetadata,
       writeSignatureVerdict,
       signatureVerdict ? JSON.stringify(signatureVerdict) : null,
-      isSuperseded ? "SUPERSEDED" : "APPROVED",
+      renderedStatus,
       currentStatus,
     ],
   );
@@ -540,7 +548,7 @@ async function updateJobWithCertificate(
     : "certificate_generated";
   const statusChange = isSuperseded
     ? { status: "SUPERSEDED (watermark added)" }
-    : { status: { old: "GENERATING_PDF", new: "APPROVED" } };
+    : { status: { old: currentStatus, new: renderedStatus } };
 
   await client.query(
     `
@@ -718,21 +726,30 @@ async function setJobError(
   userId: string,
 ): Promise<void> {
   const now = new Date();
+  const renderingStatus = "GENERATING_PDF";
+  const failedStatus = requireTargetOf(renderingStatus, "fail_render");
 
   await inTransaction(client, async () => {
     const updated = await client.query(
       `
       UPDATE calibration_job
       SET
-        status = 'REJECTED',
+        status = $5,
         rejection_reason = $2,
         rejected_by = $3,
         rejected_at = $4,
         updated_at = $4
-      WHERE id = $1 AND status = 'GENERATING_PDF'
+      WHERE id = $1 AND status = ANY($6::text[])
       RETURNING id
       `,
-      [jobId, `Erro ao gerar certificado: ${error}`, userId, now],
+      [
+        jobId,
+        `Erro ao gerar certificado: ${error}`,
+        userId,
+        now,
+        failedStatus,
+        allowedFrom("fail_render"),
+      ],
     );
     if (updated.rows.length === 0) {
       console.warn(
@@ -749,7 +766,7 @@ async function setJobError(
       [
         jobId,
         "certificate_error",
-        JSON.stringify({ status: { old: "GENERATING_PDF", new: "REJECTED" } }),
+        JSON.stringify({ status: { old: renderingStatus, new: failedStatus } }),
         userId,
         now,
         error,
@@ -1804,11 +1821,7 @@ async function processJob(
           : undefined),
     };
   }
-  if (
-    existing &&
-    existing.status !== "GENERATING_PDF" &&
-    existing.status !== "SUPERSEDED"
-  ) {
+  if (existing && !canTransition(existing.status, "complete_render")) {
     console.warn(
       `[JOB ${jobId}] Not issuing a certificate: job status is ${existing.status}`,
     );
@@ -1955,10 +1968,7 @@ async function processJob(
     const issued = await withDbClient(env, (client) =>
       inTransaction(client, async () => {
         const lockedStatus = await lockJobStatus(client, jobId);
-        if (
-          lockedStatus !== "GENERATING_PDF" &&
-          lockedStatus !== "SUPERSEDED"
-        ) {
+        if (!canTransition(lockedStatus, "complete_render")) {
           throw new CertificateIssuanceSkipped(lockedStatus);
         }
         const insertResult = await client.query<{ pdf_r2_key: string }>(

@@ -99,6 +99,11 @@ import { deriveNextCalibrationDate } from "../lib/portal-asset-interval";
 import { resolveAssetRegimeWrite } from "../lib/asset-regime";
 import { deriveRegulatedNextDate } from "../lib/regulated-interval";
 import { approveJob } from "../modules/jobs/approve-job";
+import {
+  allowedFrom,
+  canTransition,
+  requireTargetOf,
+} from "@calibra-facil/schemas/job-transitions";
 import { isCancelableJobStatus } from "../modules/jobs/job-status-transitions";
 import { resolveApiKeyApprover } from "../lib/api-key-approver";
 import { sendServiceOrdersToFinance } from "../lib/finance";
@@ -3483,11 +3488,7 @@ publicApiV2Router
         );
       }
 
-      if (
-        existing.status === "APPROVED" ||
-        existing.status === "SUPERSEDED" ||
-        existing.status === "CANCELED"
-      ) {
+      if (!canTransition(existing.status, "edit")) {
         return c.json(
           buildPublicApiError({
             code: "job_not_editable",
@@ -3536,11 +3537,7 @@ publicApiV2Router
             and(
               eq(calibrationJob.id, existing.id),
               eq(calibrationJob.organizationId, apiKey.organizationId),
-              notInArray(calibrationJob.status, [
-                "APPROVED",
-                "SUPERSEDED",
-                "CANCELED",
-              ]),
+              inArray(calibrationJob.status, allowedFrom("edit")),
             ),
           )
           .returning();
@@ -3638,7 +3635,7 @@ publicApiV2Router
           };
         }
 
-        if (!["DRAFT", "IN_PROGRESS", "REJECTED"].includes(existing.status)) {
+        if (!canTransition(existing.status, "record_results")) {
           return {
             status: 409,
             body: buildPublicApiError({
@@ -3650,11 +3647,15 @@ publicApiV2Router
 
         // Compare-and-set on the status the pre-check validated, in the key's
         // organization; the audit row commits with it.
+        const resultsStatus = requireTargetOf(
+          existing.status,
+          "record_results",
+        );
         const updated = await db.transaction(async (tx) => {
           const [row] = await tx
             .update(calibrationJob)
             .set({
-              status: "IN_PROGRESS",
+              status: resultsStatus,
               data: input.data,
               results: input.results ?? existing.results,
             })
@@ -3750,7 +3751,7 @@ publicApiV2Router
           };
         }
 
-        if (!["DRAFT", "IN_PROGRESS", "REJECTED"].includes(existing.status)) {
+        if (!canTransition(existing.status, "submit")) {
           return {
             status: 409,
             body: buildPublicApiError({
@@ -3783,12 +3784,13 @@ publicApiV2Router
 
         // Compare-and-set on the status the pre-check validated, in the key's
         // organization; the audit row commits with it.
+        const submittedStatus = requireTargetOf(existing.status, "submit");
         const updated = await db.transaction(async (tx) => {
           const [row] = await tx
             .update(calibrationJob)
             .set({
               data: input.data,
-              status: "REVIEW",
+              status: submittedStatus,
               performedAt,
             })
             .where(
@@ -3805,7 +3807,7 @@ publicApiV2Router
             jobId: existing.id,
             action: "submit",
             changes: {
-              status: { old: existing.status, new: "REVIEW" },
+              status: { old: existing.status, new: submittedStatus },
               data: { old: existing.data, new: input.data },
             },
             performedBy: apiKey.createdBy,
@@ -4056,7 +4058,7 @@ publicApiV2Router
           };
         }
 
-        if (existing.status !== "REVIEW") {
+        if (!canTransition(existing.status, "reject")) {
           return {
             status: 409,
             body: buildPublicApiError({
@@ -4068,11 +4070,12 @@ publicApiV2Router
 
         // Compare-and-set REVIEW -> REJECTED in the key's organization; the
         // audit row commits with it.
+        const rejectedStatus = requireTargetOf(existing.status, "reject");
         const updated = await db.transaction(async (tx) => {
           const [row] = await tx
             .update(calibrationJob)
             .set({
-              status: "REJECTED",
+              status: rejectedStatus,
               rejectedBy: apiKey.createdBy,
               rejectedAt: new Date(),
               rejectionReason: input.reason,
@@ -4081,7 +4084,7 @@ publicApiV2Router
               and(
                 eq(calibrationJob.id, existing.id),
                 eq(calibrationJob.organizationId, apiKey.organizationId),
-                eq(calibrationJob.status, "REVIEW"),
+                inArray(calibrationJob.status, allowedFrom("reject")),
               ),
             )
             .returning();
@@ -4090,7 +4093,7 @@ publicApiV2Router
           await tx.insert(jobAuditLog).values({
             jobId: existing.id,
             action: "reject",
-            changes: { status: { old: existing.status, new: "REJECTED" } },
+            changes: { status: { old: existing.status, new: rejectedStatus } },
             performedBy: apiKey.createdBy,
             ipAddress: getPublicApiRequestIp(c.req.raw.headers),
             reason: input.reason,
@@ -4171,10 +4174,11 @@ publicApiV2Router
         }
 
         // Compare-and-set on the validated status; the audit row commits with it.
+        const canceledStatus = requireTargetOf(existing.status, "cancel");
         const updated = await db.transaction(async (tx) => {
           const [row] = await tx
             .update(calibrationJob)
-            .set({ status: "CANCELED" })
+            .set({ status: canceledStatus })
             .where(
               and(
                 eq(calibrationJob.id, existing.id),
@@ -4188,7 +4192,7 @@ publicApiV2Router
           await tx.insert(jobAuditLog).values({
             jobId: existing.id,
             action: "cancel",
-            changes: { status: { old: existing.status, new: "CANCELED" } },
+            changes: { status: { old: existing.status, new: canceledStatus } },
             performedBy: apiKey.createdBy,
             ipAddress: getPublicApiRequestIp(c.req.raw.headers),
             reason: input.reason,
