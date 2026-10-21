@@ -36,7 +36,7 @@ export function snapshotStandardIds(
  * Tenant-scoped in SQL: only rows of the organization (and, when given, the
  * caller's unit scope) are read, so anything else is simply "not found".
  */
-export async function loadStandardFacts(input: {
+async function loadStandardFacts(input: {
   standardIds: readonly number[];
   organizationId: string;
   /** The caller's unit scope, as `buildUnitScopeCondition` builds it. */
