@@ -55,8 +55,16 @@ overrides:
   # data-stream paths. Only reachable through the dev server (apps/docs build
   # tooling via fumadocs-mdx), never the deployed Linux runtime, but bump the
   # 7.x line to the patched 7.3.5 to keep the prod audit gate clean. Supersedes
-  # the earlier >=7.0.0 <=7.3.1 bump.
-  "vite@>=7.0.0 <=7.3.4": ^7.3.5
+  # the earlier >=7.0.0 <=7.3.1 bump. Raised to 7.3.7, and the 8.x line to
+  # 8.1.6 (no patched 8.0.x exists), for the launch-editor advisory below.
+  "vite@>=7.0.0 <=7.3.6": ^7.3.7
+  "vite@>=8.0.0 <=8.1.5": ~8.1.6
+  # launch-editor <=2.14.1: an fs.existsSync() check discloses whether a path
+  # exists. Dev-server only (vite, @tanstack/devtools-vite).
+  "launch-editor@<2.14.2": ^2.14.2
+  # http-cache-semantics <=4.2.0: max-stale handling can serve stale private
+  # responses. Desktop packaging only (electron-builder).
+  "http-cache-semantics@<4.2.1": ^4.2.1
   # GHSA-5xrq-8626-4rwp: vitest <4.1.0 UI-server arbitrary file read, and
   # GHSA-82fw-gwwq-j7x9: vitest/@vitest/mocker <4.1.11 arbitrary file read through
   # a redirected mock. Lift the 4.x line (also pulled transitively via
