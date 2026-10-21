@@ -38,7 +38,6 @@ const expectedBridgeKeys = [
   "publishNotifications",
   "resumeSync",
   "retrySync",
-  "revealFile",
   "saveFile",
   "setSecret",
   "setSettings",

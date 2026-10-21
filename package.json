@@ -15,6 +15,8 @@
     "test:desktop-release-gate": "node scripts/build-desktop-artifact.test.mjs",
     "test:desktop-release-local-gates": "pnpm test:desktop-release-gate",
     "check:blocked-deps": "node scripts/check-blocked-deps.mjs",
+    "check:cycles": "node scripts/check-import-cycles.mjs",
+    "knip": "knip --no-progress",
     "ci:local": "node scripts/ci-local.mjs",
     "dev": "turbo run dev --filter=@calibra-facil/api --filter=@calibra-facil/web --filter=@calibra-facil/portal",
     "dev:isolated": "node scripts/dev-runner.mjs",
@@ -44,6 +46,7 @@
   "devDependencies": {
     "@shadcn/lint": "^0.2.0",
     "better-sqlite3": "^12.11.1",
+    "knip": "^6.42.1",
     "oxlint": "^1.83.0",
     "prettier": "^3.8.3",
     "tsrs": "0.18.0-ts7.1.0-dev.20260929",

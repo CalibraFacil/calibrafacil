@@ -98,16 +98,6 @@ export function safeAttachmentExtension(fileName: string) {
   return /^\.[a-zA-Z0-9]+$/.test(extension) ? extension : "";
 }
 
-export function formString(formData: FormData, key: string) {
-  const value = formData.get(key);
-  return typeof value === "string" && value.length > 0 ? value : null;
-}
-
-export function formNumber(formData: FormData, key: string) {
-  const value = formString(formData, key);
-  return value ? Number(value) : Number.NaN;
-}
-
 export function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? Object.fromEntries(Object.entries(value))

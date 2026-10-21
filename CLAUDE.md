@@ -23,6 +23,8 @@ pnpm build            # build all apps/packages
 pnpm lint             # oxlint across the monorepo (incl. the no-useEffect rule)
 pnpm format           # Prettier on **/*.{ts,tsx,md}
 pnpm check-types      # type-check all packages
+pnpm knip             # unused files/deps/unresolved imports (config: knip.json)
+pnpm check:cycles     # madge --circular over every workspace's src
 ```
 
 Local development needs no cloud account: `docker-compose.yml` runs Postgres, an

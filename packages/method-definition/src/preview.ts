@@ -1,5 +1,5 @@
 import { compareDecimalInputs, compileCriterionExpression } from "./criteria";
-import { buildMeasurementModelInput } from "./compile";
+import { buildMeasurementModelInput } from "./measurement-model-input";
 import { errorDiagnostic } from "./diagnostics";
 import { fingerprintJson } from "./fingerprint";
 import type {
