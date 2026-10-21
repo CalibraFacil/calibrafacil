@@ -50,6 +50,21 @@ const mocks = vi.hoisted(() => {
     return query;
   }
 
+  const queryDb = {
+    select: vi.fn(() => createQuery()),
+    insert: vi.fn(() => createQuery()),
+    update: vi.fn(() => createQuery()),
+  };
+  // A transaction runs its callback against the same queue-backed mock, so a
+  // write inside it consumes the queue in the same order as one outside it.
+  const db = {
+    ...queryDb,
+    transaction: vi.fn(
+      async (callback: (tx: typeof queryDb) => Promise<unknown>) =>
+        callback(queryDb),
+    ),
+  };
+
   return {
     selectResults,
     createR2Client: vi.fn(() => ({ send: vi.fn() })),
@@ -66,11 +81,7 @@ const mocks = vi.hoisted(() => {
         `https://downloads.example.test/${encodeURIComponent(objectKey)}`,
     ),
     uploadToR2: vi.fn(async () => undefined),
-    db: {
-      select: vi.fn(() => createQuery()),
-      insert: vi.fn(() => createQuery()),
-      update: vi.fn(() => createQuery()),
-    },
+    db,
     withLabPermission: vi.fn(() => [
       async (
         c: {
@@ -1069,6 +1080,16 @@ describe("syncRouter", () => {
           performedAt: null,
         },
       ],
+      // The row the compare-and-set UPDATE ... RETURNING hands back: no row
+      // would mean the job changed under the apply, which is a conflict.
+      [
+        {
+          id: 42,
+          jobId: "CAL-2026-0042",
+          status: "IN_PROGRESS",
+          performedAt: null,
+        },
+      ],
     );
 
     const response = await createApp().request("/api/sync/push", {
@@ -1164,6 +1185,16 @@ describe("syncRouter", () => {
             environmentalSnapshot: null,
           },
         ],
+        [
+          {
+            id: 42,
+            jobId: "CAL-2026-0042",
+            status: "REVIEW",
+            performedAt: null,
+          },
+        ],
+        // The row the compare-and-set UPDATE ... RETURNING hands back: no row
+        // would mean the job changed under the apply, which is a conflict.
         [
           {
             id: 42,

@@ -25,6 +25,7 @@ import {
   memberUnitAssignment,
   environmentalLimits,
   personnelCompetence,
+  type JobStatus,
   type MethodSnapshot,
   type MethodInputField,
   type AssetSnapshot,
@@ -88,6 +89,7 @@ import {
   like,
   lt,
   not,
+  notInArray,
   or,
   sql,
 } from "drizzle-orm";
@@ -553,6 +555,9 @@ async function buildAssetSnapshot(
 
 async function ensureEditableJobAssetSnapshot(existing: {
   id: number;
+  organizationId: string;
+  /** The status the request validated; the write only lands while it holds. */
+  status: JobStatus;
   assetId: number;
   assetSnapshot: AssetSnapshot | null;
   methodSnapshot: MethodSnapshot;
@@ -588,10 +593,22 @@ async function ensureEditableJobAssetSnapshot(existing: {
     };
   }
 
-  await db
+  // Compare-and-set on the status the request validated, in its organization:
+  // a job that was cancelled, approved or moved meanwhile is not touched.
+  const [saved] = await db
     .update(calibrationJob)
     .set({ assetSnapshot: result.snapshot })
-    .where(eq(calibrationJob.id, existing.id));
+    .where(
+      and(
+        eq(calibrationJob.id, existing.id),
+        eq(calibrationJob.organizationId, existing.organizationId),
+        eq(calibrationJob.status, existing.status),
+      ),
+    )
+    .returning();
+  if (!saved) {
+    return { ok: false as const, conflict: true as const };
+  }
 
   return { ok: true as const, snapshot: result.snapshot };
 }
@@ -1453,21 +1470,39 @@ export const jobsRouter = new Hono<{
         return c.json(existing);
       }
 
-      // Update job
-      const [updated] = await db
-        .update(calibrationJob)
-        .set(updateData)
-        .where(eq(calibrationJob.id, id))
-        .returning();
+      // Update job: matches only the statuses this route allows (the pre-check
+      // above) in the caller's organization; the audit row commits with it.
+      const updated = await db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(calibrationJob)
+          .set(updateData)
+          .where(
+            and(
+              eq(calibrationJob.id, id),
+              eq(calibrationJob.organizationId, memberData.organizationId),
+              notInArray(calibrationJob.status, [
+                "APPROVED",
+                "SUPERSEDED",
+                "CANCELED",
+              ]),
+            ),
+          )
+          .returning();
+        if (!row) return null;
 
-      // Audit log
-      await db.insert(jobAuditLog).values({
-        jobId: id,
-        action: "update",
-        changes,
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
+        // Audit log
+        await tx.insert(jobAuditLog).values({
+          jobId: id,
+          action: "update",
+          changes,
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        });
+        return row;
       });
+      if (!updated) {
+        return domainErrorResponse(c, await jobStatusConflict(id));
+      }
 
       // Notify technician if changed
       if (changes.technicianId && input.technicianId) {
@@ -1588,7 +1623,12 @@ export const jobsRouter = new Hono<{
       const [jobService] = await db
         .select({ assetTypeId: service.assetTypeId })
         .from(service)
-        .where(eq(service.id, existing.serviceId))
+        .where(
+          and(
+            eq(service.id, existing.serviceId),
+            eq(service.organizationId, memberData.organizationId),
+          ),
+        )
         .limit(1);
 
       if (jobService?.assetTypeId) {
@@ -1639,24 +1679,41 @@ export const jobsRouter = new Hono<{
         }
       }
 
-      // Update job
-      const [updated] = await db
-        .update(calibrationJob)
-        .set({ technicianId: input.technicianId })
-        .where(eq(calibrationJob.id, id))
-        .returning();
+      // Update job: matches only the statuses this route allows (the pre-check
+      // above) in the caller's organization; the audit row commits with it.
+      const updated = await db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(calibrationJob)
+          .set({ technicianId: input.technicianId })
+          .where(
+            and(
+              eq(calibrationJob.id, id),
+              eq(calibrationJob.organizationId, memberData.organizationId),
+              notInArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
+            ),
+          )
+          .returning();
+        if (!row) return null;
 
-      // Audit log
-      await db.insert(jobAuditLog).values({
-        jobId: id,
-        action: "assign",
-        changes: {
-          technicianId: { old: existing.technicianId, new: input.technicianId },
-          technicianName: { old: null, new: techMember.userName },
-        },
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
+        // Audit log
+        await tx.insert(jobAuditLog).values({
+          jobId: id,
+          action: "assign",
+          changes: {
+            technicianId: {
+              old: existing.technicianId,
+              new: input.technicianId,
+            },
+            technicianName: { old: null, new: techMember.userName },
+          },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        });
+        return row;
       });
+      if (!updated) {
+        return domainErrorResponse(c, await jobStatusConflict(id));
+      }
 
       // Send notification to assigned technician
       try {
@@ -1720,11 +1777,16 @@ export const jobsRouter = new Hono<{
 
       const assetSnapshotResult = await ensureEditableJobAssetSnapshot({
         id: existing.id,
+        organizationId: existing.organizationId,
+        status: existing.status,
         assetId: existing.assetId,
         assetSnapshot: existing.assetSnapshot,
         methodSnapshot: existing.methodSnapshot,
       });
       if (!assetSnapshotResult.ok) {
+        if ("conflict" in assetSnapshotResult) {
+          return domainErrorResponse(c, await jobStatusConflict(id));
+        }
         return c.json({ error: assetSnapshotResult.error }, 400);
       }
 
@@ -2084,11 +2146,16 @@ export const jobsRouter = new Hono<{
 
       const assetSnapshotResult = await ensureEditableJobAssetSnapshot({
         id: existing.id,
+        organizationId: existing.organizationId,
+        status: existing.status,
         assetId: existing.assetId,
         assetSnapshot: existing.assetSnapshot,
         methodSnapshot: existing.methodSnapshot,
       });
       if (!assetSnapshotResult.ok) {
+        if ("conflict" in assetSnapshotResult) {
+          return domainErrorResponse(c, await jobStatusConflict(id));
+        }
         return c.json({ error: assetSnapshotResult.error }, 400);
       }
 
@@ -2850,6 +2917,7 @@ export const jobsRouter = new Hono<{
             .where(
               and(
                 eq(calibrationJob.id, originalJob.id),
+                eq(calibrationJob.organizationId, memberData.organizationId),
                 eq(calibrationJob.status, "APPROVED"),
                 isNull(calibrationJob.supersededById),
               ),

@@ -2745,80 +2745,97 @@ async function applyLocalJobExecution(
   const nextResults = officialExecution.results;
   const compiledExecution = asRecord(nextResults.__compiledExecution);
 
-  const [updated] = await db
-    .update(calibrationJob)
-    .set({
-      data: nextData,
-      results: nextResults,
-      ...(reconciledMethod.adopted
-        ? { methodSnapshot: nextMethodSnapshot }
-        : {}),
-      standardsSnapshot: nextStandardsSnapshot,
-      environmentalSnapshot: nextEnvironmentalSnapshot,
-      calibrationLocationSnapshot: nextCalibrationLocationSnapshot,
-      calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
-      methodDeviations: nextMethodDeviations,
-      status: nextStatus,
-      performedAt: executionTime.performedAt ?? existing.performedAt,
-      updatedAt: new Date(),
-    })
-    .where(eq(calibrationJob.id, existing.id))
-    .returning();
+  // Compare-and-set on the status the pre-check validated, in the caller's
+  // organization; the audit row commits with it.
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(calibrationJob)
+      .set({
+        data: nextData,
+        results: nextResults,
+        ...(reconciledMethod.adopted
+          ? { methodSnapshot: nextMethodSnapshot }
+          : {}),
+        standardsSnapshot: nextStandardsSnapshot,
+        environmentalSnapshot: nextEnvironmentalSnapshot,
+        calibrationLocationSnapshot: nextCalibrationLocationSnapshot,
+        calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
+        methodDeviations: nextMethodDeviations,
+        status: nextStatus,
+        performedAt: executionTime.performedAt ?? existing.performedAt,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(calibrationJob.id, existing.id),
+          eq(calibrationJob.organizationId, input.memberData.organizationId),
+          eq(calibrationJob.status, existing.status),
+        ),
+      )
+      .returning();
+    if (!row) return null;
+
+    await tx.insert(jobAuditLog).values({
+      jobId: existing.id,
+      action:
+        input.event.operation === "submit_local_execution"
+          ? "submit"
+          : "execute",
+      changes: {
+        source: "desktop_sync",
+        status: { old: existing.status, new: row.status },
+        data: { old: existing.data, new: nextData },
+        results: { old: existing.results, new: nextResults },
+        desktopSubmittedResults: submittedResults,
+        officialExecution: {
+          methodFingerprint: compiledExecution.methodFingerprint ?? null,
+          resultFingerprint: compiledExecution.resultFingerprint ?? null,
+        },
+        standardsSnapshot: {
+          old: existing.standardsSnapshot,
+          new: nextStandardsSnapshot,
+        },
+        environmentalSnapshot: {
+          old: existing.environmentalSnapshot,
+          new: nextEnvironmentalSnapshot,
+        },
+        calibrationLocationSnapshot: {
+          old: existing.calibrationLocationSnapshot,
+          new: nextCalibrationLocationSnapshot,
+        },
+        calibrationPhaseSnapshot: {
+          old: existing.calibrationPhaseSnapshot,
+          new: nextCalibrationPhaseSnapshot,
+        },
+      },
+      performedBy: actorUserId,
+      // Same wording as the cloud's own submit, so the audit trail reads alike.
+      reason:
+        [
+          executionTime.backdateReason ||
+          standardsValidation.validOnlyBecauseBackdated.length > 0
+            ? `Registro retroativo (${executionTime.backdateDays} dias): ${executionTime.backdateReason ?? getNullableString(payload, "backdateReason")?.trim()}`
+            : null,
+          standardsValidation.validOnlyBecauseBackdated.length > 0
+            ? `Padroes julgados na data de execucao (${(executionTime.performedAt ?? new Date()).toISOString()}): ${standardsValidation.validOnlyBecauseBackdated.join(", ")} venceu apos essa data`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" | ") || undefined,
+    });
+    return row;
+  });
+  if (!updated) {
+    return await rejectLostDesktopExecutionRace(input, existing.id);
+  }
 
   // Reverse traceability (#426 Phase 1): mirror the frozen snapshot into the
   // indexed job_standard projection.
   await syncJobStandardLinks(
     existing.id,
     nextStandardsSnapshot,
-    updated?.performedAt ?? existing.performedAt,
+    updated.performedAt ?? existing.performedAt,
   );
-
-  await db.insert(jobAuditLog).values({
-    jobId: existing.id,
-    action:
-      input.event.operation === "submit_local_execution" ? "submit" : "execute",
-    changes: {
-      source: "desktop_sync",
-      status: { old: existing.status, new: updated?.status ?? nextStatus },
-      data: { old: existing.data, new: nextData },
-      results: { old: existing.results, new: nextResults },
-      desktopSubmittedResults: submittedResults,
-      officialExecution: {
-        methodFingerprint: compiledExecution.methodFingerprint ?? null,
-        resultFingerprint: compiledExecution.resultFingerprint ?? null,
-      },
-      standardsSnapshot: {
-        old: existing.standardsSnapshot,
-        new: nextStandardsSnapshot,
-      },
-      environmentalSnapshot: {
-        old: existing.environmentalSnapshot,
-        new: nextEnvironmentalSnapshot,
-      },
-      calibrationLocationSnapshot: {
-        old: existing.calibrationLocationSnapshot,
-        new: nextCalibrationLocationSnapshot,
-      },
-      calibrationPhaseSnapshot: {
-        old: existing.calibrationPhaseSnapshot,
-        new: nextCalibrationPhaseSnapshot,
-      },
-    },
-    performedBy: actorUserId,
-    // Same wording as the cloud's own submit, so the audit trail reads alike.
-    reason:
-      [
-        executionTime.backdateReason ||
-        standardsValidation.validOnlyBecauseBackdated.length > 0
-          ? `Registro retroativo (${executionTime.backdateDays} dias): ${executionTime.backdateReason ?? getNullableString(payload, "backdateReason")?.trim()}`
-          : null,
-        standardsValidation.validOnlyBecauseBackdated.length > 0
-          ? `Padroes julgados na data de execucao (${(executionTime.performedAt ?? new Date()).toISOString()}): ${standardsValidation.validOnlyBecauseBackdated.join(", ")} venceu apos essa data`
-          : null,
-      ]
-        .filter(Boolean)
-        .join(" | ") || undefined,
-  });
 
   await writeDesktopSyncAudit(input, actorUserId, {
     remoteEntityId: existing.id,
@@ -2831,11 +2848,60 @@ async function applyLocalJobExecution(
     remoteEntity: {
       id: existing.id,
       jobId: existing.jobId,
-      status: updated?.status ?? nextStatus,
+      status: updated.status,
       performedAt:
-        updated?.performedAt?.toISOString?.() ??
+        updated.performedAt?.toISOString?.() ??
         existing.performedAt?.toISOString?.() ??
         null,
+    },
+  };
+}
+
+/**
+ * The job changed (status, or organization) between the apply's read and its
+ * compare-and-set write: reject exactly as the pre-check would have had it seen
+ * the new row, so the desktop keeps the event queued and shows the same
+ * status_transition conflict.
+ */
+async function rejectLostDesktopExecutionRace(
+  input: ApplyDesktopSyncEventInput,
+  jobId: number,
+): Promise<ApplyDesktopSyncEventResult> {
+  const [current] = await db
+    .select()
+    .from(calibrationJob)
+    .where(
+      and(
+        eq(calibrationJob.id, jobId),
+        eq(calibrationJob.organizationId, input.memberData.organizationId),
+        buildUnitScopeCondition(calibrationJob.unitId, input.memberData),
+      ),
+    )
+    .limit(1);
+
+  if (!current) {
+    return {
+      ok: false,
+      code: "REMOTE_ENTITY_NOT_FOUND",
+      reason: "Cloud job for desktop execution event was not found.",
+    };
+  }
+
+  return {
+    ok: false,
+    code: "INVALID_STATUS_TRANSITION",
+    reason: `The cloud job changed status to ${current.status} while the desktop execution was being applied.`,
+    conflict: {
+      conflictType: "status_transition",
+      remotePayload: {
+        id: current.id,
+        jobId: current.jobId,
+        status: current.status,
+        updatedAt:
+          current.updatedAt instanceof Date
+            ? current.updatedAt.toISOString()
+            : current.updatedAt,
+      },
     },
   };
 }
