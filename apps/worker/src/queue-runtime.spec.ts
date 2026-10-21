@@ -26,6 +26,7 @@ const {
   completeQueueReceipt,
   releaseQueueReceipt,
   readQueueReceiptsMode,
+  rejectDeadLetteredCertificateRenders,
 } = vi.hoisted(() => ({
   claimQueueJobs: vi.fn(),
   completeQueueJob: vi.fn(),
@@ -36,6 +37,11 @@ const {
   completeQueueReceipt: vi.fn(),
   releaseQueueReceipt: vi.fn(),
   readQueueReceiptsMode: vi.fn(),
+  rejectDeadLetteredCertificateRenders: vi.fn(),
+}));
+
+vi.mock("@calibra-facil/db/queue-render-recovery", () => ({
+  rejectDeadLetteredCertificateRenders,
 }));
 
 vi.mock("@calibra-facil/db/queue", () => ({
@@ -60,7 +66,7 @@ vi.mock("./index.js", () => ({
   default: { queue: workerQueue },
 }));
 
-import { drainQueue } from "./queue-runtime";
+import { drainQueue, processQueueBatch } from "./queue-runtime";
 
 const CONFIG = {
   workerId: "test-worker",
@@ -94,7 +100,8 @@ function claimOnce(job: ReturnType<typeof makeJob>) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  releaseStaleQueueJobs.mockResolvedValue(undefined);
+  releaseStaleQueueJobs.mockResolvedValue({ released: 0, deadLettered: [] });
+  rejectDeadLetteredCertificateRenders.mockResolvedValue(0);
   completeQueueJob.mockResolvedValue(undefined);
   failQueueJob.mockResolvedValue(undefined);
   // The failure-recording suite predates the receipt ledger — run it with the
@@ -327,6 +334,139 @@ describe("queue-runtime idempotency receipts", () => {
       idempotencyKey: "app-queue-17",
     });
     expect(failQueueJob).toHaveBeenCalledWith(17, batchError);
+  });
+});
+
+describe("queue-runtime dead-letter handling (REQ-QDL-001, REQ-QDL-002)", () => {
+  const deadLettered = [
+    {
+      id: 41,
+      type: "CERTIFICATE",
+      payload: { type: "CERTIFICATE", jobId: 7, userId: "user-1" },
+    },
+  ];
+
+  it("REQ-QDL-002: rows the lease reclaim dead-lettered are handed to the certificate-render rejection", async () => {
+    releaseStaleQueueJobs.mockResolvedValue({ released: 0, deadLettered });
+    claimQueueJobs.mockResolvedValue([]);
+
+    await drainQueue(fakeEnv, CONFIG);
+
+    expect(rejectDeadLetteredCertificateRenders).toHaveBeenCalledWith(
+      deadLettered,
+    );
+  });
+
+  it("REQ-QDL-002: a failure rejecting the dead-lettered renders never stops the drain", async () => {
+    releaseStaleQueueJobs.mockResolvedValue({ released: 0, deadLettered });
+    rejectDeadLetteredCertificateRenders.mockRejectedValue(
+      new Error("db down"),
+    );
+    claimOnce(makeJob(50));
+    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
+      batch.messages[0]?.ack();
+    });
+
+    await expect(drainQueue(fakeEnv, CONFIG)).resolves.toBe(1);
+    expect(completeQueueJob).toHaveBeenCalledWith(50);
+  });
+
+  it("REQ-QDL-001: nothing is rejected when the reclaim dead-lettered no row", async () => {
+    claimQueueJobs.mockResolvedValue([]);
+
+    await drainQueue(fakeEnv, CONFIG);
+
+    expect(rejectDeadLetteredCertificateRenders).not.toHaveBeenCalled();
+  });
+});
+
+describe("queue-runtime claims one row at a time (REQ-QDL-001)", () => {
+  // claimQueueJobs mock backed by a tiny in-memory queue so the test can see
+  // which rows are PENDING / PROCESSING at any moment.
+  function useInMemoryQueue(ids: number[]) {
+    const status = new Map<number, "PENDING" | "PROCESSING">(
+      ids.map((id) => [id, "PENDING"]),
+    );
+    claimQueueJobs.mockImplementation(
+      async (_workerId: string, limit: number) => {
+        const claimed: ReturnType<typeof makeJob>[] = [];
+        for (const [id, state] of status) {
+          if (claimed.length >= limit) break;
+          if (state !== "PENDING") continue;
+          status.set(id, "PROCESSING");
+          claimed.push(makeJob(id));
+        }
+        return claimed;
+      },
+    );
+    completeQueueJob.mockImplementation(async (id: number) => {
+      status.delete(id);
+    });
+    return status;
+  }
+
+  it("REQ-QDL-001: a slow first job does not leave a second row PROCESSING while it runs", async () => {
+    const status = useInMemoryQueue([80, 81]);
+    let secondWhileFirstRuns: string | undefined;
+    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
+      secondWhileFirstRuns = status.get(81);
+      batch.messages[0]?.ack();
+    });
+    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
+      batch.messages[0]?.ack();
+    });
+
+    await drainQueue(fakeEnv, CONFIG);
+
+    // While the first job ran, the second row was still PENDING and unclaimed.
+    expect(secondWhileFirstRuns).toBe("PENDING");
+    expect(workerQueue).toHaveBeenCalledTimes(2);
+    expect(completeQueueJob).toHaveBeenNthCalledWith(1, 80);
+    expect(completeQueueJob).toHaveBeenNthCalledWith(2, 81);
+  });
+
+  it("REQ-QDL-001: every claim asks for exactly one row", async () => {
+    useInMemoryQueue([82, 83, 84]);
+    workerQueue.mockImplementation(async (batch: MessageBatchLike) => {
+      batch.messages[0]?.ack();
+    });
+
+    await drainQueue(fakeEnv, CONFIG);
+
+    expect(claimQueueJobs.mock.calls.length).toBeGreaterThanOrEqual(3);
+    for (const [, limit] of claimQueueJobs.mock.calls) {
+      expect(limit).toBe(1);
+    }
+  });
+
+  it("REQ-QDL-001: no more than batchSize rows are claimed per batch", async () => {
+    useInMemoryQueue([85, 86, 87]);
+    workerQueue.mockImplementation(async (batch: MessageBatchLike) => {
+      batch.messages[0]?.ack();
+    });
+
+    await expect(
+      processQueueBatch(fakeEnv, { ...CONFIG, batchSize: 2 }),
+    ).resolves.toBe(2);
+
+    expect(workerQueue).toHaveBeenCalledTimes(2);
+    expect(completeQueueJob).not.toHaveBeenCalledWith(87);
+  });
+
+  it("REQ-QDL-001: one job's failure does not fail the rows behind it", async () => {
+    useInMemoryQueue([88, 89]);
+    const boom = new Error("worker.queue exploded");
+    workerQueue
+      .mockRejectedValueOnce(boom)
+      .mockImplementationOnce(async (batch: MessageBatchLike) => {
+        batch.messages[0]?.ack();
+      });
+
+    await drainQueue(fakeEnv, CONFIG);
+
+    expect(failQueueJob).toHaveBeenCalledWith(88, boom);
+    expect(completeQueueJob).toHaveBeenCalledWith(89);
+    expect(failQueueJob).not.toHaveBeenCalledWith(89, expect.anything());
   });
 });
 

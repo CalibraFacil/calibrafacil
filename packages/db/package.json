@@ -6,6 +6,7 @@
     ".": "./src/db.ts",
     "./queue": "./src/queue.ts",
     "./queue-receipts": "./src/queue-receipts.ts",
+    "./queue-render-recovery": "./src/queue-render-recovery.ts",
     "./schema": "./src/schema.ts",
     "./seed-asset-types": "./src/seed-asset-types.ts",
     "./seed-legal-metrology-regulations": "./src/seed-legal-metrology-regulations.ts"

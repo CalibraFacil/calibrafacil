@@ -20,6 +20,7 @@ import {
   releaseStaleQueueJobs,
   type ClaimedQueueJob,
 } from "@calibra-facil/db/queue";
+import { rejectDeadLetteredCertificateRenders } from "@calibra-facil/db/queue-render-recovery";
 import {
   appQueueJobReceiptKey,
   claimQueueReceipt,
@@ -222,72 +223,100 @@ async function settleReceipt(
   }
 }
 
-// Claim and process a single batch. Returns the number of jobs claimed so
-// callers can loop (drain) or schedule the next poll. Does NOT release stale
+// Claim and process up to `batchSize` jobs. Returns the number of jobs claimed
+// so callers can loop (drain) or schedule the next poll. Does NOT release stale
 // jobs — callers decide when to do that (once per poll tick / once per drain).
+//
+// Rows are claimed ONE AT A TIME and each is processed before the next is
+// claimed. Claiming a whole batch up front stamps every row with the same
+// `locked_at`, so a row queued behind slow jobs would hold an aging lease it is
+// not using — long enough for another drainer or the backstop cron to reclaim it
+// and, on its final attempt, dead-letter (and reject) a healthy certificate. A
+// row still waiting is PENDING and untouched; its lease starts when its turn does.
 async function claimAndProcessBatch(
   env: WorkerEnv,
   workerId: string,
   batchSize: number,
 ): Promise<number> {
-  const claimed = await claimQueueJobs(workerId, batchSize);
-  if (claimed.length === 0) return 0;
-
   const mode = readQueueReceiptsMode();
-  const decisions: ReceiptDecision[] = [];
-  for (const job of claimed) {
-    // oxlint-disable-next-line eslint/no-await-in-loop -- receipt claims are cheap single-row upserts; sequential keeps log ordering deterministic.
-    decisions.push(await decideWithReceipt(job, mode));
-  }
-  const runnable = decisions.filter((decision) => decision.run);
-  const jobs = runnable.map((decision) => decision.job);
-  if (jobs.length === 0) return claimed.length;
+  let claimedCount = 0;
 
-  console.log(`[Worker] Claimed ${jobs.length} queue job(s)`);
-  const { batch, states, errors } = createBatch(jobs);
-  const executionContext: ExecutionContext = {
-    props: {},
-    waitUntil(promise) {
-      void promise.catch((error) => {
-        console.error("[Worker] waitUntil task failed", error);
-      });
-    },
-    passThroughOnException() {
-      // Local queue processing has no upstream request to pass through.
-    },
-  };
+  for (let slot = 0; slot < batchSize; slot += 1) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- one row is claimed only once the previous one is settled; see above.
+    const [job] = await claimQueueJobs(workerId, 1);
+    if (!job) break;
+    claimedCount += 1;
+
+    // oxlint-disable-next-line eslint/no-await-in-loop -- receipt claims are cheap single-row upserts.
+    const decision = await decideWithReceipt(job, mode);
+    if (!decision.run) continue;
+
+    console.log(`[Worker] Claimed queue job ${job.id}`);
+    // oxlint-disable-next-line eslint/no-await-in-loop -- jobs run sequentially by design.
+    await processClaimedJob(env, decision);
+  }
+
+  return claimedCount;
+}
+
+const executionContext: ExecutionContext = {
+  props: {},
+  waitUntil(promise) {
+    void promise.catch((error) => {
+      console.error("[Worker] waitUntil task failed", error);
+    });
+  },
+  passThroughOnException() {
+    // Local queue processing has no upstream request to pass through.
+  },
+};
+
+async function processClaimedJob(
+  env: WorkerEnv,
+  decision: ReceiptDecision,
+): Promise<void> {
+  const { job } = decision;
+  const { batch, states, errors } = createBatch([job]);
 
   try {
     await worker.queue(batch, env, executionContext);
   } catch (error) {
-    await Promise.all(
-      runnable.map(async (decision) => {
-        await settleReceipt(decision, false);
-        await failQueueJob(decision.job.id, error);
-      }),
-    );
-    return claimed.length;
+    await settleReceipt(decision, false);
+    await failQueueJob(job.id, error);
+    return;
   }
 
-  await Promise.all(
-    runnable.map(async (decision) => {
-      const acked = states.get(decision.job.id) === "acked";
-      await settleReceipt(decision, acked);
-      if (acked) {
-        await completeQueueJob(decision.job.id);
-        return;
-      }
-      await failQueueJob(
-        decision.job.id,
-        // Prefer the real error the handler retried with; the generic string
-        // is only a fallback for a job that was neither acked nor retried
-        // with an error (should not happen, but never lose the failure).
-        errors.get(decision.job.id) ?? "Job was not acknowledged by worker",
-      );
-    }),
+  const acked = states.get(job.id) === "acked";
+  await settleReceipt(decision, acked);
+  if (acked) {
+    await completeQueueJob(job.id);
+    return;
+  }
+  await failQueueJob(
+    job.id,
+    // Prefer the real error the handler retried with; the generic string
+    // is only a fallback for a job that was neither acked nor retried
+    // with an error (should not happen, but never lose the failure).
+    errors.get(job.id) ?? "Job was not acknowledged by worker",
   );
+}
 
-  return claimed.length;
+// Reclaim expired PROCESSING leases. A row whose lease expired on its final
+// attempt is dead-lettered (FAILED) instead of re-queued — a job that crashes the
+// worker process must not be re-claimed forever — and the certificate it left in
+// GENERATING_PDF is rejected here, since no worker will ever finish it. The
+// rejection is best-effort: the queue-backstop cron's stuck-render sweep is the
+// safety net, so a failure must never stop the drain.
+async function reclaimStaleJobs(staleAfterMs: number): Promise<void> {
+  const { deadLettered } = await releaseStaleQueueJobs(staleAfterMs);
+  if (deadLettered.length === 0) return;
+
+  console.error(
+    `[Worker] Dead-lettered ${deadLettered.length} queue job(s) whose lease expired on the final attempt`,
+  );
+  await rejectDeadLetteredCertificateRenders(deadLettered).catch((error) => {
+    console.error("[Worker] Failed to reject dead-lettered renders", error);
+  });
 }
 
 // Release stale jobs, then claim + process one batch. Used by the legacy
@@ -296,7 +325,7 @@ export async function processQueueBatch(
   env: WorkerEnv,
   config: QueueRuntimeConfig,
 ): Promise<number> {
-  await releaseStaleQueueJobs(config.staleAfterMs);
+  await reclaimStaleJobs(config.staleAfterMs);
   return claimAndProcessBatch(env, config.workerId, config.batchSize);
 }
 
@@ -309,7 +338,7 @@ export async function drainQueue(
   config: QueueRuntimeConfig,
   maxBatches = 1_000,
 ): Promise<number> {
-  await releaseStaleQueueJobs(config.staleAfterMs);
+  await reclaimStaleJobs(config.staleAfterMs);
 
   let processed = 0;
   for (let batch = 0; batch < maxBatches; batch += 1) {
