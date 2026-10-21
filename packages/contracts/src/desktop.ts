@@ -249,16 +249,6 @@ export const desktopUpdateStateSchema = z.object({
   message: z.string().optional(),
 });
 
-export const certificatePdfExportRequestSchema = z.object({
-  jobId: z.union([z.string().min(1), z.number().int().positive()]),
-  /**
-   * Used only to name the saved file. Optional so a draft with no number yet
-   * still saves — it just gets a plainer name.
-   */
-  certificateNumber: z.string().nullish(),
-  customerName: z.string().nullish(),
-});
-
 export const desktopAuthFetchRequestSchema = z.object({
   url: z.string().url(),
   method: z.string().min(1),
@@ -311,9 +301,6 @@ export type DesktopNotificationsPublish = z.infer<
 >;
 export type SyncSchedulerState = z.infer<typeof syncSchedulerStateSchema>;
 export type DesktopUpdateState = z.infer<typeof desktopUpdateStateSchema>;
-export type CertificatePdfExportRequest = z.infer<
-  typeof certificatePdfExportRequestSchema
->;
 export type DesktopAuthFetchRequest = z.infer<
   typeof desktopAuthFetchRequestSchema
 >;
@@ -390,9 +377,6 @@ export interface CalibraBridge {
   pickFile(): Promise<string | null>;
   pickFolder(): Promise<string | null>;
   saveFile(): Promise<string | null>;
-  saveCertificatePdf(
-    input: CertificatePdfExportRequest,
-  ): Promise<string | null>;
   openExternal(url: string): Promise<boolean>;
   exportSupportBundle(): Promise<string | null>;
   getUpdateState(): Promise<DesktopUpdateState>;

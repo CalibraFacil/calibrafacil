@@ -279,46 +279,6 @@ try {
   );
   assert(jobAttachment.id, "local calibration attachment did not return an id");
 
-  const certificateDraft = await localJson(
-    firstBootstrap.httpBaseUrl,
-    `/api/jobs/${encodeURIComponent(String(localJob.id))}/certificate-draft`,
-    firstLocalHeaders,
-    {
-      method: "POST",
-      headers: firstLocalHeaders,
-    },
-  );
-  assert(certificateDraft.id, "local certificate draft did not return an id");
-  const draftHtml = await localText(
-    firstBootstrap.httpBaseUrl,
-    `/api/jobs/${encodeURIComponent(String(localJob.id))}/certificate-draft/file`,
-    firstLocalHeaders,
-  );
-  assert(
-    draftHtml.includes("Rascunho local"),
-    "local certificate draft HTML is missing the local draft banner",
-  );
-
-  const certificatePdf = await localJson(
-    firstBootstrap.httpBaseUrl,
-    `/api/jobs/${encodeURIComponent(
-      String(localJob.id),
-    )}/certificate-draft/${encodeURIComponent(certificateDraft.id)}/pdf`,
-    firstLocalHeaders,
-    {
-      method: "POST",
-      headers: {
-        ...firstLocalHeaders,
-        "Content-Type": "application/pdf",
-      },
-      body: minimalPdfBytes(),
-    },
-  );
-  assert(
-    certificatePdf.status === "pdf_generated",
-    `local certificate PDF was not persisted: ${JSON.stringify(certificatePdf)}`,
-  );
-
   const offlineCachedScreens = await runOfflineCachedRouteSmoke(firstPage);
 
   const offlineRetry = await evaluate(
@@ -387,15 +347,6 @@ try {
     restartedJob.status === "REVIEW",
     "offline calibration execution did not survive restart",
   );
-  const restartedDraft = await localText(
-    secondBootstrap.httpBaseUrl,
-    `/api/jobs/${encodeURIComponent(String(localJob.id))}/certificate-draft/file`,
-    secondLocalHeaders,
-  );
-  assert(
-    restartedDraft.includes("Rascunho local"),
-    "local certificate draft was not readable after restart",
-  );
   const restartedAttachments = await localJson(
     secondBootstrap.httpBaseUrl,
     `/api/attachments?entityType=calibration_job&entityId=${encodeURIComponent(
@@ -454,7 +405,6 @@ try {
           customerId: localCustomer.id,
           jobId: localJob.id,
           attachmentId: jobAttachment.id,
-          certificateDraftId: certificateDraft.id,
         },
         onlineWebParity,
         offlineCachedScreens,
@@ -929,19 +879,6 @@ async function localJson(baseUrl, pathname, headers, init = {}) {
   return JSON.parse(text);
 }
 
-async function localText(baseUrl, pathname, headers, init = {}) {
-  const response = await fetch(`${baseUrl}${pathname}`, {
-    ...init,
-    headers: init.headers ?? headers,
-  });
-  const text = await response.text();
-  if (!response.ok) {
-    throw new Error(`${pathname} returned HTTP ${response.status}: ${text}`);
-  }
-
-  return text;
-}
-
 async function uploadLocalAttachment(baseUrl, headers, input) {
   const form = new FormData();
   form.set("entityType", input.entityType);
@@ -1338,38 +1275,6 @@ function authHeaders(bootstrap) {
 function createPseudoCnpj() {
   const suffix = String(Date.now()).slice(-8).padStart(8, "0");
   return `99${suffix}0001${Math.floor(Math.random() * 90 + 10)}`;
-}
-
-function minimalPdfBytes() {
-  return Buffer.from(`%PDF-1.4
-1 0 obj
-<< /Type /Catalog /Pages 2 0 R >>
-endobj
-2 0 obj
-<< /Type /Pages /Kids [3 0 R] /Count 1 >>
-endobj
-3 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R >>
-endobj
-4 0 obj
-<< /Length 44 >>
-stream
-BT /F1 12 Tf 20 100 Td (Calibra smoke) Tj ET
-endstream
-endobj
-xref
-0 5
-0000000000 65535 f
-0000000009 00000 n
-0000000058 00000 n
-0000000115 00000 n
-0000000204 00000 n
-trailer
-<< /Size 5 /Root 1 0 R >>
-startxref
-297
-%%EOF
-`);
 }
 
 function normalizeBaseUrl(value) {

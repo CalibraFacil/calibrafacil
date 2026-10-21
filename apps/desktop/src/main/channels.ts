@@ -24,7 +24,6 @@ export const desktopIpcChannels = {
   pickFile: "calibra:dialog:pick-file",
   pickFolder: "calibra:dialog:pick-folder",
   saveFile: "calibra:dialog:save-file",
-  saveCertificatePdf: "calibra:certificate:save-pdf",
   openExternal: "calibra:shell:open-external",
   exportSupportBundle: "calibra:support:export-bundle",
   getUpdateState: "calibra:update:state",

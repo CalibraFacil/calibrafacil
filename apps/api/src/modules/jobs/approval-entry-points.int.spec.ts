@@ -1,15 +1,14 @@
 /**
  * approval-entry-points.int.spec.ts — the approval policy is ONE policy.
  *
- * Calibration approval has three entry points: the cloud route
- * (`POST /jobs/:id/approve`), the desktop sync certificate publish
- * (`POST /sync/certificate-pdfs`) and the public API (`POST /v2/jobs/:id/approve`,
- * `PATCH /v2/jobs/:id`). Before they shared `approveJob`, the public API
- * released any REVIEW job as the key's creator (no role, signatory,
- * separation-of-duties, scope or environmental gate, no CAS) and the sync
- * publish had no separation-of-duties / signatory / environmental gate. Each rule below is
- * asserted against EVERY entry point it applies to, against a real Postgres
- * and the real RBAC middleware (only the better-auth session, R2 and the
+ * Calibration approval has two entry points: the cloud route
+ * (`POST /jobs/:id/approve`) and the public API (`POST /v2/jobs/:id/approve`,
+ * `PATCH /v2/jobs/:id`). Both go through `approveJob`, whose only completion is
+ * the cloud one (the worker renders and signs the PDF). The desktop certificate
+ * publish (`POST /sync/certificate-pdfs`, client-rendered bytes) was removed:
+ * approval and certificates are online-only. Each rule below is asserted
+ * against EVERY entry point it applies to, against a real Postgres and the
+ * real RBAC middleware (only the better-auth session, R2 and the
  * queue/notification side effects are faked).
  *
  *   REQ-APPROVAL-001  separation of duties (self-approval refused) — also the key creator
@@ -18,7 +17,9 @@
  *   REQ-APPROVAL-004  environmental justification
  *   REQ-APPROVAL-005  second approval refused, single audit row
  *   REQ-APPROVAL-006  concurrent approvals: exactly one wins; CAS loss writes nothing
- *   REQ-APPROVAL-007  desktop approver is the authenticated session, never a claimed actor
+ *   REQ-P01-1         POST /sync/certificate-pdfs no longer exists (404, nothing uploaded)
+ *   REQ-P01-2         a desktop certificate-publish event is refused with a precise sync code
+ *   REQ-P01-4         no client-supplied bytes can set calibration_job.certificate_url
  *   REQ-APPROVAL-008  public API: the key's CREATOR is the approver (role, roster, audit trail records the key)
  *   REQ-APPROVAL-009  public API PATCH cannot move a job into an approval-side status
  */
@@ -43,10 +44,7 @@ import {
   user,
 } from "@calibra-facil/db/schema";
 import { and, eq, sql } from "drizzle-orm";
-import {
-  loginAs,
-  loginPerRequestHeader,
-} from "../../../test/integration/setup";
+import { loginPerRequestHeader } from "../../../test/integration/setup";
 import { truncateAll } from "../../../test/integration/db";
 import { seedOrg } from "../../../test/integration/seed";
 import { createApiKeySecret } from "../../lib/api-keys";
@@ -270,11 +268,7 @@ async function releaseAuditRows(id: number) {
     })
     .from(jobAuditLog)
     .where(eq(jobAuditLog.jobId, id));
-  return rows.filter(
-    (row) =>
-      row.action === "approve" ||
-      row.action === "certificate_published_from_desktop",
-  );
+  return rows.filter((row) => row.action === "approve");
 }
 
 // ---------------------------------------------------------------------------
@@ -284,10 +278,10 @@ async function releaseAuditRows(id: number) {
 type Outcome = { approved: true } | { approved: false; code: string };
 
 type EntryPoint = {
-  name: "cloud route" | "desktop sync" | "public API";
+  name: "cloud route" | "public API";
   approve: (jobId: number, userId: string) => Promise<Outcome>;
   /** status a successful release leaves the job in */
-  approvedStatus: "GENERATING_PDF" | "APPROVED";
+  approvedStatus: "GENERATING_PDF";
 };
 
 const cloud: EntryPoint = {
@@ -313,74 +307,6 @@ const cloud: EntryPoint = {
     return { approved: false, code: "INVALID_STATUS" };
   },
 };
-
-function certificateForm(
-  jobId: number,
-  unitId: number,
-  overrides: Record<string, string> = {},
-) {
-  const form = new FormData();
-  const fields: Record<string, string> = {
-    eventId: `evt-${jobId}-${Math.random().toString(36).slice(2)}`,
-    // A distinct draft per push: replaying the SAME draft is the idempotent
-    // path (accepted), a different draft for an already released job is not.
-    entityId: `local-draft-${Math.random().toString(36).slice(2)}`,
-    operation: "generate_local_certificate_pdf",
-    idempotencyKey: `idem-${Math.random().toString(36).slice(2)}`,
-    localVersion: "1",
-    occurredAt: "2026-05-09T12:00:00.000Z",
-    actorUserId: "local",
-    organizationId: ORG,
-    unitId: String(unitId),
-    localJobId: "local-job-1",
-    remoteJobId: String(jobId),
-    draftId: `draft-${Math.random().toString(36).slice(2)}`,
-    contentHash: PDF_HASH,
-    sizeBytes: String(PDF_BYTES.byteLength),
-    ...overrides,
-  };
-  for (const [key, value] of Object.entries(fields)) form.set(key, value);
-  form.set(
-    "file",
-    new File([PDF_BYTES], "draft.pdf", { type: "application/pdf" }),
-  );
-  return form;
-}
-
-async function pushCertificate(
-  jobId: number,
-  userId: string,
-  unitId: number,
-  overrides: Record<string, string> = {},
-) {
-  loginPerRequestHeader(ORG);
-  const res = await syncRouter.request(
-    "/certificate-pdfs",
-    {
-      method: "POST",
-      headers: { "x-test-user-id": userId },
-      body: certificateForm(jobId, unitId, overrides),
-    },
-    R2_ENV,
-  );
-  const body: {
-    accepted: Array<{ eventId: string }>;
-    rejected: Array<{ code: string }>;
-  } = await res.json();
-  return body;
-}
-
-function desktop(unitId: () => number): EntryPoint {
-  return {
-    name: "desktop sync",
-    approvedStatus: "APPROVED",
-    async approve(jobId, userId) {
-      const body = await pushCertificate(jobId, userId, unitId());
-      if (body.accepted.length > 0) return { approved: true };
-      return { approved: false, code: body.rejected[0]?.code ?? "NONE" };
-    },
-  };
-}
 
 /** Seed an API key CREATED BY `userId` and return its raw secret. */
 async function seedKeyFor(
@@ -463,7 +389,7 @@ describe("approval policy — one policy across every entry point", () => {
     mocks.scope.adverse = false;
     mocks.scope.hook = null;
     fixture = await seedFixture();
-    entryPoints = [cloud, desktop(() => fixture.unitId), publicApi];
+    entryPoints = [cloud, publicApi];
   });
 
   // Not parametrized by `it.each` over a table built at import time: the
@@ -472,7 +398,7 @@ describe("approval policy — one policy across every entry point", () => {
     title: string,
     run: (entry: EntryPoint) => Promise<void>,
   ) {
-    for (const name of ["cloud route", "desktop sync", "public API"] as const) {
+    for (const name of ["cloud route", "public API"] as const) {
       it(`${title} [${name}]`, async () => {
         const entry = entryPoints.find((candidate) => candidate.name === name);
         if (!entry) throw new Error(`unknown entry point ${name}`);
@@ -645,8 +571,15 @@ describe("approval policy — one policy across every entry point", () => {
       .where(and(eq(member.userId, CHECKER), eq(member.organizationId, ORG)));
     if (!checker) throw new Error("checker missing");
 
-    // `publish` runs after the policy read and before the transition: it plays
+    // The hook runs after the policy read and before the transition: it plays
     // the part of a concurrent reviewer who rejects the job in that window.
+    mocks.scope.hook = async () => {
+      await db
+        .update(calibrationJob)
+        .set({ status: "REJECTED" })
+        .where(eq(calibrationJob.id, jobId));
+    };
+
     const result = await approveJob({
       jobId,
       actor: {
@@ -669,17 +602,8 @@ describe("approval policy — one policy across every entry point", () => {
       values: {},
       metadata: {},
       completion: {
-        kind: "publish_desktop_certificate",
-        publish: async () => {
-          await db
-            .update(calibrationJob)
-            .set({ status: "REJECTED" })
-            .where(eq(calibrationJob.id, jobId));
-          return {
-            certificateUrl: "https://example.test/x.pdf",
-            auditChanges: {},
-          };
-        },
+        kind: "generate_certificate_pdf",
+        sendServiceOrdersToFinance: async () => [],
       },
     });
 
@@ -741,52 +665,6 @@ describe("approval policy — one policy across every entry point", () => {
     const body: { error: { code: string } } = await res.json();
     expect(body.error.code).toBe("approval_conflict");
     expect(await releaseAuditRows(jobId)).toHaveLength(0);
-  });
-
-  // -------------------------------------------------------------------------
-  // publish-only desktop push on a job the cloud already released
-  // -------------------------------------------------------------------------
-
-  it("REQ-APPROVAL-010: a desktop publish on a GENERATING_PDF job keeps the cloud approval's override justification, approver and time", async () => {
-    mocks.scope.adverse = true;
-    const approvedAt = new Date("2026-03-01T10:00:00.000Z");
-    const jobId = await seedReviewJob(fixture, {
-      status: "GENERATING_PDF",
-      approvedBy: CHECKER,
-      approvedAt,
-      scopeComplianceStatus: "OUT_OF_SCOPE",
-      scopeOverrideJustification: "Cliente ciente; emitido sem selo",
-    });
-    await addMember("user-publisher", "admin");
-
-    const body = await pushCertificate(jobId, "user-publisher", fixture.unitId);
-
-    expect(body.accepted).toHaveLength(1);
-    const job = await readJob(jobId);
-    expect(job.status).toBe("APPROVED");
-    expect(job.certificateUrl).not.toBeNull();
-    expect(job.scopeOverrideJustification).toBe(
-      "Cliente ciente; emitido sem selo",
-    );
-    expect(job.scopeComplianceStatus).toBe("OUT_OF_SCOPE");
-    expect(job.approvedBy).toBe(CHECKER);
-    expect(job.approvedAt?.toISOString()).toBe(approvedAt.toISOString());
-  });
-
-  it("REQ-APPROVAL-010: publish-only does not re-run the release gates (they ran at the cloud approval)", async () => {
-    // Enforce mode would now block (no override in a `values: {}` re-evaluation).
-    mocks.scope.adverse = true;
-    const jobId = await seedReviewJob(fixture, {
-      status: "GENERATING_PDF",
-      approvedBy: MAKER,
-      approvedAt: new Date("2026-03-01T10:00:00.000Z"),
-      technicianId: MAKER,
-    });
-
-    const body = await pushCertificate(jobId, MAKER, fixture.unitId);
-
-    expect(body.accepted).toHaveLength(1);
-    expect((await readJob(jobId)).approvedBy).toBe(MAKER);
   });
 
   // -------------------------------------------------------------------------
@@ -1027,44 +905,106 @@ describe("approval policy — one policy across every entry point", () => {
     ).toHaveLength(1);
   });
 
-  it("REQ-APPROVAL-007: a desktop push claiming another user as actor is rejected, not re-attributed", async () => {
+  // -------------------------------------------------------------------------
+  // REQ-P01: the desktop certificate publish path no longer exists
+  // -------------------------------------------------------------------------
+
+  function legacyCertificateForm(jobId: number) {
+    const form = new FormData();
+    const fields: Record<string, string> = {
+      eventId: "evt-legacy-publish",
+      entityId: "local-draft-legacy",
+      operation: "generate_local_certificate_pdf",
+      idempotencyKey: "idem-legacy-publish",
+      localVersion: "1",
+      occurredAt: "2026-05-09T12:00:00.000Z",
+      actorUserId: CHECKER,
+      organizationId: ORG,
+      unitId: String(fixture.unitId),
+      localJobId: "local-job-1",
+      remoteJobId: String(jobId),
+      draftId: "draft-legacy",
+      contentHash: PDF_HASH,
+      sizeBytes: String(PDF_BYTES.byteLength),
+    };
+    for (const [key, value] of Object.entries(fields)) form.set(key, value);
+    form.set(
+      "file",
+      new File([PDF_BYTES], "draft.pdf", { type: "application/pdf" }),
+    );
+    return form;
+  }
+
+  it.each(["POST", "GET", "PUT", "PATCH", "DELETE"])(
+    "REQ-P01-1: %s /sync/certificate-pdfs is 404 for an approver, and no client bytes are stored or published",
+    async (method) => {
+      const jobId = await seedReviewJob(fixture);
+      loginPerRequestHeader(ORG);
+
+      const res = await syncRouter.request(
+        "/certificate-pdfs",
+        {
+          method,
+          headers: { "x-test-user-id": CHECKER },
+          ...(method === "GET" ? {} : { body: legacyCertificateForm(jobId) }),
+        },
+        R2_ENV,
+      );
+
+      expect(res.status).toBe(404);
+      expect(mocks.uploadToR2).not.toHaveBeenCalled();
+      expect(await readJob(jobId)).toMatchObject({
+        status: "REVIEW",
+        approvedBy: null,
+        certificateUrl: null,
+      });
+      expect(await releaseAuditRows(jobId)).toHaveLength(0);
+    },
+  );
+
+  it("REQ-P01-2: a queued generate_local_certificate_pdf event is refused with a precise code, never published", async () => {
     const jobId = await seedReviewJob(fixture);
 
-    // CHECKER is authenticated, but the payload claims MAKER approved offline.
-    const body = await pushCertificate(jobId, CHECKER, fixture.unitId, {
-      actorUserId: MAKER,
+    const body = await pushEvent(CHECKER, {
+      entityType: "certificate_draft",
+      entityId: "local-draft-legacy",
+      operation: "generate_local_certificate_pdf",
+      actorUserId: CHECKER,
+      payload: {
+        jobId: "local-job-1",
+        remoteJobId: jobId,
+        draftId: "draft-legacy",
+        contentHash: PDF_HASH,
+        sizeBytes: PDF_BYTES.byteLength,
+      },
     });
 
     expect(body.accepted).toHaveLength(0);
-    expect(body.rejected[0]?.code).toBe("APPROVAL_ACTOR_MISMATCH");
-    expect((await readJob(jobId)).status).toBe("REVIEW");
-    expect(mocks.uploadToR2).not.toHaveBeenCalled();
-  });
-
-  it("REQ-APPROVAL-007: the approver recorded for a desktop publish is the authenticated user even when the claim is the same user", async () => {
-    const jobId = await seedReviewJob(fixture);
-
-    const body = await pushCertificate(jobId, CHECKER, fixture.unitId, {
-      actorUserId: CHECKER,
-    });
-
-    expect(body.accepted).toHaveLength(1);
-    expect((await readJob(jobId)).approvedBy).toBe(CHECKER);
-  });
-
-  it("REQ-APPROVAL-007: a technician cannot publish a desktop certificate (calibration:approve guard)", async () => {
-    await addMember("user-tech", "technician");
-    const jobId = await seedReviewJob(fixture, { technicianId: "user-tech" });
-    loginAs({ userId: "user-tech", organizationId: ORG });
-
-    const res = await syncRouter.request(
-      "/certificate-pdfs",
-      { method: "POST", body: certificateForm(jobId, fixture.unitId) },
-      R2_ENV,
+    expect(body.rejected).toHaveLength(1);
+    expect(body.rejected[0]?.code).toBe(
+      "OFFLINE_CERTIFICATE_PUBLICATION_NOT_SUPPORTED",
     );
+    expect(mocks.uploadToR2).not.toHaveBeenCalled();
+    expect(await readJob(jobId)).toMatchObject({
+      status: "REVIEW",
+      approvedBy: null,
+      certificateUrl: null,
+    });
+    expect(await releaseAuditRows(jobId)).toHaveLength(0);
+  });
 
-    expect(res.status).toBe(403);
-    expect((await readJob(jobId)).status).toBe("REVIEW");
+  it("REQ-P01-4: approving through every remaining entry point never sets certificate_url (only the worker does, from its own render)", async () => {
+    for (const entry of entryPoints) {
+      const jobId = await seedReviewJob(fixture);
+      await expect(entry.approve(jobId, CHECKER)).resolves.toEqual({
+        approved: true,
+      });
+      expect(await readJob(jobId)).toMatchObject({
+        status: "GENERATING_PDF",
+        certificateUrl: null,
+      });
+    }
+    expect(mocks.uploadToR2).not.toHaveBeenCalled();
   });
 });
 

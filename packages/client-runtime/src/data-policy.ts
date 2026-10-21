@@ -291,7 +291,6 @@ export const calibraApiPolicyRegistry = {
     getEffectiveEnvironmentalLimits: "local-first-read-through-sync",
     saveExecution: "local-command-sync",
     submitExecution: "local-command-sync",
-    createCertificateDraft: "local-only",
     getCertificateDownloadUrl: "cloud-only",
     generateLabel: "cloud-only",
     getLabelDownloadUrl: "cloud-only",

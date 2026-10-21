@@ -1,6 +1,6 @@
 import path from "node:path";
 import { Buffer } from "node:buffer";
-import { readFile, stat, writeFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import {
   app,
@@ -18,7 +18,6 @@ import {
 } from "electron";
 import {
   appInfoSchema,
-  certificatePdfExportRequestSchema,
   desktopAuthFetchRequestSchema,
   desktopAuthFetchResponseSchema,
   desktopSecretNameSchema,
@@ -54,10 +53,7 @@ import {
   resolveLocalPartitionActivation,
 } from "./local-partition-activation";
 import { LocalPartitionStore } from "./local-partition-store";
-import {
-  buildCertificateFileName,
-  buildSupportBundleFileName,
-} from "./download-naming";
+import { buildSupportBundleFileName } from "./download-naming";
 import {
   observeNotifications,
   type NativeNotificationRequest,
@@ -693,18 +689,6 @@ function registerIpc(
     return result.canceled ? null : (result.filePath ?? null);
   });
 
-  handle(desktopIpcChannels.saveCertificatePdf, async (_event, input) => {
-    const request = certificatePdfExportRequestSchema.parse(input);
-    const filePath = await chooseCertificatePdfPath(request);
-    // Cancelling is an ordinary outcome, not a failure: `null` all the way up,
-    // so the renderer shows nothing rather than an error toast.
-    if (!filePath) return null;
-
-    await saveLocalCertificatePdf(request.jobId, filePath);
-    rememberDownloadDirectory(filePath);
-    return filePath;
-  });
-
   handle(desktopIpcChannels.revealFile, async (_event, filePath) => {
     if (typeof filePath !== "string" || filePath.length === 0) return false;
 
@@ -1167,26 +1151,6 @@ function createLocalApiHeaders(init?: HeadersInit) {
   return headers;
 }
 
-async function chooseCertificatePdfPath(request: {
-  jobId: string | number;
-  certificateNumber?: string | null;
-  customerName?: string | null;
-}) {
-  const result = await dialog.showSaveDialog({
-    defaultPath: path.join(
-      downloadDirectory(),
-      buildCertificateFileName({
-        jobId: request.jobId,
-        certificateNumber: request.certificateNumber,
-        customerName: request.customerName,
-      }),
-    ),
-    filters: [{ name: "PDF", extensions: ["pdf"] }],
-  });
-
-  return result.canceled ? null : (result.filePath ?? null);
-}
-
 /**
  * Where the next save dialog opens. Labs save certificate after certificate
  * into the same folder, so re-opening in the OS downloads directory every time
@@ -1203,98 +1167,6 @@ function downloadDirectory() {
 
 function rememberDownloadDirectory(filePath: string) {
   lastDownloadDirectory = path.dirname(filePath);
-}
-
-async function saveLocalCertificatePdf(
-  jobId: string | number,
-  filePath: string,
-) {
-  if (!localServer.baseUrl) {
-    throw new Error("Local server is not ready.");
-  }
-
-  const routeId = encodeURIComponent(String(jobId));
-  const draftResponse = await fetch(
-    `${localServer.baseUrl}/api/jobs/${routeId}/certificate-draft`,
-    {
-      method: "POST",
-      headers: createLocalApiHeaders(),
-    },
-  );
-
-  if (!draftResponse.ok) {
-    throw new Error(
-      `Local certificate draft failed with HTTP ${draftResponse.status}.`,
-    );
-  }
-  const draft: unknown = await draftResponse.json();
-  const draftId =
-    draft && typeof draft === "object" && !Array.isArray(draft)
-      ? Object.fromEntries(Object.entries(draft)).id
-      : null;
-  if (typeof draftId !== "string" || draftId.length === 0) {
-    throw new Error("Local certificate draft response is missing an id.");
-  }
-
-  const pdfWindow = new BrowserWindow({
-    show: false,
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-  });
-
-  try {
-    await pdfWindow.loadURL(
-      `${localServer.baseUrl}/api/jobs/${routeId}/certificate-draft/file`,
-      {
-        extraHeaders: localApiExtraHeaders(),
-      },
-    );
-    const pdf = await pdfWindow.webContents.printToPDF({
-      printBackground: true,
-      pageSize: "A4",
-    });
-    await persistLocalCertificatePdf(jobId, draftId, pdf);
-    await writeFile(filePath, pdf);
-  } finally {
-    pdfWindow.destroy();
-  }
-}
-
-async function persistLocalCertificatePdf(
-  jobId: string | number,
-  draftId: string,
-  pdf: Uint8Array,
-) {
-  const response = await fetch(
-    `${localServer.baseUrl}/api/jobs/${encodeURIComponent(
-      String(jobId),
-    )}/certificate-draft/${encodeURIComponent(draftId)}/pdf`,
-    {
-      method: "POST",
-      headers: createLocalApiHeaders({ "Content-Type": "application/pdf" }),
-      body: toArrayBuffer(pdf),
-    },
-  );
-
-  if (!response.ok) {
-    throw new Error(
-      `Local certificate PDF storage failed with HTTP ${response.status}.`,
-    );
-  }
-}
-
-function localApiExtraHeaders() {
-  const token = localServer.bootstrap?.localApiToken;
-  return token ? `Authorization: Bearer ${token}` : "";
-}
-
-function toArrayBuffer(bytes: Uint8Array) {
-  const buffer = new ArrayBuffer(bytes.byteLength);
-  new Uint8Array(buffer).set(bytes);
-  return buffer;
 }
 
 /**

@@ -99,14 +99,6 @@ function parseSyncPushBody(body: unknown) {
   };
 }
 
-function formDataFromBody(body: BodyInit | null | undefined) {
-  if (body instanceof FormData) {
-    return body;
-  }
-
-  throw new Error("Expected FormData body");
-}
-
 describe("local server", () => {
   it("captures a non-conformance offline and rejects the cloud-only job link", async () => {
     const dbPath = createTempDatabasePath();
@@ -689,37 +681,6 @@ INSERT INTO reference_standards (
               rejected: [],
               conflicts: [],
               newCursor: `cursor:${body.clientBatchId}`,
-            });
-          }
-
-          if (url === "https://api.example.test/api/sync/certificate-pdfs") {
-            expect(init?.method).toBe("POST");
-            expect(init?.body).toBeInstanceOf(FormData);
-            const formData = formDataFromBody(init?.body);
-            const eventId = formData.get("eventId");
-            const localVersion = Number(formData.get("localVersion"));
-            const file = formData.get("file");
-            expect(eventId).toEqual(expect.any(String));
-            expect(file).toBeInstanceOf(File);
-
-            return Response.json({
-              accepted: [
-                {
-                  eventId,
-                  remoteEntityId: "org/org-1/2026/jobs/CAL-1/desktop.pdf",
-                  remoteEntity: {
-                    jobId: "CAL-2026-0001",
-                    status: "APPROVED",
-                    certificateUrl:
-                      "https://certificates.calibrafacil.com/org/org-1/2026/jobs/CAL-1/desktop.pdf",
-                    portalVisible: true,
-                  },
-                  remoteVersion: localVersion + 1,
-                  cloudEventId: `cloud:${eventId}`,
-                },
-              ],
-              rejected: [],
-              conflicts: [],
             });
           }
 
@@ -2223,37 +2184,6 @@ INSERT INTO sync_conflicts (
           });
         }
 
-        if (url === "https://api.example.test/api/sync/certificate-pdfs") {
-          expect(init?.method).toBe("POST");
-          expect(init?.body).toBeInstanceOf(FormData);
-          const formData = formDataFromBody(init?.body);
-          const eventId = formData.get("eventId");
-          const localVersion = Number(formData.get("localVersion"));
-          const file = formData.get("file");
-          expect(eventId).toEqual(expect.any(String));
-          expect(file).toBeInstanceOf(File);
-
-          return Response.json({
-            accepted: [
-              {
-                eventId,
-                remoteEntityId: "org/org-1/2026/jobs/CAL-1/desktop.pdf",
-                remoteEntity: {
-                  jobId: "CAL-2026-0001",
-                  status: "APPROVED",
-                  certificateUrl:
-                    "https://certificates.calibrafacil.com/org/org-1/2026/jobs/CAL-1/desktop.pdf",
-                  portalVisible: true,
-                },
-                remoteVersion: localVersion + 1,
-                cloudEventId: `cloud:${eventId}`,
-              },
-            ],
-            rejected: [],
-            conflicts: [],
-          });
-        }
-
         if (url.startsWith("https://api.example.test/api/sync/pull")) {
           expect(init?.method).toBe("GET");
           return Response.json({
@@ -2645,18 +2575,17 @@ INSERT INTO environmental_limits (
       },
     });
 
-    const draftResponse = await app.request(
-      `/api/jobs/${createdId}/certificate-draft`,
-      { method: "POST" },
-    );
-    const draftBody = recordFromUnknown(await draftResponse.json());
-    expect(draftResponse.status, JSON.stringify(draftBody)).toBe(400);
-    // The message must not name the XLSX template system (#865 deleted it) —
-    // an operator sent looking for a "publish a template" screen finds nothing.
-    expect(stringFromRecord(draftBody, "error")).toContain(
-      "layout do certificado esta em redesenho",
-    );
-    expect(stringFromRecord(draftBody, "error")).not.toContain("XLSX");
+    // REQ-P01-3: approval and certificates are online-only, so the desktop has
+    // no local certificate-draft surface at all (it used to be a stub that
+    // always refused, feeding a PDF-upload sync path that no longer exists).
+    for (const [method, draftPath] of [
+      ["POST", `/api/jobs/${createdId}/certificate-draft`],
+      ["GET", `/api/jobs/${createdId}/certificate-draft/file`],
+      ["POST", `/api/jobs/${createdId}/certificate-draft/draft-1/pdf`],
+    ] as const) {
+      const draftResponse = await app.request(draftPath, { method });
+      expect(draftResponse.status, `${method} ${draftPath}`).toBe(404);
+    }
 
     const attachmentForm = new FormData();
     attachmentForm.set("entityType", "calibration_job");
@@ -2756,7 +2685,6 @@ INSERT INTO environmental_limits (
           nextCalibrationDate: "2027-01-15T00:00:00.000Z",
         },
       ],
-      localCertificatePath: null,
       syncState: "local",
     });
 

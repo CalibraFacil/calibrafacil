@@ -102,7 +102,7 @@ export async function advanceAssetCalibrationDatesOnApproval(input: {
   assetId: number | null;
   calibrationDate: Date | null;
   performedBy: string;
-  source: "job_approval" | "desktop_certificate_publish";
+  source: "job_approval";
 }): Promise<void> {
   try {
     if (input.assetId === null) return;

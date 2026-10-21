@@ -16,16 +16,6 @@ export type LocalJobCommandInput = {
   deviceId?: string | null;
 };
 
-export type LocalCertificateDraft = {
-  id: string;
-  jobId: string;
-  localPath: string | null;
-  status: string;
-  metadata: unknown;
-  createdAt: string;
-  updatedAt: string;
-};
-
 export type CreateLocalJobDraftInput = LocalJobCommandInput & {
   organizationId?: string | null;
   unitId?: number | null;
@@ -452,273 +442,6 @@ function resolveLocalExecutionTime(
   };
 }
 
-export function createLocalCertificateDraft(
-  database: LocalDatabase,
-  routeId: string,
-  input: LocalJobCommandInput & {
-    draftId?: string;
-    localPath?: string;
-    metadata?: JsonRecord;
-  } = {},
-) {
-  const job = findLocalJob(database, routeId);
-  if (!job) {
-    throw new Error("Job nao encontrado");
-  }
-
-  const now = new Date().toISOString();
-  const draftId = input.draftId ?? `certificate-draft:${randomUUID()}`;
-  const localPath =
-    input.localPath ?? buildLocalCertificateDraftPath(job.id, draftId);
-  const metadata = {
-    jobId: job.job_id,
-    generatedAt: now,
-    contentType: "text/html",
-    draftKind: "local_certificate_html",
-    ...input.metadata,
-  };
-
-  database.transaction(() => {
-    database
-      .prepare(
-        `
-INSERT INTO certificate_drafts (
-  id,
-  job_id,
-  local_path,
-  status,
-  metadata_json,
-  created_at,
-  updated_at,
-  sync_state
-) VALUES (
-  @id,
-  @jobId,
-  @localPath,
-  'draft',
-  @metadataJson,
-  @createdAt,
-  @updatedAt,
-  'local'
-)
-`,
-      )
-      .run({
-        id: draftId,
-        jobId: job.id,
-        localPath,
-        metadataJson: JSON.stringify(metadata),
-        createdAt: now,
-        updatedAt: now,
-      });
-
-    database
-      .prepare(
-        `
-UPDATE calibration_jobs
-SET local_certificate_path = @localPath,
-  updated_at = @updatedAt,
-  sync_state = 'local'
-WHERE id = @jobId
-`,
-      )
-      .run({
-        jobId: job.id,
-        localPath,
-        updatedAt: now,
-      });
-
-    appendLocalAudit(database, {
-      entityType: "certificate_draft",
-      entityId: draftId,
-      action: "create",
-      actorUserId: input.actorUserId,
-      details: { jobId: job.id, localPath },
-      createdAt: now,
-    });
-    const payload: Record<string, unknown> = {
-      draftId,
-      jobId: job.id,
-      localPath,
-      metadata,
-    };
-    if (job.remote_id !== null) {
-      payload.remoteJobId = job.remote_id;
-    }
-
-    appendOutboxEvent(database, {
-      entityType: "certificate_draft",
-      entityId: draftId,
-      operation: "create_local_certificate_draft",
-      payload,
-      actorUserId: input.actorUserId,
-      deviceId: input.deviceId,
-      occurredAt: now,
-    });
-  })();
-
-  return {
-    id: draftId,
-    jobId: job.id,
-    localPath,
-    status: "draft",
-    metadata,
-    createdAt: now,
-    updatedAt: now,
-  };
-}
-
-export function getLatestLocalCertificateDraft(
-  database: LocalDatabase,
-  routeId: string,
-): LocalCertificateDraft | null {
-  const job = findLocalJob(database, routeId);
-  if (!job) return null;
-
-  const row = database
-    .prepare<{ jobId: string }, LocalCertificateDraftRow>(
-      `
-SELECT *
-FROM certificate_drafts
-WHERE job_id = @jobId
-ORDER BY created_at DESC
-LIMIT 1
-`,
-    )
-    .get({ jobId: job.id });
-
-  return row ? toLocalCertificateDraft(row) : null;
-}
-
-export function saveLocalCertificateDraftPdf(
-  database: LocalDatabase,
-  routeId: string,
-  input: LocalJobCommandInput & {
-    draftId: string;
-    localPath: string;
-    contentHash: string;
-    sizeBytes: number;
-  },
-) {
-  const job = findLocalJob(database, routeId);
-  if (!job) {
-    throw new Error("Job nao encontrado");
-  }
-
-  const existing = database
-    .prepare<{ draftId: string; jobId: string }, LocalCertificateDraftRow>(
-      `
-SELECT *
-FROM certificate_drafts
-WHERE id = @draftId AND job_id = @jobId
-`,
-    )
-    .get({
-      draftId: input.draftId,
-      jobId: job.id,
-    });
-
-  if (!existing) {
-    throw new Error("Rascunho de certificado local nao encontrado");
-  }
-
-  const now = new Date().toISOString();
-  const metadata = {
-    ...parseJsonRecord(existing.metadata_json),
-    pdfPath: input.localPath,
-    pdfContentHash: input.contentHash,
-    pdfSizeBytes: input.sizeBytes,
-    pdfGeneratedAt: now,
-    pdfContentType: "application/pdf",
-  };
-
-  database.transaction(() => {
-    database
-      .prepare(
-        `
-UPDATE certificate_drafts
-SET status = 'pdf_generated',
-  metadata_json = @metadataJson,
-  updated_at = @updatedAt,
-  sync_state = 'local'
-WHERE id = @draftId
-`,
-      )
-      .run({
-        draftId: input.draftId,
-        metadataJson: JSON.stringify(metadata),
-        updatedAt: now,
-      });
-
-    database
-      .prepare(
-        `
-UPDATE calibration_jobs
-SET local_certificate_path = @localPath,
-  updated_at = @updatedAt,
-  sync_state = 'local'
-WHERE id = @jobId
-`,
-      )
-      .run({
-        jobId: job.id,
-        localPath: input.localPath,
-        updatedAt: now,
-      });
-
-    appendLocalAudit(database, {
-      entityType: "certificate_draft",
-      entityId: input.draftId,
-      action: "generate_pdf",
-      actorUserId: input.actorUserId,
-      details: {
-        jobId: job.id,
-        localPath: input.localPath,
-        contentHash: input.contentHash,
-        sizeBytes: input.sizeBytes,
-      },
-      createdAt: now,
-    });
-    const payload: Record<string, unknown> = {
-      draftId: input.draftId,
-      jobId: job.id,
-      localPath: input.localPath,
-      contentHash: input.contentHash,
-      sizeBytes: input.sizeBytes,
-    };
-    if (job.remote_id !== null) {
-      payload.remoteJobId = job.remote_id;
-    }
-
-    appendOutboxEvent(database, {
-      entityType: "certificate_draft",
-      entityId: input.draftId,
-      operation: "generate_local_certificate_pdf",
-      payload,
-      actorUserId: input.actorUserId,
-      deviceId: input.deviceId,
-      occurredAt: now,
-    });
-  })();
-
-  return getLatestLocalCertificateDraft(database, routeId);
-}
-
-export function buildLocalCertificateDraftPath(jobId: string, draftId: string) {
-  return `certificates/${toSafePathSegment(jobId)}/${toSafePathSegment(
-    draftId,
-  )}.html`;
-}
-
-export function buildLocalCertificateDraftPdfPath(
-  jobId: string,
-  draftId: string,
-) {
-  return `certificates/${toSafePathSegment(jobId)}/${toSafePathSegment(
-    draftId,
-  )}.pdf`;
-}
-
 function findLocalJob(database: LocalDatabase, routeId: string) {
   const remoteId = Number(routeId);
   if (Number.isFinite(remoteId)) {
@@ -835,7 +558,6 @@ function toJobDetail(job: LocalJobRow) {
     approvedAt: job.approved_at,
     rejectedAt: job.rejected_at,
     certificateUrl: job.certificate_url,
-    localCertificatePath: job.local_certificate_path,
     createdAt: job.created_at,
     updatedAt: job.updated_at,
     syncState: job.sync_state,
@@ -1462,26 +1184,6 @@ function getNullableNumber(row: JsonRecord, key: string) {
   return getNumber(row, key);
 }
 
-function toSafePathSegment(value: string) {
-  return (
-    value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "local"
-  );
-}
-
-function toLocalCertificateDraft(
-  row: LocalCertificateDraftRow,
-): LocalCertificateDraft {
-  return {
-    id: row.id,
-    jobId: row.job_id,
-    localPath: row.local_path,
-    status: row.status,
-    metadata: parseJson(row.metadata_json),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
 type LocalAssetCommandRow = {
   id: string;
   remote_id: number | null;
@@ -1532,16 +1234,6 @@ type LocalReferenceStandardRow = {
   sync_state: string;
 };
 
-type LocalCertificateDraftRow = {
-  id: string;
-  job_id: string;
-  local_path: string | null;
-  status: string;
-  metadata_json: string;
-  created_at: string;
-  updated_at: string;
-};
-
 type LocalJobRow = {
   id: string;
   remote_id: number | null;
@@ -1570,7 +1262,6 @@ type LocalJobRow = {
   approved_at: string | null;
   rejected_at: string | null;
   certificate_url: string | null;
-  local_certificate_path: string | null;
   created_at: string;
   updated_at: string;
   sync_state: string;

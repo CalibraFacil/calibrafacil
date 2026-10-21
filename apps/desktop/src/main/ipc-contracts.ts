@@ -1,6 +1,5 @@
 import {
   appInfoSchema,
-  certificatePdfExportRequestSchema,
   desktopAuthFetchRequestSchema,
   desktopAuthFetchResponseSchema,
   desktopSecretNameSchema,
@@ -202,10 +201,6 @@ export const desktopIpcInvokeContracts = {
   },
   [desktopIpcChannels.saveFile]: {
     args: noArgs(),
-    response: nullable(stringSchema),
-  },
-  [desktopIpcChannels.saveCertificatePdf]: {
-    args: oneArg(certificatePdfExportRequestSchema),
     response: nullable(stringSchema),
   },
   [desktopIpcChannels.openExternal]: {

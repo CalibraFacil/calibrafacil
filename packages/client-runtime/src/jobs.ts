@@ -29,20 +29,6 @@ export type JobsListData = {
   };
 };
 
-export type LocalCertificateDraft = {
-  id: string;
-  jobId: string;
-  localPath: string | null;
-  status: string;
-  metadata: unknown;
-  createdAt: string;
-  updatedAt: string;
-  contentType: string;
-  fileUrl: string;
-  draftKind: "local_certificate_draft";
-  published: false;
-};
-
 export type JobExecutionPayload = {
   selectedStandardIds?: number[];
   data: Record<string, unknown>;
