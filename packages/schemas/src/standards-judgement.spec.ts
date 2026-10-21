@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { judgeExecutionStandards, type JudgedStandardFacts } from "./index";
+import {
+  judgeExecutionStandards,
+  type JudgedStandardFacts,
+} from "./standards-judgement";
 import {
   JUDGEMENT_TODAY,
   STANDARDS_JUDGEMENT_FIXTURES,
