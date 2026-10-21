@@ -21,3 +21,7 @@ apps/docs/.source/
 # Written by release-please in its own markdown style; formatting it would
 # fail every release pull request and fight the next release's entry.
 CHANGELOG.md
+
+# `email build` copies the react-email preview app here (gitignored) — keep local
+# `format:check` runs clean after a build.
+packages/email/.react-email/
