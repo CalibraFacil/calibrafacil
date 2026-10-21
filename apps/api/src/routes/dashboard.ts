@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { db } from "@calibra-facil/db";
 import { LAB_TIME_ZONE } from "@calibra-facil/documents";
+import { isCalendarDatePast } from "@calibra-facil/shared";
 import {
   calibrationJob,
   referenceStandard,
@@ -29,6 +30,7 @@ import {
   count,
   sql,
   gte,
+  lt,
   lte,
   inArray,
   notInArray,
@@ -173,7 +175,8 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
             ),
           ),
 
-        // 5. Overdue jobs (past due date, not APPROVED/CANCELED)
+        // 5. Overdue jobs (due date is before today in the lab, not APPROVED/CANCELED).
+        // due_date is a calendar day: lt(col, now) compares it with the lab day of now.
         db
           .select({ count: count() })
           .from(calibrationJob)
@@ -181,7 +184,7 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
             and(
               eq(calibrationJob.organizationId, memberData.organizationId),
               jobUnitScopeCondition,
-              lte(calibrationJob.dueDate, now),
+              lt(calibrationJob.dueDate, now),
               inArray(calibrationJob.status, [
                 "DRAFT",
                 "IN_PROGRESS",
@@ -551,7 +554,7 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
         ...job,
         isOverdue:
           job.dueDate &&
-          job.dueDate < now &&
+          isCalendarDatePast(job.dueDate, now) &&
           ["DRAFT", "IN_PROGRESS", "REVIEW"].includes(job.status),
       });
 

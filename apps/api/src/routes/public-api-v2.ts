@@ -50,9 +50,12 @@ import {
   ilike,
   inArray,
   isNull,
+  lt,
+  lte,
   or,
   sql,
 } from "drizzle-orm";
+import { addCalendarDays, labToday } from "@calibra-facil/shared";
 import {
   buildListMeta,
   buildPublicApiError,
@@ -2008,7 +2011,7 @@ publicApiV2Router
                 "IN_PROGRESS",
                 "REVIEW",
               ]),
-              sql`${calibrationJob.dueDate} < now()`,
+              lt(calibrationJob.dueDate, labToday()),
             ),
           ),
         db
@@ -2018,7 +2021,10 @@ publicApiV2Router
             and(
               eq(referenceStandard.organizationId, apiKey.organizationId),
               inArray(referenceStandard.unitId, selectedUnitIds),
-              sql`${referenceStandard.nextCalibrationDate} <= ${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)}`,
+              lte(
+                referenceStandard.nextCalibrationDate,
+                addCalendarDays(labToday(), 30),
+              ),
             ),
           ),
         db
@@ -2080,7 +2086,7 @@ publicApiV2Router
                 "IN_PROGRESS",
                 "REVIEW",
               ]),
-              sql`${calibrationJob.dueDate} < now()`,
+              lt(calibrationJob.dueDate, labToday()),
             ),
           )
           .groupBy(calibrationJob.unitId),
@@ -2094,7 +2100,10 @@ publicApiV2Router
             and(
               eq(referenceStandard.organizationId, apiKey.organizationId),
               inArray(referenceStandard.unitId, selectedUnitIds),
-              sql`${referenceStandard.nextCalibrationDate} <= ${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)}`,
+              lte(
+                referenceStandard.nextCalibrationDate,
+                addCalendarDays(labToday(), 30),
+              ),
             ),
           )
           .groupBy(referenceStandard.unitId),
@@ -2310,7 +2319,7 @@ publicApiV2Router
                 "IN_PROGRESS",
                 "REVIEW",
               ]),
-              sql`${calibrationJob.dueDate} < now()`,
+              lt(calibrationJob.dueDate, labToday()),
             ),
           )
           .groupBy(calibrationJob.unitId),
@@ -2324,7 +2333,10 @@ publicApiV2Router
             and(
               eq(referenceStandard.organizationId, apiKey.organizationId),
               inArray(referenceStandard.unitId, selectedUnitIds),
-              sql`${referenceStandard.nextCalibrationDate} <= ${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)}`,
+              lte(
+                referenceStandard.nextCalibrationDate,
+                addCalendarDays(labToday(), 30),
+              ),
             ),
           )
           .groupBy(referenceStandard.unitId),

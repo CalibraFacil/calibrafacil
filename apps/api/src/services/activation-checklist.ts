@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, gte, isNull } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
 import {
   calibrationJob,
@@ -97,7 +97,8 @@ export async function getActivationChecklist(
         )
         .limit(1),
     ),
-    // Only a standard a calibration could actually use. Job creation rejects a
+    // Only a standard a calibration could actually use (valid through its next
+    // calibration day, inclusive). Job creation rejects a
     // non-ACTIVE or expired standard, so counting one here would tick the step
     // while the first calibration stays blocked, which is the exact lie the
     // derived checklist exists to avoid.
@@ -110,7 +111,7 @@ export async function getActivationChecklist(
             eq(referenceStandard.organizationId, organizationId),
             isNull(referenceStandard.deletedAt),
             eq(referenceStandard.status, "ACTIVE"),
-            gt(referenceStandard.nextCalibrationDate, new Date()),
+            gte(referenceStandard.nextCalibrationDate, new Date()),
           ),
         )
         .limit(1),

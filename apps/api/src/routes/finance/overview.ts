@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
+import { isCalendarDatePast, labDaysUntil } from "@calibra-facil/shared";
 import {
   billingDocument,
   customer,
@@ -139,9 +140,8 @@ export const financeOverviewRouter = new Hono<{
   };
 
   for (const installment of openInstallments) {
-    const daysOverdue = Math.floor(
-      (now.getTime() - installment.dueDate.getTime()) / (1000 * 60 * 60 * 24),
-    );
+    // Whole laboratory days past the due day (due dates are calendar days).
+    const daysOverdue = -labDaysUntil(installment.dueDate, now);
 
     if (daysOverdue > 0) {
       aging[getAgingBucketLabel(daysOverdue)] += installment.amountCents;
@@ -156,7 +156,7 @@ export const financeOverviewRouter = new Hono<{
         0,
       ),
       overdueCents: openInstallments
-        .filter((installment) => installment.dueDate < now)
+        .filter((installment) => isCalendarDatePast(installment.dueDate, now))
         .reduce((sum, installment) => sum + installment.amountCents, 0),
       receivedCents: receipts.reduce(
         (sum, receipt) => sum + receipt.amountCents,

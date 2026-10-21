@@ -1187,7 +1187,7 @@ function createOrganizationPlugin() {
           // Better Auth validates `type: "date"` additional fields with a
           // plain z.date(), which rejects every JSON body (the Date arrives
           // as an ISO string). The transforms restore Date semantics at the
-          // DB boundary (timestamp column).
+          // DB boundary (a Postgres `date` column: the day the Date names).
           accreditationValidFrom: {
             type: "string",
             input: true,

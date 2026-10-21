@@ -61,6 +61,9 @@ import {
   PortalUpdateNotificationPreferencesSchema,
 } from "@calibra-facil/schemas";
 import {
+  LAB_TODAY_SQL,
+  addCalendarDays,
+  labToday as labTodayDate,
   normalizeAccreditationNumber,
   shouldRenderAccreditationSeal,
 } from "@calibra-facil/shared";
@@ -227,16 +230,17 @@ function assetInLabSql() {
 
 function buildDueStatusCondition(dueStatus: DueStatus) {
   if (!dueStatus) return undefined;
-  const now = new Date();
-  const soon = new Date(now);
-  soon.setDate(soon.getDate() + DUE_SOON_DAYS);
+  // next_calibration_date is a calendar day: compare it with the laboratory's
+  // today (a calibration due on D is not overdue until D is over).
+  const today = labTodayDate();
+  const soon = addCalendarDays(today, DUE_SOON_DAYS);
 
   switch (dueStatus) {
     case "overdue":
-      return lt(asset.nextCalibrationDate, now);
+      return lt(asset.nextCalibrationDate, today);
     case "due_soon":
       return and(
-        gte(asset.nextCalibrationDate, now),
+        gte(asset.nextCalibrationDate, today),
         lte(asset.nextCalibrationDate, soon),
       );
     case "scheduled":
@@ -709,11 +713,12 @@ export const portalRouter = new Hono<{
       }
       const { customerIds } = scope;
 
-      // Compare against the DB clock in UTC. Binding raw JS Date objects inside
-      // a sql`` template fails under postgres.js (it can't encode a bare Date),
-      // so we derive both bounds from now() in SQL instead.
-      const nowUtc = sql`(now() at time zone 'utc')`;
-      const soonUtc = sql`((now() at time zone 'utc') + interval '${sql.raw(String(DUE_SOON_DAYS))} days')`;
+      // next_calibration_date is a calendar day: compare it with the
+      // laboratory's today, derived from the DB clock in SQL (binding raw JS
+      // Date objects inside a sql`` template fails under postgres.js, and the
+      // UTC clock is already tomorrow from 21:00 in Sao Paulo).
+      const labToday = sql.raw(LAB_TODAY_SQL);
+      const labSoon = sql`(${labToday} + ${sql.raw(String(DUE_SOON_DAYS))})`;
 
       const equipmentWhere = and(
         inArray(asset.customerId, customerIds),
@@ -743,9 +748,9 @@ export const portalRouter = new Hono<{
         db
           .select({
             total: sql<number>`cast(count(*) as int)`,
-            overdue: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} < ${nowUtc}) as int)`,
-            dueSoon: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} >= ${nowUtc} and ${asset.nextCalibrationDate} <= ${soonUtc}) as int)`,
-            scheduled: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} > ${soonUtc}) as int)`,
+            overdue: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} < ${labToday}) as int)`,
+            dueSoon: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} >= ${labToday} and ${asset.nextCalibrationDate} <= ${labSoon}) as int)`,
+            scheduled: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} > ${labSoon}) as int)`,
             unscheduled: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} is null) as int)`,
             inLab: sql<number>`cast(count(*) filter (where ${assetInLabSql()}) as int)`,
           })
@@ -1344,15 +1349,15 @@ export const portalRouter = new Hono<{
         return c.json({ units: [] });
       }
 
-      const nowUtc = sql`(now() at time zone 'utc')`;
-      const soonUtc = sql`((now() at time zone 'utc') + interval '${sql.raw(String(DUE_SOON_DAYS))} days')`;
+      const labToday = sql.raw(LAB_TODAY_SQL);
+      const labSoon = sql`(${labToday} + ${sql.raw(String(DUE_SOON_DAYS))})`;
 
       const rows = await db
         .select({
           customerId: asset.customerId,
           total: sql<number>`cast(count(*) as int)`,
-          overdue: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} < ${nowUtc}) as int)`,
-          dueSoon: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} >= ${nowUtc} and ${asset.nextCalibrationDate} <= ${soonUtc}) as int)`,
+          overdue: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} < ${labToday}) as int)`,
+          dueSoon: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} >= ${labToday} and ${asset.nextCalibrationDate} <= ${labSoon}) as int)`,
         })
         .from(asset)
         .where(

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
   DUE_SOON_DAYS,
@@ -81,6 +81,33 @@ describe("getInstrumentStatus", () => {
 
     const unscheduled = getInstrumentStatus({ nextCalibrationDate: null }, NOW);
     expect(unscheduled.status).toBe("UNSCHEDULED");
+  });
+});
+
+describe("a stored calendar date is read by the day it names (REQ-CAL-003)", () => {
+  const originalTimeZone = process.env.TZ;
+
+  beforeAll(() => {
+    // A browser in Brazil: UTC midnight reads as the evening of the day before.
+    process.env.TZ = "America/Sao_Paulo";
+  });
+
+  afterAll(() => {
+    if (originalTimeZone === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTimeZone;
+  });
+
+  it("is due today on its own day, whatever the browser's zone", () => {
+    // next_calibration_date is a Postgres date: the API sends UTC midnight.
+    const info = getCalibrationStatus("2026-05-30T00:00:00.000Z", NOW);
+    expect(info.daysDelta).toBe(0);
+    expect(info.description).toBe("Vence hoje");
+  });
+
+  it("is overdue only once the day is over", () => {
+    expect(
+      getCalibrationStatus("2026-05-29T00:00:00.000Z", NOW).description,
+    ).toBe("Vencida há 1 dia");
   });
 });
 

@@ -9,6 +9,7 @@
  */
 
 import { Client } from "pg";
+import { LAB_TODAY_SQL, labToday } from "@calibra-facil/shared";
 import {
   decideSigningCertificateExpiryAlert,
   notifyAccreditationExpiring,
@@ -163,13 +164,13 @@ async function checkAssetsDueForRecalibration(
       c.name as customer_name,
       ou.organization_id,
       a.next_calibration_date,
-      EXTRACT(DAY FROM a.next_calibration_date - CURRENT_DATE)::int as days_until_due
+      (a.next_calibration_date - ${LAB_TODAY_SQL})::int as days_until_due
     FROM asset a
     JOIN customer c ON a.customer_id = c.id
     JOIN organization_unit ou ON a.unit_id = ou.id
     WHERE a.status = 'ACTIVE'
       AND a.next_calibration_date IS NOT NULL
-      AND a.next_calibration_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
+      AND a.next_calibration_date BETWEEN ${LAB_TODAY_SQL} AND ${LAB_TODAY_SQL} + 7
       AND NOT EXISTS (
         SELECT 1 FROM scheduled_notification sn
         WHERE sn.entity_type = 'asset'
@@ -216,14 +217,14 @@ async function checkAssetsDueForLegalVerification(
       c.name as customer_name,
       ou.organization_id,
       a.next_legal_verification_date,
-      EXTRACT(DAY FROM a.next_legal_verification_date - CURRENT_DATE)::int as days_until_due
+      (a.next_legal_verification_date - ${LAB_TODAY_SQL})::int as days_until_due
     FROM asset a
     JOIN customer c ON a.customer_id = c.id
     JOIN organization_unit ou ON a.unit_id = ou.id
     WHERE a.status = 'ACTIVE'
       AND a.metrology_regime = 'LEGAL'
       AND a.next_legal_verification_date IS NOT NULL
-      AND a.next_legal_verification_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
+      AND a.next_legal_verification_date BETWEEN ${LAB_TODAY_SQL} AND ${LAB_TODAY_SQL} + 30
       AND NOT EXISTS (
         SELECT 1 FROM scheduled_notification sn
         WHERE sn.entity_type = 'asset'
@@ -261,11 +262,11 @@ async function checkStandardsExpiring(
       rs.serial_number,
       rs.organization_id,
       rs.next_calibration_date,
-      EXTRACT(DAY FROM rs.next_calibration_date - CURRENT_DATE)::int as days_until_expiry
+      (rs.next_calibration_date - ${LAB_TODAY_SQL})::int as days_until_expiry
     FROM reference_standard rs
     WHERE rs.status = 'ACTIVE'
       AND rs.next_calibration_date IS NOT NULL
-      AND rs.next_calibration_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'
+      AND rs.next_calibration_date BETWEEN ${LAB_TODAY_SQL} AND ${LAB_TODAY_SQL} + 30
       AND NOT EXISTS (
         SELECT 1 FROM scheduled_notification sn
         WHERE sn.entity_type = 'standard'
@@ -350,11 +351,11 @@ async function checkStandardsExpired(
       rs.serial_number,
       rs.organization_id,
       rs.next_calibration_date,
-      EXTRACT(DAY FROM CURRENT_DATE - rs.next_calibration_date)::int as days_expired
+      (${LAB_TODAY_SQL} - rs.next_calibration_date)::int as days_expired
     FROM reference_standard rs
     WHERE rs.status = 'ACTIVE'
       AND rs.next_calibration_date IS NOT NULL
-      AND rs.next_calibration_date < CURRENT_DATE
+      AND rs.next_calibration_date < ${LAB_TODAY_SQL}
       AND NOT EXISTS (
         SELECT 1 FROM scheduled_notification sn
         WHERE sn.entity_type = 'standard'
@@ -392,11 +393,11 @@ async function checkOverdueJobs(
       cj.technician_id,
       cj.created_by,
       cj.due_date,
-      EXTRACT(DAY FROM CURRENT_DATE - cj.due_date)::int as days_overdue
+      (${LAB_TODAY_SQL} - cj.due_date)::int as days_overdue
     FROM calibration_job cj
     WHERE cj.status IN ('DRAFT', 'IN_PROGRESS', 'REVIEW')
       AND cj.due_date IS NOT NULL
-      AND cj.due_date < CURRENT_DATE
+      AND cj.due_date < ${LAB_TODAY_SQL}
       AND NOT EXISTS (
         SELECT 1 FROM scheduled_notification sn
         WHERE sn.entity_type = 'job'
@@ -670,15 +671,25 @@ async function checkAccreditationsExpiring(
             -- Only windows alerted for THIS expiry: a renewed vigência
             -- (new valid_until) re-arms all windows instead of staying
             -- suppressed forever by the previous cycle's rows.
-            AND sn.scheduled_for = o.accreditation_valid_until
+            AND (
+              sn.scheduled_for = o.accreditation_valid_until
+              -- Rows recorded before migration 0116 hold the old instant
+              -- (23:59:59.999 in Sao Paulo): match them by the day it named.
+              OR (
+                sn.scheduled_for <> date_trunc('day', sn.scheduled_for)
+                AND (sn.scheduled_for AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::date
+                  = o.accreditation_valid_until
+              )
+            )
         ),
         ARRAY[]::int[]
       ) AS alerted_lead_days
     FROM organization o
     WHERE o.accreditation_active = true
       AND o.accreditation_valid_until IS NOT NULL
-      AND o.accreditation_valid_until > NOW()
-      AND o.accreditation_valid_until <= NOW() + INTERVAL '30 days'
+      -- Valid through its last day, inclusive (a calendar date).
+      AND o.accreditation_valid_until >= ${LAB_TODAY_SQL}
+      AND o.accreditation_valid_until <= ${LAB_TODAY_SQL} + 30
     ORDER BY o.accreditation_valid_until ASC, o.id ASC
     LIMIT $1 OFFSET $2
     `,
@@ -1252,7 +1263,8 @@ export async function processScheduledNotifications(
         try {
           const decision = decideSigningCertificateExpiryAlert({
             validUntil: row.valid_until,
-            now: accreditationNow,
+            // The laboratory's day, not the UTC one (the validity is a date).
+            now: labToday(accreditationNow),
             alreadyAlertedLeadDays: row.alerted_lead_days,
           });
 

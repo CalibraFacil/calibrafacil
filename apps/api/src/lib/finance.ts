@@ -31,6 +31,7 @@ import {
   getBillingBlockerCodeLabel,
   normalizeContaAzulConnectionConfig,
   normalizeGenericFinancialErpConfig,
+  isCalendarDatePast,
   isServiceOrderBillable,
   type FinancialStatus,
   type IntegrationBillingDocumentPayload,
@@ -787,7 +788,7 @@ export async function loadJobFinancialContexts(
       row.documentStatus === "VOID"
         ? "UNBILLED"
         : row.documentStatus === "ISSUED" &&
-            row.dueDate < now &&
+            isCalendarDatePast(row.dueDate, now) &&
             row.installmentStatus !== "PAID"
           ? "OVERDUE"
           : row.documentStatus;
@@ -850,7 +851,10 @@ export async function loadCustomerFinancialSummary(
     openDocumentsCount += 1;
     openBalanceCents += row.totalCents;
 
-    if (row.documentStatus === "OVERDUE" || row.dueDate < now) {
+    if (
+      row.documentStatus === "OVERDUE" ||
+      isCalendarDatePast(row.dueDate, now)
+    ) {
       overdueDocumentsCount += 1;
       overdueBalanceCents += row.totalCents;
     }

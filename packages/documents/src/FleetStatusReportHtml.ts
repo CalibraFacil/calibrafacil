@@ -11,7 +11,7 @@
  * interval is the customer's decision).
  */
 
-import { formatLabDate } from "./dates.js";
+import { formatLabDate, getDateOnlyDay, getLabCalendarDay } from "./dates.js";
 
 export type FleetDueStatus = "OVERDUE" | "DUE_SOON" | "OK" | "UNSCHEDULED";
 
@@ -38,8 +38,14 @@ export function classifyFleetDueStatus(
   if (!nextCalibrationDate) {
     return { status: "UNSCHEDULED", label: "Sem programação" };
   }
-  const days = Math.ceil(
-    (nextCalibrationDate.getTime() - now.getTime()) / DAY_MS,
+  // Whole laboratory days: the due date names a day, so it is overdue only
+  // once that day is over, whatever hour the report is generated at.
+  const from = getLabCalendarDay(now);
+  const to = getDateOnlyDay(nextCalibrationDate);
+  const days = Math.round(
+    (Date.UTC(to.year, to.month - 1, to.day) -
+      Date.UTC(from.year, from.month - 1, from.day)) /
+      DAY_MS,
   );
   if (days < 0) {
     const overdueDays = Math.abs(days);
