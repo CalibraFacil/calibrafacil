@@ -1,7 +1,9 @@
 import { z } from "zod";
+import { JobStatusSchema } from "./job-status";
 import { ReferenceStandardKindSchema } from "./reference-standard-kind";
 export * from "./execution-performed-at";
 export * from "./standard-validity";
+export * from "./job-transitions";
 export * from "./self-serve-signup";
 export * from "./organization-lifecycle";
 export * from "./integrations";
@@ -1890,18 +1892,7 @@ export type ListReferenceStandardsQuery = z.infer<
  * Job status values for workflow tracking
  * - SUPERSEDED: Certificate was amended and replaced (ISO 17025 Clause 7.8.4.1)
  */
-export const JobStatusSchema = z.enum([
-  "DRAFT",
-  "IN_PROGRESS",
-  "REVIEW",
-  "GENERATING_PDF",
-  "APPROVED",
-  "REJECTED",
-  "CANCELED",
-  "SUPERSEDED",
-]);
-
-export type JobStatus = z.infer<typeof JobStatusSchema>;
+export { JobStatusSchema, type JobStatus } from "./job-status";
 
 /**
  * Method Snapshot schema - Frozen copy of method at job creation
