@@ -1,4 +1,5 @@
 import { type ColumnDef } from '@tanstack/react-table'
+import { formatDateOnly } from '@calibra-facil/documents'
 import { Badge } from '@/components/ui/badge'
 import { SyncStateBadge } from '@/components/sync-state-badge'
 import type { AssetListItem, AssetStatus } from '@/features/assets/types'
@@ -22,10 +23,9 @@ const statusVariants: Record<
   SCRAPPED: 'destructive',
 }
 
+// The next calibration is a calendar date (a Postgres date): show its day.
 function formatDate(date: string | Date | null | undefined): string {
-  if (!date) return '-'
-  const d = new Date(date)
-  return d.toLocaleDateString('pt-BR')
+  return formatDateOnly(date, '-')
 }
 
 export interface AssetsTableMeta {

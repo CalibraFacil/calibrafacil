@@ -1,3 +1,8 @@
+import {
+  addCalendarDays,
+  calendarDateKey,
+  labToday,
+} from "@calibra-facil/schemas";
 import type { LocalDatabase } from "./database";
 import { listLocalJobs, type LocalJobStatus } from "./jobs";
 import { listLocalStandards } from "./standards";
@@ -60,14 +65,15 @@ export function getLocalDashboardStats(
   database: LocalDatabase,
   now: Date = new Date(),
 ): LocalDashboardStats {
-  const nowIso = now.toISOString();
-  const today = isoDate(now);
-  const startOfTomorrow = addDays(startOfDay(now), 1).toISOString();
+  // A due date and a standard's validity are calendar days: they are judged
+  // by the laboratory's day (Sao Paulo), not the UTC clock.
+  const todayKey = calendarDateKey(labToday(now));
+  const keyAfterToday = (days: number) =>
+    calendarDateKey(addCalendarDays(labToday(now), days));
   const startOfMonth = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
   ).toISOString();
-  const nextSevenDays = addDays(startOfDay(now), 8).toISOString();
-  const nextThirtyDays = addDays(startOfDay(now), 31).toISOString();
+  const dueDays = activeJobDueDays(database);
 
   const pendingCalibrations = countJobsWhere(
     database,
@@ -84,27 +90,11 @@ export function getLocalDashboardStats(
     "status = ? AND COALESCE(rejected_at, updated_at) >= ?",
     ["REJECTED", startOfMonth],
   );
-  const overdueJobs = countJobsWhere(
-    database,
-    `due_date IS NOT NULL AND due_date < ? AND status IN (${ACTIVE_JOB_STATUSES.map(
-      () => "?",
-    ).join(",")})`,
-    [nowIso, ...ACTIVE_JOB_STATUSES],
-  );
-  const dueToday = countJobsWhere(
-    database,
-    `due_date IS NOT NULL AND due_date >= ? AND due_date < ? AND status IN (${ACTIVE_JOB_STATUSES.map(
-      () => "?",
-    ).join(",")})`,
-    [startOfDay(now).toISOString(), startOfTomorrow, ...ACTIVE_JOB_STATUSES],
-  );
-  const dueNextSevenDays = countJobsWhere(
-    database,
-    `due_date IS NOT NULL AND due_date >= ? AND due_date < ? AND status IN (${ACTIVE_JOB_STATUSES.map(
-      () => "?",
-    ).join(",")})`,
-    [startOfTomorrow, nextSevenDays, ...ACTIVE_JOB_STATUSES],
-  );
+  const overdueJobs = dueDays.filter((day) => day < todayKey).length;
+  const dueToday = dueDays.filter((day) => day === todayKey).length;
+  const dueNextSevenDays = dueDays.filter(
+    (day) => day > todayKey && day <= keyAfterToday(7),
+  ).length;
   const decisionTotal = approvedThisMonth + rejectedThisMonth;
   const activeStandards = listLocalStandards(database, {
     page: 1,
@@ -115,11 +105,9 @@ export function getLocalDashboardStats(
       if (standard.status === "OUT_OF_TOLERANCE") return true;
       if (standard.status !== "ACTIVE") return false;
       const dueAt = Date.parse(standard.nextCalibrationDate);
-      return (
-        Number.isFinite(dueAt) &&
-        dueAt >= Date.parse(today) &&
-        dueAt < Date.parse(nextThirtyDays)
-      );
+      if (!Number.isFinite(dueAt)) return false;
+      const validThrough = calendarDateKey(new Date(dueAt));
+      return validThrough >= todayKey && validThrough <= keyAfterToday(30);
     })
     .sort((a, b) => a.nextCalibrationDate.localeCompare(b.nextCalibrationDate))
     .slice(0, 5)
@@ -154,6 +142,26 @@ export function getLocalDashboardStats(
     calibrationTrend: getCalibrationTrend(database, now),
     recentJobs: listLocalJobs(database, { page: 1, limit: 5 }).data,
   };
+}
+
+/** The calendar day (YYYY-MM-DD) each open job with a due date names. */
+function activeJobDueDays(database: LocalDatabase): string[] {
+  const rows = database
+    .prepare<string[], { due_date: string }>(
+      `
+SELECT due_date
+FROM calibration_jobs
+WHERE deleted_at IS NULL AND due_date IS NOT NULL
+  AND status IN (${ACTIVE_JOB_STATUSES.map(() => "?").join(",")})
+`,
+    )
+    .all(...ACTIVE_JOB_STATUSES);
+  const days: string[] = [];
+  for (const row of rows) {
+    const time = Date.parse(row.due_date);
+    if (Number.isFinite(time)) days.push(calendarDateKey(new Date(time)));
+  }
+  return days;
 }
 
 function countJobsWhere(

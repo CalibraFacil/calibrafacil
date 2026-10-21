@@ -63,6 +63,13 @@ import {
   type R2Env,
 } from "../lib/storage";
 import { standardCertificateKey } from "@calibra-facil/shared/storage-keys";
+import {
+  addCalendarDays,
+  calendarDateKey,
+  isCalendarDatePast,
+  labDaysUntil,
+  labToday,
+} from "@calibra-facil/shared";
 
 const MAX_STANDARD_CERTIFICATE_FILE_SIZE = 25 * 1024 * 1024;
 const STANDARD_CERTIFICATE_CONTENT_TYPE = "application/pdf";
@@ -356,10 +363,16 @@ export const standardsRouter = new Hono<{
 
       // Filter by upcoming calibration due date
       if (expiringWithinDays) {
-        const futureDate = new Date();
-        futureDate.setDate(futureDate.getDate() + expiringWithinDays);
-        conditions.push(lte(referenceStandard.nextCalibrationDate, futureDate));
-        conditions.push(gte(referenceStandard.nextCalibrationDate, new Date()));
+        // next_calibration_date is a calendar day: valid through that day, so
+        // "expiring" runs from the laboratory's today to today + N, inclusive.
+        const today = labToday();
+        conditions.push(
+          lte(
+            referenceStandard.nextCalibrationDate,
+            addCalendarDays(today, expiringWithinDays),
+          ),
+        );
+        conditions.push(gte(referenceStandard.nextCalibrationDate, today));
       }
 
       const whereCondition = and(...conditions);
@@ -411,11 +424,8 @@ export const standardsRouter = new Hono<{
       const standardsWithExpiry = standards.map((s) => ({
         ...s,
         certificateDocument: certificateDocuments.get(s.id) ?? null,
-        isExpired: s.nextCalibrationDate < now,
-        daysUntilExpiry: Math.ceil(
-          (s.nextCalibrationDate.getTime() - now.getTime()) /
-            (1000 * 60 * 60 * 24),
-        ),
+        isExpired: isCalendarDatePast(s.nextCalibrationDate, now),
+        daysUntilExpiry: labDaysUntil(s.nextCalibrationDate, now),
       }));
 
       return c.json({
@@ -720,11 +730,8 @@ export const standardsRouter = new Hono<{
     const result = {
       ...found,
       certificateDocument: certificateDocuments.get(found.id) ?? null,
-      isExpired: found.nextCalibrationDate < now,
-      daysUntilExpiry: Math.ceil(
-        (found.nextCalibrationDate.getTime() - now.getTime()) /
-          (1000 * 60 * 60 * 24),
-      ),
+      isExpired: isCalendarDatePast(found.nextCalibrationDate, now),
+      daysUntilExpiry: labDaysUntil(found.nextCalibrationDate, now),
     };
 
     return c.json(result);
@@ -1138,7 +1145,9 @@ export const standardsRouter = new Hono<{
       }
       if (input.calibrationDate !== undefined) {
         const newDate = new Date(input.calibrationDate);
-        if (newDate.getTime() !== existing.calibrationDate.getTime()) {
+        if (
+          calendarDateKey(newDate) !== calendarDateKey(existing.calibrationDate)
+        ) {
           changes.calibrationDate = {
             old: existing.calibrationDate.toISOString(),
             new: newDate.toISOString(),
@@ -1148,7 +1157,10 @@ export const standardsRouter = new Hono<{
       }
       if (input.nextCalibrationDate !== undefined) {
         const newDate = new Date(input.nextCalibrationDate);
-        if (newDate.getTime() !== existing.nextCalibrationDate.getTime()) {
+        if (
+          calendarDateKey(newDate) !==
+          calendarDateKey(existing.nextCalibrationDate)
+        ) {
           changes.nextCalibrationDate = {
             old: existing.nextCalibrationDate.toISOString(),
             new: newDate.toISOString(),

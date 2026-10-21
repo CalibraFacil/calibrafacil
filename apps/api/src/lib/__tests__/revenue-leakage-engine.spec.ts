@@ -13,6 +13,14 @@ function daysAgo(days: number): Date {
   return new Date(NOW.getTime() - days * 24 * 60 * 60 * 1000);
 }
 
+// An issue date and an installment due date are CALENDAR DATES (UTC midnight of
+// the day they name), aged in laboratory days. NOW is 21:00 on 2026-05-26 in
+// Sao Paulo, so the laboratory's today is the 26th: `daysAgo(n)` as a calendar
+// date is the 26th minus n.
+function calendarDaysAgo(days: number): Date {
+  return new Date(Date.UTC(2026, 4, 26 - days));
+}
+
 function baseInput(
   overrides: Partial<RevenueLeakageInput> = {},
 ): RevenueLeakageInput {
@@ -69,7 +77,7 @@ describe("evaluateRevenueLeakage", () => {
         baseInput({
           stage: "INVOICED",
           isOverdue: false,
-          issuedAt: daysAgo(31),
+          issuedAt: calendarDaysAgo(31),
         }),
         NOW,
       ),
@@ -79,8 +87,8 @@ describe("evaluateRevenueLeakage", () => {
         baseInput({
           stage: "INVOICED",
           isOverdue: true,
-          issuedAt: daysAgo(31),
-          firstOverdueInstallmentDueDate: daysAgo(20),
+          issuedAt: calendarDaysAgo(31),
+          firstOverdueInstallmentDueDate: calendarDaysAgo(20),
         }),
         NOW,
       ),
@@ -93,11 +101,37 @@ describe("evaluateRevenueLeakage", () => {
         baseInput({
           stage: "INVOICED",
           isOverdue: true,
-          firstOverdueInstallmentDueDate: daysAgo(15),
+          firstOverdueInstallmentDueDate: calendarDaysAgo(15),
         }),
         NOW,
       ),
     ).toContain("LONG_OVERDUE");
+  });
+
+  it("ages issue and due dates in laboratory days, also between 21:00 and 24:00 in Sao Paulo", () => {
+    // 23:30 on 2026-05-26 in Sao Paulo is 02:30Z on the 27th: the UTC day is
+    // already tomorrow, the laboratory's is not.
+    const lateEvening = new Date("2026-05-27T02:30:00.000Z");
+    const invoiced = (issuedAt: Date) =>
+      evaluateRevenueLeakage(
+        baseInput({ stage: "INVOICED", issuedAt }),
+        lateEvening,
+      );
+    // Issued exactly 30 laboratory days ago: not stuck yet; 31: stuck.
+    expect(invoiced(calendarDaysAgo(30))).not.toContain("STUCK_INVOICED");
+    expect(invoiced(calendarDaysAgo(31))).toContain("STUCK_INVOICED");
+
+    const overdue = (firstOverdueInstallmentDueDate: Date) =>
+      evaluateRevenueLeakage(
+        baseInput({
+          stage: "INVOICED",
+          isOverdue: true,
+          firstOverdueInstallmentDueDate,
+        }),
+        lateEvening,
+      );
+    expect(overdue(calendarDaysAgo(14))).not.toContain("LONG_OVERDUE");
+    expect(overdue(calendarDaysAgo(15))).toContain("LONG_OVERDUE");
   });
 
   it("emits BLOCKED_TOO_LONG after 7+ days", () => {

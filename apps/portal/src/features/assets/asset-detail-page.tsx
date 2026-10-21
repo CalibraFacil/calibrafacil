@@ -26,7 +26,7 @@ import {
   StaggerItem,
 } from "@/components/instrument-panel";
 import { getInstrumentStatus } from "@/lib/calibration-status";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatDateOnly } from "@/lib/format";
 import { DriftChartPanel } from "@/features/reliability/drift-chart-panel";
 import { OotAssessmentPanel } from "@/features/reliability/oot-assessment-panel";
 import {
@@ -157,7 +157,7 @@ export function AssetDetailPage({ assetId }: { assetId: string }) {
           <SignalTile
             icon={Calendar03Icon}
             label="Próxima calibração"
-            value={formatDate(asset.nextCalibrationDate)}
+            value={formatDateOnly(asset.nextCalibrationDate)}
             hint={calibration.description}
             tone={calibration.tone}
           />
@@ -173,7 +173,7 @@ export function AssetDetailPage({ assetId }: { assetId: string }) {
               <SignalTile
                 icon={CheckmarkCircle02Icon}
                 label="Última calibração"
-                value={formatDate(asset.lastCalibrationDate)}
+                value={formatDateOnly(asset.lastCalibrationDate)}
                 hint={latestCertificate.jobId}
                 tone="neutral"
                 className="h-full transition-shadow group-hover:ring-1 group-hover:ring-foreground/20"
@@ -183,7 +183,7 @@ export function AssetDetailPage({ assetId }: { assetId: string }) {
             <SignalTile
               icon={CheckmarkCircle02Icon}
               label="Última calibração"
-              value={formatDate(asset.lastCalibrationDate)}
+              value={formatDateOnly(asset.lastCalibrationDate)}
               hint="registrada"
               tone="neutral"
             />

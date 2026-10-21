@@ -50,9 +50,13 @@ import {
   ilike,
   inArray,
   isNull,
+  lt,
+  lte,
   or,
   sql,
 } from "drizzle-orm";
+import { addCalendarDays, labToday } from "@calibra-facil/shared";
+import { judgeSnapshotStandards } from "../modules/jobs/standards-judgement";
 import {
   buildListMeta,
   buildPublicApiError,
@@ -2008,7 +2012,7 @@ publicApiV2Router
                 "IN_PROGRESS",
                 "REVIEW",
               ]),
-              sql`${calibrationJob.dueDate} < now()`,
+              lt(calibrationJob.dueDate, labToday()),
             ),
           ),
         db
@@ -2018,7 +2022,10 @@ publicApiV2Router
             and(
               eq(referenceStandard.organizationId, apiKey.organizationId),
               inArray(referenceStandard.unitId, selectedUnitIds),
-              sql`${referenceStandard.nextCalibrationDate} <= ${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)}`,
+              lte(
+                referenceStandard.nextCalibrationDate,
+                addCalendarDays(labToday(), 30),
+              ),
             ),
           ),
         db
@@ -2080,7 +2087,7 @@ publicApiV2Router
                 "IN_PROGRESS",
                 "REVIEW",
               ]),
-              sql`${calibrationJob.dueDate} < now()`,
+              lt(calibrationJob.dueDate, labToday()),
             ),
           )
           .groupBy(calibrationJob.unitId),
@@ -2094,7 +2101,10 @@ publicApiV2Router
             and(
               eq(referenceStandard.organizationId, apiKey.organizationId),
               inArray(referenceStandard.unitId, selectedUnitIds),
-              sql`${referenceStandard.nextCalibrationDate} <= ${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)}`,
+              lte(
+                referenceStandard.nextCalibrationDate,
+                addCalendarDays(labToday(), 30),
+              ),
             ),
           )
           .groupBy(referenceStandard.unitId),
@@ -2310,7 +2320,7 @@ publicApiV2Router
                 "IN_PROGRESS",
                 "REVIEW",
               ]),
-              sql`${calibrationJob.dueDate} < now()`,
+              lt(calibrationJob.dueDate, labToday()),
             ),
           )
           .groupBy(calibrationJob.unitId),
@@ -2324,7 +2334,10 @@ publicApiV2Router
             and(
               eq(referenceStandard.organizationId, apiKey.organizationId),
               inArray(referenceStandard.unitId, selectedUnitIds),
-              sql`${referenceStandard.nextCalibrationDate} <= ${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)}`,
+              lte(
+                referenceStandard.nextCalibrationDate,
+                addCalendarDays(labToday(), 30),
+              ),
             ),
           )
           .groupBy(referenceStandard.unitId),
@@ -3699,12 +3712,33 @@ publicApiV2Router
           };
         }
 
+        // The route records the work as performed NOW, and takes no backdate
+        // reason: every standard of the job's snapshot must be valid today,
+        // however the draft was dated when it was saved through the cloud.
+        const performedAt = new Date();
+        const standardsJudgement = await judgeSnapshotStandards({
+          standardsSnapshot: existing.standardsSnapshot,
+          organizationId: apiKey.organizationId,
+          performedAt,
+          now: performedAt,
+          backdateReason: undefined,
+        });
+        if (!standardsJudgement.ok) {
+          return {
+            status: 422,
+            body: buildPublicApiError({
+              code: "standard_expired",
+              message: standardsJudgement.error,
+            }),
+          };
+        }
+
         const [updated] = await db
           .update(calibrationJob)
           .set({
             data: input.data,
             status: "REVIEW",
-            performedAt: new Date(),
+            performedAt,
           })
           .where(eq(calibrationJob.id, existing.id))
           .returning();

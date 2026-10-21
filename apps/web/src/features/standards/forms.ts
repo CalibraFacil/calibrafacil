@@ -1,3 +1,4 @@
+import { dateOnlyToInputValue } from '@/lib/date-only'
 import {
   CreateReferenceStandardSchema,
   RenewCertificateSchema,
@@ -591,7 +592,8 @@ export function parseStandardRenewForm(
 }
 
 function dateInputValue(value?: string | Date | null) {
-  return value ? new Date(value).toISOString().split('T')[0] : ''
+  // A stored calendar date names its own day (read by the date-only rule).
+  return dateOnlyToInputValue(value)
 }
 
 function parseStandardPayload<TData>(

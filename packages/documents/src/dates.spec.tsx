@@ -1,3 +1,7 @@
+import {
+  calendarDateKey,
+  labCalendarDayKey,
+} from "@calibra-facil/shared/calendar-date";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -114,5 +118,53 @@ describe("document dates", () => {
     expect(startOfLabMonth(new Date("2026-05-20T15:00:00.000Z"))).toEqual(
       new Date("2026-05-01T03:00:00.000Z"),
     );
+  });
+});
+
+// REQ-CAL-001: the `calendarDate` column type (packages/db) cannot import this
+// package, so it uses the copy of the rule in @calibra-facil/shared. This pins
+// the two to the same answer.
+describe("calendar-date rule parity with @calibra-facil/shared", () => {
+  const TIMES = [
+    "T00:00:00.000Z",
+    "T00:00:00.001Z",
+    "T01:30:00.000Z",
+    "T02:59:59.999Z",
+    "T03:00:00.000Z",
+    "T15:00:00.000Z",
+    "T23:59:59.000Z",
+  ];
+  // DST-free years, plus 2017-2018 when Sao Paulo still observed summer time
+  // (UTC-2 from the 3rd Sunday of October to the 3rd Sunday of February).
+  const DAYS = [
+    "2016-12-31",
+    "2017-10-14",
+    "2017-10-15",
+    "2017-10-16",
+    "2018-01-10",
+    "2018-02-17",
+    "2018-02-18",
+    "2018-02-19",
+    "2018-11-03",
+    "2018-11-04",
+    "2019-02-16",
+    "2019-02-17",
+    "2020-02-29",
+    "2026-10-15",
+    "2027-12-31",
+  ];
+
+  it("names the same day as formatDateOnlyKey over edge instants", () => {
+    for (const day of DAYS) {
+      for (const time of TIMES) {
+        const instant = new Date(`${day}${time}`);
+        expect(calendarDateKey(instant), `${day}${time}`).toBe(
+          formatDateOnlyKey(instant),
+        );
+        expect(labCalendarDayKey(instant), `${day}${time}`).toBe(
+          formatLabDayKey(instant),
+        );
+      }
+    }
   });
 });

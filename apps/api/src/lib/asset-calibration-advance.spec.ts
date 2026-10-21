@@ -37,6 +37,35 @@ describe("decideAssetCalibrationAdvance", () => {
     ).toBeNull();
   });
 
+  it("REQ-CAL-003: work done later on the day already recorded is not a second advance (the stored date names a day)", () => {
+    // last_calibration_date is a Postgres date: read back as UTC midnight.
+    const asset = {
+      ...BASE_ASSET,
+      lastCalibrationDate: new Date("2026-06-15T00:00:00.000Z"),
+    };
+    expect(
+      decideAssetCalibrationAdvance({
+        // 10:00 on the 15th in Sao Paulo: the same day, later in the day.
+        calibrationDate: new Date("2026-06-15T13:00:00.000Z"),
+        asset,
+      }),
+    ).toBeNull();
+    // 21:30 on the 15th in Sao Paulo is already 00:30Z on the 16th (UTC day),
+    // still the 15th for the laboratory.
+    expect(
+      decideAssetCalibrationAdvance({
+        calibrationDate: new Date("2026-06-16T00:30:00.000Z"),
+        asset,
+      }),
+    ).toBeNull();
+    expect(
+      decideAssetCalibrationAdvance({
+        calibrationDate: new Date("2026-06-16T03:10:00.000Z"),
+        asset,
+      }),
+    ).not.toBeNull();
+  });
+
   it("advances last_calibration_date and derives next from the customer interval", () => {
     const advance = decideAssetCalibrationAdvance({
       calibrationDate: new Date("2026-06-15T00:00:00.000Z"),

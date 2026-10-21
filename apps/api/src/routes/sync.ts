@@ -75,6 +75,7 @@ import {
   UpdateServiceOrderExecutionSchema,
   METHOD_DEVIATIONS_MAX_LENGTH,
   resolveExecutionPerformedAt,
+  assessStandardValidity,
 } from "@calibra-facil/schemas";
 import {
   and,
@@ -3047,10 +3048,20 @@ async function applyLocalJobExecution(
     };
   }
 
+  const explicitPerformedAt = Boolean(
+    getNullableString(payload, "performedAt")?.trim(),
+  );
   const standardsValidation = await validateDesktopExecutionStandardsSnapshot(
     nextStandardsSnapshot,
     nextData,
     input.memberData,
+    {
+      // Only an EXPLICIT performed date moves the judgement off the sync day.
+      performedAt: explicitPerformedAt ? executionTime.performedAt : null,
+      backdateReason:
+        getNullableString(payload, "backdateReason")?.trim() || null,
+      requireBackdateReason: nextStatus === "REVIEW",
+    },
   );
 
   if (!standardsValidation.ok) {
@@ -3154,9 +3165,18 @@ async function applyLocalJobExecution(
     },
     performedBy: actorUserId,
     // Same wording as the cloud's own submit, so the audit trail reads alike.
-    reason: executionTime.backdateReason
-      ? `Registro retroativo (${executionTime.backdateDays} dias): ${executionTime.backdateReason}`
-      : undefined,
+    reason:
+      [
+        executionTime.backdateReason ||
+        standardsValidation.validOnlyBecauseBackdated.length > 0
+          ? `Registro retroativo (${executionTime.backdateDays} dias): ${executionTime.backdateReason ?? getNullableString(payload, "backdateReason")?.trim()}`
+          : null,
+        standardsValidation.validOnlyBecauseBackdated.length > 0
+          ? `Padroes julgados na data de execucao (${(executionTime.performedAt ?? new Date()).toISOString()}): ${standardsValidation.validOnlyBecauseBackdated.join(", ")} venceu apos essa data`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" | ") || undefined,
   });
 
   await writeDesktopSyncAudit(input, actorUserId, {
@@ -3253,8 +3273,9 @@ async function validateDesktopExecutionStandardsSnapshot(
   standardsSnapshot: StandardSnapshot[] | null,
   data: Record<string, unknown>,
   memberData: MemberData,
+  judgement: StandardsJudgement,
 ): Promise<
-  | { ok: true }
+  | { ok: true; validOnlyBecauseBackdated: string[] }
   | {
       ok: false;
       code: string;
@@ -3271,7 +3292,7 @@ async function validateDesktopExecutionStandardsSnapshot(
         reason: `Desktop execution mass composition references standards missing from standardsSnapshot: ${compositionStandardIds.join(", ")}.`,
       };
     }
-    return { ok: true };
+    return { ok: true, validOnlyBecauseBackdated: [] };
   }
 
   const selectedStandardIds = standardsSnapshot.map((standard) => standard.id);
@@ -3352,28 +3373,54 @@ async function validateDesktopExecutionStandardsSnapshot(
     };
   }
 
-  const now = new Date();
-  const expiredStandards = standards.filter((standard) => {
-    const nextCalibrationDate =
-      standard.nextCalibrationDate instanceof Date
-        ? standard.nextCalibrationDate
-        : new Date(standard.nextCalibrationDate);
+  // Valid THROUGH the certificate day. With an explicit performed date (new
+  // desktop builds) it is judged on the laboratory day the work was performed,
+  // not the sync day; a legacy event carries none, so it is judged at sync time
+  // as it always was (old builds get no loosening).
+  const syncedAt = new Date();
+  const assessment = assessStandardValidity(
+    standards,
+    judgement.performedAt ?? syncedAt,
+    syncedAt,
+  );
 
-    return Number.isFinite(nextCalibrationDate.getTime())
-      ? nextCalibrationDate < now
-      : true;
-  });
-
-  if (expiredStandards.length > 0) {
+  if (assessment.expiredAtPerformed.length > 0) {
     return {
       ok: false,
       code: "STANDARD_EXPIRED",
-      reason: `Desktop execution references expired standards: ${expiredStandards.map((standard) => standard.name).join(", ")}.`,
+      reason: `Desktop execution references expired standards: ${assessment.expiredAtPerformed.join(", ")}.`,
     };
   }
 
-  return { ok: true };
+  // Valid only because the work is back-dated: a submission needs a written
+  // justification even within the usual 7 days (the draft saves are advisory).
+  if (
+    judgement.requireBackdateReason &&
+    assessment.validOnlyBecauseBackdated.length > 0 &&
+    !judgement.backdateReason
+  ) {
+    return {
+      ok: false,
+      code: "STANDARD_BACKDATE_REASON_REQUIRED",
+      reason: `The certificate of ${assessment.validOnlyBecauseBackdated.join(", ")} expired after the performed date; a justification for the back-dated record is required.`,
+    };
+  }
+
+  return {
+    ok: true,
+    validOnlyBecauseBackdated: assessment.validOnlyBecauseBackdated,
+  };
 }
+
+/** How a desktop execution event's standards are judged (Q12). */
+type StandardsJudgement = {
+  /** The explicit performed date; null for a legacy event (judged at sync). */
+  performedAt: Date | null;
+  /** The written justification sent with the event, if any. */
+  backdateReason: string | null;
+  /** A submission (not a draft save) must justify a backdate-dependent standard. */
+  requireBackdateReason: boolean;
+};
 
 async function applyCreateLocalServiceOrderIntake(
   input: ApplyDesktopSyncEventInput,

@@ -26,6 +26,7 @@ import {
   getLocalServiceOrderDetail,
   getLocalStandardDetail,
   buildLocalStandardsSnapshot,
+  localStandardsPerformedAt,
   listLocalAssetTypes,
   listLocalAssets,
   listLocalAttachments,
@@ -830,6 +831,9 @@ export function createLocalServerRuntime(
         database,
         input.selectedStandardIds,
         input.data,
+        // Judged on the day the work is recorded as performed (a draft keeps
+        // the date already saved).
+        localStandardsPerformedAt(input.performedAt, current.performedAt),
       );
       const jobMethodSnapshot = recordFromUnknown(current.methodSnapshot);
       const results = executeLocalCompiledMethod({
@@ -921,6 +925,8 @@ export function createLocalServerRuntime(
         database,
         input.selectedStandardIds,
         input.data,
+        // Judged on the day the work is recorded as performed (the cloud rule).
+        localStandardsPerformedAt(input.performedAt, null),
       );
       const jobMethodSnapshot = recordFromUnknown(current.methodSnapshot);
       const results = executeLocalCompiledMethod({

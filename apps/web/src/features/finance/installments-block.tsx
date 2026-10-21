@@ -3,6 +3,7 @@ import type {
   FinancialInstallmentsSummary,
   ReceivableInstallmentStatus,
 } from '@calibra-facil/shared'
+import { formatDateOnly } from '@calibra-facil/documents'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
@@ -19,19 +20,14 @@ const BRL_FORMAT = new Intl.NumberFormat('pt-BR', {
   currency: 'BRL',
 })
 
-const DATE_DMY_FORMAT = new Intl.DateTimeFormat('pt-BR', {
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-})
-
 function formatBrl(cents: number) {
   return BRL_FORMAT.format(cents / 100)
 }
 
 function formatDate(value: string | null | undefined) {
+  // A due date is a calendar date (a Postgres date): show the day it names.
   if (!value) return null
-  return DATE_DMY_FORMAT.format(new Date(value))
+  return formatDateOnly(value, '')
 }
 
 const INSTALLMENT_STATUS_LABEL: Record<ReceivableInstallmentStatus, string> = {

@@ -6,7 +6,7 @@ import type {
   DashboardJobStatus,
   DashboardStats,
 } from '@/features/dashboard/queries'
-import { dateOnlyDaysBetween, labDaysBetween } from '@/lib/date-only'
+import { dateOnlyDaysBetween } from '@/lib/date-only'
 
 /**
  * Pure view-model for the lab dashboard. Everything the page renders is derived
@@ -283,7 +283,9 @@ export function sumTrend(series: TrendPoint[]) {
 
 export function daysUntil(dateString: string | null, today = new Date()) {
   if (!dateString) return null
-  return labDaysBetween(today, new Date(dateString))
+  // A job's due date is a calendar date: the day it names, not the evening
+  // before it.
+  return dateOnlyDaysBetween(today, new Date(dateString))
 }
 
 export function formatDueDate(

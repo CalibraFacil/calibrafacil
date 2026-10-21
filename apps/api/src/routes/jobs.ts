@@ -52,8 +52,11 @@ import {
   ExecuteJobSchema,
   AmendJobSchema,
   FlagJobOutOfToleranceSchema,
+  assessStandardValidity,
+  isStandardValidOn,
 } from "@calibra-facil/schemas";
 import { flagJobOutOfTolerance } from "../lib/oot-notifications";
+import { judgeSnapshotStandards } from "../modules/jobs/standards-judgement";
 import { syncJobStandardLinks } from "../lib/job-standards";
 import { classifyJobScopeCompliance } from "../lib/scope-compliance";
 import {
@@ -61,7 +64,14 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
-import { normalizeStandardsForOfficialExecution } from "@calibra-facil/shared";
+import {
+  addCalendarDays,
+  calendarDateKey,
+  isCalendarDatePast,
+  labDaysUntil,
+  labToday,
+  normalizeStandardsForOfficialExecution,
+} from "@calibra-facil/shared";
 import { normalizeMethodDataForStorage } from "@calibra-facil/shared/units";
 import { selectEffectiveEnvironmentalLimits } from "../lib/unit-operational-settings";
 import {
@@ -75,6 +85,7 @@ import {
   inArray,
   isNull,
   like,
+  lt,
   not,
   or,
   sql,
@@ -584,10 +595,31 @@ async function ensureEditableJobAssetSnapshot(existing: {
   return { ok: true as const, snapshot: result.snapshot };
 }
 
+/**
+ * The moment a calibration is recorded as performed, for judging whether its
+ * reference standards were valid: the date sent with the request, else the one
+ * already saved on the job, else now. An unreadable or future date falls back
+ * the same way (the route rejects it with its own error right after).
+ */
+function standardsPerformedAt(
+  requested: string | null | undefined,
+  saved: Date | null | undefined,
+): Date {
+  const now = new Date();
+  if (requested) {
+    const parsed = new Date(requested);
+    if (!Number.isNaN(parsed.getTime()) && parsed.getTime() <= now.getTime()) {
+      return parsed;
+    }
+  }
+  return saved ?? now;
+}
+
 async function buildStandardsSnapshot(
   selectedStandardIds: number[] | undefined,
   organizationId: string,
   unitId: number,
+  performedAt: Date,
 ): Promise<
   | { ok: true; snapshot: StandardSnapshot[] | null | undefined }
   | { ok: false; error: string }
@@ -628,8 +660,12 @@ async function buildStandardsSnapshot(
     };
   }
 
-  const now = new Date();
-  const expiredStandards = standards.filter((s) => s.nextCalibrationDate < now);
+  // Valid THROUGH the certificate day (Q12): judged on the laboratory day the
+  // calibration was performed, so an expired standard is never accepted for
+  // work done after its day, and one still valid on the day of the work is.
+  const expiredStandards = standards.filter(
+    (s) => !isStandardValidOn(s.nextCalibrationDate, performedAt),
+  );
   if (expiredStandards.length > 0) {
     return {
       ok: false,
@@ -913,19 +949,18 @@ export const jobsRouter = new Hono<{
         conditions.push(lte(calibrationJob.createdAt, new Date(dateTo)));
       }
 
-      // Filter jobs due within 7 days
+      // Filter jobs due within 7 days. due_date is a calendar day: compare it
+      // with the laboratory's days (today .. today + 7), both inclusive.
       if (dueSoon) {
-        const now = new Date();
-        const sevenDaysFromNow = new Date();
-        sevenDaysFromNow.setDate(now.getDate() + 7);
-        conditions.push(gte(calibrationJob.dueDate, now));
-        conditions.push(lte(calibrationJob.dueDate, sevenDaysFromNow));
+        const today = labToday();
+        conditions.push(gte(calibrationJob.dueDate, today));
+        conditions.push(lte(calibrationJob.dueDate, addCalendarDays(today, 7)));
       }
 
-      // Filter overdue jobs
+      // Filter overdue jobs: due before today in the laboratory (a job due
+      // today is not overdue until the day is over).
       if (overdue) {
-        const now = new Date();
-        conditions.push(lte(calibrationJob.dueDate, now));
+        conditions.push(lt(calibrationJob.dueDate, labToday()));
         conditions.push(
           inArray(calibrationJob.status, ["DRAFT", "IN_PROGRESS", "REVIEW"]),
         );
@@ -984,13 +1019,9 @@ export const jobsRouter = new Hono<{
         ...job,
         isOverdue:
           job.dueDate &&
-          job.dueDate < now &&
+          isCalendarDatePast(job.dueDate, now) &&
           ["DRAFT", "IN_PROGRESS", "REVIEW"].includes(job.status),
-        daysUntilDue: job.dueDate
-          ? Math.ceil(
-              (job.dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
-            )
-          : null,
+        daysUntilDue: job.dueDate ? labDaysUntil(job.dueDate, now) : null,
         // Extract method name from snapshot for display
         methodName: methodSnapshotDisplay(job.methodSnapshot).methodName,
         methodVersion: methodSnapshotDisplay(job.methodSnapshot).methodVersion,
@@ -1195,13 +1226,9 @@ export const jobsRouter = new Hono<{
       assetSnapshot: derivedAssetSnapshot,
       isOverdue:
         job.dueDate &&
-        job.dueDate < now &&
+        isCalendarDatePast(job.dueDate, now) &&
         ["DRAFT", "IN_PROGRESS", "REVIEW"].includes(job.status),
-      daysUntilDue: job.dueDate
-        ? Math.ceil(
-            (job.dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
-          )
-        : null,
+      daysUntilDue: job.dueDate ? labDaysUntil(job.dueDate, now) : null,
       ...financialContextMap.get(job.id),
     };
 
@@ -1406,7 +1433,12 @@ export const jobsRouter = new Hono<{
       if (input.dueDate !== undefined) {
         const newDueDate = input.dueDate ? new Date(input.dueDate) : null;
         const oldDueDate = existing.dueDate;
-        if (newDueDate?.getTime() !== oldDueDate?.getTime()) {
+        // due_date is a calendar day: the same day typed at another hour is
+        // not a change.
+        if (
+          (newDueDate ? calendarDateKey(newDueDate) : null) !==
+          (oldDueDate ? calendarDateKey(oldDueDate) : null)
+        ) {
           changes.dueDate = {
             old: oldDueDate?.toISOString() || null,
             new: newDueDate?.toISOString() || null,
@@ -1697,6 +1729,9 @@ export const jobsRouter = new Hono<{
         input.selectedStandardIds,
         memberData.organizationId,
         existing.unitId,
+        // The date the work is recorded at: a standard is valid through its
+        // certificate day, judged on the laboratory day it was performed.
+        standardsPerformedAt(input.performedAt, null),
       );
       if (!standardsResult.ok) {
         return c.json({ error: standardsResult.error }, 400);
@@ -1774,6 +1809,19 @@ export const jobsRouter = new Hono<{
           },
           400,
         );
+      }
+      // The draft-time standards check is advisory. Every standard of the FINAL
+      // snapshot (whether or not this request names standards) is re-judged,
+      // from the standards table, at the final performed day.
+      const standardsJudgement = await judgeSnapshotStandards({
+        standardsSnapshot: nextStandardsSnapshot,
+        organizationId: memberData.organizationId,
+        performedAt,
+        now,
+        backdateReason: normalizedBackdateReason,
+      });
+      if (!standardsJudgement.ok) {
+        return c.json({ error: standardsJudgement.error }, 400);
       }
       const executionData = normalizedData.data ?? {};
       // An engine release recompiles the published method but never rewrites
@@ -1928,6 +1976,17 @@ export const jobsRouter = new Hono<{
             assetSnapshot: existing.assetSnapshot
               ? undefined
               : { old: null, new: nextAssetSnapshot },
+            // Every standard of the final snapshot was judged at the day the
+            // work is recorded as performed, not at the day it is submitted.
+            standardsJudgedAt:
+              standardsJudgement.standardIds.length > 0
+                ? {
+                    performedAt: performedAt.toISOString(),
+                    standardIds: standardsJudgement.standardIds,
+                    validOnlyBecauseBackdated:
+                      standardsJudgement.validOnlyBecauseBackdated,
+                  }
+                : undefined,
           },
           performedBy: session.user.id,
           ipAddress: c.req.header("x-forwarded-for") || null,
@@ -1942,8 +2001,12 @@ export const jobsRouter = new Hono<{
                 : scopeCompliance?.status === "U_BELOW_CMC"
                   ? "Submetido com incerteza menor que a CMC acreditada"
                   : null,
-              diffDays > BACKDATE_REASON_THRESHOLD_DAYS
+              diffDays > BACKDATE_REASON_THRESHOLD_DAYS ||
+              standardsJudgement.validOnlyBecauseBackdated.length > 0
                 ? `Registro retroativo (${diffDays} dias): ${normalizedBackdateReason}`
+                : null,
+              standardsJudgement.validOnlyBecauseBackdated.length > 0
+                ? `Padroes julgados na data de execucao (${performedAt.toISOString()}): ${standardsJudgement.validOnlyBecauseBackdated.join(", ")} venceu apos essa data`
                 : null,
             ]
               .filter(Boolean)
@@ -2029,6 +2092,10 @@ export const jobsRouter = new Hono<{
         input.selectedStandardIds,
         memberData.organizationId,
         existing.unitId,
+        // The date the work is recorded at (a draft keeps the one already
+        // saved): a standard is valid through its certificate day, judged on
+        // the laboratory day the calibration was performed.
+        standardsPerformedAt(input.performedAt, existing.performedAt),
       );
       if (!standardsResult.ok) {
         return c.json({ error: standardsResult.error }, 400);

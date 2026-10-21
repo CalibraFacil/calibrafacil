@@ -1,6 +1,7 @@
 import { formatCalibrationValue } from "@calibra-facil/shared";
 
 import type { SignalTone } from "@/components/instrument-panel";
+import { dateOnlyDaysBetween } from "@/lib/date-only";
 
 /**
  * Customer-facing presentation helpers for a portal calibration certificate.
@@ -33,8 +34,6 @@ export type MethodSnapshotLike = {
   formulas?: MethodFormula[] | null;
 } | null;
 
-const MS_PER_DAY = 1000 * 60 * 60 * 24;
-
 /** Tonal hint for the "próxima calibração" tile based on time-to-due. */
 export function describeDueDate(
   dueDate: string | null,
@@ -43,7 +42,9 @@ export function describeDueDate(
   if (!dueDate) return null;
   const due = new Date(dueDate);
   if (Number.isNaN(due.getTime())) return null;
-  const days = Math.round((due.getTime() - now) / MS_PER_DAY);
+  // The due date is a calendar date (a Postgres date): count laboratory days
+  // to the day it names, not 24-hour spans to its UTC-midnight instant.
+  const days = dateOnlyDaysBetween(new Date(now), due);
   if (days < 0) return { tone: "critical", hint: "vencido" };
   if (days <= 30) return { tone: "warning", hint: `vence em ${days} d` };
   if (days <= 90) return { tone: "info", hint: `em ${days} d` };

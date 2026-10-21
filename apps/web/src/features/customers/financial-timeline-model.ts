@@ -3,11 +3,7 @@ import type {
   FinancialFreshness,
 } from '@calibra-facil/shared'
 import { formatMoney } from '@calibra-facil/shared'
-import { LAB_TIME_ZONE } from '@calibra-facil/documents'
-
-const DATE_SHORT_FORMAT = new Intl.DateTimeFormat('pt-BR', {
-  dateStyle: 'short',
-})
+import { LAB_TIME_ZONE, formatDateOnly } from '@calibra-facil/documents'
 
 const DATETIME_SHORT_FORMAT = new Intl.DateTimeFormat('pt-BR', {
   dateStyle: 'short',
@@ -17,8 +13,8 @@ const DATETIME_SHORT_FORMAT = new Intl.DateTimeFormat('pt-BR', {
 })
 
 export function formatTimelineDate(value?: string | null) {
-  if (!value) return 'Não informado'
-  return DATE_SHORT_FORMAT.format(new Date(value))
+  // A due date is a calendar date (a Postgres date): the day it names.
+  return formatDateOnly(value, 'Não informado', { dateStyle: 'short' })
 }
 
 export function customerFinancialTimelineRow(

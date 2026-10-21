@@ -9,6 +9,7 @@ import {
   ViewIcon,
 } from '@hugeicons/core-free-icons'
 
+import { formatDateOnly } from '@calibra-facil/documents'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { SyncStateBadge } from '@/components/sync-state-badge'
@@ -75,9 +76,9 @@ const statusVariants: Record<
   SUPERSEDED: 'outline',
 }
 
+// A due date is a calendar date (a Postgres date): show the day it names.
 function formatDate(dateString: string | null): string {
-  if (!dateString) return '-'
-  return new Date(dateString).toLocaleDateString('pt-BR')
+  return formatDateOnly(dateString, '-')
 }
 
 function getFinancialVariant(status: Job['financialStatus']) {

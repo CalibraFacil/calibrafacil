@@ -15,6 +15,7 @@ import {
   real,
   doublePrecision,
 } from "drizzle-orm/pg-core";
+import { calendarDate } from "./calendar-date";
 import type {
   BillingDocumentExportStatus,
   BillingDocumentStatus,
@@ -232,8 +233,8 @@ export const organization = pgTable(
       .notNull(),
     // #647: vigência window. The seal only renders when the emission date
     // falls inside [validFrom, validUntil]; null bounds impose no constraint.
-    accreditationValidFrom: timestamp("accreditation_valid_from"),
-    accreditationValidUntil: timestamp("accreditation_valid_until"),
+    accreditationValidFrom: calendarDate("accreditation_valid_from"),
+    accreditationValidUntil: calendarDate("accreditation_valid_until"),
     // #427 Phase 1: accredited-scope (CMC) guard behavior. 'warn' keeps the
     // Phase 0 classification-only behavior; 'enforce' blocks accredited
     // approval on scope violations unless a documented override downgrades
@@ -2125,8 +2126,8 @@ export const asset = pgTable(
     tag: text("tag").notNull(), // Internal Lab ID / Asset ID (unique per lab org — see asset_lab_org_tag_uidx)
     status: text("status").$type<AssetStatus>().default("ACTIVE").notNull(),
     baseMeasurementUnit: text("base_measurement_unit").$type<MeasurementUnit>(),
-    lastCalibrationDate: timestamp("last_calibration_date"),
-    nextCalibrationDate: timestamp("next_calibration_date"),
+    lastCalibrationDate: calendarDate("last_calibration_date"),
+    nextCalibrationDate: calendarDate("next_calibration_date"),
     // Date the instrument was installed/commissioned. Nullable. Anchors the
     // legal-metrology verification ceiling for `regulated_interval.kind =
     // 'max_months_from_install'` (hidrômetros): `next_legal_verification_date`
@@ -2159,7 +2160,7 @@ export const asset = pgTable(
       .notNull(),
     regulatedInterval:
       jsonb("regulated_interval").$type<Record<string, unknown>>(),
-    nextLegalVerificationDate: timestamp("next_legal_verification_date"),
+    nextLegalVerificationDate: calendarDate("next_legal_verification_date"),
     deletedAt: timestamp("deleted_at"), // Soft delete for ISO 17025 compliance
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
@@ -3095,8 +3096,8 @@ export const referenceStandard = pgTable(
     // Certificate traceability
     certificateNumber: text("certificate_number").notNull(),
     calibratedBy: text("calibrated_by"), // Calibration lab name (traceability)
-    calibrationDate: timestamp("calibration_date").notNull(),
-    nextCalibrationDate: timestamp("next_calibration_date").notNull(),
+    calibrationDate: calendarDate("calibration_date").notNull(),
+    nextCalibrationDate: calendarDate("next_calibration_date").notNull(),
     // Single-value metrology data
     referenceValue: real("reference_value"), // For single-value standards
     uncertainty: real("uncertainty"),
@@ -3209,8 +3210,8 @@ export const referenceStandardCertificateDocument = pgTable(
       .notNull()
       .references(() => organizationUnit.id, { onDelete: "restrict" }),
     certificateNumber: text("certificate_number").notNull(),
-    calibrationDate: timestamp("calibration_date").notNull(),
-    nextCalibrationDate: timestamp("next_calibration_date").notNull(),
+    calibrationDate: calendarDate("calibration_date").notNull(),
+    nextCalibrationDate: calendarDate("next_calibration_date").notNull(),
     fileName: text("file_name").notNull(),
     contentType: text("content_type").notNull(),
     fileSize: integer("file_size").notNull(),
@@ -3536,7 +3537,7 @@ export const calibrationJob = pgTable(
       { onDelete: "set null" },
     ),
     // Dates
-    dueDate: timestamp("due_date"),
+    dueDate: calendarDate("due_date"),
     performedAt: timestamp("performed_at"),
     // Execution data (filled by technician during calibration)
     data: jsonb("data").$type<Record<string, unknown>>(),
@@ -3979,8 +3980,8 @@ export const billingDocument = pgTable(
       .$type<BillingDocumentStatus>()
       .default("DRAFT")
       .notNull(),
-    issueDate: timestamp("issue_date"),
-    dueDate: timestamp("due_date").notNull(),
+    issueDate: calendarDate("issue_date"),
+    dueDate: calendarDate("due_date").notNull(),
     currency: text("currency").default("BRL").notNull(),
     subtotalCents: integer("subtotal_cents").notNull(),
     discountCents: integer("discount_cents").default(0).notNull(),
@@ -4079,7 +4080,7 @@ export const receivableInstallment = pgTable(
       .$type<ReceivableInstallmentStatus>()
       .default("OPEN")
       .notNull(),
-    dueDate: timestamp("due_date").notNull(),
+    dueDate: calendarDate("due_date").notNull(),
     amountCents: integer("amount_cents").notNull(),
     currency: text("currency").default("BRL").notNull(),
     paidAt: timestamp("paid_at"),

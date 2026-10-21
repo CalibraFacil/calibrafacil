@@ -1,3 +1,4 @@
+import { standardDaysUntilExpiry } from "@calibra-facil/schemas";
 import type { LocalDatabase } from "./database";
 import { stableLocalNumericId } from "./ids";
 
@@ -316,16 +317,14 @@ function toLocalStandard(row: LocalStandardRow): LocalStandard {
 }
 
 function computeExpiry(nextCalibrationDate: string) {
-  const expiryTime = new Date(nextCalibrationDate).getTime();
-  if (!Number.isFinite(expiryTime)) {
+  // Valid THROUGH the certificate day, counted in laboratory days (the same
+  // rule the cloud lists and the execution check use).
+  const days = standardDaysUntilExpiry(nextCalibrationDate);
+  if (days === null) {
     return { isExpired: false, daysUntilExpiry: 0 };
   }
 
-  const now = Date.now();
-  return {
-    isExpired: expiryTime < now,
-    daysUntilExpiry: Math.ceil((expiryTime - now) / (1000 * 60 * 60 * 24)),
-  };
+  return { isExpired: days < 0, daysUntilExpiry: days };
 }
 
 function parseCertifiedValues(value: unknown): LocalCertifiedValue[] | null {

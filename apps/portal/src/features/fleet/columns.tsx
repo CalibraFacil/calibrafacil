@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { StatusPill } from "@/components/status-pill";
 import { getInstrumentStatus } from "@/lib/calibration-status";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatDateOnly } from "@/lib/format";
 import type { FleetAsset } from "./types";
 
 /**
@@ -109,7 +109,7 @@ export const fleetColumns: ColumnDef<FleetAsset>[] = [
       return (
         <div className="text-sm">
           <span className="font-mono tabular-nums">
-            {formatDate(row.original.nextCalibrationDate)}
+            {formatDateOnly(row.original.nextCalibrationDate)}
           </span>
           {status.daysDelta !== null ? (
             <p className="text-muted-foreground text-xs">

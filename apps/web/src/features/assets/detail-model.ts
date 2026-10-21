@@ -6,7 +6,10 @@
  * overdue / unscheduled / retired) that drives the instrument-panel hero. Keep
  * this logic here (tested) rather than in JSX, per the schema-first rule.
  */
+import { formatDateOnly } from '@calibra-facil/documents'
+
 import type { SignalTone } from '@/components/instrument-panel'
+import { dateOnlyDaysBetween } from '@/lib/date-only'
 
 export type AssetCalibrationLevel =
   | 'valid'
@@ -15,20 +18,14 @@ export type AssetCalibrationLevel =
   | 'unscheduled'
   | 'retired'
 
-const MS_PER_DAY = 86_400_000
 /** Within this window the calibration is flagged as expiring soon. */
 export const DUE_SOON_DAYS = 30
 
+/** A calibration date is a calendar date (a Postgres date): show its day. */
 export function formatDate(date: string | Date | null | undefined): string {
   if (!date) return '—'
-  const parsed = new Date(date)
-  if (Number.isNaN(parsed.getTime())) return '—'
-  return parsed.toLocaleDateString('pt-BR')
-}
-
-/** Midnight-aligned epoch so "days remaining" ignores the time of day. */
-function startOfDay(date: Date): number {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+  if (Number.isNaN(new Date(date).getTime())) return '—'
+  return formatDateOnly(date, '—')
 }
 
 export type AssetCalibrationStatus = {
@@ -74,9 +71,9 @@ export function buildAssetCalibrationStatus(
     }
   }
 
-  const daysUntilNext = Math.round(
-    (startOfDay(next) - startOfDay(now)) / MS_PER_DAY,
-  )
+  // Whole laboratory days to the day the next calibration NAMES (read in the
+  // browser's zone, its UTC-midnight value would be the evening before).
+  const daysUntilNext = dateOnlyDaysBetween(now, next)
 
   if (daysUntilNext < 0) {
     const overdue = Math.abs(daysUntilNext)

@@ -1,4 +1,5 @@
 import { db } from "@calibra-facil/db";
+import { labToday } from "@calibra-facil/shared";
 import {
   billingDocument,
   commercialAgreement,
@@ -47,11 +48,12 @@ export function bucketByDueDate(
   installments: ReadonlyArray<CashForecastInstallmentInput>,
   now: Date,
 ): Record<CashForecastBucket, CashForecastInstallmentInput[]> {
-  const todayStart = new Date(now);
-  todayStart.setUTCHours(0, 0, 0, 0);
+  // Due dates are calendar days (UTC midnight of the day they name), so the
+  // boundaries are the laboratory's today and the days after it: the UTC day
+  // is already tomorrow from 21:00 in Sao Paulo.
+  const todayStart = labToday(now);
 
-  // ISO week boundary: end of current week = next Sunday 00:00 UTC.
-  // For simplicity treat the bucket boundaries as rolling-from-now.
+  // For simplicity treat the bucket boundaries as rolling-from-today.
   const day = DAY_MS;
   const thisWeekEnd = new Date(todayStart.getTime() + 7 * day);
   const nextWeekEnd = new Date(todayStart.getTime() + 14 * day);

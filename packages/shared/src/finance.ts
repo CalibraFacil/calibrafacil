@@ -1,3 +1,5 @@
+import { calendarDateKey, labCalendarDayKey } from "./calendar-date";
+
 export type CommercialAgreementStatus =
   | "DRAFT"
   | "ACTIVE"
@@ -701,6 +703,28 @@ export function calculateFinancialDueDate(
   const dueDate = new Date(issueDate);
   dueDate.setDate(dueDate.getDate() + paymentTermDays);
   return dueDate;
+}
+
+/**
+ * The due date a billing document is issued with. A due date is a calendar
+ * day: the negotiated one stands when it is AFTER the issue day in the
+ * laboratory (Sao Paulo); otherwise (today, past, or none) the default terms
+ * apply. Comparing instants instead replaced "tomorrow in the lab" between
+ * 21:00 and 24:00, when the UTC day is already tomorrow.
+ */
+export function resolveIssuedDueDate(
+  existingDueDate: Date | null | undefined,
+  issueDate: Date,
+  paymentTermDays = DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
+): Date {
+  if (
+    existingDueDate instanceof Date &&
+    !Number.isNaN(existingDueDate.getTime()) &&
+    calendarDateKey(existingDueDate) > labCalendarDayKey(issueDate)
+  ) {
+    return existingDueDate;
+  }
+  return calculateFinancialDueDate(issueDate, paymentTermDays);
 }
 
 export function getFinancialStatusLabel(status: FinancialStatus) {

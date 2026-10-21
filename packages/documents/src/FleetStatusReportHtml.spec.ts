@@ -34,6 +34,22 @@ describe("classifyFleetDueStatus", () => {
     expect(due.label).toBe("Vence em 10 dias");
   });
 
+  it("REQ-CAL-003: counts laboratory days, so a day-only due date is not due today until its day begins", () => {
+    // 2026-10-15 stored as a calendar date (UTC midnight). 22:00 on the 14th in
+    // Sao Paulo is already 01:00Z on the 15th: one day to go, not "today".
+    const due = new Date("2026-10-15T00:00:00.000Z");
+    expect(
+      classifyFleetDueStatus(due, new Date("2026-10-15T01:00:00.000Z")),
+    ).toEqual({ status: "DUE_SOON", label: "Vence em 1 dia" });
+    // 23:30 on the 15th is 02:30Z on the 16th: still the due day, not overdue.
+    expect(
+      classifyFleetDueStatus(due, new Date("2026-10-16T02:30:00.000Z")),
+    ).toEqual({ status: "DUE_SOON", label: "Vence hoje" });
+    expect(
+      classifyFleetDueStatus(due, new Date("2026-10-16T03:10:00.000Z")),
+    ).toEqual({ status: "OVERDUE", label: "Vencido há 1 dia" });
+  });
+
   it("classifies a date beyond the window as OK ('Em dia')", () => {
     const beyond = new Date(NOW);
     beyond.setDate(beyond.getDate() + FLEET_DUE_SOON_DAYS + 1);

@@ -25,6 +25,7 @@
 import { db } from "@calibra-facil/db";
 import { asset, assetAuditLog } from "@calibra-facil/db/schema";
 import { RegulatedIntervalSchema } from "@calibra-facil/schemas";
+import { calendarDateKey } from "@calibra-facil/shared";
 import { and, eq, isNull } from "drizzle-orm";
 import { deriveNextCalibrationDate } from "./portal-asset-interval";
 import { deriveRegulatedNextDate } from "./regulated-interval";
@@ -57,9 +58,12 @@ export function decideAssetCalibrationAdvance(
 
   const { lastCalibrationDate, calibrationIntervalMonths } = input.asset;
   // Forward-only: never rewind on amendments / re-approvals of older work.
+  // last_calibration_date is a calendar day (UTC midnight when read back), the
+  // calibration date an instant: compare the days they name, so work done later
+  // on the day already recorded is not a second "advance".
   if (
     lastCalibrationDate !== null &&
-    lastCalibrationDate.getTime() >= calibrationDate.getTime()
+    calendarDateKey(lastCalibrationDate) >= calendarDateKey(calibrationDate)
   ) {
     return null;
   }

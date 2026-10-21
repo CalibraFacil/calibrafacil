@@ -8,7 +8,7 @@ import {
   organizationUnit,
   referenceStandard,
 } from "@calibra-facil/db/schema";
-import { and, count, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, lt, lte, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import {
   type AuthVariables,
@@ -345,7 +345,7 @@ export const reportsRouter = new Hono<{ Variables: AuthVariables }>()
               and(
                 eq(calibrationJob.organizationId, memberData.organizationId),
                 inArray(calibrationJob.unitId, selectedUnitIds),
-                lte(calibrationJob.dueDate, range.endDate),
+                lt(calibrationJob.dueDate, range.endDate),
                 inArray(calibrationJob.status, OPEN_JOB_STATUSES),
               ),
             ),
@@ -380,7 +380,7 @@ export const reportsRouter = new Hono<{ Variables: AuthVariables }>()
           buildGroupedJobCount(
             and(
               inArray(calibrationJob.status, OPEN_JOB_STATUSES),
-              lte(calibrationJob.dueDate, range.endDate),
+              lt(calibrationJob.dueDate, range.endDate),
             ),
           ),
           buildGroupedStandardCount(
@@ -612,7 +612,7 @@ export const reportsRouter = new Hono<{ Variables: AuthVariables }>()
               and(
                 eq(calibrationJob.organizationId, memberData.organizationId),
                 inArray(calibrationJob.unitId, selectedUnitIds),
-                lte(calibrationJob.dueDate, range.endDate),
+                lt(calibrationJob.dueDate, range.endDate),
                 inArray(calibrationJob.status, OPEN_JOB_STATUSES),
               ),
             ),
@@ -758,7 +758,7 @@ export const reportsRouter = new Hono<{ Variables: AuthVariables }>()
           buildGroupedCount(
             and(
               inArray(calibrationJob.status, OPEN_JOB_STATUSES),
-              lte(calibrationJob.dueDate, range.endDate),
+              lt(calibrationJob.dueDate, range.endDate),
             ),
           ),
           buildGroupedStandardCount(

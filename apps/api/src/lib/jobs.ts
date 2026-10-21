@@ -17,6 +17,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { notifyJobAssigned } from "@calibra-facil/notifications";
 import { normalizeMethodValidationsInput } from "@calibra-facil/schemas";
+import { addLabBusinessDays } from "@calibra-facil/shared";
 import { and, count, desc, eq, ilike, inArray, isNull, sql } from "drizzle-orm";
 import { ensureJobCommercialSnapshot } from "./finance";
 import { generateCertificateIdentity } from "./certificate-numbering";
@@ -150,22 +151,6 @@ function validatePublishedMethodCompiledArtifact(methodData: {
       "Método publicado sem artefato compilado consistente não pode gerar job regulado.",
     );
   }
-}
-
-function addBusinessDays(startDate: Date, businessDays: number) {
-  const dueDate = new Date(startDate);
-  let remainingBusinessDays = businessDays;
-
-  while (remainingBusinessDays > 0) {
-    dueDate.setDate(dueDate.getDate() + 1);
-
-    const dayOfWeek = dueDate.getDay();
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-      remainingBusinessDays -= 1;
-    }
-  }
-
-  return dueDate;
 }
 
 async function persistCalibrationJob(
@@ -434,7 +419,7 @@ async function persistCalibrationJob(
         ? params.dueDate
         : new Date(params.dueDate);
   } else if (serviceData.tat !== null && serviceData.tat !== undefined) {
-    dueDate = addBusinessDays(new Date(), serviceData.tat);
+    dueDate = addLabBusinessDays(new Date(), serviceData.tat);
   }
 
   // DOM-02: record the source repair OS, but only if it belongs to the caller's

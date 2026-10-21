@@ -20,6 +20,7 @@ import {
   PORTAL_VISIBLE_MEMBER_ROLES,
   isPortalManageableMemberRole,
 } from "@calibra-facil/auth/access";
+import { LAB_TODAY_SQL } from "@calibra-facil/shared";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   withLabPermission,
@@ -229,14 +230,14 @@ export const customerGroupsRouter = new Hono<{ Variables: AuthVariables }>()
         { total: number; overdue: number; dueSoon: number }
       >();
       if (branchIds.length > 0) {
-        const nowUtc = sql`(now() at time zone 'utc')`;
-        const soonUtc = sql`((now() at time zone 'utc') + interval '${sql.raw(String(DUE_SOON_DAYS))} days')`;
+        const labToday = sql.raw(LAB_TODAY_SQL);
+        const labSoon = sql`(${labToday} + ${sql.raw(String(DUE_SOON_DAYS))})`;
         const counts = await db
           .select({
             customerId: asset.customerId,
             total: sql<number>`cast(count(*) as int)`,
-            overdue: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} < ${nowUtc}) as int)`,
-            dueSoon: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} >= ${nowUtc} and ${asset.nextCalibrationDate} <= ${soonUtc}) as int)`,
+            overdue: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} < ${labToday}) as int)`,
+            dueSoon: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} >= ${labToday} and ${asset.nextCalibrationDate} <= ${labSoon}) as int)`,
           })
           .from(asset)
           .where(

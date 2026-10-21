@@ -20,6 +20,7 @@ export {
   buildLocalCertificateDraftPath,
   buildLocalCertificateDraftPdfPath,
   buildLocalStandardsSnapshot,
+  localStandardsPerformedAt,
   createLocalCertificateDraft,
   createLocalJobDraft,
   getLatestLocalCertificateDraft,

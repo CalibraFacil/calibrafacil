@@ -41,9 +41,14 @@ import {
   sql,
 } from "drizzle-orm";
 import {
+  addCalendarDays,
+  isCalendarDatePast,
+  labDaysUntil,
+  labToday,
   portalDigestFrequenciesFor,
   quantityKindLabelPt,
 } from "@calibra-facil/shared";
+import { formatCalendarDateBR } from "./calendar-date-format";
 import { buildLegalVerificationMessage } from "./legal-verification-message";
 import { buildCertificateAmendedLinks } from "./portal-links";
 import { isEmailSuppressed } from "./suppression";
@@ -2284,12 +2289,11 @@ function formatDateBR(date: Date): string {
 }
 
 /**
- * Calculate days remaining until a date
+ * Calculate whole laboratory days remaining until a calendar date (0 on the
+ * day itself, negative once past).
  */
 function getDaysRemaining(dueDate: Date): number {
-  const now = new Date();
-  const diffTime = dueDate.getTime() - now.getTime();
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return labDaysUntil(dueDate, new Date());
 }
 
 /**
@@ -2323,7 +2327,7 @@ export async function notifyAssetDueForRecalibration(
     .limit(1);
 
   const daysRemaining = getDaysRemaining(assetData.nextCalibrationDate);
-  const dueDate = formatDateBR(assetData.nextCalibrationDate);
+  const dueDate = formatCalendarDateBR(assetData.nextCalibrationDate);
   const assetIdentifier =
     assetData.tag || assetData.serialNumber || assetData.name;
   const itemName = customerData
@@ -2409,7 +2413,7 @@ export async function notifyAssetDueForLegalVerification(
     .limit(1);
 
   const daysRemaining = getDaysRemaining(assetData.nextLegalVerificationDate);
-  const dueDate = formatDateBR(assetData.nextLegalVerificationDate);
+  const dueDate = formatCalendarDateBR(assetData.nextLegalVerificationDate);
   const assetIdentifier =
     assetData.tag || assetData.serialNumber || assetData.name;
   const itemName = customerData
@@ -2478,7 +2482,7 @@ export async function notifyStandardExpiring(
   if (!standardData?.nextCalibrationDate) return;
 
   const daysRemaining = getDaysRemaining(standardData.nextCalibrationDate);
-  const dueDate = formatDateBR(standardData.nextCalibrationDate);
+  const dueDate = formatCalendarDateBR(standardData.nextCalibrationDate);
   const standardIdentifier =
     standardData.certificateNumber ||
     standardData.serialNumber ||
@@ -2596,7 +2600,7 @@ export async function notifyStandardExpired(
   if (!standardData?.nextCalibrationDate) return;
 
   const daysRemaining = getDaysRemaining(standardData.nextCalibrationDate);
-  const dueDate = formatDateBR(standardData.nextCalibrationDate);
+  const dueDate = formatCalendarDateBR(standardData.nextCalibrationDate);
   const standardIdentifier =
     standardData.certificateNumber ||
     standardData.serialNumber ||
@@ -2837,7 +2841,7 @@ export async function notifyJobOverdue(jobId: number): Promise<void> {
   if (!activeStatuses.includes(jobData.status)) return;
 
   const daysOverdue = Math.abs(getDaysRemaining(jobData.dueDate));
-  const dueDate = formatDateBR(jobData.dueDate);
+  const dueDate = formatCalendarDateBR(jobData.dueDate);
 
   // Notify the technician (if assigned) and admins/owners
   const recipientIds = new Set<string>();
@@ -3334,11 +3338,12 @@ const PORTAL_DIGEST_DUE_SOON_DAYS = 30;
 /** Instruments listed in the email body; the rest become "e mais N". */
 const PORTAL_DIGEST_MAX_ITEMS = 15;
 
+// A calendar date is stored as UTC midnight of the day it names: read it in UTC.
 const PORTAL_DIGEST_DATE = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
   month: "2-digit",
   year: "numeric",
-  timeZone: "America/Sao_Paulo",
+  timeZone: "UTC",
 });
 
 export type PortalDigestRunResult = {
@@ -3351,9 +3356,9 @@ export type PortalDigestRunResult = {
 };
 
 function describePortalDigestDue(due: Date, now: Date): string {
-  const days = Math.round(
-    (due.getTime() - now.getTime()) / (24 * 60 * 60 * 1000),
-  );
+  // `due` is a calendar date (UTC midnight of the day it names), counted in
+  // laboratory days and printed as that same day.
+  const days = labDaysUntil(due, now);
   const dateLabel = PORTAL_DIGEST_DATE.format(due);
   if (days < 0) {
     const overdueDays = Math.abs(days);
@@ -3522,8 +3527,10 @@ export async function sendPortalDueDigests(
   const brandByLab = new Map<string, EmailBrand | undefined>();
   const portalUrlByLab = new Map<string, string>();
 
-  const soon = new Date(now);
-  soon.setUTCDate(soon.getUTCDate() + PORTAL_DIGEST_DUE_SOON_DAYS);
+  // next_calibration_date is a calendar day: overdue is before today in the
+  // laboratory, due soon runs to today + 30.
+  const today = labToday(now);
+  const soon = addCalendarDays(today, PORTAL_DIGEST_DUE_SOON_DAYS);
 
   for (const recipient of recipients) {
     if (!recipient.email || recipient.customerIds.length === 0) continue;
@@ -3541,7 +3548,7 @@ export async function sendPortalDueDigests(
       const [counts] = await db
         .select({
           total: sql<number>`cast(count(*) as int)`,
-          overdue: sql<number>`cast(count(*) filter (where ${lt(asset.nextCalibrationDate, now)}) as int)`,
+          overdue: sql<number>`cast(count(*) filter (where ${lt(asset.nextCalibrationDate, today)}) as int)`,
         })
         .from(asset)
         .where(dueWhere);
@@ -3573,7 +3580,7 @@ export async function sendPortalDueDigests(
             tag: item.tag,
             name: item.name,
             statusLabel: describePortalDigestDue(item.nextCalibrationDate, now),
-            overdue: item.nextCalibrationDate.getTime() < now.getTime(),
+            overdue: isCalendarDatePast(item.nextCalibrationDate, now),
           },
         ];
       });

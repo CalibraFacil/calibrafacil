@@ -1,4 +1,4 @@
-import { differenceInCalendarDays } from "date-fns";
+import { dateOnlyDaysBetween } from "./date-only";
 
 import type { SignalTone } from "@/components/instrument-panel";
 
@@ -111,7 +111,10 @@ export function getCalibrationStatus(
     };
   }
 
-  const daysDelta = differenceInCalendarDays(due, now);
+  // The due date is a calendar day (a Postgres date, sent as UTC midnight):
+  // count laboratory days to the day it names, not browser-zone days to the
+  // instant, which read it as the evening before in Brazil.
+  const daysDelta = dateOnlyDaysBetween(now, due);
   const status: CalibrationStatus =
     daysDelta < 0
       ? "OVERDUE"

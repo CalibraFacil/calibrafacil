@@ -28,9 +28,11 @@ import {
   DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
   applyIntegrationMappings,
   calculateFinancialDueDate,
+  resolveIssuedDueDate,
   getBillingBlockerCodeLabel,
   normalizeContaAzulConnectionConfig,
   normalizeGenericFinancialErpConfig,
+  isCalendarDatePast,
   isServiceOrderBillable,
   type FinancialStatus,
   type IntegrationBillingDocumentPayload,
@@ -787,7 +789,7 @@ export async function loadJobFinancialContexts(
       row.documentStatus === "VOID"
         ? "UNBILLED"
         : row.documentStatus === "ISSUED" &&
-            row.dueDate < now &&
+            isCalendarDatePast(row.dueDate, now) &&
             row.installmentStatus !== "PAID"
           ? "OVERDUE"
           : row.documentStatus;
@@ -850,7 +852,10 @@ export async function loadCustomerFinancialSummary(
     openDocumentsCount += 1;
     openBalanceCents += row.totalCents;
 
-    if (row.documentStatus === "OVERDUE" || row.dueDate < now) {
+    if (
+      row.documentStatus === "OVERDUE" ||
+      isCalendarDatePast(row.dueDate, now)
+    ) {
       overdueDocumentsCount += 1;
       overdueBalanceCents += row.totalCents;
     }
@@ -1654,14 +1659,11 @@ async function issueDraftBillingDocument(params: {
       organizationId,
       tx,
     );
-    const effectiveDueDate =
-      existing.dueDate instanceof Date &&
-      existing.dueDate.getTime() > issueDate.getTime()
-        ? existing.dueDate
-        : calculateFinancialDueDate(
-            issueDate,
-            DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
-          );
+    const effectiveDueDate = resolveIssuedDueDate(
+      existing.dueDate,
+      issueDate,
+      DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
+    );
 
     await tx
       .update(billingDocument)

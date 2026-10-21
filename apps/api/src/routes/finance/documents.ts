@@ -17,7 +17,7 @@ import {
 } from "@calibra-facil/db/schema";
 import {
   DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
-  calculateFinancialDueDate,
+  resolveIssuedDueDate,
 } from "@calibra-facil/shared";
 import {
   withLabPermission,
@@ -755,14 +755,11 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
           tx,
         );
         const issueDate = new Date();
-        const effectiveDueDate =
-          existing.dueDate instanceof Date &&
-          existing.dueDate.getTime() > issueDate.getTime()
-            ? existing.dueDate
-            : calculateFinancialDueDate(
-                issueDate,
-                DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
-              );
+        const effectiveDueDate = resolveIssuedDueDate(
+          existing.dueDate,
+          issueDate,
+          DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
+        );
 
         await tx
           .update(billingDocument)
