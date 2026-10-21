@@ -162,9 +162,12 @@ See `docs/architecture/portal-frontend.md`. `apps/portal` is the cloud-only clie
 ## Other guards to be aware of
 
 - **`useEffect` is banned.** The oxlint `no-restricted-imports` rule (in `.oxlintrc.json`, part of
-  `pnpm lint`) fails on any `useEffect` import from `react`. Use derived state, event handlers, data
-  hooks, keyed remounts, or the `use-mount-effect.ts` wrapper. Only the `apps/*/src/hooks/use-mount-effect.ts`
-  wrappers may import raw `useEffect` (allowed via an `overrides` entry in `.oxlintrc.json`).
+  `pnpm lint`) fails on any `useEffect` import from `react`, and `no-restricted-properties` fails on
+  `React.useEffect` through the default import. A default import under another name
+  (`import R from "react"`) still passes: closing that needs a rule in `oxlint-plugin-calibra`. Use
+  derived state, event handlers, data hooks, keyed remounts, or the `use-mount-effect.ts` wrapper.
+  Only the `apps/*/src/hooks/use-mount-effect.ts` wrappers may import raw `useEffect` (allowed via an
+  `overrides` entry in `.oxlintrc.json`).
 - Sentry PII (`sendDefaultPii`) and session replay default to **off** and are opt-in via runtime
   config; desktop runtime must not initialize browser Sentry.
 
