@@ -43,13 +43,17 @@ import { useOverview } from "@/features/dashboard/queries";
 import { cn, getApiBaseUrl } from "@/lib/utils";
 import { keepPreviousDataInScope } from "@/lib/keep-previous-page";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
-import { formatDate, pluralize } from "@/lib/format";
 import {
   REQUEST_STATUS,
   getRequestStatus,
   normalizeRequestStatus,
   type RequestStatus,
 } from "@/lib/status-labels";
+import {
+  formatCalendarDate,
+  formatInstant,
+  pluralize,
+} from "@calibra-facil/shared/format";
 
 type RequestsSearch = {
   status?: RequestStatus;
@@ -138,7 +142,7 @@ const columns: Array<ColumnDef<CalibrationRequest>> = [
     ),
     cell: ({ row }) => (
       <span className="text-muted-foreground font-mono tabular-nums">
-        {formatDate(row.original.submittedAt)}
+        {formatInstant(row.original.submittedAt, "date-medium")}
       </span>
     ),
   },
@@ -149,7 +153,7 @@ const columns: Array<ColumnDef<CalibrationRequest>> = [
     ),
     cell: ({ row }) => (
       <span className="text-muted-foreground font-mono tabular-nums">
-        {formatDate(row.original.requestedDueDate)}
+        {formatCalendarDate(row.original.requestedDueDate, "date-medium")}
       </span>
     ),
   },

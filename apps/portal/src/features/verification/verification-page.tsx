@@ -34,6 +34,7 @@ import {
   type SignatureVerdictOverall,
   type VerificationData,
 } from "./queries";
+import { formatInstant } from "@calibra-facil/shared/format";
 
 type IconType = Parameters<typeof HugeiconsIcon>[0]["icon"];
 
@@ -55,15 +56,6 @@ const TONE_TEXT: Record<SignalTone, string> = {
 
 const TILE_RING =
   "shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]";
-
-function formatDate(value: string | null): string {
-  if (!value) return "—";
-  return new Date(value).toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
 
 function PageShell({ children }: { children: ReactNode }) {
   return (
@@ -435,7 +427,7 @@ export function VerificationPage({ token }: { token: string }) {
             <span className="font-medium">{data.service}</span>
           </BlueprintField>
           <BlueprintField label="Data" mono>
-            {formatDate(data.performedAt)}
+            {formatInstant(data.performedAt, "date")}
           </BlueprintField>
           <BlueprintField label="Laboratório" className="col-span-2">
             <span className="font-medium">{data.lab}</span>
@@ -472,7 +464,10 @@ export function VerificationPage({ token }: { token: string }) {
         >
           <p>
             Este certificado foi substituído por uma versão mais recente
-            {data.supersededAt ? ` em ${formatDate(data.supersededAt)}` : ""}.
+            {data.supersededAt
+              ? ` em ${formatInstant(data.supersededAt, "date")}`
+              : ""}
+            .
           </p>
           {data.supersededBy ? (
             <Link
@@ -515,7 +510,7 @@ export function VerificationPage({ token }: { token: string }) {
                 {signature.signerCpfCnpj ?? "—"}
               </BlueprintField>
               <BlueprintField label="Assinado em" mono>
-                {formatDate(signature.signedAt)}
+                {formatInstant(signature.signedAt, "date")}
               </BlueprintField>
               <BlueprintField label="Série do certificado" mono>
                 <span className="break-all text-xs">

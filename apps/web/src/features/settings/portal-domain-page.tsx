@@ -20,15 +20,7 @@ import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-
-function formatDateTime(value: string | Date | null) {
-  if (!value) return 'Ainda não disponível'
-
-  return new Date(value).toLocaleString('pt-BR', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  })
-}
+import { formatInstant } from '@calibra-facil/shared/format'
 
 function statusVariant(
   status: PortalDomainResponse['statusSummary']['status'],
@@ -200,11 +192,11 @@ export function PortalDomainSettingsPage() {
             />
             <StatusMetric
               label="Última verificação"
-              value={formatDateTime(domain?.lastVerifiedAt ?? null)}
+              value={formatInstant(domain?.lastVerifiedAt ?? null, 'date-time')}
             />
             <StatusMetric
               label="Ativação"
-              value={formatDateTime(domain?.activatedAt ?? null)}
+              value={formatInstant(domain?.activatedAt ?? null, 'date-time')}
             />
           </div>
         </CardContent>
@@ -321,7 +313,7 @@ export function PortalDomainSettingsPage() {
                   <div className="grid gap-3 md:grid-cols-2">
                     <StatusMetric
                       label="Verificado em"
-                      value={formatDateTime(domain.verifiedAt)}
+                      value={formatInstant(domain.verifiedAt, 'date-time')}
                     />
                     <StatusMetric
                       label="Pode ativar"

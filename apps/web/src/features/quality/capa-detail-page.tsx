@@ -26,6 +26,7 @@ import {
   CloudOnlyOfflineState,
   useDesktopCloudOnlyUnavailable,
 } from '@/runtime/sync-status'
+import { formatCalendarDate, formatInstant } from '@calibra-facil/shared/format'
 
 const statusLabels: Record<string, string> = {
   OPEN: 'Aberta',
@@ -161,12 +162,6 @@ export function CAPADetailPage({ id }: { id: string }) {
       </div>
     )
   }
-
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '-'
-    return new Date(dateStr).toLocaleDateString('pt-BR')
-  }
-
   const actionLabels: Record<string, string> = {
     create: 'Criação',
     update: 'Atualização',
@@ -256,14 +251,14 @@ export function CAPADetailPage({ id }: { id: string }) {
           <CardContent className="space-y-3">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Detecção</span>
-              <span>{formatDate(capa.detectionDate)}</span>
+              <span>{formatInstant(capa.detectionDate, 'date')}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Data Alvo</span>
               <span
                 className={capa.isOverdue ? 'text-red-600 font-medium' : ''}
               >
-                {formatDate(capa.dueDate)}
+                {formatCalendarDate(capa.dueDate, 'date')}
               </span>
             </div>
             <div className="flex justify-between">
@@ -329,7 +324,7 @@ export function CAPADetailPage({ id }: { id: string }) {
             <CardHeader>
               <CardTitle>Evidência de Implementação</CardTitle>
               <CardDescription>
-                Implementado em {formatDate(capa.implementedAt)}
+                Implementado em {formatInstant(capa.implementedAt, 'date')}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -346,7 +341,7 @@ export function CAPADetailPage({ id }: { id: string }) {
             <CardHeader>
               <CardTitle>Verificação de Eficácia</CardTitle>
               <CardDescription>
-                Verificado em {formatDate(capa.verifiedAt)} por{' '}
+                Verificado em {formatInstant(capa.verifiedAt, 'date')} por{' '}
                 {capa.verifiedByName ?? '-'}
               </CardDescription>
             </CardHeader>
@@ -539,7 +534,7 @@ export function CAPADetailPage({ id }: { id: string }) {
                     {log.reason && <p className="text-sm mt-1">{log.reason}</p>}
                   </div>
                   <span className="text-sm text-muted-foreground">
-                    {new Date(log.performedAt).toLocaleString('pt-BR')}
+                    {formatInstant(log.performedAt, 'date-time')}
                   </span>
                 </div>
               ))}

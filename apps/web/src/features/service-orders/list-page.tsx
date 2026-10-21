@@ -53,6 +53,7 @@ import {
   type ServiceOrderListItem,
   type ServiceOrderStatus,
 } from '@/features/service-orders/types'
+import { formatInstant, formatMoneyBRL } from '@calibra-facil/shared/format'
 const statusLabels: Record<ServiceOrderStatus, string> = {
   opened: 'Aberta',
   awaiting_tech_evaluation: 'Aguardando avaliação',
@@ -115,19 +116,6 @@ function parseServiceOrderStatus(
     default:
       return ''
   }
-}
-
-function formatDate(value: string | null | undefined) {
-  return value ? new Date(value).toLocaleDateString('pt-BR') : '-'
-}
-
-const BRL_FORMAT = new Intl.NumberFormat('pt-BR', {
-  style: 'currency',
-  currency: 'BRL',
-})
-
-function money(cents: number) {
-  return BRL_FORMAT.format(cents / 100)
 }
 
 function serviceOrderPath(order: ServiceOrderListItem) {
@@ -207,13 +195,15 @@ const serviceOrderColumns: ColumnDef<ServiceOrderListItem>[] = [
   {
     accessorKey: 'openedAt',
     header: 'Entrada',
-    cell: ({ row }) => formatDate(row.original.openedAt),
+    cell: ({ row }) => formatInstant(row.original.openedAt, 'date'),
   },
   {
     accessorKey: 'totalQuotedCents',
     header: 'Valor',
     cell: ({ row }) =>
-      money(row.original.totalApprovedCents || row.original.totalQuotedCents),
+      formatMoneyBRL(
+        row.original.totalApprovedCents || row.original.totalQuotedCents,
+      ),
   },
   {
     accessorKey: 'unitName',

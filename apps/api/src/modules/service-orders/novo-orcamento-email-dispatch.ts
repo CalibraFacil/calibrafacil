@@ -23,7 +23,7 @@ import {
   getLabEmailBrand,
 } from "@calibra-facil/notifications";
 import type { ServiceOrderCustomerEmailResult } from "@calibra-facil/notifications";
-import { formatLabDate } from "@calibra-facil/documents";
+import { formatInstant } from "@calibra-facil/shared/format";
 import { QuoteEmail } from "@calibra-facil/email";
 import type { QuoteEmailItem } from "@calibra-facil/email";
 
@@ -162,7 +162,7 @@ export async function dispatchNovoOrcamentoEmail(
     // Resolve the lab white-label brand (REQ-SOEMAIL-003).
     const brand = await getLabEmailBrand(input.organizationId);
 
-    const intakeDate = formatLabDate(input.openedAt);
+    const intakeDate = formatInstant(input.openedAt);
 
     // REQ-SOEMAIL-023 [HIGH RISK]: build approval URL from the captured token.
     // The token was returned by createPublicServiceOrderAccessToken inside

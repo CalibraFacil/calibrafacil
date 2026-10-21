@@ -11,6 +11,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { formatLocalDay } from "@calibra-facil/shared/format";
 
 interface DateRangePickerProps {
   value?: DateRange;
@@ -20,18 +21,10 @@ interface DateRangePickerProps {
   className?: string;
 }
 
-function formatDate(date: Date): string {
-  return date.toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
-
 function formatRange(range: DateRange | undefined, placeholder: string) {
   if (!range?.from) return placeholder;
-  if (!range.to) return formatDate(range.from);
-  return `${formatDate(range.from)} - ${formatDate(range.to)}`;
+  if (!range.to) return formatLocalDay(range.from, "date-medium");
+  return `${formatLocalDay(range.from, "date-medium")} - ${formatLocalDay(range.to, "date-medium")}`;
 }
 
 function isSameDay(left: Date, right: Date) {

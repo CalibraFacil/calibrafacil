@@ -40,6 +40,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { useApiKeysData, useSsoSettingsData } from '@/features/settings/queries'
+import { formatInstant } from '@calibra-facil/shared/format'
 
 type VerificationRecord = SsoVerificationRecord
 
@@ -251,7 +252,7 @@ function ApiKeysCard() {
                   <p className="text-xs text-muted-foreground">
                     Último uso:{' '}
                     {key.lastUsedAt
-                      ? new Date(key.lastUsedAt).toLocaleString('pt-BR')
+                      ? formatInstant(key.lastUsedAt, 'date-time')
                       : 'Nunca utilizada'}
                   </p>
                 </div>

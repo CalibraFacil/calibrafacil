@@ -75,23 +75,13 @@ import {
   ClientSection,
   TableFrame,
 } from '@/features/customers/components/client-detail-ui'
+import { formatCalendarDate, formatInstant } from '@calibra-facil/shared/format'
 
 export function ClientComplianceTab({ id }: { id: string }) {
   const { data: customer, isLoading: customerLoading } =
     useCustomerDetailData(id)
   const { data: auditLogData, isLoading: auditLoading } =
     useCustomerAuditLogData(id)
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  }
-
   const formatAction = (action: string) => {
     const actions: Record<string, string> = {
       create: 'Criação',
@@ -136,7 +126,6 @@ export function ClientComplianceTab({ id }: { id: string }) {
         auditLogData={auditLogData}
         auditLoading={auditLoading}
         formatAction={formatAction}
-        formatDate={formatDate}
         getStatusLabel={getStatusLabel}
       />
       <CustomerOotEventsPanel customerId={id} />
@@ -150,7 +139,6 @@ function ClientComplianceForm({
   auditLogData,
   auditLoading,
   formatAction,
-  formatDate,
   getStatusLabel,
 }: {
   customer: CustomerDetail
@@ -158,7 +146,6 @@ function ClientComplianceForm({
   auditLogData?: CustomerAuditLogData
   auditLoading: boolean
   formatAction: (action: string) => string
-  formatDate: (dateString: string) => string
   getStatusLabel: (status: string) => string
 }) {
   const queryClient = useQueryClient()
@@ -369,13 +356,13 @@ function ClientComplianceForm({
                     <div className="space-y-1">
                       <div>
                         Início:{' '}
-                        {new Date(
+                        {formatCalendarDate(
                           activeCommercialAgreement.effectiveFrom,
-                        ).toLocaleDateString('pt-BR')}
+                        )}
                       </div>
                       <div className="text-muted-foreground">
                         {activeCommercialAgreement.effectiveTo
-                          ? `Fim: ${new Date(activeCommercialAgreement.effectiveTo).toLocaleDateString('pt-BR')}`
+                          ? `Fim: ${formatCalendarDate(activeCommercialAgreement.effectiveTo)}`
                           : 'Sem término definido'}
                       </div>
                     </div>
@@ -521,7 +508,7 @@ function ClientComplianceForm({
                   {auditLogData.data.map((entry) => (
                     <TableRow key={entry.id}>
                       <TableCell className="whitespace-nowrap">
-                        {formatDate(entry.performedAt)}
+                        {formatInstant(entry.performedAt, 'date-time')}
                       </TableCell>
                       <TableCell>
                         <div>

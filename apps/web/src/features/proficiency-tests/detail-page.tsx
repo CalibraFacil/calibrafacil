@@ -55,6 +55,7 @@ import {
   useDesktopCloudOnlyUnavailable,
 } from '@/runtime/sync-status'
 import { StandardRecallCallout } from '@/features/spc/components/standard-recall-callout'
+import { formatInstant } from '@calibra-facil/shared/format'
 
 const STATUS_TONES: Record<PtDetail['overallStatus'], SignalTone> = {
   pending: 'info',
@@ -69,11 +70,6 @@ const AUDIT_ACTION_LABELS: Record<string, string> = {
   record_results: 'Registro de resultados',
   escalate: 'Escalada para CAPA',
   delete: 'Remoção',
-}
-
-function formatDate(dateStr: string | null) {
-  if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleDateString('pt-BR')
 }
 
 function formatValueWithUncertainty(value: number, uncertainty: number | null) {
@@ -163,14 +159,14 @@ export function ProficiencyTestDetailPage({ id }: { id: string }) {
             <StaggerItem>
               <SignalTile
                 label="Participação"
-                value={formatDate(pt.participationDate)}
+                value={formatInstant(pt.participationDate, 'date')}
                 tone="neutral"
               />
             </StaggerItem>
             <StaggerItem>
               <SignalTile
                 label="Relatório do provedor"
-                value={formatDate(pt.resultReportedAt)}
+                value={formatInstant(pt.resultReportedAt, 'date')}
                 tone="neutral"
               />
             </StaggerItem>
@@ -268,13 +264,13 @@ export function ProficiencyTestDetailPage({ id }: { id: string }) {
             )}
           </BlueprintField>
           <BlueprintField label="Inscrição" mono>
-            {formatDate(pt.registrationDate)}
+            {formatInstant(pt.registrationDate, 'date')}
           </BlueprintField>
           <BlueprintField label="Registrado por">
             {pt.createdByName ?? pt.createdBy}
           </BlueprintField>
           <BlueprintField label="Criado em" mono>
-            {formatDate(pt.createdAt)}
+            {formatInstant(pt.createdAt, 'date')}
           </BlueprintField>
           <BlueprintField label="Observações">{pt.notes ?? '—'}</BlueprintField>
         </BlueprintGrid>
@@ -380,7 +376,7 @@ export function ProficiencyTestDetailPage({ id }: { id: string }) {
                   {log.reason && <p className="text-sm mt-1">{log.reason}</p>}
                 </div>
                 <span className="text-sm text-muted-foreground">
-                  {new Date(log.performedAt).toLocaleString('pt-BR')}
+                  {formatInstant(log.performedAt, 'date-time')}
                 </span>
               </div>
             ))}

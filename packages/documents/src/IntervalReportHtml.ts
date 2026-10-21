@@ -9,7 +9,7 @@
  * customer's decision; this is an indicative analysis only.
  */
 
-import { formatLabDate } from "./dates.js";
+import { formatInstant } from "./dates.js";
 
 export type IntervalReportData = {
   assetName: string;
@@ -61,7 +61,7 @@ function pct(value: number | null): string {
 }
 
 export function renderIntervalReportHtml(data: IntervalReportData): string {
-  const generated = formatLabDate(data.generatedAtIso);
+  const generated = formatInstant(data.generatedAtIso);
   const current =
     data.currentIntervalMonths === null
       ? "não definida"

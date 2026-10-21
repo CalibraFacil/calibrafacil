@@ -1,4 +1,4 @@
-import { formatDateOnly } from '@calibra-facil/documents'
+import { formatCalendarDate } from '@calibra-facil/shared/format'
 
 import { dateOnlyToInputValue } from '@/lib/date-only'
 
@@ -12,7 +12,7 @@ import { dateOnlyToInputValue } from '@/lib/date-only'
 export function formatStandardDate(
   value: string | Date | null | undefined,
 ): string {
-  return formatDateOnly(value, '—')
+  return formatCalendarDate(value)
 }
 
 /** The same day as a `<input type="date">` value (the recall window's fields). */

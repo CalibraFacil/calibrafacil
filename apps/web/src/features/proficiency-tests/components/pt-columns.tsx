@@ -8,11 +8,7 @@ import {
   PT_STATUS_LABELS,
   type PtRound,
 } from '@/features/proficiency-tests/types'
-
-function formatDate(dateStr: string | null) {
-  if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleDateString('pt-BR')
-}
+import { formatInstant } from '@calibra-facil/shared/format'
 
 export const ptColumns: ColumnDef<PtRound>[] = [
   {
@@ -57,7 +53,7 @@ export const ptColumns: ColumnDef<PtRound>[] = [
   {
     accessorKey: 'participationDate',
     header: 'Participação',
-    cell: ({ row }) => formatDate(row.original.participationDate),
+    cell: ({ row }) => formatInstant(row.original.participationDate, 'date'),
   },
   {
     accessorKey: 'overallStatus',

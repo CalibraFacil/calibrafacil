@@ -1,5 +1,4 @@
-import { formatDateOnly } from '@calibra-facil/documents'
-import { formatMoney } from '@calibra-facil/shared'
+import { formatCalendarDate, formatMoney } from '@calibra-facil/shared/format'
 
 export type BillingMode = 'single' | 'consolidated'
 
@@ -30,5 +29,5 @@ export function getBillingModeLabel(mode: BillingMode) {
  * show on the laboratory's day, a UTC-midnight value on the day it names.
  */
 export function formatFinanceDate(value: string | Date | null | undefined) {
-  return formatDateOnly(value, 'Sem data')
+  return formatCalendarDate(value, 'date', { empty: 'Sem data' })
 }

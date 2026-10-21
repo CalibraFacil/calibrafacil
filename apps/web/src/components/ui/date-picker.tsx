@@ -10,6 +10,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import { formatLocalDay } from '@calibra-facil/shared/format'
 
 /** A quick-select shortcut shown beside the calendar (e.g. periodicity intervals). */
 interface DatePickerPreset {
@@ -37,10 +38,6 @@ interface DatePickerProps {
   >
 }
 
-function defaultFormatDate(date: Date): string {
-  return date.toLocaleDateString('pt-BR')
-}
-
 function DatePicker({
   id,
   name,
@@ -49,7 +46,7 @@ function DatePicker({
   placeholder = 'Selecione uma data',
   disabled = false,
   className,
-  formatDate = defaultFormatDate,
+  formatDate = formatLocalDay,
   presets,
   calendarProps,
 }: DatePickerProps) {

@@ -46,6 +46,7 @@ import {
   ClientPanelBody,
   Toolbar,
 } from '@/features/customers/components/client-detail-ui'
+import { formatInstant } from '@calibra-facil/shared/format'
 
 const statusLabels: Record<CustomerJobStatus, string> = {
   DRAFT: 'Rascunho',
@@ -72,13 +73,11 @@ const statusVariants: Record<
   SUPERSEDED: 'outline',
 }
 
-function formatDate(dateString: string | null): string {
-  if (!dateString) return '-'
-  return new Date(dateString).toLocaleDateString('pt-BR')
-}
-
 function formatJobDate(job: CustomerJob): string {
-  return formatDate(job.performedAt ?? job.approvedAt ?? job.createdAt)
+  return formatInstant(
+    job.performedAt ?? job.approvedAt ?? job.createdAt,
+    'date',
+  )
 }
 
 function LoadingDots() {

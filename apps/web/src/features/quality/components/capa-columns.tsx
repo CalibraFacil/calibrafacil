@@ -2,6 +2,7 @@ import { type ColumnDef } from '@tanstack/react-table'
 import { Link } from '@tanstack/react-router'
 import { Badge } from '@/components/ui/badge'
 import type { CapaRow } from '@/features/quality/types'
+import { formatCalendarDate } from '@calibra-facil/shared/format'
 
 const statusLabels: Record<string, string> = {
   OPEN: 'Aberta',
@@ -120,8 +121,7 @@ export const capaColumns: ColumnDef<CapaRow>[] = [
     header: 'Prazo',
     cell: ({ row }) => {
       if (!row.original.dueDate) return '-'
-      const date = new Date(row.original.dueDate)
-      const formatted = date.toLocaleDateString('pt-BR')
+      const formatted = formatCalendarDate(row.original.dueDate)
       if (row.original.isOverdue) {
         return <span className="text-red-600 font-medium">{formatted}</span>
       }

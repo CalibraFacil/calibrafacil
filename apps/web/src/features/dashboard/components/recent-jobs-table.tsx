@@ -1,5 +1,4 @@
 import { Link } from '@tanstack/react-router'
-import { formatDateOnly } from '@calibra-facil/documents'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -29,6 +28,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { jobRouteId } from '@/lib/route-identifiers'
 import { usePathPrewarmIntent } from '@/lib/use-route-prewarm-intent'
+import { formatCalendarDate } from '@calibra-facil/shared/format'
 
 type JobStatus =
   | 'DRAFT'
@@ -84,10 +84,6 @@ const statusVariants: Record<
 }
 
 // A due date is a calendar date (a Postgres date): show the day it names.
-function formatDate(dateString: string | null): string {
-  return formatDateOnly(dateString, '-')
-}
-
 function jobPath(job: RecentJob) {
   return `/dashboard/jobs/${encodeURIComponent(jobRouteId(job))}`
 }
@@ -204,7 +200,7 @@ export function RecentJobsTable({ jobs, isLoading }: RecentJobsTableProps) {
                           job.isOverdue ? 'text-destructive font-medium' : ''
                         }
                       >
-                        {formatDate(job.dueDate)}
+                        {formatCalendarDate(job.dueDate, 'date')}
                       </span>
                     </div>
                   </TableCell>

@@ -48,7 +48,10 @@ import {
   portalDigestFrequenciesFor,
   quantityKindLabelPt,
 } from "@calibra-facil/shared";
-import { formatCalendarDateBR } from "./calendar-date-format";
+import {
+  formatCalendarDate,
+  formatInstant,
+} from "@calibra-facil/shared/format";
 import { buildLegalVerificationMessage } from "./legal-verification-message";
 import { buildCertificateAmendedLinks } from "./portal-links";
 import { isEmailSuppressed } from "./suppression";
@@ -1110,7 +1113,7 @@ function createCalibrationRequestEmailContext(
     labName: details.labName,
     itemCount: details.itemCount,
     requestedDueDate: details.requestedDueDate
-      ? formatDateBR(details.requestedDueDate)
+      ? formatCalendarDate(details.requestedDueDate)
       : undefined,
     ...extras,
   };
@@ -1303,12 +1306,7 @@ function formatVisitAddressText(
 
 function formatVisitDate(date: Date | null): string {
   if (!date) return "data a confirmar";
-  return date.toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    timeZone: "America/Sao_Paulo",
-  });
+  return formatInstant(date, "date");
 }
 
 async function getVisitDetails(visitId: number): Promise<{
@@ -2125,15 +2123,9 @@ export async function notifyAuditPackReady(exportId: number): Promise<void> {
     .from(member)
     .where(eq(member.organizationId, exportRow.authOrganizationId));
 
-  const formatBr = (isoDate: string) => {
-    const [year, month, day] = isoDate.split("-");
-    return year && month && day ? `${day}/${month}/${year}` : isoDate;
-  };
-  const periodLabel = `${formatBr(exportRow.params.dateFrom)} a ${formatBr(exportRow.params.dateTo)}`;
+  const periodLabel = `${formatCalendarDate(exportRow.params.dateFrom)} a ${formatCalendarDate(exportRow.params.dateTo)}`;
   const expiresAtLabel = exportRow.expiresAt
-    ? exportRow.expiresAt.toLocaleDateString("pt-BR", {
-        timeZone: "America/Sao_Paulo",
-      })
+    ? formatInstant(exportRow.expiresAt, "date")
     : undefined;
   const portalUrl = `${getPortalBaseUrl()}/certificates`;
   const emailBrand = await getLabEmailBrand(exportRow.labOrganizationId);
@@ -2278,17 +2270,6 @@ export async function notifyCertificateAmended(
 // =============================================================================
 
 /**
- * Format a date to Brazilian format (DD/MM/YYYY)
- */
-function formatDateBR(date: Date): string {
-  return date.toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
-/**
  * Calculate whole laboratory days remaining until a calendar date (0 on the
  * day itself, negative once past).
  */
@@ -2327,7 +2308,7 @@ export async function notifyAssetDueForRecalibration(
     .limit(1);
 
   const daysRemaining = getDaysRemaining(assetData.nextCalibrationDate);
-  const dueDate = formatCalendarDateBR(assetData.nextCalibrationDate);
+  const dueDate = formatCalendarDate(assetData.nextCalibrationDate);
   const assetIdentifier =
     assetData.tag || assetData.serialNumber || assetData.name;
   const itemName = customerData
@@ -2413,7 +2394,7 @@ export async function notifyAssetDueForLegalVerification(
     .limit(1);
 
   const daysRemaining = getDaysRemaining(assetData.nextLegalVerificationDate);
-  const dueDate = formatCalendarDateBR(assetData.nextLegalVerificationDate);
+  const dueDate = formatCalendarDate(assetData.nextLegalVerificationDate);
   const assetIdentifier =
     assetData.tag || assetData.serialNumber || assetData.name;
   const itemName = customerData
@@ -2482,7 +2463,7 @@ export async function notifyStandardExpiring(
   if (!standardData?.nextCalibrationDate) return;
 
   const daysRemaining = getDaysRemaining(standardData.nextCalibrationDate);
-  const dueDate = formatCalendarDateBR(standardData.nextCalibrationDate);
+  const dueDate = formatCalendarDate(standardData.nextCalibrationDate);
   const standardIdentifier =
     standardData.certificateNumber ||
     standardData.serialNumber ||
@@ -2541,7 +2522,7 @@ export async function notifyPtPlanDue(
   if (!planItem?.nextDueAt) return;
 
   const daysRemaining = getDaysRemaining(planItem.nextDueAt);
-  const dueDate = formatDateBR(planItem.nextDueAt);
+  const dueDate = formatCalendarDate(planItem.nextDueAt);
   const overdue = daysRemaining < 0;
 
   const recipients = await getRecipientsByRole(organizationId, [
@@ -2600,7 +2581,7 @@ export async function notifyStandardExpired(
   if (!standardData?.nextCalibrationDate) return;
 
   const daysRemaining = getDaysRemaining(standardData.nextCalibrationDate);
-  const dueDate = formatCalendarDateBR(standardData.nextCalibrationDate);
+  const dueDate = formatCalendarDate(standardData.nextCalibrationDate);
   const standardIdentifier =
     standardData.certificateNumber ||
     standardData.serialNumber ||
@@ -2676,7 +2657,7 @@ export async function notifySigningCertificateExpiring(
 
   if (!certData) return;
 
-  const dueDate = formatDateBR(certData.validUntil);
+  const dueDate = formatInstant(certData.validUntil, "date");
   const daysRemaining = context.daysRemaining;
   const itemName = `${certData.name} (${certData.serialNumber}) — unidade ${certData.unitName}`;
 
@@ -2717,7 +2698,7 @@ export async function notifyAccreditationExpiring(
   organizationId: string,
   context: { daysRemaining: number; validUntil: Date },
 ): Promise<void> {
-  const dueDate = formatDateBR(context.validUntil);
+  const dueDate = formatCalendarDate(context.validUntil);
   const daysRemaining = context.daysRemaining;
 
   const recipients = await getRecipientsByRole(organizationId, [
@@ -2784,7 +2765,7 @@ export async function notifyAccreditedScopeLineExpiring(
 
   if (!lineData?.validUntil) return;
 
-  const dueDate = formatDateBR(lineData.validUntil);
+  const dueDate = formatCalendarDate(lineData.validUntil);
   const daysRemaining = context.daysRemaining;
   const kindLabel = quantityKindLabelPt(lineData.quantityKind);
   const lineName = `${kindLabel} ${lineData.rangeMin} a ${lineData.rangeMax} ${lineData.rangeUnit}${lineData.description ? ` (${lineData.description})` : ""} na unidade ${lineData.unitName}`;
@@ -2841,7 +2822,7 @@ export async function notifyJobOverdue(jobId: number): Promise<void> {
   if (!activeStatuses.includes(jobData.status)) return;
 
   const daysOverdue = Math.abs(getDaysRemaining(jobData.dueDate));
-  const dueDate = formatCalendarDateBR(jobData.dueDate);
+  const dueDate = formatCalendarDate(jobData.dueDate);
 
   // Notify the technician (if assigned) and admins/owners
   const recipientIds = new Set<string>();
@@ -3081,7 +3062,7 @@ export async function notifyCompetenceExpiring(
 
   const techName = userData?.name ?? "Um técnico";
   const daysRemaining = getDaysRemaining(comp.expiresAt);
-  const dueDate = formatDateBR(comp.expiresAt);
+  const dueDate = formatCalendarDate(comp.expiresAt);
 
   const recipients = await getRecipientsByRole(organizationId, [
     "admin",
@@ -3149,7 +3130,9 @@ export async function notifyCompetenceExpired(
     .limit(1);
 
   const techName = userData?.name ?? "Um técnico";
-  const dueDate = comp.expiresAt ? formatDateBR(comp.expiresAt) : undefined;
+  const dueDate = comp.expiresAt
+    ? formatCalendarDate(comp.expiresAt)
+    : undefined;
 
   const recipients = await getRecipientsByRole(organizationId, [
     "admin",
@@ -3338,14 +3321,6 @@ const PORTAL_DIGEST_DUE_SOON_DAYS = 30;
 /** Instruments listed in the email body; the rest become "e mais N". */
 const PORTAL_DIGEST_MAX_ITEMS = 15;
 
-// A calendar date is stored as UTC midnight of the day it names: read it in UTC.
-const PORTAL_DIGEST_DATE = new Intl.DateTimeFormat("pt-BR", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-  timeZone: "UTC",
-});
-
 export type PortalDigestRunResult = {
   recipients: number;
   sent: number;
@@ -3359,7 +3334,7 @@ function describePortalDigestDue(due: Date, now: Date): string {
   // `due` is a calendar date (UTC midnight of the day it names), counted in
   // laboratory days and printed as that same day.
   const days = labDaysUntil(due, now);
-  const dateLabel = PORTAL_DIGEST_DATE.format(due);
+  const dateLabel = formatCalendarDate(due);
   if (days < 0) {
     const overdueDays = Math.abs(days);
     return `Vencida há ${overdueDays} ${overdueDays === 1 ? "dia" : "dias"} (${dateLabel})`;

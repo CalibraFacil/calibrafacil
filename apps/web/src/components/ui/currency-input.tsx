@@ -2,6 +2,7 @@ import { ChangeEvent, ComponentProps, FocusEvent, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { parseFinanceCurrencyInputToCents } from '@/lib/finance-formatters'
 import { cn } from '@/lib/utils'
+import { formatNumber } from '@calibra-facil/shared/format'
 
 /**
  * Format cents as a plain editable decimal string ("1234,56") — deliberately
@@ -10,16 +11,11 @@ import { cn } from '@/lib/utils'
  * decimal mark). The pretty grouped/symbol rendering is the job of
  * `<Money>`/`formatFinanceMoney`; this is the edit affordance only.
  */
-const EDITING_NUMBER_FORMAT = new Intl.NumberFormat('pt-BR', {
-  useGrouping: false,
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-})
-
 function formatCentsForEditing(cents: number) {
-  return EDITING_NUMBER_FORMAT.format(
-    (Number.isFinite(cents) ? cents : 0) / 100,
-  )
+  return formatNumber((Number.isFinite(cents) ? cents : 0) / 100, {
+    decimals: 2,
+    grouping: false,
+  })
 }
 
 const CURRENCY_SYMBOLS: Record<string, string> = {

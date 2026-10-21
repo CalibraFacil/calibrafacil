@@ -15,6 +15,7 @@ import {
   ArrowRightIcon,
   ArrowDownIcon,
 } from '@hugeicons/core-free-icons'
+import { formatLocalDay } from '@calibra-facil/shared/format'
 
 function Calendar({
   className,
@@ -48,8 +49,7 @@ function Calendar({
       formatters={{
         // 'default' resolves to the browser locale (en-US on most machines),
         // which is what leaked "August 2026" into the pt-BR UI.
-        formatMonthDropdown: (date) =>
-          date.toLocaleString('pt-BR', { month: 'short' }),
+        formatMonthDropdown: (date) => formatLocalDay(date, 'month'),
         ...formatters,
       }}
       classNames={{
@@ -244,7 +244,7 @@ function CalendarDayButton({
     <Button
       variant="ghost"
       size="icon"
-      data-day={day.date.toLocaleDateString()}
+      data-day={formatLocalDay(day.date)}
       data-selected-single={
         modifiers.selected &&
         !modifiers.range_start &&

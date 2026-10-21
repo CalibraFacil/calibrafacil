@@ -21,8 +21,11 @@ import {
   classifyFleetDueStatus,
   FLEET_DUE_SOON_DAYS,
   type FleetStatusAsset,
-  formatLabDateTime,
 } from "@calibra-facil/documents";
+import {
+  formatCalendarDate,
+  formatInstant,
+} from "@calibra-facil/shared/format";
 import { zipSync, strToU8, type Zippable } from "fflate";
 import { Workbook } from "@cj-tech-master/excelts";
 import React from "react";
@@ -2472,11 +2475,6 @@ type AuditPackCertificateRow = {
   customer_name: string;
 };
 
-function formatBrDate(isoDate: string): string {
-  const [year, month, day] = isoDate.split("-");
-  return year && month && day ? `${day}/${month}/${year}` : isoDate;
-}
-
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -2507,7 +2505,7 @@ function renderAuditPackIndexHtml(params: {
         <td>${escapeHtml(cert.certificate_name ?? cert.job_id)}</td>
         ${params.showUnit ? `<td>${escapeHtml(cert.customer_name)}</td>` : ""}
         <td>${escapeHtml(cert.asset_name)}<div class="sub">${escapeHtml(cert.asset_tag)}${cert.serial_number ? ` · NS ${escapeHtml(cert.serial_number)}` : ""}</div></td>
-        <td class="num">${escapeHtml(formatBrDate(cert.approved_date))}</td>
+        <td class="num">${escapeHtml(formatCalendarDate(cert.approved_date))}</td>
         <td><a href="${escapeHtml(url)}">${escapeHtml(url)}</a></td>
       </tr>`;
     })
@@ -2536,7 +2534,7 @@ function renderAuditPackIndexHtml(params: {
   <div class="wrap">
     <p class="eyebrow">${escapeHtml(params.labName)} · Pacote de auditoria</p>
     <h1>Índice de certificados e links de verificação</h1>
-    <p class="eyebrow">${escapeHtml(params.customerName)} · ${escapeHtml(formatBrDate(params.dateFrom))} a ${escapeHtml(formatBrDate(params.dateTo))}</p>
+    <p class="eyebrow">${escapeHtml(params.customerName)} · ${escapeHtml(formatCalendarDate(params.dateFrom))} a ${escapeHtml(formatCalendarDate(params.dateTo))}</p>
     <p class="note">
       Cada link abre a página pública de verificação do certificado, onde o
       auditor pode confirmar a autenticidade e a assinatura digital do
@@ -2557,7 +2555,7 @@ function renderAuditPackIndexHtml(params: {
         ${rows}
       </tbody>
     </table>
-    <p class="note">Gerado em ${escapeHtml(formatLabDateTime(params.generatedAtIso))} · ${params.certificates.length} certificado(s).</p>
+    <p class="note">Gerado em ${escapeHtml(formatInstant(params.generatedAtIso, "date-time"))} · ${params.certificates.length} certificado(s).</p>
   </div>
 </body>
 </html>`;
@@ -2579,8 +2577,8 @@ function buildAuditPackReadme(params: {
     "",
     `Laboratório: ${params.labName}`,
     `Cliente: ${params.customerName}`,
-    `Período (data de aprovação): ${formatBrDate(params.dateFrom)} a ${formatBrDate(params.dateTo)}`,
-    `Gerado em: ${formatLabDateTime(params.generatedAtIso)}`,
+    `Período (data de aprovação): ${formatCalendarDate(params.dateFrom)} a ${formatCalendarDate(params.dateTo)}`,
+    `Gerado em: ${formatInstant(params.generatedAtIso, "date-time")}`,
     "",
     "Conteúdo:",
   ];

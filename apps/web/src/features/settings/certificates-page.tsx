@@ -64,6 +64,7 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { useSigningCertificatesData } from '@/features/settings/queries'
+import { formatInstant } from '@calibra-facil/shared/format'
 
 type Certificate = SigningCertificate
 
@@ -424,7 +425,7 @@ function CertificateCard({
             </span>
             <span className="flex items-center gap-1">
               <HugeiconsIcon icon={Calendar03Icon} className="size-3" />
-              Válido até {validUntil.toLocaleDateString('pt-BR')}
+              Válido até {formatInstant(validUntil, 'date')}
               {certificate.status === 'valid' && daysUntilExpiry <= 30 && (
                 <span className="text-yellow-600 dark:text-yellow-400 font-medium">
                   ({daysUntilExpiry} dias)
@@ -617,15 +618,15 @@ function CertificateDetailDialog({
     { label: 'Número de série', value: certificate.serialNumber },
     {
       label: 'Válido desde',
-      value: new Date(certificate.validFrom).toLocaleDateString('pt-BR'),
+      value: formatInstant(certificate.validFrom, 'date'),
     },
     {
       label: 'Válido até',
-      value: new Date(certificate.validUntil).toLocaleDateString('pt-BR'),
+      value: formatInstant(certificate.validUntil, 'date'),
     },
     {
       label: 'Adicionado em',
-      value: new Date(certificate.createdAt).toLocaleDateString('pt-BR'),
+      value: formatInstant(certificate.createdAt, 'date'),
     },
     { label: 'Adicionado por', value: certificate.createdByName || '-' },
   ]
@@ -634,7 +635,7 @@ function CertificateDetailDialog({
     details.push(
       {
         label: 'Revogado em',
-        value: new Date(certificate.revokedAt).toLocaleDateString('pt-BR'),
+        value: formatInstant(certificate.revokedAt, 'date'),
       },
       { label: 'Motivo da revogação', value: certificate.revokedReason || '-' },
     )

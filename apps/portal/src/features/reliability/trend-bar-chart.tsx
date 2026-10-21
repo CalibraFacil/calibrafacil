@@ -15,6 +15,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import type { FleetTrendBucket } from "./types";
+import { formatPercentPoints } from "@calibra-facil/shared/format";
 
 /**
  * Trend bar chart — recharts via the shared shadcn ChartContainer. Kept in its
@@ -43,7 +44,7 @@ export function TrendBarChartBody({
     topLabel:
       entry.ootRatePct === null
         ? "—"
-        : `${entry.ootRatePct.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`,
+        : formatPercentPoints(entry.ootRatePct, { maxDecimals: 1 }),
   }));
 
   return (
@@ -92,7 +93,7 @@ export function TrendBarChartBody({
                       ? payload.known
                       : 0;
                   return hasSignal
-                    ? `${Number(value).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% de ${known} com parecer`
+                    ? `${formatPercentPoints(Number(value), { maxDecimals: 1 })} de ${known} com parecer`
                     : "sem parecer registrado";
                 }}
               />

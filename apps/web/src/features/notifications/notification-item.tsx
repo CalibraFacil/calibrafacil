@@ -13,6 +13,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { formatInstant } from '@calibra-facil/shared/format'
 
 interface Notification {
   id: number
@@ -120,7 +121,7 @@ export function NotificationItem({
         <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-muted-foreground">
           <time
             dateTime={notification.createdAt}
-            title={new Date(notification.createdAt).toLocaleString('pt-BR')}
+            title={formatInstant(notification.createdAt, 'date-time')}
           >
             {timeAgo}
           </time>

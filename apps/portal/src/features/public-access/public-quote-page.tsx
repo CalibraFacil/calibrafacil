@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { formatMoney } from "@calibra-facil/shared";
 
 import {
   ACTION_BUTTON_CLASS,
@@ -28,11 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { usePublicServiceOrder, submitQuoteDecision } from "./queries";
 import type { QuoteDecision } from "./queries";
-
-function formatDate(value: string | null | undefined) {
-  if (!value) return "—";
-  return new Date(value).toLocaleDateString("pt-BR");
-}
+import { formatInstant, formatMoneyBRL } from "@calibra-facil/shared/format";
 
 const QUOTE_STATUS_TONE: Record<string, SignalTone> = {
   sent: "info",
@@ -152,7 +147,7 @@ export function PublicQuotePage({ token }: { token: string }) {
             <div className="relative">
               <PanelHeader
                 title={`Ordem de serviço ${order.serviceOrderNumber}`}
-                description={`Entrada em ${formatDate(order.openedAt)}`}
+                description={`Entrada em ${formatInstant(order.openedAt, "date")}`}
                 action={
                   <span className="rounded-full bg-muted px-3 py-1 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
                     {decision
@@ -187,7 +182,7 @@ export function PublicQuotePage({ token }: { token: string }) {
                 <div className="mt-4 max-w-xs">
                   <SignalTile
                     label="Total do orçamento"
-                    value={formatMoney(quote.totalCents)}
+                    value={formatMoneyBRL(quote.totalCents)}
                     hint={quote.quoteNumber}
                     tone={quoteTone}
                   />
@@ -236,7 +231,7 @@ export function PublicQuotePage({ token }: { token: string }) {
                 title="Diagnóstico do laboratório"
                 description={
                   evaluation.evaluatedAt
-                    ? `Avaliado em ${formatDate(evaluation.evaluatedAt)}`
+                    ? `Avaliado em ${formatInstant(evaluation.evaluatedAt, "date")}`
                     : undefined
                 }
               />
@@ -263,7 +258,7 @@ export function PublicQuotePage({ token }: { token: string }) {
               }
               description={
                 quote?.validUntil
-                  ? `Válido até ${formatDate(quote.validUntil)}`
+                  ? `Válido até ${formatInstant(quote.validUntil, "date")}`
                   : undefined
               }
             />
@@ -273,7 +268,7 @@ export function PublicQuotePage({ token }: { token: string }) {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <SignalTile
                     label="Total"
-                    value={formatMoney(quote.totalCents)}
+                    value={formatMoneyBRL(quote.totalCents)}
                     tone={quoteTone}
                   />
                   <SignalTile
@@ -301,11 +296,11 @@ export function PublicQuotePage({ token }: { token: string }) {
                         </p>
                         <p className="font-mono text-xs tabular-nums text-muted-foreground">
                           {item.quantity ?? 1} {item.unit ?? "un"} ×{" "}
-                          {formatMoney(item.unitPriceCents)}
+                          {formatMoneyBRL(item.unitPriceCents)}
                         </p>
                       </div>
                       <p className="shrink-0 font-mono text-sm font-semibold tabular-nums">
-                        {formatMoney(item.totalPriceCents)}
+                        {formatMoneyBRL(item.totalPriceCents)}
                       </p>
                     </li>
                   ))}

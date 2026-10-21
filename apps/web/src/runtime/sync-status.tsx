@@ -30,6 +30,7 @@ import {
   syncCompletionClearedBlockers,
 } from '@/runtime/sync-status-model'
 import { useQueryClient } from '@tanstack/react-query'
+import { formatInstant } from '@calibra-facil/shared/format'
 
 const initialSnapshot: SyncStatusSnapshot = {
   state: 'idle',
@@ -439,14 +440,6 @@ function getSyncStatusLabel(state: SyncState) {
   }
 }
 
-const SYNC_TIMESTAMP_FORMAT = new Intl.DateTimeFormat('pt-BR', {
-  dateStyle: 'short',
-  timeStyle: 'short',
-})
-
 function formatSyncTimestamp(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-
-  return SYNC_TIMESTAMP_FORMAT.format(date)
+  return formatInstant(value, 'date-time', { empty: value })
 }

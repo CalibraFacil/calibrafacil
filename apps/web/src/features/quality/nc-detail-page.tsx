@@ -51,17 +51,7 @@ import {
   getTypeLabel,
   ncAvailableActions,
 } from '@/features/quality/nc-model'
-
-function formatDate(dateString: string | null | undefined): string {
-  if (!dateString) return '-'
-  return new Date(dateString).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
+import { formatCalendarDate, formatInstant } from '@calibra-facil/shared/format'
 
 export function NCDetailPage({ id }: { id: string }) {
   const queryClient = useQueryClient()
@@ -238,7 +228,9 @@ export function NCDetailPage({ id }: { id: string }) {
               </div>
               <div>
                 <Label className="text-muted-foreground">Detectada em</Label>
-                <p className="font-medium">{formatDate(nc.detectedAt)}</p>
+                <p className="font-medium">
+                  {formatInstant(nc.detectedAt, 'date-time')}
+                </p>
               </div>
               <div>
                 <Label className="text-muted-foreground">Detectada por</Label>
@@ -305,7 +297,7 @@ export function NCDetailPage({ id }: { id: string }) {
                 <Label className="text-muted-foreground">Aprovada por</Label>
                 <p>
                   {nc.dispositionApproverName} em{' '}
-                  {formatDate(nc.dispositionApprovedAt)}
+                  {formatInstant(nc.dispositionApprovedAt, 'date-time')}
                 </p>
               </div>
             )}
@@ -319,7 +311,8 @@ export function NCDetailPage({ id }: { id: string }) {
               <div>
                 <Label className="text-muted-foreground">Resolvida por</Label>
                 <p>
-                  {nc.resolverName} em {formatDate(nc.resolvedAt)}
+                  {nc.resolverName} em{' '}
+                  {formatInstant(nc.resolvedAt, 'date-time')}
                 </p>
               </div>
             )}
@@ -463,7 +456,7 @@ export function NCDetailPage({ id }: { id: string }) {
                           Enviada em
                         </Label>
                         <p className="font-medium">
-                          {formatDate(ootNotification.sentAt)}
+                          {formatInstant(ootNotification.sentAt, 'date-time')}
                         </p>
                       </div>
                     )}
@@ -473,7 +466,10 @@ export function NCDetailPage({ id }: { id: string }) {
                           Confirmada em
                         </Label>
                         <p className="font-medium">
-                          {formatDate(ootNotification.acknowledgedAt)}
+                          {formatInstant(
+                            ootNotification.acknowledgedAt,
+                            'date-time',
+                          )}
                           {ootNotification.acknowledgedVia && (
                             <span className="ml-1 text-sm text-muted-foreground">
                               via{' '}
@@ -589,7 +585,7 @@ export function NCDetailPage({ id }: { id: string }) {
               {nc.capa.dueDate && (
                 <div>
                   <Label className="text-muted-foreground">Prazo</Label>
-                  <p>{formatDate(nc.capa.dueDate)}</p>
+                  <p>{formatCalendarDate(nc.capa.dueDate)}</p>
                 </div>
               )}
             </div>
@@ -648,7 +644,7 @@ export function NCDetailPage({ id }: { id: string }) {
                     )}
                   </div>
                   <span className="text-xs text-muted-foreground">
-                    {formatDate(log.performedAt)}
+                    {formatInstant(log.performedAt, 'date-time')}
                   </span>
                 </div>
               ))}

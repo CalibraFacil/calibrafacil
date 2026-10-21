@@ -1,5 +1,6 @@
 /** @jsxImportSource react */
-import { formatCalendarDate, formatLabDate } from "./dates.js";
+import { formatNumber } from "@calibra-facil/shared/format";
+import { formatCalendarDate, formatInstant } from "./dates.js";
 
 /**
  * Out-of-tolerance customer notification (ABNT NBR ISO/IEC 17025:2017 §7.10 —
@@ -139,7 +140,7 @@ function Header({ data }: { data: OotNotificationDocumentData }) {
             <div className="meta-title">Não conformidade</div>
             <div className="nc-number">{data.ncNumber}</div>
             <div className="meta-line">
-              Emissão: {formatLabDate(data.issuedAt)}
+              Emissão: {formatInstant(data.issuedAt)}
             </div>
           </td>
         </tr>
@@ -157,7 +158,7 @@ export function OotNotificationHtml({
   const worstMargin =
     data.asFound.worstMargin === null || data.asFound.worstMargin === undefined
       ? null
-      : data.asFound.worstMargin.toLocaleString("pt-BR");
+      : formatNumber(data.asFound.worstMargin);
   return (
     <html lang="pt-BR" data-pdf-layout="full-page">
       <head>
@@ -176,7 +177,7 @@ export function OotNotificationHtml({
             ABNT NBR ISO/IEC 17025:2017 — §7.10 Trabalho não conforme
             {isStandardRecall ? " · Recall de padrão de referência" : ""} · Não
             conformidade {data.ncNumber} · Emitida em{" "}
-            {formatLabDate(data.issuedAt)}
+            {formatInstant(data.issuedAt)}
           </p>
 
           <div className="addressee">
@@ -231,13 +232,13 @@ export function OotNotificationHtml({
               </tr>
               <tr>
                 <th>Data da calibração</th>
-                <td>{formatLabDate(data.calibrationDate)}</td>
+                <td>{formatCalendarDate(data.calibrationDate)}</td>
               </tr>
               <tr>
                 <th>
                   Calibração anterior (início do período potencialmente afetado)
                 </th>
-                <td>{formatLabDate(data.previousCalibrationDate)}</td>
+                <td>{formatCalendarDate(data.previousCalibrationDate)}</td>
               </tr>
               {isStandardRecall ? (
                 <>

@@ -22,6 +22,7 @@ import {
   type SyncConflictFieldDiff,
 } from '@/runtime/sync-conflict-actions'
 import { getSyncConflictReturnSearch } from '@/runtime/sync-conflict-return'
+import { formatInstant } from '@calibra-facil/shared/format'
 
 export function SyncConflictsPage() {
   const sync = useSyncStatus()
@@ -133,7 +134,7 @@ export function SyncConflictsPage() {
                     </CardTitle>
                     <CardDescription>
                       {conflictTypeLabel(conflict.conflictType)} · criado em{' '}
-                      {formatDate(conflict.createdAt)}
+                      {formatInstant(conflict.createdAt, 'date-time')}
                     </CardDescription>
                   </div>
                   <Badge variant="outline">{conflict.status}</Badge>
@@ -354,13 +355,4 @@ function diffStateLabel(value: SyncConflictFieldDiff['state']) {
   }
 
   return labels[value]
-}
-
-const DATETIME_SHORT_FORMAT = new Intl.DateTimeFormat('pt-BR', {
-  dateStyle: 'short',
-  timeStyle: 'short',
-})
-
-function formatDate(value: string) {
-  return DATETIME_SHORT_FORMAT.format(new Date(value))
 }

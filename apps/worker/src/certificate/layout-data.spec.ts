@@ -406,3 +406,75 @@ describe("buildCertificateLayoutData", () => {
     expect(data.dates.receivedAtText).toBe("20/06/2026");
   });
 });
+
+describe("certificate date block (REQ-FMT-2)", () => {
+  // The certificate prints dates in the laboratory's zone (America/Sao_Paulo)
+  // and the numbers in pt-BR, whatever the server's own zone. This pins the
+  // rendered text: the formatting layer must not change a byte of it.
+  it("REQ-FMT-2: prints moments in São Paulo, calendar days as named, numbers in pt-BR", () => {
+    const data = unwrap(
+      buildCertificateLayoutData(
+        massJob({
+          // 22:30 on 25/06 and 23:30 on 26/06 in São Paulo (01:30Z / 02:30Z
+          // on the next UTC day): the UTC day would print one day later.
+          performedAt: new Date("2026-06-26T01:30:00Z"),
+          approvedAt: new Date("2026-06-27T02:30:00Z"),
+          serviceOrder: {
+            receivedAt: "2026-06-20T02:59:59.999Z",
+            intakeCondition: null,
+            accessories: null,
+          },
+          environmentalSnapshot: {
+            temperature: 21.46,
+            humidity: 55,
+            pressure: 1013.25,
+            recordedAt: "2026-06-25T12:00:00.000Z",
+            recordedBy: "Fulano de Tal",
+            limits: null,
+            withinLimits: true,
+            outOfLimitsJustification: null,
+          },
+        }),
+      ),
+    );
+
+    expect({
+      dates: data.dates,
+      placeAndDateText: data.signatory.placeAndDateText,
+      standardsValidUntil: data.standards.map(
+        (standard) => standard.validUntilText,
+      ),
+      environment: {
+        temperatureText: data.environment?.temperatureText,
+        humidityText: data.environment?.humidityText,
+        pressureText: data.environment?.pressureText,
+      },
+      coverageFactors: data.resultTables.flatMap((table) =>
+        table.rows.map((row) => row.coverageFactor),
+      ),
+    }).toMatchInlineSnapshot(`
+      {
+        "coverageFactors": [
+          "2,00",
+          "2,18",
+          null,
+          null,
+        ],
+        "dates": {
+          "issuedAtText": "26/06/2026",
+          "performedAtText": "25/06/2026",
+          "receivedAtText": "19/06/2026",
+        },
+        "environment": {
+          "humidityText": "55 %",
+          "pressureText": "1.013,3 hPa",
+          "temperatureText": "21,5 ºC",
+        },
+        "placeAndDateText": "Canoas/RS, 26 de junho de 2026",
+        "standardsValidUntil": [
+          "01/01/2027",
+        ],
+      }
+    `);
+  });
+});

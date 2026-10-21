@@ -14,6 +14,7 @@ import {
   formatWeighingRangeSpec,
   isWeighingRangeSpecArray,
 } from '@/components/method-runtime/weighing-range-utils'
+import { formatInstant } from '@calibra-facil/shared/format'
 
 export type JobStatus =
   | 'DRAFT'
@@ -327,24 +328,13 @@ export const PRIORITY_REVIEW_FORMULA_KEYS = [
   'repetibilidade_desvio_apos',
 ]
 
+/** A moment (approved, performed, created) on the laboratory's day. */
 export function formatDate(dateString: string | null | undefined): string {
-  if (!dateString) return '-'
-  return new Date(dateString).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  })
+  return formatInstant(dateString, 'date', { empty: '-' })
 }
 
 export function formatDateTime(dateString: string | null | undefined): string {
-  if (!dateString) return '-'
-  return new Date(dateString).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  return formatInstant(dateString, 'date-time', { empty: '-' })
 }
 
 export function getFinancialVariant(status: string | null | undefined) {

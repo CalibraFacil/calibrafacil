@@ -24,6 +24,7 @@ import {
   SelectTrigger,
 } from '@/components/ui/select'
 import { toast } from 'sonner'
+import { formatInstant } from '@calibra-facil/shared/format'
 
 type Scope = 'customer' | 'agreement' | 'service' | 'organization'
 
@@ -240,8 +241,7 @@ export function AutomaticSendSettingsPage() {
                     </p>
                     {rule.archivedAt && (
                       <p className="text-xs text-muted-foreground">
-                        Arquivada em{' '}
-                        {new Date(rule.archivedAt).toLocaleDateString('pt-BR')}
+                        Arquivada em {formatInstant(rule.archivedAt, 'date')}
                       </p>
                     )}
                   </div>

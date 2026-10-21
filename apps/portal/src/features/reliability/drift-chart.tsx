@@ -18,6 +18,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import type { AssetDriftSeries, DriftPointSeries } from "./types";
+import { formatInstant, formatNumber } from "@calibra-facil/shared/format";
 
 /**
  * The recharts half of the drift panel. Kept in its own module so recharts/d3
@@ -39,17 +40,7 @@ const MAX_SERIES = 3;
 const SERIES_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)"];
 
 function formatTick(timeMs: number): string {
-  return new Date(timeMs)
-    .toLocaleDateString("pt-BR", { month: "short", year: "2-digit" })
-    .replace(" de ", " ");
-}
-
-function formatFullDate(timeMs: number): string {
-  return new Date(timeMs).toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
+  return formatInstant(timeMs, "month-year-short").replace(" de ", " ");
 }
 
 type PlottedSeries = {
@@ -213,7 +204,7 @@ export function DriftChart({ data }: { data: AssetDriftSeries }) {
               (dataMax: number) => Math.max(dataMax * 1.1, 0.02),
             ]}
             tickFormatter={(value: number) =>
-              value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })
+              formatNumber(value, { maxDecimals: 2 })
             }
             className="text-xs text-muted-foreground"
           />
@@ -223,7 +214,7 @@ export function DriftChart({ data }: { data: AssetDriftSeries }) {
                 labelFormatter={(_label, payload) => {
                   const timeMs = payload?.[0]?.payload?.timeMs;
                   return typeof timeMs === "number"
-                    ? formatFullDate(timeMs)
+                    ? formatInstant(timeMs, "date")
                     : "";
                 }}
                 formatter={(value, name, item) => {
@@ -238,9 +229,7 @@ export function DriftChart({ data }: { data: AssetDriftSeries }) {
                       />
                       {label}:{" "}
                       <span className="font-mono tabular-nums">
-                        {numeric.toLocaleString("pt-BR", {
-                          maximumFractionDigits: 3,
-                        })}
+                        {formatNumber(numeric, { maxDecimals: 3 })}
                       </span>
                       {numeric < 0 ? (
                         <span className="text-[var(--chart-critical)]">

@@ -34,6 +34,7 @@ import {
   FINANCIAL_FRESHNESS_STALE_AFTER_HOURS,
   summarizeInstallments,
 } from "@calibra-facil/shared";
+import { formatInstant } from "@calibra-facil/shared/format";
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { getFinancialIntegrationState } from "./billing-readiness";
 import {
@@ -87,11 +88,7 @@ function buildUnavailableStatusDescription(freshness: FinancialFreshness) {
     return "Status indisponível - sem sincronização recente";
   }
 
-  const lastSyncedAt = new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short",
-    timeZone: "America/Sao_Paulo",
-  }).format(new Date(freshness.lastSyncedAt));
+  const lastSyncedAt = formatInstant(freshness.lastSyncedAt, "date-time");
 
   return `Status indisponível - última sincronização em ${lastSyncedAt}`;
 }

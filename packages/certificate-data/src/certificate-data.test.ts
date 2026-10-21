@@ -281,7 +281,7 @@ describe("§7.8 content items", () => {
     const job = goldenJob();
     job.serviceOrder = {
       inmetroRepairMarkNumber: null,
-      receivedAt: "2026-06-01T00:00:00Z",
+      receivedAt: "2026-06-01T15:00:00Z", // a moment: noon in the lab, 01/06
       intakeCondition: "Prato riscado, sem avaria funcional",
       accessories: "Cabo de força, capa",
     };

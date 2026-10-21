@@ -3,11 +3,7 @@ import { Link } from '@tanstack/react-router'
 
 import { SPC_CHART_TYPE_LABELS, type SpcChart } from '@/features/spc/types'
 import { SpcStatusBadge } from '@/features/spc/components/spc-status-badge'
-
-function formatDateTime(dateStr: string | null) {
-  if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleString('pt-BR')
-}
+import { formatInstant } from '@calibra-facil/shared/format'
 
 export const spcChartColumns: ColumnDef<SpcChart>[] = [
   {
@@ -54,7 +50,7 @@ export const spcChartColumns: ColumnDef<SpcChart>[] = [
   {
     accessorKey: 'lastEvaluatedAt',
     header: 'Última avaliação',
-    cell: ({ row }) => formatDateTime(row.original.lastEvaluatedAt),
+    cell: ({ row }) => formatInstant(row.original.lastEvaluatedAt, 'date-time'),
   },
   {
     accessorKey: 'capaId',

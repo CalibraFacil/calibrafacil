@@ -6,7 +6,7 @@
  * overdue / unscheduled / retired) that drives the instrument-panel hero. Keep
  * this logic here (tested) rather than in JSX, per the schema-first rule.
  */
-import { formatDateOnly } from '@calibra-facil/documents'
+import { formatCalendarDate } from '@calibra-facil/shared/format'
 
 import type { SignalTone } from '@/components/instrument-panel'
 import { dateOnlyDaysBetween } from '@/lib/date-only'
@@ -23,9 +23,7 @@ export const DUE_SOON_DAYS = 30
 
 /** A calibration date is a calendar date (a Postgres date): show its day. */
 export function formatDate(date: string | Date | null | undefined): string {
-  if (!date) return '—'
-  if (Number.isNaN(new Date(date).getTime())) return '—'
-  return formatDateOnly(date, '—')
+  return formatCalendarDate(date)
 }
 
 export type AssetCalibrationStatus = {

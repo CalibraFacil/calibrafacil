@@ -15,6 +15,7 @@ import { ptBR } from "date-fns/locale";
 
 import { cn } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { formatLocalDay } from "@calibra-facil/shared/format";
 
 function Calendar({
   className,
@@ -42,8 +43,7 @@ function Calendar({
       captionLayout={captionLayout}
       locale={ptBR}
       formatters={{
-        formatMonthDropdown: (date) =>
-          date.toLocaleString("pt-BR", { month: "short" }),
+        formatMonthDropdown: (date) => formatLocalDay(date, "month"),
         ...formatters,
       }}
       classNames={{
@@ -238,7 +238,7 @@ function CalendarDayButton({
     <Button
       variant="ghost"
       size="icon"
-      data-day={day.date.toLocaleDateString()}
+      data-day={formatLocalDay(day.date)}
       data-selected-single={
         modifiers.selected &&
         !modifiers.range_start &&

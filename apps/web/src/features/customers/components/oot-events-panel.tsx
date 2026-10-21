@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { formatInstant } from '@calibra-facil/shared/format'
 
 type CustomerOotEvent = {
   id: number
@@ -34,14 +35,6 @@ const DECISION_LABELS: Record<string, string> = {
   NO_IMPACT: 'Sem impacto',
   IMPACT_CONTAINED: 'Impacto contido',
   IMPACT_ESCALATED: 'Impacto escalado',
-}
-
-function formatDate(dateString: string) {
-  return new Date(dateString).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  })
 }
 
 /**
@@ -107,7 +100,7 @@ export function CustomerOotEventsPanel({ customerId }: { customerId: string }) {
                 <TableCell className="font-mono text-xs">
                   {event.jobIdentifier}
                 </TableCell>
-                <TableCell>{formatDate(event.detectedAt)}</TableCell>
+                <TableCell>{formatInstant(event.detectedAt, 'date')}</TableCell>
                 <TableCell>
                   {event.status === 'ASSESSED' && event.assessmentDecision ? (
                     <div className="space-y-0.5">
@@ -123,7 +116,7 @@ export function CustomerOotEventsPanel({ customerId }: { customerId: string }) {
                       </Badge>
                       {event.assessmentCreatedAt ? (
                         <span className="block text-xs text-muted-foreground">
-                          em {formatDate(event.assessmentCreatedAt)}
+                          em {formatInstant(event.assessmentCreatedAt, 'date')}
                         </span>
                       ) : null}
                     </div>

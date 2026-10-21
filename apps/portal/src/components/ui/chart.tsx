@@ -11,6 +11,7 @@ import {
 import * as RechartsPrimitive from "recharts";
 
 import { cn } from "@/lib/utils";
+import { formatNumber } from "@calibra-facil/shared/format";
 
 // Format: { THEME_NAME: CSS_SELECTOR }
 const THEMES = { light: "", dark: ".dark" } as const;
@@ -249,7 +250,9 @@ function ChartTooltipContent({
                       </div>
                       {item.value && (
                         <span className="text-foreground font-mono font-medium tabular-nums">
-                          {item.value.toLocaleString()}
+                          {typeof item.value === "number"
+                            ? formatNumber(item.value)
+                            : item.value}
                         </span>
                       )}
                     </div>

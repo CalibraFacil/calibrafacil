@@ -39,6 +39,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { formatCalendarDate, formatInstant } from '@calibra-facil/shared/format'
 
 const ITEM_DISPOSITION_LABELS: Record<string, string> = {
   no_impact: 'Sem impacto',
@@ -60,25 +61,6 @@ function getConclusionBadge(
     default:
       return { variant: 'outline' as const, label: conclusion }
   }
-}
-
-function formatDateTime(dateString: string | null | undefined): string {
-  if (!dateString) return '-'
-  return new Date(dateString).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-function formatDateOnly(dateString: string | null | undefined): string {
-  if (!dateString) return '-'
-  const dateOnly = dateString.slice(0, 10)
-  const [year, month, day] = dateOnly.split('-')
-  if (!year || !month || !day) return dateString
-  return `${day}/${month}/${year}`
 }
 
 function toDateInputValue(dateString: string | null | undefined): string {
@@ -560,8 +542,13 @@ function SignedAssessmentView({
           <div className="col-span-2">
             <Label className="text-muted-foreground">Período afetado</Label>
             <p className="font-medium">
-              {formatDateOnly(assessment.affectedFrom)} até{' '}
-              {formatDateOnly(assessment.affectedTo)}
+              {formatCalendarDate(assessment.affectedFrom, 'date', {
+                empty: '-',
+              })}{' '}
+              até{' '}
+              {formatCalendarDate(assessment.affectedTo, 'date', {
+                empty: '-',
+              })}
             </p>
           </div>
         )}
@@ -618,7 +605,8 @@ function SignedAssessmentView({
       )}
 
       <p className="border-t pt-4 text-sm text-muted-foreground">
-        Assinada em {formatDateTime(assessment.signedAt)}
+        Assinada em{' '}
+        {formatInstant(assessment.signedAt, 'date-time', { empty: '-' })}
       </p>
     </div>
   )

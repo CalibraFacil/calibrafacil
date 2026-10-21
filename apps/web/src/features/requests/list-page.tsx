@@ -35,6 +35,7 @@ import {
   type CalibrationRequestListItem,
   type CalibrationRequestStatus,
 } from '@/features/requests/types'
+import { formatCalendarDate, formatInstant } from '@calibra-facil/shared/format'
 const statusLabels: Record<CalibrationRequestStatus, string> = {
   PENDING: 'Pendente',
   UNDER_REVIEW: 'Em análise',
@@ -52,11 +53,6 @@ const statusVariants: Record<
   APPROVED: 'default',
   REJECTED: 'destructive',
   CONVERTED: 'outline',
-}
-
-function formatDate(date: string | null | undefined) {
-  if (!date) return '-'
-  return new Date(date).toLocaleDateString('pt-BR')
 }
 
 // Module-level so the header/cell renderers are stable component types
@@ -89,13 +85,13 @@ const columns = [
     accessorKey: 'requestedDueDate',
     header: 'Prazo solicitado',
     cell: ({ row }: { row: { original: CalibrationRequestListItem } }) =>
-      formatDate(row.original.requestedDueDate),
+      formatCalendarDate(row.original.requestedDueDate, 'date'),
   },
   {
     accessorKey: 'submittedAt',
     header: 'Enviada em',
     cell: ({ row }: { row: { original: CalibrationRequestListItem } }) =>
-      formatDate(row.original.submittedAt),
+      formatInstant(row.original.submittedAt, 'date'),
   },
   {
     accessorKey: 'status',

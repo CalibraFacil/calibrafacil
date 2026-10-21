@@ -38,6 +38,7 @@ import { getApiBaseUrl } from "@/lib/utils";
 import { keepPreviousDataInScope } from "@/lib/keep-previous-page";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import { AuditPacksPanel } from "@/features/certificates/audit-packs";
+import { formatInstant } from "@calibra-facil/shared/format";
 
 type CertificatesSearch = {
   /** Per-instrument archive: deep-link the list scoped to one asset. */
@@ -85,16 +86,6 @@ type CertificatesResponse = {
     totalPages: number;
   };
 };
-
-function formatDate(date: string | null | undefined): string {
-  if (!date) return "-";
-  const d = new Date(date);
-  return d.toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 function toDateParam(date: Date | undefined): string {
   if (!date) return "";
@@ -210,7 +201,7 @@ const columns: ColumnDef<Certificate>[] = [
     ),
     cell: ({ row }) => (
       <span className="text-muted-foreground tabular-nums">
-        {formatDate(row.original.approvedAt)}
+        {formatInstant(row.original.approvedAt, "date-medium")}
       </span>
     ),
   },

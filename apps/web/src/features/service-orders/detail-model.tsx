@@ -9,10 +9,13 @@ import {
   Wrench01Icon,
 } from '@hugeicons/core-free-icons'
 
+import { ServiceOrderIntakeDocumentHtml } from '@calibra-facil/documents'
 import {
-  ServiceOrderIntakeDocumentHtml,
-  formatDateOnly,
-} from '@calibra-facil/documents'
+  formatCalendarDate,
+  formatInstant,
+  formatMoneyBRL,
+  formatNumber,
+} from '@calibra-facil/shared/format'
 import type {
   MaterialsListData,
   ServiceOrderCommunicationStatus,
@@ -406,13 +409,8 @@ export function communicationEventLabel(eventKey: string): string {
   return eventKey
 }
 
-const BRL_FORMAT = new Intl.NumberFormat('pt-BR', {
-  style: 'currency',
-  currency: 'BRL',
-})
-
 export function money(cents: number) {
-  return BRL_FORMAT.format(cents / 100)
+  return formatMoneyBRL(cents)
 }
 
 type FinancialStatusBadgeVariant =
@@ -446,19 +444,13 @@ export function financialStatusBadgeVariant(
   }
 }
 
-const DATETIME_SHORT_FORMAT = new Intl.DateTimeFormat('pt-BR', {
-  dateStyle: 'short',
-  timeStyle: 'short',
-})
-
 export function formatDateTime(value?: string | null) {
-  if (!value) return 'Não informado'
-  return DATETIME_SHORT_FORMAT.format(new Date(value))
+  return formatInstant(value, 'date-time', { empty: 'Não informado' })
 }
 
-/** A date-only value (a due date): the day it names, "15/10/26". */
+/** A calendar date (a due date): the day it names, "15/10/2026". */
 export function formatDate(value?: string | null) {
-  return formatDateOnly(value, 'Não informado', { dateStyle: 'short' })
+  return formatCalendarDate(value, 'date', { empty: 'Não informado' })
 }
 
 export function serviceOrderFinancialStatusSummary(
@@ -518,11 +510,6 @@ export function createEmptyQuoteItem(
   }
 }
 
-const MONEY_INPUT_FORMAT = new Intl.NumberFormat('pt-BR', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-})
-
 // Formats catalog cents into the same masked money string the row input
 // expects (pt-BR: thousands dot, decimal comma) so `parseMoneyToCents`
 // round-trips it. Missing prices stay blank so the row remains editable.
@@ -530,7 +517,7 @@ export function formatCentsForMoneyInput(
   cents: number | null | undefined,
 ): string {
   if (typeof cents !== 'number' || !Number.isFinite(cents)) return ''
-  return MONEY_INPUT_FORMAT.format(cents / 100)
+  return formatNumber(cents / 100, { decimals: 2 })
 }
 
 // Prefill patch applied when a catalog material is selected on a part row.

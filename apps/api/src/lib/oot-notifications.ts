@@ -1,3 +1,4 @@
+import { formatCalendarDate } from "@calibra-facil/shared/format";
 import { db } from "@calibra-facil/db";
 import {
   calibrationJob,
@@ -340,12 +341,6 @@ export type RecallStandardIdentity = {
   calibrationDate: Date;
 };
 
-function formatDatePtBr(date: Date): string {
-  return `${String(date.getUTCDate()).padStart(2, "0")}/${String(
-    date.getUTCMonth() + 1,
-  ).padStart(2, "0")}/${date.getUTCFullYear()}`;
-}
-
 /**
  * Called when a reference standard transitions to OUT_OF_TOLERANCE: opens the
  * typed NC (triggerSource standard_recall) and its DRAFT recall record.
@@ -380,7 +375,7 @@ export async function ensureStandardRecall(input: {
     description:
       `Padrão de referência ${input.standard.name} (nº de série ${input.standard.serialNumber}, ` +
       `certificado ${input.standard.certificateNumber}) encontrado fora de tolerância. ` +
-      `Recall §7.10: avaliar os certificados emitidos com este padrão desde ${formatDatePtBr(
+      `Recall §7.10: avaliar os certificados emitidos com este padrão desde ${formatCalendarDate(
         input.standard.calibrationDate,
       )} e notificar os clientes afetados.`,
     detectedAt: new Date(),

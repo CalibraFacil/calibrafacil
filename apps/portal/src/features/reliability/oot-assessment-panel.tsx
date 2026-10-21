@@ -9,7 +9,6 @@ import {
 
 import { getApiBaseUrl } from "@/lib/utils";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
-import { formatDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -33,6 +32,7 @@ import {
 import { dateInputToNoonIso, instantToDateInputValue } from "@/lib/date-only";
 import { useOotEvents } from "./queries";
 import { isOotDecision, type OotDecision, type OotEvent } from "./types";
+import { formatInstant } from "@calibra-facil/shared/format";
 
 export const DECISION_META: Record<
   OotDecision,
@@ -163,10 +163,10 @@ function OotAssessmentForm({ event }: { event: OotEvent }) {
             <span className="font-mono tabular-nums">
               {event.jobIdentifier}
             </span>{" "}
-            ({formatDate(event.detectedAt)}). Cabe a você, como responsável pelo
-            processo, determinar se resultados de medição anteriores foram
-            afetados e registrar a decisão — este registro é a sua evidência de
-            auditoria.
+            ({formatInstant(event.detectedAt, "date-medium")}). Cabe a você,
+            como responsável pelo processo, determinar se resultados de medição
+            anteriores foram afetados e registrar a decisão — este registro é a
+            sua evidência de auditoria.
           </>
         }
       />
@@ -302,7 +302,7 @@ function OotAssessmentRecord({ event }: { event: OotEvent }) {
 
   const period =
     event.assessmentPeriodStart || event.assessmentPeriodEnd
-      ? `${formatDate(event.assessmentPeriodStart)} — ${formatDate(event.assessmentPeriodEnd)}`
+      ? `${formatInstant(event.assessmentPeriodStart, "date-medium")} — ${formatInstant(event.assessmentPeriodEnd, "date-medium")}`
       : "—";
 
   return (
@@ -315,7 +315,7 @@ function OotAssessmentRecord({ event }: { event: OotEvent }) {
             <span className="font-mono tabular-nums">
               {event.jobIdentifier}
             </span>{" "}
-            ({formatDate(event.detectedAt)}).
+            ({formatInstant(event.detectedAt, "date-medium")}).
           </>
         }
       />
@@ -339,13 +339,13 @@ function OotAssessmentRecord({ event }: { event: OotEvent }) {
             {yesNo(event.assessmentCustomerNotified)}
           </BlueprintField>
           <BlueprintField label="Registro" mono>
-            {formatDate(event.assessmentCreatedAt)}
+            {formatInstant(event.assessmentCreatedAt, "date-medium")}
           </BlueprintField>
         </BlueprintGrid>
 
         <p className="text-muted-foreground text-xs">
           Registrado por {event.assessmentBy ?? "—"} em{" "}
-          {formatDate(event.assessmentCreatedAt)}.
+          {formatInstant(event.assessmentCreatedAt, "date-medium")}.
         </p>
       </div>
     </Panel>

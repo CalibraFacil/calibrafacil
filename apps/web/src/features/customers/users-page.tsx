@@ -74,6 +74,7 @@ import {
   ClientSection,
   TableFrame,
 } from '@/features/customers/components/client-detail-ui'
+import { formatInstant } from '@calibra-facil/shared/format'
 
 export function ClientUsersTab({ id }: { id: string }) {
   const queryClient = useQueryClient()
@@ -160,15 +161,6 @@ export function ClientUsersTab({ id }: { id: string }) {
 
     inviteMutation.mutate(inviteEmail.trim())
   }
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
-  }
-
   const getStatusBadge = (status: string, expiresAt: string) => {
     const isExpired = new Date(expiresAt) < new Date()
 
@@ -400,7 +392,9 @@ export function ClientUsersTab({ id }: { id: string }) {
                         <TableCell>
                           {getStatusBadge(inv.status, inv.expiresAt)}
                         </TableCell>
-                        <TableCell>{formatDate(inv.expiresAt)}</TableCell>
+                        <TableCell>
+                          {formatInstant(inv.expiresAt, 'date')}
+                        </TableCell>
                         <TableCell>
                           {isPending && (
                             <div className="flex gap-1">

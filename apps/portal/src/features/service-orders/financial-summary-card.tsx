@@ -6,7 +6,11 @@ import {
   CardTitle,
 } from "../../components/ui/card";
 import { dateOnlyDaysBetween } from "../../lib/date-only";
-import { formatDateOnlyLong } from "../../lib/format";
+import {
+  formatCalendarDate,
+  formatInstant,
+  formatMoneyBRL,
+} from "@calibra-facil/shared/format";
 import { cn } from "../../lib/utils";
 
 export type PortalFinancialSummary = {
@@ -52,20 +56,6 @@ export function isFinancialSummary(
   );
 }
 
-function formatLongDate(value: string | null | undefined) {
-  if (!value) return null;
-  // The due day is a date-only value (stored at UTC midnight); paid and
-  // available-at are real moments, shown on the laboratory's day.
-  return formatDateOnlyLong(value);
-}
-
-function formatMoney(cents: number | null | undefined) {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format((cents ?? 0) / 100);
-}
-
 export function financialSummaryLabel(state: PortalFinancialSummary["state"]) {
   switch (state) {
     case "INVOICE_AVAILABLE":
@@ -82,9 +72,13 @@ export function financialSummaryLabel(state: PortalFinancialSummary["state"]) {
 }
 
 export function financialSummaryDescription(summary: PortalFinancialSummary) {
-  const dueDate = formatLongDate(summary.dueDate);
+  // The due day is a calendar date (stored at UTC midnight); paid and
+  // available-at are real moments, shown on the laboratory's day.
+  const dueDate = formatCalendarDate(summary.dueDate, "date-long", {
+    empty: "",
+  });
   if (summary.state === "PAID") {
-    const paidAt = formatLongDate(summary.paidAt);
+    const paidAt = formatInstant(summary.paidAt, "date-long", { empty: "" });
     return paidAt
       ? `Pagamento confirmado em ${paidAt}`
       : "Pagamento confirmado";
@@ -93,7 +87,7 @@ export function financialSummaryDescription(summary: PortalFinancialSummary) {
     const days = summary.dueDate
       ? Math.max(0, -dateOnlyDaysBetween(new Date(), new Date(summary.dueDate)))
       : 0;
-    return `Vencido há ${days} dias · ${formatMoney(
+    return `Vencido há ${days} dias · ${formatMoneyBRL(
       summary.openAmountCents,
     )} em aberto`;
   }
@@ -176,7 +170,11 @@ export function FinancialSummaryCard({
             <h3 className="text-sm font-semibold">Documentos disponíveis</h3>
             <div className="space-y-1">
               {summary.documents.map((document) => {
-                const availableAt = formatLongDate(document.availableAt);
+                const availableAt = formatInstant(
+                  document.availableAt,
+                  "date-long",
+                  { empty: "" },
+                );
                 const documentKey = [
                   document.kind,
                   document.label,

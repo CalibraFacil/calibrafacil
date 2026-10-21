@@ -62,15 +62,7 @@ import {
   type VisitDetailJob,
   type VisitPendingRescheduleRequest,
 } from '@/features/visits/types'
-
-function formatDateTime(value: string | null | undefined) {
-  if (!value) return 'A confirmar'
-  return new Date(value).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  })
-}
+import { formatInstant } from '@calibra-facil/shared/format'
 
 export function VisitDetailPage({ visitId }: { visitId: number }) {
   const { activeOrganizationId, isContextSwitching } =
@@ -639,7 +631,7 @@ export function VisitRescheduleRequestBanner({
         </p>
         <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-400">
           {request.requestedByName ? `${request.requestedByName} · ` : ''}
-          {formatDateTime(request.createdAt)}
+          {formatInstant(request.createdAt, 'date-time')}
           {request.reason ? ` — ${request.reason}` : ''}
         </p>
         {request.preferredWindows.length > 0 ? (
@@ -648,7 +640,7 @@ export function VisitRescheduleRequestBanner({
             {request.preferredWindows
               .map(
                 (window) =>
-                  `${formatDateTime(`${window.date}T12:00:00`)} (${PREFERRED_PERIOD_LABELS[
+                  `${formatInstant(`${window.date}T12:00:00`, 'date-time')} (${PREFERRED_PERIOD_LABELS[
                     window.period
                   ].toLowerCase()})${window.note ? ` — ${window.note}` : ''}`,
               )

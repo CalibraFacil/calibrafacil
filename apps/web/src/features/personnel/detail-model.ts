@@ -3,6 +3,7 @@ import type {
   CompetenceStatus,
   TrainingType,
 } from './types'
+import { formatInstant } from '@calibra-facil/shared/format'
 
 export const COMPETENCE_WORKFLOW_STEPS: CompetenceStatus[] = [
   'REQUESTED',
@@ -46,12 +47,7 @@ export type CreateTrainingRecordDraft = {
 }
 
 export function formatCompetenceDate(dateString: string | null | undefined) {
-  if (!dateString) return '-'
-  return new Date(dateString).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  })
+  return formatInstant(dateString, 'date', { empty: '-' })
 }
 
 export function getTodayDateInputValue(now = new Date()) {

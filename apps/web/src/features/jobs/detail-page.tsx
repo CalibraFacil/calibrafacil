@@ -1,5 +1,5 @@
 import { Link, useNavigate } from '@tanstack/react-router'
-import { formatDateOnly } from '@calibra-facil/documents'
+import { formatCalendarDate } from '@calibra-facil/shared/format'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
@@ -1441,7 +1441,7 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
                       Prazo
                     </label>
                     <p className="font-mono text-sm tabular-nums">
-                      {formatDateOnly(job.dueDate, '-')}
+                      {formatCalendarDate(job.dueDate, 'date', { empty: '-' })}
                     </p>
                   </div>
                   <div>
@@ -1507,7 +1507,7 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
                     Prazo
                   </label>
                   <p className="mt-1 font-mono text-sm tabular-nums">
-                    {formatDateOnly(job.dueDate, '-')}
+                    {formatCalendarDate(job.dueDate, 'date', { empty: '-' })}
                     {job.daysUntilDue != null && job.daysUntilDue > 0 && (
                       <Badge variant="outline" className="ml-2 text-xs">
                         {job.daysUntilDue} dias

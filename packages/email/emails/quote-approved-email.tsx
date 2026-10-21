@@ -10,7 +10,7 @@ import {
   DetailRow,
 } from "./components/email-layout";
 import { Section, Text } from "@react-email/components";
-import { formatMoney } from "@calibra-facil/shared";
+import { formatMoneyBRL } from "@calibra-facil/shared/format";
 
 export interface QuoteApprovedEmailProps {
   /** White-label brand for the sending lab. */
@@ -40,7 +40,7 @@ export function QuoteApprovedEmail({
   totalApprovedCents,
 }: QuoteApprovedEmailProps) {
   const labName = brand?.name ?? "CalibraFácil";
-  const totalBrl = formatMoney(totalApprovedCents);
+  const totalBrl = formatMoneyBRL(totalApprovedCents);
   const previewText = `Orçamento ${serviceOrderNumber} aprovado — Total: ${totalBrl}`;
 
   return (

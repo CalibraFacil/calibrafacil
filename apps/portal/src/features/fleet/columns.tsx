@@ -7,8 +7,11 @@ import { Button } from "@/components/ui/button";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { StatusPill } from "@/components/status-pill";
 import { getInstrumentStatus } from "@/lib/calibration-status";
-import { formatDate, formatDateOnly } from "@/lib/format";
 import type { FleetAsset } from "./types";
+import {
+  formatCalendarDate,
+  formatInstant,
+} from "@calibra-facil/shared/format";
 
 /**
  * Sortable column ids deliberately match the `sortBy` values accepted by
@@ -91,7 +94,7 @@ export const fleetColumns: ColumnDef<FleetAsset>[] = [
             {certificate.jobId}
           </Link>
           <p className="text-muted-foreground text-xs">
-            {formatDate(certificate.approvedAt)}
+            {formatInstant(certificate.approvedAt, "date-medium")}
           </p>
         </div>
       );
@@ -109,7 +112,10 @@ export const fleetColumns: ColumnDef<FleetAsset>[] = [
       return (
         <div className="text-sm">
           <span className="font-mono tabular-nums">
-            {formatDateOnly(row.original.nextCalibrationDate)}
+            {formatCalendarDate(
+              row.original.nextCalibrationDate,
+              "date-medium",
+            )}
           </span>
           {status.daysDelta !== null ? (
             <p className="text-muted-foreground text-xs">

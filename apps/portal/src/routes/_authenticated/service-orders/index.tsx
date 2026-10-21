@@ -39,6 +39,7 @@ import {
 import { getApiBaseUrl } from "@/lib/utils";
 import { keepPreviousDataInScope } from "@/lib/keep-previous-page";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
+import { formatInstant } from "@calibra-facil/shared/format";
 
 export const Route = createFileRoute("/_authenticated/service-orders/")({
   component: ServiceOrdersPage,
@@ -122,11 +123,6 @@ const statusVariants: Record<
   warranty_return: "outline",
 };
 
-function formatDate(value: string | null | undefined) {
-  if (!value) return "-";
-  return new Date(value).toLocaleDateString("pt-BR");
-}
-
 function parseServiceOrderStatusFilter(
   value: string | null,
 ): ServiceOrderStatus | "" {
@@ -170,7 +166,7 @@ const columns: Array<ColumnDef<PortalServiceOrder>> = [
           {row.original.serviceOrderNumber}
         </Link>
         <p className="text-xs text-muted-foreground">
-          Entrada em {formatDate(row.original.openedAt)}
+          Entrada em {formatInstant(row.original.openedAt, "date")}
         </p>
       </div>
     ),
@@ -213,7 +209,7 @@ const columns: Array<ColumnDef<PortalServiceOrder>> = [
     ),
     cell: ({ row }) => (
       <span className="text-muted-foreground tabular-nums">
-        {formatDate(row.original.readyAt)}
+        {formatInstant(row.original.readyAt, "date")}
       </span>
     ),
   },

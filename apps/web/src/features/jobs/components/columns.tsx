@@ -9,7 +9,6 @@ import {
   ViewIcon,
 } from '@hugeicons/core-free-icons'
 
-import { formatDateOnly } from '@calibra-facil/documents'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { SyncStateBadge } from '@/components/sync-state-badge'
@@ -24,6 +23,7 @@ import { getFinancialStatusLabel } from '@calibra-facil/shared'
 import { jobRouteId } from '@/lib/route-identifiers'
 import { usePathPrewarmIntent } from '@/lib/use-route-prewarm-intent'
 import type { Job, JobStatus } from '@/features/jobs/types'
+import { formatCalendarDate } from '@calibra-facil/shared/format'
 
 // Animated dots for loading states
 function LoadingDots() {
@@ -77,10 +77,6 @@ const statusVariants: Record<
 }
 
 // A due date is a calendar date (a Postgres date): show the day it names.
-function formatDate(dateString: string | null): string {
-  return formatDateOnly(dateString, '-')
-}
-
 function getFinancialVariant(status: Job['financialStatus']) {
   switch (status) {
     case 'PAID':
@@ -220,7 +216,7 @@ export const jobsColumns: ColumnDef<Job>[] = [
               row.original.isOverdue ? 'text-destructive font-medium' : ''
             }
           >
-            {formatDate(row.original.dueDate)}
+            {formatCalendarDate(row.original.dueDate, 'date')}
           </span>
           {daysUntilDue != null && daysUntilDue <= 7 && daysUntilDue > 0 && (
             <Badge variant="outline" className="text-xs">

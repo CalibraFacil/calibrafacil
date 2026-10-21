@@ -64,6 +64,7 @@ import {
   type QueueView,
   type TrendWindow,
 } from '@/features/dashboard/dashboard-model'
+import { formatCalendarDate, formatInstant } from '@calibra-facil/shared/format'
 
 const DASHBOARD_INDEX_MOUNT_MARK = 'dashboard:index:mount'
 const DASHBOARD_INDEX_DATA_READY_MARK = 'dashboard:index:data:ready'
@@ -168,10 +169,7 @@ export function DashboardIndex() {
     const result = await refetch()
     if (result.error) return
 
-    const time = new Intl.DateTimeFormat('pt-BR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(new Date())
+    const time = formatInstant(new Date(), 'time')
     setUpdatedAt(time)
     setRefreshMessage(`Dados atualizados às ${time}`)
   }
@@ -927,10 +925,7 @@ function ThroughputPanel({
               tickMargin={8}
               minTickGap={32}
               tickFormatter={(value: string) =>
-                new Intl.DateTimeFormat('pt-BR', {
-                  day: '2-digit',
-                  month: 'short',
-                }).format(new Date(`${value}T12:00:00`))
+                formatCalendarDate(value, 'day-month')
               }
             />
             <ChartTooltip
@@ -939,11 +934,7 @@ function ThroughputPanel({
                 <ChartTooltipContent
                   indicator="line"
                   labelFormatter={(value) =>
-                    new Intl.DateTimeFormat('pt-BR', {
-                      weekday: 'short',
-                      day: '2-digit',
-                      month: 'short',
-                    }).format(new Date(`${String(value)}T12:00:00`))
+                    formatCalendarDate(String(value), 'weekday-day-month')
                   }
                 />
               }

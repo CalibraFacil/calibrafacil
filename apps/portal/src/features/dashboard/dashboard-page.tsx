@@ -25,7 +25,6 @@ import {
   getCalibrationStatus,
   type CalibrationFilter,
 } from "@/lib/calibration-status";
-import { formatDate, pluralize } from "@/lib/format";
 import { getRequestStatus, getServiceOrderStatus } from "@/lib/status-labels";
 import { StatusPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
@@ -48,6 +47,7 @@ import {
   type PortalOverview,
   type UnitSummaryItem,
 } from "./queries";
+import { formatInstant, pluralize } from "@calibra-facil/shared/format";
 
 /** Tonal surface + icon classes, matching instrument-panel's SignalTone maps. */
 const TONE_SURFACE: Record<SignalTone, string> = {
@@ -638,7 +638,7 @@ function RecentCertificates({
                     </div>
                     <div className="hidden text-right sm:block">
                       <p className="text-sm tabular-nums text-muted-foreground">
-                        {formatDate(certificate.approvedAt)}
+                        {formatInstant(certificate.approvedAt, "date-medium")}
                       </p>
                       <StatusPill tone={state.tone} size="sm" className="mt-1">
                         {state.label}
@@ -718,7 +718,7 @@ function OpenRequests({ requests }: { requests: PortalOverview["requests"] }) {
                       </p>
                       <p className="truncate text-xs text-muted-foreground">
                         {pluralize(request.itemCount, "ativo", "ativos")} ·{" "}
-                        {formatDate(request.submittedAt)}
+                        {formatInstant(request.submittedAt, "date-medium")}
                       </p>
                     </div>
                     <StatusPill tone={status.tone} size="sm">

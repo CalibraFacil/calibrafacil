@@ -48,7 +48,6 @@ import {
 } from "@/components/instrument-panel";
 import { AccreditationSeal } from "@/components/accreditation-seal";
 import { StatusPill, TONE } from "@/components/status-pill";
-import { formatDate, formatDateOnly } from "@/lib/format";
 import { getApiBaseUrl } from "@/lib/utils";
 import {
   useSignatureVerdict,
@@ -61,6 +60,10 @@ import {
   type CertificateVerdict,
   type MethodSnapshotLike,
 } from "@/features/certificates/verdict";
+import {
+  formatCalendarDate,
+  formatInstant,
+} from "@calibra-facil/shared/format";
 
 /**
  * Amendment chain info (ISO/IEC 17025 §7.8.8) attached by
@@ -363,7 +366,7 @@ function AmendmentNotice({ amendment }: { amendment: CertificateAmendment }) {
               </>
             )}
             {amendment.supersededAt
-              ? ` em ${formatDate(amendment.supersededAt)}`
+              ? ` em ${formatInstant(amendment.supersededAt, "date-medium")}`
               : ""}
             . Não o utilize como referência.
           </p>
@@ -501,7 +504,7 @@ function AmendmentChainTimeline({
                     ? `Retificação nº ${member.amendmentNumber}`
                     : "Emissão original"}
                   {member.approvedAt
-                    ? ` · aprovado em ${formatDate(member.approvedAt)}`
+                    ? ` · aprovado em ${formatInstant(member.approvedAt, "date-medium")}`
                     : ""}
                   {isViewed ? " · este certificado" : ""}
                 </p>
@@ -726,7 +729,7 @@ export function CertificateDetailView({
                 <SignalTile
                   icon={Calendar03Icon}
                   label="Próxima calibração"
-                  value={formatDateOnly(certificate.dueDate)}
+                  value={formatCalendarDate(certificate.dueDate, "date-medium")}
                   hint={dueState.hint}
                   tone={dueState.tone}
                 />
@@ -831,10 +834,10 @@ export function CertificateDetailView({
               {method}
             </BlueprintField>
             <BlueprintField label="Data de execução" mono>
-              {formatDate(certificate.performedAt)}
+              {formatInstant(certificate.performedAt, "date-medium")}
             </BlueprintField>
             <BlueprintField label="Aprovado em" mono>
-              {formatDate(certificate.approvedAt)}
+              {formatInstant(certificate.approvedAt, "date-medium")}
             </BlueprintField>
           </BlueprintGrid>
         </Panel>

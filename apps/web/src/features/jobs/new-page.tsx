@@ -39,6 +39,7 @@ import {
   type JobFormField,
 } from '@/features/jobs/forms'
 import type { NewJobSearch } from '@/features/jobs/new-job-search'
+import { formatLocalDay } from '@calibra-facil/shared/format'
 
 function formatPrice(priceInCents: number | null, currency: string): string {
   if (priceInCents === null) {
@@ -211,7 +212,7 @@ export function NewJobPage({ search = {} }: { search?: NewJobSearch }) {
     {
       label: 'Prazo',
       value: formData.dueDate
-        ? formData.dueDate.toLocaleDateString('pt-BR')
+        ? formatLocalDay(formData.dueDate)
         : selectedService?.tat
           ? `${selectedService.tat} dias sugeridos`
           : 'Opcional',

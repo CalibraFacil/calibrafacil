@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { formatCalendarDate } from '@calibra-facil/shared/format'
 
 const chartConfig: ChartConfig = {
   approved: {
@@ -187,13 +188,9 @@ export function ChartCalibrations({ data, isLoading }: ChartCalibrationsProps) {
                 axisLine={false}
                 tickMargin={8}
                 minTickGap={32}
-                tickFormatter={(value) => {
-                  const date = new Date(value)
-                  return date.toLocaleDateString('pt-BR', {
-                    day: '2-digit',
-                    month: 'short',
-                  })
-                }}
+                tickFormatter={(value) =>
+                  formatCalendarDate(value, 'day-month')
+                }
                 className="text-xs text-muted-foreground"
               />
               <YAxis
@@ -207,13 +204,9 @@ export function ChartCalibrations({ data, isLoading }: ChartCalibrationsProps) {
                 cursor={false}
                 content={
                   <ChartTooltipContent
-                    labelFormatter={(value) => {
-                      return new Date(value).toLocaleDateString('pt-BR', {
-                        day: '2-digit',
-                        month: 'long',
-                        year: 'numeric',
-                      })
-                    }}
+                    labelFormatter={(value) =>
+                      formatCalendarDate(value, 'date-long')
+                    }
                     indicator="dot"
                   />
                 }

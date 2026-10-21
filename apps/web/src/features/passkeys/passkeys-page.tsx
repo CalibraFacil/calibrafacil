@@ -55,16 +55,11 @@ import { defaultPasskeyName, parsePasskeyNameForm } from './forms'
 import { passkeyProviderLabel } from './provider-labels'
 import { isWebAuthnSupported } from './webauthn'
 import { type UserPasskey } from './types'
-
-const CREATED_AT_FORMAT = new Intl.DateTimeFormat('pt-BR', {
-  dateStyle: 'medium',
-})
+import { formatInstant } from '@calibra-facil/shared/format'
 
 function formatCreatedAt(value: string | null): string | null {
-  if (!value) return null
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return null
-  return CREATED_AT_FORMAT.format(date)
+  const text = formatInstant(value, 'date-medium-natural', { empty: '' })
+  return text || null
 }
 
 function messageOf(error: unknown, fallback: string): string {

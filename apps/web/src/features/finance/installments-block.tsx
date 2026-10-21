@@ -3,7 +3,10 @@ import type {
   FinancialInstallmentsSummary,
   ReceivableInstallmentStatus,
 } from '@calibra-facil/shared'
-import { formatDateOnly } from '@calibra-facil/documents'
+import {
+  formatCalendarDate,
+  formatMoneyBRL,
+} from '@calibra-facil/shared/format'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
@@ -13,21 +16,6 @@ interface InstallmentsBlockProps {
   summary: FinancialInstallmentsSummary
   /** Max rows to render inline. Defaults to 12. */
   maxRows?: number
-}
-
-const BRL_FORMAT = new Intl.NumberFormat('pt-BR', {
-  style: 'currency',
-  currency: 'BRL',
-})
-
-function formatBrl(cents: number) {
-  return BRL_FORMAT.format(cents / 100)
-}
-
-function formatDate(value: string | null | undefined) {
-  // A due date is a calendar date (a Postgres date): show the day it names.
-  if (!value) return null
-  return formatDateOnly(value, '')
 }
 
 const INSTALLMENT_STATUS_LABEL: Record<ReceivableInstallmentStatus, string> = {
@@ -87,14 +75,14 @@ export function InstallmentsBlock({
             {summary.paidCount} de {summary.total - summary.voidCount} pagas
           </Badge>
           <Badge variant="outline">
-            {formatBrl(summary.openCents)} em aberto
+            {formatMoneyBRL(summary.openCents)} em aberto
           </Badge>
           {summary.overdueCount > 0 && (
             <Badge
               variant="outline"
               className="border-destructive/40 text-destructive"
             >
-              {formatBrl(summary.overdueCents)} em atraso
+              {formatMoneyBRL(summary.overdueCents)} em atraso
             </Badge>
           )}
           {summary.voidCount > 0 && (
@@ -105,7 +93,10 @@ export function InstallmentsBlock({
         </div>
         <ul className="space-y-1">
           {visible.map((row) => {
-            const dueDate = formatDate(row.dueDate)
+            // A due date is a calendar date (a Postgres date): show the day it names.
+            const dueDate = formatCalendarDate(row.dueDate, 'date', {
+              empty: '',
+            })
             return (
               <li
                 key={row.id}
@@ -125,7 +116,7 @@ export function InstallmentsBlock({
                   </span>
                 )}
                 <span className="font-mono tabular-nums">
-                  {formatBrl(row.amountCents)}
+                  {formatMoneyBRL(row.amountCents)}
                 </span>
                 <Badge
                   variant="outline"

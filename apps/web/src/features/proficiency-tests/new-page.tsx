@@ -39,6 +39,7 @@ import {
   CloudOnlyOfflineState,
   useDesktopCloudOnlyUnavailable,
 } from '@/runtime/sync-status'
+import { formatLocalDay } from '@calibra-facil/shared/format'
 
 const ACTIVITY_OPTIONS: Array<{
   value: PtActivityType
@@ -154,9 +155,7 @@ export function NewProficiencyTestPage() {
     },
     {
       label: 'Participação',
-      value: participationDate
-        ? participationDate.toLocaleDateString('pt-BR')
-        : 'Opcional',
+      value: participationDate ? formatLocalDay(participationDate) : 'Opcional',
       complete: Boolean(participationDate),
     },
   ]

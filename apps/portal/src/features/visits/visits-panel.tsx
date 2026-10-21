@@ -34,7 +34,6 @@ import {
   SelectTrigger,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { formatDate, formatDateOnlyLong } from "@/lib/format";
 import {
   formatPortalVisitAddress,
   isVisitActionable,
@@ -47,6 +46,7 @@ import {
   type PortalVisitReschedulePeriod,
   type PortalVisitStatus,
 } from "./queries";
+import { formatCalendarDate } from "@calibra-facil/shared/format";
 
 const VISIT_TONE: Record<PortalVisitStatus, SignalTone> = {
   PROPOSED: "warning",
@@ -58,7 +58,7 @@ const VISIT_TONE: Record<PortalVisitStatus, SignalTone> = {
 
 function scheduledLabel(scheduledAt: string | null): string {
   if (!scheduledAt) return "Data a confirmar";
-  return formatDateOnlyLong(scheduledAt);
+  return formatCalendarDate(scheduledAt, "date-long");
 }
 
 type WindowDraft = {
@@ -285,7 +285,7 @@ function VisitActions({ visit }: { visit: PortalVisit }) {
           ? ` — janelas: ${request.preferredWindows
               .map(
                 (window) =>
-                  `${formatDate(new Date(`${window.date}T12:00:00`))} (${PREFERRED_PERIOD_LABELS[window.period].toLowerCase()})`,
+                  `${formatCalendarDate(window.date, "date-medium")} (${PREFERRED_PERIOD_LABELS[window.period].toLowerCase()})`,
               )
               .join(", ")}`
           : ""}
