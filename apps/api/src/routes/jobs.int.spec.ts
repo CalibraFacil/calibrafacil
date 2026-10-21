@@ -42,8 +42,14 @@ import {
   customer,
   service,
   member,
+  referenceStandard,
   user,
 } from "@calibra-facil/db/schema";
+import {
+  addCalendarDays,
+  calendarDateKey,
+  labToday,
+} from "@calibra-facil/shared";
 import { eq, sql } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
@@ -1578,5 +1584,147 @@ describe("jobsRouter — status guards (cancel allow-list, compare-and-set)", ()
 
     await insertAmendment("JOB-UNIQ-002");
     await expect(insertAmendment("JOB-UNIQ-003")).rejects.toThrow();
+  });
+});
+
+describe("jobsRouter — reference standard validity at the performed date (REQ-CAL-004, Q12)", () => {
+  // A standard is valid THROUGH the day its certificate names, judged on the
+  // Sao Paulo day the calibration was performed: the day after it, the work is
+  // refused; on the day itself (even at 23:30), accepted; and a standard that
+  // has since expired is still accepted for work done while it was valid.
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  // The standard's last valid day: three days ago, so both the day itself and
+  // the day after are in the past (a performed date may not be in the future)
+  // and inside the 7-day window that needs no backdate reason.
+  const validThrough = addCalendarDays(labToday(), -3);
+  const validThroughKey = calendarDateKey(validThrough);
+  const lastEvening = new Date(`${validThroughKey}T23:30:00-03:00`);
+  const nextMorning = new Date(
+    `${calendarDateKey(addCalendarDays(validThrough, 1))}T00:10:00-03:00`,
+  );
+
+  async function seedJobWithStandard(status: "DRAFT" | "IN_PROGRESS") {
+    const fixture = await seedJobFixture({
+      orgId: "org-q12",
+      userId: "user-q12",
+      tagSuffix: "q12",
+    });
+    loginAs({ userId: fixture.userId, organizationId: "org-q12" });
+    const id = await seedJob({
+      jobId: `JOB-Q12-${status}`,
+      organizationId: "org-q12",
+      unitId: fixture.unitId,
+      customerId: fixture.customerId,
+      assetId: fixture.assetId,
+      serviceId: fixture.serviceId,
+      createdBy: fixture.userId,
+      status,
+      methodSnapshot: executableMethodSnapshot(),
+    });
+    const [standard] = await db
+      .insert(referenceStandard)
+      .values({
+        organizationId: "org-q12",
+        unitId: fixture.unitId,
+        createdBy: fixture.userId,
+        name: "Massa Padrao",
+        kind: "generic_scalar",
+        serialNumber: "SN-Q12",
+        certificateNumber: "CERT-Q12",
+        calibrationDate: new Date("2025-01-10T15:00:00.000Z"),
+        nextCalibrationDate: validThrough,
+        coverageFactor: 2,
+        distribution: "normal",
+        status: "ACTIVE",
+        referenceValue: 1,
+        uncertainty: 0.01,
+      })
+      .returning({ id: referenceStandard.id });
+    return { id, standardId: standard?.id ?? 0 };
+  }
+
+  function submit(id: number, standardId: number, performedAt: Date) {
+    return jobsRouter.request(`/${id}/submit`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        calibrationLocation: { type: "lab", addressText: "Laboratório" },
+        data: { indication: "10", reference: "9" },
+        selectedStandardIds: [standardId],
+        performedAt: performedAt.toISOString(),
+      }),
+    });
+  }
+
+  function execute(id: number, standardId: number, performedAt: Date) {
+    return jobsRouter.request(`/${id}/execute`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        data: { indication: "10", reference: "9" },
+        selectedStandardIds: [standardId],
+        performedAt: performedAt.toISOString(),
+      }),
+    });
+  }
+
+  it("REQ-CAL-004 [HIGH RISK]: submit accepts the standard for work performed on its last valid day at 23:30 in Sao Paulo", async () => {
+    const { id, standardId } = await seedJobWithStandard("IN_PROGRESS");
+
+    const res = await submit(id, standardId, lastEvening);
+
+    expect(res.status).toBe(200);
+    expect(await statusOf(id)).toBe("REVIEW");
+    const [row] = await db
+      .select({ standardsSnapshot: calibrationJob.standardsSnapshot })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, id));
+    expect(row?.standardsSnapshot?.map((standard) => standard.id)).toEqual([
+      standardId,
+    ]);
+  });
+
+  it("REQ-CAL-004 [HIGH RISK]: submit refuses the standard for work performed at 00:10 the day after, and the job stays IN_PROGRESS", async () => {
+    const { id, standardId } = await seedJobWithStandard("IN_PROGRESS");
+
+    const res = await submit(id, standardId, nextMorning);
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain("certificado vencido");
+    expect(await statusOf(id)).toBe("IN_PROGRESS");
+    expect(await auditActions(id)).not.toContain("submit");
+  });
+
+  it("REQ-CAL-004: a worksheet save (execute) judges the standard by the same performed day", async () => {
+    const { id, standardId } = await seedJobWithStandard("DRAFT");
+
+    const refused = await execute(id, standardId, nextMorning);
+    expect(refused.status).toBe(400);
+    expect(await statusOf(id)).toBe("DRAFT");
+
+    const accepted = await execute(id, standardId, lastEvening);
+    expect(accepted.status).toBe(200);
+    expect(await statusOf(id)).toBe("IN_PROGRESS");
+  });
+
+  it("REQ-CAL-004: a draft keeps judging the standard by the performed date it already saved, not by today", async () => {
+    const { id, standardId } = await seedJobWithStandard("DRAFT");
+    expect((await execute(id, standardId, lastEvening)).status).toBe(200);
+
+    // An auto-save that carries no date: today the standard is long expired,
+    // but the work was recorded on a day it was still valid.
+    const res = await jobsRouter.request(`/${id}/execute`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        data: { indication: "10", reference: "9" },
+        selectedStandardIds: [standardId],
+      }),
+    });
+
+    expect(res.status).toBe(200);
   });
 });

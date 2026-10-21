@@ -1,0 +1,278 @@
+/**
+ * sync-standard-validity.int.spec.ts: real-Postgres proof that the desktop sync
+ * apply judges a reference standard by the Sao Paulo day the work was PERFORMED,
+ * not by the day it is synced (REQ-CAL-004, Q12).
+ *
+ * A standard is valid THROUGH the day its certificate names (D). The standard
+ * below is valid through three days ago, so every event is synced (today) after
+ * it expired; what matters is when the work was done.
+ */
+
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { eq } from "drizzle-orm";
+import { db } from "@calibra-facil/db";
+import {
+  asset,
+  assetType,
+  calibrationJob,
+  referenceStandard,
+  service,
+} from "@calibra-facil/db/schema";
+import {
+  addCalendarDays,
+  calendarDateKey,
+  labToday,
+} from "@calibra-facil/shared";
+import { loginAs } from "../../test/integration/setup";
+import { truncateAll } from "../../test/integration/db";
+import { seedCustomer, seedOrg } from "../../test/integration/seed";
+import { executableMethodSnapshot } from "../../test/integration/executable-method";
+import { syncRouter } from "./sync";
+
+vi.mock("../lib/background-jobs", () => ({
+  enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
+}));
+
+vi.mock("@calibra-facil/notifications", () => ({
+  notifyJobSubmittedForReview: vi.fn().mockResolvedValue(undefined),
+  notifyJobApproved: vi.fn().mockResolvedValue(undefined),
+  notifyJobRejected: vi.fn().mockResolvedValue(undefined),
+  notifyJobAssigned: vi.fn().mockResolvedValue(undefined),
+  notifyCertificateAmended: vi.fn().mockResolvedValue(undefined),
+}));
+
+const JSON_HEADERS = { "content-type": "application/json" };
+
+// The last valid day of the standard: three days ago (a stored calendar date).
+const VALID_THROUGH = addCalendarDays(labToday(), -3);
+const VALID_THROUGH_KEY = calendarDateKey(VALID_THROUGH);
+const DAY_AFTER_KEY = calendarDateKey(addCalendarDays(VALID_THROUGH, 1));
+const DAY_BEFORE_KEY = calendarDateKey(addCalendarDays(VALID_THROUGH, -1));
+
+async function seedWorld() {
+  const org = await seedOrg({
+    orgId: "org-sv",
+    userId: "user-sv",
+    role: "admin",
+  });
+  const customerId = await seedCustomer({
+    labOrganizationId: org.orgId,
+    name: "Cliente",
+  });
+  const [type] = await db
+    .insert(assetType)
+    .values({ name: "AT", slug: "at-sv", definition: [] })
+    .returning({ id: assetType.id });
+  const [instrument] = await db
+    .insert(asset)
+    .values({
+      labOrganizationId: org.orgId,
+      unitId: org.unitId,
+      customerId,
+      assetTypeId: type?.id ?? 0,
+      name: "Instrumento",
+      serialNumber: "SN-SV",
+      tag: "TAG-SV",
+    })
+    .returning({ id: asset.id });
+  const [svc] = await db
+    .insert(service)
+    .values({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      name: "Calibracao",
+      isActive: true,
+    })
+    .returning({ id: service.id });
+  const [job] = await db
+    .insert(calibrationJob)
+    .values({
+      jobId: "CAL-SV-1",
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      customerId,
+      assetId: instrument?.id ?? 0,
+      serviceId: svc?.id ?? 0,
+      createdBy: org.userId,
+      status: "IN_PROGRESS",
+      methodSnapshot: executableMethodSnapshot(),
+      // The desktop apply needs the frozen asset snapshot a started job carries.
+      assetSnapshot: {
+        assetId: instrument?.id ?? 0,
+        assetTypeId: type?.id ?? 0,
+        assetTypeName: "AT",
+        assetTypeSlug: "at-sv",
+        baseMeasurementUnit: null,
+        name: "Instrumento",
+        tag: "TAG-SV",
+        serialNumber: "SN-SV",
+        manufacturer: null,
+        model: null,
+        specifications: null,
+        capturedAt: "2026-01-01T00:00:00.000Z",
+      },
+      certificateName: "CAL-SV-1",
+    })
+    .returning({ id: calibrationJob.id });
+  const [standard] = await db
+    .insert(referenceStandard)
+    .values({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      createdBy: org.userId,
+      name: "Massa Padrao",
+      kind: "generic_scalar",
+      serialNumber: "SN-STD-SV",
+      certificateNumber: "CERT-SV",
+      calibrationDate: new Date("2025-01-10T15:00:00.000Z"),
+      nextCalibrationDate: VALID_THROUGH,
+      coverageFactor: 2,
+      distribution: "normal",
+      status: "ACTIVE",
+      referenceValue: 1,
+      uncertainty: 0.01,
+    })
+    .returning({ id: referenceStandard.id });
+  return { org, jobId: job?.id ?? 0, standardId: standard?.id ?? 0 };
+}
+
+type World = Awaited<ReturnType<typeof seedWorld>>;
+
+async function pushSubmit(
+  world: World,
+  options: { occurredAt: string; performedAt?: string; eventId: string },
+) {
+  loginAs({ userId: world.org.userId, organizationId: world.org.orgId });
+  const res = await syncRouter.request("/push", {
+    method: "POST",
+    headers: { ...JSON_HEADERS, "x-active-unit-id": String(world.org.unitId) },
+    body: JSON.stringify({
+      deviceId: "device-sv-1",
+      clientBatchId: `batch-${options.eventId}`,
+      baseCursor: null,
+      events: [
+        {
+          eventId: options.eventId,
+          entityType: "calibration_job",
+          entityId: "local-job-sv",
+          operation: "submit_local_execution",
+          payload: {
+            remoteId: world.jobId,
+            status: "REVIEW",
+            data: { indication: "10", reference: "9" },
+            ...(options.performedAt
+              ? { performedAt: options.performedAt }
+              : {}),
+            standardsSnapshot: [
+              {
+                id: world.standardId,
+                name: "Massa Padrao",
+                certificateNumber: "CERT-SV",
+                calibrationDate: "2025-01-10T00:00:00.000Z",
+                nextCalibrationDate: `${VALID_THROUGH_KEY}T00:00:00.000Z`,
+                uncertainty: 0.01,
+                uncertaintyUnit: "g",
+                coverageFactor: 2,
+                distribution: "normal",
+                drift: null,
+                certifiedValues: null,
+              },
+            ],
+            calibrationLocationSnapshot: {
+              type: "lab",
+              addressText: "Laboratório",
+            },
+          },
+          occurredAt: options.occurredAt,
+          actorUserId: world.org.userId,
+          organizationId: world.org.orgId,
+          unitId: world.org.unitId,
+          idempotencyKey: `idem-${options.eventId}`,
+          localVersion: 0,
+        },
+      ],
+    }),
+  });
+  expect(res.status).toBe(200);
+  const body: {
+    accepted: Array<{ eventId: string }>;
+    rejected: Array<{ eventId: string; code: string; reason: string }>;
+  } = await res.json();
+  return body;
+}
+
+async function statusOf(jobId: number) {
+  const [row] = await db
+    .select({ status: calibrationJob.status })
+    .from(calibrationJob)
+    .where(eq(calibrationJob.id, jobId));
+  return row?.status;
+}
+
+describe("syncRouter — desktop execution judges a standard by the performed day (REQ-CAL-004, Q12)", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  it("REQ-CAL-004 [HIGH RISK]: an event performed the day before the standard expired is accepted although it is synced days after", async () => {
+    const world = await seedWorld();
+
+    const body = await pushSubmit(world, {
+      eventId: "evt-before",
+      occurredAt: `${DAY_BEFORE_KEY}T15:00:00.000Z`,
+    });
+
+    expect(body.rejected).toEqual([]);
+    expect(body.accepted.map((event) => event.eventId)).toEqual(["evt-before"]);
+    expect(await statusOf(world.jobId)).toBe("REVIEW");
+  });
+
+  it("REQ-CAL-004 [HIGH RISK]: an event performed on the last valid day at 23:30 in Sao Paulo is accepted", async () => {
+    const world = await seedWorld();
+    const performedAt = new Date(`${VALID_THROUGH_KEY}T23:30:00-03:00`);
+
+    const body = await pushSubmit(world, {
+      eventId: "evt-last-evening",
+      occurredAt: performedAt.toISOString(),
+      performedAt: performedAt.toISOString(),
+    });
+
+    expect(body.rejected).toEqual([]);
+    expect(await statusOf(world.jobId)).toBe("REVIEW");
+  });
+
+  it("REQ-CAL-004 [HIGH RISK]: an event performed after the standard expired (00:10 the next day) is refused STANDARD_EXPIRED and the job is untouched", async () => {
+    const world = await seedWorld();
+    const performedAt = new Date(`${DAY_AFTER_KEY}T00:10:00-03:00`);
+
+    const body = await pushSubmit(world, {
+      eventId: "evt-after",
+      occurredAt: performedAt.toISOString(),
+      performedAt: performedAt.toISOString(),
+    });
+
+    expect(body.accepted).toEqual([]);
+    expect(body.rejected).toEqual([
+      expect.objectContaining({
+        eventId: "evt-after",
+        code: "STANDARD_EXPIRED",
+      }),
+    ]);
+    expect(await statusOf(world.jobId)).toBe("IN_PROGRESS");
+  });
+
+  it("REQ-CAL-004: with no explicit performed date the event time (not the sync time) decides", async () => {
+    const world = await seedWorld();
+
+    // Recorded on the day after the standard expired, synced today.
+    const body = await pushSubmit(world, {
+      eventId: "evt-recorded-after",
+      occurredAt: `${DAY_AFTER_KEY}T15:00:00.000Z`,
+    });
+
+    expect(body.rejected).toEqual([
+      expect.objectContaining({ code: "STANDARD_EXPIRED" }),
+    ]);
+    expect(await statusOf(world.jobId)).toBe("IN_PROGRESS");
+  });
+});

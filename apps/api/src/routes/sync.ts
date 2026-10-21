@@ -75,6 +75,7 @@ import {
   UpdateServiceOrderExecutionSchema,
   METHOD_DEVIATIONS_MAX_LENGTH,
   resolveExecutionPerformedAt,
+  isStandardValidOn,
 } from "@calibra-facil/schemas";
 import {
   and,
@@ -3051,6 +3052,11 @@ async function applyLocalJobExecution(
     nextStandardsSnapshot,
     nextData,
     input.memberData,
+    // When the work was done, never when it is synced: a standard valid on
+    // that laboratory day is accepted, one already expired on it is refused.
+    executionTime.performedAt ??
+      existing.performedAt ??
+      resolveDesktopPerformedAt(input.event.occurredAt),
   );
 
   if (!standardsValidation.ok) {
@@ -3253,6 +3259,7 @@ async function validateDesktopExecutionStandardsSnapshot(
   standardsSnapshot: StandardSnapshot[] | null,
   data: Record<string, unknown>,
   memberData: MemberData,
+  performedAt: Date,
 ): Promise<
   | { ok: true }
   | {
@@ -3352,17 +3359,11 @@ async function validateDesktopExecutionStandardsSnapshot(
     };
   }
 
-  const now = new Date();
-  const expiredStandards = standards.filter((standard) => {
-    const nextCalibrationDate =
-      standard.nextCalibrationDate instanceof Date
-        ? standard.nextCalibrationDate
-        : new Date(standard.nextCalibrationDate);
-
-    return Number.isFinite(nextCalibrationDate.getTime())
-      ? nextCalibrationDate < now
-      : true;
-  });
+  // Valid THROUGH the certificate day, judged on the laboratory day the work
+  // was performed (never the sync time).
+  const expiredStandards = standards.filter(
+    (standard) => !isStandardValidOn(standard.nextCalibrationDate, performedAt),
+  );
 
   if (expiredStandards.length > 0) {
     return {

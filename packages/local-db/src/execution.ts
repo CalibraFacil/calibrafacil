@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { resolveExecutionPerformedAt } from "@calibra-facil/schemas";
+import {
+  isStandardValidOn,
+  resolveExecutionPerformedAt,
+} from "@calibra-facil/schemas";
 import type { LocalDatabase } from "./database";
 import { getLocalEffectiveEnvironmentalLimits } from "./environmental-limits";
 import { stableLocalNumericId } from "./ids";
@@ -269,6 +272,11 @@ export function saveLocalJobExecution(
     database,
     input.selectedStandardIds,
     input.data,
+    // The date the work is recorded at; a draft keeps the one already saved.
+    localStandardsPerformedAt(
+      input.performedAt,
+      nextStatus === "REVIEW" ? null : existing.performed_at,
+    ),
   );
   const environmentalSnapshot = input.environment
     ? buildEnvironmentalSnapshot(database, existing, input.environment, {
@@ -852,10 +860,35 @@ function getPublishedMethod(database: LocalDatabase, localMethodId: string) {
     .get({ id: localMethodId });
 }
 
+/**
+ * The moment a calibration is recorded as performed, for judging whether its
+ * reference standards were valid (REQ-CAL-004): the date entered with the
+ * request, else the one already saved on the job, else now. An unreadable or
+ * future date falls back the same way (the submit rules reject it separately).
+ */
+export function localStandardsPerformedAt(
+  requested: string | null | undefined,
+  saved: string | null | undefined,
+  now: Date = new Date(),
+): Date {
+  for (const [candidate, allowFuture] of [
+    [requested, false],
+    [saved, true],
+  ] as const) {
+    if (!candidate) continue;
+    const parsed = new Date(candidate);
+    if (Number.isNaN(parsed.getTime())) continue;
+    if (!allowFuture && parsed.getTime() > now.getTime()) continue;
+    return parsed;
+  }
+  return now;
+}
+
 export function buildLocalStandardsSnapshot(
   database: LocalDatabase,
   selectedStandardIds: number[] | undefined,
   data: JsonRecord = {},
+  performedAt: Date = new Date(),
 ) {
   const compositionStandardIds = collectCompositionStandardIds(data);
   if (
@@ -881,7 +914,6 @@ WHERE remote_id IN (${standardIds.map(() => "?").join(",")})
     .all(...standardIds);
   const rowsByRemoteId = new Map(rows.map((row) => [row.remote_id, row]));
   const compositionStandardIdSet = new Set(compositionStandardIds);
-  const now = Date.now();
 
   return standardIds.map((standardId) => {
     const row = rowsByRemoteId.get(standardId);
@@ -896,11 +928,13 @@ WHERE remote_id IN (${standardIds.map(() => "?").join(",")})
     const snapshot = parseJsonRecord(row.snapshot_json);
     const nextCalibrationDate =
       getString(snapshot, "nextCalibrationDate") ?? row.next_calibration_date;
-    const nextCalibrationTime = nextCalibrationDate
-      ? new Date(nextCalibrationDate).getTime()
-      : Number.NaN;
 
-    if (!Number.isFinite(nextCalibrationTime) || nextCalibrationTime < now) {
+    // Valid THROUGH the certificate day, judged on the laboratory day the work
+    // was performed (the cloud's rule, `isStandardValidOn`).
+    if (
+      !nextCalibrationDate ||
+      !isStandardValidOn(nextCalibrationDate, performedAt)
+    ) {
       throw new Error(`Padrao ${row.name} esta com certificado vencido`);
     }
 
