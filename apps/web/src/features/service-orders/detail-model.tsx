@@ -9,7 +9,10 @@ import {
   Wrench01Icon,
 } from '@hugeicons/core-free-icons'
 
-import { ServiceOrderIntakeDocumentHtml } from '@calibra-facil/documents'
+import {
+  ServiceOrderIntakeDocumentHtml,
+  formatDateOnly,
+} from '@calibra-facil/documents'
 import type {
   MaterialsListData,
   ServiceOrderCommunicationStatus,
@@ -448,18 +451,14 @@ const DATETIME_SHORT_FORMAT = new Intl.DateTimeFormat('pt-BR', {
   timeStyle: 'short',
 })
 
-const DATE_SHORT_FORMAT = new Intl.DateTimeFormat('pt-BR', {
-  dateStyle: 'short',
-})
-
 export function formatDateTime(value?: string | null) {
   if (!value) return 'Não informado'
   return DATETIME_SHORT_FORMAT.format(new Date(value))
 }
 
+/** A date-only value (a due date): the day it names, "15/10/26". */
 export function formatDate(value?: string | null) {
-  if (!value) return 'Não informado'
-  return DATE_SHORT_FORMAT.format(new Date(value))
+  return formatDateOnly(value, 'Não informado', { dateStyle: 'short' })
 }
 
 export function serviceOrderFinancialStatusSummary(

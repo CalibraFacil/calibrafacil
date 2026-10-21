@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router'
+import { formatDateOnly } from '@calibra-facil/documents'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -82,9 +83,9 @@ const statusVariants: Record<
   SUPERSEDED: 'outline',
 }
 
+// A due date is a calendar date (a Postgres date): show the day it names.
 function formatDate(dateString: string | null): string {
-  if (!dateString) return '-'
-  return new Date(dateString).toLocaleDateString('pt-BR')
+  return formatDateOnly(dateString, '-')
 }
 
 function jobPath(job: RecentJob) {

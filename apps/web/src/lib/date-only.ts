@@ -79,6 +79,22 @@ export function dateOnlyToInputValue(
 }
 
 /**
+ * A stored date-only value as the LOCAL date a date picker should show: local
+ * midnight of the day it names. `new Date(value)` would be UTC midnight, which
+ * a picker in Brazil shows as the day before (and saves back as that day).
+ * Undefined for a missing or unreadable value.
+ */
+export function dateOnlyToLocalDate(
+  value: string | Date | null | undefined,
+): Date | undefined {
+  if (!value) return undefined
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return undefined
+  const { year, month, day } = getDateOnlyDay(date)
+  return new Date(year, month - 1, day)
+}
+
+/**
  * Whole calendar days from `today`'s laboratory day to the day a stored
  * date-only value names (negative when past): the due-today / expired-yesterday
  * counts.

@@ -5,6 +5,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { FloppyDiskIcon, SquareLock02Icon } from '@hugeicons/core-free-icons'
 
 import { calibraApi } from '@/utils/api'
+import { dateOnlyToLocalDate } from '@/lib/date-only'
 import type { AssetDetail } from '@/features/assets/types'
 import {
   isAssetFormStatus,
@@ -120,7 +121,8 @@ export function AssetEditForm({
     serialNumber: asset.serialNumber,
     tag: asset.tag,
     status: asset.status,
-    lastCalibrationDate: parseDate(asset.lastCalibrationDate),
+    // A stored calendar date: the picker shows the day it names.
+    lastCalibrationDate: dateOnlyToLocalDate(asset.lastCalibrationDate),
     installedAt: parseDate(asset.installedAt),
     comments: asset.comments || '',
     ...regulatedFormFieldsFromAsset(asset),

@@ -48,6 +48,7 @@ import {
   portalDigestFrequenciesFor,
   quantityKindLabelPt,
 } from "@calibra-facil/shared";
+import { formatCalendarDateBR } from "./calendar-date-format";
 import { buildLegalVerificationMessage } from "./legal-verification-message";
 import { buildCertificateAmendedLinks } from "./portal-links";
 import { isEmailSuppressed } from "./suppression";
@@ -2326,7 +2327,7 @@ export async function notifyAssetDueForRecalibration(
     .limit(1);
 
   const daysRemaining = getDaysRemaining(assetData.nextCalibrationDate);
-  const dueDate = formatDateBR(assetData.nextCalibrationDate);
+  const dueDate = formatCalendarDateBR(assetData.nextCalibrationDate);
   const assetIdentifier =
     assetData.tag || assetData.serialNumber || assetData.name;
   const itemName = customerData
@@ -2412,7 +2413,7 @@ export async function notifyAssetDueForLegalVerification(
     .limit(1);
 
   const daysRemaining = getDaysRemaining(assetData.nextLegalVerificationDate);
-  const dueDate = formatDateBR(assetData.nextLegalVerificationDate);
+  const dueDate = formatCalendarDateBR(assetData.nextLegalVerificationDate);
   const assetIdentifier =
     assetData.tag || assetData.serialNumber || assetData.name;
   const itemName = customerData
@@ -2481,7 +2482,7 @@ export async function notifyStandardExpiring(
   if (!standardData?.nextCalibrationDate) return;
 
   const daysRemaining = getDaysRemaining(standardData.nextCalibrationDate);
-  const dueDate = formatDateBR(standardData.nextCalibrationDate);
+  const dueDate = formatCalendarDateBR(standardData.nextCalibrationDate);
   const standardIdentifier =
     standardData.certificateNumber ||
     standardData.serialNumber ||
@@ -2599,7 +2600,7 @@ export async function notifyStandardExpired(
   if (!standardData?.nextCalibrationDate) return;
 
   const daysRemaining = getDaysRemaining(standardData.nextCalibrationDate);
-  const dueDate = formatDateBR(standardData.nextCalibrationDate);
+  const dueDate = formatCalendarDateBR(standardData.nextCalibrationDate);
   const standardIdentifier =
     standardData.certificateNumber ||
     standardData.serialNumber ||
@@ -2840,7 +2841,7 @@ export async function notifyJobOverdue(jobId: number): Promise<void> {
   if (!activeStatuses.includes(jobData.status)) return;
 
   const daysOverdue = Math.abs(getDaysRemaining(jobData.dueDate));
-  const dueDate = formatDateBR(jobData.dueDate);
+  const dueDate = formatCalendarDateBR(jobData.dueDate);
 
   // Notify the technician (if assigned) and admins/owners
   const recipientIds = new Set<string>();

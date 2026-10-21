@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { formatDateOnlyKey } from "@calibra-facil/documents";
 import { useState } from "react";
 import {
   addDays,
@@ -97,9 +98,15 @@ export function CalendarPage({
   );
 
   const duesByDay = groupDuesByDay(data?.data ?? []);
-  const monthDues = (data?.data ?? []).filter((due) =>
-    isSameMonth(new Date(due.nextCalibrationDate), monthStart),
-  );
+  const monthKey = format(monthStart, "yyyy-MM");
+  const monthDues = (data?.data ?? []).filter((due) => {
+    const dueDate = new Date(due.nextCalibrationDate);
+    // The day the date names (UTC midnight would read as the evening before).
+    return (
+      !Number.isNaN(dueDate.getTime()) &&
+      formatDateOnlyKey(dueDate).startsWith(monthKey)
+    );
+  });
   const monthOverdue = monthDues.filter(
     (due) => getInstrumentStatus(due).status === "OVERDUE",
   ).length;

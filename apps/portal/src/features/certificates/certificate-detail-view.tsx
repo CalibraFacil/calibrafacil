@@ -48,7 +48,7 @@ import {
 } from "@/components/instrument-panel";
 import { AccreditationSeal } from "@/components/accreditation-seal";
 import { StatusPill, TONE } from "@/components/status-pill";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatDateOnly } from "@/lib/format";
 import { getApiBaseUrl } from "@/lib/utils";
 import {
   useSignatureVerdict,
@@ -726,7 +726,7 @@ export function CertificateDetailView({
                 <SignalTile
                   icon={Calendar03Icon}
                   label="Próxima calibração"
-                  value={formatDate(certificate.dueDate)}
+                  value={formatDateOnly(certificate.dueDate)}
                   hint={dueState.hint}
                   tone={dueState.tone}
                 />

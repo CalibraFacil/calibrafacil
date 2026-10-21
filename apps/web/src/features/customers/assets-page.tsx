@@ -1,4 +1,5 @@
 import { Link, useNavigate } from '@tanstack/react-router'
+import { formatDateOnly } from '@calibra-facil/documents'
 import { useState } from 'react'
 import {
   PlusSignIcon,
@@ -57,10 +58,9 @@ const statusVariants: Record<
   SCRAPPED: 'destructive',
 }
 
+// The next calibration is a calendar date (a Postgres date): show its day.
 function formatDate(date: string | Date | null | undefined): string {
-  if (!date) return '-'
-  const d = new Date(date)
-  return d.toLocaleDateString('pt-BR')
+  return formatDateOnly(date, '-')
 }
 
 export function ClientEquipmentTab({ id }: { id: string }) {

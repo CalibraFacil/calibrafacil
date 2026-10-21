@@ -2,7 +2,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Calendar03Icon } from "@hugeicons/core-free-icons";
 
 import { Panel, PanelHeader } from "@/components/instrument-panel";
-import { formatDate } from "@/lib/format";
+import { formatDateOnly } from "@/lib/format";
 import type { AssetDetail } from "./types";
 
 /**
@@ -38,7 +38,7 @@ export function LegalVerificationPanel({ asset }: { asset: AssetDetail }) {
             <span className="font-mono tabular-nums">
               {noNationalPeriod
                 ? "sem periodicidade nacional fixada"
-                : formatDate(asset.nextLegalVerificationDate)}
+                : formatDateOnly(asset.nextLegalVerificationDate)}
             </span>
           </span>
         </div>
