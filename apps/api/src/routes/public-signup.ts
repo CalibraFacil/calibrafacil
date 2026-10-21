@@ -106,6 +106,8 @@ async function hasExistingLabMembership(email: string) {
       and(
         eq(member.userId, existing.id),
         or(eq(organization.type, "LAB"), isNull(organization.type)),
+        // A soft-deleted laboratory (records retention) is not an account.
+        isNull(organization.deletedAt),
       ),
     )
     .limit(1);

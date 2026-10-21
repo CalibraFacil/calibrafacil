@@ -262,6 +262,7 @@ export async function hasActiveLabMembership(email: string) {
       and(
         eq(sql<string>`lower(${user.email})`, normalizedEmail),
         eq(organization.type, "LAB"),
+        isNull(organization.deletedAt),
       ),
     )
     .limit(1);
@@ -281,6 +282,7 @@ export async function hasPendingLabInvitation(email: string) {
         eq(invitation.status, "pending"),
         gt(invitation.expiresAt, new Date()),
         eq(organization.type, "LAB"),
+        isNull(organization.deletedAt),
       ),
     )
     .limit(1);

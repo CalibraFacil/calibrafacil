@@ -64,6 +64,10 @@
     {
       "path": "/api/cron/certificate-drift",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/records-purge",
+      "schedule": "0 5 * * 0"
     }
   ],
   "rewrites": [

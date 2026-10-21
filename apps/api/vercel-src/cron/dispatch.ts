@@ -12,6 +12,7 @@ import { runStaleJobBackstop } from "../../src/lib/stale-job-backstop";
 import { createWorkerRuntimeEnv } from "../../src/lib/runtime-env";
 import { runCron } from "./cron-run";
 import { runCertificateDriftCheck } from "../../src/lib/certificate-drift";
+import { runRecordsPurge } from "../../src/lib/records-purge";
 import {
   createR2Client,
   downloadFromR2,
@@ -306,6 +307,20 @@ async function handleCertificateDrift(request: Request) {
   });
 }
 
+// Retention of regulated records (decision Q16): purge of soft-deleted
+// organizations whose newest evidence is past retention. Registered but OFF:
+// RECORDS_PURGE_ENABLED must be "true" to do anything, and even then it only
+// logs what it would purge unless RECORDS_PURGE_MODE=execute (DEPLOYMENT.md).
+async function handleRecordsPurge(request: Request) {
+  if (!isCronAuthorized(request)) {
+    return cronAuthFailureResponse();
+  }
+
+  return runCron("records-purge", { leaseSeconds: 300 }, () =>
+    runRecordsPurge(),
+  );
+}
+
 export const JOB_HANDLERS: Record<
   string,
   (request: Request) => Promise<Response>
@@ -320,6 +335,7 @@ export const JOB_HANDLERS: Record<
   "spc-recompute": handleSpcRecompute,
   "email-domain-health": handleEmailDomainHealth,
   "certificate-drift": handleCertificateDrift,
+  "records-purge": handleRecordsPurge,
 };
 
 function resolveJob(request: Request) {

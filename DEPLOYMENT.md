@@ -142,29 +142,31 @@ then set `AUTH_COOKIE_DOMAIN` and build the frontends with `VITE_API_URL`.
 
 `apps/api/.env.example` documents every variable. The essentials for production:
 
-| Variable                                                                                            | Notes                                                                                |
-| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `NODE_ENV=production`                                                                               |                                                                                      |
-| `DATABASE_URL`                                                                                      | PostgreSQL connection string                                                         |
-| `API_URL`, `APP_URL`, `PORTAL_APP_URL`                                                              | Public URLs (`API_URL` = `APP_URL` when the API is served under `/api`)              |
-| `VERIFY_URL`                                                                                        | Optional; host of the verification page (defaults to `PORTAL_APP_URL`)               |
-| `BETTER_AUTH_SECRET`                                                                                | ≥ 32 random characters                                                               |
-| `AUTH_COOKIE_DOMAIN`                                                                                | e.g. `.example.com` when the API and the apps are on different subdomains            |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`                               | Outgoing e-mail; or `RESEND_API_KEY` for Resend (`EMAIL_TRANSPORT` picks when both)  |
-| `EMAIL_FROM`                                                                                        | Sender, e.g. `"Laboratório <calibra@example.com>"`                                   |
-| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`                                                          | Object-storage credentials                                                           |
-| `R2_BUCKET_NAME`, `R2_MEDIA_BUCKET_NAME`                                                            | Documents bucket (regulated records) and media bucket (logos, etc.)                  |
-| `R2_ACCOUNT_ID` **or** `R2_ENDPOINT` (+ `R2_REGION`)                                                | Cloudflare R2 account, or the endpoint of any S3-compatible store                    |
-| `R2_PUBLIC_ENDPOINT`                                                                                | Optional; the store's public address when `R2_ENDPOINT` is internal (download links) |
-| `GOTENBERG_URL` (+ `GOTENBERG_TOKEN`)                                                               | PDF rendering                                                                        |
-| `SIGNING_MASTER_KEY`, `INTEGRATIONS_MASTER_KEY`, `PUBLIC_API_MASTER_KEY`, `EMAIL_DOMAIN_MASTER_KEY` | 32 random bytes each, base64 (`openssl rand -base64 32`); never reuse one key twice  |
-| `QUOTE_APPROVAL_CODE_PEPPER`, `CRON_SECRET`                                                         | Random strings                                                                       |
-| `PORTAL_SERVICE_USER_ID`                                                                            | Id of the account that owns client-portal organizations (`init` creates it)          |
-| `BACKGROUND_JOBS_MODE`                                                                              | `local` (inside the API process), `queue` (a separate worker) or `vercel`            |
-| `BACKGROUND_JOBS_MAX_DELIVERIES`                                                                    | Optional, default `3`: Vercel deliveries before a certificate is rejected            |
-| `STUCK_RENDER_AFTER_MS`                                                                             | Optional, default `3600000` (60 min): see _Certificates stuck in generation_ below   |
-| `QUEUE_RECEIPTS_MODE`                                                                               | Optional, default `enforce`; `shadow`/`off` opt out: see _Queue idempotency_ below   |
-| `CRON_SCHEDULER=internal`                                                                           | Run the scheduled jobs inside the API (see below)                                    |
+| Variable                                                                                            | Notes                                                                                 |
+| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `NODE_ENV=production`                                                                               |                                                                                       |
+| `DATABASE_URL`                                                                                      | PostgreSQL connection string                                                          |
+| `API_URL`, `APP_URL`, `PORTAL_APP_URL`                                                              | Public URLs (`API_URL` = `APP_URL` when the API is served under `/api`)               |
+| `VERIFY_URL`                                                                                        | Optional; host of the verification page (defaults to `PORTAL_APP_URL`)                |
+| `BETTER_AUTH_SECRET`                                                                                | ≥ 32 random characters                                                                |
+| `AUTH_COOKIE_DOMAIN`                                                                                | e.g. `.example.com` when the API and the apps are on different subdomains             |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`                               | Outgoing e-mail; or `RESEND_API_KEY` for Resend (`EMAIL_TRANSPORT` picks when both)   |
+| `EMAIL_FROM`                                                                                        | Sender, e.g. `"Laboratório <calibra@example.com>"`                                    |
+| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`                                                          | Object-storage credentials                                                            |
+| `R2_BUCKET_NAME`, `R2_MEDIA_BUCKET_NAME`                                                            | Documents bucket (regulated records) and media bucket (logos, etc.)                   |
+| `R2_ACCOUNT_ID` **or** `R2_ENDPOINT` (+ `R2_REGION`)                                                | Cloudflare R2 account, or the endpoint of any S3-compatible store                     |
+| `R2_PUBLIC_ENDPOINT`                                                                                | Optional; the store's public address when `R2_ENDPOINT` is internal (download links)  |
+| `GOTENBERG_URL` (+ `GOTENBERG_TOKEN`)                                                               | PDF rendering                                                                         |
+| `SIGNING_MASTER_KEY`, `INTEGRATIONS_MASTER_KEY`, `PUBLIC_API_MASTER_KEY`, `EMAIL_DOMAIN_MASTER_KEY` | 32 random bytes each, base64 (`openssl rand -base64 32`); never reuse one key twice   |
+| `QUOTE_APPROVAL_CODE_PEPPER`, `CRON_SECRET`                                                         | Random strings                                                                        |
+| `PORTAL_SERVICE_USER_ID`                                                                            | Id of the account that owns client-portal organizations (`init` creates it)           |
+| `BACKGROUND_JOBS_MODE`                                                                              | `local` (inside the API process), `queue` (a separate worker) or `vercel`             |
+| `BACKGROUND_JOBS_MAX_DELIVERIES`                                                                    | Optional, default `3`: Vercel deliveries before a certificate is rejected             |
+| `STUCK_RENDER_AFTER_MS`                                                                             | Optional, default `3600000` (60 min): see _Certificates stuck in generation_ below    |
+| `QUEUE_RECEIPTS_MODE`                                                                               | Optional, default `enforce`; `shadow`/`off` opt out: see _Queue idempotency_ below    |
+| `CRON_SCHEDULER=internal`                                                                           | Run the scheduled jobs inside the API (see below)                                     |
+| `RECORDS_PURGE_ENABLED`                                                                             | Optional, default `false`: enables the `records-purge` cron (see _Records retention_) |
+| `RECORDS_PURGE_MODE`                                                                                | Optional, default `dry-run`; only `execute` deletes (see _Records retention_)         |
 
 Extra origins for CORS and auth can be listed in `CORS_ALLOWED_ORIGINS` and
 `AUTH_TRUSTED_ORIGINS`. The Conta Azul ERP integration needs no server setup: each laboratory
@@ -221,12 +223,38 @@ a job twice. Or trigger them with your scheduler of choice:
 | `notifications`        | `0 8 * * *`    |
 | `portal-digest`        | `0 9 * * *`    |
 | `auth-maintenance`     | `30 4 * * 1`   |
+| `records-purge`        | `0 5 * * 0`    |
 
 Example crontab line:
 
 ```cron
 */30 * * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://api.example.com/api/cron/queue-backstop
 ```
+
+#### Records retention (purge of soft-deleted laboratories)
+
+Regulated records (technical records, certificates, audit and event logs, reference standards, NC/CAPA,
+service orders, finance documents) are kept at least 10 years: `organization.retention_years` defaults
+to 10 and the database refuses anything below 5. A laboratory that holds records is never deleted for
+real: `pnpm --dir apps/api soft-delete-lab --slug <slug> --reason "<why>"` soft-deletes and suspends it
+(`organization.deleted_at`), and Postgres refuses a `DELETE` of a laboratory organization.
+`docs/architecture/records-retention.md` is the inventory of what counts as evidence and of every
+foreign key into it.
+
+The `records-purge` cron (weekly, `apps/api/vercel.json`) is the only thing that can remove such a
+laboratory, and it is **off by default**:
+
+- `RECORDS_PURGE_ENABLED` unset or anything but `true`: the cron answers immediately and touches nothing.
+- `RECORDS_PURGE_ENABLED=true`: it selects the soft-deleted laboratories that are not under
+  `organization.legal_hold` and whose newest record (their own deletion included) is older than their
+  `retention_years`, and **only logs** what it would purge (`[records-purge] dry run: would purge ...`).
+- `RECORDS_PURGE_MODE=execute` as well: for each of those it writes `records.purge.started` to
+  `platform_event_log`, deletes the laboratory and everything it owns in one transaction, then writes
+  `records.purge.completed` (or `failed`). The platform event log is append-only and survives the purge.
+
+Run it in dry-run for a while and review the log before switching to `execute`. The purge removes
+database rows only: certificate PDFs and attachments in object storage are not deleted by it. Set
+`legal_hold = true` on an organization (with `legal_hold_reason`) to exclude it, whatever its age.
 
 #### Queue idempotency and lease fencing
 

@@ -35,6 +35,7 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { getLabCustomerById } from "../lib/customer-access";
+import { isReferencedRowViolation } from "../lib/db-errors";
 import { fetchCnpjRegistration } from "../lib/cnpj-lookup";
 import {
   loadCustomerActiveCommercialAgreement,
@@ -628,51 +629,71 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
       const ipAddress =
         c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null;
 
-      // Log audit entry before deletion. CMP-06 (#649): the customer_id FK no
-      // longer cascades (soft reference), so this row survives the delete below.
-      await db.insert(customerAuditLog).values({
-        customerId: id,
-        action: "delete",
-        changes: { customer: { old: existingCustomer, new: null } },
-        performedBy: session.user.id,
-        ipAddress,
-      });
-
-      // CMP-07 (#692): deleting the customer cascades its assets
-      // (asset.customer_id → customer, intentional). Record a 'delete' audit row
-      // for EACH asset first — the asset_audit_log.asset_id FK no longer cascades,
-      // so these rows survive the delete and the ISO/IEC 17025 trail is preserved.
-      const customerAssets = await db
-        .select()
-        .from(asset)
-        .where(eq(asset.customerId, id));
-      if (customerAssets.length > 0) {
-        await db.insert(assetAuditLog).values(
-          customerAssets.map((assetRow) => ({
-            assetId: assetRow.id,
+      // Retention (decision Q16): a customer that still has regulated records
+      // (jobs, certificates, service orders, billing documents, requests,
+      // visits, OOT events) cannot be deleted. Those foreign keys are RESTRICT, so
+      // Postgres refuses the DELETE; the audit rows below are written in the same
+      // transaction so a refused delete leaves no "delete" entry behind.
+      try {
+        await db.transaction(async (tx) => {
+          // Log audit entry before deletion. CMP-06 (#649): the customer_id FK no
+          // longer cascades (soft reference), so this row survives the delete below.
+          await tx.insert(customerAuditLog).values({
+            customerId: id,
             action: "delete",
-            changes: { asset: { old: assetRow, new: null } },
+            changes: { customer: { old: existingCustomer, new: null } },
             performedBy: session.user.id,
             ipAddress,
-            reason: "Cliente excluído",
-          })),
-        );
+          });
+
+          // CMP-07 (#692): deleting the customer cascades its assets
+          // (asset.customer_id → customer, intentional). Record a 'delete' audit row
+          // for EACH asset first — the asset_audit_log.asset_id FK no longer cascades,
+          // so these rows survive the delete and the ISO/IEC 17025 trail is preserved.
+          const customerAssets = await tx
+            .select()
+            .from(asset)
+            .where(eq(asset.customerId, id));
+          if (customerAssets.length > 0) {
+            await tx.insert(assetAuditLog).values(
+              customerAssets.map((assetRow) => ({
+                assetId: assetRow.id,
+                action: "delete",
+                changes: { asset: { old: assetRow, new: null } },
+                performedBy: session.user.id,
+                ipAddress,
+                reason: "Cliente excluído",
+              })),
+            );
+          }
+
+          // Delete the customer (the asset/customer audit trail above survives)
+          await tx
+            .delete(customer)
+            .where(
+              and(
+                eq(customer.id, id),
+                eq(customer.labOrganizationId, memberData.organizationId),
+              ),
+            );
+
+          // Also delete the associated (CLIENT) organization
+          await tx
+            .delete(organization)
+            .where(eq(organization.id, existingCustomer.authOrganizationId));
+        });
+      } catch (error) {
+        if (isReferencedRowViolation(error)) {
+          return c.json(
+            {
+              error:
+                "Cliente possui registros regulados retidos (calibrações, ordens de serviço, documentos financeiros) e não pode ser excluído",
+            },
+            409,
+          );
+        }
+        throw error;
       }
-
-      // Delete the customer (the asset/customer audit trail above survives)
-      await db
-        .delete(customer)
-        .where(
-          and(
-            eq(customer.id, id),
-            eq(customer.labOrganizationId, memberData.organizationId),
-          ),
-        );
-
-      // Also delete the associated organization
-      await db
-        .delete(organization)
-        .where(eq(organization.id, existingCustomer.authOrganizationId));
 
       return c.json({ success: true });
     } catch (error) {

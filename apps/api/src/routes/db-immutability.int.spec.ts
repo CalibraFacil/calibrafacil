@@ -52,6 +52,7 @@ import { eq, sql } from "drizzle-orm";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { hardDeleteOrganizationAsPurge } from "../../test/integration/records-retention";
 import { createApiKeySecret } from "../lib/api-keys";
 import { seedExtraMember } from "../../test/integration/tenant-refs";
 import { applyJobTimeline } from "../cli/seed-demo/timeline";
@@ -1047,7 +1048,8 @@ describe("evidence outlives its parent (migration 0115)", () => {
       throw new Error("evidence seed failed");
     }
 
-    await db.delete(organization).where(eq(organization.id, orgId));
+    // Retention (migration 0117): a LAB organization is only deleted by the purge.
+    await hardDeleteOrganizationAsPurge(orgId);
 
     expect(
       await db.select().from(organization).where(eq(organization.id, orgId)),
