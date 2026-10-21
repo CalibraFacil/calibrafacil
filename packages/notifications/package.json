@@ -27,13 +27,11 @@
     "@calibra-facil/shared": "workspace:*",
     "@calibra-facil/email-sender": "workspace:*",
     "@calibra-facil/email": "workspace:*",
-    "@react-email/components": "1.0.12",
     "@react-email/render": "^2.0.8",
     "drizzle-orm": "^0.45.2",
     "resend": "^6.12.4"
   },
   "devDependencies": {
-    "@calibra-facil/email": "workspace:*",
     "@repo/typescript-config": "workspace:^",
     "@types/node": "^24.13.0",
     "@types/react": "^19.2.16",

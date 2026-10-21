@@ -12,7 +12,6 @@
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
-    "@repo/typescript-config": "workspace:^",
     "@types/react": "^19.2.16",
     "@types/react-dom": "^19.0.1",
     "vitest": "^4.1.11"

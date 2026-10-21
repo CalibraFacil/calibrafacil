@@ -5,9 +5,9 @@ assembles documents — calibration certificates, service-order PDFs, and the
 PDF-label job — **off** the Vercel queue function.
 
 It is the "phase 2" of the build-time work in PR #398: moving the heavy
-`processBackgroundJob` graph (react-dom SSR, XLSX templating, `@resvg/resvg-js`,
-signing) out of `apps/api/api/queues/background.js` so that Vercel function
-stops carrying a ~6 MB bundle and a native dependency.
+`processBackgroundJob` graph (react-dom SSR, XLSX templating, signing) out of
+`apps/api/api/queues/background.js` so that Vercel function stops carrying a
+~6 MB bundle and a native dependency.
 
 ## How it works (push-driven, scale-to-zero — no idle DB polling)
 
@@ -162,9 +162,6 @@ container in production:
 - Delete the static `import { processBackgroundJob }` from
   `apps/api/vercel-src/queues/background.ts` (collapse it to a forwarder, or
   delete the queue function entirely → API goes 3 → 2 functions).
-- Drop `external: ["@resvg/resvg-js"]` from
-  `apps/api/scripts/build-vercel-functions.mjs` (resvg now lives only in this
-  glibc container).
 - Exclude `node_modules` from Vercel function packaging (the ~88 s win), now
   that nothing on Vercel runs the worker.
 

@@ -9,9 +9,6 @@
         "jsx": "react-jsx",
         "module": "ESNext",
         "moduleResolution": "bundler",
-        "types": [
-            "@cloudflare/workers-types"
-        ],
         "strict": true,
         "esModuleInterop": true,
         "skipLibCheck": true,
