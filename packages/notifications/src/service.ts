@@ -1089,7 +1089,12 @@ async function getCalibrationRequestDetails(requestId: number): Promise<{
   const items = await db
     .select({ id: calibrationRequestItem.id })
     .from(calibrationRequestItem)
-    .where(eq(calibrationRequestItem.requestId, requestId));
+    .where(
+      and(
+        eq(calibrationRequestItem.requestId, requestId),
+        eq(calibrationRequestItem.organizationId, request.organizationId),
+      ),
+    );
 
   return {
     ...request,

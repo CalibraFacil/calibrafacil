@@ -35,7 +35,14 @@ export async function syncJobStandardLinks(
 
   try {
     await db.transaction(async (tx) => {
-      await tx.delete(jobStandard).where(eq(jobStandard.jobId, jobId));
+      await tx
+        .delete(jobStandard)
+        .where(
+          and(
+            eq(jobStandard.jobId, jobId),
+            eq(jobStandard.organizationId, organizationId),
+          ),
+        );
 
       const standardIds = [
         ...new Set(

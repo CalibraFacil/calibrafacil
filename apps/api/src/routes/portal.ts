@@ -805,7 +805,12 @@ export const portalRouter = new Hono<{
             itemCount: sql<number>`cast((select count(*) from ${calibrationRequestItem} where ${calibrationRequestItem.requestId} = ${calibrationRequest.id}) as int)`,
           })
           .from(calibrationRequest)
-          .where(requestWhere)
+          .where(
+            and(
+              requestWhere,
+              eq(calibrationRequest.organizationId, scope.labOrganizationId),
+            ),
+          )
           .orderBy(desc(calibrationRequest.submittedAt))
           .limit(5),
         db
@@ -3056,7 +3061,10 @@ export const portalRouter = new Hono<{
           return c.json({ data: [] });
         }
 
-        const conditions = [inArray(assetOotEvent.customerId, customerIds)];
+        const conditions = [
+          inArray(assetOotEvent.customerId, customerIds),
+          eq(assetOotEvent.labOrganizationId, scope.labOrganizationId),
+        ];
         if (status) {
           conditions.push(eq(assetOotEvent.status, status));
         }
@@ -3162,7 +3170,15 @@ export const portalRouter = new Hono<{
         const [existingAssessment] = await db
           .select({ id: assetOotImpactAssessment.id })
           .from(assetOotImpactAssessment)
-          .where(eq(assetOotImpactAssessment.eventId, id))
+          .where(
+            and(
+              eq(assetOotImpactAssessment.eventId, id),
+              eq(
+                assetOotImpactAssessment.organizationId,
+                event.labOrganizationId,
+              ),
+            ),
+          )
           .limit(1);
         if (existingAssessment) {
           return c.json(
