@@ -17,6 +17,8 @@ import {
   type AuthVariables,
 } from "../../middleware/permission";
 import { buildUnitScopeCondition } from "../../lib/units";
+import { agreementBelongsToOrganization } from "../../lib/tenant-refs";
+import { isUniqueViolationOf } from "../../lib/db-errors";
 import {
   recomputeCertificateRelease,
   releaseByException,
@@ -26,6 +28,9 @@ import type { CertificateReleasePolicyMode } from "@calibra-facil/shared";
 const JobIdParamSchema = z.object({
   calibrationJobId: z.coerce.number().int().positive(),
 });
+
+/** Partial unique index: one organization-wide default policy (migration 0029). */
+const ORG_DEFAULT_POLICY_INDEX = "certificate_release_policy_org_default_uidx";
 
 const PolicyIdParamSchema = z.object({
   id: z.coerce.number().int().positive(),
@@ -338,6 +343,20 @@ export const settingsCertificateReleasePolicyRouter = new Hono<{
         if (!matched) return c.json({ error: "Cliente inválido" }, 400);
       }
 
+      // Same cross-tenant guard for the agreement the override is pinned to.
+      if (
+        body.commercialAgreementId != null &&
+        !(await agreementBelongsToOrganization(
+          member.organizationId,
+          body.commercialAgreementId,
+        ))
+      ) {
+        return c.json({ error: "Contrato inválido" }, 400);
+      }
+
+      // The partial unique index is the authority: a second org-wide default
+      // (customer, agreement and category all null) violates it, also when two
+      // requests race. Map that one index to 409 instead of a 500.
       const inserted = await db
         .insert(certificateReleasePolicy)
         .values({
@@ -349,7 +368,17 @@ export const settingsCertificateReleasePolicyRouter = new Hono<{
           priority: body.priority ?? 0,
           createdByUserId: session.user.id,
         })
-        .returning();
+        .returning()
+        .catch((error: unknown) => {
+          if (isUniqueViolationOf(error, ORG_DEFAULT_POLICY_INDEX)) return null;
+          throw error;
+        });
+      if (inserted === null) {
+        return c.json(
+          { error: "Já existe uma política padrão para a organização" },
+          409,
+        );
+      }
 
       const created = inserted[0];
       if (!created) return c.json({ error: "Falha ao criar política" }, 500);

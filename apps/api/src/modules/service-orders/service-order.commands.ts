@@ -27,6 +27,10 @@ import {
   recordServiceOrderEvent,
 } from "../../lib/service-order-workflow";
 import { buildUnitScopeCondition } from "../../lib/units";
+import {
+  isAssignableTechnician,
+  serviceOrderBelongsToOrganization,
+} from "../../lib/tenant-refs";
 import { getScopedServiceOrder } from "./service-order.queries";
 import { enqueueServiceOrderDocumentJob } from "./service-order.documents";
 import { enqueueServiceOrderEmail } from "./email-outbox-payloads";
@@ -44,6 +48,40 @@ type DateLikeInput = string | null | undefined;
 
 function parseDate(value: DateLikeInput) {
   return value ? new Date(value) : null;
+}
+
+/**
+ * Ids the request body points the OS at — the responsible technician and the
+ * source (warranty / repair origin) OS — must belong to the caller's
+ * organization. Cross-tenant ids are refused with the same status as unknown
+ * ids so the answer is not an existence oracle.
+ */
+async function validateServiceOrderRefs(params: {
+  organizationId: string;
+  unitId: number | null;
+  responsibleTechnicianId?: string | null;
+  sourceServiceOrderId?: number | null;
+}) {
+  if (
+    params.responsibleTechnicianId &&
+    !(await isAssignableTechnician({
+      organizationId: params.organizationId,
+      userId: params.responsibleTechnicianId,
+      unitId: params.unitId,
+    }))
+  ) {
+    return { status: "invalid_technician" as const };
+  }
+  if (
+    params.sourceServiceOrderId &&
+    !(await serviceOrderBelongsToOrganization(
+      params.organizationId,
+      params.sourceServiceOrderId,
+    ))
+  ) {
+    return { status: "invalid_source_order" as const };
+  }
+  return null;
 }
 
 export async function createServiceOrder(input: {
@@ -73,10 +111,21 @@ export async function createServiceOrder(input: {
   if (
     !assetRow ||
     assetRow.customerId !== input.values.customerId ||
-    assetRow.labOrganizationId !== input.member.organizationId
+    assetRow.labOrganizationId !== input.member.organizationId ||
+    // Unit scope: the OS snapshots the asset's data, so a unit-scoped member
+    // must not open one for an asset that lives in a unit they cannot access.
+    !input.member.accessibleUnitIds.includes(assetRow.unitId)
   ) {
     return { status: "invalid_asset" as const };
   }
+
+  const refs = await validateServiceOrderRefs({
+    organizationId: input.member.organizationId,
+    unitId,
+    responsibleTechnicianId: input.values.responsibleTechnicianId,
+    sourceServiceOrderId: input.values.sourceServiceOrderId,
+  });
+  if (refs) return refs;
 
   const created = await createInitialServiceOrderRecords({
     organizationId: input.member.organizationId,
@@ -236,6 +285,20 @@ export async function updateServiceOrder(input: {
     .limit(1);
   if (!existing) return { status: "not_found" as const };
 
+  const refs = await validateServiceOrderRefs({
+    organizationId: input.member.organizationId,
+    unitId: existing.unitId,
+    responsibleTechnicianId:
+      input.values.responsibleTechnicianId === existing.responsibleTechnicianId
+        ? undefined
+        : input.values.responsibleTechnicianId,
+    sourceServiceOrderId:
+      input.values.sourceServiceOrderId === existing.sourceServiceOrderId
+        ? undefined
+        : input.values.sourceServiceOrderId,
+  });
+  if (refs) return refs;
+
   if (
     input.values.status &&
     input.values.status !== existing.status &&
@@ -353,6 +416,19 @@ export async function assignServiceOrderTechnician(input: {
   actorUserId: string;
   technicianId: string;
 }) {
+  const order = await getScopedServiceOrder(input.serviceOrderId, input.member);
+  if (!order) return { status: "not_found" as const };
+
+  if (
+    !(await isAssignableTechnician({
+      organizationId: input.member.organizationId,
+      userId: input.technicianId,
+      unitId: order.unitId,
+    }))
+  ) {
+    return { status: "invalid_technician" as const };
+  }
+
   const [updated] = await db
     .update(serviceOrder)
     .set({
@@ -368,7 +444,7 @@ export async function assignServiceOrderTechnician(input: {
     )
     .returning();
 
-  if (!updated) return null;
+  if (!updated) return { status: "not_found" as const };
 
   await recordServiceOrderEvent({
     organizationId: updated.organizationId,
@@ -380,7 +456,7 @@ export async function assignServiceOrderTechnician(input: {
     newValue: { technicianId: input.technicianId },
   });
 
-  return updated;
+  return { status: "ok" as const, data: updated };
 }
 
 export async function deliverServiceOrder(input: {
@@ -576,13 +652,17 @@ export async function cancelServiceOrder(input: {
  * Returns null for orders closed before that value was recorded, or when the
  * remembered status is no longer one the app knows.
  */
-async function readStatusBeforeClose(serviceOrderId: number) {
+async function readStatusBeforeClose(
+  serviceOrderId: number,
+  organizationId: string,
+) {
   const [lastClosure] = await db
     .select({ oldValue: serviceOrderEventLog.oldValue })
     .from(serviceOrderEventLog)
     .where(
       and(
         eq(serviceOrderEventLog.serviceOrderId, serviceOrderId),
+        eq(serviceOrderEventLog.organizationId, organizationId),
         inArray(serviceOrderEventLog.eventType, [
           "service_order.closed",
           "service_order.canceled",
@@ -617,7 +697,7 @@ export async function reopenServiceOrder(input: {
   // Back to where it was; awaiting_tech_evaluation only when nothing was
   // recorded (orders closed before this was tracked).
   const restoredStatus =
-    (await readStatusBeforeClose(input.serviceOrderId)) ??
+    (await readStatusBeforeClose(input.serviceOrderId, order.organizationId)) ??
     "awaiting_tech_evaluation";
 
   const [updated] = await db

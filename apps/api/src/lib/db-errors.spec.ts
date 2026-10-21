@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { extractPgErrorCode, isUniqueViolation } from "./db-errors";
+import {
+  extractPgConstraintName,
+  extractPgErrorCode,
+  isUniqueViolation,
+  isUniqueViolationOf,
+} from "./db-errors";
 
 // Supports REQ-SEC-TAG-005a: the tag-conflict catch relies on recognizing a
 // Postgres unique_violation (23505) even when postgres-js wraps it in a Drizzle
@@ -37,5 +42,54 @@ describe("db-errors: isUniqueViolation / extractPgErrorCode", () => {
     expect(isUniqueViolation(undefined)).toBe(false);
     expect(isUniqueViolation("23505")).toBe(false);
     expect(extractPgErrorCode({})).toBeUndefined();
+  });
+});
+
+describe("db-errors: isUniqueViolationOf / extractPgConstraintName", () => {
+  // Supports REQ-CREL-006 / REQ-AUTOSEND-001: the 409 mapping must fire only for
+  // the org-default index, so a 23505 on any other index keeps surfacing as 500.
+  const wrappedDefault = {
+    name: "DrizzleQueryError",
+    code: undefined,
+    cause: {
+      code: "23505",
+      constraint_name: "certificate_release_policy_org_default_uidx",
+    },
+  };
+
+  it("matches a wrapped 23505 on the named index", () => {
+    expect(
+      isUniqueViolationOf(
+        wrappedDefault,
+        "certificate_release_policy_org_default_uidx",
+      ),
+    ).toBe(true);
+    expect(extractPgConstraintName(wrappedDefault)).toBe(
+      "certificate_release_policy_org_default_uidx",
+    );
+  });
+
+  it("does not match a 23505 on a different index", () => {
+    expect(
+      isUniqueViolationOf(
+        wrappedDefault,
+        "automatic_send_rule_org_default_uidx",
+      ),
+    ).toBe(false);
+  });
+
+  it("does not match a non-unique error that names the index", () => {
+    const fk = {
+      code: "23503",
+      constraint_name: "certificate_release_policy_org_default_uidx",
+    };
+    expect(
+      isUniqueViolationOf(fk, "certificate_release_policy_org_default_uidx"),
+    ).toBe(false);
+  });
+
+  it("returns undefined for errors without a constraint name", () => {
+    expect(extractPgConstraintName(new Error("boom"))).toBeUndefined();
+    expect(extractPgConstraintName({ code: "23505" })).toBeUndefined();
   });
 });

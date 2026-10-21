@@ -18,6 +18,10 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../../middleware/permission";
+import {
+  servicesBelongToOrganization,
+  unitsBelongToOrganization,
+} from "../../lib/tenant-refs";
 
 const COMMERCIAL_AGREEMENT_STATUSES = [
   "DRAFT",
@@ -187,6 +191,32 @@ async function syncCustomerComplianceContract(
   return updatedCustomer ?? null;
 }
 
+/**
+ * The units and services a contract names (scope + price terms) are body-supplied
+ * ids: every one must belong to the caller's organization, otherwise the
+ * agreement would price or scope another tenant's catalog. Returns the refusal
+ * message, or null when all ids are in-org.
+ */
+async function findForeignAgreementRef(
+  organizationId: string,
+  input: z.infer<typeof CreateAgreementSchema>,
+) {
+  const unitIds = [
+    ...input.unitIds,
+    ...input.serviceTerms.flatMap((term) =>
+      term.unitId == null ? [] : [term.unitId],
+    ),
+  ];
+  if (!(await unitsBelongToOrganization(organizationId, unitIds))) {
+    return "Unidade invalida";
+  }
+  const serviceIds = input.serviceTerms.map((term) => term.serviceId);
+  if (!(await servicesBelongToOrganization(organizationId, serviceIds))) {
+    return "Servico invalido";
+  }
+  return null;
+}
+
 export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
   .get(
     "/",
@@ -256,6 +286,12 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
       if (!ownedCustomer) {
         return c.json({ error: "Cliente nao encontrado" }, 404);
       }
+
+      const foreignRef = await findForeignAgreementRef(
+        member.organizationId,
+        input,
+      );
+      if (foreignRef) return c.json({ error: foreignRef }, 400);
 
       const [created] = await db.transaction(async (tx) => {
         const [agreement] = await tx
@@ -350,6 +386,12 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
       if (!ownedCustomer) {
         return c.json({ error: "Cliente nao encontrado" }, 404);
       }
+
+      const foreignRef = await findForeignAgreementRef(
+        member.organizationId,
+        input,
+      );
+      if (foreignRef) return c.json({ error: foreignRef }, 400);
 
       const [updated] = await db.transaction(async (tx) => {
         const [agreement] = await tx

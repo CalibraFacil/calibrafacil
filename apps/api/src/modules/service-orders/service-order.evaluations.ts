@@ -8,6 +8,7 @@ import { and, eq, ne } from "drizzle-orm";
 import type { AuthVariables } from "../../middleware/permission";
 import { recordServiceOrderEvent } from "../../lib/service-order-workflow";
 import { buildUnitScopeCondition } from "../../lib/units";
+import { userIsOrganizationMember } from "../../lib/tenant-refs";
 
 type ServiceOrderMember = AuthVariables["member"];
 type EvaluationRow = typeof serviceOrderEvaluation.$inferSelect;
@@ -49,6 +50,19 @@ export async function createServiceOrderEvaluation(input: {
     .where(eq(serviceOrderEvaluation.serviceOrderId, input.serviceOrderId))
     .limit(1);
   if (existingEvaluation) return { status: "already_exists" as const };
+
+  // The evaluating technician may be named in the body: it must be a member of
+  // this organization (the caller themself is, by construction).
+  if (
+    input.values.technicianId &&
+    input.values.technicianId !== input.actorUserId &&
+    !(await userIsOrganizationMember(
+      input.member.organizationId,
+      input.values.technicianId,
+    ))
+  ) {
+    return { status: "invalid_technician" as const };
+  }
 
   const technicianId = input.values.technicianId ?? input.actorUserId;
   const nextStatus = input.values.requiresQuote
@@ -166,6 +180,17 @@ export async function updateServiceOrderEvaluation(input: {
     )
     .limit(1);
   if (!existingEvaluation) return { status: "not_found" as const };
+
+  if (
+    input.values.technicianId &&
+    input.values.technicianId !== input.actorUserId &&
+    !(await userIsOrganizationMember(
+      input.member.organizationId,
+      input.values.technicianId,
+    ))
+  ) {
+    return { status: "invalid_technician" as const };
+  }
 
   const reason = input.revisionReason?.trim();
   const locked = await hasQuoteLeftTheLab(input.serviceOrderId);

@@ -23,6 +23,7 @@ import {
   useFinanceContractCustomerOptionsData,
   useFinanceContractServiceOptionsData,
 } from '@/features/finance/queries'
+import { defaultContractEffectiveFrom } from '@/features/finance/date-defaults'
 import {
   ServiceTermsEditor,
   createEmptyServiceTerm,
@@ -37,7 +38,7 @@ export function NewFinanceContractPage() {
   const [agreementCode, setAgreementCode] = useState('')
   const currency = FINANCE_CURRENCY
   const [effectiveFrom, setEffectiveFrom] = useState(
-    new Date().toISOString().slice(0, 10),
+    defaultContractEffectiveFrom(),
   )
   const [effectiveTo, setEffectiveTo] = useState('')
   const [defaultPaymentTermDays, setDefaultPaymentTermDays] = useState('28')

@@ -45,6 +45,13 @@ import {
   useNewJobCustomerAssetsData,
   useNewJobServicesData,
 } from '@/features/jobs/queries'
+import {
+  buildVisitAcceptRescheduleInput,
+  buildVisitConfirmInput,
+  buildVisitRescheduleInput,
+  formatVisitDay,
+  visitDateInputValue,
+} from '@/features/visits/forms'
 import { useVisitDetailData } from '@/features/visits/queries'
 import {
   formatVisitAddress,
@@ -63,14 +70,6 @@ function formatDateTime(value: string | null | undefined) {
     month: 'short',
     year: 'numeric',
   })
-}
-
-/** ISO string → YYYY-MM-DD for a native date input. */
-function toDateInputValue(value: string | null) {
-  if (!value) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  return date.toISOString().slice(0, 10)
 }
 
 export function VisitDetailPage({ visitId }: { visitId: number }) {
@@ -138,7 +137,7 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
   const technicians = techniciansData?.data ?? []
 
   const [scheduledAt, setScheduledAt] = useState(
-    toDateInputValue(visit.scheduledAt),
+    visitDateInputValue(visit.scheduledAt),
   )
   const [technicianId, setTechnicianId] = useState(visit.technicianId ?? '')
   const [cancelReason, setCancelReason] = useState('')
@@ -188,9 +187,10 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
 
   const rescheduleMutation = useMutation({
     mutationFn: async () =>
-      calibraApi.visits.reschedule(visit.id, {
-        scheduledAt: scheduledAt || null,
-      }),
+      calibraApi.visits.reschedule(
+        visit.id,
+        buildVisitRescheduleInput(scheduledAt),
+      ),
     onSuccess: async () => {
       await invalidate()
       toast.success('Visita reagendada')
@@ -200,10 +200,10 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
 
   const confirmMutation = useMutation({
     mutationFn: async () =>
-      calibraApi.visits.confirm(visit.id, {
-        scheduledAt: scheduledAt || null,
-        technicianId: technicianId || null,
-      }),
+      calibraApi.visits.confirm(
+        visit.id,
+        buildVisitConfirmInput(scheduledAt, technicianId),
+      ),
     onSuccess: async () => {
       await invalidate()
       toast.success('Visita confirmada')
@@ -258,10 +258,15 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
   })
 
   const acceptRescheduleMutation = useMutation({
-    mutationFn: async (input: { requestId: number; scheduledAt: string }) =>
-      calibraApi.visits.acceptRescheduleRequest(visit.id, input.requestId, {
-        scheduledAt: input.scheduledAt,
-      }),
+    mutationFn: async (input: { requestId: number; acceptedDate: string }) => {
+      const payload = buildVisitAcceptRescheduleInput(input.acceptedDate)
+      if (!payload) throw new Error('Informe a nova data da visita')
+      return calibraApi.visits.acceptRescheduleRequest(
+        visit.id,
+        input.requestId,
+        payload,
+      )
+    },
     onSuccess: async () => {
       await invalidate()
       toast.success('Reagendamento aceito — visita movida para a nova data')
@@ -297,7 +302,7 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
 
   const addressText = formatVisitAddress(visit.address)
   const technicianChanged = (visit.technicianId ?? '') !== technicianId
-  const dateChanged = toDateInputValue(visit.scheduledAt) !== scheduledAt
+  const dateChanged = visitDateInputValue(visit.scheduledAt) !== scheduledAt
   const pendingReschedule = visit.pendingRescheduleRequest
 
   const canAddJob =
@@ -326,7 +331,7 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
           <p className="text-sm text-muted-foreground">
             Agendada para{' '}
             <span className="font-mono">
-              {formatDateTime(visit.scheduledAt)}
+              {formatVisitDay(visit.scheduledAt)}
             </span>
             {visit.technicianName
               ? ` · ${visit.technicianName}`
@@ -348,7 +353,7 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
           onAccept={(acceptedDate) =>
             acceptRescheduleMutation.mutate({
               requestId: pendingReschedule.id,
-              scheduledAt: acceptedDate,
+              acceptedDate,
             })
           }
           onDecline={(resolutionNote) =>
@@ -622,7 +627,7 @@ export function VisitRescheduleRequestBanner({
 }) {
   const firstWindow = request.preferredWindows[0]
   const [acceptDate, setAcceptDate] = useState(
-    firstWindow?.date ?? toDateInputValue(currentScheduledAt),
+    firstWindow?.date ?? visitDateInputValue(currentScheduledAt),
   )
   const [declineNote, setDeclineNote] = useState('')
 

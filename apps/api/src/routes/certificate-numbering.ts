@@ -7,11 +7,13 @@ import {
   organization,
   type CertificateNumberingConfig,
 } from "@calibra-facil/db/schema";
+import { getLabCalendarDay } from "@calibra-facil/documents";
 import { UpdateCertificateNumberingProfileSchema } from "@calibra-facil/schemas";
 import { and, desc, eq } from "drizzle-orm";
 import {
   requireLabProtected,
   requireOrgType,
+  requirePermission,
   type AuthVariables,
 } from "../middleware/permission";
 import { requireUnitOperationalSettingsManager } from "../lib/unit-operational-settings";
@@ -90,11 +92,14 @@ export const certificateNumberingRouter = new Hono<{
     "/",
     ...requireLabProtected,
     requireOrgType("LAB"),
+    // The profile is keyed on organizationId and numbers every unit's
+    // certificates, so changing it is an organization-level settings write
+    // (owner/admin) — not something a single-unit unit_admin may do.
+    requirePermission({ settings: ["update"] }),
     zValidator("json", UpdateCertificateNumberingProfileSchema),
     async (c) => {
       const memberData = c.get("member");
       const session = c.get("session");
-      requireUnitOperationalSettingsManager(memberData);
 
       const input = c.req.valid("json");
       let config;
@@ -123,50 +128,59 @@ export const certificateNumberingRouter = new Hono<{
         )
         .limit(1);
 
-      const [profile] = await db
-        .insert(certificateNumberingProfile)
-        .values({
-          organizationId: memberData.organizationId,
-          name: input.name,
-          config,
-          createdBy: session.user.id,
-          updatedBy: session.user.id,
-        })
-        .onConflictDoUpdate({
-          target: certificateNumberingProfile.organizationId,
-          set: {
+      const profile = await db.transaction(async (tx) => {
+        const [saved] = await tx
+          .insert(certificateNumberingProfile)
+          .values({
+            organizationId: memberData.organizationId,
             name: input.name,
             config,
+            createdBy: session.user.id,
             updatedBy: session.user.id,
-            updatedAt: new Date(),
+          })
+          .onConflictDoUpdate({
+            target: certificateNumberingProfile.organizationId,
+            set: {
+              name: input.name,
+              config,
+              updatedBy: session.user.id,
+              updatedAt: new Date(),
+            },
+          })
+          .returning();
+
+        if (!saved) return null;
+
+        // Audit row commits atomically with the change (ISO 17025 §7.5/§8.4).
+        await tx.insert(certificateNumberingAuditLog).values({
+          organizationId: memberData.organizationId,
+          profileId: saved.id,
+          action: existing ? "update" : "create",
+          changes: {
+            old: existing
+              ? {
+                  name: existing.name,
+                  config: existing.config,
+                }
+              : null,
+            new: {
+              name: saved.name,
+              config: saved.config,
+            },
           },
-        })
-        .returning();
+          performedBy: session.user.id,
+          ipAddress:
+            c.req.header("x-forwarded-for") ??
+            c.req.header("x-real-ip") ??
+            null,
+        });
+
+        return saved;
+      });
 
       if (!profile) {
         return c.json({ error: "Falha ao salvar perfil" }, 500);
       }
-
-      await db.insert(certificateNumberingAuditLog).values({
-        organizationId: memberData.organizationId,
-        profileId: profile.id,
-        action: existing ? "update" : "create",
-        changes: {
-          old: existing
-            ? {
-                name: existing.name,
-                config: existing.config,
-              }
-            : null,
-          new: {
-            name: profile.name,
-            config: profile.config,
-          },
-        },
-        performedBy: session.user.id,
-        ipAddress:
-          c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null,
-      });
 
       return c.json({
         message: "Perfil de numeracao atualizado",
@@ -218,8 +232,9 @@ function buildPreview(
     { organizationId: "preview", generatedAt, projectCode: config.projectCode },
     config,
   );
-  const yyyy = String(generatedAt.getFullYear());
-  const month = generatedAt.getMonth() + 1;
+  const labDay = getLabCalendarDay(generatedAt);
+  const yyyy = String(labDay.year);
+  const month = labDay.month;
   const sequence = String(123).padStart(config.sequence.padding, "0");
   const tokens = {
     number: "",
@@ -250,7 +265,7 @@ function buildPreview(
         "NOV",
         "DEC",
       ][month - 1] ?? "",
-    dd: String(generatedAt.getDate()).padStart(2, "0"),
+    dd: String(labDay.day).padStart(2, "0"),
     seq: sequence,
   };
   const number = renderCertificateTemplate(config.numberTemplate, tokens);

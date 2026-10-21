@@ -25,7 +25,8 @@ covers the big-picture architecture; `CONTRIBUTING.md` covers the contribution f
 - `pnpm build`: build all apps/packages.
 - `pnpm lint`: run oxlint across the monorepo.
 - `pnpm format`: format `*.ts`, `*.tsx`, `*.md` with Prettier.
-- `pnpm check-types`: TypeScript type checks.
+- `pnpm check-types`: TypeScript type checks with `tsrs` (Rust port of the TS 7 compiler; falls
+  back to `tsc` where it has no binary). `pnpm check-types:tsc` runs the same checks on native `tsc`.
 - `pnpm turbo test`: run all tests (use Node 24 and `TZ=UTC`).
 - `pnpm turbo dev --filter=@calibra-facil/api`: run a single app.
 - `cd packages/db && pnpm db:bootstrap`: build a new database (schema push + `sql/schema-extras.sql`)
@@ -86,7 +87,11 @@ covers the big-picture architecture; `CONTRIBUTING.md` covers the contribution f
 - Preserve Better Auth patterns and RBAC permission boundaries.
 - The math engine (`packages/math-engine`) is versioned: any change to a numeric result needs
   a new `ENGINE_VERSION` and a new dossier directory under `validation/math-engine/`. Never
-  reformat it as part of a sweep.
+  reformat it as part of a sweep. A SHA-256 pin of the engine source and five golden
+  propagation results, recorded in the current dossier's `manifest.json`, enforces this: any
+  byte change under `packages/math-engine/src` (a comment included) fails the gate until the
+  version is bumped, the new dossier directory exists and
+  `pnpm --filter @calibra-facil/math-engine run engine:pin` has recorded it.
 - Approved calibrations and issued certificates are immutable records; changes go through the
   amendment flow, never through in-place edits.
 - Keep changes scoped; avoid broad rewrites mixed with feature work.
@@ -98,6 +103,12 @@ covers the big-picture architecture; `CONTRIBUTING.md` covers the contribution f
 - Run focused tests with package scripts, e.g., `cd apps/api && pnpm test:run`.
 - Real-database integration tests (`*.int.spec.ts`) run with
   `pnpm --dir apps/api test:integration` against a disposable local Postgres.
+- The integration tier also runs a **tenant SQL guard** (`apps/api/test/integration/tenant-sql-guard.ts`):
+  every statement application code issues against a tenant table (any table with
+  `organization_id`/`lab_organization_id`) must carry an organization predicate, or the test fails.
+  A legitimately unscoped access needs an entry with a reason in
+  `apps/api/test/integration/tenant-sql-allowlist.ts`. `TENANT_SQL_GUARD=report` (plus
+  `TENANT_SQL_GUARD_REPORT=<file>` for JSON lines) or `=off` helps when debugging locally.
 
 ## Commit & Pull Request Guidelines
 

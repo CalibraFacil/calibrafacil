@@ -108,7 +108,7 @@ describe('CustomerFinancialTimelineBlock', () => {
         }}
         freshness={{
           status: 'fresh',
-          lastSyncedAt: '2026-05-20T00:00:00.000Z',
+          lastSyncedAt: '2026-05-20T15:00:00.000Z',
           label: 'Sincronizado',
         }}
         loading={false}
@@ -158,7 +158,7 @@ describe('CustomerFinancialTimelineBlock', () => {
         }}
         freshness={{
           status: 'fresh',
-          lastSyncedAt: '2026-05-20T00:00:00.000Z',
+          lastSyncedAt: '2026-05-20T15:00:00.000Z',
           label: 'Sincronizado',
         }}
         loading={false}
@@ -203,7 +203,7 @@ function timelineDocument(): CustomerFinancialTimelineDocument {
     fiscalDocuments: [],
     freshness: {
       status: 'fresh',
-      lastSyncedAt: '2026-05-20T00:00:00.000Z',
+      lastSyncedAt: '2026-05-20T15:00:00.000Z',
       label: 'Sincronizado',
     },
     providerEvidence: {

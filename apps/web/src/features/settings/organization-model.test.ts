@@ -15,12 +15,14 @@ import {
   createOrganizationIdentityDraft,
   createOrganizationIsoDraft,
   createUnitNameDrafts,
+  dateInputToIso,
   formatInvitationTimeRemaining,
   getCurrentOrganizationRole,
   getGovernanceActivityDescription,
   getGovernanceActivityLabel,
   getInvitationStatusLabel,
   getInvitationStatusVariant,
+  getAccreditationPreviewStatus,
   getInviterName,
   getOrganizationRoleLabel,
   getPersistedAssignmentsForMember,
@@ -216,7 +218,8 @@ describe('organization-model', () => {
     })
 
     // #647: vigência travels as an ISO string (Better Auth rejects Date-typed
-    // fields on JSON bodies), start-of-day / end-of-day anchored. Empty stays
+    // fields on JSON bodies), start-of-day / end-of-day anchored in the
+    // laboratory's zone (America/Sao_Paulo, -03:00). Empty stays
     // "" so the server clears the stored date (undefined would be skipped by
     // the partial update).
     expect(
@@ -226,8 +229,8 @@ describe('organization-model', () => {
         accreditationValidUntil: '2027-03-05',
       }),
     ).toMatchObject({
-      accreditationValidFrom: '2027-03-01T00:00:00.000Z',
-      accreditationValidUntil: '2027-03-05T23:59:59.999Z',
+      accreditationValidFrom: '2027-03-01T03:00:00.000Z',
+      accreditationValidUntil: '2027-03-06T02:59:59.999Z',
     })
     expect(buildOrganizationIsoPayload(isoDraft)).toMatchObject({
       accreditationValidFrom: '',
@@ -303,5 +306,74 @@ describe('organization-model', () => {
     ]
     expect(getInviterName(members, 'user-1')).toBe('Ana')
     expect(getInviterName(members, 'missing')).toBeUndefined()
+  })
+})
+
+describe('accreditation window as laboratory calendar days', () => {
+  it('hydrates the date fields from new and legacy stored bounds', () => {
+    // Written by the lab-day anchor (00:00 / 23:59:59.999 -03:00).
+    expect(
+      createOrganizationIsoDraft({
+        accreditationValidFrom: '2027-03-01T03:00:00.000Z',
+        accreditationValidUntil: '2027-03-06T02:59:59.999Z',
+      }),
+    ).toMatchObject({
+      accreditationValidFrom: '2027-03-01',
+      accreditationValidUntil: '2027-03-05',
+    })
+    // Legacy UTC anchor: exact UTC midnight start, UTC 23:59:59.999 end.
+    expect(
+      createOrganizationIsoDraft({
+        accreditationValidFrom: new Date('2027-03-01T00:00:00.000Z'),
+        accreditationValidUntil: new Date('2027-03-05T23:59:59.999Z'),
+      }),
+    ).toMatchObject({
+      accreditationValidFrom: '2027-03-01',
+      accreditationValidUntil: '2027-03-05',
+    })
+  })
+
+  it('round-trips a typed day through the payload and back', () => {
+    const draft = createOrganizationIsoDraft({
+      accreditationValidFrom: '2027-03-01T03:00:00.000Z',
+      accreditationValidUntil: '2027-03-06T02:59:59.999Z',
+    })
+    const payload = buildOrganizationIsoPayload(draft)
+    expect(
+      createOrganizationIsoDraft({
+        accreditationValidFrom: payload.accreditationValidFrom,
+        accreditationValidUntil: payload.accreditationValidUntil,
+      }),
+    ).toMatchObject({
+      accreditationValidFrom: '2027-03-01',
+      accreditationValidUntil: '2027-03-05',
+    })
+  })
+
+  it('rejects days that are not on the calendar', () => {
+    expect(dateInputToIso('2027-02-30', 'end')).toBe('')
+    expect(dateInputToIso('01/03/2027', 'start')).toBe('')
+    expect(dateInputToIso('  ', 'start')).toBe('')
+  })
+
+  it('previews the seal as active at 23:30 -03:00 on the last day and expired after', () => {
+    const draft = {
+      accreditationActive: true,
+      accreditationNumber: '0123',
+      accreditationValidFrom: '2027-03-01',
+      accreditationValidUntil: '2027-03-05',
+    }
+    expect(
+      getAccreditationPreviewStatus(
+        draft,
+        new Date('2027-03-05T23:30:00-03:00'),
+      ),
+    ).toBe('active')
+    expect(
+      getAccreditationPreviewStatus(
+        draft,
+        new Date('2027-03-06T00:30:00-03:00'),
+      ),
+    ).toBe('expired')
   })
 })

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { db } from "@calibra-facil/db";
+import { formatLabDayKey } from "@calibra-facil/documents";
 import {
   asset,
   billingDocument,
@@ -525,7 +526,12 @@ export async function markContaAzulReconnectRequired(params: {
       lastValidationError: params.message,
       updatedAt: new Date(),
     })
-    .where(eq(organizationIntegration.id, params.integrationId));
+    .where(
+      and(
+        eq(organizationIntegration.id, params.integrationId),
+        eq(organizationIntegration.organizationId, params.organizationId),
+      ),
+    );
 
   await writeIntegrationEvent({
     integrationId: params.integrationId,
@@ -2440,12 +2446,19 @@ export function getRequestedLimitFromRun(
 function getServiceOrderCommercialDate(
   payload: IntegrationServiceOrderPayload,
 ) {
-  return (
-    payload.approvedAt?.slice(0, 10) ??
-    payload.performedAt?.slice(0, 10) ??
-    payload.updatedAt?.slice(0, 10) ??
-    new Date().toISOString().slice(0, 10)
-  );
+  // The sale is dated by the laboratory's calendar day. The instants are UTC,
+  // so slicing them (or "now") would date a sale approved after 21:00 in
+  // Sao Paulo the following day.
+  for (const candidate of [
+    payload.approvedAt,
+    payload.performedAt,
+    payload.updatedAt,
+  ]) {
+    if (!candidate) continue;
+    const instant = new Date(candidate);
+    if (!Number.isNaN(instant.getTime())) return formatLabDayKey(instant);
+  }
+  return formatLabDayKey(new Date());
 }
 
 function getServiceOrderTotalCents(payload: IntegrationServiceOrderPayload) {

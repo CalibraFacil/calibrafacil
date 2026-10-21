@@ -33,11 +33,12 @@ import {
   formatAccreditationNumber,
   shouldRenderAccreditationSeal,
 } from "@calibra-facil/shared";
-import type {
-  CalibrationCertificateData,
-  CertificateResultRow,
-  CertificateResultTable,
-  CertificateStandard,
+import {
+  formatDateOnly,
+  type CalibrationCertificateData,
+  type CertificateResultRow,
+  type CertificateResultTable,
+  type CertificateStandard,
 } from "@calibra-facil/documents";
 import { certificateVerificationUrl } from "@calibra-facil/shared/public-urls";
 
@@ -450,7 +451,7 @@ function buildStandards(job: CertificateJobData): CertificateStandard[] {
     // Verbatim, never guessed from the certificate number — see the note on
     // normalizeStandards in @calibra-facil/certificate-data.
     issuer: standard.calibratedBy?.trim() || null,
-    validUntilText: formatDate(standard.nextCalibrationDate),
+    validUntilText: formatDateOnly(standard.nextCalibrationDate, "") || null,
   }));
 }
 

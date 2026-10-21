@@ -26,6 +26,7 @@ import {
   SelectTrigger,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useHasPermission } from '@/components/permission-gate'
 import { useCertificateNumberingProfileData } from '@/features/settings/queries'
 
 type ResetScope = CertificateNumberingResetScope
@@ -119,6 +120,8 @@ function CertificateNumberingForm({
   data: CertificateNumberingProfileResponse
 }) {
   const queryClient = useQueryClient()
+  // The profile is organization-wide: unit admins can read it, not change it.
+  const canSave = useHasPermission({ settings: ['update'] })
   const [form, setForm] = useState<FormState>(() => formFromConfig(data))
   const preview = useMemo(() => buildLocalPreview(form), [form])
 
@@ -332,10 +335,15 @@ function CertificateNumberingForm({
             </p>
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex items-center justify-end gap-3">
+            {canSave ? null : (
+              <p className="text-sm text-muted-foreground">
+                Só o administrador da organização altera a numeração.
+              </p>
+            )}
             <Button
               onClick={() => saveMutation.mutate()}
-              disabled={saveMutation.isPending}
+              disabled={!canSave || saveMutation.isPending}
             >
               {saveMutation.isPending ? 'Salvando...' : 'Salvar perfil'}
             </Button>

@@ -13,6 +13,7 @@ import { unitKind } from "@calibra-facil/shared";
 import {
   requireLabProtected,
   requireOrgType,
+  requirePermission,
   type AuthVariables,
 } from "../middleware/permission";
 import {
@@ -60,7 +61,8 @@ function diffScopeLine(
  * Accredited-scope (CMC) lines — ISO/IEC 17025 §7.6/§7.8.3, ILAC P14 (#427).
  * Unit-scoped like environmental limits: Cgcre accredits each laboratory site
  * with its own scope. Writes are restricted to unit operational-settings
- * managers and leave an append-only audit trail.
+ * managers and leave an append-only audit trail. The org-level enforcement mode
+ * is the exception: it needs the organization `settings:update` permission.
  */
 export const accreditedScopeRouter = new Hono<{
   Variables: AuthVariables;
@@ -108,12 +110,15 @@ export const accreditedScopeRouter = new Hono<{
     "/enforcement",
     ...requireLabProtected,
     requireOrgType("LAB"),
+    // organization.scopeEnforcementMode governs EVERY unit's accredited
+    // approvals, so it is an organization-level settings write (owner/admin).
+    // A single-unit unit_admin must not be able to relax it org-wide.
+    requirePermission({ settings: ["update"] }),
     zValidator("json", z.object({ mode: z.enum(["warn", "enforce"]) })),
     async (c) => {
       const input = c.req.valid("json");
       const memberData = c.get("member");
       const session = c.get("session");
-      requireUnitOperationalSettingsManager(memberData);
 
       const [before] = await db
         .select({ scopeEnforcementMode: organization.scopeEnforcementMode })
@@ -121,26 +126,29 @@ export const accreditedScopeRouter = new Hono<{
         .where(eq(organization.id, memberData.organizationId))
         .limit(1);
 
-      await db
-        .update(organization)
-        .set({ scopeEnforcementMode: input.mode })
-        .where(eq(organization.id, memberData.organizationId));
+      // The mode change and its audit row commit (or fail) together.
+      await db.transaction(async (tx) => {
+        await tx
+          .update(organization)
+          .set({ scopeEnforcementMode: input.mode })
+          .where(eq(organization.id, memberData.organizationId));
 
-      if (before && before.scopeEnforcementMode !== input.mode) {
-        await db.insert(accreditedScopeLineAuditLog).values({
-          scopeLineId: null,
-          organizationId: memberData.organizationId,
-          action: "enforcement_mode_change",
-          changes: {
-            scopeEnforcementMode: {
-              old: before.scopeEnforcementMode,
-              new: input.mode,
+        if (before && before.scopeEnforcementMode !== input.mode) {
+          await tx.insert(accreditedScopeLineAuditLog).values({
+            scopeLineId: null,
+            organizationId: memberData.organizationId,
+            action: "enforcement_mode_change",
+            changes: {
+              scopeEnforcementMode: {
+                old: before.scopeEnforcementMode,
+                new: input.mode,
+              },
             },
-          },
-          performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
-        });
-      }
+            performedBy: session.user.id,
+            ipAddress: c.req.header("x-forwarded-for") || null,
+          });
+        }
+      });
 
       return c.json({
         message:

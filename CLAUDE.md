@@ -71,13 +71,19 @@ added to `packages/db/sql/schema-extras.sql`.
   `hono/client` outside `client-runtime`, and router coupling inside `apps/web/src/features`.
 - **`as` type assertions are banned** (`consistent-type-assertions: never`). Use type guards,
   `satisfies`, or schema parsing instead.
-- **`check-types` runs the native Go compiler** — `tsc` from `typescript@7` (TypeScript 7.0, the
-  10x native port; GA'd, replaced the old `@typescript/native-preview`/`tsgo` beta). Exception:
-  the Next.js app (`apps/docs`) stays pinned to `typescript@6.0.3` — the classic
-  JS build — because its tooling (`next typegen`) imports the TypeScript compiler _API_, which
-  the native `typescript@7` package does not ship (it exposes only the `tsc` binary plus an
-  `unstable/*` API). The API `dev`/`start` and worker run under
-  **Bun**; the web/portal/local-server run under Node + Vite/tsx.
+- **`check-types` runs `tsrs`**, the Rust port of the TypeScript 7 compiler (Cloudflare/VoidZero)
+  (`tsrs` npm package, pinned exactly in the root `package.json`; same flags and diagnostics as
+  `tsc`, 4-8x faster and 2-3x less memory on `apps/api`). Each package's script goes
+  through `scripts/typecheck.mjs`, which falls back to the native Go `tsc` (`typescript@7`, still
+  installed for editors and peer deps) on hosts without a tsrs binary (it ships linux x64/arm64
+  and macOS arm64 only: no Windows, no Intel macOS). `pnpm check-types:tsc` (or
+  `CHECK_TYPES_CHECKER=tsc`) forces `tsc` for a local parity check. If the two
+  disagree, `tsc` is the reference, so report it upstream (oxc-project/tsrs). Exit codes differ
+  on errors (tsc 1, tsrs 2); both are non-zero. Exception: the Next.js app (`apps/docs`) stays
+  on `typescript@6.0.3` and `tsc` — the classic JS build — because its tooling (`next typegen`)
+  imports the TypeScript compiler _API_, which the native `typescript@7` package does not ship.
+  The API `dev`/`start` and worker run under **Bun**; the web/portal/local-server run under
+  Node + Vite/tsx.
 - `pnpm.overrides` and `scripts/check-blocked-deps.mjs` pin/forbid specific dependency versions
   after supply-chain incidents (TanStack, axios). Don't loosen these; `check-blocked-deps`
   fails the build if a blocked version reappears in the lockfile.
@@ -168,6 +174,14 @@ See `docs/architecture/portal-frontend.md`. `apps/portal` is the cloud-only clie
   derived state, event handlers, data hooks, keyed remounts, or the `use-mount-effect.ts` wrapper.
   Only the `apps/*/src/hooks/use-mount-effect.ts` wrappers may import raw `useEffect` (allowed via an
   `overrides` entry in `.oxlintrc.json`).
+- **The math engine is source-pinned.** `packages/math-engine/src/audit/engine-source-pin.spec.ts`
+  compares a SHA-256 of the engine sources (and five golden GUM results) with the current
+  dossier's `validation/math-engine/v<version>/manifest.json`. Any byte change to engine code,
+  comments and formatting included, fails it. A deliberate release bumps `ENGINE_VERSION` and
+  the package version, adds the new dossier directory, then runs
+  `pnpm --filter @calibra-facil/math-engine run engine:pin`. The engine is exact for formula
+  evaluation, sensitivities and Type A sums, but propagation (`u_c`, `ν_eff`, `k`, `U`) runs in
+  float64; see `packages/math-engine/README.md`.
 - Sentry PII (`sendDefaultPii`) and session replay default to **off** and are opt-in via runtime
   config; desktop runtime must not initialize browser Sentry.
 

@@ -29,6 +29,7 @@ import {
   PanelHeader,
   type SignalTone,
 } from "@/components/instrument-panel";
+import { dateInputToNoonIso, instantToDateInputValue } from "@/lib/date-only";
 import { useOotEvents } from "./queries";
 import { isOotDecision, type OotDecision, type OotEvent } from "./types";
 
@@ -51,11 +52,9 @@ function yesNo(value: boolean | null): string {
   return value === null ? "—" : value ? "Sim" : "Não";
 }
 
-/** "2026-05-03T…" → "2026-05-03" for a date input default. */
+/** "2026-05-03T…" → the user's day, "2026-05-03", for a date input default. */
 function toDateInputValue(value: string | null): string {
-  if (!value) return "";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+  return instantToDateInputValue(value);
 }
 
 /**
@@ -108,8 +107,10 @@ function OotAssessmentForm({ event }: { event: OotEvent }) {
         rationale: rationale.trim(),
         suspectProductShipped: suspectShipped,
       };
-      if (periodStart) body.affectedPeriodStart = periodStart;
-      if (periodEnd) body.affectedPeriodEnd = periodEnd;
+      const affectedPeriodStart = dateInputToNoonIso(periodStart);
+      const affectedPeriodEnd = dateInputToNoonIso(periodEnd);
+      if (affectedPeriodStart) body.affectedPeriodStart = affectedPeriodStart;
+      if (affectedPeriodEnd) body.affectedPeriodEnd = affectedPeriodEnd;
       // The schema requires an answer when suspect product was shipped — the
       // checkbox IS the answer (checked = sim, unchecked = não).
       if (suspectShipped) body.customerNotified = customerNotified;

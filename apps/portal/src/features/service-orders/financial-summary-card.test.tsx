@@ -14,7 +14,7 @@ function summary(
   return {
     state: "PAYMENT_PENDING",
     visible: true,
-    dueDate: "2026-06-10T00:00:00.000Z",
+    dueDate: "2026-06-10T12:00:00.000Z",
     paidAt: null,
     openAmountCents: 10000,
     overdueAmountCents: 0,
@@ -139,6 +139,35 @@ describe("FinancialSummaryCard", () => {
     expect(container.textContent).toContain("R$");
     expect(container.textContent).toContain("175,00 em aberto");
     expectPortalNeutralCopy(container);
+  });
+
+  it("shows a due day stored at UTC midnight on the day it names", () => {
+    render(
+      <FinancialSummaryCard
+        summary={summary({ dueDate: "2026-06-10T00:00:00.000Z" })}
+      />,
+    );
+
+    // 10/06 at UTC midnight is 21:00 on 09/06 in Sao Paulo.
+    expect(screen.getByText("Vence em 10 de junho de 2026")).toBeTruthy();
+  });
+
+  it("counts the overdue days from the laboratory day", () => {
+    // 22:00 on 14/06 in Sao Paulo is already 15/06 in UTC: the due day 10/06 is
+    // four days back, not five.
+    vi.setSystemTime(new Date("2026-06-14T22:00:00-03:00"));
+    const { container } = render(
+      <FinancialSummaryCard
+        summary={summary({
+          state: "OVERDUE",
+          dueDate: "2026-06-10T00:00:00.000Z",
+          openAmountCents: 17500,
+          overdueAmountCents: 10000,
+        })}
+      />,
+    );
+
+    expect(container.textContent).toContain("Vencido há 4 dias");
   });
 
   it("renders the stale freshness footer without provider wording", () => {

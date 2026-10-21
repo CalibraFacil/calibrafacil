@@ -12,6 +12,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { LAB_ID } from "./api";
 import type { SeededAsset } from "./assets";
 import type { SeedContext } from "./context";
+import { withHistoryRewrite } from "./history-rewrite";
 
 const DAY_MS = 86_400_000;
 
@@ -76,51 +77,54 @@ export async function seedAssetCalibrationDates(
 export async function ageFoundations(ctx: SeedContext): Promise<void> {
   const now = ctx.now.toISOString();
   const org = LAB_ID;
-  await db.execute(sql`
+  // Rewrites the audit rows too, which Postgres only allows under the seed's
+  // transaction-local escape hatch.
+  await withHistoryRewrite(async (tx) => {
+    await tx.execute(sql`
     update organization set created_at = ${now}::timestamp - interval '430 days' where id = ${org}
   `);
-  await db.execute(sql`
+    await tx.execute(sql`
     update customer set created_at = ${now}::timestamp - (interval '1 day' * (270 + (id * 37 % 220)))
     where lab_organization_id = ${org}
   `);
-  await db.execute(sql`
+    await tx.execute(sql`
     update customer_audit_log l set performed_at = c.created_at
     from customer c where c.id = l.customer_id and c.lab_organization_id = ${org}
   `);
-  await db.execute(sql`
+    await tx.execute(sql`
     update asset a set created_at = c.created_at + (interval '1 day' * (3 + (a.id * 13 % 60)))
     from customer c where c.id = a.customer_id and a.lab_organization_id = ${org}
   `);
-  await db.execute(sql`
+    await tx.execute(sql`
     update asset_audit_log l set performed_at = a.created_at
     from asset a where a.id = l.asset_id and a.lab_organization_id = ${org} and l.action = 'create'
   `);
-  await db.execute(sql`
+    await tx.execute(sql`
     update reference_standard set created_at = calibration_date + interval '3 days'
     where organization_id = ${org}
   `);
-  await db.execute(sql`
+    await tx.execute(sql`
     update reference_standard_audit_log l set performed_at = s.created_at
     from reference_standard s where s.id = l.standard_id and s.organization_id = ${org}
   `);
-  await db.execute(sql`
+    await tx.execute(sql`
     update service set created_at = ${now}::timestamp - interval '210 days',
       updated_at = ${now}::timestamp - interval '210 days'
     where organization_id = ${org}
   `);
-  await db.execute(sql`
+    await tx.execute(sql`
     update service_audit_log l set performed_at = s.created_at
     from service s where s.id = l.service_id and s.organization_id = ${org}
   `);
-  // Methods: drafted, reviewed and published over the days before first use.
-  await db.execute(sql`
+    // Methods: drafted, reviewed and published over the days before first use.
+    await tx.execute(sql`
     update calibration_method set
       published_at = ${now}::timestamp - (interval '1 day' * (150 - id * 3)),
       created_at = ${now}::timestamp - (interval '1 day' * (160 - id * 3)),
       method_compiled_at = ${now}::timestamp - (interval '1 day' * (151 - id * 3))
     where organization_id = ${org}
   `);
-  await db.execute(sql`
+    await tx.execute(sql`
     update method_audit_log l set performed_at = m.published_at - case l.action
       when 'create' then interval '10 days'
       when 'update' then interval '9 days'
@@ -129,22 +133,23 @@ export async function ageFoundations(ctx: SeedContext): Promise<void> {
       else interval '0 days' end
     from calibration_method m where m.id = l.method_id and m.organization_id = ${org}
   `);
-  // Qualifications: requested a few weeks before the evaluation that approved them.
-  await db.execute(sql`
+    // Qualifications: requested a few weeks before the evaluation that approved them.
+    await tx.execute(sql`
     update personnel_competence set created_at = qualified_at - interval '25 days'
     where organization_id = ${org} and qualified_at is not null
   `);
-  await db.execute(sql`
+    await tx.execute(sql`
     update personnel_competence_audit_log l set performed_at = case when l.action = 'create'
       then c.created_at else c.qualified_at end
     from personnel_competence c where c.id = l.competence_id and c.organization_id = ${org}
       and c.qualified_at is not null
   `);
-  await db.execute(sql`
+    await tx.execute(sql`
     update training_record set created_at = start_date where organization_id = ${org}
   `);
-  await db.execute(sql`
+    await tx.execute(sql`
     update training_record_audit_log l set performed_at = t.start_date
     from training_record t where t.id = l.training_record_id and t.organization_id = ${org}
   `);
+  });
 }

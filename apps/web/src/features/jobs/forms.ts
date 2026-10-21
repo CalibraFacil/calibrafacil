@@ -1,4 +1,8 @@
-import { CreateJobSchema, type CreateJobInput } from '@calibra-facil/schemas'
+import {
+  CreateJobSchema,
+  resolveExecutionPerformedAt,
+  type CreateJobInput,
+} from '@calibra-facil/schemas'
 
 import {
   zodFormError,
@@ -106,4 +110,101 @@ function mapJobSchemaError(error: { field: JobFormField; message: string }) {
   }
 
   return error
+}
+
+export type ExecutionPerformedAtForm = {
+  /** Calendar day from the date input, `YYYY-MM-DD`, or '' when empty. */
+  date: string
+  backdateReason: string
+}
+
+export type ExecutionPerformedAtState = {
+  /** Can be sent with the submit. */
+  valid: boolean
+  payload: { performedAt: string; backdateReason?: string } | null
+  /**
+   * The chosen day as an instant whenever the day itself is acceptable, even
+   * if a reason is still missing: what a draft save remembers.
+   */
+  instant: string | null
+  /** More than the threshold back: the reason field must be shown and filled. */
+  requiresBackdateReason: boolean
+  backdateDays: number
+  field: 'performedAt' | 'backdateReason' | null
+  message: string | null
+}
+
+/**
+ * The execution date of a calibration, checked with the same rules as the
+ * cloud's submit (and the desktop's, which mirrors it): not in the future, and
+ * a reason once it is more than 7 days back.
+ *
+ * The date input is a calendar day; it is sent as noon of that day, except that
+ * today (before noon) is sent as the current instant, which would otherwise be
+ * read as the future and refused.
+ */
+export function parseExecutionPerformedAt(
+  form: ExecutionPerformedAtForm,
+  now: Date,
+): ExecutionPerformedAtState {
+  const invalid = (
+    field: 'performedAt' | 'backdateReason',
+    message: string,
+    extra: Partial<ExecutionPerformedAtState> = {},
+  ): ExecutionPerformedAtState => ({
+    valid: false,
+    payload: null,
+    instant: null,
+    requiresBackdateReason: false,
+    backdateDays: 0,
+    field,
+    message,
+    ...extra,
+  })
+
+  if (!form.date) {
+    return invalid('performedAt', 'Informe a data da calibração')
+  }
+
+  const dayStart = new Date(`${form.date}T00:00:00`)
+  if (Number.isNaN(dayStart.getTime())) {
+    return invalid('performedAt', 'Data de execução inválida')
+  }
+  if (dayStart.getTime() > now.getTime()) {
+    return invalid('performedAt', 'A data de execução não pode estar no futuro')
+  }
+
+  const noon = new Date(`${form.date}T12:00:00`)
+  const instant = noon.getTime() > now.getTime() ? now : noon
+  const resolved = resolveExecutionPerformedAt({
+    performedAt: instant.toISOString(),
+    backdateReason: form.backdateReason,
+    now,
+  })
+
+  if (!resolved.ok) {
+    if (resolved.code === 'reason_required') {
+      return invalid('backdateReason', resolved.message, {
+        instant: instant.toISOString(),
+        requiresBackdateReason: true,
+        backdateDays: resolved.backdateDays,
+      })
+    }
+    return invalid('performedAt', resolved.message)
+  }
+
+  return {
+    valid: true,
+    payload: {
+      performedAt: resolved.performedAt.toISOString(),
+      ...(resolved.backdateReason
+        ? { backdateReason: resolved.backdateReason }
+        : {}),
+    },
+    instant: resolved.performedAt.toISOString(),
+    requiresBackdateReason: resolved.backdateReason !== null,
+    backdateDays: resolved.backdateDays,
+    field: null,
+    message: null,
+  }
 }

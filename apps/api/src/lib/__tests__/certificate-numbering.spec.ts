@@ -258,7 +258,9 @@ describe("REQ-CERTNUM-006: buildCertificateSequenceKey — all reset scopes", ()
   });
 
   it("REQ-CERTNUM-006 zero-pads month 1 (January) to 01", () => {
-    const jan2026 = new Date(Date.UTC(2026, 0, 1));
+    // Mid-month, so the month is January in every time zone: this test is about
+    // the padding. Where a day starts is covered by the lab-calendar tests below.
+    const jan2026 = new Date(Date.UTC(2026, 0, 15, 12));
     expect(
       buildCertificateSequenceKey(
         "month",
@@ -380,5 +382,55 @@ describe("REQ-CERTNUM-008: DEFAULT_CERTIFICATE_NUMBERING_CONFIG", () => {
       DEFAULT_CERTIFICATE_NUMBERING_CONFIG,
     );
     expect(result).toBe(DEFAULT_CERTIFICATE_NUMBERING_CONFIG);
+  });
+});
+
+// The year / month / day of a certificate number (and the sequence it resets on)
+// are the laboratory's calendar day, America/Sao_Paulo, the zone the certificate
+// layout prints its dates in (LAB_TIME_ZONE) — not the server's: the API runs in
+// UTC in production and in the developer's zone locally, which used to give
+// different numbers for the same instant.
+describe("REQ-CERTNUM-008: certificate numbers use the laboratory's calendar day", () => {
+  // 01:30 UTC on 1 January is 22:30 on 31 December in São Paulo.
+  const newYearInUtcOnly = new Date("2026-01-01T01:30:00.000Z");
+  // 03:00 UTC is midnight in São Paulo: the new year has started there too.
+  const newYearInSaoPaulo = new Date("2026-01-01T03:00:00.000Z");
+
+  it("REQ-CERTNUM-008 keeps the old year until midnight in São Paulo", () => {
+    const context = { organizationId: "org1", generatedAt: newYearInUtcOnly };
+    expect(buildCertificateSequenceKey("year", context, baseConfig)).toBe(
+      "year:2025",
+    );
+    expect(buildCertificateSequenceKey("month", context, baseConfig)).toBe(
+      "month:2025-12",
+    );
+  });
+
+  it("REQ-CERTNUM-008 starts the new year at midnight in São Paulo", () => {
+    const context = { organizationId: "org1", generatedAt: newYearInSaoPaulo };
+    expect(buildCertificateSequenceKey("year", context, baseConfig)).toBe(
+      "year:2026",
+    );
+    expect(buildCertificateSequenceKey("month", context, baseConfig)).toBe(
+      "month:2026-01",
+    );
+  });
+
+  it("REQ-CERTNUM-008 gives the same key whatever the server's zone", () => {
+    const previous = process.env.TZ;
+    try {
+      const keys = ["UTC", "America/Sao_Paulo", "Asia/Tokyo"].map((zone) => {
+        process.env.TZ = zone;
+        return buildCertificateSequenceKey(
+          "month",
+          { organizationId: "org1", generatedAt: newYearInUtcOnly },
+          baseConfig,
+        );
+      });
+      expect(new Set(keys)).toEqual(new Set(["month:2025-12"]));
+    } finally {
+      if (previous === undefined) delete process.env.TZ;
+      else process.env.TZ = previous;
+    }
   });
 });

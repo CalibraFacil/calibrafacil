@@ -86,6 +86,14 @@ describe("PortalVisitsPanel (#739 customer actions)", () => {
     expect(screen.getByText("Solicitar reagendamento")).toBeTruthy();
   });
 
+  it("lists a visit stored at UTC midnight on the day it was scheduled", async () => {
+    // 10/08 at UTC midnight is 21:00 on 09/08 in Sao Paulo.
+    stubVisits([visitFixture({ scheduledAt: "2026-08-10T00:00:00.000Z" })]);
+    renderPanel();
+
+    expect(await screen.findByText("10 de agosto de 2026")).toBeTruthy();
+  });
+
   it("shows the confirmed chip and hides the confirm button once customerConfirmedAt is set", async () => {
     stubVisits([visitFixture({ customerConfirmedAt: inDays(-1) })]);
     renderPanel();

@@ -291,7 +291,13 @@ export function createLocalSyncScheduler(
     // than one run. Waiting a full poll interval between batches would leave a
     // technician's reconnect only partly drained — and every record still in
     // the queue keeps its cloud actions blocked.
-    if ((lastSnapshot?.pendingOutboxCount ?? 0) > 0) {
+    // (Another user's queued events do not count: they wait for their author
+    // and draining would spin on them.)
+    if (
+      (lastSnapshot?.pendingOutboxCount ?? 0) -
+        (lastSnapshot?.pendingForOtherUserCount ?? 0) >
+      0
+    ) {
       schedule(drainIntervalMs, "poll");
       return;
     }

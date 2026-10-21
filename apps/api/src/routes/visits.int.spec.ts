@@ -1,10 +1,10 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   visitJobsRouter,
   visitRescheduleRequestsRouter,
   visitsRouter,
 } from "./visits";
-import { db } from "@calibra-facil/db";
+import { db, getDb } from "@calibra-facil/db";
 import {
   asset,
   assetType,
@@ -21,6 +21,7 @@ import { eq, sql } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { seedExtraMember } from "../../test/integration/tenant-refs";
 
 // Real-DB + real-RBAC integration tests for the visits router.
 // Only the better-auth session is mocked (see test/integration/setup.ts);
@@ -667,6 +668,61 @@ describe("visitJobsRouter — remove instrument audit trail (ISO/IEC 17025)", ()
       .where(eq(jobAuditLog.jobId, jobDbId));
     expect(auditRows).toHaveLength(0);
   });
+
+  it("REQ-JOBST-VISIT-001: a job that leaves DRAFT between the guard read and the write is not cancelled → 409 JOB_STATUS_CONFLICT, status unchanged, NO audit row", async () => {
+    const fx = await seedVisitJobFixture({
+      orgId: "org-vjc",
+      userId: "user-vjc",
+    });
+    const jobDbId = await seedVisitJob({
+      jobId: "JOB-VJC-1",
+      organizationId: fx.orgId,
+      unitId: fx.unitId,
+      customerId: fx.customerId,
+      assetId: fx.assetId,
+      serviceId: fx.serviceId,
+      createdBy: fx.userId,
+      visitId: fx.visitId,
+    });
+
+    // Forces the lost compare-and-set deterministically: the handler has read
+    // the job as DRAFT; right before it opens the transaction carrying its
+    // write, another actor starts the calibration. (`db` is a Proxy over the
+    // cached instance, so spy on the instance.)
+    const instance = getDb();
+    const originalTransaction = instance.transaction.bind(instance);
+    vi.spyOn(instance, "transaction").mockImplementationOnce(
+      async (callback, config) => {
+        await db
+          .update(calibrationJob)
+          .set({ status: "IN_PROGRESS" })
+          .where(eq(calibrationJob.id, jobDbId));
+        return originalTransaction(callback, config);
+      },
+    );
+
+    loginAs({ userId: fx.userId, organizationId: fx.orgId });
+    const res = await visitJobsRouter.request(
+      `/${fx.visitId}/jobs/${jobDbId}`,
+      { method: "DELETE" },
+    );
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      code: "JOB_STATUS_CONFLICT",
+      currentStatus: "IN_PROGRESS",
+    });
+    const [job] = await db
+      .select({ status: calibrationJob.status })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, jobDbId));
+    expect(job?.status).toBe("IN_PROGRESS");
+    const auditRows = await db
+      .select()
+      .from(jobAuditLog)
+      .where(eq(jobAuditLog.jobId, jobDbId));
+    expect(auditRows).toHaveLength(0);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -981,5 +1037,141 @@ describe("visitRescheduleRequestsRouter (#739) — real DB + real RBAC middlewar
     const filteredBody = await filtered.json();
     expect(filteredBody.data).toHaveLength(1);
     expect(filteredBody.data[0].id).toBe(fx.visitId);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Foreign-id (tenant-refs) guard: the technician named in the body must be a
+// member of the caller's organization (and assignable in the visit's unit),
+// never another tenant's user.
+// ---------------------------------------------------------------------------
+describe("visitsRouter — request-supplied technicianId is tenant-scoped", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  async function seedTwoOrgsWithVisit() {
+    const orgA = await seedOrg({ orgId: "org-a", role: "admin" });
+    const orgB = await seedOrg({ orgId: "org-b", role: "admin" });
+    const cust = await seedCustomer({
+      labOrgId: orgA.orgId,
+      clientOrgId: "client-a1",
+    });
+    const visitId = await seedVisit({
+      organizationId: orgA.orgId,
+      unitId: orgA.unitId,
+      customerId: cust,
+      createdBy: orgA.userId,
+      status: "PROPOSED",
+      scheduledAt: new Date("2026-08-15T10:00:00.000Z"),
+    });
+    return { orgA, orgB, visitId };
+  }
+
+  it("REQ-TENANT-VISIT-001 [HIGH RISK]: POST /:id/assign with another org's technician → 400, visit technician unchanged", async () => {
+    const { orgA, orgB, visitId } = await seedTwoOrgsWithVisit();
+
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const res = await visitsRouter.request(`/${visitId}/assign`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ technicianId: orgB.userId }),
+    });
+
+    expect(res.status).toBe(400);
+    const [row] = await db
+      .select({ technicianId: calibrationVisit.technicianId })
+      .from(calibrationVisit)
+      .where(eq(calibrationVisit.id, visitId));
+    expect(row?.technicianId).toBeNull();
+  });
+
+  it("REQ-TENANT-VISIT-002 [HIGH RISK]: POST /:id/confirm with another org's technician → 400, visit stays PROPOSED", async () => {
+    const { orgA, orgB, visitId } = await seedTwoOrgsWithVisit();
+
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const res = await visitsRouter.request(`/${visitId}/confirm`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ technicianId: orgB.userId }),
+    });
+
+    expect(res.status).toBe(400);
+    const [row] = await db
+      .select({
+        status: calibrationVisit.status,
+        technicianId: calibrationVisit.technicianId,
+      })
+      .from(calibrationVisit)
+      .where(eq(calibrationVisit.id, visitId));
+    expect(row?.status).toBe("PROPOSED");
+    expect(row?.technicianId).toBeNull();
+  });
+
+  it("REQ-TENANT-VISIT-003: the refusal is identical for a foreign and a non-existent technician (no existence oracle)", async () => {
+    const { orgA, orgB, visitId } = await seedTwoOrgsWithVisit();
+
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const foreign = await visitsRouter.request(`/${visitId}/assign`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ technicianId: orgB.userId }),
+    });
+    const missing = await visitsRouter.request(`/${visitId}/assign`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ technicianId: "no-such-user" }),
+    });
+
+    expect(foreign.status).toBe(missing.status);
+    expect(await foreign.json()).toEqual(await missing.json());
+  });
+
+  it("REQ-TENANT-VISIT-004: assign with a same-org technician assigned to the visit's unit → 200 and persisted", async () => {
+    const { orgA, visitId } = await seedTwoOrgsWithVisit();
+    const tech = await seedExtraMember({
+      orgId: orgA.orgId,
+      userId: "tech-a",
+      role: "technician",
+      unitId: orgA.unitId,
+      unitRole: "technician",
+    });
+
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const res = await visitsRouter.request(`/${visitId}/assign`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ technicianId: tech.userId }),
+    });
+
+    expect(res.status).toBe(200);
+    const [row] = await db
+      .select({ technicianId: calibrationVisit.technicianId })
+      .from(calibrationVisit)
+      .where(eq(calibrationVisit.id, visitId));
+    expect(row?.technicianId).toBe(tech.userId);
+  });
+
+  it("REQ-TENANT-VISIT-005: a same-org technician with no assignment to the visit's unit is refused (same rule as POST /jobs/:id/assign)", async () => {
+    const { orgA, visitId } = await seedTwoOrgsWithVisit();
+    const tech = await seedExtraMember({
+      orgId: orgA.orgId,
+      userId: "tech-unassigned",
+      role: "technician",
+    });
+
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const res = await visitsRouter.request(`/${visitId}/assign`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ technicianId: tech.userId }),
+    });
+
+    expect(res.status).toBe(400);
+    const [row] = await db
+      .select({ technicianId: calibrationVisit.technicianId })
+      .from(calibrationVisit)
+      .where(eq(calibrationVisit.id, visitId));
+    expect(row?.technicianId).toBeNull();
   });
 });

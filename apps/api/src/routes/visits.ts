@@ -38,6 +38,7 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { buildUnitScopeCondition } from "../lib/units";
+import { isAssignableTechnician } from "../lib/tenant-refs";
 import {
   notifyVisitCancelled,
   notifyVisitConfirmed,
@@ -47,6 +48,10 @@ import {
 } from "@calibra-facil/notifications";
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
 import { formatOnsiteAddressText } from "../lib/onsite-address";
+import {
+  buildJobStatusConflict,
+  isCancelableJobStatus,
+} from "../modules/jobs/job-status-transitions";
 import {
   assertAssetBelongsToVisitCustomer,
   canAddJobToVisit,
@@ -64,6 +69,14 @@ const technicianUser = alias(user, "calibrationVisitTechnician");
  */
 
 const VISIT_TERMINAL = new Set(["COMPLETED", "CANCELLED"]);
+
+/**
+ * The technician named in the body must be a member of the caller's
+ * organization who can work in the visit's unit (same rule as
+ * `POST /jobs/:id/assign`). One generic answer for "does not exist" and "belongs
+ * to another tenant" so the response is not an existence oracle for user ids.
+ */
+const TECHNICIAN_REFUSED = "Tecnico nao encontrado ou sem permissao";
 
 /** Load one visit scoped to the org + unit, or null. */
 async function getScopedVisit(id: number, member: AuthVariables["member"]) {
@@ -354,6 +367,16 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
       if (VISIT_TERMINAL.has(visit.status)) {
         return c.json({ error: "Visita ja finalizada ou cancelada" }, 409);
       }
+      if (
+        technicianId !== visit.technicianId &&
+        !(await isAssignableTechnician({
+          organizationId: member.organizationId,
+          userId: technicianId,
+          unitId: visit.unitId,
+        }))
+      ) {
+        return c.json({ error: TECHNICIAN_REFUSED }, 400);
+      }
 
       const [updated] = await db
         .update(calibrationVisit)
@@ -401,6 +424,16 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
           { error: "Defina a data e o técnico para confirmar a visita" },
           400,
         );
+      }
+      if (
+        technicianId !== visit.technicianId &&
+        !(await isAssignableTechnician({
+          organizationId: member.organizationId,
+          userId: technicianId,
+          unitId: visit.unitId,
+        }))
+      ) {
+        return c.json({ error: TECHNICIAN_REFUSED }, 400);
       }
 
       const confirmDateChanged =
@@ -697,24 +730,50 @@ export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Job nao encontrado nesta visita" }, 404);
       }
 
-      // REQ-VISITJOB-006: soft-cancel (CANCELED with single L per JobStatus enum)
-      const [updatedJob] = await db
-        .update(calibrationJob)
-        .set({ status: "CANCELED" })
-        .where(eq(calibrationJob.id, jobId))
-        .returning();
+      // The guard above allows DRAFT only; keep the status machine's own
+      // allow-list as the final word, so a status added later never slips in.
+      if (!isCancelableJobStatus(foundJob.status)) {
+        return c.json(
+          {
+            error: "Apenas jobs com status DRAFT podem ser removidos da visita",
+          },
+          409,
+        );
+      }
 
-      // Audit parity with the main job-cancel route (append-only ISO 17025 trail)
-      await db.insert(jobAuditLog).values({
-        jobId,
-        action: "cancel",
-        changes: {
-          status: { old: foundJob.status, new: "CANCELED" },
-        },
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
-        reason: `Instrumento removido da visita #${id}`,
+      // REQ-VISITJOB-006: soft-cancel (CANCELED with single L per JobStatus enum).
+      // Compare-and-set on the status the guards validated; the audit row
+      // (append-only ISO 17025 trail, parity with the main job-cancel route)
+      // commits in the same transaction.
+      const updatedJob = await db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(calibrationJob)
+          .set({ status: "CANCELED" })
+          .where(
+            and(
+              eq(calibrationJob.id, jobId),
+              eq(calibrationJob.organizationId, member.organizationId),
+              eq(calibrationJob.status, foundJob.status),
+            ),
+          )
+          .returning();
+        if (!row) return null;
+
+        await tx.insert(jobAuditLog).values({
+          jobId,
+          action: "cancel",
+          changes: {
+            status: { old: foundJob.status, new: "CANCELED" },
+          },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+          reason: `Instrumento removido da visita #${id}`,
+        });
+        return row;
       });
+      if (!updatedJob) {
+        return c.json(await buildJobStatusConflict(jobId), 409);
+      }
 
       return c.json(updatedJob);
     },

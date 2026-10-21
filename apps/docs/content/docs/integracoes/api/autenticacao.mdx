@@ -41,12 +41,24 @@ Cada escopo segue o padrão `<recurso>:<ação>`. Conceda apenas o necessário:
 | `requests:read` | Listar e consultar solicitações |
 | `requests:write` | Criar e cancelar solicitações |
 | `jobs:read` | Listar e consultar ordens de calibração |
-| `jobs:write` | Criar ordens, registrar execução, submeter, aprovar/rejeitar |
+| `jobs:write` | Criar ordens, registrar execução, submeter, aprovar/rejeitar (a aprovação segue as regras abaixo) |
 | `services:read` | Listar o catálogo de serviços |
 | `units:read` | Listar unidades da organização |
 | `reports:read` | Acessar métricas consolidadas |
 | `certificates:read` | Baixar certificados emitidos |
 | `webhooks:manage` | Criar, atualizar e revogar webhooks |
+
+## Aprovação de ordens por chave de API
+
+`POST /jobs/{id}/approve` libera um certificado e é um ato regulado (ISO/IEC 17025). A chave age **em nome do usuário que a criou**, que é o aprovador responsável. No momento da chamada esse usuário precisa:
+
+- ainda ser membro da organização e ter permissão de aprovar calibrações;
+- ser signatário autorizado, quando o laboratório mantém uma lista de signatários;
+- não ser quem executou ou criou a ordem (separação de responsabilidades).
+
+A ordem também passa pelas mesmas verificações de escopo acreditado e de condições ambientais da aplicação, e dois pedidos simultâneos nunca aprovam a ordem duas vezes. A trilha de auditoria registra o criador como aprovador e a chave usada. Chaves revogadas são recusadas com 401. `PATCH /jobs/{id}` não altera o status da ordem: use os endpoints de ação.
+
+Recusas: `403 approval_requires_signatory`, `403 self_approval_blocked`, `409 job_not_approvable`, `409 approval_conflict`, `400 environmental_justification_required`, `422 scope_violation`.
 
 ## Boas práticas
 

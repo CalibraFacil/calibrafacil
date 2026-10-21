@@ -10,7 +10,9 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "check-types": "tsc --noEmit",
+    "check-types": "node ../../scripts/typecheck.mjs --noEmit",
+    "engine:pin": "tsx scripts/engine-pin.ts",
+    "engine:pin:check": "tsx scripts/engine-pin.ts --check",
     "test": "vitest run",
     "test:run": "vitest run"
   },
@@ -26,6 +28,7 @@
     "@repo/typescript-config": "workspace:^",
     "@types/node": "^24.13.0",
     "@vitest/coverage-v8": "^4.1.11",
+    "tsx": "^4.22.4",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
   }

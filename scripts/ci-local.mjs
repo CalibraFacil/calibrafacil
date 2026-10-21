@@ -5,7 +5,7 @@
 // Node 24 + TZ=UTC to match the runners.
 //
 // Usage:
-//   pnpm ci:local            # test only packages changed vs origin/main (like CI)
+//   pnpm ci:local            # test packages changed vs origin/main and their dependents (like CI)
 //   pnpm ci:local --all      # run every package's tests
 //   pnpm ci:local --no-audit # skip the network security audit
 //
@@ -17,7 +17,7 @@ import { spawnSync } from "node:child_process";
 const args = new Set(process.argv.slice(2));
 const runAllTests = args.has("--all");
 const skipAudit = args.has("--no-audit");
-const testFilter = runAllTests ? [] : ["--filter=[origin/main...HEAD]"];
+const testFilter = runAllTests ? [] : ["--filter=...[origin/main...HEAD]"];
 
 const env = { ...process.env, TZ: "UTC", FORCE_COLOR: "1" };
 

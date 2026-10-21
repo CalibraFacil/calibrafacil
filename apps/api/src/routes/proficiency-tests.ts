@@ -32,6 +32,7 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { createCorrectiveActionRecord } from "../lib/corrective-actions";
+import { resolveAccessibleUnitContext } from "../lib/unit-operational-settings";
 import { eq, and, or, ilike, desc, asc, count } from "drizzle-orm";
 
 /**
@@ -280,6 +281,12 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
       const session = c.get("session");
       const input = c.req.valid("json");
 
+      // A body-supplied unit must be one the caller can access (403 otherwise).
+      const planUnitId =
+        input.unitId == null
+          ? null
+          : resolveAccessibleUnitContext(member, input.unitId).unitId;
+
       const lastSatisfactoryAt = input.lastSatisfactoryAt
         ? new Date(input.lastSatisfactoryAt)
         : null;
@@ -287,7 +294,7 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
         .insert(ptPlanItem)
         .values({
           organizationId: member.organizationId,
-          unitId: input.unitId ?? null,
+          unitId: planUnitId,
           scopePart: input.scopePart,
           riskJustification: input.riskJustification ?? null,
           frequencyMonths: input.frequencyMonths,
@@ -526,11 +533,17 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
         }
       }
 
+      // A body-supplied unit must be one the caller can access (403 otherwise).
+      const testUnitId =
+        input.unitId == null
+          ? null
+          : resolveAccessibleUnitContext(member, input.unitId).unitId;
+
       const [created] = await db
         .insert(proficiencyTest)
         .values({
           organizationId: member.organizationId,
-          unitId: input.unitId ?? null,
+          unitId: testUnitId,
           activityType: input.activityType,
           provider: input.provider,
           providerAccreditation: input.providerAccreditation ?? null,

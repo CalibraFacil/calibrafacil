@@ -16,7 +16,8 @@ describe('quality feature forms', () => {
         description: 'Resultado fora do critério de aceitação',
         jobId: '42',
       },
-      new Date('2026-05-20T00:00:00.000Z'),
+      // A date picker hands back the chosen day at local midnight.
+      new Date(2026, 4, 20),
       '14:35',
     )
 
@@ -28,7 +29,10 @@ describe('quality feature forms', () => {
         jobId: 42,
       },
     })
-    expect(result.success && result.data.detectedAt).toContain('2026-05-20T')
+    // 14:35 on the day picked, in the user's own time zone.
+    expect(result.success && result.data.detectedAt).toBe(
+      new Date(2026, 4, 20, 14, 35).toISOString(),
+    )
   })
 
   it('accepts the §7.10 out_of_tolerance non-conformance type', () => {

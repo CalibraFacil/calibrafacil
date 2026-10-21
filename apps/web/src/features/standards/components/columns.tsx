@@ -24,6 +24,7 @@ import type {
   StandardListItem,
   StandardStatus,
 } from '@/features/standards/types'
+import { formatStandardDate } from '@/features/standards/dates'
 import { cn } from '@/lib/utils'
 import { standardRouteId } from '@/lib/route-identifiers'
 
@@ -65,10 +66,6 @@ function getStatusBadge(status: StandardStatus) {
     default:
       return { variant: 'secondary' as const, label: status }
   }
-}
-
-function formatDate(dateString: string | Date): string {
-  return new Date(dateString).toLocaleDateString('pt-BR')
 }
 
 function formatUncertainty(standard: ReferenceStandard): string {
@@ -161,7 +158,7 @@ export const standardsColumns: ColumnDef<ReferenceStandard>[] = [
       return (
         <div className="flex items-center gap-2">
           <span className="text-sm">
-            {formatDate(row.original.nextCalibrationDate)}
+            {formatStandardDate(row.original.nextCalibrationDate)}
           </span>
           <Badge
             variant={calBadge.variant}

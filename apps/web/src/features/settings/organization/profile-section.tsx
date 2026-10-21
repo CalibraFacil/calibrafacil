@@ -9,7 +9,6 @@ import { authClient } from '@calibra-facil/auth/client'
 import { translateAuthErrorMessage } from '@calibra-facil/auth/error-messages'
 import {
   ACCREDITATION_NUMBER_PREFIX,
-  getAccreditationStatus,
   normalizeAccreditationNumber,
 } from '@calibra-facil/shared'
 import { isValidCnpj, normalizeCnpj } from '@calibra-facil/shared/cnpj'
@@ -26,6 +25,7 @@ import {
   buildOrganizationIsoPayload,
   createOrganizationIdentityDraft,
   createOrganizationIsoDraft,
+  getAccreditationPreviewStatus,
 } from '@/features/settings/organization-model'
 import type { ActiveOrganization } from '@/features/settings/organization/shared'
 import { AccreditationSealPreview } from '@/features/settings/accreditation-seal-preview'
@@ -676,15 +676,11 @@ export function OrganizationProfileSection({
                         </div>
                       </FieldGroup>
                       <AccreditationSealPreview
-                        status={getAccreditationStatus({
+                        status={getAccreditationPreviewStatus({
                           accreditationActive,
                           accreditationNumber,
-                          accreditationValidFrom: accreditationValidFrom
-                            ? `${accreditationValidFrom}T00:00:00.000Z`
-                            : null,
-                          accreditationValidUntil: accreditationValidUntil
-                            ? `${accreditationValidUntil}T23:59:59.999Z`
-                            : null,
+                          accreditationValidFrom,
+                          accreditationValidUntil,
                         })}
                         accreditationNumber={accreditationNumber}
                       />

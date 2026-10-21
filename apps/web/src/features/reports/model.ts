@@ -1,3 +1,5 @@
+import { LAB_TIME_ZONE } from '@calibra-facil/documents'
+
 import type {
   ComparisonResponse,
   ReportPeriod,
@@ -132,6 +134,7 @@ export function getNextComparisonSort({
 
 const REPORT_RANGE_DATE_FORMAT = new Intl.DateTimeFormat('pt-BR', {
   dateStyle: 'medium',
+  timeZone: LAB_TIME_ZONE,
 })
 
 export function formatReportRange(

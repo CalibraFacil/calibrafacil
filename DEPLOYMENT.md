@@ -161,6 +161,7 @@ then set `AUTH_COOKIE_DOMAIN` and build the frontends with `VITE_API_URL`.
 | `QUOTE_APPROVAL_CODE_PEPPER`, `CRON_SECRET`                                                         | Random strings                                                                       |
 | `PORTAL_SERVICE_USER_ID`                                                                            | Id of the account that owns client-portal organizations (`init` creates it)          |
 | `BACKGROUND_JOBS_MODE`                                                                              | `local` (inside the API process), `queue` (a separate worker) or `vercel`            |
+| `BACKGROUND_JOBS_MAX_DELIVERIES`                                                                    | Optional, default `3`: Vercel deliveries before a certificate is rejected            |
 | `CRON_SCHEDULER=internal`                                                                           | Run the scheduled jobs inside the API (see below)                                    |
 
 Extra origins for CORS and auth can be listed in `CORS_ALLOWED_ORIGINS` and

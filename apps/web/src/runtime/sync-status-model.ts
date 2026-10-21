@@ -12,6 +12,8 @@ export type DesktopSyncAvailabilitySnapshot = {
 
 export type DataSourceIndicatorSnapshot = DesktopSyncAvailabilitySnapshot & {
   pendingOutboxCount: number
+  /** Part of `pendingOutboxCount` recorded by a different signed-in user. */
+  pendingForOtherUserCount?: number
   conflictCount: number
 }
 
@@ -79,13 +81,43 @@ export function getDataSourceIndicatorModel(
   }
 
   if (sync.pendingOutboxCount > 0) {
+    // Another user's events are not sent under this session; they wait for
+    // their author, which is not something this user can fix by syncing.
+    const forOtherUser = Math.min(
+      sync.pendingForOtherUserCount ?? 0,
+      sync.pendingOutboxCount,
+    )
+    const own = sync.pendingOutboxCount - forOtherUser
+
+    if (own === 0) {
+      return {
+        label: 'Pendente',
+        title: 'Alterações de outro usuário',
+        description:
+          forOtherUser === 1
+            ? '1 alteração de outro usuário aguarda esse usuário entrar para ser enviada.'
+            : `${forOtherUser} alterações de outro usuário aguardam esse usuário entrar para serem enviadas.`,
+        variant: 'outline',
+        className: 'text-amber-700 dark:text-amber-300',
+        dotClassName: 'bg-amber-500',
+      }
+    }
+
+    const ownDescription =
+      own === 1
+        ? '1 alteração aguardando envio para a nuvem.'
+        : `${own} alterações aguardando envio para a nuvem.`
+    const otherDescription =
+      forOtherUser === 0
+        ? ''
+        : forOtherUser === 1
+          ? ' Mais 1 alteração de outro usuário aguarda esse usuário entrar.'
+          : ` Mais ${forOtherUser} alterações de outro usuário aguardam esse usuário entrar.`
+
     return {
       label: 'Pendente',
       title: 'Alterações locais pendentes',
-      description:
-        sync.pendingOutboxCount === 1
-          ? '1 alteração aguardando envio para a nuvem.'
-          : `${sync.pendingOutboxCount} alterações aguardando envio para a nuvem.`,
+      description: `${ownDescription}${otherDescription}`,
       variant: 'outline',
       className: 'text-amber-700 dark:text-amber-300',
       dotClassName: 'bg-amber-500',

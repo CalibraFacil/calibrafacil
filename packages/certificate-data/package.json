@@ -12,7 +12,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit",
-    "check-types": "tsc -p tsconfig.json --noEmit",
+    "check-types": "node ../../scripts/typecheck.mjs -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:run": "vitest run",
     "lint": "oxlint"

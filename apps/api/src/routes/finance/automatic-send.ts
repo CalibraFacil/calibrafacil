@@ -9,6 +9,11 @@ import {
   type AuthVariables,
 } from "../../middleware/permission";
 import type { AutomaticSendMilestone } from "@calibra-facil/shared";
+import { agreementBelongsToOrganization } from "../../lib/tenant-refs";
+import { isUniqueViolationOf } from "../../lib/db-errors";
+
+/** Partial unique index: one organization-wide default rule (migration 0031). */
+const ORG_DEFAULT_RULE_INDEX = "automatic_send_rule_org_default_uidx";
 
 const RuleIdParamSchema = z.object({
   id: z.coerce.number().int().positive(),
@@ -118,6 +123,19 @@ export const financeAutomaticSendRouter = new Hono<{
         if (!matched) return c.json({ error: "Cliente inválido" }, 400);
       }
 
+      // Same cross-tenant guard for the agreement the override is pinned to.
+      if (
+        body.commercialAgreementId != null &&
+        !(await agreementBelongsToOrganization(
+          member.organizationId,
+          body.commercialAgreementId,
+        ))
+      ) {
+        return c.json({ error: "Contrato inválido" }, 400);
+      }
+
+      // The partial unique index is the authority: a second org-wide default rule
+      // violates it, also when two requests race. Map that one index to 409.
       const inserted = await db
         .insert(automaticSendRule)
         .values({
@@ -129,7 +147,17 @@ export const financeAutomaticSendRouter = new Hono<{
           priority: body.priority ?? 0,
           createdByUserId: session.user.id,
         })
-        .returning();
+        .returning()
+        .catch((error: unknown) => {
+          if (isUniqueViolationOf(error, ORG_DEFAULT_RULE_INDEX)) return null;
+          throw error;
+        });
+      if (inserted === null) {
+        return c.json(
+          { error: "Já existe uma regra padrão para a organização" },
+          409,
+        );
+      }
 
       const created = inserted[0];
       if (!created) return c.json({ error: "Falha ao criar regra" }, 500);

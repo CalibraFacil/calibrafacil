@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
 import { beforeEach, inject, vi } from "vitest";
 import { assertEphemeralTestDb } from "./guard";
+import { installTenantSqlGuard } from "./tenant-sql-guard";
 
 // Per-worker setup for the integration tier. Runs before any test file in this
 // worker process. Each worker gets its OWN copy of the schema (calibra_w<id>)
@@ -151,6 +152,19 @@ export function loginAs(params: { userId: string; organizationId: string }) {
   getSessionMock.mockResolvedValue(sessionFor(params));
 }
 
+/**
+ * Resolve the session PER REQUEST from the `x-test-user-id` header instead of a
+ * single global user, so two requests in flight (e.g. a `Promise.all` race
+ * between two approvers) really run as two different users. Send the header on
+ * every request; a missing header is unauthenticated.
+ */
+export function loginPerRequestHeader(organizationId: string) {
+  getSessionMock.mockImplementation(async (input: { headers: Headers }) => {
+    const userId = input.headers.get("x-test-user-id");
+    return userId ? sessionFor({ userId, organizationId }) : null;
+  });
+}
+
 /** Make the next request unauthenticated (getSession -> null -> 401). */
 export function logout() {
   getSessionMock.mockResolvedValue(null);
@@ -180,3 +194,7 @@ beforeEach(() => {
   getSessionMock.mockReset();
   portalGetSessionMock.mockReset();
 });
+
+// Tenancy guard: every statement the app issues against a tenant-scoped table
+// must carry an organization predicate (see tenant-sql-guard.ts).
+installTenantSqlGuard();

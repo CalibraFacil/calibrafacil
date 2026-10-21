@@ -34,7 +34,7 @@ import {
   SelectTrigger,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { formatDate, formatDateLong } from "@/lib/format";
+import { formatDate, formatDateOnlyLong } from "@/lib/format";
 import {
   formatPortalVisitAddress,
   isVisitActionable,
@@ -58,7 +58,7 @@ const VISIT_TONE: Record<PortalVisitStatus, SignalTone> = {
 
 function scheduledLabel(scheduledAt: string | null): string {
   if (!scheduledAt) return "Data a confirmar";
-  return formatDateLong(new Date(scheduledAt));
+  return formatDateOnlyLong(scheduledAt);
 }
 
 type WindowDraft = {

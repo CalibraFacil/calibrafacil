@@ -1,18 +1,25 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { publicApiV2Router } from "./public-api-v2";
-import { db } from "@calibra-facil/db";
+import { db, getDb } from "@calibra-facil/db";
 import {
   asset,
   assetAuditLog,
   assetType,
+  calibrationJob,
   customer,
+  jobAuditLog,
   organization,
   organizationApiKey,
 } from "@calibra-facil/db/schema";
 import { eq, inArray, sql } from "drizzle-orm";
+import type { JobStatus } from "@calibra-facil/db/schema";
 import { createApiKeySecret } from "../lib/api-keys";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import {
+  seedExtraMember,
+  seedJobForOrg,
+} from "../../test/integration/tenant-refs";
 
 // Real-DB integration test for the public API v2 router.
 // No session mock is needed — auth is entirely via API key, handled by
@@ -787,5 +794,184 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
       .from(assetAuditLog)
       .where(eq(assetAuditLog.assetId, assetB));
     expect(logs).toHaveLength(0);
+  });
+
+  // =========================================================================
+  // Foreign-id (tenant-refs) guard: PATCH /jobs/:id technicianId
+  // =========================================================================
+  it("REQ-TENANT-PAPI-001 [HIGH RISK]: PATCH /jobs/:id assigning another org's user as technician → 400, job technician unchanged", async () => {
+    const orgA = await seedOrg({ orgId: "org-a" });
+    const orgB = await seedOrg({ orgId: "org-b" });
+    const { rawKey } = await seedApiKey({
+      orgId: orgA.orgId,
+      userId: orgA.userId,
+      keyId: "key-jobs-write",
+      scopes: ["jobs:write"],
+    });
+    const { jobId: jobA } = await seedJobForOrg({
+      orgId: orgA.orgId,
+      unitId: orgA.unitId,
+      createdBy: orgA.userId,
+    });
+
+    const res = await publicApiV2Router.request(`/jobs/${jobA}`, {
+      method: "PATCH",
+      headers: { "x-api-key": rawKey, "content-type": "application/json" },
+      body: JSON.stringify({ technicianId: orgB.userId }),
+    });
+
+    expect(res.status).toBe(400);
+    const [row] = await db
+      .select({ technicianId: calibrationJob.technicianId })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, jobA));
+    expect(row?.technicianId).toBeNull();
+  });
+
+  it("REQ-TENANT-PAPI-002: PATCH /jobs/:id assigning a same-org technician assigned to the job's unit → 200 and persisted", async () => {
+    const orgA = await seedOrg({ orgId: "org-a" });
+    const { rawKey } = await seedApiKey({
+      orgId: orgA.orgId,
+      userId: orgA.userId,
+      keyId: "key-jobs-write",
+      scopes: ["jobs:write"],
+    });
+    const { jobId: jobA } = await seedJobForOrg({
+      orgId: orgA.orgId,
+      unitId: orgA.unitId,
+      createdBy: orgA.userId,
+    });
+    const tech = await seedExtraMember({
+      orgId: orgA.orgId,
+      userId: "tech-a",
+      role: "technician",
+      unitId: orgA.unitId,
+      unitRole: "technician",
+    });
+
+    const res = await publicApiV2Router.request(`/jobs/${jobA}`, {
+      method: "PATCH",
+      headers: { "x-api-key": rawKey, "content-type": "application/json" },
+      body: JSON.stringify({ technicianId: tech.userId }),
+    });
+
+    expect(res.status).toBe(200);
+    const [row] = await db
+      .select({ technicianId: calibrationJob.technicianId })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, jobA));
+    expect(row?.technicianId).toBe(tech.userId);
+  });
+
+  // =========================================================================
+  // DELETE /jobs/:id — cancel through the status machine's allow-list, with a
+  // compare-and-set on the validated status
+  // =========================================================================
+  async function seedCancelableJob(status: JobStatus) {
+    const orgA = await seedOrg({ orgId: "org-a" });
+    const { rawKey } = await seedApiKey({
+      orgId: orgA.orgId,
+      userId: orgA.userId,
+      keyId: "key-jobs-write",
+      scopes: ["jobs:write"],
+    });
+    const { jobId } = await seedJobForOrg({
+      orgId: orgA.orgId,
+      unitId: orgA.unitId,
+      createdBy: orgA.userId,
+    });
+    await db
+      .update(calibrationJob)
+      .set({ status })
+      .where(eq(calibrationJob.id, jobId));
+    return { rawKey, jobId };
+  }
+
+  async function cancelJob(
+    rawKey: string,
+    jobId: number,
+    idempotencyKey: string,
+  ) {
+    return publicApiV2Router.request(`/jobs/${jobId}`, {
+      method: "DELETE",
+      headers: {
+        "x-api-key": rawKey,
+        "content-type": "application/json",
+        "idempotency-key": idempotencyKey,
+      },
+      body: JSON.stringify({ reason: "Cliente desistiu" }),
+    });
+  }
+
+  async function jobState(jobId: number) {
+    const [row] = await db
+      .select({ status: calibrationJob.status })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, jobId));
+    const audit = await db
+      .select({ action: jobAuditLog.action })
+      .from(jobAuditLog)
+      .where(eq(jobAuditLog.jobId, jobId));
+    return { status: row?.status, audit: audit.map((entry) => entry.action) };
+  }
+
+  it.each<JobStatus>(["DRAFT", "IN_PROGRESS", "REVIEW", "REJECTED"])(
+    "REQ-JOBST-PAPI-001: DELETE /jobs/:id cancels a %s job → 200, CANCELED, one cancel audit row",
+    async (status) => {
+      const { rawKey, jobId } = await seedCancelableJob(status);
+
+      const res = await cancelJob(rawKey, jobId, `cancel-ok-${status}`);
+
+      expect(res.status).toBe(200);
+      expect(await jobState(jobId)).toEqual({
+        status: "CANCELED",
+        audit: ["cancel"],
+      });
+    },
+  );
+
+  it.each<JobStatus>(["APPROVED", "GENERATING_PDF", "SUPERSEDED", "CANCELED"])(
+    "REQ-JOBST-PAPI-002: DELETE /jobs/:id on a %s job → 409 job_not_cancelable, status unchanged, NO audit row",
+    async (status) => {
+      const { rawKey, jobId } = await seedCancelableJob(status);
+
+      const res = await cancelJob(rawKey, jobId, `cancel-no-${status}`);
+
+      expect(res.status).toBe(409);
+      expect(await res.json()).toMatchObject({
+        error: { code: "job_not_cancelable" },
+      });
+      expect(await jobState(jobId)).toEqual({ status, audit: [] });
+    },
+  );
+
+  it("REQ-JOBST-PAPI-003: a job that is approved between the read and the write is not cancelled → 409 job_status_conflict, status unchanged, NO audit row", async () => {
+    const { rawKey, jobId } = await seedCancelableJob("REVIEW");
+
+    // Forces the lost compare-and-set deterministically: the handler has read
+    // the job as REVIEW; right before it opens the transaction carrying its
+    // write, another actor moves it to GENERATING_PDF.
+    const instance = getDb();
+    const originalTransaction = instance.transaction.bind(instance);
+    vi.spyOn(instance, "transaction").mockImplementationOnce(
+      async (callback, config) => {
+        await db
+          .update(calibrationJob)
+          .set({ status: "GENERATING_PDF" })
+          .where(eq(calibrationJob.id, jobId));
+        return originalTransaction(callback, config);
+      },
+    );
+
+    const res = await cancelJob(rawKey, jobId, "cancel-race");
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      error: { code: "job_status_conflict" },
+    });
+    expect(await jobState(jobId)).toEqual({
+      status: "GENERATING_PDF",
+      audit: [],
+    });
   });
 });

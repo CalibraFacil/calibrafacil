@@ -17,7 +17,7 @@
   },
   "scripts": {
     "test": "vitest run --passWithNoTests",
-    "check-types": "tsc --noEmit",
+    "check-types": "node ../../scripts/typecheck.mjs --noEmit",
     "lint": "oxlint"
   },
   "keywords": [],

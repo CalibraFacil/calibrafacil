@@ -2,8 +2,14 @@ export { LabelHtml, type LabelData } from "./LabelHtml.js";
 export {
   LAB_TIME_ZONE,
   formatCalendarDate,
+  formatDateOnly,
+  formatDateOnlyKey,
+  getDateOnlyDay,
   formatLabDate,
   formatLabDateTime,
+  getLabCalendarDay,
+  formatLabDayKey,
+  startOfLabMonth,
 } from "./dates.js";
 export {
   renderIntervalReportHtml,

@@ -18,6 +18,8 @@ export const localDiagnosticsSchema = z.object({
       messages: z.array(z.string()),
     }),
     pendingOutboxCount: z.number().int().nonnegative(),
+    /** The part of `pendingOutboxCount` recorded by another user. */
+    pendingForOtherUserCount: z.number().int().nonnegative().optional(),
     conflictCount: z.number().int().nonnegative(),
     activeCalibrationJobCount: z.number().int().nonnegative(),
     activeServiceOrderWorkflowCount: z.number().int().nonnegative(),

@@ -113,12 +113,14 @@ function buildMutationOperation(params: {
   responseStatus?: 200 | 201;
   pathParameters?: OpenApiParameter[];
   idempotent?: boolean;
+  description?: string;
 }) {
   const responseStatus = params.responseStatus ?? 200;
 
   return {
     tags: [params.tag],
     summary: params.summary,
+    ...(params.description ? { description: params.description } : {}),
     security: [{ ApiKeyAuth: [] }],
     parameters: [
       ...(params.pathParameters ?? []),
@@ -647,6 +649,8 @@ export function buildPublicApiV2OpenApiDocument(origin: string) {
         post: buildMutationOperation({
           summary: "Aprovar OS",
           tag: "Jobs",
+          description:
+            "A aprovação é feita em nome do criador da chave de API, que é o aprovador responsável e precisa, no momento da chamada, ter permissão de aprovar calibrações, ser signatário autorizado (quando o laboratório mantém lista de signatários), não ser quem executou ou criou a OS (separação de responsabilidades, ISO/IEC 17025) e passar as mesmas verificações de escopo acreditado e condições ambientais da aplicação. Recusas: 403 `approval_requires_signatory` (criador sem permissão ou fora da lista de signatários) ou `self_approval_blocked`; 409 `job_not_approvable` (OS fora de revisão) ou `approval_conflict` (aprovação concorrente); 400 `environmental_justification_required`; 422 `scope_violation`. A trilha de auditoria registra a chave usada. O status da OS não pode ser alterado por `PATCH /jobs/{id}`.",
           requestBodyDescription:
             "Aprova o job e libera certificado quando aplicável.",
           pathParameters: [

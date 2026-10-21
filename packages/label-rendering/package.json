@@ -12,7 +12,7 @@
   },
   "scripts": {
     "build": "tsc --noEmit",
-    "check-types": "tsc --noEmit",
+    "check-types": "node ../../scripts/typecheck.mjs --noEmit",
     "lint": "oxlint",
     "test": "vitest run --passWithNoTests"
   },

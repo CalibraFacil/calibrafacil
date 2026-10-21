@@ -11,15 +11,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { calibraApi } from '@/utils/api'
+import { formatStandardDate } from '@/features/standards/dates'
 import type { StandardDetail } from '@/features/standards/types'
-
-function formatDate(value: string | Date) {
-  return new Date(value).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  })
-}
 
 function formatFileSize(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
@@ -144,8 +137,8 @@ export function StandardCertificateDocumentPanel({
               <div>
                 <dt className="text-muted-foreground">Validade</dt>
                 <dd className="mt-1 font-mono tabular-nums">
-                  {formatDate(document.calibrationDate)} -{' '}
-                  {formatDate(document.nextCalibrationDate)}
+                  {formatStandardDate(document.calibrationDate)} -{' '}
+                  {formatStandardDate(document.nextCalibrationDate)}
                 </dd>
               </div>
             </dl>

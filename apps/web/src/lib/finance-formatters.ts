@@ -1,3 +1,4 @@
+import { formatDateOnly } from '@calibra-facil/documents'
 import { formatMoney } from '@calibra-facil/shared'
 
 export type BillingMode = 'single' | 'consolidated'
@@ -23,11 +24,11 @@ export function getBillingModeLabel(mode: BillingMode) {
   return mode === 'single' ? 'Por OS' : 'Consolidada'
 }
 
+/**
+ * Finance dates are mostly date-only (a due day typed in a date field and
+ * stored at UTC midnight) next to real moments (exported, completed): both
+ * show on the laboratory's day, a UTC-midnight value on the day it names.
+ */
 export function formatFinanceDate(value: string | Date | null | undefined) {
-  if (!value) return 'Sem data'
-
-  const date = value instanceof Date ? value : new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Sem data'
-
-  return date.toLocaleDateString('pt-BR')
+  return formatDateOnly(value, 'Sem data')
 }

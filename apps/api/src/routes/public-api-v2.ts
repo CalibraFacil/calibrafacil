@@ -89,9 +89,14 @@ import {
 } from "../middleware/permission";
 import { createClientOrganizationAsServiceOwner } from "../lib/portal-service-account";
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
+import { isAssignableTechnician } from "../lib/tenant-refs";
 import { deriveNextCalibrationDate } from "../lib/portal-asset-interval";
 import { resolveAssetRegimeWrite } from "../lib/asset-regime";
 import { deriveRegulatedNextDate } from "../lib/regulated-interval";
+import { approveJob } from "../modules/jobs/approve-job";
+import { isCancelableJobStatus } from "../modules/jobs/job-status-transitions";
+import { resolveApiKeyApprover } from "../lib/api-key-approver";
+import { sendServiceOrdersToFinance } from "../lib/finance";
 import {
   denormalizeAssetSpecificationsForResponse,
   normalizeAssetSpecificationsFromInput,
@@ -498,6 +503,23 @@ function mapWebhookSubscription(
     updatedAt: record.updatedAt,
   };
 }
+
+/**
+ * Public `PATCH /jobs/:id` edits plain fields only. `status` is deliberately
+ * not editable here: the full JobStatus enum would let a `jobs:write` key set
+ * APPROVED (or revive SUPERSEDED) with no approver and none of the release
+ * gates. Every transition has its own endpoint (`/submit`, `/reject`,
+ * `DELETE` to cancel) and approval is refused to API keys altogether.
+ */
+const PublicUpdateJobSchema = UpdateJobSchema.omit({ status: true }).extend({
+  externalId: z.string().trim().optional(),
+  status: z
+    .never({
+      message:
+        "O status da OS não pode ser alterado por este endpoint; use as ações /submit, /reject ou DELETE",
+    })
+    .optional(),
+});
 
 export const publicApiV2Router = new Hono<{
   Variables: ApiKeyAuthVariables;
@@ -3393,10 +3415,7 @@ publicApiV2Router
   .patch(
     "/jobs/:id",
     requireApiScope("jobs:write"),
-    zValidator(
-      "json",
-      UpdateJobSchema.extend({ externalId: z.string().trim().optional() }),
-    ),
+    zValidator("json", PublicUpdateJobSchema),
     async (c) => {
       const apiKey = c.get("apiKey");
       const input = c.req.valid("json");
@@ -3437,13 +3456,35 @@ publicApiV2Router
         );
       }
 
-      if (existing.status === "APPROVED" || existing.status === "CANCELED") {
+      if (
+        existing.status === "APPROVED" ||
+        existing.status === "SUPERSEDED" ||
+        existing.status === "CANCELED"
+      ) {
         return c.json(
           buildPublicApiError({
             code: "job_not_editable",
             message: `Não é possível atualizar uma OS com status ${existing.status}`,
           }),
           409,
+        );
+      }
+
+      if (
+        input.technicianId &&
+        input.technicianId !== existing.technicianId &&
+        !(await isAssignableTechnician({
+          organizationId: apiKey.organizationId,
+          userId: input.technicianId,
+          unitId: existing.unitId,
+        }))
+      ) {
+        return c.json(
+          buildPublicApiError({
+            code: "technician_not_found",
+            message: "Técnico não encontrado ou sem permissão",
+          }),
+          400,
         );
       }
 
@@ -3460,7 +3501,6 @@ publicApiV2Router
               : input.dueDate
                 ? new Date(input.dueDate)
                 : null,
-          status: input.status ?? existing.status,
         })
         .where(eq(calibrationJob.id, existing.id))
         .returning();
@@ -3713,8 +3753,8 @@ publicApiV2Router
       }
 
       return withIdempotentMutation(c, input, async () => {
-        const [existing] = await db
-          .select()
+        const [job] = await db
+          .select({ unitId: calibrationJob.unitId })
           .from(calibrationJob)
           .where(
             and(
@@ -3724,7 +3764,7 @@ publicApiV2Router
           )
           .limit(1);
 
-        if (!existing) {
+        if (!job) {
           return {
             status: 404,
             body: buildPublicApiError({
@@ -3734,55 +3774,144 @@ publicApiV2Router
           };
         }
 
-        if (existing.status !== "REVIEW") {
-          return {
-            status: 409,
-            body: buildPublicApiError({
-              code: "job_not_approvable",
-              message: "A OS precisa estar em revisão para ser aprovada",
-            }),
-          };
-        }
-
-        const [updated] = await db
-          .update(calibrationJob)
-          .set({
-            status: "GENERATING_PDF",
-            approvedBy: apiKey.createdBy,
-            approvedAt: new Date(),
-            rejectedBy: null,
-            rejectedAt: null,
-            rejectionReason: null,
-          })
-          .where(eq(calibrationJob.id, existing.id))
-          .returning();
-
-        await db.insert(jobAuditLog).values({
-          jobId: existing.id,
-          action: "approve",
-          changes: { status: { old: existing.status, new: "GENERATING_PDF" } },
-          performedBy: apiKey.createdBy,
-          ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-          reason: input.reason,
-        });
-
-        await emitPublicApiWebhookEvent({
+        // Approval is a regulated release (ISO/IEC 17025 §6.2.6) and a key is
+        // a credential, not a person: it acts FOR its creator, who is the
+        // accountable approver. The creator's current role, unit scope,
+        // signatory authorization and separation of duties are checked by the
+        // same command the cloud route and the desktop sync use, and the audit
+        // row records the key the approval went through.
+        const approver = await resolveApiKeyApprover({
           organizationId: apiKey.organizationId,
-          eventType: "job.approved",
-          payload: {
-            id: updated!.id,
-            jobId: updated!.jobId,
-            status: updated!.status,
-          },
-          env: c.env,
+          userId: apiKey.createdBy,
+          unitId: job.unitId,
         });
 
-        return {
-          status: 200,
-          body: { data: updated! },
-          resourceType: "job" as const,
-          resourceId: updated!.id,
-        };
+        const result = await approveJob({
+          jobId: resolvedId,
+          actor: {
+            kind: "api_key",
+            apiKey: {
+              id: apiKey.id,
+              name: apiKey.name,
+              keyPrefix: apiKey.keyPrefix,
+            },
+            member: approver,
+          },
+          values: input,
+          metadata: { ipAddress: getPublicApiRequestIp(c.req.raw.headers) },
+          completion: {
+            kind: "generate_certificate_pdf",
+            sendServiceOrdersToFinance: async (params) =>
+              approver
+                ? sendServiceOrdersToFinance({
+                    ...params,
+                    scope: approver,
+                    env: c.env,
+                  })
+                : [],
+          },
+        });
+
+        switch (result.status) {
+          case "not_found":
+            return {
+              status: 404,
+              body: buildPublicApiError({
+                code: "job_not_found",
+                message: "OS não encontrada",
+              }),
+            };
+          case "invalid_status":
+            return {
+              status: 409,
+              body: buildPublicApiError({
+                code: "job_not_approvable",
+                message: "A OS precisa estar em revisão para ser aprovada",
+              }),
+            };
+          case "dispatch_failed":
+            return {
+              status: 503,
+              body: buildPublicApiError({
+                code: "approval_dispatch_failed",
+                message:
+                  "Não foi possível enfileirar a geração do certificado; a aprovação foi revertida. Tente novamente",
+              }),
+            };
+          case "concurrent_approval":
+            return {
+              status: 409,
+              body: buildPublicApiError({
+                code: "approval_conflict",
+                message:
+                  "A OS foi alterada por outra aprovação ou revisão em andamento",
+              }),
+            };
+          case "approval_requires_signatory":
+          case "role_not_permitted":
+          case "not_authorized_signatory":
+            return {
+              status: 403,
+              body: buildPublicApiError({
+                code: "approval_requires_signatory",
+                message:
+                  "O criador da chave de API precisa ser um signatário autorizado com permissão de aprovar calibrações",
+              }),
+            };
+          case "self_approval_blocked":
+            return {
+              status: 403,
+              body: buildPublicApiError({
+                code: "self_approval_blocked",
+                message:
+                  "Separação de responsabilidades (ISO/IEC 17025): quem executou ou criou a calibração não pode aprová-la, nem por chave de API",
+              }),
+            };
+          case "environmental_justification_required":
+            return {
+              status: 400,
+              body: buildPublicApiError({
+                code: "environmental_justification_required",
+                message:
+                  "Condições ambientais fora dos limites. Forneça environmentalJustification para aprovar",
+                details: {
+                  environmentalSnapshot: result.environmentalSnapshot,
+                },
+              }),
+            };
+          case "scope_violation":
+            return {
+              status: 422,
+              body: buildPublicApiError({
+                code: "scope_violation",
+                message:
+                  "Violação do escopo acreditado (CMC): a emissão acreditada está bloqueada. Aprove com scopeOverrideJustification para emitir sem o selo de acreditação",
+                details: { scopeCompliance: result.scopeCompliance },
+              }),
+            };
+          case "approved": {
+            const updated = result.job;
+            if (updated) {
+              await emitPublicApiWebhookEvent({
+                organizationId: apiKey.organizationId,
+                eventType: "job.approved",
+                payload: {
+                  id: updated.id,
+                  jobId: updated.jobId,
+                  status: updated.status,
+                },
+                env: c.env,
+              });
+            }
+
+            return {
+              status: 200,
+              body: { data: updated },
+              resourceType: "job" as const,
+              resourceId: updated?.id ?? resolvedId,
+            };
+          }
+        }
       });
     },
   )
@@ -3913,47 +4042,75 @@ publicApiV2Router
           };
         }
 
-        if (existing.status === "APPROVED") {
+        // Explicit allow-list (the same one DELETE /jobs/:id uses): APPROVED,
+        // SUPERSEDED, CANCELED and GENERATING_PDF (approval in progress) are
+        // refused.
+        if (!isCancelableJobStatus(existing.status)) {
           return {
             status: 409,
             body: buildPublicApiError({
               code: "job_not_cancelable",
-              message: "Não é possível cancelar uma OS aprovada",
+              message:
+                existing.status === "APPROVED"
+                  ? "Não é possível cancelar uma OS aprovada"
+                  : `Não é possível cancelar uma OS com status ${existing.status}`,
             }),
           };
         }
 
-        const [updated] = await db
-          .update(calibrationJob)
-          .set({ status: "CANCELED" })
-          .where(eq(calibrationJob.id, existing.id))
-          .returning();
+        // Compare-and-set on the validated status; the audit row commits with it.
+        const updated = await db.transaction(async (tx) => {
+          const [row] = await tx
+            .update(calibrationJob)
+            .set({ status: "CANCELED" })
+            .where(
+              and(
+                eq(calibrationJob.id, existing.id),
+                eq(calibrationJob.organizationId, apiKey.organizationId),
+                eq(calibrationJob.status, existing.status),
+              ),
+            )
+            .returning();
+          if (!row) return null;
 
-        await db.insert(jobAuditLog).values({
-          jobId: existing.id,
-          action: "cancel",
-          changes: { status: { old: existing.status, new: "CANCELED" } },
-          performedBy: apiKey.createdBy,
-          ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-          reason: input.reason,
+          await tx.insert(jobAuditLog).values({
+            jobId: existing.id,
+            action: "cancel",
+            changes: { status: { old: existing.status, new: "CANCELED" } },
+            performedBy: apiKey.createdBy,
+            ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+            reason: input.reason,
+          });
+          return row;
         });
+
+        if (!updated) {
+          return {
+            status: 409,
+            body: buildPublicApiError({
+              code: "job_status_conflict",
+              message:
+                "O status da OS mudou durante a operação. Recarregue e tente novamente.",
+            }),
+          };
+        }
 
         await emitPublicApiWebhookEvent({
           organizationId: apiKey.organizationId,
           eventType: "job.canceled",
           payload: {
-            id: updated!.id,
-            jobId: updated!.jobId,
-            status: updated!.status,
+            id: updated.id,
+            jobId: updated.jobId,
+            status: updated.status,
           },
           env: c.env,
         });
 
         return {
           status: 200,
-          body: { data: updated! },
+          body: { data: updated },
           resourceType: "job" as const,
-          resourceId: updated!.id,
+          resourceId: updated.id,
         };
       });
     },

@@ -6,18 +6,52 @@ import type {
 } from "@calibra-facil/contracts";
 import type { LocalDatabase } from "./database";
 import { setSyncCursor } from "./outbox";
+import { resolveServiceOrdersForAggregates } from "./service-orders";
+import { recordSkippedRow } from "./skipped-rows";
 
 type JsonRecord = Record<string, unknown>;
 
+/** A pulled row that was left untouched because local changes are queued. */
+export type SkippedPulledRow = {
+  entityType: "customer" | "asset" | "calibration_job" | "service_order";
+  localId: string;
+};
+
+export type ApplySyncSummary = {
+  skipped: SkippedPulledRow[];
+};
+
+/**
+ * Apply a cloud snapshot/delta to the local cache.
+ *
+ * A pulled row never overwrites a row that still has queued local changes (an
+ * outbox event that is pending, failed or in conflict). The upserts used to be
+ * blind and forced `sync_state = 'synced'`, so any pull that arrived while an
+ * edit was waiting silently replaced the edit; since the push cursor bug made
+ * every pull restart from the epoch, that happened on every sync.
+ *
+ * The row is skipped, not merged, and no local conflict is recorded here: the
+ * conflict model is server-detected. The skipped row keeps its
+ * `remote_base_updated_at` anchor, so the queued edit is pushed with the base
+ * it was really made against and the cloud answers `concurrent_update`
+ * (STALE_BASE_VERSION, with the current cloud fields) if the row moved on. That
+ * lands in `sync_conflicts` through the normal push path, where the conflicts
+ * UI already shows local vs cloud values. Overwriting the anchor instead would
+ * have hidden the divergence from the server. Once the queued change is
+ * accepted the row is clean again and the next pull applies normally.
+ */
 export function applySyncBootstrap(
   database: LocalDatabase,
   bootstrap: SyncBootstrapResponse,
   pulledAt = new Date().toISOString(),
-) {
+): ApplySyncSummary {
   const organizationId = bootstrap.organization.id;
   const activeUnitId = bootstrap.permissions.activeUnitId;
+  const skipped: SkippedPulledRow[] = [];
 
   database.transaction(() => {
+    const pending = loadPendingLocalChanges(database);
+
     database
       .prepare(
         `
@@ -158,6 +192,18 @@ ON CONFLICT(id) DO UPDATE SET
     for (const item of bootstrap.customers) {
       const row = asRecord(item);
       const id = requiredNumber(row, "id");
+      if (
+        skipPendingRow(
+          database,
+          pending,
+          skipped,
+          row,
+          "customer",
+          "customer",
+          id,
+        )
+      )
+        continue;
       database
         .prepare(
           `
@@ -221,6 +267,8 @@ ON CONFLICT(id) DO UPDATE SET
     for (const item of bootstrap.assets) {
       const row = asRecord(item);
       const id = requiredNumber(row, "id");
+      if (skipPendingRow(database, pending, skipped, row, "asset", "asset", id))
+        continue;
       const customerId = requiredNumber(row, "customerId");
       const assetTypeId = requiredNumber(row, "assetTypeId");
       database
@@ -610,6 +658,19 @@ ON CONFLICT(id) DO UPDATE SET
     for (const item of bootstrap.jobs) {
       const row = asRecord(item);
       const id = requiredNumber(row, "id");
+      if (
+        skipPendingRow(
+          database,
+          pending,
+          skipped,
+          row,
+          "calibration_job",
+          "job",
+          id,
+        )
+      ) {
+        continue;
+      }
       database
         .prepare(
           `
@@ -742,6 +803,19 @@ ON CONFLICT(id) DO UPDATE SET
     for (const item of bootstrap.serviceOrders ?? []) {
       const row = asRecord(item);
       const id = requiredNumber(row, "id");
+      if (
+        skipPendingRow(
+          database,
+          pending,
+          skipped,
+          row,
+          "service_order",
+          "service-order",
+          id,
+        )
+      ) {
+        continue;
+      }
       database
         .prepare(
           `
@@ -835,10 +909,18 @@ ON CONFLICT(id) DO UPDATE SET
   claimed_defect = excluded.claimed_defect,
   intake_condition = excluded.intake_condition,
   updated_at = excluded.updated_at,
-  sync_state = excluded.sync_state
+  -- A quote/execution/delivery child of this order is still queued: the header
+  -- is refreshed, but the order stays dirty until that child is accepted.
+  sync_state = CASE WHEN @keepSyncState = 1
+    THEN service_orders.sync_state ELSE excluded.sync_state END
 `,
         )
         .run({
+          keepSyncState: pending.serviceOrdersWithQueuedChildren.has(
+            remoteLocalId("service-order", id),
+          )
+            ? 1
+            : 0,
           id: remoteLocalId("service-order", id),
           remoteId: id,
           // Opaque cloud id the dashboard routes with, so a synced OS has the
@@ -905,22 +987,27 @@ ON CONFLICT(id) DO UPDATE SET
         });
     }
   })();
+
+  return { skipped };
 }
 
 export function applySyncPullResponse(
   database: LocalDatabase,
   response: SyncPullResponse,
   pulledAt = new Date().toISOString(),
-) {
-  if (response.events.length > 0) {
-    const base = getLocalSessionSnapshot(database);
-    if (!base) {
-      throw new Error(
-        "Cannot apply sync pull before bootstrap snapshot exists",
-      );
-    }
+): ApplySyncSummary {
+  if (response.events.length === 0) {
+    setSyncCursor(database, response.cursor);
+    return { skipped: [] };
+  }
 
-    applySyncBootstrap(
+  const base = getLocalSessionSnapshot(database);
+  if (!base) {
+    throw new Error("Cannot apply sync pull before bootstrap snapshot exists");
+  }
+
+  return database.transaction(() => {
+    const summary = applySyncBootstrap(
       database,
       {
         ...base,
@@ -938,10 +1025,199 @@ export function applySyncPullResponse(
       },
       pulledAt,
     );
-    return;
+
+    summary.skipped.push(...applyCloudDeletions(database, response.events));
+    return summary;
+  })();
+}
+
+/**
+ * Soft-delete the local copy of assets and reference standards the cloud
+ * deleted. Only these two are covered: they are the tables whose cloud rows are
+ * soft-deleted and pulled; everything else the pull carries is upsert-only.
+ *
+ * An asset with queued local changes is left alone and reported as skipped,
+ * for the same reason an upsert is: the queued edit must reach the cloud (which
+ * rejects it for a deleted asset) instead of vanishing silently.
+ */
+function applyCloudDeletions(
+  database: LocalDatabase,
+  events: CloudSyncEvent[],
+): SkippedPulledRow[] {
+  const deletions = events.filter((event) => event.operation === "delete");
+  if (deletions.length === 0) return [];
+
+  const pending = loadPendingLocalChanges(database);
+  const skipped: SkippedPulledRow[] = [];
+
+  for (const event of deletions) {
+    const remoteId = Number(event.entityId);
+    if (!Number.isInteger(remoteId)) continue;
+
+    const deletedAt =
+      getDateString(asRecord(event.payload), "deletedAt") ?? event.occurredAt;
+
+    if (event.entityType === "asset") {
+      if (
+        skipPendingRow(
+          database,
+          pending,
+          skipped,
+          // The deletion's own version: what a re-fetch has to bring back.
+          {
+            updatedAt:
+              getDateString(asRecord(event.payload), "updatedAt") ??
+              event.occurredAt,
+          },
+          "asset",
+          "asset",
+          remoteId,
+        )
+      ) {
+        continue;
+      }
+
+      database
+        .prepare(
+          `
+UPDATE assets
+SET deleted_at = @deletedAt,
+  sync_state = 'synced'
+WHERE id = @id AND deleted_at IS NULL
+`,
+        )
+        .run({ id: remoteLocalId("asset", remoteId), deletedAt });
+    }
+
+    if (event.entityType === "reference_standard") {
+      // reference_standards has no deleted_at: 'deleted' is the state every
+      // local standards query already filters out.
+      database
+        .prepare(
+          `
+UPDATE reference_standards
+SET sync_state = 'deleted',
+  pulled_at = @deletedAt
+WHERE id = @id
+`,
+        )
+        .run({ id: remoteLocalId("standard", remoteId), deletedAt });
+    }
   }
 
-  setSyncCursor(database, response.cursor);
+  return skipped;
+}
+
+type PendingLocalChanges = {
+  /** `<kind>:<local id>` of every aggregate with an unsettled outbox event. */
+  aggregates: Set<string>;
+  /** Service orders whose own row is clean but a child event is still queued. */
+  serviceOrdersWithQueuedChildren: Set<string>;
+};
+
+const PULLED_AGGREGATE_TABLES = {
+  customer: { table: "customers", prefix: "customer" },
+  asset: { table: "assets", prefix: "asset" },
+  calibration_job: { table: "calibration_jobs", prefix: "job" },
+  service_order: { table: "service_orders", prefix: "service-order" },
+} as const;
+
+/**
+ * What still has to be pushed. "Unsettled" is every outbox status but
+ * `synced`: pending and failed events will be retried, and a conflict event is
+ * waiting for the user, so all of them mean the local row differs from the
+ * cloud on purpose.
+ *
+ * A locally created row that was accepted keeps its own local id and gains a
+ * `remote_id`, while the pull addresses rows as `<prefix>:<remote id>`; the
+ * remote-addressed id is added too so the queued edit is recognised either way.
+ */
+function loadPendingLocalChanges(database: LocalDatabase): PendingLocalChanges {
+  const events = database
+    .prepare<[], { kind: string; id: string }>(
+      `
+SELECT DISTINCT e.aggregate_kind AS kind, e.aggregate_id AS id
+FROM outbox o
+JOIN domain_events e ON e.event_id = o.event_id
+WHERE o.status <> 'synced'
+`,
+    )
+    .all();
+
+  const aggregates = new Set(
+    events.map((event) => `${event.kind}:${event.id}`),
+  );
+
+  for (const [kind, { table, prefix }] of Object.entries(
+    PULLED_AGGREGATE_TABLES,
+  )) {
+    const ids = events.filter((event) => event.kind === kind);
+    for (const chunk of chunked(ids, 500)) {
+      const rows = database
+        .prepare<
+          string[],
+          { remote_id: number | null }
+        >(`SELECT remote_id FROM ${table} WHERE remote_id IS NOT NULL AND id IN (${chunk.map(() => "?").join(", ")})`)
+        .all(...chunk.map((event) => event.id));
+      for (const row of rows) {
+        if (row.remote_id !== null) {
+          aggregates.add(`${kind}:${remoteLocalId(prefix, row.remote_id)}`);
+        }
+      }
+    }
+  }
+
+  const serviceOrdersWithQueuedChildren = new Set<string>();
+  for (const orderId of resolveServiceOrdersForAggregates(database, events)) {
+    if (aggregates.has(`service_order:${orderId}`)) continue;
+
+    serviceOrdersWithQueuedChildren.add(orderId);
+    const remoteId = database
+      .prepare<
+        [string],
+        { remote_id: number | null }
+      >("SELECT remote_id FROM service_orders WHERE id = ?")
+      .get(orderId)?.remote_id;
+    if (remoteId !== null && remoteId !== undefined) {
+      serviceOrdersWithQueuedChildren.add(
+        remoteLocalId("service-order", remoteId),
+      );
+    }
+  }
+
+  return { aggregates, serviceOrdersWithQueuedChildren };
+}
+
+function skipPendingRow(
+  database: LocalDatabase,
+  pending: PendingLocalChanges,
+  skipped: SkippedPulledRow[],
+  row: JsonRecord,
+  entityType: SkippedPulledRow["entityType"],
+  prefix: string,
+  remoteId: number,
+) {
+  const localId = remoteLocalId(prefix, remoteId);
+  if (!pending.aggregates.has(`${entityType}:${localId}`)) return false;
+
+  skipped.push({ entityType, localId });
+  // The cursor moves past this row: remember it so it is fetched again once
+  // its queued changes settle (see skipped-rows.ts).
+  recordSkippedRow(database, {
+    entityType,
+    localId,
+    remoteId,
+    cloudUpdatedAt: getDateString(row, "updatedAt"),
+  });
+  return true;
+}
+
+function chunked<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
 }
 
 function remoteLocalId(kind: string, remoteId: number) {

@@ -18,7 +18,7 @@
     "vitest": "^4.1.11"
   },
   "scripts": {
-    "check-types": "tsc --noEmit",
+    "check-types": "node ../../scripts/typecheck.mjs --noEmit",
     "test": "vitest",
     "test:run": "vitest run",
     "lint": "oxlint"

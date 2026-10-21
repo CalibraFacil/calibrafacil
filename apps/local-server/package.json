@@ -14,7 +14,7 @@
     "dev": "tsx --watch src/bin.ts",
     "start": "tsx src/bin.ts",
     "bundle": "vite build --config vite.config.ts",
-    "check-types": "tsc --noEmit",
+    "check-types": "node ../../scripts/typecheck.mjs --noEmit",
     "lint": "oxlint",
     "test": "vitest run --passWithNoTests"
   },

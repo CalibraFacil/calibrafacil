@@ -233,18 +233,21 @@ export async function sendServiceOrderQuote(input: {
   actorUserId: string;
   values: SendQuoteInput;
 }) {
-  const quote = await getQuoteForAction(input.serviceOrderId, input.quoteId);
-  if (!quote) return { status: "quote_not_found" as const };
-  if (!canEditServiceOrderQuote(quote.status)) {
-    return { status: "conflict" as const };
-  }
-
+  // Resolve the OS inside the caller's org/unit scope FIRST: a cross-tenant
+  // (OS, quote) pair then answers exactly like an unknown OS, instead of
+  // revealing through "quote not found" vs "OS not found" that the quote exists.
   const detail = await getServiceOrderDetail(
     input.serviceOrderId,
     input.member.organizationId,
     buildUnitScopeCondition(serviceOrder.unitId, input.member),
   );
   if (!detail) return { status: "order_not_found" as const };
+
+  const quote = await getQuoteForAction(input.serviceOrderId, input.quoteId);
+  if (!quote) return { status: "quote_not_found" as const };
+  if (!canEditServiceOrderQuote(quote.status)) {
+    return { status: "conflict" as const };
+  }
   // Sending drives the OS to awaiting_quote_approval. Only the clearly-wrong
   // case is blocked here: a closed or canceled OS must not be rewound and the
   // customer must not be mailed a fresh approval link for finished work.
