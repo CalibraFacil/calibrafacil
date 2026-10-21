@@ -35,6 +35,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { DataTable } from "@/components/ui/data-table";
 import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
 import { getApiBaseUrl } from "@/lib/utils";
+import { keepPreviousDataInScope } from "@/lib/keep-previous-page";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import { AuditPacksPanel } from "@/features/certificates/audit-packs";
 
@@ -293,6 +294,7 @@ function CertificatesPage() {
       }
       return response.json();
     },
+    placeholderData: keepPreviousDataInScope(key("portal-certificates")),
   });
 
   const handleRowClick = (certificate: Certificate) => {

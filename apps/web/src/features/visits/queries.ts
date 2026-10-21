@@ -1,6 +1,7 @@
 import { queryOptions, useQuery } from '@tanstack/react-query'
 
 import { calibraApi } from '@/utils/api'
+import { keepPreviousDataInScope } from '@/lib/keep-previous-page'
 import type { VisitDetail, VisitsListData, VisitStatus } from './types'
 
 export const VISITS_LIST_LIMIT = 20
@@ -29,6 +30,7 @@ export function visitsListQueryOptions(input: {
         mine: input.mine || undefined,
         rescheduleRequested: input.rescheduleRequested || undefined,
       }),
+    placeholderData: keepPreviousDataInScope(['visits', input.organizationId]),
   })
 }
 

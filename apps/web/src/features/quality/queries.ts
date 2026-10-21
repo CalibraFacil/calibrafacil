@@ -5,6 +5,7 @@ import type {
 } from '@calibra-facil/client-runtime'
 
 import { calibraApi } from '@/utils/api'
+import { keepPreviousDataInScope } from '@/lib/keep-previous-page'
 import {
   ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,
@@ -89,6 +90,10 @@ export function nonConformanceListQueryOptions(
         status: input.statusFilter || undefined,
         type: input.typeFilter || undefined,
       }),
+    placeholderData: keepPreviousDataInScope([
+      'non-conformances',
+      input.organizationId,
+    ]),
   })
 }
 
@@ -166,6 +171,7 @@ export function capaListQueryOptions(input: CapaListQueryInput) {
         severity: input.severityFilter || undefined,
         category: input.categoryFilter || undefined,
       }),
+    placeholderData: keepPreviousDataInScope(['capas', input.organizationId]),
   })
 }
 
