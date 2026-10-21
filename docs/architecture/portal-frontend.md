@@ -145,9 +145,9 @@ imports `client-runtime` or `@calibra-facil/api`. Only business data under
   lab's once it lands.
 - **Boundaries are router defaults** (`components/route-boundaries.tsx`:
   `defaultErrorComponent`, `defaultPendingComponent`, `defaultNotFoundComponent`,
-  `defaultOnCatch`). Crashes are reported through `lib/sentry.ts`, which is opt-in
-  (`VITE_SENTRY_DSN`, production only, no PII, no replay) and lazy-loads the SDK
-  (`vendor-sentry`, never in the initial graph). The boundaries are in the
+  `defaultOnCatch`). Crashes are reported through `lib/report-client-error.ts`:
+  one structured `console.error` line (JSON), no third-party SDK, no network
+  call. The boundaries are in the
   initial graph, so they use `panel-styles`, `button-variants` and inline glyphs
   instead of `instrument-panel.tsx`, `ui/button.tsx` or the icon barrel.
 - **Paginated lists keep their rows while the next page loads**: pass

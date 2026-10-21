@@ -3,7 +3,6 @@ import { Alert02Icon, Compass01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import type { ErrorComponentProps } from '@tanstack/react-router'
 
-import { reportRouteError } from '@/app/observability/sentry'
 import { Button } from '@/components/ui/button'
 import {
   Empty,
@@ -15,6 +14,7 @@ import {
 } from '@/components/ui/empty'
 import { Spinner } from '@/components/ui/spinner'
 import { ACTION_BUTTON_CLASS } from '@/components/instrument-panel'
+import { reportClientError } from '@/lib/report-client-error'
 
 const BOUNDARY_WRAPPER_CLASS =
   'flex min-h-[60vh] w-full items-center justify-center p-6'
@@ -36,8 +36,8 @@ export function RouteErrorFallback({ reset }: ErrorComponentProps) {
           </EmptyMedia>
           <EmptyTitle>Algo deu errado ao carregar esta página</EmptyTitle>
           <EmptyDescription>
-            O erro foi registrado para a nossa equipe. Tente novamente; se o
-            problema continuar, volte ao início.
+            O erro foi registrado. Tente novamente; se o problema continuar,
+            volte ao início.
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
@@ -108,6 +108,9 @@ export const routeBoundaryOptions = {
   defaultPendingComponent: RoutePendingFallback,
   defaultNotFoundComponent: RouteNotFoundFallback,
   defaultOnCatch: (error: Error, info: { componentStack?: string | null }) => {
-    void reportRouteError(error, info)
+    reportClientError(error, {
+      route: typeof window === 'undefined' ? '' : window.location.pathname,
+      componentStack: info.componentStack,
+    })
   },
 }

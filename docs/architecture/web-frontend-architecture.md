@@ -196,10 +196,11 @@ must be explicit:
   eligible.
 - desktop runtime must not initialize browser Sentry.
 
-Initialization and reporting live in `app/observability/sentry.ts`. Router
-boundaries (`app/router/route-boundaries.tsx`: default error, pending and
+Router boundaries (`app/router/route-boundaries.tsx`: default error, pending and
 not-found components) report render and loader crashes through `defaultOnCatch`
--> `reportRouteError`, which re-checks the desktop guard on every report.
+-> `reportClientError` (`lib/report-client-error.ts`), a structured
+`console.error` line with no third-party SDK. Sentry initialization stays in
+`router.tsx`, unchanged.
 Paginated list query options pass `placeholderData:
 keepPreviousDataInScope([...])` (`lib/keep-previous-page.ts`) so paging never
 flashes the skeleton, scoped so rows never carry across an organization switch.

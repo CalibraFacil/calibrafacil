@@ -32,13 +32,8 @@ const jsChunkBudget = Number(
 const forbiddenInitialChunks = [
   "vendor-charts",
   "vendor-motion",
-  "vendor-sentry",
   "sign-in-shader-panel",
 ];
-// Lazy vendor chunks that are big by nature and fetched on demand: they are
-// held to "never in the initial graph" (above) instead of the per-chunk size.
-// The Sentry SDK only loads when VITE_SENTRY_DSN is set (src/lib/sentry.ts).
-const lazyVendorChunks = ["vendor-sentry"];
 
 function fail(message) {
   console.error(`\n[bundle-budget] ${message}`);
@@ -66,11 +61,7 @@ const checks = [
   ...initialGraph.checks,
 ];
 const chunkFailures = metrics.jsChunks
-  .filter(
-    (chunk) =>
-      !lazyVendorChunks.some((name) => chunk.name.startsWith(name)) &&
-      chunk.bytes > jsChunkBudget,
-  )
+  .filter((chunk) => chunk.bytes > jsChunkBudget)
   .map((chunk) => ({
     name: `chunk:${chunk.name}`,
     bytes: chunk.bytes,

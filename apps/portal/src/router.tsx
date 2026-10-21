@@ -2,18 +2,6 @@ import { createRouter } from "@tanstack/react-router";
 import { QueryClient } from "@tanstack/react-query";
 import { routeTree } from "./routeTree.gen";
 import { routeBoundaryOptions } from "./components/route-boundaries";
-import { initializeSentry } from "./lib/sentry";
-
-function scheduleIdle(callback: () => void) {
-  if (typeof window === "undefined") return;
-
-  if (typeof window.requestIdleCallback === "function") {
-    window.requestIdleCallback(callback, { timeout: 2000 });
-    return;
-  }
-
-  globalThis.setTimeout(callback, 0);
-}
 
 export const getRouter = () => {
   const queryClient = new QueryClient({
@@ -34,10 +22,6 @@ export const getRouter = () => {
     context: {
       queryClient,
     },
-  });
-
-  scheduleIdle(() => {
-    void initializeSentry();
   });
 
   return router;

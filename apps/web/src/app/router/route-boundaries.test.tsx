@@ -20,25 +20,11 @@ import {
 import { RoutePendingFallback, routeBoundaryOptions } from './route-boundaries'
 
 const mocks = vi.hoisted(() => ({
-  init: vi.fn(),
-  captureException: vi.fn(),
-  isDesktop: vi.fn(() => false),
+  reportClientError: vi.fn(),
 }))
 
-vi.mock('@sentry/react', () => ({
-  init: mocks.init,
-  captureException: mocks.captureException,
-  browserTracingIntegration: () => ({ name: 'tracing' }),
-  replayIntegration: () => ({ name: 'replay' }),
-}))
-
-vi.mock('@/runtime/desktop', () => ({ isDesktopRuntime: mocks.isDesktop }))
-
-vi.mock('@/app/config/runtime', () => ({
-  getSentryDsn: () => 'https://key@o0.ingest.sentry.io/1',
-  shouldEnableTelemetry: () => true,
-  shouldEnableSentryReplay: () => false,
-  shouldSendSentryPii: () => false,
+vi.mock('@/lib/report-client-error', () => ({
+  reportClientError: mocks.reportClientError,
 }))
 
 let shouldCrash = true
@@ -79,7 +65,6 @@ describe('router boundaries (web)', () => {
   beforeEach(() => {
     shouldCrash = true
     vi.clearAllMocks()
-    mocks.isDesktop.mockReturnValue(false)
     // React logs caught render errors; keep the test output readable.
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
@@ -89,7 +74,9 @@ describe('router boundaries (web)', () => {
     vi.restoreAllMocks()
   })
 
-  it('REQ-FE-BOUNDARY-010: a route render crash shows pt-BR copy and is reported to Sentry', async () => {
+  it('REQ-FE-BOUNDARY-010: a route render crash shows pt-BR copy and is reported through reportClientError', async () => {
+    // The router uses a memory history here; defaultOnCatch reads the real URL.
+    window.history.replaceState({}, '', '/quebrada')
     renderApp('/quebrada')
 
     expect(
@@ -99,19 +86,25 @@ describe('router boundaries (web)', () => {
       screen.getByRole('button', { name: 'Tentar novamente' }),
     ).toBeTruthy()
 
-    await waitFor(() => expect(mocks.captureException).toHaveBeenCalledTimes(1))
-    const [reported] = mocks.captureException.mock.calls[0] ?? []
+    await waitFor(() =>
+      expect(mocks.reportClientError).toHaveBeenCalledTimes(1),
+    )
+    const [reported, context] = mocks.reportClientError.mock.calls[0] ?? []
     expect(reported).toBeInstanceOf(Error)
     expect(reported.message).toBe('boom na renderização')
+    expect(context.route).toBe('/quebrada')
+    expect(context.componentStack).toContain('Broken')
   })
 
-  it('REQ-FE-BOUNDARY-011: a loader failure also reaches the boundary and Sentry', async () => {
+  it('REQ-FE-BOUNDARY-011: a loader failure also reaches the boundary and reportClientError', async () => {
     renderApp('/carga', { loaderFails: true })
 
     expect(
       await screen.findByText('Algo deu errado ao carregar esta página'),
     ).toBeTruthy()
-    await waitFor(() => expect(mocks.captureException).toHaveBeenCalled())
+    await waitFor(() => expect(mocks.reportClientError).toHaveBeenCalled())
+    const [reported] = mocks.reportClientError.mock.calls[0] ?? []
+    expect(reported.message).toBe('falha no loader')
   })
 
   it('REQ-FE-BOUNDARY-012: the retry action resets the boundary and re-renders the route', async () => {
@@ -132,7 +125,7 @@ describe('router boundaries (web)', () => {
     expect(await screen.findByText('Página não encontrada')).toBeTruthy()
     const home = screen.getByRole('button', { name: 'Ir para o início' })
     expect(home.getAttribute('href')).toBe('/dashboard')
-    expect(mocks.captureException).not.toHaveBeenCalled()
+    expect(mocks.reportClientError).not.toHaveBeenCalled()
   })
 
   it('REQ-FE-BOUNDARY-014: the pending fallback announces loading in pt-BR', () => {
@@ -140,18 +133,5 @@ describe('router boundaries (web)', () => {
 
     expect(screen.getByRole('status')).toBeTruthy()
     expect(screen.getByText('Carregando…')).toBeTruthy()
-  })
-
-  it('REQ-FE-BOUNDARY-015: the desktop runtime shows the boundary but never reports to Sentry', async () => {
-    mocks.isDesktop.mockReturnValue(true)
-    renderApp('/quebrada')
-
-    expect(
-      await screen.findByText('Algo deu errado ao carregar esta página'),
-    ).toBeTruthy()
-    // Give the (skipped) async report a chance to run.
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(mocks.init).not.toHaveBeenCalled()
-    expect(mocks.captureException).not.toHaveBeenCalled()
   })
 })

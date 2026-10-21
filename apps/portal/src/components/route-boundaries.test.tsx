@@ -20,14 +20,11 @@ import {
 import { RoutePendingFallback, routeBoundaryOptions } from "./route-boundaries";
 
 const mocks = vi.hoisted(() => ({
-  init: vi.fn(),
-  captureException: vi.fn(),
+  reportClientError: vi.fn(),
 }));
 
-vi.mock("@sentry/react", () => ({
-  init: mocks.init,
-  captureException: mocks.captureException,
-  browserTracingIntegration: () => ({ name: "tracing" }),
+vi.mock("@/lib/report-client-error", () => ({
+  reportClientError: mocks.reportClientError,
 }));
 
 let shouldCrash = true;
@@ -68,8 +65,6 @@ describe("router boundaries (portal)", () => {
   beforeEach(() => {
     shouldCrash = true;
     vi.clearAllMocks();
-    vi.stubEnv("PROD", true);
-    vi.stubEnv("VITE_SENTRY_DSN", "https://key@o0.ingest.sentry.io/2");
     // React logs caught render errors; keep the test output readable.
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
@@ -77,10 +72,11 @@ describe("router boundaries (portal)", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
-    vi.unstubAllEnvs();
   });
 
-  it("REQ-FE-BOUNDARY-030: a route render crash shows pt-BR copy and is reported to Sentry", async () => {
+  it("REQ-FE-BOUNDARY-030: a route render crash shows pt-BR copy and is reported through reportClientError", async () => {
+    // The router uses a memory history here; defaultOnCatch reads the real URL.
+    window.history.replaceState({}, "", "/quebrada");
     renderApp("/quebrada");
 
     expect(
@@ -91,20 +87,24 @@ describe("router boundaries (portal)", () => {
     ).toBeTruthy();
 
     await waitFor(() =>
-      expect(mocks.captureException).toHaveBeenCalledTimes(1),
+      expect(mocks.reportClientError).toHaveBeenCalledTimes(1),
     );
-    const [reported] = mocks.captureException.mock.calls[0] ?? [];
+    const [reported, context] = mocks.reportClientError.mock.calls[0] ?? [];
     expect(reported).toBeInstanceOf(Error);
     expect(reported.message).toBe("boom na renderização");
+    expect(context.route).toBe("/quebrada");
+    expect(context.componentStack).toContain("Broken");
   });
 
-  it("REQ-FE-BOUNDARY-031: a loader failure also reaches the boundary and Sentry", async () => {
+  it("REQ-FE-BOUNDARY-031: a loader failure also reaches the boundary and reportClientError", async () => {
     renderApp("/carga", { loaderFails: true });
 
     expect(
       await screen.findByText("Algo deu errado ao carregar esta página"),
     ).toBeTruthy();
-    await waitFor(() => expect(mocks.captureException).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.reportClientError).toHaveBeenCalled());
+    const [reported] = mocks.reportClientError.mock.calls[0] ?? [];
+    expect(reported.message).toBe("falha no loader");
   });
 
   it("REQ-FE-BOUNDARY-032: the retry action resets the boundary and re-renders the route", async () => {
@@ -125,7 +125,7 @@ describe("router boundaries (portal)", () => {
     expect(await screen.findByText("Página não encontrada")).toBeTruthy();
     const home = screen.getByRole("link", { name: "Ir para o início" });
     expect(home.getAttribute("href")).toBe("/");
-    expect(mocks.captureException).not.toHaveBeenCalled();
+    expect(mocks.reportClientError).not.toHaveBeenCalled();
   });
 
   it("REQ-FE-BOUNDARY-034: the pending fallback announces loading in pt-BR", () => {

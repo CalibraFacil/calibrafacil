@@ -4,7 +4,7 @@ import type { ErrorComponentProps } from "@tanstack/react-router";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { ACTION_BUTTON_CLASS, PANEL_CLASS } from "@/components/panel-styles";
 import { cn } from "@/lib/utils";
-import { reportRouteError } from "@/lib/sentry";
+import { reportClientError } from "@/lib/report-client-error";
 
 /*
  * These boundaries are wired into the router, so they ship in the initial
@@ -186,6 +186,9 @@ export const routeBoundaryOptions = {
   defaultPendingComponent: RoutePendingFallback,
   defaultNotFoundComponent: RouteNotFoundFallback,
   defaultOnCatch: (error: Error, info: { componentStack?: string | null }) => {
-    void reportRouteError(error, info);
+    reportClientError(error, {
+      route: typeof window === "undefined" ? "" : window.location.pathname,
+      componentStack: info.componentStack,
+    });
   },
 };
