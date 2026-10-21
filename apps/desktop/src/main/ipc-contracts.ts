@@ -183,10 +183,6 @@ export const desktopIpcInvokeContracts = {
     args: oneArg(localPartitionActivationRequestSchema),
     response: localPartitionActivationResultSchema,
   },
-  [desktopIpcChannels.revealFile]: {
-    args: oneArg(nonEmptyString()),
-    response: booleanResponse(),
-  },
   [desktopIpcChannels.retrySync]: {
     args: noArgs(),
     response: syncActionResultSchema,

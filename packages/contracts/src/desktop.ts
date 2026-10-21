@@ -353,11 +353,6 @@ export interface CalibraBridge {
    */
   publishNotifications(payload: DesktopNotificationsPublish): Promise<boolean>;
   /**
-   * Select a file in the OS file manager. Answers "where did it go?" without
-   * making the user hunt for it, and returns `false` when the path is gone.
-   */
-  revealFile(filePath: string): Promise<boolean>;
-  /**
    * Back/forward gestures the OS reports to the host rather than the page:
    * mouse thumb buttons on Windows and Linux, trackpad swipe on macOS.
    * Keyboard shortcuts are handled in the renderer, where text-field focus is
