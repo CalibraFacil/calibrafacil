@@ -120,7 +120,7 @@ class RequestTransitionError extends Error {
   }
 }
 
-async function getRequestItems(requestIds: number[]) {
+async function getRequestItems(requestIds: number[], organizationId: string) {
   if (requestIds.length === 0) return [];
 
   return db
@@ -148,7 +148,12 @@ async function getRequestItems(requestIds: number[]) {
       eq(calibrationRequestItem.convertedJobId, calibrationJob.id),
     )
     .leftJoin(service, eq(calibrationJob.serviceId, service.id))
-    .where(inArray(calibrationRequestItem.requestId, requestIds))
+    .where(
+      and(
+        inArray(calibrationRequestItem.requestId, requestIds),
+        eq(calibrationRequestItem.organizationId, organizationId),
+      ),
+    )
     .orderBy(calibrationRequestItem.id);
 }
 
@@ -212,7 +217,7 @@ async function getRequestDetail(
     return null;
   }
 
-  const items = await getRequestItems([request.id]);
+  const items = await getRequestItems([request.id], organizationId);
 
   return {
     ...request,
@@ -304,6 +309,7 @@ export const calibrationRequestsRouter = new Hono<{
 
       const items = await getRequestItems(
         requests.map((request) => request.id),
+        member.organizationId,
       );
       const itemCountByRequestId = new Map<number, number>();
 
@@ -785,7 +791,15 @@ export const calibrationRequestsRouter = new Hono<{
               convertedJobId: calibrationRequestItem.convertedJobId,
             })
             .from(calibrationRequestItem)
-            .where(eq(calibrationRequestItem.requestId, request.id))
+            .where(
+              and(
+                eq(calibrationRequestItem.requestId, request.id),
+                eq(
+                  calibrationRequestItem.organizationId,
+                  member.organizationId,
+                ),
+              ),
+            )
             .orderBy(calibrationRequestItem.id);
 
           if (requestItems.some((item) => item.convertedJobId)) {
@@ -929,7 +943,15 @@ export const calibrationRequestsRouter = new Hono<{
             await tx
               .update(calibrationRequestItem)
               .set({ convertedJobId: newJob.id })
-              .where(eq(calibrationRequestItem.id, requestItem.id));
+              .where(
+                and(
+                  eq(calibrationRequestItem.id, requestItem.id),
+                  eq(
+                    calibrationRequestItem.organizationId,
+                    member.organizationId,
+                  ),
+                ),
+              );
           }
 
           await tx

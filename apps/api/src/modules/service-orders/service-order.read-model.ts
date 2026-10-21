@@ -143,37 +143,72 @@ export async function getServiceOrderDetail(
     db
       .select()
       .from(serviceOrderAssetSnapshot)
-      .where(eq(serviceOrderAssetSnapshot.serviceOrderId, id))
+      .where(
+        and(
+          eq(serviceOrderAssetSnapshot.serviceOrderId, id),
+          eq(serviceOrderAssetSnapshot.organizationId, order.organizationId),
+        ),
+      )
       .limit(1),
     db
       .select()
       .from(serviceOrderIntakeDocument)
-      .where(eq(serviceOrderIntakeDocument.serviceOrderId, id))
+      .where(
+        and(
+          eq(serviceOrderIntakeDocument.serviceOrderId, id),
+          eq(serviceOrderIntakeDocument.organizationId, order.organizationId),
+        ),
+      )
       .orderBy(desc(serviceOrderIntakeDocument.version)),
     db
       .select()
       .from(serviceOrderTag)
-      .where(eq(serviceOrderTag.serviceOrderId, id))
+      .where(
+        and(
+          eq(serviceOrderTag.serviceOrderId, id),
+          eq(serviceOrderTag.organizationId, order.organizationId),
+        ),
+      )
       .orderBy(desc(serviceOrderTag.id)),
     db
       .select()
       .from(serviceOrderDeliveryDocument)
-      .where(eq(serviceOrderDeliveryDocument.serviceOrderId, id))
+      .where(
+        and(
+          eq(serviceOrderDeliveryDocument.serviceOrderId, id),
+          eq(serviceOrderDeliveryDocument.organizationId, order.organizationId),
+        ),
+      )
       .orderBy(desc(serviceOrderDeliveryDocument.version)),
     db
       .select()
       .from(serviceOrderEvaluation)
-      .where(eq(serviceOrderEvaluation.serviceOrderId, id))
+      .where(
+        and(
+          eq(serviceOrderEvaluation.serviceOrderId, id),
+          eq(serviceOrderEvaluation.organizationId, order.organizationId),
+        ),
+      )
       .orderBy(desc(serviceOrderEvaluation.evaluatedAt)),
     db
       .select()
       .from(serviceOrderQuote)
-      .where(eq(serviceOrderQuote.serviceOrderId, id))
+      .where(
+        and(
+          eq(serviceOrderQuote.serviceOrderId, id),
+          eq(serviceOrderQuote.organizationId, order.organizationId),
+        ),
+      )
       .orderBy(desc(serviceOrderQuote.version)),
     db
       .select()
       .from(serviceOrderExecution)
-      .where(eq(serviceOrderExecution.serviceOrderId, id))
+      .where(
+        and(
+          eq(serviceOrderExecution.serviceOrderId, id),
+          eq(serviceOrderExecution.organizationId, order.organizationId),
+        ),
+      )
       .limit(1),
     db
       .select({
@@ -216,7 +251,12 @@ export async function getServiceOrderDetail(
         calibrationJob,
         eq(serviceOrderCertificateLink.certificateJobId, calibrationJob.id),
       )
-      .where(eq(serviceOrderCertificateLink.serviceOrderId, id)),
+      .where(
+        and(
+          eq(serviceOrderCertificateLink.serviceOrderId, id),
+          eq(serviceOrderCertificateLink.organizationId, order.organizationId),
+        ),
+      ),
   ]);
 
   const quoteItems = quotes.length
@@ -224,9 +264,12 @@ export async function getServiceOrderDetail(
         .select()
         .from(serviceOrderQuoteItem)
         .where(
-          inArray(
-            serviceOrderQuoteItem.quoteId,
-            quotes.map((quote) => quote.id),
+          and(
+            inArray(
+              serviceOrderQuoteItem.quoteId,
+              quotes.map((quote) => quote.id),
+            ),
+            eq(serviceOrderQuoteItem.organizationId, order.organizationId),
           ),
         )
         .orderBy(serviceOrderQuoteItem.sortOrder, serviceOrderQuoteItem.id)
@@ -236,7 +279,12 @@ export async function getServiceOrderDetail(
     ? await db
         .select()
         .from(serviceOrderExecutionItem)
-        .where(eq(serviceOrderExecutionItem.executionId, execution.id))
+        .where(
+          and(
+            eq(serviceOrderExecutionItem.executionId, execution.id),
+            eq(serviceOrderExecutionItem.organizationId, order.organizationId),
+          ),
+        )
         .orderBy(
           serviceOrderExecutionItem.sortOrder,
           serviceOrderExecutionItem.id,

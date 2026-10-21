@@ -7,6 +7,7 @@ import { buildUnitScopeCondition } from "../../lib/units";
 export async function getQuoteForAction(
   serviceOrderId: number,
   quoteId: number,
+  organizationId: string,
 ) {
   const [quote] = await db
     .select()
@@ -15,6 +16,7 @@ export async function getQuoteForAction(
       and(
         eq(serviceOrderQuote.id, quoteId),
         eq(serviceOrderQuote.serviceOrderId, serviceOrderId),
+        eq(serviceOrderQuote.organizationId, organizationId),
       ),
     )
     .limit(1);

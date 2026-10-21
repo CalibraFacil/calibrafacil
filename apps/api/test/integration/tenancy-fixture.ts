@@ -79,6 +79,8 @@ export async function seedTenant(orgId: string): Promise<Tenant> {
       dueDate: new Date("2026-02-01T00:00:00.000Z"),
       subtotalCents: 1000,
       totalCents: 1000,
+      createdBy: org.userId,
+      updatedBy: org.userId,
     })
     .returning({ id: billingDocument.id });
   if (!document) throw new Error("document not seeded");

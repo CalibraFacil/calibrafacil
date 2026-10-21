@@ -145,7 +145,12 @@ export async function createServiceOrderQuote(input: {
         freightCents: totals.freightCents,
         totalCents: totals.totalCents,
       })
-      .where(eq(serviceOrderQuote.id, quote.id));
+      .where(
+        and(
+          eq(serviceOrderQuote.id, quote.id),
+          eq(serviceOrderQuote.organizationId, quote.organizationId),
+        ),
+      );
     await recordServiceOrderEvent(
       {
         organizationId: order.organizationId,
@@ -187,7 +192,11 @@ export async function updateServiceOrderQuoteDraft(input: {
     .limit(1);
   if (!order) return { status: "not_found" as const };
 
-  const quote = await getQuoteForAction(input.serviceOrderId, input.quoteId);
+  const quote = await getQuoteForAction(
+    input.serviceOrderId,
+    input.quoteId,
+    input.member.organizationId,
+  );
   if (!quote) return { status: "not_found" as const };
   if (!canEditServiceOrderQuote(quote.status)) {
     return { status: "conflict" as const };
@@ -221,7 +230,12 @@ export async function updateServiceOrderQuoteDraft(input: {
         : {}),
       updatedAt: new Date(),
     })
-    .where(eq(serviceOrderQuote.id, input.quoteId))
+    .where(
+      and(
+        eq(serviceOrderQuote.id, input.quoteId),
+        eq(serviceOrderQuote.organizationId, input.member.organizationId),
+      ),
+    )
     .returning();
 
   return { status: "ok" as const, data: updated };
@@ -244,7 +258,11 @@ export async function sendServiceOrderQuote(input: {
   );
   if (!detail) return { status: "order_not_found" as const };
 
-  const quote = await getQuoteForAction(input.serviceOrderId, input.quoteId);
+  const quote = await getQuoteForAction(
+    input.serviceOrderId,
+    input.quoteId,
+    input.member.organizationId,
+  );
   if (!quote) return { status: "quote_not_found" as const };
   if (!canEditServiceOrderQuote(quote.status)) {
     return { status: "conflict" as const };
@@ -299,7 +317,12 @@ export async function sendServiceOrderQuote(input: {
       clientMessage: input.values.clientMessage ?? quote.clientMessage,
       updatedAt: new Date(),
     })
-    .where(eq(serviceOrderQuote.id, input.quoteId))
+    .where(
+      and(
+        eq(serviceOrderQuote.id, input.quoteId),
+        eq(serviceOrderQuote.organizationId, input.member.organizationId),
+      ),
+    )
     .returning();
 
   // Mid-job re-quote: the instrument is on the bench, so the order keeps saying
@@ -355,7 +378,15 @@ export async function sendServiceOrderQuote(input: {
       db
         .select()
         .from(serviceOrderQuoteItem)
-        .where(eq(serviceOrderQuoteItem.quoteId, input.quoteId))
+        .where(
+          and(
+            eq(serviceOrderQuoteItem.quoteId, input.quoteId),
+            eq(
+              serviceOrderQuoteItem.organizationId,
+              input.member.organizationId,
+            ),
+          ),
+        )
         .orderBy(serviceOrderQuoteItem.sortOrder, serviceOrderQuoteItem.id),
       db
         .select({
@@ -458,7 +489,11 @@ export async function approveServiceOrderQuoteManually(input: {
   actorUserId: string;
   values: ApproveQuoteManuallyInput;
 }) {
-  const quote = await getQuoteForAction(input.serviceOrderId, input.quoteId);
+  const quote = await getQuoteForAction(
+    input.serviceOrderId,
+    input.quoteId,
+    input.organizationId,
+  );
   if (!quote || !canApproveServiceOrderQuote(quote.status)) {
     return { status: "conflict" as const };
   }
@@ -502,7 +537,12 @@ export async function approveServiceOrderQuoteManually(input: {
         manualApprovalEvidenceType: input.values.manualApprovalEvidenceType,
         manualApprovalEvidenceText: input.values.manualApprovalEvidenceText,
       })
-      .where(eq(serviceOrderQuote.id, input.quoteId));
+      .where(
+        and(
+          eq(serviceOrderQuote.id, input.quoteId),
+          eq(serviceOrderQuote.organizationId, input.organizationId),
+        ),
+      );
     // REQ-QPUB-003 [HIGH RISK]: a decided quote's public links stop working.
     await revokeActiveTokensForQuote(tx, {
       organizationId: order.organizationId,
@@ -571,7 +611,11 @@ export async function rejectServiceOrderQuoteManually(input: {
   actorUserId: string;
   values: RejectQuoteManuallyInput;
 }) {
-  const quote = await getQuoteForAction(input.serviceOrderId, input.quoteId);
+  const quote = await getQuoteForAction(
+    input.serviceOrderId,
+    input.quoteId,
+    input.organizationId,
+  );
   if (!quote || !canApproveServiceOrderQuote(quote.status)) {
     return { status: "conflict" as const };
   }
@@ -612,7 +656,12 @@ export async function rejectServiceOrderQuoteManually(input: {
         rejectedAt: new Date(),
         rejectionReason: input.values.rejectionReason,
       })
-      .where(eq(serviceOrderQuote.id, input.quoteId));
+      .where(
+        and(
+          eq(serviceOrderQuote.id, input.quoteId),
+          eq(serviceOrderQuote.organizationId, input.organizationId),
+        ),
+      );
     // REQ-QPUB-003 [HIGH RISK]: a decided quote's public links stop working.
     await revokeActiveTokensForQuote(tx, {
       organizationId: order.organizationId,
@@ -682,7 +731,12 @@ export async function approveServiceOrderQuoteByPortalUser(input: {
   const linkedCustomer = await getPortalCustomerForAuthOrganization(
     input.authOrganizationId,
   );
-  const quote = await getQuoteForAction(input.serviceOrderId, input.quoteId);
+  if (!linkedCustomer) return { status: "not_found" as const };
+  const quote = await getQuoteForAction(
+    input.serviceOrderId,
+    input.quoteId,
+    linkedCustomer.labOrganizationId,
+  );
   const [order] = await db
     .select()
     .from(serviceOrder)
@@ -709,7 +763,15 @@ export async function approveServiceOrderQuoteByPortalUser(input: {
         approvedAt: new Date(),
         approvedByPortalUserId: input.actorUserId,
       })
-      .where(eq(serviceOrderQuote.id, input.quoteId));
+      .where(
+        and(
+          eq(serviceOrderQuote.id, input.quoteId),
+          eq(
+            serviceOrderQuote.organizationId,
+            linkedCustomer.labOrganizationId,
+          ),
+        ),
+      );
     // REQ-QPUB-003 [HIGH RISK]: a decided quote's public links stop working.
     await revokeActiveTokensForQuote(tx, {
       organizationId: order.organizationId,
@@ -781,7 +843,12 @@ export async function rejectServiceOrderQuoteByPortalUser(input: {
   const linkedCustomer = await getPortalCustomerForAuthOrganization(
     input.authOrganizationId,
   );
-  const quote = await getQuoteForAction(input.serviceOrderId, input.quoteId);
+  if (!linkedCustomer) return { status: "not_found" as const };
+  const quote = await getQuoteForAction(
+    input.serviceOrderId,
+    input.quoteId,
+    linkedCustomer.labOrganizationId,
+  );
   const [order] = await db
     .select()
     .from(serviceOrder)
@@ -812,7 +879,15 @@ export async function rejectServiceOrderQuoteByPortalUser(input: {
         rejectedAt: new Date(),
         rejectionReason: input.values.rejectionReason ?? null,
       })
-      .where(eq(serviceOrderQuote.id, input.quoteId));
+      .where(
+        and(
+          eq(serviceOrderQuote.id, input.quoteId),
+          eq(
+            serviceOrderQuote.organizationId,
+            linkedCustomer.labOrganizationId,
+          ),
+        ),
+      );
     // REQ-QPUB-003 [HIGH RISK]: a decided quote's public links stop working.
     await revokeActiveTokensForQuote(tx, {
       organizationId: order.organizationId,

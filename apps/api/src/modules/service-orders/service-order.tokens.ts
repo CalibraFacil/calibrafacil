@@ -8,7 +8,7 @@ import {
   canApproveServiceOrderQuote,
   isServiceOrderDecidingQuoteStatus,
 } from "@calibra-facil/shared";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   APPROVAL_CODE_ALPHABET,
   APPROVAL_CODE_LENGTH,
@@ -253,7 +253,11 @@ export async function approveQuoteWithPublicServiceOrderAccess(
     return { status: "not_found", error: "Link invalido ou expirado" };
   }
 
-  const quote = await getQuoteForAction(access.serviceOrderId, quoteId);
+  const quote = await getQuoteForAction(
+    access.serviceOrderId,
+    quoteId,
+    access.organizationId,
+  );
   const [order] = await db
     .select()
     .from(serviceOrder)
@@ -271,7 +275,12 @@ export async function approveQuoteWithPublicServiceOrderAccess(
     await tx
       .update(serviceOrderQuote)
       .set({ status: "approved", approvedAt: new Date() })
-      .where(eq(serviceOrderQuote.id, quote.id));
+      .where(
+        and(
+          eq(serviceOrderQuote.id, quote.id),
+          eq(serviceOrderQuote.organizationId, quote.organizationId),
+        ),
+      );
     // REQ-QPUB-003 [HIGH RISK]: a decided quote's public links stop working.
     await revokeActiveTokensForQuote(tx, {
       organizationId: order.organizationId,
@@ -327,7 +336,11 @@ export async function rejectQuoteWithPublicServiceOrderAccess(
     return { status: "not_found", error: "Link invalido ou expirado" };
   }
 
-  const quote = await getQuoteForAction(access.serviceOrderId, quoteId);
+  const quote = await getQuoteForAction(
+    access.serviceOrderId,
+    quoteId,
+    access.organizationId,
+  );
   const [order] = await db
     .select()
     .from(serviceOrder)
@@ -353,7 +366,12 @@ export async function rejectQuoteWithPublicServiceOrderAccess(
         rejectedAt: new Date(),
         rejectionReason: input.rejectionReason ?? null,
       })
-      .where(eq(serviceOrderQuote.id, quote.id));
+      .where(
+        and(
+          eq(serviceOrderQuote.id, quote.id),
+          eq(serviceOrderQuote.organizationId, quote.organizationId),
+        ),
+      );
     // REQ-QPUB-003 [HIGH RISK]: a decided quote's public links stop working.
     await revokeActiveTokensForQuote(tx, {
       organizationId: order.organizationId,

@@ -639,7 +639,12 @@ export async function replaceQuoteItems(
   );
   await executor
     .delete(serviceOrderQuoteItem)
-    .where(eq(serviceOrderQuoteItem.quoteId, params.quoteId));
+    .where(
+      and(
+        eq(serviceOrderQuoteItem.quoteId, params.quoteId),
+        eq(serviceOrderQuoteItem.organizationId, params.organizationId),
+      ),
+    );
   if (calculated.items.length > 0) {
     await executor.insert(serviceOrderQuoteItem).values(
       calculated.items.map((item) => ({
@@ -694,7 +699,12 @@ export async function replaceExecutionItems(
   );
   await executor
     .delete(serviceOrderExecutionItem)
-    .where(eq(serviceOrderExecutionItem.executionId, params.executionId));
+    .where(
+      and(
+        eq(serviceOrderExecutionItem.executionId, params.executionId),
+        eq(serviceOrderExecutionItem.organizationId, params.organizationId),
+      ),
+    );
   if (calculated.items.length > 0) {
     await executor.insert(serviceOrderExecutionItem).values(
       calculated.items.map((item) => ({
@@ -748,6 +758,7 @@ export async function createBillingDocumentFromServiceOrder(params: {
       .where(
         and(
           eq(serviceOrderQuote.serviceOrderId, order.id),
+          eq(serviceOrderQuote.organizationId, order.organizationId),
           eq(serviceOrderQuote.status, "approved"),
         ),
       )
@@ -757,7 +768,12 @@ export async function createBillingDocumentFromServiceOrder(params: {
       ? await tx
           .select()
           .from(serviceOrderQuoteItem)
-          .where(eq(serviceOrderQuoteItem.quoteId, approvedQuote.id))
+          .where(
+            and(
+              eq(serviceOrderQuoteItem.quoteId, approvedQuote.id),
+              eq(serviceOrderQuoteItem.organizationId, order.organizationId),
+            ),
+          )
       : [];
 
     const subtotalCents =

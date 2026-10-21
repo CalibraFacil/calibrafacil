@@ -104,6 +104,7 @@ export async function unlinkServiceOrderCertificate(input: {
           serviceOrderCertificateLink.certificateJobId,
           input.certificateJobId,
         ),
+        eq(serviceOrderCertificateLink.organizationId, input.organizationId),
       ),
     );
 

@@ -3626,7 +3626,12 @@ async function applyLocalServiceOrderExecutionNotes(
     const [existing] = await tx
       .select()
       .from(serviceOrderExecution)
-      .where(eq(serviceOrderExecution.serviceOrderId, order.id))
+      .where(
+        and(
+          eq(serviceOrderExecution.serviceOrderId, order.id),
+          eq(serviceOrderExecution.organizationId, order.organizationId),
+        ),
+      )
       .limit(1);
     const [current] =
       existing !== undefined
@@ -3666,7 +3671,12 @@ async function applyLocalServiceOrderExecutionNotes(
         result: values.result,
         updatedAt: new Date(),
       })
-      .where(eq(serviceOrderExecution.id, current.id))
+      .where(
+        and(
+          eq(serviceOrderExecution.id, current.id),
+          eq(serviceOrderExecution.organizationId, order.organizationId),
+        ),
+      )
       .returning();
     await tx
       .update(serviceOrder)

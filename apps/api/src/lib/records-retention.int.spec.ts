@@ -479,7 +479,7 @@ describe("REQ-RET-2: evidence is never reached by a cascading foreign key", () =
       .where(eq(referenceStandard.organizationId, lab.orgId));
     if (!standard || lab.jobId === null) throw new Error("fixture");
     await db.execute(
-      sql`insert into job_standard (job_id, standard_id) values (${lab.jobId}, ${standard.id})`,
+      sql`insert into job_standard (organization_id, job_id, standard_id) values (${lab.orgId}, ${lab.jobId}, ${standard.id})`,
     );
 
     const failure = await failureOf(() =>
