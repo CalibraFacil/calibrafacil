@@ -182,8 +182,10 @@ See `docs/architecture/portal-frontend.md`. `apps/portal` is the cloud-only clie
   `pnpm --filter @calibra-facil/math-engine run engine:pin`. The engine is exact for formula
   evaluation, sensitivities and Type A sums, but propagation (`u_c`, `ν_eff`, `k`, `U`) runs in
   float64; see `packages/math-engine/README.md`.
-- Sentry PII (`sendDefaultPii`) and session replay default to **off** and are opt-in via runtime
-  config; desktop runtime must not initialize browser Sentry.
+- **No third-party error tracking.** Nothing is reported off the device or the server. Server errors
+  go through `createLogErrorReporter` (`packages/shared/src/telemetry`) as one redacted JSON line on
+  stderr; browser route errors go to the console. Do not add an error-tracking SDK, replay or
+  default PII collection.
 
 ## Packages quick reference
 

@@ -1,5 +1,5 @@
 import {
-  createErrorReporter,
+  createLogErrorReporter,
   createLogger,
   type ErrorReporter,
   type StructuredLogger,
@@ -8,18 +8,16 @@ import {
 // Server-side error tracking for the worker surfaces: every run
 // mode reports through this singleton — the local Bun poller, the Cloudflare
 // document-worker container, and the Vercel Queue consumer (which imports
-// processBackgroundJob from this package). No SENTRY_DSN -> no-op.
+// processBackgroundJob from this package). Errors are written as one
+// redacted JSON line on stderr (see packages/shared/src/telemetry/error-reporter.ts).
 
 let reporter: ErrorReporter | null = null;
 
 export function getWorkerErrorReporter(): ErrorReporter {
-  reporter ??= createErrorReporter({
-    dsn: process.env.SENTRY_DSN,
+  reporter ??= createLogErrorReporter({
+    service: "worker",
     environment:
-      process.env.SENTRY_ENVIRONMENT ??
-      process.env.VERCEL_ENV ??
-      process.env.NODE_ENV ??
-      "development",
+      process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "development",
     release: process.env.VERCEL_GIT_COMMIT_SHA,
   });
   return reporter;

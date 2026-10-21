@@ -238,7 +238,7 @@ CI should reject newly introduced runtime-only product guards unless documented 
 - Native links/notifications may proceed after auth/scope foundations, but release waits for packaged tests.
 - Online parity does not require mirroring all 336 cloud-only methods in SQLite. Keep cloud authority for billing, administration and final regulated decisions unless a later scope explicitly changes it.
 - Web evolves faster than installed desktop. Commit stamps alone do not solve skew; compatibility policy and routine release cadence are mandatory.
-- Avoid exposing internal sync/transport terms in ordinary user flows. Provide detailed diagnostics in support surfaces with redaction; retain opt-in Sentry PII/replay settings.
+- Avoid exposing internal sync/transport terms in ordinary user flows. Provide detailed diagnostics in support surfaces with redaction; no third-party error tracking, session replay or default PII collection.
 - Scope expansion to full browser offline behavior or all OS releases changes cost materially. No calendar promise should be made before Phase 0.
 
 Suggested ownership: product owns the workflow ledger/exceptions; frontend owns shared behavior and availability UX; desktop owns shell/IPC/distribution; local/server owners own sync and canonical domain outcomes; QA owns packaged scenarios and field-device evidence. These are responsibilities, not a requirement to use multiple agents.

@@ -106,6 +106,43 @@ Keep copies off the server. To restore into a fresh install with the same `.env`
 `postgres` and `s3` only, `pg_restore -U calibra -d calibra --clean` the dump inside the
 `postgres` container, untar the files into the `s3-data` volume, then `docker compose up -d`.
 
+### Logs and errors
+
+There is no error-tracking service to configure and no DSN: nothing leaves your server. The API
+and the worker write to stdout/stderr, and every unhandled error (a failed request, a failed job,
+a failed cron or queue run) is also reported as one JSON line on stderr:
+
+```json
+{
+  "level": "error",
+  "message": "relation \"x\" does not exist",
+  "name": "Error",
+  "stack": "...",
+  "tags": { "surface": "api" },
+  "service": "api",
+  "environment": "production",
+  "release": "abc123",
+  "timestamp": "2026-01-01T12:00:00.000Z"
+}
+```
+
+The message and stack are scrubbed of credentials, tokens and connection-string passwords; request
+bodies, headers, cookies and environment values are never included. `service` is `api` or `worker`.
+`environment` and `release` come from `VERCEL_ENV`/`NODE_ENV` and `VERCEL_GIT_COMMIT_SHA` when set.
+
+With Docker, read them with `docker compose logs`:
+
+```bash
+docker compose logs -f api worker                                          # follow
+docker compose logs --no-log-prefix api worker | grep '"level":"error"'    # errors only
+```
+
+To keep or alert on them, point the Docker logging driver at your collector (journald, Loki,
+Fluent Bit, CloudWatch, ...) or ship `docker compose logs` to it, and match on `"level":"error"`.
+Set `max-size`/`max-file` on the `json-file` driver (or use the `local` driver) so container logs
+cannot fill the disk. The browser apps send nothing off the device: a route error is written to
+the browser console only.
+
 ### Using hosted services instead
 
 Each dependency can move out of the compose file: delete its service and point the variables
@@ -126,7 +163,7 @@ SMTP: set `RESEND_API_KEY` and leave `SMTP_HOST` empty.
 | Object storage | Any S3-compatible store (Cloudflare R2, AWS S3, MinIO, …) — two buckets      |
 | PDF rendering  | [Gotenberg](https://gotenberg.dev) 8 reachable from the API/worker           |
 | E-mail         | An SMTP server, or a [Resend](https://resend.com) account                    |
-| Optional       | Sentry (errors), Conta Azul (ERP)                                            |
+| Optional       | Conta Azul (ERP)                                                             |
 
 The simplest layout serves the API under `/api` on the app's and the portal's own hosts (what
 the Docker setup does). The API can also live on a host of its own, e.g. `api.example.com`:
@@ -176,11 +213,11 @@ laboratory instead, set `CONTA_AZUL_CLIENT_ID` and `CONTA_AZUL_CLIENT_SECRET`
 
 ### Frontends
 
-| App            | Variables                                                                                                                                                                                   |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web`     | `VITE_API_URL`, `VITE_PORTAL_APP_URL`, `VITE_OPERATOR_*` (identity shown on the legal pages: `LEGAL_NAME`, `CNPJ`, `ADDRESS`, `EMAIL`, `DPO_NAME`, `DPO_EMAIL`), optional `VITE_SENTRY_DSN` |
-| `apps/portal`  | `VITE_API_URL`, `VITE_WEB_URL`                                                                                                                                                              |
-| `apps/desktop` | `VITE_DESKTOP_AUTH_API_URL`, `VITE_DESKTOP_AUTH_ORIGIN` (see [`docs/desktop-auto-update.md`](./docs/desktop-auto-update.md))                                                                |
+| App            | Variables                                                                                                                                                       |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web`     | `VITE_API_URL`, `VITE_PORTAL_APP_URL`, `VITE_OPERATOR_*` (identity shown on the legal pages: `LEGAL_NAME`, `CNPJ`, `ADDRESS`, `EMAIL`, `DPO_NAME`, `DPO_EMAIL`) |
+| `apps/portal`  | `VITE_API_URL`, `VITE_WEB_URL`                                                                                                                                  |
+| `apps/desktop` | `VITE_DESKTOP_AUTH_API_URL`, `VITE_DESKTOP_AUTH_ORIGIN` (see [`docs/desktop-auto-update.md`](./docs/desktop-auto-update.md))                                    |
 
 Vite bakes these in at build time. The Docker images also read them when the container starts
 (the static server answers `/runtime-env.js` with the container's `VITE_*` variables), so one

@@ -127,7 +127,6 @@ export default defineConfig({
             },
             { name: 'vendor-tanstack', test: /\/@tanstack\//, priority: 40 },
             { name: 'vendor-base-ui', test: /\/@base-ui\//, priority: 40 },
-            { name: 'vendor-sentry', test: /\/@sentry\//, priority: 40 },
             { name: 'vendor-motion', test: /\/motion\//, priority: 40 },
             {
               name: 'vendor-math-engine',

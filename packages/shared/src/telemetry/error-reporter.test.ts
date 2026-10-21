@@ -1,36 +1,33 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  buildErrorEvent,
-  createErrorReporter,
-  parseSentryDsn,
-  parseStackFrames,
+  buildErrorLogRecord,
+  createLogErrorReporter,
   sanitizeErrorMessage,
+  sanitizeErrorStack,
 } from "./error-reporter";
 
-const DSN = "https://publickey123@o123.ingest.us.sentry.io/456";
-
-describe("parseSentryDsn", () => {
-  it("extracts the envelope endpoint and public key", () => {
-    expect(parseSentryDsn(DSN)).toEqual({
-      endpoint: "https://o123.ingest.us.sentry.io/api/456/envelope/",
-      publicKey: "publickey123",
-    });
+function capture(
+  error: unknown,
+  tags?: Record<string, string>,
+  options: Parameters<typeof createLogErrorReporter>[0] = {},
+): Record<string, unknown> {
+  const lines: string[] = [];
+  const reporter = createLogErrorReporter({
+    ...options,
+    write: (line) => lines.push(line),
   });
-
-  it("rejects malformed DSNs instead of throwing", () => {
-    expect(parseSentryDsn("not a dsn")).toBeNull();
-    expect(parseSentryDsn("https://host.example/123")).toBeNull(); // no key
-    expect(parseSentryDsn("https://key@host.example/")).toBeNull(); // no project
-  });
-});
+  reporter.captureException(error, tags ? { tags } : undefined);
+  expect(lines).toHaveLength(1);
+  return JSON.parse(String(lines[0]));
+}
 
 describe("sanitizeErrorMessage (redaction)", () => {
   it("scrubs credentials embedded in connection strings", () => {
     const sanitized = sanitizeErrorMessage(
-      "connect failed: postgres://calibra:hunter2@ep-x.neon.tech/db",
+      "connect failed: postgres://calibra:hunter2@db.internal/app",
     );
     expect(sanitized).not.toContain("hunter2");
-    expect(sanitized).toContain("postgres://***@ep-x.neon.tech/db");
+    expect(sanitized).toContain("postgres://***@db.internal/app");
   });
 
   it("scrubs bearer tokens and secret-ish key=value pairs", () => {
@@ -54,116 +51,122 @@ describe("sanitizeErrorMessage (redaction)", () => {
       sanitizeErrorMessage('relation "app_queue_job" does not exist'),
     ).toBe('relation "app_queue_job" does not exist');
   });
-});
 
-describe("parseStackFrames", () => {
-  it("parses V8 frames oldest-first and flags in_app", () => {
-    const stack = [
-      "Error: boom",
-      "    at renderCertificate (/var/task/apps/worker/src/index.ts:120:11)",
-      "    at process (/var/task/node_modules/hono/dist/index.js:5:3)",
-      "    at /var/task/apps/api/src/app.ts:9:1",
-    ].join("\n");
-
-    const frames = parseStackFrames(stack);
-    expect(frames).toHaveLength(3);
-    // Sentry wants oldest call first.
-    expect(frames[2]).toMatchObject({
-      function: "renderCertificate",
-      filename: "/var/task/apps/worker/src/index.ts",
-      lineno: 120,
-      colno: 11,
-      in_app: true,
-    });
-    expect(frames[1]?.in_app).toBe(false); // node_modules
-    expect(frames[0]?.function).toBe("<anonymous>");
+  it("scrubs the stack, whose first line repeats the message", () => {
+    const sanitized = sanitizeErrorStack(
+      "Error: password=topsecret leaked\n    at run (/app/src/index.ts:1:1)",
+    );
+    expect(sanitized).not.toContain("topsecret");
+    expect(sanitized).toContain("at run (/app/src/index.ts:1:1)");
   });
 });
 
-describe("buildErrorEvent", () => {
-  it("builds a redacted event with structural tags", () => {
-    const event = buildErrorEvent(new Error("password=topsecret leaked"), {
-      tags: { surface: "api", path: "/api/jobs" },
+describe("createLogErrorReporter", () => {
+  it("REQ-NS-2 writes one JSON line with level, message, name, stack, tags, service, environment, release and timestamp", () => {
+    const record = capture(
+      new TypeError("boom"),
+      { surface: "api" },
+      { service: "api", environment: "production", release: "abc123" },
+    );
+
+    expect(record).toMatchObject({
+      level: "error",
+      message: "boom",
+      name: "TypeError",
+      tags: { surface: "api" },
+      service: "api",
       environment: "production",
+      release: "abc123",
     });
-
-    expect(event.level).toBe("error");
-    expect(event.tags).toEqual({ surface: "api", path: "/api/jobs" });
-    expect(event.exception.values[0]?.type).toBe("Error");
-    expect(event.exception.values[0]?.value).not.toContain("topsecret");
-    expect(event.event_id).toMatch(/^[0-9a-f]{32}$/);
+    expect(String(record.stack)).toContain("TypeError: boom");
+    expect(new Date(String(record.timestamp)).toISOString()).toBe(
+      record.timestamp,
+    );
   });
 
-  it("copes with non-Error throwables", () => {
-    const event = buildErrorEvent("string failure");
-    expect(event.exception.values[0]).toMatchObject({
-      type: "Error",
-      value: "string failure",
+  it("REQ-NS-2 defaults tags to an empty object and omits unset metadata", () => {
+    const record = capture(new Error("x"));
+    expect(record.tags).toEqual({});
+    expect(record).not.toHaveProperty("service");
+    expect(record).not.toHaveProperty("environment");
+    expect(record).not.toHaveProperty("release");
+  });
+
+  it("REQ-NS-2 redacts secrets from the message and the stack", () => {
+    const record = capture(new Error("password=topsecret leaked"));
+    expect(JSON.stringify(record)).not.toContain("topsecret");
+    expect(record.message).toBe("password=*** leaked");
+  });
+
+  it("REQ-NS-2 emits only the documented fields (no bodies, headers, cookies or env)", () => {
+    const error = Object.assign(new Error("boom"), {
+      body: { cpf: "123" },
+      headers: { cookie: "session=1" },
+      env: { DATABASE_URL: "postgres://u:p@h/d" },
     });
+    const record = capture(error);
+    expect(Object.keys(record).toSorted()).toEqual(
+      ["level", "message", "name", "stack", "tags", "timestamp"].toSorted(),
+    );
+    expect(JSON.stringify(record)).not.toContain("session=1");
+    expect(JSON.stringify(record)).not.toContain("DATABASE_URL");
+  });
+
+  it("REQ-NS-2 copes with non-Error throwables", () => {
+    expect(capture("string failure")).toMatchObject({
+      name: "Error",
+      message: "string failure",
+    });
+    expect(capture({ toString: () => "object failure" })).toMatchObject({
+      message: "object failure",
+    });
+  });
+
+  it("REQ-NS-2 never throws, even when the throwable or the sink misbehave", async () => {
+    const hostile = {
+      toString() {
+        throw new Error("nope");
+      },
+    };
+    const lines: string[] = [];
+    const reporter = createLogErrorReporter({ write: (l) => lines.push(l) });
+    expect(() => reporter.captureException(hostile)).not.toThrow();
+    expect(JSON.parse(String(lines[0])).message).toBe(
+      "unserializable throwable",
+    );
+
+    const broken = createLogErrorReporter({
+      write: () => {
+        throw new Error("stderr closed");
+      },
+    });
+    expect(() => broken.captureException(new Error("x"))).not.toThrow();
+    await broken.flush();
+  });
+
+  it("REQ-NS-2 flush resolves immediately", async () => {
+    const reporter = createLogErrorReporter({ write: () => {} });
+    await expect(reporter.flush(5_000)).resolves.toBeUndefined();
+  });
+
+  it("REQ-NS-2 writes to stderr via console.error by default", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    createLogErrorReporter({ service: "worker" }).captureException(
+      new Error("boom"),
+    );
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(spy.mock.calls[0]?.[0]))).toMatchObject({
+      service: "worker",
+      message: "boom",
+    });
+    spy.mockRestore();
   });
 });
 
-describe("createErrorReporter", () => {
-  it("is a no-op without a DSN and never throws", async () => {
-    const reporter = createErrorReporter({ dsn: undefined });
-    reporter.captureException(new Error("x"));
-    await reporter.flush();
-  });
-
-  it("POSTs an envelope with auth header and flush awaits delivery", async () => {
-    const fetchImpl = vi.fn(async () => new Response("{}", { status: 200 }));
-    const reporter = createErrorReporter({
-      dsn: DSN,
-      environment: "test",
-      fetchImpl,
-    });
-
-    reporter.captureException(new Error("boom"), {
-      tags: { surface: "worker" },
-    });
-    await reporter.flush();
-
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchImpl.mock.calls[0] ?? [];
-    expect(url).toBe("https://o123.ingest.us.sentry.io/api/456/envelope/");
-    const headers = Object(init).headers;
-    expect(headers["X-Sentry-Auth"]).toContain("sentry_key=publickey123");
-    const body = String(Object(init).body);
-    const [envelopeHeader, itemHeader, payload] = body.trim().split("\n");
-    expect(JSON.parse(String(envelopeHeader)).dsn).toBe(DSN);
-    expect(JSON.parse(String(itemHeader))).toEqual({ type: "event" });
-    expect(JSON.parse(String(payload)).tags).toEqual({ surface: "worker" });
-  });
-
-  it("swallows transport failures (non-interfering)", async () => {
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const reporter = createErrorReporter({
-      dsn: DSN,
-      fetchImpl: vi.fn(async () => {
-        throw new Error("network down");
-      }),
-    });
-
-    reporter.captureException(new Error("boom"));
-    await reporter.flush();
-
-    expect(consoleSpy).toHaveBeenCalled();
-    consoleSpy.mockRestore();
-  });
-
-  it("sheds captures beyond the in-flight cap instead of queueing unbounded", async () => {
-    let resolveAll: () => void = () => {};
-    const gate = new Promise<Response>((resolve) => {
-      resolveAll = () => resolve(new Response("{}"));
-    });
-    const fetchImpl = vi.fn(() => gate);
-    const reporter = createErrorReporter({ dsn: DSN, fetchImpl });
-
-    for (let i = 0; i < 30; i += 1) {
-      reporter.captureException(new Error(`e${i}`));
-    }
-    expect(fetchImpl.mock.calls.length).toBeLessThanOrEqual(20);
-    resolveAll();
-    await reporter.flush();
+describe("buildErrorLogRecord", () => {
+  it("falls back to the name Error for anonymous error names", () => {
+    const error = new Error("x");
+    error.name = "";
+    expect(buildErrorLogRecord(error).name).toBe("Error");
   });
 });
