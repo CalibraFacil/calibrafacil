@@ -18,7 +18,6 @@ export const desktopIpcChannels = {
   deepLinkRequested: "calibra:deep-link:requested",
   deepLinkReady: "calibra:deep-link:ready",
   publishNotifications: "calibra:notifications:publish",
-  revealFile: "calibra:shell:reveal-file",
   historyCommand: "calibra:history:command",
   activateLocalPartition: "calibra:local-partition:activate",
   pickFile: "calibra:dialog:pick-file",

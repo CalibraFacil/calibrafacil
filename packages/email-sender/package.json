@@ -24,7 +24,6 @@
   "license": "MIT",
   "dependencies": {
     "@calibra-facil/db": "workspace:*",
-    "@calibra-facil/shared": "workspace:*",
     "@react-email/render": "^2.0.8",
     "drizzle-orm": "^0.45.2",
     "nodemailer": "^10.0.15",

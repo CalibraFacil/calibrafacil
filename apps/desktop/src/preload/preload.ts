@@ -49,8 +49,6 @@ const calibraBridge: CalibraBridge = {
   notifyDeepLinkReady: () => invoke<boolean>(desktopIpcChannels.deepLinkReady),
   publishNotifications: (payload: DesktopNotificationsPublish) =>
     invoke<boolean>(desktopIpcChannels.publishNotifications, payload),
-  revealFile: (filePath: string) =>
-    invoke<boolean>(desktopIpcChannels.revealFile, filePath),
   onHistoryCommand: (listener: (command: string) => void) =>
     subscribe<string>(desktopIpcChannels.historyCommand, listener),
   activateLocalPartition: (request: LocalPartitionActivationRequest) =>

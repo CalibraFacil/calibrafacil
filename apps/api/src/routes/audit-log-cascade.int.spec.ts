@@ -47,6 +47,7 @@ import {
 import { eq, sql } from "drizzle-orm";
 import { truncateAll } from "../../test/integration/db";
 import { seedApiKey, seedOrg } from "../../test/integration/seed";
+import { hardDeleteOrganizationAsPurge } from "../../test/integration/records-retention";
 
 // ---------------------------------------------------------------------------
 // Inline domain seed helpers
@@ -326,7 +327,8 @@ describe("audit-log subject FKs no longer self-delete the trail (CMP-07 #692)", 
       .returning({ id: organizationApiKeyAuditLog.id });
     if (!auditRow) throw new Error("seed apiKey audit: insert failed");
 
-    await db.delete(organization).where(eq(organization.id, org.orgId));
+    // Retention (migration 0117): a LAB organization is only deleted by the purge.
+    await hardDeleteOrganizationAsPurge(org.orgId);
 
     const goneOrg = await db
       .select()

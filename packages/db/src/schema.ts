@@ -266,6 +266,21 @@ export const organization = pgTable(
     website: text("website"),
     technicalManagerName: text("technical_manager_name"),
     technicalManagerTitle: text("technical_manager_title"),
+    // Records retention (decision Q16, migration 0117, docs/architecture/
+    // records-retention.md). A LAB organization is never hard-deleted while it
+    // holds regulated records: it is soft-deleted (deleted_at, which also
+    // suspends it so nobody signs in) and only the purge job may remove the row,
+    // once the newest evidence is older than retention_years and no legal hold
+    // applies. The CHECKs (retention_years >= 5, soft-delete implies SUSPENDED)
+    // and the DELETE guard trigger live in sql/schema-extras.sql.
+    deletedAt: timestamp("deleted_at"),
+    deletedBy: text("deleted_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    deletionReason: text("deletion_reason"),
+    retentionYears: integer("retention_years").default(10).notNull(),
+    legalHold: boolean("legal_hold").default(false).notNull(),
+    legalHoldReason: text("legal_hold_reason"),
   },
   (table) => [uniqueIndex("organization_slug_uidx").on(table.slug)],
 );
@@ -332,11 +347,11 @@ export const certificateNumberingSequence = pgTable(
     id: serial("id").primaryKey(),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     profileId: integer("profile_id")
       .notNull()
       .references(() => certificateNumberingProfile.id, {
-        onDelete: "cascade",
+        onDelete: "restrict",
       }),
     sequenceKey: text("sequence_key").notNull(),
     currentValue: integer("current_value").default(0).notNull(),
@@ -797,7 +812,7 @@ export const issuedCertificateSnapshot = pgTable(
     id: serial("id").primaryKey(),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     jobId: integer("job_id")
       .notNull()
       .references(() => calibrationJob.id, { onDelete: "restrict" }),
@@ -3083,7 +3098,7 @@ export const referenceStandard = pgTable(
       .references(() => organizationUnit.id, { onDelete: "restrict" }),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     name: text("name").notNull(), // e.g., "Conjunto de Pesos E2"
     kind: text("kind")
       .$type<ReferenceStandardKind>()
@@ -3202,10 +3217,10 @@ export const referenceStandardCertificateDocument = pgTable(
     id: serial("id").primaryKey(),
     standardId: integer("standard_id")
       .notNull()
-      .references(() => referenceStandard.id, { onDelete: "cascade" }),
+      .references(() => referenceStandard.id, { onDelete: "restrict" }),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     unitId: integer("unit_id")
       .notNull()
       .references(() => organizationUnit.id, { onDelete: "restrict" }),
@@ -3494,7 +3509,7 @@ export const calibrationJob = pgTable(
     // Organization scope
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     unitId: integer("unit_id")
       .notNull()
       .references(() => organizationUnit.id, { onDelete: "restrict" }),
@@ -3811,10 +3826,10 @@ export const commercialAgreement = pgTable(
     id: serial("id").primaryKey(),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     customerId: integer("customer_id")
       .notNull()
-      .references(() => customer.id, { onDelete: "cascade" }),
+      .references(() => customer.id, { onDelete: "restrict" }),
     status: text("status")
       .$type<CommercialAgreementStatus>()
       .default("DRAFT")
@@ -3916,7 +3931,7 @@ export const jobCommercialSnapshot = pgTable(
       .references(() => calibrationJob.id, { onDelete: "cascade" }),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     customerId: integer("customer_id")
       .notNull()
       .references(() => customer.id, { onDelete: "restrict" }),
@@ -3962,7 +3977,7 @@ export const billingDocument = pgTable(
       .default(sql`gen_random_uuid()`),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     customerId: integer("customer_id")
       .notNull()
       .references(() => customer.id, { onDelete: "restrict" }),
@@ -4218,7 +4233,7 @@ export const certificateRelease = pgTable(
     id: serial("id").primaryKey(),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     calibrationJobId: integer("calibration_job_id")
       .notNull()
       .references(() => calibrationJob.id, { onDelete: "cascade" }),
@@ -4340,7 +4355,7 @@ export const billingGroup = pgTable(
     id: serial("id").primaryKey(),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     customerId: integer("customer_id")
       .notNull()
       .references(() => customer.id, { onDelete: "restrict" }),
@@ -4378,7 +4393,7 @@ export const billingGroupServiceOrder = pgTable(
       .references(() => billingGroup.id, { onDelete: "cascade" }),
     serviceOrderId: integer("service_order_id")
       .notNull()
-      .references(() => serviceOrder.id, { onDelete: "cascade" }),
+      .references(() => serviceOrder.id, { onDelete: "restrict" }),
     addedAt: timestamp("added_at").defaultNow().notNull(),
   },
   (table) => [
@@ -4428,7 +4443,7 @@ export const serviceOrderOutsourcedCost = pgTable(
     id: serial("id").primaryKey(),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     serviceOrderId: integer("service_order_id")
       .notNull()
       .references(() => serviceOrder.id, { onDelete: "cascade" }),
@@ -4504,7 +4519,7 @@ export const serviceOrder = pgTable(
     id: serial("id").primaryKey(),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     unitId: integer("unit_id")
       .notNull()
       .references(() => organizationUnit.id, { onDelete: "restrict" }),
@@ -5041,7 +5056,7 @@ export const serviceOrderCertificateLink = pgTable(
       .references(() => serviceOrder.id, { onDelete: "cascade" }),
     certificateJobId: integer("certificate_job_id")
       .notNull()
-      .references(() => calibrationJob.id, { onDelete: "cascade" }),
+      .references(() => calibrationJob.id, { onDelete: "restrict" }),
     linkedByUserId: text("linked_by_user_id")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
@@ -5115,9 +5130,9 @@ export const serviceOrderNumberingSequence = pgTable(
     id: serial("id").primaryKey(),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     unitId: integer("unit_id").references(() => organizationUnit.id, {
-      onDelete: "cascade",
+      onDelete: "restrict",
     }),
     sequenceKey: text("sequence_key").notNull(),
     currentValue: integer("current_value").default(0).notNull(),
@@ -5330,7 +5345,7 @@ export const calibrationRequest = pgTable(
     id: serial("id").primaryKey(),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     unitId: integer("unit_id")
       .notNull()
       .references(() => organizationUnit.id, { onDelete: "restrict" }),
@@ -5339,7 +5354,7 @@ export const calibrationRequest = pgTable(
       .references(() => customer.id, { onDelete: "restrict" }),
     authOrganizationId: text("auth_organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     status: text("status")
       .$type<CalibrationRequestStatus>()
       .default("PENDING")
@@ -5488,7 +5503,7 @@ export const calibrationVisit = pgTable(
     id: serial("id").primaryKey(),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     unitId: integer("unit_id")
       .notNull()
       .references(() => organizationUnit.id, { onDelete: "restrict" }),
@@ -5582,7 +5597,7 @@ export const visitRescheduleRequest = pgTable(
       .references(() => calibrationVisit.id, { onDelete: "cascade" }),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     customerId: integer("customer_id")
       .notNull()
       .references(() => customer.id, { onDelete: "restrict" }),
@@ -6908,7 +6923,7 @@ export const correctiveAction = pgTable(
     capaNumber: text("capa_number").notNull().unique(),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
 
     // Source
     source: text("source")
@@ -7079,7 +7094,7 @@ export const nonConformance = pgTable(
     ncNumber: text("nc_number").notNull().unique(),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     // Optional link to calibration job
     jobId: integer("job_id").references(() => calibrationJob.id),
     // NC classification
@@ -7285,7 +7300,7 @@ export const jobStandard = pgTable(
       .references(() => calibrationJob.id, { onDelete: "cascade" }),
     standardId: integer("standard_id")
       .notNull()
-      .references(() => referenceStandard.id, { onDelete: "cascade" }),
+      .references(() => referenceStandard.id, { onDelete: "restrict" }),
     // When the standard was used (execution time; falls back to job creation
     // for backfilled rows without performed_at).
     usedAt: timestamp("used_at"),
@@ -7331,7 +7346,7 @@ export const standardRecall = pgTable(
     id: serial("id").primaryKey(),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     standardId: integer("standard_id")
       .notNull()
       .references(() => referenceStandard.id, { onDelete: "restrict" }),
@@ -7405,7 +7420,7 @@ export const ootImpactAssessment = pgTable(
     id: serial("id").primaryKey(),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     ncId: integer("nc_id")
       .notNull()
       .references(() => nonConformance.id, { onDelete: "restrict" }),
@@ -7500,7 +7515,7 @@ export const ootNotification = pgTable(
     id: serial("id").primaryKey(),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     ncId: integer("nc_id")
       .notNull()
       .references(() => nonConformance.id, { onDelete: "restrict" }),
@@ -7717,7 +7732,7 @@ export const personnelCompetence = pgTable(
     id: serial("id").primaryKey(),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     // ISO/IEC 17025 §6.2 competence record. userId is nullable + ON DELETE SET
     // NULL (migration 0083): a user self-deletion (Better Auth deleteUser) must
     // NOT cascade-wipe this regulated record. The beforeDelete hook soft-deletes
@@ -7794,7 +7809,7 @@ export const trainingRecord = pgTable(
     id: serial("id").primaryKey(),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     // Nullable + ON DELETE SET NULL (migration 0083): a user self-deletion
     // (Better Auth deleteUser) must NOT cascade-wipe this ISO/IEC 17025 §6.2.3
     // training record (incl. the R2 certificate reference). The beforeDelete hook
@@ -7918,7 +7933,7 @@ export const authorizedSignatory = pgTable(
     id: serial("id").primaryKey(),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     // Nullable + ON DELETE SET NULL (migration 0083): a user self-deletion
     // (Better Auth deleteUser) must NOT cascade-wipe this ISO/IEC 17025 §6.2.6
     // authorization history. The beforeDelete hook REVOKES the authorization
@@ -8158,7 +8173,7 @@ export const proficiencyTest = pgTable(
     id: serial("id").primaryKey(),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     unitId: integer("unit_id").references(() => organizationUnit.id, {
       onDelete: "restrict",
     }),
@@ -8224,7 +8239,7 @@ export const ptPlanItem = pgTable(
     id: serial("id").primaryKey(),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     unitId: integer("unit_id").references(() => organizationUnit.id, {
       onDelete: "restrict",
     }),
@@ -8286,13 +8301,13 @@ export const checkStandardReading = pgTable(
     id: serial("id").primaryKey(),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     unitId: integer("unit_id").references(() => organizationUnit.id, {
       onDelete: "restrict",
     }),
     standardId: integer("standard_id")
       .notNull()
-      .references(() => referenceStandard.id, { onDelete: "cascade" }),
+      .references(() => referenceStandard.id, { onDelete: "restrict" }),
 
     /** Measured point/parameter key, e.g. "100 g" — one chart per parameter. */
     parameter: text("parameter").notNull(),
@@ -8385,13 +8400,13 @@ export const controlChart = pgTable(
     id: serial("id").primaryKey(),
     organizationId: text("organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     unitId: integer("unit_id").references(() => organizationUnit.id, {
       onDelete: "restrict",
     }),
     standardId: integer("standard_id")
       .notNull()
-      .references(() => referenceStandard.id, { onDelete: "cascade" }),
+      .references(() => referenceStandard.id, { onDelete: "restrict" }),
     parameter: text("parameter").notNull(),
 
     chartType: text("chart_type")
@@ -8595,16 +8610,16 @@ export const assetOotEvent = pgTable(
     jobId: integer("job_id")
       .notNull()
       .unique()
-      .references(() => calibrationJob.id, { onDelete: "cascade" }),
+      .references(() => calibrationJob.id, { onDelete: "restrict" }),
     assetId: integer("asset_id")
       .notNull()
-      .references(() => asset.id, { onDelete: "cascade" }),
+      .references(() => asset.id, { onDelete: "restrict" }),
     customerId: integer("customer_id")
       .notNull()
-      .references(() => customer.id, { onDelete: "cascade" }),
+      .references(() => customer.id, { onDelete: "restrict" }),
     labOrganizationId: text("lab_organization_id")
       .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "restrict" }),
     status: text("status")
       .$type<AssetOotEventStatus>()
       .default("OPEN")

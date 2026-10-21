@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { format, isValid, parse } from 'date-fns'
 import { toast } from 'sonner'
-import { Building06Icon, Delete02Icon } from '@hugeicons/core-free-icons'
+import { Building06Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { authClient } from '@calibra-facil/auth/client'
@@ -29,6 +29,7 @@ import {
 } from '@/features/settings/organization-model'
 import type { ActiveOrganization } from '@/features/settings/organization/shared'
 import { AccreditationSealPreview } from '@/features/settings/accreditation-seal-preview'
+import { DeleteOrganizationCard } from '@/features/settings/organization/delete-organization-card'
 import {
   Card,
   CardContent,
@@ -57,17 +58,6 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
 import { brazilPhoneMask, cepMask, cnpjMask } from '@/lib/input-masks'
 
 // The vigência drafts stay "yyyy-MM-dd" strings (what buildOrganizationIsoPayload
@@ -85,10 +75,12 @@ function dateToDraft(date: Date | undefined): string {
 export function OrganizationProfileSection({
   activeOrg,
   canManageOrganizationSettings,
+  canDeleteOrganization,
   governanceViewer,
 }: {
   activeOrg: ActiveOrganization
   canManageOrganizationSettings: boolean
+  canDeleteOrganization: boolean
   governanceViewer: GovernanceViewer | null
 }) {
   const identityDraft = createOrganizationIdentityDraft(activeOrg)
@@ -170,10 +162,6 @@ export function OrganizationProfileSection({
     disabled: isUpdatingIso,
     onResolved: handleCnpjResolved,
   })
-
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [deleteConfirmName, setDeleteConfirmName] = useState('')
-  const [isDeleting, setIsDeleting] = useState(false)
 
   const queryClient = useQueryClient()
   const unitContextQuery = useDashboardUnitsData({
@@ -298,36 +286,6 @@ export function OrganizationProfileSection({
     if (!file) return
 
     logoUploadMutation.mutate(file)
-  }
-
-  const handleDeleteOrganization = async () => {
-    if (deleteConfirmName !== activeOrg.name) {
-      toast.error('O nome da organização não confere')
-      return
-    }
-
-    setIsDeleting(true)
-    try {
-      const result = await authClient.organization.delete({
-        organizationId: activeOrg.id,
-      })
-      if (result.error) {
-        throw new Error(
-          translateAuthErrorMessage(
-            result.error.message,
-            'Falha ao excluir organização',
-          ),
-        )
-      }
-      toast.success('Organização excluída com sucesso')
-      // Redirect to dashboard after deletion
-      window.location.href = '/dashboard'
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Falha ao excluir organização'
-      toast.error(message)
-      setIsDeleting(false)
-    }
   }
 
   return (
@@ -920,78 +878,9 @@ export function OrganizationProfileSection({
         )}
       </div>
 
-      {/* Danger Zone — shown within the Organização tab */}
-      {canManageOrganizationSettings && (
-        <Card className="border-destructive/50">
-          <CardHeader>
-            <CardTitle className="text-destructive">
-              Excluir Organização
-            </CardTitle>
-            <CardDescription>
-              Exclua permanentemente esta organização e todos os seus dados.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <AlertDialog
-              open={deleteDialogOpen}
-              onOpenChange={(open) => {
-                if (!open) {
-                  setDeleteConfirmName('')
-                }
-                setDeleteDialogOpen(open)
-              }}
-            >
-              <AlertDialogTrigger
-                render={
-                  <Button variant="destructive">
-                    <HugeiconsIcon icon={Delete02Icon} />
-                    Excluir organização
-                  </Button>
-                }
-              />
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>
-                    Excluir organização permanentemente?
-                  </AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Esta ação é irreversível. Todos os dados da organização
-                    serão excluídos permanentemente, incluindo membros,
-                    calibrações e certificados.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <div className="py-4">
-                  <Field>
-                    <FieldLabel htmlFor="delete-confirm-name">
-                      Digite <strong>{activeOrg.name}</strong> para confirmar
-                    </FieldLabel>
-                    <Input
-                      id="delete-confirm-name"
-                      value={deleteConfirmName}
-                      onChange={(e) => setDeleteConfirmName(e.target.value)}
-                      placeholder={activeOrg.name}
-                      disabled={isDeleting}
-                    />
-                  </Field>
-                </div>
-                <AlertDialogFooter>
-                  <AlertDialogCancel disabled={isDeleting}>
-                    Cancelar
-                  </AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleDeleteOrganization}
-                    disabled={
-                      isDeleting || deleteConfirmName !== activeOrg.name
-                    }
-                    variant="destructive"
-                  >
-                    {isDeleting ? 'Excluindo...' : 'Excluir permanentemente'}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </CardContent>
-        </Card>
+      {/* Danger zone: owner only. "Excluir" is a soft delete (records retention). */}
+      {canDeleteOrganization && (
+        <DeleteOrganizationCard organizationName={activeOrg.name} />
       )}
     </>
   )

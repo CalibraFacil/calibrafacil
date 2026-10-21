@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Run the GitHub CI gates locally — we're on the free plan and out of Actions
 // minutes, so PRs are validated here instead. Mirrors .github/workflows/ci.yml
-// (blocked-deps → frozen install → audit → lint → type-check → test) under
+// (blocked-deps → frozen install → audit → lint → knip → import cycles → type-check → test) under
 // Node 24 + TZ=UTC to match the runners.
 //
 // Usage:
@@ -45,6 +45,11 @@ const steps = [
         },
       ]),
   { name: "Lint", run: () => shell("pnpm", ["run", "lint"]) },
+  { name: "Unused code (knip)", run: () => shell("pnpm", ["run", "knip"]) },
+  {
+    name: "Import cycles (madge)",
+    run: () => shell("pnpm", ["run", "check:cycles"]),
+  },
   {
     name: "Type check (turbo)",
     run: () => shell("pnpm", ["run", "check-types"]),

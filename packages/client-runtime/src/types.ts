@@ -13,6 +13,7 @@ import type {
   CreateMaterialSchema,
   CreateNonConformanceSchema,
   CreateServiceSchema,
+  SoftDeleteOrganizationSchema,
   UpdateAssetSchema,
   UpdateCertificateNumberingProfileSchema,
   UpdateCustomerSchema,
@@ -25,6 +26,9 @@ export type AdjustMaterialStockInput = z.input<
   typeof AdjustMaterialStockSchema
 >;
 export type CreateAssetInput = z.input<typeof CreateAssetSchema>;
+export type SoftDeleteOrganizationRequest = z.input<
+  typeof SoftDeleteOrganizationSchema
+>;
 export type CreateCustomerInput = z.input<typeof CreateCustomerSchema>;
 export type CreateCustomerGroupInput = z.input<
   typeof CreateCustomerGroupSchema
@@ -2389,6 +2393,22 @@ export interface ApiKeysApi {
   revoke(id: string): Promise<{ success: boolean }>;
 }
 
+export type SoftDeleteOrganizationResponse = {
+  success: boolean;
+  deletedAt: string;
+};
+
+/**
+ * Organization lifecycle (records retention). The laboratory's owner
+ * soft-deletes it: its records are kept for the retention period and the
+ * laboratory is locked. Cloud only.
+ */
+export interface OrganizationLifecycleApi {
+  softDelete(
+    input: SoftDeleteOrganizationRequest,
+  ): Promise<SoftDeleteOrganizationResponse>;
+}
+
 export type EntityLabelResponse = {
   label?: string | null;
 };
@@ -2787,6 +2807,7 @@ export interface CalibraApi {
   finance: FinanceApi;
   sso: SsoApi;
   apiKeys: ApiKeysApi;
+  organizationLifecycle: OrganizationLifecycleApi;
   entityLabels: EntityLabelsApi;
   certificateNumbering: CertificateNumberingApi;
   portalDomains: PortalDomainsApi;

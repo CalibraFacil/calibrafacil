@@ -13,6 +13,7 @@ import {
   authErrorSignals,
   userCreateErrorWasDuplicate,
 } from "../lib/auth-user-errors";
+import { removeLabOrganization } from "../lib/records-retention";
 
 /**
  * Everything it takes to turn "a name and an e-mail" into a laboratory that
@@ -263,9 +264,14 @@ export async function cleanupFailedLabProvisioning(params: {
 }) {
   try {
     if (params.organizationId) {
-      await db
-        .delete(organization)
-        .where(eq(organization.id, params.organizationId));
+      // Retention (decision Q16): the organization was created a moment ago, so
+      // it normally holds nothing and is hard-deleted; removeLabOrganization
+      // proves that first and soft-deletes it instead if any evidence exists.
+      await removeLabOrganization({
+        organizationId: params.organizationId,
+        deletedBy: null,
+        reason: "Provisionamento do laboratório falhou",
+      });
     }
   } catch (error) {
     console.error("Failed to clean up failed LAB provisioning", {

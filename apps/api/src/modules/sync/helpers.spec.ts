@@ -6,8 +6,6 @@ import {
   buildSyncAttachmentObjectKey,
   DEFAULT_SYNC_PULL_LIMIT,
   encodeSyncAttachmentId,
-  formNumber,
-  formString,
   getNullableString,
   getNumber,
   getRecordOrNull,
@@ -251,38 +249,6 @@ describe("sync helpers — buildSyncAttachmentObjectKey", () => {
       contentHash: "abcdef0123456789abcdef0123456789",
     });
     expect(key.endsWith(".p df")).toBe(false);
-  });
-});
-
-function form(entries: Record<string, string>) {
-  const fd = new FormData();
-  for (const [k, v] of Object.entries(entries)) fd.set(k, v);
-  return fd;
-}
-
-describe("sync helpers — form extractors", () => {
-  it("formString returns the value when present and non-empty", () => {
-    expect(formString(form({ a: "hello" }), "a")).toBe("hello");
-  });
-
-  it("formString returns null when the key is missing", () => {
-    expect(formString(form({}), "a")).toBeNull();
-  });
-
-  it("formString returns null for an empty value", () => {
-    expect(formString(form({ a: "" }), "a")).toBeNull();
-  });
-
-  it("formNumber parses a numeric string", () => {
-    expect(formNumber(form({ n: "3.5" }), "n")).toBe(3.5);
-  });
-
-  it("formNumber returns NaN when the key is missing", () => {
-    expect(Number.isNaN(formNumber(form({}), "n"))).toBe(true);
-  });
-
-  it("formNumber returns NaN for a non-numeric value", () => {
-    expect(Number.isNaN(formNumber(form({ n: "abc" }), "n"))).toBe(true);
   });
 });
 
