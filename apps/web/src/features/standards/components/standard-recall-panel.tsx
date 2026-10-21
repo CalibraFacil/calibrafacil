@@ -28,6 +28,10 @@ import {
 } from '@/components/instrument-panel'
 import { HideFromRole, ShowForRole } from '@/components/permission-gate'
 import { OperationUnavailableNotice } from '@/components/availability/action-availability-gate'
+import {
+  formatStandardDate,
+  standardDateInputValue,
+} from '@/features/standards/dates'
 import { useOperationAvailability } from '@/runtime/use-operation-availability'
 import {
   useImpactedCertificatesData,
@@ -62,15 +66,6 @@ const ACKNOWLEDGED_VIA_LABELS: Record<StandardRecallAcknowledgedVia, string> = {
   manual: 'registro manual',
 }
 
-function formatDate(value: string | null): string {
-  if (!value) return '—'
-  return new Date(value).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  })
-}
-
 function formatDateTime(value: string | null): string {
   if (!value) return '—'
   return new Date(value).toLocaleString('pt-BR', {
@@ -80,10 +75,6 @@ function formatDateTime(value: string | null): string {
     hour: '2-digit',
     minute: '2-digit',
   })
-}
-
-function isoToDateInput(value: string): string {
-  return value.slice(0, 10)
 }
 
 function dateInputToIsoStart(value: string): string | undefined {
@@ -203,9 +194,9 @@ function RecallDraftWizard({
     .size
 
   const fromValue =
-    fromInput || (impacted ? isoToDateInput(impacted.window.from) : '')
+    fromInput || (impacted ? standardDateInputValue(impacted.window.from) : '')
   const toValue =
-    toInput || (impacted ? isoToDateInput(impacted.window.to) : '')
+    toInput || (impacted ? standardDateInputValue(impacted.window.to) : '')
 
   const toggleRow = (jobId: number, checked: boolean) => {
     setExcludedJobIds((prev) =>
@@ -337,8 +328,8 @@ function RecallDraftWizard({
               </span>
               , referentes ao período{' '}
               <span className="font-medium text-foreground">
-                {formatDate(impacted?.window.from ?? null)} –{' '}
-                {formatDate(impacted?.window.to ?? null)}
+                {formatStandardDate(impacted?.window.from ?? null)} –{' '}
+                {formatStandardDate(impacted?.window.to ?? null)}
               </span>
               . O envio registra você como aprovador do lote e fica documentado
               na não conformidade.
@@ -442,7 +433,7 @@ function ImpactedCertificatesTable({
                   )}
                 </td>
                 <td className="px-3 py-2.5 font-mono tabular-nums">
-                  {formatDate(row.approvedAt)}
+                  {formatStandardDate(row.approvedAt)}
                 </td>
                 <td className="px-3 py-2.5">
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -501,7 +492,8 @@ function RecallSentDashboard({
           {recall.approvedBy ?? '—'}
         </BlueprintField>
         <BlueprintField label="Período notificado" mono>
-          {formatDate(recall.fromDate)} – {formatDate(recall.toDate)}
+          {formatStandardDate(recall.fromDate)} –{' '}
+          {formatStandardDate(recall.toDate)}
         </BlueprintField>
       </BlueprintGrid>
 

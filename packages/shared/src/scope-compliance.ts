@@ -19,6 +19,7 @@
  * applies only to *accredited* issuance (see accreditation.ts).
  */
 
+import { isLabDayWithinBounds } from "./accreditation";
 import {
   convertUnitDelta,
   convertUnitValue,
@@ -135,18 +136,10 @@ export type ScopeComplianceResult = {
   pointsTotal: number;
 };
 
-function toDate(value: Date | string | null | undefined): Date | null {
-  if (value == null) return null;
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
 function isScopeLineActive(line: AccreditedScopeLineLike, atDate: Date) {
-  const from = toDate(line.validFrom);
-  const until = toDate(line.validUntil);
-  if (from && atDate < from) return false;
-  if (until && atDate > until) return false;
-  return true;
+  // By the laboratory's calendar day, like the org-level vigência window: a
+  // line valid "until 15/07" still covers an issue at 23:30 -03:00 that day.
+  return isLabDayWithinBounds(line.validFrom, line.validUntil, atDate);
 }
 
 /**

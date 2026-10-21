@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { db } from "@calibra-facil/db";
+import { LAB_TIME_ZONE } from "@calibra-facil/documents";
 import {
   calibrationJob,
   referenceStandard,
@@ -35,6 +36,7 @@ import {
   asc,
   isNull,
 } from "drizzle-orm";
+import { getDashboardWindows } from "../lib/dashboard-windows";
 import { getExecuteRows } from "../lib/db";
 import { buildUnitScopeCondition } from "../lib/units";
 
@@ -58,16 +60,14 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
     const memberData = c.get("member");
     const now = new Date();
 
-    // Calculate date boundaries
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const thirtyDaysFromNow = new Date(now);
-    thirtyDaysFromNow.setDate(now.getDate() + 30);
-    const endOfToday = new Date(now);
-    endOfToday.setHours(23, 59, 59, 999);
-    const sevenDaysFromNow = new Date(now);
-    sevenDaysFromNow.setDate(now.getDate() + 7);
-    const ninetyDaysAgo = new Date(now);
-    ninetyDaysAgo.setDate(now.getDate() - 90);
+    // Calculate date boundaries ("this month" and "today" are the lab's days)
+    const {
+      startOfMonth,
+      thirtyDaysFromNow,
+      endOfToday,
+      sevenDaysFromNow,
+      ninetyDaysAgo,
+    } = getDashboardWindows(now);
     const jobUnitScopeCondition = buildUnitScopeCondition(
       calibrationJob.unitId,
       memberData,
@@ -76,6 +76,9 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
       referenceStandard.unitId,
       memberData,
     );
+    // Bucket decisions by the lab's calendar day (the columns are UTC
+    // timestamps), the day the dashboard trend chart labels them with.
+    const trendDay = sql`(COALESCE(approved_at, rejected_at) AT TIME ZONE 'UTC' AT TIME ZONE '${sql.raw(LAB_TIME_ZONE)}')::date`;
     const trendUnitFilter =
       memberData.selectedUnitScope === "all"
         ? sql`AND unit_id IN (${sql.join(
@@ -299,7 +302,7 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
         // Note: Convert dates to ISO strings for raw SQL to avoid postgres driver issues
         db.execute(sql`
           SELECT
-            DATE(COALESCE(approved_at, rejected_at)) as date,
+            ${trendDay} as date,
             COUNT(*) FILTER (WHERE status = 'APPROVED') as approved,
             COUNT(*) FILTER (WHERE status = 'REJECTED') as rejected
           FROM calibration_job
@@ -309,7 +312,7 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
               (status = 'APPROVED' AND approved_at >= ${ninetyDaysAgo.toISOString()})
               OR (status = 'REJECTED' AND rejected_at >= ${ninetyDaysAgo.toISOString()})
             )
-          GROUP BY DATE(COALESCE(approved_at, rejected_at))
+          GROUP BY ${trendDay}
           ORDER BY date ASC
         `),
 

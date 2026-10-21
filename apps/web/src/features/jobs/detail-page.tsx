@@ -95,6 +95,7 @@ import {
   type ReviewFormula,
   type ReviewMethodField,
 } from '@/features/jobs/detail-model'
+import { formatStandardDate } from '@/features/standards/dates'
 import {
   buildJobApprovalInput,
   isJobApprovalBlockedByEnvironment,
@@ -1372,7 +1373,7 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
                           </div>
                           <div className="shrink-0 text-left text-sm sm:text-right">
                             <p className="font-mono tabular-nums">
-                              {formatDate(standard.calibrationDate)}
+                              {formatStandardDate(standard.calibrationDate)}
                             </p>
                             {standard.uncertainty != null && (
                               <p className="inline-flex flex-wrap items-center gap-1 font-mono tabular-nums text-muted-foreground sm:justify-end">
@@ -1687,7 +1688,7 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
                         </div>
                         <div className="shrink-0 text-left text-sm sm:text-right">
                           <p className="font-mono tabular-nums">
-                            {formatDate(standard.calibrationDate)}
+                            {formatStandardDate(standard.calibrationDate)}
                           </p>
                           {standard.uncertainty != null && (
                             <p className="font-mono tabular-nums text-muted-foreground">

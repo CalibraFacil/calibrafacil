@@ -1,4 +1,9 @@
-import { normalizeAccreditationNumber } from '@calibra-facil/shared'
+import {
+  accreditationBoundDay,
+  accreditationDayToInstant,
+  getAccreditationStatus,
+  normalizeAccreditationNumber,
+} from '@calibra-facil/shared'
 
 import type {
   EditableUnitAssignmentRole,
@@ -178,28 +183,55 @@ export function buildOrganizationIdentityPayload(
   }
 }
 
-/** #647: hydrate a stored timestamp into the <input type="date"> value (UTC date part). */
+/**
+ * #647: hydrate a stored window bound into the <input type="date"> value: the
+ * laboratory calendar day it names (legacy UTC-anchored values included).
+ */
 function toDateInputValue(value: Date | string | null | undefined): string {
-  if (!value) return ''
-  const date = value instanceof Date ? value : new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-  return date.toISOString().slice(0, 10)
+  return accreditationBoundDay(value) ?? ''
 }
 
 /**
  * #647: form date ("2027-03-01") → ISO instant for the Better Auth payload;
  * empty stays "" so the field clears (the server transform stores "" as
  * NULL; undefined would be skipped by the partial update, leaving a stale
- * date in place). `validFrom` anchors at start-of-day and `validUntil` at
- * END-of-day so the final vigência day is inclusive (a certificate emitted
- * at noon on the validUntil date is still inside the window).
+ * date in place). `validFrom` anchors at 00:00 and `validUntil` at 23:59:59.999
+ * of that day in the laboratory's zone (America/Sao_Paulo), so the final
+ * vigência day is inclusive (a certificate emitted at 23:30 -03:00 on the
+ * validUntil date is still inside the window).
  */
 export function dateInputToIso(value: string, bound: 'start' | 'end'): string {
   const trimmed = value.trim()
   if (!trimmed) return ''
-  const time = bound === 'start' ? 'T00:00:00.000Z' : 'T23:59:59.999Z'
-  const date = new Date(`${trimmed}${time}`)
-  return Number.isNaN(date.getTime()) ? '' : date.toISOString()
+  const date = accreditationDayToInstant(trimmed, bound)
+  return date ? date.toISOString() : ''
+}
+
+/**
+ * The settings seal preview's status for the form as typed: the draft window
+ * days anchored exactly as they will be saved (laboratory days).
+ */
+export function getAccreditationPreviewStatus(
+  draft: Pick<
+    OrganizationIsoDraft,
+    | 'accreditationActive'
+    | 'accreditationNumber'
+    | 'accreditationValidFrom'
+    | 'accreditationValidUntil'
+  >,
+  now: Date = new Date(),
+) {
+  return getAccreditationStatus(
+    {
+      accreditationActive: draft.accreditationActive,
+      accreditationNumber: draft.accreditationNumber,
+      accreditationValidFrom:
+        dateInputToIso(draft.accreditationValidFrom, 'start') || null,
+      accreditationValidUntil:
+        dateInputToIso(draft.accreditationValidUntil, 'end') || null,
+    },
+    now,
+  )
 }
 
 export function createOrganizationIsoDraft(

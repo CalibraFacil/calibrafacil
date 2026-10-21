@@ -72,8 +72,135 @@ function toDate(value: Date | string | null | undefined): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+// The vigência window is a pair of CALENDAR DAYS of the laboratory, not a pair
+// of UTC instants. The API and worker clocks run in UTC, so an instant at
+// 23:30 -03:00 on the window's last day is already the next UTC day.
+// (Same zone as `LAB_TIME_ZONE` in @calibra-facil/documents, which depends on
+// this package and so cannot be imported here.)
+const ACCREDITATION_TIME_ZONE = "America/Sao_Paulo";
+
+const LAB_CLOCK = new Intl.DateTimeFormat("en-CA", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+  timeZone: ACCREDITATION_TIME_ZONE,
+});
+
+function labClock(date: Date) {
+  const parts = Object.fromEntries(
+    LAB_CLOCK.formatToParts(date).map((part) => [part.type, part.value]),
+  );
+  return {
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+    hour: Number(parts.hour),
+    minute: Number(parts.minute),
+    second: Number(parts.second),
+  };
+}
+
+function dayKey(year: number, month: number, day: number): string {
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/** The laboratory's calendar day of an instant, as "2027-03-05". */
+function labDayKey(date: Date): string {
+  const { year, month, day } = labClock(date);
+  return dayKey(year, month, day);
+}
+
+/** The instant the laboratory's calendar day `year-month-day` begins (00:00). */
+function startOfLabDayInstant(year: number, month: number, day: number): Date {
+  const wallClockAsUtc = Date.UTC(year, month - 1, day);
+  let instant = wallClockAsUtc;
+  // The zone's offset on that day, found by reading the guess back in the zone
+  // (a second pass settles days whose offset differs from the first guess's).
+  for (let pass = 0; pass < 2; pass += 1) {
+    const read = labClock(new Date(instant));
+    const readAsUtc = Date.UTC(
+      read.year,
+      read.month - 1,
+      read.day,
+      read.hour,
+      read.minute,
+      read.second,
+    );
+    instant = wallClockAsUtc - (readAsUtc - instant);
+  }
+  return new Date(instant);
+}
+
+const DAY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+
 /**
- * Whether `atDate` falls inside the accreditation vigência window. Bounds are
+ * A window day ("2027-03-05", the value of a date field) as the instant the
+ * laboratory's day starts (00:00) or ends (23:59:59.999) in São Paulo, so the
+ * final vigência day is inclusive. Null for anything that is not a real
+ * `YYYY-MM-DD` calendar day.
+ */
+export function accreditationDayToInstant(
+  day: string,
+  bound: "start" | "end",
+): Date | null {
+  const match = DAY_PATTERN.exec(day);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const date = Number(match[3]);
+  const check = new Date(Date.UTC(year, month - 1, date));
+  if (
+    check.getUTCFullYear() !== year ||
+    check.getUTCMonth() !== month - 1 ||
+    check.getUTCDate() !== date
+  ) {
+    return null;
+  }
+  if (bound === "start") return startOfLabDayInstant(year, month, date);
+  const nextDay = new Date(Date.UTC(year, month - 1, date + 1));
+  const next = startOfLabDayInstant(
+    nextDay.getUTCFullYear(),
+    nextDay.getUTCMonth() + 1,
+    nextDay.getUTCDate(),
+  );
+  return new Date(next.getTime() - 1);
+}
+
+/**
+ * The calendar day a stored window bound names, as "2027-03-05" (null when
+ * missing or unparseable). Bounds written by the lab-day anchor
+ * ({@link accreditationDayToInstant}) are read in the laboratory's zone.
+ * Legacy bounds were anchored in UTC: a start at exactly UTC midnight names
+ * that UTC day (read in São Paulo it would be the evening before), and a UTC
+ * 23:59:59.999 end already falls on its own day in São Paulo.
+ */
+export function accreditationBoundDay(
+  value: Date | string | null | undefined,
+): string | null {
+  const date = toDate(value);
+  if (!date) return null;
+  const isUtcMidnight =
+    date.getUTCHours() === 0 &&
+    date.getUTCMinutes() === 0 &&
+    date.getUTCSeconds() === 0 &&
+    date.getUTCMilliseconds() === 0;
+  if (isUtcMidnight) {
+    return dayKey(
+      date.getUTCFullYear(),
+      date.getUTCMonth() + 1,
+      date.getUTCDate(),
+    );
+  }
+  return labDayKey(date);
+}
+
+/**
+ * Whether `atDate` falls inside the accreditation vigência window, judged by
+ * the laboratory's calendar day (both bounds inclusive). Bounds are
  * independent: a missing side imposes no constraint, so orgs that never filled
  * the window keep the pre-#647 behavior (REQ-CMP-VIG-004).
  */
@@ -81,10 +208,28 @@ export function isWithinAccreditationWindow(
   profile: AccreditationProfile,
   atDate: Date,
 ): boolean {
-  const from = toDate(profile.accreditationValidFrom);
-  const until = toDate(profile.accreditationValidUntil);
-  if (from && atDate < from) return false;
-  if (until && atDate > until) return false;
+  return isLabDayWithinBounds(
+    profile.accreditationValidFrom,
+    profile.accreditationValidUntil,
+    atDate,
+  );
+}
+
+/**
+ * The same day-based test for any stored vigência pair (the accredited scope
+ * lines share the window's anchor): `atDate`'s laboratory day against the
+ * days the bounds name, both inclusive, a missing side unconstrained.
+ */
+export function isLabDayWithinBounds(
+  validFrom: Date | string | null | undefined,
+  validUntil: Date | string | null | undefined,
+  atDate: Date,
+): boolean {
+  const from = accreditationBoundDay(validFrom);
+  const until = accreditationBoundDay(validUntil);
+  const day = labDayKey(atDate);
+  if (from && day < from) return false;
+  if (until && day > until) return false;
   return true;
 }
 

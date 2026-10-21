@@ -217,6 +217,39 @@ describe("evaluateScopeCompliance", () => {
     expect(result.status).toBe("OUT_OF_SCOPE");
   });
 
+  describe.each([
+    {
+      shape: "lab-day anchor (00:00 / 23:59:59.999 -03:00)",
+      validFrom: "2026-07-01T03:00:00.000Z",
+      validUntil: "2026-07-16T02:59:59.999Z",
+    },
+    {
+      shape: "legacy UTC anchor",
+      validFrom: "2026-07-01T00:00:00.000Z",
+      validUntil: "2026-07-15T23:59:59.999Z",
+    },
+  ])("vigência window 2026-07-01..2026-07-15, $shape", (window) => {
+    const line: AccreditedScopeLineLike = { ...massLine, ...window };
+
+    it("keeps the line in scope at 23:30 -03:00 on its last day", () => {
+      const result = evaluateScopeCompliance({
+        scopeLines: [line],
+        points: [point({})],
+        atDate: new Date("2026-07-15T23:30:00-03:00"),
+      });
+      expect(result.status).toBe("PASS");
+    });
+
+    it("drops the line from 00:30 -03:00 on the next day", () => {
+      const result = evaluateScopeCompliance({
+        scopeLines: [line],
+        points: [point({})],
+        atDate: new Date("2026-07-16T00:30:00-03:00"),
+      });
+      expect(result.status).toBe("OUT_OF_SCOPE");
+    });
+  });
+
   it("ignores lines of a different quantity kind", () => {
     const temperatureLine: AccreditedScopeLineLike = {
       quantityKind: "temperature",

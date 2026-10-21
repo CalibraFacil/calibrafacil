@@ -1,9 +1,12 @@
+import { formatDateOnly, getLabCalendarDay } from '@calibra-facil/documents'
+
 import type { SignalTone } from '@/components/instrument-panel'
 import type {
   DashboardJob,
   DashboardJobStatus,
   DashboardStats,
 } from '@/features/dashboard/queries'
+import { dateOnlyDaysBetween, labDaysBetween } from '@/lib/date-only'
 
 /**
  * Pure view-model for the lab dashboard. Everything the page renders is derived
@@ -224,6 +227,8 @@ export type TrendPoint = { date: string; approved: number; rejected: number }
 
 export type TrendWindow = 30 | 90
 
+// The cursor walks UTC midnights that stand for laboratory calendar days, so
+// reading its UTC day gives the day it stands for.
 function isoDay(date: Date) {
   return date.toISOString().slice(0, 10)
 }
@@ -247,8 +252,11 @@ export function buildTrendSeries(
   }
 
   const series: TrendPoint[] = []
+  // The API buckets decisions by the laboratory's day, so "today" is the
+  // laboratory's day too, not the browser's.
+  const labToday = getLabCalendarDay(today)
   const cursor = new Date(
-    Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()),
+    Date.UTC(labToday.year, labToday.month - 1, labToday.day),
   )
   cursor.setUTCDate(cursor.getUTCDate() - (days - 1))
 
@@ -275,16 +283,7 @@ export function sumTrend(series: TrendPoint[]) {
 
 export function daysUntil(dateString: string | null, today = new Date()) {
   if (!dateString) return null
-  const due = new Date(dateString)
-  const startOfDue = new Date(due.getFullYear(), due.getMonth(), due.getDate())
-  const startOfToday = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate(),
-  )
-  return Math.round(
-    (startOfDue.getTime() - startOfToday.getTime()) / 86_400_000,
-  )
+  return labDaysBetween(today, new Date(dateString))
 }
 
 export function formatDueDate(
@@ -308,7 +307,11 @@ export function formatStandardDue(
   dateString: string | null,
   today = new Date(),
 ) {
-  const difference = daysUntil(dateString, today)
+  // A standard's expiry is a date typed in a date field (stored at UTC
+  // midnight): it names its own day, not the evening before.
+  const difference = dateString
+    ? dateOnlyDaysBetween(today, new Date(dateString))
+    : null
   if (difference === null) return 'Sem vencimento'
   if (difference < 0) return 'Vencido'
   if (difference === 0) return 'Vence hoje'
@@ -317,11 +320,7 @@ export function formatStandardDue(
 }
 
 export function formatShortDate(dateString: string | null) {
-  if (!dateString) return '—'
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: 'short',
-  }).format(new Date(dateString))
+  return formatDateOnly(dateString, '—', { day: '2-digit', month: 'short' })
 }
 
 export function jobTitle(job: DashboardJob) {

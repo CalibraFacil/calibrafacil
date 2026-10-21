@@ -34,7 +34,7 @@
  *   jobUnitScopeCondition = buildUnitScopeCondition(calibrationJob.unitId, memberData)
  */
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { dashboardRouter } from "./dashboard";
 import { db } from "@calibra-facil/db";
 import {
@@ -618,5 +618,89 @@ describe("dashboardRouter — real DB + real middleware (READ-ONLY aggregation)"
     );
     expect(statusMap.get("DRAFT")).toBe(1);
     expect(statusMap.get("REVIEW")).toBe(1);
+  });
+
+  // =========================================================================
+  // REQ-DATE-009: the dashboard's month, "today" and trend days are the lab's
+  // (Sao Paulo) calendar days, not the UTC server's.
+  // =========================================================================
+  describe("REQ-DATE-009: laboratory calendar days", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("counts the month, today and the trend by the Sao Paulo day late in the evening", async () => {
+      // 23:30 on 2026-05-31 in Sao Paulo is already 02:30Z on 2026-06-01.
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date("2026-05-31T23:30:00-03:00"));
+
+      const org = await seedDashboardFixture({
+        orgId: "org-a",
+        userId: "user-a",
+        tagSuffix: "a",
+      });
+      const base = {
+        organizationId: "org-a",
+        unitId: org.unitId,
+        customerId: org.customerId,
+        assetId: org.assetId,
+        serviceId: org.serviceId,
+        createdBy: org.userId,
+        methodSnapshot: minimalMethodSnapshot(),
+      };
+      await db.insert(calibrationJob).values([
+        {
+          // Approved 09:00 on May 31 in Sao Paulo: May's, even though the
+          // UTC clock is already in June.
+          ...base,
+          jobId: "D-APPROVED",
+          certificateName: "D-APPROVED",
+          status: "APPROVED",
+          approvedAt: new Date("2026-05-31T09:00:00-03:00"),
+        },
+        {
+          // Approved at 22:00 on May 31 in Sao Paulo (01:00Z June 1).
+          ...base,
+          jobId: "D-LATE",
+          certificateName: "D-LATE",
+          status: "APPROVED",
+          approvedAt: new Date("2026-05-31T22:00:00-03:00"),
+        },
+        {
+          // Due 00:30 on June 1 in Sao Paulo: tomorrow, not due today.
+          ...base,
+          jobId: "D-TOMORROW",
+          certificateName: "D-TOMORROW",
+          status: "DRAFT",
+          dueDate: new Date("2026-06-01T00:30:00-03:00"),
+        },
+        {
+          // Due 22:30 on May 31 in Sao Paulo: still due today.
+          ...base,
+          jobId: "D-TODAY",
+          certificateName: "D-TODAY",
+          status: "DRAFT",
+          dueDate: new Date("2026-05-31T22:30:00-03:00"),
+        },
+      ]);
+
+      loginAs({ userId: org.userId, organizationId: "org-a" });
+      const res = await dashboardRouter.request("/stats", {
+        headers: JSON_HEADERS,
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+
+      expect(body.approvedThisMonth).toBe(2);
+      expect(body.dueToday).toBe(1);
+      expect(
+        body.calibrationTrend.map(
+          (point: { date: string; approved: number }) => ({
+            date: String(point.date).slice(0, 10),
+            approved: point.approved,
+          }),
+        ),
+      ).toEqual([{ date: "2026-05-31", approved: 2 }]);
+    });
   });
 });

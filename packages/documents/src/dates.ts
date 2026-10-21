@@ -59,6 +59,15 @@ export function formatCalendarDate(value: DateInput, empty = "—"): string {
   return date ? CALENDAR_DATE.format(date) : empty;
 }
 
+function isUtcMidnight(date: Date): boolean {
+  return (
+    date.getUTCHours() === 0 &&
+    date.getUTCMinutes() === 0 &&
+    date.getUTCSeconds() === 0 &&
+    date.getUTCMilliseconds() === 0
+  );
+}
+
 const DAY_PARTS = new Intl.DateTimeFormat("en-CA", {
   year: "numeric",
   month: "2-digit",
@@ -119,4 +128,55 @@ export function startOfLabMonth(date: Date): Date {
     read.second,
   );
   return new Date(wallClockAsUtc - (readAsUtc - wallClockAsUtc));
+}
+
+/**
+ * The calendar day a stored date-only value names (a standard's calibration
+ * date, a due date, a visit day). These are typed into date fields and stored
+ * at exactly UTC midnight, which read in São Paulo is the evening before, so
+ * an exact-UTC-midnight value names its UTC day. Any other instant (a value
+ * stored at local noon, or a real moment) names its laboratory day.
+ */
+export function getDateOnlyDay(value: Date): {
+  year: number;
+  month: number;
+  day: number;
+} {
+  if (isUtcMidnight(value)) {
+    return {
+      year: value.getUTCFullYear(),
+      month: value.getUTCMonth() + 1,
+      day: value.getUTCDate(),
+    };
+  }
+  return getLabCalendarDay(value);
+}
+
+/** A date-only value's day as "2026-10-15" (a date field's value). */
+export function formatDateOnlyKey(value: Date): string {
+  const { year, month, day } = getDateOnlyDay(value);
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/**
+ * A date-only value as a pt-BR calendar date: "15/10/2026" by default, or in
+ * the shape of `options` ("15 de outubro de 2026"). See {@link getDateOnlyDay}.
+ */
+export function formatDateOnly(
+  value: DateInput,
+  empty = "—",
+  options: Intl.DateTimeFormatOptions = {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  },
+): string {
+  const date = toDate(value);
+  if (!date) return empty;
+  const { year, month, day } = getDateOnlyDay(date);
+  // Noon UTC of the named day, read in UTC: no zone can move it to another day.
+  return new Intl.DateTimeFormat("pt-BR", {
+    ...options,
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month - 1, day, 12)));
 }

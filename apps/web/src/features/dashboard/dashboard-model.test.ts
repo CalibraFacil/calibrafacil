@@ -1,12 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import type { DashboardStats } from '@/features/dashboard/queries'
 import {
   buildHealthSignals,
   buildPipeline,
   buildTrendSeries,
+  daysUntil,
   defaultQueueView,
   formatDueDate,
+  formatShortDate,
   formatStandardDue,
   selectQueueJobs,
   sumTrend,
@@ -205,5 +207,63 @@ describe('date labels', () => {
       'Vence em 14 dias',
     )
     expect(formatStandardDue('2026-09-01T12:00:00', today)).toBe('Vencido')
+  })
+})
+
+describe('laboratory calendar day (REQ-DATE-004)', () => {
+  // 23:30 in Sao Paulo on 2026-05-20 is 02:30Z on the 21st.
+  const evening = new Date('2026-05-20T23:30:00-03:00')
+
+  afterEach(() => {
+    process.env.TZ = 'America/Sao_Paulo'
+  })
+
+  it('ends the trend window on the Sao Paulo day, whatever the browser zone', () => {
+    process.env.TZ = 'UTC'
+    const series = buildTrendSeries(
+      [{ date: '2026-05-20', approved: 3, rejected: 0 }],
+      30,
+      evening,
+    )
+    expect(series.at(-1)).toEqual({
+      date: '2026-05-20',
+      approved: 3,
+      rejected: 0,
+    })
+    expect(series[0]?.date).toBe('2026-04-21')
+  })
+
+  it('counts days until a deadline from the Sao Paulo day', () => {
+    process.env.TZ = 'UTC'
+    // Due at noon on the 21st in Sao Paulo: tomorrow, not today.
+    expect(daysUntil('2026-05-21T12:00:00-03:00', evening)).toBe(1)
+    expect(formatDueDate('2026-05-20T10:00:00-03:00', false, evening)).toBe(
+      'Hoje',
+    )
+  })
+})
+
+describe('standard expiry dates (REQ-DATE-007)', () => {
+  // Typed in a date field and stored at UTC midnight: 21:00 the evening before
+  // in Sao Paulo.
+  const expiry = '2026-05-21T00:00:00.000Z'
+
+  it('shows the expiry on the day that was typed', () => {
+    expect(formatShortDate(expiry)).toBe('21 de mai.')
+    expect(formatShortDate(null)).toBe('—')
+  })
+
+  it('counts the days from the Sao Paulo day to the day that was typed', () => {
+    // The standard expires on the 21st: still a day away on the evening of
+    // the 20th, due today during the 21st, expired on the 22nd.
+    expect(
+      formatStandardDue(expiry, new Date('2026-05-20T23:30:00-03:00')),
+    ).toBe('Vence amanhã')
+    expect(
+      formatStandardDue(expiry, new Date('2026-05-21T09:00:00-03:00')),
+    ).toBe('Vence hoje')
+    expect(
+      formatStandardDue(expiry, new Date('2026-05-22T09:00:00-03:00')),
+    ).toBe('Vencido')
   })
 })

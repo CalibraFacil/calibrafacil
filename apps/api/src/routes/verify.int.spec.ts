@@ -77,6 +77,8 @@ async function seedVerifiableCert(params: {
   accreditationActive?: boolean;
   accreditationNumber?: string | null;
   methodAccreditedScope?: boolean;
+  accreditationValidUntil?: Date;
+  approvedAt?: Date;
   signatureMetadata?: typeof calibrationJob.$inferInsert.signatureMetadata;
   signatureVerdict?: typeof calibrationJob.$inferInsert.signatureVerdict;
   // Amendment linkage (ISO 17025 7.8.4.1) — set to wire this job as an
@@ -115,6 +117,7 @@ async function seedVerifiableCert(params: {
     status: "ACTIVE",
     accreditationActive,
     accreditationNumber,
+    accreditationValidUntil: params.accreditationValidUntil ?? null,
     createdAt: NOW,
   });
 
@@ -205,7 +208,7 @@ async function seedVerifiableCert(params: {
       verificationToken: token,
       createdBy: userId,
       performedAt: NOW,
-      approvedAt: status === "APPROVED" ? NOW : null,
+      approvedAt: status === "APPROVED" ? (params.approvedAt ?? NOW) : null,
       signatureMetadata: params.signatureMetadata,
       signatureVerdict: params.signatureVerdict,
       supersedesId: params.supersedesId,
@@ -633,5 +636,62 @@ describe("verifyRouter — real DB, public certificate verification", () => {
     }
     expect(body.accreditation.accredited).toBe(false);
     expect(body.accreditation.number).toBeNull();
+  });
+  // The vigência window is judged by the laboratory's calendar day: the API
+  // clock is UTC, so a certificate approved at 23:30 -03:00 on the last day is
+  // already the next UTC day.
+  describe.each([
+    {
+      shape: "lab-day anchored end (23:59:59.999 -03:00)",
+      validUntil: new Date("2026-03-06T02:59:59.999Z"),
+    },
+    {
+      shape: "legacy UTC end (23:59:59.999Z)",
+      validUntil: new Date("2026-03-05T23:59:59.999Z"),
+    },
+  ])("accreditation window ending 2026-03-05, $shape", ({ validUntil }) => {
+    it("REQ-CMP-VIG-002: approved at 23:30 -03:00 on the last day keeps the seal", async () => {
+      const cert = await seedVerifiableCert({
+        orgId: "org-a",
+        token: VALID_UUID_A,
+        jobId: "CAL-A-VIG-IN",
+        accreditationActive: true,
+        accreditationNumber: "9999",
+        methodAccreditedScope: true,
+        accreditationValidUntil: validUntil,
+        approvedAt: new Date("2026-03-05T23:30:00-03:00"),
+      });
+
+      const res = await verifyRouter.request(`/${cert.token}`);
+      expect(res.status).toBe(200);
+      const body: unknown = await res.json();
+      if (!isRecord(body) || !isRecord(body.accreditation)) {
+        throw new Error("unexpected body shape");
+      }
+      expect(body.accreditation.accredited).toBe(true);
+      expect(body.accreditation.number).toBe("9999");
+    });
+
+    it("REQ-CMP-VIG-002: approved at 00:30 -03:00 the next day loses the seal", async () => {
+      const cert = await seedVerifiableCert({
+        orgId: "org-a",
+        token: VALID_UUID_A,
+        jobId: "CAL-A-VIG-OUT",
+        accreditationActive: true,
+        accreditationNumber: "9999",
+        methodAccreditedScope: true,
+        accreditationValidUntil: validUntil,
+        approvedAt: new Date("2026-03-06T00:30:00-03:00"),
+      });
+
+      const res = await verifyRouter.request(`/${cert.token}`);
+      expect(res.status).toBe(200);
+      const body: unknown = await res.json();
+      if (!isRecord(body) || !isRecord(body.accreditation)) {
+        throw new Error("unexpected body shape");
+      }
+      expect(body.accreditation.accredited).toBe(false);
+      expect(body.accreditation.number).toBeNull();
+    });
   });
 });

@@ -59,6 +59,10 @@ import type {
   BillingDocumentListItem,
   ReceiptRow,
 } from '@/features/finance/types'
+import {
+  defaultReceivedAt,
+  receivedAtPayload,
+} from '@/features/finance/date-defaults'
 import type { ReceivablesSearch } from '@/features/finance/receivables/receivables-search'
 
 const PAYMENT_METHODS: readonly FinancialPaymentMethod[] = [
@@ -366,9 +370,7 @@ export function FinanceReceivablesPage({
     useState<FinancialPaymentMethod>('BANK_TRANSFER')
   const [reference, setReference] = useState('')
   const [notes, setNotes] = useState('')
-  const [receivedAt, setReceivedAt] = useState(
-    new Date().toISOString().slice(0, 10),
-  )
+  const [receivedAt, setReceivedAt] = useState(defaultReceivedAt())
 
   const documents = documentsQuery.data?.data ?? []
   const installments = receiptsQuery.data?.data ?? []
@@ -378,7 +380,7 @@ export function FinanceReceivablesPage({
     setPaymentMethod('BANK_TRANSFER')
     setReference('')
     setNotes('')
-    setReceivedAt(new Date().toISOString().slice(0, 10))
+    setReceivedAt(defaultReceivedAt())
   }, [])
 
   const installmentColumns = useMemo(
@@ -388,6 +390,8 @@ export function FinanceReceivablesPage({
 
   function submitReceipt() {
     if (!receiptRow) return
+    const receivedAtInstant = receivedAtPayload(receivedAt)
+    if (!receivedAtInstant) return
     receiveMutation.mutate(
       {
         installmentId: receiptRow.installmentId,
@@ -395,7 +399,7 @@ export function FinanceReceivablesPage({
         paymentMethod,
         reference,
         notes,
-        receivedAt: new Date(receivedAt).toISOString(),
+        receivedAt: receivedAtInstant,
       },
       { onSuccess: () => setReceiptRow(null) },
     )
@@ -604,7 +608,9 @@ export function FinanceReceivablesPage({
             <Button
               type="button"
               onClick={submitReceipt}
-              disabled={receiveMutation.isPending}
+              disabled={
+                receiveMutation.isPending || !receivedAtPayload(receivedAt)
+              }
             >
               {receiveMutation.isPending ? 'Registrando…' : 'Confirmar baixa'}
             </Button>
