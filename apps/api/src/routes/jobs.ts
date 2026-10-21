@@ -1501,7 +1501,7 @@ export const jobsRouter = new Hono<{
         return row;
       });
       if (!updated) {
-        return c.json(await buildJobStatusConflict(id), 409);
+        return domainErrorResponse(c, await jobStatusConflict(id));
       }
 
       // Notify technician if changed
@@ -1712,7 +1712,7 @@ export const jobsRouter = new Hono<{
         return row;
       });
       if (!updated) {
-        return c.json(await buildJobStatusConflict(id), 409);
+        return domainErrorResponse(c, await jobStatusConflict(id));
       }
 
       // Send notification to assigned technician
@@ -1785,7 +1785,7 @@ export const jobsRouter = new Hono<{
       });
       if (!assetSnapshotResult.ok) {
         if ("conflict" in assetSnapshotResult) {
-          return c.json(await buildJobStatusConflict(id), 409);
+          return domainErrorResponse(c, await jobStatusConflict(id));
         }
         return c.json({ error: assetSnapshotResult.error }, 400);
       }
@@ -2154,7 +2154,7 @@ export const jobsRouter = new Hono<{
       });
       if (!assetSnapshotResult.ok) {
         if ("conflict" in assetSnapshotResult) {
-          return c.json(await buildJobStatusConflict(id), 409);
+          return domainErrorResponse(c, await jobStatusConflict(id));
         }
         return c.json({ error: assetSnapshotResult.error }, 400);
       }
