@@ -16,6 +16,7 @@ import { StatusPill } from "@/components/status-pill";
 import { getRequestStatus, type RequestStatus } from "@/lib/status-labels";
 import { formatDate, formatDateOnly } from "@/lib/format";
 import { getApiBaseUrl } from "@/lib/utils";
+import { usePortalQueryKey } from "@/lib/portal-org-context";
 
 export const Route = createFileRoute("/_authenticated/requests/$id")({
   component: RequestDetailPage,
@@ -103,8 +104,9 @@ function formatOnsiteAddress(address: RequestDetail["onsiteAddress"]): string {
 function RequestDetailPage() {
   const { id } = Route.useParams();
 
+  const key = usePortalQueryKey();
   const { data, isLoading, error } = useQuery({
-    queryKey: ["portal-request-detail", id],
+    queryKey: key("portal-request-detail", id),
     queryFn: async (): Promise<RequestDetail> => {
       const response = await fetch(
         `${getApiBaseUrl()}/api/portal/requests/${id}`,

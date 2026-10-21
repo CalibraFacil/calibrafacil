@@ -8,6 +8,7 @@ import {
 } from "@hugeicons/core-free-icons";
 
 import { getApiBaseUrl } from "@/lib/utils";
+import { usePortalQueryKey } from "@/lib/portal-org-context";
 import { formatDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -89,6 +90,7 @@ export function OotAssessmentPanel({ assetId }: { assetId: number }) {
 
 function OotAssessmentForm({ event }: { event: OotEvent }) {
   const queryClient = useQueryClient();
+  const key = usePortalQueryKey();
   const [decision, setDecision] = useState<OotDecision | "">("");
   const [rationale, setRationale] = useState("");
   const [periodStart, setPeriodStart] = useState(
@@ -130,7 +132,7 @@ function OotAssessmentForm({ event }: { event: OotEvent }) {
     },
     onSuccess: () => {
       toast.success("Avaliação registrada");
-      queryClient.invalidateQueries({ queryKey: ["portal-oot-events"] });
+      queryClient.invalidateQueries({ queryKey: key("portal-oot-events") });
     },
     onError: (error: Error) => {
       toast.error(error.message);

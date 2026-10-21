@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { getApiBaseUrl } from "@/lib/utils";
+import { usePortalQueryKey } from "@/lib/portal-org-context";
 
 /**
  * ISO/IEC 17025 §7.10 out-of-tolerance notifications: the lab informed this
@@ -42,11 +43,12 @@ export type OotNotificationsResponse = {
   };
 };
 
-export const OOT_NOTIFICATIONS_QUERY_KEY = ["portal-oot-notifications"];
+const OOT_NOTIFICATIONS_SCOPE = "portal-oot-notifications";
 
 export function useOotNotifications() {
+  const key = usePortalQueryKey();
   return useQuery({
-    queryKey: OOT_NOTIFICATIONS_QUERY_KEY,
+    queryKey: key(OOT_NOTIFICATIONS_SCOPE),
     queryFn: async (): Promise<OotNotificationsResponse> => {
       const response = await fetch(
         `${getApiBaseUrl()}/api/portal/oot-notifications`,
@@ -76,6 +78,7 @@ function extractErrorMessage(body: unknown, fallback: string): string {
 
 /** POST acknowledge (idempotent). `id` is the opaque token from the list. */
 export function useAcknowledgeOotNotification() {
+  const key = usePortalQueryKey();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -96,7 +99,7 @@ export function useAcknowledgeOotNotification() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: OOT_NOTIFICATIONS_QUERY_KEY,
+        queryKey: key(OOT_NOTIFICATIONS_SCOPE),
       });
     },
   });

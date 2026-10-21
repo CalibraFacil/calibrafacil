@@ -113,6 +113,15 @@ imports `client-runtime` or `@calibra-facil/api`. Only business data under
 - `getApiBaseUrl()` (`lib/utils.ts`) resolves the API origin per host
   (localhost:3000 in dev, `VITE_API_URL` when set, else the same origin). Always go through it; never hardcode the origin.
 - Wrap reads in `useQuery` with a stable `queryKey` and a sensible `staleTime`.
+- **Authenticated query keys are scoped to the active client organization.** The
+  API answers for whichever org the session names, and a customer can belong to
+  several, so a key without the org id would serve one org's cache to another.
+  Build every key with `usePortalQueryKey()` (`lib/portal-org-context.tsx`, backed
+  by `portalQueryKey` in `lib/portal-query-keys.ts`) — for `useQuery` and for
+  `invalidateQueries` alike. Only public/pre-auth queries (verification, invites,
+  magic link, branding) and the user-level org list stay unscoped. The org
+  switcher also cancels in-flight portal queries and removes the previous
+  org's entries when it switches.
 - The dashboard is powered by `GET /api/portal/overview` (an aggregation endpoint
   in `apps/api/src/routes/portal.ts`) via `features/dashboard/queries.ts:useOverview`;
   the sidebar badges reuse the same hook so counts cannot drift.

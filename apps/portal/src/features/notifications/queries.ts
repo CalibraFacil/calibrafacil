@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-query";
 
 import { getApiBaseUrl } from "@/lib/utils";
+import { usePortalQueryKey } from "@/lib/portal-org-context";
 import type { PortalNotificationType } from "./lib";
 
 /**
@@ -39,11 +40,9 @@ export type NotificationPreferences = {
   preferences: Partial<Record<PortalNotificationType, NotificationChannels>>;
 };
 
-export const NOTIFICATION_FEED_QUERY_KEY = ["portal-notification-feed"];
-export const NOTIFICATION_COUNT_QUERY_KEY = ["portal-notification-count"];
-export const NOTIFICATION_PREFERENCES_QUERY_KEY = [
-  "portal-notification-preferences",
-];
+const NOTIFICATION_FEED_SCOPE = "portal-notification-feed";
+const NOTIFICATION_COUNT_SCOPE = "portal-notification-count";
+const NOTIFICATION_PREFERENCES_SCOPE = "portal-notification-preferences";
 
 async function throwResponseError(
   response: Response,
@@ -66,8 +65,9 @@ async function throwResponseError(
  * once-a-minute count is plenty for a surface visited a few times a week.
  */
 export function useUnreadNotificationCount() {
+  const key = usePortalQueryKey();
   return useQuery({
-    queryKey: NOTIFICATION_COUNT_QUERY_KEY,
+    queryKey: key(NOTIFICATION_COUNT_SCOPE),
     queryFn: async (): Promise<number> => {
       const response = await fetch(
         `${getApiBaseUrl()}/api/portal/notifications/unread-count`,
@@ -89,8 +89,9 @@ export function useUnreadNotificationCount() {
 
 /** Cursor-paginated feed; fetched only while the popover/page is open. */
 export function useNotificationFeed(enabled: boolean) {
+  const key = usePortalQueryKey();
   return useInfiniteQuery({
-    queryKey: NOTIFICATION_FEED_QUERY_KEY,
+    queryKey: key(NOTIFICATION_FEED_SCOPE),
     queryFn: async ({
       pageParam,
     }: {
@@ -119,11 +120,14 @@ export function useNotificationFeed(enabled: boolean) {
 }
 
 function useInvalidateNotifications() {
+  const key = usePortalQueryKey();
   const queryClient = useQueryClient();
   return async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: NOTIFICATION_FEED_QUERY_KEY }),
-      queryClient.invalidateQueries({ queryKey: NOTIFICATION_COUNT_QUERY_KEY }),
+      queryClient.invalidateQueries({ queryKey: key(NOTIFICATION_FEED_SCOPE) }),
+      queryClient.invalidateQueries({
+        queryKey: key(NOTIFICATION_COUNT_SCOPE),
+      }),
     ]);
   };
 }
@@ -172,8 +176,9 @@ export function useMarkAllNotificationsRead() {
 }
 
 export function useNotificationPreferences() {
+  const key = usePortalQueryKey();
   return useQuery({
-    queryKey: NOTIFICATION_PREFERENCES_QUERY_KEY,
+    queryKey: key(NOTIFICATION_PREFERENCES_SCOPE),
     queryFn: async (): Promise<NotificationPreferences> => {
       const response = await fetch(
         `${getApiBaseUrl()}/api/portal/notification-preferences`,
@@ -200,6 +205,7 @@ export type UpdatePreferencesInput = {
  * the server truth.
  */
 export function useUpdateNotificationPreferences() {
+  const key = usePortalQueryKey();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (
@@ -222,14 +228,14 @@ export function useUpdateNotificationPreferences() {
     },
     onMutate: async (input) => {
       await queryClient.cancelQueries({
-        queryKey: NOTIFICATION_PREFERENCES_QUERY_KEY,
+        queryKey: key(NOTIFICATION_PREFERENCES_SCOPE),
       });
       const previous = queryClient.getQueryData<NotificationPreferences>(
-        NOTIFICATION_PREFERENCES_QUERY_KEY,
+        key(NOTIFICATION_PREFERENCES_SCOPE),
       );
       if (previous) {
         queryClient.setQueryData<NotificationPreferences>(
-          NOTIFICATION_PREFERENCES_QUERY_KEY,
+          key(NOTIFICATION_PREFERENCES_SCOPE),
           {
             digestFrequency: input.digestFrequency ?? previous.digestFrequency,
             emailEnabled: input.emailEnabled ?? previous.emailEnabled,
@@ -242,14 +248,14 @@ export function useUpdateNotificationPreferences() {
     onError: (_error, _input, context) => {
       if (context?.previous) {
         queryClient.setQueryData(
-          NOTIFICATION_PREFERENCES_QUERY_KEY,
+          key(NOTIFICATION_PREFERENCES_SCOPE),
           context.previous,
         );
       }
     },
     onSettled: async () => {
       await queryClient.invalidateQueries({
-        queryKey: NOTIFICATION_PREFERENCES_QUERY_KEY,
+        queryKey: key(NOTIFICATION_PREFERENCES_SCOPE),
       });
     },
   });

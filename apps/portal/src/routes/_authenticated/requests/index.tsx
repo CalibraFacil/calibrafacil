@@ -41,6 +41,7 @@ import {
 import { StatusPill } from "@/components/status-pill";
 import { useOverview } from "@/features/dashboard/queries";
 import { cn, getApiBaseUrl } from "@/lib/utils";
+import { usePortalQueryKey } from "@/lib/portal-org-context";
 import { formatDate, pluralize } from "@/lib/format";
 import {
   REQUEST_STATUS,
@@ -180,8 +181,9 @@ function RequestsPage() {
   const overview = useOverview();
   const requestStats = overview.data?.requests;
 
+  const key = usePortalQueryKey();
   const { data, isLoading, error } = useQuery({
-    queryKey: ["portal-requests", page, limit, deferredSearch, statusFilter],
+    queryKey: key("portal-requests", page, limit, deferredSearch, statusFilter),
     queryFn: async (): Promise<RequestsResponse> => {
       const params = new URLSearchParams({
         page: String(page),

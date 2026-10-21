@@ -37,6 +37,7 @@ import {
   SelectTrigger,
 } from "@/components/ui/select";
 import { getApiBaseUrl } from "@/lib/utils";
+import { usePortalQueryKey } from "@/lib/portal-org-context";
 
 export const Route = createFileRoute("/_authenticated/service-orders/")({
   component: ServiceOrdersPage,
@@ -223,8 +224,9 @@ function ServiceOrdersPage() {
   const [statusFilter, setStatusFilter] = useState<ServiceOrderStatus | "">("");
   const limit = 20;
 
+  const key = usePortalQueryKey();
   const { data, isLoading, error } = useQuery({
-    queryKey: ["portal-service-orders", page, limit, search, statusFilter],
+    queryKey: key("portal-service-orders", page, limit, search, statusFilter),
     queryFn: async (): Promise<ServiceOrdersResponse> => {
       const params = new URLSearchParams({
         page: String(page),

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { getApiBaseUrl } from "@/lib/utils";
+import { usePortalQueryKey } from "@/lib/portal-org-context";
 import type { RequestStatus } from "@/lib/status-labels";
 
 export type OverviewEquipmentItem = {
@@ -78,8 +79,9 @@ async function fetchOverview(): Promise<PortalOverview> {
 }
 
 export function useOverview() {
+  const key = usePortalQueryKey();
   return useQuery({
-    queryKey: ["portal-overview"],
+    queryKey: key("portal-overview"),
     queryFn: fetchOverview,
     staleTime: 60_000,
   });
@@ -100,8 +102,9 @@ type UnitSummaryResponse = {
 
 /** Per-unit calibration breakdown; more than one unit only in group mode. */
 export function useUnitSummary() {
+  const key = usePortalQueryKey();
   return useQuery({
-    queryKey: ["portal-unit-summary"],
+    queryKey: key("portal-unit-summary"),
     queryFn: async (): Promise<UnitSummaryResponse> => {
       const response = await fetch(
         `${getApiBaseUrl()}/api/portal/units/summary`,

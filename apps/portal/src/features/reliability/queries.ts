@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { getApiBaseUrl } from "@/lib/utils";
+import { usePortalQueryKey } from "@/lib/portal-org-context";
 import type {
   AssetDriftSeries,
   FleetAnalytics,
@@ -37,8 +38,9 @@ async function fetchFleetAnalytics(
 
 /** Fleet as-found reliability analytics (EOPR) — lab verdicts, never recomputed. */
 export function useFleetAnalytics(params: FleetAnalyticsParams) {
+  const key = usePortalQueryKey();
   return useQuery({
-    queryKey: ["portal-fleet-analytics", params],
+    queryKey: key("portal-fleet-analytics", params),
     queryFn: () => fetchFleetAnalytics(params),
     staleTime: 60_000,
   });
@@ -46,8 +48,9 @@ export function useFleetAnalytics(params: FleetAnalyticsParams) {
 
 /** Matched-point as-found margin series + OLS drift regression for one asset. */
 export function useDriftSeries(assetId: number) {
+  const key = usePortalQueryKey();
   return useQuery({
-    queryKey: ["portal-drift-series", assetId],
+    queryKey: key("portal-drift-series", assetId),
     queryFn: async (): Promise<AssetDriftSeries> => {
       const response = await fetch(
         `${getApiBaseUrl()}/api/portal/assets/${assetId}/drift-series`,
@@ -67,8 +70,9 @@ export function useDriftSeries(assetId: number) {
  * fetch OPEN and ASSESSED together (the asset panel filters client-side).
  */
 export function useOotEvents(status?: OotEventStatus) {
+  const key = usePortalQueryKey();
   return useQuery({
-    queryKey: ["portal-oot-events", status ?? "all"],
+    queryKey: key("portal-oot-events", status ?? "all"),
     queryFn: async (): Promise<Array<OotEvent>> => {
       const searchParams = new URLSearchParams();
       if (status) searchParams.set("status", status);
