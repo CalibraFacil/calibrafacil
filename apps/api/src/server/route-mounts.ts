@@ -31,6 +31,7 @@ import { methodsRouter } from "../routes/methods";
 import { notificationsRouter } from "../routes/notifications";
 import { nonConformancesRouter } from "../routes/non-conformances";
 import { ootAckRouter } from "../routes/oot-ack";
+import { organizationLifecycleRouter } from "../routes/organization-lifecycle";
 import { organizationMediaRouter } from "../routes/organization-media";
 import { emailDomainsRouter } from "../routes/email-domains";
 import { portalDomainsRouter } from "../routes/portal-domains";
@@ -144,6 +145,7 @@ export function mountApiRoutes(
       .route("/api/units", unitsRouter)
       .route("/api/integrations", integrationsRouter)
       .route("/api/sync", syncRouter)
+      .route("/api/organization", organizationLifecycleRouter)
       .route("/api/organization-media", organizationMediaRouter)
       .route("/api/profile-media", profileMediaRouter)
       .route("/api/public/signup", publicSignupRouter)

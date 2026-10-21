@@ -114,7 +114,7 @@ describe("schema.ts and migration 0116 name the same calendar-date columns (REQ-
     expect(migratedColumns()).toHaveLength(13);
   });
 
-  it("is the last journal entry, with a `when` after the one before it", () => {
+  it("is journaled, with a `when` after the one before it", () => {
     const journal: { entries: Array<{ tag: string; when: number }> } =
       JSON.parse(
         readFileSync(
@@ -122,8 +122,13 @@ describe("schema.ts and migration 0116 name the same calendar-date columns (REQ-
           "utf8",
         ),
       );
-    const last = journal.entries.at(-1);
-    const previous = journal.entries.at(-2);
+    // Later migrations are appended after it, so find it by tag, not by position.
+    const index = journal.entries.findIndex(
+      (entry) => entry.tag === "0116_calendar_date_columns",
+    );
+    expect(index).toBeGreaterThan(0);
+    const last = journal.entries[index];
+    const previous = journal.entries[index - 1];
     expect(last?.tag).toBe("0116_calendar_date_columns");
     expect(last?.when).toBeGreaterThan(previous?.when ?? Infinity);
   });

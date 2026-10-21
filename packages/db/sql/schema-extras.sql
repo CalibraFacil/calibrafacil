@@ -270,3 +270,62 @@ DROP TRIGGER IF EXISTS platform_event_log_append_only ON public.platform_event_l
 CREATE TRIGGER platform_event_log_append_only
   BEFORE UPDATE OR DELETE ON public.platform_event_log
   FOR EACH ROW EXECUTE FUNCTION calibra_append_only('signup_reservation');
+-- Records retention (migration 0117, decision Q16).
+--
+-- A LAB organization is never hard-deleted by accident:
+--   * organization.retention_years is the retention period of the organization's
+--     regulated records, never below 5 years;
+--   * a soft-deleted organization (deleted_at) must be SUSPENDED, so the existing
+--     tenant-lifecycle gate in requireOrganization locks everybody out;
+--   * DELETE of a LAB organization raises unless the transaction opted in with
+--     `SET LOCAL calibra.allow_org_purge = 'on'` (the records purge job, and the
+--     cleanup of a just-created organization that holds no records) or with the
+--     seed escape hatch `calibra.allow_audit_rewrite` of migration 0115. Both
+--     are conventions for application code, not a security boundary.
+--   * calibra_retain_until(org, record_date) is the date a record of that
+--     organization may first be purged: record_date + retention_years.
+ALTER TABLE organization DROP CONSTRAINT IF EXISTS organization_retention_years_min;
+ALTER TABLE organization
+  ADD CONSTRAINT organization_retention_years_min CHECK (retention_years >= 5);
+ALTER TABLE organization DROP CONSTRAINT IF EXISTS organization_soft_delete_suspended;
+ALTER TABLE organization
+  ADD CONSTRAINT organization_soft_delete_suspended
+  CHECK (deleted_at IS NULL OR status = 'SUSPENDED');
+CREATE OR REPLACE FUNCTION calibra_org_purge_allowed()
+RETURNS boolean
+LANGUAGE sql STABLE
+AS $$
+  SELECT calibra_history_rewrite_allowed()
+      OR coalesce(current_setting('calibra.allow_org_purge', true), '') = 'on'
+$$;
+CREATE OR REPLACE FUNCTION calibra_organization_delete_guard()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF coalesce(OLD.type, 'LAB') <> 'LAB' OR calibra_org_purge_allowed() THEN
+    RETURN OLD;
+  END IF;
+
+  RAISE EXCEPTION 'organization % (%): a LAB organization cannot be hard-deleted',
+    OLD.id, OLD.slug
+    USING ERRCODE = 'P0001',
+          TABLE = TG_TABLE_NAME,
+          HINT = 'Soft-delete it (organization.deleted_at); only the records purge job removes the row, after the retention period.';
+END
+$$;
+DROP TRIGGER IF EXISTS organization_lab_delete_guard ON public.organization;
+CREATE TRIGGER organization_lab_delete_guard
+  BEFORE DELETE ON public.organization
+  FOR EACH ROW EXECUTE FUNCTION calibra_organization_delete_guard();
+CREATE OR REPLACE FUNCTION calibra_retain_until(org_id text, record_date timestamp)
+RETURNS timestamp
+LANGUAGE sql STABLE
+AS $$
+  SELECT record_date + make_interval(
+    years => coalesce(
+      (SELECT o.retention_years FROM public.organization o WHERE o.id = org_id),
+      10
+    )
+  )
+$$;

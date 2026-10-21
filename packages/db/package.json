@@ -7,6 +7,7 @@
     "./queue": "./src/queue.ts",
     "./queue-receipts": "./src/queue-receipts.ts",
     "./queue-render-recovery": "./src/queue-render-recovery.ts",
+    "./records-retention": "./src/records-retention.ts",
     "./schema": "./src/schema.ts",
     "./seed-asset-types": "./src/seed-asset-types.ts",
     "./seed-legal-metrology-regulations": "./src/seed-legal-metrology-regulations.ts"
@@ -24,7 +25,8 @@
     "security:migrate-p12": "node ./scripts/migrate-p12-encryption.mjs",
     "db:audit:method-dimensions": "tsx ./scripts/audit-method-dimensions.mjs",
     "lint": "oxlint",
-    "check-types": "node ../../scripts/typecheck.mjs --noEmit"
+    "check-types": "node ../../scripts/typecheck.mjs --noEmit",
+    "retention:inventory": "tsx ./scripts/records-retention-inventory.ts"
   },
   "keywords": [],
   "author": "",

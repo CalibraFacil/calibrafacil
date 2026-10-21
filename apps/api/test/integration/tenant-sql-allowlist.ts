@@ -60,6 +60,31 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     reason:
       "Better Auth deleteUser: preserves the regulated records of the user being deleted across every organization they belonged to (by user_id, then by the rows' own ids).",
   },
+  {
+    category: "auth-session",
+    file: "packages/auth/src/lab-access.ts",
+    tables: ["member", "invitation"],
+    kinds: ["select"],
+    reason:
+      "Sign-in gate: does this e-mail belong to a laboratory (not soft-deleted) or hold a pending invitation to one? Resolved by e-mail before any organization is active.",
+  },
+  {
+    category: "auth-session",
+    file: "packages/auth/src/auth.ts",
+    tables: ["member"],
+    kinds: ["select"],
+    reason:
+      "Session creation picks the user's default active organization (oldest non-deleted membership of the surface) by user_id, before one is active.",
+  },
+  {
+    category: "cron-queue",
+    file: "apps/api/src/lib/records-purge.ts",
+    tables: ["customer"],
+    kinds: ["delete"],
+    sql: /delete from organization o where o\.id = \$1 and o\.type = '[^']*' and not exists \( select 1 from customer c where c\.auth_organization_id = o\.id\)/,
+    reason:
+      "Records purge: after a laboratory is erased, its portal-login CLIENT organizations are removed unless another customer still points at them (a cross-tenant existence check on customer.auth_organization_id).",
+  },
   // -------------------------------------------------------------------------
   // public-token: the unguessable token/secret is the credential; the
   // organization comes from the row the token resolves to.

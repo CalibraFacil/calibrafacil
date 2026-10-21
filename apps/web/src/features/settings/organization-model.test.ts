@@ -10,6 +10,7 @@ import {
   buildOrganizationIdentityPayload,
   buildOrganizationIsoPayload,
   buildDraftAssignmentsForMember,
+  canDeleteOrganization,
   canManageOrganizationSettings,
   createAssignmentDrafts,
   createOrganizationIdentityDraft,
@@ -236,6 +237,13 @@ describe('organization-model', () => {
       accreditationValidFrom: '',
       accreditationValidUntil: '',
     })
+  })
+
+  it('REQ-RET-3: only the owner can delete the organization', () => {
+    expect(canDeleteOrganization('owner')).toBe(true)
+    for (const role of ['admin', 'operator', 'technician', 'member']) {
+      expect(canDeleteOrganization(role), role).toBe(false)
+    }
   })
 
   it('builds unit name drafts from units and local overrides', () => {

@@ -166,6 +166,11 @@ export function canManageOrganizationSettings(role: string) {
   return role === 'owner' || role === 'admin'
 }
 
+/** Closing the laboratory down is the owner's call alone (the API enforces it). */
+export function canDeleteOrganization(role: string) {
+  return role === 'owner'
+}
+
 export function createOrganizationIdentityDraft(
   organization: OrganizationIdentityInput,
 ): OrganizationIdentityDraft {

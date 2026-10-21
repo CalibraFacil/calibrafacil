@@ -25,6 +25,17 @@ export function isUniqueViolation(error: unknown): boolean {
 }
 
 /**
+ * True when Postgres refused a DELETE because a row still references the one
+ * being removed (SQLSTATE 23001 restrict_violation or 23503
+ * foreign_key_violation). A customer that still has regulated records fails
+ * this way (retention, decision Q16).
+ */
+export function isReferencedRowViolation(error: unknown): boolean {
+  const code = extractPgErrorCode(error);
+  return code === "23001" || code === "23503";
+}
+
+/**
  * Walk `error` (and its `.cause` chain) for the `constraint_name` postgres-js
  * sets on a constraint violation. A unique violation on an index reports the
  * index name here.

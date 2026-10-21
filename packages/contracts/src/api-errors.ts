@@ -64,6 +64,14 @@ export const API_ERROR_CODES = [
   "request_not_cancelable",
   "multi_unit_request_not_allowed",
 
+  // Records retention (decision Q16): organization lifecycle and the
+  // customers / API keys that depend on it.
+  "organization_confirmation_mismatch",
+  "organization_already_deleted",
+  "organization_suspended",
+  "organization_deleted",
+  "customer_has_retained_records",
+
   // Webhooks.
   "webhook_not_found",
   "webhook_delivery_not_found",

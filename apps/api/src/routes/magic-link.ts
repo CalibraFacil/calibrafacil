@@ -7,7 +7,7 @@ import {
   user,
   verification,
 } from "@calibra-facil/db/schema";
-import { and, asc, eq, gt } from "drizzle-orm";
+import { and, asc, eq, gt, isNull } from "drizzle-orm";
 
 /**
  * Magic-link preview — NO AUTH (gated by possession of a valid magic-link token).
@@ -81,6 +81,7 @@ export const magicLinkRouter = new Hono().get("/preview", async (c) => {
       and(
         eq(member.userId, account.id),
         eq(organization.type, organizationType),
+        isNull(organization.deletedAt),
       ),
     )
     .orderBy(asc(member.createdAt))
