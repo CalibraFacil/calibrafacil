@@ -4,8 +4,8 @@ type SentryModule = typeof import("@sentry/react");
 
 /**
  * The portal reports only what the router catches: opt-in via
- * `VITE_SENTRY_DSN`, production builds only, no default PII and no session
- * replay (portal users are customers of the laboratory).
+ * `VITE_SENTRY_DSN`, production builds only, no default PII, no session
+ * replay and no performance tracing (portal users are customers of the laboratory).
  */
 function getSentryDsn(): string | null {
   return runtimeEnv("VITE_SENTRY_DSN", import.meta.env.VITE_SENTRY_DSN) || null;
@@ -23,8 +23,6 @@ async function loadAndInitialize(): Promise<SentryModule | null> {
   Sentry.init({
     dsn,
     sendDefaultPii: false,
-    integrations: [Sentry.browserTracingIntegration()],
-    tracesSampleRate: 0.2,
   });
   return Sentry;
 }

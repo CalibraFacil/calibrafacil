@@ -1,22 +1,107 @@
 import { Link, useRouter } from "@tanstack/react-router";
-import { Alert02Icon, Compass01Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 
-import {
-  ACTION_BUTTON_CLASS,
-  Panel,
-  PanelHeader,
-} from "@/components/instrument-panel";
-import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { buttonVariants } from "@/components/ui/button-variants";
+import { ACTION_BUTTON_CLASS, PANEL_CLASS } from "@/components/panel-styles";
+import { cn } from "@/lib/utils";
 import { reportRouteError } from "@/lib/sentry";
+
+/*
+ * These boundaries are wired into the router, so they ship in the initial
+ * bundle graph. They wear the instrument-panel look through its style
+ * constants (`panel-styles`) instead of importing `instrument-panel.tsx`
+ * (which pulls `motion` and the tooltip stack), and draw their two glyphs
+ * inline: the hugeicons barrel is a 47 KiB chunk that must stay out of
+ * first paint.
+ */
+
+function AlertGlyph() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="size-5"
+    >
+      <path d="M12 3.5 2.5 20h19L12 3.5Z" />
+      <path d="M12 10v4.5" />
+      <path d="M12 17.25h.01" />
+    </svg>
+  );
+}
+
+function CompassGlyph() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="size-5"
+    >
+      <circle cx="12" cy="12" r="9.5" />
+      <path d="m15.5 8.5-2 5-5 2 2-5 5-2Z" />
+    </svg>
+  );
+}
 
 function BoundaryShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-[60vh] w-full items-center justify-center p-4">
       {children}
     </div>
+  );
+}
+
+function BoundaryPanel({
+  tone,
+  icon,
+  title,
+  description,
+  children,
+  role,
+}: {
+  tone: "critical" | "neutral";
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+  role?: "alert";
+}) {
+  return (
+    <section
+      role={role}
+      className={cn(PANEL_CLASS, "w-full max-w-md space-y-5 p-6")}
+    >
+      <div className="flex items-start gap-3">
+        <span
+          className={cn(
+            "flex size-10 shrink-0 items-center justify-center rounded-xl",
+            tone === "critical"
+              ? "bg-destructive/10 text-destructive"
+              : "bg-muted/60 text-muted-foreground",
+          )}
+        >
+          {icon}
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-balance text-base font-semibold sm:text-lg">
+            {title}
+          </h2>
+          <p className="mt-1 text-pretty text-sm text-muted-foreground">
+            {description}
+          </p>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2">{children}</div>
+    </section>
   );
 }
 
@@ -29,35 +114,33 @@ export function RouteErrorFallback({ reset }: ErrorComponentProps) {
 
   return (
     <BoundaryShell>
-      <Panel className="w-full max-w-md space-y-5 p-6" role="alert">
-        <div className="flex items-start gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
-            <HugeiconsIcon icon={Alert02Icon} className="size-5" />
-          </span>
-          <PanelHeader
-            title="Algo deu errado ao carregar esta página"
-            description="O erro foi registrado. Tente novamente; se o problema continuar, volte ao início."
-          />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            className={ACTION_BUTTON_CLASS}
-            onClick={() => {
-              reset();
-              void router.invalidate();
-            }}
-          >
-            Tentar novamente
-          </Button>
-          <Button
-            variant="outline"
-            className={ACTION_BUTTON_CLASS}
-            render={<Link to="/" />}
-          >
-            Ir para o início
-          </Button>
-        </div>
-      </Panel>
+      <BoundaryPanel
+        role="alert"
+        tone="critical"
+        icon={<AlertGlyph />}
+        title="Algo deu errado ao carregar esta página"
+        description="O erro foi registrado. Tente novamente; se o problema continuar, volte ao início."
+      >
+        <button
+          type="button"
+          className={cn(buttonVariants(), ACTION_BUTTON_CLASS)}
+          onClick={() => {
+            reset();
+            void router.invalidate();
+          }}
+        >
+          Tentar novamente
+        </button>
+        <Link
+          to="/"
+          className={cn(
+            buttonVariants({ variant: "outline" }),
+            ACTION_BUTTON_CLASS,
+          )}
+        >
+          Ir para o início
+        </Link>
+      </BoundaryPanel>
     </BoundaryShell>
   );
 }
@@ -70,7 +153,10 @@ export function RoutePendingFallback() {
         aria-live="polite"
         className="flex items-center gap-2 text-sm text-muted-foreground"
       >
-        <Spinner aria-hidden role="presentation" className="size-5" />
+        <span
+          aria-hidden="true"
+          className="size-5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground"
+        />
         <span>Carregando…</span>
       </div>
     </BoundaryShell>
@@ -80,20 +166,16 @@ export function RoutePendingFallback() {
 export function RouteNotFoundFallback() {
   return (
     <BoundaryShell>
-      <Panel className="w-full max-w-md space-y-5 p-6">
-        <div className="flex items-start gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted/60 text-muted-foreground">
-            <HugeiconsIcon icon={Compass01Icon} className="size-5" />
-          </span>
-          <PanelHeader
-            title="Página não encontrada"
-            description="O endereço pode ter mudado ou o conteúdo não está mais disponível."
-          />
-        </div>
-        <Button className={ACTION_BUTTON_CLASS} render={<Link to="/" />}>
+      <BoundaryPanel
+        tone="neutral"
+        icon={<CompassGlyph />}
+        title="Página não encontrada"
+        description="O endereço pode ter mudado ou o conteúdo não está mais disponível."
+      >
+        <Link to="/" className={cn(buttonVariants(), ACTION_BUTTON_CLASS)}>
           Ir para o início
-        </Button>
-      </Panel>
+        </Link>
+      </BoundaryPanel>
     </BoundaryShell>
   );
 }

@@ -5,13 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   init: vi.fn(),
   captureException: vi.fn(),
-  browserTracingIntegration: vi.fn(() => ({ name: "tracing" })),
 }));
 
 vi.mock("@sentry/react", () => ({
   init: mocks.init,
   captureException: mocks.captureException,
-  browserTracingIntegration: mocks.browserTracingIntegration,
 }));
 
 async function loadModule() {

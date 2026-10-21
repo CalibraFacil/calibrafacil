@@ -129,6 +129,33 @@ imports `client-runtime` or `@calibra-facil/api`. Only business data under
   endpoints return client-visible projections, and the assets list accepts a
   portal-local `dueStatus` filter without touching the shared list schema.
 
+## Startup, Boundaries and Lists
+
+- **Startup is parallel.** `_authenticated`'s `beforeLoad` calls
+  `loadPortalStartup` (`lib/portal-startup.ts`), which starts the session read,
+  the client-organizations query (`ensureQueryData`, user-level key
+  `["portal-organizations"]`) and the branding prefetch together. The active
+  organization is read off the session, so the only dependent request is
+  `setActive`, and only when the session does not already name the target
+  organization. Do not add a request that waits on another without a real
+  data dependency, and do not move the org switch back into a mount effect.
+- **Branding never blocks.** The root route kicks the branding request first
+  thing and its loader waits at most `BRANDING_FIRST_PAINT_WAIT_MS`; a failed
+  or slow request leaves the CalibraFácil default brand, which swaps to the
+  lab's once it lands.
+- **Boundaries are router defaults** (`components/route-boundaries.tsx`:
+  `defaultErrorComponent`, `defaultPendingComponent`, `defaultNotFoundComponent`,
+  `defaultOnCatch`). Crashes are reported through `lib/sentry.ts`, which is opt-in
+  (`VITE_SENTRY_DSN`, production only, no PII, no replay) and lazy-loads the SDK
+  (`vendor-sentry`, never in the initial graph). The boundaries are in the
+  initial graph, so they use `panel-styles`, `button-variants` and inline glyphs
+  instead of `instrument-panel.tsx`, `ui/button.tsx` or the icon barrel.
+- **Paginated lists keep their rows while the next page loads**: pass
+  `placeholderData: keepPreviousDataInScope(key("portal-<list>"))`
+  (`lib/keep-previous-page.ts`). The scope guard (portal root + active
+  organization + list name) stops one organization's rows from showing under
+  another after a switch, which plain `keepPreviousData` would allow.
+
 ## Opaque Identifiers
 
 Customer-facing URLs should not leak the lab's internal sequence. Service orders

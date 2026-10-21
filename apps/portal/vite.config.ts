@@ -77,6 +77,8 @@ export default defineConfig({
               priority: 50,
             },
             { name: "vendor-motion", test: /\/motion\//, priority: 40 },
+            // Loaded lazily, only when VITE_SENTRY_DSN is set (lib/sentry.ts).
+            { name: "vendor-sentry", test: /\/@sentry\//, priority: 40 },
             // Only chart routes import recharts (lazily, via drift-chart /
             // trend-bar-chart), so it must stay out of the initial graph.
             {

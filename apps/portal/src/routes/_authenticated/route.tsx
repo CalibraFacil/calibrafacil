@@ -49,13 +49,10 @@ async function readPortalSession() {
 
 async function activatePortalOrganization(organizationId: string) {
   const result = await portalOrganization.setActive({ organizationId });
+  // Plain copy on purpose: this runs in the route's beforeLoad, which is part
+  // of the initial bundle graph, and the auth message catalog is not.
   if (result.error) {
-    throw new Error(
-      translateAuthErrorMessage(
-        result.error.message,
-        "Falha ao ativar a organização",
-      ),
-    );
+    throw new Error("Falha ao ativar a organização");
   }
 }
 

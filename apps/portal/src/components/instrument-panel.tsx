@@ -18,16 +18,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { ACTION_BUTTON_CLASS, PANEL_CLASS } from "./panel-styles";
+
+export { ACTION_BUTTON_CLASS, PANEL_CLASS };
 
 type IconType = Parameters<typeof HugeiconsIcon>[0]["icon"];
-
-/** Flat console surface — concentric-radius safe (rounded-2xl outer). */
-export const PANEL_CLASS =
-  "min-w-0 rounded-2xl bg-card text-card-foreground shadow-[0_1px_2px_rgba(15,23,42,0.05),0_16px_40px_rgba(15,23,42,0.05)] ring-1 ring-foreground/10";
-
-/** Tactile press + property-specific transition (never `transition: all`). */
-export const ACTION_BUTTON_CLASS =
-  "min-h-10 active:scale-[0.96] transition-[background-color,color,box-shadow,border-color,transform]";
 
 /** Technical blueprint grid, fading toward the lower-right. */
 const BLUEPRINT_GRID_CLASS =
