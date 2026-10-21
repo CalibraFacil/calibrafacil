@@ -171,6 +171,24 @@ carries `min-w-0 overflow-x-hidden` so the inset frame keeps its rounded corners
   (`shortcutLabel`), never a hardcoded `⌘`.
 - Copy is **pt-BR**.
 
+## Bundle Budget
+
+The router plugin runs with `autoCodeSplitting: true`, so every route's page is
+its own chunk and `index.html` only loads the shell. Keep it that way:
+
+- Heavy, decorative or chart-only code is imported with `React.lazy` where it is
+  used (`SignInShaderPanel`, `DriftChart`, `TrendBarChartBody`) — never from a
+  module the entry or layout imports statically.
+- `vite.config.ts` pins vendor chunks (`vendor-react`, `vendor-ui-utils`,
+  `vendor-motion`, `vendor-charts`). `clsx`/`tailwind-merge`/`cva` have their own
+  higher-priority chunk because recharts imports `clsx` too: without it Rolldown
+  folds them into `vendor-charts` and every page preloads recharts/d3.
+- `pnpm --filter @calibra-facil/portal build:ci` builds and runs
+  `scripts/check-bundle-size.mjs`, which measures the **initial graph** (entry +
+  every `modulepreload` in `index.html`, raw and gzip), fails if
+  `vendor-charts`/`vendor-motion`/the shader panel appear in it, and enforces
+  budgets just above the current size. Raise a budget only with a reason.
+
 ## Scope
 
 The portal is **cloud-only** — it is not part of the desktop/offline split, so
