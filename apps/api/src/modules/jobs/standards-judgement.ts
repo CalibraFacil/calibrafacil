@@ -3,75 +3,130 @@ import {
   referenceStandard,
   type StandardSnapshot,
 } from "@calibra-facil/db/schema";
-import { assessStandardValidity } from "@calibra-facil/schemas";
-import { and, eq, inArray } from "drizzle-orm";
+import {
+  judgeExecutionStandards,
+  type JudgedStandardFacts,
+  type StandardsJudgement,
+  type StandardsJudgementMode,
+  type StandardsJudgementRefusalCode,
+} from "@calibra-facil/schemas";
+import { and, eq, inArray, type SQL } from "drizzle-orm";
+import type { ApiErrorCode } from "@calibra-facil/contracts";
+import { invalid } from "../../lib/domain-errors";
 
 /**
- * Submit-time judgement of the standards a job will be recorded with (Q12).
- * Every standard of the FINAL snapshot is read from the standards table and
- * judged on the laboratory day of the FINAL performed date:
- *  - expired on that day: refused;
- *  - valid on that day but expired as of today (the record depends on being
- *    back-dated): refused unless a written justification came with it, even
- *    when the backdate is within the usual 7 days.
+ * The cloud's runtime of the one standards judgement (Q12). This file is only a
+ * thin fact loader (Drizzle) and the mapping of the refusal codes to the cloud's
+ * error surfaces; every rule lives in `judgeExecutionStandards`
+ * (`packages/schemas`), shared with the desktop sync apply and the offline
+ * local database.
  */
-export async function judgeSnapshotStandards(input: {
-  standardsSnapshot: StandardSnapshot[] | null;
-  organizationId: string;
-  performedAt: Date;
-  now: Date;
-  backdateReason: string | undefined;
-}): Promise<
-  | { ok: true; standardIds: number[]; validOnlyBecauseBackdated: string[] }
-  | { ok: false; error: string }
-> {
-  const standardIds = [
-    ...new Set((input.standardsSnapshot ?? []).map((standard) => standard.id)),
-  ];
-  if (standardIds.length === 0) {
-    return { ok: true, standardIds: [], validOnlyBecauseBackdated: [] };
-  }
 
+export type StandardsRefusal = Extract<StandardsJudgement, { ok: false }>;
+
+/** The standards a stored snapshot names, once each, in order. */
+export function snapshotStandardIds(
+  snapshot: StandardSnapshot[] | null | undefined,
+): number[] {
+  return [...new Set((snapshot ?? []).map((standard) => standard.id))];
+}
+
+/**
+ * The standards as the standards table has them, for the pure judgement.
+ * Tenant-scoped in SQL: only rows of the organization (and, when given, the
+ * caller's unit scope) are read, so anything else is simply "not found".
+ */
+export async function loadStandardFacts(input: {
+  standardIds: readonly number[];
+  organizationId: string;
+  /** The caller's unit scope, as `buildUnitScopeCondition` builds it. */
+  unitScope?: SQL;
+}): Promise<JudgedStandardFacts[]> {
+  if (input.standardIds.length === 0) return [];
   const rows = await db
     .select({
       id: referenceStandard.id,
       name: referenceStandard.name,
+      status: referenceStandard.status,
+      deletedAt: referenceStandard.deletedAt,
       nextCalibrationDate: referenceStandard.nextCalibrationDate,
     })
     .from(referenceStandard)
     .where(
       and(
-        inArray(referenceStandard.id, standardIds),
+        inArray(referenceStandard.id, [...input.standardIds]),
         eq(referenceStandard.organizationId, input.organizationId),
+        input.unitScope,
       ),
     );
-  if (rows.length !== standardIds.length) {
-    const found = new Set(rows.map((row) => row.id));
-    return {
-      ok: false,
-      error: `Padroes nao encontrados ou nao pertencem a organizacao: ${standardIds.filter((id) => !found.has(id)).join(", ")}`,
-    };
-  }
+  return rows.map((row) => ({ ...row, inScope: true }));
+}
 
-  const assessment = assessStandardValidity(rows, input.performedAt, input.now);
-  if (assessment.expiredAtPerformed.length > 0) {
-    return {
-      ok: false,
-      error: `Os seguintes padroes estao com certificado vencido: ${assessment.expiredAtPerformed.join(", ")}`,
-    };
+/**
+ * Judge the standards of a job at the cloud: load them from the standards
+ * table (organization-scoped) and call the one judgement.
+ */
+export async function judgeSnapshotStandards(input: {
+  standardIds: readonly number[];
+  organizationId: string;
+  unitScope?: SQL;
+  performedAt: Date | null;
+  now: Date;
+  backdateReason?: string | null;
+  mode: StandardsJudgementMode;
+  requireBackdateReason?: boolean;
+}): Promise<StandardsJudgement> {
+  const facts = await loadStandardFacts(input);
+  return judgeExecutionStandards(
+    {
+      standardIds: input.standardIds,
+      performedAt: input.performedAt,
+      today: input.now,
+      backdateReason: input.backdateReason,
+      mode: input.mode,
+      requireBackdateReason: input.requireBackdateReason,
+    },
+    facts,
+  );
+}
+
+/** The pt-BR text of a refusal (names for standards in scope, ids otherwise). */
+export function standardsRefusalMessage(refusal: StandardsRefusal): string {
+  const names = refusal.standardNames.join(", ");
+  switch (refusal.code) {
+    case "standard_not_found":
+      return `Padroes nao encontrados ou nao pertencem a organizacao: ${refusal.standardIds.join(", ")}`;
+    case "standard_deleted":
+      return `Os seguintes padroes foram excluidos: ${names}`;
+    case "standard_inactive":
+      return `Os seguintes padroes nao estao ativos: ${names}`;
+    case "standard_expired":
+      return `Os seguintes padroes estao com certificado vencido: ${names}`;
+    case "standard_backdate_reason_required":
+      return `O certificado de ${names} venceu apos a data de execucao; e necessario justificar o lancamento retroativo (motivo do registro retroativo)`;
   }
-  if (
-    assessment.validOnlyBecauseBackdated.length > 0 &&
-    !input.backdateReason
-  ) {
-    return {
-      ok: false,
-      error: `O certificado de ${assessment.validOnlyBecauseBackdated.join(", ")} venceu apos a data de execucao; e necessario justificar o lancamento retroativo (motivo do registro retroativo)`,
-    };
-  }
-  return {
-    ok: true,
-    standardIds,
-    validOnlyBecauseBackdated: assessment.validOnlyBecauseBackdated,
-  };
+}
+
+const REFUSAL_API_CODES = {
+  standard_not_found: "standard_not_found",
+  standard_deleted: "standard_deleted",
+  standard_inactive: "standard_inactive",
+  standard_expired: "standard_expired",
+  standard_backdate_reason_required: "standard_backdate_reason_required",
+} satisfies Record<StandardsJudgementRefusalCode, ApiErrorCode>;
+
+/** The registry code (`API_ERROR_CODES`) of a refusal, cloud and public API alike. */
+export function standardsRefusalApiCode(
+  refusal: StandardsRefusal,
+): ApiErrorCode {
+  return REFUSAL_API_CODES[refusal.code];
+}
+
+/** The cloud's error for a refusal: 400 with the stable code, as before. */
+export function standardsRefusalDomainError(refusal: StandardsRefusal) {
+  return invalid(
+    standardsRefusalApiCode(refusal),
+    standardsRefusalMessage(refusal),
+    { details: { standardIds: refusal.standardIds } },
+  );
 }

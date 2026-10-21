@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
 import {
-  assessStandardValidity,
-  isStandardValidOn,
+  judgeExecutionStandards,
   resolveExecutionPerformedAt,
+  type JudgedStandardFacts,
+  type StandardsJudgement,
+  type StandardsJudgementMode,
 } from "@calibra-facil/schemas";
 import type { LocalDatabase } from "./database";
 import { getLocalEffectiveEnvironmentalLimits } from "./environmental-limits";
@@ -274,16 +276,9 @@ export function saveLocalJobExecution(
   const standardsJudgement =
     nextStatus === "REVIEW"
       ? judgeSubmittedLocalStandards(database, {
-          standardsSnapshot: standardsSnapshot
-            ? standardsSnapshot.map((standard) => ({
-                id: standard.id,
-                name: standard.name,
-                nextCalibrationDate:
-                  typeof standard.nextCalibrationDate === "string"
-                    ? standard.nextCalibrationDate
-                    : null,
-              }))
-            : parseSnapshotStandardRefs(existing.standards_snapshot_json),
+          standardIds: standardsSnapshot
+            ? standardsSnapshot.map((standard) => standard.id)
+            : parseSnapshotStandardIds(existing.standards_snapshot_json),
           performedAt: executionTime.performedAt
             ? new Date(executionTime.performedAt)
             : new Date(),
@@ -635,14 +630,8 @@ export function localStandardsPerformedAt(
   return now;
 }
 
-type StandardRef = {
-  id: number;
-  name: string;
-  nextCalibrationDate: string | null;
-};
-
-/** The standards (id, name, validity) a saved snapshot JSON refers to. */
-function parseSnapshotStandardRefs(snapshotJson: string | null): StandardRef[] {
+/** The ids of the standards a saved snapshot JSON refers to. */
+function parseSnapshotStandardIds(snapshotJson: string | null): number[] {
   if (!snapshotJson) return [];
   let parsed: unknown;
   try {
@@ -651,45 +640,25 @@ function parseSnapshotStandardRefs(snapshotJson: string | null): StandardRef[] {
     return [];
   }
   if (!Array.isArray(parsed)) return [];
-  const refs: StandardRef[] = [];
+  const ids: number[] = [];
   for (const entry of parsed) {
     if (!isJsonObject(entry)) continue;
     const id = getNumber(entry, "id");
-    if (id === null) continue;
-    refs.push({
-      id,
-      name: getString(entry, "name") ?? String(id),
-      nextCalibrationDate: getString(entry, "nextCalibrationDate") ?? null,
-    });
+    if (id !== null) ids.push(id);
   }
-  return refs;
+  return ids;
 }
 
 function noStandardsJudgement(): { validOnlyBecauseBackdated: string[] } {
   return { validOnlyBecauseBackdated: [] };
 }
 
-/**
- * Submit-time judgement of the standards a job is recorded with (Q12), offline.
- * Mirrors the cloud: each standard is read from the local standards table (the
- * saved snapshot only supplies the ids, and a validity if the row is gone) and
- * judged on the laboratory day of the final performed date. Expired then: refused.
- * Valid then but expired today: refused unless a written reason came with it.
- */
-function judgeSubmittedLocalStandards(
+function loadLocalStandardRows(
   database: LocalDatabase,
-  input: {
-    standardsSnapshot: StandardRef[];
-    performedAt: Date;
-    backdateReason: string | null;
-  },
-): { validOnlyBecauseBackdated: string[] } {
-  const ids = [
-    ...new Set(input.standardsSnapshot.map((standard) => standard.id)),
-  ];
-  if (ids.length === 0) return { validOnlyBecauseBackdated: [] };
-
-  const rows = database
+  ids: readonly number[],
+): LocalReferenceStandardRow[] {
+  if (ids.length === 0) return [];
+  return database
     .prepare<number[], LocalReferenceStandardRow>(
       `
 SELECT *
@@ -698,44 +667,107 @@ WHERE remote_id IN (${ids.map(() => "?").join(",")})
 `,
     )
     .all(...ids);
-  const rowsByRemoteId = new Map(rows.map((row) => [row.remote_id, row]));
-  const savedById = new Map(
-    input.standardsSnapshot.map((standard) => [standard.id, standard]),
-  );
+}
 
-  const judged = ids.map((id) => {
-    const row = rowsByRemoteId.get(id);
-    const saved = savedById.get(id);
-    const rowSnapshot = row ? parseJsonRecord(row.snapshot_json) : {};
-    return {
-      name: row?.name ?? saved?.name ?? String(id),
+/**
+ * The cached standards as facts for the one judgement. The cache only holds
+ * the laboratory's own standards, so a row is always in scope; the offline
+ * table keeps no deletion instant, only the `deleted` sync state.
+ */
+function localStandardFacts(
+  rows: readonly LocalReferenceStandardRow[],
+): JudgedStandardFacts[] {
+  const facts: JudgedStandardFacts[] = [];
+  for (const row of rows) {
+    if (row.remote_id === null) continue;
+    facts.push({
+      id: row.remote_id,
+      name: row.name,
+      status: row.status,
+      deletedAt: row.sync_state === "deleted" ? "deleted" : null,
       nextCalibrationDate:
-        getString(rowSnapshot, "nextCalibrationDate") ??
-        row?.next_calibration_date ??
-        saved?.nextCalibrationDate ??
-        "",
-    };
-  });
+        getString(parseJsonRecord(row.snapshot_json), "nextCalibrationDate") ??
+        row.next_calibration_date,
+      inScope: true,
+    });
+  }
+  return facts;
+}
 
-  const assessment = assessStandardValidity(
-    judged,
-    input.performedAt,
-    new Date(),
+/**
+ * The offline runtime of the one standards judgement (Q12, REQ-SJ-3): load the
+ * cached standards and call `judgeExecutionStandards`, which the cloud, the
+ * public API and the desktop sync apply share. Exported for the parity test;
+ * the offline paths use it through `judgeSubmittedLocalStandards` (a submit)
+ * and `buildLocalStandardsSnapshot` (a draft save).
+ */
+export function judgeLocalStandards(
+  database: LocalDatabase,
+  input: {
+    standardIds: readonly number[];
+    performedAt: Date | null;
+    today?: Date;
+    backdateReason?: string | null;
+    mode?: StandardsJudgementMode;
+    requireBackdateReason?: boolean;
+  },
+): StandardsJudgement {
+  return judgeExecutionStandards(
+    {
+      standardIds: input.standardIds,
+      performedAt: input.performedAt,
+      today: input.today ?? new Date(),
+      backdateReason: input.backdateReason,
+      mode: input.mode ?? "desktop_explicit",
+      requireBackdateReason: input.requireBackdateReason,
+    },
+    localStandardFacts(loadLocalStandardRows(database, input.standardIds)),
   );
-  if (assessment.expiredAtPerformed.length > 0) {
-    throw new Error(
-      `Padrao ${assessment.expiredAtPerformed.join(", ")} esta com certificado vencido`,
-    );
+}
+
+/** The pt-BR error the offline paths throw for a refused judgement. */
+function localStandardsRefusalError(
+  refusal: Extract<StandardsJudgement, { ok: false }>,
+): Error {
+  const names = refusal.standardNames.join(", ");
+  switch (refusal.code) {
+    case "standard_not_found":
+      return new Error(
+        `Padrao ${refusal.standardIds.join(", ")} nao encontrado no cache local`,
+      );
+    case "standard_deleted":
+      return new Error(`Padrao ${names} nao encontrado no cache local`);
+    case "standard_inactive":
+      return new Error(`Padrao ${names} nao esta ativo`);
+    case "standard_expired":
+      return new Error(`Padrao ${names} esta com certificado vencido`);
+    case "standard_backdate_reason_required":
+      return new Error(
+        `O certificado de ${names} venceu apos a data de execucao; e necessario justificar o lancamento retroativo (motivo do registro retroativo)`,
+      );
   }
-  if (
-    assessment.validOnlyBecauseBackdated.length > 0 &&
-    !input.backdateReason
-  ) {
-    throw new Error(
-      `O certificado de ${assessment.validOnlyBecauseBackdated.join(", ")} venceu apos a data de execucao; e necessario justificar o lancamento retroativo (motivo do registro retroativo)`,
-    );
-  }
-  return { validOnlyBecauseBackdated: assessment.validOnlyBecauseBackdated };
+}
+
+/**
+ * Submit-time judgement of the standards a job is recorded with (Q12), offline:
+ * every standard of the FINAL snapshot, judged on the laboratory day of the
+ * final performed date by the same function the cloud uses.
+ */
+function judgeSubmittedLocalStandards(
+  database: LocalDatabase,
+  input: {
+    standardIds: readonly number[];
+    performedAt: Date;
+    backdateReason: string | null;
+  },
+): { validOnlyBecauseBackdated: string[] } {
+  const judgement = judgeLocalStandards(database, input);
+  if (!judgement.ok) throw localStandardsRefusalError(judgement);
+  return {
+    validOnlyBecauseBackdated: judgement.validOnlyBecauseBackdated.map(
+      (standard) => standard.name,
+    ),
+  };
 }
 
 export function buildLocalStandardsSnapshot(
@@ -757,40 +789,29 @@ export function buildLocalStandardsSnapshot(
   );
   if (standardIds.length === 0) return [];
 
-  const rows = database
-    .prepare<number[], LocalReferenceStandardRow>(
-      `
-SELECT *
-FROM reference_standards
-WHERE remote_id IN (${standardIds.map(() => "?").join(",")})
-`,
-    )
-    .all(...standardIds);
+  const rows = loadLocalStandardRows(database, standardIds);
   const rowsByRemoteId = new Map(rows.map((row) => [row.remote_id, row]));
   const compositionStandardIdSet = new Set(compositionStandardIds);
 
+  // A draft save judges with the same function as a submit, at the day the work
+  // is recorded as performed; only the back-date reason waits for the submit.
+  const judgement = judgeLocalStandards(database, {
+    standardIds,
+    performedAt,
+    mode: "desktop_explicit",
+    requireBackdateReason: false,
+  });
+  if (!judgement.ok) throw localStandardsRefusalError(judgement);
+
   return standardIds.map((standardId) => {
     const row = rowsByRemoteId.get(standardId);
-    if (!row || row.sync_state === "deleted") {
+    if (!row) {
       throw new Error(`Padrao ${standardId} nao encontrado no cache local`);
-    }
-
-    if (row.status !== "ACTIVE") {
-      throw new Error(`Padrao ${row.name} nao esta ativo`);
     }
 
     const snapshot = parseJsonRecord(row.snapshot_json);
     const nextCalibrationDate =
       getString(snapshot, "nextCalibrationDate") ?? row.next_calibration_date;
-
-    // Valid THROUGH the certificate day, judged on the laboratory day the work
-    // was performed (the cloud's rule, `isStandardValidOn`).
-    if (
-      !nextCalibrationDate ||
-      !isStandardValidOn(nextCalibrationDate, performedAt)
-    ) {
-      throw new Error(`Padrao ${row.name} esta com certificado vencido`);
-    }
 
     const certifiedValues = parseSnapshotCertifiedValues(
       snapshot.certifiedValues,

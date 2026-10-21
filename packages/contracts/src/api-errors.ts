@@ -42,6 +42,10 @@ export const API_ERROR_CODES = [
   "environmental_justification_required",
   "scope_violation",
   "standard_expired",
+  "standard_not_found",
+  "standard_deleted",
+  "standard_inactive",
+  "standard_backdate_reason_required",
   "certificate_not_found",
   "certificate_not_ready",
 

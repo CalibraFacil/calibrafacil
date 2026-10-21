@@ -257,3 +257,61 @@ describe("offline standard validity at the performed date (REQ-CAL-004)", () => 
     threeDaysAfter.close();
   });
 });
+
+// REQ-SJ-2: the submit re-judges EVERY standard of the final snapshot with the
+// one judgement, so a standard that was deactivated, or deleted by a pull, after
+// the draft named it is refused offline exactly as the cloud refuses it.
+describe("offline submit re-judges the saved snapshot with the one judgement (REQ-SJ-2)", () => {
+  const FAR = new Date(Date.now() + 365 * DAY_MS).toISOString().slice(0, 10);
+
+  function draftThenChange(change: string) {
+    const database = createDatabase(FAR);
+    saveLocalJobExecution(database, baseInput);
+    database.prepare(change).run();
+    return database;
+  }
+
+  const submitWithoutNaming = (database: Database) =>
+    saveLocalJobExecution(database, {
+      routeId: "789",
+      actorUserId: "user-1",
+      deviceId: "device-1",
+      data: { reading: 1 },
+      requireResults: true,
+    });
+
+  it("REQ-SJ-2: refuses a standard deactivated after the draft", () => {
+    const database = draftThenChange(
+      "UPDATE reference_standards SET status = 'INACTIVE' WHERE remote_id = 999",
+    );
+
+    expect(() => submitWithoutNaming(database)).toThrow(/nao esta ativo/);
+    expect(
+      database
+        .prepare<
+          [],
+          { status: string }
+        >("SELECT status FROM calibration_jobs WHERE id = 'job:789'")
+        .get()?.status,
+    ).toBe("IN_PROGRESS");
+    database.close();
+  });
+
+  it("REQ-SJ-2: refuses a standard deleted by a pull after the draft", () => {
+    const database = draftThenChange(
+      "UPDATE reference_standards SET sync_state = 'deleted' WHERE remote_id = 999",
+    );
+
+    expect(() => submitWithoutNaming(database)).toThrow(
+      /nao encontrado no cache local/,
+    );
+    database.close();
+  });
+
+  it("REQ-SJ-2: still accepts a standard that stayed ACTIVE and valid", () => {
+    const database = draftThenChange("SELECT 1");
+
+    expect(submitWithoutNaming(database)?.status).toBe("REVIEW");
+    database.close();
+  });
+});
