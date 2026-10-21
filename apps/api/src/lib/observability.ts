@@ -1,5 +1,5 @@
 import {
-  createErrorReporter,
+  createLogErrorReporter,
   createLogger,
   type ErrorReporter,
   type StructuredLogger,
@@ -7,21 +7,17 @@ import {
 
 // Server-side error tracking for the API surfaces: request
 // handlers (app.onError), the cron dispatcher and the Vercel Queue consumer
-// all report through this singleton. No SENTRY_DSN -> no-op, zero overhead —
-// the reporter is a reliability net, never a dependency.
+// all report through this singleton, which writes one redacted JSON line to
+// stderr per error (see packages/shared/src/telemetry/error-reporter.ts).
 
 let reporter: ErrorReporter | null = null;
 
 export function getErrorReporter(): ErrorReporter {
-  reporter ??= createErrorReporter({
-    dsn: process.env.SENTRY_DSN,
+  reporter ??= createLogErrorReporter({
+    service: "api",
     environment:
-      process.env.SENTRY_ENVIRONMENT ??
-      process.env.VERCEL_ENV ??
-      process.env.NODE_ENV ??
-      "development",
+      process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "development",
     release: process.env.VERCEL_GIT_COMMIT_SHA,
-    serverName: process.env.VERCEL_REGION,
   });
   return reporter;
 }

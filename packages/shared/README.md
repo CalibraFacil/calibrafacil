@@ -27,7 +27,7 @@ Node, the browser, the Electron renderer).
 | `signup-email-policy`                             | Corporate-domain rule for the self-service sign-up              |
 | `domain-utils`                                    | Hostname and origin normalization                               |
 | `public-urls`, `storage-keys`, `storage-endpoint` | Public URL builders and the object-storage layout               |
-| `telemetry`                                       | Logger and a dependency-free Sentry error reporter              |
+| `telemetry`                                       | Structured logger and a log-backed error reporter               |
 
 ## Exports
 

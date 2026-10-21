@@ -74,7 +74,6 @@ The app runs at `https://localhost:5173` (HTTPS required for auth cookies).
 - Tailwind CSS 4
 - Shadcn/ui components
 - Recharts (dashboards)
-- Sentry (error tracking)
 
 ## Scripts
 
@@ -129,7 +128,6 @@ src/
   keys directly from new code.
 - Sidebar, cloud-only behavior, and route access metadata should be added to
   `src/app/router/route-meta.ts` instead of duplicated in navigation components.
-- Sentry PII and replay are opt-in through `src/app/config/runtime.ts`.
 
 See
 [`../../docs/architecture/web-frontend-architecture.md`](../../docs/architecture/web-frontend-architecture.md)

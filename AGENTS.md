@@ -78,8 +78,9 @@ covers the big-picture architecture; `CONTRIBUTING.md` covers the contribution f
   `apps/web/src/app/router/route-meta.ts` where possible.
 - Forms for regulated workflows should be schema-first. Prefer `@calibra-facil/schemas` for
   domain payloads and feature `forms.ts` files for UI-to-payload parsing.
-- Sentry PII and session replay must remain opt-in through runtime config. Do not enable
-  replay or default PII collection by default.
+- No third-party error tracking, replay or default PII collection. Server errors are written
+  as one redacted JSON line on stderr (`createLogErrorReporter`); browser route errors go to the
+  console. Keep secrets, bodies, headers and cookies out of those lines.
 
 ## Guardrails for Regulated Code
 

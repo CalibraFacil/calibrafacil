@@ -90,7 +90,7 @@ every domain failure carries a stable `code`.
   `forbidden`, `notFound`, `conflict`, `unprocessable` in
   `apps/api/src/lib/domain-errors.ts`); **never `c.json({ error })` for a domain
   failure**. `applyErrorHandling` maps the thrown error once to
-  `{ error, code, details? }` with its status; it is not reported to Sentry
+  `{ error, code, details? }` with its status; it is not reported as an error
   unless the status is 5xx. Where a handler runs without the app-level error
   hook (a bare sub-router in a test) or must `return`, use
   `return domainErrorResponse(c, error)` — same body. `error` stays the pt-BR

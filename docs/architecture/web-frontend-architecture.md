@@ -126,8 +126,6 @@ This includes:
 - cloud/local API defaults
 - desktop local API fallback
 - dashboard localStorage keys
-- Sentry DSN, PII, and replay flags
-- route prefixes eligible for replay when replay is explicitly enabled
 
 Dashboard organization and unit storage is centralized in
 `apps/web/src/features/dashboard/dashboard-scope-storage.ts`. New code should not
@@ -194,20 +192,15 @@ Preserve behavior for:
 
 ## Telemetry and Privacy
 
-Sentry may initialize in production web runtime, but privacy-sensitive behavior
-must be explicit:
-
-- `sendDefaultPii` defaults to `false`.
-- session replay defaults to disabled.
-- replay only runs when the explicit env flag is enabled and the route prefix is
-  eligible.
-- desktop runtime must not initialize browser Sentry.
+The web runtime has no third-party telemetry: no error-tracking SDK, no session
+replay, no default PII collection. Errors stay in the browser console (and, on
+the server, in structured logs).
 
 Router boundaries (`app/router/route-boundaries.tsx`: default error, pending and
 not-found components) report render and loader crashes through `defaultOnCatch`
 -> `reportClientError` (`lib/report-client-error.ts`), a structured
-`console.error` line with no third-party SDK. Sentry initialization stays in
-`router.tsx`, unchanged.
+`console.error` line with no third-party SDK.
+
 Paginated list query options pass `placeholderData:
 keepPreviousDataInScope([...])` (`lib/keep-previous-page.ts`) so paging never
 flashes the skeleton, scoped so rows never carry across an organization switch.

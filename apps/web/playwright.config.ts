@@ -27,7 +27,6 @@ export default defineConfig({
           VITE_API_URL: process.env.VITE_API_URL ?? 'http://127.0.0.1:3000',
           VITE_PORTAL_APP_URL:
             process.env.VITE_PORTAL_APP_URL ?? 'http://127.0.0.1:5174',
-          VITE_SENTRY_DSN: '',
         },
       }
     : undefined,

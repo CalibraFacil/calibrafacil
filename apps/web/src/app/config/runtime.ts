@@ -7,12 +7,6 @@ const DEFAULT_LOCAL_API_URL = 'http://localhost:3000'
 const DEFAULT_DESKTOP_LOCAL_API_URL = 'http://127.0.0.1:4317'
 const DEFAULT_DEVELOPMENT_PORTAL_PORT = '5174'
 
-const SENTRY_REPLAY_ENABLED_PREFIXES = [
-  '/dashboard',
-  '/sign-in',
-  '/accept-invitation',
-] as const
-
 function isLocalHostname(hostname: string) {
   return (
     hostname === 'localhost' ||
@@ -53,31 +47,4 @@ export function getPortalBaseUrl() {
   // Convention when VITE_PORTAL_APP_URL is unset: the portal lives on the
   // "portal." subdomain of the lab app's domain.
   return `${protocol}//portal.${hostname.replace(/^www\./, '')}`
-}
-
-export function getSentryDsn() {
-  return runtimeEnv('VITE_SENTRY_DSN', import.meta.env.VITE_SENTRY_DSN) || null
-}
-
-export function shouldEnableTelemetry() {
-  return import.meta.env.PROD
-}
-
-export function shouldSendSentryPii() {
-  return (
-    runtimeEnv(
-      'VITE_SENTRY_SEND_DEFAULT_PII',
-      import.meta.env.VITE_SENTRY_SEND_DEFAULT_PII,
-    ) === 'true'
-  )
-}
-
-export function shouldEnableSentryReplay(pathname: string) {
-  return (
-    runtimeEnv(
-      'VITE_SENTRY_REPLAY_ENABLED',
-      import.meta.env.VITE_SENTRY_REPLAY_ENABLED,
-    ) === 'true' &&
-    SENTRY_REPLAY_ENABLED_PREFIXES.some((prefix) => pathname.startsWith(prefix))
-  )
 }

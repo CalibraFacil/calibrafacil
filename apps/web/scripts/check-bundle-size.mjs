@@ -35,7 +35,7 @@ const initialJsGzipBudget = Number(
   process.env.WEB_BUNDLE_BUDGET_INITIAL_JS_GZIP ?? 585_000,
 )
 // Chunks that must only be fetched by the routes that use them.
-const forbiddenInitialChunks = ['vendor-charts', 'vendor-sentry']
+const forbiddenInitialChunks = ['vendor-charts']
 
 function fail(message) {
   console.error(`\n[bundle-budget] ${message}`)

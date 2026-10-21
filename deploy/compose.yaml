@@ -56,7 +56,6 @@ x-app-env: &app-env
   SMTP_USER: ${SMTP_USER:-}
   SMTP_PASSWORD: ${SMTP_PASSWORD:-}
   RESEND_API_KEY: ${RESEND_API_KEY:-}
-  SENTRY_DSN: ${SENTRY_DSN:-}
 
 services:
   caddy:

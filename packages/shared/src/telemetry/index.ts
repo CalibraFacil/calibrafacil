@@ -1,12 +1,11 @@
 export {
-  buildErrorEvent,
-  createErrorReporter,
-  parseSentryDsn,
-  parseStackFrames,
+  buildErrorLogRecord,
+  createLogErrorReporter,
   sanitizeErrorMessage,
+  sanitizeErrorStack,
+  type ErrorLogRecord,
   type ErrorReporter,
-  type ErrorReporterOptions,
-  type SentryEvent,
+  type LogErrorReporterOptions,
 } from "./error-reporter";
 export {
   createLogger,

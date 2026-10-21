@@ -1,63 +1,50 @@
-// Dependency-free Sentry error reporter for the server surfaces.
+// Server-side error reporter backed by structured logging.
 //
-// Why not @sentry/node or @sentry/bun: the deployed API/cron/queue functions
-// run on Vercel's UNPINNABLE managed Bun ("1.x"), whose rolls have boot-crashed
-// prod twice; @sentry/node's OpenTelemetry auto-instrumentation is unsupported
-// under Bun, and @sentry/bun would break the Node-based document-worker
-// container and the Node test tier. This reporter is ~200 lines of plain
-// `fetch` against Sentry's stable envelope API — identical behavior on every
-// runtime, zero boot risk in the esbuild bundle, trivially unit-testable. If
-// the runtime situation stabilizes, it can be swapped for the official SDK
-// behind the same ErrorReporter interface.
+// Every captured exception becomes ONE JSON line on stderr, so whatever
+// collects the container/process logs (journald, Docker log driver, Loki, ...)
+// can index and alert on it. There is no network transport and no third-party
+// service: the product is self-hosted and errors stay in the operator's logs.
 //
 // Design rules:
 //   - capture NEVER throws and never alters control flow;
-//   - payloads are REDACTED: structural tags, error type, sanitized message,
-//     stack frames — never request bodies, headers, cookies or env values;
-//   - transport is bounded (3s timeout, capped in-flight queue) and awaited
-//     only via an explicit flush() before a serverless function freezes.
+//   - lines are REDACTED: structural tags, error name, sanitized message and
+//     sanitized stack — never request bodies, headers, cookies or env values;
+//   - flush() resolves immediately (a log line is written synchronously), the
+//     method exists so call sites that await it before a serverless function
+//     freezes keep working unchanged.
 
 export type ErrorReporter = {
   captureException(
     error: unknown,
     context?: { tags?: Record<string, string> },
   ): void;
-  /** Await in-flight deliveries (bounded) — call before a function returns. */
+  /** Kept for call-site compatibility; resolves immediately. */
   flush(timeoutMs?: number): Promise<void>;
 };
 
-export type ErrorReporterOptions = {
-  /** Sentry DSN; absent/empty -> no-op reporter. */
-  dsn?: string | null;
+export type LogErrorReporterOptions = {
+  /** Emitting surface, e.g. "api" or "worker". */
+  service?: string;
   environment?: string;
   release?: string;
-  serverName?: string;
-  /** Injected for tests. Defaults to global fetch. */
-  fetchImpl?: typeof fetch;
+  /** Injected for tests. Defaults to `console.error` (stderr). */
+  write?: (line: string) => void;
 };
 
-const MAX_IN_FLIGHT = 20;
-const TRANSPORT_TIMEOUT_MS = 3_000;
-const DEFAULT_FLUSH_TIMEOUT_MS = 2_000;
-
-type ParsedDsn = {
-  endpoint: string;
-  publicKey: string;
+export type ErrorLogRecord = {
+  level: "error";
+  message: string;
+  name: string;
+  stack?: string;
+  tags: Record<string, string>;
+  service?: string;
+  environment?: string;
+  release?: string;
+  timestamp: string;
 };
 
-export function parseSentryDsn(dsn: string): ParsedDsn | null {
-  try {
-    const url = new URL(dsn);
-    const projectId = url.pathname.replace(/^\/+|\/+$/g, "");
-    if (!url.username || !projectId) return null;
-    return {
-      endpoint: `${url.protocol}//${url.host}/api/${projectId}/envelope/`,
-      publicKey: url.username,
-    };
-  } catch {
-    return null;
-  }
-}
+const MAX_MESSAGE_LENGTH = 2_000;
+const MAX_STACK_LENGTH = 8_000;
 
 const SECRET_PATTERNS: Array<[RegExp, string]> = [
   // Credentials embedded in URLs (postgres://user:pass@host, https://key@host).
@@ -75,174 +62,81 @@ const SECRET_PATTERNS: Array<[RegExp, string]> = [
   [/\b[A-Za-z0-9+/_-]{40,}={0,2}\b/g, "***"],
 ];
 
-/** Scrub secret-shaped substrings from an error message before it leaves. */
-export function sanitizeErrorMessage(message: string): string {
-  let sanitized = message.slice(0, 2_000);
+function scrub(text: string, maxLength: number): string {
+  let sanitized = text.slice(0, maxLength);
   for (const [pattern, replacement] of SECRET_PATTERNS) {
     sanitized = sanitized.replace(pattern, replacement);
   }
   return sanitized;
 }
 
-type StackFrame = {
-  function: string;
-  filename: string;
-  lineno?: number;
-  colno?: number;
-  in_app: boolean;
-};
+/** Scrub secret-shaped substrings from an error message before it is logged. */
+export function sanitizeErrorMessage(message: string): string {
+  return scrub(message, MAX_MESSAGE_LENGTH);
+}
 
-const FRAME_PATTERN =
-  /^\s*at\s+(?:(?<fn>.+?)\s+\()?(?<file>[^()]+?):(?<line>\d+):(?<col>\d+)\)?\s*$/;
+/** Scrub secret-shaped substrings from a stack (its first line is the message). */
+export function sanitizeErrorStack(stack: string): string {
+  return scrub(stack, MAX_STACK_LENGTH);
+}
 
-/** Parse a V8-style stack into Sentry frames (oldest first). */
-export function parseStackFrames(stack: string): StackFrame[] {
-  const frames: StackFrame[] = [];
-  for (const line of stack.split("\n")) {
-    const match = FRAME_PATTERN.exec(line);
-    const groups = match?.groups;
-    if (!groups?.file) continue;
-    frames.push({
-      function: groups.fn ?? "<anonymous>",
-      filename: groups.file,
-      lineno: Number(groups.line),
-      colno: Number(groups.col),
-      in_app:
-        !groups.file.includes("node_modules") &&
-        !groups.file.includes("/.bun/"),
-    });
+function describeThrowable(error: unknown): {
+  name: string;
+  message: string;
+  stack?: string;
+} {
+  if (error instanceof Error) {
+    return {
+      name: error.name !== "" ? error.name : "Error",
+      message: sanitizeErrorMessage(error.message),
+      ...(error.stack ? { stack: sanitizeErrorStack(error.stack) } : {}),
+    };
   }
-  return frames.reverse();
+  let message: string;
+  try {
+    message = String(error);
+  } catch {
+    message = "unserializable throwable";
+  }
+  return { name: "Error", message: sanitizeErrorMessage(message) };
 }
 
-function randomEventId(): string {
-  return crypto.randomUUID().replaceAll("-", "");
-}
-
-export type SentryEvent = {
-  event_id: string;
-  timestamp: number;
-  platform: "javascript";
-  level: "error";
-  environment?: string;
-  release?: string;
-  server_name?: string;
-  tags: Record<string, string>;
-  exception: {
-    values: Array<{
-      type: string;
-      value: string;
-      stacktrace?: { frames: StackFrame[] };
-    }>;
-  };
-};
-
-export function buildErrorEvent(
+export function buildErrorLogRecord(
   error: unknown,
-  options: {
-    tags?: Record<string, string>;
-    environment?: string;
-    release?: string;
-    serverName?: string;
-  } = {},
-): SentryEvent {
-  const isError = error instanceof Error;
-  const type = isError && error.name !== "" ? error.name : "Error";
-  const rawMessage = isError ? error.message : String(error);
-  const frames = isError && error.stack ? parseStackFrames(error.stack) : [];
-
+  options: LogErrorReporterOptions & { tags?: Record<string, string> } = {},
+): ErrorLogRecord {
+  const { name, message, stack } = describeThrowable(error);
   return {
-    event_id: randomEventId(),
-    timestamp: Date.now() / 1_000,
-    platform: "javascript",
     level: "error",
-    environment: options.environment,
-    release: options.release,
-    server_name: options.serverName,
+    message,
+    name,
+    ...(stack ? { stack } : {}),
     tags: options.tags ?? {},
-    exception: {
-      values: [
-        {
-          type,
-          value: sanitizeErrorMessage(rawMessage),
-          ...(frames.length > 0 ? { stacktrace: { frames } } : {}),
-        },
-      ],
-    },
+    ...(options.service ? { service: options.service } : {}),
+    ...(options.environment ? { environment: options.environment } : {}),
+    ...(options.release ? { release: options.release } : {}),
+    timestamp: new Date().toISOString(),
   };
 }
 
-function buildEnvelope(event: SentryEvent, dsn: string): string {
-  const header = JSON.stringify({
-    event_id: event.event_id,
-    sent_at: new Date().toISOString(),
-    dsn,
-  });
-  const itemHeader = JSON.stringify({ type: "event" });
-  return `${header}\n${itemHeader}\n${JSON.stringify(event)}\n`;
-}
-
-const NOOP_REPORTER: ErrorReporter = {
-  captureException() {},
-  async flush() {},
-};
-
-export function createErrorReporter(
-  options: ErrorReporterOptions,
+export function createLogErrorReporter(
+  options: LogErrorReporterOptions = {},
 ): ErrorReporter {
-  const dsn = options.dsn?.trim();
-  const parsed = dsn ? parseSentryDsn(dsn) : null;
-  if (!dsn || !parsed) return NOOP_REPORTER;
-
-  const fetchImpl = options.fetchImpl ?? fetch;
-  const pending = new Set<Promise<void>>();
+  const write = options.write ?? ((line: string) => console.error(line));
 
   return {
     captureException(error, context) {
       try {
-        if (pending.size >= MAX_IN_FLIGHT) return; // shed, never queue unbounded
-        const event = buildErrorEvent(error, {
-          tags: context?.tags,
-          environment: options.environment,
-          release: options.release,
-          serverName: options.serverName,
-        });
-        const delivery = Promise.resolve(
-          fetchImpl(parsed.endpoint, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/x-sentry-envelope",
-              "X-Sentry-Auth": `Sentry sentry_version=7, sentry_client=calibra-server-reporter/1.0, sentry_key=${parsed.publicKey}`,
-            },
-            body: buildEnvelope(event, dsn),
-            signal: AbortSignal.timeout(TRANSPORT_TIMEOUT_MS),
-          }),
-        )
-          .then(() => undefined)
-          .catch((transportError) => {
-            // Non-interfering: delivery failures are log-only.
-            console.error(
-              "[ErrorReporter] failed to deliver event",
-              transportError instanceof Error
-                ? transportError.message
-                : transportError,
-            );
-          })
-          .finally(() => {
-            pending.delete(delivery);
-          });
-        pending.add(delivery);
-      } catch (captureError) {
-        console.error("[ErrorReporter] capture failed", captureError);
+        write(
+          JSON.stringify(
+            buildErrorLogRecord(error, { ...options, tags: context?.tags }),
+          ),
+        );
+      } catch {
+        // Never interfere with the caller: a logging failure is dropped.
       }
     },
 
-    async flush(timeoutMs = DEFAULT_FLUSH_TIMEOUT_MS) {
-      if (pending.size === 0) return;
-      await Promise.race([
-        Promise.allSettled(pending),
-        new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
-      ]);
-    },
+    async flush() {},
   };
 }
