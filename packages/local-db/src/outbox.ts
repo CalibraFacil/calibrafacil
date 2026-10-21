@@ -1,6 +1,7 @@
 import type { SyncPushResponse } from "@calibra-facil/contracts";
 import { stringifySyncConflictPayload } from "@calibra-facil/contracts";
 import type { LocalDatabase } from "./database";
+import { releaseSettledSkippedRows } from "./skipped-rows";
 import {
   recomputeServiceOrderSyncStates,
   resolveServiceOrdersForAggregates,
@@ -32,6 +33,37 @@ WHERE status IN ('pending', 'failed')
 `,
     )
     .get();
+
+  return row?.total ?? 0;
+}
+
+const RECORDED_ACTOR_SQL = `(domain_events.actor_user_id IS NOT NULL
+    AND domain_events.actor_user_id NOT IN ('', 'local'))`;
+
+/**
+ * An outbox event whose recorded author is not `actorUserId`. Events with no
+ * recorded author (older rows, or the "local" placeholder) belong to nobody in
+ * particular and are never counted. `null` (the signed-in user is not known)
+ * counts nothing: there is no one to compare against.
+ */
+export function countPendingOutboxForOtherUsers(
+  database: LocalDatabase,
+  actorUserId: string | null,
+) {
+  if (actorUserId === null) return 0;
+
+  const row = database
+    .prepare<{ actorUserId: string }, { total: number }>(
+      `
+SELECT COUNT(*) AS total
+FROM outbox
+INNER JOIN domain_events ON domain_events.event_id = outbox.event_id
+WHERE outbox.status IN ('pending', 'failed')
+  AND ${RECORDED_ACTOR_SQL}
+  AND domain_events.actor_user_id <> @actorUserId
+`,
+    )
+    .get({ actorUserId });
 
   return row?.total ?? 0;
 }
@@ -100,12 +132,26 @@ ON CONFLICT(scope) DO UPDATE SET
 export function listPendingOutboxEvents(
   database: LocalDatabase,
   limit = 50,
-  options: { includeDeferred?: boolean } = {},
+  options: {
+    includeDeferred?: boolean;
+    /**
+     * The signed-in user. When given, only events authored by them (or with no
+     * recorded author) are returned: the cloud attributes a pushed event to the
+     * session that pushes it, so another user's event must wait until that user
+     * is signed in. It stays queued, untouched.
+     */
+    actorUserId?: string | null;
+  } = {},
 ): PendingOutboxEvent[] {
   const now = new Date().toISOString();
   const rows = database
     .prepare<
-      { now: string; limit: number; includeDeferred: number },
+      {
+        now: string;
+        limit: number;
+        includeDeferred: number;
+        actorUserId: string | null;
+      },
       PendingOutboxEventRow
     >(
       `
@@ -143,6 +189,11 @@ WHERE outbox.status IN ('pending', 'failed')
     OR outbox.next_attempt_at IS NULL
     OR outbox.next_attempt_at <= @now
   )
+  AND (
+    @actorUserId IS NULL
+    OR NOT ${RECORDED_ACTOR_SQL}
+    OR domain_events.actor_user_id = @actorUserId
+  )
 ORDER BY outbox.created_at ASC
 LIMIT @limit
 `,
@@ -151,6 +202,7 @@ LIMIT @limit
       now,
       limit,
       includeDeferred: options.includeDeferred ? 1 : 0,
+      actorUserId: options.actorUserId ?? null,
     });
 
   return rows.map((row) => ({
@@ -379,9 +431,16 @@ INSERT OR IGNORE INTO sync_conflicts (
         });
     }
 
-    if (response.newCursor !== undefined) {
-      setSyncCursor(database, response.newCursor);
-    }
+    // Accepted events have cleared their rows; a skipped pull row that is now
+    // clean is fetched again (an accepted change normally comes back through
+    // the pull anyway, this also covers one the cloud answered without changing).
+    releaseSettledSkippedRows(database);
+
+    // `response.newCursor` is deliberately not stored. It is the push batch's
+    // marker (`cursor:<batch>:<n>`), not a position in the pull stream; saving
+    // it as the pull cursor made the next pull restart from the epoch and
+    // re-download (and re-apply) every row after each push. Only a pull or a
+    // bootstrap moves the pull cursor.
   })();
 }
 

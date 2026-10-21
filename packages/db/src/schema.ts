@@ -508,6 +508,37 @@ export const organizationEventLog = pgTable(
   ],
 );
 
+// Desktop sync ops the cloud has claimed or applied. One row per (organization,
+// op id): the unique index is what makes two concurrent pushes of the same op
+// resolve to a single apply — the second insert conflicts and the op is
+// reported as already applied (or still in progress). `appliedAt` is NULL while
+// the op is claimed and being applied; `claimedAt` lets a claim whose process
+// died be taken over after a lease. `result` keeps what the push answered
+// (remote entity id/snapshot) so a retry gets the same acknowledgement.
+// Events applied before this table existed are still found through
+// organization_event_log (details->>'eventId').
+export const syncAppliedEvent = pgTable(
+  "sync_applied_event",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    eventId: text("event_id").notNull(),
+    entityType: text("entity_type").notNull(),
+    entityId: text("entity_id").notNull(),
+    claimedAt: timestamp("claimed_at").defaultNow().notNull(),
+    appliedAt: timestamp("applied_at"),
+    result: jsonb("result").$type<Record<string, unknown>>(),
+  },
+  (table) => [
+    uniqueIndex("sync_applied_event_org_event_uidx").on(
+      table.organizationId,
+      table.eventId,
+    ),
+  ],
+);
+
 export const platformEventLog = pgTable(
   "platform_event_log",
   {

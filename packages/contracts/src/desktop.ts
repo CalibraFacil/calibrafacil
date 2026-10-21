@@ -137,6 +137,13 @@ export const syncSchedulerStateSchema = z.object({
 export const syncStatusSnapshotSchema = z.object({
   state: syncStateSchema,
   pendingOutboxCount: z.number().int().nonnegative(),
+  /**
+   * How many of `pendingOutboxCount` were recorded by a different user than the
+   * one signed in. They are not sent (the cloud would attribute them to the
+   * signed-in session) and wait, unchanged, until their author signs in.
+   * Absent from builds that predate it: read as 0.
+   */
+  pendingForOtherUserCount: z.number().int().nonnegative().optional(),
   conflictCount: z.number().int().nonnegative(),
   lastSyncedAt: z.string().datetime().nullable(),
   activeRunId: z.string().nullable().optional(),

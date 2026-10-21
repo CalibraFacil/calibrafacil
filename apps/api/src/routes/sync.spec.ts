@@ -14,6 +14,7 @@ import {
   DesktopCreateAssetSchema,
   DesktopUpdateAssetSchema,
   DesktopUpdateServiceOrderExecutionSchema,
+  resolveDesktopPerformedAt,
   stripDesktopNullEntries,
   syncRouter,
 } from "./sync";
@@ -112,6 +113,25 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("@calibra-facil/db", () => ({
   db: mocks.db,
+}));
+
+// The claim table (sync_applied_event) is exercised against a real database in
+// sync.int.spec.ts. Here the claim is a pass-through that keeps the mocked
+// select queue exactly as it was: the audit-log lookup still answers
+// "already applied", anything else is claimed.
+vi.mock("../modules/sync/applied-events", () => ({
+  claimDesktopSyncEvent: async (
+    _organizationId: string,
+    _event: unknown,
+    findLegacyApplied: () => Promise<Record<string, unknown> | null>,
+  ) => {
+    const legacy = await findLegacyApplied();
+    return legacy
+      ? { state: "applied", ...legacy }
+      : { state: "claimed", claimId: 1 };
+  },
+  completeDesktopSyncClaim: async () => undefined,
+  releaseDesktopSyncClaim: async () => undefined,
 }));
 
 vi.mock("../middleware/permission", () => ({
@@ -491,6 +511,65 @@ describe("syncRouter", () => {
       },
     ]);
     expect(mocks.db.insert).not.toHaveBeenCalled();
+  });
+
+  it("REQ-SYNC-PUSH-UNKNOWN-003: rejects an unknown entity/operation instead of acknowledging it, without writing an audit row", async () => {
+    mocks.selectResults.push([]);
+
+    const response = await createApp().request("/api/sync/push", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        deviceId: "desktop-1",
+        clientBatchId: "batch-unknown-op",
+        baseCursor: null,
+        events: [
+          syncEvent({
+            eventId: "evt-unknown-op",
+            entityType: "calibration_job",
+            operation: "approve_local_job_from_the_future",
+          }),
+        ],
+      }),
+    });
+    const body = syncPushResponseSchema.parse(await response.json());
+
+    expect(response.status).toBe(200);
+    expect(body.accepted).toEqual([]);
+    expect(body.conflicts).toEqual([]);
+    expect(body.rejected).toEqual([
+      expect.objectContaining({
+        eventId: "evt-unknown-op",
+        code: "UNSUPPORTED_SYNC_OPERATION",
+      }),
+    ]);
+    expect(mocks.db.insert).not.toHaveBeenCalled();
+  });
+
+  it("REQ-SYNC-PUSH-UNKNOWN-004: still acknowledges the audit-only desktop events", async () => {
+    mocks.selectResults.push([]);
+
+    const response = await createApp().request("/api/sync/push", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        deviceId: "desktop-1",
+        clientBatchId: "batch-audit-only",
+        baseCursor: null,
+        events: [
+          syncEvent({
+            eventId: "evt-attachment",
+            entityType: "attachment",
+            operation: "create_local_attachment",
+          }),
+        ],
+      }),
+    });
+    const body = syncPushResponseSchema.parse(await response.json());
+
+    expect(body.rejected).toEqual([]);
+    expect(body.accepted).toHaveLength(1);
+    expect(mocks.db.insert).toHaveBeenCalledTimes(1);
   });
 
   it("acknowledges an already-applied pushed event without reapplying it", async () => {
@@ -1035,6 +1114,223 @@ describe("syncRouter", () => {
     ]);
     expect(mocks.db.update).toHaveBeenCalledTimes(1);
     expect(mocks.db.insert).toHaveBeenCalledTimes(2);
+  });
+
+  describe("performedAt of an offline submission", () => {
+    function pushSubmit(
+      occurredAt: string,
+      extraPayload: Record<string, unknown> = {},
+    ) {
+      const compiledMethod = {
+        methodId: "method-1",
+        methodVersion: 1,
+        status: "compiled",
+        coreVersion: "0.1.0",
+        methodFingerprint: "method-v1",
+        normalizedMethodJson: "{}",
+        engine: {
+          packageName: "@calibra-facil/math-engine",
+          version: "engine-1",
+          optionsFingerprint: "options-1",
+        },
+        inputs: [],
+        formulas: [],
+        measurementModels: [],
+        acceptanceCriteria: [],
+        diagnostics: [],
+      };
+      mocks.selectResults.push(
+        [],
+        [{ details: { remoteEntityId: 42 } }],
+        [
+          {
+            id: 42,
+            jobId: "CAL-2026-0042",
+            status: "IN_PROGRESS",
+            updatedAt: new Date("2026-05-09T12:30:00.000Z"),
+            performedAt: null,
+            data: null,
+            results: null,
+            methodSnapshot: {
+              methodFingerprint: "method-v1",
+              engineVersion: "engine-1",
+              engineOptionsFingerprint: "options-1",
+              normalizedMethodJson: "{}",
+              dataFields: [],
+              compiledMethod,
+            },
+            assetSnapshot: { id: 10, specifications: {} },
+            standardsSnapshot: null,
+            environmentalSnapshot: null,
+          },
+        ],
+        [
+          {
+            id: 42,
+            jobId: "CAL-2026-0042",
+            status: "REVIEW",
+            performedAt: null,
+          },
+        ],
+      );
+
+      return createApp().request("/api/sync/push", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          deviceId: "desktop-1",
+          clientBatchId: "batch-performed-at",
+          baseCursor: null,
+          events: [
+            syncEvent({
+              eventId: "evt-performed-at",
+              entityType: "calibration_job",
+              entityId: "local-job-1",
+              operation: "submit_local_execution",
+              occurredAt,
+              payload: {
+                status: "REVIEW",
+                data: {},
+                results: null,
+                ...extraPayload,
+              },
+            }),
+          ],
+        }),
+      });
+    }
+
+    function performedAtWritten() {
+      const updateQuery = mocks.db.update.mock.results[0]?.value;
+      const setArgs = updateQuery?.set.mock.calls[0]?.[0];
+      return setArgs?.performedAt;
+    }
+
+    it("REQ-SYNC-PERFORMED-AT-001: records the local submit time, not the sync time", async () => {
+      const fourDaysAgo = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000);
+      const response = await pushSubmit(fourDaysAgo.toISOString());
+      const body = syncPushResponseSchema.parse(await response.json());
+
+      expect(body.rejected).toEqual([]);
+      expect(performedAtWritten()).toEqual(fourDaysAgo);
+    });
+
+    it("REQ-SYNC-PERFORMED-AT-002: clamps a future device clock to now", async () => {
+      const before = Date.now();
+      const response = await pushSubmit(
+        new Date(before + 3 * 24 * 60 * 60 * 1000).toISOString(),
+      );
+      const body = syncPushResponseSchema.parse(await response.json());
+
+      expect(body.rejected).toEqual([]);
+      const written = performedAtWritten();
+      expect(written).toBeInstanceOf(Date);
+      expect(written.getTime()).toBeGreaterThanOrEqual(before);
+      expect(written.getTime()).toBeLessThanOrEqual(Date.now());
+    });
+
+    function auditReasonWritten() {
+      for (const result of mocks.db.insert.mock.results) {
+        const values = result.value?.values.mock.calls[0]?.[0];
+        if (values && "action" in values && "jobId" in values) {
+          return values.reason;
+        }
+      }
+      return undefined;
+    }
+
+    const DAY_MS = 24 * 60 * 60 * 1000;
+
+    it("REQ-SYNC-PERFORMED-AT-004: records the performed date the technician chose, not the submit time", async () => {
+      const performedAt = new Date(Date.now() - 3 * DAY_MS);
+      const response = await pushSubmit(new Date().toISOString(), {
+        performedAt: performedAt.toISOString(),
+      });
+      const body = syncPushResponseSchema.parse(await response.json());
+
+      expect(body.rejected).toEqual([]);
+      expect(performedAtWritten()).toEqual(performedAt);
+      expect(auditReasonWritten()).toBeUndefined();
+    });
+
+    it("REQ-SYNC-PERFORMED-AT-005: rejects a performed date in the future", async () => {
+      const response = await pushSubmit(new Date().toISOString(), {
+        performedAt: new Date(Date.now() + 2 * DAY_MS).toISOString(),
+      });
+      const body = syncPushResponseSchema.parse(await response.json());
+
+      expect(body.accepted).toEqual([]);
+      expect(body.rejected).toEqual([
+        {
+          eventId: "evt-performed-at",
+          code: "INVALID_DESKTOP_EVENT_PAYLOAD",
+          reason: "A data de execução não pode estar no futuro",
+        },
+      ]);
+      expect(mocks.db.update).not.toHaveBeenCalled();
+    });
+
+    it("REQ-SYNC-PERFORMED-AT-006: rejects an unparseable performed date", async () => {
+      const response = await pushSubmit(new Date().toISOString(), {
+        performedAt: "ontem",
+      });
+      const body = syncPushResponseSchema.parse(await response.json());
+
+      expect(body.rejected[0]?.reason).toBe("Data de execução inválida");
+      expect(mocks.db.update).not.toHaveBeenCalled();
+    });
+
+    it("REQ-SYNC-PERFORMED-AT-007: requires a reason when the date is more than 7 days before it was recorded", async () => {
+      const recordedAt = new Date(Date.now() - 1 * DAY_MS);
+      const response = await pushSubmit(recordedAt.toISOString(), {
+        performedAt: new Date(recordedAt.getTime() - 10 * DAY_MS).toISOString(),
+      });
+      const body = syncPushResponseSchema.parse(await response.json());
+
+      expect(body.rejected[0]?.reason).toBe(
+        "Motivo obrigatório para lançamentos com mais de 7 dias",
+      );
+      expect(mocks.db.update).not.toHaveBeenCalled();
+    });
+
+    it("REQ-SYNC-PERFORMED-AT-008: stores a backdate reason in the audit trail like the cloud submit", async () => {
+      const recordedAt = new Date(Date.now() - 1 * DAY_MS);
+      const response = await pushSubmit(recordedAt.toISOString(), {
+        performedAt: new Date(recordedAt.getTime() - 10 * DAY_MS).toISOString(),
+        backdateReason: "  Sem sinal no cliente  ",
+      });
+      const body = syncPushResponseSchema.parse(await response.json());
+
+      expect(body.rejected).toEqual([]);
+      expect(auditReasonWritten()).toBe(
+        "Registro retroativo (10 dias): Sem sinal no cliente",
+      );
+    });
+
+    it("REQ-SYNC-PERFORMED-AT-009: an entry made the same day is not backdated just because it synced days later", async () => {
+      // Offline for ten days: recorded and performed ten days ago, pushed today.
+      const tenDaysAgo = new Date(Date.now() - 10 * DAY_MS);
+      const response = await pushSubmit(tenDaysAgo.toISOString(), {
+        performedAt: tenDaysAgo.toISOString(),
+      });
+      const body = syncPushResponseSchema.parse(await response.json());
+
+      expect(body.rejected).toEqual([]);
+      expect(performedAtWritten()).toEqual(tenDaysAgo);
+      expect(auditReasonWritten()).toBeUndefined();
+    });
+
+    it("REQ-SYNC-PERFORMED-AT-003: falls back to now when occurredAt is unparseable", () => {
+      const now = new Date("2026-05-20T10:00:00.000Z");
+      expect(resolveDesktopPerformedAt("not-a-date", now)).toEqual(now);
+      expect(resolveDesktopPerformedAt("", now)).toEqual(now);
+      expect(
+        resolveDesktopPerformedAt("2026-05-23T10:00:00.000Z", now),
+      ).toEqual(now);
+      expect(
+        resolveDesktopPerformedAt("2026-05-16T10:00:00.000Z", now),
+      ).toEqual(new Date("2026-05-16T10:00:00.000Z"));
+    });
   });
 
   it("acknowledges pull cursors through the sync ack endpoint", async () => {

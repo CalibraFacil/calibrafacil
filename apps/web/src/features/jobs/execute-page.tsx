@@ -124,8 +124,8 @@ import {
   type JobData,
   type ReferenceStandard,
 } from '@/features/jobs/execution'
+import { parseExecutionPerformedAt } from '@/features/jobs/forms'
 
-const BACKDATE_REASON_THRESHOLD_DAYS = 7
 const MS_PER_DAY = 1000 * 60 * 60 * 24
 
 function formatDateForInput(date: Date): string {
@@ -428,6 +428,16 @@ function ExecuteJobForm({
     job.performedAt ? formatDateForInput(new Date(job.performedAt)) : '',
   )
   const [backdateReason, setBackdateReason] = useState('')
+  // The execution date follows the cloud's submit rules (not in the future, a
+  // reason beyond 7 days back); see parseExecutionPerformedAt in ./forms.
+  // Deliberate live-clock read: the rules are measured against the real clock
+  // at the moment the technician submits, not a value frozen at mount. This
+  // project does not run React Compiler, so nothing memoizes it.
+  // oxlint-disable-next-line react/purity
+  const performedAtState = parseExecutionPerformedAt(
+    { date: performedAt, backdateReason },
+    new Date(),
+  )
   // ISO/IEC 17025 §7.8.2.1(n) — printed on the certificate when filled.
   const [methodDeviations, setMethodDeviations] = useState(
     job.methodDeviations ?? '',
@@ -773,9 +783,7 @@ function ExecuteJobForm({
           calibrationPhases: calibrationPhasesPayload,
           methodDeviations,
           // Persist the execution date with the draft so it survives a reload.
-          performedAt: performedAt
-            ? new Date(`${performedAt}T12:00:00`).toISOString()
-            : undefined,
+          performedAt: performedAtState.instant ?? undefined,
         }),
       )
     },
@@ -799,6 +807,9 @@ function ExecuteJobForm({
           'Informe o motivo dos blocos marcados como não executados.',
         )
       }
+      if (!performedAtState.payload) {
+        throw new Error(performedAtState.message ?? 'Data de execução inválida')
+      }
       return calibraApi.jobs.submitExecution(
         apiRouteParam(jobId),
         buildExecutionMutationPayload({
@@ -809,8 +820,7 @@ function ExecuteJobForm({
           calibrationLocation: calibrationLocationPayload,
           calibrationPhases: calibrationPhasesPayload,
           methodDeviations,
-          performedAt: new Date(`${performedAt}T12:00:00`).toISOString(),
-          backdateReason: backdateReason.trim() || undefined,
+          ...performedAtState.payload,
         }),
       )
     },
@@ -1041,25 +1051,10 @@ function ExecuteJobForm({
     )
   }
 
-  // Backdate handling for the performed (execution) date.
-  // Deliberate live-clock read: the "not in the future" gate and the backdate
-  // day count must be measured against the real clock at the moment the
-  // technician submits, not against a value frozen when the page mounted.
-  // This project does not run React Compiler, so nothing memoizes it.
-  // oxlint-disable-next-line react/purity
-  const nowMs = Date.now()
   const performedDate = performedAt ? new Date(`${performedAt}T00:00:00`) : null
-  const isPerformedDateValid =
-    performedDate != null &&
-    !Number.isNaN(performedDate.getTime()) &&
-    performedDate.getTime() <= nowMs
-  const backdateDays =
-    performedDate && !Number.isNaN(performedDate.getTime())
-      ? Math.floor((nowMs - performedDate.getTime()) / MS_PER_DAY)
-      : 0
-  const requiresBackdateReason = backdateDays > BACKDATE_REASON_THRESHOLD_DAYS
-  const isBackdateReasonSatisfied =
-    !requiresBackdateReason || backdateReason.trim().length > 0
+  const { requiresBackdateReason, backdateDays } = performedAtState
+  const isPerformedDateValid = performedAtState.field !== 'performedAt'
+  const isBackdateReasonSatisfied = performedAtState.field !== 'backdateReason'
 
   // Check if can submit
   const meetsExecutionRequirements = useMemo(

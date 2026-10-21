@@ -62,6 +62,7 @@ import {
   UpdateCustomerSchema,
   UpdateServiceOrderExecutionSchema,
   METHOD_DEVIATIONS_MAX_LENGTH,
+  resolveExecutionPerformedAt,
 } from "@calibra-facil/schemas";
 import {
   localAttachmentSchema,
@@ -162,6 +163,9 @@ type LocalJobExecutionInput = {
   calibrationPhases?: CalibrationPhaseInput;
   /** ISO/IEC 17025 §7.8.2.1(n) — mirrors the cloud execute contract. */
   methodDeviations?: string | null;
+  /** When the calibration was performed (ISO) and, if backdated, why. */
+  performedAt?: string;
+  backdateReason?: string;
 };
 
 function buildCalibrationLocationSnapshot(
@@ -493,7 +497,10 @@ export function createLocalServerRuntime(
           lastRunId: syncStatus.lastRunId ?? null,
           lastError: syncStatus.lastError ?? null,
         },
-        database: getLocalDatabaseDiagnostics(database),
+        database: getLocalDatabaseDiagnostics(
+          database,
+          getLocalRequestContext(config, database).userId,
+        ),
       }),
     );
   });
@@ -851,6 +858,7 @@ export function createLocalServerRuntime(
         calibrationLocationSnapshot,
         calibrationPhaseSnapshot,
         methodDeviations: input.methodDeviations,
+        performedAt: input.performedAt,
         actorUserId: context.userId,
         deviceId: config.deviceId,
       });
@@ -899,6 +907,15 @@ export function createLocalServerRuntime(
     if (calibrationPhaseError) {
       return c.json({ error: calibrationPhaseError }, 400);
     }
+    // The cloud's rules for the performed date, answered the same way (400):
+    // not in the future, and a reason once it is more than 7 days back.
+    const performedAtError = resolveExecutionPerformedAt({
+      performedAt: input.performedAt,
+      backdateReason: input.backdateReason,
+    });
+    if (!performedAtError.ok) {
+      return c.json({ error: performedAtError.message }, 400);
+    }
     try {
       const standardsSnapshot = buildLocalStandardsSnapshot(
         database,
@@ -932,6 +949,8 @@ export function createLocalServerRuntime(
         calibrationLocationSnapshot,
         calibrationPhaseSnapshot,
         methodDeviations: input.methodDeviations,
+        performedAt: input.performedAt,
+        backdateReason: input.backdateReason,
         requireResults: true,
         actorUserId: context.userId,
         deviceId: config.deviceId,
@@ -1950,6 +1969,12 @@ function parseLocalJobExecutionInput(value: unknown): LocalJobExecutionInput {
         : typeof input.methodDeviations === "string"
           ? input.methodDeviations.slice(0, METHOD_DEVIATIONS_MAX_LENGTH)
           : null,
+    performedAt:
+      typeof input.performedAt === "string" ? input.performedAt : undefined,
+    backdateReason:
+      typeof input.backdateReason === "string"
+        ? input.backdateReason
+        : undefined,
   };
 }
 

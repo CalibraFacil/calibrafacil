@@ -4,12 +4,16 @@ import { syncRouter } from "./sync";
 import { db } from "@calibra-facil/db";
 import {
   asset,
+  assetAuditLog,
   assetType,
   customer,
   organization,
+  organizationEventLog,
+  referenceStandard,
+  syncAppliedEvent,
   user,
 } from "@calibra-facil/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
@@ -30,6 +34,12 @@ import { seedOrg } from "../../test/integration/seed";
 //   REQ-SYNC-004  [HIGH RISK]  POST /bootstrap tenant isolation — org B data absent from org A response
 //   REQ-SYNC-005  [HIGH RISK]  GET  /pull  tenant isolation — org B customer absent from org A pull
 //   REQ-SYNC-006               POST /push + GET /pull unauthenticated → 401
+//   REQ-SYNC-PULL-001..004     GET  /pull cursor: nothing skipped across pages
+//   REQ-SYNC-PULL-005          GET  /pull soft-deleted asset/standard sent as delete events
+//   REQ-SYNC-PUSH-UNKNOWN-001  POST /push unknown op rejected, not acknowledged
+//   REQ-SYNC-PUSH-DEDUP-001    POST /push retried op id deduplicated
+//   REQ-SYNC-PUSH-DEDUP-002..006 concurrent / in-flight / abandoned / rejected / died-late claims
+//   REQ-SYNC-PUSH-REMOTEID-001 POST /push remote id lookup not capped by an unordered LIMIT
 
 const JSON_HEADERS = { "content-type": "application/json" };
 
@@ -631,6 +641,745 @@ describe("syncRouter — real DB + real middleware (tenant isolation cut-line)",
       .filter(Boolean);
     expect(customerNames).toContain("Alpha Pull Client");
     expect(customerNames).not.toContain("Beta Pull Client");
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Pull cursor (per-table windows merged into one stream)
+  // ───────────────────────────────────────────────────────────────────────────
+  const pullPageShape = z.object({
+    cursor: z.string().nullable(),
+    hasMore: z.boolean(),
+    events: z.array(
+      z.object({
+        entityType: z.string(),
+        entityId: z.union([z.number(), z.string()]),
+        occurredAt: z.string(),
+      }),
+    ),
+  });
+
+  async function pullPage(
+    org: { userId: string; orgId: string; unitId: number },
+    params: { limit: number; cursor?: string | null },
+  ) {
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const query = new URLSearchParams({ limit: String(params.limit) });
+    if (params.cursor) query.set("cursor", params.cursor);
+    const res = await syncRouter.request(`/pull?${query.toString()}`, {
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+    });
+    expect(res.status).toBe(200);
+    return pullPageShape.parse(await res.json());
+  }
+
+  async function pullEverything(
+    org: { userId: string; orgId: string; unitId: number },
+    params: { limit: number; cursor?: string | null },
+  ) {
+    const pages: Array<z.infer<typeof pullPageShape>> = [];
+    let cursor = params.cursor ?? null;
+    for (let page = 0; page < 30; page += 1) {
+      const body = await pullPage(org, { limit: params.limit, cursor });
+      pages.push(body);
+      if (!body.hasMore) break;
+      cursor = body.cursor;
+    }
+    return pages;
+  }
+
+  async function seedCustomerAt(params: {
+    labOrgId: string;
+    name: string;
+    updatedAt: Date;
+  }) {
+    const clientOrgId = `client-${params.name}`;
+    await db.insert(organization).values({
+      id: clientOrgId,
+      name: clientOrgId,
+      slug: clientOrgId,
+      type: "CLIENT",
+      status: "ACTIVE",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    });
+    const [row] = await db
+      .insert(customer)
+      .values({
+        name: params.name,
+        authOrganizationId: clientOrgId,
+        labOrganizationId: params.labOrgId,
+        updatedAt: params.updatedAt,
+      })
+      .returning({ id: customer.id });
+    if (!row) throw new Error("seedCustomerAt: insert failed");
+    return row.id;
+  }
+
+  it("REQ-SYNC-PULL-001: a table over its limit is not skipped when another table has newer rows", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    const customerIds: number[] = [];
+    for (let index = 0; index < 5; index += 1) {
+      customerIds.push(
+        await seedCustomerAt({
+          labOrgId: org.orgId,
+          name: `pending-${index}`,
+          updatedAt: new Date(Date.UTC(2026, 0, 1, 10, 0, index)),
+        }),
+      );
+    }
+    // Newer than every customer: the old cursor jumped straight to this row.
+    await db.insert(assetType).values({
+      name: "Tipo Recente",
+      slug: "tipo-recente",
+      definition: [],
+      updatedAt: new Date(Date.UTC(2026, 0, 1, 10, 0, 30)),
+    });
+
+    const pages = await pullEverything(org, { limit: 2 });
+    const events = pages.flatMap((page) => page.events);
+
+    const pulledCustomers = events
+      .filter((event) => event.entityType === "customer")
+      .map((event) => Number(event.entityId));
+    expect(pulledCustomers).toEqual(customerIds);
+    expect(
+      events.filter((event) => event.entityType === "asset_type"),
+    ).toHaveLength(1);
+    expect(pages.length).toBeGreaterThan(1);
+    expect(pages.at(-1)?.hasMore).toBe(false);
+  });
+
+  it("REQ-SYNC-PULL-005: a soft-deleted asset and standard reach the pull as delete events with their deletedAt, while bootstrap keeps excluding them", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    const customerId = await seedCustomerRow({
+      labOrgId: org.orgId,
+      clientOrgId: "client-del",
+      name: "Acme Del",
+    });
+    const [type] = await db
+      .insert(assetType)
+      .values({ name: "Termômetro", slug: "termometro-del", definition: [] })
+      .returning({ id: assetType.id });
+    if (!type) throw new Error("assetType insert failed");
+    const deletedAt = new Date(Date.UTC(2026, 0, 2, 12, 0, 0));
+    const [deletedAsset] = await db
+      .insert(asset)
+      .values({
+        unitId: org.unitId,
+        customerId,
+        labOrganizationId: org.orgId,
+        assetTypeId: type.id,
+        name: "Apagado",
+        serialNumber: "SN-DEL",
+        tag: "TAG-DEL",
+        updatedAt: deletedAt,
+        deletedAt,
+      })
+      .returning({ id: asset.id });
+    const [liveAsset] = await db
+      .insert(asset)
+      .values({
+        unitId: org.unitId,
+        customerId,
+        labOrganizationId: org.orgId,
+        assetTypeId: type.id,
+        name: "Ativo",
+        serialNumber: "SN-LIVE",
+        tag: "TAG-LIVE",
+        updatedAt: new Date(Date.UTC(2026, 0, 2, 11, 0, 0)),
+      })
+      .returning({ id: asset.id });
+    const [deletedStandard] = await db
+      .insert(referenceStandard)
+      .values({
+        unitId: org.unitId,
+        organizationId: org.orgId,
+        name: "Padrão apagado",
+        serialNumber: "STD-DEL",
+        certificateNumber: "CERT-DEL",
+        calibrationDate: new Date(Date.UTC(2025, 0, 1)),
+        nextCalibrationDate: new Date(Date.UTC(2027, 0, 1)),
+        createdBy: org.userId,
+        updatedAt: deletedAt,
+        deletedAt,
+      })
+      .returning({ id: referenceStandard.id });
+    if (!deletedAsset || !liveAsset || !deletedStandard) {
+      throw new Error("seed failed");
+    }
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await syncRouter.request("/pull?limit=100", {
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+    });
+    const body = z
+      .object({
+        events: z.array(
+          z.object({
+            entityType: z.string(),
+            entityId: z.union([z.number(), z.string()]),
+            operation: z.string(),
+            payload: z.record(z.string(), z.unknown()),
+          }),
+        ),
+      })
+      .parse(await res.json());
+    const find = (entityType: string, id: number) =>
+      body.events.find(
+        (event) =>
+          event.entityType === entityType && Number(event.entityId) === id,
+      );
+
+    expect(find("asset", deletedAsset.id)?.operation).toBe("delete");
+    expect(find("asset", deletedAsset.id)?.payload.deletedAt).toBe(
+      deletedAt.toISOString(),
+    );
+    expect(find("reference_standard", deletedStandard.id)?.operation).toBe(
+      "delete",
+    );
+    expect(find("asset", liveAsset.id)?.operation).toBe("upsert");
+
+    const bootstrap = await syncRouter.request("/bootstrap", {
+      method: "POST",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+    });
+    const snapshot = z
+      .object({
+        assets: z.array(z.object({ id: z.number() })),
+        standards: z.array(z.object({ id: z.number() })),
+      })
+      .parse(await bootstrap.json());
+    expect(snapshot.assets.map((row) => row.id)).toEqual([liveAsset.id]);
+    expect(snapshot.standards).toEqual([]);
+  });
+
+  it("REQ-SYNC-PULL-002: rows sharing one timestamp across a page boundary are neither lost nor repeated", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    const sameInstant = new Date(Date.UTC(2026, 0, 1, 10, 0, 0, 123));
+    const customerIds: number[] = [];
+    for (let index = 0; index < 5; index += 1) {
+      customerIds.push(
+        await seedCustomerAt({
+          labOrgId: org.orgId,
+          name: `tie-${index}`,
+          updatedAt: sameInstant,
+        }),
+      );
+    }
+
+    const pages = await pullEverything(org, { limit: 2 });
+    const pulled = pages
+      .flatMap((page) => page.events)
+      .filter((event) => event.entityType === "customer")
+      .map((event) => Number(event.entityId));
+
+    expect(pulled).toEqual(customerIds);
+  });
+
+  it("REQ-SYNC-PULL-003: the cursor never moves backwards and strictly advances while hasMore", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    for (let index = 0; index < 4; index += 1) {
+      await seedCustomerAt({
+        labOrgId: org.orgId,
+        name: `advance-${index}`,
+        updatedAt: new Date(Date.UTC(2026, 0, 1, 10, 0, 0)),
+      });
+    }
+
+    const pages = await pullEverything(org, { limit: 1 });
+    const cursors = pages
+      .filter((page) => page.hasMore)
+      .map((page) => page.cursor);
+
+    expect(cursors.length).toBeGreaterThan(1);
+    expect(new Set(cursors).size).toBe(cursors.length);
+  });
+
+  it("REQ-SYNC-PULL-004: a cursor in the old bare-ISO format (and the push cursors old desktops stored) is still accepted", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    const early = await seedCustomerAt({
+      labOrgId: org.orgId,
+      name: "legacy-early",
+      updatedAt: new Date(Date.UTC(2026, 0, 1, 10, 0, 0)),
+    });
+    const late = await seedCustomerAt({
+      labOrgId: org.orgId,
+      name: "legacy-late",
+      updatedAt: new Date(Date.UTC(2026, 0, 1, 11, 0, 0)),
+    });
+
+    const fromIso = await pullPage(org, {
+      limit: 100,
+      cursor: "2026-01-01T10:30:00.000Z",
+    });
+    const customerIds = (page: typeof fromIso) =>
+      page.events
+        .filter((event) => event.entityType === "customer")
+        .map((event) => Number(event.entityId));
+    expect(customerIds(fromIso)).toEqual([late]);
+
+    // Desktops built before this change store the push cursor as the pull
+    // cursor; it is not a date, so the pull restarts from the epoch.
+    const fromPushCursor = await pullPage(org, {
+      limit: 100,
+      cursor: "cursor:batch-1:3",
+    });
+    expect(customerIds(fromPushCursor)).toEqual([early, late]);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Unknown ops must be rejected, never acknowledged
+  // ───────────────────────────────────────────────────────────────────────────
+  it("REQ-SYNC-PUSH-UNKNOWN-001: POST /push with an unknown entity/operation is rejected UNSUPPORTED_SYNC_OPERATION and leaves no audit row", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "operator" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    const res = await syncRouter.request("/push", {
+      method: "POST",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: buildPushBody([
+        buildSyncEvent({
+          eventId: "evt-unknown-op-001",
+          organizationId: org.orgId,
+          unitId: org.unitId,
+          actorUserId: org.userId,
+        }),
+      ]),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.accepted).toHaveLength(0);
+    expect(body.rejected).toHaveLength(1);
+    expect(body.rejected[0].eventId).toBe("evt-unknown-op-001");
+    expect(body.rejected[0].code).toBe("UNSUPPORTED_SYNC_OPERATION");
+
+    // An audit row would make a retry look "already applied".
+    const audit = await db
+      .select({ id: organizationEventLog.id })
+      .from(organizationEventLog)
+      .where(eq(organizationEventLog.entityId, "local-entity-1"));
+    expect(audit).toHaveLength(0);
+  });
+
+  it("REQ-SYNC-PUSH-UNKNOWN-002: the audit-only desktop events (attachment, certificate draft) are still acknowledged", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "operator" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    const res = await syncRouter.request("/push", {
+      method: "POST",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: buildPushBody([
+        {
+          ...buildSyncEvent({
+            eventId: "evt-attachment-001",
+            organizationId: org.orgId,
+            unitId: org.unitId,
+            actorUserId: org.userId,
+          }),
+          entityType: "attachment",
+          operation: "create_local_attachment",
+        },
+        {
+          ...buildSyncEvent({
+            eventId: "evt-draft-001",
+            organizationId: org.orgId,
+            unitId: org.unitId,
+            actorUserId: org.userId,
+          }),
+          entityType: "certificate_draft",
+          operation: "create_local_certificate_draft",
+        },
+      ]),
+    });
+
+    const body = await res.json();
+    expect(body.rejected).toHaveLength(0);
+    expect(body.accepted).toHaveLength(2);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Push idempotency: a retried op id is acknowledged, not re-applied
+  // ───────────────────────────────────────────────────────────────────────────
+  it("REQ-SYNC-PUSH-DEDUP-001: a retried op id is deduplicated even when its entity has more than 100 audit rows", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "operator" });
+    for (let index = 0; index < 150; index += 1) {
+      await db.insert(organizationEventLog).values({
+        organizationId: org.orgId,
+        action: "desktop_sync.save_local_execution",
+        entityType: "calibration_job",
+        entityId: "local-busy-job",
+        details: { eventId: `evt-other-${index}` },
+      });
+    }
+    await db.insert(organizationEventLog).values({
+      organizationId: org.orgId,
+      action: "desktop_sync.save_local_execution",
+      entityType: "calibration_job",
+      entityId: "local-busy-job",
+      details: { eventId: "evt-retried" },
+    });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    // Applying this event would be rejected (empty payload): it can only be
+    // acknowledged because the lookup finds the earlier application.
+    const res = await syncRouter.request("/push", {
+      method: "POST",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: buildPushBody([
+        {
+          eventId: "evt-retried",
+          entityType: "asset",
+          entityId: "local-busy-job",
+          operation: "create_local_asset",
+          payload: {},
+          occurredAt: new Date().toISOString(),
+          actorUserId: org.userId,
+          organizationId: org.orgId,
+          unitId: org.unitId,
+          idempotencyKey: "idem-retried",
+          localVersion: 0,
+        },
+      ]),
+    });
+
+    const body = await res.json();
+    expect(body.rejected).toHaveLength(0);
+    expect(body.accepted).toHaveLength(1);
+    expect(body.accepted[0].eventId).toBe("evt-retried");
+  });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Replay dedup under concurrency (sync_applied_event)
+  // ───────────────────────────────────────────────────────────────────────────
+  // A create op that is NOT idempotent by itself apart from the tag unique
+  // index: applied twice it would write the asset and its audit log twice.
+  async function seedAssetCreateContext(orgId: string, suffix: string) {
+    const customerId = await seedCustomerRow({
+      labOrgId: orgId,
+      clientOrgId: `client-${suffix}`,
+      name: "Acme",
+    });
+    const [type] = await db
+      .insert(assetType)
+      .values({
+        name: "Balança",
+        slug: `balanca-${suffix}`,
+        definition: [],
+      })
+      .returning({ id: assetType.id });
+    if (!type) throw new Error("assetType insert failed");
+    return { customerId, assetTypeId: type.id };
+  }
+
+  function createAssetEvent(
+    org: { orgId: string; unitId: number; userId: string },
+    eventId: string,
+    context: { customerId: number; assetTypeId: number },
+    tag: string,
+  ): Record<string, unknown> {
+    return {
+      eventId,
+      entityType: "asset",
+      entityId: `local-asset-${eventId}`,
+      operation: "create_local_asset",
+      payload: {
+        customerId: context.customerId,
+        assetTypeId: context.assetTypeId,
+        name: "Balança de Bancada",
+        serialNumber: `SN-${tag}`,
+        tag,
+        baseMeasurementUnit: "kg",
+      },
+      occurredAt: new Date().toISOString(),
+      actorUserId: org.userId,
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      idempotencyKey: `idem-${eventId}`,
+      localVersion: 0,
+    };
+  }
+
+  function pushRequest(org: { unitId: number }, events: unknown[]) {
+    return syncRouter.request("/push", {
+      method: "POST",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: buildPushBody(events.map((event) => ({ ...Object(event) }))),
+    });
+  }
+
+  it("REQ-SYNC-PUSH-DEDUP-002: concurrent pushes of the same op id apply it exactly once", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "operator" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const context = await seedAssetCreateContext(org.orgId, "race");
+    const event = createAssetEvent(org, "evt-concurrent", context, "RACE-1");
+
+    const responses = await Promise.all(
+      Array.from({ length: 6 }, () => pushRequest(org, [event])),
+    );
+    const bodies = await Promise.all(responses.map((res) => res.json()));
+
+    const created = await db
+      .select({ id: asset.id })
+      .from(asset)
+      .where(eq(asset.tag, "RACE-1"));
+    expect(created).toHaveLength(1);
+    const audits = await db
+      .select({ id: assetAuditLog.id })
+      .from(assetAuditLog)
+      .where(eq(assetAuditLog.assetId, created[0]?.id ?? -1));
+    expect(audits).toHaveLength(1);
+
+    // Whoever did not apply it is told the op is in flight (retry) or already
+    // applied: no request other than the winner tried to apply it again (that
+    // would surface as TAG_ALREADY_EXISTS), and no second success appears for
+    // a different entity.
+    for (const body of bodies) {
+      for (const rejection of body.rejected) {
+        expect(rejection.code).toBe("SYNC_EVENT_IN_PROGRESS");
+      }
+    }
+    const acceptedIds = bodies.flatMap((body) =>
+      body.accepted.map(
+        (entry: { remoteEntityId: number }) => entry.remoteEntityId,
+      ),
+    );
+    expect(acceptedIds.length).toBeGreaterThanOrEqual(1);
+    expect(new Set(acceptedIds)).toEqual(new Set([created[0]?.id]));
+
+    const rows = await db
+      .select()
+      .from(syncAppliedEvent)
+      .where(eq(syncAppliedEvent.eventId, "evt-concurrent"));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.appliedAt).not.toBeNull();
+
+    // A later retry is acknowledged from the record, with the same entity.
+    const retry = await (await pushRequest(org, [event])).json();
+    expect(retry.accepted).toHaveLength(1);
+    expect(retry.accepted[0].remoteEntityId).toBe(created[0]?.id);
+  });
+
+  it("REQ-SYNC-PUSH-DEDUP-003: an op claimed by a request still in flight is not applied again", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "operator" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const context = await seedAssetCreateContext(org.orgId, "inflight");
+    await db.insert(syncAppliedEvent).values({
+      organizationId: org.orgId,
+      eventId: "evt-inflight",
+      entityType: "asset",
+      entityId: "local-asset-evt-inflight",
+    });
+
+    const body = await (
+      await pushRequest(org, [
+        createAssetEvent(org, "evt-inflight", context, "INFLIGHT-1"),
+      ])
+    ).json();
+
+    expect(body.accepted).toHaveLength(0);
+    expect(body.rejected[0].code).toBe("SYNC_EVENT_IN_PROGRESS");
+    const created = await db
+      .select({ id: asset.id })
+      .from(asset)
+      .where(eq(asset.tag, "INFLIGHT-1"));
+    expect(created).toHaveLength(0);
+  });
+
+  it("REQ-SYNC-PUSH-DEDUP-004: a claim abandoned past the lease is taken over and applied", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "operator" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const context = await seedAssetCreateContext(org.orgId, "abandoned");
+    await db.insert(syncAppliedEvent).values({
+      organizationId: org.orgId,
+      eventId: "evt-abandoned",
+      entityType: "asset",
+      entityId: "local-asset-evt-abandoned",
+      claimedAt: sql`now() - interval '1 hour'`,
+    });
+
+    const body = await (
+      await pushRequest(org, [
+        createAssetEvent(org, "evt-abandoned", context, "ABANDONED-1"),
+      ])
+    ).json();
+
+    expect(body.rejected).toHaveLength(0);
+    expect(body.accepted).toHaveLength(1);
+    const rows = await db
+      .select()
+      .from(syncAppliedEvent)
+      .where(eq(syncAppliedEvent.eventId, "evt-abandoned"));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.appliedAt).not.toBeNull();
+  });
+
+  it("REQ-SYNC-PUSH-DEDUP-006: an abandoned claim whose op already wrote its audit row is completed, not re-applied", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "operator" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const context = await seedAssetCreateContext(org.orgId, "diedlate");
+    const [existing] = await db
+      .insert(asset)
+      .values({
+        unitId: org.unitId,
+        customerId: context.customerId,
+        labOrganizationId: org.orgId,
+        assetTypeId: context.assetTypeId,
+        name: "Nome original",
+        serialNumber: "SN-DL",
+        tag: "DIEDLATE-1",
+      })
+      .returning({ id: asset.id });
+    if (!existing) throw new Error("seed failed");
+    // An update that already applied and wrote its audit row (the last thing an
+    // op does); the process died before marking the claim applied, and the
+    // lease has since run out. Applying it again would rename the asset again.
+    await db.insert(organizationEventLog).values({
+      organizationId: org.orgId,
+      action: "desktop_sync.update_local_asset",
+      entityType: "asset",
+      entityId: "local-asset-diedlate",
+      details: { eventId: "evt-diedlate", remoteEntityId: existing.id },
+    });
+    await db.insert(syncAppliedEvent).values({
+      organizationId: org.orgId,
+      eventId: "evt-diedlate",
+      entityType: "asset",
+      entityId: "local-asset-diedlate",
+      claimedAt: sql`now() - interval '1 hour'`,
+    });
+
+    const body = await (
+      await pushRequest(org, [
+        {
+          eventId: "evt-diedlate",
+          entityType: "asset",
+          entityId: "local-asset-diedlate",
+          operation: "update_local_asset",
+          payload: { name: "Nome do replay" },
+          occurredAt: new Date().toISOString(),
+          actorUserId: org.userId,
+          organizationId: org.orgId,
+          unitId: org.unitId,
+          idempotencyKey: "idem-diedlate",
+          localVersion: 1,
+        },
+      ])
+    ).json();
+
+    expect(body.rejected).toHaveLength(0);
+    expect(body.accepted).toHaveLength(1);
+    expect(body.accepted[0].remoteEntityId).toBe(existing.id);
+    const [after] = await db
+      .select({ name: asset.name })
+      .from(asset)
+      .where(eq(asset.id, existing.id));
+    expect(after?.name).toBe("Nome original");
+    const [claim] = await db
+      .select()
+      .from(syncAppliedEvent)
+      .where(eq(syncAppliedEvent.eventId, "evt-diedlate"));
+    expect(claim?.appliedAt).not.toBeNull();
+    expect(claim?.result).toMatchObject({ remoteEntityId: existing.id });
+  });
+
+  it("REQ-SYNC-PUSH-DEDUP-005: an op that is rejected leaves no claim, so the corrected event can be pushed again", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "operator" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const context = await seedAssetCreateContext(org.orgId, "rejected");
+
+    const rejected = await (
+      await pushRequest(org, [
+        {
+          ...createAssetEvent(org, "evt-bad", context, "BAD-1"),
+          payload: {},
+        },
+      ])
+    ).json();
+    expect(rejected.rejected).toHaveLength(1);
+    expect(
+      await db
+        .select()
+        .from(syncAppliedEvent)
+        .where(eq(syncAppliedEvent.eventId, "evt-bad")),
+    ).toHaveLength(0);
+
+    const fixed = await (
+      await pushRequest(org, [
+        createAssetEvent(org, "evt-bad", context, "BAD-1"),
+      ])
+    ).json();
+    expect(fixed.accepted).toHaveLength(1);
+  });
+
+  it("REQ-SYNC-PUSH-REMOTEID-001: the remote id of a busy entity is found even when it is not among its first 20 audit rows", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "operator" });
+    const customerId = await seedCustomerRow({
+      labOrgId: org.orgId,
+      clientOrgId: "client-busy",
+      name: "Acme",
+    });
+    const [type] = await db
+      .insert(assetType)
+      .values({ name: "Balança", slug: "balanca-busy", definition: [] })
+      .returning({ id: assetType.id });
+    if (!type) throw new Error("assetType insert failed");
+
+    // Many audit rows for this local id that carry no remote id come first...
+    for (let index = 0; index < 30; index += 1) {
+      await db.insert(organizationEventLog).values({
+        organizationId: org.orgId,
+        action: "desktop_sync.update_local_asset",
+        entityType: "asset",
+        entityId: "local-busy-asset",
+        details: { eventId: `evt-noise-${index}` },
+      });
+    }
+    // ...and the one that maps it to the cloud asset comes last.
+    await db.insert(organizationEventLog).values({
+      organizationId: org.orgId,
+      action: "desktop_sync.create_local_asset",
+      entityType: "asset",
+      entityId: "local-busy-asset",
+      details: { eventId: "evt-created-earlier", remoteEntityId: 424242 },
+    });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    const res = await syncRouter.request("/push", {
+      method: "POST",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: buildPushBody([
+        {
+          eventId: "evt-create-again",
+          entityType: "asset",
+          entityId: "local-busy-asset",
+          operation: "create_local_asset",
+          payload: {
+            customerId,
+            assetTypeId: type.id,
+            name: "Balança de Bancada",
+            serialNumber: "SN-BUSY-1",
+            tag: "BUSY-TAG-1",
+            baseMeasurementUnit: "kg",
+          },
+          occurredAt: new Date().toISOString(),
+          actorUserId: org.userId,
+          organizationId: org.orgId,
+          unitId: org.unitId,
+          idempotencyKey: "idem-create-again",
+          localVersion: 0,
+        },
+      ]),
+    });
+
+    const body = await res.json();
+    expect(body.rejected).toHaveLength(0);
+    expect(body.accepted).toHaveLength(1);
+    expect(body.accepted[0].remoteEntityId).toBe(424242);
+    const created = await db
+      .select({ id: asset.id })
+      .from(asset)
+      .where(eq(asset.tag, "BUSY-TAG-1"));
+    expect(created).toHaveLength(0);
   });
 
   // ───────────────────────────────────────────────────────────────────────────

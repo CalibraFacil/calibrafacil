@@ -12,9 +12,11 @@ import {
   applySyncPushResult,
   countOpenSyncConflicts,
   countPendingOutbox,
+  countPendingOutboxForOtherUsers,
   getSyncCursor,
   getSyncCursorUpdatedAt,
   listPendingOutboxEvents,
+  releaseSettledSkippedRows,
   markOutboxEventsFailedForRetry,
   type LocalDatabase,
 } from "@calibra-facil/local-db";
@@ -47,6 +49,10 @@ export function createLocalSyncRuntime(
   let status: SyncStatusSnapshot = {
     state: config.syncEnabled ? "idle" : "offline",
     pendingOutboxCount: countPendingOutbox(database),
+    pendingForOtherUserCount: countPendingOutboxForOtherUsers(
+      database,
+      getLocalSyncContext(config, database).userId,
+    ),
     conflictCount: countOpenSyncConflicts(database),
     lastSyncedAt: getSyncCursorUpdatedAt(database),
     activeRunId: null,
@@ -57,7 +63,7 @@ export function createLocalSyncRuntime(
 
   return {
     getStatus() {
-      status = withLocalCounts(database, status);
+      status = withLocalCounts(config, database, status);
       return status;
     },
     runInitialSync() {
@@ -80,7 +86,7 @@ export function createLocalSyncRuntime(
     const runId = createSyncRunId("initial");
     if (!config.syncEnabled) {
       status = {
-        ...withLocalCounts(database, status),
+        ...withLocalCounts(config, database, status),
         state: "offline",
         activeRunId: null,
         lastRunId: runId,
@@ -90,7 +96,7 @@ export function createLocalSyncRuntime(
 
     if (!config.cloudApiUrl) {
       status = {
-        ...withLocalCounts(database, status),
+        ...withLocalCounts(config, database, status),
         state: "error",
         activeRunId: null,
         lastRunId: runId,
@@ -100,7 +106,7 @@ export function createLocalSyncRuntime(
     }
 
     status = {
-      ...withLocalCounts(database, status),
+      ...withLocalCounts(config, database, status),
       state: "syncing",
       activeRunId: runId,
       lastError: null,
@@ -138,11 +144,11 @@ export function createLocalSyncRuntime(
       await pullCloudChanges(config, database, fetchImpl);
 
       status = {
-        ...withLocalCounts(database, status),
+        ...withLocalCounts(config, database, status),
         state:
           countOpenSyncConflicts(database) > 0
             ? "conflict"
-            : countPendingOutbox(database) > 0
+            : hasUnsentOwnChanges(config, database)
               ? "error"
               : "idle",
         lastSyncedAt: syncedAt,
@@ -154,7 +160,7 @@ export function createLocalSyncRuntime(
       return status;
     } catch (error) {
       status = {
-        ...withLocalCounts(database, status),
+        ...withLocalCounts(config, database, status),
         state: "error",
         activeRunId: null,
         lastRunId: runId,
@@ -179,7 +185,7 @@ export function createLocalSyncRuntime(
     const runId = createSyncRunId("push");
     if (!config.syncEnabled) {
       status = {
-        ...withLocalCounts(database, status),
+        ...withLocalCounts(config, database, status),
         state: "offline",
         activeRunId: null,
         lastRunId: runId,
@@ -189,7 +195,7 @@ export function createLocalSyncRuntime(
 
     if (!config.cloudApiUrl) {
       status = {
-        ...withLocalCounts(database, status),
+        ...withLocalCounts(config, database, status),
         state: "error",
         activeRunId: null,
         lastRunId: runId,
@@ -199,7 +205,7 @@ export function createLocalSyncRuntime(
     }
 
     status = {
-      ...withLocalCounts(database, status),
+      ...withLocalCounts(config, database, status),
       state: "syncing",
       activeRunId: runId,
       lastError: null,
@@ -214,11 +220,11 @@ export function createLocalSyncRuntime(
       });
       await pullCloudChanges(config, database, fetchImpl);
       status = {
-        ...withLocalCounts(database, status),
+        ...withLocalCounts(config, database, status),
         state:
           countOpenSyncConflicts(database) > 0
             ? "conflict"
-            : countPendingOutbox(database) > 0
+            : hasUnsentOwnChanges(config, database)
               ? "error"
               : "idle",
         lastSyncedAt: new Date().toISOString(),
@@ -230,7 +236,7 @@ export function createLocalSyncRuntime(
       return status;
     } catch (error) {
       status = {
-        ...withLocalCounts(database, status),
+        ...withLocalCounts(config, database, status),
         state: "error",
         activeRunId: null,
         lastRunId: runId,
@@ -252,6 +258,8 @@ export function createLocalSyncRuntime(
     return (row?.total ?? 0) > 0;
   }
 }
+
+const MAX_PULL_PAGES = 200;
 
 function createSyncRunId(kind: "initial" | "push") {
   return `${kind}-${randomUUID()}`;
@@ -319,7 +327,15 @@ async function pullCloudChanges(
     throw new Error("Cloud API URL is not configured for local sync");
   }
 
-  for (let page = 0; page < 20; page += 1) {
+  // Rows a previous pull skipped because of queued local changes that have
+  // since settled (a conflict ignored, say) are fetched again: rewind first.
+  releaseSettledSkippedRows(database);
+
+  // The server pages the pull (`hasMore`) and the cursor it returns is the
+  // position the next page resumes from: keep asking until it says it is done.
+  // The cursor is persisted after every page, so a run cut short by the page
+  // cap (or a network failure) resumes where it stopped instead of restarting.
+  for (let page = 0; page < MAX_PULL_PAGES; page += 1) {
     const pullUrl = new URL("/api/sync/pull", config.cloudApiUrl);
     const cursor = getSyncCursor(database);
     if (cursor) {
@@ -344,9 +360,15 @@ async function pullCloudChanges(
     if (!body.hasMore) {
       return;
     }
+
+    // A server that keeps saying "more" without moving the cursor would make
+    // this loop re-download the same page until the cap.
+    if (getSyncCursor(database) === cursor) {
+      throw new Error("Cloud pull made no progress: cursor did not advance");
+    }
   }
 
-  throw new Error("Cloud pull did not converge after 20 pages");
+  throw new Error(`Cloud pull did not converge after ${MAX_PULL_PAGES} pages`);
 }
 
 async function pushPendingOutbox(
@@ -360,8 +382,12 @@ async function pushPendingOutbox(
   }
   const cloudApiUrl = config.cloudApiUrl;
 
+  // Only what the signed-in user authored (or nobody did): the cloud records
+  // the pushing session as the actor, so a colleague's offline work must not be
+  // sent under this session. It stays queued until its author signs in.
   const pending = listPendingOutboxEvents(database, 50, {
     includeDeferred: options.includeDeferred,
+    actorUserId: getLocalSyncContext(config, database).userId,
   });
   if (pending.length === 0) return;
 
@@ -624,13 +650,36 @@ function applyCloudAuthHeaders(config: LocalServerConfig, headers: Headers) {
   }
 }
 
+/**
+ * Changes the signed-in user could still send. Another user's queued events are
+ * not a failure of this run: they wait for their author.
+ */
+function hasUnsentOwnChanges(
+  config: LocalServerConfig,
+  database: LocalDatabase,
+) {
+  return (
+    countPendingOutbox(database) -
+      countPendingOutboxForOtherUsers(
+        database,
+        getLocalSyncContext(config, database).userId,
+      ) >
+    0
+  );
+}
+
 function withLocalCounts(
+  config: LocalServerConfig,
   database: LocalDatabase,
   snapshot: SyncStatusSnapshot,
 ): SyncStatusSnapshot {
   return {
     ...snapshot,
     pendingOutboxCount: countPendingOutbox(database),
+    pendingForOtherUserCount: countPendingOutboxForOtherUsers(
+      database,
+      getLocalSyncContext(config, database).userId,
+    ),
     conflictCount: countOpenSyncConflicts(database),
     lastSyncedAt: snapshot.lastSyncedAt ?? getSyncCursorUpdatedAt(database),
   };

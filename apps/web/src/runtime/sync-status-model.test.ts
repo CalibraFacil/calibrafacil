@@ -132,6 +132,30 @@ describe('getDataSourceIndicatorModel', () => {
       },
     ],
     [
+      'pending only for another user',
+      { pendingOutboxCount: 2, pendingForOtherUserCount: 2 },
+      {
+        label: 'Pendente',
+        title: 'Alterações de outro usuário',
+        description:
+          '2 alterações de outro usuário aguardam esse usuário entrar para serem enviadas.',
+        variant: 'outline',
+        dotClassName: 'bg-amber-500',
+      },
+    ],
+    [
+      'pending for this user and for another',
+      { pendingOutboxCount: 3, pendingForOtherUserCount: 1 },
+      {
+        label: 'Pendente',
+        title: 'Alterações locais pendentes',
+        description:
+          '2 alterações aguardando envio para a nuvem. Mais 1 alteração de outro usuário aguarda esse usuário entrar.',
+        variant: 'outline',
+        dotClassName: 'bg-amber-500',
+      },
+    ],
+    [
       'offline cache',
       {
         state: 'offline',

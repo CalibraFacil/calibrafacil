@@ -84,9 +84,23 @@ function labParts(date: Date) {
   };
 }
 
+/**
+ * The laboratory's calendar day of a moment, as numbers. For anything that is
+ * named after the day (a certificate number's year/month/day, the sequence it
+ * resets on) and so must not depend on the server's zone.
+ */
+export function getLabCalendarDay(value: Date): {
+  year: number;
+  month: number;
+  day: number;
+} {
+  const { year, month, day } = labParts(value);
+  return { year, month, day };
+}
+
 /** The day a moment fell on in the laboratory, as "2026-10-02". */
-export function getLabCalendarDay(date: Date): string {
-  const { year, month, day } = labParts(date);
+export function formatLabDayKey(value: Date): string {
+  const { year, month, day } = getLabCalendarDay(value);
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 

@@ -6,6 +6,7 @@ import {
   formatLabDate,
   formatLabDateTime,
   getLabCalendarDay,
+  formatLabDayKey,
   startOfLabMonth,
 } from "./dates.js";
 import { LabelHtml } from "./LabelHtml.js";
@@ -33,6 +34,20 @@ describe("document dates", () => {
     expect(formatCalendarDate("not a date")).toBe("—");
   });
 
+  it("names the laboratory's calendar day of a moment, whatever the server's zone", () => {
+    // 01:30 UTC on 1 January is 22:30 on 31 December in São Paulo.
+    expect(getLabCalendarDay(new Date("2026-01-01T01:30:00.000Z"))).toEqual({
+      year: 2025,
+      month: 12,
+      day: 31,
+    });
+    expect(getLabCalendarDay(new Date("2026-01-01T03:00:00.000Z"))).toEqual({
+      year: 2026,
+      month: 1,
+      day: 1,
+    });
+  });
+
   it("prints a label with the day the calibration was performed at the lab", () => {
     const html = renderToStaticMarkup(
       <LabelHtml
@@ -51,8 +66,8 @@ describe("document dates", () => {
   });
 
   it("names the laboratory's calendar day of a moment as YYYY-MM-DD", () => {
-    expect(getLabCalendarDay(new Date(LATE_EVENING))).toBe("2026-10-02");
-    expect(getLabCalendarDay(new Date("2026-10-03T03:00:00.000Z"))).toBe(
+    expect(formatLabDayKey(new Date(LATE_EVENING))).toBe("2026-10-02");
+    expect(formatLabDayKey(new Date("2026-10-03T03:00:00.000Z"))).toBe(
       "2026-10-03",
     );
   });

@@ -9,6 +9,7 @@ import {
   type CertificateNumberingSnapshot,
   type CertificateSequenceResetScope,
 } from "@calibra-facil/db/schema";
+import { getLabCalendarDay } from "@calibra-facil/documents";
 import { CertificateNumberingConfigSchema } from "@calibra-facil/schemas";
 import { and, eq, sql } from "drizzle-orm";
 
@@ -147,8 +148,10 @@ function buildTemplateTokens(params: {
   sequence: number;
   certificateNumber?: string;
 }) {
-  const yyyy = String(params.generatedAt.getUTCFullYear());
-  const month = params.generatedAt.getUTCMonth() + 1;
+  // The laboratory's calendar day, not the server's (see getLabCalendarDay).
+  const labDay = getLabCalendarDay(params.generatedAt);
+  const yyyy = String(labDay.year);
+  const month = labDay.month;
   const projectCode =
     params.config.projectCode && params.config.projectCode.trim()
       ? params.config.projectCode.trim()
@@ -164,7 +167,7 @@ function buildTemplateTokens(params: {
     yy: yyyy.slice(-2),
     mm: pad(month, 2),
     mon: MONTH_ABBREVIATIONS[month - 1] ?? "",
-    dd: pad(params.generatedAt.getUTCDate(), 2),
+    dd: pad(labDay.day, 2),
     seq: pad(params.sequence, params.config.sequence.padding),
   };
 }
@@ -185,8 +188,7 @@ export function buildCertificateSequenceKey(
   context: CertificateNumberingContext,
   config: CertificateNumberingConfig,
 ) {
-  const year = context.generatedAt.getUTCFullYear();
-  const month = context.generatedAt.getUTCMonth() + 1;
+  const { year, month } = getLabCalendarDay(context.generatedAt);
   const projectCode =
     context.projectCode?.trim() || config.projectCode?.trim() || "GERAL";
 

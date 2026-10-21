@@ -74,8 +74,19 @@ import {
   UpdateCustomerSchema,
   UpdateServiceOrderExecutionSchema,
   METHOD_DEVIATIONS_MAX_LENGTH,
+  resolveExecutionPerformedAt,
 } from "@calibra-facil/schemas";
-import { and, desc, eq, gt, inArray, isNull, like, not } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  like,
+  not,
+  sql,
+} from "drizzle-orm";
 import { writeOrganizationAuditEvent } from "../lib/audit";
 import {
   createR2Client,
@@ -100,6 +111,11 @@ import { deriveRegulatedNextDate } from "../lib/regulated-interval";
 import { deriveNextCalibrationDate } from "../lib/portal-asset-interval";
 import { approveJob } from "../modules/jobs/approve-job";
 import {
+  claimDesktopSyncEvent,
+  completeDesktopSyncClaim,
+  releaseDesktopSyncClaim,
+} from "../modules/sync/applied-events";
+import {
   asRecord,
   buildSyncAttachmentObjectKey,
   encodeSyncAttachmentId,
@@ -111,11 +127,21 @@ import {
   isIntegerNumber,
   isPositiveInteger,
   parseSnapshotDate,
-  parseSyncPullCursor,
   parseSyncPullLimit,
   toSyncTimestamp,
   tryDecodeSyncAttachmentId,
 } from "../modules/sync/helpers";
+import {
+  afterSyncPullPosition,
+  formatSyncPullPosition,
+  parseSyncPullPosition,
+  planSyncPullPage,
+  syncPullRank,
+  syncPullTimestamp,
+  type SyncPullEntityType,
+  type SyncPullPosition,
+  type SyncPullWindow,
+} from "../modules/sync/pull-cursor";
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
 import { createNonConformanceRecord } from "../lib/non-conformances";
 import { ensureOotNotificationForNc } from "../lib/oot-notifications";
@@ -617,28 +643,66 @@ export const syncRouter = new Hono<{
           continue;
         }
 
-        const appliedEvent = await findAppliedDesktopSyncEvent(
+        const claim = await claimDesktopSyncEvent(
           memberData.organizationId,
           event,
+          () => findAppliedDesktopSyncEvent(memberData.organizationId, event),
         );
-        if (appliedEvent) {
+        if (claim.state === "applied") {
           accepted.push({
             eventId: event.eventId,
-            remoteEntityId: appliedEvent.remoteEntityId,
-            remoteEntity: appliedEvent.remoteEntity,
+            remoteEntityId: claim.remoteEntityId,
+            remoteEntity: claim.remoteEntity,
             remoteVersion: event.localVersion + 1,
             cloudEventId: `cloud:${event.eventId}`,
           });
           continue;
         }
+        if (claim.state === "in_progress") {
+          // Another push of this very op is applying it right now. Not
+          // acknowledged (it may still fail) and not applied a second time:
+          // the desktop keeps it queued and retries.
+          rejected.push({
+            eventId: event.eventId,
+            code: "SYNC_EVENT_IN_PROGRESS",
+            reason: "This sync event is being applied by another request.",
+          });
+          continue;
+        }
 
-        const result = await applyDesktopSyncEvent({
-          event,
-          memberData,
-          sessionUserId: session.user.id,
-          deviceId: body.deviceId,
-          clientBatchId: body.clientBatchId,
-        });
+        let result: ApplyDesktopSyncEventResult;
+        try {
+          result = await applyDesktopSyncEvent({
+            event,
+            memberData,
+            sessionUserId: session.user.id,
+            deviceId: body.deviceId,
+            clientBatchId: body.clientBatchId,
+          });
+        } catch (error) {
+          await releaseDesktopSyncClaim(claim.claimId);
+          throw error;
+        }
+
+        if (result.ok) {
+          // The op is applied whatever happens to the bookkeeping. If marking
+          // the claim fails it is picked up after the lease from the audit log
+          // (see claimDesktopSyncEvent); failing the request here would only
+          // make the desktop retry into "in progress".
+          await completeDesktopSyncClaim(claim.claimId, result).catch(
+            (error: unknown) => {
+              console.error(
+                "[Sync] Failed to mark desktop sync event applied:",
+                event.eventId,
+                error,
+              );
+            },
+          );
+        } else {
+          // Not applied (rejected or conflicting): free the op id so the
+          // corrected or re-based event can be pushed again.
+          await releaseDesktopSyncClaim(claim.claimId);
+        }
 
         if (!result.ok) {
           if (result.conflict) {
@@ -690,16 +754,14 @@ export const syncRouter = new Hono<{
     },
   )
   .get("/pull", ...withLabPermission({ calibration: ["read"] }), async (c) => {
-    const cursor = c.req.query("cursor") ?? null;
-    const since = parseSyncPullCursor(cursor);
+    const since = parseSyncPullPosition(c.req.query("cursor"));
     const limit = parseSyncPullLimit(c.req.query("limit"));
     const memberData = getMemberData(c);
     const pull = await loadCloudSyncEventsSince(memberData, since, limit);
-    const serverCursor = new Date().toISOString();
 
     return c.json(
       syncPullResponseSchema.parse({
-        cursor: pull.hasMore ? pull.cursor : serverCursor,
+        cursor: pull.cursor,
         hasMore: pull.hasMore,
         events: pull.events,
       }),
@@ -945,7 +1007,7 @@ function buildStaleDesktopBaseConflict(params: {
 
 async function loadCloudSyncEventsSince(
   memberData: MemberData,
-  since: Date,
+  since: SyncPullPosition,
   limit: number,
 ) {
   const [
@@ -962,8 +1024,14 @@ async function loadCloudSyncEventsSince(
     db
       .select()
       .from(assetType)
-      .where(gt(assetType.updatedAt, since))
-      .orderBy(assetType.updatedAt)
+      .where(
+        afterSyncPullPosition(
+          "asset_type",
+          { timestamp: assetType.updatedAt, id: assetType.id },
+          since,
+        ),
+      )
+      .orderBy(syncPullTimestamp(assetType.updatedAt), assetType.id)
       .limit(limit + 1),
     db
       .select({
@@ -980,10 +1048,14 @@ async function loadCloudSyncEventsSince(
       .where(
         and(
           eq(customer.labOrganizationId, memberData.organizationId),
-          gt(customer.updatedAt, since),
+          afterSyncPullPosition(
+            "customer",
+            { timestamp: customer.updatedAt, id: customer.id },
+            since,
+          ),
         ),
       )
-      .orderBy(customer.updatedAt)
+      .orderBy(syncPullTimestamp(customer.updatedAt), customer.id)
       .limit(limit + 1),
     db
       .select({
@@ -1009,6 +1081,7 @@ async function loadCloudSyncEventsSince(
         installedAt: asset.installedAt,
         status: asset.status,
         updatedAt: asset.updatedAt,
+        deletedAt: asset.deletedAt,
       })
       .from(asset)
       .innerJoin(customer, eq(asset.customerId, customer.id))
@@ -1016,11 +1089,16 @@ async function loadCloudSyncEventsSince(
         and(
           eq(customer.labOrganizationId, memberData.organizationId),
           buildUnitScopeCondition(asset.unitId, memberData),
-          isNull(asset.deletedAt),
-          gt(asset.updatedAt, since),
+          // Soft-deleted rows stay in the pull (as delete events): filtering
+          // them out meant a cloud deletion never reached the desktop.
+          afterSyncPullPosition(
+            "asset",
+            { timestamp: asset.updatedAt, id: asset.id },
+            since,
+          ),
         ),
       )
-      .orderBy(asset.updatedAt)
+      .orderBy(syncPullTimestamp(asset.updatedAt), asset.id)
       .limit(limit + 1),
     db
       .select({
@@ -1039,10 +1117,14 @@ async function loadCloudSyncEventsSince(
         and(
           eq(service.organizationId, memberData.organizationId),
           buildUnitScopeCondition(service.unitId, memberData),
-          gt(service.updatedAt, since),
+          afterSyncPullPosition(
+            "service",
+            { timestamp: service.updatedAt, id: service.id },
+            since,
+          ),
         ),
       )
-      .orderBy(service.updatedAt)
+      .orderBy(syncPullTimestamp(service.updatedAt), service.id)
       .limit(limit + 1),
     db
       .select({
@@ -1070,17 +1152,27 @@ async function loadCloudSyncEventsSince(
         status: referenceStandard.status,
         createdAt: referenceStandard.createdAt,
         updatedAt: referenceStandard.updatedAt,
+        deletedAt: referenceStandard.deletedAt,
       })
       .from(referenceStandard)
       .where(
         and(
           eq(referenceStandard.organizationId, memberData.organizationId),
           buildUnitScopeCondition(referenceStandard.unitId, memberData),
-          isNull(referenceStandard.deletedAt),
-          gt(referenceStandard.updatedAt, since),
+          afterSyncPullPosition(
+            "reference_standard",
+            {
+              timestamp: referenceStandard.updatedAt,
+              id: referenceStandard.id,
+            },
+            since,
+          ),
         ),
       )
-      .orderBy(referenceStandard.updatedAt)
+      .orderBy(
+        syncPullTimestamp(referenceStandard.updatedAt),
+        referenceStandard.id,
+      )
       .limit(limit + 1),
     db
       .select()
@@ -1089,10 +1181,20 @@ async function loadCloudSyncEventsSince(
         and(
           eq(environmentalLimits.organizationId, memberData.organizationId),
           buildUnitScopeCondition(environmentalLimits.unitId, memberData),
-          gt(environmentalLimits.updatedAt, since),
+          afterSyncPullPosition(
+            "environmental_limit",
+            {
+              timestamp: environmentalLimits.updatedAt,
+              id: environmentalLimits.id,
+            },
+            since,
+          ),
         ),
       )
-      .orderBy(environmentalLimits.updatedAt)
+      .orderBy(
+        syncPullTimestamp(environmentalLimits.updatedAt),
+        environmentalLimits.id,
+      )
       .limit(limit + 1),
     db
       .select({
@@ -1126,10 +1228,14 @@ async function loadCloudSyncEventsSince(
         and(
           eq(calibrationJob.organizationId, memberData.organizationId),
           buildUnitScopeCondition(calibrationJob.unitId, memberData),
-          gt(calibrationJob.updatedAt, since),
+          afterSyncPullPosition(
+            "calibration_job",
+            { timestamp: calibrationJob.updatedAt, id: calibrationJob.id },
+            since,
+          ),
         ),
       )
-      .orderBy(calibrationJob.updatedAt)
+      .orderBy(syncPullTimestamp(calibrationJob.updatedAt), calibrationJob.id)
       .limit(limit + 1),
     db
       .select({
@@ -1174,10 +1280,14 @@ async function loadCloudSyncEventsSince(
         and(
           eq(serviceOrder.organizationId, memberData.organizationId),
           buildUnitScopeCondition(serviceOrder.unitId, memberData),
-          gt(serviceOrder.updatedAt, since),
+          afterSyncPullPosition(
+            "service_order",
+            { timestamp: serviceOrder.updatedAt, id: serviceOrder.id },
+            since,
+          ),
         ),
       )
-      .orderBy(serviceOrder.updatedAt)
+      .orderBy(syncPullTimestamp(serviceOrder.updatedAt), serviceOrder.id)
       .limit(limit + 1),
     db
       .select({
@@ -1205,51 +1315,110 @@ async function loadCloudSyncEventsSince(
         and(
           eq(calibrationMethod.organizationId, memberData.organizationId),
           eq(calibrationMethod.status, "PUBLISHED"),
-          gt(calibrationMethod.publishedAt, since),
+          afterSyncPullPosition(
+            "published_method",
+            {
+              timestamp: calibrationMethod.publishedAt,
+              id: calibrationMethod.id,
+            },
+            since,
+          ),
         ),
       )
-      .orderBy(calibrationMethod.publishedAt)
+      .orderBy(
+        syncPullTimestamp(calibrationMethod.publishedAt),
+        calibrationMethod.id,
+      )
       .limit(limit + 1),
   ]);
+  // Page planning (see modules/sync/pull-cursor.ts): when any table filled its
+  // window the page is cut at the smallest boundary row so that no row older
+  // than the cursor we hand out is left unsent.
+  const windows = [
+    pullWindow("asset_type", changedAssetTypes, "updatedAt"),
+    pullWindow("customer", changedCustomers, "updatedAt"),
+    pullWindow("asset", changedAssets, "updatedAt"),
+    pullWindow("service", changedServices, "updatedAt"),
+    pullWindow("reference_standard", changedStandards, "updatedAt"),
+    pullWindow("environmental_limit", changedEnvironmentalLimits, "updatedAt"),
+    pullWindow("calibration_job", changedJobs, "updatedAt"),
+    pullWindow("service_order", changedServiceOrders, "updatedAt"),
+    pullWindow("published_method", changedMethods, "publishedAt"),
+  ];
+  const plan = planSyncPullPage(windows, limit);
+  const taken = <T>(entityType: SyncPullEntityType, rows: T[]) =>
+    rows.slice(0, plan.take.get(entityType) ?? 0);
+
   const changedStandardsWithDocuments =
-    await attachReferenceStandardCertificateDocuments(changedStandards);
+    await attachReferenceStandardCertificateDocuments(
+      taken("reference_standard", changedStandards),
+    );
 
   const events = [
-    ...toCloudEvents("asset_type", changedAssetTypes, "updatedAt", limit),
-    ...toCloudEvents("customer", changedCustomers, "updatedAt", limit),
-    ...toCloudEvents("asset", changedAssets, "updatedAt", limit),
-    ...toCloudEvents("service", changedServices, "updatedAt", limit),
+    ...toCloudEvents(
+      "asset_type",
+      taken("asset_type", changedAssetTypes),
+      "updatedAt",
+    ),
+    ...toCloudEvents(
+      "customer",
+      taken("customer", changedCustomers),
+      "updatedAt",
+    ),
+    ...toCloudEvents("asset", taken("asset", changedAssets), "updatedAt"),
+    ...toCloudEvents("service", taken("service", changedServices), "updatedAt"),
     ...toCloudEvents(
       "reference_standard",
       changedStandardsWithDocuments,
       "updatedAt",
-      limit,
     ),
     ...toCloudEvents(
       "environmental_limit",
-      changedEnvironmentalLimits,
+      taken("environmental_limit", changedEnvironmentalLimits),
       "updatedAt",
-      limit,
     ),
-    ...toCloudEvents("calibration_job", changedJobs, "updatedAt", limit),
-    ...toCloudEvents("service_order", changedServiceOrders, "updatedAt", limit),
-    ...toCloudEvents("published_method", changedMethods, "publishedAt", limit),
-  ].sort((left, right) => left.occurredAt.localeCompare(right.occurredAt));
+    ...toCloudEvents(
+      "calibration_job",
+      taken("calibration_job", changedJobs),
+      "updatedAt",
+    ),
+    ...toCloudEvents(
+      "service_order",
+      taken("service_order", changedServiceOrders),
+      "updatedAt",
+    ),
+    ...toCloudEvents(
+      "published_method",
+      taken("published_method", changedMethods),
+      "publishedAt",
+    ),
+  ].sort(
+    (left, right) =>
+      Date.parse(left.occurredAt) - Date.parse(right.occurredAt) ||
+      syncPullRank(left.entityType) - syncPullRank(right.entityType) ||
+      Number(left.entityId) - Number(right.entityId),
+  );
 
   return {
     events,
-    cursor: events.at(-1)?.occurredAt ?? since.toISOString(),
-    hasMore: [
-      changedAssetTypes,
-      changedCustomers,
-      changedAssets,
-      changedServices,
-      changedStandards,
-      changedEnvironmentalLimits,
-      changedJobs,
-      changedServiceOrders,
-      changedMethods,
-    ].some((rows) => rows.length > limit),
+    // Where the next pull resumes. With no events (nothing past `since`) the
+    // incoming position is kept as is.
+    cursor: formatSyncPullPosition(plan.last ?? since),
+    hasMore: plan.hasMore,
+  };
+}
+
+function pullWindow(
+  entityType: SyncPullEntityType,
+  rows: Array<Record<string, unknown>>,
+  timestampKey: string,
+): SyncPullWindow {
+  return {
+    entityType,
+    rows: rows.map((row) => ({
+      timestampMs: Date.parse(toSyncTimestamp(row[timestampKey])),
+      id: Number(row.id),
+    })),
   };
 }
 
@@ -1266,9 +1435,8 @@ function toCloudEvents(
     | "service_order",
   rows: Array<Record<string, unknown>>,
   timestampKey: string,
-  limit: number,
 ) {
-  return rows.slice(0, limit).map((row) => {
+  return rows.map((row) => {
     const occurredAt = toSyncTimestamp(row[timestampKey]);
     return {
       cloudEventId: `cloud:${entityType}:${String(row.id)}:${occurredAt}`,
@@ -1277,7 +1445,9 @@ function toCloudEvents(
         typeof row.id === "number" || typeof row.id === "string"
           ? row.id
           : String(row.id),
-      operation: "upsert" as const,
+      // A soft-deleted row (assets, standards) travels as a delete so the
+      // desktop can soft-delete its copy; its payload still carries deletedAt.
+      operation: row.deletedAt ? ("delete" as const) : ("upsert" as const),
       occurredAt,
       payload: row,
     };
@@ -1690,6 +1860,41 @@ async function applyDesktopCertificatePdfUpload(
   }
 }
 
+const AUDIT_ONLY_DESKTOP_SYNC_EVENTS = [
+  { entityType: "attachment", operation: "create_local_attachment" },
+  {
+    entityType: "certificate_draft",
+    operation: "create_local_certificate_draft",
+  },
+] as const;
+
+function isAuditOnlyDesktopSyncEvent(event: SyncEvent) {
+  return AUDIT_ONLY_DESKTOP_SYNC_EVENTS.some(
+    (known) =>
+      known.entityType === event.entityType &&
+      known.operation === event.operation,
+  );
+}
+
+/**
+ * When an offline calibration was performed. The desktop stamps the submit
+ * event with the local time it happened; using the sync time instead would put
+ * the day the laptop got connectivity on the certificate, the asset's next-due
+ * date and the standards-used-at links. A device clock is not trusted to lie
+ * about the future: the value is clamped to `now`, and an absent/unparseable
+ * `occurredAt` falls back to `now`.
+ * Exported for spec coverage; not part of the route surface.
+ */
+export function resolveDesktopPerformedAt(
+  occurredAt: string | null | undefined,
+  now: Date = new Date(),
+) {
+  if (!occurredAt) return now;
+  const parsed = new Date(occurredAt);
+  if (Number.isNaN(parsed.getTime())) return now;
+  return parsed.getTime() > now.getTime() ? now : parsed;
+}
+
 async function applyDesktopSyncEvent(
   input: ApplyDesktopSyncEventInput,
 ): Promise<ApplyDesktopSyncEventResult> {
@@ -1790,8 +1995,23 @@ async function applyDesktopSyncEvent(
       );
     }
 
-    await writeDesktopSyncAudit(input, actorUserId);
-    return { ok: true };
+    // Audit-only events: the desktop records them in its outbox, but the cloud
+    // has nothing to apply (attachment bytes travel through the attachment
+    // endpoints, the certificate draft is local until its PDF is uploaded).
+    // Everything else is unknown to this server, and acknowledging it would
+    // make the desktop mark the event synced and never send it again: reject
+    // it so the outbox keeps it (and does NOT write an audit row, which would
+    // make the dedup lookup treat the event as applied).
+    if (isAuditOnlyDesktopSyncEvent(input.event)) {
+      await writeDesktopSyncAudit(input, actorUserId);
+      return { ok: true };
+    }
+
+    return {
+      ok: false,
+      code: "UNSUPPORTED_SYNC_OPERATION",
+      reason: `Sync operation ${input.event.operation} on ${input.event.entityType} is not supported by this server.`,
+    };
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Desktop sync event failed.";
@@ -2799,6 +3019,21 @@ async function applyLocalJobExecution(
   const nextMethodDeviations = hasOwn(payload, "methodDeviations")
     ? getMethodDeviationsOrNull(payload, "methodDeviations")
     : existing.methodDeviations;
+  // When the calibration was performed. A submit carries the explicit date the
+  // technician chose (older clients send none: the submit time stands in).
+  const executionTime = resolveDesktopExecutionTime(
+    payload,
+    input.event.occurredAt,
+    nextStatus === "REVIEW",
+  );
+  if (!executionTime.ok) {
+    return {
+      ok: false,
+      code: "INVALID_DESKTOP_EVENT_PAYLOAD",
+      reason: executionTime.reason,
+    };
+  }
+
   const standardsValidation = await validateDesktopExecutionStandardsSnapshot(
     nextStandardsSnapshot,
     nextData,
@@ -2859,7 +3094,7 @@ async function applyLocalJobExecution(
       calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
       methodDeviations: nextMethodDeviations,
       status: nextStatus,
-      performedAt: nextStatus === "REVIEW" ? new Date() : existing.performedAt,
+      performedAt: executionTime.performedAt ?? existing.performedAt,
       updatedAt: new Date(),
     })
     .where(eq(calibrationJob.id, existing.id))
@@ -2905,6 +3140,10 @@ async function applyLocalJobExecution(
       },
     },
     performedBy: actorUserId,
+    // Same wording as the cloud's own submit, so the audit trail reads alike.
+    reason: executionTime.backdateReason
+      ? `Registro retroativo (${executionTime.backdateDays} dias): ${executionTime.backdateReason}`
+      : undefined,
   });
 
   await writeDesktopSyncAudit(input, actorUserId, {
@@ -2924,6 +3163,76 @@ async function applyLocalJobExecution(
         existing.performedAt?.toISOString?.() ??
         null,
     },
+  };
+}
+
+type DesktopExecutionTime =
+  | {
+      ok: true;
+      /** null: leave the stored value alone (draft save without a date). */
+      performedAt: Date | null;
+      backdateDays: number;
+      backdateReason: string | null;
+    }
+  | { ok: false; reason: string };
+
+/**
+ * The performed date of an offline execution, under the cloud's submit rules
+ * (`resolveExecutionPerformedAt`): it must parse, may not be in the future and
+ * needs a reason beyond 7 days.
+ *
+ * "Days back" is measured from when the technician recorded the submission
+ * (`occurredAt`, clamped to now), not from the sync: a laptop that was offline
+ * for ten days would otherwise push a same-day entry past the threshold with no
+ * way left to add the reason. "Future" is measured against the server clock.
+ * A draft save only remembers a valid date, like the cloud's /execute. Events
+ * from older clients carry no date: the submit time is used, as before.
+ */
+function resolveDesktopExecutionTime(
+  payload: Record<string, unknown>,
+  occurredAt: string,
+  isSubmit: boolean,
+  now: Date = new Date(),
+): DesktopExecutionTime {
+  const rawPerformedAt = getNullableString(payload, "performedAt")?.trim();
+  const recordedAt = resolveDesktopPerformedAt(occurredAt, now);
+
+  if (!isSubmit) {
+    const parsed = rawPerformedAt ? new Date(rawPerformedAt) : null;
+    return {
+      ok: true,
+      performedAt: parsed && !Number.isNaN(parsed.getTime()) ? parsed : null,
+      backdateDays: 0,
+      backdateReason: null,
+    };
+  }
+
+  if (!rawPerformedAt) {
+    return {
+      ok: true,
+      performedAt: recordedAt,
+      backdateDays: 0,
+      backdateReason: null,
+    };
+  }
+
+  const parsed = new Date(rawPerformedAt);
+  const referenceNow =
+    parsed.getTime() > recordedAt.getTime() && parsed.getTime() <= now.getTime()
+      ? parsed
+      : recordedAt;
+  const resolved = resolveExecutionPerformedAt({
+    performedAt: rawPerformedAt,
+    backdateReason: getNullableString(payload, "backdateReason"),
+    now: referenceNow,
+  });
+  if (!resolved.ok) return { ok: false, reason: resolved.message };
+
+  return {
+    ok: true,
+    performedAt: resolved.performedAt,
+    backdateDays: resolved.backdateDays,
+    backdateReason: resolved.backdateReason,
   };
 }
 
@@ -4195,7 +4504,12 @@ async function findDesktopSyncRemoteEntityId(
   organizationId: string,
   localEntityId: string,
 ) {
-  const rows = await db
+  // Filter in SQL on the key itself. An entity can have far more audit rows
+  // than any page, most of them without a remote id (updates, retries); an
+  // unordered LIMIT over all of them could miss the row that maps the local id
+  // to its cloud row, and the create was then applied a second time. The
+  // oldest mapping wins, which is the one the entity was created with.
+  const [row] = await db
     .select({
       details: organizationEventLog.details,
     })
@@ -4204,22 +4518,19 @@ async function findDesktopSyncRemoteEntityId(
       and(
         eq(organizationEventLog.organizationId, organizationId),
         eq(organizationEventLog.entityId, localEntityId),
+        sql`${organizationEventLog.details}->>'remoteEntityId' IS NOT NULL`,
       ),
     )
-    .limit(20);
+    .orderBy(asc(organizationEventLog.id))
+    .limit(1);
 
-  for (const row of rows) {
-    const details = asRecord(row.details);
-    const remoteEntityId = details.remoteEntityId;
-    if (
-      typeof remoteEntityId === "number" ||
-      typeof remoteEntityId === "string"
-    ) {
-      return remoteEntityId;
-    }
-  }
+  if (!row) return null;
 
-  return null;
+  const remoteEntityId = asRecord(row.details).remoteEntityId;
+  return typeof remoteEntityId === "number" ||
+    typeof remoteEntityId === "string"
+    ? remoteEntityId
+    : null;
 }
 
 async function findAppliedDesktopSyncEvent(
@@ -4235,6 +4546,10 @@ async function findAppliedDesktopSyncEvent(
       and(
         eq(organizationEventLog.organizationId, organizationId),
         eq(organizationEventLog.entityId, event.entityId),
+        // Filter on the op id in SQL: an entity can have far more audit rows
+        // than the page below, and an unordered LIMIT would miss the one that
+        // proves this event was already applied (a retried push re-applied).
+        sql`${organizationEventLog.details}->>'eventId' = ${event.eventId}`,
       ),
     )
     .limit(100);
