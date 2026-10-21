@@ -37,6 +37,7 @@ import {
   SelectTrigger,
 } from "@/components/ui/select";
 import { getApiBaseUrl } from "@/lib/utils";
+import { keepPreviousDataInScope } from "@/lib/keep-previous-page";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 
 export const Route = createFileRoute("/_authenticated/service-orders/")({
@@ -253,6 +254,7 @@ function ServiceOrdersPage() {
       const result: ServiceOrdersResponse = await response.json();
       return result;
     },
+    placeholderData: keepPreviousDataInScope(key("portal-service-orders")),
   });
 
   return (

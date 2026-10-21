@@ -1392,78 +1392,24 @@ describe("syncRouter", () => {
     );
   });
 
-  it("rejects desktop certificate PDF upload before the local job has synced", async () => {
-    mocks.selectResults.push([], []);
-
-    const response = await createApp().request(
-      "/api/sync/certificate-pdfs",
-      {
-        method: "POST",
-        body: certificatePdfUploadFormData(),
-      },
-      testR2Env,
-    );
-    const body = syncPushResponseSchema.parse(await response.json());
-
-    expect(response.status).toBe(200);
-    expect(body.accepted).toEqual([]);
-    expect(body.conflicts).toEqual([]);
-    expect(body.rejected).toEqual([
-      {
-        eventId: "evt-certificate-pdf-1",
-        code: "REMOTE_ENTITY_MAPPING_MISSING",
-        reason: "Desktop certificate PDF upload has no synced cloud job.",
-      },
-    ]);
-    expect(mocks.uploadToR2).not.toHaveBeenCalled();
-    expect(mocks.db.update).not.toHaveBeenCalled();
-  });
-
-  it("rejects desktop certificate PDF upload when the cloud job is not publishable", async () => {
-    mocks.selectResults.push(
-      [],
-      [
+  it.each(["POST", "GET", "PUT", "PATCH", "DELETE"])(
+    "REQ-P01-1: %s /api/sync/certificate-pdfs does not exist (404), nothing is uploaded or written",
+    async (method) => {
+      const response = await createApp().request(
+        "/api/sync/certificate-pdfs",
         {
-          details: {
-            remoteEntityId: 42,
-          },
+          method,
+          ...(method === "GET" ? {} : { body: certificatePdfUploadFormData() }),
         },
-      ],
-      [
-        {
-          id: 42,
-          jobId: "CAL-2026-0042",
-          status: "APPROVED",
-          certificateUrl: null,
-          unitId: 10,
-        },
-      ],
-    );
+        testR2Env,
+      );
 
-    const response = await createApp().request(
-      "/api/sync/certificate-pdfs",
-      {
-        method: "POST",
-        body: certificatePdfUploadFormData(),
-      },
-      testR2Env,
-    );
-    const body = syncPushResponseSchema.parse(await response.json());
-
-    expect(response.status).toBe(200);
-    expect(body.accepted).toEqual([]);
-    expect(body.conflicts).toEqual([]);
-    expect(body.rejected).toEqual([
-      {
-        eventId: "evt-certificate-pdf-1",
-        code: "INVALID_STATUS_TRANSITION",
-        reason:
-          "Cannot publish desktop certificate PDF for job with status APPROVED.",
-      },
-    ]);
-    expect(mocks.uploadToR2).not.toHaveBeenCalled();
-    expect(mocks.db.update).not.toHaveBeenCalled();
-  });
+      expect(response.status).toBe(404);
+      expect(mocks.uploadToR2).not.toHaveBeenCalled();
+      expect(mocks.db.update).not.toHaveBeenCalled();
+      expect(mocks.db.insert).not.toHaveBeenCalled();
+    },
+  );
 
   it("creates signed upload URLs for offline sync attachments", async () => {
     const requestBody = attachmentUploadRequest();

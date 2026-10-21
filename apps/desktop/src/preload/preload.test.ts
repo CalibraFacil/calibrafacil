@@ -48,7 +48,6 @@ const expectedBridgeKeys = [
   "resumeSync",
   "retrySync",
   "revealFile",
-  "saveCertificatePdf",
   "saveFile",
   "setSecret",
   "setSettings",

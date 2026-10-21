@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import {
   syncBootstrapResponseSchema,
   syncAckRequestSchema,
@@ -56,7 +56,6 @@ import {
   METHOD_ENGINE_OPTIONS,
 } from "@calibra-facil/math-engine";
 import { normalizeStandardsForOfficialExecution } from "@calibra-facil/shared";
-import { desktopCertificatePdfKey } from "@calibra-facil/shared/storage-keys";
 import {
   buildDesktopSyncConflictId,
   buildSyncPushCursor,
@@ -93,7 +92,6 @@ import {
   createR2Client,
   generatePresignedUploadUrl,
   generatePresignedUrl,
-  uploadToR2,
   type R2Env,
 } from "../lib/storage";
 import {
@@ -110,7 +108,6 @@ import { reconcileMethodSnapshotEngine } from "../lib/method-snapshot-engine";
 import { resolveAssetRegimeWrite } from "../lib/asset-regime";
 import { deriveRegulatedNextDate } from "../lib/regulated-interval";
 import { deriveNextCalibrationDate } from "../lib/portal-asset-interval";
-import { approveJob } from "../modules/jobs/approve-job";
 import {
   claimDesktopSyncEvent,
   completeDesktopSyncClaim,
@@ -120,8 +117,6 @@ import {
   asRecord,
   buildSyncAttachmentObjectKey,
   encodeSyncAttachmentId,
-  formNumber,
-  formString,
   getNullableString,
   getNumber,
   getRecordOrNull,
@@ -162,9 +157,7 @@ import {
   loadCustomerActiveCommercialAgreement,
   syncComplianceWithActiveAgreement,
 } from "../lib/finance";
-import { storedObjectUrl } from "@calibra-facil/shared/public-urls";
 
-const MAX_DESKTOP_CERTIFICATE_PDF_BYTES = 25 * 1024 * 1024;
 const SYNC_ATTACHMENT_URL_EXPIRES_IN_SECONDS = 900;
 
 // ============================================================================
@@ -559,23 +552,6 @@ export const syncRouter = new Hono<{
     },
   )
   .post(
-    "/certificate-pdfs",
-    ...withLabPermission({ calibration: ["approve"] }),
-    async (c) => {
-      const memberData = getMemberData(c);
-      const session = c.get("session");
-      const formData = await c.req.formData();
-      const result = await applyDesktopCertificatePdfUpload({
-        formData,
-        memberData,
-        sessionUserId: session.user.id,
-        env: c.env,
-      });
-
-      return c.json(syncPushResponseSchema.parse(result));
-    },
-  )
-  .post(
     "/push",
     ...withLabPermission({ calibration: ["create"] }),
     async (c) => {
@@ -921,13 +897,6 @@ type ApplyDesktopSyncEventInput = {
   sessionUserId: string;
   deviceId: string;
   clientBatchId: string;
-};
-
-type ApplyDesktopCertificatePdfUploadInput = {
-  formData: FormData;
-  memberData: MemberData;
-  sessionUserId: string;
-  env: R2Env;
 };
 
 type ApplyDesktopSyncEventResult =
@@ -1533,347 +1502,6 @@ function standardCertificateDocumentSnapshot(
   };
 }
 
-async function applyDesktopCertificatePdfUpload(
-  input: ApplyDesktopCertificatePdfUploadInput,
-) {
-  const fields = readCertificatePdfUploadFields(input.formData);
-  if (!fields.ok) {
-    return syncPushResponseSchema.parse({
-      accepted: [],
-      rejected: [
-        {
-          eventId: fields.eventId,
-          code: fields.code,
-          reason: fields.reason,
-        },
-      ],
-      conflicts: [],
-    });
-  }
-
-  const upload = fields.value;
-  if (upload.organizationId !== input.memberData.organizationId) {
-    return syncPushResponseSchema.parse({
-      accepted: [],
-      rejected: [
-        {
-          eventId: upload.eventId,
-          code: "ORGANIZATION_SCOPE_MISMATCH",
-          reason: "Certificate PDF upload organization does not match.",
-        },
-      ],
-      conflicts: [],
-    });
-  }
-
-  if (
-    upload.unitId !== null &&
-    !input.memberData.accessibleUnitIds.includes(upload.unitId)
-  ) {
-    return syncPushResponseSchema.parse({
-      accepted: [],
-      rejected: [
-        {
-          eventId: upload.eventId,
-          code: "UNIT_SCOPE_MISMATCH",
-          reason: "Certificate PDF upload unit is not accessible.",
-        },
-      ],
-      conflicts: [],
-    });
-  }
-
-  const actorAllowed = await validateSyncActorScope(
-    getClaimedSyncActorUserId(upload.actorUserId),
-    input.memberData,
-    input.sessionUserId,
-  );
-  if (!actorAllowed) {
-    return syncPushResponseSchema.parse({
-      accepted: [],
-      rejected: [
-        {
-          eventId: upload.eventId,
-          code: "ACTOR_SCOPE_MISMATCH",
-          reason:
-            "Certificate PDF upload actor is not a member of the active organization.",
-        },
-      ],
-      conflicts: [],
-    });
-  }
-
-  // A desktop publish is an approval (it releases the certificate), so the
-  // approver is the AUTHENTICATED pushing user — nothing in the multipart
-  // payload can name someone else. The device holds no per-user signing
-  // credential and the cloud keeps no device registry, so a different
-  // `actorUserId` cannot be verified; it is refused instead of re-attributed
-  // (an approval must never be recorded against, or checked as, a person who
-  // did not authenticate it). The offline approver signs in on the device and
-  // pushes under their own session.
-  const claimedApprover = getClaimedSyncActorUserId(upload.actorUserId);
-  if (claimedApprover !== null && claimedApprover !== input.sessionUserId) {
-    return syncPushResponseSchema.parse({
-      accepted: [],
-      rejected: [
-        {
-          eventId: upload.eventId,
-          code: "APPROVAL_ACTOR_MISMATCH",
-          reason:
-            "Offline approvals must be pushed by the authenticated user who approved; the claimed actor differs from the session.",
-        },
-      ],
-      conflicts: [],
-    });
-  }
-
-  try {
-    const existingRemoteKey = await findDesktopSyncRemoteEntityId(
-      input.memberData.organizationId,
-      upload.entityId,
-    );
-    if (typeof existingRemoteKey === "string") {
-      return syncPushResponseSchema.parse({
-        accepted: [
-          {
-            eventId: upload.eventId,
-            remoteEntityId: existingRemoteKey,
-            remoteVersion: upload.localVersion + 1,
-            cloudEventId: `cloud:${upload.eventId}`,
-          },
-        ],
-        rejected: [],
-        conflicts: [],
-      });
-    }
-
-    const mappedRemoteJobId = await findDesktopSyncRemoteEntityId(
-      input.memberData.organizationId,
-      upload.localJobId,
-    );
-    const remoteJobId =
-      typeof mappedRemoteJobId === "number"
-        ? mappedRemoteJobId
-        : upload.remoteJobId;
-    if (typeof remoteJobId !== "number") {
-      return syncPushResponseSchema.parse({
-        accepted: [],
-        rejected: [
-          {
-            eventId: upload.eventId,
-            code: "REMOTE_ENTITY_MAPPING_MISSING",
-            reason: "Desktop certificate PDF upload has no synced cloud job.",
-          },
-        ],
-        conflicts: [],
-      });
-    }
-
-    const [job] = await db
-      .select()
-      .from(calibrationJob)
-      .where(
-        and(
-          eq(calibrationJob.id, remoteJobId),
-          eq(calibrationJob.organizationId, input.memberData.organizationId),
-          buildUnitScopeCondition(calibrationJob.unitId, input.memberData),
-        ),
-      )
-      .limit(1);
-
-    if (!job) {
-      return syncPushResponseSchema.parse({
-        accepted: [],
-        rejected: [
-          {
-            eventId: upload.eventId,
-            code: "REMOTE_ENTITY_NOT_FOUND",
-            reason: "Cloud job for desktop certificate PDF was not found.",
-          },
-        ],
-        conflicts: [],
-      });
-    }
-
-    if (!["REVIEW", "GENERATING_PDF"].includes(job.status)) {
-      return syncPushResponseSchema.parse({
-        accepted: [],
-        rejected: [
-          {
-            eventId: upload.eventId,
-            code: "INVALID_STATUS_TRANSITION",
-            reason: `Cannot publish desktop certificate PDF for job with status ${job.status}.`,
-          },
-        ],
-        conflicts: [],
-      });
-    }
-
-    if (job.certificateUrl) {
-      return syncPushResponseSchema.parse({
-        accepted: [],
-        rejected: [
-          {
-            eventId: upload.eventId,
-            code: "CERTIFICATE_ALREADY_PUBLISHED",
-            reason: "Cloud job already has a published certificate PDF.",
-          },
-        ],
-        conflicts: [],
-      });
-    }
-
-    const bytes = new Uint8Array(await upload.file.arrayBuffer());
-    if (bytes.byteLength === 0) {
-      throw new Error("Uploaded certificate PDF is empty.");
-    }
-
-    if (bytes.byteLength > MAX_DESKTOP_CERTIFICATE_PDF_BYTES) {
-      throw new Error("Uploaded certificate PDF exceeds the size limit.");
-    }
-
-    if (bytes.byteLength !== upload.sizeBytes) {
-      throw new Error("Uploaded certificate PDF size does not match metadata.");
-    }
-
-    const contentHash = createHash("sha256").update(bytes).digest("hex");
-    if (contentHash !== upload.contentHash) {
-      throw new Error("Uploaded certificate PDF hash does not match metadata.");
-    }
-
-    const year = new Date(upload.occurredAt).getUTCFullYear();
-    const remoteKey = buildDesktopCertificatePdfKey({
-      organizationId: input.memberData.organizationId,
-      year,
-      jobId: job.jobId,
-      draftId: upload.draftId,
-    });
-    const certificateUrl = storedObjectUrl(remoteKey);
-    const r2Client = createR2Client(input.env);
-    const actorUserId = input.sessionUserId;
-    // A pre-redesign desktop build may arrive with a template snapshot frozen
-    // onto the job. It is accepted and preserved as the historical evidence it
-    // is, but nothing FABRICATES one any more: the previous version wrote a
-    // placeholder {name: "Padrão do Sistema"} whenever the job had none, which
-    // put an invented template name into a regulated evidence column for a
-    // certificate no template ever produced. There is no per-method template
-    // left to resolve from, so absent is the honest value.
-    //
-    // The cloud-side issuance block (#865) is deliberately not applied here:
-    // these PDFs were already rendered offline, and rejecting them on sync
-    // would lose them. That is not a claim that desktop issuance still works —
-    // generateLocalCertificateDraft (apps/local-server/src/certificates.ts)
-    // throws unconditionally, so nothing offline renders a certificate today.
-    // The release RULES (below) are not optional, though: a refused approval
-    // comes back as a rejected op and the desktop surfaces it.
-
-    // The release itself is the shared approval command — the same gates
-    // (role, separation of duties, authorized signatory, environmental
-    // justification, accredited scope), compare-and-set transition and audit
-    // as the cloud route. The PDF is uploaded only once the policy passed.
-    const approval = await approveJob({
-      jobId: job.id,
-      actor: { kind: "user", member: input.memberData },
-      values: {},
-      metadata: {},
-      completion: {
-        kind: "publish_desktop_certificate",
-        publish: async () => {
-          await uploadToR2(
-            r2Client,
-            input.env.R2_BUCKET_NAME,
-            remoteKey,
-            bytes,
-            "application/pdf",
-          );
-          return {
-            certificateUrl,
-            auditChanges: {
-              contentHash,
-              sizeBytes: bytes.byteLength,
-              remoteKey,
-            },
-          };
-        },
-      },
-    });
-
-    if (approval.status !== "approved") {
-      return syncPushResponseSchema.parse({
-        accepted: [],
-        rejected: [
-          {
-            eventId: upload.eventId,
-            ...describeRefusedDesktopApproval(approval),
-          },
-        ],
-        conflicts: [],
-      });
-    }
-
-    const approvedAt = approval.job?.approvedAt ?? new Date();
-
-    await writeOrganizationAuditEvent({
-      organizationId: input.memberData.organizationId,
-      unitId: upload.unitId,
-      actorUserId,
-      actorMemberId: input.memberData.id,
-      action: "desktop_sync.generate_local_certificate_pdf",
-      entityType: "certificate_draft",
-      entityId: upload.entityId,
-      details: {
-        eventId: upload.eventId,
-        idempotencyKey: upload.idempotencyKey,
-        localVersion: upload.localVersion,
-        localEntityId: upload.entityId,
-        localJobId: upload.localJobId,
-        remoteEntityId: remoteKey,
-        remoteJobId: job.id,
-        certificateUrl,
-        portalVisible: true,
-        contentHash,
-        sizeBytes: bytes.byteLength,
-      },
-    });
-
-    return syncPushResponseSchema.parse({
-      accepted: [
-        {
-          eventId: upload.eventId,
-          remoteEntityId: remoteKey,
-          remoteEntity: {
-            jobId: job.jobId,
-            status: "APPROVED",
-            certificateUrl,
-            remoteKey,
-            portalVisible: true,
-            approvedAt: approvedAt.toISOString(),
-          },
-          remoteVersion: upload.localVersion + 1,
-          cloudEventId: `cloud:${upload.eventId}`,
-        },
-      ],
-      rejected: [],
-      conflicts: [],
-    });
-  } catch (error) {
-    return syncPushResponseSchema.parse({
-      accepted: [],
-      rejected: [
-        {
-          eventId: upload.eventId,
-          code: "CERTIFICATE_PDF_UPLOAD_FAILED",
-          reason:
-            error instanceof Error
-              ? error.message
-              : "Desktop certificate PDF upload failed.",
-        },
-      ],
-      conflicts: [],
-    });
-  }
-}
-
 const AUDIT_ONLY_DESKTOP_SYNC_EVENTS = [
   { entityType: "attachment", operation: "create_local_attachment" },
   {
@@ -2009,9 +1637,22 @@ async function applyDesktopSyncEvent(
       );
     }
 
+    // Certificates are issued online only: the cloud worker renders and signs
+    // them after the cloud approval. A queued offline "publish certificate PDF"
+    // event (an older desktop build) is refused with its own code — never
+    // applied, never acknowledged, so the desktop keeps showing it as refused.
+    if (input.event.operation === "generate_local_certificate_pdf") {
+      return {
+        ok: false,
+        code: "OFFLINE_CERTIFICATE_PUBLICATION_NOT_SUPPORTED",
+        reason:
+          "Certificates are issued online only: approve the job in the cloud app and the certificate is generated and signed there. Client-rendered certificate PDFs are not accepted.",
+      };
+    }
+
     // Audit-only events: the desktop records them in its outbox, but the cloud
     // has nothing to apply (attachment bytes travel through the attachment
-    // endpoints, the certificate draft is local until its PDF is uploaded).
+    // endpoints, the legacy certificate-draft marker carries no data).
     // Everything else is unknown to this server, and acknowledging it would
     // make the desktop mark the event synced and never send it again: reject
     // it so the outbox keeps it (and does NOT write an audit row, which would
@@ -4327,224 +3968,6 @@ async function createMethodExecutionEngine(): Promise<CalculationEngineLike> {
   return createCalculationEngine(
     METHOD_ENGINE_OPTIONS,
   ) as unknown as CalculationEngineLike;
-}
-
-type CertificatePdfUploadFields = {
-  eventId: string;
-  entityId: string;
-  operation: string;
-  idempotencyKey: string;
-  localVersion: number;
-  occurredAt: string;
-  actorUserId: string;
-  organizationId: string;
-  unitId: number | null;
-  localJobId: string;
-  remoteJobId: number | null;
-  draftId: string;
-  contentHash: string;
-  sizeBytes: number;
-  file: File;
-};
-
-type RefusedDesktopApproval = Exclude<
-  Awaited<ReturnType<typeof approveJob>>,
-  { status: "approved" }
->;
-
-/**
- * Maps a refusal from the shared approval command to the rejected-op shape the
- * desktop outbox stores (`code: reason` in `last_error`). Always a rejection —
- * never `accepted`, never silently dropped.
- */
-function describeRefusedDesktopApproval(refusal: RefusedDesktopApproval): {
-  code: string;
-  reason: string;
-} {
-  switch (refusal.status) {
-    case "not_found":
-      return {
-        code: "REMOTE_ENTITY_NOT_FOUND",
-        reason: "Cloud job for desktop certificate PDF was not found.",
-      };
-    case "invalid_status":
-      return {
-        code: "INVALID_STATUS_TRANSITION",
-        reason: `Cannot publish desktop certificate PDF for job with status ${refusal.currentStatus}.`,
-      };
-    case "approval_requires_signatory":
-    case "role_not_permitted":
-      return {
-        code: "APPROVAL_ROLE_NOT_PERMITTED",
-        reason:
-          "The authenticated user is not allowed to approve calibrations; the offline approval was not applied.",
-      };
-    case "self_approval_blocked":
-      return {
-        code: "SELF_APPROVAL_BLOCKED",
-        reason:
-          "Separation of duties (ISO/IEC 17025): the user who executed or created the calibration cannot approve it; the offline approval was not applied.",
-      };
-    case "not_authorized_signatory":
-      return {
-        code: "APPROVER_NOT_AUTHORIZED_SIGNATORY",
-        reason:
-          "The approver is not an authorized signatory for this instrument type (ISO/IEC 17025 6.2.6); the offline approval was not applied.",
-      };
-    case "environmental_justification_required":
-      return {
-        code: "ENVIRONMENTAL_JUSTIFICATION_REQUIRED",
-        reason:
-          "Environmental conditions were out of limits and no justification is recorded; approve the job in the cloud app with a justification.",
-      };
-    case "scope_violation":
-      return {
-        code: "SCOPE_VIOLATION",
-        reason:
-          "Accredited-scope (CMC) violation blocks accredited issuance; approve the job in the cloud app with a documented justification.",
-      };
-    case "dispatch_failed":
-      return {
-        code: "APPROVAL_DISPATCH_FAILED",
-        reason:
-          "The certificate job could not be dispatched; the approval was reverted.",
-      };
-    case "concurrent_approval":
-      return {
-        code: "APPROVAL_CONFLICT",
-        reason:
-          "The cloud job changed (another approval or review) while this offline approval was being applied; nothing was written.",
-      };
-  }
-}
-
-function readCertificatePdfUploadFields(
-  formData: FormData,
-):
-  | { ok: true; value: CertificatePdfUploadFields }
-  | { ok: false; eventId: string; code: string; reason: string } {
-  const eventId = formString(formData, "eventId") ?? "unknown";
-  const file = formData.get("file");
-  const localVersion = formNumber(formData, "localVersion");
-  const sizeBytes = formNumber(formData, "sizeBytes");
-  const remoteJobIdValue = formNumber(formData, "remoteJobId");
-  const remoteJobId = Number.isInteger(remoteJobIdValue)
-    ? remoteJobIdValue
-    : null;
-  const unitIdText = formString(formData, "unitId");
-  const unitId =
-    unitIdText === null || unitIdText === "" ? null : Number(unitIdText);
-
-  if (!(file instanceof File)) {
-    return {
-      ok: false,
-      eventId,
-      code: "INVALID_CERTIFICATE_PDF_UPLOAD",
-      reason: "Certificate PDF upload is missing the PDF file.",
-    };
-  }
-
-  if (
-    !Number.isInteger(localVersion) ||
-    !Number.isInteger(sizeBytes) ||
-    sizeBytes <= 0 ||
-    (unitId !== null && (!Number.isInteger(unitId) || unitId <= 0))
-  ) {
-    return {
-      ok: false,
-      eventId,
-      code: "INVALID_CERTIFICATE_PDF_UPLOAD",
-      reason: "Certificate PDF upload has invalid numeric metadata.",
-    };
-  }
-
-  const required = {
-    entityId: formString(formData, "entityId"),
-    operation: formString(formData, "operation"),
-    idempotencyKey: formString(formData, "idempotencyKey"),
-    occurredAt: formString(formData, "occurredAt"),
-    actorUserId: formString(formData, "actorUserId"),
-    organizationId: formString(formData, "organizationId"),
-    localJobId: formString(formData, "localJobId"),
-    draftId: formString(formData, "draftId"),
-    contentHash: formString(formData, "contentHash"),
-  };
-
-  if (Object.values(required).some((value) => !value)) {
-    return {
-      ok: false,
-      eventId,
-      code: "INVALID_CERTIFICATE_PDF_UPLOAD",
-      reason: "Certificate PDF upload is missing required metadata.",
-    };
-  }
-
-  if (required.operation !== "generate_local_certificate_pdf") {
-    return {
-      ok: false,
-      eventId,
-      code: "INVALID_CERTIFICATE_PDF_UPLOAD_OPERATION",
-      reason: "Certificate PDF upload operation is not supported.",
-    };
-  }
-
-  if (!/^[a-f0-9]{64}$/.test(required.contentHash!)) {
-    return {
-      ok: false,
-      eventId,
-      code: "INVALID_CERTIFICATE_PDF_HASH",
-      reason: "Certificate PDF upload hash is invalid.",
-    };
-  }
-
-  if (file.type && file.type !== "application/pdf") {
-    return {
-      ok: false,
-      eventId,
-      code: "INVALID_CERTIFICATE_PDF_CONTENT_TYPE",
-      reason: "Certificate PDF upload must be application/pdf.",
-    };
-  }
-
-  return {
-    ok: true,
-    value: {
-      eventId,
-      entityId: required.entityId!,
-      operation: required.operation!,
-      idempotencyKey: required.idempotencyKey!,
-      localVersion,
-      occurredAt: required.occurredAt!,
-      actorUserId: required.actorUserId!,
-      organizationId: required.organizationId!,
-      unitId,
-      localJobId: required.localJobId!,
-      remoteJobId,
-      draftId: required.draftId!,
-      contentHash: required.contentHash!,
-      sizeBytes,
-      file,
-    },
-  };
-}
-
-// Desktop-originated certs and sync attachments are part of the offline
-// subsystem: they stay in the documents bucket and use the id-only org
-// partition (slug omitted). The attachment key also round-trips as the opaque
-// attachment id, so its byte layout must stay stable — org ids are URL-safe,
-// so the shared builder produces the same string as the previous local one.
-function buildDesktopCertificatePdfKey(input: {
-  organizationId: string;
-  year: number;
-  jobId: string;
-  draftId: string;
-}) {
-  return desktopCertificatePdfKey({
-    org: { id: input.organizationId, slug: "" },
-    year: input.year,
-    jobId: input.jobId,
-    draftId: input.draftId,
-  }).key;
 }
 
 function methodDiagnostic(

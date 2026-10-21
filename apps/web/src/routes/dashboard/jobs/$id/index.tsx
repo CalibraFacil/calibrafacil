@@ -11,7 +11,6 @@ export const Route = createFileRoute('/dashboard/jobs/$id/')({
 
 function JobDetailRoute() {
   const { id } = Route.useParams()
-  const { runtime } = Route.useRouteContext()
 
-  return <JobDetailPage id={id} runtime={runtime} />
+  return <JobDetailPage id={id} />
 }

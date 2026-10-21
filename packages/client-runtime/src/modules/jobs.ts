@@ -158,11 +158,6 @@ export function createJobsApi(rawCloudClient: any): JobsApi {
         "Erro ao submeter",
       );
     },
-    async createCertificateDraft() {
-      throw new Error(
-        "Rascunhos locais de certificado estão disponíveis apenas no desktop",
-      );
-    },
     async getCertificateDownloadUrl(jobId: string | number) {
       return readJsonResponse<JobDownloadUrlData>(
         await rawCloudClient.api.jobs[":id"].download.$get({

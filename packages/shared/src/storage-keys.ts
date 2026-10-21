@@ -15,7 +15,6 @@
  * Layout overview:
  *   documents bucket  org/{slug}-{id}/{year}/jobs/{jobId}/issued/{issuedId}/{descriptive}.pdf|.xlsx
  *                     org/{slug}-{id}/{year}/jobs/{jobId}/label.pdf
- *                     org/{slug}-{id}/{year}/jobs/{jobId}/desktop-{draftId}.pdf
  *                     org/{slug}-{id}/{year}/{month}/service-orders/{number}/...
  *                     org/{slug}-{id}/standards/{stdId}/certificates/{docId}-{file}
  *                     org/{slug}-{id}/sync-attachments/{entityType}/{entityId}/{file}
@@ -38,7 +37,6 @@ export type StorageCategory =
   | "ISSUED_CERTIFICATE"
   | "SERVICE_ORDER_DOC"
   | "JOB_LABEL"
-  | "DESKTOP_CERTIFICATE"
   | "STANDARD_DOC"
   | "SYNC_ATTACHMENT"
   | "PORTAL_EXPORT"
@@ -63,7 +61,6 @@ export function bucketFor(category: StorageCategory): StorageBucket {
     case "ISSUED_CERTIFICATE":
     case "SERVICE_ORDER_DOC":
     case "JOB_LABEL":
-    case "DESKTOP_CERTIFICATE":
     case "STANDARD_DOC":
     case "SYNC_ATTACHMENT":
     case "PORTAL_EXPORT":
@@ -248,23 +245,6 @@ export function jobLabelKey(params: JobLabelKeyParams): StorageObject {
   return {
     bucket: bucketFor("JOB_LABEL"),
     key: `org/${part}/${params.year}/jobs/${jobId}/label.pdf`,
-  };
-}
-
-export interface DesktopCertificateKeyParams {
-  org: OrgRef;
-  jobId: string;
-  year: number;
-  draftId: string;
-}
-
-export function desktopCertificatePdfKey(
-  params: DesktopCertificateKeyParams,
-): StorageObject {
-  const part = orgPartition(params.org);
-  return {
-    bucket: bucketFor("DESKTOP_CERTIFICATE"),
-    key: `org/${part}/${params.year}/jobs/${safeR2Segment(params.jobId)}/desktop-${safeR2Segment(params.draftId)}.pdf`,
   };
 }
 

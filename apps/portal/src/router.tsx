@@ -1,6 +1,7 @@
 import { createRouter } from "@tanstack/react-router";
 import { QueryClient } from "@tanstack/react-query";
 import { routeTree } from "./routeTree.gen";
+import { routeBoundaryOptions } from "./components/route-boundaries";
 
 export const getRouter = () => {
   const queryClient = new QueryClient({
@@ -17,6 +18,7 @@ export const getRouter = () => {
     defaultPreload: "intent",
     defaultPreloadDelay: 80,
     defaultPreloadStaleTime: 0,
+    ...routeBoundaryOptions,
     context: {
       queryClient,
     },

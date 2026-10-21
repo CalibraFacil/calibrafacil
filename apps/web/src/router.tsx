@@ -12,6 +12,7 @@ import {
   shouldEnableTelemetry,
   shouldSendSentryPii,
 } from './app/config/runtime'
+import { routeBoundaryOptions } from './app/router/route-boundaries'
 
 function scheduleIdle(callback: () => void) {
   if (typeof window === 'undefined') return
@@ -68,6 +69,7 @@ export const getRouter = () => {
     defaultPreload: 'intent',
     defaultPreloadDelay: 80,
     defaultPreloadStaleTime: 0,
+    ...routeBoundaryOptions,
     context: {
       queryClient,
       runtime: {

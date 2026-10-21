@@ -277,9 +277,6 @@ export async function installDesktopBridge(
         async saveFile() {
           return null
         },
-        async saveCertificatePdf() {
-          return null
-        },
         async openExternal() {
           return true
         },

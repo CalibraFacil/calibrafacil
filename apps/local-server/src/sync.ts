@@ -3,7 +3,6 @@ import {
   syncPullResponseSchema,
   syncBootstrapResponseSchema,
   syncPushResponseSchema,
-  type SyncPushResponse,
   type SyncStatusSnapshot,
 } from "@calibra-facil/contracts";
 import {
@@ -21,8 +20,6 @@ import {
   type LocalDatabase,
 } from "@calibra-facil/local-db";
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
 import type { LocalServerConfig } from "./bootstrap";
 
 export type LocalSyncRuntime = {
@@ -391,32 +388,11 @@ async function pushPendingOutbox(
   });
   if (pending.length === 0) return;
 
-  const certificatePdfEvents = pending.filter(
-    (event) => event.operation === "generate_local_certificate_pdf",
-  );
-  const regularEvents = pending.filter(
-    (event) => event.operation !== "generate_local_certificate_pdf",
-  );
-
-  if (regularEvents.length > 0) {
-    await pushOutboxEvents(
-      config,
-      database,
-      fetchImpl,
-      regularEvents,
-      cloudApiUrl,
-    );
-  }
-
-  if (certificatePdfEvents.length > 0) {
-    await uploadPendingCertificatePdfs(
-      config,
-      database,
-      fetchImpl,
-      certificatePdfEvents,
-      cloudApiUrl,
-    );
-  }
+  // Every event travels as an event. There is no side channel for certificate
+  // bytes: certificates are rendered and signed in the cloud after an online
+  // approval, so a queued `generate_local_certificate_pdf` (an older build) is
+  // pushed like any other and the cloud refuses it with a precise code.
+  await pushOutboxEvents(config, database, fetchImpl, pending, cloudApiUrl);
 }
 
 async function pushOutboxEvents(
@@ -487,97 +463,6 @@ async function pushOutboxEvents(
   );
 }
 
-async function uploadPendingCertificatePdfs(
-  config: LocalServerConfig,
-  database: LocalDatabase,
-  fetchImpl: typeof fetch,
-  pending: ReturnType<typeof listPendingOutboxEvents>,
-  cloudApiUrl: string,
-) {
-  const uploadUrl = new URL("/api/sync/certificate-pdfs", cloudApiUrl);
-  const context = getLocalSyncContext(config, database);
-  const accepted: SyncPushResponse["accepted"] = [];
-  const rejected: SyncPushResponse["rejected"] = [];
-
-  for (const event of pending) {
-    const payload = asRecord(event.payload);
-    const localPath = getString(payload, "localPath");
-    const localJobId = getString(payload, "jobId");
-    const remoteJobId = getNumber(payload, "remoteJobId");
-    const draftId = getString(payload, "draftId");
-    const contentHash = getString(payload, "contentHash");
-    const sizeBytes = getNumber(payload, "sizeBytes");
-
-    if (!localPath || !localJobId || !draftId || !contentHash || !sizeBytes) {
-      rejected.push({
-        eventId: event.eventId,
-        code: "INVALID_LOCAL_CERTIFICATE_PDF_EVENT",
-        reason: "Local certificate PDF sync event is missing metadata.",
-      });
-      continue;
-    }
-
-    const absolutePath = resolveLocalStoragePath(config.storageRoot, localPath);
-    const bytes = await readFile(absolutePath);
-    const formData = new FormData();
-    formData.set("eventId", event.eventId);
-    formData.set("entityId", event.entityId);
-    formData.set("operation", event.operation);
-    formData.set("idempotencyKey", event.idempotencyKey);
-    formData.set("localVersion", String(event.localVersion));
-    formData.set("occurredAt", event.occurredAt);
-    formData.set("actorUserId", event.actorUserId ?? context.userId ?? "local");
-    formData.set("organizationId", context.organizationId ?? "");
-    formData.set(
-      "unitId",
-      context.unitId === null ? "" : String(context.unitId),
-    );
-    formData.set("localJobId", localJobId);
-    if (remoteJobId !== null) {
-      formData.set("remoteJobId", String(remoteJobId));
-    }
-    formData.set("draftId", draftId);
-    formData.set("contentHash", contentHash);
-    formData.set("sizeBytes", String(sizeBytes));
-    formData.set(
-      "file",
-      new Blob([toArrayBuffer(bytes)], { type: "application/pdf" }),
-      `${draftId}.pdf`,
-    );
-
-    const headers = new Headers();
-    applyCloudAuthHeaders(config, headers);
-
-    const response = await fetchImpl(uploadUrl, {
-      method: "POST",
-      headers,
-      body: formData,
-    });
-
-    if (!response.ok) {
-      rejected.push({
-        eventId: event.eventId,
-        code: "CERTIFICATE_PDF_UPLOAD_FAILED",
-        reason: `Cloud certificate PDF upload failed with HTTP ${response.status}.`,
-      });
-      continue;
-    }
-
-    const body = syncPushResponseSchema.parse(await response.json());
-    accepted.push(...body.accepted);
-    rejected.push(...body.rejected);
-  }
-
-  applySyncPushResult(
-    database,
-    syncPushResponseSchema.parse({
-      accepted,
-      rejected,
-      conflicts: [],
-    }),
-  );
-}
-
 function getLocalSyncContext(
   config: LocalServerConfig,
   database: LocalDatabase,
@@ -605,39 +490,6 @@ LIMIT 1
     unitId: config.unitId ?? snapshot?.active_unit_id ?? null,
     userId: config.userId ?? snapshot?.user_id ?? null,
   };
-}
-
-function resolveLocalStoragePath(storageRoot: string, localPath: string) {
-  const root = path.resolve(storageRoot);
-  const target = path.resolve(root, localPath);
-
-  if (target !== root && !target.startsWith(`${root}${path.sep}`)) {
-    throw new Error("Caminho local invalido");
-  }
-
-  return target;
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? Object.fromEntries(Object.entries(value))
-    : {};
-}
-
-function getString(row: Record<string, unknown>, key: string) {
-  const value = row[key];
-  return typeof value === "string" && value.length > 0 ? value : null;
-}
-
-function getNumber(row: Record<string, unknown>, key: string) {
-  const value = row[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function toArrayBuffer(bytes: Uint8Array) {
-  const buffer = new ArrayBuffer(bytes.byteLength);
-  new Uint8Array(buffer).set(bytes);
-  return buffer;
 }
 
 function applyCloudAuthHeaders(config: LocalServerConfig, headers: Headers) {

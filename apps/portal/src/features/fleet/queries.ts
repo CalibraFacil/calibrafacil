@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { getApiBaseUrl } from "@/lib/utils";
+import { keepPreviousDataInScope } from "@/lib/keep-previous-page";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import type { CalibrationFilter } from "@/lib/calibration-status";
 import type { FleetAssetsResponse, FleetSortBy } from "./types";
@@ -44,6 +45,7 @@ export function useFleetAssets(params: FleetAssetsParams) {
   return useQuery({
     queryKey: key("portal-assets", params),
     queryFn: () => fetchFleetAssets(params),
+    placeholderData: keepPreviousDataInScope(key("portal-assets")),
   });
 }
 

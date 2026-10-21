@@ -83,11 +83,6 @@ import {
   type LocalServerConfig,
 } from "./bootstrap";
 import {
-  generateLocalCertificateDraft,
-  readLocalCertificateDraftFile,
-  storeLocalCertificateDraftPdf,
-} from "./certificates";
-import {
   createLocalSyncRuntime,
   notifyCloudConflictResolution,
   type LocalSyncRuntime,
@@ -971,65 +966,6 @@ export function createLocalServerRuntime(
         },
         422,
       );
-    }
-  });
-
-  app.post("/api/jobs/:id/certificate-draft", async (c) => {
-    try {
-      return c.json(
-        await generateLocalCertificateDraft(
-          database,
-          config,
-          c.req.param("id"),
-        ),
-        201,
-      );
-    } catch (error) {
-      return c.json({ error: errorMessage(error) }, 400);
-    }
-  });
-
-  app.get("/api/jobs/:id/certificate-draft/file", async (c) => {
-    try {
-      const file = await readLocalCertificateDraftFile(
-        database,
-        config,
-        c.req.param("id"),
-      );
-      if (!file) {
-        return c.json({ error: "Rascunho de certificado nao encontrado" }, 404);
-      }
-
-      return new Response(file.bytes, {
-        headers: {
-          "Content-Type": `${file.contentType}; charset=utf-8`,
-          "Content-Disposition": `inline; filename="${file.fileName}"`,
-          "Cache-Control": "no-store",
-        },
-      });
-    } catch (error) {
-      return c.json({ error: errorMessage(error) }, 400);
-    }
-  });
-
-  app.post("/api/jobs/:id/certificate-draft/:draftId/pdf", async (c) => {
-    try {
-      const bytes = new Uint8Array(await c.req.arrayBuffer());
-      if (bytes.byteLength === 0) {
-        return c.json({ error: "PDF local vazio" }, 400);
-      }
-
-      return c.json(
-        await storeLocalCertificateDraftPdf(
-          database,
-          config,
-          c.req.param("id"),
-          c.req.param("draftId"),
-          bytes,
-        ),
-      );
-    } catch (error) {
-      return c.json({ error: errorMessage(error) }, 400);
     }
   });
 

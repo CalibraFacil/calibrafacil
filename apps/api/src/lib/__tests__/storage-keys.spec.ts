@@ -4,7 +4,6 @@ import {
   bucketFor,
   buildOrganizationLogoUrl,
   decodeLogoAssetKey,
-  desktopCertificatePdfKey,
   encodeKeyPart,
   encodeLogoAssetKey,
   getLogoKeyFromUrl,
@@ -34,7 +33,6 @@ describe("bucketFor", () => {
       "ISSUED_CERTIFICATE",
       "SERVICE_ORDER_DOC",
       "JOB_LABEL",
-      "DESKTOP_CERTIFICATE",
       "STANDARD_DOC",
       "SYNC_ATTACHMENT",
     ] as const) {
@@ -151,7 +149,7 @@ describe("issued certificate keys", () => {
   });
 });
 
-describe("job label / desktop certificate keys", () => {
+describe("job label keys", () => {
   it("builds a job label key", () => {
     expect(
       jobLabelKey({ org: ORG, jobId: "CAL-2026-9001", year: 2026 }),
@@ -159,17 +157,6 @@ describe("job label / desktop certificate keys", () => {
       bucket: "documents",
       key: `org/${PART}/2026/jobs/CAL-2026-9001/label.pdf`,
     });
-  });
-
-  it("builds a desktop certificate key", () => {
-    expect(
-      desktopCertificatePdfKey({
-        org: ORG,
-        jobId: "CAL-2026-9001",
-        year: 2026,
-        draftId: "draft-9",
-      }).key,
-    ).toBe(`org/${PART}/2026/jobs/CAL-2026-9001/desktop-draft-9.pdf`);
   });
 });
 

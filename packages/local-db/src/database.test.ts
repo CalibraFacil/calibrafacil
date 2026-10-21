@@ -1983,7 +1983,7 @@ WHERE outbox.event_id = @eventId
     database.close();
   });
 
-  it("marks accepted certificate draft uploads as synced", () => {
+  it("REQ-P01-3: an accepted legacy certificate event never writes certificate_url or APPROVED into the local job", () => {
     const database = openLocalDatabase({ filePath: createTempDatabasePath() });
     const now = new Date("2026-01-15T10:00:00.000Z").toISOString();
 
@@ -2147,11 +2147,12 @@ WHERE certificate_drafts.id = 'certificate-draft:local'
         .get(),
     );
 
+    // The cloud issues certificates; a sync result can never publish one into
+    // the local job. The URL only ever arrives through a pull of the cloud row.
     expect(row).toEqual({
-      draft_sync_state: "synced",
-      job_status: "APPROVED",
-      certificate_url:
-        "https://certificates.calibrafacil.com/org/org-1/2026/jobs/CAL-1/desktop.pdf",
+      draft_sync_state: "local",
+      job_status: "REVIEW",
+      certificate_url: null,
     });
 
     database.close();

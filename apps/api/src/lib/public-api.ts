@@ -1,3 +1,4 @@
+import type { ApiErrorCode } from "@calibra-facil/contracts";
 import { createHash, createHmac, randomBytes } from "node:crypto";
 import { db } from "@calibra-facil/db";
 import {
@@ -32,8 +33,14 @@ export function getPublicApiRequestIp(headers: Headers) {
   );
 }
 
+/**
+ * Public API v2 error envelope (`{ error: { code, message, details } }`). The
+ * envelope is the v2 contract and stays as is; the `code` values come from the
+ * shared registry (`API_ERROR_CODES` in @calibra-facil/contracts) so the two
+ * API surfaces can never declare the same failure under different names.
+ */
 export function buildPublicApiError(params: {
-  code: string;
+  code: ApiErrorCode;
   message: string;
   details?: Record<string, unknown> | null;
 }) {

@@ -41,6 +41,7 @@ import {
 import { StatusPill } from "@/components/status-pill";
 import { useOverview } from "@/features/dashboard/queries";
 import { cn, getApiBaseUrl } from "@/lib/utils";
+import { keepPreviousDataInScope } from "@/lib/keep-previous-page";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import { formatDate, pluralize } from "@/lib/format";
 import {
@@ -218,6 +219,7 @@ function RequestsPage() {
 
       return response.json();
     },
+    placeholderData: keepPreviousDataInScope(key("portal-requests")),
   });
 
   function applyStatusFilter(next: RequestStatus | "") {

@@ -16,6 +16,7 @@ import type {
 } from '@calibra-facil/client-runtime'
 
 import { calibraApi } from '@/utils/api'
+import { keepPreviousDataInScope } from '@/lib/keep-previous-page'
 import {
   ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,
@@ -68,6 +69,10 @@ export function ptListQueryOptions(input: PtListQueryInput) {
         status: input.statusFilter || undefined,
         activityType: input.activityTypeFilter || undefined,
       }),
+    placeholderData: keepPreviousDataInScope([
+      'proficiency-tests',
+      input.organizationId,
+    ]),
   })
 }
 

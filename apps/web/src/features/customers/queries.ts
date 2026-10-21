@@ -1,6 +1,7 @@
 import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 
 import { calibraApi } from '@/utils/api'
+import { keepPreviousDataInScope } from '@/lib/keep-previous-page'
 import {
   ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,
@@ -50,6 +51,10 @@ export function customersListQueryOptions(input: CustomersListQueryInput) {
         limit: input.limit,
         query: input.search || undefined,
       }),
+    placeholderData: keepPreviousDataInScope([
+      'customers',
+      input.organizationId,
+    ]),
   })
 }
 
@@ -111,6 +116,11 @@ export function customerAssetsQueryOptions({
         query: search || undefined,
       })
     },
+    placeholderData: keepPreviousDataInScope([
+      'assets',
+      'customer',
+      customerId,
+    ]),
   })
 }
 
@@ -145,6 +155,7 @@ export function customerJobsQueryOptions({
         status: statusFilter || undefined,
       })
     },
+    placeholderData: keepPreviousDataInScope(['jobs', 'customer', customerId]),
   })
 }
 
