@@ -61,8 +61,6 @@ const calibraBridge: CalibraBridge = {
   pickFile: () => invoke(desktopIpcChannels.pickFile),
   pickFolder: () => invoke(desktopIpcChannels.pickFolder),
   saveFile: () => invoke(desktopIpcChannels.saveFile),
-  saveCertificatePdf: (input) =>
-    invoke(desktopIpcChannels.saveCertificatePdf, input),
   openExternal: (url) => invoke(desktopIpcChannels.openExternal, url),
   exportSupportBundle: () => invoke(desktopIpcChannels.exportSupportBundle),
   getUpdateState: () => invoke(desktopIpcChannels.getUpdateState),

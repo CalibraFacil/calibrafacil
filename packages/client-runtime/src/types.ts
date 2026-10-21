@@ -91,7 +91,6 @@ import type {
   JobsListStatus,
   JobExecutionPayload,
   EffectiveEnvironmentalLimitsResponse,
-  LocalCertificateDraft,
   ReferenceStandardsResponse,
 } from "./jobs";
 import type {
@@ -116,7 +115,6 @@ export type {
   JobsListStatus,
   JobExecutionPayload,
   EffectiveEnvironmentalLimitsResponse,
-  LocalCertificateDraft,
   ReferenceStandardsResponse,
 } from "./jobs";
 export type {
@@ -214,9 +212,6 @@ export interface JobsApi {
     jobId: string | number,
     input: JobExecutionPayload,
   ): Promise<unknown>;
-  createCertificateDraft(
-    jobId: string | number,
-  ): Promise<LocalCertificateDraft>;
   getCertificateDownloadUrl(
     jobId: string | number,
   ): Promise<JobDownloadUrlData>;

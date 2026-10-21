@@ -588,43 +588,6 @@ WHERE id = @localId
       });
   }
 
-  if (event.aggregate_kind === "certificate_draft") {
-    const remoteEntity = asRecord(accepted.remoteEntity);
-    const payload = asRecord(parseJson(event.payload_json));
-    const localJobId = getString(payload, "jobId");
-    const certificateUrl = getString(remoteEntity, "certificateUrl");
-    const status = getString(remoteEntity, "status");
-    database
-      .prepare(
-        `
-UPDATE certificate_drafts
-SET sync_state = 'synced'
-WHERE id = @localId
-`,
-      )
-      .run({
-        localId: event.aggregate_id,
-      });
-
-    if (localJobId && certificateUrl) {
-      database
-        .prepare(
-          `
-UPDATE calibration_jobs
-SET certificate_url = @certificateUrl,
-  status = COALESCE(@status, status),
-  sync_state = 'synced'
-WHERE id = @localJobId
-`,
-        )
-        .run({
-          certificateUrl,
-          status,
-          localJobId,
-        });
-    }
-  }
-
   if (
     event.aggregate_kind === "service_order" &&
     typeof accepted.remoteEntityId === "number"

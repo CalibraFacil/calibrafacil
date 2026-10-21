@@ -663,4 +663,99 @@ describe("local sync partial-failure / conflict reconciliation", () => {
 
     database.close();
   });
+
+  // REQ-P01-3: approval and certificates are online-only. A certificate-PDF
+  // event queued by an older build is never uploaded as client bytes: it goes
+  // through the ordinary push, and the cloud's refusal keeps it failed (visible,
+  // not silently dropped or marked synced).
+  it("REQ-P01-3: a queued legacy generate_local_certificate_pdf event is pushed as an event, never uploaded", async () => {
+    const dbPath = createTempDatabasePath();
+    const database = openLocalDatabase({ filePath: dbPath });
+    seedTenant(database);
+
+    const now = "2026-01-15T10:00:00.000Z";
+    const payload = JSON.stringify({
+      jobId: "local-job-1",
+      draftId: "draft-1",
+      localPath: "certificates/local-job-1/draft-1.pdf",
+      contentHash: "a".repeat(64),
+      sizeBytes: 4,
+    });
+    database
+      .prepare(
+        `
+INSERT INTO domain_events (
+  event_id, aggregate_kind, aggregate_id, aggregate_version, event_type,
+  payload_json, metadata_json, actor_user_id, device_id, occurred_at, sync_state
+) VALUES (
+  'event-legacy-cert', 'certificate_draft', 'draft-1', 1,
+  'generate_local_certificate_pdf', @payload, '{}', 'user-1', 'device-test',
+  @now, 'pending'
+)
+`,
+      )
+      .run({ payload, now });
+    database
+      .prepare(
+        `
+INSERT INTO outbox (
+  id, event_id, operation, payload_json, idempotency_key, status, created_at
+) VALUES (
+  'outbox:event-legacy-cert', 'event-legacy-cert',
+  'generate_local_certificate_pdf', @payload, 'local:event-legacy-cert',
+  'pending', @now
+)
+`,
+      )
+      .run({ payload, now });
+
+    const requestedUrls: string[] = [];
+    const app = createLocalServer(createConfig(dbPath), database, {
+      fetch: async (input, init) => {
+        const url = String(input);
+        requestedUrls.push(url);
+
+        if (url === "https://api.example.test/api/sync/push") {
+          const events = parsePushEvents(init?.body);
+          expect(events.map((event) => event.operation)).toEqual([
+            "generate_local_certificate_pdf",
+          ]);
+          return Response.json({
+            accepted: [],
+            rejected: [
+              {
+                eventId: "event-legacy-cert",
+                code: "OFFLINE_CERTIFICATE_PUBLICATION_NOT_SUPPORTED",
+                reason: "Certificates are issued online only.",
+              },
+            ],
+            conflicts: [],
+          });
+        }
+
+        if (url === "https://api.example.test/api/sync/bootstrap") {
+          return bootstrapResponse();
+        }
+
+        if (url.startsWith("https://api.example.test/api/sync/pull")) {
+          return emptyPullResponse();
+        }
+
+        throw new Error(`Unexpected URL ${url}`);
+      },
+    });
+
+    const response = await app.request("/api/local/sync/retry", {
+      method: "POST",
+    });
+
+    expect(response.status).toBe(200);
+    expect(
+      requestedUrls.filter((url) => url.includes("certificate-pdfs")),
+    ).toEqual([]);
+    expect(requestedUrls).toContain("https://api.example.test/api/sync/push");
+    expect(readOutboxStatus(database, "event-legacy-cert")).toBe("failed");
+
+    database.close();
+  });
 });

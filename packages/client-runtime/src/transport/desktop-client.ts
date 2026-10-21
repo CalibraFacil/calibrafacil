@@ -21,7 +21,6 @@ import type {
   JobsListData,
   LocalAttachment,
   LocalAttachmentsResponse,
-  LocalCertificateDraft,
   LocalSessionSnapshotResponse,
   LocalSyncConflict,
   LocalSyncConflictsResponse,
@@ -1616,25 +1615,6 @@ export function createDesktopApiClient(
         }
 
         return response.json();
-      },
-      async createCertificateDraft(jobId) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/jobs/${apiRouteParam(jobId)}/certificate-draft`,
-            options.baseUrl,
-          ),
-          {
-            method: "POST",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error("Falha ao gerar rascunho local do certificado");
-        }
-
-        return readDesktopJson<LocalCertificateDraft>(response);
       },
     },
     serviceOrders: {

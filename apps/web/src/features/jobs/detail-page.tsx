@@ -260,9 +260,6 @@ function buildVerdictTiles(verdict: JobVerdict): Array<{
 
 type JobDetailPageProps = {
   id: string
-  runtime: {
-    isDesktop: boolean
-  }
 }
 
 function toRecordArray(value: unknown): Array<Record<string, unknown>> {
@@ -347,7 +344,7 @@ function toFinancialStatus(value: unknown): FinancialStatus {
   }
 }
 
-export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
+export function JobDetailPage({ id }: JobDetailPageProps) {
   const apiJobId = apiRouteParam(id)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -503,46 +500,6 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
       ])
       setAssignDialogOpen(false)
       setSelectedTechnician('')
-    },
-    onError: (error) => {
-      toast.error(error.message)
-    },
-  })
-
-  const saveLocalCertificatePdfMutation = useMutation({
-    mutationFn: async () => {
-      if (!window.calibraBridge) {
-        throw new Error('Exportação local disponível apenas no desktop')
-      }
-
-      // The host names the file from these; without them the operator gets a
-      // downloads folder full of files named after numeric job ids.
-      return window.calibraBridge.saveCertificatePdf({
-        jobId: id,
-        // Optional on the wire, so an unloaded job still saves — it just
-        // gets a plainer name. The button only renders once loaded anyway.
-        certificateNumber: job?.jobId ?? null,
-        customerName: job?.customerName ?? null,
-      })
-    },
-    onSuccess: (filePath) => {
-      // A cancelled dialog is not a failure and not a success — say nothing.
-      if (!filePath) return
-
-      toast.success('PDF local salvo', {
-        description: filePath,
-        action: {
-          label: 'Mostrar na pasta',
-          onClick: () => {
-            void window.calibraBridge?.revealFile(filePath).then((revealed) => {
-              if (!revealed) {
-                toast.error('O arquivo não está mais nesse local.')
-              }
-            })
-          },
-        },
-      })
-      queryClient.invalidateQueries({ queryKey: ['jobs', id] })
     },
     onError: (error) => {
       toast.error(error.message)
@@ -1054,21 +1011,6 @@ export function JobDetailPage({ id, runtime }: JobDetailPageProps) {
                           ? 'Dados capturados'
                           : 'Sem dados'}
                     </Badge>
-                    {runtime.isDesktop && (
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        className={ACTION_BUTTON_CLASS}
-                        onClick={() => saveLocalCertificatePdfMutation.mutate()}
-                        disabled={saveLocalCertificatePdfMutation.isPending}
-                      >
-                        {saveLocalCertificatePdfMutation.isPending && (
-                          <Spinner className="mr-2 size-3" />
-                        )}
-                        Salvar PDF local
-                      </Button>
-                    )}
                   </div>
                 </div>
                 <div className="grid gap-px overflow-hidden rounded-lg bg-black/5 md:grid-cols-3">

@@ -38,9 +38,6 @@ describe("client runtime data policy registry", () => {
     expect(getCalibraApiDataPolicy("customers", "list")).toBe(
       "local-first-read-through-sync",
     );
-    expect(getCalibraApiDataPolicy("jobs", "createCertificateDraft")).toBe(
-      "local-only",
-    );
     expect(getCalibraApiDataPolicy("sync", "getSession")).toBe("local-only");
     expect(getCalibraApiDataPolicy("jobs", "saveExecution")).toBe(
       "local-command-sync",
@@ -949,11 +946,6 @@ describe("client runtime data policy registry", () => {
           "method": "submitExecution",
           "namespace": "jobs",
           "policy": "local-command-sync",
-        },
-        {
-          "method": "createCertificateDraft",
-          "namespace": "jobs",
-          "policy": "local-only",
         },
         {
           "method": "getCertificateDownloadUrl",
@@ -2695,61 +2687,26 @@ describe("desktop hybrid runtime adapter", () => {
     );
   });
 
-  it("keeps certificate draft generation on the local desktop API", async () => {
-    const fetchCalls: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
-    const fetchMock: typeof fetch = async (input, init) => {
-      fetchCalls.push([input, init]);
-      const url = new URL(String(input));
-
-      if (
-        url.origin === "http://127.0.0.1:4317" &&
-        url.pathname === "/api/jobs/job-1/certificate-draft"
-      ) {
-        return Response.json({
-          id: "draft-1",
-          jobId: "job-1",
-          localPath: "certificates/job-1/draft-1.html",
-          status: "draft",
-          metadata: {},
-          createdAt: "2026-01-15T10:00:00.000Z",
-          updatedAt: "2026-01-15T10:00:00.000Z",
-          contentType: "text/html",
-          fileUrl: "/api/jobs/job-1/certificate-draft/file",
-          draftKind: "local_certificate_draft",
-          published: false,
-        });
-      }
-
-      throw new Error(`Unexpected request: ${url.toString()}`);
-    };
-    const client = createDesktopHybridApiClient({
+  it("REQ-P01-3: the desktop client has no local certificate-draft surface (certificates are issued online only)", () => {
+    const client = createDesktopApiClient({
+      baseUrl: "http://127.0.0.1:4317",
+      tokenProvider: () => "local-token",
+      fetch: async () => Response.json({}),
+    });
+    const hybrid = createDesktopHybridApiClient({
       cloud: {
         baseUrl: "https://api.example.test",
-        fetch: fetchMock,
+        fetch: async () => Response.json({}),
       },
       local: {
         baseUrl: "http://127.0.0.1:4317",
         tokenProvider: () => "local-token",
-        fetch: fetchMock,
+        fetch: async () => Response.json({}),
       },
     });
 
-    await expect(client.jobs.createCertificateDraft("job-1")).resolves.toEqual({
-      id: "draft-1",
-      jobId: "job-1",
-      localPath: "certificates/job-1/draft-1.html",
-      status: "draft",
-      metadata: {},
-      createdAt: "2026-01-15T10:00:00.000Z",
-      updatedAt: "2026-01-15T10:00:00.000Z",
-      contentType: "text/html",
-      fileUrl: "/api/jobs/job-1/certificate-draft/file",
-      draftKind: "local_certificate_draft",
-      published: false,
-    });
-    expect(fetchCalls.map(([input]) => String(input))).toEqual([
-      "http://127.0.0.1:4317/api/jobs/job-1/certificate-draft",
-    ]);
+    expect(Object.keys(client.jobs)).not.toContain("createCertificateDraft");
+    expect(Object.keys(hybrid.jobs)).not.toContain("createCertificateDraft");
   });
 
   it("keeps slash-bearing job identifiers in one API route segment", async () => {
@@ -2780,14 +2737,12 @@ describe("desktop hybrid runtime adapter", () => {
         measurements: [],
       }),
     );
-    await client.jobs.createCertificateDraft("R-0001/2026");
 
     expect(fetchCalls.map(([input]) => String(input))).toEqual([
       "http://127.0.0.1:4317/api/jobs/R-0001%252F2026",
       "http://127.0.0.1:4317/api/jobs/R-0001%252F2026",
       "http://127.0.0.1:4317/api/jobs/R-0001%252F2026/execute",
       "http://127.0.0.1:4317/api/jobs/R-0001%252F2026/submit",
-      "http://127.0.0.1:4317/api/jobs/R-0001%252F2026/certificate-draft",
     ]);
   });
 
