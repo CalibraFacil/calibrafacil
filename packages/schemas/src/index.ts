@@ -3,6 +3,7 @@ import { JobStatusSchema } from "./job-status";
 import { ReferenceStandardKindSchema } from "./reference-standard-kind";
 export * from "./execution-performed-at";
 export * from "./standard-validity";
+export * from "./standards-judgement";
 export * from "./job-transitions";
 export * from "./self-serve-signup";
 export * from "./organization-lifecycle";

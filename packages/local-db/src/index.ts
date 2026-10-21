@@ -18,6 +18,7 @@ export {
 } from "./jobs";
 export {
   buildLocalStandardsSnapshot,
+  judgeLocalStandards,
   localStandardsPerformedAt,
   createLocalJobDraft,
   getLocalJobDetail,

@@ -57,7 +57,12 @@ import {
   sql,
 } from "drizzle-orm";
 import { addCalendarDays, labToday } from "@calibra-facil/shared";
-import { judgeSnapshotStandards } from "../modules/jobs/standards-judgement";
+import {
+  judgeSnapshotStandards,
+  snapshotStandardIds,
+  standardsRefusalApiCode,
+  standardsRefusalMessage,
+} from "../modules/jobs/standards-judgement";
 import {
   buildListMeta,
   buildPublicApiError,
@@ -3785,18 +3790,19 @@ publicApiV2Router
         // however the draft was dated when it was saved through the cloud.
         const performedAt = new Date();
         const standardsJudgement = await judgeSnapshotStandards({
-          standardsSnapshot: existing.standardsSnapshot,
+          standardIds: snapshotStandardIds(existing.standardsSnapshot),
           organizationId: apiKey.organizationId,
           performedAt,
           now: performedAt,
-          backdateReason: undefined,
+          mode: "public_api",
         });
         if (!standardsJudgement.ok) {
           return {
             status: 422,
             body: buildPublicApiError({
-              code: "standard_expired",
-              message: standardsJudgement.error,
+              code: standardsRefusalApiCode(standardsJudgement),
+              message: standardsRefusalMessage(standardsJudgement),
+              details: { standardIds: standardsJudgement.standardIds },
             }),
           };
         }
