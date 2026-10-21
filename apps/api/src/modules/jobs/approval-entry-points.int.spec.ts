@@ -1,0 +1,1224 @@
+/**
+ * approval-entry-points.int.spec.ts — the approval policy is ONE policy.
+ *
+ * Calibration approval has three entry points: the cloud route
+ * (`POST /jobs/:id/approve`), the desktop sync certificate publish
+ * (`POST /sync/certificate-pdfs`) and the public API (`POST /v2/jobs/:id/approve`,
+ * `PATCH /v2/jobs/:id`). Before they shared `approveJob`, the public API
+ * released any REVIEW job as the key's creator (no role, signatory,
+ * separation-of-duties, scope or environmental gate, no CAS) and the sync
+ * publish had no separation-of-duties / signatory / environmental gate. Each rule below is
+ * asserted against EVERY entry point it applies to, against a real Postgres
+ * and the real RBAC middleware (only the better-auth session, R2 and the
+ * queue/notification side effects are faked).
+ *
+ *   REQ-APPROVAL-001  separation of duties (self-approval refused) — also the key creator
+ *   REQ-APPROVAL-002  authorized-signatory roster
+ *   REQ-APPROVAL-003  accredited scope (CMC) enforce mode
+ *   REQ-APPROVAL-004  environmental justification
+ *   REQ-APPROVAL-005  second approval refused, single audit row
+ *   REQ-APPROVAL-006  concurrent approvals: exactly one wins; CAS loss writes nothing
+ *   REQ-APPROVAL-007  desktop approver is the authenticated session, never a claimed actor
+ *   REQ-APPROVAL-008  public API: the key's CREATOR is the approver (role, roster, audit trail records the key)
+ *   REQ-APPROVAL-009  public API PATCH cannot move a job into an approval-side status
+ */
+
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { db } from "@calibra-facil/db";
+import {
+  appQueueJob,
+  asset,
+  assetAuditLog,
+  assetType,
+  authorizedSignatory,
+  calibrationJob,
+  customer,
+  customerAuditLog,
+  jobAuditLog,
+  member,
+  organization,
+  organizationApiKey,
+  organizationEventLog,
+  service,
+  user,
+} from "@calibra-facil/db/schema";
+import { and, eq, sql } from "drizzle-orm";
+import {
+  loginAs,
+  loginPerRequestHeader,
+} from "../../../test/integration/setup";
+import { truncateAll } from "../../../test/integration/db";
+import { seedOrg } from "../../../test/integration/seed";
+import { createApiKeySecret } from "../../lib/api-keys";
+import { jobsRouter } from "../../routes/jobs";
+import { syncRouter } from "../../routes/sync";
+import { publicApiV2Router } from "../../routes/public-api-v2";
+import { approveJob } from "./approve-job";
+
+const mocks = vi.hoisted(() => {
+  const scope: {
+    adverse: boolean;
+    /** Runs after the policy read and before the write: a concurrent actor. */
+    hook: (() => Promise<void>) | null;
+  } = { adverse: false, hook: null };
+  return {
+    uploadToR2: vi.fn(async () => undefined),
+    enqueue: vi.fn(),
+    scope,
+  };
+});
+
+vi.mock("../../lib/background-jobs", () => ({
+  enqueueBackgroundJob: mocks.enqueue,
+}));
+
+vi.mock("@calibra-facil/notifications", () => ({
+  notifyJobSubmittedForReview: vi.fn().mockResolvedValue(undefined),
+  notifyJobApproved: vi.fn().mockResolvedValue(undefined),
+  notifyJobRejected: vi.fn().mockResolvedValue(undefined),
+  notifyJobAssigned: vi.fn().mockResolvedValue(undefined),
+  notifyCertificateAmended: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("../../lib/storage", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../lib/storage")>();
+  return {
+    ...actual,
+    createR2Client: () => ({ send: vi.fn() }),
+    uploadToR2: mocks.uploadToR2,
+  };
+});
+
+// The CMC classification itself is covered by its own specs; here it is the
+// switch that makes every entry point see an enforced, adverse verdict.
+vi.mock("../../lib/scope-compliance", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../lib/scope-compliance")>();
+  return {
+    ...actual,
+    classifyJobScopeCompliance: vi.fn(async () => {
+      await mocks.scope.hook?.();
+      return mocks.scope.adverse
+        ? {
+            compliance: {
+              status: "OUT_OF_SCOPE",
+              findings: [],
+            },
+            enforcementMode: "enforce",
+          }
+        : { compliance: null, enforcementMode: "warn" };
+    }),
+  };
+});
+
+const JSON_HEADERS = { "content-type": "application/json" };
+const R2_ENV = {
+  R2_ACCOUNT_ID: "account-1",
+  R2_ACCESS_KEY_ID: "access-key-1",
+  R2_SECRET_ACCESS_KEY: "secret-key-1",
+  R2_BUCKET_NAME: "documents",
+};
+const PDF_BYTES = new Uint8Array([37, 80, 68, 70]);
+const PDF_HASH =
+  "315d429b7714cedb6ad04ac31240145257692630457f3c88253c5beceac76027";
+
+// ---------------------------------------------------------------------------
+// Fixture: org-a with two admins. `maker` executed/created the job; `checker`
+// is the distinct approver. A `technician` member exists to prove role gating.
+// ---------------------------------------------------------------------------
+
+const ORG = "org-a";
+const MAKER = "user-maker";
+const CHECKER = "user-checker";
+
+async function addMember(
+  userId: string,
+  role: "admin" | "technician" | "owner",
+) {
+  await db.insert(user).values({
+    id: userId,
+    name: userId,
+    email: `${userId}@lab.test`,
+  });
+  await db.insert(member).values({
+    id: `member-${userId}`,
+    organizationId: ORG,
+    userId,
+    role,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+  });
+}
+
+type Fixture = Awaited<ReturnType<typeof seedFixture>>;
+
+async function seedFixture() {
+  const org = await seedOrg({ orgId: ORG, userId: MAKER, role: "admin" });
+  await addMember(CHECKER, "admin");
+
+  await db.insert(organization).values({
+    id: "client-a",
+    name: "Client A",
+    slug: "client-a",
+    type: "CLIENT",
+    status: "ACTIVE",
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+  });
+  const [cust] = await db
+    .insert(customer)
+    .values({
+      name: "Customer A",
+      labOrganizationId: ORG,
+      authOrganizationId: "client-a",
+    })
+    .returning({ id: customer.id });
+  const [type] = await db
+    .insert(assetType)
+    .values({ name: "AT", slug: "at-a", definition: [] })
+    .returning({ id: assetType.id });
+  if (!cust || !type) throw new Error("seed failed");
+  const [ast] = await db
+    .insert(asset)
+    .values({
+      unitId: org.unitId,
+      customerId: cust.id,
+      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${cust.id})`,
+      assetTypeId: type.id,
+      name: "Instrument",
+      serialNumber: "SN-1",
+      tag: "TAG-1",
+    })
+    .returning({ id: asset.id });
+  const [svc] = await db
+    .insert(service)
+    .values({
+      organizationId: ORG,
+      unitId: org.unitId,
+      name: "Service",
+      isActive: true,
+    })
+    .returning({ id: service.id });
+  if (!ast || !svc) throw new Error("seed failed");
+
+  return {
+    unitId: org.unitId,
+    customerId: cust.id,
+    assetId: ast.id,
+    assetTypeId: type.id,
+    serviceId: svc.id,
+  };
+}
+
+async function seedReviewJob(
+  fixture: Fixture,
+  overrides: Partial<typeof calibrationJob.$inferInsert> = {},
+): Promise<number> {
+  const [row] = await db
+    .insert(calibrationJob)
+    .values({
+      jobId: `CAL-2026-${Math.floor(Math.random() * 1e6)}`,
+      organizationId: ORG,
+      unitId: fixture.unitId,
+      customerId: fixture.customerId,
+      assetId: fixture.assetId,
+      serviceId: fixture.serviceId,
+      createdBy: MAKER,
+      technicianId: MAKER,
+      status: "REVIEW",
+      methodSnapshot: {
+        methodId: 1,
+        methodName: "Test Method",
+        methodVersion: 1,
+        dataFields: [],
+        variableBindings: [],
+        formulas: [],
+        measurementModels: [],
+        validations: [],
+        uncertaintyParams: [],
+      },
+      certificateName: "cert",
+      ...overrides,
+    })
+    .returning({ id: calibrationJob.id });
+  if (!row) throw new Error("seedReviewJob failed");
+  return row.id;
+}
+
+async function readJob(id: number) {
+  const [row] = await db
+    .select({
+      status: calibrationJob.status,
+      approvedBy: calibrationJob.approvedBy,
+      approvedAt: calibrationJob.approvedAt,
+      certificateUrl: calibrationJob.certificateUrl,
+      scopeOverrideJustification: calibrationJob.scopeOverrideJustification,
+      scopeComplianceStatus: calibrationJob.scopeComplianceStatus,
+      rejectedBy: calibrationJob.rejectedBy,
+      rejectedAt: calibrationJob.rejectedAt,
+      rejectionReason: calibrationJob.rejectionReason,
+    })
+    .from(calibrationJob)
+    .where(eq(calibrationJob.id, id));
+  if (!row) throw new Error("job vanished");
+  return row;
+}
+
+async function releaseAuditRows(id: number) {
+  const rows = await db
+    .select({
+      action: jobAuditLog.action,
+      performedBy: jobAuditLog.performedBy,
+    })
+    .from(jobAuditLog)
+    .where(eq(jobAuditLog.jobId, id));
+  return rows.filter(
+    (row) =>
+      row.action === "approve" ||
+      row.action === "certificate_published_from_desktop",
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Entry points normalised to one outcome so every rule runs against each.
+// ---------------------------------------------------------------------------
+
+type Outcome = { approved: true } | { approved: false; code: string };
+
+type EntryPoint = {
+  name: "cloud route" | "desktop sync" | "public API";
+  approve: (jobId: number, userId: string) => Promise<Outcome>;
+  /** status a successful release leaves the job in */
+  approvedStatus: "GENERATING_PDF" | "APPROVED";
+};
+
+const cloud: EntryPoint = {
+  name: "cloud route",
+  approvedStatus: "GENERATING_PDF",
+  async approve(jobId, userId) {
+    loginPerRequestHeader(ORG);
+    const res = await jobsRouter.request(`/${jobId}/approve`, {
+      method: "POST",
+      headers: { ...JSON_HEADERS, "x-test-user-id": userId },
+      body: JSON.stringify({}),
+    });
+    if (res.status === 200) return { approved: true };
+    const body: {
+      code?: string;
+      environmentalSnapshot?: unknown;
+      error?: string;
+    } = await res.json();
+    if (body.code) return { approved: false, code: body.code };
+    if (body.environmentalSnapshot !== undefined) {
+      return { approved: false, code: "ENVIRONMENTAL_JUSTIFICATION_REQUIRED" };
+    }
+    return { approved: false, code: "INVALID_STATUS" };
+  },
+};
+
+function certificateForm(
+  jobId: number,
+  unitId: number,
+  overrides: Record<string, string> = {},
+) {
+  const form = new FormData();
+  const fields: Record<string, string> = {
+    eventId: `evt-${jobId}-${Math.random().toString(36).slice(2)}`,
+    // A distinct draft per push: replaying the SAME draft is the idempotent
+    // path (accepted), a different draft for an already released job is not.
+    entityId: `local-draft-${Math.random().toString(36).slice(2)}`,
+    operation: "generate_local_certificate_pdf",
+    idempotencyKey: `idem-${Math.random().toString(36).slice(2)}`,
+    localVersion: "1",
+    occurredAt: "2026-05-09T12:00:00.000Z",
+    actorUserId: "local",
+    organizationId: ORG,
+    unitId: String(unitId),
+    localJobId: "local-job-1",
+    remoteJobId: String(jobId),
+    draftId: `draft-${Math.random().toString(36).slice(2)}`,
+    contentHash: PDF_HASH,
+    sizeBytes: String(PDF_BYTES.byteLength),
+    ...overrides,
+  };
+  for (const [key, value] of Object.entries(fields)) form.set(key, value);
+  form.set(
+    "file",
+    new File([PDF_BYTES], "draft.pdf", { type: "application/pdf" }),
+  );
+  return form;
+}
+
+async function pushCertificate(
+  jobId: number,
+  userId: string,
+  unitId: number,
+  overrides: Record<string, string> = {},
+) {
+  loginPerRequestHeader(ORG);
+  const res = await syncRouter.request(
+    "/certificate-pdfs",
+    {
+      method: "POST",
+      headers: { "x-test-user-id": userId },
+      body: certificateForm(jobId, unitId, overrides),
+    },
+    R2_ENV,
+  );
+  const body: {
+    accepted: Array<{ eventId: string }>;
+    rejected: Array<{ code: string }>;
+  } = await res.json();
+  return body;
+}
+
+function desktop(unitId: () => number): EntryPoint {
+  return {
+    name: "desktop sync",
+    approvedStatus: "APPROVED",
+    async approve(jobId, userId) {
+      const body = await pushCertificate(jobId, userId, unitId());
+      if (body.accepted.length > 0) return { approved: true };
+      return { approved: false, code: body.rejected[0]?.code ?? "NONE" };
+    },
+  };
+}
+
+/** Seed an API key CREATED BY `userId` and return its raw secret. */
+async function seedKeyFor(
+  userId: string,
+  overrides: Partial<typeof organizationApiKey.$inferInsert> = {},
+) {
+  const secret = createApiKeySecret();
+  const id = `key-${userId}-${Math.random().toString(36).slice(2)}`;
+  await db.insert(organizationApiKey).values({
+    id,
+    organizationId: ORG,
+    name: `Key of ${userId}`,
+    keyPrefix: secret.keyPrefix,
+    keyHash: secret.keyHash,
+    scopes: ["jobs:read", "jobs:write"],
+    createdBy: userId,
+    ...overrides,
+  });
+  return { id, rawKey: secret.key, prefix: secret.keyPrefix };
+}
+
+function publicRequest(
+  rawKey: string,
+  path: string,
+  method: string,
+  body: unknown,
+) {
+  return publicApiV2Router.request(path, {
+    method,
+    headers: {
+      ...JSON_HEADERS,
+      "x-api-key": rawKey,
+      "idempotency-key": `idem-${Math.random().toString(36).slice(2)}`,
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+// The accountable person for a public-API approval is the key's creator, so
+// "userId" below is whoever created the key used for the call.
+const publicApi: EntryPoint = {
+  name: "public API",
+  approvedStatus: "GENERATING_PDF",
+  async approve(jobId, userId) {
+    const key = await seedKeyFor(userId);
+    const res = await publicRequest(
+      key.rawKey,
+      `/jobs/${jobId}/approve`,
+      "POST",
+      {},
+    );
+    if (res.status === 200) return { approved: true };
+    const body: { error: { code: string } } = await res.json();
+    // The public API reports roster/role refusals under one code.
+    const codes: Record<string, string> = {
+      approval_requires_signatory: "APPROVER_NOT_AUTHORIZED_SIGNATORY",
+      self_approval_blocked: "SELF_APPROVAL_BLOCKED",
+      scope_violation: "SCOPE_VIOLATION",
+      environmental_justification_required:
+        "ENVIRONMENTAL_JUSTIFICATION_REQUIRED",
+    };
+    return {
+      approved: false,
+      code: codes[body.error.code] ?? body.error.code,
+    };
+  },
+};
+
+// ---------------------------------------------------------------------------
+
+describe("approval policy — one policy across every entry point", () => {
+  let fixture: Fixture;
+  let entryPoints: EntryPoint[];
+
+  beforeEach(async () => {
+    await truncateAll();
+    mocks.uploadToR2.mockClear();
+    mocks.enqueue.mockReset();
+    mocks.enqueue.mockResolvedValue({ messageId: "test-noop" });
+    mocks.scope.adverse = false;
+    mocks.scope.hook = null;
+    fixture = await seedFixture();
+    entryPoints = [cloud, desktop(() => fixture.unitId), publicApi];
+  });
+
+  // Not parametrized by `it.each` over a table built at import time: the
+  // fixture (unit id) exists only after the per-test seed.
+  function eachEntryPoint(
+    title: string,
+    run: (entry: EntryPoint) => Promise<void>,
+  ) {
+    for (const name of ["cloud route", "desktop sync", "public API"] as const) {
+      it(`${title} [${name}]`, async () => {
+        const entry = entryPoints.find((candidate) => candidate.name === name);
+        if (!entry) throw new Error(`unknown entry point ${name}`);
+        await run(entry);
+      });
+    }
+  }
+
+  eachEntryPoint(
+    "baseline: a distinct admin approves a REVIEW job and is the recorded approver",
+    async (entry) => {
+      const jobId = await seedReviewJob(fixture);
+
+      await expect(entry.approve(jobId, CHECKER)).resolves.toEqual({
+        approved: true,
+      });
+
+      const job = await readJob(jobId);
+      expect(job.status).toBe(entry.approvedStatus);
+      expect(job.approvedBy).toBe(CHECKER);
+      expect(await releaseAuditRows(jobId)).toHaveLength(1);
+    },
+  );
+
+  eachEntryPoint(
+    "REQ-APPROVAL-001: the executing technician cannot approve their own work when another approver exists",
+    async (entry) => {
+      const jobId = await seedReviewJob(fixture);
+
+      await expect(entry.approve(jobId, MAKER)).resolves.toEqual({
+        approved: false,
+        code: "SELF_APPROVAL_BLOCKED",
+      });
+
+      expect(await readJob(jobId)).toMatchObject({
+        status: "REVIEW",
+        approvedBy: null,
+      });
+      expect(await releaseAuditRows(jobId)).toHaveLength(0);
+      expect(mocks.uploadToR2).not.toHaveBeenCalled();
+    },
+  );
+
+  eachEntryPoint(
+    "REQ-APPROVAL-001: the job creator cannot approve either",
+    async (entry) => {
+      const jobId = await seedReviewJob(fixture, {
+        technicianId: CHECKER,
+        createdBy: MAKER,
+      });
+
+      await expect(entry.approve(jobId, MAKER)).resolves.toEqual({
+        approved: false,
+        code: "SELF_APPROVAL_BLOCKED",
+      });
+      expect((await readJob(jobId)).status).toBe("REVIEW");
+    },
+  );
+
+  eachEntryPoint(
+    "REQ-APPROVAL-002: an approver outside the signatory roster is refused",
+    async (entry) => {
+      // The org keeps a roster, and only MAKER is on it.
+      await db.insert(authorizedSignatory).values({
+        organizationId: ORG,
+        userId: MAKER,
+        assetTypeId: null,
+        status: "ACTIVE",
+        authorizedBy: MAKER,
+      });
+      const jobId = await seedReviewJob(fixture);
+
+      await expect(entry.approve(jobId, CHECKER)).resolves.toEqual({
+        approved: false,
+        code: "APPROVER_NOT_AUTHORIZED_SIGNATORY",
+      });
+
+      expect((await readJob(jobId)).status).toBe("REVIEW");
+      expect(await releaseAuditRows(jobId)).toHaveLength(0);
+      expect(mocks.uploadToR2).not.toHaveBeenCalled();
+    },
+  );
+
+  eachEntryPoint(
+    "REQ-APPROVAL-003: an enforced accredited-scope violation blocks the release",
+    async (entry) => {
+      mocks.scope.adverse = true;
+      const jobId = await seedReviewJob(fixture);
+
+      await expect(entry.approve(jobId, CHECKER)).resolves.toEqual({
+        approved: false,
+        code: "SCOPE_VIOLATION",
+      });
+
+      expect((await readJob(jobId)).status).toBe("REVIEW");
+      expect(await releaseAuditRows(jobId)).toHaveLength(0);
+      expect(mocks.uploadToR2).not.toHaveBeenCalled();
+    },
+  );
+
+  eachEntryPoint(
+    "REQ-APPROVAL-004: out-of-limits environment without a justification blocks the release",
+    async (entry) => {
+      const jobId = await seedReviewJob(fixture, {
+        environmentalSnapshot: {
+          withinLimits: false,
+          outOfLimitsJustification: null,
+        },
+      });
+
+      await expect(entry.approve(jobId, CHECKER)).resolves.toEqual({
+        approved: false,
+        code: "ENVIRONMENTAL_JUSTIFICATION_REQUIRED",
+      });
+
+      expect((await readJob(jobId)).status).toBe("REVIEW");
+      expect(mocks.uploadToR2).not.toHaveBeenCalled();
+    },
+  );
+
+  eachEntryPoint(
+    "REQ-APPROVAL-005: a second approval is refused and leaves exactly one audit row",
+    async (entry) => {
+      const jobId = await seedReviewJob(fixture);
+      await expect(entry.approve(jobId, CHECKER)).resolves.toEqual({
+        approved: true,
+      });
+
+      const second = await entry.approve(jobId, CHECKER);
+
+      expect(second.approved).toBe(false);
+      expect(await releaseAuditRows(jobId)).toHaveLength(1);
+      expect((await readJob(jobId)).approvedBy).toBe(CHECKER);
+    },
+  );
+
+  eachEntryPoint(
+    "REQ-APPROVAL-006: two distinct approvers racing release the job exactly once, and the single audit row names the winner",
+    async (entry) => {
+      const jobId = await seedReviewJob(fixture);
+      const rival = "user-checker-2";
+      await addMember(rival, "admin");
+
+      // Each request resolves its own session (x-test-user-id), so these are
+      // two different users genuinely in flight at once.
+      const approvers = [CHECKER, rival];
+      const outcomes = await Promise.all(
+        approvers.map((userId) => entry.approve(jobId, userId)),
+      );
+
+      const winners = approvers.filter(
+        (_userId, index) => outcomes[index]?.approved === true,
+      );
+      expect(winners).toHaveLength(1);
+      const [winner] = winners;
+      const audit = await releaseAuditRows(jobId);
+      expect(audit).toHaveLength(1);
+      expect(audit[0]?.performedBy).toBe(winner);
+      const job = await readJob(jobId);
+      expect(job.status).toBe(entry.approvedStatus);
+      expect(job.approvedBy).toBe(winner);
+    },
+  );
+
+  it("REQ-APPROVAL-006: the write is compare-and-set — a job that left REVIEW after the read is not overwritten, and no audit row is written", async () => {
+    const jobId = await seedReviewJob(fixture);
+    const [checker] = await db
+      .select()
+      .from(member)
+      .where(and(eq(member.userId, CHECKER), eq(member.organizationId, ORG)));
+    if (!checker) throw new Error("checker missing");
+
+    // `publish` runs after the policy read and before the transition: it plays
+    // the part of a concurrent reviewer who rejects the job in that window.
+    const result = await approveJob({
+      jobId,
+      actor: {
+        kind: "user",
+        member: {
+          id: checker.id,
+          role: "admin",
+          organizationId: ORG,
+          organizationType: "LAB",
+          userId: CHECKER,
+          activeUnitId: fixture.unitId,
+          activeUnitName: "Matriz",
+          accessibleUnitIds: [fixture.unitId],
+          accessibleUnits: [],
+          selectedUnitScope: "all",
+          canAccessAllUnits: true,
+          unitRole: null,
+        },
+      },
+      values: {},
+      metadata: {},
+      completion: {
+        kind: "publish_desktop_certificate",
+        publish: async () => {
+          await db
+            .update(calibrationJob)
+            .set({ status: "REJECTED" })
+            .where(eq(calibrationJob.id, jobId));
+          return {
+            certificateUrl: "https://example.test/x.pdf",
+            auditChanges: {},
+          };
+        },
+      },
+    });
+
+    expect(result).toEqual({ status: "concurrent_approval" });
+    expect(await readJob(jobId)).toMatchObject({
+      status: "REJECTED",
+      approvedBy: null,
+      certificateUrl: null,
+    });
+    expect(await releaseAuditRows(jobId)).toHaveLength(0);
+  });
+
+  it("REQ-APPROVAL-006: the cloud route maps a lost compare-and-set to 409 APPROVAL_CONFLICT", async () => {
+    const jobId = await seedReviewJob(fixture);
+    // A concurrent reviewer rejects the job between the policy read and the write.
+    mocks.scope.hook = async () => {
+      await db
+        .update(calibrationJob)
+        .set({ status: "REJECTED" })
+        .where(eq(calibrationJob.id, jobId));
+    };
+
+    loginPerRequestHeader(ORG);
+    const res = await jobsRouter.request(`/${jobId}/approve`, {
+      method: "POST",
+      headers: { ...JSON_HEADERS, "x-test-user-id": CHECKER },
+      body: JSON.stringify({}),
+    });
+
+    expect(res.status).toBe(409);
+    const body: { code: string } = await res.json();
+    expect(body.code).toBe("APPROVAL_CONFLICT");
+    expect(await readJob(jobId)).toMatchObject({
+      status: "REJECTED",
+      approvedBy: null,
+    });
+    expect(await releaseAuditRows(jobId)).toHaveLength(0);
+    expect(mocks.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("REQ-APPROVAL-006: the public API maps a lost compare-and-set to 409 approval_conflict", async () => {
+    const jobId = await seedReviewJob(fixture);
+    const key = await seedKeyFor(CHECKER);
+    mocks.scope.hook = async () => {
+      await db
+        .update(calibrationJob)
+        .set({ status: "REJECTED" })
+        .where(eq(calibrationJob.id, jobId));
+    };
+
+    const res = await publicRequest(
+      key.rawKey,
+      `/jobs/${jobId}/approve`,
+      "POST",
+      {},
+    );
+
+    expect(res.status).toBe(409);
+    const body: { error: { code: string } } = await res.json();
+    expect(body.error.code).toBe("approval_conflict");
+    expect(await releaseAuditRows(jobId)).toHaveLength(0);
+  });
+
+  // -------------------------------------------------------------------------
+  // publish-only desktop push on a job the cloud already released
+  // -------------------------------------------------------------------------
+
+  it("REQ-APPROVAL-010: a desktop publish on a GENERATING_PDF job keeps the cloud approval's override justification, approver and time", async () => {
+    mocks.scope.adverse = true;
+    const approvedAt = new Date("2026-03-01T10:00:00.000Z");
+    const jobId = await seedReviewJob(fixture, {
+      status: "GENERATING_PDF",
+      approvedBy: CHECKER,
+      approvedAt,
+      scopeComplianceStatus: "OUT_OF_SCOPE",
+      scopeOverrideJustification: "Cliente ciente; emitido sem selo",
+    });
+    await addMember("user-publisher", "admin");
+
+    const body = await pushCertificate(jobId, "user-publisher", fixture.unitId);
+
+    expect(body.accepted).toHaveLength(1);
+    const job = await readJob(jobId);
+    expect(job.status).toBe("APPROVED");
+    expect(job.certificateUrl).not.toBeNull();
+    expect(job.scopeOverrideJustification).toBe(
+      "Cliente ciente; emitido sem selo",
+    );
+    expect(job.scopeComplianceStatus).toBe("OUT_OF_SCOPE");
+    expect(job.approvedBy).toBe(CHECKER);
+    expect(job.approvedAt?.toISOString()).toBe(approvedAt.toISOString());
+  });
+
+  it("REQ-APPROVAL-010: publish-only does not re-run the release gates (they ran at the cloud approval)", async () => {
+    // Enforce mode would now block (no override in a `values: {}` re-evaluation).
+    mocks.scope.adverse = true;
+    const jobId = await seedReviewJob(fixture, {
+      status: "GENERATING_PDF",
+      approvedBy: MAKER,
+      approvedAt: new Date("2026-03-01T10:00:00.000Z"),
+      technicianId: MAKER,
+    });
+
+    const body = await pushCertificate(jobId, MAKER, fixture.unitId);
+
+    expect(body.accepted).toHaveLength(1);
+    expect((await readJob(jobId)).approvedBy).toBe(MAKER);
+  });
+
+  // -------------------------------------------------------------------------
+  // dispatch (outbox / compensation)
+  // -------------------------------------------------------------------------
+
+  it.each(["cloud route", "public API"] as const)(
+    "REQ-APPROVAL-011: when dispatching the certificate job fails the approval is reverted to REVIEW with an audit note [%s]",
+    async (name) => {
+      const entry = entryPoints.find((candidate) => candidate.name === name);
+      if (!entry) throw new Error("entry point missing");
+      const jobId = await seedReviewJob(fixture);
+      mocks.enqueue.mockRejectedValueOnce(new Error("queue down"));
+
+      await expect(entry.approve(jobId, CHECKER)).resolves.toMatchObject({
+        approved: false,
+      });
+
+      expect(await readJob(jobId)).toMatchObject({
+        status: "REVIEW",
+        approvedBy: null,
+        approvedAt: null,
+      });
+      const actions = (
+        await db
+          .select({ action: jobAuditLog.action, reason: jobAuditLog.reason })
+          .from(jobAuditLog)
+          .where(eq(jobAuditLog.jobId, jobId))
+      ).map((row) => row.action);
+      expect(actions).toEqual(
+        expect.arrayContaining(["approve", "approve_reverted"]),
+      );
+
+      // Nothing is stranded: the same approval can simply be retried.
+      await expect(entry.approve(jobId, CHECKER)).resolves.toEqual({
+        approved: true,
+      });
+      expect((await readJob(jobId)).status).toBe("GENERATING_PDF");
+    },
+  );
+
+  describe("with the database queue (BACKGROUND_JOBS_MODE=queue)", () => {
+    beforeEach(() => {
+      vi.stubEnv("BACKGROUND_JOBS_MODE", "queue");
+      vi.stubEnv("DOCUMENT_WORKER_URL", "");
+    });
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it("REQ-APPROVAL-011: the queue row is committed with the approval, not dispatched separately", async () => {
+      const jobId = await seedReviewJob(fixture);
+
+      await expect(cloud.approve(jobId, CHECKER)).resolves.toEqual({
+        approved: true,
+      });
+
+      const rows = await db.select().from(appQueueJob);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ type: "CERTIFICATE", status: "PENDING" });
+      expect(rows[0]?.payload).toMatchObject({ jobId, userId: CHECKER });
+      expect(mocks.enqueue).not.toHaveBeenCalled();
+    });
+
+    it("REQ-APPROVAL-011: a refused approval and a lost race queue nothing; racing approvers queue exactly one row", async () => {
+      const refused = await seedReviewJob(fixture);
+      await expect(cloud.approve(refused, MAKER)).resolves.toMatchObject({
+        approved: false,
+      });
+      expect(await db.select().from(appQueueJob)).toHaveLength(0);
+
+      const raced = await seedReviewJob(fixture, { technicianId: null });
+      await addMember("user-checker-2", "admin");
+      await Promise.all([
+        cloud.approve(raced, CHECKER),
+        cloud.approve(raced, "user-checker-2"),
+      ]);
+      expect(await db.select().from(appQueueJob)).toHaveLength(1);
+    });
+
+    it("REQ-APPROVAL-011: if the queue insert fails the whole approval rolls back (job stays REVIEW, no audit row)", async () => {
+      const jobId = await seedReviewJob(fixture);
+      await db.execute(
+        sql`alter table app_queue_job rename to app_queue_job_x`,
+      );
+      try {
+        loginPerRequestHeader(ORG);
+        const res = await jobsRouter.request(`/${jobId}/approve`, {
+          method: "POST",
+          headers: { ...JSON_HEADERS, "x-test-user-id": CHECKER },
+          body: JSON.stringify({}),
+        });
+        expect(res.status).toBe(500);
+      } finally {
+        await db.execute(
+          sql`alter table app_queue_job_x rename to app_queue_job`,
+        );
+      }
+
+      expect(await readJob(jobId)).toMatchObject({
+        status: "REVIEW",
+        approvedBy: null,
+      });
+      expect(await releaseAuditRows(jobId)).toHaveLength(0);
+    });
+  });
+
+  it("REQ-APPROVAL-012: approving a previously rejected, resubmitted job clears the stale rejection", async () => {
+    const jobId = await seedReviewJob(fixture, {
+      rejectedBy: MAKER,
+      rejectedAt: new Date("2026-02-01T00:00:00.000Z"),
+      rejectionReason: "Rever incerteza",
+      technicianId: null,
+    });
+
+    await expect(cloud.approve(jobId, CHECKER)).resolves.toEqual({
+      approved: true,
+    });
+
+    expect(await readJob(jobId)).toMatchObject({
+      status: "GENERATING_PDF",
+      rejectedBy: null,
+      rejectedAt: null,
+      rejectionReason: null,
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // REQ-APR-008: non-approval sync events record the session user too
+  // -------------------------------------------------------------------------
+
+  async function pushEvent(
+    userId: string,
+    event: Record<string, unknown>,
+  ): Promise<{
+    accepted: unknown[];
+    rejected: Array<{ code: string; reason: string }>;
+  }> {
+    loginPerRequestHeader(ORG);
+    const res = await syncRouter.request(
+      "/push",
+      {
+        method: "POST",
+        headers: { ...JSON_HEADERS, "x-test-user-id": userId },
+        body: JSON.stringify({
+          deviceId: "device-1",
+          clientBatchId: `batch-${Math.random().toString(36).slice(2)}`,
+          baseCursor: null,
+          events: [
+            {
+              eventId: `evt-${Math.random().toString(36).slice(2)}`,
+              idempotencyKey: `idem-${Math.random().toString(36).slice(2)}`,
+              occurredAt: new Date().toISOString(),
+              localVersion: 0,
+              organizationId: ORG,
+              unitId: fixture.unitId,
+              ...event,
+            },
+          ],
+        }),
+      },
+      R2_ENV,
+    );
+    return res.json();
+  }
+
+  it("REQ-APR-008: a synced asset update is audited as the session user; the claimed actor is metadata only", async () => {
+    const body = await pushEvent(CHECKER, {
+      entityType: "asset",
+      entityId: "local-asset-1",
+      operation: "update_local_asset",
+      actorUserId: MAKER,
+      payload: { remoteId: fixture.assetId, comments: "Ajustado offline" },
+    });
+
+    expect(body.rejected).toEqual([]);
+    expect(body.accepted).toHaveLength(1);
+    const audits = await db
+      .select({ performedBy: assetAuditLog.performedBy })
+      .from(assetAuditLog)
+      .where(eq(assetAuditLog.assetId, fixture.assetId));
+    expect(audits.map((row) => row.performedBy)).toEqual([CHECKER]);
+
+    const [event] = await db
+      .select()
+      .from(organizationEventLog)
+      .where(
+        eq(organizationEventLog.action, "desktop_sync.update_local_asset"),
+      );
+    expect(event?.actorUserId).toBe(CHECKER);
+    expect(event?.details).toMatchObject({ claimedActorUserId: MAKER });
+  });
+
+  it("REQ-APR-008: a synced customer update is audited as the session user; claimed actor kept as metadata; 'local' adds none", async () => {
+    const [cust] = await db.select({ id: customer.id }).from(customer);
+    if (!cust) throw new Error("customer missing");
+
+    const claimed = await pushEvent(CHECKER, {
+      entityType: "customer",
+      entityId: "local-customer-1",
+      operation: "update_local_customer",
+      actorUserId: MAKER,
+      payload: { remoteId: cust.id, name: "Renamed by desktop" },
+    });
+    expect(claimed.accepted).toHaveLength(1);
+
+    const local = await pushEvent(CHECKER, {
+      entityType: "customer",
+      entityId: "local-customer-1",
+      operation: "update_local_customer",
+      actorUserId: "local",
+      payload: { remoteId: cust.id, name: "Renamed again" },
+    });
+    expect(local.accepted).toHaveLength(1);
+
+    const audits = await db
+      .select({ performedBy: customerAuditLog.performedBy })
+      .from(customerAuditLog);
+    expect(audits.map((row) => row.performedBy)).toEqual([CHECKER, CHECKER]);
+
+    const events = await db
+      .select({ details: organizationEventLog.details })
+      .from(organizationEventLog)
+      .where(
+        and(
+          eq(organizationEventLog.action, "desktop_sync.update_local_customer"),
+        ),
+      );
+    expect(events).toHaveLength(2);
+    expect(
+      events.filter((row) => JSON.stringify(row.details).includes(MAKER)),
+    ).toHaveLength(1);
+    expect(
+      events.filter((row) =>
+        JSON.stringify(row.details).includes("claimedActorUserId"),
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("REQ-APPROVAL-007: a desktop push claiming another user as actor is rejected, not re-attributed", async () => {
+    const jobId = await seedReviewJob(fixture);
+
+    // CHECKER is authenticated, but the payload claims MAKER approved offline.
+    const body = await pushCertificate(jobId, CHECKER, fixture.unitId, {
+      actorUserId: MAKER,
+    });
+
+    expect(body.accepted).toHaveLength(0);
+    expect(body.rejected[0]?.code).toBe("APPROVAL_ACTOR_MISMATCH");
+    expect((await readJob(jobId)).status).toBe("REVIEW");
+    expect(mocks.uploadToR2).not.toHaveBeenCalled();
+  });
+
+  it("REQ-APPROVAL-007: the approver recorded for a desktop publish is the authenticated user even when the claim is the same user", async () => {
+    const jobId = await seedReviewJob(fixture);
+
+    const body = await pushCertificate(jobId, CHECKER, fixture.unitId, {
+      actorUserId: CHECKER,
+    });
+
+    expect(body.accepted).toHaveLength(1);
+    expect((await readJob(jobId)).approvedBy).toBe(CHECKER);
+  });
+
+  it("REQ-APPROVAL-007: a technician cannot publish a desktop certificate (calibration:approve guard)", async () => {
+    await addMember("user-tech", "technician");
+    const jobId = await seedReviewJob(fixture, { technicianId: "user-tech" });
+    loginAs({ userId: "user-tech", organizationId: ORG });
+
+    const res = await syncRouter.request(
+      "/certificate-pdfs",
+      { method: "POST", body: certificateForm(jobId, fixture.unitId) },
+      R2_ENV,
+    );
+
+    expect(res.status).toBe(403);
+    expect((await readJob(jobId)).status).toBe("REVIEW");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+describe("approval policy — public API (key creator is the approver)", () => {
+  let fixture: Fixture;
+
+  beforeEach(async () => {
+    await truncateAll();
+    mocks.uploadToR2.mockClear();
+    mocks.enqueue.mockReset();
+    mocks.enqueue.mockResolvedValue({ messageId: "test-noop" });
+    mocks.scope.adverse = false;
+    mocks.scope.hook = null;
+    fixture = await seedFixture();
+  });
+
+  it("REQ-APPROVAL-008: an approval through a key records the creator as approver and the key in the audit row", async () => {
+    const jobId = await seedReviewJob(fixture);
+    const key = await seedKeyFor(CHECKER, { name: "ERP integration" });
+
+    const res = await publicRequest(
+      key.rawKey,
+      `/jobs/${jobId}/approve`,
+      "POST",
+      { reason: "ok" },
+    );
+
+    expect(res.status).toBe(200);
+    expect(await readJob(jobId)).toMatchObject({
+      status: "GENERATING_PDF",
+      approvedBy: CHECKER,
+    });
+    const [audit] = await db
+      .select()
+      .from(jobAuditLog)
+      .where(
+        and(eq(jobAuditLog.jobId, jobId), eq(jobAuditLog.action, "approve")),
+      );
+    expect(audit?.performedBy).toBe(CHECKER);
+    expect(audit?.changes).toMatchObject({
+      approvedVia: {
+        channel: "api_key",
+        apiKeyId: key.id,
+        apiKeyName: "ERP integration",
+        apiKeyPrefix: key.prefix,
+      },
+    });
+  });
+
+  it("REQ-APPROVAL-008: a key created by a user without calibration:approve (technician) is refused 403 approval_requires_signatory", async () => {
+    await addMember("user-tech", "technician");
+    const jobId = await seedReviewJob(fixture);
+    const key = await seedKeyFor("user-tech");
+
+    const res = await publicRequest(
+      key.rawKey,
+      `/jobs/${jobId}/approve`,
+      "POST",
+      {},
+    );
+
+    expect(res.status).toBe(403);
+    const body: { error: { code: string } } = await res.json();
+    expect(body.error.code).toBe("approval_requires_signatory");
+    expect(await readJob(jobId)).toMatchObject({
+      status: "REVIEW",
+      approvedBy: null,
+    });
+    expect(await releaseAuditRows(jobId)).toHaveLength(0);
+  });
+
+  it("REQ-APPROVAL-008: a key whose creator left the organization cannot approve", async () => {
+    await addMember("user-gone", "admin");
+    const key = await seedKeyFor("user-gone");
+    await db.delete(member).where(eq(member.userId, "user-gone"));
+    const jobId = await seedReviewJob(fixture);
+
+    const res = await publicRequest(
+      key.rawKey,
+      `/jobs/${jobId}/approve`,
+      "POST",
+      {},
+    );
+
+    expect(res.status).toBe(403);
+    expect((await readJob(jobId)).status).toBe("REVIEW");
+  });
+
+  it("REQ-APPROVAL-008: a revoked key is refused by auth (401) and the job is untouched", async () => {
+    const jobId = await seedReviewJob(fixture);
+    const key = await seedKeyFor(CHECKER, { revokedAt: new Date() });
+
+    const res = await publicRequest(
+      key.rawKey,
+      `/jobs/${jobId}/approve`,
+      "POST",
+      {},
+    );
+
+    expect(res.status).toBe(401);
+    expect((await readJob(jobId)).status).toBe("REVIEW");
+  });
+
+  it("REQ-APPROVAL-008: a key without the jobs:write scope is refused 403", async () => {
+    const jobId = await seedReviewJob(fixture);
+    const key = await seedKeyFor(CHECKER, { scopes: ["jobs:read"] });
+
+    const res = await publicRequest(
+      key.rawKey,
+      `/jobs/${jobId}/approve`,
+      "POST",
+      {},
+    );
+
+    expect(res.status).toBe(403);
+    expect((await readJob(jobId)).status).toBe("REVIEW");
+  });
+
+  it.each(["APPROVED", "GENERATING_PDF", "SUPERSEDED", "REVIEW"])(
+    "REQ-APPROVAL-009: PATCH /jobs/:id cannot set status %s (use the approve endpoint); the job is untouched",
+    async (status) => {
+      const jobId = await seedReviewJob(fixture, { status: "IN_PROGRESS" });
+      const key = await seedKeyFor(CHECKER);
+
+      const res = await publicRequest(key.rawKey, `/jobs/${jobId}`, "PATCH", {
+        status,
+      });
+
+      expect(res.status).toBe(400);
+      expect((await readJob(jobId)).status).toBe("IN_PROGRESS");
+      expect(await releaseAuditRows(jobId)).toHaveLength(0);
+    },
+  );
+
+  it("REQ-APPROVAL-009: PATCH /jobs/:id still edits the plain fields", async () => {
+    const jobId = await seedReviewJob(fixture, { status: "IN_PROGRESS" });
+    const key = await seedKeyFor(CHECKER);
+
+    const res = await publicRequest(key.rawKey, `/jobs/${jobId}`, "PATCH", {
+      technicianId: CHECKER,
+    });
+
+    expect(res.status).toBe(200);
+    const [row] = await db
+      .select({
+        technicianId: calibrationJob.technicianId,
+        status: calibrationJob.status,
+      })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, jobId));
+    expect(row).toEqual({ technicianId: CHECKER, status: "IN_PROGRESS" });
+  });
+});

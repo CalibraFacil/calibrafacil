@@ -92,13 +92,25 @@ function getRetryDelayMs(attempts: number) {
   return Math.min(5 * 60_000, 5_000 * 2 ** Math.max(0, attempts - 1));
 }
 
+/** A db handle or an open transaction: anything that can `execute` SQL. */
+export type QueueExecutor = Pick<typeof db, "execute">;
+
 export async function enqueueQueueJob(
   message: QueueMessage,
-  options: { maxAttempts?: number; availableAt?: Date } = {},
+  options: {
+    maxAttempts?: number;
+    availableAt?: Date;
+    /**
+     * Run the insert on this handle instead of the shared pool — pass an open
+     * transaction to commit the queue row atomically with the state change that
+     * needs it (outbox pattern).
+     */
+    executor?: QueueExecutor;
+  } = {},
 ) {
   const availableAt = options.availableAt ?? new Date();
 
-  const result = await db.execute(sql`
+  const result = await (options.executor ?? db).execute(sql`
     insert into app_queue_job (type, payload, max_attempts, available_at)
     values (
       ${getMessageType(message)},
