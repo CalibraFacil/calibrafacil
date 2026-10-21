@@ -813,6 +813,13 @@
       "when": 1791700000000,
       "tag": "0115_db_immutability",
       "breakpoints": true
+    },
+    {
+      "idx": 116,
+      "version": "7",
+      "when": 1791800000000,
+      "tag": "0116_calendar_date_columns",
+      "breakpoints": true
     }
   ]
 }
