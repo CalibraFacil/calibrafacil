@@ -95,6 +95,19 @@ function calendarDateOf(value: Date): Date {
   return day;
 }
 
+/**
+ * Today in the laboratory as a Postgres `date` expression, for raw SQL that
+ * compares a calendar-date column with "today": the database clock runs in
+ * UTC, so `now()`, `CURRENT_DATE` and `now() at time zone 'utc'` all name
+ * tomorrow between 21:00 and 24:00 in Sao Paulo.
+ *
+ *   where due_date < (now() AT TIME ZONE 'America/Sao_Paulo')::date
+ *
+ * Add days with plain integers (`<expr> + 30`); subtract two dates for a day
+ * count (`due_date - <expr>`).
+ */
+export const LAB_TODAY_SQL = `(now() AT TIME ZONE '${CALENDAR_TIME_ZONE}')::date`;
+
 /** Today in the laboratory, as a calendar date (UTC midnight of its day). */
 export function labToday(now: Date = new Date()): Date {
   const today = calendarDateFromKey(labCalendarDayKey(now));
@@ -105,6 +118,27 @@ export function labToday(now: Date = new Date()): Date {
 /** A calendar date `days` days later (earlier when negative); zone-proof. */
 export function addCalendarDays(date: Date, days: number): Date {
   return new Date(calendarDateOf(date).getTime() + days * MS_PER_DAY);
+}
+
+/**
+ * Whole calendar days from today's laboratory day (the day of `now`) to the day
+ * the calendar date `value` names: 0 on the day itself, negative once it is
+ * past. The one way to ask "is it overdue / expired / due soon".
+ */
+export function labDaysUntil(value: Date, now: Date = new Date()): number {
+  return calendarDaysBetween(labToday(now), value);
+}
+
+/**
+ * Whether the day `value` names is before today's laboratory day: a due date
+ * or a validity that is over. The day itself is NOT past (a standard valid
+ * through D is still valid on D, a bill due on D is not yet overdue on D).
+ */
+export function isCalendarDatePast(
+  value: Date,
+  now: Date = new Date(),
+): boolean {
+  return labDaysUntil(value, now) < 0;
 }
 
 /**

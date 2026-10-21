@@ -4,9 +4,44 @@ import {
   calendarDateFromKey,
   calendarDateKey,
   calendarDaysBetween,
+  isCalendarDatePast,
   labCalendarDayKey,
+  labDaysUntil,
   labToday,
 } from "./calendar-date";
+
+describe("overdue and expiry are judged by laboratory days (REQ-CAL-003)", () => {
+  const due = new Date("2026-10-15T00:00:00.000Z"); // a stored calendar date
+
+  it("is not past on the day itself, including 21:00-24:00 in Sao Paulo", () => {
+    // 23:30 on 2026-10-15 in Sao Paulo is 02:30Z on the 16th: the UTC day has
+    // rolled over, the laboratory's has not.
+    const lateEvening = new Date("2026-10-16T02:30:00.000Z");
+    expect(isCalendarDatePast(due, lateEvening)).toBe(false);
+    expect(labDaysUntil(due, lateEvening)).toBe(0);
+    // 21:30 on the 14th is 00:30Z on the 15th: one day to go in the laboratory.
+    expect(isCalendarDatePast(due, new Date("2026-10-15T00:30:00.000Z"))).toBe(
+      false,
+    );
+    expect(labDaysUntil(due, new Date("2026-10-15T00:30:00.000Z"))).toBe(1);
+  });
+
+  it("is past from 00:00 of the next day in Sao Paulo", () => {
+    const justAfterMidnight = new Date("2026-10-16T03:10:00.000Z"); // 00:10 on the 16th
+    expect(isCalendarDatePast(due, justAfterMidnight)).toBe(true);
+    expect(labDaysUntil(due, justAfterMidnight)).toBe(-1);
+  });
+
+  it("reads a value stored at local noon by the day it names", () => {
+    const noon = new Date("2026-10-15T15:00:00.000Z");
+    expect(isCalendarDatePast(noon, new Date("2026-10-16T02:30:00.000Z"))).toBe(
+      false,
+    );
+    expect(isCalendarDatePast(noon, new Date("2026-10-16T03:10:00.000Z"))).toBe(
+      true,
+    );
+  });
+});
 
 describe("calendar dates (REQ-CAL-001, REQ-CAL-003)", () => {
   it("names the UTC day of an exact-UTC-midnight value", () => {
