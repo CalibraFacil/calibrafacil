@@ -1,0 +1,143 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  // Gate: unused files, dependencies, devDependencies, unlisted dependencies and
+  // binaries, and unresolved imports fail `pnpm knip` (and CI). Unused exports,
+  // exported types and duplicate exports are report-only ("warn") for now: there
+  // are several hundred, mostly helpers exported for tests, and clearing them is
+  // its own sweep. Flip a rule to "error" once its count reaches zero.
+  "rules": {
+    "exports": "warn",
+    "nsExports": "warn",
+    "types": "warn",
+    "nsTypes": "warn",
+    "duplicates": "warn",
+    "enumMembers": "warn"
+  },
+  // Binaries that come from the environment, not from a package.json dependency:
+  // Postgres client and drizzle-kit (run by the integration test setup against a
+  // disposable database, resolved from packages/db), the CI runner, the Linux loader cache, Playwright's CLI
+  // (installed by the workflow itself) and `package` (a workflow step name).
+  "ignoreBinaries": [
+    "psql",
+    "drizzle-kit",
+    "ldconfig",
+    "playwright",
+    "package"
+  ],
+  // Dynamic specifiers a static analysis cannot follow.
+  "ignoreUnresolved": ["src/cli/seed-demo.ts"],
+  "workspaces": {
+    // apps/docs imports the Fumadocs-generated `.source/` through the tsconfig
+    // alias `collections/*`; the folder only exists after `fumadocs-mdx` runs, so a
+    // fresh CI checkout reports it as an unlisted dependency.
+    "apps/docs": {
+      "ignoreDependencies": ["collections"]
+    },
+    ".": {
+      "entry": ["scripts/*.{mjs,ts}"],
+      "project": ["scripts/**/*.{mjs,ts}"],
+      // tsrs is resolved at runtime by scripts/typecheck.mjs, never imported.
+      "ignoreDependencies": ["tsrs"]
+    },
+    "apps/api": {
+      "entry": [
+        // Vercel function shims and their esbuild sources.
+        "api/**/*.js",
+        "vercel-src/**/*.ts",
+        "scripts/*.mjs",
+        "src/cli/*.ts",
+        // background-jobs.ts loads this through a variable specifier
+        // (`import(modulePath)`) so bundlers leave @calibra-facil/worker out of
+        // the serverless bundle. Not dead: it is the in-process dev runner.
+        "src/lib/worker-modules.ts",
+        "test/**/*.ts"
+      ],
+      "project": [
+        "src/**/*.{ts,tsx}",
+        "api/**/*.js",
+        "vercel-src/**/*.ts",
+        "scripts/*.mjs",
+        "test/**/*.ts"
+      ]
+    },
+    "apps/desktop": {
+      "entry": ["vite.*.config.ts"],
+      "project": ["src/**/*.ts", "*.ts"],
+      // Native modules the local-server loads at runtime and electron-builder.yml
+      // packages by path (node_modules/<name>/**); electron-builder is invoked by
+      // scripts/build-desktop-artifact.mjs.
+      "ignoreDependencies": [
+        "better-sqlite3",
+        "serialport",
+        "usb",
+        "electron-builder"
+      ]
+    },
+    "apps/web": {
+      "entry": [
+        "src/routes/**/*.{ts,tsx}",
+        "scripts/*.mjs",
+        "e2e/**/*.ts",
+        "e2e-stack/**/*.ts",
+        "vitest.*.js"
+      ],
+      "project": ["src/**/*.{ts,tsx,css}", "scripts/*.mjs", "e2e*/**/*.ts"]
+    },
+    "apps/portal": {
+      "entry": ["src/routes/**/*.{ts,tsx}", "scripts/*.mjs"],
+      "project": ["src/**/*.{ts,tsx,css}", "scripts/*.mjs"]
+    },
+    "apps/worker": {
+      "entry": ["test/**/*.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
+    },
+    "apps/local-server": {
+      "project": ["src/**/*.ts"]
+    },
+    "apps/site": {
+      // scripts/build-docs.mjs points at apps/docs/node_modules/next by path.
+      "ignoreDependencies": ["next"]
+    },
+    "packages/auth": {
+      // Declared but not imported; left for the branch that owns packages/auth.
+      // vite-env.d.ts imports a type from @calibra-facil/contracts.
+      "ignoreDependencies": [
+        "@calibra-facil/shared",
+        "@calibra-facil/contracts"
+      ]
+    },
+    "packages/db": {
+      "entry": ["scripts/*.{mjs,ts}", "src/seed-*.ts"],
+      "project": ["src/**/*.ts", "scripts/*.{mjs,ts}"],
+      // drizzle.config.ts throws without DATABASE_URL, so knip must not load it.
+      "drizzle": false
+    },
+    "packages/email": {
+      "ignoreIssues": {
+        // The `@jsxImportSource react` pragma in a comment, not an import.
+        "src/jsx-dev-runtime.ts": ["unlisted"]
+      }
+    },
+    "packages/math-engine": {
+      "entry": ["scripts/*.ts"],
+      "project": ["src/**/*.ts", "scripts/*.ts"],
+      // The engine source is byte-pinned by validation/math-engine (any change,
+      // comments included, needs a new ENGINE_VERSION and dossier). These barrels
+      // are unimported today; deleting them is a versioned engine release.
+      "ignore": [
+        "src/engine/index.ts",
+        "src/evaluator/index.ts",
+        "src/testing/index.ts"
+      ]
+    },
+    "packages/notifications": {
+      // Specs `vi.mock("resend")`; the mock only intercepts when the package
+      // resolves from this package.
+      "ignoreDependencies": ["resend"]
+    },
+    "packages/signing": {
+      "entry": ["scripts/*.mjs"],
+      "project": ["src/**/*.ts", "scripts/*.mjs"]
+    }
+  }
+}

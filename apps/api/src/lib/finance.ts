@@ -50,7 +50,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import type { IntegrationsEnv } from "./integrations";
+import type { IntegrationsEnv } from "./integrations-env";
 import { buildUnitScopeCondition } from "./units";
 import { decryptPassword, encryptPassword } from "@calibra-facil/signing";
 import { createFinancialErpAdapter } from "./financial-erp-adapters";

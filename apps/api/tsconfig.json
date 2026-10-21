@@ -27,8 +27,7 @@
       "@calibra-facil/worker/scheduled": ["../worker/src/scheduled.ts"],
       "drizzle-orm": ["./node_modules/drizzle-orm"],
       "drizzle-orm/*": ["./node_modules/drizzle-orm/*"]
-    },
-    "types": ["@cloudflare/workers-types"]
+    }
   },
   "include": ["src/**/*", "api/**/*.ts", "vercel-src/**/*"],
   "exclude": [

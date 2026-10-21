@@ -1,6 +1,6 @@
 import path from "node:path";
 import { Buffer } from "node:buffer";
-import { readFile, stat } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import {
   app,
@@ -687,20 +687,6 @@ function registerIpc(
   handle(desktopIpcChannels.saveFile, async () => {
     const result = await dialog.showSaveDialog({});
     return result.canceled ? null : (result.filePath ?? null);
-  });
-
-  handle(desktopIpcChannels.revealFile, async (_event, filePath) => {
-    if (typeof filePath !== "string" || filePath.length === 0) return false;
-
-    // A path saved earlier in the session may have been moved or deleted since.
-    try {
-      await stat(filePath);
-    } catch {
-      return false;
-    }
-
-    shell.showItemInFolder(filePath);
-    return true;
   });
 
   handle(desktopIpcChannels.openExternal, async (_event, url) => {
