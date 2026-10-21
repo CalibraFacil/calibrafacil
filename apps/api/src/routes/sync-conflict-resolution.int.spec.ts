@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { organizationOf } from "../../test/integration/organization-of";
 import { syncRouter } from "./sync";
 import { db } from "@calibra-facil/db";
 import {
@@ -156,6 +157,7 @@ async function seedExecutionRow(params: {
   const [row] = await db
     .insert(serviceOrderExecution)
     .values({
+      organizationId: organizationOf("service_order", params.serviceOrderId),
       serviceOrderId: params.serviceOrderId,
       startedByUserId: params.startedByUserId,
       servicePerformed: params.servicePerformed,
