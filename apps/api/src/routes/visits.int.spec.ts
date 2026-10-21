@@ -1,10 +1,10 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   visitJobsRouter,
   visitRescheduleRequestsRouter,
   visitsRouter,
 } from "./visits";
-import { db } from "@calibra-facil/db";
+import { db, getDb } from "@calibra-facil/db";
 import {
   asset,
   assetType,
@@ -662,6 +662,61 @@ describe("visitJobsRouter — remove instrument audit trail (ISO/IEC 17025)", ()
       .where(eq(calibrationJob.id, jobDbId));
     expect(job?.status).toBe("IN_PROGRESS");
 
+    const auditRows = await db
+      .select()
+      .from(jobAuditLog)
+      .where(eq(jobAuditLog.jobId, jobDbId));
+    expect(auditRows).toHaveLength(0);
+  });
+
+  it("REQ-JOBST-VISIT-001: a job that leaves DRAFT between the guard read and the write is not cancelled → 409 JOB_STATUS_CONFLICT, status unchanged, NO audit row", async () => {
+    const fx = await seedVisitJobFixture({
+      orgId: "org-vjc",
+      userId: "user-vjc",
+    });
+    const jobDbId = await seedVisitJob({
+      jobId: "JOB-VJC-1",
+      organizationId: fx.orgId,
+      unitId: fx.unitId,
+      customerId: fx.customerId,
+      assetId: fx.assetId,
+      serviceId: fx.serviceId,
+      createdBy: fx.userId,
+      visitId: fx.visitId,
+    });
+
+    // Forces the lost compare-and-set deterministically: the handler has read
+    // the job as DRAFT; right before it opens the transaction carrying its
+    // write, another actor starts the calibration. (`db` is a Proxy over the
+    // cached instance, so spy on the instance.)
+    const instance = getDb();
+    const originalTransaction = instance.transaction.bind(instance);
+    vi.spyOn(instance, "transaction").mockImplementationOnce(
+      async (callback, config) => {
+        await db
+          .update(calibrationJob)
+          .set({ status: "IN_PROGRESS" })
+          .where(eq(calibrationJob.id, jobDbId));
+        return originalTransaction(callback, config);
+      },
+    );
+
+    loginAs({ userId: fx.userId, organizationId: fx.orgId });
+    const res = await visitJobsRouter.request(
+      `/${fx.visitId}/jobs/${jobDbId}`,
+      { method: "DELETE" },
+    );
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      code: "JOB_STATUS_CONFLICT",
+      currentStatus: "IN_PROGRESS",
+    });
+    const [job] = await db
+      .select({ status: calibrationJob.status })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, jobDbId));
+    expect(job?.status).toBe("IN_PROGRESS");
     const auditRows = await db
       .select()
       .from(jobAuditLog)

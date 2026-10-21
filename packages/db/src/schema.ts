@@ -3759,6 +3759,11 @@ export const calibrationJob = pgTable(
     uniqueIndex("job_org_job_id_uidx").on(table.organizationId, table.jobId),
     // Amendment tracking indexes for efficient chain lookups
     index("job_supersedes_id_idx").on(table.supersedesId),
+    // A certificate is amended at most once: two concurrent amendments of the
+    // same approved job must not both survive (ISO 17025 §7.8.8 chain).
+    uniqueIndex("job_supersedes_id_uidx")
+      .on(table.supersedesId)
+      .where(sql`${table.supersedesId} is not null`),
     index("job_superseded_by_id_idx").on(table.supersededById),
     // DOM-02: resolve "does this repair OS already have a calibration opened?"
     // (the pending-after-repair queue leftJoins on this column).

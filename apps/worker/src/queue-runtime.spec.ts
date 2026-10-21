@@ -168,6 +168,23 @@ describe("queue-runtime failure recording (REQ-REL-OBS-002)", () => {
   });
 });
 
+describe("queue-runtime delivery attempt", () => {
+  it("REQ-WRETRY-005 hands the worker each message's attempt and the row's max attempts", async () => {
+    const job = { ...makeJob(20), attempts: 2, maxAttempts: 3 };
+    claimOnce(job);
+    let seen: { attempt?: number; maxAttempts?: number } | undefined;
+    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
+      const message = batch.messages[0];
+      seen = { attempt: message?.attempt, maxAttempts: message?.maxAttempts };
+      message?.ack();
+    });
+
+    await drainQueue(fakeEnv, CONFIG);
+
+    expect(seen).toEqual({ attempt: 2, maxAttempts: 3 });
+  });
+});
+
 describe("queue-runtime idempotency receipts", () => {
   it("off mode never touches the ledger", async () => {
     const job = makeJob(10);
@@ -315,5 +332,10 @@ describe("queue-runtime idempotency receipts", () => {
 
 // Minimal structural type for the mocked batch the worker handler receives.
 interface MessageBatchLike {
-  messages: Array<{ ack: () => void; retry: (error?: unknown) => void }>;
+  messages: Array<{
+    attempt?: number;
+    maxAttempts?: number;
+    ack: () => void;
+    retry: (error?: unknown) => void;
+  }>;
 }

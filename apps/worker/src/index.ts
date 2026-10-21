@@ -133,9 +133,30 @@ export interface Env {
 
 export type QueueMessage = BackgroundJobMessage;
 
+/**
+ * Which delivery of a queue message this is. Runtimes that redeliver a failed
+ * message (Vercel Queue, the DB queue) supply it; runtimes that never redeliver
+ * (in-process local/inline dev) leave it out, which means "this is the only
+ * attempt", so a failure is final.
+ */
+export interface DeliveryAttempt {
+  /** 1-based delivery count of this message. */
+  attempt: number;
+  /** Deliveries the runtime will make before giving up on the message. */
+  maxAttempts: number;
+}
+
+/** Whether a failure on this delivery is the last one the queue will make. */
+export function isFinalDelivery(delivery?: DeliveryAttempt): boolean {
+  return !delivery || delivery.attempt >= delivery.maxAttempts;
+}
+
 export interface MessageBatch<T> {
   messages: {
     body: T;
+    /** Delivery metadata, when the runtime redelivers failed messages. */
+    attempt?: number;
+    maxAttempts?: number;
     ack: () => void;
     // Optional error (REQ-REL-OBS-002): the DB-queue runtime records it as the
     // job's real last_error. Cloudflare's native retry ignores extra args, so
@@ -376,6 +397,72 @@ async function fetchSigningCertificate(
   };
 }
 
+/**
+ * Outcome of the certificate-issuance status write.
+ *
+ * - `issued`: GENERATING_PDF -> APPROVED, audited.
+ * - `watermarked`: a SUPERSEDED job keeps its status; only the stored
+ *   certificate is refreshed.
+ * - `skipped`: the job is in no state that may be issued (cancelled, rejected,
+ *   already approved...). NOTHING was written; the caller must roll back
+ *   whatever it created for this issuance.
+ */
+export type CertificateTransitionResult =
+  | { outcome: "issued" }
+  | { outcome: "watermarked" }
+  | { outcome: "skipped"; currentStatus: string | null };
+
+/** Thrown inside the issuance transaction to roll back a skipped issuance. */
+class CertificateIssuanceSkipped extends Error {
+  constructor(readonly currentStatus: string | null) {
+    super(`Certificate issuance skipped: job status is ${currentStatus}`);
+    this.name = "CertificateIssuanceSkipped";
+  }
+}
+
+/** Runs `operation` in one transaction on `client`; rolls back on any throw. */
+async function inTransaction<T>(
+  client: Client,
+  operation: () => Promise<T>,
+): Promise<T> {
+  await client.query("BEGIN");
+  try {
+    const result = await operation();
+    await client.query("COMMIT");
+    return result;
+  } catch (error) {
+    await client.query("ROLLBACK").catch((rollbackError) => {
+      console.error("[worker] ROLLBACK failed:", rollbackError);
+    });
+    throw error;
+  }
+}
+
+/**
+ * Locks the job row and returns its status. Held until the surrounding
+ * transaction ends, so a concurrent cancel/reject/amend (compare-and-set on the
+ * prior status) waits and then sees the post-issuance status.
+ */
+async function lockJobStatus(
+  client: Client,
+  jobId: number,
+): Promise<string | null> {
+  const result = await client.query<{ status: string }>(
+    `SELECT status FROM calibration_job WHERE id = $1 FOR UPDATE`,
+    [jobId],
+  );
+  return result.rows[0]?.status ?? null;
+}
+
+/**
+ * The issuance status write. Must run inside a transaction together with
+ * whatever the caller created for this issuance (the issued snapshot row).
+ *
+ * Every write is compare-and-set on the status the worker expects:
+ * `GENERATING_PDF` (approval in progress) or `SUPERSEDED` (watermark refresh).
+ * Anything else (a job cancelled or rejected while the PDF rendered, or one that
+ * is already APPROVED) writes nothing and is reported as `skipped`.
+ */
 async function updateJobWithCertificate(
   client: Client,
   jobId: number,
@@ -384,18 +471,21 @@ async function updateJobWithCertificate(
   signatureMetadata?: SignatureMetadata,
   signatureVerdict?: StoredSignatureVerdict,
   options: { preserveSignatureMetadata?: boolean } = {},
-): Promise<void> {
+): Promise<CertificateTransitionResult> {
   const now = new Date();
 
-  // Check if job is SUPERSEDED (being regenerated with watermark)
   const statusResult = await client.query<{
     status: string;
     signature_metadata: unknown;
-  }>(`SELECT status, signature_metadata FROM calibration_job WHERE id = $1`, [
-    jobId,
-  ]);
-  const currentStatus = statusResult.rows[0]?.status;
+  }>(
+    `SELECT status, signature_metadata FROM calibration_job WHERE id = $1 FOR UPDATE`,
+    [jobId],
+  );
+  const currentStatus = statusResult.rows[0]?.status ?? null;
   const isSuperseded = currentStatus === "SUPERSEDED";
+  if (currentStatus !== "GENERATING_PDF" && !isSuperseded) {
+    return { outcome: "skipped", currentStatus };
+  }
   const shouldPreserveSignatureMetadata =
     options.preserveSignatureMetadata === true &&
     signatureMetadata === undefined;
@@ -410,18 +500,20 @@ async function updateJobWithCertificate(
   // pass no verdict and must not wipe it).
   const writeSignatureVerdict = signatureVerdict !== undefined;
 
-  // Only update status to APPROVED if not already SUPERSEDED
-  // SUPERSEDED jobs are being regenerated with watermark and should keep their status
-  await client.query(
+  // Compare-and-set: SUPERSEDED jobs are being regenerated with watermark and
+  // keep their status; GENERATING_PDF becomes APPROVED. A job that left the
+  // expected status since the read above matches zero rows.
+  const updated = await client.query(
     `
     UPDATE calibration_job
     SET
-      status = CASE WHEN status = 'SUPERSEDED' THEN 'SUPERSEDED' ELSE 'APPROVED' END,
+      status = $8,
       certificate_url = $2,
       signature_metadata = CASE WHEN $5 THEN signature_metadata ELSE $3::jsonb END,
       signature_verdict = CASE WHEN $6 THEN $7::jsonb ELSE signature_verdict END,
       updated_at = $4
-    WHERE id = $1
+    WHERE id = $1 AND status = $9
+    RETURNING id
     `,
     [
       jobId,
@@ -431,8 +523,13 @@ async function updateJobWithCertificate(
       shouldPreserveSignatureMetadata,
       writeSignatureVerdict,
       signatureVerdict ? JSON.stringify(signatureVerdict) : null,
+      isSuperseded ? "SUPERSEDED" : "APPROVED",
+      currentStatus,
     ],
   );
+  if (updated.rows.length === 0) {
+    return { outcome: "skipped", currentStatus };
+  }
 
   // Log appropriate action based on whether this is a watermark regeneration
   const action = isSuperseded
@@ -462,15 +559,18 @@ async function updateJobWithCertificate(
     ],
   );
 
-  if (!isSuperseded) {
-    try {
-      await notifyCertificateReady(jobId);
-    } catch (error) {
-      console.error(
-        `[JOB ${jobId}] Failed to send certificate ready notification:`,
-        error,
-      );
-    }
+  return { outcome: isSuperseded ? "watermarked" : "issued" };
+}
+
+/** Customer-facing "certificate ready" mail; only after the issuance COMMITs. */
+async function notifyCertificateIssued(jobId: number): Promise<void> {
+  try {
+    await notifyCertificateReady(jobId);
+  } catch (error) {
+    console.error(
+      `[JOB ${jobId}] Failed to send certificate ready notification:`,
+      error,
+    );
   }
 }
 
@@ -594,12 +694,20 @@ async function signPdfWithUnitCertificate(
     }
     const detail =
       signError instanceof Error ? signError.message : String(signError);
+    // Not permanent: the failure may be a TSA/network outage, so earlier
+    // deliveries retry it; the final one still REJECTS the job.
     throw new SigningPolicyError(
       `Falha na assinatura digital do certificado: ${detail}`,
+      { permanent: false },
     );
   }
 }
 
+/**
+ * Records a failed emission: GENERATING_PDF -> REJECTED. Compare-and-set on
+ * GENERATING_PDF, so a job that was cancelled, already approved or amended in the
+ * meantime is never flipped to REJECTED by a late failure.
+ */
 async function setJobError(
   client: Client,
   jobId: number,
@@ -608,34 +716,43 @@ async function setJobError(
 ): Promise<void> {
   const now = new Date();
 
-  await client.query(
-    `
-    UPDATE calibration_job
-    SET 
-      status = 'REJECTED',
-      rejection_reason = $2,
-      rejected_by = $3,
-      rejected_at = $4,
-      updated_at = $4
-    WHERE id = $1
-    `,
-    [jobId, `Erro ao gerar certificado: ${error}`, userId, now],
-  );
+  await inTransaction(client, async () => {
+    const updated = await client.query(
+      `
+      UPDATE calibration_job
+      SET
+        status = 'REJECTED',
+        rejection_reason = $2,
+        rejected_by = $3,
+        rejected_at = $4,
+        updated_at = $4
+      WHERE id = $1 AND status = 'GENERATING_PDF'
+      RETURNING id
+      `,
+      [jobId, `Erro ao gerar certificado: ${error}`, userId, now],
+    );
+    if (updated.rows.length === 0) {
+      console.warn(
+        `[JOB ${jobId}] Not marking REJECTED: job is no longer GENERATING_PDF (error was: ${error})`,
+      );
+      return;
+    }
 
-  await client.query(
-    `
-    INSERT INTO job_audit_log (job_id, action, changes, performed_by, performed_at, reason)
-    VALUES ($1, $2, $3, $4, $5, $6)
-    `,
-    [
-      jobId,
-      "certificate_error",
-      JSON.stringify({ status: { old: "GENERATING_PDF", new: "REJECTED" } }),
-      userId,
-      now,
-      error,
-    ],
-  );
+    await client.query(
+      `
+      INSERT INTO job_audit_log (job_id, action, changes, performed_by, performed_at, reason)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      `,
+      [
+        jobId,
+        "certificate_error",
+        JSON.stringify({ status: { old: "GENERATING_PDF", new: "REJECTED" } }),
+        userId,
+        now,
+        error,
+      ],
+    );
+  });
 }
 
 // =============================================================================
@@ -1634,20 +1751,37 @@ async function processJob(
   env: Env,
   jobId: number,
   userId: string,
-): Promise<{ success: boolean; certificateUrl?: string; error?: string }> {
-  // Idempotency, checked before any work: an already-issued job returns its
-  // stored certificate. The transition is replayed (not skipped) because the
-  // crash may have happened between the snapshot insert and the job update.
-  const existingSnapshot = await withDbClient(env, async (client) => {
+): Promise<{
+  success: boolean;
+  certificateUrl?: string;
+  error?: string;
+  /** Set when the message was acknowledged without issuing anything. */
+  skipped?: string;
+  /**
+   * Set on a failure that retrying cannot fix (missing data, a method that
+   * cannot be laid out, a signing policy refusal): the job is REJECTED right
+   * away instead of waiting for the final delivery.
+   */
+  permanent?: boolean;
+}> {
+  // Idempotency, checked before any work. Only a job still in the state this
+  // worker is allowed to act on (GENERATING_PDF, or SUPERSEDED for the
+  // watermark refresh) proceeds. Anything else was changed since the message was
+  // enqueued: an APPROVED job is already issued (redelivery is a no-op, no
+  // second audit entry or notification), and a cancelled/rejected one must never
+  // be brought back to life by a late message.
+  const existing = await withDbClient(env, async (client) => {
     const result = await client.query<{
-      pdf_r2_key: string;
+      status: string;
+      certificate_url: string | null;
+      pdf_r2_key: string | null;
       signature_metadata: unknown;
     }>(
       `
-        select ics.pdf_r2_key, cj.signature_metadata
-        from issued_certificate_snapshot ics
-        join calibration_job cj on cj.id = ics.job_id
-        where ics.job_id = $1
+        select cj.status, cj.certificate_url, ics.pdf_r2_key, cj.signature_metadata
+        from calibration_job cj
+        left join issued_certificate_snapshot ics on ics.job_id = cj.id
+        where cj.id = $1
         limit 1
       `,
       [jobId],
@@ -1655,19 +1789,65 @@ async function processJob(
     return result.rows[0] ?? null;
   });
 
-  if (existingSnapshot) {
-    const certificateUrl = storedObjectUrl(existingSnapshot.pdf_r2_key);
-    await withDbClient(env, (client) =>
-      updateJobWithCertificate(
-        client,
-        jobId,
-        certificateUrl,
-        userId,
-        parseSignatureMetadata(existingSnapshot.signature_metadata),
-        undefined,
-        { preserveSignatureMetadata: true },
-      ),
+  if (existing && existing.status === "APPROVED") {
+    console.log(`[JOB ${jobId}] Already APPROVED; redelivery is a no-op`);
+    return {
+      success: true,
+      skipped: "APPROVED",
+      certificateUrl:
+        existing.certificate_url ??
+        (existing.pdf_r2_key
+          ? storedObjectUrl(existing.pdf_r2_key)
+          : undefined),
+    };
+  }
+  if (
+    existing &&
+    existing.status !== "GENERATING_PDF" &&
+    existing.status !== "SUPERSEDED"
+  ) {
+    console.warn(
+      `[JOB ${jobId}] Not issuing a certificate: job status is ${existing.status}`,
     );
+    return { success: true, skipped: existing.status };
+  }
+
+  // The transition is replayed (not skipped) for a job that still has its
+  // snapshot but never reached APPROVED: the crash may have happened between
+  // the snapshot insert and the job update.
+  if (existing?.pdf_r2_key) {
+    const snapshotKey = existing.pdf_r2_key;
+    const certificateUrl = storedObjectUrl(snapshotKey);
+    try {
+      const transition = await withDbClient(env, (client) =>
+        inTransaction(client, async () => {
+          const result = await updateJobWithCertificate(
+            client,
+            jobId,
+            certificateUrl,
+            userId,
+            parseSignatureMetadata(existing.signature_metadata),
+            undefined,
+            { preserveSignatureMetadata: true },
+          );
+          if (result.outcome === "skipped") {
+            throw new CertificateIssuanceSkipped(result.currentStatus);
+          }
+          return result;
+        }),
+      );
+      if (transition.outcome === "issued") {
+        await notifyCertificateIssued(jobId);
+      }
+    } catch (error) {
+      if (error instanceof CertificateIssuanceSkipped) {
+        console.warn(
+          `[JOB ${jobId}] Not issuing a certificate: job status is ${error.currentStatus}`,
+        );
+        return { success: true, skipped: error.currentStatus ?? "unknown" };
+      }
+      throw error;
+    }
     return { success: true, certificateUrl };
   }
 
@@ -1684,9 +1864,14 @@ async function processJob(
         },
       }),
     );
-    if (!job) return { success: false, error: "Job not found" };
+    if (!job)
+      return { success: false, error: "Job not found", permanent: true };
     if (!job.organizationId) {
-      return { success: false, error: "Missing organization_id" };
+      return {
+        success: false,
+        error: "Missing organization_id",
+        permanent: true,
+      };
     }
 
     // The layout refuses to guess: if the method does not declare enough to
@@ -1702,6 +1887,7 @@ async function processJob(
       return {
         success: false,
         error: `Certificado não pode ser emitido: ${layout.reasons.join(" ")}`,
+        permanent: true,
       };
     }
 
@@ -1759,9 +1945,21 @@ async function processJob(
       renderedAt: new Date().toISOString(),
     };
 
-    const issuedPdfR2Key = await withDbClient(env, async (client) => {
-      const insertResult = await client.query<{ pdf_r2_key: string }>(
-        `
+    // The snapshot insert and the status write commit together or not at all,
+    // under a lock on the job row. If the job left GENERATING_PDF while the PDF
+    // rendered (cancelled, rejected...), nothing is persisted: no snapshot row
+    // that would make the job look issued, and no APPROVED status.
+    const issued = await withDbClient(env, (client) =>
+      inTransaction(client, async () => {
+        const lockedStatus = await lockJobStatus(client, jobId);
+        if (
+          lockedStatus !== "GENERATING_PDF" &&
+          lockedStatus !== "SUPERSEDED"
+        ) {
+          throw new CertificateIssuanceSkipped(lockedStatus);
+        }
+        const insertResult = await client.query<{ pdf_r2_key: string }>(
+          `
           insert into issued_certificate_snapshot (
             organization_id,
             job_id,
@@ -1782,68 +1980,89 @@ async function processJob(
           on conflict (job_id) do nothing
           returning pdf_r2_key
         `,
-        [
-          job.organizationId,
-          jobId,
-          job.jobId,
-          pdf.key,
-          sha256Hex(pdfBuffer),
-          CERTIFICATE_LAYOUT_KEY,
-          CERTIFICATE_LAYOUT_VERSION,
-          WORKER_RENDERER_VERSION,
-          JSON.stringify(renderPolicy),
-          JSON.stringify(renderMetadata),
-          JSON.stringify(layout.data),
-          userId,
-        ],
-      );
+          [
+            job.organizationId,
+            jobId,
+            job.jobId,
+            pdf.key,
+            sha256Hex(pdfBuffer),
+            CERTIFICATE_LAYOUT_KEY,
+            CERTIFICATE_LAYOUT_VERSION,
+            WORKER_RENDERER_VERSION,
+            JSON.stringify(renderPolicy),
+            JSON.stringify(renderMetadata),
+            JSON.stringify(layout.data),
+            userId,
+          ],
+        );
 
-      // Lost the race, or a re-drain: whatever is stored wins. Minting a second
-      // number here is the one failure this whole path must not have.
-      const insertedPdfR2Key = insertResult.rows[0]?.pdf_r2_key;
-      const stored = insertedPdfR2Key
-        ? null
-        : (
-            await client.query<{
-              pdf_r2_key: string;
-              signature_metadata: unknown;
-            }>(
-              `
+        // Lost the race, or a re-drain: whatever is stored wins. Minting a second
+        // number here is the one failure this whole path must not have.
+        const insertedPdfR2Key = insertResult.rows[0]?.pdf_r2_key;
+        const stored = insertedPdfR2Key
+          ? null
+          : (
+              await client.query<{
+                pdf_r2_key: string;
+                signature_metadata: unknown;
+              }>(
+                `
                 select ics.pdf_r2_key, cj.signature_metadata
                 from issued_certificate_snapshot ics
                 join calibration_job cj on cj.id = ics.job_id
                 where ics.job_id = $1
                 limit 1
               `,
-              [jobId],
-            )
-          ).rows[0];
+                [jobId],
+              )
+            ).rows[0];
 
-      const snapshotPdfR2Key = insertedPdfR2Key ?? stored?.pdf_r2_key;
-      if (!snapshotPdfR2Key) {
-        throw new Error("Issued certificate snapshot was not persisted");
-      }
+        const snapshotPdfR2Key = insertedPdfR2Key ?? stored?.pdf_r2_key;
+        if (!snapshotPdfR2Key) {
+          throw new Error("Issued certificate snapshot was not persisted");
+        }
 
-      await updateJobWithCertificate(
-        client,
-        jobId,
-        storedObjectUrl(snapshotPdfR2Key),
-        userId,
-        insertedPdfR2Key
-          ? signed.signatureMetadata
-          : parseSignatureMetadata(stored?.signature_metadata),
-        insertedPdfR2Key ? signed.signatureVerdict : undefined,
-        { preserveSignatureMetadata: !insertedPdfR2Key },
-      );
-      return snapshotPdfR2Key;
-    });
+        const transition = await updateJobWithCertificate(
+          client,
+          jobId,
+          storedObjectUrl(snapshotPdfR2Key),
+          userId,
+          insertedPdfR2Key
+            ? signed.signatureMetadata
+            : parseSignatureMetadata(stored?.signature_metadata),
+          insertedPdfR2Key ? signed.signatureVerdict : undefined,
+          { preserveSignatureMetadata: !insertedPdfR2Key },
+        );
+        if (transition.outcome === "skipped") {
+          throw new CertificateIssuanceSkipped(transition.currentStatus);
+        }
+        return { key: snapshotPdfR2Key, outcome: transition.outcome };
+      }),
+    );
+
+    if (issued.outcome === "issued") {
+      await notifyCertificateIssued(jobId);
+    }
 
     return {
       success: true,
-      certificateUrl: storedObjectUrl(issuedPdfR2Key),
+      certificateUrl: storedObjectUrl(issued.key),
     };
   } catch (error) {
-    return { success: false, error: getErrorMessage(error) };
+    if (error instanceof CertificateIssuanceSkipped) {
+      // The job changed under the render (e.g. cancelled). The transaction
+      // rolled back, so no snapshot or status write survives. The PDF object
+      // already uploaded is unreferenced (its key carries a fresh UUID).
+      console.warn(
+        `[JOB ${jobId}] Not issuing a certificate: job status is ${error.currentStatus}`,
+      );
+      return { success: true, skipped: error.currentStatus ?? "unknown" };
+    }
+    return {
+      success: false,
+      error: getErrorMessage(error),
+      permanent: error instanceof SigningPolicyError && error.permanent,
+    };
   }
 }
 
@@ -2082,6 +2301,7 @@ function isServiceOrderDocumentMessage(
 async function processDocumentMessage(
   env: Env,
   body: DocumentBackgroundJobMessage,
+  delivery?: DeliveryAttempt,
 ) {
   if (isServiceOrderDocumentMessage(body)) {
     let result: { success: boolean; error?: string };
@@ -2135,16 +2355,29 @@ async function processDocumentMessage(
       : await processJob(env, body.jobId, body.userId);
 
   if (!result.success && messageType !== "LABEL") {
-    await withDbClient(env, (client) =>
-      setJobError(
-        client,
-        body.jobId,
-        result.error || "Unknown error",
-        body.userId,
-      ),
-    ).catch((dbError) => {
-      console.error(`[JOB ${body.jobId}] Failed to record error:`, dbError);
-    });
+    // A transient failure (Gotenberg timeout, S3 hiccup) must not REJECT an
+    // approved calibration: the queue redelivers this message, and a REJECTED
+    // job would make that redelivery a no-op. So the job stays GENERATING_PDF
+    // until the last delivery, or until the failure is one retrying cannot fix.
+    if (
+      ("permanent" in result && result.permanent) ||
+      isFinalDelivery(delivery)
+    ) {
+      await withDbClient(env, (client) =>
+        setJobError(
+          client,
+          body.jobId,
+          result.error || "Unknown error",
+          body.userId,
+        ),
+      ).catch((dbError) => {
+        console.error(`[JOB ${body.jobId}] Failed to record error:`, dbError);
+      });
+    } else {
+      console.warn(
+        `[JOB ${body.jobId}] Certificate attempt ${delivery?.attempt}/${delivery?.maxAttempts} failed; keeping GENERATING_PDF for redelivery: ${result.error}`,
+      );
+    }
   }
 
   if (!result.success) {
@@ -2775,9 +3008,10 @@ async function processAuditPackJob(
 export async function processBackgroundJob(
   env: Env,
   message: BackgroundJobMessage,
+  delivery?: DeliveryAttempt,
 ) {
   try {
-    await processBackgroundJobUnreported(env, message);
+    await processBackgroundJobUnreported(env, message, delivery);
   } catch (error) {
     reportWorkerError(error, { jobType: message.type ?? "CERTIFICATE" });
     await flushWorkerErrorReporter();
@@ -2788,6 +3022,7 @@ export async function processBackgroundJob(
 async function processBackgroundJobUnreported(
   env: Env,
   message: BackgroundJobMessage,
+  delivery?: DeliveryAttempt,
 ) {
   if (message.type === "AUDIT_PACK") {
     await processAuditPackJob(env, message);
@@ -2821,7 +3056,7 @@ async function processBackgroundJobUnreported(
 
   // HTML/label documents render through the hosted Gotenberg service
   // (services/gotenberg) — no in-function Chromium to launch.
-  await processDocumentMessage(env, message);
+  await processDocumentMessage(env, message, delivery);
 }
 
 // One message dispatcher only: every run mode routes through
@@ -2842,7 +3077,13 @@ export default {
 
     for (const msg of batch.messages) {
       try {
-        await processBackgroundJob(env, msg.body);
+        await processBackgroundJob(
+          env,
+          msg.body,
+          msg.attempt !== undefined && msg.maxAttempts !== undefined
+            ? { attempt: msg.attempt, maxAttempts: msg.maxAttempts }
+            : undefined,
+        );
         msg.ack();
       } catch (error) {
         console.error("[BATCH] Failed to process message:", {

@@ -134,6 +134,11 @@ function createBatch(jobs: ClaimedQueueJob[]) {
     batch: {
       messages: jobs.map((job) => ({
         body: job.payload,
+        // claimQueueJobs already counted this delivery in `attempts`;
+        // failQueueJob dead-letters the row once it reaches `maxAttempts`, so
+        // that is exactly the delivery whose failure must be final.
+        attempt: job.attempts,
+        maxAttempts: job.maxAttempts,
         ack: () => states.set(job.id, "acked"),
         retry: (error?: unknown) => {
           states.set(job.id, "retry");

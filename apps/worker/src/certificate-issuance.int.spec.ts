@@ -33,7 +33,8 @@ vi.mock("@calibra-facil/notifications", () => ({
   notifyAuditPackReady: vi.fn(async () => undefined),
 }));
 
-import { processBackgroundJob } from "./index";
+import { notifyCertificateReady } from "@calibra-facil/notifications";
+import worker, { processBackgroundJob } from "./index";
 
 const GOTENBERG_URL = "http://gotenberg.test";
 const FAKE_PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]); // "%PDF-"
@@ -41,7 +42,15 @@ const FAKE_PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]); // "%PDF-
 /** Every Gotenberg request the run made, so the geometry can be asserted. */
 type CapturedRender = { url: string; files: string[] };
 
-function stubGotenberg(captured: CapturedRender[]) {
+function stubGotenberg(
+  captured: CapturedRender[],
+  options: {
+    /** Runs while the "PDF" is rendering, before Gotenberg answers. */
+    onRender?: () => Promise<void>;
+    /** Answer with an HTTP failure instead of a PDF. */
+    fail?: boolean;
+  } = {},
+) {
   const realFetch = globalThis.fetch;
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = typeof input === "string" ? input : String(input);
@@ -56,6 +65,8 @@ function stubGotenberg(captured: CapturedRender[]) {
             .map((entry) => (entry instanceof File ? entry.name : "blob"))
         : [];
     captured.push({ url, files });
+    await options.onRender?.();
+    if (options.fail) return new Response("boom", { status: 500 });
     return new Response(FAKE_PDF_BYTES, { status: 200 });
   });
 }
@@ -176,6 +187,12 @@ beforeEach(async () => {
 afterEach(() => {
   vi.restoreAllMocks();
 });
+
+async function setStatus(jobId: number, status: string) {
+  await db.execute(
+    sql`UPDATE calibration_job SET status = ${status} WHERE id = ${jobId}`,
+  );
+}
 
 describe("fixed-layout certificate issuance (worker real-DB integration)", () => {
   it("REQ-WCERT-001 [HIGH RISK] a GENERATING_PDF job is issued: status -> APPROVED, certificate_url persisted, job_audit_log written", async () => {
@@ -367,5 +384,224 @@ describe("fixed-layout certificate issuance (worker real-DB integration)", () =>
     const after = await jobRow(job.jobId);
     expect(after.status).toBe("REJECTED");
     expect(asString(after.rejection_reason)).toContain("expanded_uncertainty");
+  });
+
+  // Job status guards: the worker only ever acts on a job that is still in the
+  // state the approval left it in (GENERATING_PDF). A job changed meanwhile must
+  // not come back approved, and must not keep a certificate row that makes it
+  // look issued.
+  describe("status guards (compare-and-set on GENERATING_PDF)", () => {
+    beforeEach(() => {
+      vi.mocked(notifyCertificateReady).mockClear();
+    });
+
+    it("REQ-WSTAT-001 [HIGH RISK] a job cancelled while its PDF renders is NOT approved: no snapshot, no certificate_url, no approval audit, no notification", async () => {
+      const { env } = makeRecordingEnv();
+      const { org, job } = await seedOrgAndJob();
+      stubGotenberg([], {
+        onRender: () => setStatus(job.jobId, "CANCELED"),
+      });
+
+      await processBackgroundJob(env, {
+        type: "CERTIFICATE",
+        jobId: job.jobId,
+        userId: org.userId,
+      });
+
+      const after = await jobRow(job.jobId);
+      expect(after.status).toBe("CANCELED");
+      expect(after.certificate_url).toBeNull();
+      expect(await issuedSnapshotRows(job.jobId)).toHaveLength(0);
+      const actions = (await auditRows(job.jobId)).map((e) => e.action);
+      expect(actions).not.toContain("certificate_generated");
+      expect(notifyCertificateReady).not.toHaveBeenCalled();
+    });
+
+    it("REQ-WSTAT-002 a job that is already CANCELED is not rendered or issued at all", async () => {
+      const { env } = makeRecordingEnv();
+      const captured: CapturedRender[] = [];
+      stubGotenberg(captured);
+      const { org, job } = await seedOrgAndJob({ status: "CANCELED" });
+
+      await processBackgroundJob(env, {
+        type: "CERTIFICATE",
+        jobId: job.jobId,
+        userId: org.userId,
+      });
+
+      expect(captured).toHaveLength(0);
+      expect((await jobRow(job.jobId)).status).toBe("CANCELED");
+      expect(await issuedSnapshotRows(job.jobId)).toHaveLength(0);
+    });
+
+    it("REQ-WSTAT-003 [HIGH RISK] redelivery of an already-APPROVED job is a no-op: no second audit entry, no second notification, no re-render", async () => {
+      const { env } = makeRecordingEnv();
+      const captured: CapturedRender[] = [];
+      stubGotenberg(captured);
+      const { org, job } = await seedOrgAndJob();
+      const message = {
+        type: "CERTIFICATE" as const,
+        jobId: job.jobId,
+        userId: org.userId,
+      };
+
+      await processBackgroundJob(env, message);
+      const auditAfterFirst = await auditRows(job.jobId);
+      const approved = await jobRow(job.jobId);
+
+      await processBackgroundJob(env, message);
+
+      expect(await auditRows(job.jobId)).toEqual(auditAfterFirst);
+      expect(await jobRow(job.jobId)).toEqual(approved);
+      expect(captured).toHaveLength(1);
+      expect(notifyCertificateReady).toHaveBeenCalledTimes(1);
+    });
+
+    it("REQ-WSTAT-004 a late render failure does not REJECT a job that was cancelled meanwhile", async () => {
+      const { env } = makeRecordingEnv();
+      const { org, job } = await seedOrgAndJob();
+      stubGotenberg([], {
+        onRender: () => setStatus(job.jobId, "CANCELED"),
+        fail: true,
+      });
+
+      await expect(
+        processBackgroundJob(env, {
+          type: "CERTIFICATE",
+          jobId: job.jobId,
+          userId: org.userId,
+        }),
+      ).rejects.toThrow();
+
+      expect((await jobRow(job.jobId)).status).toBe("CANCELED");
+      const actions = (await auditRows(job.jobId)).map((e) => e.action);
+      expect(actions).not.toContain("certificate_error");
+    });
+  });
+  // A render failure is usually infrastructure (Gotenberg timeout, S3 hiccup).
+  // Rejecting the job on the first failure would make the queue's redelivery a
+  // no-op and force a re-submit + re-approval of an already approved
+  // calibration. Only the last delivery (or a permanent error) may REJECT.
+  describe("delivery attempts (transient vs final vs permanent failures)", () => {
+    const delivery = (attempt: number) => ({ attempt, maxAttempts: 3 });
+
+    it("REQ-WRETRY-001 [HIGH RISK] a transient render failure on a non-final attempt leaves the job in GENERATING_PDF, and a later attempt approves it", async () => {
+      const { env } = makeRecordingEnv();
+      const { org, job } = await seedOrgAndJob();
+      const message = {
+        type: "CERTIFICATE" as const,
+        jobId: job.jobId,
+        userId: org.userId,
+      };
+
+      stubGotenberg([], { fail: true });
+      await expect(
+        processBackgroundJob(env, message, delivery(1)),
+      ).rejects.toThrow();
+
+      const afterFailure = await jobRow(job.jobId);
+      expect(afterFailure.status).toBe("GENERATING_PDF");
+      expect(afterFailure.rejection_reason).toBeNull();
+      expect(await issuedSnapshotRows(job.jobId)).toHaveLength(0);
+      expect((await auditRows(job.jobId)).map((e) => e.action)).not.toContain(
+        "certificate_error",
+      );
+
+      vi.restoreAllMocks();
+      stubGotenberg([]);
+      await processBackgroundJob(env, message, delivery(2));
+
+      const after = await jobRow(job.jobId);
+      expect(after.status).toBe("APPROVED");
+      expect(await issuedSnapshotRows(job.jobId)).toHaveLength(1);
+    });
+
+    it("REQ-WRETRY-002 [HIGH RISK] the failure on the final attempt REJECTS the job with the reason; earlier failures do not", async () => {
+      const { env } = makeRecordingEnv();
+      const { org, job } = await seedOrgAndJob();
+      const message = {
+        type: "CERTIFICATE" as const,
+        jobId: job.jobId,
+        userId: org.userId,
+      };
+      stubGotenberg([], { fail: true });
+
+      for (const attempt of [1, 2]) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- deliveries are sequential by definition.
+        await expect(
+          processBackgroundJob(env, message, delivery(attempt)),
+        ).rejects.toThrow();
+        // oxlint-disable-next-line eslint/no-await-in-loop -- see above.
+        expect((await jobRow(job.jobId)).status).toBe("GENERATING_PDF");
+      }
+
+      await expect(
+        processBackgroundJob(env, message, delivery(3)),
+      ).rejects.toThrow();
+
+      const after = await jobRow(job.jobId);
+      expect(after.status).toBe("REJECTED");
+      expect(asString(after.rejection_reason)).toContain(
+        "Erro ao gerar certificado",
+      );
+      const errors = (await auditRows(job.jobId)).filter(
+        (entry) => entry.action === "certificate_error",
+      );
+      expect(errors).toHaveLength(1);
+    });
+
+    it("REQ-WRETRY-003 a permanent error (method cannot be rendered) REJECTS immediately, without waiting for the final attempt", async () => {
+      const { env } = makeRecordingEnv();
+      stubGotenberg([]);
+      const { org, job } = await seedOrgAndJob({
+        withoutReportedUncertainty: true,
+      });
+
+      await expect(
+        processBackgroundJob(
+          env,
+          { type: "CERTIFICATE", jobId: job.jobId, userId: org.userId },
+          delivery(1),
+        ),
+      ).rejects.toThrow();
+
+      const after = await jobRow(job.jobId);
+      expect(after.status).toBe("REJECTED");
+      expect(asString(after.rejection_reason)).toContain(
+        "expanded_uncertainty",
+      );
+    });
+
+    it("REQ-WRETRY-004 the queue handler forwards the message's delivery attempt: a non-final failure retries the message and keeps GENERATING_PDF", async () => {
+      const { env } = makeRecordingEnv();
+      const { org, job } = await seedOrgAndJob();
+      stubGotenberg([], { fail: true });
+      const retry = vi.fn();
+      const ack = vi.fn();
+
+      await worker.queue(
+        {
+          messages: [
+            {
+              body: {
+                type: "CERTIFICATE",
+                jobId: job.jobId,
+                userId: org.userId,
+              },
+              attempt: 1,
+              maxAttempts: 3,
+              ack,
+              retry,
+            },
+          ],
+        },
+        env,
+        { props: {}, waitUntil: () => undefined, passThroughOnException() {} },
+      );
+
+      expect(ack).not.toHaveBeenCalled();
+      expect(retry).toHaveBeenCalledTimes(1);
+      expect((await jobRow(job.jobId)).status).toBe("GENERATING_PDF");
+    });
   });
 });

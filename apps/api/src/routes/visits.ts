@@ -49,6 +49,10 @@ import {
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
 import { formatOnsiteAddressText } from "../lib/onsite-address";
 import {
+  buildJobStatusConflict,
+  isCancelableJobStatus,
+} from "../modules/jobs/job-status-transitions";
+import {
   assertAssetBelongsToVisitCustomer,
   canAddJobToVisit,
   resolveVisitJobRemoval,
@@ -726,24 +730,50 @@ export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Job nao encontrado nesta visita" }, 404);
       }
 
-      // REQ-VISITJOB-006: soft-cancel (CANCELED with single L per JobStatus enum)
-      const [updatedJob] = await db
-        .update(calibrationJob)
-        .set({ status: "CANCELED" })
-        .where(eq(calibrationJob.id, jobId))
-        .returning();
+      // The guard above allows DRAFT only; keep the status machine's own
+      // allow-list as the final word, so a status added later never slips in.
+      if (!isCancelableJobStatus(foundJob.status)) {
+        return c.json(
+          {
+            error: "Apenas jobs com status DRAFT podem ser removidos da visita",
+          },
+          409,
+        );
+      }
 
-      // Audit parity with the main job-cancel route (append-only ISO 17025 trail)
-      await db.insert(jobAuditLog).values({
-        jobId,
-        action: "cancel",
-        changes: {
-          status: { old: foundJob.status, new: "CANCELED" },
-        },
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
-        reason: `Instrumento removido da visita #${id}`,
+      // REQ-VISITJOB-006: soft-cancel (CANCELED with single L per JobStatus enum).
+      // Compare-and-set on the status the guards validated; the audit row
+      // (append-only ISO 17025 trail, parity with the main job-cancel route)
+      // commits in the same transaction.
+      const updatedJob = await db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(calibrationJob)
+          .set({ status: "CANCELED" })
+          .where(
+            and(
+              eq(calibrationJob.id, jobId),
+              eq(calibrationJob.organizationId, member.organizationId),
+              eq(calibrationJob.status, foundJob.status),
+            ),
+          )
+          .returning();
+        if (!row) return null;
+
+        await tx.insert(jobAuditLog).values({
+          jobId,
+          action: "cancel",
+          changes: {
+            status: { old: foundJob.status, new: "CANCELED" },
+          },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+          reason: `Instrumento removido da visita #${id}`,
+        });
+        return row;
       });
+      if (!updatedJob) {
+        return c.json(await buildJobStatusConflict(jobId), 409);
+      }
 
       return c.json(updatedJob);
     },
