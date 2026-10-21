@@ -147,8 +147,8 @@ function buildTemplateTokens(params: {
   sequence: number;
   certificateNumber?: string;
 }) {
-  const yyyy = String(params.generatedAt.getFullYear());
-  const month = params.generatedAt.getMonth() + 1;
+  const yyyy = String(params.generatedAt.getUTCFullYear());
+  const month = params.generatedAt.getUTCMonth() + 1;
   const projectCode =
     params.config.projectCode && params.config.projectCode.trim()
       ? params.config.projectCode.trim()
@@ -164,7 +164,7 @@ function buildTemplateTokens(params: {
     yy: yyyy.slice(-2),
     mm: pad(month, 2),
     mon: MONTH_ABBREVIATIONS[month - 1] ?? "",
-    dd: pad(params.generatedAt.getDate(), 2),
+    dd: pad(params.generatedAt.getUTCDate(), 2),
     seq: pad(params.sequence, params.config.sequence.padding),
   };
 }
@@ -185,8 +185,8 @@ export function buildCertificateSequenceKey(
   context: CertificateNumberingContext,
   config: CertificateNumberingConfig,
 ) {
-  const year = context.generatedAt.getFullYear();
-  const month = context.generatedAt.getMonth() + 1;
+  const year = context.generatedAt.getUTCFullYear();
+  const month = context.generatedAt.getUTCMonth() + 1;
   const projectCode =
     context.projectCode?.trim() || config.projectCode?.trim() || "GERAL";
 

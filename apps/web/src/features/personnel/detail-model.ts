@@ -61,6 +61,9 @@ export function getTodayDateInputValue(now = new Date()) {
   return `${year}-${month}-${day}`
 }
 
+// A date field ("2026-05-20") names a day on the user's own calendar, and the
+// screens read dates back in the browser's zone: so it is local midnight.
+// `new Date("2026-05-20")` would be UTC midnight, the evening before in Brazil.
 export function toISOStringFromDateInput(value: string) {
   return new Date(`${value}T00:00:00`).toISOString()
 }
@@ -159,6 +162,6 @@ export function createCompetenceEvaluationPayload({
     notes: notes || undefined,
     qualifiedAt: passed ? now.toISOString() : undefined,
     expiresAt:
-      passed && expiresAt ? new Date(expiresAt).toISOString() : undefined,
+      passed && expiresAt ? toISOStringFromDateInput(expiresAt) : undefined,
   }
 }

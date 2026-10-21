@@ -3,6 +3,7 @@ import type {
   FinancialFreshness,
 } from '@calibra-facil/shared'
 import { formatMoney } from '@calibra-facil/shared'
+import { LAB_TIME_ZONE } from '@calibra-facil/documents'
 
 const DATE_SHORT_FORMAT = new Intl.DateTimeFormat('pt-BR', {
   dateStyle: 'short',
@@ -11,6 +12,8 @@ const DATE_SHORT_FORMAT = new Intl.DateTimeFormat('pt-BR', {
 const DATETIME_SHORT_FORMAT = new Intl.DateTimeFormat('pt-BR', {
   dateStyle: 'short',
   timeStyle: 'short',
+  // A sync moment reads the same in the browser and in the API's own text.
+  timeZone: LAB_TIME_ZONE,
 })
 
 export function formatTimelineDate(value?: string | null) {

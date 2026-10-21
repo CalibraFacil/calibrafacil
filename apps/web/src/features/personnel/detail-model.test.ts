@@ -76,7 +76,8 @@ describe('personnel detail model', () => {
       type: 'internal',
       provider: 'SENAI',
       description: 'Conteudo',
-      startDate: '2026-05-20T00:00:00.000Z',
+      // A date field names a day in the user's own time zone.
+      startDate: new Date(2026, 4, 20).toISOString(),
       endDate: undefined,
     })
 
@@ -91,7 +92,7 @@ describe('personnel detail model', () => {
       passed: true,
       notes: undefined,
       qualifiedAt: '2026-05-20T10:00:00.000Z',
-      expiresAt: '2027-05-20T00:00:00.000Z',
+      expiresAt: new Date(2027, 4, 20).toISOString(),
     })
     expect(
       createCompetenceEvaluationPayload({
@@ -105,6 +106,27 @@ describe('personnel detail model', () => {
       qualifiedAt: undefined,
       expiresAt: undefined,
     })
+  })
+
+  it('shows the day typed into a date field back on that same day', () => {
+    const training = createTrainingRecordPayload({
+      userId: 'user-1',
+      title: 'Treinamento',
+      type: 'internal',
+      provider: '',
+      description: '',
+      startDate: '2026-05-20',
+      endDate: '2026-05-22',
+    })
+    const evaluation = createCompetenceEvaluationPayload({
+      passed: true,
+      notes: '',
+      expiresAt: '2027-05-20',
+    })
+
+    expect(formatCompetenceDate(training.startDate)).toBe('20/05/2026')
+    expect(formatCompetenceDate(training.endDate)).toBe('22/05/2026')
+    expect(formatCompetenceDate(evaluation.expiresAt)).toBe('20/05/2027')
   })
 })
 

@@ -14,7 +14,7 @@ function summary(
   return {
     state: "PAYMENT_PENDING",
     visible: true,
-    dueDate: "2026-06-10T00:00:00.000Z",
+    dueDate: "2026-06-10T12:00:00.000Z",
     paidAt: null,
     openAmountCents: 10000,
     overdueAmountCents: 0,

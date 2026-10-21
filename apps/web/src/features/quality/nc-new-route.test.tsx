@@ -63,7 +63,8 @@ vi.mock('@/components/ui/date-picker', () => ({
     <div>
       <button
         type="button"
-        onClick={() => onChange?.(new Date('2026-05-20T00:00:00.000Z'))}
+        // A date picker hands back the chosen day at local midnight.
+        onClick={() => onChange?.(new Date(2026, 4, 20))}
       >
         {placeholder}
       </button>
@@ -147,9 +148,9 @@ describe('new NC route workflow', () => {
         jobId: 42,
       }),
     )
-    expect(
-      apiMocks.createNonConformance.mock.calls[0]?.[0].detectedAt,
-    ).toContain('2026-05-20T')
+    expect(apiMocks.createNonConformance.mock.calls[0]?.[0].detectedAt).toBe(
+      new Date(2026, 4, 20, 14, 35).toISOString(),
+    )
     expect(toastMocks.success).toHaveBeenCalledWith(
       'NC NC-12 registrada com sucesso',
     )

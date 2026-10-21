@@ -58,3 +58,51 @@ export function formatCalendarDate(value: DateInput, empty = "—"): string {
   const date = toDate(value);
   return date ? CALENDAR_DATE.format(date) : empty;
 }
+
+const DAY_PARTS = new Intl.DateTimeFormat("en-CA", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+  timeZone: LAB_TIME_ZONE,
+});
+
+function labParts(date: Date) {
+  const parts = Object.fromEntries(
+    DAY_PARTS.formatToParts(date).map((part) => [part.type, part.value]),
+  );
+  return {
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+    hour: Number(parts.hour),
+    minute: Number(parts.minute),
+    second: Number(parts.second),
+  };
+}
+
+/** The day a moment fell on in the laboratory, as "2026-10-02". */
+export function getLabCalendarDay(date: Date): string {
+  const { year, month, day } = labParts(date);
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/** The instant the laboratory's calendar month of `date` began. */
+export function startOfLabMonth(date: Date): Date {
+  const { year, month } = labParts(date);
+  const wallClockAsUtc = Date.UTC(year, month - 1, 1);
+  // The zone's offset on that day, found by reading the guess back in the zone.
+  const read = labParts(new Date(wallClockAsUtc));
+  const readAsUtc = Date.UTC(
+    read.year,
+    read.month - 1,
+    read.day,
+    read.hour,
+    read.minute,
+    read.second,
+  );
+  return new Date(wallClockAsUtc - (readAsUtc - wallClockAsUtc));
+}

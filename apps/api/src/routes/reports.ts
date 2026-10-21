@@ -17,13 +17,12 @@ import {
   requireOrgType,
 } from "../middleware/permission";
 import { getExecuteRows } from "../lib/db";
+import { resolvePeriodRange, type ReportPeriod } from "../lib/report-period";
 
 const ReportQuerySchema = z.object({
   period: z.enum(["7d", "30d", "90d", "month"]).optional().default("30d"),
   unitIds: z.string().optional(),
 });
-
-type ReportPeriod = z.infer<typeof ReportQuerySchema>["period"];
 
 const OPEN_JOB_STATUSES = ["DRAFT", "IN_PROGRESS", "REVIEW"] as const;
 
@@ -34,25 +33,6 @@ type UnitSummary = {
   name: string;
   slug: string;
 };
-
-function resolvePeriodRange(period: ReportPeriod) {
-  const now = new Date();
-  const startDate = new Date(now);
-
-  if (period === "month") {
-    startDate.setDate(1);
-    startDate.setHours(0, 0, 0, 0);
-  } else {
-    const days = period === "7d" ? 7 : period === "30d" ? 30 : 90;
-    startDate.setDate(now.getDate() - days);
-  }
-
-  return {
-    period,
-    startDate,
-    endDate: now,
-  };
-}
 
 function parseRequestedUnitIds(raw?: string) {
   if (!raw?.trim()) return null;

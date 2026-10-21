@@ -4,6 +4,8 @@ export {
   formatCalendarDate,
   formatLabDate,
   formatLabDateTime,
+  getLabCalendarDay,
+  startOfLabMonth,
 } from "./dates.js";
 export {
   renderIntervalReportHtml,

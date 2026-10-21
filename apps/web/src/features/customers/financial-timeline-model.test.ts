@@ -38,12 +38,12 @@ describe('customer financial timeline model', () => {
           accessKey: null,
           xmlAvailable: false,
           consultationOnly: true,
-          lastSyncedAt: '2026-05-20T00:00:00.000Z',
+          lastSyncedAt: '2026-05-20T15:00:00.000Z',
         },
       ],
       freshness: {
         status: 'fresh',
-        lastSyncedAt: '2026-05-20T00:00:00.000Z',
+        lastSyncedAt: '2026-05-20T15:00:00.000Z',
         label: 'Sincronizado',
       },
       providerEvidence: null,
@@ -77,7 +77,7 @@ describe('customer financial timeline model', () => {
       fiscalDocuments: [],
       freshness: {
         status: 'stale',
-        lastSyncedAt: '2026-05-20T00:00:00.000Z',
+        lastSyncedAt: '2026-05-20T15:00:00.000Z',
         label: 'Status desatualizado',
       },
       providerEvidence: {
@@ -112,7 +112,7 @@ describe('customer financial timeline model', () => {
       fiscalDocuments: [],
       freshness: {
         status: 'fresh',
-        lastSyncedAt: '2026-05-20T00:00:00.000Z',
+        lastSyncedAt: '2026-05-20T15:00:00.000Z',
         label: 'Sincronizado',
       },
       providerEvidence: null,
@@ -126,10 +126,21 @@ describe('customer financial timeline model', () => {
     expect(
       customerTimelineFreshnessLabel({
         status: 'fresh',
-        lastSyncedAt: '2026-05-20T00:00:00.000Z',
+        lastSyncedAt: '2026-05-20T15:00:00.000Z',
         label: 'Sincronizado',
       }),
     ).toMatch(/^Sincronizado em 20\/05\/2026/)
     expect(customerTimelineFreshnessLabel(null)).toBe('Status local')
+  })
+
+  it('reads the sync moment at the laboratory, whatever the browser zone', () => {
+    // 01:30 UTC on 21 May is 22:30 on 20 May in Sao Paulo.
+    expect(
+      customerTimelineFreshnessLabel({
+        status: 'fresh',
+        lastSyncedAt: '2026-05-21T01:30:00.000Z',
+        label: 'Sincronizado',
+      }),
+    ).toBe('Sincronizado em 20/05/2026, 22:30')
   })
 })
