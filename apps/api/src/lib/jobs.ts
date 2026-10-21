@@ -17,6 +17,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { notifyJobAssigned } from "@calibra-facil/notifications";
 import { normalizeMethodValidationsInput } from "@calibra-facil/schemas";
+import { requireTargetOf } from "@calibra-facil/schemas/job-transitions";
 import { addLabBusinessDays } from "@calibra-facil/shared";
 import { and, count, desc, eq, ilike, inArray, isNull, sql } from "drizzle-orm";
 import { ensureJobCommercialSnapshot } from "./finance";
@@ -454,7 +455,7 @@ async function persistCalibrationJob(
       technicianId: params.technicianId || null,
       methodSnapshot,
       assetSnapshot,
-      status: "DRAFT",
+      status: requireTargetOf(null, "create"),
       dueDate,
       visitId: params.visitId ?? null,
       sourceServiceOrderId,

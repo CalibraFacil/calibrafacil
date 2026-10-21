@@ -76,6 +76,10 @@ import {
   resolveExecutionPerformedAt,
 } from "@calibra-facil/schemas";
 import {
+  canTransition,
+  requireTargetOf,
+} from "@calibra-facil/schemas/job-transitions";
+import {
   and,
   asc,
   desc,
@@ -2618,7 +2622,9 @@ async function applyLocalJobExecution(
     };
   }
 
-  if (!["DRAFT", "IN_PROGRESS", "REJECTED"].includes(existing.status)) {
+  const executionCommand =
+    input.event.operation === "submit_local_execution" ? "submit" : "execute";
+  if (!canTransition(existing.status, executionCommand)) {
     return {
       ok: false,
       code: "INVALID_STATUS_TRANSITION",
@@ -2638,9 +2644,11 @@ async function applyLocalJobExecution(
     };
   }
 
+  // A submit lands where the table says; a plain save keeps the status the
+  // desktop reported (the offline store applies the same execute rule).
   const nextStatus =
-    input.event.operation === "submit_local_execution"
-      ? "REVIEW"
+    executionCommand === "submit"
+      ? requireTargetOf(existing.status, "submit")
       : (getJobStatus(payload, "status") ?? "IN_PROGRESS");
   const nextData = getRecordOrNull(payload, "data") ?? {};
   const standardsSnapshotResult = hasOwn(payload, "standardsSnapshot")

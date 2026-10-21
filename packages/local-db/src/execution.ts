@@ -6,6 +6,10 @@ import {
   type StandardsJudgement,
   type StandardsJudgementMode,
 } from "@calibra-facil/schemas";
+import {
+  canTransition,
+  requireTargetOf,
+} from "@calibra-facil/schemas/job-transitions";
 import type { LocalDatabase } from "./database";
 import { getLocalEffectiveEnvironmentalLimits } from "./environmental-limits";
 import { stableLocalNumericId } from "./ids";
@@ -174,7 +178,7 @@ INSERT INTO calibration_jobs (
   NULL,
   NULL,
   NULL,
-  'DRAFT',
+  @status,
   @dueDate,
   0,
   @createdAt,
@@ -194,6 +198,7 @@ INSERT INTO calibration_jobs (
         technicianId: input.technicianId ?? null,
         methodSnapshotJson: JSON.stringify(methodSnapshot),
         assetSnapshotJson: JSON.stringify(assetSnapshot),
+        status: requireTargetOf(null, "create"),
         dueDate: input.dueDate ?? null,
         createdAt: now,
         updatedAt: now,
@@ -244,19 +249,17 @@ export function saveLocalJobExecution(
     throw new Error("Job nao encontrado");
   }
 
-  if (!["DRAFT", "IN_PROGRESS", "REJECTED"].includes(existing.status)) {
+  // The same table the cloud uses: a submit goes to REVIEW, a plain save keeps
+  // the job open (DRAFT becomes IN_PROGRESS).
+  const command = input.requireResults ? "submit" : "execute";
+  if (!canTransition(existing.status, command)) {
     throw new Error(
       `Nao e possivel executar um job com status ${existing.status}`,
     );
   }
 
   const now = new Date().toISOString();
-  const nextStatus: LocalJobStatus =
-    input.requireResults || existing.status === "REVIEW"
-      ? "REVIEW"
-      : existing.status === "DRAFT"
-        ? "IN_PROGRESS"
-        : existing.status;
+  const nextStatus: LocalJobStatus = requireTargetOf(existing.status, command);
   const executionTime = resolveLocalExecutionTime(
     nextStatus === "REVIEW",
     input,
