@@ -1552,6 +1552,7 @@ export async function sendServiceOrderToFinance(params: {
 
         if (useServiceOrderLine) {
           await tx.insert(billingDocumentItem).values({
+            organizationId,
             documentId: document.id,
             jobId: null,
             serviceOrderId: order.id,
@@ -1564,6 +1565,7 @@ export async function sendServiceOrderToFinance(params: {
         } else {
           await tx.insert(billingDocumentItem).values(
             approvedJobs.map((job, index) => ({
+              organizationId,
               documentId: document.id,
               jobId: job.id,
               serviceOrderId: order.id,
@@ -1578,6 +1580,7 @@ export async function sendServiceOrderToFinance(params: {
         }
 
         await tx.insert(receivableInstallment).values({
+          organizationId,
           documentId: document.id,
           installmentNumber: 1,
           status: "OPEN",
@@ -1686,6 +1689,7 @@ async function issueDraftBillingDocument(params: {
 
     if (!existingInstallment) {
       await tx.insert(receivableInstallment).values({
+        organizationId,
         documentId,
         installmentNumber: 1,
         status: "OPEN",

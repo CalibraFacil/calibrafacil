@@ -433,6 +433,7 @@ export const calibrationRequestsRouter = new Hono<{
         }
 
         await tx.insert(calibrationRequestAuditLog).values({
+          organizationId: member.organizationId,
           requestId: id,
           action: "review",
           changes: {
@@ -554,6 +555,7 @@ export const calibrationRequestsRouter = new Hono<{
         }
 
         await tx.insert(calibrationRequestAuditLog).values({
+          organizationId: member.organizationId,
           requestId: id,
           action: "approve",
           changes: {
@@ -679,6 +681,7 @@ export const calibrationRequestsRouter = new Hono<{
         }
 
         await tx.insert(calibrationRequestAuditLog).values({
+          organizationId: member.organizationId,
           requestId: id,
           action: "reject",
           changes: {
@@ -939,6 +942,7 @@ export const calibrationRequestsRouter = new Hono<{
             .where(eq(calibrationRequest.id, request.id));
 
           await tx.insert(calibrationRequestAuditLog).values({
+            organizationId: member.organizationId,
             requestId: request.id,
             action: "convert",
             changes: {

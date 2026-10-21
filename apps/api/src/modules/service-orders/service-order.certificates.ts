@@ -50,6 +50,7 @@ export async function linkServiceOrderCertificate(input: {
   const [link] = await db
     .insert(serviceOrderCertificateLink)
     .values({
+      organizationId: input.organizationId,
       serviceOrderId: input.serviceOrderId,
       certificateJobId: input.certificateJobId,
       linkedByUserId: input.actorUserId,

@@ -762,6 +762,7 @@ export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
         if (!row) return null;
 
         await tx.insert(jobAuditLog).values({
+          organizationId: member.organizationId,
           jobId,
           action: "cancel",
           changes: {
@@ -863,6 +864,7 @@ export const visitRescheduleRequestsRouter = new Hono<{
           .where(eq(visitRescheduleRequest.id, requestId));
 
         await tx.insert(visitAuditLog).values({
+          organizationId: member.organizationId,
           visitId: id,
           action: "reschedule_request_accept",
           changes: {
@@ -929,6 +931,7 @@ export const visitRescheduleRequestsRouter = new Hono<{
           .returning();
 
         await tx.insert(visitAuditLog).values({
+          organizationId: member.organizationId,
           visitId: id,
           action: "reschedule_request_decline",
           changes: { rescheduleRequestId: requestId },

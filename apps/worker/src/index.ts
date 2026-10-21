@@ -544,8 +544,9 @@ async function updateJobWithCertificate(
 
   await client.query(
     `
-    INSERT INTO job_audit_log (job_id, action, changes, performed_by, performed_at)
-    VALUES ($1, $2, $3, $4, $5)
+    INSERT INTO job_audit_log (organization_id, job_id, action, changes, performed_by, performed_at)
+    SELECT organization_id, id, $2::text, $3::jsonb, $4::text, $5::timestamp
+      FROM calibration_job WHERE id = $1
     `,
     [
       jobId,
@@ -743,8 +744,9 @@ async function setJobError(
 
     await client.query(
       `
-      INSERT INTO job_audit_log (job_id, action, changes, performed_by, performed_at, reason)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO job_audit_log (organization_id, job_id, action, changes, performed_by, performed_at, reason)
+      SELECT organization_id, id, $2::text, $3::jsonb, $4::text, $5::timestamp, $6::text
+        FROM calibration_job WHERE id = $1
       `,
       [
         jobId,
@@ -826,8 +828,9 @@ async function updateJobWithLabel(
 
   await client.query(
     `
-    INSERT INTO job_audit_log (job_id, action, changes, performed_by, performed_at)
-    VALUES ($1, $2, $3, $4, $5)
+    INSERT INTO job_audit_log (organization_id, job_id, action, changes, performed_by, performed_at)
+    SELECT organization_id, id, $2::text, $3::jsonb, $4::text, $5::timestamp
+      FROM calibration_job WHERE id = $1
     `,
     [
       jobId,
@@ -1070,8 +1073,9 @@ async function processServiceOrderIntakeDocument(
         );
       } else {
         await client.query(
-          `INSERT INTO service_order_intake_document (service_order_id, document_number, version, type, pdf_r2_key, issued_at, issued_by_user_id)
-           VALUES ($1, $2, 1, 'combined', $3, now(), $4)
+          `INSERT INTO service_order_intake_document (organization_id, service_order_id, document_number, version, type, pdf_r2_key, issued_at, issued_by_user_id)
+           SELECT so.organization_id, so.id, $2::text, 1, 'combined', $3::text, now(), $4::text
+             FROM service_order so WHERE so.id = $1
            ON CONFLICT DO NOTHING`,
           [serviceOrderId, `${data.serviceOrderNumber}/REC`, key, userId],
         );
@@ -1172,8 +1176,9 @@ async function processServiceOrderTag(
         );
       } else {
         await client.query(
-          `INSERT INTO service_order_tag (service_order_id, tag_number, pdf_r2_key, printed_at, printed_by_user_id)
-           VALUES ($1, $2, $3, now(), $4)`,
+          `INSERT INTO service_order_tag (organization_id, service_order_id, tag_number, pdf_r2_key, printed_at, printed_by_user_id)
+           SELECT so.organization_id, so.id, $2::text, $3::text, now(), $4::text
+             FROM service_order so WHERE so.id = $1`,
           [serviceOrderId, tagNumber, key, userId],
         );
       }

@@ -39,6 +39,7 @@ export async function startServiceOrderExecution(input: {
   const [execution] = await db
     .insert(serviceOrderExecution)
     .values({
+      organizationId: input.member.organizationId,
       serviceOrderId: input.serviceOrderId,
       startedByUserId: input.actorUserId,
       technicalNotes: input.values.notes ?? null,

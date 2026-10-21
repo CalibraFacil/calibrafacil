@@ -488,6 +488,7 @@ async function persistCalibrationJob(
   );
 
   await executor.insert(jobAuditLog).values({
+    organizationId: params.organizationId,
     jobId: newJob.id,
     action: "create",
     changes: {

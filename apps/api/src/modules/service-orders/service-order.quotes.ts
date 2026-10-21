@@ -113,6 +113,7 @@ export async function createServiceOrderQuote(input: {
     const [quote] = await tx
       .insert(serviceOrderQuote)
       .values({
+        organizationId: input.member.organizationId,
         serviceOrderId: input.serviceOrderId,
         quoteNumber: `${order.serviceOrderNumber}/ORC`,
         version,

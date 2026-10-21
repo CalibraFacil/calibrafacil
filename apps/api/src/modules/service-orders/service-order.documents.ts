@@ -52,6 +52,7 @@ export async function issueIntakeDocument(input: {
   const [document] = await db
     .insert(serviceOrderIntakeDocument)
     .values({
+      organizationId: input.organizationId,
       serviceOrderId: input.serviceOrderId,
       documentNumber: `${detail.serviceOrderNumber}/REC`,
       version: detail.intakeDocuments.length + 1,
@@ -96,6 +97,7 @@ export async function issueTag(input: {
   const [tag] = await db
     .insert(serviceOrderTag)
     .values({
+      organizationId: input.organizationId,
       serviceOrderId: input.serviceOrderId,
       tagNumber: `${detail.serviceOrderNumber}-TAG-${detail.tags.length + 1}`,
       printedAt: new Date(),
@@ -143,6 +145,7 @@ export async function issueDeliveryDocument(input: {
   const [document] = await db
     .insert(serviceOrderDeliveryDocument)
     .values({
+      organizationId: input.organizationId,
       serviceOrderId: input.serviceOrderId,
       documentNumber: `${detail.serviceOrderNumber}/ENT`,
       version: nextVersion,

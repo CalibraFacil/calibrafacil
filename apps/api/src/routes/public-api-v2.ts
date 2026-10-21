@@ -738,6 +738,7 @@ publicApiV2Router
           .returning();
 
         await db.insert(customerAuditLog).values({
+          organizationId: apiKey.organizationId,
           customerId: created!.id,
           action: "create",
           changes: { customer: { old: null, new: created } },
@@ -839,6 +840,7 @@ publicApiV2Router
         .returning();
 
       await db.insert(customerAuditLog).values({
+        organizationId: apiKey.organizationId,
         customerId: existing.id,
         action: "update",
         changes: { customer: { old: existing, new: updated } },
@@ -928,6 +930,7 @@ publicApiV2Router
       try {
         await db.transaction(async (tx) => {
           await tx.insert(customerAuditLog).values({
+            organizationId: apiKey.organizationId,
             customerId: existing.id,
             action: "delete",
             changes: { customer: { old: existing, new: null } },
@@ -946,6 +949,7 @@ publicApiV2Router
           if (customerAssets.length > 0) {
             await tx.insert(assetAuditLog).values(
               customerAssets.map((assetRow) => ({
+                organizationId: apiKey.organizationId,
                 assetId: assetRow.id,
                 action: "delete",
                 changes: { asset: { old: assetRow, new: null } },
@@ -1373,6 +1377,7 @@ publicApiV2Router
         }
 
         await db.insert(assetAuditLog).values({
+          organizationId: apiKey.organizationId,
           assetId: created!.id,
           action: "create",
           changes: {
@@ -1648,6 +1653,7 @@ publicApiV2Router
       }
 
       await db.insert(assetAuditLog).values({
+        organizationId: apiKey.organizationId,
         assetId: existing.id,
         action: "update",
         changes: {
@@ -1745,6 +1751,7 @@ publicApiV2Router
       }
 
       await db.insert(assetAuditLog).values({
+        organizationId: apiKey.organizationId,
         assetId: existing.id,
         action: "delete",
         changes: { asset: { old: existing, new: null } },
@@ -2899,12 +2906,14 @@ publicApiV2Router
 
           await tx.insert(calibrationRequestItem).values(
             assetIds.map((assetId) => ({
+              organizationId: apiKey.organizationId,
               requestId: request!.id,
               assetId,
             })),
           );
 
           await tx.insert(calibrationRequestAuditLog).values({
+            organizationId: apiKey.organizationId,
             requestId: request!.id,
             action: "create",
             changes: {
@@ -3026,6 +3035,7 @@ publicApiV2Router
         .returning();
 
       await db.insert(calibrationRequestAuditLog).values({
+        organizationId: apiKey.organizationId,
         requestId: existing.id,
         action: "update",
         changes: { request: { old: existing, new: updated } },
@@ -3123,6 +3133,7 @@ publicApiV2Router
           .returning();
 
         await db.insert(calibrationRequestAuditLog).values({
+          organizationId: apiKey.organizationId,
           requestId: existing.id,
           action: "reject",
           changes: { status: { old: existing.status, new: "REJECTED" } },
@@ -3566,6 +3577,7 @@ publicApiV2Router
         if (!row) return null;
 
         await tx.insert(jobAuditLog).values({
+          organizationId: apiKey.organizationId,
           jobId: existing.id,
           action: "update",
           changes: { job: { old: existing, new: row } },
@@ -3688,6 +3700,7 @@ publicApiV2Router
           if (!row) return null;
 
           await tx.insert(jobAuditLog).values({
+            organizationId: apiKey.organizationId,
             jobId: existing.id,
             action: "execute",
             changes: {
@@ -3821,6 +3834,7 @@ publicApiV2Router
           if (!row) return null;
 
           await tx.insert(jobAuditLog).values({
+            organizationId: apiKey.organizationId,
             jobId: existing.id,
             action: "submit",
             changes: {
@@ -4107,6 +4121,7 @@ publicApiV2Router
           if (!row) return null;
 
           await tx.insert(jobAuditLog).values({
+            organizationId: apiKey.organizationId,
             jobId: existing.id,
             action: "reject",
             changes: { status: { old: existing.status, new: "REJECTED" } },
@@ -4205,6 +4220,7 @@ publicApiV2Router
           if (!row) return null;
 
           await tx.insert(jobAuditLog).values({
+            organizationId: apiKey.organizationId,
             jobId: existing.id,
             action: "cancel",
             changes: { status: { old: existing.status, new: "CANCELED" } },

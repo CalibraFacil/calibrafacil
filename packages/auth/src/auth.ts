@@ -1555,6 +1555,7 @@ export async function preserveRegulatedRecordsOnUserDeletion(
         .set({ deletedAt: now })
         .where(eq(schema.personnelCompetence.id, row.id));
       await tx.insert(schema.personnelCompetenceAuditLog).values({
+        organizationId: row.organizationId,
         competenceId: row.id,
         action: "delete",
         changes: {
@@ -1581,6 +1582,7 @@ export async function preserveRegulatedRecordsOnUserDeletion(
         .set({ deletedAt: now })
         .where(eq(schema.trainingRecord.id, row.id));
       await tx.insert(schema.trainingRecordAuditLog).values({
+        organizationId: row.organizationId,
         trainingRecordId: row.id,
         action: "delete",
         changes: {
@@ -1607,6 +1609,7 @@ export async function preserveRegulatedRecordsOnUserDeletion(
         .set({ status: "REVOKED", revokedAt: now })
         .where(eq(schema.authorizedSignatory.id, row.id));
       await tx.insert(schema.authorizedSignatoryAuditLog).values({
+        organizationId: row.organizationId,
         signatoryId: row.id,
         action: "revoke",
         changes: {

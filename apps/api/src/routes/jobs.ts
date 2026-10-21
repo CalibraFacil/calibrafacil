@@ -1492,6 +1492,7 @@ export const jobsRouter = new Hono<{
 
         // Audit log
         await tx.insert(jobAuditLog).values({
+          organizationId: memberData.organizationId,
           jobId: id,
           action: "update",
           changes,
@@ -1697,6 +1698,7 @@ export const jobsRouter = new Hono<{
 
         // Audit log
         await tx.insert(jobAuditLog).values({
+          organizationId: memberData.organizationId,
           jobId: id,
           action: "assign",
           changes: {
@@ -1976,6 +1978,7 @@ export const jobsRouter = new Hono<{
 
         // Audit log
         await tx.insert(jobAuditLog).values({
+          organizationId: memberData.organizationId,
           jobId: id,
           action: "submit",
           changes: {
@@ -2085,7 +2088,12 @@ export const jobsRouter = new Hono<{
 
       // Reverse traceability (#426 Phase 1): mirror the frozen snapshot into
       // the indexed job_standard projection.
-      await syncJobStandardLinks(id, nextStandardsSnapshot, performedAt);
+      await syncJobStandardLinks(
+        id,
+        nextStandardsSnapshot,
+        performedAt,
+        memberData.organizationId,
+      );
 
       // Send notifications to admins/owners (fire and forget)
       notifyJobSubmittedForReview(id, session.user.id).catch((err) => {
@@ -2293,6 +2301,7 @@ export const jobsRouter = new Hono<{
 
         // Audit log
         await tx.insert(jobAuditLog).values({
+          organizationId: memberData.organizationId,
           jobId: id,
           action: "execute",
           changes: {
@@ -2382,7 +2391,12 @@ export const jobsRouter = new Hono<{
 
       // Reverse traceability (#426 Phase 1): mirror the frozen snapshot into
       // the indexed job_standard projection.
-      await syncJobStandardLinks(id, nextStandardsSnapshot, nextPerformedAt);
+      await syncJobStandardLinks(
+        id,
+        nextStandardsSnapshot,
+        nextPerformedAt,
+        memberData.organizationId,
+      );
 
       // On-site visits roll forward to IN_PROGRESS once any of their jobs starts.
       if (existing.status === "DRAFT" && updated?.visitId) {
@@ -2591,6 +2605,7 @@ export const jobsRouter = new Hono<{
         if (!row) return null;
 
         await tx.insert(jobAuditLog).values({
+          organizationId: memberData.organizationId,
           jobId: id,
           action: "reject",
           changes: {
@@ -2770,6 +2785,7 @@ export const jobsRouter = new Hono<{
         if (!row) return null;
 
         await tx.insert(jobAuditLog).values({
+          organizationId: memberData.organizationId,
           jobId: id,
           action: "cancel",
           changes: {
@@ -2930,6 +2946,7 @@ export const jobsRouter = new Hono<{
 
           // Audit log for original job (superseded)
           await tx.insert(jobAuditLog).values({
+            organizationId: memberData.organizationId,
             jobId: originalJob.id,
             action: "supersede",
             changes: {
@@ -2943,6 +2960,7 @@ export const jobsRouter = new Hono<{
 
           // Audit log for amended job (created)
           await tx.insert(jobAuditLog).values({
+            organizationId: memberData.organizationId,
             jobId: amendedJob.id,
             action: "create_amendment",
             changes: {
@@ -3001,6 +3019,7 @@ export const jobsRouter = new Hono<{
         amendedJob.id,
         originalJob.standardsSnapshot,
         originalJob.performedAt,
+        memberData.organizationId,
       );
 
       await enqueueBackgroundJob({

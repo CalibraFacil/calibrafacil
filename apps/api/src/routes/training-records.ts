@@ -227,6 +227,7 @@ export const trainingRecordsRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       await db.insert(trainingRecordAuditLog).values({
+        organizationId: memberData.organizationId,
         trainingRecordId: created.id,
         action: "create",
         changes: {
@@ -307,6 +308,7 @@ export const trainingRecordsRouter = new Hono<{ Variables: AuthVariables }>()
         .returning();
 
       await db.insert(trainingRecordAuditLog).values({
+        organizationId: memberData.organizationId,
         trainingRecordId: id,
         action: "update",
         changes: updateData,
@@ -359,6 +361,7 @@ export const trainingRecordsRouter = new Hono<{ Variables: AuthVariables }>()
         .returning();
 
       await db.insert(trainingRecordAuditLog).values({
+        organizationId: memberData.organizationId,
         trainingRecordId: id,
         action: "complete",
         changes: { status: { old: existing.status, new: "completed" } },
@@ -408,6 +411,7 @@ export const trainingRecordsRouter = new Hono<{ Variables: AuthVariables }>()
         .where(eq(trainingRecord.id, id));
 
       await db.insert(trainingRecordAuditLog).values({
+        organizationId: memberData.organizationId,
         trainingRecordId: id,
         action: "delete",
         changes: { deletedAt: new Date().toISOString() },

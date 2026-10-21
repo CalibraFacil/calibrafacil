@@ -519,6 +519,7 @@ export async function createInitialServiceOrderRecords(
     if (!created) throw new Error("Falha ao criar OS");
 
     await tx.insert(serviceOrderAssetSnapshot).values({
+      organizationId: params.organizationId,
       serviceOrderId: created.id,
       ...snapshot,
     });
@@ -642,6 +643,7 @@ export async function replaceQuoteItems(
   if (calculated.items.length > 0) {
     await executor.insert(serviceOrderQuoteItem).values(
       calculated.items.map((item) => ({
+        organizationId: params.organizationId,
         quoteId: params.quoteId,
         type: item.type,
         description: item.description,
@@ -696,6 +698,7 @@ export async function replaceExecutionItems(
   if (calculated.items.length > 0) {
     await executor.insert(serviceOrderExecutionItem).values(
       calculated.items.map((item) => ({
+        organizationId: params.organizationId,
         executionId: params.executionId,
         quoteItemId: item.quoteItemId ?? null,
         type: item.type,
@@ -799,6 +802,7 @@ export async function createBillingDocumentFromServiceOrder(params: {
     const billingItems =
       quoteItems.length > 0
         ? quoteItems.map((item, index) => ({
+            organizationId: order.organizationId,
             documentId: document.id,
             serviceOrderId: order.id,
             materialId: item.materialId ?? null,
@@ -810,6 +814,7 @@ export async function createBillingDocumentFromServiceOrder(params: {
           }))
         : [
             {
+              organizationId: order.organizationId,
               documentId: document.id,
               serviceOrderId: order.id,
               description: `Taxa de avaliacao - ${order.serviceOrderNumber}`,
@@ -822,6 +827,7 @@ export async function createBillingDocumentFromServiceOrder(params: {
 
     await tx.insert(billingDocumentItem).values(billingItems);
     await tx.insert(receivableInstallment).values({
+      organizationId: order.organizationId,
       documentId: document.id,
       installmentNumber: 1,
       dueDate,

@@ -1917,6 +1917,7 @@ async function applyCreateLocalAsset(
     if (!created) throw new Error("Erro ao criar ativo");
 
     await tx.insert(assetAuditLog).values({
+      organizationId: created.labOrganizationId,
       assetId: created.id,
       action: "create",
       changes: {
@@ -2196,6 +2197,7 @@ async function applyUpdateLocalAsset(
 
   if (Object.keys(changes).length > 0) {
     await db.insert(assetAuditLog).values({
+      organizationId: updatedAsset.labOrganizationId,
       assetId: remoteEntityId,
       action: "status" in changes ? "status_change" : "update",
       changes,
@@ -2280,6 +2282,7 @@ async function applyCreateLocalCustomer(
     if (!created) throw new Error("Erro ao criar cliente");
 
     await tx.insert(customerAuditLog).values({
+      organizationId: created.labOrganizationId,
       customerId: created.id,
       action: "create",
       changes: {
@@ -2414,6 +2417,7 @@ async function applyUpdateLocalCustomer(
 
     if (Object.keys(changes).length > 0) {
       await tx.insert(customerAuditLog).values({
+        organizationId: input.memberData.organizationId,
         customerId: remoteEntityId,
         action: "update",
         changes: {
@@ -2548,6 +2552,7 @@ async function applyUpdateLocalCustomerCompliance(
   if (!updatedCustomer) throw new Error("Erro ao atualizar conformidade");
 
   await db.insert(customerAuditLog).values({
+    organizationId: input.memberData.organizationId,
     customerId: remoteEntityId,
     action: "compliance_change",
     changes: { old: existing.compliance, new: updatedCompliance },
@@ -2776,6 +2781,7 @@ async function applyLocalJobExecution(
     if (!row) return null;
 
     await tx.insert(jobAuditLog).values({
+      organizationId: input.memberData.organizationId,
       jobId: existing.id,
       action:
         input.event.operation === "submit_local_execution"
@@ -2835,6 +2841,7 @@ async function applyLocalJobExecution(
     existing.id,
     nextStandardsSnapshot,
     updated.performedAt ?? existing.performedAt,
+    input.memberData.organizationId,
   );
 
   await writeDesktopSyncAudit(input, actorUserId, {
@@ -3447,6 +3454,7 @@ async function applyCreateLocalServiceOrderQuoteDraft(
     const [created] = await tx
       .insert(serviceOrderQuote)
       .values({
+        organizationId: order.organizationId,
         serviceOrderId: order.id,
         quoteNumber: `${order.serviceOrderNumber}/ORC`,
         version,
@@ -3626,6 +3634,7 @@ async function applyLocalServiceOrderExecutionNotes(
         : await tx
             .insert(serviceOrderExecution)
             .values({
+              organizationId: order.organizationId,
               serviceOrderId: order.id,
               startedByUserId: actorUserId,
               technicalNotes: values.technicalNotes ?? null,
@@ -3770,6 +3779,7 @@ async function applyCreateLocalServiceOrderDeliveryDocumentDraft(
   const [document] = await db
     .insert(serviceOrderDeliveryDocument)
     .values({
+      organizationId: order.organizationId,
       serviceOrderId: order.id,
       documentNumber: `${order.serviceOrderNumber}/ENT`,
       version,

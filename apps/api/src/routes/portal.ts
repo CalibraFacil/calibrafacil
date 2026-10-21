@@ -1734,6 +1734,7 @@ export const portalRouter = new Hono<{
         const [existing] = await db
           .select({
             id: asset.id,
+            labOrganizationId: asset.labOrganizationId,
             customerId: asset.customerId,
             lastCalibrationDate: asset.lastCalibrationDate,
             calibrationIntervalMonths: asset.calibrationIntervalMonths,
@@ -1790,6 +1791,7 @@ export const portalRouter = new Hono<{
           );
 
         await db.insert(assetAuditLog).values({
+          organizationId: existing.labOrganizationId,
           assetId: id,
           action: "interval_change",
           changes: {
@@ -3176,6 +3178,7 @@ export const portalRouter = new Hono<{
         const [assessment] = await db
           .insert(assetOotImpactAssessment)
           .values({
+            organizationId: event.labOrganizationId,
             eventId: id,
             decision: input.decision,
             rationale: input.rationale,
@@ -3204,6 +3207,7 @@ export const portalRouter = new Hono<{
           );
 
         await db.insert(assetOotAuditLog).values({
+          organizationId: event.labOrganizationId,
           eventId: id,
           action: "assess",
           changes: {

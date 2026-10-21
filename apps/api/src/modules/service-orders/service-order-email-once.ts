@@ -35,6 +35,8 @@ import type { ServiceOrderCustomerEmailResult } from "@calibra-facil/notificatio
  * result or a thrown error is treated as failure (release the log row).
  */
 export interface SendServiceOrderEmailOnceInput {
+  /** Laboratory that owns the service order (tenant column of the ledger row). */
+  organizationId: string;
   /** Numeric PK of the service order. */
   serviceOrderId: number;
   /**
@@ -90,7 +92,7 @@ export type SendServiceOrderEmailOnceOutcome = "sent" | "deduped" | "failed";
 export async function sendServiceOrderEmailOnce(
   input: SendServiceOrderEmailOnceInput,
 ): Promise<SendServiceOrderEmailOnceOutcome> {
-  const { serviceOrderId, eventKey, dispatch } = input;
+  const { organizationId, serviceOrderId, eventKey, dispatch } = input;
 
   let claimedId: number | undefined;
 
@@ -98,7 +100,7 @@ export async function sendServiceOrderEmailOnce(
     // Step 1: try to claim the key.
     const rows = await db
       .insert(serviceOrderEmailLog)
-      .values({ serviceOrderId, eventKey })
+      .values({ organizationId, serviceOrderId, eventKey })
       .onConflictDoNothing()
       .returning();
 

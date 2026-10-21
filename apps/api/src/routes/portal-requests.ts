@@ -425,12 +425,14 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
 
         await tx.insert(calibrationRequestItem).values(
           input.assetIds.map((assetId) => ({
+            organizationId: createdRequest.organizationId,
             requestId: createdRequest.id,
             assetId,
           })),
         );
 
         await tx.insert(calibrationRequestAuditLog).values({
+          organizationId: createdRequest.organizationId,
           requestId: createdRequest.id,
           action: "create",
           changes: {
@@ -650,12 +652,14 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
 
           await tx.insert(calibrationRequestItem).values(
             group.assetIds.map((assetId) => ({
+              organizationId: createdRequest.organizationId,
               requestId: createdRequest.id,
               assetId,
             })),
           );
 
           await tx.insert(calibrationRequestAuditLog).values({
+            organizationId: createdRequest.organizationId,
             requestId: createdRequest.id,
             action: "create",
             changes: {

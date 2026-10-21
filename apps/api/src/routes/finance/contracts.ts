@@ -320,6 +320,7 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
         if (input.unitIds.length > 0) {
           await tx.insert(commercialAgreementUnitScope).values(
             input.unitIds.map((unitId) => ({
+              organizationId: member.organizationId,
               agreementId: agreement.id,
               unitId,
             })),
@@ -328,6 +329,7 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
 
         await tx.insert(commercialAgreementServiceTerm).values(
           input.serviceTerms.map((term) => ({
+            organizationId: member.organizationId,
             agreementId: agreement.id,
             serviceId: term.serviceId,
             unitId: term.unitId ?? null,
@@ -428,6 +430,7 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
         if (input.unitIds.length > 0) {
           await tx.insert(commercialAgreementUnitScope).values(
             input.unitIds.map((unitId) => ({
+              organizationId: member.organizationId,
               agreementId: id,
               unitId,
             })),
@@ -436,6 +439,7 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
 
         await tx.insert(commercialAgreementServiceTerm).values(
           input.serviceTerms.map((term) => ({
+            organizationId: member.organizationId,
             agreementId: id,
             serviceId: term.serviceId,
             unitId: term.unitId ?? null,

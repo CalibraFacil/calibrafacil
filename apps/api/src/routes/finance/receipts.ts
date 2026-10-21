@@ -135,6 +135,7 @@ export const financeInstallmentsRouter = new Hono<{
       const [createdReceipt] = await tx
         .insert(paymentReceipt)
         .values({
+          organizationId: member.organizationId,
           installmentId,
           recordedBy: session.user.id,
           receivedAt,

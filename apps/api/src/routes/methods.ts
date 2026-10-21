@@ -1654,6 +1654,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
 
         // Audit log
         await db.insert(methodAuditLog).values({
+          organizationId: member.organizationId,
           methodId: newMethod.id,
           action: "create",
           changes: { initial: input },
@@ -1781,6 +1782,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         }
 
         await db.insert(methodAuditLog).values({
+          organizationId: member.organizationId,
           methodId: newMethod.id,
           action: "create",
           // Freeze the adoption evidence (ISO/IEC 17025 §7.2.1.5): the
@@ -1991,6 +1993,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
 
         // Audit log
         await db.insert(methodAuditLog).values({
+          organizationId: member.organizationId,
           methodId: id,
           action: "update",
           changes,
@@ -2121,6 +2124,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           .returning();
 
         await db.insert(methodAuditLog).values({
+          organizationId: member.organizationId,
           methodId: id,
           action: "request_approval",
           changes: {
@@ -2194,6 +2198,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           .returning();
 
         await db.insert(methodAuditLog).values({
+          organizationId: member.organizationId,
           methodId: id,
           action: "technical_review",
           changes: {
@@ -2373,6 +2378,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           .returning();
 
         await db.insert(methodAuditLog).values({
+          organizationId: member.organizationId,
           methodId: id,
           action: "quality_approve",
           changes: {
@@ -2459,6 +2465,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           .returning();
 
         await db.insert(methodAuditLog).values({
+          organizationId: member.organizationId,
           methodId: id,
           action: "return_to_draft",
           changes: { status: { old: existing.status, new: "DRAFT" } },
@@ -2638,6 +2645,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
 
         // Audit log
         await db.insert(methodAuditLog).values({
+          organizationId: member.organizationId,
           methodId: id,
           action: "publish",
           changes: {
@@ -2711,6 +2719,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
 
         // Audit log
         await db.insert(methodAuditLog).values({
+          organizationId: member.organizationId,
           methodId: id,
           action: "archive",
           changes: { status: { old: "PUBLISHED", new: "ARCHIVED" } },
@@ -2838,6 +2847,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
 
         // Audit log
         await db.insert(methodAuditLog).values({
+          organizationId: member.organizationId,
           methodId: newMethod.id,
           action: "new_version",
           changes: {
@@ -2902,6 +2912,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
       // mirrors customers.ts. The method_id FK no longer cascades (soft
       // reference), so this row outlives the method it documents.
       await db.insert(methodAuditLog).values({
+        organizationId: member.organizationId,
         methodId: id,
         action: "delete",
         changes: { method: { old: existing, new: null } },

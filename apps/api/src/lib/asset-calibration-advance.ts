@@ -110,6 +110,7 @@ export async function advanceAssetCalibrationDatesOnApproval(input: {
     const [existing] = await db
       .select({
         id: asset.id,
+        labOrganizationId: asset.labOrganizationId,
         lastCalibrationDate: asset.lastCalibrationDate,
         nextCalibrationDate: asset.nextCalibrationDate,
         nextLegalVerificationDate: asset.nextLegalVerificationDate,
@@ -150,6 +151,7 @@ export async function advanceAssetCalibrationDatesOnApproval(input: {
       };
     }
     await db.insert(assetAuditLog).values({
+      organizationId: existing.labOrganizationId,
       assetId: existing.id,
       action: "update",
       changes: { source: input.source, ...changes },

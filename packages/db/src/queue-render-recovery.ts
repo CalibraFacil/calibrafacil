@@ -100,6 +100,7 @@ export async function rejectCertificateRender(params: {
     if (updated.length === 0) return false;
 
     await tx.insert(jobAuditLog).values({
+      organizationId: params.organizationId,
       jobId: params.jobId,
       action: "certificate_error",
       changes: {
