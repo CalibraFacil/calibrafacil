@@ -1,6 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
 
 import { ExecuteJobPage } from '@/features/jobs/execute-page'
+import { useExecutionDraftOwner } from '@/features/jobs/use-execution-draft-owner'
+import { TanStackUnsavedChangesGate } from '@/lib/unsaved-changes-gate'
 import { parseSyncConflictReturnSearch } from '@/runtime/sync-conflict-return'
 
 export const Route = createFileRoute('/dashboard/jobs/$id/execute')({
@@ -14,6 +16,16 @@ export const Route = createFileRoute('/dashboard/jobs/$id/execute')({
 function ExecuteJobRoute() {
   const { id } = Route.useParams()
   const conflictReturn = Route.useSearch()
+  const draftScope = useExecutionDraftOwner()
 
-  return <ExecuteJobPage id={id} conflictReturn={conflictReturn} />
+  // The router-owned navigation gate is injected so the feature stays free of
+  // router coupling.
+  return (
+    <ExecuteJobPage
+      id={id}
+      conflictReturn={conflictReturn}
+      draftScope={draftScope}
+      UnsavedChangesGate={TanStackUnsavedChangesGate}
+    />
+  )
 }

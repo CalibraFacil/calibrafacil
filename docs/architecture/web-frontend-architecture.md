@@ -75,6 +75,13 @@ Production feature modules should not call `createFileRoute`, `Route.use*`,
 `useParams`, or `useSearch`. Route params and search state should be normalized
 at the route boundary and passed into features through props or loader inputs.
 
+Router behavior that a feature needs beyond params/search (for example
+blocking navigation while a form holds unsaved work) is injected by the route
+adapter as a component prop, not imported into the feature. The execution page
+takes `UnsavedChangesGate` (`apps/web/src/lib/unsaved-changes-gate.tsx`); the
+route passes `TanStackUnsavedChangesGate`, tests pass a fake, and the default is
+a no-op gate.
+
 Recommended file roles:
 
 - `*-page.tsx` and `*-layout.tsx`: route-rendered feature UI.

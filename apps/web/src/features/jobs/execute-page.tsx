@@ -1,6 +1,6 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -125,6 +125,24 @@ import {
   type ReferenceStandard,
 } from '@/features/jobs/execution'
 import { parseExecutionPerformedAt } from '@/features/jobs/forms'
+import {
+  clearExecutionDraft,
+  hashExecutionValues,
+  isExecutionFormDirty,
+  resolveExecutionDraftOffer,
+  writeExecutionDraft,
+  type ExecutionDraftOwner,
+  type ExecutionFormValues,
+} from '@/features/jobs/execution-draft'
+import {
+  ExecutionDraftRestoreDialog,
+  ExecutionDraftSync,
+  ExecutionNavigationGuard,
+} from '@/features/jobs/components/execution-unsaved-guard'
+import {
+  NoUnsavedChangesGate,
+  type UnsavedChangesGate,
+} from '@/lib/unsaved-changes-gate'
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24
 
@@ -153,6 +171,13 @@ const PERFORMED_AT_PRESETS: readonly DatePickerPreset[] = [
 type ExecuteJobPageProps = {
   id: string
   conflictReturn: SyncConflictReturnSearch
+  /** Null/omitted disables the local draft (the navigation guard still works). */
+  draftScope?: ExecutionDraftOwner | null
+  /**
+   * Navigation gate supplied by the route adapter, keeping this feature free of
+   * router coupling. Omitted (tests, embedded renders) means "never block".
+   */
+  UnsavedChangesGate?: UnsavedChangesGate
 }
 
 function toAssetSpecificationFieldDefinition(
@@ -229,7 +254,12 @@ function formatContextValue(value: unknown): string {
   return JSON.stringify(value)
 }
 
-export function ExecuteJobPage({ id, conflictReturn }: ExecuteJobPageProps) {
+export function ExecuteJobPage({
+  id,
+  conflictReturn,
+  draftScope = null,
+  UnsavedChangesGate = NoUnsavedChangesGate,
+}: ExecuteJobPageProps) {
   const apiJobId = apiRouteParam(id)
   const engine = useMemo(() => createMethodCalculationEngine(), [])
 
@@ -289,13 +319,17 @@ export function ExecuteJobPage({ id, conflictReturn }: ExecuteJobPageProps) {
 
   return (
     <ExecuteJobForm
-      key={job.id}
+      // The draft offer is resolved when the form mounts, so a change of
+      // organization/user must remount it rather than reuse another scope's.
+      key={`${job.id}:${draftScope?.organizationId ?? ''}:${draftScope?.userId ?? ''}`}
       job={job}
       standardsData={standardsWithProfiles}
       envLimits={envLimits}
       engine={engine}
       jobId={id}
       conflictReturn={conflictReturn}
+      draftScope={draftScope}
+      UnsavedChangesGate={UnsavedChangesGate}
     />
   )
 }
@@ -307,6 +341,8 @@ function ExecuteJobForm({
   engine,
   jobId,
   conflictReturn,
+  draftScope,
+  UnsavedChangesGate,
 }: {
   job: JobData
   standardsData: Array<ReferenceStandard>
@@ -314,6 +350,8 @@ function ExecuteJobForm({
   engine: ReturnType<typeof createMethodCalculationEngine>
   jobId: string
   conflictReturn: SyncConflictReturnSearch
+  draftScope: ExecutionDraftOwner | null
+  UnsavedChangesGate: UnsavedChangesGate
 }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -442,6 +480,89 @@ function ExecuteJobForm({
   const [methodDeviations, setMethodDeviations] = useState(
     job.methodDeviations ?? '',
   )
+
+  // --- Unsaved-readings protection -----------------------------------------
+  // Everything the technician can type, as one comparable value. Dirty is
+  // derived from it (current vs last saved/loaded), never tracked by effects.
+  const currentValues = useMemo(
+    (): ExecutionFormValues => ({
+      formData,
+      selectedStandardIds,
+      environment,
+      calibrationLocation,
+      calibrationPhases,
+      performedAt,
+      backdateReason,
+      methodDeviations,
+    }),
+    [
+      formData,
+      selectedStandardIds,
+      environment,
+      calibrationLocation,
+      calibrationPhases,
+      performedAt,
+      backdateReason,
+      methodDeviations,
+    ],
+  )
+  // The values last loaded from / saved to the server; the first render's
+  // values are exactly what was loaded from the job.
+  const [savedValues, setSavedValues] = useState(currentValues)
+  const isDirty = useMemo(
+    () => isExecutionFormDirty(currentValues, savedValues),
+    [currentValues, savedValues],
+  )
+  const draftKey = useMemo(
+    () => (isDirty ? hashExecutionValues(currentValues) : 'clean'),
+    [currentValues, isDirty],
+  )
+  const scope = useMemo(
+    () => (draftScope ? { ...draftScope, jobId: String(job.id) } : null),
+    [draftScope, job.id],
+  )
+  const serverUpdatedAt = job.updatedAt ?? null
+  // A local draft newer than the server's data is offered, never auto-applied.
+  const [draftOffer, setDraftOffer] = useState<ExecutionFormValues | null>(
+    () =>
+      scope && isExecutionEditable(job.status)
+        ? resolveExecutionDraftOffer({
+            scope,
+            baseline: currentValues,
+            serverUpdatedAt,
+          })
+        : null,
+  )
+  // Set right before this page navigates itself away after a save/submit, since
+  // the render that clears the dirt has not committed when navigate() runs.
+  const leaveAllowed = useRef(false)
+
+  const restoreDraft = () => {
+    if (!draftOffer) return
+    setFormData(draftOffer.formData)
+    setSelectedStandardIds(draftOffer.selectedStandardIds)
+    setEnvironment(draftOffer.environment)
+    setCalibrationLocation(draftOffer.calibrationLocation)
+    setCalibrationPhases(draftOffer.calibrationPhases)
+    setPerformedAt(draftOffer.performedAt)
+    setBackdateReason(draftOffer.backdateReason)
+    setMethodDeviations(draftOffer.methodDeviations)
+    setDraftOffer(null)
+  }
+  const discardDraft = () => {
+    if (scope) clearExecutionDraft(scope)
+    setDraftOffer(null)
+  }
+  // Keep the readings recoverable even though the debounce has not fired.
+  const flushDraftBeforeLeaving = () => {
+    if (scope) {
+      writeExecutionDraft({
+        scope,
+        values: currentValues,
+        baseUpdatedAt: serverUpdatedAt,
+      })
+    }
+  }
 
   const assetSpecFields = useMemo(
     () =>
@@ -771,7 +892,9 @@ function ExecuteJobForm({
 
   // Save draft mutation
   const saveMutation = useMutation({
-    mutationFn: async () => {
+    // The variable is the snapshot being saved: on success it becomes the new
+    // clean baseline, so edits typed while the request was in flight stay dirty.
+    mutationFn: async (_saved: ExecutionFormValues) => {
       return calibraApi.jobs.saveExecution(
         apiRouteParam(jobId),
         buildExecutionMutationPayload({
@@ -787,10 +910,12 @@ function ExecuteJobForm({
         }),
       )
     },
-    onSuccess: () => {
+    onSuccess: (_data, saved) => {
+      setSavedValues(saved)
       queryClient.invalidateQueries({ queryKey: ['jobs', jobId] })
       toast.success('Dados salvos com sucesso!')
       if (shouldReturnToSyncConflicts(conflictReturn)) {
+        leaveAllowed.current = true
         navigate({ to: '/dashboard/sync/conflicts' })
       }
     },
@@ -801,7 +926,7 @@ function ExecuteJobForm({
 
   // Submit for review mutation
   const submitMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (_submitted: ExecutionFormValues) => {
       if (missingNotPerformedPhaseReasons.length > 0) {
         throw new Error(
           'Informe o motivo dos blocos marcados como não executados.',
@@ -824,7 +949,10 @@ function ExecuteJobForm({
         }),
       )
     },
-    onSuccess: () => {
+    onSuccess: (_data, submitted) => {
+      setSavedValues(submitted)
+      leaveAllowed.current = true
+      if (scope) clearExecutionDraft(scope)
       queryClient.invalidateQueries({ queryKey: ['jobs'] })
       toast.success('Job enviado para revisão!')
       if (shouldReturnToSyncConflicts(conflictReturn)) {
@@ -1135,6 +1263,25 @@ function ExecuteJobForm({
 
   return (
     <div className="mx-auto w-full max-w-[1500px] space-y-6 pb-10">
+      <ExecutionDraftSync
+        key={`${draftKey}:${draftOffer !== null}`}
+        scope={scope}
+        values={currentValues}
+        dirty={isDirty}
+        suspended={draftOffer !== null}
+        baseUpdatedAt={serverUpdatedAt}
+      />
+      <ExecutionNavigationGuard
+        Gate={UnsavedChangesGate}
+        shouldBlock={() => isDirty && !leaveAllowed.current}
+        draftKept={scope !== null}
+        onBeforeLeave={flushDraftBeforeLeaving}
+      />
+      <ExecutionDraftRestoreDialog
+        open={draftOffer !== null}
+        onRestore={restoreDraft}
+        onDiscard={discardDraft}
+      />
       <SyncConflictReturnNotice search={conflictReturn} />
       {/* Header */}
       <Panel className="relative overflow-hidden p-5 sm:p-6">
@@ -1244,10 +1391,10 @@ function ExecuteJobForm({
                 idleText="Salvar Rascunho"
                 savedText="Salvo"
                 disabled={missingAssetSpecFields.length > 0}
-                onSave={() => saveMutation.mutateAsync()}
+                onSave={() => saveMutation.mutateAsync(currentValues)}
               />
               <Button
-                onClick={() => submitMutation.mutate()}
+                onClick={() => submitMutation.mutate(currentValues)}
                 disabled={submitMutation.isPending || !canSubmit}
                 className="h-10 justify-center px-3 shadow-[0_12px_28px_rgba(37,99,235,0.22)] active:scale-[0.96]"
               >
