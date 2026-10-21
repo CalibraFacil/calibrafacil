@@ -220,63 +220,6 @@ export type ScopeComplianceFindingData = {
   message?: string | null
 }
 
-type EnvironmentalLimitRange = {
-  min: number
-  max: number
-}
-
-export type JobEnvironmentalSnapshot = {
-  withinLimits?: boolean | null
-  outOfLimitsJustification?: string | null
-  temperature?: number | null
-  humidity?: number | null
-  pressure?: number | null
-  limits?: {
-    temperature?: EnvironmentalLimitRange | null
-    humidity?: EnvironmentalLimitRange | null
-    pressure?: EnvironmentalLimitRange | null
-  } | null
-}
-
-/**
- * The job shape the detail page reads from the job-detail API response.
- * Fields the API may omit (or return null for) are optional/nullable; the
- * page normalizes them through `toJobStatus`/`toFinancialStatus` and the
- * `isApprovedJobRecordData` guard before trusting anything stricter.
- */
-export type JobDetailData = {
-  id: number
-  jobId: string
-  status: string
-  customerName?: string | null
-  assetName?: string | null
-  assetTag?: string | null
-  serviceName?: string | null
-  technicianName?: string | null
-  methodSnapshot: ReviewMethodSnapshot
-  data?: Record<string, unknown> | null
-  results?: Record<string, unknown> | null
-  environmentalSnapshot?: JobEnvironmentalSnapshot | null
-  performedAt?: string | null
-  createdAt?: string | null
-  updatedAt?: string | null
-  rejectedAt?: string | null
-  rejectionReason?: string | null
-  dueDate?: string | null
-  daysUntilDue?: number | null
-  isOverdue?: boolean | null
-  financialStatus?: string | null
-  invoiceEligibility?: boolean | null
-  invoiceDocumentNumber?: string | null
-  supersedesId?: number | null
-  amendmentNumber?: number | null
-  amendmentReason?: string | null
-  asFoundConformity?: AsFoundConformity | null
-  asFoundMargins?: number[] | null
-  scopeComplianceStatus?: string | null
-  scopeComplianceFindings?: ScopeComplianceFindingData[] | null
-}
-
 export type ReviewContextItem = {
   key: string
   label: string

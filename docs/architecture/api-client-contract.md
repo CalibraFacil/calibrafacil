@@ -107,3 +107,72 @@ every domain failure carries a stable `code`.
   grandfathered as exact per-file counts in the rule's `LEGACY_BASELINE`; a file
   can never gain one. When you migrate a site, lower that file's count in the
   same change.
+
+## Typed, validated responses (response contracts)
+
+Request payloads were already schema-derived. Responses used to be trusted:
+`client-runtime` cast every body (`assumeClientResponse<T>`), pages passed
+hand-written generics (`jobs.get<TJob>()`), and the portal read `fetch(...).json()`
+as `any`. Response contracts replace that, one domain at a time.
+
+**The pattern (one schema, three guards):**
+
+1. **Schema.** `packages/contracts/src/<domain>.ts` holds Zod _wire_ schemas for
+   the responses and exports the inferred types (`JobDetail`, `JobsListResponse`,
+   `PortalOverviewResponse`, ...). Rules: validate only (no `.default()`,
+   `.transform()`, `.coerce`), unknown keys allowed, timestamps are ISO strings,
+   nullable/optional exactly as the handler returns them. Written from what the
+   handler returns today, never the reverse.
+2. **Server: compile time.** The handler types its response with
+   `body satisfies ServerShape<JobDetail>` (`ServerShape` lets a `Date` stand
+   where the wire has an ISO string and keeps literal unions exact). A handler
+   change that breaks the shape fails `pnpm check-types`.
+3. **Client: run time.** `client-runtime` modules validate with
+   `readValidatedJsonResponse(response, schema, { endpoint, fallback })`; the
+   portal uses `fetchPortalJson(path, schema, { errorMessage })`
+   (`apps/portal/src/lib/api-fetch.ts`). Both call `validateResponsePayload`
+   from contracts. A valid payload is returned as-is (same object, every key the
+   server sent, so frozen evidence is never rewritten); call sites get inferred
+   types and no generic.
+4. **CI: contract test.** An int spec calls the real route (real middleware, real
+   Postgres) and `safeParse`s the body with the same schema:
+   `apps/api/src/routes/jobs-contract.int.spec.ts`,
+   `portal-overview-contract.int.spec.ts`. Drift between the handler's runtime
+   values (including the JSON snapshot columns) and the schema fails CI.
+   `packages/contracts/src/jobs.fixtures.ts` has contract-valid payloads for unit
+   tests in any package.
+
+**Mismatch policy** (`ResponseValidationMode`):
+
+- `strict` (default; development and tests): throw `ResponseContractError`
+  (endpoint + failing paths) so drift fails where it is introduced.
+- `warn` (production): never break the UI. One structured JSON warning
+  (`tag: "response-contract"`, endpoint, paths and codes, never response values:
+  they can be customer data) and the payload is returned as received.
+  The web app selects it with `import.meta.env.PROD` (or
+  `VITE_RESPONSE_VALIDATION=warn`, used by the mocked-API Playwright run).
+  The portal helper is `strict` on the dev server and `warn` in production and
+  in its component unit tests (they stub `fetch` with partial bodies; tests of
+  the helper itself pass `responseValidation: "strict"`).
+
+**Covered so far (first slice):** jobs domain (`GET /api/jobs`, `GET /api/jobs/:id`,
+the execute/submit/approve/reject/cancel/assign mutation responses, amend,
+technicians list, certificate/label download links) and `GET /api/portal/overview`.
+
+**Opaque by design, for now:** `methodSnapshot.compiledMethod` is `unknown` in the
+job schema because the database column is; the worksheet reads it through
+`compiledMethodSnapshotSchema.safeParse` (see `readCompiledMethodSnapshot` in
+`apps/web/src/features/jobs/execution.ts`). The detail schema also declares
+`unitId`, `asFoundConformity` and `asFoundMargins` as optional: the web reads them
+but `GET /api/jobs/:id` does not select them (known defect, noted in the schema).
+
+**Follow-ups (remaining domains, in rough priority):** `POST /api/jobs` create,
+`flag-oot`, `generate-label`; `standards` (incl. `jobs.listStandards`) and
+`environmental-limits` (`jobs.getEffectiveEnvironmentalLimits`), which still take
+a generic; service orders; customers/assets/services/methods; quality
+(NC/CAPA); finance; reports; the other ~60 portal `fetch` calls (move each to
+`fetchPortalJson` with a contract schema); the desktop transport
+(`desktop-client.ts` still reads local-server bodies with `readDesktopJson<T>`,
+unvalidated: give `apps/local-server` the same contract tests); and the
+hand-written `*Data` DTOs left in `packages/client-runtime/src/types.ts`.
+New endpoints should start with a schema in contracts rather than a generic.

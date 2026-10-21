@@ -267,7 +267,7 @@ export function ExecuteJobPage({
     data: job,
     isLoading: jobLoading,
     error: jobError,
-  } = useJobDetailData<JobData>({
+  } = useJobDetailData({
     id,
     apiJobId,
   })

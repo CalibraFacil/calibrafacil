@@ -1,26 +1,134 @@
+import {
+  jobAmendResponseSchema,
+  jobDetailSchema,
+  jobDownloadUrlResponseSchema,
+  jobMutationResponseSchema,
+  jobTechniciansResponseSchema,
+  jobsListResponseSchema,
+  type JobStatus,
+  type ResponseValidationOptions,
+} from "@calibra-facil/contracts";
+import type { z } from "zod";
+
 import type {
   CreateJobInput,
   CreateJobResult,
-  JobAmendResult,
-  JobDownloadUrlData,
   JobsApi,
   JobsListInput,
-  TechnicianListData,
 } from "../types";
 import type {
   EffectiveEnvironmentalLimitsResponse,
-  JobsListData,
   JobExecutionPayload,
   ReferenceStandardsResponse,
 } from "../jobs";
 import { CalibraApiError } from "../transport/errors";
-import { readApiError, readJsonResponse } from "../transport/response";
+import {
+  readApiError,
+  readJsonResponse,
+  readValidatedJsonResponse,
+} from "../transport/response";
 import { apiRouteParam } from "../transport/url";
 
-export function createJobsApi(rawCloudClient: any): JobsApi {
+type JobIdParam = { param: { id: string } };
+type JobPostRoute<TInput> = { $post(input: TInput): Promise<Response> };
+
+/**
+ * The slice of the raw Hono RPC client this module drives. Declared here (not
+ * `any`) so a renamed route or a changed payload fails `check-types`.
+ */
+export type JobsRawCloudClient = {
+  api: {
+    jobs: {
+      $post(input: { json: CreateJobInput }): Promise<Response>;
+      $get(input: {
+        query: {
+          page: string;
+          limit: string;
+          customerId?: string;
+          query?: string;
+          status?: JobStatus;
+        };
+      }): Promise<Response>;
+      technicians: { list: { $get(): Promise<Response> } };
+      ":id": {
+        $get(input: JobIdParam): Promise<Response>;
+        $delete(
+          input: JobIdParam & { json: { reason: string } },
+        ): Promise<Response>;
+        approve: JobPostRoute<
+          JobIdParam & {
+            json: {
+              reason?: string;
+              environmentalJustification?: string;
+              scopeOverrideJustification?: string;
+            };
+          }
+        >;
+        reject: JobPostRoute<JobIdParam & { json: { reason: string } }>;
+        "flag-oot": JobPostRoute<
+          JobIdParam & {
+            json: {
+              description?: string;
+              affectedScope?: string;
+              notifyCustomer: boolean;
+            };
+          }
+        >;
+        assign: JobPostRoute<JobIdParam & { json: { technicianId: string } }>;
+        download: { $get(input: JobIdParam): Promise<Response> };
+        "generate-label": JobPostRoute<JobIdParam>;
+        "download-label": { $get(input: JobIdParam): Promise<Response> };
+        "label-commands": {
+          $get(
+            input: JobIdParam & { query: Record<string, string> },
+          ): Promise<Response>;
+        };
+        amend: JobPostRoute<JobIdParam & { json: { reason: string } }>;
+        execute: JobPostRoute<JobIdParam & { json: JobExecutionPayload }>;
+        submit: JobPostRoute<JobIdParam & { json: JobExecutionPayload }>;
+      };
+    };
+    standards: {
+      $get(input: {
+        query: { status?: string; limit?: string };
+      }): Promise<Response>;
+    };
+    "environmental-limits": {
+      effective: {
+        ":assetTypeId": {
+          $get(input: {
+            param: { assetTypeId: string };
+            query?: { unitId?: string };
+          }): Promise<Response>;
+        };
+      };
+    };
+  };
+};
+
+export function createJobsApi(
+  rawCloudClient: JobsRawCloudClient,
+  options: ResponseValidationOptions = {},
+): JobsApi {
+  // Every contract-covered response below is checked against its
+  // `@calibra-facil/contracts` schema; see `validateResponsePayload` for the
+  // strict (dev/test) vs warn (production) behavior on a mismatch.
+  const validated = <TSchema extends z.ZodType>(
+    response: Response,
+    schema: TSchema,
+    endpoint: string,
+    fallback: string,
+  ) =>
+    readValidatedJsonResponse(response, schema, {
+      endpoint,
+      fallback,
+      responseValidation: options.responseValidation,
+      onResponseContractViolation: options.onResponseContractViolation,
+    });
+
   return {
     async list(input: JobsListInput) {
-      return readJsonResponse<JobsListData>(
+      return validated(
         await rawCloudClient.api.jobs.$get({
           query: {
             page: String(input.page),
@@ -30,6 +138,8 @@ export function createJobsApi(rawCloudClient: any): JobsApi {
             status: input.status || undefined,
           },
         }),
+        jobsListResponseSchema,
+        "GET /api/jobs",
         "Falha ao carregar calibrações",
       );
     },
@@ -39,17 +149,21 @@ export function createJobsApi(rawCloudClient: any): JobsApi {
         "Erro ao criar ordem",
       );
     },
-    async get<TJob = unknown>(jobId: string | number) {
-      return readJsonResponse<TJob>(
+    async get(jobId: string | number) {
+      return validated(
         await rawCloudClient.api.jobs[":id"].$get({
           param: { id: apiRouteParam(jobId) },
         }),
+        jobDetailSchema,
+        "GET /api/jobs/:id",
         "Falha ao carregar job",
       );
     },
     async listTechnicians() {
-      return readJsonResponse<TechnicianListData>(
+      return validated(
         await rawCloudClient.api.jobs.technicians.list.$get(),
+        jobTechniciansResponseSchema,
+        "GET /api/jobs/technicians/list",
         "Falha ao carregar técnicos",
       );
     },
@@ -62,20 +176,24 @@ export function createJobsApi(rawCloudClient: any): JobsApi {
         scopeOverrideJustification?: string;
       },
     ) {
-      return readJsonResponse<unknown>(
+      return validated(
         await rawCloudClient.api.jobs[":id"].approve.$post({
           param: { id: apiRouteParam(jobId) },
           json: input,
         }),
+        jobMutationResponseSchema,
+        "POST /api/jobs/:id/approve",
         "Erro ao aprovar",
       );
     },
     async reject(jobId: string | number, reason: string) {
-      return readJsonResponse<unknown>(
+      return validated(
         await rawCloudClient.api.jobs[":id"].reject.$post({
           param: { id: apiRouteParam(jobId) },
           json: { reason },
         }),
+        jobMutationResponseSchema,
+        "POST /api/jobs/:id/reject",
         "Erro ao rejeitar",
       );
     },
@@ -96,20 +214,24 @@ export function createJobsApi(rawCloudClient: any): JobsApi {
       );
     },
     async cancel(jobId: string | number, reason: string) {
-      return readJsonResponse<unknown>(
+      return validated(
         await rawCloudClient.api.jobs[":id"].$delete({
           param: { id: apiRouteParam(jobId) },
           json: { reason },
         }),
+        jobMutationResponseSchema,
+        "DELETE /api/jobs/:id",
         "Erro ao cancelar",
       );
     },
     async assign(jobId: string | number, technicianId: string) {
-      return readJsonResponse<unknown>(
+      return validated(
         await rawCloudClient.api.jobs[":id"].assign.$post({
           param: { id: apiRouteParam(jobId) },
           json: { technicianId },
         }),
+        jobMutationResponseSchema,
+        "POST /api/jobs/:id/assign",
         "Erro ao atribuir",
       );
     },
@@ -141,28 +263,34 @@ export function createJobsApi(rawCloudClient: any): JobsApi {
       return result;
     },
     async saveExecution(jobId: string | number, input: JobExecutionPayload) {
-      return readJsonResponse<unknown>(
+      return validated(
         await rawCloudClient.api.jobs[":id"].execute.$post({
           param: { id: apiRouteParam(jobId) },
           json: input,
         }),
+        jobMutationResponseSchema,
+        "POST /api/jobs/:id/execute",
         "Erro ao salvar",
       );
     },
     async submitExecution(jobId: string | number, input: JobExecutionPayload) {
-      return readJsonResponse<unknown>(
+      return validated(
         await rawCloudClient.api.jobs[":id"].submit.$post({
           param: { id: apiRouteParam(jobId) },
           json: input,
         }),
+        jobMutationResponseSchema,
+        "POST /api/jobs/:id/submit",
         "Erro ao submeter",
       );
     },
     async getCertificateDownloadUrl(jobId: string | number) {
-      return readJsonResponse<JobDownloadUrlData>(
+      return validated(
         await rawCloudClient.api.jobs[":id"].download.$get({
           param: { id: apiRouteParam(jobId) },
         }),
+        jobDownloadUrlResponseSchema,
+        "GET /api/jobs/:id/download",
         "Falha ao gerar link",
       );
     },
@@ -175,10 +303,12 @@ export function createJobsApi(rawCloudClient: any): JobsApi {
       );
     },
     async getLabelDownloadUrl(jobId: string | number) {
-      return readJsonResponse<JobDownloadUrlData>(
+      return validated(
         await rawCloudClient.api.jobs[":id"]["download-label"].$get({
           param: { id: apiRouteParam(jobId) },
         }),
+        jobDownloadUrlResponseSchema,
+        "GET /api/jobs/:id/download-label",
         "Falha ao gerar link",
       );
     },
@@ -205,11 +335,13 @@ export function createJobsApi(rawCloudClient: any): JobsApi {
       return response.text();
     },
     async amend(jobId: string | number, reason: string) {
-      return readJsonResponse<JobAmendResult>(
+      return validated(
         await rawCloudClient.api.jobs[":id"].amend.$post({
           param: { id: apiRouteParam(jobId) },
           json: { reason },
         }),
+        jobAmendResponseSchema,
+        "POST /api/jobs/:id/amend",
         "Falha ao criar retificação",
       );
     },

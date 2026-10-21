@@ -57,6 +57,15 @@ import {
   assessStandardValidity,
   isStandardValidOn,
 } from "@calibra-facil/schemas";
+import type {
+  JobAmendResponse,
+  JobDetail,
+  JobDownloadUrlResponse,
+  JobMutationResponse,
+  JobTechniciansResponse,
+  JobsListResponse,
+  ServerShape,
+} from "@calibra-facil/contracts";
 import { flagJobOutOfTolerance } from "../lib/oot-notifications";
 import { judgeSnapshotStandards } from "../modules/jobs/standards-judgement";
 import { syncJobStandardLinks } from "../lib/job-standards";
@@ -1039,10 +1048,10 @@ export const jobsRouter = new Hono<{
       );
       const jobsWithComputedFields = jobs.map((job) => ({
         ...job,
-        isOverdue:
-          job.dueDate &&
-          isCalendarDatePast(job.dueDate, now) &&
-          ["DRAFT", "IN_PROGRESS", "REVIEW"].includes(job.status),
+        isOverdue: job.dueDate
+          ? isCalendarDatePast(job.dueDate, now) &&
+            ["DRAFT", "IN_PROGRESS", "REVIEW"].includes(job.status)
+          : null,
         daysUntilDue: job.dueDate ? labDaysUntil(job.dueDate, now) : null,
         // Extract method name from snapshot for display
         methodName: methodSnapshotDisplay(job.methodSnapshot).methodName,
@@ -1058,7 +1067,7 @@ export const jobsRouter = new Hono<{
           total: countResult?.total ?? 0,
           totalPages: Math.ceil((countResult?.total ?? 0) / limit),
         },
-      });
+      } satisfies ServerShape<JobsListResponse>);
     },
   )
 
@@ -1246,15 +1255,15 @@ export const jobsRouter = new Hono<{
     const result = {
       ...job,
       assetSnapshot: derivedAssetSnapshot,
-      isOverdue:
-        job.dueDate &&
-        isCalendarDatePast(job.dueDate, now) &&
-        ["DRAFT", "IN_PROGRESS", "REVIEW"].includes(job.status),
+      isOverdue: job.dueDate
+        ? isCalendarDatePast(job.dueDate, now) &&
+          ["DRAFT", "IN_PROGRESS", "REVIEW"].includes(job.status)
+        : null,
       daysUntilDue: job.dueDate ? labDaysUntil(job.dueDate, now) : null,
       ...financialContextMap.get(job.id),
     };
 
-    return c.json(result);
+    return c.json(result satisfies ServerShape<JobDetail>);
   })
 
   // =========================================================================
@@ -1721,7 +1730,7 @@ export const jobsRouter = new Hono<{
       return c.json({
         message: `Job atribuido a ${techMember.userName}`,
         data: updated,
-      });
+      } satisfies ServerShape<JobMutationResponse>);
     },
   )
 
@@ -2092,7 +2101,7 @@ export const jobsRouter = new Hono<{
       return c.json({
         message: "Job submetido para revisao",
         data: updated,
-      });
+      } satisfies ServerShape<JobMutationResponse>);
     },
   )
 
@@ -2392,7 +2401,7 @@ export const jobsRouter = new Hono<{
       return c.json({
         message: "Dados salvos com sucesso",
         data: updated,
-      });
+      } satisfies ServerShape<JobMutationResponse>);
     },
   )
 
@@ -2516,7 +2525,7 @@ export const jobsRouter = new Hono<{
           return c.json({
             message: "Gerando certificado...",
             data: result.job,
-          });
+          } satisfies ServerShape<JobMutationResponse>);
       }
     },
   )
@@ -2611,7 +2620,7 @@ export const jobsRouter = new Hono<{
       return c.json({
         message: "Job rejeitado",
         data: updated,
-      });
+      } satisfies ServerShape<JobMutationResponse>);
     },
   )
 
@@ -2786,7 +2795,7 @@ export const jobsRouter = new Hono<{
       return c.json({
         message: "Job cancelado",
         data: updated,
-      });
+      } satisfies ServerShape<JobMutationResponse>);
     },
   )
 
@@ -3030,7 +3039,7 @@ export const jobsRouter = new Hono<{
             status: "DRAFT",
             amendmentNumber,
           },
-        },
+        } satisfies ServerShape<JobAmendResponse>,
         201,
       );
     },
@@ -3290,7 +3299,9 @@ export const jobsRouter = new Hono<{
             )
             .orderBy(user.name);
 
-      return c.json({ data: technicians });
+      return c.json({
+        data: technicians,
+      } satisfies ServerShape<JobTechniciansResponse>);
     },
   )
 
@@ -3337,14 +3348,14 @@ export const jobsRouter = new Hono<{
             "certificate",
             env.API_URL,
           ),
-        });
+        } satisfies JobDownloadUrlResponse);
       }
 
       const key = extractKeyFromUrl(job.certificateUrl);
       const client = createR2Client(env);
       const url = await generatePresignedUrl(client, env.R2_BUCKET_NAME, key);
 
-      return c.json({ url });
+      return c.json({ url } satisfies JobDownloadUrlResponse);
     },
   )
 
@@ -3501,14 +3512,14 @@ export const jobsRouter = new Hono<{
             "label",
             env.API_URL,
           ),
-        });
+        } satisfies JobDownloadUrlResponse);
       }
 
       const key = extractKeyFromUrl(job.labelUrl);
       const client = createR2Client(env);
       const url = await generatePresignedUrl(client, env.R2_BUCKET_NAME, key);
 
-      return c.json({ url });
+      return c.json({ url } satisfies JobDownloadUrlResponse);
     },
   )
 

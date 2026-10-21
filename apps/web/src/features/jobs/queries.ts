@@ -48,7 +48,7 @@ export function jobsListQueryOptions(input: JobsListQueryInput) {
   })
 }
 
-export function jobDetailQueryOptions<TJob = unknown>({
+export function jobDetailQueryOptions({
   id,
   apiJobId = id,
 }: {
@@ -57,7 +57,7 @@ export function jobDetailQueryOptions<TJob = unknown>({
 }) {
   return queryOptions({
     queryKey: ['jobs', id],
-    queryFn: () => calibraApi.jobs.get<TJob>(apiJobId),
+    queryFn: () => calibraApi.jobs.get(apiJobId),
   })
 }
 
@@ -220,7 +220,7 @@ export async function prewarmJobExecute(queryClient: QueryClient, id: string) {
   ])
 }
 
-export function useJobDetailData<TJob = unknown>({
+export function useJobDetailData({
   id,
   apiJobId = id,
   refetchWhileGeneratingPdf = false,
@@ -230,7 +230,7 @@ export function useJobDetailData<TJob = unknown>({
   refetchWhileGeneratingPdf?: boolean
 }) {
   return useQuery({
-    ...jobDetailQueryOptions<TJob>({ id, apiJobId }),
+    ...jobDetailQueryOptions({ id, apiJobId }),
     refetchInterval: refetchWhileGeneratingPdf
       ? (query) => {
           const status = getJobStatus(query.state.data)
