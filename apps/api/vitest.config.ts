@@ -12,7 +12,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    include: ["src/**/*.spec.ts"],
+    include: ["src/**/*.spec.ts", "test/integration/*.spec.ts"],
     // The real-DB integration tier (*.int.spec.ts) runs under
     // vitest.integration.config.ts (Docker required) — keep it out of the fast suite.
     exclude: ["**/node_modules/**", "**/*.int.spec.ts"],

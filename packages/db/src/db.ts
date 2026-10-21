@@ -20,6 +20,34 @@ type Database =
   | NeonDatabase<typeof schema>
   | ReturnType<typeof drizzlePostgres<typeof schema>>;
 
+/**
+ * Test-only statement observer. Off by default: with no observer installed the
+ * hooks below are no-ops, so production behaviour is unchanged. The API
+ * integration tier installs one to assert every tenant-table statement carries
+ * an organization predicate (see apps/api/test/integration/tenant-sql-guard.ts).
+ *
+ * - `onAccess` runs synchronously whenever calling code obtains the database
+ *   (`db.<member>` or `getDb()`), i.e. while the caller's stack is still live,
+ *   so an observer can attribute the statements that follow to their call site.
+ * - `onQuery` receives every SQL statement (parameterized text) at execution.
+ */
+export type QueryObserver = {
+  onAccess?: () => void;
+  onQuery: (query: string, params: unknown[]) => void;
+};
+
+let queryObserver: QueryObserver | null = null;
+
+export function setQueryObserver(observer: QueryObserver | null): void {
+  queryObserver = observer;
+}
+
+const observingLogger = {
+  logQuery(query: string, params: unknown[]) {
+    queryObserver?.onQuery(query, params);
+  },
+};
+
 let cachedDatabase: { key: string; database: Database } | null = null;
 
 function isCloudflareWorkersRuntime() {
@@ -50,7 +78,7 @@ function createPostgresJsDatabase(connectionString: string) {
       Number.isFinite(configuredMax) && configuredMax > 0 ? configuredMax : 5,
     fetch_types: false,
   });
-  return drizzlePostgres(sql, { schema });
+  return drizzlePostgres(sql, { schema, logger: observingLogger });
 }
 
 function createNeonServerlessDatabase(connectionString: string) {
@@ -70,6 +98,7 @@ function createNeonServerlessDatabase(connectionString: string) {
  * @see https://developers.cloudflare.com/hyperdrive/examples/connect-to-postgres/postgres-drivers-and-libraries/drizzle-orm/
  */
 export function getDb(): Database {
+  queryObserver?.onAccess?.();
   const isProduction = process.env.NODE_ENV === "production";
   const isCloudflare = isCloudflareWorkersRuntime();
 

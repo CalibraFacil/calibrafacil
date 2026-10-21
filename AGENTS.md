@@ -103,6 +103,12 @@ covers the big-picture architecture; `CONTRIBUTING.md` covers the contribution f
 - Run focused tests with package scripts, e.g., `cd apps/api && pnpm test:run`.
 - Real-database integration tests (`*.int.spec.ts`) run with
   `pnpm --dir apps/api test:integration` against a disposable local Postgres.
+- The integration tier also runs a **tenant SQL guard** (`apps/api/test/integration/tenant-sql-guard.ts`):
+  every statement application code issues against a tenant table (any table with
+  `organization_id`/`lab_organization_id`) must carry an organization predicate, or the test fails.
+  A legitimately unscoped access needs an entry with a reason in
+  `apps/api/test/integration/tenant-sql-allowlist.ts`. `TENANT_SQL_GUARD=report` (plus
+  `TENANT_SQL_GUARD_REPORT=<file>` for JSON lines) or `=off` helps when debugging locally.
 
 ## Commit & Pull Request Guidelines
 

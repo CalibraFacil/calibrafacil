@@ -477,7 +477,10 @@ export const syncRouter = new Hono<{
           ),
       ]);
       const standardsWithDocuments =
-        await attachReferenceStandardCertificateDocuments(standards);
+        await attachReferenceStandardCertificateDocuments(
+          memberData.organizationId,
+          standards,
+        );
 
       const massCompositionProfileRows = await db
         .select({
@@ -680,7 +683,10 @@ export const syncRouter = new Hono<{
             clientBatchId: body.clientBatchId,
           });
         } catch (error) {
-          await releaseDesktopSyncClaim(claim.claimId);
+          await releaseDesktopSyncClaim(
+            memberData.organizationId,
+            claim.claimId,
+          );
           throw error;
         }
 
@@ -689,19 +695,24 @@ export const syncRouter = new Hono<{
           // the claim fails it is picked up after the lease from the audit log
           // (see claimDesktopSyncEvent); failing the request here would only
           // make the desktop retry into "in progress".
-          await completeDesktopSyncClaim(claim.claimId, result).catch(
-            (error: unknown) => {
-              console.error(
-                "[Sync] Failed to mark desktop sync event applied:",
-                event.eventId,
-                error,
-              );
-            },
-          );
+          await completeDesktopSyncClaim(
+            memberData.organizationId,
+            claim.claimId,
+            result,
+          ).catch((error: unknown) => {
+            console.error(
+              "[Sync] Failed to mark desktop sync event applied:",
+              event.eventId,
+              error,
+            );
+          });
         } else {
           // Not applied (rejected or conflicting): free the op id so the
           // corrected or re-based event can be pushed again.
-          await releaseDesktopSyncClaim(claim.claimId);
+          await releaseDesktopSyncClaim(
+            memberData.organizationId,
+            claim.claimId,
+          );
         }
 
         if (!result.ok) {
@@ -1351,6 +1362,7 @@ async function loadCloudSyncEventsSince(
 
   const changedStandardsWithDocuments =
     await attachReferenceStandardCertificateDocuments(
+      memberData.organizationId,
       taken("reference_standard", changedStandards),
     );
 
@@ -1461,7 +1473,7 @@ type ReferenceStandardSyncRow = {
 
 async function attachReferenceStandardCertificateDocuments<
   TStandard extends ReferenceStandardSyncRow,
->(standards: TStandard[]) {
+>(organizationId: string, standards: TStandard[]) {
   if (standards.length === 0) {
     return standards.map((standard) => ({
       ...standard,
@@ -1474,6 +1486,7 @@ async function attachReferenceStandardCertificateDocuments<
     .from(referenceStandardCertificateDocument)
     .where(
       and(
+        eq(referenceStandardCertificateDocument.organizationId, organizationId),
         inArray(
           referenceStandardCertificateDocument.standardId,
           standards.map((standard) => standard.id),
