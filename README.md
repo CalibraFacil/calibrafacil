@@ -139,7 +139,7 @@ pnpm dev              # API, lab app and portal
 pnpm dev:all          # every app with a dev script (docs, site, desktop, worker…)
 pnpm lint             # oxlint (architecture boundaries are lint rules too)
 pnpm format           # Prettier
-pnpm check-types      # TypeScript (native tsc 7)
+pnpm check-types      # TypeScript (tsrs; pnpm check-types:tsc for native tsc 7)
 TZ=UTC pnpm turbo test                      # unit tests
 pnpm --dir apps/api test:integration        # real-Postgres integration tests (Docker)
 pnpm --dir apps/web test:stack              # browser checks against a running `pnpm dev`

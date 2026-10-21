@@ -10,7 +10,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "check-types": "tsc --noEmit",
+    "check-types": "node ../../scripts/typecheck.mjs --noEmit",
     "lint": "oxlint"
   },
   "main": "./src/index.ts",

@@ -64,6 +64,7 @@ jobs:
       - name: Format check
         run: bun run format:check
 
+      # Runs tsrs (the Rust port of the TypeScript 7 compiler); see scripts/typecheck.mjs.
       - name: Type Check
         run: bun run check-types
 

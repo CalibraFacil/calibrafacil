@@ -8,7 +8,7 @@
     "build": "vite build && node scripts/prerender.mjs && node scripts/build-docs.mjs",
     "preview": "vite preview --port 3002",
     "lint": "oxlint",
-    "check-types": "tsc --noEmit",
+    "check-types": "node ../../scripts/typecheck.mjs --noEmit",
     "test": "vitest run",
     "test:run": "vitest run"
   },
