@@ -148,6 +148,7 @@ describe("organization_id on every tenant table (migration 0118)", () => {
         organizationId: a.orgId,
         installmentId: a.installmentId,
         recordedBy: a.userId,
+        receivedAt: new Date("2026-02-02T00:00:00.000Z"),
         amountCents: 1000,
         paymentMethod: "PIX",
       });
@@ -207,6 +208,7 @@ describe("organization_id on every tenant table (migration 0118)", () => {
           organizationId: b.orgId,
           installmentId: a.installmentId,
           recordedBy: b.userId,
+          receivedAt: new Date("2026-02-02T00:00:00.000Z"),
           amountCents: 1,
           paymentMethod: "PIX",
         }),

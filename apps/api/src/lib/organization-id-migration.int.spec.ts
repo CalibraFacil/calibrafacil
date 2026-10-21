@@ -12,7 +12,7 @@
  *              it, once, however often it runs
  *
  * How the "main" shape is obtained: this branch's schema is cloned from the
- * template database, the rows are written by the application's own writers, then
+ * worker database (pg_dump), the rows are written by the application's own writers, then
  * every organization_id column of the registry (with its keys and indexes) and
  * every (organization, id) unique is dropped. Compared catalog-for-catalog with a
  * database pushed from main's schema.ts, that revert is identical (columns,
@@ -20,7 +20,6 @@
  */
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { setTimeout as sleep } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
 import { sql } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
@@ -42,8 +41,8 @@ const MIGRATION = readFileSync(
 );
 
 const baseUrl = inject("testDbBaseUrl");
-const template = inject("testDbTemplate");
 const workerUrl = process.env.DATABASE_URL;
+const workerDatabase = new URL(workerUrl ?? "postgres://x/").pathname.slice(1);
 const scratchName = `calibra_mig_${process.env.VITEST_POOL_ID ?? "0"}`;
 
 function pgEnv(): Record<string, string> {
@@ -109,11 +108,24 @@ function columnCount(database: string): number {
   );
 }
 
-function constraintCount(database: string, suffix: string): number {
+/** How many of the constraints of this design (by name) exist. */
+function constraintCount(
+  database: string,
+  kind: "tenant_fk" | "unique",
+): number {
+  const names =
+    kind === "tenant_fk"
+      ? listTenancy().flatMap((table) =>
+          table.compositeKeys.map((key) => key.name),
+        )
+      : listTenancy().flatMap((table) =>
+          table.orgIdUniques.map((unique) => unique.name),
+        );
+  const list = names.map((name) => `'${name}'`).join(", ");
   return Number(
     mustPsql(
       database,
-      `select count(*) from pg_constraint where connamespace = 'public'::regnamespace and conname like '%${suffix}';`,
+      `select count(*) from pg_constraint where connamespace = 'public'::regnamespace and conname in (${list});`,
     ).trim(),
   );
 }
@@ -138,22 +150,22 @@ function rowCounts(database: string): Record<string, string> {
   return result;
 }
 
-async function createScratch(): Promise<void> {
+/**
+ * An empty database with the schema of this worker's database. Cloned with
+ * pg_dump, not CREATE DATABASE ... TEMPLATE: that would take the template the
+ * other workers clone from while they start up.
+ */
+function createScratch(): void {
   const admin = "postgres";
   mustPsql(admin, `DROP DATABASE IF EXISTS ${scratchName} WITH (FORCE);`);
-  // CREATE DATABASE ... TEMPLATE refuses while another session is on the
-  // template (a worker cloning it at the same moment): retry briefly.
-  let lastError = "";
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    const result = psql(
-      admin,
-      `CREATE DATABASE ${scratchName} TEMPLATE ${template};`,
-    );
-    if (result.ok) return;
-    lastError = result.stderr;
-    await sleep(500);
-  }
-  throw new Error(`could not create ${scratchName}: ${lastError}`);
+  mustPsql(admin, `CREATE DATABASE ${scratchName};`);
+  const dump = spawnSync(
+    "pg_dump",
+    ["--schema-only", "--no-owner", "--no-privileges", "-d", workerDatabase],
+    { encoding: "utf8", env: pgEnv(), maxBuffer: 256 * 1024 * 1024 },
+  );
+  if (dump.status !== 0) throw new Error(`pg_dump failed: ${dump.stderr}`);
+  mustPsql(scratchName, dump.stdout);
 }
 
 describe("migration 0118 on a database in main's shape", () => {
@@ -162,7 +174,7 @@ describe("migration 0118 on a database in main's shape", () => {
 
   beforeAll(async () => {
     if (!workerUrl) throw new Error("DATABASE_URL is not set");
-    await createScratch();
+    createScratch();
     // The db singleton follows DATABASE_URL: point it at the scratch database
     // while seeding, then put the worker's database back (afterAll).
     process.env.DATABASE_URL = `${baseUrl}/${scratchName}`;
@@ -193,8 +205,8 @@ describe("migration 0118 on a database in main's shape", () => {
 
   it("REQ-ORG-2: before the migration none of the tables has organization_id nor the composite keys (main's shape)", () => {
     expect(columnCount(scratchName)).toBe(0);
-    expect(constraintCount(scratchName, "_tenant_fk")).toBe(0);
-    expect(constraintCount(scratchName, "_id_org_uidx")).toBe(0);
+    expect(constraintCount(scratchName, "tenant_fk")).toBe(0);
+    expect(constraintCount(scratchName, "unique")).toBe(0);
   });
 
   it("REQ-ORG-2: the pre-check raises on an audit row whose entity is gone and applies nothing", () => {
@@ -217,8 +229,12 @@ describe("migration 0118 on a database in main's shape", () => {
 
     // Atomic: no column, no key, no row changed.
     expect(columnCount(scratchName)).toBe(0);
-    expect(constraintCount(scratchName, "_tenant_fk")).toBe(0);
-    mustPsql(scratchName, `delete from job_audit_log where job_id = 987654;`);
+    expect(constraintCount(scratchName, "tenant_fk")).toBe(0);
+    // The audit logs are append-only: removing the probe row needs the seed hatch.
+    mustPsql(
+      scratchName,
+      `begin; select set_config('calibra.allow_audit_rewrite', 'on', true); delete from job_audit_log where job_id = 987654; commit;`,
+    );
     expect(rowCounts(scratchName)).toEqual(before);
   });
 
@@ -258,7 +274,8 @@ describe("migration 0118 on a database in main's shape", () => {
       if (table === "job_standard") {
         // Re-inserted above: same rows, new ids.
         const owners = after[table]
-          ?.split("\n")
+          ?.trim()
+          .split("\n")
           .map((line) => line.split("|")[1]);
         expect(owners?.toSorted(), table).toEqual(["org-a", "org-b"]);
         continue;
@@ -284,8 +301,8 @@ describe("migration 0118 on a database in main's shape", () => {
   it("REQ-ORG-3: the composite keys and the uniques exist, one of each", () => {
     const composites = listTenancy().flatMap((table) => table.compositeKeys);
     const uniques = listTenancy().flatMap((table) => table.orgIdUniques);
-    expect(constraintCount(scratchName, "_tenant_fk")).toBe(composites.length);
-    expect(constraintCount(scratchName, "_id_org_uidx")).toBe(uniques.length);
+    expect(constraintCount(scratchName, "tenant_fk")).toBe(composites.length);
+    expect(constraintCount(scratchName, "unique")).toBe(uniques.length);
     // The cross-tenant row the pre-check refused cannot be inserted any more.
     const refused = psql(
       scratchName,
@@ -315,15 +332,15 @@ describe("migration 0118 on a database in main's shape", () => {
   it("REQ-ORG-2: running it again changes nothing", () => {
     const before = snapshot(scratchName);
     const columns = columnCount(scratchName);
-    const composites = constraintCount(scratchName, "_tenant_fk");
-    const uniques = constraintCount(scratchName, "_id_org_uidx");
+    const composites = constraintCount(scratchName, "tenant_fk");
+    const uniques = constraintCount(scratchName, "unique");
 
     const again = psql(scratchName, MIGRATION);
     expect(again.ok, again.stderr).toBe(true);
 
     expect(snapshot(scratchName)).toEqual(before);
     expect(columnCount(scratchName)).toBe(columns);
-    expect(constraintCount(scratchName, "_tenant_fk")).toBe(composites);
-    expect(constraintCount(scratchName, "_id_org_uidx")).toBe(uniques);
+    expect(constraintCount(scratchName, "tenant_fk")).toBe(composites);
+    expect(constraintCount(scratchName, "unique")).toBe(uniques);
   });
 });

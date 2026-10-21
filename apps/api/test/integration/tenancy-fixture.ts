@@ -162,6 +162,7 @@ export async function seedTenantChildren(t: Tenant): Promise<void> {
     organizationId,
     installmentId: t.installmentId,
     recordedBy: t.userId,
+    receivedAt: new Date("2026-02-02T00:00:00.000Z"),
     amountCents: 1000,
     paymentMethod: "PIX",
   });
