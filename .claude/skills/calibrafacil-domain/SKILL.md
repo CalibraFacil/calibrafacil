@@ -65,14 +65,26 @@ regulated boundaries.
 > These classifications govern whether a surface may be touched by an unattended
 > loop. **When in doubt, treat a surface as pair-don't-loop.**
 
-| Surface                                                                           | Real location                                                                                                                                                                                                                                                                                                                            | Class                                                                                                                                                 |
-| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Calibration approval workflow** (separation of duties, "approved is immutable") | `packages/auth/src/access.ts` (`CalibrationState` draft→submitted→in_review→approved→rejected; `calibrationWorkflowPermissions`, `canPerformCalibrationAction`); enforced in `apps/api/src/middleware/permission.ts` (`requireCalibrationAction`); approver columns in `packages/db/src/schema.ts` (`technicalReviewedBy`, `approvedBy`) | **pair-don't-loop**                                                                                                                                   |
-| **ICP-Brasil A1 signing / credential custody**                                    | `packages/signing/` (`signer.ts` PKCS#12+PAdES, `chain-validation.ts`, `verify.ts`, `timestamp.ts`, `encryption.ts`); schema `organizationSigningCertificate` (AES-256-GCM encrypted P12 + password)                                                                                                                                     | **pair-don't-loop**                                                                                                                                   |
-| **RBAC / multi-tenant policy layer**                                              | `packages/auth/src/access.ts` (Better-Auth `createAccessControl`, roles); enforced in `apps/api/src/middleware/permission.ts` (`requirePermission`, `requireRole`, `requireOrgType`, `requireOrganization`) + `resolveMemberUnitScope` in `apps/api/src/lib/units.ts`                                                                    | **pair-don't-loop**                                                                                                                                   |
-| **GUM uncertainty math engine**                                                   | `packages/math-engine` (`gum/`, `uncertainty/type-a.ts`, `type-b.ts`, `numeric/decimal.ts`)                                                                                                                                                                                                                                              | **loopable-with-verifier** — only when gated by the numeric oracle tests **and** a dossier regeneration (`validation/math-engine/v0.3.0/dossier.tex`) |
-| **vigência / accreditation capability-vs-validity separation**                    | Not modeled. Today: `organization.accreditationActive` (boolean), `organization.accreditationNumber/Body`, `calibrationMethod.accreditedScope` (boolean) — flags, no validity window                                                                                                                                                     | **doesn't-exist-yet**                                                                                                                                 |
-| **PSIE state machine + credential-custody boundary**                              | Not in code. Only `docs/estrategia/precificacao-posicionamento.md` ("lacres/selos Inmetro + PSIE = **não existe no schema**, é a parte que exige construção")                                                                                                                                                                            | **doesn't-exist-yet**                                                                                                                                 |
+| Surface                                                                           | Real location                                                                                                                                                                                                                                                                                                                            | Class                                                                                                                                                                                |
+| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Calibration approval workflow** (separation of duties, "approved is immutable") | `packages/auth/src/access.ts` (`CalibrationState` draft→submitted→in_review→approved→rejected; `calibrationWorkflowPermissions`, `canPerformCalibrationAction`); enforced in `apps/api/src/middleware/permission.ts` (`requireCalibrationAction`); approver columns in `packages/db/src/schema.ts` (`technicalReviewedBy`, `approvedBy`) | **pair-don't-loop**                                                                                                                                                                  |
+| **ICP-Brasil A1 signing / credential custody**                                    | `packages/signing/` (`signer.ts` PKCS#12+PAdES, `chain-validation.ts`, `verify.ts`, `timestamp.ts`, `encryption.ts`); schema `organizationSigningCertificate` (AES-256-GCM encrypted P12 + password)                                                                                                                                     | **pair-don't-loop**                                                                                                                                                                  |
+| **RBAC / multi-tenant policy layer**                                              | `packages/auth/src/access.ts` (Better-Auth `createAccessControl`, roles); enforced in `apps/api/src/middleware/permission.ts` (`requirePermission`, `requireRole`, `requireOrgType`, `requireOrganization`) + `resolveMemberUnitScope` in `apps/api/src/lib/units.ts`                                                                    | **pair-don't-loop**                                                                                                                                                                  |
+| **GUM uncertainty math engine**                                                   | `packages/math-engine` (`gum/`, `uncertainty/type-a.ts`, `type-b.ts`, `numeric/decimal.ts`)                                                                                                                                                                                                                                              | **loopable-with-verifier** — only when gated by the numeric oracle tests **and** a dossier regeneration (`validation/math-engine/v<ENGINE_VERSION>/`); see the source-pin gate below |
+| **vigência / accreditation capability-vs-validity separation**                    | Not modeled. Today: `organization.accreditationActive` (boolean), `organization.accreditationNumber/Body`, `calibrationMethod.accreditedScope` (boolean) — flags, no validity window                                                                                                                                                     | **doesn't-exist-yet**                                                                                                                                                                |
+| **PSIE state machine + credential-custody boundary**                              | Not in code. Only `docs/estrategia/precificacao-posicionamento.md` ("lacres/selos Inmetro + PSIE = **não existe no schema**, é a parte que exige construção")                                                                                                                                                                            | **doesn't-exist-yet**                                                                                                                                                                |
+
+**Math-engine gates (all must stay green; never edit them to go green).**
+`audit/engine-dossier-gate.spec.ts` (version and reference fingerprint),
+`audit/engine-source-pin.spec.ts` (SHA-256 of every non-test engine source file and
+five golden propagation results, pinned in the current dossier's `manifest.json`)
+and `gum/ea-4-02-examples.spec.ts` (published EA-4/02 M:2022 worked examples at
+half a unit of the last published digit). Any byte change under
+`packages/math-engine/src` — a comment included — fails the pin: a deliberate
+release bumps `ENGINE_VERSION` and `package.json` together, adds
+`validation/math-engine/v<new>/` with its own manifest, then runs
+`pnpm --filter @calibra-facil/math-engine run engine:pin`. The script refuses to
+rewrite evidence already pinned for a version.
 
 ## Real conventions (detected, not assumed)
 
@@ -86,13 +98,24 @@ regulated boundaries.
   scope; every tenant-scoped query MUST filter by `organizationId` (and `unitId`
   where the table is unit-scoped, e.g. `organizationSigningCertificate`). Never
   return rows across tenants. Preserve tenant/org/unit scoping in every change.
-- **Uncertainty is never value-only.** `packages/math-engine` uses an exact
-  **decimal backend** (`numeric/decimal.ts`, bigint-based — not float). A
-  measurement result carries value **plus** standard/expanded uncertainty, the
-  **coverage factor `k`** and (effective) degrees of freedom: `coverageFactor`
-  and `expandedUncertainty` are first-class (`uncertainty/type-b.ts`,
-  `gum/measurement.ts`); `k` from Student-t via `coverageFactorForProbability(p, νeff)`
-  (`gum/statistics.ts`). Results are fingerprinted for audit (`audit/`).
+- **Uncertainty is never value-only.** `packages/math-engine` is a hybrid
+  numeric engine, **not** exact end to end. **Exact** (bigint rationals,
+  `numeric/decimal.ts`, decimal mode): formula evaluation with `+ − × ÷` and
+  integer powers, symbolic sensitivity coefficients, the Type A mean and sum of
+  squares, and the canonical output text. **float64 (IEEE-754 binary64)**:
+  everything past a square root or a quantile — standard deviations and Type B
+  divisors (√3, √6, √2), the combined variance (GUM Eq. 10/13), `u_c`,
+  Welch–Satterthwaite `ν_eff`, the Student-t `k` and `U` — plus transcendental
+  functions (`Math.*`, last digit may differ per JS runtime) and the
+  numerical-derivative fallback. Never describe it as "exact decimal" or "not
+  float" without that split (dossier, "Métodos numéricos" and limitations 2
+  and 5). A measurement result carries value **plus** standard/expanded
+  uncertainty, the **coverage factor `k`** and (effective) degrees of freedom:
+  `coverageFactor` and `expandedUncertainty` are first-class
+  (`uncertainty/type-b.ts`, `gum/measurement.ts`); `k` from Student-t via
+  `coverageFactorForProbability(p, νeff)` (`gum/statistics.ts`; `ν_eff` is kept
+  real, not truncated as EA-4/02 Appendix E does). Results are fingerprinted for
+  audit (`audit/`).
 - **Bans:** `useEffect` import from `react` is lint-blocked (use derived state /
   data hooks / `use-mount-effect.ts`); `as` type assertions are banned
   (`consistent-type-assertions: never` — use type guards, `satisfies`, schema parse).
