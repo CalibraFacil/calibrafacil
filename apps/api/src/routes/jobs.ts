@@ -2,7 +2,11 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@calibra-facil/db";
-import { domainErrorResponse, invalid } from "../lib/domain-errors";
+import {
+  domainErrorResponse,
+  invalid,
+  type DomainError,
+} from "../lib/domain-errors";
 import {
   renderLabel,
   defaultRenderOptions,
@@ -54,8 +58,7 @@ import {
   ExecuteJobSchema,
   AmendJobSchema,
   FlagJobOutOfToleranceSchema,
-  assessStandardValidity,
-  isStandardValidOn,
+  judgeExecutionStandards,
 } from "@calibra-facil/schemas";
 import type {
   JobAmendResponse,
@@ -67,7 +70,11 @@ import type {
   ServerShape,
 } from "@calibra-facil/contracts";
 import { flagJobOutOfTolerance } from "../lib/oot-notifications";
-import { judgeSnapshotStandards } from "../modules/jobs/standards-judgement";
+import {
+  judgeSnapshotStandards,
+  snapshotStandardIds,
+  standardsRefusalDomainError,
+} from "../modules/jobs/standards-judgement";
 import { syncJobStandardLinks } from "../lib/job-standards";
 import { classifyJobScopeCompliance } from "../lib/scope-compliance";
 import {
@@ -653,7 +660,7 @@ async function buildStandardsSnapshot(
   performedAt: Date,
 ): Promise<
   | { ok: true; snapshot: StandardSnapshot[] | null | undefined }
-  | { ok: false; error: string }
+  | { ok: false; refusal: DomainError }
 > {
   if (selectedStandardIds === undefined) {
     return { ok: true, snapshot: undefined };
@@ -663,53 +670,47 @@ async function buildStandardsSnapshot(
     return { ok: true, snapshot: null };
   }
 
+  // A standard named twice is one standard: the snapshot lists it once, in the
+  // order it was first named.
+  const standardIds = [...new Set(selectedStandardIds)];
+
   const standards = await db
     .select()
     .from(referenceStandard)
     .where(
       and(
-        inArray(referenceStandard.id, selectedStandardIds),
+        inArray(referenceStandard.id, standardIds),
         eq(referenceStandard.organizationId, organizationId),
-        eq(referenceStandard.unitId, unitId),
       ),
     );
 
-  if (standards.length !== selectedStandardIds.length) {
-    const foundIds = new Set(standards.map((s) => s.id));
-    const missingIds = selectedStandardIds.filter((id) => !foundIds.has(id));
-    return {
-      ok: false,
-      error: `Padroes nao encontrados ou nao pertencem a organizacao: ${missingIds.join(", ")}`,
-    };
-  }
-
-  const inactiveStandards = standards.filter((s) => s.status !== "ACTIVE");
-  if (inactiveStandards.length > 0) {
-    return {
-      ok: false,
-      error: `Os seguintes padroes nao estao ativos: ${inactiveStandards.map((s) => s.name).join(", ")}`,
-    };
-  }
-
-  // Valid THROUGH the certificate day (Q12): judged on the laboratory day the
-  // calibration was performed, so an expired standard is never accepted for
-  // work done after its day, and one still valid on the day of the work is.
-  const expiredStandards = standards.filter(
-    (s) => !isStandardValidOn(s.nextCalibrationDate, performedAt),
+  // The draft-time judgement is advisory (the submit re-judges the FINAL
+  // snapshot and asks for the back-date reason), but it is the same judgement.
+  const judgement = judgeExecutionStandards(
+    {
+      standardIds,
+      performedAt,
+      today: new Date(),
+      mode: "cloud",
+      requireBackdateReason: false,
+    },
+    standards.map((standard) => ({
+      id: standard.id,
+      name: standard.name,
+      status: standard.status,
+      deletedAt: standard.deletedAt,
+      nextCalibrationDate: standard.nextCalibrationDate,
+      inScope: standard.unitId === unitId,
+    })),
   );
-  if (expiredStandards.length > 0) {
-    return {
-      ok: false,
-      error: `Os seguintes padroes estao com certificado vencido: ${expiredStandards.map((s) => s.name).join(", ")}`,
-    };
+  if (!judgement.ok) {
+    return { ok: false, refusal: standardsRefusalDomainError(judgement) };
   }
 
   const standardsById = new Map(
     standards.map((standard) => [standard.id, standard]),
   );
-  const orderedStandards = selectedStandardIds.map(
-    (id) => standardsById.get(id)!,
-  );
+  const orderedStandards = standardIds.map((id) => standardsById.get(id)!);
 
   const currentDocuments = await db
     .select()
@@ -1807,7 +1808,7 @@ export const jobsRouter = new Hono<{
         standardsPerformedAt(input.performedAt, null),
       );
       if (!standardsResult.ok) {
-        return c.json({ error: standardsResult.error }, 400);
+        return domainErrorResponse(c, standardsResult.refusal);
       }
 
       const environmentalSnapshot = await buildEnvironmentalSnapshot(
@@ -1887,15 +1888,23 @@ export const jobsRouter = new Hono<{
       // snapshot (whether or not this request names standards) is re-judged,
       // from the standards table, at the final performed day.
       const standardsJudgement = await judgeSnapshotStandards({
-        standardsSnapshot: nextStandardsSnapshot,
+        standardIds: snapshotStandardIds(nextStandardsSnapshot),
         organizationId: memberData.organizationId,
         performedAt,
         now,
         backdateReason: normalizedBackdateReason,
+        mode: "cloud",
       });
       if (!standardsJudgement.ok) {
-        return c.json({ error: standardsJudgement.error }, 400);
+        return domainErrorResponse(
+          c,
+          standardsRefusalDomainError(standardsJudgement),
+        );
       }
+      const backdatedStandardNames =
+        standardsJudgement.validOnlyBecauseBackdated.map(
+          (standard) => standard.name,
+        );
       const executionData = normalizedData.data ?? {};
       // An engine release recompiles the published method but never rewrites
       // the copies frozen into open jobs; adopt the recompiled method here when
@@ -2057,8 +2066,7 @@ export const jobsRouter = new Hono<{
                 ? {
                     performedAt: performedAt.toISOString(),
                     standardIds: standardsJudgement.standardIds,
-                    validOnlyBecauseBackdated:
-                      standardsJudgement.validOnlyBecauseBackdated,
+                    validOnlyBecauseBackdated: backdatedStandardNames,
                   }
                 : undefined,
           },
@@ -2076,11 +2084,11 @@ export const jobsRouter = new Hono<{
                   ? "Submetido com incerteza menor que a CMC acreditada"
                   : null,
               diffDays > BACKDATE_REASON_THRESHOLD_DAYS ||
-              standardsJudgement.validOnlyBecauseBackdated.length > 0
+              standardsJudgement.reasonRequired
                 ? `Registro retroativo (${diffDays} dias): ${normalizedBackdateReason}`
                 : null,
-              standardsJudgement.validOnlyBecauseBackdated.length > 0
-                ? `Padroes julgados na data de execucao (${performedAt.toISOString()}): ${standardsJudgement.validOnlyBecauseBackdated.join(", ")} venceu apos essa data`
+              standardsJudgement.reasonRequired
+                ? `Padroes julgados na data de execucao (${performedAt.toISOString()}): ${backdatedStandardNames.join(", ")} venceu apos essa data`
                 : null,
             ]
               .filter(Boolean)
@@ -2178,7 +2186,7 @@ export const jobsRouter = new Hono<{
         standardsPerformedAt(input.performedAt, existing.performedAt),
       );
       if (!standardsResult.ok) {
-        return c.json({ error: standardsResult.error }, 400);
+        return domainErrorResponse(c, standardsResult.refusal);
       }
 
       const environmentalSnapshot = await buildEnvironmentalSnapshot(
