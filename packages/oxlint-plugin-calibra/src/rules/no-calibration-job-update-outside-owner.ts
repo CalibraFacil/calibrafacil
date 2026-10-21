@@ -31,9 +31,8 @@ const TEST_DIRECTORY_PATTERN = /(^|\/)apps\/[^/]+\/test\//;
 const LEGACY_BASELINE: Baseline = new Map<string, number>([
   ["apps/api/src/cli/seed-demo/jobs.ts", 1],
   ["apps/api/src/cli/seed-demo/timeline.ts", 1],
-  ["apps/api/src/routes/jobs.ts", 8],
-  ["apps/api/src/routes/public-api-v2.ts", 5],
-  ["apps/api/src/routes/sync.ts", 1],
+  ["apps/api/src/routes/jobs.ts", 5],
+  ["apps/api/src/routes/public-api-v2.ts", 3],
   ["apps/api/src/routes/visits.ts", 1],
 ]);
 

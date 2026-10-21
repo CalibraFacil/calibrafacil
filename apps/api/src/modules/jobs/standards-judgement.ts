@@ -91,7 +91,7 @@ export async function judgeSnapshotStandards(input: {
 }
 
 /** The pt-BR text of a refusal (names for standards in scope, ids otherwise). */
-export function standardsRefusalMessage(refusal: StandardsRefusal): string {
+function standardsRefusalMessage(refusal: StandardsRefusal): string {
   const names = refusal.standardNames.join(", ");
   switch (refusal.code) {
     case "standard_not_found":

@@ -52,7 +52,7 @@ export type CompiledSnapshotFailureKind =
   | "snapshot_invalid"
   | "snapshot_mismatch";
 
-export type CompiledSnapshotResult =
+type CompiledSnapshotResult =
   | { ok: true; compiledMethod: CompiledMethod }
   | {
       ok: false;
@@ -61,7 +61,7 @@ export type CompiledSnapshotResult =
       diagnostics: MethodDiagnostic[];
     };
 
-export function getCompiledMethodSnapshot(
+function getCompiledMethodSnapshot(
   methodSnapshot: MethodSnapshot | null | undefined,
 ): CompiledSnapshotResult {
   const compiledMethod = methodSnapshot?.compiledMethod;
@@ -159,7 +159,7 @@ export function getCompiledMethodSnapshot(
   return { ok: true, compiledMethod };
 }
 
-export function buildOfficialExecutionInputs(params: {
+function buildOfficialExecutionInputs(params: {
   methodSnapshot: MethodSnapshot;
   data: Record<string, unknown>;
   assetSnapshot: AssetSnapshot;
@@ -192,7 +192,7 @@ export function buildOfficialExecutionInputs(params: {
   return inputs;
 }
 
-export type OfficialExecutionOutcome =
+type OfficialExecutionOutcome =
   | {
       ok: true;
       results: Record<string, unknown>;
