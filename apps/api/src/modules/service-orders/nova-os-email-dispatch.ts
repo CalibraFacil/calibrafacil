@@ -14,7 +14,7 @@ import {
   sendServiceOrderCustomerEmail,
   getLabEmailBrand,
 } from "@calibra-facil/notifications";
-import { formatLabDate } from "@calibra-facil/documents";
+import { formatInstant } from "@calibra-facil/shared/format";
 import { ServiceOrderCreatedEmail } from "@calibra-facil/email";
 
 // ---------------------------------------------------------------------------
@@ -93,7 +93,7 @@ export async function dispatchNovaOsEmail(
     // Wrapped here because getLabEmailBrand can fail if the DB is unavailable.
     const brand = await getLabEmailBrand(input.organizationId);
 
-    const intakeDate = formatLabDate(input.openedAt);
+    const intakeDate = formatInstant(input.openedAt);
 
     return await sendServiceOrderCustomerEmail({
       serviceOrder: {

@@ -15,11 +15,7 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty'
 import { getStatusBadge } from '@/features/personnel/components/columns'
-
-function formatDate(dateString: string | null | undefined): string {
-  if (!dateString) return '-'
-  return new Date(dateString).toLocaleDateString('pt-BR')
-}
+import { formatInstant } from '@calibra-facil/shared/format'
 
 const typeLabels: Record<string, string> = {
   internal: 'Interno',
@@ -122,11 +118,11 @@ export function TrainingTab({ id }: { id: string }) {
               </div>
               <div>
                 <Label className="text-muted-foreground text-xs">Início</Label>
-                <p className="text-sm">{formatDate(tr.startDate)}</p>
+                <p className="text-sm">{formatInstant(tr.startDate, 'date')}</p>
               </div>
               <div>
                 <Label className="text-muted-foreground text-xs">Término</Label>
-                <p className="text-sm">{formatDate(tr.endDate)}</p>
+                <p className="text-sm">{formatInstant(tr.endDate, 'date')}</p>
               </div>
               <div>
                 <Label className="text-muted-foreground text-xs">Horas</Label>

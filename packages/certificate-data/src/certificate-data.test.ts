@@ -171,6 +171,25 @@ describe("buildCertificateData", () => {
     expect(section("job").performedAtText).toBe("10/06/2026");
   });
 
+  it("REQ-FMT-2: prints approval and performance on the laboratory's day, not the UTC day", () => {
+    // 22:30 and 23:30 in São Paulo are already the next UTC day: the UTC day
+    // printed on the certificate was one day late.
+    const job = goldenJob();
+    job.performedAt = new Date("2026-06-10T01:30:00Z");
+    job.approvedAt = new Date("2026-06-13T02:30:00Z");
+    const evening = buildCertificateData(job);
+    const eveningSection = (key: string): Record<string, unknown> => {
+      const value = Reflect.get(evening, key);
+      if (value === null || typeof value !== "object") {
+        throw new Error(`Expected object section: ${key}`);
+      }
+      return Object.fromEntries(Object.entries(value));
+    };
+
+    expect(eveningSection("certificate").issuedAtText).toBe("12/06/2026");
+    expect(eveningSection("job").performedAtText).toBe("09/06/2026");
+  });
+
   it("formats environment readings with fixed decimals and units", () => {
     const environment = section("environment");
     expect(environment.temperatureText).toBe("20,4 ºC");
@@ -281,7 +300,7 @@ describe("§7.8 content items", () => {
     const job = goldenJob();
     job.serviceOrder = {
       inmetroRepairMarkNumber: null,
-      receivedAt: "2026-06-01T00:00:00Z",
+      receivedAt: "2026-06-01T15:00:00Z", // a moment: noon in the lab, 01/06
       intakeCondition: "Prato riscado, sem avaria funcional",
       accessories: "Cabo de força, capa",
     };

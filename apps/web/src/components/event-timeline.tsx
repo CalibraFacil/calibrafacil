@@ -17,6 +17,7 @@ import {
   TimelineTime,
   TimelineTitle,
 } from '@/components/ui/timeline'
+import { formatInstant } from '@calibra-facil/shared/format'
 
 type BadgeVariant =
   | 'default'
@@ -59,18 +60,6 @@ type EventTimelineProps = {
    * the historical behavior of rendering everything.
    */
   initialVisibleCount?: number
-}
-
-function formatDateTime(dateString: string | null | undefined): string {
-  if (!dateString) return '-'
-
-  return new Date(dateString).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
 }
 
 function EventTimelineContent({
@@ -148,7 +137,7 @@ function EventTimelineContent({
                   dateTime={item.timestamp ?? undefined}
                   className={cn(compact && 'tabular-nums')}
                 >
-                  {formatDateTime(item.timestamp)}
+                  {formatInstant(item.timestamp, 'date-time')}
                 </TimelineTime>
               </TimelineHeader>
               {item.description ? (

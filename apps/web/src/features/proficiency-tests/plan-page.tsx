@@ -35,13 +35,9 @@ import {
   CloudOnlyOfflineState,
   useDesktopCloudOnlyUnavailable,
 } from '@/runtime/sync-status'
+import { formatInstant } from '@calibra-facil/shared/format'
 
 const DUE_SOON_WINDOW_DAYS = 90
-
-function formatDate(dateStr: string | null) {
-  if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleDateString('pt-BR')
-}
 
 type DueState = 'overdue' | 'due_soon' | 'ok' | 'unscheduled'
 
@@ -236,7 +232,7 @@ export function ProficiencyTestPlanPage() {
                           {item.frequencyMonths} meses
                         </td>
                         <td className="px-3 py-2.5 font-mono tabular-nums">
-                          {formatDate(item.lastSatisfactoryAt)}
+                          {formatInstant(item.lastSatisfactoryAt, 'date')}
                         </td>
                         <td className="px-3 py-2.5 font-mono tabular-nums">
                           <span
@@ -248,7 +244,7 @@ export function ProficiencyTestPlanPage() {
                                   : ''
                             }
                           >
-                            {formatDate(item.nextDueAt)}
+                            {formatInstant(item.nextDueAt, 'date')}
                           </span>
                         </td>
                         <td className="px-3 py-2.5">

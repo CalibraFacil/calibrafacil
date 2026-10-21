@@ -18,6 +18,7 @@ import type {
   NonConformanceStatus,
   NonConformanceType,
 } from '@/features/quality/types'
+import { formatInstant } from '@calibra-facil/shared/format'
 
 function getStatusBadge(status: NonConformanceStatus) {
   switch (status) {
@@ -67,10 +68,6 @@ function getDispositionLabel(disposition: NonConformanceDisposition): string {
   }
 }
 
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('pt-BR')
-}
-
 export const ncColumns: ColumnDef<NonConformanceRow>[] = [
   {
     accessorKey: 'ncNumber',
@@ -107,7 +104,9 @@ export const ncColumns: ColumnDef<NonConformanceRow>[] = [
     header: 'Detectada em',
     cell: ({ row }) => (
       <div>
-        <span className="text-sm">{formatDate(row.original.detectedAt)}</span>
+        <span className="text-sm">
+          {formatInstant(row.original.detectedAt, 'date')}
+        </span>
         {row.original.detectedByName && (
           <p className="text-xs text-muted-foreground">
             por {row.original.detectedByName}

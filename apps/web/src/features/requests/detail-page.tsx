@@ -46,6 +46,7 @@ import type {
   RequestConversionService,
   RequestTechnician,
 } from '@/features/requests/types'
+import { formatCalendarDate, formatInstant } from '@calibra-facil/shared/format'
 
 type ConversionDraft = {
   serviceId: string
@@ -70,11 +71,6 @@ const statusVariants: Record<
   APPROVED: 'default',
   REJECTED: 'destructive',
   CONVERTED: 'outline',
-}
-
-function formatDate(date: string | null | undefined) {
-  if (!date) return '-'
-  return new Date(date).toLocaleDateString('pt-BR')
 }
 
 function getCompatibleServices(
@@ -671,7 +667,7 @@ export function CalibrationRequestDetailPage({ id }: { id: string }) {
               </h1>
               <p className="mt-0.5 text-pretty text-sm text-muted-foreground">
                 {request.customerName} · enviada em{' '}
-                {formatDate(request.submittedAt)}
+                {formatInstant(request.submittedAt, 'date')}
               </p>
             </div>
             <Badge
@@ -709,7 +705,7 @@ export function CalibrationRequestDetailPage({ id }: { id: string }) {
               <SignalTile
                 icon={Calendar03Icon}
                 label="Prazo solicitado"
-                value={formatDate(request.requestedDueDate)}
+                value={formatCalendarDate(request.requestedDueDate, 'date')}
                 hint="cliente"
                 tone="neutral"
               />
@@ -725,7 +721,7 @@ export function CalibrationRequestDetailPage({ id }: { id: string }) {
         />
         <BlueprintGrid className="mt-4 sm:grid-cols-2">
           <BlueprintField label="Prazo solicitado" mono>
-            {formatDate(request.requestedDueDate)}
+            {formatCalendarDate(request.requestedDueDate, 'date')}
           </BlueprintField>
           <BlueprintField label="Forma de envio">
             {deliveryLabel}
@@ -733,7 +729,7 @@ export function CalibrationRequestDetailPage({ id }: { id: string }) {
           {request.deliveryMethod === 'onsite' ? (
             <>
               <BlueprintField label="Data preferida da visita" mono>
-                {formatDate(request.preferredVisitDate)}
+                {formatCalendarDate(request.preferredVisitDate, 'date')}
               </BlueprintField>
               <BlueprintField
                 label="Endereço da visita"

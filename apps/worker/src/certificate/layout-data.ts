@@ -34,7 +34,11 @@ import {
   shouldRenderAccreditationSeal,
 } from "@calibra-facil/shared";
 import {
-  formatDateOnly,
+  formatCalendarDate,
+  formatInstant,
+  formatNumber,
+} from "@calibra-facil/shared/format";
+import {
   type CalibrationCertificateData,
   type CertificateResultRow,
   type CertificateResultTable,
@@ -259,10 +263,7 @@ function formatEffectiveDof(value: unknown): string | null {
 function formatCoverageFactor(value: unknown): string | null {
   const parsed = toNumber(value);
   if (parsed === null) return null;
-  return parsed.toLocaleString("pt-BR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  return formatNumber(parsed, { decimals: 2 });
 }
 
 // ── the points themselves ───────────────────────────────────────────────────
@@ -451,7 +452,9 @@ function buildStandards(job: CertificateJobData): CertificateStandard[] {
     // Verbatim, never guessed from the certificate number — see the note on
     // normalizeStandards in @calibra-facil/certificate-data.
     issuer: standard.calibratedBy?.trim() || null,
-    validUntilText: formatDateOnly(standard.nextCalibrationDate, "") || null,
+    validUntilText:
+      formatCalendarDate(standard.nextCalibrationDate, "date", { empty: "" }) ||
+      null,
   }));
 }
 
@@ -505,27 +508,6 @@ function buildUncertaintyStatement(tables: CertificateResultTable[]): string {
       "uma probabilidade de abrangência de aproximadamente 95 %.";
 
   return `${base}${tail}`;
-}
-
-function formatDate(value: Date | string | null | undefined): string | null {
-  if (!value) return null;
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
-}
-
-function formatLongDate(
-  value: Date | string | null | undefined,
-): string | null {
-  if (!value) return null;
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-    timeZone: "America/Sao_Paulo",
-  });
 }
 
 function joinAddress(job: CertificateJobData): string | null {
@@ -633,8 +615,10 @@ export function buildCertificateLayoutData(
 
   if (reasons.length > 0) return { ok: false, reasons };
 
-  const performedAtText = formatDate(job.performedAt);
-  const issuedAtText = formatDate(job.approvedAt);
+  const performedAtText =
+    formatInstant(job.performedAt, "date", { empty: "" }) || null;
+  const issuedAtText =
+    formatInstant(job.approvedAt, "date", { empty: "" }) || null;
   if (!performedAtText || !issuedAtText) {
     return {
       ok: false,
@@ -688,7 +672,9 @@ export function buildCertificateLayoutData(
       accessories: job.serviceOrder?.accessories ?? null,
     },
     dates: {
-      receivedAtText: formatDate(job.serviceOrder?.receivedAt),
+      receivedAtText:
+        formatInstant(job.serviceOrder?.receivedAt, "date", { empty: "" }) ||
+        null,
       performedAtText,
       issuedAtText,
     },
@@ -770,11 +756,11 @@ function asTrimmedString(value: unknown): string | null {
 function formatEnvironment(value: unknown, unit: string): string | null {
   const parsed = toNumber(value);
   if (parsed === null) return null;
-  return `${parsed.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} ${unit}`;
+  return `${formatNumber(parsed, { maxDecimals: 1 })} ${unit}`;
 }
 
 function buildPlaceAndDate(job: CertificateJobData): string | null {
-  const date = formatLongDate(job.approvedAt);
+  const date = formatInstant(job.approvedAt, "date-long", { empty: "" });
   if (!date) return null;
   const place = [job.lab.city, job.lab.state].filter(Boolean).join("/");
   return place ? `${place}, ${date}` : date;

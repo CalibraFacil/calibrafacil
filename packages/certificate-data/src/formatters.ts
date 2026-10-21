@@ -1,3 +1,5 @@
+import { formatCalendarDate } from "@calibra-facil/shared/format";
+
 export function getPath(data: Record<string, unknown>, path: string): unknown {
   return path.split(".").reduce<unknown>((current, segment) => {
     if (current == null || typeof current !== "object") {
@@ -43,12 +45,8 @@ function formatDate(value: Date, formatter?: string): string {
   }
 
   if (style === "dd/mm/yyyy") {
-    return new Intl.DateTimeFormat("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      timeZone: "UTC",
-    }).format(value);
+    // The day the value names (a UTC-midnight date column names its UTC day).
+    return formatCalendarDate(value, "date");
   }
 
   return value.toISOString();

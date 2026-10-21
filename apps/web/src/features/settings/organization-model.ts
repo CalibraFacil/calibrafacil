@@ -13,6 +13,7 @@ import type {
   OrganizationUnit,
   UnitAssignmentRole,
 } from '@/features/settings/types'
+import { formatInstant } from '@calibra-facil/shared/format'
 
 export const GLOBAL_MEMBER_ROLES = [
   'member',
@@ -425,13 +426,8 @@ export function getGovernanceActivityDescription(
   return 'Alteração registrada na governança multiunidade.'
 }
 
-const GOVERNANCE_ACTIVITY_TIME_FORMAT = new Intl.DateTimeFormat('pt-BR', {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-})
-
 export function formatGovernanceActivityTime(value: string) {
-  return GOVERNANCE_ACTIVITY_TIME_FORMAT.format(new Date(value))
+  return formatInstant(value, 'date-time-medium')
 }
 
 export function createAssignmentDrafts(

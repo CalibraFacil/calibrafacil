@@ -1,5 +1,5 @@
 /** @jsxImportSource react */
-import { formatLabDate } from "./dates.js";
+import { formatCalendarDate } from "./dates.js";
 
 // Types for label generation (standalone, does not depend on @calibra-facil/db)
 
@@ -133,7 +133,9 @@ export function LabelHtml({ label }: { label: LabelData }) {
               <div className="field">
                 <span className="field-label">DATA:</span>
                 <span className="field-value">
-                  {formatLabDate(label.calibrationDate, "-")}
+                  {formatCalendarDate(label.calibrationDate, "date", {
+                    empty: "-",
+                  })}
                 </span>
               </div>
             </div>

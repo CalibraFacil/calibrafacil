@@ -13,6 +13,7 @@ import {
 } from '@/components/instrument-panel'
 import { DataTableColumnHeader } from '@/components/ui/data-table-column-header'
 import { FinanceDataTable } from '@/features/finance/components/finance-data-table'
+import { formatPercentPoints } from '@calibra-facil/shared/format'
 
 interface MarginRow {
   entityId: number
@@ -28,17 +29,6 @@ interface MarginRow {
 interface MarginEnvelope {
   byCustomer: MarginRow[]
   byService: MarginRow[]
-}
-
-const PERCENT_FORMAT = new Intl.NumberFormat('pt-BR', {
-  style: 'percent',
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 1,
-})
-
-function formatPercent(value: number | null) {
-  if (value === null) return '—'
-  return PERCENT_FORMAT.format(value / 100)
 }
 
 function marginTone(cents: number) {
@@ -119,7 +109,7 @@ const marginColumns: ColumnDef<MarginRow, unknown>[] = [
     meta: { label: '%' },
     cell: ({ row }) => (
       <div className="text-right font-mono tabular-nums text-muted-foreground">
-        {formatPercent(row.original.marginPercent)}
+        {formatPercentPoints(row.original.marginPercent, { maxDecimals: 1 })}
       </div>
     ),
   },

@@ -1,3 +1,5 @@
+import { formatNumber } from "@calibra-facil/shared/format";
+
 /**
  * pt-BR decimal formatting for certificate values.
  *
@@ -35,9 +37,5 @@ export function formatDecimalPtBr(
       ? 0
       : Math.min(6, Math.max(1, fractionDigitsOf(value))));
 
-  return value.toLocaleString("pt-BR", {
-    useGrouping: false,
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
+  return formatNumber(value, { decimals, grouping: false });
 }

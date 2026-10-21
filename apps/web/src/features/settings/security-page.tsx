@@ -10,11 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-
-const SESSION_DATETIME_FORMAT = new Intl.DateTimeFormat('pt-BR', {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-})
+import { formatInstant } from '@calibra-facil/shared/format'
 
 export function SecuritySettingsPage() {
   const {
@@ -25,11 +21,6 @@ export function SecuritySettingsPage() {
     revokeOtherSessions,
     isUpdating,
   } = useSettings()
-
-  const formatDate = (date: Date) => {
-    return SESSION_DATETIME_FORMAT.format(date)
-  }
-
   const parseUserAgent = (userAgent: string | null | undefined) => {
     if (!userAgent) return 'Dispositivo desconhecido'
     // Simple user agent parsing
@@ -75,7 +66,8 @@ export function SecuritySettingsPage() {
                         )}
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        Criado em: {formatDate(s.createdAt)}
+                        Criado em:{' '}
+                        {formatInstant(s.createdAt, 'date-time-medium')}
                       </p>
                       {s.ipAddress && (
                         <p className="text-xs text-muted-foreground">

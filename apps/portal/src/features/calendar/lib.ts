@@ -1,5 +1,5 @@
 import { format } from "date-fns";
-import { formatDateOnlyKey } from "@calibra-facil/documents";
+import { calendarDateKey } from "@calibra-facil/shared/calendar-date";
 
 import type { CalendarDueAsset } from "./queries";
 
@@ -22,7 +22,7 @@ export function groupDuesByDay(
     if (Number.isNaN(date.getTime())) continue;
     // The due date is a calendar date (a Postgres date, UTC midnight): it is
     // placed on the day it names, not on the evening before in Brazil.
-    const key = formatDateOnlyKey(date);
+    const key = calendarDateKey(date);
     const bucket = byDay.get(key);
     if (bucket) {
       bucket.push(due);

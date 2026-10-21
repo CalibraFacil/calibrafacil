@@ -4,6 +4,7 @@ import {
   type FeatureFormValidationResult,
   zodFormError,
 } from '@/shared/forms/validation'
+import { formatInstant } from '@calibra-facil/shared/format'
 
 export const PASSKEY_NAME_MAX_LENGTH = 64
 
@@ -35,12 +36,8 @@ export function parsePasskeyNameForm(input: {
   return { success: true, data: parsed.data }
 }
 
-const PASSKEY_DEFAULT_NAME_DATE = new Intl.DateTimeFormat('pt-BR', {
-  dateStyle: 'short',
-})
-
 // Default label applied when a user creates a passkey without naming it (the
 // one-click banner / "Adicionar passkey" button). Editable later in Settings.
 export function defaultPasskeyName(now: Date): string {
-  return `Passkey • ${PASSKEY_DEFAULT_NAME_DATE.format(now)}`
+  return `Passkey • ${formatInstant(now, 'date')}`
 }

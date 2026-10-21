@@ -24,6 +24,7 @@ import {
   SelectTrigger,
 } from '@/components/ui/select'
 import { toast } from 'sonner'
+import { formatInstant } from '@calibra-facil/shared/format'
 
 type Scope = 'customer' | 'agreement' | 'service' | 'organization'
 
@@ -227,10 +228,7 @@ export function CertificateReleasePolicyPage() {
                     </p>
                     {policy.archivedAt && (
                       <p className="text-xs text-muted-foreground">
-                        Arquivada em{' '}
-                        {new Date(policy.archivedAt).toLocaleDateString(
-                          'pt-BR',
-                        )}
+                        Arquivada em {formatInstant(policy.archivedAt, 'date')}
                       </p>
                     )}
                   </div>

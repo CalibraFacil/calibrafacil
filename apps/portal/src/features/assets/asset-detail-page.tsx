@@ -26,7 +26,6 @@ import {
   StaggerItem,
 } from "@/components/instrument-panel";
 import { getInstrumentStatus } from "@/lib/calibration-status";
-import { formatDate, formatDateOnly } from "@/lib/format";
 import { DriftChartPanel } from "@/features/reliability/drift-chart-panel";
 import { OotAssessmentPanel } from "@/features/reliability/oot-assessment-panel";
 import {
@@ -39,6 +38,10 @@ import { IntervalEditorPanel } from "./interval-editor-panel";
 import { IntervalInsightPanel } from "./interval-insight-panel";
 import { LegalVerificationPanel } from "./legal-verification-panel";
 import type { AssetDetail } from "./types";
+import {
+  formatCalendarDate,
+  formatInstant,
+} from "@calibra-facil/shared/format";
 
 /**
  * Asset detail. Layout rule: the wide main column carries what needs width or
@@ -157,7 +160,7 @@ export function AssetDetailPage({ assetId }: { assetId: string }) {
           <SignalTile
             icon={Calendar03Icon}
             label="Próxima calibração"
-            value={formatDateOnly(asset.nextCalibrationDate)}
+            value={formatCalendarDate(asset.nextCalibrationDate, "date-medium")}
             hint={calibration.description}
             tone={calibration.tone}
           />
@@ -173,7 +176,10 @@ export function AssetDetailPage({ assetId }: { assetId: string }) {
               <SignalTile
                 icon={CheckmarkCircle02Icon}
                 label="Última calibração"
-                value={formatDateOnly(asset.lastCalibrationDate)}
+                value={formatCalendarDate(
+                  asset.lastCalibrationDate,
+                  "date-medium",
+                )}
                 hint={latestCertificate.jobId}
                 tone="neutral"
                 className="h-full transition-shadow group-hover:ring-1 group-hover:ring-foreground/20"
@@ -183,7 +189,10 @@ export function AssetDetailPage({ assetId }: { assetId: string }) {
             <SignalTile
               icon={CheckmarkCircle02Icon}
               label="Última calibração"
-              value={formatDateOnly(asset.lastCalibrationDate)}
+              value={formatCalendarDate(
+                asset.lastCalibrationDate,
+                "date-medium",
+              )}
               hint="registrada"
               tone="neutral"
             />
@@ -261,7 +270,7 @@ export function AssetDetailPage({ assetId }: { assetId: string }) {
                 {statusLabels[asset.status]}
               </BlueprintField>
               <BlueprintField label="Atualizado em" mono>
-                {formatDate(asset.updatedAt)}
+                {formatInstant(asset.updatedAt, "date-medium")}
               </BlueprintField>
             </BlueprintGrid>
           </Panel>
@@ -392,7 +401,7 @@ function CalibrationHistoryPanel({ asset }: { asset: AssetDetail }) {
                 </Link>
               ),
               description: certificate.serviceName,
-              meta: formatDate(certificate.approvedAt),
+              meta: formatInstant(certificate.approvedAt, "date-medium"),
               state: "done",
               tone: "ok",
               icon: File01Icon,

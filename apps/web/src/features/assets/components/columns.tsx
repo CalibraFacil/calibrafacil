@@ -1,8 +1,8 @@
 import { type ColumnDef } from '@tanstack/react-table'
-import { formatDateOnly } from '@calibra-facil/documents'
 import { Badge } from '@/components/ui/badge'
 import { SyncStateBadge } from '@/components/sync-state-badge'
 import type { AssetListItem, AssetStatus } from '@/features/assets/types'
+import { formatCalendarDate } from '@calibra-facil/shared/format'
 
 export type Asset = AssetListItem
 
@@ -24,10 +24,6 @@ const statusVariants: Record<
 }
 
 // The next calibration is a calendar date (a Postgres date): show its day.
-function formatDate(date: string | Date | null | undefined): string {
-  return formatDateOnly(date, '-')
-}
-
 export interface AssetsTableMeta {
   onCustomerClick?: (customerId: number) => void
 }
@@ -123,6 +119,7 @@ export const assetsColumns: ColumnDef<Asset>[] = [
   {
     accessorKey: 'nextCalibrationDate',
     header: 'Próx. Calibração',
-    cell: ({ row }) => formatDate(row.original.nextCalibrationDate),
+    cell: ({ row }) =>
+      formatCalendarDate(row.original.nextCalibrationDate, 'date'),
   },
 ]

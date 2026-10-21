@@ -14,7 +14,7 @@ import {
   HighlightValue,
 } from "./components/email-layout";
 import { Section, Text } from "@react-email/components";
-import { formatMoney } from "@calibra-facil/shared";
+import { formatMoneyBRL } from "@calibra-facil/shared/format";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -185,12 +185,8 @@ function groupItems(items: QuoteEmailItem[]): {
 // Rendering helpers
 // ---------------------------------------------------------------------------
 
-// REQ-SOEMAIL-024: BRL from integer cents using formatMoney from @calibra-facil/shared.
-// formatMoney(cents) uses Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
-// which produces "R$ 1.460,00" for 146000 — no float drift.
-function brl(cents: number): string {
-  return formatMoney(cents);
-}
+// REQ-SOEMAIL-024: BRL from integer cents through the shared formatting layer
+// (formatMoneyBRL): "R$ 1.460,00" for 146000 — no float drift.
 
 interface ItemRowProps {
   item: QuoteEmailItem;
@@ -203,8 +199,10 @@ function ItemRow({ item }: ItemRowProps) {
         {item.description}
       </Text>
       <Text className="m-0 font-sans text-[13px] font-[420] leading-[1.4] text-fg-3">
-        {item.quantity} {item.unit} × {brl(item.unitPriceCents)} ={" "}
-        <span className="font-bold text-fg">{brl(item.totalPriceCents)}</span>
+        {item.quantity} {item.unit} × {formatMoneyBRL(item.unitPriceCents)} ={" "}
+        <span className="font-bold text-fg">
+          {formatMoneyBRL(item.totalPriceCents)}
+        </span>
       </Text>
     </Section>
   );
@@ -227,7 +225,7 @@ function ItemGroup({ label, items, subtotal }: ItemGroupProps) {
         <ItemRow key={item.id} item={item} />
       ))}
       <Text className="m-0 mt-2 border-t border-t-[rgba(0,0,0,0.06)] pt-2 text-right font-sans text-[13px] font-bold leading-[1.4] text-fg">
-        Subtotal: {brl(subtotal)}
+        Subtotal: {formatMoneyBRL(subtotal)}
       </Text>
     </Section>
   );
@@ -276,7 +274,7 @@ export function QuoteEmail({
   const { services, parts, optionals } = groupItems(items);
 
   const assetDesc = [assetManufacturer, assetModel].filter(Boolean).join(" ");
-  const previewText = `Orçamento ${serviceOrderNumber} — ${assetDesc || "equipamento"} — ${brl(totalCents)}`;
+  const previewText = `Orçamento ${serviceOrderNumber} — ${assetDesc || "equipamento"} — ${formatMoneyBRL(totalCents)}`;
 
   const hasOptionals =
     freightCents > 0 || discountCents > 0 || optionals.length > 0;
@@ -356,12 +354,12 @@ export function QuoteEmail({
               ))}
               {freightCents > 0 ? (
                 <Text className="m-0 mt-1 font-sans text-[13px] font-[420] leading-[1.4] text-fg-3">
-                  Frete: {brl(freightCents)}
+                  Frete: {formatMoneyBRL(freightCents)}
                 </Text>
               ) : null}
               {discountCents > 0 ? (
                 <Text className="m-0 mt-1 font-sans text-[13px] font-[420] leading-[1.4] text-fg-3">
-                  Desconto: -{brl(discountCents)}
+                  Desconto: -{formatMoneyBRL(discountCents)}
                 </Text>
               ) : null}
             </Section>
@@ -370,7 +368,7 @@ export function QuoteEmail({
           {/* REQ-SOEMAIL-022: Total from persisted totalCents — NOT recomputed */}
           <Section className="mt-2 border-t-2 border-t-brand pt-3">
             <Text className="m-0 text-right font-sans text-[18px] font-bold leading-[1.3] text-fg">
-              Total: {brl(totalCents)}
+              Total: {formatMoneyBRL(totalCents)}
             </Text>
           </Section>
         </Section>

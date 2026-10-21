@@ -73,6 +73,7 @@ import {
   SpcStatusBadge,
 } from '@/features/spc/components/spc-status-badge'
 import { StandardRecallCallout } from '@/features/spc/components/standard-recall-callout'
+import { formatInstant, formatNumber } from '@calibra-facil/shared/format'
 
 const chartConfig: ChartConfig = {
   value: {
@@ -106,11 +107,6 @@ function parseSpcChartType(value: string | null): SpcChartType | null {
     default:
       return null
   }
-}
-
-function formatDateTime(dateStr: string | null) {
-  if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleString('pt-BR')
 }
 
 function localDatetimeInputValue(date: Date) {
@@ -278,9 +274,7 @@ export function SpcChartPage({ id }: { id: string }) {
                 label="Última avaliação"
                 value={
                   chart.lastEvaluatedAt
-                    ? new Date(chart.lastEvaluatedAt).toLocaleDateString(
-                        'pt-BR',
-                      )
+                    ? formatInstant(chart.lastEvaluatedAt, 'date')
                     : '—'
                 }
                 tone="neutral"
@@ -340,7 +334,7 @@ export function SpcChartPage({ id }: { id: string }) {
               Motor {evaluation.engineVersion} · fingerprint{' '}
               {evaluation.fingerprint}
               {evaluation.evaluatedAt
-                ? ` · avaliado em ${formatDateTime(evaluation.evaluatedAt)}`
+                ? ` · avaliado em ${formatInstant(evaluation.evaluatedAt, 'date-time')}`
                 : ''}
             </p>
           </div>
@@ -420,13 +414,7 @@ function ControlChartPanel({ chart }: { chart: SpcChartDetail }) {
                 axisLine={false}
                 tickMargin={8}
                 minTickGap={32}
-                tickFormatter={(value) => {
-                  const date = new Date(value)
-                  return date.toLocaleDateString('pt-BR', {
-                    day: '2-digit',
-                    month: 'short',
-                  })
-                }}
+                tickFormatter={(value) => formatInstant(value, 'day-month')}
                 className="text-xs text-muted-foreground"
               />
               <YAxis
@@ -436,9 +424,7 @@ function ControlChartPanel({ chart }: { chart: SpcChartDetail }) {
                 width={64}
                 domain={domain}
                 tickFormatter={(value) =>
-                  Number(value).toLocaleString('pt-BR', {
-                    maximumFractionDigits: 4,
-                  })
+                  formatNumber(Number(value), { maxDecimals: 4 })
                 }
                 className="text-xs text-muted-foreground"
               />
@@ -447,7 +433,7 @@ function ControlChartPanel({ chart }: { chart: SpcChartDetail }) {
                 content={
                   <ChartTooltipContent
                     labelFormatter={(value) =>
-                      new Date(value).toLocaleString('pt-BR')
+                      formatInstant(value, 'date-time')
                     }
                     indicator="dot"
                   />
@@ -673,7 +659,7 @@ function ReadingsPanel({
                     className="border-b border-border/70 transition-colors last:border-0 hover:bg-muted/35"
                   >
                     <td className="px-3 py-2.5 font-mono tabular-nums">
-                      {formatDateTime(reading.measuredAt)}
+                      {formatInstant(reading.measuredAt, 'date-time')}
                     </td>
                     <td className="px-3 py-2.5 text-right font-mono tabular-nums">
                       {reading.value}

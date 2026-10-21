@@ -10,7 +10,6 @@ import {
 } from "@hugeicons/core-free-icons";
 
 import { cn } from "@/lib/utils";
-import { formatDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -44,16 +43,14 @@ import type {
   FleetAnalyticsBucket,
   FleetTrendBucket,
 } from "./types";
+import {
+  formatInstant,
+  formatPercentPoints,
+} from "@calibra-facil/shared/format";
 
 /* -------------------------------------------------------------------------- */
 /* Formatting + tone helpers                                                  */
 /* -------------------------------------------------------------------------- */
-
-/** "22,2%", or "—" when the rate has no KNOWN cycles behind it. */
-function formatPct(value: number | null): string {
-  if (value === null) return "—";
-  return `${value.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
-}
 
 function ootRateTone(rate: number | null): SignalTone {
   if (rate === null) return "neutral";
@@ -243,7 +240,7 @@ function ReliabilityContent({ data }: { data: FleetAnalytics }) {
           <SignalTile
             icon={Analytics01Icon}
             label="Taxa fora de tolerância"
-            value={formatPct(totals.ootRatePct)}
+            value={formatPercentPoints(totals.ootRatePct, { maxDecimals: 1 })}
             hint={"condição “como recebido”"}
             tone={ootRateTone(totals.ootRatePct)}
           />
@@ -261,7 +258,7 @@ function ReliabilityContent({ data }: { data: FleetAnalytics }) {
           <SignalTile
             icon={ChartHistogramIcon}
             label="Cobertura do parecer"
-            value={formatPct(totals.coveragePct)}
+            value={formatPercentPoints(totals.coveragePct, { maxDecimals: 1 })}
             hint="ciclos com parecer"
             tone={coverageTone(totals.coveragePct)}
           />
@@ -338,7 +335,7 @@ function ReliabilityContent({ data }: { data: FleetAnalytics }) {
                           "text-destructive",
                       )}
                     >
-                      {formatPct(row.ootRatePct)}
+                      {formatPercentPoints(row.ootRatePct, { maxDecimals: 1 })}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -399,10 +396,15 @@ function ReliabilityContent({ data }: { data: FleetAnalytics }) {
                       {offender.nonConforming}/{offender.known}
                     </TableCell>
                     <TableCell className="text-destructive text-right font-mono tabular-nums">
-                      {formatPct(offender.failureRatePct)}
+                      {formatPercentPoints(offender.failureRatePct, {
+                        maxDecimals: 1,
+                      })}
                     </TableCell>
                     <TableCell className="text-right font-mono tabular-nums">
-                      {formatDate(offender.lastNonConformingAt)}
+                      {formatInstant(
+                        offender.lastNonConformingAt,
+                        "date-medium",
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}

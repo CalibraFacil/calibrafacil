@@ -12,6 +12,10 @@ import {
   type CertificateImageContext,
 } from "./eccentricity-indicator.js";
 import { formatDecimalPtBr } from "./decimal-format.js";
+import {
+  formatCalendarDate,
+  formatInstant,
+} from "@calibra-facil/shared/format";
 import { certificateVerificationUrl } from "@calibra-facil/shared/public-urls";
 
 /**
@@ -360,21 +364,14 @@ export type BuildCertificateDataOptions = {
 
 type Dateish = Date | string | null | undefined;
 
-function parseDateish(value: Dateish): Date | null {
-  if (!value) return null;
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
+/** A moment (approval, performance, receipt), as the laboratory's day. */
+function formatCertificateInstant(value: Dateish): string {
+  return formatInstant(value, "date", { empty: "" });
 }
 
-function formatCertificateDate(value: Dateish): string {
-  const date = parseDateish(value);
-  if (!date) return "";
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(date);
+/** A calendar date (a standard's calibration or validity day), as named. */
+function formatCertificateCalendarDate(value: Dateish): string {
+  return formatCalendarDate(value, "date", { empty: "" });
 }
 
 function toIsoDateish(value: Dateish): string | null {
@@ -621,11 +618,13 @@ function normalizeStandards(job: CertificateJobData) {
     issuer: standard.calibratedBy?.trim() || null,
     calibratedBy: standard.calibratedBy,
     calibrationDate: toIsoDateish(standard.calibrationDate),
-    calibrationDateText: formatCertificateDate(standard.calibrationDate),
+    calibrationDateText: formatCertificateCalendarDate(
+      standard.calibrationDate,
+    ),
     validUntil: toIsoDateish(standard.nextCalibrationDate),
-    validUntilText: formatCertificateDate(standard.nextCalibrationDate),
+    validUntilText: formatCertificateCalendarDate(standard.nextCalibrationDate),
     nextCalibrationDate: toIsoDateish(standard.nextCalibrationDate),
-    nextCalibrationDateText: formatCertificateDate(
+    nextCalibrationDateText: formatCertificateCalendarDate(
       standard.nextCalibrationDate,
     ),
     uncertainty: standard.uncertainty,
@@ -879,7 +878,7 @@ export function buildCertificateData(
       // PDF (same target as the thermal-label QR). See verifyRouter / verify page.
       verificationUrl: certificateVerificationUrl(job.verificationToken),
       issuedAt: toIsoDateish(job.approvedAt),
-      issuedAtText: formatCertificateDate(job.approvedAt),
+      issuedAtText: formatCertificateInstant(job.approvedAt),
       supersedesId: job.supersedesId,
       supersededById: job.supersededById,
       amendmentNumber: job.amendmentNumber,
@@ -890,7 +889,7 @@ export function buildCertificateData(
     job: {
       id: job.jobId,
       performedAt: toIsoDateish(job.performedAt),
-      performedAtText: formatCertificateDate(job.performedAt),
+      performedAtText: formatCertificateInstant(job.performedAt),
       location: job.calibrationLocationSnapshot?.addressText,
       locationType: job.calibrationLocationSnapshot?.type,
     },
@@ -916,7 +915,7 @@ export function buildCertificateData(
     serviceOrder: {
       inmetroRepairMarkNumber: job.serviceOrder?.inmetroRepairMarkNumber,
       receivedAt: toIsoDateish(job.serviceOrder?.receivedAt ?? null),
-      receivedAtText: formatCertificateDate(job.serviceOrder?.receivedAt),
+      receivedAtText: formatCertificateInstant(job.serviceOrder?.receivedAt),
       intakeCondition: job.serviceOrder?.intakeCondition ?? null,
       accessories: job.serviceOrder?.accessories ?? null,
     },

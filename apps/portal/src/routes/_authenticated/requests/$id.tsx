@@ -14,9 +14,12 @@ import {
 } from "@/components/instrument-panel";
 import { StatusPill } from "@/components/status-pill";
 import { getRequestStatus, type RequestStatus } from "@/lib/status-labels";
-import { formatDate, formatDateOnly } from "@/lib/format";
 import { getApiBaseUrl } from "@/lib/utils";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
+import {
+  formatCalendarDate,
+  formatInstant,
+} from "@calibra-facil/shared/format";
 
 export const Route = createFileRoute("/_authenticated/requests/$id")({
   component: RequestDetailPage,
@@ -173,7 +176,7 @@ function RequestDetailPage() {
           <p className="text-muted-foreground mt-1 text-sm">
             Enviada em{" "}
             <span className="font-mono tabular-nums">
-              {formatDate(data.submittedAt)}
+              {formatInstant(data.submittedAt, "date-medium")}
             </span>
           </p>
         </div>
@@ -192,10 +195,10 @@ function RequestDetailPage() {
             {deliveryMethodLabel}
           </BlueprintField>
           <BlueprintField label="Prazo solicitado" mono>
-            {formatDate(data.requestedDueDate)}
+            {formatCalendarDate(data.requestedDueDate, "date-medium")}
           </BlueprintField>
           <BlueprintField label="Enviada em" mono>
-            {formatDate(data.submittedAt)}
+            {formatInstant(data.submittedAt, "date-medium")}
           </BlueprintField>
         </BlueprintGrid>
 
@@ -219,7 +222,7 @@ function RequestDetailPage() {
             </p>
             {data.rejectedAt ? (
               <p className="text-muted-foreground mt-1 text-xs tabular-nums">
-                Recusada em {formatDate(data.rejectedAt)}
+                Recusada em {formatInstant(data.rejectedAt, "date-medium")}
               </p>
             ) : null}
           </div>
@@ -237,7 +240,7 @@ function RequestDetailPage() {
               {data.invoiceRemittanceNumber || "—"}
             </BlueprintField>
             <BlueprintField label="Data de emissão" mono>
-              {formatDate(data.invoiceRemittanceIssuedAt)}
+              {formatInstant(data.invoiceRemittanceIssuedAt, "date-medium")}
             </BlueprintField>
             <BlueprintField
               label="Chave de acesso"
@@ -261,7 +264,7 @@ function RequestDetailPage() {
           />
           <BlueprintGrid className="mt-4 sm:grid-cols-2">
             <BlueprintField label="Data preferida" mono>
-              {formatDate(data.preferredVisitDate)}
+              {formatCalendarDate(data.preferredVisitDate, "date-medium")}
             </BlueprintField>
             {data.visit ? (
               <BlueprintField label="Situação da visita">
@@ -270,7 +273,7 @@ function RequestDetailPage() {
             ) : null}
             {data.visit?.scheduledAt ? (
               <BlueprintField label="Data confirmada" mono>
-                {formatDateOnly(data.visit.scheduledAt)}
+                {formatCalendarDate(data.visit.scheduledAt, "date-medium")}
               </BlueprintField>
             ) : null}
             {data.visit?.technicianName ? (

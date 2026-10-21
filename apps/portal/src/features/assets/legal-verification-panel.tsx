@@ -2,8 +2,8 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Calendar03Icon } from "@hugeicons/core-free-icons";
 
 import { Panel, PanelHeader } from "@/components/instrument-panel";
-import { formatDateOnly } from "@/lib/format";
 import type { AssetDetail } from "./types";
+import { formatCalendarDate } from "@calibra-facil/shared/format";
 
 /**
  * Track 2 — the regulation-fixed legal-metrology VERIFICATION periodicity (read-only),
@@ -38,7 +38,10 @@ export function LegalVerificationPanel({ asset }: { asset: AssetDetail }) {
             <span className="font-mono tabular-nums">
               {noNationalPeriod
                 ? "sem periodicidade nacional fixada"
-                : formatDateOnly(asset.nextLegalVerificationDate)}
+                : formatCalendarDate(
+                    asset.nextLegalVerificationDate,
+                    "date-medium",
+                  )}
             </span>
           </span>
         </div>

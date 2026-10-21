@@ -1,4 +1,5 @@
-import { formatDateOnly, getLabCalendarDay } from '@calibra-facil/documents'
+import { getLabCalendarDay } from '@calibra-facil/shared/calendar-date'
+import { formatCalendarDate } from '@calibra-facil/shared/format'
 
 import type { SignalTone } from '@/components/instrument-panel'
 import type {
@@ -322,7 +323,7 @@ export function formatStandardDue(
 }
 
 export function formatShortDate(dateString: string | null) {
-  return formatDateOnly(dateString, '—', { day: '2-digit', month: 'short' })
+  return formatCalendarDate(dateString, 'day-month')
 }
 
 export function jobTitle(job: DashboardJob) {

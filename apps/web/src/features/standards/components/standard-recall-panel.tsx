@@ -45,6 +45,7 @@ import type {
   StandardRecallNotification,
   StandardStatus,
 } from '@/features/standards/types'
+import { formatInstant } from '@calibra-facil/shared/format'
 
 const TABLE_WRAPPER_CLASS =
   'overflow-x-auto rounded-xl bg-background shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]'
@@ -64,17 +65,6 @@ const ACKNOWLEDGED_VIA_LABELS: Record<StandardRecallAcknowledgedVia, string> = {
   email_link: 'link do e-mail',
   portal_link: 'portal',
   manual: 'registro manual',
-}
-
-function formatDateTime(value: string | null): string {
-  if (!value) return '—'
-  return new Date(value).toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
 }
 
 function dateInputToIsoStart(value: string): string | undefined {
@@ -486,7 +476,7 @@ function RecallSentDashboard({
 
       <BlueprintGrid className="sm:grid-cols-3">
         <BlueprintField label="Aprovado em" mono>
-          {formatDateTime(recall.approvedAt)}
+          {formatInstant(recall.approvedAt, 'date-time')}
         </BlueprintField>
         <BlueprintField label="Aprovado por" mono>
           {recall.approvedBy ?? '—'}
@@ -607,11 +597,11 @@ function RecallNotificationsTable({
                   </div>
                 </td>
                 <td className="px-3 py-2.5 font-mono tabular-nums">
-                  {formatDateTime(notification.sentAt)}
+                  {formatInstant(notification.sentAt, 'date-time')}
                 </td>
                 <td className="px-3 py-2.5">
                   <span className="font-mono tabular-nums">
-                    {formatDateTime(notification.acknowledgedAt)}
+                    {formatInstant(notification.acknowledgedAt, 'date-time')}
                   </span>
                   {notification.acknowledgedVia ? (
                     <span className="ml-1.5 text-xs text-muted-foreground">

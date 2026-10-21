@@ -29,9 +29,9 @@ import {
   type PortalFinancialSummary,
 } from "@/features/service-orders/financial-summary-card";
 import { getServiceOrderStatus } from "@/lib/status-labels";
-import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 import { getApiBaseUrl } from "@/lib/utils";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
+import { formatInstant, formatMoneyBRL } from "@calibra-facil/shared/format";
 
 export const Route = createFileRoute("/_authenticated/service-orders/$id")({
   component: ServiceOrderDetailPage,
@@ -381,7 +381,7 @@ function ServiceOrderDetailPage() {
       const meta = EVENT_META[event.eventType];
       return {
         title: meta.label,
-        meta: formatDateTime(event.createdAt),
+        meta: formatInstant(event.createdAt, "date-time-medium"),
         tone: meta.tone,
         state: index === all.length - 1 ? "current" : "done",
       };
@@ -409,7 +409,7 @@ function ServiceOrderDetailPage() {
           <p className="text-muted-foreground mt-1 text-sm">
             Entrada em{" "}
             <span className="font-mono tabular-nums">
-              {formatDate(order.openedAt)}
+              {formatInstant(order.openedAt, "date-medium")}
             </span>
           </p>
         </div>
@@ -420,10 +420,10 @@ function ServiceOrderDetailPage() {
         <Panel className="ring-warning/40 p-5">
           <PanelHeader
             title="Orçamento aguardando sua aprovação"
-            description={`${latestQuote.quoteNumber} · validade ${formatDate(latestQuote.validUntil)}`}
+            description={`${latestQuote.quoteNumber} · validade ${formatInstant(latestQuote.validUntil, "date-medium")}`}
             action={
               <span className="text-warning font-mono text-xl font-semibold tabular-nums">
-                {formatCurrency(latestQuote.totalCents)}
+                {formatMoneyBRL(latestQuote.totalCents)}
               </span>
             }
           />
@@ -514,7 +514,7 @@ function ServiceOrderDetailPage() {
                 title="Diagnóstico"
                 description={
                   latestEvaluation.evaluatedAt
-                    ? `Avaliado em ${formatDate(latestEvaluation.evaluatedAt)}`
+                    ? `Avaliado em ${formatInstant(latestEvaluation.evaluatedAt, "date-medium")}`
                     : undefined
                 }
               />
@@ -541,9 +541,9 @@ function ServiceOrderDetailPage() {
                 title="Reparo realizado"
                 description={
                   execution.finishedAt
-                    ? `Concluído em ${formatDate(execution.finishedAt)}`
+                    ? `Concluído em ${formatInstant(execution.finishedAt, "date-medium")}`
                     : execution.startedAt
-                      ? `Iniciado em ${formatDate(execution.startedAt)}`
+                      ? `Iniciado em ${formatInstant(execution.startedAt, "date-medium")}`
                       : undefined
                 }
                 action={
@@ -618,7 +618,7 @@ function ServiceOrderDetailPage() {
                 {order.warrantyUntil ? (
                   <BlueprintGrid className="sm:grid-cols-2">
                     <BlueprintField label="Garantia até" mono>
-                      {formatDate(order.warrantyUntil)}
+                      {formatInstant(order.warrantyUntil, "date-medium")}
                     </BlueprintField>
                   </BlueprintGrid>
                 ) : null}
@@ -645,7 +645,7 @@ function ServiceOrderDetailPage() {
                 title={`Orçamento ${latestQuote.quoteNumber}`}
                 action={
                   <span className="font-mono text-base font-semibold tabular-nums">
-                    {formatCurrency(latestQuote.totalCents)}
+                    {formatMoneyBRL(latestQuote.totalCents)}
                   </span>
                 }
               />
@@ -749,12 +749,12 @@ function LineItem({ item }: { item: QuoteItem | ExecutionItem }) {
             {ITEM_TYPE_LABEL[item.type] ?? item.type}
           </span>
           <span className="font-mono tabular-nums">
-            {item.quantity} {item.unit} × {formatCurrency(item.unitPriceCents)}
+            {item.quantity} {item.unit} × {formatMoneyBRL(item.unitPriceCents)}
           </span>
         </p>
       </div>
       <span className="shrink-0 font-mono text-sm font-medium tabular-nums">
-        {formatCurrency(item.totalPriceCents)}
+        {formatMoneyBRL(item.totalPriceCents)}
       </span>
     </div>
   );

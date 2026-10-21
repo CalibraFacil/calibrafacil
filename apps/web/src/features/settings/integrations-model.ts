@@ -18,6 +18,7 @@ import type {
   IntegrationSummary,
   SyncTarget,
 } from '@/features/settings/types'
+import { formatInstant } from '@calibra-facil/shared/format'
 
 export const defaultIntegrationDraft = {
   name: 'ERP Financeiro',
@@ -330,12 +331,7 @@ export function formatIntegrationPreviewPayload(
 }
 
 export function formatIntegrationDateTime(value: string | null) {
-  if (!value) return 'Ainda não disponível'
-
-  return new Date(value).toLocaleString('pt-BR', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  })
+  return formatInstant(value, 'date-time', { empty: 'Ainda não disponível' })
 }
 
 export function formatIntegrationDuration(value: number | null | undefined) {

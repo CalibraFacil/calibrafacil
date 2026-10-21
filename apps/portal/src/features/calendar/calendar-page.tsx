@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { formatDateOnlyKey } from "@calibra-facil/documents";
+import { calendarDateKey } from "@calibra-facil/shared/calendar-date";
 import { useState } from "react";
 import {
   addDays,
@@ -36,7 +36,7 @@ import {
 } from "@/components/instrument-panel";
 import { StatusPill, TONE } from "@/components/status-pill";
 import { getInstrumentStatus } from "@/lib/calibration-status";
-import { formatDateLong } from "@/lib/format";
+import { formatLocalDay } from "@calibra-facil/shared/format";
 import { cn } from "@/lib/utils";
 import { useCalendarDues, type CalendarDueAsset } from "./queries";
 import { usePortalUnits } from "@/features/fleet/queries";
@@ -44,11 +44,6 @@ import { PortalVisitsPanel } from "@/features/visits/visits-panel";
 import { dayKey, groupDuesByDay, parseMonthParam, toMonthParam } from "./lib";
 
 const WEEKDAYS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
-
-const MONTH_TITLE = new Intl.DateTimeFormat("pt-BR", {
-  month: "long",
-  year: "numeric",
-});
 
 const TONE_RANK: Record<SignalTone, number> = {
   critical: 4,
@@ -104,7 +99,7 @@ export function CalendarPage({
     // The day the date names (UTC midnight would read as the evening before).
     return (
       !Number.isNaN(dueDate.getTime()) &&
-      formatDateOnlyKey(dueDate).startsWith(monthKey)
+      calendarDateKey(dueDate).startsWith(monthKey)
     );
   });
   const monthOverdue = monthDues.filter(
@@ -130,7 +125,7 @@ export function CalendarPage({
     onMonthChange(sameAsCurrent ? undefined : toMonthParam(value));
   }
 
-  const monthTitle = MONTH_TITLE.format(monthStart);
+  const monthTitle = formatLocalDay(monthStart, "month-year");
 
   return (
     <div className="portal-shell space-y-6">
@@ -257,7 +252,7 @@ export function CalendarPage({
                       type="button"
                       onClick={() => setSelectedDay(key)}
                       aria-pressed={selected}
-                      aria-label={`${formatDateLong(day)}${
+                      aria-label={`${formatLocalDay(day, "date-long")}${
                         dues.length > 0
                           ? `, ${dues.length} vencimento${dues.length === 1 ? "" : "s"}`
                           : ""
@@ -305,7 +300,9 @@ export function CalendarPage({
         <Panel className="p-5">
           <PanelHeader
             title={
-              selectedDate ? formatDateLong(selectedDate) : "Selecione um dia"
+              selectedDate
+                ? formatLocalDay(selectedDate, "date-long")
+                : "Selecione um dia"
             }
             description={
               selectedDate

@@ -1,10 +1,9 @@
-import { LAB_TIME_ZONE } from '@calibra-facil/documents'
-
 import type {
   ComparisonResponse,
   ReportPeriod,
   ReportUnitOption,
 } from './types'
+import { formatInstant } from '@calibra-facil/shared/format'
 
 export type ComparisonSortKey =
   | 'unitName'
@@ -132,17 +131,13 @@ export function getNextComparisonSort({
   }
 }
 
-const REPORT_RANGE_DATE_FORMAT = new Intl.DateTimeFormat('pt-BR', {
-  dateStyle: 'medium',
-  timeZone: LAB_TIME_ZONE,
-})
-
 export function formatReportRange(
   range: { startDate: string; endDate: string } | null | undefined,
 ) {
   if (!range) return 'Período selecionado'
 
-  return `${REPORT_RANGE_DATE_FORMAT.format(
-    new Date(range.startDate),
-  )} até ${REPORT_RANGE_DATE_FORMAT.format(new Date(range.endDate))}`
+  return `${formatInstant(
+    range.startDate,
+    'date-medium-natural',
+  )} até ${formatInstant(range.endDate, 'date-medium-natural')}`
 }

@@ -27,6 +27,7 @@ import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
+import { formatInstant } from '@calibra-facil/shared/format'
 
 export interface IntegrationDriftRow {
   linkId: string
@@ -49,16 +50,6 @@ function driftQueueQueryOptions() {
     queryFn: () =>
       calibraApi.integrations.listDrift<{ data: IntegrationDriftRow[] }>(),
   })
-}
-
-const DATETIME_SHORT_FORMAT = new Intl.DateTimeFormat('pt-BR', {
-  dateStyle: 'short',
-  timeStyle: 'short',
-})
-
-function formatDate(value: string | null) {
-  if (!value) return null
-  return DATETIME_SHORT_FORMAT.format(new Date(value))
 }
 
 interface AcknowledgeDialogProps {
@@ -216,8 +207,11 @@ export function IntegrationDriftQueuePage() {
           <CardContent>
             <ul className="space-y-3">
               {rows.map((row) => {
-                const checkedAt = formatDate(row.driftCheckedAt)
-                const lastSyncedAt = formatDate(row.lastSyncedAt)
+                const checkedAt = formatInstant(row.driftCheckedAt, 'date-time')
+                const lastSyncedAt = formatInstant(
+                  row.lastSyncedAt,
+                  'date-time',
+                )
                 return (
                   <li
                     key={row.linkId}

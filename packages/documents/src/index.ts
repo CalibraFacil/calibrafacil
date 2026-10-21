@@ -2,11 +2,9 @@ export { LabelHtml, type LabelData } from "./LabelHtml.js";
 export {
   LAB_TIME_ZONE,
   formatCalendarDate,
-  formatDateOnly,
+  formatInstant,
   formatDateOnlyKey,
   getDateOnlyDay,
-  formatLabDate,
-  formatLabDateTime,
   getLabCalendarDay,
   formatLabDayKey,
   startOfLabMonth,

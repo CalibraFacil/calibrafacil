@@ -689,12 +689,9 @@ export function getBillingBlockerCodeLabel(code: BillingBlockerCode) {
 
 export const DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS = 28;
 
-export function formatMoney(cents: number, currency = "BRL") {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency,
-  }).format(cents / 100);
-}
+// Integer cents as currency text lives in the one formatting layer (./format);
+// re-exported here because finance callers have always imported it from here.
+export { formatMoney } from "./format";
 
 export function calculateFinancialDueDate(
   issueDate: Date,

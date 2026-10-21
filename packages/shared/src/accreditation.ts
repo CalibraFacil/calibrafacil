@@ -5,6 +5,8 @@
  * calibration prefix ("CAL") is a fixed display concern, never persisted.
  */
 
+import { getLabClock } from "./calendar-date.js";
+
 export const ACCREDITATION_NUMBER_PREFIX = "CAL";
 
 /**
@@ -75,34 +77,7 @@ function toDate(value: Date | string | null | undefined): Date | null {
 // The vigência window is a pair of CALENDAR DAYS of the laboratory, not a pair
 // of UTC instants. The API and worker clocks run in UTC, so an instant at
 // 23:30 -03:00 on the window's last day is already the next UTC day.
-// (Same zone as `LAB_TIME_ZONE` in @calibra-facil/documents, which depends on
-// this package and so cannot be imported here.)
-const ACCREDITATION_TIME_ZONE = "America/Sao_Paulo";
-
-const LAB_CLOCK = new Intl.DateTimeFormat("en-CA", {
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-  hourCycle: "h23",
-  timeZone: ACCREDITATION_TIME_ZONE,
-});
-
-function labClock(date: Date) {
-  const parts = Object.fromEntries(
-    LAB_CLOCK.formatToParts(date).map((part) => [part.type, part.value]),
-  );
-  return {
-    year: Number(parts.year),
-    month: Number(parts.month),
-    day: Number(parts.day),
-    hour: Number(parts.hour),
-    minute: Number(parts.minute),
-    second: Number(parts.second),
-  };
-}
+// (The laboratory's wall clock comes from ./calendar-date.)
 
 function dayKey(year: number, month: number, day: number): string {
   return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -110,7 +85,7 @@ function dayKey(year: number, month: number, day: number): string {
 
 /** The laboratory's calendar day of an instant, as "2027-03-05". */
 function labDayKey(date: Date): string {
-  const { year, month, day } = labClock(date);
+  const { year, month, day } = getLabClock(date);
   return dayKey(year, month, day);
 }
 
@@ -121,7 +96,7 @@ function startOfLabDayInstant(year: number, month: number, day: number): Date {
   // The zone's offset on that day, found by reading the guess back in the zone
   // (a second pass settles days whose offset differs from the first guess's).
   for (let pass = 0; pass < 2; pass += 1) {
-    const read = labClock(new Date(instant));
+    const read = getLabClock(new Date(instant));
     const readAsUtc = Date.UTC(
       read.year,
       read.month - 1,

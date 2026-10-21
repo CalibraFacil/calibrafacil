@@ -11,7 +11,12 @@
  * interval is the customer's decision).
  */
 
-import { formatLabDate, getDateOnlyDay, getLabCalendarDay } from "./dates.js";
+import {
+  formatCalendarDate,
+  formatInstant,
+  getDateOnlyDay,
+  getLabCalendarDay,
+} from "./dates.js";
 
 export type FleetDueStatus = "OVERDUE" | "DUE_SOON" | "OK" | "UNSCHEDULED";
 
@@ -105,14 +110,6 @@ function parseDate(value: string | null): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function formatDate(value: string | null): string {
-  const date = parseDate(value);
-  if (!date) return "—";
-  return `${String(date.getUTCDate()).padStart(2, "0")}/${String(
-    date.getUTCMonth() + 1,
-  ).padStart(2, "0")}/${date.getUTCFullYear()}`;
-}
-
 const STATUS_COLOR: Record<FleetDueStatus, string> = {
   OVERDUE: "#b91c1c",
   DUE_SOON: "#b45309",
@@ -124,7 +121,7 @@ export function renderFleetStatusReportHtml(
   data: FleetStatusReportData,
 ): string {
   const now = new Date(data.generatedAtIso);
-  const generated = formatLabDate(now);
+  const generated = formatInstant(now);
   const showUnit = data.assets.some((asset) => asset.unitName);
 
   const counts = { OVERDUE: 0, DUE_SOON: 0, OK: 0, UNSCHEDULED: 0 };
@@ -142,15 +139,15 @@ export function renderFleetStatusReportHtml(
           : `${asset.calibrationIntervalMonths} ${asset.calibrationIntervalMonths === 1 ? "mês" : "meses"}`;
       const legal =
         asset.metrologyRegime === "LEGAL"
-          ? formatDate(asset.nextLegalVerificationDate)
+          ? formatCalendarDate(asset.nextLegalVerificationDate)
           : "—";
       return `<tr>
         ${showUnit ? `<td>${esc(asset.unitName ?? "—")}</td>` : ""}
         <td>${esc(asset.tag)}</td>
         <td>${esc(asset.name)}${asset.manufacturer || asset.model ? `<div class="sub">${esc([asset.manufacturer, asset.model].filter(Boolean).join(" · "))}</div>` : ""}</td>
         <td>${esc(asset.serialNumber ?? "—")}</td>
-        <td class="num">${formatDate(asset.lastCalibrationDate)}</td>
-        <td class="num">${formatDate(asset.nextCalibrationDate)}</td>
+        <td class="num">${formatCalendarDate(asset.lastCalibrationDate)}</td>
+        <td class="num">${formatCalendarDate(asset.nextCalibrationDate)}</td>
         <td class="num">${esc(interval)}</td>
         <td class="num">${legal}</td>
         <td><span class="status" style="color:${STATUS_COLOR[due.status]}">${esc(due.label)}</span></td>

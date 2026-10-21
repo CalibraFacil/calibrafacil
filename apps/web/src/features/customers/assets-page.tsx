@@ -1,5 +1,4 @@
 import { Link, useNavigate } from '@tanstack/react-router'
-import { formatDateOnly } from '@calibra-facil/documents'
 import { useState } from 'react'
 import {
   PlusSignIcon,
@@ -40,6 +39,7 @@ import {
   TableFrame,
   Toolbar,
 } from '@/features/customers/components/client-detail-ui'
+import { formatCalendarDate } from '@calibra-facil/shared/format'
 
 const statusLabels: Record<CustomerAssetStatus, string> = {
   ACTIVE: 'Ativo',
@@ -59,10 +59,6 @@ const statusVariants: Record<
 }
 
 // The next calibration is a calendar date (a Postgres date): show its day.
-function formatDate(date: string | Date | null | undefined): string {
-  return formatDateOnly(date, '-')
-}
-
 export function ClientEquipmentTab({ id }: { id: string }) {
   const navigate = useNavigate()
 
@@ -204,7 +200,7 @@ export function ClientEquipmentTab({ id }: { id: string }) {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {formatDate(asset.nextCalibrationDate)}
+                        {formatCalendarDate(asset.nextCalibrationDate, 'date')}
                       </TableCell>
                     </TableRow>
                   ))}

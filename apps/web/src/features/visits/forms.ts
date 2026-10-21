@@ -1,4 +1,4 @@
-import { formatDateOnly } from '@calibra-facil/documents'
+import { formatCalendarDate } from '@calibra-facil/shared/format'
 
 import { dateInputToNoonIso, dateOnlyToInputValue } from '@/lib/date-only'
 
@@ -19,10 +19,8 @@ export function visitDateInputValue(scheduledAt: string | null): string {
 
 /** The scheduled day for a visit row: "10 de ago. de 2026". */
 export function formatVisitDay(scheduledAt: string | null | undefined): string {
-  return formatDateOnly(scheduledAt, 'A confirmar', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
+  return formatCalendarDate(scheduledAt, 'date-medium', {
+    empty: 'A confirmar',
   })
 }
 

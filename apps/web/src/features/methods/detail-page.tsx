@@ -43,6 +43,7 @@ import {
   PanelHeader,
 } from '@/components/instrument-panel'
 import { cn } from '@/lib/utils'
+import { formatInstant } from '@calibra-facil/shared/format'
 
 type VoidMethodMutation = { mutate: () => void; isPending: boolean }
 type ReturnToDraftMutation = {
@@ -79,17 +80,6 @@ function getStatusLabel(status: string) {
 
 function getStatusVariant(status: string) {
   return statusVariants[status] ?? 'outline'
-}
-
-function formatDateTime(date: string | null | undefined): string {
-  if (!date) return '—'
-  return new Date(date).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
 }
 
 /** Horizontal approval-lifecycle stepper — governance at a glance. */
@@ -286,7 +276,7 @@ export function MethodDetailPage({ id }: { id: string }) {
                 {method.createdByName || '—'}
               </BlueprintField>
               <BlueprintField label="Criado em" mono>
-                {formatDateTime(method.createdAt)}
+                {formatInstant(method.createdAt, 'date-time')}
               </BlueprintField>
               <BlueprintField label="Revisão técnica">
                 {method.technicalReviewedByName || '—'}
@@ -295,11 +285,11 @@ export function MethodDetailPage({ id }: { id: string }) {
                 {method.approvedByName || '—'}
               </BlueprintField>
               <BlueprintField label="Publicado em" mono>
-                {formatDateTime(method.publishedAt)}
+                {formatInstant(method.publishedAt, 'date-time')}
               </BlueprintField>
               {method.archivedAt ? (
                 <BlueprintField label="Arquivado em" mono>
-                  {formatDateTime(method.archivedAt)}
+                  {formatInstant(method.archivedAt, 'date-time')}
                 </BlueprintField>
               ) : null}
             </BlueprintGrid>
@@ -331,9 +321,10 @@ export function MethodDetailPage({ id }: { id: string }) {
                           '—'}
                       </BlueprintField>
                       <BlueprintField label="Compilado em" mono>
-                        {formatDateTime(
+                        {formatInstant(
                           method.methodCompiledAt ||
                             method.publicationEvidence?.compiledAt,
+                          'date-time',
                         )}
                       </BlueprintField>
                       <BlueprintField label="Previews / diagnósticos" mono>

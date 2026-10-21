@@ -35,12 +35,12 @@ import {
 } from "@/components/instrument-panel";
 import { TONE } from "@/components/status-pill";
 import { cn } from "@/lib/utils";
-import { formatDateTime } from "@/lib/format";
 import { useOverview } from "@/features/dashboard/queries";
 import { type CalibrationFilter } from "@/lib/calibration-status";
 import { fleetColumns } from "./columns";
 import { useFleetAssets, usePortalUnits } from "./queries";
 import { isFleetSortBy } from "./types";
+import { formatInstant } from "@calibra-facil/shared/format";
 
 type IconType = Parameters<typeof HugeiconsIcon>[0]["icon"];
 
@@ -360,7 +360,8 @@ export function FleetPage({
             {/* Single source of truth is the lab's job/asset state — say when
                 this snapshot of it was taken. */}
             <p className="text-muted-foreground text-right font-mono text-[11px] tabular-nums">
-              Dados atualizados em {formatDateTime(new Date(dataUpdatedAt))}
+              Dados atualizados em{" "}
+              {formatInstant(new Date(dataUpdatedAt), "date-time-medium")}
             </p>
           </>
         ) : null}

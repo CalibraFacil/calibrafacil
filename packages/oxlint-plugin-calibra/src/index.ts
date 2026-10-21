@@ -8,6 +8,7 @@
 // no-json-error-body-in-routes carries a non-empty baseline (legacy routes).
 import noApiImportInFrontend from "./rules/no-api-import-in-frontend.ts";
 import noHonoClientOutsideClientRuntime from "./rules/no-hono-client-outside-client-runtime.ts";
+import noRawLocaleFormatting from "./rules/no-raw-locale-formatting.ts";
 import noJsonErrorBodyInRoutes from "./rules/no-json-error-body-in-routes.ts";
 import noRouterCouplingInFeatures from "./rules/no-router-coupling-in-features.ts";
 
@@ -18,6 +19,7 @@ export default {
   rules: {
     "no-api-import-in-frontend": noApiImportInFrontend,
     "no-hono-client-outside-client-runtime": noHonoClientOutsideClientRuntime,
+    "no-raw-locale-formatting": noRawLocaleFormatting,
     "no-json-error-body-in-routes": noJsonErrorBodyInRoutes,
     "no-router-coupling-in-features": noRouterCouplingInFeatures,
   },

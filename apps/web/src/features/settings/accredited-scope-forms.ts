@@ -16,6 +16,7 @@ import {
   type QuantityKind,
 } from '@calibra-facil/shared'
 import { dateInputToIso } from '@/features/settings/organization-model'
+import { formatLocalDay } from '@calibra-facil/shared/format'
 
 export interface ScopeLineFormState {
   quantityKind: QuantityKind
@@ -176,7 +177,7 @@ export function formatVigencia(line: AccreditedScopeLine): string | null {
   const from = boundToPickerDate(line.validFrom)
   const until = boundToPickerDate(line.validUntil)
   if (!from && !until) return null
-  const fmt = (d: Date) => d.toLocaleDateString('pt-BR')
+  const fmt = (d: Date) => formatLocalDay(d)
   if (from && until) return `${fmt(from)} a ${fmt(until)}`
   if (from) return `a partir de ${fmt(from)}`
   return until ? `até ${fmt(until)}` : null

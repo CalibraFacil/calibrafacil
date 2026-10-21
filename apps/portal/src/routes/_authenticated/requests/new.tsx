@@ -26,9 +26,9 @@ import {
 } from "@/components/instrument-panel";
 import { StatusPill } from "@/components/status-pill";
 import { getCalibrationStatus } from "@/lib/calibration-status";
-import { pluralize } from "@/lib/format";
 import { cn, getApiBaseUrl } from "@/lib/utils";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
+import { pluralize } from "@calibra-facil/shared/format";
 
 type NewRequestSearch = {
   /** Self-service recall: instruments to preselect (e.g. from asset detail). */

@@ -16,6 +16,7 @@ import type {
   CompetenceRow,
   CompetenceStatus,
 } from '@/features/personnel/types'
+import { formatInstant } from '@calibra-facil/shared/format'
 
 const statusConfig: Record<
   CompetenceStatus,
@@ -49,11 +50,6 @@ const statusConfig: Record<
   SUSPENDED: { label: 'Suspensa', variant: 'destructive' },
   EXPIRED: { label: 'Expirada', variant: 'destructive' },
   CANCELLED: { label: 'Cancelada', variant: 'secondary' },
-}
-
-function formatDate(dateString: string | null): string {
-  if (!dateString) return '-'
-  return new Date(dateString).toLocaleDateString('pt-BR')
 }
 
 export function getStatusBadge(status: CompetenceStatus) {
@@ -96,7 +92,9 @@ export const competenceColumns: ColumnDef<CompetenceRow>[] = [
     accessorKey: 'qualifiedAt',
     header: 'Qualificado em',
     cell: ({ row }) => (
-      <span className="text-sm">{formatDate(row.original.qualifiedAt)}</span>
+      <span className="text-sm">
+        {formatInstant(row.original.qualifiedAt, 'date')}
+      </span>
     ),
   },
   {
@@ -116,7 +114,7 @@ export const competenceColumns: ColumnDef<CompetenceRow>[] = [
             isExpiringSoon && 'text-destructive font-medium',
           )}
         >
-          {formatDate(expiresAt)}
+          {formatInstant(expiresAt, 'date')}
         </span>
       )
     },

@@ -76,6 +76,7 @@ import {
   ClientSection,
   TableFrame,
 } from '@/features/customers/components/client-detail-ui'
+import { formatInstant } from '@calibra-facil/shared/format'
 
 export function CustomerGroupGestorTab({ groupId }: { groupId: number }) {
   const [inviteOpen, setInviteOpen] = useState(false)
@@ -119,14 +120,6 @@ export function CustomerGroupGestorTab({ groupId }: { groupId: number }) {
       onError: (error) => toast.error(error.message),
     })
   }
-
-  const formatDate = (dateString: string) =>
-    new Date(dateString).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    })
-
   const getStatusBadge = (status: string, expiresAt: string) => {
     const isExpired = new Date(expiresAt) < new Date()
 
@@ -364,7 +357,9 @@ export function CustomerGroupGestorTab({ groupId }: { groupId: number }) {
                         <TableCell>
                           {getStatusBadge(inv.status, inv.expiresAt)}
                         </TableCell>
-                        <TableCell>{formatDate(inv.expiresAt)}</TableCell>
+                        <TableCell>
+                          {formatInstant(inv.expiresAt, 'date')}
+                        </TableCell>
                         <TableCell>
                           {isPending && (
                             <div className="flex gap-1">

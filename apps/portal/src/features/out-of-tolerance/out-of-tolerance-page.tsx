@@ -24,13 +24,13 @@ import {
   StaggerItem,
 } from "@/components/instrument-panel";
 import { StatusPill } from "@/components/status-pill";
-import { formatDateTime } from "@/lib/format";
 import { getOotNotificationStatus } from "@/lib/status-labels";
 import {
   useAcknowledgeOotNotification,
   useOotNotifications,
   type OotNotification,
 } from "./queries";
+import { formatInstant } from "@calibra-facil/shared/format";
 
 const ACK_VIA_LABEL: Record<string, string> = {
   email_link: "link do e-mail",
@@ -176,13 +176,20 @@ function NotificationCard({ notification }: { notification: OotNotification }) {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="text-muted-foreground space-y-0.5 text-xs">
           {notification.sentAt ? (
-            <p>Enviada em {formatDateTime(notification.sentAt)}</p>
+            <p>
+              Enviada em{" "}
+              {formatInstant(notification.sentAt, "date-time-medium")}
+            </p>
           ) : (
-            <p>Registrada em {formatDateTime(notification.createdAt)}</p>
+            <p>
+              Registrada em{" "}
+              {formatInstant(notification.createdAt, "date-time-medium")}
+            </p>
           )}
           {isAcknowledged ? (
             <p>
-              Confirmada em {formatDateTime(notification.acknowledgedAt)}
+              Confirmada em{" "}
+              {formatInstant(notification.acknowledgedAt, "date-time-medium")}
               {viaLabel ? ` (via ${viaLabel})` : ""}
             </p>
           ) : null}
