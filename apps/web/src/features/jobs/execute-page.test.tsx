@@ -112,8 +112,17 @@ describe('ExecuteJobPage workflow', () => {
     renderExecutePage()
 
     // The execution date starts empty and gates submission, so pick today first.
+    // Today in the page's own (local) zone: toISOString() is the UTC day, which
+    // is already tomorrow in the evening in the Americas, a date the field's
+    // max forbids.
+    const now = new Date()
+    const today = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0'),
+    ].join('-')
     fireEvent.change(screen.getByLabelText('Data'), {
-      target: { value: new Date().toISOString().slice(0, 10) },
+      target: { value: today },
     })
 
     fireEvent.click(

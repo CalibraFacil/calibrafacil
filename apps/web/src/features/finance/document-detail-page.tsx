@@ -9,6 +9,7 @@ import {
   BillingDocumentStatusBadge,
   ExportStatusBadge,
 } from '@/components/finance-status-badges'
+import { dateOnlyToInputValue } from '@/lib/date-only'
 import { formatFinanceDate, formatFinanceMoney } from '@/lib/finance-formatters'
 import {
   Money,
@@ -441,7 +442,7 @@ function DocumentParametersCard({
     notes: string
   }) => void
 }) {
-  const [dueDate, setDueDate] = useState(document.dueDate.slice(0, 10))
+  const [dueDate, setDueDate] = useState(dateOnlyToInputValue(document.dueDate))
   const [discountCents, setDiscountCents] = useState(document.discountCents)
   const [notes, setNotes] = useState(document.notes ?? '')
   const isDraft = document.status === 'DRAFT'

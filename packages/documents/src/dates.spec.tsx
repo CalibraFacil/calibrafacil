@@ -3,6 +3,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   formatCalendarDate,
+  formatDateOnly,
+  formatDateOnlyKey,
+  getDateOnlyDay,
   formatLabDate,
   formatLabDateTime,
   getLabCalendarDay,
@@ -45,6 +48,37 @@ describe("document dates", () => {
       year: 2026,
       month: 1,
       day: 1,
+    });
+  });
+
+  describe("date-only values", () => {
+    it("reads exact UTC midnight as the day it names, and any other instant in the laboratory's zone", () => {
+      // A date typed into a date field and stored at UTC midnight.
+      expect(formatDateOnly("2026-10-15T00:00:00.000Z")).toBe("15/10/2026");
+      // The same field after a storage change to local noon (15:00Z).
+      expect(formatDateOnly("2026-10-15T15:00:00.000Z")).toBe("15/10/2026");
+      // A real moment: 01:30Z on the 16th is the evening of the 15th in Brazil.
+      expect(formatDateOnly("2026-10-16T01:30:00.000Z")).toBe("15/10/2026");
+      expect(formatDateOnlyKey(new Date("2026-10-15T00:00:00.000Z"))).toBe(
+        "2026-10-15",
+      );
+      expect(getDateOnlyDay(new Date("2026-01-01T00:00:00.000Z"))).toEqual({
+        year: 2026,
+        month: 1,
+        day: 1,
+      });
+    });
+
+    it("formats in the requested shape and falls back for a missing value", () => {
+      expect(
+        formatDateOnly("2026-10-15T00:00:00.000Z", "—", {
+          day: "2-digit",
+          month: "long",
+          year: "numeric",
+        }),
+      ).toBe("15 de outubro de 2026");
+      expect(formatDateOnly(null)).toBe("—");
+      expect(formatDateOnly("nope", "Sem data")).toBe("Sem data");
     });
   });
 

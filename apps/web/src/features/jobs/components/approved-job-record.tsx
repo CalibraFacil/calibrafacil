@@ -93,6 +93,7 @@ import {
   reviewColumnDisplayLabel,
   type ApprovedJobRecordData,
 } from '@/features/jobs/detail-model'
+import { formatStandardDate } from '@/features/standards/dates'
 import {
   BlueprintField,
   BlueprintGrid,
@@ -1011,7 +1012,10 @@ export function ApprovedJobRecord({
                         </p>
                       </div>
                       <div className="shrink-0 text-left text-sm sm:text-right">
-                        <p>Calibrado em: {formatDate(std.calibrationDate)}</p>
+                        <p>
+                          Calibrado em:{' '}
+                          {formatStandardDate(std.calibrationDate)}
+                        </p>
                         {std.uncertainty != null && (
                           <p className="inline-flex flex-wrap items-center gap-1 font-mono tabular-nums text-muted-foreground sm:justify-end">
                             U ={' '}

@@ -5,6 +5,8 @@ import {
   CardHeader,
   CardTitle,
 } from "../../components/ui/card";
+import { dateOnlyDaysBetween } from "../../lib/date-only";
+import { formatDateOnlyLong } from "../../lib/format";
 import { cn } from "../../lib/utils";
 
 export type PortalFinancialSummary = {
@@ -52,11 +54,9 @@ export function isFinancialSummary(
 
 function formatLongDate(value: string | null | undefined) {
   if (!value) return null;
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  }).format(new Date(value));
+  // The due day is a date-only value (stored at UTC midnight); paid and
+  // available-at are real moments, shown on the laboratory's day.
+  return formatDateOnlyLong(value);
 }
 
 function formatMoney(cents: number | null | undefined) {
@@ -91,13 +91,7 @@ export function financialSummaryDescription(summary: PortalFinancialSummary) {
   }
   if (summary.state === "OVERDUE") {
     const days = summary.dueDate
-      ? Math.max(
-          0,
-          Math.floor(
-            (Date.now() - new Date(summary.dueDate).getTime()) /
-              (24 * 60 * 60 * 1000),
-          ),
-        )
+      ? Math.max(0, -dateOnlyDaysBetween(new Date(), new Date(summary.dueDate)))
       : 0;
     return `Vencido há ${days} dias · ${formatMoney(
       summary.openAmountCents,

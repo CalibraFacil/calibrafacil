@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  accreditationBoundDay,
+  accreditationDayToInstant,
   ACCREDITATION_NUMBER_PREFIX,
   ACCREDITATION_SEAL_FONT_FAMILY,
   ACCREDITATION_SEAL_SCHEME,
@@ -441,5 +443,102 @@ describe("shouldRenderAccreditationSeal — scope-override downgrade", () => {
         scopeOverrideJustification: "   ",
       }),
     ).toBe(true);
+  });
+});
+
+// The vigência window is a pair of calendar days of the laboratory (São Paulo),
+// not a pair of UTC instants: the server clock is UTC, so a certificate issued
+// at 23:30 -03:00 on the last day is already the next UTC day.
+describe("accreditation vigência window — laboratory calendar days", () => {
+  const base = { accreditationActive: true, accreditationNumber: "9999" };
+
+  describe.each([
+    {
+      shape: "stored by the lab-day anchor (00:00 / 23:59:59.999 -03:00)",
+      from: "2027-03-01T03:00:00.000Z",
+      until: "2027-03-06T02:59:59.999Z",
+    },
+    {
+      shape: "legacy UTC anchor (UTC 00:00 / UTC 23:59:59.999)",
+      from: "2027-03-01T00:00:00.000Z",
+      until: "2027-03-05T23:59:59.999Z",
+    },
+  ])("window 2027-03-01..2027-03-05 $shape", ({ from, until }) => {
+    const lab = {
+      ...base,
+      accreditationValidFrom: from,
+      accreditationValidUntil: until,
+    };
+
+    it("REQ-CMP-VIG-002: an issue at 23:30 -03:00 on the last day is inside the window", () => {
+      const issuedAt = new Date("2027-03-05T23:30:00-03:00");
+      expect(getAccreditationStatus(lab, issuedAt)).toBe("active");
+      expect(
+        shouldRenderAccreditationSeal({
+          lab,
+          methodAccreditedScope: true,
+          atDate: issuedAt,
+        }),
+      ).toBe(true);
+    });
+
+    it("REQ-CMP-VIG-002: an issue at 00:30 -03:00 on the next day is outside the window", () => {
+      const issuedAt = new Date("2027-03-06T00:30:00-03:00");
+      expect(getAccreditationStatus(lab, issuedAt)).toBe("expired");
+      expect(
+        shouldRenderAccreditationSeal({
+          lab,
+          methodAccreditedScope: true,
+          atDate: issuedAt,
+        }),
+      ).toBe(false);
+    });
+
+    it("REQ-CMP-VIG-002: the first day counts from 00:00 -03:00 and not before", () => {
+      expect(
+        getAccreditationStatus(lab, new Date("2027-03-01T00:30:00-03:00")),
+      ).toBe("active");
+      expect(
+        getAccreditationStatus(lab, new Date("2027-02-28T23:30:00-03:00")),
+      ).toBe("expired");
+    });
+  });
+
+  it("reads a stored bound as the calendar day it names", () => {
+    expect(accreditationBoundDay("2027-03-01T03:00:00.000Z")).toBe(
+      "2027-03-01",
+    );
+    expect(accreditationBoundDay("2027-03-01T00:00:00.000Z")).toBe(
+      "2027-03-01",
+    );
+    expect(accreditationBoundDay("2027-03-06T02:59:59.999Z")).toBe(
+      "2027-03-05",
+    );
+    expect(accreditationBoundDay("2027-03-05T23:59:59.999Z")).toBe(
+      "2027-03-05",
+    );
+    expect(accreditationBoundDay(null)).toBeNull();
+    expect(accreditationBoundDay("not a date")).toBeNull();
+  });
+
+  it("anchors a day to 00:00 and 23:59:59.999 in São Paulo", () => {
+    expect(
+      accreditationDayToInstant("2027-03-01", "start")?.toISOString(),
+    ).toBe("2027-03-01T03:00:00.000Z");
+    expect(accreditationDayToInstant("2027-03-05", "end")?.toISOString()).toBe(
+      "2027-03-06T02:59:59.999Z",
+    );
+    // 2018 was still on daylight saving (-02:00) in November.
+    expect(
+      accreditationDayToInstant("2018-11-20", "start")?.toISOString(),
+    ).toBe("2018-11-20T02:00:00.000Z");
+    // DST ended 2019-02-17 at 00:00 (-02) -> 23:00 on the 16th (-03): the 16th
+    // runs one hour longer and its last millisecond is the one before 03:00Z.
+    expect(accreditationDayToInstant("2019-02-16", "end")?.toISOString()).toBe(
+      "2019-02-17T02:59:59.999Z",
+    );
+    expect(accreditationDayToInstant("2027-02-30", "start")).toBeNull();
+    expect(accreditationDayToInstant("2027-13-01", "end")).toBeNull();
+    expect(accreditationDayToInstant("03/05/2027", "end")).toBeNull();
   });
 });

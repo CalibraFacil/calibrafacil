@@ -35,6 +35,7 @@ import {
   StaggerItem,
   type SignalTone,
 } from '@/components/instrument-panel'
+import { formatStandardDate } from '@/features/standards/dates'
 import { metrologyKindDefinition } from '@/features/standards/metrology-kinds'
 import { StandardCertificateDocumentPanel } from '@/features/standards/components/standard-certificate-document-panel'
 import { StandardRecallPanel } from '@/features/standards/components/standard-recall-panel'
@@ -91,14 +92,6 @@ const statusConfig: Record<
   INACTIVE: { label: 'Inativo', variant: 'secondary' },
   OUT_OF_TOLERANCE: { label: 'Fora de Tolerância', variant: 'destructive' },
   SENT_FOR_CALIBRATION: { label: 'Em Calibração', variant: 'outline' },
-}
-
-function formatDate(dateString: string | Date): string {
-  return new Date(dateString).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  })
 }
 
 function formatDegreesOfFreedom(
@@ -254,7 +247,7 @@ export function StandardDetailPage({ id }: { id: string }) {
               <SignalTile
                 icon={Calendar03Icon}
                 label="Próxima calibração"
-                value={formatDate(standard.nextCalibrationDate)}
+                value={formatStandardDate(standard.nextCalibrationDate)}
                 hint={calLabel}
                 tone={calTone}
               />
@@ -383,11 +376,11 @@ export function StandardDetailPage({ id }: { id: string }) {
                   {standard.calibratedBy || '—'}
                 </BlueprintField>
                 <BlueprintField label="Data de calibração" mono>
-                  {formatDate(standard.calibrationDate)}
+                  {formatStandardDate(standard.calibrationDate)}
                 </BlueprintField>
                 <BlueprintField label="Próxima calibração" mono>
                   <span className="inline-flex items-center gap-2">
-                    {formatDate(standard.nextCalibrationDate)}
+                    {formatStandardDate(standard.nextCalibrationDate)}
                     {standard.isExpired ? (
                       <HugeiconsIcon
                         icon={AlertCircleIcon}

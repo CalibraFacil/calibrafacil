@@ -1,9 +1,11 @@
+import { format } from 'date-fns'
 import { describe, expect, it } from 'vitest'
 
 import {
   buildScopeLinePayload,
   canSaveScopeLine,
   emptyScopeLineForm,
+  formatVigencia,
   scopeLineToFormState,
   type ScopeLineFormState,
 } from './accredited-scope-forms'
@@ -44,8 +46,10 @@ describe('buildScopeLinePayload', () => {
     expect(built.ok).toBe(true)
     if (!built.ok) return
     expect(built.payload.id).toBe(7)
-    expect(built.payload.validFrom).toBe('2026-01-15T00:00:00.000Z')
-    expect(built.payload.validUntil).toBe('2026-12-31T23:59:59.999Z')
+    // Anchored on the laboratory's calendar days (America/Sao_Paulo, -03:00),
+    // like the org-level window: intentional change from the UTC anchor.
+    expect(built.payload.validFrom).toBe('2026-01-15T03:00:00.000Z')
+    expect(built.payload.validUntil).toBe('2027-01-01T02:59:59.999Z')
   })
 
   it('rejects non-numeric input instead of sending NaN to the API', () => {
@@ -115,5 +119,38 @@ describe('scopeLineToFormState', () => {
     })
     expect(state.validFrom).toBeInstanceOf(Date)
     expect(state.validUntil).toBeInstanceOf(Date)
+  })
+
+  it('reads stored bounds back as the calendar days they name', () => {
+    const base = {
+      id: 3,
+      unitId: 1,
+      quantityKind: 'mass' as const,
+      rangeMin: 0,
+      rangeMax: 500,
+      rangeUnit: 'g',
+      cmcType: 'fixed' as const,
+      cmcA: 0.005,
+      cmcB: null,
+      cmcUnit: 'g',
+      coverageFactor: 2,
+      description: null,
+    }
+    for (const [validFrom, validUntil] of [
+      ['2026-01-15T03:00:00.000Z', '2027-01-01T02:59:59.999Z'],
+      // Legacy UTC anchor: the start used to read as the evening before.
+      ['2026-01-15T00:00:00.000Z', '2026-12-31T23:59:59.999Z'],
+    ]) {
+      const state = scopeLineToFormState({ ...base, validFrom, validUntil })
+      expect(state.validFrom && format(state.validFrom, 'yyyy-MM-dd')).toBe(
+        '2026-01-15',
+      )
+      expect(state.validUntil && format(state.validUntil, 'yyyy-MM-dd')).toBe(
+        '2026-12-31',
+      )
+      expect(formatVigencia({ ...base, validFrom, validUntil })).toBe(
+        '15/01/2026 a 31/12/2026',
+      )
+    }
   })
 })

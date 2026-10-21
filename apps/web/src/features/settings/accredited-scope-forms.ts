@@ -11,6 +11,7 @@ import type {
   SaveAccreditedScopeLineInput,
 } from '@calibra-facil/client-runtime'
 import {
+  accreditationBoundDay,
   QUANTITY_KIND_OPTIONS_PT,
   type QuantityKind,
 } from '@calibra-facil/shared'
@@ -50,6 +51,21 @@ function numberFromForm(value: string): number | null {
   if (!trimmed) return null
   const parsed = Number(trimmed.replace(',', '.'))
   return Number.isFinite(parsed) ? parsed : null
+}
+
+/**
+ * A stored vigência bound as the local-calendar Date the date picker holds:
+ * the day the bound names (a legacy UTC-midnight start included), not the day
+ * its instant falls on in the browser's zone.
+ */
+function boundToPickerDate(value: string | Date | null): Date | undefined {
+  const day = accreditationBoundDay(value)
+  if (!day) return undefined
+  const [year, month, date] = day.split('-').map(Number)
+  if (year === undefined || month === undefined || date === undefined) {
+    return undefined
+  }
+  return new Date(year, month - 1, date)
 }
 
 export function toDateOrUndefined(
@@ -144,8 +160,8 @@ export function scopeLineToFormState(
     cmcB: line.cmcB != null ? String(line.cmcB) : '',
     cmcUnit: line.cmcUnit,
     description: line.description ?? '',
-    validFrom: toDateOrUndefined(line.validFrom),
-    validUntil: toDateOrUndefined(line.validUntil),
+    validFrom: boundToPickerDate(line.validFrom),
+    validUntil: boundToPickerDate(line.validUntil),
   }
 }
 
@@ -157,8 +173,8 @@ export function formatCmcExpression(line: AccreditedScopeLine): string {
 }
 
 export function formatVigencia(line: AccreditedScopeLine): string | null {
-  const from = toDateOrUndefined(line.validFrom)
-  const until = toDateOrUndefined(line.validUntil)
+  const from = boundToPickerDate(line.validFrom)
+  const until = boundToPickerDate(line.validUntil)
   if (!from && !until) return null
   const fmt = (d: Date) => d.toLocaleDateString('pt-BR')
   if (from && until) return `${fmt(from)} a ${fmt(until)}`

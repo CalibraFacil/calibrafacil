@@ -346,6 +346,14 @@ describe("buildCertificateLayoutData", () => {
     expect(data.conformity).toBeNull();
   });
 
+  it("prints a standard's validity on the calendar day that was typed, not the evening before", () => {
+    // The standard's "next calibration" is a date typed into a date field and
+    // stored at UTC midnight; formatted as a moment in São Paulo it printed
+    // 31/12/2026 on the certificate.
+    const data = unwrap(buildCertificateLayoutData(massJob()));
+    expect(data.standards[0]?.validUntilText).toBe("01/01/2027");
+  });
+
   it("states traceability from the standards' calibrating bodies only", () => {
     const data = unwrap(buildCertificateLayoutData(massJob()));
     expect(data.traceabilityStatementText).toContain("RBC Padrões");

@@ -14,7 +14,7 @@ import {
 } from "@/components/instrument-panel";
 import { StatusPill } from "@/components/status-pill";
 import { getRequestStatus, type RequestStatus } from "@/lib/status-labels";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatDateOnly } from "@/lib/format";
 import { getApiBaseUrl } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/requests/$id")({
@@ -268,7 +268,7 @@ function RequestDetailPage() {
             ) : null}
             {data.visit?.scheduledAt ? (
               <BlueprintField label="Data confirmada" mono>
-                {formatDate(data.visit.scheduledAt)}
+                {formatDateOnly(data.visit.scheduledAt)}
               </BlueprintField>
             ) : null}
             {data.visit?.technicianName ? (

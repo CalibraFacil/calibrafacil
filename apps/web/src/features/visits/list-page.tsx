@@ -20,6 +20,7 @@ import {
   CloudOnlyOfflineState,
   useDesktopCloudOnlyUnavailable,
 } from '@/runtime/sync-status'
+import { formatVisitDay } from '@/features/visits/forms'
 import { useVisitsListData } from '@/features/visits/queries'
 import {
   formatVisitAddress,
@@ -27,15 +28,6 @@ import {
   VISIT_STATUS_VARIANTS,
   type VisitStatus,
 } from '@/features/visits/types'
-
-function formatDate(date: string | null | undefined) {
-  if (!date) return 'A confirmar'
-  return new Date(date).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  })
-}
 
 const STATUS_FILTERS: Array<{ value: VisitStatus | ''; label: string }> = [
   { value: '', label: 'Todas' },
@@ -192,7 +184,7 @@ export function VisitsPage() {
                       </div>
                       <p className="mt-0.5 truncate text-xs text-muted-foreground">
                         <span className="font-mono tabular-nums">
-                          {formatDate(visit.scheduledAt)}
+                          {formatVisitDay(visit.scheduledAt)}
                         </span>
                         {' · '}
                         {visit.assetCount}{' '}

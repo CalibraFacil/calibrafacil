@@ -154,4 +154,27 @@ describe("OotAssessmentPanel", () => {
       null,
     );
   });
+
+  it("REQ-DATE-007: defaults the period end to the day it was detected in Sao Paulo, not the UTC day", async () => {
+    // 23:30 on 2026-06-15 in Sao Paulo is already 02:30Z on the 16th.
+    stubFetch([
+      ootEvent({
+        detectedAt: "2026-06-16T02:30:00.000Z",
+        suggestedPeriodStart: "2026-01-11T01:00:00.000Z",
+      }),
+    ]);
+
+    renderPanel();
+
+    const start = await screen.findByLabelText("Início do período afetado");
+    const end = screen.getByLabelText("Fim do período afetado");
+    if (
+      !(start instanceof HTMLInputElement) ||
+      !(end instanceof HTMLInputElement)
+    ) {
+      throw new Error("period inputs not found");
+    }
+    expect(end.value).toBe("2026-06-15");
+    expect(start.value).toBe("2026-01-10");
+  });
 });
