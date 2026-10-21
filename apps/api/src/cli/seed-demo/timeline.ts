@@ -5,7 +5,6 @@
  * timeline: the job, its audit trail, its certificate snapshot and the frozen
  * environment/location snapshots all move together.
  */
-import { db } from "@calibra-facil/db";
 import {
   assetAuditLog,
   calibrationJob,
@@ -16,6 +15,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { and, asc, eq, gt, sql } from "drizzle-orm";
 
+import { withHistoryRewrite } from "./history-rewrite";
 import type { PlannedJob } from "./job-plan";
 
 const MINUTE_MS = 60_000;
@@ -66,81 +66,85 @@ export async function applyJobTimeline(
   moments: JobMoments,
   seedStartedAt: Date,
 ): Promise<void> {
-  const decided = moments.decidedAt ?? null;
-  const approved = moments.final === "APPROVED";
-  const rejected = moments.final === "REJECTED";
-  const lastEvent = decided ?? moments.submittedAt ?? moments.createdAt;
+  // Approved jobs, their snapshot and the audit rows are append-only; the seed
+  // rewrites them under Postgres' transaction-local escape hatch.
+  await withHistoryRewrite(async (tx) => {
+    const decided = moments.decidedAt ?? null;
+    const approved = moments.final === "APPROVED";
+    const rejected = moments.final === "REJECTED";
+    const lastEvent = decided ?? moments.submittedAt ?? moments.createdAt;
 
-  await db
-    .update(calibrationJob)
-    .set({
-      createdAt: moments.createdAt,
-      updatedAt: lastEvent,
-      dueDate: moments.dueDate,
-      ...(moments.performedAt ? { performedAt: moments.performedAt } : {}),
-      ...(approved && decided ? { approvedAt: decided } : {}),
-      ...(rejected && decided ? { rejectedAt: decided } : {}),
-    })
-    .where(eq(calibrationJob.id, jobId));
-
-  // The frozen snapshots carry their own capture instants.
-  const recordedAt = (moments.performedAt ?? moments.createdAt).toISOString();
-  await db.execute(sql`
-    update calibration_job set
-      environmental_snapshot = case when environmental_snapshot is null then null
-        else jsonb_set(environmental_snapshot, '{recordedAt}', to_jsonb(${recordedAt}::text)) end,
-      calibration_location_snapshot = case when calibration_location_snapshot is null then null
-        else jsonb_set(calibration_location_snapshot, '{recordedAt}', to_jsonb(${recordedAt}::text)) end,
-      certificate_numbering_snapshot = case when certificate_numbering_snapshot is null then null
-        else jsonb_set(certificate_numbering_snapshot, '{generatedAt}', to_jsonb(${moments.createdAt.toISOString()}::text)) end,
-      asset_snapshot = case when asset_snapshot is null then null
-        else jsonb_set(asset_snapshot, '{capturedAt}', to_jsonb(${moments.createdAt.toISOString()}::text)) end
-    where id = ${jobId}
-  `);
-
-  const entries = await db
-    .select({ id: jobAuditLog.id, action: jobAuditLog.action })
-    .from(jobAuditLog)
-    .where(eq(jobAuditLog.jobId, jobId))
-    .orderBy(asc(jobAuditLog.id));
-  const seen = new Map<string, number>();
-  for (const entry of entries) {
-    const index = seen.get(entry.action) ?? 0;
-    seen.set(entry.action, index + 1);
-    // eslint-disable-next-line no-await-in-loop
-    await db
-      .update(jobAuditLog)
-      .set({ performedAt: auditTime(entry.action, index, moments) })
-      .where(eq(jobAuditLog.id, entry.id));
-  }
-
-  await db
-    .update(jobCommercialSnapshot)
-    .set({ capturedAt: moments.createdAt })
-    .where(eq(jobCommercialSnapshot.jobId, jobId));
-  await db
-    .update(jobStandard)
-    .set({ usedAt: moments.performedAt ?? moments.createdAt })
-    .where(eq(jobStandard.jobId, jobId));
-
-  if (approved && decided) {
-    await db
-      .update(issuedCertificateSnapshot)
+    await tx
+      .update(calibrationJob)
       .set({
-        issuedAt: addMinutes(decided, 1),
-        createdAt: addMinutes(decided, 1),
+        createdAt: moments.createdAt,
+        updatedAt: lastEvent,
+        dueDate: moments.dueDate,
+        ...(moments.performedAt ? { performedAt: moments.performedAt } : {}),
+        ...(approved && decided ? { approvedAt: decided } : {}),
+        ...(rejected && decided ? { rejectedAt: decided } : {}),
       })
-      .where(eq(issuedCertificateSnapshot.jobId, jobId));
-    // "Last calibration date advanced" is logged when the job is approved.
-    await db
-      .update(assetAuditLog)
-      .set({ performedAt: decided })
-      .where(
-        and(
-          eq(assetAuditLog.assetId, assetId),
-          eq(assetAuditLog.action, "update"),
-          gt(assetAuditLog.performedAt, seedStartedAt),
-        ),
-      );
-  }
+      .where(eq(calibrationJob.id, jobId));
+
+    // The frozen snapshots carry their own capture instants.
+    const recordedAt = (moments.performedAt ?? moments.createdAt).toISOString();
+    await tx.execute(sql`
+      update calibration_job set
+        environmental_snapshot = case when environmental_snapshot is null then null
+          else jsonb_set(environmental_snapshot, '{recordedAt}', to_jsonb(${recordedAt}::text)) end,
+        calibration_location_snapshot = case when calibration_location_snapshot is null then null
+          else jsonb_set(calibration_location_snapshot, '{recordedAt}', to_jsonb(${recordedAt}::text)) end,
+        certificate_numbering_snapshot = case when certificate_numbering_snapshot is null then null
+          else jsonb_set(certificate_numbering_snapshot, '{generatedAt}', to_jsonb(${moments.createdAt.toISOString()}::text)) end,
+        asset_snapshot = case when asset_snapshot is null then null
+          else jsonb_set(asset_snapshot, '{capturedAt}', to_jsonb(${moments.createdAt.toISOString()}::text)) end
+      where id = ${jobId}
+    `);
+
+    const entries = await tx
+      .select({ id: jobAuditLog.id, action: jobAuditLog.action })
+      .from(jobAuditLog)
+      .where(eq(jobAuditLog.jobId, jobId))
+      .orderBy(asc(jobAuditLog.id));
+    const seen = new Map<string, number>();
+    for (const entry of entries) {
+      const index = seen.get(entry.action) ?? 0;
+      seen.set(entry.action, index + 1);
+      // eslint-disable-next-line no-await-in-loop
+      await tx
+        .update(jobAuditLog)
+        .set({ performedAt: auditTime(entry.action, index, moments) })
+        .where(eq(jobAuditLog.id, entry.id));
+    }
+
+    await tx
+      .update(jobCommercialSnapshot)
+      .set({ capturedAt: moments.createdAt })
+      .where(eq(jobCommercialSnapshot.jobId, jobId));
+    await tx
+      .update(jobStandard)
+      .set({ usedAt: moments.performedAt ?? moments.createdAt })
+      .where(eq(jobStandard.jobId, jobId));
+
+    if (approved && decided) {
+      await tx
+        .update(issuedCertificateSnapshot)
+        .set({
+          issuedAt: addMinutes(decided, 1),
+          createdAt: addMinutes(decided, 1),
+        })
+        .where(eq(issuedCertificateSnapshot.jobId, jobId));
+      // "Last calibration date advanced" is logged when the job is approved.
+      await tx
+        .update(assetAuditLog)
+        .set({ performedAt: decided })
+        .where(
+          and(
+            eq(assetAuditLog.assetId, assetId),
+            eq(assetAuditLog.action, "update"),
+            gt(assetAuditLog.performedAt, seedStartedAt),
+          ),
+        );
+    }
+  });
 }

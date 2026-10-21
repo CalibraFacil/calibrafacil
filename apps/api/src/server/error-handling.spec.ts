@@ -17,6 +17,14 @@ function makeApp(deps: ErrorHandlingDeps) {
   app.get("/api/nope", () => {
     throw new HTTPException(404, { message: "não encontrado" });
   });
+  app.get("/api/frozen", () => {
+    throw new Error("Failed query", {
+      cause: Object.assign(
+        new Error("calibration_job 7 (CAL-1): column results is frozen"),
+        { code: "P0001" },
+      ),
+    });
+  });
   app.get("/api/ok", (c) => c.json({ ok: true }));
   return app;
 }
@@ -58,6 +66,20 @@ describe("applyErrorHandling", () => {
 
     expect(body).not.toContain("postgres://");
     expect(body).not.toContain("db exploded");
+  });
+
+  it("turns an immutability-trigger refusal (P0001) into a reported 409", async () => {
+    const deps = makeDeps();
+    const app = makeApp(deps);
+
+    const response = await app.request("/api/frozen");
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: "Registro emitido ou de auditoria não pode ser alterado",
+      code: "record_immutable",
+    });
+    expect(deps.report).toHaveBeenCalledTimes(1);
   });
 
   it("passes intentional HTTPExceptions through without reporting", async () => {

@@ -1320,8 +1320,13 @@ export const jobsRouter = new Hono<{
         return c.json({ error: "Job nao encontrado" }, 404);
       }
 
-      // Cannot update approved or canceled jobs
-      if (existing.status === "APPROVED" || existing.status === "CANCELED") {
+      // Cannot update approved, superseded or canceled jobs: a SUPERSEDED job is
+      // an issued certificate that an amendment replaced, as frozen as APPROVED.
+      if (
+        existing.status === "APPROVED" ||
+        existing.status === "SUPERSEDED" ||
+        existing.status === "CANCELED"
+      ) {
         return c.json(
           {
             error: `Nao e possivel atualizar um job com status ${existing.status}`,
@@ -1475,6 +1480,17 @@ export const jobsRouter = new Hono<{
 
       if (!existing) {
         return c.json({ error: "Job nao encontrado" }, 404);
+      }
+
+      // The technician is part of an issued certificate's record: no new
+      // assignment once the job is approved, and none after it was superseded.
+      if (existing.status === "APPROVED" || existing.status === "SUPERSEDED") {
+        return c.json(
+          {
+            error: `Nao e possivel atribuir tecnico a um job com status ${existing.status}`,
+          },
+          400,
+        );
       }
 
       // Validate technician

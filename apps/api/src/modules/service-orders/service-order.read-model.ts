@@ -194,7 +194,13 @@ export async function getServiceOrderDetail(
       })
       .from(serviceOrderEventLog)
       .leftJoin(user, eq(serviceOrderEventLog.actorId, user.id))
-      .where(eq(serviceOrderEventLog.serviceOrderId, id))
+      // The log has no FK to the order (it outlives it), so scope it by org too.
+      .where(
+        and(
+          eq(serviceOrderEventLog.serviceOrderId, id),
+          eq(serviceOrderEventLog.organizationId, order.organizationId),
+        ),
+      )
       .orderBy(desc(serviceOrderEventLog.createdAt)),
     db
       .select({

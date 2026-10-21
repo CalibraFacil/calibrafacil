@@ -108,6 +108,19 @@ export async function setup({ provide }: GlobalSetupContext) {
     stdio: "inherit",
   });
 
+  // The whole sql/schema-extras.sql, applied exactly as `db:bootstrap` applies it
+  // in production: extensions, the one-default-per-organization partial unique
+  // indexes, CHECK constraints and the regulated-invariant triggers. Same file as
+  // the API tier (see apps/api/test/integration/global-setup.ts).
+  const extras = readFileSync(
+    new URL("../../../../packages/db/sql/schema-extras.sql", import.meta.url),
+    "utf8",
+  );
+  execSync(`psql -v ON_ERROR_STOP=1 "${url}"`, {
+    input: extras,
+    stdio: ["pipe", "ignore", "inherit"],
+  });
+
   provide("testDatabaseUrl", url);
 }
 

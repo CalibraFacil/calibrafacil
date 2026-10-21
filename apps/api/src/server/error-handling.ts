@@ -1,5 +1,6 @@
 import type { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
+import { extractPgErrorCode } from "../lib/db-errors";
 import { flushErrorReporter, reportServerError } from "../lib/observability";
 import type { Env } from "./env";
 
@@ -36,6 +37,19 @@ export function applyErrorHandling(
     // Serverless: the function may freeze right after the response — give the
     // delivery a bounded window instead of losing the event.
     await deps.flush();
+
+    // P0001 comes only from the immutability triggers (migration 0115): the
+    // write raced an approval or a route missed its status guard. Reported
+    // above as a defect, but the client gets a conflict, not a crash.
+    if (extractPgErrorCode(error) === "P0001") {
+      return c.json(
+        {
+          error: "Registro emitido ou de auditoria não pode ser alterado",
+          code: "record_immutable",
+        },
+        409,
+      );
+    }
 
     return c.json({ error: "Erro interno do servidor" }, 500);
   });
