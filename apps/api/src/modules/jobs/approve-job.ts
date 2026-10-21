@@ -35,13 +35,12 @@ type ApproveJobInput = z.infer<typeof ApproveJobSchema>;
 /**
  * WHO is approving. Every entry point that can release a calibration builds
  * one of these explicitly, so the policy never infers an approver from a
- * transport (session cookie, API key, desktop push). The policy always runs
+ * transport (session cookie, API key). The policy always runs
  * against a PERSON (`member`): the role gate, separation of duties and the
  * signatory roster are properties of people, never of a credential.
  *
  * - `user`: an authenticated lab member. Cloud routes pass the session's
- *   member; the desktop sync passes the member of the AUTHENTICATED pushing
- *   session — never an actor id claimed in the pushed payload.
+ *   member — never an actor id claimed in a request payload.
  * - `api_key`: an organization API key acting for its creator, who is the
  *   accountable approver (`member` = the creator's CURRENT membership, null if
  *   they left the organization, which refuses the approval). The key identity
@@ -57,37 +56,26 @@ export type ApprovalActor =
       member: AuthVariables["member"] | null;
     };
 
-/** What a successful approval does to the job. */
-export type ApprovalCompletion =
-  | {
-      /** Cloud: REVIEW → GENERATING_PDF, the worker renders the certificate. */
-      kind: "generate_certificate_pdf";
-      /**
-       * Env-bound financial dispatch, injected by the route: the command owns
-       * the "which service orders, which milestone" flow while the transport
-       * to the finance engine stays with the caller.
-       */
-      sendServiceOrdersToFinance: (params: {
-        organizationId: string;
-        serviceOrderIds: number[];
-        actorUserId: string;
-      }) => Promise<ReadonlyArray<FinanceSendResult>>;
-    }
-  | {
-      /**
-       * Desktop sync: the certificate PDF was rendered offline and is
-       * published as the release. REVIEW → APPROVED.
-       */
-      kind: "publish_desktop_certificate";
-      /**
-       * Stores the PDF. Called only AFTER the approval policy passed (nothing
-       * is uploaded for a refused approval) and before the state transition.
-       */
-      publish: () => Promise<{
-        certificateUrl: string;
-        auditChanges: Record<string, unknown>;
-      }>;
-    };
+/**
+ * What a successful approval does to the job. There is exactly one completion:
+ * approval and certificates are online-only, so the worker renders (and
+ * signs) the certificate. No caller can hand `approveJob` PDF bytes or a
+ * `certificateUrl`.
+ */
+export type ApprovalCompletion = {
+  /** REVIEW → GENERATING_PDF, the worker renders the certificate. */
+  kind: "generate_certificate_pdf";
+  /**
+   * Env-bound financial dispatch, injected by the route: the command owns
+   * the "which service orders, which milestone" flow while the transport
+   * to the finance engine stays with the caller.
+   */
+  sendServiceOrdersToFinance: (params: {
+    organizationId: string;
+    serviceOrderIds: number[];
+    actorUserId: string;
+  }) => Promise<ReadonlyArray<FinanceSendResult>>;
+};
 
 export type FinanceSendResult = {
   ok: boolean;
@@ -228,7 +216,7 @@ async function evaluateRelease(params: {
 
 /**
  * Approve a calibration job — the ONE implementation behind every entry point
- * (cloud route, public API, desktop sync). It owns the ISO/IEC 17025 release
+ * (cloud route, public API). It owns the ISO/IEC 17025 release
  * gates, the compare-and-set status transition, the audit trail and the
  * post-approval side effects, callable without the HTTP pipeline. Route
  * adapters only build the actor and map each result status to a response.
@@ -255,7 +243,7 @@ export async function approveJob(
   // Role gate: the workflow matrix (`calibrationWorkflowPermissions`) — REVIEW
   // is the `in_review` workflow state. Same effective-role mapping as the
   // `requireCalibrationAction` guard, so a caller that bypassed (or never had)
-  // the route guard — desktop sync, a future entry point — is still held to it.
+  // the route guard — a future entry point — is still held to it.
   if (
     !canPerformCalibrationAction(
       getCalibrationAuthorizationRole(memberData),
@@ -282,15 +270,8 @@ export async function approveJob(
     return { status: "not_found" };
   }
 
-  // A desktop-published certificate for a job the cloud already released
-  // (GENERATING_PDF is reachable only through this command) is not a second
-  // approval: the gates ran when it was released and the approver stays.
-  const publishOnly =
-    completion.kind === "publish_desktop_certificate" &&
-    existing.status === "GENERATING_PDF";
-
   // Can only approve from REVIEW status
-  if (existing.status !== "REVIEW" && !publishOnly) {
+  if (existing.status !== "REVIEW") {
     return { status: "invalid_status", currentStatus: existing.status };
   }
 
@@ -306,8 +287,8 @@ export async function approveJob(
   // member can access the job's unit by construction (no unit-scope join
   // needed here).
   if (
-    !publishOnly &&
-    (existing.technicianId === approverId || existing.createdBy === approverId)
+    existing.technicianId === approverId ||
+    existing.createdBy === approverId
   ) {
     const [alternateApprover] = await db
       .select({ id: member.id })
@@ -332,15 +313,13 @@ export async function approveJob(
   // — skipped when the org has no signatory records. Distinct from execution
   // competence (which gates the technician at assignment) and from the
   // self-approval gate above — four-eyes by identity vs. signatory scope.
-  if (!publishOnly) {
-    const signatoryGate = await checkApproverIsAuthorizedSignatory({
-      organizationId: memberData.organizationId,
-      approverId,
-      assetId: existing.assetId,
-    });
-    if (!signatoryGate.ok) {
-      return { status: "not_authorized_signatory" };
-    }
+  const signatoryGate = await checkApproverIsAuthorizedSignatory({
+    organizationId: memberData.organizationId,
+    approverId,
+    assetId: existing.assetId,
+  });
+  if (!signatoryGate.ok) {
+    return { status: "not_authorized_signatory" };
   }
 
   // Check environmental conditions - block approval if out of limits without justification
@@ -348,8 +327,7 @@ export async function approveJob(
     existing.environmentalSnapshot &&
     !existing.environmentalSnapshot.withinLimits &&
     !existing.environmentalSnapshot.outOfLimitsJustification &&
-    !values.environmentalJustification &&
-    !publishOnly
+    !values.environmentalJustification
   ) {
     return {
       status: "environmental_justification_required",
@@ -357,37 +335,20 @@ export async function approveJob(
     };
   }
 
-  // The release evaluation below (as-found verdict, accredited-scope
-  // classification and its documented override) is frozen at the moment of
-  // release. It is NOT recomputed for a publish-only desktop push on a job the
-  // cloud already released: that would re-derive it from `values: {}` and erase
-  // the override justification recorded with the original approval (the
-  // seal-suppression record), so the stored record is kept as is.
-  const approvedAt =
-    completion.kind === "publish_desktop_certificate"
-      ? (existing.approvedAt ?? new Date())
-      : new Date();
-  const evaluation = publishOnly
-    ? null
-    : await evaluateRelease({
-        existing,
-        organizationId: memberData.organizationId,
-        values,
-        approvedAt,
-      });
-  if (evaluation?.status === "scope_violation") {
+  // The release evaluation (as-found verdict, accredited-scope classification
+  // and its documented override) is frozen at the moment of release.
+  const approvedAt = new Date();
+  const evaluation = await evaluateRelease({
+    existing,
+    organizationId: memberData.organizationId,
+    values,
+    approvedAt,
+  });
+  if (evaluation.status === "scope_violation") {
     return evaluation;
   }
 
-  // Every gate passed. A desktop certificate is stored only now, so a refused
-  // approval uploads nothing.
-  const published =
-    completion.kind === "publish_desktop_certificate"
-      ? await completion.publish()
-      : null;
-
   const scopeChanges =
-    evaluation &&
     existing.scopeComplianceStatus !== evaluation.scopeCompliance.status
       ? {
           scopeComplianceStatus: {
@@ -396,7 +357,7 @@ export async function approveJob(
           },
         }
       : {};
-  const appliedScopeOverride = evaluation?.appliedScopeOverride ?? null;
+  const appliedScopeOverride = evaluation.appliedScopeOverride;
 
   // Status transition + audit row in ONE transaction, compare-and-set on the
   // status that was evaluated: a concurrent or repeated approval matches zero
@@ -416,46 +377,27 @@ export async function approveJob(
         }
       : {};
 
-  const transition: Partial<typeof calibrationJob.$inferInsert> = published
-    ? {
-        status: "APPROVED",
-        certificateUrl: published.certificateUrl,
-        approvedBy: existing.approvedBy ?? approverId,
-        certificateTemplateSnapshot:
-          existing.certificateTemplateSnapshot ?? null,
-        updatedAt: new Date(),
-      }
-    : {
-        // We set approved_by now so the PDF worker can fetch it.
-        status: "GENERATING_PDF",
-        approvedBy: approverId,
-      };
-
   const outcome = await db.transaction(async (tx) => {
     const [updated] = await tx
       .update(calibrationJob)
       .set({
-        ...transition,
-        // Publish-only keeps every field the original approval wrote
-        // (approver, time, as-found, scope verdict and override).
-        ...(evaluation
-          ? {
-              approvedAt,
-              ...(evaluation.environmentalSnapshot
-                ? { environmentalSnapshot: evaluation.environmentalSnapshot }
-                : {}),
-              asFoundConformity: evaluation.asFound.conformity,
-              asFoundMargins: evaluation.asFound.margins,
-              scopeComplianceStatus: evaluation.scopeCompliance.status,
-              scopeComplianceFindings: evaluation.scopeCompliance.findings,
-              scopeOverrideJustification: evaluation.appliedScopeOverride,
-              // A resubmitted (previously rejected) job is released clean:
-              // the stale rejection must not read as the current state.
-              rejectedBy: null,
-              rejectedAt: null,
-              rejectionReason: null,
-            }
+        // We set approved_by now so the PDF worker can fetch it.
+        status: "GENERATING_PDF",
+        approvedBy: approverId,
+        approvedAt,
+        ...(evaluation.environmentalSnapshot
+          ? { environmentalSnapshot: evaluation.environmentalSnapshot }
           : {}),
+        asFoundConformity: evaluation.asFound.conformity,
+        asFoundMargins: evaluation.asFound.margins,
+        scopeComplianceStatus: evaluation.scopeCompliance.status,
+        scopeComplianceFindings: evaluation.scopeCompliance.findings,
+        scopeOverrideJustification: evaluation.appliedScopeOverride,
+        // A resubmitted (previously rejected) job is released clean:
+        // the stale rejection must not read as the current state.
+        rejectedBy: null,
+        rejectedAt: null,
+        rejectionReason: null,
       })
       .where(
         and(
@@ -470,78 +412,47 @@ export async function approveJob(
       return null;
     }
 
-    await tx.insert(jobAuditLog).values(
-      published
-        ? {
-            jobId,
-            action: "certificate_published_from_desktop",
-            changes: {
-              source: "desktop_sync",
-              ...approvedVia,
-              status: { old: existing.status, new: "APPROVED" },
-              ...scopeChanges,
-              approvedBy: {
-                old: existing.approvedBy,
-                new: existing.approvedBy ?? approverId,
+    await tx.insert(jobAuditLog).values({
+      jobId,
+      action: "approve",
+      changes: {
+        status: { old: existing.status, new: "GENERATING_PDF" },
+        ...approvedVia,
+        // Recorded on ANY transition — including adverse → null when the
+        // guard stopped applying (scope lines deleted, vigência lapsed).
+        // Erasing a previously frozen verdict without an audit entry
+        // would leave a §8.4 gap and make bypass-by-deleting-scope-lines
+        // invisible.
+        ...scopeChanges,
+        ...(appliedScopeOverride
+          ? {
+              scopeOverrideJustification: {
+                old: existing.scopeOverrideJustification,
+                new: appliedScopeOverride,
               },
-              approvedAt: {
-                old: existing.approvedAt?.toISOString() ?? null,
-                new: approvedAt.toISOString(),
-              },
-              certificateUrl: {
-                old: existing.certificateUrl,
-                new: published.certificateUrl,
-              },
-              ...published.auditChanges,
-            },
-            performedBy: approverId,
-            ipAddress: input.metadata.ipAddress ?? null,
-          }
-        : {
-            jobId,
-            action: "approve",
-            changes: {
-              status: { old: existing.status, new: "GENERATING_PDF" },
-              ...approvedVia,
-              // Recorded on ANY transition — including adverse → null when the
-              // guard stopped applying (scope lines deleted, vigência lapsed).
-              // Erasing a previously frozen verdict without an audit entry
-              // would leave a §8.4 gap and make bypass-by-deleting-scope-lines
-              // invisible.
-              ...scopeChanges,
-              ...(appliedScopeOverride
-                ? {
-                    scopeOverrideJustification: {
-                      old: existing.scopeOverrideJustification,
-                      new: appliedScopeOverride,
-                    },
-                  }
-                : {}),
-            },
-            performedBy: approverId,
-            ipAddress: input.metadata.ipAddress ?? null,
-            // Keep the approver's own notes alongside the override record —
-            // the downgrade must not erase the supplied approval reason from
-            // the trail.
-            reason: appliedScopeOverride
-              ? [
-                  `Aprovado SEM selo de acreditação (violação de escopo/CMC documentada): ${appliedScopeOverride}`,
-                  values.reason?.trim() || null,
-                ]
-                  .filter(Boolean)
-                  .join(" | ")
-              : values.reason || "Aprovado - Gerando PDF",
-          },
-    );
+            }
+          : {}),
+      },
+      performedBy: approverId,
+      ipAddress: input.metadata.ipAddress ?? null,
+      // Keep the approver's own notes alongside the override record —
+      // the downgrade must not erase the supplied approval reason from
+      // the trail.
+      reason: appliedScopeOverride
+        ? [
+            `Aprovado SEM selo de acreditação (violação de escopo/CMC documentada): ${appliedScopeOverride}`,
+            values.reason?.trim() || null,
+          ]
+            .filter(Boolean)
+            .join(" | ")
+        : values.reason || "Aprovado - Gerando PDF",
+    });
 
     // Outbox: when certificate jobs are dispatched through `app_queue_job`
     // (same Postgres) the queue row commits atomically with the approval, so a
     // dispatch failure can never strand the job in GENERATING_PDF — the
     // stale-lease backstop owns every row that exists.
-    const staged =
-      completion.kind === "generate_certificate_pdf"
-        ? await stageBackgroundJob(tx, { jobId, userId: approverId })
-        : null;
+    const staged = await stageBackgroundJob(tx, { jobId, userId: approverId });
 
     return { updated, staged };
   });
@@ -551,24 +462,22 @@ export async function approveJob(
   }
   const { updated, staged } = outcome;
 
-  if (completion.kind === "generate_certificate_pdf") {
-    if (staged) {
-      await dispatchStagedBackgroundJob();
-    } else {
-      try {
-        await enqueueBackgroundJob({ jobId, userId: approverId });
-      } catch (error) {
-        // Not durable in our database (Vercel Queue / in-process): nothing
-        // would ever pick the job up. Compensate instead of leaving it in
-        // GENERATING_PDF forever.
-        await revertApprovalAfterDispatchFailure({
-          existing,
-          approverId,
-          error,
-          ipAddress: input.metadata.ipAddress ?? null,
-        });
-        return { status: "dispatch_failed" };
-      }
+  if (staged) {
+    await dispatchStagedBackgroundJob();
+  } else {
+    try {
+      await enqueueBackgroundJob({ jobId, userId: approverId });
+    } catch (error) {
+      // Not durable in our database (Vercel Queue / in-process): nothing
+      // would ever pick the job up. Compensate instead of leaving it in
+      // GENERATING_PDF forever.
+      await revertApprovalAfterDispatchFailure({
+        existing,
+        approverId,
+        error,
+        ipAddress: input.metadata.ipAddress ?? null,
+      });
+      return { status: "dispatch_failed" };
     }
   }
 
@@ -580,25 +489,22 @@ export async function approveJob(
     assetId: existing.assetId,
     calibrationDate: existing.performedAt ?? updated.approvedAt ?? null,
     performedBy: approverId,
-    source: published ? "desktop_certificate_publish" : "job_approval",
+    source: "job_approval",
   });
 
-  if (completion.kind === "generate_certificate_pdf") {
-    runCloudApprovalSideEffects({
-      existing,
-      updated,
-      approverId,
-      organizationId: memberData.organizationId,
-      conformity: evaluation?.asFound.conformity ?? null,
-      sendServiceOrdersToFinance: completion.sendServiceOrdersToFinance,
-    });
-  }
+  runCloudApprovalSideEffects({
+    existing,
+    updated,
+    approverId,
+    organizationId: memberData.organizationId,
+    conformity: evaluation.asFound.conformity,
+    sendServiceOrdersToFinance: completion.sendServiceOrdersToFinance,
+  });
 
   return {
     status: "approved",
     job: updated,
-    scopeCompliance:
-      evaluation?.scopeCompliance.status ?? existing.scopeComplianceStatus,
+    scopeCompliance: evaluation.scopeCompliance.status,
   };
 }
 
@@ -677,10 +583,7 @@ function runCloudApprovalSideEffects(params: {
   approverId: string;
   organizationId: string;
   conformity: JobRow["asFoundConformity"];
-  sendServiceOrdersToFinance: Extract<
-    ApprovalCompletion,
-    { kind: "generate_certificate_pdf" }
-  >["sendServiceOrdersToFinance"];
+  sendServiceOrdersToFinance: ApprovalCompletion["sendServiceOrdersToFinance"];
 }) {
   const { existing, updated, approverId, organizationId } = params;
   const jobId = existing.id;
