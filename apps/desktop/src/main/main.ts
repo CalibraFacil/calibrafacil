@@ -80,6 +80,7 @@ import {
   desktopWindowIconPath,
   hideMainWindowMenu,
 } from "./main-window";
+import { installUnloadConfirmation } from "./unload-confirmation";
 import { getDesktopLogFilePath, installDesktopLogger } from "./desktop-log";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
@@ -293,6 +294,22 @@ function createWindow(restored: ResolvedWindowState) {
   installRendererDiagnostics(window);
   hideMainWindowMenu(window);
   installWindowStatePersistence(window, restored);
+  // The calibration worksheet arms a beforeunload prompt while it holds unsaved
+  // readings; without a handler Electron cancels reload/close silently.
+  installUnloadConfirmation(window, () => {
+    const choice = dialog.showMessageBoxSync(window, {
+      type: "warning",
+      title: desktopAppName,
+      message: "Há leituras não salvas. Sair sem salvar?",
+      detail:
+        "Um rascunho local será mantido neste dispositivo e poderá ser restaurado ao reabrir a execução.",
+      buttons: ["Sair sem salvar", "Continuar editando"],
+      defaultId: 1,
+      cancelId: 1,
+      noLink: true,
+    });
+    return choice === 0;
+  });
 
   mainWindow.on("page-title-updated", (event) => {
     event.preventDefault();
