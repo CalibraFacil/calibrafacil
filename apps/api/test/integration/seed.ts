@@ -4,6 +4,7 @@ import {
   organization,
   organizationUnit,
   member,
+  memberUnitAssignment,
   organizationApiKey,
   customer,
 } from "@calibra-facil/db/schema";
@@ -70,6 +71,21 @@ export async function seedOrg(params?: {
 
   if (!unit) throw new Error("seedOrg: failed to create default unit");
   return { orgId, userId, memberId, unitId: unit.id };
+}
+
+/**
+ * Promote a seeded member to `unit_admin` of its unit (member_unit_assignment),
+ * WITHOUT changing the org-level role. This is the "scoped manager" persona:
+ * a technician/member who administers one unit but is not an org admin.
+ */
+export async function grantUnitAdmin(org: SeededOrg): Promise<void> {
+  await db.insert(memberUnitAssignment).values({
+    organizationId: org.orgId,
+    memberId: org.memberId,
+    unitId: org.unitId,
+    role: "unit_admin",
+    createdBy: org.userId,
+  });
 }
 
 export type SeededPortalContext = {

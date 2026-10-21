@@ -18,6 +18,7 @@
  *   REQ-CNUM-003  RBAC: technician/operator/member → 403 on GET and PUT; admin → 200
  *   REQ-CNUM-004  Audit trail: PUT → audit-log row with correct performedBy + changes
  *   REQ-CNUM-005  Unauthenticated GET/PUT → 401
+ *   REQ-CNUM-006  Org-wide write: PUT needs settings:update (owner/admin); a unit_admin → 403
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
@@ -30,7 +31,7 @@ import {
 import { eq, and } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
-import { seedOrg } from "../../test/integration/seed";
+import { grantUnitAdmin, seedOrg } from "../../test/integration/seed";
 
 const JSON_HEADERS = { "content-type": "application/json" };
 
@@ -359,6 +360,60 @@ describe("certificateNumberingRouter — real DB + real middleware", () => {
       method: "PUT",
       headers: JSON_HEADERS,
       body: JSON.stringify(VALID_PUT_PAYLOAD),
+    });
+
+    expect(res.status).toBe(200);
+  });
+
+  // -------------------------------------------------------------------------
+  // REQ-CNUM-006  The profile is org-wide (keyed on organizationId): changing
+  // it re-numbers every unit, so a single-unit unit_admin must NOT write it.
+  // -------------------------------------------------------------------------
+
+  it("REQ-CNUM-006: PUT / as owner → 200", async () => {
+    const org = await seedOrg({ orgId: "org-1", role: "owner" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    const res = await certificateNumberingRouter.request("/", {
+      method: "PUT",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(VALID_PUT_PAYLOAD),
+    });
+
+    expect(res.status).toBe(200);
+  });
+
+  it("REQ-CNUM-006: PUT / as a single-unit unit_admin → 403 and nothing is persisted", async () => {
+    const org = await seedOrg({ orgId: "org-1", role: "technician" });
+    await grantUnitAdmin(org);
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    const res = await certificateNumberingRouter.request("/", {
+      method: "PUT",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify(VALID_PUT_PAYLOAD),
+    });
+
+    expect(res.status).toBe(403);
+    const profiles = await db
+      .select()
+      .from(certificateNumberingProfile)
+      .where(eq(certificateNumberingProfile.organizationId, org.orgId));
+    expect(profiles).toHaveLength(0);
+    const audit = await db
+      .select()
+      .from(certificateNumberingAuditLog)
+      .where(eq(certificateNumberingAuditLog.organizationId, org.orgId));
+    expect(audit).toHaveLength(0);
+  });
+
+  it("REQ-CNUM-006: a unit_admin can still read GET /audit-log (read access unchanged)", async () => {
+    const org = await seedOrg({ orgId: "org-1", role: "technician" });
+    await grantUnitAdmin(org);
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    const res = await certificateNumberingRouter.request("/audit-log", {
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
     });
 
     expect(res.status).toBe(200);

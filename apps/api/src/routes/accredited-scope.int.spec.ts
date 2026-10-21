@@ -4,11 +4,12 @@ import { db } from "@calibra-facil/db";
 import {
   accreditedScopeLine,
   accreditedScopeLineAuditLog,
+  organization,
 } from "@calibra-facil/db/schema";
 import { eq, and } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
-import { seedOrg } from "../../test/integration/seed";
+import { grantUnitAdmin, seedOrg } from "../../test/integration/seed";
 
 // Real-DB + real-RBAC integration tests for the accredited-scope router
 // (#427 — ISO/IEC 17025 §7.6/§7.8.3 CMC guard, Phase 0). Only the better-auth
@@ -259,5 +260,87 @@ describe("accreditedScopeRouter — real DB + real middleware", () => {
       .where(eq(accreditedScopeLineAuditLog.scopeLineId, lineId));
     expect(audit).toHaveLength(1);
     expect(audit[0]?.action).toBe("delete");
+  });
+
+  // REQ-CMC-006 --------------------------------------------------------------
+  // PUT /enforcement flips organization.scopeEnforcementMode for EVERY unit, so
+  // it needs the org-level settings:update permission (owner/admin), not the
+  // unit-scoped manager gate that a single-unit unit_admin passes.
+  async function readMode(orgId: string) {
+    const [row] = await db
+      .select({ mode: organization.scopeEnforcementMode })
+      .from(organization)
+      .where(eq(organization.id, orgId));
+    return row?.mode;
+  }
+
+  it.each(["admin", "owner"] as const)(
+    "REQ-CMC-006: PUT /enforcement as role=%s -> 200, persists and writes the audit row",
+    async (role) => {
+      const org = await seedOrg({ orgId: "org-a", role });
+      await db
+        .update(organization)
+        .set({ scopeEnforcementMode: "warn" })
+        .where(eq(organization.id, org.orgId));
+
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+      const res = await accreditedScopeRouter.request("/enforcement", {
+        method: "PUT",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ mode: "enforce" }),
+      });
+
+      expect(res.status).toBe(200);
+      expect(await readMode(org.orgId)).toBe("enforce");
+      const audit = await db
+        .select()
+        .from(accreditedScopeLineAuditLog)
+        .where(
+          and(
+            eq(accreditedScopeLineAuditLog.organizationId, org.orgId),
+            eq(accreditedScopeLineAuditLog.action, "enforcement_mode_change"),
+          ),
+        );
+      expect(audit).toHaveLength(1);
+      expect(audit[0]?.performedBy).toBe(org.userId);
+    },
+  );
+
+  it("REQ-CMC-006: PUT /enforcement as a single-unit unit_admin -> 403 and the org mode is unchanged", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "technician" });
+    await grantUnitAdmin(org);
+    await db
+      .update(organization)
+      .set({ scopeEnforcementMode: "enforce" })
+      .where(eq(organization.id, org.orgId));
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await accreditedScopeRouter.request("/enforcement", {
+      method: "PUT",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({ mode: "warn" }),
+    });
+
+    expect(res.status).toBe(403);
+    expect(await readMode(org.orgId)).toBe("enforce");
+    const audit = await db
+      .select()
+      .from(accreditedScopeLineAuditLog)
+      .where(eq(accreditedScopeLineAuditLog.organizationId, org.orgId));
+    expect(audit).toHaveLength(0);
+  });
+
+  it("REQ-CMC-006: unit_admin keeps unit-scoped access (PUT / scope line still 200)", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "technician" });
+    await grantUnitAdmin(org);
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await accreditedScopeRouter.request("/", {
+      method: "PUT",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify(validLine),
+    });
+
+    expect(res.status).toBe(200);
   });
 });

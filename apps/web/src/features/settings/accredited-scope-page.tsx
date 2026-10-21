@@ -32,6 +32,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
+import { useHasPermission } from '@/components/permission-gate'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { DateInput } from '@/components/ui/date-input'
 import { Panel, PanelHeader } from '@/components/instrument-panel'
@@ -60,6 +61,8 @@ import {
 
 export function AccreditedScopeSettingsPage() {
   const queryClient = useQueryClient()
+  // The issuance guard is organization-wide: unit admins edit scope lines only.
+  const canSetEnforcement = useHasPermission({ settings: ['update'] })
   const [dialogOpen, setDialogOpen] = useState(false)
   const [form, setForm] = useState<ScopeLineFormState>(emptyScopeLineForm)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -205,7 +208,9 @@ export function AccreditedScopeSettingsPage() {
                   }
                 }}
               >
-                <SelectTrigger disabled={enforcementMutation.isPending}>
+                <SelectTrigger
+                  disabled={!canSetEnforcement || enforcementMutation.isPending}
+                >
                   {scopeData?.enforcementMode === 'enforce'
                     ? 'Bloquear emissão acreditada'
                     : 'Apenas avisar'}
@@ -223,6 +228,11 @@ export function AccreditedScopeSettingsPage() {
                 Comece no modo aviso e ative o bloqueio depois de validar as
                 linhas do escopo.
               </p>
+              {canSetEnforcement ? null : (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Só o administrador da organização altera a guarda.
+                </p>
+              )}
             </div>
           </Panel>
           <Panel className="p-5 sm:p-6">
