@@ -135,4 +135,34 @@ describe("Postgres queue helpers", () => {
 
     expect(dbMock.execute).toHaveBeenCalledOnce();
   });
+
+  it("REQ-QDL-001 splits the reclaimed rows into released (PENDING) and dead-lettered (FAILED)", async () => {
+    dbMock.execute.mockResolvedValue({
+      rows: [
+        {
+          id: 1,
+          type: "CERTIFICATE",
+          payload: { jobId: 9 },
+          status: "PENDING",
+        },
+        {
+          id: 2,
+          type: "CERTIFICATE",
+          payload: { type: "CERTIFICATE", jobId: 10, userId: "user_1" },
+          status: "FAILED",
+        },
+      ],
+    });
+
+    await expect(releaseStaleQueueJobs(60_000)).resolves.toEqual({
+      released: 1,
+      deadLettered: [
+        {
+          id: 2,
+          type: "CERTIFICATE",
+          payload: { type: "CERTIFICATE", jobId: 10, userId: "user_1" },
+        },
+      ],
+    });
+  });
 });

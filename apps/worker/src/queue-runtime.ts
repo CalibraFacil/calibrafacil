@@ -20,6 +20,7 @@ import {
   releaseStaleQueueJobs,
   type ClaimedQueueJob,
 } from "@calibra-facil/db/queue";
+import { rejectDeadLetteredCertificateRenders } from "@calibra-facil/db/queue-render-recovery";
 import {
   appQueueJobReceiptKey,
   claimQueueReceipt,
@@ -290,13 +291,31 @@ async function claimAndProcessBatch(
   return claimed.length;
 }
 
+// Reclaim expired PROCESSING leases. A row whose lease expired on its final
+// attempt is dead-lettered (FAILED) instead of re-queued — a job that crashes the
+// worker process must not be re-claimed forever — and the certificate it left in
+// GENERATING_PDF is rejected here, since no worker will ever finish it. The
+// rejection is best-effort: the queue-backstop cron's stuck-render sweep is the
+// safety net, so a failure must never stop the drain.
+async function reclaimStaleJobs(staleAfterMs: number): Promise<void> {
+  const { deadLettered } = await releaseStaleQueueJobs(staleAfterMs);
+  if (deadLettered.length === 0) return;
+
+  console.error(
+    `[Worker] Dead-lettered ${deadLettered.length} queue job(s) whose lease expired on the final attempt`,
+  );
+  await rejectDeadLetteredCertificateRenders(deadLettered).catch((error) => {
+    console.error("[Worker] Failed to reject dead-lettered renders", error);
+  });
+}
+
 // Release stale jobs, then claim + process one batch. Used by the legacy
 // poller (`bun.ts`) on each tick.
 export async function processQueueBatch(
   env: WorkerEnv,
   config: QueueRuntimeConfig,
 ): Promise<number> {
-  await releaseStaleQueueJobs(config.staleAfterMs);
+  await reclaimStaleJobs(config.staleAfterMs);
   return claimAndProcessBatch(env, config.workerId, config.batchSize);
 }
 
@@ -309,7 +328,7 @@ export async function drainQueue(
   config: QueueRuntimeConfig,
   maxBatches = 1_000,
 ): Promise<number> {
-  await releaseStaleQueueJobs(config.staleAfterMs);
+  await reclaimStaleJobs(config.staleAfterMs);
 
   let processed = 0;
   for (let batch = 0; batch < maxBatches; batch += 1) {

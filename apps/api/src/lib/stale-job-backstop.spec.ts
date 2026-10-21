@@ -18,38 +18,74 @@ import {
 
 const SAVED = {
   QUEUE_STALE_AFTER_MS: process.env.QUEUE_STALE_AFTER_MS,
+  STUCK_RENDER_AFTER_MS: process.env.STUCK_RENDER_AFTER_MS,
   DOCUMENT_WORKER_URL: process.env.DOCUMENT_WORKER_URL,
 };
+
+function reclaimed(released: number, deadLettered: unknown[] = []) {
+  return { released, deadLettered };
+}
+
+const DEAD_LETTERED_ROW = {
+  id: 41,
+  type: "CERTIFICATE" as const,
+  payload: { type: "CERTIFICATE", jobId: 7, userId: "user-1" },
+};
+
+/** Every dep but the two thresholds, so the env-driven defaults apply. */
+function depsWithoutThresholds(
+  rejectStuckRenders: StaleJobBackstopDeps["rejectStuckRenders"],
+): Partial<StaleJobBackstopDeps> {
+  return {
+    releaseStaleJobs: vi.fn(async () => reclaimed(0)),
+    rejectDeadLetteredRenders: vi.fn(async () => 0),
+    rejectStuckRenders,
+    countRecoverableJobs: vi.fn(async () => 0),
+    resolveDocumentWorkerUrl: () => null,
+    wake: vi.fn(async () => {}),
+    pruneReceipts: vi.fn(async () => 0),
+  };
+}
 
 function makeDeps(
   overrides: Partial<StaleJobBackstopDeps> = {},
 ): StaleJobBackstopDeps {
   return {
-    releaseStaleJobs: vi.fn(async () => 0),
+    releaseStaleJobs: vi.fn(async () => reclaimed(0)),
+    rejectDeadLetteredRenders: vi.fn(async () => 0),
+    rejectStuckRenders: vi.fn(async () => 0),
     countRecoverableJobs: vi.fn(async () => 0),
     resolveDocumentWorkerUrl: () => "https://worker.example.test",
     wake: vi.fn(async () => {}),
     pruneReceipts: vi.fn(async () => 0),
     staleAfterMs: 10 * 60_000,
+    stuckRenderAfterMs: 60 * 60_000,
     ...overrides,
   };
+}
+
+function restoreEnv(name: string, value: string | undefined) {
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   delete process.env.QUEUE_STALE_AFTER_MS;
+  delete process.env.STUCK_RENDER_AFTER_MS;
   delete process.env.DOCUMENT_WORKER_URL;
 });
 
 afterEach(() => {
-  process.env.QUEUE_STALE_AFTER_MS = SAVED.QUEUE_STALE_AFTER_MS;
-  process.env.DOCUMENT_WORKER_URL = SAVED.DOCUMENT_WORKER_URL;
+  restoreEnv("QUEUE_STALE_AFTER_MS", SAVED.QUEUE_STALE_AFTER_MS);
+  restoreEnv("STUCK_RENDER_AFTER_MS", SAVED.STUCK_RENDER_AFTER_MS);
+  restoreEnv("DOCUMENT_WORKER_URL", SAVED.DOCUMENT_WORKER_URL);
 });
 
 describe("runStaleJobBackstop (REL-03 periodic orphan-job backstop)", () => {
   it("REQ-REL-PDF-001 re-claims stale leases and re-drives them by waking the worker — no new enqueue", async () => {
     const deps = makeDeps({
-      releaseStaleJobs: vi.fn(async () => 2),
+      releaseStaleJobs: vi.fn(async () => reclaimed(2)),
       countRecoverableJobs: vi.fn(async () => 2),
       resolveDocumentWorkerUrl: () => "https://worker.example.test",
       wake: vi.fn(async () => {}),
@@ -67,6 +103,9 @@ describe("runStaleJobBackstop (REL-03 periodic orphan-job backstop)", () => {
     expect(deps.wake).toHaveBeenCalledWith("https://worker.example.test");
     expect(result).toEqual({
       released: 2,
+      deadLettered: 0,
+      rejectedRenders: 0,
+      stuckRendersRejected: 0,
       pending: 2,
       woke: true,
       prunedReceipts: 0,
@@ -78,7 +117,7 @@ describe("runStaleJobBackstop (REL-03 periodic orphan-job backstop)", () => {
     // re-claims. releaseStaleQueueJobs only touches PROCESSING, so released is 0,
     // but the row is still recoverable and MUST be re-driven.
     const deps = makeDeps({
-      releaseStaleJobs: vi.fn(async () => 0),
+      releaseStaleJobs: vi.fn(async () => reclaimed(0)),
       countRecoverableJobs: vi.fn(async () => 1),
       wake: vi.fn(async () => {}),
     });
@@ -88,6 +127,9 @@ describe("runStaleJobBackstop (REL-03 periodic orphan-job backstop)", () => {
     expect(deps.wake).toHaveBeenCalledTimes(1);
     expect(result).toEqual({
       released: 0,
+      deadLettered: 0,
+      rejectedRenders: 0,
+      stuckRendersRejected: 0,
       pending: 1,
       woke: true,
       prunedReceipts: 0,
@@ -96,7 +138,7 @@ describe("runStaleJobBackstop (REL-03 periodic orphan-job backstop)", () => {
 
   it("REQ-REL-PDF-001 does not wake the worker when nothing is recoverable (respects Neon-suspend / avoids a needless container boot)", async () => {
     const deps = makeDeps({
-      releaseStaleJobs: vi.fn(async () => 0),
+      releaseStaleJobs: vi.fn(async () => reclaimed(0)),
       countRecoverableJobs: vi.fn(async () => 0),
       wake: vi.fn(async () => {}),
     });
@@ -106,6 +148,9 @@ describe("runStaleJobBackstop (REL-03 periodic orphan-job backstop)", () => {
     expect(deps.wake).not.toHaveBeenCalled();
     expect(result).toEqual({
       released: 0,
+      deadLettered: 0,
+      rejectedRenders: 0,
+      stuckRendersRejected: 0,
       pending: 0,
       woke: false,
       prunedReceipts: 0,
@@ -121,7 +166,7 @@ describe("runStaleJobBackstop (REL-03 periodic orphan-job backstop)", () => {
     const wake = vi.fn(async () => {});
     const enqueueSpy = vi.fn();
     const deps = makeDeps({
-      releaseStaleJobs: vi.fn(async () => 1),
+      releaseStaleJobs: vi.fn(async () => reclaimed(1)),
       countRecoverableJobs: vi.fn(async () => 1),
       wake,
     });
@@ -140,7 +185,7 @@ describe("runStaleJobBackstop (REL-03 periodic orphan-job backstop)", () => {
 
   it("does not wake when no document worker is configured (nothing to drive; only the cheap release/count run)", async () => {
     const deps = makeDeps({
-      releaseStaleJobs: vi.fn(async () => 1),
+      releaseStaleJobs: vi.fn(async () => reclaimed(1)),
       countRecoverableJobs: vi.fn(async () => 3),
       resolveDocumentWorkerUrl: () => null,
       wake: vi.fn(async () => {}),
@@ -152,6 +197,9 @@ describe("runStaleJobBackstop (REL-03 periodic orphan-job backstop)", () => {
     expect(deps.wake).not.toHaveBeenCalled();
     expect(result).toEqual({
       released: 1,
+      deadLettered: 0,
+      rejectedRenders: 0,
+      stuckRendersRejected: 0,
       pending: 3,
       woke: false,
       prunedReceipts: 0,
@@ -160,12 +208,14 @@ describe("runStaleJobBackstop (REL-03 periodic orphan-job backstop)", () => {
 
   it("defaults the stale-after window to QUEUE_STALE_AFTER_MS when not overridden", async () => {
     process.env.QUEUE_STALE_AFTER_MS = "900000";
-    const releaseStaleJobs = vi.fn(async () => 0);
+    const releaseStaleJobs = vi.fn(async () => reclaimed(0));
 
     // Override only the DB reads + wake; leave staleAfterMs to the default resolver
     // so it is read from the env.
     await runStaleJobBackstop({
       releaseStaleJobs,
+      rejectDeadLetteredRenders: vi.fn(async () => 0),
+      rejectStuckRenders: vi.fn(async () => 0),
       countRecoverableJobs: vi.fn(async () => 0),
       resolveDocumentWorkerUrl: () => null,
       wake: vi.fn(async () => {}),
@@ -173,5 +223,119 @@ describe("runStaleJobBackstop (REL-03 periodic orphan-job backstop)", () => {
     });
 
     expect(releaseStaleJobs).toHaveBeenCalledWith(900_000);
+  });
+});
+
+describe("runStaleJobBackstop dead-letter orchestration (REQ-QDL-002, REQ-QDL-003)", () => {
+  it("REQ-QDL-002 hands the rows the reclaim dead-lettered to the render rejection and reports the counts", async () => {
+    const deps = makeDeps({
+      releaseStaleJobs: vi.fn(async () => reclaimed(1, [DEAD_LETTERED_ROW])),
+      rejectDeadLetteredRenders: vi.fn(async () => 1),
+    });
+
+    const result = await runStaleJobBackstop(deps);
+
+    expect(deps.rejectDeadLetteredRenders).toHaveBeenCalledWith([
+      DEAD_LETTERED_ROW,
+    ]);
+    expect(result).toMatchObject({
+      released: 1,
+      deadLettered: 1,
+      rejectedRenders: 1,
+    });
+  });
+
+  it("REQ-QDL-002 rejects dead-lettered renders only after the reclaim that found them", async () => {
+    const order: string[] = [];
+    const deps = makeDeps({
+      releaseStaleJobs: vi.fn(async () => {
+        order.push("release");
+        return reclaimed(0, [DEAD_LETTERED_ROW]);
+      }),
+      rejectDeadLetteredRenders: vi.fn(async () => {
+        order.push("reject-dead-lettered");
+        return 1;
+      }),
+      rejectStuckRenders: vi.fn(async () => {
+        order.push("sweep");
+        return 0;
+      }),
+      countRecoverableJobs: vi.fn(async () => {
+        order.push("count");
+        return 0;
+      }),
+    });
+
+    await runStaleJobBackstop(deps);
+
+    expect(order).toEqual([
+      "release",
+      "reject-dead-lettered",
+      "sweep",
+      "count",
+    ]);
+  });
+
+  it("REQ-QDL-003 sweeps stuck renders with the configured threshold and reports how many were rejected", async () => {
+    const deps = makeDeps({
+      rejectStuckRenders: vi.fn(async () => 2),
+      stuckRenderAfterMs: 90 * 60_000,
+    });
+
+    const result = await runStaleJobBackstop(deps);
+
+    expect(deps.rejectStuckRenders).toHaveBeenCalledWith(90 * 60_000);
+    expect(result.stuckRendersRejected).toBe(2);
+  });
+
+  it("REQ-QDL-003 defaults the stuck-render threshold to 60 minutes", async () => {
+    const rejectStuckRenders = vi.fn(async () => 0);
+
+    await runStaleJobBackstop(depsWithoutThresholds(rejectStuckRenders));
+
+    expect(rejectStuckRenders).toHaveBeenCalledWith(60 * 60_000);
+  });
+
+  it("REQ-QDL-003 reads the threshold from STUCK_RENDER_AFTER_MS", async () => {
+    process.env.STUCK_RENDER_AFTER_MS = "1800000";
+    const rejectStuckRenders = vi.fn(async () => 0);
+
+    await runStaleJobBackstop(depsWithoutThresholds(rejectStuckRenders));
+
+    expect(rejectStuckRenders).toHaveBeenCalledWith(30 * 60_000);
+  });
+
+  it("REQ-QDL-003 ignores an invalid STUCK_RENDER_AFTER_MS", async () => {
+    process.env.STUCK_RENDER_AFTER_MS = "soon";
+    const rejectStuckRenders = vi.fn(async () => 0);
+
+    await runStaleJobBackstop(depsWithoutThresholds(rejectStuckRenders));
+
+    expect(rejectStuckRenders).toHaveBeenCalledWith(60 * 60_000);
+  });
+
+  it("REQ-QDL-002 a failing render rejection never stops the reclaim, the sweep or the wake", async () => {
+    const deps = makeDeps({
+      releaseStaleJobs: vi.fn(async () => reclaimed(1, [DEAD_LETTERED_ROW])),
+      rejectDeadLetteredRenders: vi.fn(async () => {
+        throw new Error("db down");
+      }),
+      rejectStuckRenders: vi.fn(async () => {
+        throw new Error("db down");
+      }),
+      countRecoverableJobs: vi.fn(async () => 1),
+    });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await runStaleJobBackstop(deps);
+
+    expect(result).toMatchObject({
+      released: 1,
+      deadLettered: 1,
+      rejectedRenders: 0,
+      stuckRendersRejected: 0,
+      woke: true,
+    });
+    expect(deps.wake).toHaveBeenCalledTimes(1);
   });
 });

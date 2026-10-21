@@ -210,27 +210,85 @@ export async function failQueueJob(id: number, error: unknown) {
     .where(eq(appQueueJob.id, id));
 }
 
+/** A queue row the lease reclaim gave up on (see `releaseStaleQueueJobs`). */
+export type DeadLetteredQueueJob = {
+  id: number;
+  type: AppQueueJobType;
+  payload: Record<string, unknown>;
+};
+
+export type ReleaseStaleQueueJobsResult = {
+  /** Rows returned to PENDING so they can be claimed again. */
+  released: number;
+  /** Rows moved to FAILED because the lease expired on their final attempt. */
+  deadLettered: DeadLetteredQueueJob[];
+};
+
+function isAppQueueJobType(value: unknown): value is AppQueueJobType {
+  return (
+    value === "CERTIFICATE" ||
+    value === "LABEL" ||
+    value === "SERVICE_ORDER_INTAKE_DOCUMENT" ||
+    value === "SERVICE_ORDER_TAG" ||
+    value === "SERVICE_ORDER_QUOTE" ||
+    value === "SERVICE_ORDER_DELIVERY_RECEIPT" ||
+    value === "INTEGRATION_SYNC" ||
+    value === "AUDIT_PACK" ||
+    value === "OOT_NOTIFICATION"
+  );
+}
+
 // Reclaim rows whose PROCESSING lease has expired (a worker died mid-job, or a
-// drain crashed) back to PENDING so they can be claimed again. Returns the number
-// of rows reclaimed so a periodic backstop can decide whether to re-drive the
-// drain (see apps/api/src/lib/stale-job-backstop.ts / the queue-backstop cron).
+// drain crashed). A row with attempts left goes back to PENDING so it can be
+// claimed again. A row whose lease expired on its FINAL attempt (attempts >=
+// max_attempts) is dead-lettered to FAILED instead: a job that kills the worker
+// process (OOM, a crash in rendering) never reaches `failQueueJob`, so without
+// this it would be re-claimed forever. The dead-lettered rows are returned so the
+// caller can settle whatever the job left in flight (a certificate stuck in
+// GENERATING_PDF — see queue-render-recovery.ts). A periodic backstop uses the
+// counts to decide whether to re-drive the drain (see
+// apps/api/src/lib/stale-job-backstop.ts / the queue-backstop cron).
 export async function releaseStaleQueueJobs(
   staleAfterMs = 10 * 60_000,
-): Promise<number> {
+): Promise<ReleaseStaleQueueJobsResult> {
   const staleBefore = new Date(Date.now() - staleAfterMs);
 
   const result = await db.execute(sql`
     update app_queue_job
-    set status = 'PENDING',
+    set status = case when attempts >= max_attempts then 'FAILED' else 'PENDING' end,
+        available_at = case when attempts >= max_attempts then now() else available_at end,
+        last_error = case
+          when attempts >= max_attempts then
+            'Lease expired on the final attempt (' || attempts || '/' || max_attempts ||
+            '): the worker stopped before finishing the job; dead-lettered.'
+          else last_error
+        end,
         locked_by = null,
         locked_at = null,
         updated_at = now()
     where status = 'PROCESSING'
       and locked_at < ${staleBefore.toISOString()}::timestamptz
-    returning id
+    returning id, type, payload, status
   `);
 
-  return getExecuteRows(result).length;
+  let released = 0;
+  const deadLettered: DeadLetteredQueueJob[] = [];
+  for (const raw of getExecuteRows(result)) {
+    const row = toRecord(raw);
+    if (row.status !== "FAILED") {
+      released += 1;
+      continue;
+    }
+    if (typeof row.id === "number" && isAppQueueJobType(row.type)) {
+      deadLettered.push({
+        id: row.id,
+        type: row.type,
+        payload: toRecord(row.payload),
+      });
+    }
+  }
+
+  return { released, deadLettered };
 }
 
 export type QueueDepth = {

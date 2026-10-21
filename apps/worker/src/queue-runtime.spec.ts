@@ -26,6 +26,7 @@ const {
   completeQueueReceipt,
   releaseQueueReceipt,
   readQueueReceiptsMode,
+  rejectDeadLetteredCertificateRenders,
 } = vi.hoisted(() => ({
   claimQueueJobs: vi.fn(),
   completeQueueJob: vi.fn(),
@@ -36,6 +37,11 @@ const {
   completeQueueReceipt: vi.fn(),
   releaseQueueReceipt: vi.fn(),
   readQueueReceiptsMode: vi.fn(),
+  rejectDeadLetteredCertificateRenders: vi.fn(),
+}));
+
+vi.mock("@calibra-facil/db/queue-render-recovery", () => ({
+  rejectDeadLetteredCertificateRenders,
 }));
 
 vi.mock("@calibra-facil/db/queue", () => ({
@@ -94,7 +100,8 @@ function claimOnce(job: ReturnType<typeof makeJob>) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  releaseStaleQueueJobs.mockResolvedValue(undefined);
+  releaseStaleQueueJobs.mockResolvedValue({ released: 0, deadLettered: [] });
+  rejectDeadLetteredCertificateRenders.mockResolvedValue(0);
   completeQueueJob.mockResolvedValue(undefined);
   failQueueJob.mockResolvedValue(undefined);
   // The failure-recording suite predates the receipt ledger — run it with the
@@ -327,6 +334,49 @@ describe("queue-runtime idempotency receipts", () => {
       idempotencyKey: "app-queue-17",
     });
     expect(failQueueJob).toHaveBeenCalledWith(17, batchError);
+  });
+});
+
+describe("queue-runtime dead-letter handling (REQ-QDL-001, REQ-QDL-002)", () => {
+  const deadLettered = [
+    {
+      id: 41,
+      type: "CERTIFICATE",
+      payload: { type: "CERTIFICATE", jobId: 7, userId: "user-1" },
+    },
+  ];
+
+  it("REQ-QDL-002: rows the lease reclaim dead-lettered are handed to the certificate-render rejection", async () => {
+    releaseStaleQueueJobs.mockResolvedValue({ released: 0, deadLettered });
+    claimQueueJobs.mockResolvedValue([]);
+
+    await drainQueue(fakeEnv, CONFIG);
+
+    expect(rejectDeadLetteredCertificateRenders).toHaveBeenCalledWith(
+      deadLettered,
+    );
+  });
+
+  it("REQ-QDL-002: a failure rejecting the dead-lettered renders never stops the drain", async () => {
+    releaseStaleQueueJobs.mockResolvedValue({ released: 0, deadLettered });
+    rejectDeadLetteredCertificateRenders.mockRejectedValue(
+      new Error("db down"),
+    );
+    claimOnce(makeJob(50));
+    workerQueue.mockImplementationOnce(async (batch: MessageBatchLike) => {
+      batch.messages[0]?.ack();
+    });
+
+    await expect(drainQueue(fakeEnv, CONFIG)).resolves.toBe(1);
+    expect(completeQueueJob).toHaveBeenCalledWith(50);
+  });
+
+  it("REQ-QDL-001: nothing is rejected when the reclaim dead-lettered no row", async () => {
+    claimQueueJobs.mockResolvedValue([]);
+
+    await drainQueue(fakeEnv, CONFIG);
+
+    expect(rejectDeadLetteredCertificateRenders).not.toHaveBeenCalled();
   });
 });
 

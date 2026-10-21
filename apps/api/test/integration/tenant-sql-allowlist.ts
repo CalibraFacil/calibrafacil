@@ -119,6 +119,24 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     reason:
       "Certificate drift sweep re-hashes stored PDFs for every tenant (platform integrity job, not request-scoped).",
   },
+  {
+    category: "cron-queue",
+    file: "packages/db/src/queue-render-recovery.ts",
+    tables: ["calibration_job"],
+    kinds: ["select"],
+    sql: /from calibration_job cj where cj\.status = ''.* and not exists \( select 1 from app_queue_job q where /,
+    reason:
+      "queue-backstop stuck-render sweep: finds GENERATING_PDF certificates older than STUCK_RENDER_AFTER_MS with no live queue row across every tenant; each rejection then runs scoped by the candidate's own organization_id.",
+  },
+  {
+    category: "cron-queue",
+    file: "packages/db/src/queue-render-recovery.ts",
+    tables: ["calibration_job"],
+    kinds: ["select"],
+    sql: /from "calibration_job" where "calibration_job"\."id" = \$\d+ limit/,
+    reason:
+      "queue-backstop dead-letter handling: the app_queue_job payload carries only the job id, so the owning organization is read from the job itself and every following write is scoped by it.",
+  },
   // -------------------------------------------------------------------------
   // portal-cross-org: the client portal reads across laboratories; its tenant
   // boundary is the customer (portal customer scope), not organization_id.
