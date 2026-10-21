@@ -2,6 +2,7 @@ import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 import type { MethodTemplateCatalogEntry } from '@calibra-facil/client-runtime'
 
 import { calibraApi } from '@/utils/api'
+import { keepPreviousDataInScope } from '@/lib/keep-previous-page'
 import {
   ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,
@@ -55,6 +56,7 @@ export function methodsListQueryOptions(input: MethodsListQueryInput) {
         query: input.search || undefined,
         status: input.statusFilter || undefined,
       }) as Promise<MethodsListData>,
+    placeholderData: keepPreviousDataInScope(['methods', input.organizationId]),
   })
 }
 

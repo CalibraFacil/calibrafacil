@@ -66,6 +66,7 @@
     "eslint/preserve-caught-error": "error",
     "calibra/no-api-import-in-frontend": "error",
     "calibra/no-hono-client-outside-client-runtime": "error",
+    "calibra/no-json-error-body-in-routes": "error",
     "calibra/no-router-coupling-in-features": "error"
   },
   "overrides": [

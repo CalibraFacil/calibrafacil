@@ -1,38 +1,8 @@
 import { useMemo } from 'react'
-import {
-  useQuery,
-  useQueryClient,
-  type QueryClient,
-} from '@tanstack/react-query'
-import { createCollection, useLiveQuery } from '@tanstack/react-db'
-import { queryCollectionOptions } from '@tanstack/query-db-collection'
+import { useQuery } from '@tanstack/react-query'
 
-import { fetchJobsList, jobsListQueryOptions } from '@/features/jobs/queries'
-import type { JobsListQueryInput, JobsListStatus } from './types'
-
-function createJobsListCollection(
-  queryClient: QueryClient,
-  input: JobsListQueryInput,
-) {
-  const options = jobsListQueryOptions(input)
-
-  return createCollection(
-    queryCollectionOptions({
-      id: [
-        'jobs-list',
-        input.organizationId,
-        input.page,
-        input.search,
-        input.statusFilter,
-      ].join(':'),
-      queryKey: options.queryKey,
-      queryFn: () => fetchJobsList(input),
-      select: (data) => data.data,
-      queryClient,
-      getKey: (job) => job.id,
-    }),
-  )
-}
+import { jobsListQueryOptions } from '@/features/jobs/queries'
+import type { JobsListStatus } from './types'
 
 export function useJobsListData({
   activeOrganizationId,
@@ -47,9 +17,7 @@ export function useJobsListData({
   search: string
   statusFilter: JobsListStatus | ''
 }) {
-  const queryClient = useQueryClient()
   const organizationId = activeOrganizationId ?? 'no-org'
-  const canLoad = Boolean(activeOrganizationId) && enabled
   const queryInput = useMemo(
     () => ({
       organizationId,
@@ -59,26 +27,11 @@ export function useJobsListData({
     }),
     [organizationId, page, search, statusFilter],
   )
-  const jobsCollection = useMemo(
-    () =>
-      canLoad ? createJobsListCollection(queryClient, queryInput) : undefined,
-    [canLoad, queryClient, queryInput],
-  )
 
-  const queryResult = useQuery({
+  // The list options keep the previous page's rows as placeholder data, so
+  // paging and filtering never flash back to the skeleton.
+  return useQuery({
     ...jobsListQueryOptions(queryInput),
-    enabled: canLoad,
+    enabled: Boolean(activeOrganizationId) && enabled,
   })
-  const liveJobs = useLiveQuery(() => jobsCollection, [jobsCollection])
-
-  return {
-    ...queryResult,
-    data: queryResult.data
-      ? {
-          ...queryResult.data,
-          data: liveJobs.data ?? queryResult.data.data,
-        }
-      : queryResult.data,
-    isLoading: queryResult.isLoading || liveJobs.isLoading,
-  }
 }

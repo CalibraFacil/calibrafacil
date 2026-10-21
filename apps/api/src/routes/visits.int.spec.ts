@@ -723,6 +723,64 @@ describe("visitJobsRouter — remove instrument audit trail (ISO/IEC 17025)", ()
       .where(eq(jobAuditLog.jobId, jobDbId));
     expect(auditRows).toHaveLength(0);
   });
+
+  it("REQ-DE-3: the lost visit-job removal keeps its 409 + pt-BR error text and legacy code/currentStatus, gaining details", async () => {
+    const fx = await seedVisitJobFixture({
+      orgId: "org-vjc-de3",
+      userId: "user-vjc-de3",
+    });
+    const jobDbId = await seedVisitJob({
+      jobId: "JOB-VJC-DE3",
+      organizationId: fx.orgId,
+      unitId: fx.unitId,
+      customerId: fx.customerId,
+      assetId: fx.assetId,
+      serviceId: fx.serviceId,
+      createdBy: fx.userId,
+      visitId: fx.visitId,
+    });
+
+    // Forces the lost compare-and-set deterministically: the handler has read
+    // the job as DRAFT; right before it opens the transaction carrying its
+    // write, another actor starts the calibration. (`db` is a Proxy over the
+    // cached instance, so spy on the instance.)
+    const instance = getDb();
+    const originalTransaction = instance.transaction.bind(instance);
+    vi.spyOn(instance, "transaction").mockImplementationOnce(
+      async (callback, config) => {
+        await db
+          .update(calibrationJob)
+          .set({ status: "IN_PROGRESS" })
+          .where(eq(calibrationJob.id, jobDbId));
+        return originalTransaction(callback, config);
+      },
+    );
+
+    loginAs({ userId: fx.userId, organizationId: fx.orgId });
+    const res = await visitJobsRouter.request(
+      `/${fx.visitId}/jobs/${jobDbId}`,
+      { method: "DELETE" },
+    );
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({
+      error:
+        "O status do job mudou durante a operacao. Recarregue e tente novamente.",
+      code: "JOB_STATUS_CONFLICT",
+      currentStatus: "IN_PROGRESS",
+      details: { currentStatus: "IN_PROGRESS" },
+    });
+    const [job] = await db
+      .select({ status: calibrationJob.status })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, jobDbId));
+    expect(job?.status).toBe("IN_PROGRESS");
+    const auditRows = await db
+      .select()
+      .from(jobAuditLog)
+      .where(eq(jobAuditLog.jobId, jobDbId));
+    expect(auditRows).toHaveLength(0);
+  });
 });
 
 // ---------------------------------------------------------------------------

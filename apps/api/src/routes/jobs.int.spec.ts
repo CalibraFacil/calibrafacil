@@ -1424,6 +1424,47 @@ describe("jobsRouter — status guards (cancel allow-list, compare-and-set)", ()
     expect(await auditActions(id)).not.toContain("cancel");
   });
 
+  it("REQ-DE-3: a lost status compare-and-set keeps its 409 + pt-BR error text and gains details alongside the legacy code/currentStatus", async () => {
+    const { id } = await seedFixtureJob("REVIEW", "JOB-DE3-CAS-001");
+    changeStatusBeforeNextTransaction(id, "REJECTED");
+
+    const res = await cancel(id);
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({
+      error:
+        "O status do job mudou durante a operacao. Recarregue e tente novamente.",
+      code: "JOB_STATUS_CONFLICT",
+      currentStatus: "REJECTED",
+      details: { currentStatus: "REJECTED" },
+    });
+  });
+
+  it.each([
+    [
+      "GENERATING_PDF",
+      "Nao e possivel cancelar um job com status GENERATING_PDF.",
+    ],
+    ["CANCELED", "Job ja foi cancelado"],
+    [
+      "APPROVED",
+      "Nao e possivel cancelar um job aprovado. Jobs aprovados sao imutaveis para conformidade ISO 17025.",
+    ],
+  ] as const)(
+    "REQ-DE-3: cancel a %s job keeps its 400 + error text and gains code job_not_cancelable",
+    async (status, expectedError) => {
+      const { id } = await seedFixtureJob(status, `JOB-DE3-${status}`);
+
+      const res = await cancel(id);
+
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({
+        error: expectedError,
+        code: "job_not_cancelable",
+      });
+    },
+  );
+
   it("REQ-JOBST-005b [HIGH RISK]: reject loses to a cancel that lands between its read and its write → 409; job stays CANCELED; no reject audit row", async () => {
     const { id } = await seedFixtureJob("REVIEW", "JOB-CAS-REJECT-001");
     changeStatusBeforeNextTransaction(id, "CANCELED");
