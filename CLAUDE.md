@@ -171,6 +171,14 @@ See `docs/architecture/portal-frontend.md`. `apps/portal` is the cloud-only clie
   `pnpm lint`) fails on any `useEffect` import from `react`. Use derived state, event handlers, data
   hooks, keyed remounts, or the `use-mount-effect.ts` wrapper. Only the `apps/*/src/hooks/use-mount-effect.ts`
   wrappers may import raw `useEffect` (allowed via an `overrides` entry in `.oxlintrc.json`).
+- **The math engine is source-pinned.** `packages/math-engine/src/audit/engine-source-pin.spec.ts`
+  compares a SHA-256 of the engine sources (and five golden GUM results) with the current
+  dossier's `validation/math-engine/v<version>/manifest.json`. Any byte change to engine code,
+  comments and formatting included, fails it. A deliberate release bumps `ENGINE_VERSION` and
+  the package version, adds the new dossier directory, then runs
+  `pnpm --filter @calibra-facil/math-engine run engine:pin`. The engine is exact for formula
+  evaluation, sensitivities and Type A sums, but propagation (`u_c`, `ν_eff`, `k`, `U`) runs in
+  float64; see `packages/math-engine/README.md`.
 - Sentry PII (`sendDefaultPii`) and session replay default to **off** and are opt-in via runtime
   config; desktop runtime must not initialize browser Sentry.
 
