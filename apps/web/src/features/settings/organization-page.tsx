@@ -7,6 +7,7 @@ import {
   useOrganizationUnitsData,
 } from '@/features/settings/queries'
 import {
+  canDeleteOrganization as canDeleteOrganizationForRole,
   canManageOrganizationSettings as canManageOrganizationSettingsForRole,
   getCurrentOrganizationRole,
 } from '@/features/settings/organization-model'
@@ -114,6 +115,7 @@ function OrganizationSettingsPage({
         <OrganizationProfileSection
           activeOrg={activeOrg}
           canManageOrganizationSettings={canManageOrganizationSettings}
+          canDeleteOrganization={canDeleteOrganizationForRole(currentOrgRole)}
           governanceViewer={governanceViewer}
         />
       )}

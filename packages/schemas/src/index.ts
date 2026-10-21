@@ -2,6 +2,7 @@ import { z } from "zod";
 export * from "./execution-performed-at";
 export * from "./standard-validity";
 export * from "./self-serve-signup";
+export * from "./organization-lifecycle";
 export * from "./integrations";
 export * from "./portal-fleet";
 export * from "./printing";

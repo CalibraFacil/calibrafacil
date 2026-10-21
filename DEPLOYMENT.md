@@ -256,6 +256,19 @@ Run it in dry-run for a while and review the log before switching to `execute`. 
 database rows only: certificate PDFs and attachments in object storage are not deleted by it. Set
 `legal_hold = true` on an organization (with `legal_hold_reason`) to exclude it, whatever its age.
 
+The laboratory's owner can also soft-delete it from **Configurações → Organização → Excluir organização**
+(`POST /api/organization/soft-delete`, owner only, typed name plus a reason). That locks the laboratory, signs
+the owner out and revokes its API keys; the keys of a suspended or soft-deleted laboratory are refused with
+`organization_suspended` / `organization_deleted`, and its issued certificates keep verifying at `/verify`.
+
+**Applying migration 0117.** It drops and re-adds 42 foreign keys (the ones that cascaded a delete into
+evidence, now `RESTRICT`) in a single transaction. Each `ALTER TABLE` takes an `ACCESS EXCLUSIVE` lock on the
+referencing table and a `SHARE ROW EXCLUSIVE` lock on the referenced one (`organization`, `customer`, `asset`,
+`reference_standard`, ...), and every re-added key is re-validated against the existing rows. On a database
+with a lot of evidence this holds those locks for as long as the validation scans take, and anything that
+writes to those tables waits. Run it in a low-traffic window (the app can stay up; writes queue behind it).
+It is idempotent, so a failed run rolls back whole and can simply be repeated.
+
 #### Queue idempotency and lease fencing
 
 Queue delivery is at-least-once: Vercel Queue redelivers a message until it is acknowledged, and a

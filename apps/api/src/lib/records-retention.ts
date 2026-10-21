@@ -12,7 +12,12 @@
  */
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
-import { organization, organizationEventLog } from "@calibra-facil/db/schema";
+import {
+  organization,
+  organizationApiKey,
+  organizationApiKeyAuditLog,
+  organizationEventLog,
+} from "@calibra-facil/db/schema";
 import {
   PLATFORM_EVIDENCE_TABLES,
   listEvidenceTables,
@@ -69,6 +74,8 @@ export async function softDeleteLabOrganization(input: {
   organizationId: string;
   deletedBy: string | null;
   reason: string;
+  /** The member who asked for it, when a person did (kept on the event log). */
+  actorMemberId?: string | null;
 }): Promise<SoftDeleteOutcome> {
   return db.transaction(async (tx) => {
     const now = new Date();
@@ -92,13 +99,41 @@ export async function softDeleteLabOrganization(input: {
       .returning();
 
     if (updated) {
+      // The laboratory's public-API keys die with it: the keys authenticate
+      // straight to the organization id, with no session in between.
+      const revokedKeys = await tx
+        .update(organizationApiKey)
+        .set({ revokedAt: now, revokedBy: input.deletedBy })
+        .where(
+          and(
+            eq(organizationApiKey.organizationId, input.organizationId),
+            isNull(organizationApiKey.revokedAt),
+          ),
+        )
+        .returning();
+      if (revokedKeys.length > 0) {
+        await tx.insert(organizationApiKeyAuditLog).values(
+          revokedKeys.map((key) => ({
+            apiKeyId: key.id,
+            organizationId: input.organizationId,
+            action: "revoke",
+            performedBy: input.deletedBy,
+            details: { reason: "organization_soft_deleted" },
+          })),
+        );
+      }
+
       await tx.insert(organizationEventLog).values({
         organizationId: input.organizationId,
         actorUserId: input.deletedBy,
+        actorMemberId: input.actorMemberId ?? null,
         action: "organization.soft_deleted",
         entityType: "organization",
         entityId: input.organizationId,
-        details: { reason: input.reason },
+        details: {
+          reason: input.reason,
+          revokedApiKeys: revokedKeys.length,
+        },
       });
       return { status: "soft_deleted", deletedAt: now };
     }

@@ -33,6 +33,7 @@ import {
   member,
   nonConformance,
   organization,
+  organizationApiKey,
   organizationEventLog,
   platformEventLog,
   referenceStandard,
@@ -51,10 +52,17 @@ import {
   hasPendingLabInvitation,
 } from "@calibra-facil/auth/lab-access";
 import { magicLinkRouter } from "../routes/magic-link";
+import { publicApiRouter } from "../routes/public-api";
+import { publicApiV2Router } from "../routes/public-api-v2";
+import { verifyRouter } from "../routes/verify";
 import { customersRouter } from "../routes/customers";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
-import { seedOrg, type SeededOrg } from "../../test/integration/seed";
+import {
+  seedApiKey,
+  seedOrg,
+  type SeededOrg,
+} from "../../test/integration/seed";
 import { hardDeleteOrganizationAsPurge } from "../../test/integration/records-retention";
 import { getExecuteRows } from "./db";
 import {
@@ -192,7 +200,11 @@ type LabFixture = SeededOrg & {
   jobId: number | null;
 };
 
-async function seedJob(fixture: LabFixture, at: Date) {
+async function seedJob(
+  fixture: LabFixture,
+  at: Date,
+  overrides: Partial<typeof calibrationJob.$inferInsert> = {},
+) {
   const [job] = await db
     .insert(calibrationJob)
     .values({
@@ -213,6 +225,7 @@ async function seedJob(fixture: LabFixture, at: Date) {
       certificateUrl: "https://files.test/c.pdf",
       createdAt: at,
       updatedAt: at,
+      ...overrides,
     })
     .returning({ id: calibrationJob.id });
   if (!job) throw new Error("seedJob: insert failed");
@@ -817,6 +830,9 @@ describe("REQ-RET-3: a LAB organization is soft-deleted, never hard-deleted", ()
     });
 
     expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({
+      code: "customer_has_retained_records",
+    });
     expect(await count("customer", sql`id = ${lab.customerId}`)).toBe(1);
     expect(await organizationExists(lab.clientId)).toBe(true);
     expect(await count("asset", sql`id = ${lab.assetId}`)).toBe(1);
@@ -1218,6 +1234,71 @@ describe(
       });
     });
 
+    it("REQ-RET-5 [HIGH RISK]: records.purge.started is committed by another transaction before the first row is deleted", async () => {
+      await seedLab({ orgId: "org-order", evidenceAt: OLD });
+      await markSoftDeleted("org-order", new Date("2012-01-01T00:00:00.000Z"));
+      // A probe in the database itself: deleting a job raises unless a `started`
+      // event for its organization already exists and was written by a
+      // DIFFERENT transaction (xmin is the writer's xid), i.e. is committed.
+      await db.execute(sql`
+        create or replace function test_purge_requires_started() returns trigger
+        language plpgsql as $$
+        begin
+          if not exists (
+            select 1 from platform_event_log
+             where action = 'records.purge.started'
+               and entity_id = old.organization_id
+               and xmin::text::bigint <> (txid_current() % 4294967296)
+          ) then
+            raise exception 'purge started event not committed before delete';
+          end if;
+          return old;
+        end $$`);
+      await db.execute(sql`
+        create trigger test_purge_requires_started before delete on calibration_job
+        for each row execute function test_purge_requires_started()`);
+
+      try {
+        // Control: the probe does bite when nothing was announced.
+        const bare = await failureOf(() =>
+          db.transaction(async (tx) => {
+            await tx.execute(
+              sql`select set_config('calibra.allow_audit_rewrite', 'on', true)`,
+            );
+            await tx.execute(
+              sql`delete from calibration_job where organization_id = 'org-order'`,
+            );
+          }),
+        );
+        expect(bare.message).toContain("not committed before delete");
+
+        const result = await runRecordsPurge({
+          config: { enabled: true, mode: "execute" },
+          now: NOW,
+        });
+
+        expect(result.outcomes.map((o) => o.status)).toEqual(["purged"]);
+        expect(await organizationExists("org-order")).toBe(false);
+        const actions = (
+          await db
+            .select({ action: platformEventLog.action })
+            .from(platformEventLog)
+            .orderBy(platformEventLog.id)
+        ).map((row) => row.action);
+        expect(actions).toEqual([
+          "records.purge.started",
+          "records.purge.completed",
+        ]);
+      } finally {
+        await db.execute(
+          sql`drop trigger if exists test_purge_requires_started on calibration_job`,
+        );
+        await db.execute(
+          sql`drop function if exists test_purge_requires_started()`,
+        );
+      }
+    });
+
     it("REQ-RET-5: a purge that fails leaves the organization intact and says so on the platform event log", async () => {
       const lab = await seedLab({ orgId: "org-doomed", evidenceAt: OLD });
       await markSoftDeleted("org-doomed", new Date("2012-01-01T00:00:00.000Z"));
@@ -1257,3 +1338,156 @@ describe(
     });
   },
 );
+
+// ---------------------------------------------------------------------------
+// REQ-RET-3: what a suspended / soft-deleted laboratory still exposes
+// ---------------------------------------------------------------------------
+
+describe("REQ-RET-3: a suspended or soft-deleted laboratory's outward surfaces", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  async function keyFor(orgId: string, userId: string) {
+    const { rawKey } = await seedApiKey({
+      organizationId: orgId,
+      createdBy: userId,
+      keyId: `key-${orgId}`,
+      scopes: ["customers:read"],
+    });
+    return { authorization: `Bearer ${rawKey}` };
+  }
+
+  it("REQ-RET-3: an active laboratory's API key works (control)", async () => {
+    const lab = await seedOrg({ orgId: "org-key-ok" });
+    const headers = await keyFor(lab.orgId, lab.userId);
+
+    expect(
+      (await publicApiRouter.request("/customers", { headers })).status,
+    ).toBe(200);
+  });
+
+  it("REQ-RET-3 [HIGH RISK]: the API key of a SUSPENDED laboratory is refused with 403 organization_suspended, on v1 and v2", async () => {
+    const lab = await seedOrg({ orgId: "org-key-susp" });
+    const headers = await keyFor(lab.orgId, lab.userId);
+    await db
+      .update(organization)
+      .set({ status: "SUSPENDED", suspendedAt: new Date() })
+      .where(eq(organization.id, lab.orgId));
+
+    for (const [name, router] of [
+      ["v1", publicApiRouter],
+      ["v2", publicApiV2Router],
+    ] as const) {
+      const res = await router.request("/customers", { headers });
+      expect(res.status, name).toBe(403);
+      expect(await res.json(), name).toMatchObject({
+        code: "organization_suspended",
+      });
+    }
+  });
+
+  it("REQ-RET-3 [HIGH RISK]: the API key of a SOFT-DELETED laboratory is refused with 403 organization_deleted, even if it was not revoked", async () => {
+    const lab = await seedOrg({ orgId: "org-key-del" });
+    const headers = await keyFor(lab.orgId, lab.userId);
+    await markSoftDeleted(lab.orgId, new Date("2026-01-01T00:00:00.000Z"));
+
+    for (const [name, router] of [
+      ["v1", publicApiRouter],
+      ["v2", publicApiV2Router],
+    ] as const) {
+      const res = await router.request("/customers", { headers });
+      expect(res.status, name).toBe(403);
+      expect(await res.json(), name).toMatchObject({
+        code: "organization_deleted",
+      });
+    }
+  });
+
+  it("REQ-RET-3: softDeleteLabOrganization revokes every active key of the laboratory, with an audit row each", async () => {
+    const lab = await seedOrg({ orgId: "org-key-rev" });
+    const other = await seedOrg({ orgId: "org-key-rev-2", userId: "u-2" });
+    const headers = await keyFor(lab.orgId, lab.userId);
+    const otherHeaders = await keyFor(other.orgId, other.userId);
+    await seedApiKey({
+      organizationId: lab.orgId,
+      createdBy: lab.userId,
+      keyId: "key-already-revoked",
+      scopes: ["customers:read"],
+      revokedAt: new Date("2026-01-02T00:00:00.000Z"),
+    });
+
+    await softDeleteLabOrganization({
+      organizationId: lab.orgId,
+      deletedBy: lab.userId,
+      reason: "Encerramento das atividades",
+    });
+
+    const res = await publicApiRouter.request("/customers", { headers });
+    expect(res.status).toBe(401);
+    expect(await res.text()).toContain("inválida");
+    // Another laboratory's key is untouched.
+    expect(
+      (
+        await publicApiRouter.request("/customers", {
+          headers: otherHeaders,
+        })
+      ).status,
+    ).toBe(200);
+    // Only the key that was active got a revoke row; the old revocation stays.
+    expect(
+      await count(
+        "organization_api_key_audit_log",
+        sql`organization_id = ${lab.orgId} and action = 'revoke'`,
+      ),
+    ).toBe(1);
+    const [old] = await db
+      .select({ revokedAt: organizationApiKey.revokedAt })
+      .from(organizationApiKey)
+      .where(eq(organizationApiKey.id, "key-already-revoked"));
+    expect(old?.revokedAt?.toISOString()).toBe("2026-01-02T00:00:00.000Z");
+  });
+
+  it("REQ-RET-3 [HIGH RISK]: an issued (APPROVED and SUPERSEDED) certificate of a soft-deleted laboratory still verifies at /verify", async () => {
+    const lab = await seedLab({
+      orgId: "org-verify",
+      evidenceAt: new Date("2025-03-01T00:00:00.000Z"),
+    });
+    const approvedId = lab.jobId;
+    if (approvedId === null) throw new Error("fixture");
+    await seedJob(lab, new Date("2025-03-02T00:00:00.000Z"), {
+      jobId: "CAL-SUPERSEDED",
+      status: "SUPERSEDED",
+      supersededById: approvedId,
+      supersededAt: new Date("2025-03-02T00:00:00.000Z"),
+    });
+    const jobs = await db
+      .select({
+        status: calibrationJob.status,
+        token: calibrationJob.verificationToken,
+      })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.organizationId, lab.orgId));
+    expect(jobs.map((row) => row.status).toSorted()).toEqual([
+      "APPROVED",
+      "SUPERSEDED",
+    ]);
+
+    const outcome = await softDeleteLabOrganization({
+      organizationId: lab.orgId,
+      deletedBy: lab.userId,
+      reason: "Encerramento das atividades",
+    });
+    expect(outcome.status).toBe("soft_deleted");
+
+    for (const row of jobs) {
+      const res = await verifyRouter.request(`/${row.token}`);
+      expect(res.status, row.status).toBe(200);
+      expect(await res.json(), row.status).toMatchObject({
+        valid: true,
+        status: row.status,
+        lab: "Lab org-verify",
+      });
+    }
+  });
+});

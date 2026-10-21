@@ -36,6 +36,7 @@ import {
 } from "../middleware/permission";
 import { getLabCustomerById } from "../lib/customer-access";
 import { isReferencedRowViolation } from "../lib/db-errors";
+import { conflict, domainErrorResponse } from "../lib/domain-errors";
 import { fetchCnpjRegistration } from "../lib/cnpj-lookup";
 import {
   loadCustomerActiveCommercialAgreement,
@@ -684,12 +685,12 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         });
       } catch (error) {
         if (isReferencedRowViolation(error)) {
-          return c.json(
-            {
-              error:
-                "Cliente possui registros regulados retidos (calibrações, ordens de serviço, documentos financeiros) e não pode ser excluído",
-            },
-            409,
+          return domainErrorResponse(
+            c,
+            conflict(
+              "customer_has_retained_records",
+              "Cliente possui registros regulados retidos (calibrações, ordens de serviço, documentos financeiros) e não pode ser excluído",
+            ),
           );
         }
         throw error;

@@ -43,6 +43,14 @@ pnpm --dir packages/db retention:inventory
    (`findDefaultActiveOrganizationId`, `hasActiveLabMembership`,
    `hasPendingLabInvitation`, the magic-link preview and the public sign-up
    membership check). The Better Auth `organization.delete` endpoint is disabled.
+   The owner soft-deletes from the organization settings
+   (`POST /api/organization/soft-delete`: owner only, the organization's name
+   typed as confirmation, and a reason), and the same function revokes every
+   active API key of the laboratory with an audit row each. A key whose
+   organization is suspended or soft-deleted is refused by `requireApiKeyAuth`
+   with 403 `organization_suspended` / `organization_deleted`, revoked or not.
+   Issued certificates stay verifiable at `/verify`: that route does not look at
+   the organization's lifecycle.
 3. **A CLIENT organization** (the system-owned organization behind a portal
    customer) is still hard-deleted with its customer, because the customer's
    foreign keys are RESTRICT: a customer that has jobs, service orders, billing
