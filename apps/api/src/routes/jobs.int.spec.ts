@@ -19,12 +19,23 @@
  *   REQ-JOB-008  Unauthenticated approve → 401
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { jobsRouter } from "./jobs";
-import { db } from "@calibra-facil/db";
+import {
+  compileMethodDraft,
+  fingerprintJson,
+  type CalculationEngineLike,
+} from "@calibra-facil/method-definition";
+import {
+  createCalculationEngine,
+  METHOD_ENGINE_OPTIONS,
+  normalizeEngineOptions,
+} from "@calibra-facil/math-engine";
+import { db, getDb } from "@calibra-facil/db";
 import {
   accreditedScopeLine,
   calibrationJob,
+  jobAuditLog,
   organization,
   assetType,
   asset,
@@ -179,7 +190,8 @@ type JobStatus =
   | "APPROVED"
   | "REJECTED"
   | "GENERATING_PDF"
-  | "CANCELED";
+  | "CANCELED"
+  | "SUPERSEDED";
 
 /**
  * Seed a calibration_job row with all required FKs.
@@ -197,6 +209,7 @@ async function seedJob(params: {
   status?: JobStatus;
   results?: Record<string, unknown>;
   performedAt?: Date;
+  methodSnapshot?: typeof calibrationJob.$inferInsert.methodSnapshot;
 }): Promise<number> {
   const status: JobStatus = params.status ?? "DRAFT";
   const [row] = await db
@@ -211,7 +224,7 @@ async function seedJob(params: {
       createdBy: params.createdBy,
       technicianId: params.technicianId ?? null,
       status,
-      methodSnapshot: minimalMethodSnapshot(),
+      methodSnapshot: params.methodSnapshot ?? minimalMethodSnapshot(),
       certificateName: params.jobId,
       results: params.results,
       performedAt: params.performedAt,
@@ -1190,5 +1203,380 @@ describe("jobsRouter — accredited-scope (CMC) guard at approval (#427 Phase 1)
       .where(eq(calibrationJob.id, world.jobId));
     expect(row?.scopeComplianceStatus).toBe("PASS");
     expect(row?.scopeOverrideJustification).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Status guards: cancel allow-list, compare-and-set transitions, concurrency.
+// ---------------------------------------------------------------------------
+
+/**
+ * A real, executable compiled method (one scalar error formula) so that submit
+ * and execute get past the official-execution gate and reach their status
+ * write. Compiled with the same engine the route executes with.
+ */
+function executableMethodSnapshot() {
+  const normalizedOptions = normalizeEngineOptions(METHOD_ENGINE_OPTIONS);
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- same adapter cast as routes/methods.ts and routes/jobs.ts: math-engine exposes a narrower concrete type than method-definition's engine interface.
+  const engine = createCalculationEngine(
+    METHOD_ENGINE_OPTIONS,
+  ) as unknown as CalculationEngineLike;
+  const engineVersion = normalizedOptions.engineVersion;
+  const optionsFingerprint = fingerprintJson(
+    normalizedOptions,
+    "engine-options",
+  );
+  const compiled = compileMethodDraft(
+    {
+      id: "erro_indicacao",
+      version: 1,
+      status: "draft",
+      name: "Erro de indicação",
+      inputs: [
+        {
+          kind: "scalar",
+          key: "indication",
+          label: "Indicação",
+          unit: "g",
+          required: true,
+        },
+        {
+          kind: "scalar",
+          key: "reference",
+          label: "Referência",
+          unit: "g",
+          required: true,
+        },
+      ],
+      formulas: [
+        {
+          key: "error",
+          label: "Erro",
+          expression: "indication - reference",
+          outputUnit: "g",
+          outputKind: "error",
+          required: true,
+        },
+      ],
+    },
+    {
+      engine,
+      engineMetadata: {
+        packageName: "@calibra-facil/math-engine",
+        version: engineVersion,
+        optionsFingerprint,
+      },
+    },
+  );
+  if (!compiled.ok) {
+    throw new Error(
+      `executableMethodSnapshot: ${JSON.stringify(compiled.diagnostics)}`,
+    );
+  }
+  return {
+    ...minimalMethodSnapshot(),
+    compiledMethod: compiled.method,
+    methodFingerprint: compiled.method.methodFingerprint,
+    engineVersion,
+    engineOptionsFingerprint: optionsFingerprint,
+    normalizedMethodJson: compiled.method.normalizedMethodJson,
+  };
+}
+
+async function statusOf(id: number) {
+  const [row] = await db
+    .select({ status: calibrationJob.status })
+    .from(calibrationJob)
+    .where(eq(calibrationJob.id, id));
+  return row?.status;
+}
+
+async function auditActions(id: number) {
+  const rows = await db
+    .select({ action: jobAuditLog.action })
+    .from(jobAuditLog)
+    .where(eq(jobAuditLog.jobId, id));
+  return rows.map((row) => row.action);
+}
+
+/**
+ * Forces the interleaving of a lost compare-and-set, deterministically: the
+ * handler has already read the job (that read is its first query), and right
+ * before it opens the transaction that carries its status write, another
+ * actor moves the job to `status`. A real race can serialise either way
+ * (reject-then-cancel is legitimately 200 + 200), so asserting on a live race
+ * is flaky; this fixes the order instead.
+ */
+function changeStatusBeforeNextTransaction(id: number, status: JobStatus) {
+  // `db` is a Proxy over the cached instance; spy on the instance itself.
+  const instance = getDb();
+  const originalTransaction = instance.transaction.bind(instance);
+  vi.spyOn(instance, "transaction").mockImplementationOnce(
+    async (callback, config) => {
+      await db
+        .update(calibrationJob)
+        .set({ status })
+        .where(eq(calibrationJob.id, id));
+      return originalTransaction(callback, config);
+    },
+  );
+}
+
+describe("jobsRouter — status guards (cancel allow-list, compare-and-set)", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  async function seedFixtureJob(
+    status: JobStatus,
+    jobId: string,
+    methodSnapshot?: Parameters<typeof seedJob>[0]["methodSnapshot"],
+  ) {
+    const fixture = await seedJobFixture({
+      orgId: "org-g",
+      userId: "user-g",
+      tagSuffix: "g",
+    });
+    loginAs({ userId: fixture.userId, organizationId: "org-g" });
+    const id = await seedJob({
+      jobId,
+      organizationId: "org-g",
+      unitId: fixture.unitId,
+      customerId: fixture.customerId,
+      assetId: fixture.assetId,
+      serviceId: fixture.serviceId,
+      createdBy: fixture.userId,
+      status,
+      methodSnapshot,
+    });
+    return { fixture, id };
+  }
+
+  function cancel(id: number) {
+    return jobsRouter.request(`/${id}`, {
+      method: "DELETE",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ reason: "Cancelamento de teste" }),
+    });
+  }
+
+  it("REQ-JOBST-001 [HIGH RISK]: cancel a GENERATING_PDF job (approval in progress) → 400; DB stays GENERATING_PDF; no cancel audit", async () => {
+    const { id } = await seedFixtureJob("GENERATING_PDF", "JOB-GEN-001");
+
+    const res = await cancel(id);
+
+    expect(res.status).toBe(400);
+    expect(await statusOf(id)).toBe("GENERATING_PDF");
+    expect(await auditActions(id)).not.toContain("cancel");
+  });
+
+  it("REQ-JOBST-002: cancel a SUPERSEDED job → 400; DB stays SUPERSEDED", async () => {
+    const { id } = await seedFixtureJob("SUPERSEDED", "JOB-SUP-001");
+
+    const res = await cancel(id);
+
+    expect(res.status).toBe(400);
+    expect(await statusOf(id)).toBe("SUPERSEDED");
+  });
+
+  it("REQ-JOBST-003: cancel an already CANCELED job → 400", async () => {
+    const { id } = await seedFixtureJob("CANCELED", "JOB-CAN-001");
+
+    expect((await cancel(id)).status).toBe(400);
+    expect(await auditActions(id)).not.toContain("cancel");
+  });
+
+  it.each(["DRAFT", "IN_PROGRESS", "REVIEW", "REJECTED"] as const)(
+    "REQ-JOBST-004: cancel a %s job is still allowed → 200 + CANCELED + cancel audit",
+    async (status) => {
+      const { id } = await seedFixtureJob(status, `JOB-OK-${status}`);
+
+      const res = await cancel(id);
+
+      expect(res.status).toBe(200);
+      expect(await statusOf(id)).toBe("CANCELED");
+      expect(await auditActions(id)).toContain("cancel");
+    },
+  );
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("REQ-JOBST-005 [HIGH RISK]: cancel loses to a transition that lands between its read and its write → 409; the other actor's status stands; no cancel audit row", async () => {
+    const { id } = await seedFixtureJob("REVIEW", "JOB-CAS-CANCEL-001");
+    // Someone rejects the job after cancel validated REVIEW.
+    changeStatusBeforeNextTransaction(id, "REJECTED");
+
+    const res = await cancel(id);
+
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.code).toBe("JOB_STATUS_CONFLICT");
+    expect(body.currentStatus).toBe("REJECTED");
+    expect(await statusOf(id)).toBe("REJECTED");
+    expect(await auditActions(id)).not.toContain("cancel");
+  });
+
+  it("REQ-JOBST-005b [HIGH RISK]: reject loses to a cancel that lands between its read and its write → 409; job stays CANCELED; no reject audit row", async () => {
+    const { id } = await seedFixtureJob("REVIEW", "JOB-CAS-REJECT-001");
+    changeStatusBeforeNextTransaction(id, "CANCELED");
+
+    const res = await jobsRouter.request(`/${id}/reject`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ reason: "Erros no procedimento" }),
+    });
+
+    expect(res.status).toBe(409);
+    expect(await statusOf(id)).toBe("CANCELED");
+    expect(await auditActions(id)).not.toContain("reject");
+    const [row] = await db
+      .select({ rejectedBy: calibrationJob.rejectedBy })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, id));
+    expect(row?.rejectedBy).toBeNull();
+  });
+
+  it("REQ-JOBST-008 [HIGH RISK]: submit loses to an approval that lands between its read and its write → 409; job stays GENERATING_PDF; submitted data not written; no submit audit row", async () => {
+    const { id } = await seedFixtureJob(
+      "IN_PROGRESS",
+      "JOB-CAS-SUBMIT-001",
+      executableMethodSnapshot(),
+    );
+    changeStatusBeforeNextTransaction(id, "GENERATING_PDF");
+
+    const res = await jobsRouter.request(`/${id}/submit`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        calibrationLocation: { type: "lab", addressText: "Laboratório" },
+        data: { indication: "10", reference: "9", marcador: "submit-perdido" },
+      }),
+    });
+
+    expect(res.status).toBe(409);
+    expect(await statusOf(id)).toBe("GENERATING_PDF");
+    expect(await auditActions(id)).not.toContain("submit");
+    const [row] = await db
+      .select({ data: calibrationJob.data })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, id));
+    expect(JSON.stringify(row?.data ?? null)).not.toContain("submit-perdido");
+  });
+
+  it("REQ-JOBST-009 [HIGH RISK]: execute (worksheet save) loses to a cancel that lands between its read and its write → 409; job stays CANCELED; data not written; no execute audit row", async () => {
+    const { id } = await seedFixtureJob(
+      "DRAFT",
+      "JOB-CAS-EXEC-001",
+      executableMethodSnapshot(),
+    );
+    changeStatusBeforeNextTransaction(id, "CANCELED");
+
+    const res = await jobsRouter.request(`/${id}/execute`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        data: { indication: "10", reference: "9", marcador: "execute-perdido" },
+      }),
+    });
+
+    expect(res.status).toBe(409);
+    expect(await statusOf(id)).toBe("CANCELED");
+    expect(await auditActions(id)).not.toContain("execute");
+    const [row] = await db
+      .select({ data: calibrationJob.data })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, id));
+    expect(JSON.stringify(row?.data ?? null)).not.toContain("execute-perdido");
+  });
+
+  it("REQ-JOBST-010: control — with no interleaved change, execute saves (200 + IN_PROGRESS + execute audit row), so the 409s above come from the guard and not the payload", async () => {
+    const { id } = await seedFixtureJob(
+      "DRAFT",
+      "JOB-CAS-CTRL-001",
+      executableMethodSnapshot(),
+    );
+
+    const res = await jobsRouter.request(`/${id}/execute`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        data: { indication: "10", reference: "9", marcador: "execute-ok" },
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await statusOf(id)).toBe("IN_PROGRESS");
+    expect(await auditActions(id)).toContain("execute");
+  });
+
+  it("REQ-JOBST-011: control — with no interleaved change, submit moves an IN_PROGRESS job to REVIEW with its submit audit row", async () => {
+    const { id } = await seedFixtureJob(
+      "IN_PROGRESS",
+      "JOB-CAS-CTRL-002",
+      executableMethodSnapshot(),
+    );
+
+    const res = await jobsRouter.request(`/${id}/submit`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        calibrationLocation: { type: "lab", addressText: "Laboratório" },
+        data: { indication: "10", reference: "9", marcador: "submit-ok" },
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await statusOf(id)).toBe("REVIEW");
+    expect(await auditActions(id)).toContain("submit");
+  });
+
+  it("REQ-JOBST-006 [HIGH RISK]: concurrent amend of one APPROVED job → exactly one amendment is created", async () => {
+    const { id, fixture } = await seedFixtureJob("APPROVED", "JOB-AMEND-001");
+
+    const amend = () =>
+      jobsRouter.request(`/${id}/amend`, {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ reason: "Correcao do valor de referencia" }),
+      });
+    const [first, second] = await Promise.all([amend(), amend()]);
+
+    expect([first.status, second.status].toSorted()).toEqual([201, 400]);
+
+    const amendments = await db
+      .select({ id: calibrationJob.id, status: calibrationJob.status })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.supersedesId, id));
+    expect(amendments).toHaveLength(1);
+    expect(amendments[0]?.status).toBe("DRAFT");
+    expect(await statusOf(id)).toBe("SUPERSEDED");
+    const supersedeAudits = (await auditActions(id)).filter(
+      (action) => action === "supersede",
+    );
+    expect(supersedeAudits).toHaveLength(1);
+    expect(fixture.unitId).toBeGreaterThan(0);
+  });
+
+  it("REQ-JOBST-007: the database refuses a second job superseding the same original (partial unique index)", async () => {
+    const { id, fixture } = await seedFixtureJob("APPROVED", "JOB-UNIQ-001");
+
+    const insertAmendment = (jobId: string) =>
+      db.insert(calibrationJob).values({
+        jobId,
+        organizationId: "org-g",
+        unitId: fixture.unitId,
+        customerId: fixture.customerId,
+        assetId: fixture.assetId,
+        serviceId: fixture.serviceId,
+        createdBy: fixture.userId,
+        status: "DRAFT",
+        methodSnapshot: minimalMethodSnapshot(),
+        supersedesId: id,
+      });
+
+    await insertAmendment("JOB-UNIQ-002");
+    await expect(insertAmendment("JOB-UNIQ-003")).rejects.toThrow();
   });
 });

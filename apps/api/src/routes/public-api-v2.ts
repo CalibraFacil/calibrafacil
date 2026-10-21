@@ -94,6 +94,7 @@ import { deriveNextCalibrationDate } from "../lib/portal-asset-interval";
 import { resolveAssetRegimeWrite } from "../lib/asset-regime";
 import { deriveRegulatedNextDate } from "../lib/regulated-interval";
 import { approveJob } from "../modules/jobs/approve-job";
+import { isCancelableJobStatus } from "../modules/jobs/job-status-transitions";
 import { resolveApiKeyApprover } from "../lib/api-key-approver";
 import { sendServiceOrdersToFinance } from "../lib/finance";
 import {
@@ -4037,47 +4038,75 @@ publicApiV2Router
           };
         }
 
-        if (existing.status === "APPROVED") {
+        // Explicit allow-list (the same one DELETE /jobs/:id uses): APPROVED,
+        // SUPERSEDED, CANCELED and GENERATING_PDF (approval in progress) are
+        // refused.
+        if (!isCancelableJobStatus(existing.status)) {
           return {
             status: 409,
             body: buildPublicApiError({
               code: "job_not_cancelable",
-              message: "Não é possível cancelar uma OS aprovada",
+              message:
+                existing.status === "APPROVED"
+                  ? "Não é possível cancelar uma OS aprovada"
+                  : `Não é possível cancelar uma OS com status ${existing.status}`,
             }),
           };
         }
 
-        const [updated] = await db
-          .update(calibrationJob)
-          .set({ status: "CANCELED" })
-          .where(eq(calibrationJob.id, existing.id))
-          .returning();
+        // Compare-and-set on the validated status; the audit row commits with it.
+        const updated = await db.transaction(async (tx) => {
+          const [row] = await tx
+            .update(calibrationJob)
+            .set({ status: "CANCELED" })
+            .where(
+              and(
+                eq(calibrationJob.id, existing.id),
+                eq(calibrationJob.organizationId, apiKey.organizationId),
+                eq(calibrationJob.status, existing.status),
+              ),
+            )
+            .returning();
+          if (!row) return null;
 
-        await db.insert(jobAuditLog).values({
-          jobId: existing.id,
-          action: "cancel",
-          changes: { status: { old: existing.status, new: "CANCELED" } },
-          performedBy: apiKey.createdBy,
-          ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-          reason: input.reason,
+          await tx.insert(jobAuditLog).values({
+            jobId: existing.id,
+            action: "cancel",
+            changes: { status: { old: existing.status, new: "CANCELED" } },
+            performedBy: apiKey.createdBy,
+            ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+            reason: input.reason,
+          });
+          return row;
         });
+
+        if (!updated) {
+          return {
+            status: 409,
+            body: buildPublicApiError({
+              code: "job_status_conflict",
+              message:
+                "O status da OS mudou durante a operação. Recarregue e tente novamente.",
+            }),
+          };
+        }
 
         await emitPublicApiWebhookEvent({
           organizationId: apiKey.organizationId,
           eventType: "job.canceled",
           payload: {
-            id: updated!.id,
-            jobId: updated!.jobId,
-            status: updated!.status,
+            id: updated.id,
+            jobId: updated.jobId,
+            status: updated.status,
           },
           env: c.env,
         });
 
         return {
           status: 200,
-          body: { data: updated! },
+          body: { data: updated },
           resourceType: "job" as const,
-          resourceId: updated!.id,
+          resourceId: updated.id,
         };
       });
     },

@@ -60,8 +60,15 @@ export function resolveSigningPolicy(input: {
  * with this message as rejection_reason.
  */
 export class SigningPolicyError extends Error {
-  constructor(message: string) {
+  /**
+   * True when retrying cannot help (the unit's policy refuses to emit). False
+   * for a signing attempt that failed and might succeed on redelivery.
+   */
+  readonly permanent: boolean;
+
+  constructor(message: string, options: { permanent?: boolean } = {}) {
     super(message);
     this.name = "SigningPolicyError";
+    this.permanent = options.permanent ?? true;
   }
 }

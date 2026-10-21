@@ -118,6 +118,11 @@ import {
   stripAssetSpecData,
 } from "../modules/jobs/helpers";
 import { approveJob } from "../modules/jobs/approve-job";
+import {
+  buildJobStatusConflict,
+  isCancelableJobStatus,
+  JobStatusConflictError,
+} from "../modules/jobs/job-status-transitions";
 import { certificateVerificationUrl } from "@calibra-facil/shared/public-urls";
 
 // Aliases for multiple user joins
@@ -1803,120 +1808,140 @@ export const jobsRouter = new Hono<{
         atDate: now,
       });
 
-      // Update job with execution data and set status to REVIEW
-      const [updated] = await db
-        .update(calibrationJob)
-        .set({
-          data: nextData,
-          results: nextResults,
-          ...(reconciledMethod.adopted
-            ? { methodSnapshot: nextMethodSnapshot }
-            : {}),
-          scopeComplianceStatus: scopeCompliance?.status ?? null,
-          scopeComplianceFindings: scopeCompliance?.findings ?? null,
-          // A re-submission restarts the release flow: any override recorded
-          // by a previous approval attempt no longer applies.
-          scopeOverrideJustification: null,
-          assetSnapshot: nextAssetSnapshot,
-          standardsSnapshot: nextStandardsSnapshot,
-          environmentalSnapshot: nextEnvironmentalSnapshot,
-          calibrationLocationSnapshot: nextCalibrationLocationSnapshot,
-          calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
-          status: "REVIEW",
-          performedAt,
-        })
-        .where(eq(calibrationJob.id, id))
-        .returning();
+      // Update job with execution data and set status to REVIEW. The status
+      // change and its audit row commit together or not at all.
+      const updated = await db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(calibrationJob)
+          .set({
+            data: nextData,
+            results: nextResults,
+            ...(reconciledMethod.adopted
+              ? { methodSnapshot: nextMethodSnapshot }
+              : {}),
+            scopeComplianceStatus: scopeCompliance?.status ?? null,
+            scopeComplianceFindings: scopeCompliance?.findings ?? null,
+            // A re-submission restarts the release flow: any override recorded
+            // by a previous approval attempt no longer applies.
+            scopeOverrideJustification: null,
+            assetSnapshot: nextAssetSnapshot,
+            standardsSnapshot: nextStandardsSnapshot,
+            environmentalSnapshot: nextEnvironmentalSnapshot,
+            calibrationLocationSnapshot: nextCalibrationLocationSnapshot,
+            calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
+            status: "REVIEW",
+            performedAt,
+          })
+          .where(
+            and(
+              eq(calibrationJob.id, id),
+              eq(calibrationJob.organizationId, memberData.organizationId),
+              // Compare-and-set on the status this request validated: a
+              // concurrent transition (approve, reject, cancel...) makes this
+              // match zero rows instead of silently overwriting it.
+              eq(calibrationJob.status, existing.status),
+            ),
+          )
+          .returning();
+        if (!row) return null;
+
+        // Audit log
+        await tx.insert(jobAuditLog).values({
+          jobId: id,
+          action: "submit",
+          changes: {
+            status: { old: existing.status, new: "REVIEW" },
+            // Evidence that the frozen compiled method was re-pointed at the
+            // method's current compilation (same definition, new engine).
+            methodSnapshotEngine: reconciledMethod.adopted
+              ? {
+                  old: {
+                    engineVersion: existing.methodSnapshot.engineVersion,
+                    methodFingerprint:
+                      existing.methodSnapshot.methodFingerprint,
+                  },
+                  new: {
+                    engineVersion: nextMethodSnapshot.engineVersion,
+                    methodFingerprint: nextMethodSnapshot.methodFingerprint,
+                  },
+                }
+              : undefined,
+            data: { old: existing.data, new: nextData },
+            results: { old: existing.results, new: nextResults },
+            officialExecution: officialExecution.execution
+              ? {
+                  methodFingerprint:
+                    officialExecution.execution.methodFingerprint,
+                  inputFingerprint:
+                    officialExecution.execution.inputFingerprint,
+                  calculationFingerprint:
+                    officialExecution.execution.calculationFingerprint,
+                  resultFingerprint:
+                    officialExecution.execution.resultFingerprint,
+                }
+              : undefined,
+            standardsSnapshot:
+              standardsResult.snapshot !== undefined
+                ? {
+                    old: existing.standardsSnapshot,
+                    new: standardsResult.snapshot,
+                  }
+                : undefined,
+            environmentalSnapshot: environmentalSnapshot
+              ? {
+                  old: existing.environmentalSnapshot,
+                  new: environmentalSnapshot,
+                }
+              : undefined,
+            calibrationLocationSnapshot: input.calibrationLocation
+              ? {
+                  old: existing.calibrationLocationSnapshot,
+                  new: nextCalibrationLocationSnapshot,
+                }
+              : undefined,
+            calibrationPhaseSnapshot: input.calibrationPhases
+              ? {
+                  old: existing.calibrationPhaseSnapshot,
+                  new: nextCalibrationPhaseSnapshot,
+                }
+              : undefined,
+            unitConversions:
+              normalizedData.conversions.length > 0
+                ? normalizedData.conversions
+                : undefined,
+            assetSnapshot: existing.assetSnapshot
+              ? undefined
+              : { old: null, new: nextAssetSnapshot },
+          },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+          reason:
+            [
+              nextEnvironmentalSnapshot &&
+              !nextEnvironmentalSnapshot.withinLimits
+                ? "Submetido com condições ambientais fora dos limites"
+                : null,
+              scopeCompliance?.status === "OUT_OF_SCOPE"
+                ? "Submetido com ponto fora do escopo acreditado (CMC)"
+                : scopeCompliance?.status === "U_BELOW_CMC"
+                  ? "Submetido com incerteza menor que a CMC acreditada"
+                  : null,
+              diffDays > BACKDATE_REASON_THRESHOLD_DAYS
+                ? `Registro retroativo (${diffDays} dias): ${normalizedBackdateReason}`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" | ") || undefined,
+        });
+        return row;
+      });
+      if (!updated) {
+        return c.json(await buildJobStatusConflict(id), 409);
+      }
 
       // Reverse traceability (#426 Phase 1): mirror the frozen snapshot into
       // the indexed job_standard projection.
       await syncJobStandardLinks(id, nextStandardsSnapshot, performedAt);
-
-      // Audit log
-      await db.insert(jobAuditLog).values({
-        jobId: id,
-        action: "submit",
-        changes: {
-          status: { old: existing.status, new: "REVIEW" },
-          // Evidence that the frozen compiled method was re-pointed at the
-          // method's current compilation (same definition, new engine).
-          methodSnapshotEngine: reconciledMethod.adopted
-            ? {
-                old: {
-                  engineVersion: existing.methodSnapshot.engineVersion,
-                  methodFingerprint: existing.methodSnapshot.methodFingerprint,
-                },
-                new: {
-                  engineVersion: nextMethodSnapshot.engineVersion,
-                  methodFingerprint: nextMethodSnapshot.methodFingerprint,
-                },
-              }
-            : undefined,
-          data: { old: existing.data, new: nextData },
-          results: { old: existing.results, new: nextResults },
-          officialExecution: officialExecution.execution
-            ? {
-                methodFingerprint:
-                  officialExecution.execution.methodFingerprint,
-                inputFingerprint: officialExecution.execution.inputFingerprint,
-                calculationFingerprint:
-                  officialExecution.execution.calculationFingerprint,
-                resultFingerprint:
-                  officialExecution.execution.resultFingerprint,
-              }
-            : undefined,
-          standardsSnapshot:
-            standardsResult.snapshot !== undefined
-              ? {
-                  old: existing.standardsSnapshot,
-                  new: standardsResult.snapshot,
-                }
-              : undefined,
-          environmentalSnapshot: environmentalSnapshot
-            ? {
-                old: existing.environmentalSnapshot,
-                new: environmentalSnapshot,
-              }
-            : undefined,
-          calibrationLocationSnapshot: input.calibrationLocation
-            ? {
-                old: existing.calibrationLocationSnapshot,
-                new: nextCalibrationLocationSnapshot,
-              }
-            : undefined,
-          calibrationPhaseSnapshot: input.calibrationPhases
-            ? {
-                old: existing.calibrationPhaseSnapshot,
-                new: nextCalibrationPhaseSnapshot,
-              }
-            : undefined,
-          unitConversions:
-            normalizedData.conversions.length > 0
-              ? normalizedData.conversions
-              : undefined,
-          assetSnapshot: existing.assetSnapshot
-            ? undefined
-            : { old: null, new: nextAssetSnapshot },
-        },
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
-        reason:
-          [
-            nextEnvironmentalSnapshot && !nextEnvironmentalSnapshot.withinLimits
-              ? "Submetido com condições ambientais fora dos limites"
-              : null,
-            scopeCompliance?.status === "OUT_OF_SCOPE"
-              ? "Submetido com ponto fora do escopo acreditado (CMC)"
-              : scopeCompliance?.status === "U_BELOW_CMC"
-                ? "Submetido com incerteza menor que a CMC acreditada"
-                : null,
-            diffDays > BACKDATE_REASON_THRESHOLD_DAYS
-              ? `Registro retroativo (${diffDays} dias): ${normalizedBackdateReason}`
-              : null,
-          ]
-            .filter(Boolean)
-            .join(" | ") || undefined,
-      });
 
       // Send notifications to admins/owners (fire and forget)
       notifyJobSubmittedForReview(id, session.user.id).catch((err) => {
@@ -2073,118 +2098,137 @@ export const jobsRouter = new Hono<{
           ? parsedPerformedAt
           : null;
 
-      // Update job with execution data
-      const [updated] = await db
-        .update(calibrationJob)
-        .set({
-          data: nextData,
-          results: nextResults,
-          ...(reconciledMethod.adopted
-            ? { methodSnapshot: nextMethodSnapshot }
-            : {}),
-          assetSnapshot: nextAssetSnapshot,
-          standardsSnapshot: nextStandardsSnapshot,
-          environmentalSnapshot: nextEnvironmentalSnapshot,
-          calibrationLocationSnapshot: nextCalibrationLocationSnapshot,
-          calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
-          status: newStatus,
-          ...(nextPerformedAt ? { performedAt: nextPerformedAt } : {}),
-          // §7.8.2.1(n). Absent = untouched: the worksheet auto-saves and a
-          // partial payload must not wipe a deviation already recorded.
-          // Explicit null clears it; empty/whitespace normalizes to null so a
-          // blank box never prints an empty heading on the certificate.
-          ...(input.methodDeviations === undefined
-            ? {}
-            : { methodDeviations: input.methodDeviations?.trim() || null }),
-        })
-        .where(eq(calibrationJob.id, id))
-        .returning();
+      // Update job with execution data. Status/data write and audit row commit
+      // together or not at all.
+      const updated = await db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(calibrationJob)
+          .set({
+            data: nextData,
+            results: nextResults,
+            ...(reconciledMethod.adopted
+              ? { methodSnapshot: nextMethodSnapshot }
+              : {}),
+            assetSnapshot: nextAssetSnapshot,
+            standardsSnapshot: nextStandardsSnapshot,
+            environmentalSnapshot: nextEnvironmentalSnapshot,
+            calibrationLocationSnapshot: nextCalibrationLocationSnapshot,
+            calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
+            status: newStatus,
+            ...(nextPerformedAt ? { performedAt: nextPerformedAt } : {}),
+            // §7.8.2.1(n). Absent = untouched: the worksheet auto-saves and a
+            // partial payload must not wipe a deviation already recorded.
+            // Explicit null clears it; empty/whitespace normalizes to null so a
+            // blank box never prints an empty heading on the certificate.
+            ...(input.methodDeviations === undefined
+              ? {}
+              : { methodDeviations: input.methodDeviations?.trim() || null }),
+          })
+          .where(
+            and(
+              eq(calibrationJob.id, id),
+              eq(calibrationJob.organizationId, memberData.organizationId),
+              // Compare-and-set on the status this request validated: a
+              // concurrent transition (approve, reject, cancel...) makes this
+              // match zero rows instead of silently overwriting it.
+              eq(calibrationJob.status, existing.status),
+            ),
+          )
+          .returning();
+        if (!row) return null;
+
+        // Audit log
+        await tx.insert(jobAuditLog).values({
+          jobId: id,
+          action: "execute",
+          changes: {
+            methodSnapshotEngine: reconciledMethod.adopted
+              ? {
+                  old: {
+                    engineVersion: existing.methodSnapshot.engineVersion,
+                    methodFingerprint:
+                      existing.methodSnapshot.methodFingerprint,
+                  },
+                  new: {
+                    engineVersion: nextMethodSnapshot.engineVersion,
+                    methodFingerprint: nextMethodSnapshot.methodFingerprint,
+                  },
+                }
+              : undefined,
+            status:
+              existing.status !== newStatus
+                ? { old: existing.status, new: newStatus }
+                : undefined,
+            data: { old: existing.data, new: nextData },
+            results: { old: existing.results, new: nextResults },
+            // §7.8.2.1(n) is printed on the certificate, so a change to it is
+            // evidence an assessor may ask about. Logged only when it moved.
+            methodDeviations:
+              input.methodDeviations !== undefined &&
+              (input.methodDeviations?.trim() || null) !==
+                existing.methodDeviations
+                ? {
+                    old: existing.methodDeviations,
+                    new: input.methodDeviations?.trim() || null,
+                  }
+                : undefined,
+            officialExecution: officialExecution.execution
+              ? {
+                  methodFingerprint:
+                    officialExecution.execution.methodFingerprint,
+                  inputFingerprint:
+                    officialExecution.execution.inputFingerprint,
+                  calculationFingerprint:
+                    officialExecution.execution.calculationFingerprint,
+                  resultFingerprint:
+                    officialExecution.execution.resultFingerprint,
+                }
+              : undefined,
+            standardsSnapshot:
+              standardsResult.snapshot !== undefined
+                ? {
+                    old: existing.standardsSnapshot,
+                    new: standardsResult.snapshot,
+                  }
+                : undefined,
+            environmentalSnapshot: environmentalSnapshot
+              ? {
+                  old: existing.environmentalSnapshot,
+                  new: environmentalSnapshot,
+                }
+              : undefined,
+            calibrationLocationSnapshot: input.calibrationLocation
+              ? {
+                  old: existing.calibrationLocationSnapshot,
+                  new: nextCalibrationLocationSnapshot,
+                }
+              : undefined,
+            calibrationPhaseSnapshot: input.calibrationPhases
+              ? {
+                  old: existing.calibrationPhaseSnapshot,
+                  new: nextCalibrationPhaseSnapshot,
+                }
+              : undefined,
+            unitConversions:
+              normalizedData.conversions.length > 0
+                ? normalizedData.conversions
+                : undefined,
+            assetSnapshot: existing.assetSnapshot
+              ? undefined
+              : { old: null, new: nextAssetSnapshot },
+          },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        });
+        return row;
+      });
+      if (!updated) {
+        return c.json(await buildJobStatusConflict(id), 409);
+      }
 
       // Reverse traceability (#426 Phase 1): mirror the frozen snapshot into
       // the indexed job_standard projection.
       await syncJobStandardLinks(id, nextStandardsSnapshot, nextPerformedAt);
-
-      // Audit log
-      await db.insert(jobAuditLog).values({
-        jobId: id,
-        action: "execute",
-        changes: {
-          methodSnapshotEngine: reconciledMethod.adopted
-            ? {
-                old: {
-                  engineVersion: existing.methodSnapshot.engineVersion,
-                  methodFingerprint: existing.methodSnapshot.methodFingerprint,
-                },
-                new: {
-                  engineVersion: nextMethodSnapshot.engineVersion,
-                  methodFingerprint: nextMethodSnapshot.methodFingerprint,
-                },
-              }
-            : undefined,
-          status:
-            existing.status !== newStatus
-              ? { old: existing.status, new: newStatus }
-              : undefined,
-          data: { old: existing.data, new: nextData },
-          results: { old: existing.results, new: nextResults },
-          // §7.8.2.1(n) is printed on the certificate, so a change to it is
-          // evidence an assessor may ask about. Logged only when it moved.
-          methodDeviations:
-            input.methodDeviations !== undefined &&
-            (input.methodDeviations?.trim() || null) !==
-              existing.methodDeviations
-              ? {
-                  old: existing.methodDeviations,
-                  new: input.methodDeviations?.trim() || null,
-                }
-              : undefined,
-          officialExecution: officialExecution.execution
-            ? {
-                methodFingerprint:
-                  officialExecution.execution.methodFingerprint,
-                inputFingerprint: officialExecution.execution.inputFingerprint,
-                calculationFingerprint:
-                  officialExecution.execution.calculationFingerprint,
-                resultFingerprint:
-                  officialExecution.execution.resultFingerprint,
-              }
-            : undefined,
-          standardsSnapshot:
-            standardsResult.snapshot !== undefined
-              ? {
-                  old: existing.standardsSnapshot,
-                  new: standardsResult.snapshot,
-                }
-              : undefined,
-          environmentalSnapshot: environmentalSnapshot
-            ? {
-                old: existing.environmentalSnapshot,
-                new: environmentalSnapshot,
-              }
-            : undefined,
-          calibrationLocationSnapshot: input.calibrationLocation
-            ? {
-                old: existing.calibrationLocationSnapshot,
-                new: nextCalibrationLocationSnapshot,
-              }
-            : undefined,
-          calibrationPhaseSnapshot: input.calibrationPhases
-            ? {
-                old: existing.calibrationPhaseSnapshot,
-                new: nextCalibrationPhaseSnapshot,
-              }
-            : undefined,
-          unitConversions:
-            normalizedData.conversions.length > 0
-              ? normalizedData.conversions
-              : undefined,
-          assetSnapshot: existing.assetSnapshot
-            ? undefined
-            : { old: null, new: nextAssetSnapshot },
-        },
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
-      });
 
       // On-site visits roll forward to IN_PROGRESS once any of their jobs starts.
       if (existing.status === "DRAFT" && updated?.visitId) {
@@ -2370,29 +2414,41 @@ export const jobsRouter = new Hono<{
         );
       }
 
-      // Update job
-      const [updated] = await db
-        .update(calibrationJob)
-        .set({
-          status: "REJECTED",
-          rejectedBy: session.user.id,
-          rejectedAt: new Date(),
-          rejectionReason: input.reason,
-        })
-        .where(eq(calibrationJob.id, id))
-        .returning();
+      // Compare-and-set REVIEW -> REJECTED; the audit row commits with it.
+      const updated = await db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(calibrationJob)
+          .set({
+            status: "REJECTED",
+            rejectedBy: session.user.id,
+            rejectedAt: new Date(),
+            rejectionReason: input.reason,
+          })
+          .where(
+            and(
+              eq(calibrationJob.id, id),
+              eq(calibrationJob.organizationId, memberData.organizationId),
+              eq(calibrationJob.status, "REVIEW"),
+            ),
+          )
+          .returning();
+        if (!row) return null;
 
-      // Audit log
-      await db.insert(jobAuditLog).values({
-        jobId: id,
-        action: "reject",
-        changes: {
-          status: { old: existing.status, new: "REJECTED" },
-        },
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
-        reason: input.reason,
+        await tx.insert(jobAuditLog).values({
+          jobId: id,
+          action: "reject",
+          changes: {
+            status: { old: "REVIEW", new: "REJECTED" },
+          },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+          reason: input.reason,
+        });
+        return row;
       });
+      if (!updated) {
+        return c.json(await buildJobStatusConflict(id), 409);
+      }
 
       // Send notification to technician (fire and forget)
       notifyJobRejected(id, session.user.id, input.reason).catch((err) => {
@@ -2527,24 +2583,47 @@ export const jobsRouter = new Hono<{
         return c.json({ error: "Job ja foi cancelado" }, 400);
       }
 
-      // Update job
-      const [updated] = await db
-        .update(calibrationJob)
-        .set({ status: "CANCELED" })
-        .where(eq(calibrationJob.id, id))
-        .returning();
+      // Explicit allow-list: anything else (GENERATING_PDF = approval in
+      // progress, SUPERSEDED, ...) is refused.
+      if (!isCancelableJobStatus(existing.status)) {
+        return c.json(
+          {
+            error: `Nao e possivel cancelar um job com status ${existing.status}.`,
+          },
+          400,
+        );
+      }
 
-      // Audit log
-      await db.insert(jobAuditLog).values({
-        jobId: id,
-        action: "cancel",
-        changes: {
-          status: { old: existing.status, new: "CANCELED" },
-        },
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
-        reason: input.reason,
+      // Compare-and-set on the validated status; the audit row commits with it.
+      const updated = await db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(calibrationJob)
+          .set({ status: "CANCELED" })
+          .where(
+            and(
+              eq(calibrationJob.id, id),
+              eq(calibrationJob.organizationId, memberData.organizationId),
+              eq(calibrationJob.status, existing.status),
+            ),
+          )
+          .returning();
+        if (!row) return null;
+
+        await tx.insert(jobAuditLog).values({
+          jobId: id,
+          action: "cancel",
+          changes: {
+            status: { old: existing.status, new: "CANCELED" },
+          },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+          reason: input.reason,
+        });
+        return row;
       });
+      if (!updated) {
+        return c.json(await buildJobStatusConflict(id), 409);
+      }
 
       return c.json({
         message: "Job cancelado",
@@ -2571,92 +2650,189 @@ export const jobsRouter = new Hono<{
         return c.json({ error: "Job nao encontrado" }, 404);
       }
 
-      // Get existing job
-      const [originalJob] = await db
-        .select()
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, id),
-            eq(calibrationJob.organizationId, memberData.organizationId),
-            buildUnitScopeCondition(calibrationJob.unitId, memberData),
-          ),
-        )
-        .limit(1);
+      // One transaction, serialised on the original job's row: the status and
+      // already-amended checks are re-evaluated under the lock, so two
+      // concurrent amendments can never both pass them (no duplicate DRAFT
+      // amendment, no burned certificate number). The certificate number is
+      // reserved on the same transaction, so a failure rolls it back too.
+      const outcome = await db
+        .transaction(async (tx) => {
+          const [originalJob] = await tx
+            .select()
+            .from(calibrationJob)
+            .where(
+              and(
+                eq(calibrationJob.id, id),
+                eq(calibrationJob.organizationId, memberData.organizationId),
+                buildUnitScopeCondition(calibrationJob.unitId, memberData),
+              ),
+            )
+            .limit(1)
+            .for("update");
 
-      if (!originalJob) {
+          if (!originalJob) {
+            return { kind: "not_found" as const };
+          }
+
+          // Can only amend APPROVED jobs
+          if (originalJob.status !== "APPROVED") {
+            return {
+              kind: "invalid_status" as const,
+              status: originalJob.status,
+            };
+          }
+
+          // Check if already superseded
+          if (originalJob.supersededById) {
+            return {
+              kind: "already_amended" as const,
+              supersededById: originalJob.supersededById,
+            };
+          }
+
+          // Calculate amendment number
+          let amendmentNumber = 1;
+          if (originalJob.supersedesId) {
+            // This is already an amendment, increment
+            amendmentNumber = (originalJob.amendmentNumber || 0) + 1;
+          }
+
+          // Generate a lab-specific certificate number for the amended job.
+          const certificateIdentity = await generateCertificateIdentity(
+            {
+              organizationId: memberData.organizationId,
+              generatedAt: new Date(),
+              performedBy: session.user.id,
+            },
+            tx,
+          );
+          // Create new job as a clone of the original
+          const [amendedJob] = await tx
+            .insert(calibrationJob)
+            .values({
+              jobId: certificateIdentity.certificateNumber,
+              certificateName: certificateIdentity.certificateName,
+              certificateNumberingSnapshot: certificateIdentity.snapshot,
+              organizationId: originalJob.organizationId,
+              unitId: originalJob.unitId,
+              customerId: originalJob.customerId,
+              assetId: originalJob.assetId,
+              serviceId: originalJob.serviceId,
+              technicianId: originalJob.technicianId,
+              methodSnapshot: originalJob.methodSnapshot,
+              standardsSnapshot: originalJob.standardsSnapshot,
+              // Carried forward verbatim as a historical record of what the
+              // superseded certificate rendered from. Nothing resolves it any
+              // more — the amendment cannot be approved until the fixed layouts
+              // land (#865), and it will render with whatever layout is current
+              // then, not with the original's XLSX template.
+              certificateTemplateSnapshot:
+                originalJob.certificateTemplateSnapshot,
+              status: "DRAFT", // Start in DRAFT for corrections
+              dueDate: originalJob.dueDate,
+              data: originalJob.data, // Clone calibration data
+              results: originalJob.results, // Clone results
+              supersedesId: originalJob.id, // Link to original
+              amendmentNumber,
+              amendmentReason: input.reason,
+              createdBy: session.user.id,
+            })
+            .returning();
+
+          if (!amendedJob) {
+            throw new Error("Falha ao criar retificacao");
+          }
+
+          // Update original job to SUPERSEDED (compare-and-set on APPROVED).
+          // Store the reason on the original job so it's visible when viewing the
+          // superseded certificate.
+          const [superseded] = await tx
+            .update(calibrationJob)
+            .set({
+              status: "SUPERSEDED",
+              supersededById: amendedJob.id,
+              supersededAt: new Date(),
+              amendmentReason: input.reason, // Store reason on original job too
+            })
+            .where(
+              and(
+                eq(calibrationJob.id, originalJob.id),
+                eq(calibrationJob.status, "APPROVED"),
+                isNull(calibrationJob.supersededById),
+              ),
+            )
+            .returning();
+          if (!superseded) {
+            // Rolls back the amended job and the reserved certificate number.
+            throw new JobStatusConflictError();
+          }
+
+          // Audit log for original job (superseded)
+          await tx.insert(jobAuditLog).values({
+            jobId: originalJob.id,
+            action: "supersede",
+            changes: {
+              status: { old: "APPROVED", new: "SUPERSEDED" },
+              supersededById: amendedJob.id,
+            },
+            performedBy: session.user.id,
+            ipAddress: c.req.header("x-forwarded-for") || null,
+            reason: `Certificado retificado. Novo: ${amendedJob.jobId}. Motivo: ${input.reason}`,
+          });
+
+          // Audit log for amended job (created)
+          await tx.insert(jobAuditLog).values({
+            jobId: amendedJob.id,
+            action: "create_amendment",
+            changes: {
+              supersedesId: originalJob.id,
+              amendmentNumber,
+              reason: input.reason,
+            },
+            performedBy: session.user.id,
+            ipAddress: c.req.header("x-forwarded-for") || null,
+            reason: input.reason,
+          });
+
+          return {
+            kind: "amended" as const,
+            originalJob,
+            amendedJob,
+            amendmentNumber,
+          };
+        })
+        .catch((error: unknown) => {
+          if (error instanceof JobStatusConflictError) {
+            return { kind: "conflict" as const };
+          }
+          throw error;
+        });
+
+      if (outcome.kind === "not_found") {
         return c.json({ error: "Job nao encontrado" }, 404);
       }
-
-      // Can only amend APPROVED jobs
-      if (originalJob.status !== "APPROVED") {
+      if (outcome.kind === "invalid_status") {
         return c.json(
           {
-            error: `Apenas certificados aprovados podem ser retificados. Status atual: ${originalJob.status}`,
+            error: `Apenas certificados aprovados podem ser retificados. Status atual: ${outcome.status}`,
           },
           400,
         );
       }
-
-      // Check if already superseded
-      if (originalJob.supersededById) {
+      if (outcome.kind === "already_amended") {
         return c.json(
           {
             error: "Este certificado ja foi retificado",
-            supersededBy: originalJob.supersededById,
+            supersededBy: outcome.supersededById,
           },
           400,
         );
       }
-
-      // Calculate amendment number
-      let amendmentNumber = 1;
-      if (originalJob.supersedesId) {
-        // This is already an amendment, increment
-        amendmentNumber = (originalJob.amendmentNumber || 0) + 1;
+      if (outcome.kind === "conflict") {
+        return c.json(await buildJobStatusConflict(id), 409);
       }
 
-      // Generate a lab-specific certificate number for the amended job.
-      const certificateIdentity = await generateCertificateIdentity({
-        organizationId: memberData.organizationId,
-        generatedAt: new Date(),
-        performedBy: session.user.id,
-      });
-      // Create new job as a clone of the original
-      const [amendedJob] = await db
-        .insert(calibrationJob)
-        .values({
-          jobId: certificateIdentity.certificateNumber,
-          certificateName: certificateIdentity.certificateName,
-          certificateNumberingSnapshot: certificateIdentity.snapshot,
-          organizationId: originalJob.organizationId,
-          unitId: originalJob.unitId,
-          customerId: originalJob.customerId,
-          assetId: originalJob.assetId,
-          serviceId: originalJob.serviceId,
-          technicianId: originalJob.technicianId,
-          methodSnapshot: originalJob.methodSnapshot,
-          standardsSnapshot: originalJob.standardsSnapshot,
-          // Carried forward verbatim as a historical record of what the
-          // superseded certificate rendered from. Nothing resolves it any
-          // more — the amendment cannot be approved until the fixed layouts
-          // land (#865), and it will render with whatever layout is current
-          // then, not with the original's XLSX template.
-          certificateTemplateSnapshot: originalJob.certificateTemplateSnapshot,
-          status: "DRAFT", // Start in DRAFT for corrections
-          dueDate: originalJob.dueDate,
-          data: originalJob.data, // Clone calibration data
-          results: originalJob.results, // Clone results
-          supersedesId: originalJob.id, // Link to original
-          amendmentNumber,
-          amendmentReason: input.reason,
-          createdBy: session.user.id,
-        })
-        .returning();
-
-      if (!amendedJob) {
-        return c.json({ error: "Falha ao criar retificacao" }, 500);
-      }
+      const { originalJob, amendedJob, amendmentNumber } = outcome;
 
       // Reverse traceability (#426 Phase 1): the amendment clones the frozen
       // standards snapshot verbatim, so mirror the links for the new job too.
@@ -2666,48 +2842,9 @@ export const jobsRouter = new Hono<{
         originalJob.performedAt,
       );
 
-      // Update original job to SUPERSEDED
-      // Store the reason on the original job so it's visible when viewing the superseded certificate
-      await db
-        .update(calibrationJob)
-        .set({
-          status: "SUPERSEDED",
-          supersededById: amendedJob.id,
-          supersededAt: new Date(),
-          amendmentReason: input.reason, // Store reason on original job too
-        })
-        .where(eq(calibrationJob.id, originalJob.id));
-
       await enqueueBackgroundJob({
         jobId: originalJob.id,
         userId: session.user.id,
-      });
-
-      // Audit log for original job (superseded)
-      await db.insert(jobAuditLog).values({
-        jobId: originalJob.id,
-        action: "supersede",
-        changes: {
-          status: { old: "APPROVED", new: "SUPERSEDED" },
-          supersededById: amendedJob.id,
-        },
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
-        reason: `Certificado retificado. Novo: ${amendedJob.jobId}. Motivo: ${input.reason}`,
-      });
-
-      // Audit log for amended job (created)
-      await db.insert(jobAuditLog).values({
-        jobId: amendedJob.id,
-        action: "create_amendment",
-        changes: {
-          supersedesId: originalJob.id,
-          amendmentNumber,
-          reason: input.reason,
-        },
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
-        reason: input.reason,
       });
 
       // Notify customer (async)
