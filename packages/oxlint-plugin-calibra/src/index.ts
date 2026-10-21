@@ -8,6 +8,7 @@
 // baselines are empty today — the boundaries are currently clean.
 import noApiImportInFrontend from "./rules/no-api-import-in-frontend.ts";
 import noHonoClientOutsideClientRuntime from "./rules/no-hono-client-outside-client-runtime.ts";
+import noRawLocaleFormatting from "./rules/no-raw-locale-formatting.ts";
 import noRouterCouplingInFeatures from "./rules/no-router-coupling-in-features.ts";
 
 export default {
@@ -17,6 +18,7 @@ export default {
   rules: {
     "no-api-import-in-frontend": noApiImportInFrontend,
     "no-hono-client-outside-client-runtime": noHonoClientOutsideClientRuntime,
+    "no-raw-locale-formatting": noRawLocaleFormatting,
     "no-router-coupling-in-features": noRouterCouplingInFeatures,
   },
 };
