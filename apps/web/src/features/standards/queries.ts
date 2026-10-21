@@ -8,6 +8,7 @@ import {
 import type { MassCompositionProfileWriteInput } from '@calibra-facil/client-runtime'
 
 import { calibraApi } from '@/utils/api'
+import { keepPreviousDataInScope } from '@/lib/keep-previous-page'
 import {
   ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,
@@ -63,6 +64,10 @@ export function standardsListQueryOptions(input: StandardsListQueryInput) {
         query: input.search || undefined,
         status: input.statusFilter || undefined,
       }),
+    placeholderData: keepPreviousDataInScope([
+      'standards',
+      input.organizationId,
+    ]),
   })
 }
 

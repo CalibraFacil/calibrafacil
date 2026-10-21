@@ -33,91 +33,80 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useMountEffect } from "@/hooks/use-mount-effect";
 import { sanitizePortalRedirect } from "@/lib/auth-redirect";
 import { readSessionWithRetry } from "@/lib/auth-session";
 import { PortalOrgProvider } from "@/lib/portal-org-context";
-import { getApiBaseUrl } from "@/lib/utils";
+import {
+  loadPortalStartup,
+  parsePortalSession,
+  portalOrganizationsQueryOptions,
+} from "@/lib/portal-startup";
 
-const PORTAL_ORG_KEY = "portal-active-org";
+async function readPortalSession() {
+  const result = await readSessionWithRetry(getPortalSession);
+  return { data: parsePortalSession(result.data) };
+}
+
+async function activatePortalOrganization(organizationId: string) {
+  const result = await portalOrganization.setActive({ organizationId });
+  // Plain copy on purpose: this runs in the route's beforeLoad, which is part
+  // of the initial bundle graph, and the auth message catalog is not.
+  if (result.error) {
+    throw new Error("Falha ao ativar a organização");
+  }
+}
 
 export const Route = createFileRoute("/_authenticated")({
   // Settle the session before any authenticated route renders (parity with
-  // apps/web). The component below keeps its own session
-  // check as defense in depth for sessions lost after load.
-  beforeLoad: async ({ location, preload }) => {
-    if (preload) return;
+  // apps/web). The session, the client organizations and the lab branding are
+  // requested together; the only dependent step is activating the right
+  // organization, and only when the session does not already point at it. The
+  // component below keeps its own session check as defense in depth for
+  // sessions lost after load.
+  beforeLoad: async ({ context, location, preload }) => {
+    if (preload) return { startup: null };
 
-    const { data: session } = await readSessionWithRetry(getPortalSession);
+    const startup = await loadPortalStartup({
+      queryClient: context.queryClient,
+      readSession: readPortalSession,
+      setActiveOrganization: activatePortalOrganization,
+    });
 
-    if (!session) {
+    if (startup.status === "signed-out") {
       throw redirect({
         to: "/sign-in",
         search: { redirect: sanitizePortalRedirect(location.href) },
       });
     }
+
+    return { startup };
   },
   component: PortalLayout,
 });
 
-type PortalOrganization = {
-  id: string;
-  name: string;
-  slug: string;
-  logo: string | null;
-  type: string;
-  createdAt: string;
-  memberRole: string;
-};
-
 function PortalLayout() {
   const navigate = useNavigate();
+  const { startup } = Route.useRouteContext();
   const signInRedirect =
     typeof window === "undefined"
       ? "/"
       : sanitizePortalRedirect(
           `${window.location.pathname}${window.location.search}${window.location.hash}`,
         );
-  const { data: session, isPending: sessionPending } = usePortalSession();
-  const { data: activeOrg, isPending: activeOrgLoading } =
-    usePortalActiveOrganization();
+  const { data: liveSession, isPending: sessionPending } = usePortalSession();
+  const { data: activeOrg } = usePortalActiveOrganization();
 
-  // Fetch CLIENT organizations where user has an external portal role
-  const { data: clientOrganizations = [], isPending: orgsLoading } = useQuery({
-    queryKey: ["portal-organizations"],
-    queryFn: async (): Promise<Array<PortalOrganization>> => {
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/organizations`,
-        {
-          credentials: "include",
-        },
-      );
-      if (!response.ok) {
-        throw new Error("Failed to fetch organizations");
-      }
-      return response.json();
-    },
-    enabled: !!session,
-  });
-
-  const hasClientAccess = clientOrganizations.length > 0;
-  const storedOrgId =
-    typeof window !== "undefined" ? localStorage.getItem(PORTAL_ORG_KEY) : null;
-  const storedOrg = storedOrgId
-    ? (clientOrganizations.find((org) => org.id === storedOrgId) ?? null)
-    : null;
-  const activeClientOrg =
-    activeOrg?.type === "CLIENT"
-      ? (clientOrganizations.find((org) => org.id === activeOrg.id) ?? null)
-      : null;
-  const targetOrg =
-    storedOrg ?? activeClientOrg ?? clientOrganizations[0] ?? null;
-  const needsPortalOrgSwitch = Boolean(
-    session && hasClientAccess && targetOrg && activeOrg?.id !== targetOrg.id,
+  // Primed by the route's beforeLoad, so this is a cache read on first paint;
+  // it only fetches when that entry was invalidated (e.g. an accepted invite).
+  const { data: clientOrganizations = [], isPending: orgsLoading } = useQuery(
+    portalOrganizationsQueryOptions(),
   );
 
-  // Show loading state
-  if (sessionPending) {
+  // The startup snapshot carries the first paint; the live session takes over
+  // as soon as it is known (and signals a session lost after load).
+  const session = liveSession ?? startup?.session ?? null;
+
+  if (!startup && sessionPending) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Spinner className="size-8" />
@@ -125,23 +114,20 @@ function PortalLayout() {
     );
   }
 
-  if (!session) {
+  if (!session || (!sessionPending && liveSession === null)) {
     return <Navigate to="/sign-in" search={{ redirect: signInRedirect }} />;
   }
 
-  if (orgsLoading || activeOrgLoading || needsPortalOrgSwitch) {
+  if (orgsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        {needsPortalOrgSwitch && targetOrg ? (
-          <PortalOrgSwitcher key={targetOrg.id} organizationId={targetOrg.id} />
-        ) : null}
         <Spinner className="size-8" />
       </div>
     );
   }
 
   // No CLIENT access - show error page
-  if (!hasClientAccess) {
+  if (clientOrganizations.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <Card className="w-full max-w-md">
@@ -177,48 +163,24 @@ function PortalLayout() {
 
   return (
     // Every portal query key is scoped to this id (see portal-query-keys.ts),
-    // so one client org's cached data can never be served to another.
-    <PortalOrgProvider organizationId={activeOrg?.id ?? null}>
+    // so one client org's cached data can never be served to another. The
+    // live active organization follows the sidebar switcher; until it loads,
+    // the organization activated at startup is already the right one.
+    <PortalOrgProvider
+      organizationId={activeOrg?.id ?? startup?.organizationId ?? null}
+    >
       <SidebarProvider>
-        {targetOrg ? (
-          <PersistPortalOrgSelection
-            key={targetOrg.id}
-            organizationId={targetOrg.id}
-          />
-        ) : null}
         <PortalSidebar />
         <SidebarInset>
           <PortalHeader />
           <main className="flex-1 space-y-4 p-4 2xl:p-6 3xl:px-8">
-            {session.user.name.trim() ? null : <CompleteProfilePrompt />}
+            {session.user.name?.trim() ? null : <CompleteProfilePrompt />}
             <Outlet />
           </main>
         </SidebarInset>
       </SidebarProvider>
     </PortalOrgProvider>
   );
-}
-
-function PortalOrgSwitcher({ organizationId }: { organizationId: string }) {
-  useMountEffect(() => {
-    void portalOrganization.setActive({ organizationId }).then(() => {
-      localStorage.setItem(PORTAL_ORG_KEY, organizationId);
-    });
-  });
-
-  return null;
-}
-
-function PersistPortalOrgSelection({
-  organizationId,
-}: {
-  organizationId: string;
-}) {
-  useMountEffect(() => {
-    localStorage.setItem(PORTAL_ORG_KEY, organizationId);
-  });
-
-  return null;
 }
 
 function CompleteProfilePrompt() {

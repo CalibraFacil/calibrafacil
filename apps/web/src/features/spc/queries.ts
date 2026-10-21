@@ -12,6 +12,7 @@ import type {
 } from '@calibra-facil/schemas'
 
 import { calibraApi } from '@/utils/api'
+import { keepPreviousDataInScope } from '@/lib/keep-previous-page'
 import {
   ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,
@@ -62,6 +63,10 @@ export function spcChartListQueryOptions(input: SpcChartListQueryInput) {
         standardId: input.standardId,
         status: input.statusFilter || undefined,
       }),
+    placeholderData: keepPreviousDataInScope([
+      'spc-charts',
+      input.organizationId,
+    ]),
   })
 }
 

@@ -3,6 +3,7 @@ import { AssetTypeFieldSchema } from '@calibra-facil/schemas'
 import { z } from 'zod'
 
 import { calibraApi, getApiBaseURL } from '@/utils/api'
+import { keepPreviousDataInScope } from '@/lib/keep-previous-page'
 import type { LegalMetrologyRegulationCatalogEntry } from './forms'
 import {
   ensureRouteQueries,
@@ -63,6 +64,7 @@ export function assetsListQueryOptions(input: AssetsListQueryInput) {
         status: input.statusFilter || undefined,
         customerId: input.customerId ?? undefined,
       }),
+    placeholderData: keepPreviousDataInScope(['assets', input.organizationId]),
   })
 }
 

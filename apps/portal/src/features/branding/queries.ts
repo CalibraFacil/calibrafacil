@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 
 import { getApiBaseUrl } from "@/lib/utils";
 
@@ -34,4 +35,37 @@ export function brandingQueryOptions() {
     staleTime: Infinity,
     gcTime: Infinity,
   });
+}
+
+/**
+ * How long the first paint may wait for branding. The lab identity is
+ * cosmetic, so a slow or hung request must never hold the app: past this
+ * budget the default brand renders and the real one swaps in when it lands.
+ */
+export const BRANDING_FIRST_PAINT_WAIT_MS = 800;
+
+/** Starts the branding request. Never rejects (failures leave the default). */
+export function prefetchBranding(queryClient: QueryClient): Promise<void> {
+  return queryClient.prefetchQuery(brandingQueryOptions());
+}
+
+/**
+ * Gives branding a brief head start so a white-labeled host does not flash the
+ * CalibraFácil brand, without ever blocking on it: resolves when branding
+ * settles, fails, or the wait budget runs out, whichever comes first.
+ */
+export async function settleBrandingForFirstPaint(
+  queryClient: QueryClient,
+  waitMs: number = BRANDING_FIRST_PAINT_WAIT_MS,
+): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const budget = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, waitMs);
+  });
+
+  try {
+    await Promise.race([prefetchBranding(queryClient), budget]);
+  } finally {
+    clearTimeout(timer);
+  }
 }

@@ -1,6 +1,7 @@
 import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 
 import { calibraApi } from '@/utils/api'
+import { keepPreviousDataInScope } from '@/lib/keep-previous-page'
 import {
   ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,
@@ -59,6 +60,10 @@ export function servicesListQueryOptions(input: ServicesListQueryInput) {
               ? false
               : undefined,
       }),
+    placeholderData: keepPreviousDataInScope([
+      'services',
+      input.organizationId,
+    ]),
   })
 }
 

@@ -6,6 +6,7 @@ import {
   getStableDashboardOrganizationIdForRouteData,
   prewarmRouteQueries,
 } from '@/lib/route-data'
+import { keepPreviousDataInScope } from '@/lib/keep-previous-page'
 import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import {
   type EffectiveEnvironmentalLimitsData,
@@ -43,6 +44,7 @@ export function jobsListQueryOptions(input: JobsListQueryInput) {
       input.statusFilter,
     ],
     queryFn: () => fetchJobsList(input),
+    placeholderData: keepPreviousDataInScope(['jobs', input.organizationId]),
   })
 }
 
