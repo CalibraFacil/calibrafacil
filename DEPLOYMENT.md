@@ -178,7 +178,7 @@ laboratory instead, set `CONTA_AZUL_CLIENT_ID` and `CONTA_AZUL_CLIENT_SECRET`
 | App            | Variables                                                                                                                                                                                   |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `apps/web`     | `VITE_API_URL`, `VITE_PORTAL_APP_URL`, `VITE_OPERATOR_*` (identity shown on the legal pages: `LEGAL_NAME`, `CNPJ`, `ADDRESS`, `EMAIL`, `DPO_NAME`, `DPO_EMAIL`), optional `VITE_SENTRY_DSN` |
-| `apps/portal`  | `VITE_API_URL`, `VITE_WEB_URL`                                                                                                                                                              |
+| `apps/portal`  | `VITE_API_URL`, `VITE_WEB_URL`, optional `VITE_SENTRY_DSN` (route crashes only; no PII, no replay)                                                                                          |
 | `apps/desktop` | `VITE_DESKTOP_AUTH_API_URL`, `VITE_DESKTOP_AUTH_ORIGIN` (see [`docs/desktop-auto-update.md`](./docs/desktop-auto-update.md))                                                                |
 
 Vite bakes these in at build time. The Docker images also read them when the container starts
