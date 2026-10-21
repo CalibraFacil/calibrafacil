@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@calibra-facil/db";
+import { domainErrorResponse, invalid } from "../lib/domain-errors";
 import {
   renderLabel,
   defaultRenderOptions,
@@ -130,7 +131,7 @@ import {
 } from "../modules/jobs/helpers";
 import { approveJob } from "../modules/jobs/approve-job";
 import {
-  buildJobStatusConflict,
+  jobStatusConflict,
   isCancelableJobStatus,
   JobStatusConflictError,
 } from "../modules/jobs/job-status-transitions";
@@ -1354,11 +1355,12 @@ export const jobsRouter = new Hono<{
         existing.status === "SUPERSEDED" ||
         existing.status === "CANCELED"
       ) {
-        return c.json(
-          {
-            error: `Nao e possivel atualizar um job com status ${existing.status}`,
-          },
-          400,
+        return domainErrorResponse(
+          c,
+          invalid(
+            "job_not_editable",
+            `Nao e possivel atualizar um job com status ${existing.status}`,
+          ),
         );
       }
 
@@ -1707,11 +1709,12 @@ export const jobsRouter = new Hono<{
 
       // Can only submit from DRAFT, IN_PROGRESS, or REJECTED
       if (!["DRAFT", "IN_PROGRESS", "REJECTED"].includes(existing.status)) {
-        return c.json(
-          {
-            error: `Nao e possivel submeter um job com status ${existing.status}`,
-          },
-          400,
+        return domainErrorResponse(
+          c,
+          invalid(
+            "job_not_submittable",
+            `Nao e possivel submeter um job com status ${existing.status}`,
+          ),
         );
       }
 
@@ -2015,7 +2018,7 @@ export const jobsRouter = new Hono<{
         return row;
       });
       if (!updated) {
-        return c.json(await buildJobStatusConflict(id), 409);
+        return domainErrorResponse(c, await jobStatusConflict(id));
       }
 
       // Reverse traceability (#426 Phase 1): mirror the frozen snapshot into
@@ -2070,11 +2073,12 @@ export const jobsRouter = new Hono<{
 
       // Can only execute from DRAFT, IN_PROGRESS, or REJECTED
       if (!["DRAFT", "IN_PROGRESS", "REJECTED"].includes(existing.status)) {
-        return c.json(
-          {
-            error: `Nao e possivel executar um job com status ${existing.status}`,
-          },
-          400,
+        return domainErrorResponse(
+          c,
+          invalid(
+            "job_not_executable",
+            `Nao e possivel executar um job com status ${existing.status}`,
+          ),
         );
       }
 
@@ -2306,7 +2310,7 @@ export const jobsRouter = new Hono<{
         return row;
       });
       if (!updated) {
-        return c.json(await buildJobStatusConflict(id), 409);
+        return domainErrorResponse(c, await jobStatusConflict(id));
       }
 
       // Reverse traceability (#426 Phase 1): mirror the frozen snapshot into
@@ -2366,11 +2370,12 @@ export const jobsRouter = new Hono<{
         case "not_found":
           return c.json({ error: "Job nao encontrado" }, 404);
         case "invalid_status":
-          return c.json(
-            {
-              error: `Nao e possivel aprovar um job com status ${result.currentStatus}. O job deve estar em REVIEW.`,
-            },
-            400,
+          return domainErrorResponse(
+            c,
+            invalid(
+              "job_not_approvable",
+              `Nao e possivel aprovar um job com status ${result.currentStatus}. O job deve estar em REVIEW.`,
+            ),
           );
         case "approval_requires_signatory":
           return c.json(
@@ -2489,11 +2494,12 @@ export const jobsRouter = new Hono<{
 
       // Can only reject from REVIEW status
       if (existing.status !== "REVIEW") {
-        return c.json(
-          {
-            error: `Nao e possivel rejeitar um job com status ${existing.status}. O job deve estar em REVIEW.`,
-          },
-          400,
+        return domainErrorResponse(
+          c,
+          invalid(
+            "job_not_rejectable",
+            `Nao e possivel rejeitar um job com status ${existing.status}. O job deve estar em REVIEW.`,
+          ),
         );
       }
 
@@ -2530,7 +2536,7 @@ export const jobsRouter = new Hono<{
         return row;
       });
       if (!updated) {
-        return c.json(await buildJobStatusConflict(id), 409);
+        return domainErrorResponse(c, await jobStatusConflict(id));
       }
 
       // Send notification to technician (fire and forget)
@@ -2652,28 +2658,32 @@ export const jobsRouter = new Hono<{
 
       // Cannot cancel approved jobs (ISO 17025 immutability requirement)
       if (existing.status === "APPROVED") {
-        return c.json(
-          {
-            error:
-              "Nao e possivel cancelar um job aprovado. Jobs aprovados sao imutaveis para conformidade ISO 17025.",
-          },
-          400,
+        return domainErrorResponse(
+          c,
+          invalid(
+            "job_not_cancelable",
+            "Nao e possivel cancelar um job aprovado. Jobs aprovados sao imutaveis para conformidade ISO 17025.",
+          ),
         );
       }
 
       // Cannot cancel already canceled jobs
       if (existing.status === "CANCELED") {
-        return c.json({ error: "Job ja foi cancelado" }, 400);
+        return domainErrorResponse(
+          c,
+          invalid("job_not_cancelable", "Job ja foi cancelado"),
+        );
       }
 
       // Explicit allow-list: anything else (GENERATING_PDF = approval in
       // progress, SUPERSEDED, ...) is refused.
       if (!isCancelableJobStatus(existing.status)) {
-        return c.json(
-          {
-            error: `Nao e possivel cancelar um job com status ${existing.status}.`,
-          },
-          400,
+        return domainErrorResponse(
+          c,
+          invalid(
+            "job_not_cancelable",
+            `Nao e possivel cancelar um job com status ${existing.status}.`,
+          ),
         );
       }
 
@@ -2705,7 +2715,7 @@ export const jobsRouter = new Hono<{
         return row;
       });
       if (!updated) {
-        return c.json(await buildJobStatusConflict(id), 409);
+        return domainErrorResponse(c, await jobStatusConflict(id));
       }
 
       return c.json({
@@ -2912,7 +2922,7 @@ export const jobsRouter = new Hono<{
         );
       }
       if (outcome.kind === "conflict") {
-        return c.json(await buildJobStatusConflict(id), 409);
+        return domainErrorResponse(c, await jobStatusConflict(id));
       }
 
       const { originalJob, amendedJob, amendmentNumber } = outcome;

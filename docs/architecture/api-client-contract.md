@@ -74,3 +74,36 @@ oxlint plugin (`packages/oxlint-plugin-calibra`):
 `calibra/no-api-import-in-frontend` and
 `calibra/no-hono-client-outside-client-runtime`. Each rule carries a
 `LEGACY_BASELINE` ratchet for grandfathering existing violations (empty today).
+
+## Domain errors and stable codes
+
+Clients must be able to branch on a failure without parsing pt-BR text, so
+every domain failure carries a stable `code`.
+
+- **The registry** is `API_ERROR_CODES` in `packages/contracts/src/api-errors.ts`
+  (one file, a closed TypeScript union exported as `ApiErrorCode`; the response
+  body type is `ApiErrorBody = { error, code, details? }`). Codes are
+  snake_case and never reused for another meaning. `JOB_STATUS_CONFLICT` is the
+  single documented legacy upper-case code, kept because clients already ship
+  against it.
+- **Server side:** new endpoints **throw `DomainError`** (`invalid`, `unauthenticated`,
+  `forbidden`, `notFound`, `conflict`, `unprocessable` in
+  `apps/api/src/lib/domain-errors.ts`); **never `c.json({ error })` for a domain
+  failure**. `applyErrorHandling` maps the thrown error once to
+  `{ error, code, details? }` with its status; it is not reported to Sentry
+  unless the status is 5xx. Where a handler runs without the app-level error
+  hook (a bare sub-router in a test) or must `return`, use
+  `return domainErrorResponse(c, error)` — same body. `error` stays the pt-BR
+  text; structured context goes in `details` (JSON-safe). `legacyBody` exists
+  only to keep top-level fields of pre-registry responses (`currentStatus`).
+- **Public API v2** keeps its `{ error: { code, message, details } }` envelope;
+  `buildPublicApiError` takes an `ApiErrorCode`, so v2 and the internal API
+  share the registry.
+- **Client side:** `CalibraApiError.code` (`packages/client-runtime`) carries the
+  code when the response body has a known one. Branch on `error.code`, not on
+  `error.message`.
+- **Guard:** the `calibra/no-json-error-body-in-routes` oxlint rule flags
+  `c.json({ error ... })` in `apps/api/src/routes`. Existing sites are
+  grandfathered as exact per-file counts in the rule's `LEGACY_BASELINE`; a file
+  can never gain one. When you migrate a site, lower that file's count in the
+  same change.

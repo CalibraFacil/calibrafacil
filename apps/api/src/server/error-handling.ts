@@ -1,6 +1,7 @@
 import type { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { extractPgErrorCode } from "../lib/db-errors";
+import { DomainError, domainErrorBody } from "../lib/domain-errors";
 import { flushErrorReporter, reportServerError } from "../lib/observability";
 import type { Env } from "./env";
 
@@ -26,14 +27,28 @@ export function applyErrorHandling(
       return error.getResponse();
     }
 
-    deps.report(error, {
-      surface: "api",
-      tags: {
-        method: c.req.method,
-        // Route pattern when matched; falls back to the raw path.
-        path: c.req.routePath || new URL(c.req.url).pathname,
-      },
-    });
+    const reportDefect = () =>
+      deps.report(error, {
+        surface: "api",
+        tags: {
+          method: c.req.method,
+          // Route pattern when matched; falls back to the raw path.
+          path: c.req.routePath || new URL(c.req.url).pathname,
+        },
+      });
+
+    // Typed domain failures (throw notFound(...), conflict(...), ...) are
+    // expected outcomes: mapped once to { error, code, details? } and NOT
+    // reported — unless the error itself carries a 5xx status.
+    if (error instanceof DomainError) {
+      if (error.status >= 500) {
+        reportDefect();
+        await deps.flush();
+      }
+      return c.json(domainErrorBody(error), error.status);
+    }
+
+    reportDefect();
     // Serverless: the function may freeze right after the response — give the
     // delivery a bounded window instead of losing the event.
     await deps.flush();

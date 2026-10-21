@@ -1,6 +1,7 @@
 import { db } from "@calibra-facil/db";
 import { calibrationJob, type JobStatus } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
+import { conflict } from "../../lib/domain-errors";
 
 /**
  * Job status machine (calibration_job.status), as enforced by the API:
@@ -43,18 +44,23 @@ export class JobStatusConflictError extends Error {
   }
 }
 
-/** Body of the 409 returned when a status compare-and-set matched no row. */
-export async function buildJobStatusConflict(jobId: number) {
+/**
+ * The 409 returned when a status compare-and-set matched no row: the job moved
+ * under the caller. Wire shape is unchanged for existing clients (legacy
+ * upper-case code + top-level `currentStatus`); `details` carries the same
+ * status for new clients.
+ */
+export async function jobStatusConflict(jobId: number) {
   const [current] = await db
     .select({ status: calibrationJob.status })
     .from(calibrationJob)
     .where(eq(calibrationJob.id, jobId))
     .limit(1);
+  const currentStatus = current?.status ?? null;
 
-  return {
-    error:
-      "O status do job mudou durante a operacao. Recarregue e tente novamente.",
-    code: "JOB_STATUS_CONFLICT",
-    currentStatus: current?.status ?? null,
-  };
+  return conflict(
+    "JOB_STATUS_CONFLICT",
+    "O status do job mudou durante a operacao. Recarregue e tente novamente.",
+    { details: { currentStatus }, legacyBody: { currentStatus } },
+  );
 }
