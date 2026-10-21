@@ -150,8 +150,23 @@ async function pushSubmit(
     performedAt?: string;
     backdateReason?: string;
     eventId: string;
+    /** List the standard twice in the snapshot, as a buggy client might. */
+    duplicateStandard?: boolean;
   },
 ) {
+  const standardEntry = {
+    id: world.standardId,
+    name: "Massa Padrao",
+    certificateNumber: "CERT-SV",
+    calibrationDate: "2025-01-10T00:00:00.000Z",
+    nextCalibrationDate: `${calendarDateKey(world.validThrough)}T00:00:00.000Z`,
+    uncertainty: 0.01,
+    uncertaintyUnit: "g",
+    coverageFactor: 2,
+    distribution: "normal",
+    drift: null,
+    certifiedValues: null,
+  };
   loginAs({ userId: world.org.userId, organizationId: world.org.orgId });
   const res = await syncRouter.request("/push", {
     method: "POST",
@@ -176,21 +191,9 @@ async function pushSubmit(
             ...(options.backdateReason
               ? { backdateReason: options.backdateReason }
               : {}),
-            standardsSnapshot: [
-              {
-                id: world.standardId,
-                name: "Massa Padrao",
-                certificateNumber: "CERT-SV",
-                calibrationDate: "2025-01-10T00:00:00.000Z",
-                nextCalibrationDate: `${calendarDateKey(world.validThrough)}T00:00:00.000Z`,
-                uncertainty: 0.01,
-                uncertaintyUnit: "g",
-                coverageFactor: 2,
-                distribution: "normal",
-                drift: null,
-                certifiedValues: null,
-              },
-            ],
+            standardsSnapshot: options.duplicateStandard
+              ? [standardEntry, standardEntry]
+              : [standardEntry],
             calibrationLocationSnapshot: {
               type: "lab",
               addressText: "Laboratório",
@@ -322,6 +325,35 @@ describe("syncRouter — desktop execution judges a standard by the performed da
 
     expect(body.rejected).toEqual([]);
     expect(await statusOf(world.jobId)).toBe("REVIEW");
+  });
+});
+
+describe("syncRouter — a standard listed twice is snapshotted once (REQ-SJ-1)", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  it("REQ-SJ-1: a snapshot naming the same standard twice is stored with one entry", async () => {
+    const world = await seedWorld({
+      validThrough: addCalendarDays(labToday(), 60),
+    });
+    const performedAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+    const body = await pushSubmit(world, {
+      eventId: "evt-duplicate",
+      occurredAt: performedAt,
+      performedAt,
+      duplicateStandard: true,
+    });
+
+    expect(body.rejected).toEqual([]);
+    const [row] = await db
+      .select({ standardsSnapshot: calibrationJob.standardsSnapshot })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, world.jobId));
+    expect(row?.standardsSnapshot?.map((standard) => standard.id)).toEqual([
+      world.standardId,
+    ]);
   });
 });
 

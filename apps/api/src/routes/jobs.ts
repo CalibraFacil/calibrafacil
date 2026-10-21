@@ -657,12 +657,16 @@ async function buildStandardsSnapshot(
     return { ok: true, snapshot: null };
   }
 
+  // A standard named twice is one standard: the snapshot lists it once, in the
+  // order it was first named.
+  const standardIds = [...new Set(selectedStandardIds)];
+
   const standards = await db
     .select()
     .from(referenceStandard)
     .where(
       and(
-        inArray(referenceStandard.id, selectedStandardIds),
+        inArray(referenceStandard.id, standardIds),
         eq(referenceStandard.organizationId, organizationId),
       ),
     );
@@ -671,7 +675,7 @@ async function buildStandardsSnapshot(
   // snapshot and asks for the back-date reason), but it is the same judgement.
   const judgement = judgeExecutionStandards(
     {
-      standardIds: selectedStandardIds,
+      standardIds,
       performedAt,
       today: new Date(),
       mode: "cloud",
@@ -693,9 +697,7 @@ async function buildStandardsSnapshot(
   const standardsById = new Map(
     standards.map((standard) => [standard.id, standard]),
   );
-  const orderedStandards = selectedStandardIds.map(
-    (id) => standardsById.get(id)!,
-  );
+  const orderedStandards = standardIds.map((id) => standardsById.get(id)!);
 
   const currentDocuments = await db
     .select()

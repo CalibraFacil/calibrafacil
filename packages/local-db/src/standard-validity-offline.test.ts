@@ -314,4 +314,18 @@ describe("offline submit re-judges the saved snapshot with the one judgement (RE
     expect(submitWithoutNaming(database)?.status).toBe("REVIEW");
     database.close();
   });
+
+  it("REQ-SJ-1: a standard named twice in selectedStandardIds is snapshotted once", () => {
+    const database = createDatabase(FAR);
+
+    const job = saveLocalJobExecution(database, {
+      ...baseInput,
+      selectedStandardIds: [999, 999],
+    });
+
+    expect(job?.standardsSnapshot).toEqual([
+      expect.objectContaining({ id: 999, name: "Massa Padrao" }),
+    ]);
+    database.close();
+  });
 });

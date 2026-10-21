@@ -1866,6 +1866,29 @@ describe("jobsRouter — reference standard validity at the performed date (REQ-
     expect(await statusOf(id)).toBe("IN_PROGRESS");
   });
 
+  it("REQ-SJ-1: a standard named twice in selectedStandardIds is snapshotted once", async () => {
+    const { id, standardId } = await seedJobWithStandard("DRAFT");
+
+    const res = await jobsRouter.request(`/${id}/execute`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        data: { indication: "10", reference: "9" },
+        selectedStandardIds: [standardId, standardId],
+        performedAt: lastEvening.toISOString(),
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const [row] = await db
+      .select({ standardsSnapshot: calibrationJob.standardsSnapshot })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, id));
+    expect(row?.standardsSnapshot?.map((standard) => standard.id)).toEqual([
+      standardId,
+    ]);
+  });
+
   it("REQ-CAL-004: a draft keeps judging the standard by the performed date it already saved, not by today", async () => {
     const { id, standardId } = await seedJobWithStandard("DRAFT");
     expect((await execute(id, standardId, lastEvening)).status).toBe(200);

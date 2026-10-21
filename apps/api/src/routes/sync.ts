@@ -4285,7 +4285,11 @@ function getStandardSnapshotsResult(
     };
   }
   const normalized: StandardSnapshot[] = [];
+  const seenIds = new Set<number>();
   for (const standard of parseResult.data) {
+    // A standard listed twice is one standard: keep its first entry.
+    if (seenIds.has(standard.id)) continue;
+    seenIds.add(standard.id);
     const calibrationDate = parseSnapshotDate(standard.calibrationDate);
     const nextCalibrationDate =
       standard.nextCalibrationDate == null
