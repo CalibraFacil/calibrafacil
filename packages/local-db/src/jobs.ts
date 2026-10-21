@@ -1,3 +1,4 @@
+import { isCalendarDatePast } from "@calibra-facil/schemas";
 import type { LocalDatabase } from "./database";
 import { stableLocalNumericId } from "./ids";
 
@@ -166,7 +167,11 @@ LIMIT @limit OFFSET @offset
       technicianName: row.technician_name,
       status: row.status,
       dueDate: row.due_date,
-      isOverdue: row.due_date ? row.due_date < new Date().toISOString() : false,
+      // The due date is a calendar day: overdue once that day is over in the
+      // laboratory, not when its instant has passed on the UTC clock.
+      isOverdue: row.due_date
+        ? isCalendarDatePast(new Date(row.due_date))
+        : false,
       createdAt: row.created_at,
       syncState: row.sync_state,
     })),

@@ -13,7 +13,11 @@ import type {
   BillingDocumentStatus,
   ReceivableInstallmentStatus,
 } from "@calibra-facil/shared";
-import { isServiceOrderBillable } from "@calibra-facil/shared";
+import {
+  isServiceOrderBillable,
+  labDaysSince,
+  labDaysUntil,
+} from "@calibra-facil/shared";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import {
   evaluateOrderBlockers,
@@ -48,8 +52,6 @@ export const REVENUE_LEAKAGE_LABEL: Record<RevenueLeakageClass, string> = {
   BLOCKED_TOO_LONG: "Bloqueado há mais de 7 dias",
 };
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 export const REVENUE_LEAKAGE_THRESHOLDS = {
   stuckReadyToBillDays: 7,
   stuckSentToFinanceDays: 3,
@@ -69,8 +71,9 @@ export interface RevenueLeakageInput {
   lastStatusChangedAt: Date | null;
 }
 
-function daysBetween(a: Date, b: Date): number {
-  return Math.floor((a.getTime() - b.getTime()) / DAY_MS);
+/** Whole laboratory days since the day a calendar date (a due/issue date) names. */
+function daysSinceCalendarDate(day: Date, now: Date): number {
+  return -labDaysUntil(day, now);
 }
 
 /**
@@ -87,7 +90,7 @@ export function evaluateRevenueLeakage(
   if (
     input.stage === "READY_TO_BILL" &&
     input.completedAt &&
-    daysBetween(now, input.completedAt) >
+    labDaysSince(input.completedAt, now) >
       REVENUE_LEAKAGE_THRESHOLDS.stuckReadyToBillDays
   ) {
     classes.push("STUCK_READY_TO_BILL");
@@ -96,7 +99,7 @@ export function evaluateRevenueLeakage(
   if (
     input.stage === "SENT_TO_FINANCE" &&
     input.sentAt &&
-    daysBetween(now, input.sentAt) >
+    labDaysSince(input.sentAt, now) >
       REVENUE_LEAKAGE_THRESHOLDS.stuckSentToFinanceDays
   ) {
     classes.push("STUCK_SENT_TO_FINANCE");
@@ -106,7 +109,7 @@ export function evaluateRevenueLeakage(
     input.stage === "INVOICED" &&
     !input.isOverdue &&
     input.issuedAt &&
-    daysBetween(now, input.issuedAt) >
+    daysSinceCalendarDate(input.issuedAt, now) >
       REVENUE_LEAKAGE_THRESHOLDS.stuckInvoicedDays
   ) {
     classes.push("STUCK_INVOICED");
@@ -115,7 +118,7 @@ export function evaluateRevenueLeakage(
   if (
     input.isOverdue &&
     input.firstOverdueInstallmentDueDate &&
-    daysBetween(now, input.firstOverdueInstallmentDueDate) >
+    daysSinceCalendarDate(input.firstOverdueInstallmentDueDate, now) >
       REVENUE_LEAKAGE_THRESHOLDS.longOverdueDays
   ) {
     classes.push("LONG_OVERDUE");
@@ -124,7 +127,7 @@ export function evaluateRevenueLeakage(
   if (
     input.isBlocked &&
     input.lastStatusChangedAt &&
-    daysBetween(now, input.lastStatusChangedAt) >
+    labDaysSince(input.lastStatusChangedAt, now) >
       REVENUE_LEAKAGE_THRESHOLDS.blockedTooLongDays
   ) {
     classes.push("BLOCKED_TOO_LONG");
@@ -391,15 +394,22 @@ export async function buildRevenueLeakage(
 
     // Age signal: pick the most relevant timestamp for the displayed
     // "há N dias" badge — overdue rules > completed > generic update.
-    const ageAnchor =
-      (classes.includes("LONG_OVERDUE")
-        ? firstOverdue?.dueDate
-        : classes.includes("STUCK_INVOICED")
-          ? docInfo?.issueDate
-          : classes.includes("STUCK_SENT_TO_FINANCE")
-            ? docInfo?.updatedAt
-            : (order.deliveredAt ?? order.readyAt ?? null)) ?? null;
-    const ageInDays = ageAnchor ? daysBetween(now, ageAnchor) : null;
+    // The due and issue dates are calendar dates (aged by the day they name);
+    // the other anchors are instants (aged by the laboratory day they fell on).
+    const ageInDays = classes.includes("LONG_OVERDUE")
+      ? firstOverdue
+        ? daysSinceCalendarDate(firstOverdue.dueDate, now)
+        : null
+      : classes.includes("STUCK_INVOICED")
+        ? docInfo?.issueDate
+          ? daysSinceCalendarDate(docInfo.issueDate, now)
+          : null
+        : (() => {
+            const anchor = classes.includes("STUCK_SENT_TO_FINANCE")
+              ? docInfo?.updatedAt
+              : (order.deliveredAt ?? order.readyAt ?? null);
+            return anchor ? labDaysSince(anchor, now) : null;
+          })();
 
     alerts.push({
       serviceOrderId: order.id,

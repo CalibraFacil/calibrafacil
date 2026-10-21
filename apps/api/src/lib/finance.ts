@@ -28,6 +28,7 @@ import {
   DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
   applyIntegrationMappings,
   calculateFinancialDueDate,
+  resolveIssuedDueDate,
   getBillingBlockerCodeLabel,
   normalizeContaAzulConnectionConfig,
   normalizeGenericFinancialErpConfig,
@@ -1658,14 +1659,11 @@ async function issueDraftBillingDocument(params: {
       organizationId,
       tx,
     );
-    const effectiveDueDate =
-      existing.dueDate instanceof Date &&
-      existing.dueDate.getTime() > issueDate.getTime()
-        ? existing.dueDate
-        : calculateFinancialDueDate(
-            issueDate,
-            DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
-          );
+    const effectiveDueDate = resolveIssuedDueDate(
+      existing.dueDate,
+      issueDate,
+      DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
+    );
 
     await tx
       .update(billingDocument)

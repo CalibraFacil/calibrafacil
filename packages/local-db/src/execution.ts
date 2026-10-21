@@ -299,7 +299,7 @@ export function saveLocalJobExecution(
             : new Date(),
           backdateReason: input.backdateReason?.trim() || null,
         })
-      : { validOnlyBecauseBackdated: [] as string[] };
+      : noStandardsJudgement();
   const environmentalSnapshot = input.environment
     ? buildEnvironmentalSnapshot(database, existing, input.environment, {
         recordedAt: now,
@@ -941,6 +941,10 @@ function parseSnapshotStandardRefs(snapshotJson: string | null): StandardRef[] {
     });
   }
   return refs;
+}
+
+function noStandardsJudgement(): { validOnlyBecauseBackdated: string[] } {
+  return { validOnlyBecauseBackdated: [] };
 }
 
 /**

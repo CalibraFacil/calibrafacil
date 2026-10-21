@@ -12,6 +12,17 @@
  * `performedAt` is when the work was done, never when it was synced or saved.
  */
 
+// The laboratory-day helpers the offline packages (which do not depend on
+// @calibra-facil/shared) compare calendar dates with.
+export {
+  addCalendarDays,
+  calendarDateKey,
+  isCalendarDatePast,
+  labCalendarDayKey,
+  labDaysUntil,
+  labToday,
+} from "@calibra-facil/shared/calendar-date";
+
 import {
   calendarDateFromKey,
   calendarDateKey,

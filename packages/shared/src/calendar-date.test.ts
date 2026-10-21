@@ -1,14 +1,57 @@
 import { describe, expect, it } from "vitest";
 import {
   addCalendarDays,
+  addLabBusinessDays,
   calendarDateFromKey,
   calendarDateKey,
   calendarDaysBetween,
   isCalendarDatePast,
   labCalendarDayKey,
+  labDaysSince,
   labDaysUntil,
   labToday,
 } from "./calendar-date";
+
+describe("addLabBusinessDays: a turnaround counted on the laboratory's calendar (REQ-CAL-003)", () => {
+  it("starts from the laboratory's day, not the UTC one, at 23:30 on a Thursday", () => {
+    // 2026-10-15 is a Thursday. 23:30 in Sao Paulo is 02:30Z on Friday the
+    // 16th: counting from the UTC Friday skipped the weekend to Monday.
+    const thursdayEvening = new Date("2026-10-16T02:30:00.000Z");
+    expect(addLabBusinessDays(thursdayEvening, 1).toISOString()).toBe(
+      "2026-10-16T00:00:00.000Z",
+    );
+    expect(addLabBusinessDays(thursdayEvening, 2).toISOString()).toBe(
+      "2026-10-19T00:00:00.000Z",
+    );
+  });
+
+  it("skips weekends and returns the due day as a calendar date", () => {
+    const fridayNoon = new Date("2026-10-16T15:00:00.000Z");
+    expect(addLabBusinessDays(fridayNoon, 1).toISOString()).toBe(
+      "2026-10-19T00:00:00.000Z",
+    );
+    expect(addLabBusinessDays(fridayNoon, 0).toISOString()).toBe(
+      "2026-10-16T00:00:00.000Z",
+    );
+  });
+});
+
+describe("labDaysSince: the laboratory days since an instant (REQ-CAL-003)", () => {
+  it("counts the day an instant fell on in Sao Paulo, not in UTC", () => {
+    // 22:00 on the 14th in Sao Paulo is 01:00Z on the 15th.
+    const evening = new Date("2026-10-15T01:00:00.000Z");
+    expect(labDaysSince(evening, new Date("2026-10-15T15:00:00.000Z"))).toBe(1);
+    // Still the same laboratory day at 23:30.
+    expect(labDaysSince(evening, new Date("2026-10-15T02:30:00.000Z"))).toBe(0);
+    // An instant at exactly UTC midnight is an instant: 21:00 the day before.
+    expect(
+      labDaysSince(
+        new Date("2026-10-15T00:00:00.000Z"),
+        new Date("2026-10-16T15:00:00.000Z"),
+      ),
+    ).toBe(2);
+  });
+});
 
 describe("overdue and expiry are judged by laboratory days (REQ-CAL-003)", () => {
   const due = new Date("2026-10-15T00:00:00.000Z"); // a stored calendar date

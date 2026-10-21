@@ -130,6 +130,33 @@ export function labDaysUntil(value: Date, now: Date = new Date()): number {
 }
 
 /**
+ * The calendar date `businessDays` weekdays after the laboratory's day of
+ * `start` (Saturdays and Sundays do not count): a turnaround due date.
+ */
+export function addLabBusinessDays(start: Date, businessDays: number): Date {
+  let day = labToday(start);
+  let remaining = businessDays;
+  while (remaining > 0) {
+    day = addCalendarDays(day, 1);
+    const weekday = day.getUTCDay();
+    if (weekday !== 0 && weekday !== 6) remaining -= 1;
+  }
+  return day;
+}
+
+/**
+ * Whole laboratory days from the day an INSTANT fell on (a completion, a
+ * sending, a status change) to today's laboratory day: 0 on the same day, 1
+ * the day after. For calendar dates (a due date, an issue date) use
+ * `-labDaysUntil` instead: it reads them by the day they name.
+ */
+export function labDaysSince(instant: Date, now: Date = new Date()): number {
+  const day = calendarDateFromKey(labCalendarDayKey(instant));
+  if (!day) throw new RangeError("Invalid date");
+  return calendarDaysBetween(day, labToday(now));
+}
+
+/**
  * Whether the day `value` names is before today's laboratory day: a due date
  * or a validity that is over. The day itself is NOT past (a standard valid
  * through D is still valid on D, a bill due on D is not yet overdue on D).
