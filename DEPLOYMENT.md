@@ -162,6 +162,7 @@ then set `AUTH_COOKIE_DOMAIN` and build the frontends with `VITE_API_URL`.
 | `PORTAL_SERVICE_USER_ID`                                                                            | Id of the account that owns client-portal organizations (`init` creates it)          |
 | `BACKGROUND_JOBS_MODE`                                                                              | `local` (inside the API process), `queue` (a separate worker) or `vercel`            |
 | `BACKGROUND_JOBS_MAX_DELIVERIES`                                                                    | Optional, default `3`: Vercel deliveries before a certificate is rejected            |
+| `STUCK_RENDER_AFTER_MS`                                                                             | Optional, default `3600000` (60 min): see _Certificates stuck in generation_ below   |
 | `CRON_SCHEDULER=internal`                                                                           | Run the scheduled jobs inside the API (see below)                                    |
 
 Extra origins for CORS and auth can be listed in `CORS_ALLOWED_ORIGINS` and
@@ -225,6 +226,28 @@ Example crontab line:
 ```cron
 */30 * * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://api.example.com/api/cron/queue-backstop
 ```
+
+#### Certificates stuck in generation
+
+A certificate is `GENERATING_PDF` from approval until the worker issues it. The worker rejects it
+itself when a render fails for good, but it cannot when the process dies mid-render (out of
+memory, a crash) or when a Vercel Queue message is dropped after its retries. The `queue-backstop`
+job covers both, so such a certificate ends up `REJECTED` (reason `Erro ao gerar certificado: ...`,
+plus a `job_audit_log` entry) and can be sent for approval again, instead of staying
+`GENERATING_PDF` forever:
+
+- A queue row whose lease expired (`QUEUE_STALE_AFTER_MS`, default 10 minutes) on its final
+  attempt (`attempts >= max_attempts`) is dead-lettered to `FAILED` instead of being re-queued, so a
+  job that crashes the worker is not retried forever. Rows with attempts left are re-queued as
+  before. The certificate that row was rendering is rejected.
+- A certificate that has been `GENERATING_PDF` for longer than `STUCK_RENDER_AFTER_MS` (default
+  `3600000`, 60 minutes, counted from its last update) and has no `PENDING` or `PROCESSING` queue
+  row is rejected the same way. Keep it well above the longest render plus the Vercel Queue retry
+  window: a Vercel delivery is not tracked by a queue row, so the threshold is the only thing
+  protecting a certificate that is still being retried.
+
+Only a job still in `GENERATING_PDF` is rejected. An `APPROVED` or `SUPERSEDED` certificate, its
+issued snapshot and its number are never touched.
 
 ### A server with Bun
 
