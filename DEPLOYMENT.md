@@ -510,25 +510,51 @@ failed run rolls back whole and can be repeated. What to know before running it:
   CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS calibration_request_id_org_uidx ON calibration_request (id, organization_id);
   ```
 
+  **Before running the migration, check that every pre-built index is valid.** An interrupted
+  `CREATE INDEX CONCURRENTLY` leaves an `INVALID` index under the constraint's name; it enforces nothing, and
+  its name would clash with the one the constraint creates. The migration drops such a leftover itself, but
+  look first (and `indisready` must be true too):
+
+  ```sql
+  SELECT c.relname AS index_name, i.indrelid::regclass AS table_name, i.indisvalid, i.indisready
+    FROM pg_index i
+    JOIN pg_class c ON c.oid = i.indexrelid
+   WHERE c.relnamespace = 'public'::regnamespace AND c.relname LIKE '%\_id\_org\_uidx'
+   ORDER BY i.indisvalid, c.relname;
+  ```
+
+  Every row must show `indisvalid = t`. Drop each `f` row concurrently (it never blocks writes) and build it
+  again with the statement above:
+
+  ```sql
+  SELECT format('DROP INDEX CONCURRENTLY IF EXISTS public.%I;', c.relname)
+    FROM pg_index i
+    JOIN pg_class c ON c.oid = i.indexrelid
+   WHERE c.relnamespace = 'public'::regnamespace AND c.relname LIKE '%\_id\_org\_uidx' AND NOT i.indisvalid
+  \gexec
+  ```
+
   The other three parents (`receivable_installment`, `service_order_execution`, `service_order_quote`) gain
   their `organization_id` in this very migration, so their index is built by it.
 
 - **The composite foreign keys are added `NOT VALID`.** Postgres enforces them for every new row at once, and
   the migration has already checked the existing rows (it raises, naming the table and the count, if any child
   points at another laboratory's row), so no second scan runs under the lock. After the deploy, mark them
-  validated; this takes only a `SHARE UPDATE EXCLUSIVE` lock (reads and writes continue) and is idempotent:
+  validated. Each `VALIDATE CONSTRAINT` runs as **its own statement in autocommit**, so every one takes only a
+  `SHARE UPDATE EXCLUSIVE` lock (reads and writes continue) and releases it before the next starts; locks
+  never accumulate. `\gexec` sends each generated statement separately, and re-running it is harmless (it
+  lists only what is still not validated):
 
   ```sql
-  DO $$
-  DECLARE c record;
-  BEGIN
-    FOR c IN SELECT conrelid::regclass AS tbl, conname FROM pg_constraint
-              WHERE contype = 'f' AND NOT convalidated AND conname LIKE '%\_tenant\_fk'
-    LOOP
-      EXECUTE format('ALTER TABLE %s VALIDATE CONSTRAINT %I', c.tbl, c.conname);
-    END LOOP;
-  END $$;
+  SELECT format('ALTER TABLE %s VALIDATE CONSTRAINT %I;', conrelid::regclass, conname)
+    FROM pg_constraint
+   WHERE contype = 'f' AND NOT convalidated AND conname LIKE '%\_tenant\_fk'
+   ORDER BY conrelid::regclass::text, conname
+  \gexec
   ```
+
+  Run it with `psql "$DATABASE_URL" -v ON_ERROR_STOP=1` (without `-1`/`--single-transaction`, which would put
+  them all back in one transaction).
 
 - **Orphans.** A row of a non-audit child table with no parent (real corruption) makes the migration raise
   and apply nothing: fix the rows it names and run it again. An audit-log row whose entity was hard-deleted is

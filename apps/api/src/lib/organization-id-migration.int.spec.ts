@@ -49,6 +49,16 @@ const workerUrl = process.env.DATABASE_URL;
 const workerDatabase = new URL(workerUrl ?? "postgres://x/").pathname.slice(1);
 const scratchName = `calibra_mig_${process.env.VITEST_POOL_ID ?? "0"}`;
 
+/** A statement block of DEPLOYMENT.md, verbatim (the list-item indentation removed). */
+function documentedSql(pattern: RegExp): string {
+  const block = readFileSync(
+    new URL("../../../../DEPLOYMENT.md", import.meta.url),
+    "utf8",
+  ).match(pattern)?.[0];
+  if (!block) throw new Error(`DEPLOYMENT.md has no block matching ${pattern}`);
+  return block.replace(/^ {2}/gm, "");
+}
+
 function pgEnv(): Record<string, string> {
   const url = new URL(`${baseUrl}/postgres`);
   return {
@@ -291,8 +301,68 @@ describe("migration 0118 on a database in main's shape", () => {
       `create unique index concurrently if not exists asset_id_org_uidx on asset (id, lab_organization_id);`,
     );
 
+    // Two interrupted CREATE INDEX CONCURRENTLY leftovers (INVALID, under the constraint's name):
+    // the DEPLOYMENT.md "drop the invalid ones" statement removes the first; the migration
+    // drops the second by itself.
+    for (const [table, name, columns] of [
+      ["service", "service_id_org_uidx", "id, organization_id"],
+      [
+        "billing_document",
+        "billing_document_id_org_uidx",
+        "id, organization_id",
+      ],
+    ] as const) {
+      mustPsql(
+        scratchName,
+        `create unique index concurrently ${name} on ${table} (${columns});`,
+      );
+      mustPsql(
+        scratchName,
+        `update pg_index set indisvalid = false where indexrelid = 'public.${name}'::regclass;`,
+      );
+    }
+    const check = documentedSql(/SELECT c\.relname AS index_name[\s\S]*?;/);
+    expect(
+      mustPsql(scratchName, check).split("\n").filter(Boolean),
+      "the documented check lists the two invalid leftovers first",
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining(
+          "billing_document_id_org_uidx|billing_document|f|",
+        ),
+        expect.stringContaining("service_id_org_uidx|service|f|"),
+      ]),
+    );
+    // Verbatim from DEPLOYMENT.md: drops every INVALID one (both here).
+    mustPsql(
+      scratchName,
+      documentedSql(/SELECT format\('DROP INDEX CONCURRENTLY[\s\S]*?\\gexec/),
+    );
+    expect(
+      mustPsql(
+        scratchName,
+        `select count(*) from pg_class where relname in ('service_id_org_uidx', 'billing_document_id_org_uidx');`,
+      ).trim(),
+    ).toBe("0");
+    // Leftover the documented step did not get to (re-created invalid right before the migration).
+    mustPsql(
+      scratchName,
+      `create unique index concurrently billing_document_id_org_uidx on billing_document (id, organization_id);`,
+    );
+    mustPsql(
+      scratchName,
+      `update pg_index set indisvalid = false where indexrelid = 'public.billing_document_id_org_uidx'::regclass;`,
+    );
+
     const applied = psql(scratchName, MIGRATION);
     expect(applied.ok, applied.stderr).toBe(true);
+    // The migration dropped the invalid leftover and built the constraint's own valid index.
+    expect(
+      mustPsql(
+        scratchName,
+        `select i.indisvalid from pg_constraint k join pg_index i on i.indexrelid = k.conindid where k.conname = 'billing_document_id_org_uidx';`,
+      ).trim(),
+    ).toBe("t");
     // The unattributable rows are counted, not raised.
     expect(applied.stderr).toContain(
       "job_audit_log has 1 audit row(s) of a deleted entity",
@@ -399,15 +469,15 @@ describe("migration 0118 on a database in main's shape", () => {
       );
     const total = listTenancy().flatMap((table) => table.compositeKeys).length;
     expect(unvalidated()).toBe(total);
-    // The step of DEPLOYMENT.md, verbatim; running it twice is harmless.
-    const step = readFileSync(
-      new URL("../../../../DEPLOYMENT.md", import.meta.url),
-      "utf8",
-    ).match(/DO \$\$\n\s*DECLARE c record;[\s\S]*?END \$\$;/)?.[0];
-    if (!step) throw new Error("DEPLOYMENT.md has no VALIDATE step");
-    mustPsql(scratchName, step.replace(/^ {2}/gm, ""));
+    // The step of DEPLOYMENT.md, verbatim: one statement per constraint, each in autocommit
+    // (\\gexec), so psql sends no BEGIN around them. Running it twice is harmless.
+    const step = documentedSql(
+      /SELECT format\('ALTER TABLE %s VALIDATE CONSTRAINT[\s\S]*?\\gexec/,
+    );
+    expect(step).not.toMatch(/\bDO \$\$/);
+    mustPsql(scratchName, step);
     expect(unvalidated()).toBe(0);
-    mustPsql(scratchName, step.replace(/^ {2}/gm, ""));
+    mustPsql(scratchName, step);
     expect(unvalidated()).toBe(0);
   });
 

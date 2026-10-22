@@ -344,6 +344,16 @@ BEGIN
        WHERE conrelid = to_regclass(format('public.%I', edge.parent_table))
          AND conname = edge.constraint_name
     ) THEN
+      -- An INVALID leftover under this name (an interrupted CREATE INDEX CONCURRENTLY) would
+      -- make the constraint's own index clash with it: drop it, the constraint builds a new one.
+      IF EXISTS (
+        SELECT 1 FROM pg_class c JOIN pg_index i ON i.indexrelid = c.oid
+         WHERE c.relname = edge.constraint_name
+           AND c.relnamespace = 'public'::regnamespace
+           AND c.relkind = 'i' AND NOT i.indisvalid
+      ) THEN
+        EXECUTE format('DROP INDEX public.%I', edge.constraint_name);
+      END IF;
       IF EXISTS (
         SELECT 1 FROM pg_class c JOIN pg_index i ON i.indexrelid = c.oid
          WHERE c.relname = edge.constraint_name
