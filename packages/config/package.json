@@ -1,0 +1,31 @@
+{
+  "name": "@calibra-facil/config",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "description": "One validated configuration module per runtime: the environment variables of the API, the worker, the local server and the frontends, with types, defaults and descriptions",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "env-example": "tsx scripts/generate-env-example.ts",
+    "env-example:check": "tsx scripts/generate-env-example.ts --check",
+    "test": "vitest run --passWithNoTests",
+    "test:run": "vitest run --passWithNoTests",
+    "check-types": "node ../../scripts/typecheck.mjs --noEmit",
+    "lint": "oxlint"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:^",
+    "@types/node": "^24.13.0",
+    "tsx": "^4.22.4",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  }
+}

@@ -21,6 +21,33 @@ describe("resolveTsaConfig (#646 / CMP-03)", () => {
     });
   });
 
+  it("REQ-TSA-1: passes SIGNING_TSA_TIMEOUT_MS on as the request timeout, ignoring an unusable value", () => {
+    const url = "https://act.example/tsa";
+    expect(
+      resolveTsaConfig({
+        SIGNING_TSA_URL: url,
+        SIGNING_TSA_TIMEOUT_MS: "15000",
+      })?.timeoutMs,
+    ).toBe(15000);
+    for (const unusable of ["", "soon", "-5", "0", "1.5"]) {
+      expect(
+        resolveTsaConfig({
+          SIGNING_TSA_URL: url,
+          SIGNING_TSA_TIMEOUT_MS: unusable,
+        })?.timeoutMs,
+      ).toBeUndefined();
+    }
+  });
+
+  it("caps the timeout at 60000 ms so four tries stay under the 300 s queue function limit", () => {
+    expect(
+      resolveTsaConfig({
+        SIGNING_TSA_URL: "https://tsa.example.test",
+        SIGNING_TSA_TIMEOUT_MS: "120000",
+      })?.timeoutMs,
+    ).toBe(60_000);
+  });
+
   it("defaults icpBrasilConformant to FALSE — honest labeling for generic TSAs", () => {
     const generic = resolveTsaConfig({
       SIGNING_TSA_URL: "https://freetsa.example",

@@ -21,6 +21,8 @@
 // message is acknowledged — rather than guessed to be the first, which could
 // leave a failed certificate in GENERATING_PDF forever.
 
+import { readJobsConfig } from "@calibra-facil/config";
+
 export const DEFAULT_MAX_BACKGROUND_JOB_DELIVERIES = 3;
 
 /** Seconds before the first retry; doubles per delivery, capped at 5 minutes. */
@@ -29,9 +31,9 @@ const RETRY_MAX_DELAY_SECONDS = 300;
 /** Wait before retrying a delivery that found the message's lease held. */
 const LEASE_HELD_RETRY_SECONDS = 60;
 
-export function readMaxBackgroundJobDeliveries(
-  value = process.env.BACKGROUND_JOBS_MAX_DELIVERIES,
-): number {
+export function readMaxBackgroundJobDeliveries(value?: string): number {
+  // Unset: the validated setting. An explicit value is parsed leniently (tests).
+  if (value === undefined) return readJobsConfig().maxDeliveries;
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= 1
     ? parsed

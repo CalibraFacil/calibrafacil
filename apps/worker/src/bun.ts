@@ -1,3 +1,9 @@
+import {
+  failFast,
+  loadWorkerConfig,
+  rawEnv,
+  setProcessEnvDefault,
+} from "@calibra-facil/config";
 import { processScheduledNotifications } from "./scheduled.js";
 import { processScheduledIntegrationSyncs } from "./integrations.js";
 import {
@@ -7,7 +13,6 @@ import {
 } from "./queue-runtime.js";
 
 type BunRuntime = {
-  env: Record<string, string | undefined>;
   file(path: URL): {
     exists(): Promise<boolean>;
     text(): Promise<string>;
@@ -16,9 +21,8 @@ type BunRuntime = {
 
 declare const Bun: BunRuntime;
 
-const config = readQueueConfig();
 const workerDirectory = new URL("..", import.meta.url);
-const isProduction = process.env.NODE_ENV === "production";
+const isProduction = rawEnv().NODE_ENV === "production";
 
 function parseLocalEnv(contents: string): Record<string, string> {
   const env: Record<string, string> = {};
@@ -55,7 +59,7 @@ async function loadLocalEnv() {
 
     const localEnv = parseLocalEnv(await file.text());
     for (const [key, value] of Object.entries(localEnv)) {
-      process.env[key] ??= value;
+      setProcessEnvDefault(key, value);
     }
   }
 }
@@ -93,6 +97,11 @@ function scheduleDailyAt(hourUtc: number, task: () => Promise<void>) {
 
 await loadLocalEnv();
 
+// Validate the configuration before doing anything else: a bad deploy exits
+// here with one message that lists every problem.
+failFast(() => loadWorkerConfig());
+
+const config = readQueueConfig();
 const env = createWorkerEnv();
 
 console.log(`[Worker] Starting ${config.workerId}`);

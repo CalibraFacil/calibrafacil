@@ -68,10 +68,10 @@ describe("calibra/no-calibration-job-update-outside-owner (real oxlint)", () => 
   });
 
   it("REQ-TR-4: grandfathers the exact legacy count and fails above it", async () => {
-    // apps/api/src/routes/visits.ts is baselined at 1.
-    await expectClean(RULE, { "apps/api/src/routes/visits.ts": UPDATE });
+    // apps/api/src/cli/seed-demo/jobs.ts is baselined at 1.
+    await expectClean(RULE, { "apps/api/src/cli/seed-demo/jobs.ts": UPDATE });
     await expectViolation(RULE, {
-      "apps/api/src/routes/visits.ts": updates(2),
+      "apps/api/src/cli/seed-demo/jobs.ts": updates(2),
     });
   });
 
@@ -79,9 +79,6 @@ describe("calibra/no-calibration-job-update-outside-owner (real oxlint)", () => 
     const legacy: Record<string, number> = {
       "apps/api/src/cli/seed-demo/jobs.ts": 1,
       "apps/api/src/cli/seed-demo/timeline.ts": 1,
-      "apps/api/src/routes/jobs.ts": 5,
-      "apps/api/src/routes/public-api-v2.ts": 3,
-      "apps/api/src/routes/visits.ts": 1,
     };
     for (const [file, count] of Object.entries(legacy)) {
       // eslint-disable-next-line no-await-in-loop -- sequential spawns keep the output readable
@@ -89,7 +86,25 @@ describe("calibra/no-calibration-job-update-outside-owner (real oxlint)", () => 
       // eslint-disable-next-line no-await-in-loop -- see above
       await expectViolation(RULE, { [file]: updates(count + 1) });
     }
-    // Ten real oxlint spawns: well above the default 5s on a busy machine.
+    // Four real oxlint spawns.
+  }, 60_000);
+
+  it("REQ-LC-2: the cloud jobs routes, the public API and the visits routes no longer write the job themselves (reject, cancel, assign, edit and amend moved into the jobs module)", async () => {
+    for (const file of [
+      "apps/api/src/routes/jobs.ts",
+      "apps/api/src/routes/public-api-v2.ts",
+      "apps/api/src/routes/visits.ts",
+    ]) {
+      // eslint-disable-next-line no-await-in-loop -- sequential spawns keep the output readable
+      await expectViolation(RULE, { [file]: UPDATE });
+    }
+    await expectClean(RULE, {
+      "apps/api/src/modules/jobs/reject-job.ts": UPDATE,
+      "apps/api/src/modules/jobs/cancel-job.ts": UPDATE,
+      "apps/api/src/modules/jobs/assign-job.ts": UPDATE,
+      "apps/api/src/modules/jobs/edit-job.ts": UPDATE,
+      "apps/api/src/modules/jobs/amend-job.ts": UPDATE,
+    });
   }, 60_000);
 
   it("REQ-SUB-4: the desktop sync apply no longer writes the job itself (its grandfathered write moved into the submit/execute command)", async () => {

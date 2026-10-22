@@ -52,6 +52,7 @@ import {
   formatCalendarDate,
   formatInstant,
 } from "@calibra-facil/shared/format";
+import { readEmailConfig, readOriginsConfig } from "@calibra-facil/config";
 import { buildLegalVerificationMessage } from "./legal-verification-message";
 import { buildCertificateAmendedLinks } from "./portal-links";
 import { isEmailSuppressed } from "./suppression";
@@ -432,10 +433,11 @@ function getVisitEmailType(
 }
 
 function getEmailLogoSrc(): string {
-  const explicitLogoUrl = process.env.EMAIL_LOGO_URL;
+  const explicitLogoUrl = readEmailConfig().emailLogoUrl;
   if (explicitLogoUrl) return explicitLogoUrl;
 
-  const appUrl = process.env.WEB_URL ?? process.env.APP_URL;
+  const origins = readOriginsConfig();
+  const appUrl = origins.webUrl ?? origins.appUrl;
   if (appUrl) return `${appUrl.replace(/\/$/, "")}/logo192.png`;
 
   return `${appBaseUrl()}/logo192.png`;

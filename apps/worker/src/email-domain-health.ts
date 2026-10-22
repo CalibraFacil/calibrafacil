@@ -16,6 +16,7 @@
  *    retries.
  */
 
+import { readEmailConfig } from "@calibra-facil/config";
 import { db } from "@calibra-facil/db";
 import {
   organizationEmailDomain,
@@ -43,7 +44,7 @@ function resolveApiKey(
   masterKey: string | undefined,
 ): string | undefined {
   if (row.mode === "managed") {
-    return process.env.RESEND_API_KEY;
+    return readEmailConfig().resendApiKey;
   }
   // Legacy byok rows only. The key columns are nullable since managed mode.
   if (!masterKey || !row.resendApiKeyEncrypted || !row.resendApiKeyIv) {

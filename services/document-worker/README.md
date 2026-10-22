@@ -60,6 +60,10 @@ wrangler secret put R2_SECRET_ACCESS_KEY
 wrangler secret put GOTENBERG_URL             # https://calibrafacil-gotenberg.<...>.workers.dev
 wrangler secret put GOTENBERG_TOKEN
 wrangler secret put SIGNING_MASTER_KEY
+wrangler secret put SIGNING_TSA_URL           # optional: RFC 3161 time-stamp authority; unset = no time-stamp
+wrangler secret put SIGNING_TSA_AUTH          # optional: full Authorization header value of a contracted authority
+wrangler secret put SIGNING_TSA_ICP_CONFORMANT # optional: "true" only for a credentialed ICP-Brasil authority
+wrangler secret put SIGNING_TSA_TIMEOUT_MS    # optional: request timeout in ms (default 30000)
 wrangler secret put INTEGRATIONS_MASTER_KEY
 wrangler secret put RESEND_API_KEY            # optional (notifyCertificateReady email)
 wrangler secret put RESEND_FROM_EMAIL         # optional

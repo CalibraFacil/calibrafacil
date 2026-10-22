@@ -9,6 +9,12 @@
 // container and the local poller stay byte-for-byte identical in how they
 // process a job.
 import {
+  loadWorkerConfig,
+  readJobsConfig,
+  setProcessEnvDefault,
+  workerSigningEnv,
+} from "@calibra-facil/config";
+import {
   GetObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -30,7 +36,7 @@ import {
   type QueueReceiptClaim,
   type QueueReceiptsMode,
 } from "@calibra-facil/db/queue-receipts";
-import { resolveS3EndpointConfigFromProcess } from "@calibra-facil/shared/storage-endpoint";
+import { resolveS3EndpointConfig } from "@calibra-facil/shared/storage-endpoint";
 import worker, { type ExecutionContext } from "./index.js";
 
 export type WorkerEnv = Parameters<typeof worker.queue>[1];
@@ -43,30 +49,30 @@ export type QueueRuntimeConfig = {
 };
 
 export function readQueueConfig(): QueueRuntimeConfig {
+  const jobs = readJobsConfig();
   return {
-    workerId: process.env.WORKER_ID ?? `worker-${process.pid}`,
-    batchSize: Number(process.env.QUEUE_BATCH_SIZE ?? 10),
-    pollIntervalMs: Number(process.env.QUEUE_POLL_INTERVAL_MS ?? 2_000),
-    staleAfterMs: Number(process.env.QUEUE_STALE_AFTER_MS ?? 10 * 60_000),
+    workerId: jobs.workerId ?? `worker-${process.pid}`,
+    batchSize: jobs.queueBatchSize,
+    pollIntervalMs: jobs.queuePollIntervalMs,
+    staleAfterMs: jobs.queueStaleAfterMs,
   };
 }
 
-function requiredEnv(name: string) {
-  const value = process.env[name];
-  if (!value) throw new Error(`${name} is required`);
-  return value;
-}
+type StorageSettings = ReturnType<typeof loadWorkerConfig>["storage"];
 
-function createR2Bucket(bucket = requiredEnv("R2_BUCKET_NAME")) {
-  const { endpoint, region, forcePathStyle } =
-    resolveS3EndpointConfigFromProcess();
+function createR2Bucket(storage: StorageSettings, bucket: string) {
+  const { endpoint, region, forcePathStyle } = resolveS3EndpointConfig({
+    R2_ACCOUNT_ID: storage.accountId,
+    R2_ENDPOINT: storage.endpoint,
+    R2_REGION: storage.region,
+  });
   const client = new S3Client({
     region,
     endpoint,
     forcePathStyle,
     credentials: {
-      accessKeyId: requiredEnv("R2_ACCESS_KEY_ID"),
-      secretAccessKey: requiredEnv("R2_SECRET_ACCESS_KEY"),
+      accessKeyId: storage.accessKeyId ?? "",
+      secretAccessKey: storage.secretAccessKey ?? "",
     },
   });
 
@@ -102,26 +108,34 @@ function createR2Bucket(bucket = requiredEnv("R2_BUCKET_NAME")) {
   };
 }
 
+/**
+ * Builds the worker environment from the validated worker configuration: a
+ * missing database, storage credential or key throws one aggregated error
+ * listing every problem.
+ */
 export function createWorkerEnv(): WorkerEnv {
-  const databaseUrl = requiredEnv("DATABASE_URL");
-  process.env.NODE_ENV ??= "production";
+  const config = loadWorkerConfig();
+  const { storage } = config;
+  setProcessEnvDefault("NODE_ENV", "production");
 
   return {
-    DATABASE_URL: databaseUrl,
-    CERTIFICATES_BUCKET: createR2Bucket(),
+    DATABASE_URL: config.database.url ?? "",
+    CERTIFICATES_BUCKET: createR2Bucket(storage, storage.bucketName ?? ""),
     MEDIA_BUCKET: createR2Bucket(
-      process.env.R2_MEDIA_BUCKET_NAME ?? "calibrafacil-media-dev",
+      storage,
+      storage.mediaBucketName ?? "calibrafacil-media-dev",
     ),
-    GOTENBERG_URL: process.env.GOTENBERG_URL,
-    GOTENBERG_TOKEN: process.env.GOTENBERG_TOKEN,
-    SIGNING_MASTER_KEY: requiredEnv("SIGNING_MASTER_KEY"),
-    INTEGRATIONS_MASTER_KEY: requiredEnv("INTEGRATIONS_MASTER_KEY"),
-    RESEND_API_KEY: process.env.RESEND_API_KEY,
-    RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
-    EMAIL_FROM: process.env.EMAIL_FROM,
-    EMAIL_LOGO_URL: process.env.EMAIL_LOGO_URL,
-    WEB_URL: process.env.WEB_URL,
-    APP_URL: process.env.APP_URL,
+    GOTENBERG_URL: config.rendering.gotenbergUrl,
+    GOTENBERG_TOKEN: config.rendering.gotenbergToken,
+    // The master key and every SIGNING_TSA_* variable, shared with the API.
+    ...workerSigningEnv(config.signing),
+    INTEGRATIONS_MASTER_KEY: config.integrations.masterKey,
+    RESEND_API_KEY: config.email.resendApiKey,
+    RESEND_FROM_EMAIL: config.email.resendFromEmail,
+    EMAIL_FROM: config.email.emailFrom,
+    EMAIL_LOGO_URL: config.email.emailLogoUrl,
+    WEB_URL: config.origins.webUrl,
+    APP_URL: config.origins.appUrl,
   };
 }
 

@@ -34,6 +34,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@calibra-facil/config": "workspace:^",
     "@calibra-facil/schemas": "workspace:^",
     "@calibra-facil/shared": "workspace:^",
     "@neondatabase/serverless": "^1.1.0",

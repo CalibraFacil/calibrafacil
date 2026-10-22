@@ -1,3 +1,4 @@
+import { readJobsConfig } from "@calibra-facil/config";
 import type {
   BackgroundJobMessage,
   IntegrationSyncBackgroundJobMessage,
@@ -9,10 +10,7 @@ import { isQueueMessage, type QueueMessage } from "@calibra-facil/db/queue";
 // job land in `app_queue_job`?" without pulling the dispatcher in.
 
 export function getBackgroundJobsMode() {
-  return (
-    process.env.BACKGROUND_JOBS_MODE ??
-    (process.env.VERCEL ? "vercel" : "local")
-  );
+  return readJobsConfig().mode;
 }
 
 export function isContaAzulSyncMessage(
@@ -24,17 +22,11 @@ export function isContaAzulSyncMessage(
 }
 
 export function getDocumentWorkerUrl(): string | null {
-  const url = process.env.DOCUMENT_WORKER_URL?.trim();
-  return url ? url : null;
+  return readJobsConfig().documentWorkerUrl ?? null;
 }
 
 export function getDocumentWorkerJobTypes(): ReadonlySet<string> {
-  return new Set(
-    (process.env.DOCUMENT_WORKER_JOB_TYPES ?? "")
-      .split(",")
-      .map((value) => value.trim())
-      .filter((value) => value.length > 0),
-  );
+  return new Set(readJobsConfig().documentWorkerJobTypes);
 }
 
 // Mirror packages/db/src/queue.ts:getMessageType so a CERTIFICATE/LABEL job

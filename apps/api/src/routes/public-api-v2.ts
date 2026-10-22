@@ -14,7 +14,6 @@ import {
   calibrationRequestItem,
   customer,
   customerAuditLog,
-  jobAuditLog,
   organization,
   organizationUnit,
   publicApiResourceRef,
@@ -92,7 +91,6 @@ import {
 } from "../middleware/permission";
 import { createClientOrganizationAsServiceOwner } from "../lib/portal-service-account";
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
-import { isAssignableTechnician } from "../lib/tenant-refs";
 import { deriveNextCalibrationDate } from "../lib/portal-asset-interval";
 import { resolveAssetRegimeWrite } from "../lib/asset-regime";
 import { deriveRegulatedNextDate } from "../lib/regulated-interval";
@@ -103,12 +101,9 @@ import {
   type JobExecutionActor,
   type JobExecutionResult,
 } from "../modules/jobs/submit-job";
-import {
-  allowedFrom,
-  canTransition,
-  requireTargetOf,
-} from "@calibra-facil/schemas/job-transitions";
-import { isCancelableJobStatus } from "../modules/jobs/job-status-transitions";
+import { cancelJob } from "../modules/jobs/cancel-job";
+import { editJob } from "../modules/jobs/edit-job";
+import { rejectJob } from "../modules/jobs/reject-job";
 import { resolveApiKeyApprover } from "../lib/api-key-approver";
 import { sendServiceOrdersToFinance } from "../lib/finance";
 import {
@@ -552,13 +547,13 @@ function jobStatusConflictBody() {
 function publicApiJobActor(
   apiKey: ApiKeyAuthVariables["apiKey"],
   headers: Headers,
-): JobExecutionActor {
+) {
   return {
     kind: "api_key",
     userId: apiKey.createdBy,
     apiKey: { id: apiKey.id, name: apiKey.name, keyPrefix: apiKey.keyPrefix },
     ipAddress: getPublicApiRequestIp(headers),
-  };
+  } satisfies JobExecutionActor;
 }
 
 /**
@@ -3598,95 +3593,55 @@ publicApiV2Router
         );
       }
 
-      const [existing] = await db
-        .select()
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, resolvedId),
-            eq(calibrationJob.organizationId, apiKey.organizationId),
-          ),
-        )
-        .limit(1);
-
-      if (!existing) {
-        return c.json(
-          buildPublicApiError({
-            code: "job_not_found",
-            message: "OS não encontrada",
-          }),
-          404,
-        );
-      }
-
-      if (!canTransition(existing.status, "edit")) {
-        return c.json(
-          buildPublicApiError({
-            code: "job_not_editable",
-            message: `Não é possível atualizar uma OS com status ${existing.status}`,
-          }),
-          409,
-        );
-      }
-
-      if (
-        input.technicianId &&
-        input.technicianId !== existing.technicianId &&
-        !(await isAssignableTechnician({
-          organizationId: apiKey.organizationId,
-          userId: input.technicianId,
-          unitId: existing.unitId,
-        }))
-      ) {
-        return c.json(
-          buildPublicApiError({
-            code: "technician_not_found",
-            message: "Técnico não encontrado ou sem permissão",
-          }),
-          400,
-        );
-      }
-
-      // The write matches only the statuses this route allows (the pre-check
-      // above) in the key's organization; the audit row commits with it.
-      const updated = await db.transaction(async (tx) => {
-        const [row] = await tx
-          .update(calibrationJob)
-          .set({
-            technicianId:
-              input.technicianId === undefined
-                ? existing.technicianId
-                : input.technicianId,
-            dueDate:
-              input.dueDate === undefined
-                ? existing.dueDate
-                : input.dueDate
-                  ? new Date(input.dueDate)
-                  : null,
-          })
-          .where(
-            and(
-              eq(calibrationJob.id, existing.id),
-              eq(calibrationJob.organizationId, apiKey.organizationId),
-              inArray(calibrationJob.status, allowedFrom("edit")),
-            ),
-          )
-          .returning();
-        if (!row) return null;
-
-        await tx.insert(jobAuditLog).values({
-          organizationId: apiKey.organizationId,
-          jobId: existing.id,
-          action: "update",
-          changes: { job: { old: existing, new: row } },
-          performedBy: apiKey.createdBy,
-          ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-        });
-        return row;
+      // Transport only: the policy is `editJob` (the same command the cloud
+      // PUT runs).
+      const result = await editJob({
+        actor: publicApiJobActor(apiKey, c.req.raw.headers),
+        jobId: resolvedId,
+        organizationId: apiKey.organizationId,
+        unitScope: null,
+        technicianId: input.technicianId,
+        dueDate: input.dueDate,
       });
-      if (!updated) {
-        return c.json(jobStatusConflictBody(), 409);
+      switch (result.status) {
+        case "not_found":
+          return c.json(
+            buildPublicApiError({
+              code: "job_not_found",
+              message: "OS não encontrada",
+            }),
+            404,
+          );
+        case "illegal_transition":
+          return c.json(
+            buildPublicApiError({
+              code: result.error.code,
+              message: `Não é possível atualizar uma OS com status ${result.currentStatus}`,
+            }),
+            409,
+          );
+        case "technician_not_found":
+          return c.json(
+            buildPublicApiError({
+              code: result.error.code,
+              message: "Técnico não encontrado ou sem permissão",
+            }),
+            400,
+          );
+        case "competence_missing":
+          return c.json(
+            buildPublicApiError({
+              code: result.error.code,
+              message: result.error.message,
+            }),
+            422,
+          );
+        case "concurrent_update":
+          return c.json(jobStatusConflictBody(), 409);
+        case "ok":
+          break;
       }
+      const updated = result.job;
 
       const externalId = input.externalId?.trim();
       if (externalId) {
@@ -3694,7 +3649,7 @@ publicApiV2Router
           organizationId: apiKey.organizationId,
           apiKeyId: apiKey.id,
           resourceType: "job",
-          resourceId: existing.id,
+          resourceId: resolvedId,
           externalId,
         });
       }
@@ -3707,7 +3662,7 @@ publicApiV2Router
             (await getResourceExternalId({
               organizationId: apiKey.organizationId,
               resourceType: "job",
-              resourceId: existing.id,
+              resourceId: resolvedId,
             })),
         },
       };
@@ -4055,80 +4010,42 @@ publicApiV2Router
       }
 
       return withIdempotentMutation(c, input, async () => {
-        const [existing] = await db
-          .select()
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.id, resolvedId),
-              eq(calibrationJob.organizationId, apiKey.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!existing) {
-          return {
-            status: 404,
-            body: buildPublicApiError({
-              code: "job_not_found",
-              message: "OS não encontrada",
-            }),
-          };
-        }
-
-        if (!canTransition(existing.status, "reject")) {
-          return {
-            status: 409,
-            body: buildPublicApiError({
-              code: "job_not_rejectable",
-              message: "A OS precisa estar em revisão para ser rejeitada",
-            }),
-          };
-        }
-
-        // Compare-and-set REVIEW -> REJECTED in the key's organization; the
-        // audit row commits with it.
-        const rejectedStatus = requireTargetOf(existing.status, "reject");
-        const updated = await db.transaction(async (tx) => {
-          const [row] = await tx
-            .update(calibrationJob)
-            .set({
-              status: rejectedStatus,
-              rejectedBy: apiKey.createdBy,
-              rejectedAt: new Date(),
-              rejectionReason: input.reason,
-            })
-            .where(
-              and(
-                eq(calibrationJob.id, existing.id),
-                eq(calibrationJob.organizationId, apiKey.organizationId),
-                inArray(calibrationJob.status, allowedFrom("reject")),
-              ),
-            )
-            .returning();
-          if (!row) return null;
-
-          await tx.insert(jobAuditLog).values({
-            organizationId: apiKey.organizationId,
-            jobId: existing.id,
-            action: "reject",
-            changes: { status: { old: existing.status, new: rejectedStatus } },
-            performedBy: apiKey.createdBy,
-            ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-            reason: input.reason,
-          });
-          return row;
+        // Transport only: the policy is `rejectJob` (the same command the
+        // cloud route runs).
+        const result = await rejectJob({
+          actor: publicApiJobActor(apiKey, c.req.raw.headers),
+          jobId: resolvedId,
+          organizationId: apiKey.organizationId,
+          unitScope: null,
+          reason: input.reason,
         });
-        if (!updated) {
-          return { status: 409, body: jobStatusConflictBody() };
+        switch (result.status) {
+          case "not_found":
+            return {
+              status: 404,
+              body: buildPublicApiError({
+                code: "job_not_found",
+                message: "OS não encontrada",
+              }),
+            };
+          case "illegal_transition":
+            return {
+              status: 409,
+              body: buildPublicApiError({
+                code: result.error.code,
+                message: "A OS precisa estar em revisão para ser rejeitada",
+              }),
+            };
+          case "concurrent_update":
+            return { status: 409, body: jobStatusConflictBody() };
+          case "ok":
+            return {
+              status: 200,
+              body: { data: result.job },
+              resourceType: "job" as const,
+              resourceId: result.job.id,
+            };
         }
-
-        return {
-          status: 200,
-          body: { data: updated },
-          resourceType: "job" as const,
-          resourceId: updated.id,
-        };
       });
     },
   )
@@ -4155,81 +4072,41 @@ publicApiV2Router
       }
 
       return withIdempotentMutation(c, input, async () => {
-        const [existing] = await db
-          .select()
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.id, resolvedId),
-              eq(calibrationJob.organizationId, apiKey.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!existing) {
-          return {
-            status: 404,
-            body: buildPublicApiError({
-              code: "job_not_found",
-              message: "OS não encontrada",
-            }),
-          };
-        }
-
-        // Explicit allow-list (the same one DELETE /jobs/:id uses): APPROVED,
-        // SUPERSEDED, CANCELED and GENERATING_PDF (approval in progress) are
-        // refused.
-        if (!isCancelableJobStatus(existing.status)) {
-          return {
-            status: 409,
-            body: buildPublicApiError({
-              code: "job_not_cancelable",
-              message:
-                existing.status === "APPROVED"
-                  ? "Não é possível cancelar uma OS aprovada"
-                  : `Não é possível cancelar uma OS com status ${existing.status}`,
-            }),
-          };
-        }
-
-        // Compare-and-set on the validated status; the audit row commits with it.
-        const canceledStatus = requireTargetOf(existing.status, "cancel");
-        const updated = await db.transaction(async (tx) => {
-          const [row] = await tx
-            .update(calibrationJob)
-            .set({ status: canceledStatus })
-            .where(
-              and(
-                eq(calibrationJob.id, existing.id),
-                eq(calibrationJob.organizationId, apiKey.organizationId),
-                eq(calibrationJob.status, existing.status),
-              ),
-            )
-            .returning();
-          if (!row) return null;
-
-          await tx.insert(jobAuditLog).values({
-            organizationId: apiKey.organizationId,
-            jobId: existing.id,
-            action: "cancel",
-            changes: { status: { old: existing.status, new: canceledStatus } },
-            performedBy: apiKey.createdBy,
-            ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-            reason: input.reason,
-          });
-          return row;
+        // Transport only: the policy is `cancelJob` (the same command the
+        // cloud route and the visit's remove-job run).
+        const result = await cancelJob({
+          actor: publicApiJobActor(apiKey, c.req.raw.headers),
+          jobId: resolvedId,
+          organizationId: apiKey.organizationId,
+          unitScope: null,
+          reason: input.reason,
         });
-
-        if (!updated) {
-          return {
-            status: 409,
-            body: buildPublicApiError({
-              code: "job_status_conflict",
-              message:
-                "O status da OS mudou durante a operação. Recarregue e tente novamente.",
-            }),
-          };
+        switch (result.status) {
+          case "not_found":
+            return {
+              status: 404,
+              body: buildPublicApiError({
+                code: "job_not_found",
+                message: "OS não encontrada",
+              }),
+            };
+          case "illegal_transition":
+            return {
+              status: 409,
+              body: buildPublicApiError({
+                code: result.error.code,
+                message:
+                  result.currentStatus === "APPROVED"
+                    ? "Não é possível cancelar uma OS aprovada"
+                    : `Não é possível cancelar uma OS com status ${result.currentStatus}`,
+              }),
+            };
+          case "concurrent_update":
+            return { status: 409, body: jobStatusConflictBody() };
+          case "ok":
+            break;
         }
+        const updated = result.job;
 
         await emitPublicApiWebhookEvent({
           organizationId: apiKey.organizationId,

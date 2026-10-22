@@ -26,7 +26,6 @@ import {
   user,
   member,
   memberUnitAssignment,
-  personnelCompetence,
   type AssetSnapshot,
 } from "@calibra-facil/db/schema";
 import {
@@ -66,7 +65,6 @@ import {
 } from "../middleware/permission";
 import {
   addCalendarDays,
-  calendarDateKey,
   isCalendarDatePast,
   labDaysUntil,
   labToday,
@@ -80,7 +78,6 @@ import {
   lte,
   gte,
   inArray,
-  isNull,
   lt,
   or,
   sql,
@@ -91,7 +88,6 @@ import {
   extractKeyFromUrl,
 } from "../lib/storage";
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
-import { generateCertificateIdentity } from "../lib/certificate-numbering";
 import { loadJobFinancialContexts } from "../lib/finance";
 import { alias } from "drizzle-orm/pg-core";
 import { getExecuteRows } from "../lib/db";
@@ -104,22 +100,18 @@ import {
   methodSnapshotDisplay,
   buildLocalJobFileUrl,
 } from "../modules/jobs/helpers";
-import {
-  allowedFrom,
-  canTransition,
-  requireTargetOf,
-} from "@calibra-facil/schemas/job-transitions";
 import { approveJob } from "../modules/jobs/approve-job";
+import { amendJob } from "../modules/jobs/amend-job";
+import { assignJob } from "../modules/jobs/assign-job";
+import { cancelJob } from "../modules/jobs/cancel-job";
+import { editJob } from "../modules/jobs/edit-job";
+import { rejectJob } from "../modules/jobs/reject-job";
 import {
   executeJob,
   submitJob,
   type JobExecutionResult,
 } from "../modules/jobs/submit-job";
-import {
-  jobStatusConflict,
-  isCancelableJobStatus,
-  JobStatusConflictError,
-} from "../modules/jobs/job-status-transitions";
+import { jobStatusConflict } from "../modules/jobs/job-status-transitions";
 import { certificateVerificationUrl } from "@calibra-facil/shared/public-urls";
 
 // Aliases for multiple user joins
@@ -719,165 +711,41 @@ export const jobsRouter = new Hono<{
         return c.json({ error: "Job nao encontrado" }, 404);
       }
 
-      // Get existing job
-      const [existing] = await db
-        .select()
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, id),
-            eq(calibrationJob.organizationId, memberData.organizationId),
-            buildUnitScopeCondition(calibrationJob.unitId, memberData),
-          ),
-        )
-        .limit(1);
-
-      if (!existing) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
-
-      // Cannot update approved, superseded or canceled jobs: a SUPERSEDED job is
-      // an issued certificate that an amendment replaced, as frozen as APPROVED.
-      if (!canTransition(existing.status, "edit")) {
-        return domainErrorResponse(
-          c,
-          invalid(
-            "job_not_editable",
-            `Nao e possivel atualizar um job com status ${existing.status}`,
-          ),
-        );
-      }
-
-      // Build changes object for audit log
-      const changes: Record<string, { old: unknown; new: unknown }> = {};
-      const updateData: Record<string, unknown> = {};
-
-      if (
-        input.technicianId !== undefined &&
-        input.technicianId !== existing.technicianId
-      ) {
-        // Validate technician
-        if (input.technicianId) {
-          const [techMember] = await db
-            .select()
-            .from(member)
-            .where(
-              and(
-                eq(member.userId, input.technicianId),
-                eq(member.organizationId, memberData.organizationId),
-                inArray(member.role, ["technician", "admin", "owner"]),
-              ),
-            )
-            .limit(1);
-
-          if (!techMember) {
-            return c.json(
-              { error: "Tecnico nao encontrado ou sem permissao" },
-              400,
-            );
-          }
-
-          if (
-            existing.unitId &&
-            !["admin", "owner"].includes(techMember.role)
-          ) {
-            const [assignment] = await db
-              .select({ id: memberUnitAssignment.id })
-              .from(memberUnitAssignment)
-              .where(
-                and(
-                  eq(memberUnitAssignment.memberId, techMember.id),
-                  eq(
-                    memberUnitAssignment.organizationId,
-                    memberData.organizationId,
-                  ),
-                  eq(memberUnitAssignment.unitId, existing.unitId),
-                  inArray(memberUnitAssignment.role, [
-                    "technician",
-                    "unit_admin",
-                  ]),
-                ),
-              )
-              .limit(1);
-
-            if (!assignment) {
-              return c.json(
-                { error: "Tecnico nao encontrado ou sem permissao" },
-                400,
+      const result = await editJob({
+        actor: {
+          kind: "user",
+          userId: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        },
+        jobId: id,
+        organizationId: memberData.organizationId,
+        unitScope: memberData,
+        technicianId: input.technicianId,
+        dueDate: input.dueDate,
+      });
+      switch (result.status) {
+        case "not_found":
+          return c.json({ error: "Job nao encontrado" }, 404);
+        case "illegal_transition":
+        case "technician_not_found":
+        case "competence_missing":
+          return domainErrorResponse(c, result.error);
+        case "concurrent_update":
+          return domainErrorResponse(c, await jobStatusConflict(id));
+        case "ok":
+          // Notify the technician if it changed.
+          if (result.changed.technician && input.technicianId) {
+            try {
+              await notifyJobAssigned(id, input.technicianId, session.user.id);
+            } catch (err) {
+              console.error(
+                "[Jobs] Failed to send assignment notification:",
+                err,
               );
             }
           }
-        }
-
-        changes.technicianId = {
-          old: existing.technicianId,
-          new: input.technicianId,
-        };
-        updateData.technicianId = input.technicianId;
+          return c.json(result.job);
       }
-
-      if (input.dueDate !== undefined) {
-        const newDueDate = input.dueDate ? new Date(input.dueDate) : null;
-        const oldDueDate = existing.dueDate;
-        // due_date is a calendar day: the same day typed at another hour is
-        // not a change.
-        if (
-          (newDueDate ? calendarDateKey(newDueDate) : null) !==
-          (oldDueDate ? calendarDateKey(oldDueDate) : null)
-        ) {
-          changes.dueDate = {
-            old: oldDueDate?.toISOString() || null,
-            new: newDueDate?.toISOString() || null,
-          };
-          updateData.dueDate = newDueDate;
-        }
-      }
-
-      if (Object.keys(updateData).length === 0) {
-        return c.json(existing);
-      }
-
-      // Update job: matches only the statuses this route allows (the pre-check
-      // above) in the caller's organization; the audit row commits with it.
-      const updated = await db.transaction(async (tx) => {
-        const [row] = await tx
-          .update(calibrationJob)
-          .set(updateData)
-          .where(
-            and(
-              eq(calibrationJob.id, id),
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              inArray(calibrationJob.status, allowedFrom("edit")),
-            ),
-          )
-          .returning();
-        if (!row) return null;
-
-        // Audit log
-        await tx.insert(jobAuditLog).values({
-          organizationId: memberData.organizationId,
-          jobId: id,
-          action: "update",
-          changes,
-          performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
-        });
-        return row;
-      });
-      if (!updated) {
-        return domainErrorResponse(c, await jobStatusConflict(id));
-      }
-
-      // Notify technician if changed
-      if (changes.technicianId && input.technicianId) {
-        try {
-          await notifyJobAssigned(id, input.technicianId, session.user.id);
-        } catch (err) {
-          console.error("[Jobs] Failed to send assignment notification:", err);
-        }
-      }
-
-      return c.json(updated);
     },
   )
 
@@ -898,199 +766,42 @@ export const jobsRouter = new Hono<{
         return c.json({ error: "Job nao encontrado" }, 404);
       }
 
-      // Get existing job
-      const [existing] = await db
-        .select()
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, id),
-            eq(calibrationJob.organizationId, memberData.organizationId),
-            buildUnitScopeCondition(calibrationJob.unitId, memberData),
-          ),
-        )
-        .limit(1);
-
-      if (!existing) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
-
-      // The technician is part of an issued certificate's record: no new
-      // assignment once the job is approved, and none after it was superseded.
-      if (!canTransition(existing.status, "assign")) {
-        return c.json(
-          {
-            error: `Nao e possivel atribuir tecnico a um job com status ${existing.status}`,
-          },
-          400,
-        );
-      }
-
-      // Validate technician
-      const [techMember] = await db
-        .select({
-          id: member.id,
-          userId: member.userId,
-          userName: user.name,
-          role: member.role,
-        })
-        .from(member)
-        .innerJoin(user, eq(member.userId, user.id))
-        .where(
-          and(
-            eq(member.userId, input.technicianId),
-            eq(member.organizationId, memberData.organizationId),
-          ),
-        )
-        .limit(1);
-
-      if (!techMember) {
-        return c.json(
-          { error: "Tecnico nao encontrado ou sem permissao" },
-          400,
-        );
-      }
-
-      if (existing.unitId) {
-        const [assignment] =
-          techMember.role === "admin" || techMember.role === "owner"
-            ? [{ id: 1 }]
-            : await db
-                .select({ id: memberUnitAssignment.id })
-                .from(memberUnitAssignment)
-                .where(
-                  and(
-                    eq(memberUnitAssignment.memberId, techMember.id),
-                    eq(
-                      memberUnitAssignment.organizationId,
-                      memberData.organizationId,
-                    ),
-                    eq(memberUnitAssignment.unitId, existing.unitId),
-                    inArray(memberUnitAssignment.role, [
-                      "technician",
-                      "unit_admin",
-                    ]),
-                  ),
-                )
-                .limit(1);
-
-        if (!assignment) {
-          return c.json(
-            { error: "Tecnico nao encontrado ou sem permissao" },
-            400,
-          );
-        }
-      }
-
-      // Validate competence (auto-detect enforcement)
-      // Get asset type from the job's service
-      const [jobService] = await db
-        .select({ assetTypeId: service.assetTypeId })
-        .from(service)
-        .where(
-          and(
-            eq(service.id, existing.serviceId),
-            eq(service.organizationId, memberData.organizationId),
-          ),
-        )
-        .limit(1);
-
-      if (jobService?.assetTypeId) {
-        const [competenceCount] = await db
-          .select({ total: count() })
-          .from(personnelCompetence)
-          .where(
-            and(
-              eq(personnelCompetence.organizationId, memberData.organizationId),
-              isNull(personnelCompetence.deletedAt),
-            ),
-          );
-
-        if ((competenceCount?.total ?? 0) > 0) {
-          const [activeCompetence] = await db
-            .select({
-              id: personnelCompetence.id,
-              expiresAt: personnelCompetence.expiresAt,
-            })
-            .from(personnelCompetence)
-            .where(
-              and(
-                eq(personnelCompetence.userId, input.technicianId),
-                eq(
-                  personnelCompetence.organizationId,
-                  memberData.organizationId,
-                ),
-                eq(personnelCompetence.assetTypeId, jobService.assetTypeId),
-                eq(personnelCompetence.status, "ACTIVE"),
-                isNull(personnelCompetence.deletedAt),
-              ),
-            )
-            .limit(1);
-
-          if (
-            !activeCompetence ||
-            (activeCompetence.expiresAt &&
-              activeCompetence.expiresAt < new Date())
-          ) {
-            return c.json(
-              {
-                error:
-                  "Técnico não possui competência ativa para este tipo de instrumento",
-              },
-              400,
+      const result = await assignJob({
+        actor: {
+          kind: "user",
+          userId: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        },
+        jobId: id,
+        organizationId: memberData.organizationId,
+        unitScope: memberData,
+        technicianId: input.technicianId,
+      });
+      switch (result.status) {
+        case "not_found":
+          return c.json({ error: "Job nao encontrado" }, 404);
+        case "illegal_transition":
+        case "technician_not_found":
+        case "competence_missing":
+          return domainErrorResponse(c, result.error);
+        case "concurrent_update":
+          return domainErrorResponse(c, await jobStatusConflict(id));
+        case "ok":
+          // Send notification to assigned technician
+          try {
+            await notifyJobAssigned(id, input.technicianId, session.user.id);
+          } catch (err) {
+            console.error(
+              "[Jobs] Failed to send assignment notification:",
+              err,
             );
           }
-        }
+
+          return c.json({
+            message: `Job atribuido a ${result.technicianName}`,
+            data: result.job,
+          } satisfies ServerShape<JobMutationResponse>);
       }
-
-      // Update job: matches only the statuses this route allows (the pre-check
-      // above) in the caller's organization; the audit row commits with it.
-      const updated = await db.transaction(async (tx) => {
-        const [row] = await tx
-          .update(calibrationJob)
-          .set({ technicianId: input.technicianId })
-          .where(
-            and(
-              eq(calibrationJob.id, id),
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              inArray(calibrationJob.status, allowedFrom("assign")),
-            ),
-          )
-          .returning();
-        if (!row) return null;
-
-        // Audit log
-        await tx.insert(jobAuditLog).values({
-          organizationId: memberData.organizationId,
-          jobId: id,
-          action: "assign",
-          changes: {
-            technicianId: {
-              old: existing.technicianId,
-              new: input.technicianId,
-            },
-            technicianName: { old: null, new: techMember.userName },
-          },
-          performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
-        });
-        return row;
-      });
-      if (!updated) {
-        return domainErrorResponse(c, await jobStatusConflict(id));
-      }
-
-      // Send notification to assigned technician
-      try {
-        await notifyJobAssigned(id, input.technicianId, session.user.id);
-      } catch (err) {
-        console.error("[Jobs] Failed to send assignment notification:", err);
-      }
-
-      return c.json({
-        message: `Job atribuido a ${techMember.userName}`,
-        data: updated,
-      } satisfies ServerShape<JobMutationResponse>);
     },
   )
 
@@ -1335,81 +1046,35 @@ export const jobsRouter = new Hono<{
         return c.json({ error: "Job nao encontrado" }, 404);
       }
 
-      // Get existing job
-      const [existing] = await db
-        .select()
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, id),
-            eq(calibrationJob.organizationId, memberData.organizationId),
-            buildUnitScopeCondition(calibrationJob.unitId, memberData),
-          ),
-        )
-        .limit(1);
-
-      if (!existing) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
-
-      // Can only reject from REVIEW status
-      if (!canTransition(existing.status, "reject")) {
-        return domainErrorResponse(
-          c,
-          invalid(
-            "job_not_rejectable",
-            `Nao e possivel rejeitar um job com status ${existing.status}. O job deve estar em REVIEW.`,
-          ),
-        );
-      }
-
-      // Compare-and-set REVIEW -> REJECTED; the audit row commits with it.
-      const rejectedStatus = requireTargetOf(existing.status, "reject");
-      const updated = await db.transaction(async (tx) => {
-        const [row] = await tx
-          .update(calibrationJob)
-          .set({
-            status: rejectedStatus,
-            rejectedBy: session.user.id,
-            rejectedAt: new Date(),
-            rejectionReason: input.reason,
-          })
-          .where(
-            and(
-              eq(calibrationJob.id, id),
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              inArray(calibrationJob.status, allowedFrom("reject")),
-            ),
-          )
-          .returning();
-        if (!row) return null;
-
-        await tx.insert(jobAuditLog).values({
-          organizationId: memberData.organizationId,
-          jobId: id,
-          action: "reject",
-          changes: {
-            status: { old: existing.status, new: rejectedStatus },
-          },
-          performedBy: session.user.id,
+      const result = await rejectJob({
+        actor: {
+          kind: "user",
+          userId: session.user.id,
           ipAddress: c.req.header("x-forwarded-for") || null,
-          reason: input.reason,
-        });
-        return row;
+        },
+        jobId: id,
+        organizationId: memberData.organizationId,
+        unitScope: memberData,
+        reason: input.reason,
       });
-      if (!updated) {
-        return domainErrorResponse(c, await jobStatusConflict(id));
+      switch (result.status) {
+        case "not_found":
+          return c.json({ error: "Job nao encontrado" }, 404);
+        case "illegal_transition":
+          return domainErrorResponse(c, result.error);
+        case "concurrent_update":
+          return domainErrorResponse(c, await jobStatusConflict(id));
+        case "ok":
+          // Send notification to technician (fire and forget)
+          notifyJobRejected(id, session.user.id, input.reason).catch((err) => {
+            console.error("[Jobs] Failed to send rejection notification:", err);
+          });
+
+          return c.json({
+            message: "Job rejeitado",
+            data: result.job,
+          } satisfies ServerShape<JobMutationResponse>);
       }
-
-      // Send notification to technician (fire and forget)
-      notifyJobRejected(id, session.user.id, input.reason).catch((err) => {
-        console.error("[Jobs] Failed to send rejection notification:", err);
-      });
-
-      return c.json({
-        message: "Job rejeitado",
-        data: updated,
-      } satisfies ServerShape<JobMutationResponse>);
     },
   )
 
@@ -1501,91 +1166,30 @@ export const jobsRouter = new Hono<{
         return c.json({ error: "Job nao encontrado" }, 404);
       }
 
-      // Get existing job
-      const [existing] = await db
-        .select()
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, id),
-            eq(calibrationJob.organizationId, memberData.organizationId),
-            buildUnitScopeCondition(calibrationJob.unitId, memberData),
-          ),
-        )
-        .limit(1);
-
-      if (!existing) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
-
-      // Cannot cancel approved jobs (ISO 17025 immutability requirement)
-      if (existing.status === "APPROVED") {
-        return domainErrorResponse(
-          c,
-          invalid(
-            "job_not_cancelable",
-            "Nao e possivel cancelar um job aprovado. Jobs aprovados sao imutaveis para conformidade ISO 17025.",
-          ),
-        );
-      }
-
-      // Cannot cancel already canceled jobs
-      if (existing.status === "CANCELED") {
-        return domainErrorResponse(
-          c,
-          invalid("job_not_cancelable", "Job ja foi cancelado"),
-        );
-      }
-
-      // The transition table is the allow-list: anything else (GENERATING_PDF =
-      // approval in progress, SUPERSEDED, ...) is refused.
-      if (!isCancelableJobStatus(existing.status)) {
-        return domainErrorResponse(
-          c,
-          invalid(
-            "job_not_cancelable",
-            `Nao e possivel cancelar um job com status ${existing.status}.`,
-          ),
-        );
-      }
-
-      // Compare-and-set on the validated status; the audit row commits with it.
-      const canceledStatus = requireTargetOf(existing.status, "cancel");
-      const updated = await db.transaction(async (tx) => {
-        const [row] = await tx
-          .update(calibrationJob)
-          .set({ status: canceledStatus })
-          .where(
-            and(
-              eq(calibrationJob.id, id),
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              eq(calibrationJob.status, existing.status),
-            ),
-          )
-          .returning();
-        if (!row) return null;
-
-        await tx.insert(jobAuditLog).values({
-          organizationId: memberData.organizationId,
-          jobId: id,
-          action: "cancel",
-          changes: {
-            status: { old: existing.status, new: canceledStatus },
-          },
-          performedBy: session.user.id,
+      const result = await cancelJob({
+        actor: {
+          kind: "user",
+          userId: session.user.id,
           ipAddress: c.req.header("x-forwarded-for") || null,
-          reason: input.reason,
-        });
-        return row;
+        },
+        jobId: id,
+        organizationId: memberData.organizationId,
+        unitScope: memberData,
+        reason: input.reason,
       });
-      if (!updated) {
-        return domainErrorResponse(c, await jobStatusConflict(id));
+      switch (result.status) {
+        case "not_found":
+          return c.json({ error: "Job nao encontrado" }, 404);
+        case "illegal_transition":
+          return domainErrorResponse(c, result.error);
+        case "concurrent_update":
+          return domainErrorResponse(c, await jobStatusConflict(id));
+        case "ok":
+          return c.json({
+            message: "Job cancelado",
+            data: result.job,
+          } satisfies ServerShape<JobMutationResponse>);
       }
-
-      return c.json({
-        message: "Job cancelado",
-        data: updated,
-      } satisfies ServerShape<JobMutationResponse>);
     },
   )
 
@@ -1607,190 +1211,27 @@ export const jobsRouter = new Hono<{
         return c.json({ error: "Job nao encontrado" }, 404);
       }
 
-      // One transaction, serialised on the original job's row: the status and
-      // already-amended checks are re-evaluated under the lock, so two
-      // concurrent amendments can never both pass them (no duplicate DRAFT
-      // amendment, no burned certificate number). The certificate number is
-      // reserved on the same transaction, so a failure rolls it back too.
-      const outcome = await db
-        .transaction(async (tx) => {
-          const [originalJob] = await tx
-            .select()
-            .from(calibrationJob)
-            .where(
-              and(
-                eq(calibrationJob.id, id),
-                eq(calibrationJob.organizationId, memberData.organizationId),
-                buildUnitScopeCondition(calibrationJob.unitId, memberData),
-              ),
-            )
-            .limit(1)
-            .for("update");
-
-          if (!originalJob) {
-            return { kind: "not_found" as const };
-          }
-
-          // Can only amend APPROVED jobs
-          if (!canTransition(originalJob.status, "amend")) {
-            return {
-              kind: "invalid_status" as const,
-              status: originalJob.status,
-            };
-          }
-
-          // Check if already superseded
-          if (originalJob.supersededById) {
-            return {
-              kind: "already_amended" as const,
-              supersededById: originalJob.supersededById,
-            };
-          }
-
-          // Calculate amendment number
-          let amendmentNumber = 1;
-          if (originalJob.supersedesId) {
-            // This is already an amendment, increment
-            amendmentNumber = (originalJob.amendmentNumber || 0) + 1;
-          }
-
-          // Generate a lab-specific certificate number for the amended job.
-          const certificateIdentity = await generateCertificateIdentity(
-            {
-              organizationId: memberData.organizationId,
-              generatedAt: new Date(),
-              performedBy: session.user.id,
-            },
-            tx,
-          );
-          // Create new job as a clone of the original
-          const [amendedJob] = await tx
-            .insert(calibrationJob)
-            .values({
-              jobId: certificateIdentity.certificateNumber,
-              certificateName: certificateIdentity.certificateName,
-              certificateNumberingSnapshot: certificateIdentity.snapshot,
-              organizationId: originalJob.organizationId,
-              unitId: originalJob.unitId,
-              customerId: originalJob.customerId,
-              assetId: originalJob.assetId,
-              serviceId: originalJob.serviceId,
-              technicianId: originalJob.technicianId,
-              methodSnapshot: originalJob.methodSnapshot,
-              standardsSnapshot: originalJob.standardsSnapshot,
-              // Carried forward verbatim as a historical record of what the
-              // superseded certificate rendered from. Nothing resolves it any
-              // more — the amendment cannot be approved until the fixed layouts
-              // land (#865), and it will render with whatever layout is current
-              // then, not with the original's XLSX template.
-              certificateTemplateSnapshot:
-                originalJob.certificateTemplateSnapshot,
-              status: requireTargetOf(null, "create"), // Start in DRAFT for corrections
-              dueDate: originalJob.dueDate,
-              data: originalJob.data, // Clone calibration data
-              results: originalJob.results, // Clone results
-              supersedesId: originalJob.id, // Link to original
-              amendmentNumber,
-              amendmentReason: input.reason,
-              createdBy: session.user.id,
-            })
-            .returning();
-
-          if (!amendedJob) {
-            throw new Error("Falha ao criar retificacao");
-          }
-
-          // Update original job to SUPERSEDED (compare-and-set on APPROVED).
-          // Store the reason on the original job so it's visible when viewing the
-          // superseded certificate.
-          const supersededStatus = requireTargetOf(originalJob.status, "amend");
-          const [superseded] = await tx
-            .update(calibrationJob)
-            .set({
-              status: supersededStatus,
-              supersededById: amendedJob.id,
-              supersededAt: new Date(),
-              amendmentReason: input.reason, // Store reason on original job too
-            })
-            .where(
-              and(
-                eq(calibrationJob.id, originalJob.id),
-                eq(calibrationJob.organizationId, memberData.organizationId),
-                inArray(calibrationJob.status, allowedFrom("amend")),
-                isNull(calibrationJob.supersededById),
-              ),
-            )
-            .returning();
-          if (!superseded) {
-            // Rolls back the amended job and the reserved certificate number.
-            throw new JobStatusConflictError();
-          }
-
-          // Audit log for original job (superseded)
-          await tx.insert(jobAuditLog).values({
-            organizationId: memberData.organizationId,
-            jobId: originalJob.id,
-            action: "supersede",
-            changes: {
-              status: { old: originalJob.status, new: supersededStatus },
-              supersededById: amendedJob.id,
-            },
-            performedBy: session.user.id,
-            ipAddress: c.req.header("x-forwarded-for") || null,
-            reason: `Certificado retificado. Novo: ${amendedJob.jobId}. Motivo: ${input.reason}`,
-          });
-
-          // Audit log for amended job (created)
-          await tx.insert(jobAuditLog).values({
-            organizationId: memberData.organizationId,
-            jobId: amendedJob.id,
-            action: "create_amendment",
-            changes: {
-              supersedesId: originalJob.id,
-              amendmentNumber,
-              reason: input.reason,
-            },
-            performedBy: session.user.id,
-            ipAddress: c.req.header("x-forwarded-for") || null,
-            reason: input.reason,
-          });
-
-          return {
-            kind: "amended" as const,
-            originalJob,
-            amendedJob,
-            amendmentNumber,
-          };
-        })
-        .catch((error: unknown) => {
-          if (error instanceof JobStatusConflictError) {
-            return { kind: "conflict" as const };
-          }
-          throw error;
-        });
-
-      if (outcome.kind === "not_found") {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
-      if (outcome.kind === "invalid_status") {
-        return c.json(
-          {
-            error: `Apenas certificados aprovados podem ser retificados. Status atual: ${outcome.status}`,
-          },
-          400,
-        );
-      }
-      if (outcome.kind === "already_amended") {
-        return c.json(
-          {
-            error: "Este certificado ja foi retificado",
-            supersededBy: outcome.supersededById,
-          },
-          400,
-        );
-      }
-      if (outcome.kind === "conflict") {
-        return domainErrorResponse(c, await jobStatusConflict(id));
+      const outcome = await amendJob({
+        actor: {
+          kind: "user",
+          userId: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        },
+        jobId: id,
+        organizationId: memberData.organizationId,
+        unitScope: memberData,
+        reason: input.reason,
+      });
+      switch (outcome.status) {
+        case "not_found":
+          return c.json({ error: "Job nao encontrado" }, 404);
+        case "illegal_transition":
+        case "already_amended":
+          return domainErrorResponse(c, outcome.error);
+        case "concurrent_update":
+          return domainErrorResponse(c, await jobStatusConflict(id));
+        case "ok":
+          break;
       }
 
       const { originalJob, amendedJob, amendmentNumber } = outcome;

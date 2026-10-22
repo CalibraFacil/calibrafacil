@@ -1,3 +1,4 @@
+import { setProcessEnv } from "@calibra-facil/config";
 import type { Hono } from "hono";
 import type { Env } from "./env";
 
@@ -14,7 +15,7 @@ export function applyRuntimeEnv(app: Hono<{ Bindings: Env }>) {
   app.use("*", async (c, next) => {
     for (const [key, value] of Object.entries(c.env)) {
       if (typeof value === "string") {
-        process.env[key] = value;
+        setProcessEnv(key, value);
       }
     }
 
@@ -27,13 +28,13 @@ export function applyRuntimeEnv(app: Hono<{ Bindings: Env }>) {
         typeof localConnectionString === "string" &&
         localConnectionString.trim().length > 0
       ) {
-        process.env.DATABASE_URL = localConnectionString.trim();
-        delete process.env.HYPERDRIVE_URL;
+        setProcessEnv("DATABASE_URL", localConnectionString.trim());
+        setProcessEnv("HYPERDRIVE_URL", undefined);
       } else if (hyperdriveConnectionString) {
-        process.env.HYPERDRIVE_URL = hyperdriveConnectionString;
+        setProcessEnv("HYPERDRIVE_URL", hyperdriveConnectionString);
       }
     } else if (hyperdriveConnectionString) {
-      process.env.HYPERDRIVE_URL = hyperdriveConnectionString;
+      setProcessEnv("HYPERDRIVE_URL", hyperdriveConnectionString);
     }
 
     await next();

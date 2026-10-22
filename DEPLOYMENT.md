@@ -151,6 +151,76 @@ in the `x-app-env` block of `compose.yaml` elsewhere (`DATABASE_URL` for a manag
 `R2_PUBLIC_ENDPOINT` and the `FILES_URL` site in the `Caddyfile`. Resend works instead of
 SMTP: set `RESEND_API_KEY` and leave `SMTP_HOST` empty.
 
+## Upgrading to this release
+
+Configuration is now validated when each process starts (see [Configuration](#configuration)):
+**the API, the worker and the local server refuse to start, with one message listing every
+problem, when production is missing a required variable or one has the wrong shape.** Before,
+most of these only failed at first use, deep inside a request, or never. Check your environment
+**before** you deploy.
+
+**Newly required in production** (`NODE_ENV=production`, or any Vercel deployment):
+
+| Variable                     | Who is affected                                                                                                                                       |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CRON_SECRET`                | Bun and hand-built images. Without it the API used to start and every `/api/cron/*` job answered 503. (Docker Compose and Vercel already require it.) |
+| `QUOTE_APPROVAL_CODE_PEPPER` | Bun and hand-built images. Only Vercel enforced it; elsewhere a built-in development pepper was used silently. (Docker Compose already requires it.)  |
+| `API_URL` and `APP_URL`      | Everyone who left one out. The auth layer used to throw on first use.                                                                                 |
+| `R2_MEDIA_BUCKET_NAME`       | The worker, which used to fall back to a development bucket name.                                                                                     |
+
+**Newly shape-checked in production** (the variable was accepted before and only failed when
+first used):
+
+| Variable                                                                                            | Rule                                                                      |
+| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `SIGNING_MASTER_KEY`, `INTEGRATIONS_MASTER_KEY`, `PUBLIC_API_MASTER_KEY`, `EMAIL_DOMAIN_MASTER_KEY` | 32 random bytes, base64 encoded (`EMAIL_DOMAIN_MASTER_KEY` only when set) |
+| `BETTER_AUTH_SECRET`                                                                                | at least 32 characters                                                    |
+
+Everywhere (not only in production) a variable that is set must now have the right type: a
+number must be a whole number (`SMTP_PORT`, `PORT`), an address must be an `http://` or `https://` URL, and `EMAIL_TRANSPORT` and
+`BACKGROUND_JOBS_MODE` must be one of their documented values. The switches
+that document a safe fallback (`QUEUE_RECEIPTS_MODE`, `RECORDS_PURGE_ENABLED`,
+`RECORDS_PURGE_MODE`, `CRON_SCHEDULER`, `BACKGROUND_JOBS_MAX_DELIVERIES`,
+`STUCK_RENDER_AFTER_MS`, `QUEUE_STALE_AFTER_MS`, `DATABASE_POOL_MAX`) keep it: an unusable value still means the default.
+
+**Before deploying**, validate the environment you are about to run, without starting anything,
+from a checkout of this release:
+
+```bash
+pnpm config:check --runtime api --env-file <your production env file>
+pnpm config:check --runtime worker --env-file <your production env file>
+```
+
+The file is read instead of your shell's environment; it must be a `KEY=VALUE` file that includes
+`NODE_ENV=production` (add `--production` otherwise, to apply the production requirements). Run
+the command from the repository root, and use the pinned pnpm (`corepack enable`): the report
+lists variable names and reasons and never prints a value, and the exit code is non-zero when
+anything is wrong.
+
+With the Docker setup the API's environment is assembled by `compose.yaml`, so check it inside the
+image the same way the containers will see it:
+
+```bash
+docker compose run --rm --no-deps api bun ../../packages/config/scripts/check-config.ts --runtime api
+docker compose run --rm --no-deps worker bun ../../packages/config/scripts/check-config.ts --runtime worker
+```
+
+**Certificate time-stamping now reaches the worker.** `SIGNING_TSA_URL`, `SIGNING_TSA_AUTH` and
+`SIGNING_TSA_ICP_CONFORMANT` were documented as settings of the signing path, but the environment
+the worker runs with never carried them, so no certificate was ever time-stamped, whatever you had
+configured. They now take effect on every worker path (and the new optional
+`SIGNING_TSA_TIMEOUT_MS` with them). **If `SIGNING_TSA_URL` is set in your environment, the
+certificates issued after this upgrade are time-stamped, and a certificate is not issued while the
+authority is unreachable** (the job stays `GENERATING_PDF` while the queue retries, then is
+`REJECTED`; see _Certificate time-stamping_). Check that the authority and its credentials work, or
+unset `SIGNING_TSA_URL`, **before** you deploy. With it unset nothing changes. Docker Compose now
+passes these variables from `deploy/.env` to the API and the worker (all optional).
+
+Generate a missing key or secret with `openssl rand -base64 32` (never reuse one key for two
+purposes, and never replace `SIGNING_MASTER_KEY`, `INTEGRATIONS_MASTER_KEY`,
+`PUBLIC_API_MASTER_KEY` or `EMAIL_DOMAIN_MASTER_KEY` once data is encrypted with it: add only the
+ones you do not have yet).
+
 ## Other ways to host
 
 ### What the pieces need
@@ -175,9 +245,32 @@ then set `AUTH_COOKIE_DOMAIN` and build the frontends with `VITE_API_URL`.
 | `portal.example.com` | client portal (`apps/portal`), including the `/v/:token` page that verifies certificates |
 | `api.example.com`    | API (`apps/api`), when not served under `/api`                                           |
 
+### Configuration
+
+Every environment variable the API, the worker, the local server and the frontends read is
+declared once, with its type, default, whether production requires it and a one-line description,
+in [`packages/config`](./packages/config/src). **That schema is the source of truth**; the tables
+below are a summary.
+
+- Each process validates its configuration when it starts (the API's Bun entry and Vercel
+  functions, the worker, the local server). A bad deploy fails immediately with one error that
+  lists every problem, by variable name and reason, never with a value:
+
+  ```text
+  Invalid api configuration (2 problems):
+    - DATABASE_URL: is required in production (PostgreSQL connection string)
+    - BETTER_AUTH_SECRET: must be at least 32 characters in production
+  ```
+
+- Outside production only the types are checked, so `pnpm dev` and the tests keep working with
+  the defaults of `apps/api/.env.example`.
+- `apps/api/.env.example` and `deploy/.env.example` are generated from the schema: change a
+  variable in `packages/config`, then run `pnpm config:env-example` and commit the result. A test
+  fails when a committed example differs from the schema.
+
 ### API (`apps/api`) and worker (`apps/worker`)
 
-`apps/api/.env.example` documents every variable. The essentials for production:
+`apps/api/.env.example` lists every variable with its description. The essentials for production:
 
 | Variable                                                                                            | Notes                                                                                 |
 | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
@@ -195,6 +288,7 @@ then set `AUTH_COOKIE_DOMAIN` and build the frontends with `VITE_API_URL`.
 | `R2_PUBLIC_ENDPOINT`                                                                                | Optional; the store's public address when `R2_ENDPOINT` is internal (download links)  |
 | `GOTENBERG_URL` (+ `GOTENBERG_TOKEN`)                                                               | PDF rendering                                                                         |
 | `SIGNING_MASTER_KEY`, `INTEGRATIONS_MASTER_KEY`, `PUBLIC_API_MASTER_KEY`, `EMAIL_DOMAIN_MASTER_KEY` | 32 random bytes each, base64 (`openssl rand -base64 32`); never reuse one key twice   |
+| `SIGNING_TSA_URL` (+ `SIGNING_TSA_AUTH`, `SIGNING_TSA_ICP_CONFORMANT`, `SIGNING_TSA_TIMEOUT_MS`)    | Optional RFC 3161 time-stamping of certificates: see _Certificate time-stamping_      |
 | `QUOTE_APPROVAL_CODE_PEPPER`, `CRON_SECRET`                                                         | Random strings                                                                        |
 | `PORTAL_SERVICE_USER_ID`                                                                            | Id of the account that owns client-portal organizations (`init` creates it)           |
 | `BACKGROUND_JOBS_MODE`                                                                              | `local` (inside the API process), `queue` (a separate worker) or `vercel`             |
@@ -212,6 +306,54 @@ Secret in **Configurações → Integrações**, which shows the redirect URL to
 (`API_URL` + `/api/integrations/conta-azul/oauth/callback`). To supply one application to every
 laboratory instead, set `CONTA_AZUL_CLIENT_ID` and `CONTA_AZUL_CLIENT_SECRET`
 (`CONTA_AZUL_OAUTH_REDIRECT_URI` overrides the redirect URL).
+
+#### Certificate time-stamping (RFC 3161)
+
+Set `SIGNING_TSA_URL` to the endpoint of a time-stamp authority and every signed certificate gets
+a carimbo do tempo (PAdES-T). The other variables are optional: `SIGNING_TSA_AUTH` is the full
+`Authorization` header value of a contracted authority (`Basic ...` or `Bearer ...`),
+`SIGNING_TSA_TIMEOUT_MS` the request timeout (1000 to 60000, default 30000; capped at 60000 so the worst case, 4 × 60 s + 7 s = 247 s, stays under the 300 s queue function limit), and
+`SIGNING_TSA_ICP_CONFORMANT=true` is to be set **only** for a credentialed ICP-Brasil authority:
+otherwise the signature records `icpBrasilConformant: false`, so a generic authority is never
+presented as legally conformant. The settings are validated at start-up (the address must be an
+`http://` or `https://` URL).
+
+They take effect on **every worker path**: the Vercel Queue consumer and cron handlers, the
+inline and local (`BACKGROUND_JOBS_MODE=local`) runner in the API process, the database-queue
+drain (`apps/worker` `serve`, including the document-worker container) and the always-on Bun
+worker (`bun src/bun.ts`, the `worker` service of the Docker setup). All of them build the
+signing part of the worker environment from one function, `workerSigningEnv` in
+`packages/config`. On Cloudflare, the document-worker container receives them from the Worker's
+own variables and secrets.
+
+With `SIGNING_TSA_URL` unset nothing changes: no time-stamp is requested and the signed PDF is
+byte-identical to what earlier releases produced.
+
+**With a TSA configured, time-stamping fails closed.** A certificate is never issued unstamped:
+
+- Each delivery makes one request to the authority and retries it up to three more times (four in
+  all; the retry count is not configurable) when the request fails: connection error, no answer
+  within `SIGNING_TSA_TIMEOUT_MS`, or any non-2xx HTTP status. It waits 1, 2 and 4 seconds after
+  the first, second and third failure (doubling from 1 second; nothing after the last). The
+  timeout covers the wait for the response headers. An answer that arrives but is unusable (not a
+  valid time-stamp response, a rejection status, or no token) is not retried: the delivery fails at
+  once. When no stamp is obtained the render fails before anything is uploaded: no PDF is stored,
+  no certificate snapshot is written and no "certificate ready" e-mail is sent.
+- Keep the worst case inside the function's time limit. An unreachable authority that hangs costs
+  up to `4 × SIGNING_TSA_TIMEOUT_MS + 7 seconds` per delivery (127 seconds at the default 30000),
+  on top of the render itself. The Vercel Queue function (`api/queues/background.js`) has a
+  `maxDuration` of 300 seconds; the timeout is therefore capped at 60000 (247 seconds worst case),
+  and the validation refuses anything larger.
+- While the queue still has deliveries left (Vercel: `BACKGROUND_JOBS_MAX_DELIVERIES`, default 3;
+  database queue: the row's `max_attempts`), the job stays `GENERATING_PDF` and the message is
+  redelivered, so a short outage of the authority heals itself.
+- On the final delivery the job is `REJECTED`, with the reason `Falha na assinatura digital do
+certificado: Falha ao obter carimbo do tempo RFC 3161 ...`, and can be sent for approval again
+  once the authority is back. Runners that never redeliver (the inline and local ones) treat the
+  first failure as final.
+
+Laboratories that sign certificates therefore depend on the authority being available: monitor
+it, or leave `SIGNING_TSA_URL` empty until you have a contracted one.
 
 ### Frontends
 
