@@ -631,6 +631,7 @@ export function buildPublicApiV2OpenApiDocument(origin: string) {
           tag: "Jobs",
           description:
             "Salva os dados da planilha da OS. Os `results` enviados nunca são gravados: o servidor os recalcula a partir de `data` com a execução oficial do método compilado congelado na OS, como na aplicação. Uma OS REJEITADA continua REJEITADA após salvar; só a submissão a leva adiante. Recusas: 409 `job_not_executable` (OS fora de um status que aceite resultados) ou `job_status_conflict`; 422 `official_execution_failed` (método sem execução oficial) e `standard_*` (padrão de referência vencido, inativo ou excluído).",
+          requestBodyDescription: "Envia resultados executados para o job.",
           pathParameters: [
             buildPathParameter("id", "Identificador interno ou externalId"),
           ],
@@ -642,6 +643,7 @@ export function buildPublicApiV2OpenApiDocument(origin: string) {
           tag: "Jobs",
           description:
             "Submete a OS para revisão com as mesmas verificações da aplicação: os `results` são recalculados a partir de `data` pela execução oficial do método (o valor enviado nunca é gravado), o local da calibração é obrigatório, a data de execução (`performedAt`) não pode ser futura e exige `backdateReason` além de 7 dias, os padrões de referência são julgados na data de execução, o técnico responsável precisa ter competência ativa para o tipo de instrumento (quando o laboratório mantém competências) e o escopo acreditado (CMC) é classificado e registrado. Recusas: 400 `performed_at_invalid`, `performed_at_future`, `backdate_reason_required`, `calibration_record_incomplete` ou `asset_specification_missing`; 409 `job_not_submittable` ou `job_status_conflict`; 422 `official_execution_failed`, `technician_competence_missing` e `standard_*`.",
+          requestBodyDescription: "Submete o job para etapa de revisão.",
           pathParameters: [
             buildPathParameter("id", "Identificador interno ou externalId"),
           ],
