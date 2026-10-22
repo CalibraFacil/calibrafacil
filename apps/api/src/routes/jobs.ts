@@ -1,11 +1,12 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@calibra-facil/db";
 import {
+  domainErrorBody,
   domainErrorResponse,
   invalid,
-  type DomainError,
+  notFound,
 } from "../lib/domain-errors";
 import {
   renderLabel,
@@ -22,24 +23,12 @@ import {
   customer,
   organization,
   service,
-  referenceStandard,
-  referenceStandardCertificateDocument,
   user,
   member,
   memberUnitAssignment,
-  environmentalLimits,
   personnelCompetence,
-  type JobStatus,
-  type MethodSnapshot,
-  type MethodInputField,
   type AssetSnapshot,
-  type StandardSnapshot,
-  type EnvironmentalSnapshot,
-  type EnvironmentalLimitsSnapshot,
-  type CalibrationLocationSnapshot,
-  type CalibrationPhaseSnapshot,
 } from "@calibra-facil/db/schema";
-import { reconcileMethodSnapshotEngine } from "../lib/method-snapshot-engine";
 import {
   notifyJobSubmittedForReview,
   notifyJobRejected,
@@ -58,7 +47,6 @@ import {
   ExecuteJobSchema,
   AmendJobSchema,
   FlagJobOutOfToleranceSchema,
-  judgeExecutionStandards,
 } from "@calibra-facil/schemas";
 import type {
   JobAmendResponse,
@@ -70,13 +58,7 @@ import type {
   ServerShape,
 } from "@calibra-facil/contracts";
 import { flagJobOutOfTolerance } from "../lib/oot-notifications";
-import {
-  judgeSnapshotStandards,
-  snapshotStandardIds,
-  standardsRefusalDomainError,
-} from "../modules/jobs/standards-judgement";
 import { syncJobStandardLinks } from "../lib/job-standards";
-import { classifyJobScopeCompliance } from "../lib/scope-compliance";
 import {
   addServerTiming,
   withLabPermission,
@@ -88,10 +70,7 @@ import {
   isCalendarDatePast,
   labDaysUntil,
   labToday,
-  normalizeStandardsForOfficialExecution,
 } from "@calibra-facil/shared";
-import { normalizeMethodDataForStorage } from "@calibra-facil/shared/units";
-import { selectEffectiveEnvironmentalLimits } from "../lib/unit-operational-settings";
 import {
   eq,
   and,
@@ -102,9 +81,7 @@ import {
   gte,
   inArray,
   isNull,
-  like,
   lt,
-  not,
   or,
   sql,
 } from "drizzle-orm";
@@ -112,8 +89,6 @@ import {
   createR2Client,
   generatePresignedUrl,
   extractKeyFromUrl,
-  type R2Env,
-  type R2BucketLike,
 } from "../lib/storage";
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
 import { generateCertificateIdentity } from "../lib/certificate-numbering";
@@ -121,30 +96,13 @@ import { loadJobFinancialContexts } from "../lib/finance";
 import { alias } from "drizzle-orm/pg-core";
 import { getExecuteRows } from "../lib/db";
 import { buildUnitScopeCondition } from "../lib/units";
-import { syncVisitStatusFromJobs } from "../lib/visits";
 import { parseLegacyNumericIdentifier } from "../lib/route-identifiers";
-import {
-  executeCompiledMethod,
-  type CalculationEngineLike,
-  type CompiledMethod,
-  type CompiledMethodExecutionResult,
-  type MethodDiagnostic,
-} from "@calibra-facil/method-definition";
-import {
-  createCalculationEngine,
-  METHOD_ENGINE_OPTIONS,
-} from "@calibra-facil/math-engine";
 import {
   decodeRouteIdentifier,
   shouldUseLocalR2Download,
   r2EnvFromUnknown,
-  methodInputFieldsFromSnapshot,
   methodSnapshotDisplay,
-  isCompiledMethod,
   buildLocalJobFileUrl,
-  checkEnvironmentWithinLimits,
-  findMissingRequiredAssetSpecs,
-  stripAssetSpecData,
 } from "../modules/jobs/helpers";
 import {
   allowedFrom,
@@ -152,6 +110,11 @@ import {
   requireTargetOf,
 } from "@calibra-facil/schemas/job-transitions";
 import { approveJob } from "../modules/jobs/approve-job";
+import {
+  executeJob,
+  submitJob,
+  type JobExecutionResult,
+} from "../modules/jobs/submit-job";
 import {
   jobStatusConflict,
   isCancelableJobStatus,
@@ -195,655 +158,46 @@ async function resolveJobRouteId(
   return job?.id ?? null;
 }
 
-function buildCalibrationLocationSnapshot(
-  input:
-    | {
-        type: "customer_site" | "lab" | "other";
-        addressText: string;
-        notes?: string | null;
-      }
-    | undefined,
-  existing: CalibrationLocationSnapshot | null | undefined,
-  actorUserId: string,
-): CalibrationLocationSnapshot | undefined {
-  if (!input) return existing ?? undefined;
-
-  return {
-    type: input.type,
-    addressText: input.addressText.trim(),
-    ...(input.notes?.trim() ? { notes: input.notes.trim() } : {}),
-    recordedAt: new Date().toISOString(),
-    recordedBy: actorUserId,
-  };
-}
-
-function validateCalibrationLocationForSubmit(
-  snapshot: CalibrationLocationSnapshot | null | undefined,
-): string | null {
-  if (!snapshot) return "Local da calibração é obrigatório";
-  if (!["customer_site", "lab", "other"].includes(snapshot.type)) {
-    return "Tipo de local da calibração é inválido";
-  }
-  if (!snapshot.addressText.trim()) {
-    return "Endereço/local da calibração é obrigatório";
-  }
-  return null;
-}
-
-function buildCalibrationPhaseSnapshot(
-  input:
-    | {
-        blocks: Record<
-          string,
-          {
-            mode:
-              | "before_and_after"
-              | "before_only"
-              | "after_only"
-              | "not_performed";
-            reason?: string | null;
-          }
-        >;
-      }
-    | undefined,
-  existing: CalibrationPhaseSnapshot | null | undefined,
-  actorUserId: string,
-): CalibrationPhaseSnapshot | undefined {
-  if (!input) return existing ?? undefined;
-
-  const blocks: CalibrationPhaseSnapshot["blocks"] = {};
-  for (const [key, block] of Object.entries(input.blocks ?? {})) {
-    if (!key.trim()) continue;
-    if (!isCalibrationPhaseMode(block.mode)) continue;
-    blocks[key] = {
-      mode: block.mode,
-      ...(block.reason?.trim() ? { reason: block.reason.trim() } : {}),
-    };
-  }
-
-  return {
-    blocks,
-    recordedAt: new Date().toISOString(),
-    recordedBy: actorUserId,
-  };
-}
-
-function isCalibrationPhaseMode(
-  mode: unknown,
-): mode is CalibrationPhaseSnapshot["blocks"][string]["mode"] {
-  return (
-    mode === "before_and_after" ||
-    mode === "before_only" ||
-    mode === "after_only" ||
-    mode === "not_performed"
-  );
-}
-
-function validateCalibrationPhasesForSubmit(
-  snapshot: CalibrationPhaseSnapshot | null | undefined,
-): string | null {
-  for (const [blockKey, block] of Object.entries(snapshot?.blocks ?? {})) {
-    if (block.mode !== "not_performed") continue;
-    if (!block.reason?.trim()) {
-      return `Informe o motivo para não executar o bloco ${blockKey}`;
-    }
-  }
-  return null;
-}
-
-function createMethodExecutionEngine(): CalculationEngineLike {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- math-engine exposes a narrower concrete type than the method-definition execution adapter.
-  return createCalculationEngine(
-    METHOD_ENGINE_OPTIONS,
-  ) as unknown as CalculationEngineLike;
-}
-
-function standardCertificateDocumentSnapshot(
-  document: typeof referenceStandardCertificateDocument.$inferSelect,
-) {
-  return {
-    documentId: document.id,
-    r2Key: document.r2Key,
-    fileName: document.fileName,
-    fileSize: document.fileSize,
-    sha256: document.sha256,
-    uploadedAt: document.uploadedAt,
-    certificateNumber: document.certificateNumber,
-    calibrationDate: document.calibrationDate,
-    nextCalibrationDate: document.nextCalibrationDate,
-  };
-}
-
-function finalizedStandardCertificateDocumentCondition() {
-  return not(like(referenceStandardCertificateDocument.r2Key, "pending/%"));
-}
-
-function jobExecutionDiagnostic(
-  code: string,
-  message: string,
-  path: string,
-): MethodDiagnostic {
-  return {
-    code,
-    severity: "error",
-    message,
-    path,
-  };
-}
-
-function getCompiledMethodSnapshot(
-  methodSnapshot: MethodSnapshot | null | undefined,
-):
-  | { ok: true; compiledMethod: CompiledMethod }
-  | { ok: false; diagnostics: MethodDiagnostic[]; message: string } {
-  const compiledMethod = methodSnapshot?.compiledMethod;
-  if (
-    !methodSnapshot ||
-    !compiledMethod ||
-    typeof compiledMethod !== "object" ||
-    !methodSnapshot.methodFingerprint ||
-    !methodSnapshot.engineVersion ||
-    !methodSnapshot.engineOptionsFingerprint ||
-    !methodSnapshot.normalizedMethodJson
-  ) {
-    const message =
-      "Snapshot compilado do método é obrigatório para execução regulada";
-    return {
-      ok: false,
-      message,
-      diagnostics: [
-        jobExecutionDiagnostic(
-          "COMPILED_METHOD_SNAPSHOT_REQUIRED",
-          message,
-          "methodSnapshot.compiledMethod",
-        ),
-      ],
-    };
-  }
-
-  if (!isCompiledMethod(compiledMethod)) {
-    const message = "Snapshot compilado do método possui formato inválido";
-    return {
-      ok: false,
-      message,
-      diagnostics: [
-        jobExecutionDiagnostic(
-          "COMPILED_METHOD_SNAPSHOT_INVALID",
-          message,
-          "methodSnapshot.compiledMethod",
-        ),
-      ],
-    };
-  }
-
-  const candidate = compiledMethod;
-  const mismatches: MethodDiagnostic[] = [];
-  if (candidate.methodFingerprint !== methodSnapshot.methodFingerprint) {
-    mismatches.push(
-      jobExecutionDiagnostic(
-        "COMPILED_METHOD_SNAPSHOT_MISMATCH",
-        "Fingerprint do método compilado diverge do snapshot do job",
-        "methodSnapshot.methodFingerprint",
-      ),
-    );
-  }
-  if (candidate.engine?.version !== methodSnapshot.engineVersion) {
-    mismatches.push(
-      jobExecutionDiagnostic(
-        "COMPILED_METHOD_SNAPSHOT_MISMATCH",
-        "Versão do engine compilado diverge do snapshot do job",
-        "methodSnapshot.engineVersion",
-      ),
-    );
-  }
-  if (
-    candidate.engine?.optionsFingerprint !==
-    methodSnapshot.engineOptionsFingerprint
-  ) {
-    mismatches.push(
-      jobExecutionDiagnostic(
-        "COMPILED_METHOD_SNAPSHOT_MISMATCH",
-        "Fingerprint das opções do engine diverge do snapshot do job",
-        "methodSnapshot.engineOptionsFingerprint",
-      ),
-    );
-  }
-  if (candidate.normalizedMethodJson !== methodSnapshot.normalizedMethodJson) {
-    mismatches.push(
-      jobExecutionDiagnostic(
-        "COMPILED_METHOD_SNAPSHOT_MISMATCH",
-        "JSON normalizado do método compilado diverge do snapshot do job",
-        "methodSnapshot.normalizedMethodJson",
-      ),
-    );
-  }
-  if (mismatches.length > 0) {
-    return {
-      ok: false,
-      message: "Snapshot compilado do método diverge dos metadados do job",
-      diagnostics: mismatches,
-    };
-  }
-
-  return { ok: true, compiledMethod };
-}
-
-function buildOfficialExecutionInputs(params: {
-  methodSnapshot: MethodSnapshot;
-  data: Record<string, unknown>;
-  assetSnapshot: AssetSnapshot;
-  standardsSnapshot: StandardSnapshot[] | null | undefined;
-  environmentalSnapshot: EnvironmentalSnapshot | null | undefined;
-}): Record<string, unknown> {
-  const inputs: Record<string, unknown> = { ...params.data };
-
-  for (const field of params.methodSnapshot.dataFields ?? []) {
-    if (field.source !== "asset_spec" || !field.assetSpecKey) continue;
-    const value = params.assetSnapshot.specifications?.[field.assetSpecKey];
-    if (value !== undefined) {
-      inputs[field.key] = value;
-    }
-  }
-
-  if (params.environmentalSnapshot) {
-    inputs.environment = {
-      temperature: params.environmentalSnapshot.temperature,
-      humidity: params.environmentalSnapshot.humidity,
-      pressure: params.environmentalSnapshot.pressure,
-    };
-  }
-
-  if (params.standardsSnapshot !== undefined) {
-    inputs.standards =
-      normalizeStandardsForOfficialExecution(params.standardsSnapshot) ?? [];
-  }
-
-  return inputs;
-}
-
-function executeOfficialCompiledSnapshot(params: {
-  methodSnapshot: MethodSnapshot;
-  data: Record<string, unknown>;
-  assetSnapshot: AssetSnapshot;
-  standardsSnapshot: StandardSnapshot[] | null | undefined;
-  environmentalSnapshot: EnvironmentalSnapshot | null | undefined;
-  calibrationPhaseSnapshot: CalibrationPhaseSnapshot | null | undefined;
-  requireSuccess?: boolean;
-}):
-  | { ok: true; results: Record<string, unknown>; execution: null }
-  | {
-      ok: true;
-      results: Record<string, unknown>;
-      execution: CompiledMethodExecutionResult;
-    }
-  | { ok: false; diagnostics: MethodDiagnostic[]; message: string } {
-  const snapshot = getCompiledMethodSnapshot(params.methodSnapshot);
-  if (!snapshot.ok) {
-    return snapshot;
-  }
-
-  const execution = executeCompiledMethod(
-    snapshot.compiledMethod,
-    {
-      inputs: buildOfficialExecutionInputs(params),
-      calibrationPhases: params.calibrationPhaseSnapshot ?? undefined,
-    },
-    { engine: createMethodExecutionEngine() },
-  );
-
-  if (!execution.ok && params.requireSuccess !== false) {
-    return {
-      ok: false,
-      diagnostics: execution.diagnostics,
-      message:
-        execution.diagnostics.find((item) => item.severity === "error")
-          ?.message ?? "Execução oficial do método compilado falhou",
-    };
-  }
-
-  return {
-    ok: true,
-    results: {
-      ...execution.outputs,
-      __compiledExecution: {
-        methodFingerprint: execution.methodFingerprint,
-        engineVersion: execution.engineVersion,
-        engineOptionsFingerprint: execution.engineOptionsFingerprint,
-        inputFingerprint: execution.inputFingerprint,
-        calculationFingerprint: execution.calculationFingerprint,
-        resultFingerprint: execution.resultFingerprint,
-        canonicalResultJson: execution.canonicalResultJson,
-        formulaResults: execution.formulaResults,
-        measurementModelResults: execution.measurementModelResults,
-        acceptanceCriteriaResults: execution.acceptanceCriteriaResults,
-        diagnostics: execution.diagnostics,
-      },
-    },
-    execution,
-  };
-}
-
-async function buildAssetSnapshot(
-  assetId: number,
-): Promise<
-  | { ok: true; snapshot: AssetSnapshot; assetTypeDefinition: unknown }
-  | { ok: false; error: string }
-> {
-  const [row] = await db
-    .select({
-      id: asset.id,
-      assetTypeId: asset.assetTypeId,
-      name: asset.name,
-      tag: asset.tag,
-      serialNumber: asset.serialNumber,
-      manufacturer: asset.manufacturer,
-      model: asset.model,
-      baseMeasurementUnit: asset.baseMeasurementUnit,
-      specifications: asset.specifications,
-      assetTypeName: assetType.name,
-      assetTypeSlug: assetType.slug,
-      assetTypeDefinition: assetType.definition,
-    })
-    .from(asset)
-    .innerJoin(assetType, eq(asset.assetTypeId, assetType.id))
-    .where(eq(asset.id, assetId))
-    .limit(1);
-
-  if (!row) {
-    return { ok: false, error: "Ativo nao encontrado" };
-  }
-
-  return {
-    ok: true,
-    assetTypeDefinition: row.assetTypeDefinition,
-    snapshot: {
-      assetId: row.id,
-      assetTypeId: row.assetTypeId,
-      assetTypeName: row.assetTypeName,
-      assetTypeSlug: row.assetTypeSlug,
-      baseMeasurementUnit: row.baseMeasurementUnit,
-      name: row.name,
-      tag: row.tag,
-      serialNumber: row.serialNumber,
-      manufacturer: row.manufacturer,
-      model: row.model,
-      specifications: row.specifications,
-      capturedAt: new Date().toISOString(),
-    },
-  };
-}
-
-async function ensureEditableJobAssetSnapshot(existing: {
-  id: number;
-  organizationId: string;
-  /** The status the request validated; the write only lands while it holds. */
-  status: JobStatus;
-  assetId: number;
-  assetSnapshot: AssetSnapshot | null;
-  methodSnapshot: MethodSnapshot;
-}) {
-  if (existing.assetSnapshot) {
-    const missing = findMissingRequiredAssetSpecs(
-      existing.methodSnapshot,
-      existing.assetSnapshot,
-    );
-    if (missing.length > 0) {
-      return {
-        ok: false as const,
-        error: `O ativo não possui a especificação obrigatória "${missing[0]?.label}". Atualize o cadastro do ativo antes de executar a calibração.`,
-      };
-    }
-
-    return { ok: true as const, snapshot: existing.assetSnapshot };
-  }
-
-  const result = await buildAssetSnapshot(existing.assetId);
-  if (!result.ok) {
-    return result;
-  }
-
-  const missing = findMissingRequiredAssetSpecs(
-    existing.methodSnapshot,
-    result.snapshot,
-  );
-  if (missing.length > 0) {
-    return {
-      ok: false as const,
-      error: `O ativo não possui a especificação obrigatória "${missing[0]?.label}". Atualize o cadastro do ativo antes de executar a calibração.`,
-    };
-  }
-
-  // Compare-and-set on the status the request validated, in its organization:
-  // a job that was cancelled, approved or moved meanwhile is not touched.
-  const [saved] = await db
-    .update(calibrationJob)
-    .set({ assetSnapshot: result.snapshot })
-    .where(
-      and(
-        eq(calibrationJob.id, existing.id),
-        eq(calibrationJob.organizationId, existing.organizationId),
-        eq(calibrationJob.status, existing.status),
-      ),
-    )
-    .returning();
-  if (!saved) {
-    return { ok: false as const, conflict: true as const };
-  }
-
-  return { ok: true as const, snapshot: result.snapshot };
+function jobNotFound() {
+  return notFound("job_not_found", "Job nao encontrado");
 }
 
 /**
- * The moment a calibration is recorded as performed, for judging whether its
- * reference standards were valid: the date sent with the request, else the one
- * already saved on the job, else now. An unreadable or future date falls back
- * the same way (the route rejects it with its own error right after).
+ * The HTTP answer to a submit/execute command that did not write: the
+ * command's own refusal (code, status, pt-BR message), unchanged. Transport
+ * mapping only.
  */
-function standardsPerformedAt(
-  requested: string | null | undefined,
-  saved: Date | null | undefined,
-): Date {
-  const now = new Date();
-  if (requested) {
-    const parsed = new Date(requested);
-    if (!Number.isNaN(parsed.getTime()) && parsed.getTime() <= now.getTime()) {
-      return parsed;
-    }
+async function jobExecutionRefusalResponse(
+  c: Context,
+  jobId: number,
+  result: Exclude<JobExecutionResult, { status: "ok" }>,
+) {
+  switch (result.status) {
+    case "not_found":
+      return domainErrorResponse(c, jobNotFound());
+    case "concurrent_update":
+      return domainErrorResponse(c, await jobStatusConflict(jobId));
+    case "official_execution_failed":
+      // The 422 carries the method diagnostics next to the stable code.
+      return c.newResponse(
+        JSON.stringify({
+          ...domainErrorBody(result.error),
+          diagnostics: result.failure.diagnostics,
+        }),
+        result.error.status,
+        { "Content-Type": "application/json" },
+      );
+    case "precondition_failed":
+      return domainErrorResponse(c, invalid("invalid_request", result.reason));
+    case "illegal_transition":
+    case "status_payload_mismatch":
+    case "invalid_performed_at":
+    case "standards_refused":
+    case "asset_unavailable":
+    case "record_incomplete":
+    case "competence_missing":
+      return domainErrorResponse(c, result.error);
   }
-  return saved ?? now;
-}
-
-async function buildStandardsSnapshot(
-  selectedStandardIds: number[] | undefined,
-  organizationId: string,
-  unitId: number,
-  performedAt: Date,
-): Promise<
-  | { ok: true; snapshot: StandardSnapshot[] | null | undefined }
-  | { ok: false; refusal: DomainError }
-> {
-  if (selectedStandardIds === undefined) {
-    return { ok: true, snapshot: undefined };
-  }
-
-  if (selectedStandardIds.length === 0) {
-    return { ok: true, snapshot: null };
-  }
-
-  // A standard named twice is one standard: the snapshot lists it once, in the
-  // order it was first named.
-  const standardIds = [...new Set(selectedStandardIds)];
-
-  const standards = await db
-    .select()
-    .from(referenceStandard)
-    .where(
-      and(
-        inArray(referenceStandard.id, standardIds),
-        eq(referenceStandard.organizationId, organizationId),
-      ),
-    );
-
-  // The draft-time judgement is advisory (the submit re-judges the FINAL
-  // snapshot and asks for the back-date reason), but it is the same judgement.
-  const judgement = judgeExecutionStandards(
-    {
-      standardIds,
-      performedAt,
-      today: new Date(),
-      mode: "cloud",
-      requireBackdateReason: false,
-    },
-    standards.map((standard) => ({
-      id: standard.id,
-      name: standard.name,
-      status: standard.status,
-      deletedAt: standard.deletedAt,
-      nextCalibrationDate: standard.nextCalibrationDate,
-      inScope: standard.unitId === unitId,
-    })),
-  );
-  if (!judgement.ok) {
-    return { ok: false, refusal: standardsRefusalDomainError(judgement) };
-  }
-
-  const standardsById = new Map(
-    standards.map((standard) => [standard.id, standard]),
-  );
-  const orderedStandards = standardIds.map((id) => standardsById.get(id)!);
-
-  const currentDocuments = await db
-    .select()
-    .from(referenceStandardCertificateDocument)
-    .where(
-      and(
-        eq(referenceStandardCertificateDocument.isCurrent, true),
-        finalizedStandardCertificateDocumentCondition(),
-        or(
-          ...orderedStandards.map((standard) =>
-            and(
-              eq(referenceStandardCertificateDocument.standardId, standard.id),
-              eq(
-                referenceStandardCertificateDocument.certificateNumber,
-                standard.certificateNumber,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  const documentsByStandardId = new Map(
-    currentDocuments.map((document) => [
-      document.standardId,
-      standardCertificateDocumentSnapshot(document),
-    ]),
-  );
-
-  return {
-    ok: true,
-    snapshot: orderedStandards.map((s) => ({
-      id: s.id,
-      name: s.name,
-      type: s.type,
-      kind: s.kind,
-      certificateNumber: s.certificateNumber,
-      calibratedBy: s.calibratedBy,
-      calibrationDate: s.calibrationDate,
-      nextCalibrationDate: s.nextCalibrationDate,
-      uncertainty: s.uncertainty,
-      uncertaintyUnit: s.uncertaintyUnit,
-      coverageFactor: s.coverageFactor,
-      distribution: s.distribution,
-      drift: s.drift,
-      certifiedValues: s.certifiedValues,
-      metrologyData: s.metrologyData,
-      certificateDocument: documentsByStandardId.get(s.id) ?? null,
-    })),
-  };
-}
-
-async function buildEnvironmentalSnapshot(
-  environment:
-    | {
-        temperature: number | null;
-        humidity: number | null;
-        pressure: number | null;
-      }
-    | undefined,
-  existing: { assetId: number; unitId: number },
-  organizationId: string,
-  userId: string,
-): Promise<EnvironmentalSnapshot | undefined> {
-  if (!environment) return undefined;
-
-  const [jobAsset] = await db
-    .select({ assetTypeId: asset.assetTypeId })
-    .from(asset)
-    .where(eq(asset.id, existing.assetId))
-    .limit(1);
-
-  let frozenLimits: EnvironmentalLimitsSnapshot | null = null;
-  if (jobAsset && existing.unitId) {
-    const limits = await db
-      .select()
-      .from(environmentalLimits)
-      .where(
-        and(
-          eq(environmentalLimits.organizationId, organizationId),
-          eq(environmentalLimits.unitId, existing.unitId),
-          or(
-            eq(environmentalLimits.assetTypeId, jobAsset.assetTypeId),
-            isNull(environmentalLimits.assetTypeId),
-          ),
-        ),
-      )
-      .orderBy(desc(environmentalLimits.assetTypeId));
-
-    const { limits: effectiveLimits } =
-      selectEffectiveEnvironmentalLimits(limits);
-    if (effectiveLimits) {
-      frozenLimits = {
-        ...(effectiveLimits.temperatureMin != null &&
-        effectiveLimits.temperatureMax != null
-          ? {
-              temperature: {
-                min: effectiveLimits.temperatureMin,
-                max: effectiveLimits.temperatureMax,
-              },
-            }
-          : {}),
-        ...(effectiveLimits.humidityMin != null &&
-        effectiveLimits.humidityMax != null
-          ? {
-              humidity: {
-                min: effectiveLimits.humidityMin,
-                max: effectiveLimits.humidityMax,
-              },
-            }
-          : {}),
-        ...(effectiveLimits.pressureMin != null &&
-        effectiveLimits.pressureMax != null
-          ? {
-              pressure: {
-                min: effectiveLimits.pressureMin,
-                max: effectiveLimits.pressureMax,
-              },
-            }
-          : {}),
-      };
-    }
-  }
-
-  return {
-    temperature: environment.temperature,
-    humidity: environment.humidity,
-    pressure: environment.pressure,
-    recordedAt: new Date().toISOString(),
-    recordedBy: userId,
-    limits: frozenLimits,
-    withinLimits: checkEnvironmentWithinLimits(environment, frozenLimits),
-    outOfLimitsJustification: null,
-  };
 }
 
 /**
@@ -1740,369 +1094,43 @@ export const jobsRouter = new Hono<{
 
   // =========================================================================
   // POST /:id/submit - Submit job for review (transition from DRAFT/IN_PROGRESS to REVIEW)
+  // Transport only: the policy is `submitJob` (modules/jobs/submit-job.ts).
   // =========================================================================
   .post(
     "/:id/submit",
     ...withLabPermission({ calibration: ["submit"] }),
     zValidator("json", SubmitForReviewSchema),
     async (c) => {
-      const BACKDATE_REASON_THRESHOLD_DAYS = 7;
       const memberData = c.get("member");
       const session = c.get("session");
       const id = await resolveJobRouteId(c.req.param("id"), memberData);
       const input = c.req.valid("json");
 
       if (id === null) {
-        return c.json({ error: "Job nao encontrado" }, 404);
+        return domainErrorResponse(c, jobNotFound());
       }
 
-      // Get existing job
-      const [existing] = await db
-        .select()
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, id),
-            eq(calibrationJob.organizationId, memberData.organizationId),
-            buildUnitScopeCondition(calibrationJob.unitId, memberData),
-          ),
-        )
-        .limit(1);
-
-      if (!existing) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
-
-      // Can only submit from the statuses the transition table allows
-      if (!canTransition(existing.status, "submit")) {
-        return domainErrorResponse(
-          c,
-          invalid(
-            "job_not_submittable",
-            `Nao e possivel submeter um job com status ${existing.status}`,
-          ),
-        );
-      }
-
-      const assetSnapshotResult = await ensureEditableJobAssetSnapshot({
-        id: existing.id,
-        organizationId: existing.organizationId,
-        status: existing.status,
-        assetId: existing.assetId,
-        assetSnapshot: existing.assetSnapshot,
-        methodSnapshot: existing.methodSnapshot,
-      });
-      if (!assetSnapshotResult.ok) {
-        if ("conflict" in assetSnapshotResult) {
-          return domainErrorResponse(c, await jobStatusConflict(id));
-        }
-        return c.json({ error: assetSnapshotResult.error }, 400);
-      }
-
-      const standardsResult = await buildStandardsSnapshot(
-        input.selectedStandardIds,
-        memberData.organizationId,
-        existing.unitId,
-        // The date the work is recorded at: a standard is valid through its
-        // certificate day, judged on the laboratory day it was performed.
-        standardsPerformedAt(input.performedAt, null),
-      );
-      if (!standardsResult.ok) {
-        return domainErrorResponse(c, standardsResult.refusal);
-      }
-
-      const environmentalSnapshot = await buildEnvironmentalSnapshot(
-        input.environment,
-        existing,
-        memberData.organizationId,
-        session.user.id,
-      );
-
-      const normalizedData = normalizeMethodDataForStorage(
-        input.data,
-        methodInputFieldsFromSnapshot(existing.methodSnapshot),
-        assetSnapshotResult.snapshot.baseMeasurementUnit ?? null,
-      );
-
-      const nextStandardsSnapshot =
-        standardsResult.snapshot === undefined
-          ? existing.standardsSnapshot
-          : standardsResult.snapshot;
-      const nextEnvironmentalSnapshot =
-        environmentalSnapshot ?? existing.environmentalSnapshot;
-      const nextCalibrationLocationSnapshot = buildCalibrationLocationSnapshot(
-        input.calibrationLocation,
-        existing.calibrationLocationSnapshot,
-        session.user.id,
-      );
-      const nextCalibrationPhaseSnapshot = buildCalibrationPhaseSnapshot(
-        input.calibrationPhases,
-        existing.calibrationPhaseSnapshot,
-        session.user.id,
-      );
-      const calibrationLocationError = validateCalibrationLocationForSubmit(
-        nextCalibrationLocationSnapshot,
-      );
-      if (calibrationLocationError) {
-        return c.json({ error: calibrationLocationError }, 400);
-      }
-      const calibrationPhaseError = validateCalibrationPhasesForSubmit(
-        nextCalibrationPhaseSnapshot,
-      );
-      if (calibrationPhaseError) {
-        return c.json({ error: calibrationPhaseError }, 400);
-      }
-      const nextAssetSnapshot = assetSnapshotResult.snapshot;
-      const nextData = stripAssetSpecData(
-        normalizedData.data,
-        existing.methodSnapshot,
-      );
-      const performedAt = input.performedAt
-        ? new Date(input.performedAt)
-        : new Date();
-      if (Number.isNaN(performedAt.getTime())) {
-        return c.json({ error: "Data de execução inválida" }, 400);
-      }
-      const now = new Date();
-      if (performedAt.getTime() > now.getTime()) {
-        return c.json(
-          { error: "A data de execução não pode estar no futuro" },
-          400,
-        );
-      }
-      const diffMs = now.getTime() - performedAt.getTime();
-      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-      const normalizedBackdateReason = input.backdateReason?.trim();
-      if (
-        diffDays > BACKDATE_REASON_THRESHOLD_DAYS &&
-        !normalizedBackdateReason
-      ) {
-        return c.json(
-          {
-            error: `Motivo obrigatório para lançamentos com mais de ${BACKDATE_REASON_THRESHOLD_DAYS} dias`,
-          },
-          400,
-        );
-      }
-      // The draft-time standards check is advisory. Every standard of the FINAL
-      // snapshot (whether or not this request names standards) is re-judged,
-      // from the standards table, at the final performed day.
-      const standardsJudgement = await judgeSnapshotStandards({
-        standardIds: snapshotStandardIds(nextStandardsSnapshot),
-        organizationId: memberData.organizationId,
-        performedAt,
-        now,
-        backdateReason: normalizedBackdateReason,
-        mode: "cloud",
-      });
-      if (!standardsJudgement.ok) {
-        return domainErrorResponse(
-          c,
-          standardsRefusalDomainError(standardsJudgement),
-        );
-      }
-      const backdatedStandardNames =
-        standardsJudgement.validOnlyBecauseBackdated.map(
-          (standard) => standard.name,
-        );
-      const executionData = normalizedData.data ?? {};
-      // An engine release recompiles the published method but never rewrites
-      // the copies frozen into open jobs; adopt the recompiled method here when
-      // it is provably the same definition, or this job could never be
-      // submitted again (review of the 0.4.0 execution guard).
-      const reconciledMethod = await reconcileMethodSnapshotEngine({
-        methodSnapshot: existing.methodSnapshot,
-        organizationId: memberData.organizationId,
-        engine: createMethodExecutionEngine(),
-      });
-      const nextMethodSnapshot = reconciledMethod.methodSnapshot;
-      const officialExecution = executeOfficialCompiledSnapshot({
-        methodSnapshot: nextMethodSnapshot,
-        data: executionData,
-        assetSnapshot: nextAssetSnapshot,
-        standardsSnapshot: nextStandardsSnapshot,
-        environmentalSnapshot: nextEnvironmentalSnapshot,
-        calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
-        requireSuccess: true,
-      });
-      if (!officialExecution.ok) {
-        return c.json(
-          {
-            error: officialExecution.message,
-            diagnostics: officialExecution.diagnostics,
-          },
-          422,
-        );
-      }
-      const nextResults = officialExecution.execution
-        ? officialExecution.results
-        : (input.results ?? existing.results);
-
-      // Accredited-scope (CMC) guard — ISO/IEC 17025 §7.6/§7.8.3, ILAC P14
-      // (#427 Phase 0). Classified here so the technician and the signer see
-      // the warning during review; approval re-classifies at the emission
-      // date and is authoritative. Warn-only: never blocks the submit.
-      const { compliance: scopeCompliance } = await classifyJobScopeCompliance({
-        organizationId: memberData.organizationId,
-        unitId: existing.unitId,
-        methodSnapshot: existing.methodSnapshot,
-        assetSnapshot: nextAssetSnapshot,
-        data: nextData ?? null,
-        results: nextResults ?? null,
-        // `now`, not performedAt: predicts the seal decision approval will
-        // make at the emission date (backdated executions stay comparable).
-        atDate: now,
-      });
-
-      // Update job with execution data and set status to REVIEW. The status
-      // change and its audit row commit together or not at all.
-      const submittedStatus = requireTargetOf(existing.status, "submit");
-      const updated = await db.transaction(async (tx) => {
-        const [row] = await tx
-          .update(calibrationJob)
-          .set({
-            data: nextData,
-            results: nextResults,
-            ...(reconciledMethod.adopted
-              ? { methodSnapshot: nextMethodSnapshot }
-              : {}),
-            scopeComplianceStatus: scopeCompliance?.status ?? null,
-            scopeComplianceFindings: scopeCompliance?.findings ?? null,
-            // A re-submission restarts the release flow: any override recorded
-            // by a previous approval attempt no longer applies.
-            scopeOverrideJustification: null,
-            assetSnapshot: nextAssetSnapshot,
-            standardsSnapshot: nextStandardsSnapshot,
-            environmentalSnapshot: nextEnvironmentalSnapshot,
-            calibrationLocationSnapshot: nextCalibrationLocationSnapshot,
-            calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
-            status: submittedStatus,
-            performedAt,
-          })
-          .where(
-            and(
-              eq(calibrationJob.id, id),
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              // Compare-and-set on the status this request validated: a
-              // concurrent transition (approve, reject, cancel...) makes this
-              // match zero rows instead of silently overwriting it.
-              eq(calibrationJob.status, existing.status),
-            ),
-          )
-          .returning();
-        if (!row) return null;
-
-        // Audit log
-        await tx.insert(jobAuditLog).values({
-          jobId: id,
-          action: "submit",
-          changes: {
-            status: { old: existing.status, new: submittedStatus },
-            // Evidence that the frozen compiled method was re-pointed at the
-            // method's current compilation (same definition, new engine).
-            methodSnapshotEngine: reconciledMethod.adopted
-              ? {
-                  old: {
-                    engineVersion: existing.methodSnapshot.engineVersion,
-                    methodFingerprint:
-                      existing.methodSnapshot.methodFingerprint,
-                  },
-                  new: {
-                    engineVersion: nextMethodSnapshot.engineVersion,
-                    methodFingerprint: nextMethodSnapshot.methodFingerprint,
-                  },
-                }
-              : undefined,
-            data: { old: existing.data, new: nextData },
-            results: { old: existing.results, new: nextResults },
-            officialExecution: officialExecution.execution
-              ? {
-                  methodFingerprint:
-                    officialExecution.execution.methodFingerprint,
-                  inputFingerprint:
-                    officialExecution.execution.inputFingerprint,
-                  calculationFingerprint:
-                    officialExecution.execution.calculationFingerprint,
-                  resultFingerprint:
-                    officialExecution.execution.resultFingerprint,
-                }
-              : undefined,
-            standardsSnapshot:
-              standardsResult.snapshot !== undefined
-                ? {
-                    old: existing.standardsSnapshot,
-                    new: standardsResult.snapshot,
-                  }
-                : undefined,
-            environmentalSnapshot: environmentalSnapshot
-              ? {
-                  old: existing.environmentalSnapshot,
-                  new: environmentalSnapshot,
-                }
-              : undefined,
-            calibrationLocationSnapshot: input.calibrationLocation
-              ? {
-                  old: existing.calibrationLocationSnapshot,
-                  new: nextCalibrationLocationSnapshot,
-                }
-              : undefined,
-            calibrationPhaseSnapshot: input.calibrationPhases
-              ? {
-                  old: existing.calibrationPhaseSnapshot,
-                  new: nextCalibrationPhaseSnapshot,
-                }
-              : undefined,
-            unitConversions:
-              normalizedData.conversions.length > 0
-                ? normalizedData.conversions
-                : undefined,
-            assetSnapshot: existing.assetSnapshot
-              ? undefined
-              : { old: null, new: nextAssetSnapshot },
-            // Every standard of the final snapshot was judged at the day the
-            // work is recorded as performed, not at the day it is submitted.
-            standardsJudgedAt:
-              standardsJudgement.standardIds.length > 0
-                ? {
-                    performedAt: performedAt.toISOString(),
-                    standardIds: standardsJudgement.standardIds,
-                    validOnlyBecauseBackdated: backdatedStandardNames,
-                  }
-                : undefined,
-          },
-          performedBy: session.user.id,
+      const result = await submitJob({
+        actor: {
+          kind: "user",
+          userId: session.user.id,
           ipAddress: c.req.header("x-forwarded-for") || null,
-          reason:
-            [
-              nextEnvironmentalSnapshot &&
-              !nextEnvironmentalSnapshot.withinLimits
-                ? "Submetido com condições ambientais fora dos limites"
-                : null,
-              scopeCompliance?.status === "OUT_OF_SCOPE"
-                ? "Submetido com ponto fora do escopo acreditado (CMC)"
-                : scopeCompliance?.status === "U_BELOW_CMC"
-                  ? "Submetido com incerteza menor que a CMC acreditada"
-                  : null,
-              diffDays > BACKDATE_REASON_THRESHOLD_DAYS ||
-              standardsJudgement.reasonRequired
-                ? `Registro retroativo (${diffDays} dias): ${normalizedBackdateReason}`
-                : null,
-              standardsJudgement.reasonRequired
-                ? `Padroes julgados na data de execucao (${performedAt.toISOString()}): ${backdatedStandardNames.join(", ")} venceu apos essa data`
-                : null,
-            ]
-              .filter(Boolean)
-              .join(" | ") || undefined,
-        });
-        return row;
+        },
+        jobId: id,
+        organizationId: memberData.organizationId,
+        unitScope: memberData,
+        data: input.data,
+        clientResults: input.results,
+        performedAt: input.performedAt,
+        backdateReason: input.backdateReason,
+        selectedStandardIds: input.selectedStandardIds,
+        environment: input.environment,
+        calibrationLocation: input.calibrationLocation,
+        calibrationPhases: input.calibrationPhases,
       });
-      if (!updated) {
-        return domainErrorResponse(c, await jobStatusConflict(id));
+      if (result.status !== "ok") {
+        return jobExecutionRefusalResponse(c, id, result);
       }
-
-      // Reverse traceability (#426 Phase 1): mirror the frozen snapshot into
-      // the indexed job_standard projection.
-      await syncJobStandardLinks(id, nextStandardsSnapshot, performedAt);
 
       // Send notifications to admins/owners (fire and forget)
       notifyJobSubmittedForReview(id, session.user.id).catch((err) => {
@@ -2111,13 +1139,14 @@ export const jobsRouter = new Hono<{
 
       return c.json({
         message: "Job submetido para revisao",
-        data: updated,
+        data: result.job,
       } satisfies ServerShape<JobMutationResponse>);
     },
   )
 
   // =========================================================================
   // POST /:id/execute - Save execution data (worksheet auto-save / manual save)
+  // Transport only: the policy is `executeJob` (modules/jobs/submit-job.ts).
   // =========================================================================
   .post(
     "/:id/execute",
@@ -2130,288 +1159,34 @@ export const jobsRouter = new Hono<{
       const input = c.req.valid("json");
 
       if (id === null) {
-        return c.json({ error: "Job nao encontrado" }, 404);
+        return domainErrorResponse(c, jobNotFound());
       }
 
-      // Get existing job
-      const [existing] = await db
-        .select()
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, id),
-            eq(calibrationJob.organizationId, memberData.organizationId),
-            buildUnitScopeCondition(calibrationJob.unitId, memberData),
-          ),
-        )
-        .limit(1);
-
-      if (!existing) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
-
-      // Can only execute from the statuses the transition table allows
-      if (!canTransition(existing.status, "execute")) {
-        return domainErrorResponse(
-          c,
-          invalid(
-            "job_not_executable",
-            `Nao e possivel executar um job com status ${existing.status}`,
-          ),
-        );
-      }
-
-      const assetSnapshotResult = await ensureEditableJobAssetSnapshot({
-        id: existing.id,
-        organizationId: existing.organizationId,
-        status: existing.status,
-        assetId: existing.assetId,
-        assetSnapshot: existing.assetSnapshot,
-        methodSnapshot: existing.methodSnapshot,
-      });
-      if (!assetSnapshotResult.ok) {
-        if ("conflict" in assetSnapshotResult) {
-          return domainErrorResponse(c, await jobStatusConflict(id));
-        }
-        return c.json({ error: assetSnapshotResult.error }, 400);
-      }
-
-      const standardsResult = await buildStandardsSnapshot(
-        input.selectedStandardIds,
-        memberData.organizationId,
-        existing.unitId,
-        // The date the work is recorded at (a draft keeps the one already
-        // saved): a standard is valid through its certificate day, judged on
-        // the laboratory day the calibration was performed.
-        standardsPerformedAt(input.performedAt, existing.performedAt),
-      );
-      if (!standardsResult.ok) {
-        return domainErrorResponse(c, standardsResult.refusal);
-      }
-
-      const environmentalSnapshot = await buildEnvironmentalSnapshot(
-        input.environment,
-        existing,
-        memberData.organizationId,
-        session.user.id,
-      );
-
-      const normalizedData = normalizeMethodDataForStorage(
-        input.data,
-        methodInputFieldsFromSnapshot(existing.methodSnapshot),
-        assetSnapshotResult.snapshot.baseMeasurementUnit ?? null,
-      );
-
-      const nextStandardsSnapshot =
-        standardsResult.snapshot === undefined
-          ? existing.standardsSnapshot
-          : standardsResult.snapshot;
-      const nextEnvironmentalSnapshot =
-        environmentalSnapshot ?? existing.environmentalSnapshot;
-      const nextCalibrationLocationSnapshot = buildCalibrationLocationSnapshot(
-        input.calibrationLocation,
-        existing.calibrationLocationSnapshot,
-        session.user.id,
-      );
-      const nextCalibrationPhaseSnapshot = buildCalibrationPhaseSnapshot(
-        input.calibrationPhases,
-        existing.calibrationPhaseSnapshot,
-        session.user.id,
-      );
-      const nextAssetSnapshot = assetSnapshotResult.snapshot;
-      const nextData = stripAssetSpecData(
-        normalizedData.data,
-        existing.methodSnapshot,
-      );
-      const executionData = normalizedData.data ?? {};
-      // Same reconciliation as the submit route: a draft saved after an engine
-      // release must keep executing (review of the 0.4.0 execution guard).
-      const reconciledMethod = await reconcileMethodSnapshotEngine({
-        methodSnapshot: existing.methodSnapshot,
-        organizationId: memberData.organizationId,
-        engine: createMethodExecutionEngine(),
-      });
-      const nextMethodSnapshot = reconciledMethod.methodSnapshot;
-      const officialExecution = executeOfficialCompiledSnapshot({
-        methodSnapshot: nextMethodSnapshot,
-        data: executionData,
-        assetSnapshot: nextAssetSnapshot,
-        standardsSnapshot: nextStandardsSnapshot,
-        environmentalSnapshot: nextEnvironmentalSnapshot,
-        calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
-        requireSuccess: false,
-      });
-      if (!officialExecution.ok) {
-        return c.json(
-          {
-            error: officialExecution.message,
-            diagnostics: officialExecution.diagnostics,
-          },
-          422,
-        );
-      }
-      const nextResults = officialExecution.execution
-        ? officialExecution.results
-        : (input.results ?? null);
-
-      // Determine new status
-      const newStatus = requireTargetOf(existing.status, "execute");
-
-      // Persist the chosen execution date on draft saves so it survives a
-      // reload. Only updated when a valid value is sent (never cleared here);
-      // the strict not-future / backdate-reason gating happens on submit.
-      const parsedPerformedAt = input.performedAt
-        ? new Date(input.performedAt)
-        : null;
-      const nextPerformedAt =
-        parsedPerformedAt && !Number.isNaN(parsedPerformedAt.getTime())
-          ? parsedPerformedAt
-          : null;
-
-      // Update job with execution data. Status/data write and audit row commit
-      // together or not at all.
-      const updated = await db.transaction(async (tx) => {
-        const [row] = await tx
-          .update(calibrationJob)
-          .set({
-            data: nextData,
-            results: nextResults,
-            ...(reconciledMethod.adopted
-              ? { methodSnapshot: nextMethodSnapshot }
-              : {}),
-            assetSnapshot: nextAssetSnapshot,
-            standardsSnapshot: nextStandardsSnapshot,
-            environmentalSnapshot: nextEnvironmentalSnapshot,
-            calibrationLocationSnapshot: nextCalibrationLocationSnapshot,
-            calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
-            status: newStatus,
-            ...(nextPerformedAt ? { performedAt: nextPerformedAt } : {}),
-            // §7.8.2.1(n). Absent = untouched: the worksheet auto-saves and a
-            // partial payload must not wipe a deviation already recorded.
-            // Explicit null clears it; empty/whitespace normalizes to null so a
-            // blank box never prints an empty heading on the certificate.
-            ...(input.methodDeviations === undefined
-              ? {}
-              : { methodDeviations: input.methodDeviations?.trim() || null }),
-          })
-          .where(
-            and(
-              eq(calibrationJob.id, id),
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              // Compare-and-set on the status this request validated: a
-              // concurrent transition (approve, reject, cancel...) makes this
-              // match zero rows instead of silently overwriting it.
-              eq(calibrationJob.status, existing.status),
-            ),
-          )
-          .returning();
-        if (!row) return null;
-
-        // Audit log
-        await tx.insert(jobAuditLog).values({
-          jobId: id,
-          action: "execute",
-          changes: {
-            methodSnapshotEngine: reconciledMethod.adopted
-              ? {
-                  old: {
-                    engineVersion: existing.methodSnapshot.engineVersion,
-                    methodFingerprint:
-                      existing.methodSnapshot.methodFingerprint,
-                  },
-                  new: {
-                    engineVersion: nextMethodSnapshot.engineVersion,
-                    methodFingerprint: nextMethodSnapshot.methodFingerprint,
-                  },
-                }
-              : undefined,
-            status:
-              existing.status !== newStatus
-                ? { old: existing.status, new: newStatus }
-                : undefined,
-            data: { old: existing.data, new: nextData },
-            results: { old: existing.results, new: nextResults },
-            // §7.8.2.1(n) is printed on the certificate, so a change to it is
-            // evidence an assessor may ask about. Logged only when it moved.
-            methodDeviations:
-              input.methodDeviations !== undefined &&
-              (input.methodDeviations?.trim() || null) !==
-                existing.methodDeviations
-                ? {
-                    old: existing.methodDeviations,
-                    new: input.methodDeviations?.trim() || null,
-                  }
-                : undefined,
-            officialExecution: officialExecution.execution
-              ? {
-                  methodFingerprint:
-                    officialExecution.execution.methodFingerprint,
-                  inputFingerprint:
-                    officialExecution.execution.inputFingerprint,
-                  calculationFingerprint:
-                    officialExecution.execution.calculationFingerprint,
-                  resultFingerprint:
-                    officialExecution.execution.resultFingerprint,
-                }
-              : undefined,
-            standardsSnapshot:
-              standardsResult.snapshot !== undefined
-                ? {
-                    old: existing.standardsSnapshot,
-                    new: standardsResult.snapshot,
-                  }
-                : undefined,
-            environmentalSnapshot: environmentalSnapshot
-              ? {
-                  old: existing.environmentalSnapshot,
-                  new: environmentalSnapshot,
-                }
-              : undefined,
-            calibrationLocationSnapshot: input.calibrationLocation
-              ? {
-                  old: existing.calibrationLocationSnapshot,
-                  new: nextCalibrationLocationSnapshot,
-                }
-              : undefined,
-            calibrationPhaseSnapshot: input.calibrationPhases
-              ? {
-                  old: existing.calibrationPhaseSnapshot,
-                  new: nextCalibrationPhaseSnapshot,
-                }
-              : undefined,
-            unitConversions:
-              normalizedData.conversions.length > 0
-                ? normalizedData.conversions
-                : undefined,
-            assetSnapshot: existing.assetSnapshot
-              ? undefined
-              : { old: null, new: nextAssetSnapshot },
-          },
-          performedBy: session.user.id,
+      const result = await executeJob({
+        actor: {
+          kind: "user",
+          userId: session.user.id,
           ipAddress: c.req.header("x-forwarded-for") || null,
-        });
-        return row;
+        },
+        jobId: id,
+        organizationId: memberData.organizationId,
+        unitScope: memberData,
+        data: input.data,
+        clientResults: input.results,
+        performedAt: input.performedAt,
+        selectedStandardIds: input.selectedStandardIds,
+        environment: input.environment,
+        calibrationLocation: input.calibrationLocation,
+        calibrationPhases: input.calibrationPhases,
+        methodDeviations: input.methodDeviations,
       });
-      if (!updated) {
-        return domainErrorResponse(c, await jobStatusConflict(id));
-      }
-
-      // Reverse traceability (#426 Phase 1): mirror the frozen snapshot into
-      // the indexed job_standard projection.
-      await syncJobStandardLinks(id, nextStandardsSnapshot, nextPerformedAt);
-
-      // On-site visits roll forward to IN_PROGRESS once any of their jobs starts.
-      if (existing.status === "DRAFT" && updated?.visitId) {
-        try {
-          await syncVisitStatusFromJobs(updated.visitId);
-        } catch (error) {
-          console.error("[Jobs] Failed to sync visit status:", error);
-        }
+      if (result.status !== "ok") {
+        return jobExecutionRefusalResponse(c, id, result);
       }
 
       return c.json({
         message: "Dados salvos com sucesso",
-        data: updated,
+        data: result.job,
       } satisfies ServerShape<JobMutationResponse>);
     },
   )

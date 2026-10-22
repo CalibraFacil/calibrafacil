@@ -52,17 +52,10 @@ import {
   isNull,
   lt,
   lte,
-  notInArray,
   or,
   sql,
 } from "drizzle-orm";
 import { addCalendarDays, labToday } from "@calibra-facil/shared";
-import {
-  judgeSnapshotStandards,
-  snapshotStandardIds,
-  standardsRefusalApiCode,
-  standardsRefusalMessage,
-} from "../modules/jobs/standards-judgement";
 import {
   buildListMeta,
   buildPublicApiError,
@@ -104,6 +97,12 @@ import { deriveNextCalibrationDate } from "../lib/portal-asset-interval";
 import { resolveAssetRegimeWrite } from "../lib/asset-regime";
 import { deriveRegulatedNextDate } from "../lib/regulated-interval";
 import { approveJob } from "../modules/jobs/approve-job";
+import {
+  executeJob,
+  submitJob,
+  type JobExecutionActor,
+  type JobExecutionResult,
+} from "../modules/jobs/submit-job";
 import {
   allowedFrom,
   canTransition,
@@ -547,6 +546,103 @@ function jobStatusConflictBody() {
     message:
       "O status da OS mudou durante a operação. Recarregue e tente novamente.",
   });
+}
+
+/** The key's creator is the accountable person; the key itself is recorded. */
+function publicApiJobActor(
+  apiKey: ApiKeyAuthVariables["apiKey"],
+  headers: Headers,
+): JobExecutionActor {
+  return {
+    kind: "api_key",
+    userId: apiKey.createdBy,
+    apiKey: { id: apiKey.id, name: apiKey.name, keyPrefix: apiKey.keyPrefix },
+    ipAddress: getPublicApiRequestIp(headers),
+  };
+}
+
+/**
+ * The public API's answer to a submit/results command that did not write: the
+ * command's own refusal code and message in the v2 error envelope, with the
+ * status the v2 contract has always used for it (409 for a job that cannot
+ * take the operation, 422 for a rejected standard).
+ */
+function publicApiJobExecutionRefusal(
+  result: Exclude<JobExecutionResult, { status: "ok" }>,
+  illegalTransitionMessage: string,
+): { status: ContentfulStatusCode; body: Record<string, unknown> } {
+  switch (result.status) {
+    case "not_found":
+      return {
+        status: 404,
+        body: buildPublicApiError({
+          code: "job_not_found",
+          message: "OS não encontrada",
+        }),
+      };
+    case "concurrent_update":
+      return { status: 409, body: jobStatusConflictBody() };
+    case "illegal_transition":
+      return {
+        status: 409,
+        body: buildPublicApiError({
+          code: result.error.code,
+          message: illegalTransitionMessage,
+        }),
+      };
+    case "status_payload_mismatch":
+      return {
+        status: 409,
+        body: buildPublicApiError({
+          code: result.error.code,
+          message: result.error.message,
+        }),
+      };
+    case "standards_refused":
+      return {
+        status: 422,
+        body: buildPublicApiError({
+          code: result.error.code,
+          message: result.error.message,
+          details: { standardIds: result.refusal.standardIds },
+        }),
+      };
+    case "official_execution_failed":
+      return {
+        status: 422,
+        body: buildPublicApiError({
+          code: result.error.code,
+          message: result.error.message,
+          details: { diagnostics: result.failure.diagnostics },
+        }),
+      };
+    case "competence_missing":
+      return {
+        status: 422,
+        body: buildPublicApiError({
+          code: result.error.code,
+          message: result.error.message,
+        }),
+      };
+    case "precondition_failed":
+      return {
+        status: 400,
+        body: buildPublicApiError({
+          code: "invalid_request",
+          message: result.reason,
+        }),
+      };
+    case "invalid_performed_at":
+    case "asset_unavailable":
+    case "record_incomplete":
+      return {
+        status: 400,
+        body: buildPublicApiError({
+          code: result.error.code,
+          message: result.error.message,
+        }),
+      };
+  }
 }
 
 export const publicApiV2Router = new Hono<{
@@ -3638,80 +3734,31 @@ publicApiV2Router
       }
 
       return withIdempotentMutation(c, input, async () => {
-        const [existing] = await db
-          .select()
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.id, resolvedId),
-              eq(calibrationJob.organizationId, apiKey.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!existing) {
-          return {
-            status: 404,
-            body: buildPublicApiError({
-              code: "job_not_found",
-              message: "OS não encontrada",
-            }),
-          };
-        }
-
-        if (!canTransition(existing.status, "record_results")) {
-          return {
-            status: 409,
-            body: buildPublicApiError({
-              code: "job_not_executable",
-              message: "A OS não aceita atualização de resultados neste status",
-            }),
-          };
-        }
-
-        // Compare-and-set on the status the pre-check validated, in the key's
-        // organization; the audit row commits with it.
-        const resultsStatus = requireTargetOf(
-          existing.status,
-          "record_results",
-        );
-        const updated = await db.transaction(async (tx) => {
-          const [row] = await tx
-            .update(calibrationJob)
-            .set({
-              status: resultsStatus,
-              data: input.data,
-              results: input.results ?? existing.results,
-            })
-            .where(
-              and(
-                eq(calibrationJob.id, existing.id),
-                eq(calibrationJob.organizationId, apiKey.organizationId),
-                eq(calibrationJob.status, existing.status),
-              ),
-            )
-            .returning();
-          if (!row) return null;
-
-          await tx.insert(jobAuditLog).values({
-            jobId: existing.id,
-            action: "execute",
-            changes: {
-              data: { old: existing.data, new: input.data },
-              results: {
-                old: existing.results,
-                new: input.results ?? existing.results,
-              },
-            },
-            performedBy: apiKey.createdBy,
-            ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-          });
-          return row;
+        // Transport only: the policy is `executeJob` (the same command the
+        // cloud route and the desktop sync run). The results the client sent
+        // are not stored; they are recomputed from the data.
+        const result = await executeJob({
+          actor: publicApiJobActor(apiKey, c.req.raw.headers),
+          jobId: resolvedId,
+          organizationId: apiKey.organizationId,
+          unitScope: null,
+          data: input.data,
+          clientResults: input.results,
+          performedAt: input.performedAt,
+          selectedStandardIds: input.selectedStandardIds,
+          environment: input.environment,
+          calibrationLocation: input.calibrationLocation,
+          calibrationPhases: input.calibrationPhases,
+          methodDeviations: input.methodDeviations,
         });
-        if (!updated) {
-          return { status: 409, body: jobStatusConflictBody() };
+        if (result.status !== "ok") {
+          return publicApiJobExecutionRefusal(
+            result,
+            "A OS não aceita atualização de resultados neste status",
+          );
         }
 
+        const updated = result.job;
         const body = { data: updated };
 
         await emitPublicApiWebhookEvent({
@@ -3754,101 +3801,35 @@ publicApiV2Router
       }
 
       return withIdempotentMutation(c, input, async () => {
-        const [existing] = await db
-          .select()
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.id, resolvedId),
-              eq(calibrationJob.organizationId, apiKey.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!existing) {
-          return {
-            status: 404,
-            body: buildPublicApiError({
-              code: "job_not_found",
-              message: "OS não encontrada",
-            }),
-          };
-        }
-
-        if (!canTransition(existing.status, "submit")) {
-          return {
-            status: 409,
-            body: buildPublicApiError({
-              code: "job_not_submittable",
-              message: "A OS não pode ser submetida neste status",
-            }),
-          };
-        }
-
-        // The route records the work as performed NOW, and takes no backdate
-        // reason: every standard of the job's snapshot must be valid today,
-        // however the draft was dated when it was saved through the cloud.
-        const performedAt = new Date();
-        const standardsJudgement = await judgeSnapshotStandards({
-          standardIds: snapshotStandardIds(existing.standardsSnapshot),
+        // Transport only: the policy is `submitJob`, the very command the
+        // cloud route and the desktop sync run (official calculation, scope,
+        // competence, environment, backdate and standards rules).
+        const result = await submitJob({
+          actor: publicApiJobActor(apiKey, c.req.raw.headers),
+          jobId: resolvedId,
           organizationId: apiKey.organizationId,
-          performedAt,
-          now: performedAt,
-          mode: "public_api",
+          unitScope: null,
+          data: input.data,
+          clientResults: input.results,
+          performedAt: input.performedAt,
+          backdateReason: input.backdateReason,
+          selectedStandardIds: input.selectedStandardIds,
+          environment: input.environment,
+          calibrationLocation: input.calibrationLocation,
+          calibrationPhases: input.calibrationPhases,
         });
-        if (!standardsJudgement.ok) {
-          return {
-            status: 422,
-            body: buildPublicApiError({
-              code: standardsRefusalApiCode(standardsJudgement),
-              message: standardsRefusalMessage(standardsJudgement),
-              details: { standardIds: standardsJudgement.standardIds },
-            }),
-          };
-        }
-
-        // Compare-and-set on the status the pre-check validated, in the key's
-        // organization; the audit row commits with it.
-        const submittedStatus = requireTargetOf(existing.status, "submit");
-        const updated = await db.transaction(async (tx) => {
-          const [row] = await tx
-            .update(calibrationJob)
-            .set({
-              data: input.data,
-              status: submittedStatus,
-              performedAt,
-            })
-            .where(
-              and(
-                eq(calibrationJob.id, existing.id),
-                eq(calibrationJob.organizationId, apiKey.organizationId),
-                eq(calibrationJob.status, existing.status),
-              ),
-            )
-            .returning();
-          if (!row) return null;
-
-          await tx.insert(jobAuditLog).values({
-            jobId: existing.id,
-            action: "submit",
-            changes: {
-              status: { old: existing.status, new: submittedStatus },
-              data: { old: existing.data, new: input.data },
-            },
-            performedBy: apiKey.createdBy,
-            ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-          });
-          return row;
-        });
-        if (!updated) {
-          return { status: 409, body: jobStatusConflictBody() };
+        if (result.status !== "ok") {
+          return publicApiJobExecutionRefusal(
+            result,
+            "A OS não pode ser submetida neste status",
+          );
         }
 
         return {
           status: 200,
-          body: { data: updated },
+          body: { data: result.job },
           resourceType: "job" as const,
-          resourceId: updated.id,
+          resourceId: result.job.id,
         };
       });
     },

@@ -18,17 +18,19 @@
 //
 //   create           apps/api/src/lib/jobs.ts:444-457 (new job, status DRAFT)
 //                    apps/api/src/routes/jobs.ts:2871,2891 (the amendment clone, DRAFT)
-//   execute          apps/api/src/routes/jobs.ts:2137,2242,2288 (save worksheet:
+//   execute          apps/api/src/modules/jobs/submit-job.ts (`executeJob`: save
+//                      worksheet / record results, for the cloud route, the
+//                      public API and the desktop sync apply alike:
 //                      DRAFT -> IN_PROGRESS, otherwise the status is kept)
-//                    apps/api/src/routes/sync.ts:2618 (desktop save, same rule)
 //                    packages/local-db/src/execution.ts:245,252-257 (offline save)
-//   record_results   apps/api/src/routes/public-api-v2.ts:3641,3657 (public API
-//                      results: always lands in IN_PROGRESS, REJECTED included -
-//                      kept as its own command because the cloud/desktop save
-//                      keeps a REJECTED job REJECTED)
-//   submit           apps/api/src/routes/jobs.ts:1768,1961
-//                    apps/api/src/routes/public-api-v2.ts:3753,3791
-//                    apps/api/src/routes/sync.ts:2618,2640
+//   record_results   no longer used. The public API results route moved a
+//                      REJECTED job to IN_PROGRESS; owner decision Q18 unified it
+//                      on the cloud/desktop rule (a save keeps a REJECTED job
+//                      REJECTED), so it now runs `execute` like every other
+//                      save. The rows stay only because the table's own test
+//                      pins them; retire the command with that test.
+//   submit           apps/api/src/modules/jobs/submit-job.ts (`submitJob`, for
+//                      the cloud route, the public API and the desktop sync)
 //                    packages/local-db/src/execution.ts:245,253
 //   reject           apps/api/src/routes/jobs.ts:2563,2578,2587
 //                    apps/api/src/routes/public-api-v2.ts:4059,4075,4084
@@ -50,9 +52,8 @@
 //                    apps/api/src/routes/public-api-v2.ts:3486,3539
 //   assign           apps/api/src/routes/jobs.ts:1556,1692 (technician)
 //
-// The pre-existing rules are kept exactly, including two that read as
-// accidents (assign is accepted for CANCELED and GENERATING_PDF jobs; the
-// public API results route moves a REJECTED job to IN_PROGRESS). Changing
+// The pre-existing rules are kept exactly, including one that reads as an
+// accident (assign is accepted for CANCELED and GENERATING_PDF jobs). Changing
 // them is a product decision made here, in one place, with the tests beside it.
 
 import type { JobStatus } from "./job-status";

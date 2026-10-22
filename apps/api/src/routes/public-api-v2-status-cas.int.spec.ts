@@ -21,6 +21,7 @@ import { createApiKeySecret } from "../lib/api-keys";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { seedJobForOrg } from "../../test/integration/tenant-refs";
+import { executableMethodSnapshot } from "../../test/integration/executable-method";
 import {
   auditActions,
   changeJobBeforeNextTransaction,
@@ -93,7 +94,9 @@ const SITES: Site[] = [
     from: "DRAFT",
     rival: "CANCELED",
     to: "IN_PROGRESS",
-    send: post("/results", { data: { marcador: "cas-results" } }),
+    send: post("/results", {
+      data: { indication: "10", reference: "9", marcador: "cas-results" },
+    }),
   },
   {
     name: "POST /jobs/:id/submit",
@@ -101,7 +104,10 @@ const SITES: Site[] = [
     from: "IN_PROGRESS",
     rival: "GENERATING_PDF",
     to: "REVIEW",
-    send: post("/submit", { data: { marcador: "cas-submit" } }),
+    send: post("/submit", {
+      data: { indication: "10", reference: "9", marcador: "cas-submit" },
+      calibrationLocation: { type: "lab", addressText: "Laboratório" },
+    }),
   },
   {
     name: "POST /jobs/:id/reject",
@@ -133,7 +139,9 @@ async function seedWorld(from: JobStatus) {
   });
   await db
     .update(calibrationJob)
-    .set({ status: from })
+    // The results and submit routes run the official execution of the job's
+    // compiled method (the one submit/execute command), so the job carries one.
+    .set({ status: from, methodSnapshot: executableMethodSnapshot() })
     .where(eq(calibrationJob.id, jobId));
   return { orgA, orgB, keyA, keyB, jobId };
 }

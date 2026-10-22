@@ -1193,6 +1193,10 @@ describe("syncRouter", () => {
             performedAt: null,
           },
         ],
+        // A submit also reads the organization's accredited-scope setup (no
+        // row: the guard does not apply). The job has no technician, so there
+        // is no competence to look up.
+        [],
         // The row the compare-and-set UPDATE ... RETURNING hands back: no row
         // would mean the job changed under the apply, which is a conflict.
         [

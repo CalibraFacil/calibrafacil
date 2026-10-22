@@ -1,4 +1,4 @@
 {
   "title": "API",
-  "pages": ["autenticacao", "conceitos", "webhooks"]
+  "pages": ["autenticacao", "conceitos", "webhooks", "mudancas"]
 }
