@@ -19,6 +19,7 @@
  *   REQ-SUB-5g  an illegal transition is refused, nothing written
  *   REQ-SUB-5h  the desktop's payload status is checked, not trusted (Q20)
  *   REQ-SUB-5i  the public API now runs the whole submit policy
+ *   REQ-SUB-5j  a sync event for a job outside the session's unit scope is out of reach
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -28,6 +29,7 @@ import {
   asset,
   calibrationJob,
   jobAuditLog,
+  organizationUnit,
   personnelCompetence,
   referenceStandard,
   user,
@@ -41,7 +43,10 @@ import {
 import { loginAs } from "../../../test/integration/setup";
 import { truncateAll } from "../../../test/integration/db";
 import { seedApiKey, seedOrg } from "../../../test/integration/seed";
-import { seedJobForOrg } from "../../../test/integration/tenant-refs";
+import {
+  seedExtraMember,
+  seedJobForOrg,
+} from "../../../test/integration/tenant-refs";
 import { executableMethodSnapshot } from "../../../test/integration/executable-method";
 import { auditActions, jobRow } from "../../../test/integration/job-cas";
 import { jobsRouter } from "../../routes/jobs";
@@ -599,6 +604,33 @@ describe.each(ENTRY_POINTS)("submit and execute policy [$name]", (entry) => {
     );
   });
 
+  it("REQ-SUB-5a [HIGH RISK]: the audit row keeps what the client claimed as its results under the caller's own key, while the job stores the server-computed ones", async () => {
+    const world = await seedWorld({ status: "IN_PROGRESS" });
+    const claimed = { error: "999", staleMarker: true };
+
+    await expect(
+      entry.run(world, { command: "submit", results: claimed }),
+    ).resolves.toEqual({ ok: true });
+
+    const [audit] = await auditRows(world.jobId);
+    const submittedKey =
+      entry.name === "desktop sync"
+        ? "desktopSubmittedResults"
+        : "clientSubmittedResults";
+    const otherKey =
+      submittedKey === "desktopSubmittedResults"
+        ? "clientSubmittedResults"
+        : "desktopSubmittedResults";
+    expect(audit?.changes).toHaveProperty(submittedKey, claimed);
+    expect(audit?.changes).not.toHaveProperty(otherKey);
+    const job = await jobRow(world.jobId);
+    expect(job.results).not.toHaveProperty("staleMarker");
+    expect(job.results).toHaveProperty("__compiledExecution");
+    expect(audit?.changes).toMatchObject({
+      results: { new: job.results },
+    });
+  });
+
   it("REQ-SUB-5i: a submit records who did it and the fingerprints of the official execution it ran", async () => {
     const world = await seedWorld({ status: "IN_PROGRESS" });
 
@@ -666,6 +698,122 @@ describe("desktop sync: the payload status is not trusted (REQ-SUB-5h, Q20)", ()
 
     expect((await jobRow(world.jobId)).status).toBe("IN_PROGRESS");
   });
+});
+
+describe("desktop sync: a job outside the session's unit scope is out of reach (tenancy)", () => {
+  beforeEach(async () => {
+    await truncateAll();
+    mocks.scope.status = null;
+  });
+
+  async function seedTwoUnits() {
+    const org = await seedOrg({
+      orgId: ORG,
+      userId: TECHNICIAN,
+      role: "admin",
+    });
+    const [other] = await db
+      .insert(organizationUnit)
+      .values({
+        organizationId: ORG,
+        name: "Filial",
+        slug: "filial",
+        status: "ACTIVE",
+        isDefault: false,
+        createdBy: TECHNICIAN,
+      })
+      .returning({ id: organizationUnit.id });
+    if (!other) throw new Error("unit insert failed");
+    // The job lives in the OTHER unit; the pushing technician is assigned only
+    // to the default one.
+    const { jobId } = await seedJobForOrg({
+      orgId: ORG,
+      unitId: other.id,
+      createdBy: TECHNICIAN,
+    });
+    await db
+      .update(calibrationJob)
+      .set({
+        status: "IN_PROGRESS",
+        methodSnapshot: executableMethodSnapshot(),
+      })
+      .where(eq(calibrationJob.id, jobId));
+    await seedExtraMember({
+      orgId: ORG,
+      userId: "user-sub-scoped",
+      role: "technician",
+      unitId: org.unitId,
+      unitRole: "technician",
+    });
+    return { org, jobId };
+  }
+
+  async function pushAs(
+    world: Awaited<ReturnType<typeof seedTwoUnits>>,
+    operation: "save_local_execution" | "submit_local_execution",
+  ) {
+    loginAs({ userId: "user-sub-scoped", organizationId: ORG });
+    const res = await syncRouter.request("/push", {
+      method: "POST",
+      headers: {
+        ...JSON_HEADERS,
+        "x-active-unit-id": String(world.org.unitId),
+      },
+      body: JSON.stringify({
+        deviceId: "device-sub-2",
+        clientBatchId: `batch-${operation}`,
+        baseCursor: null,
+        events: [
+          {
+            eventId: `evt-${operation}`,
+            entityType: "calibration_job",
+            entityId: "local-job-sub-scope",
+            operation,
+            payload: {
+              remoteId: world.jobId,
+              status:
+                operation === "submit_local_execution"
+                  ? "REVIEW"
+                  : "IN_PROGRESS",
+              data: DATA,
+              calibrationLocationSnapshot: LOCATION,
+            },
+            occurredAt: new Date().toISOString(),
+            actorUserId: "user-sub-scoped",
+            organizationId: ORG,
+            unitId: world.org.unitId,
+            idempotencyKey: `idem-${operation}`,
+            localVersion: 0,
+          },
+        ],
+      }),
+    });
+    expect(res.status).toBe(200);
+    const body: {
+      accepted: unknown[];
+      rejected: Array<{ code: string }>;
+    } = await res.json();
+    return body;
+  }
+
+  it.each(["save_local_execution", "submit_local_execution"] as const)(
+    "REQ-SUB-5j [HIGH RISK]: %s for a job in a unit the session cannot reach is rejected as not found and changes nothing",
+    async (operation) => {
+      const world = await seedTwoUnits();
+      const before = await jobRow(world.jobId);
+
+      const body = await pushAs(world, operation);
+
+      expect(body.accepted).toEqual([]);
+      expect(body.rejected).toEqual([
+        expect.objectContaining({ code: "REMOTE_ENTITY_NOT_FOUND" }),
+      ]);
+      await expectUntouched(
+        { ...world, assetId: 0, assetTypeId: 0, rawKey: "" },
+        before,
+      );
+    },
+  );
 });
 
 describe("public API: results and submit run the whole policy (REQ-SUB-5i)", () => {

@@ -184,7 +184,15 @@ export function buildPublicApiV2OpenApiDocument(origin: string) {
       title: "CalibraFácil Public API",
       version: "2.0.0",
       description:
-        "API pública resource-first para integrações e conectores operacionais do CalibraFácil.",
+        "API pública resource-first para integrações e conectores operacionais do CalibraFácil.\n\n" +
+        "## Mudanças\n\n" +
+        "**2026-10-21: `POST /jobs/{id}/results` e `POST /jobs/{id}/submit`** passam a seguir as mesmas regras da aplicação. " +
+        "`results` é calculado pelo servidor a partir de `data` (a resposta inclui `__compiledExecution`) e o valor enviado é ignorado; " +
+        "uma OS `REJECTED` continua `REJECTED` ao salvar resultados; `data` é normalizado (unidade base do ativo, chaves de especificação do ativo removidas); " +
+        "`selectedStandardIds`, `environment`, `calibrationLocation`, `calibrationPhases`, `performedAt`, `backdateReason` e `methodDeviations` passam a ser respeitados; " +
+        "novas recusas 4xx: `performed_at_invalid`, `performed_at_future`, `backdate_reason_required`, `calibration_record_incomplete`, `asset_specification_missing` (400), " +
+        "`official_execution_failed`, `technician_competence_missing` e `standard_*` (422). " +
+        "Detalhes em Integrações > API > Mudanças da API.",
     },
     servers: [
       {
