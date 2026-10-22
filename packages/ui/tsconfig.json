@@ -1,0 +1,17 @@
+{
+  "extends": "@repo/typescript-config/base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "types": ["node"],
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src/**/*", "vitest.setup.ts"],
+  "exclude": ["node_modules", "dist"]
+}

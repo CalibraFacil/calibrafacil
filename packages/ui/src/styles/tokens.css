@@ -1,0 +1,58 @@
+/*
+ * Shared theme tokens and Tailwind source registration for @calibra-facil/ui.
+ *
+ * Import once from each app's stylesheet, after `@import "tailwindcss"`:
+ *
+ *   @import "@calibra-facil/ui/tokens.css";
+ *
+ * Everything here is a CSS variable, so an app re-themes the package by
+ * overriding the variables in its own :root / .dark blocks — nothing in the
+ * components hard-codes a colour.
+ */
+
+/* shadcn's Tailwind layer: data-* variants, accordion keyframes, no-scrollbar. */
+@import "./shadcn.css";
+
+/* Tailwind v4 scans the app's own sources only; the package's classes live in
+   a workspace dependency, so register it (path is relative to this file). */
+@source "../";
+
+/*
+ * Signal tokens: the two tones of the status vocabulary that have no shadcn
+ * token (`ok` and `warning`; `critical` is `destructive`, `info` is `primary`,
+ * `neutral` is `muted`). Defaults are the emerald / amber steps the lab app
+ * already shipped; each value is contrast-tuned per scheme.
+ */
+:root {
+  /* Neutral "ink" the console shadows and blueprint hairlines are mixed from
+     (slate-900); dark mode mixes them from --foreground instead. */
+  --ink: oklch(20.8% 0.042 265.755);
+  --signal-ok: oklch(69.6% 0.17 162.48);
+  --signal-ok-text: oklch(50.8% 0.118 165.612);
+  --signal-ok-icon: oklch(59.6% 0.145 163.225);
+  --signal-ok-dot: oklch(59.6% 0.145 163.225);
+  --signal-warning: oklch(76.9% 0.188 70.08);
+  --signal-warning-text: oklch(55.5% 0.163 48.998);
+  --signal-warning-icon: oklch(66.6% 0.179 58.318);
+  --signal-warning-dot: oklch(66.6% 0.179 58.318);
+}
+
+.dark {
+  --signal-ok-text: oklch(76.5% 0.177 163.223);
+  --signal-ok-icon: oklch(76.5% 0.177 163.223);
+  --signal-ok-dot: oklch(69.6% 0.17 162.48);
+  --signal-warning-text: oklch(82.8% 0.189 84.429);
+  --signal-warning-icon: oklch(82.8% 0.189 84.429);
+  --signal-warning-dot: oklch(76.9% 0.188 70.08);
+}
+
+@theme inline {
+  --color-signal-ok: var(--signal-ok);
+  --color-signal-ok-text: var(--signal-ok-text);
+  --color-signal-ok-icon: var(--signal-ok-icon);
+  --color-signal-ok-dot: var(--signal-ok-dot);
+  --color-signal-warning: var(--signal-warning);
+  --color-signal-warning-text: var(--signal-warning-text);
+  --color-signal-warning-icon: var(--signal-warning-icon);
+  --color-signal-warning-dot: var(--signal-warning-dot);
+}

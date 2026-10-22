@@ -1,0 +1,273 @@
+/**
+ * Instrument-panel primitives — the shared visual language for the metrology
+ * console: certificate review/quality-record screens and the asset registry.
+ *
+ * The aesthetic is a flat "metrology console": layered shadows instead of hard
+ * borders, a subtle blueprint grid, mono tabular numerics for measured values,
+ * and tonal signal tiles that read like instrument indicators. Enter animations
+ * are split into semantic chunks and staggered.
+ */
+import { motion, type Variants } from "motion/react";
+import type { ComponentProps, ReactNode } from "react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { InformationCircleIcon } from "@hugeicons/core-free-icons";
+
+import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip";
+import { cn } from "../lib/utils";
+import { ACTION_BUTTON_CLASS, PANEL_CLASS } from "../lib/panel-styles";
+import { STATUS_TONE, type SignalTone } from "../lib/status-tone";
+
+export { ACTION_BUTTON_CLASS, PANEL_CLASS };
+export type { SignalTone };
+
+type IconType = Parameters<typeof HugeiconsIcon>[0]["icon"];
+
+/** Technical blueprint grid, fading toward the lower-right. */
+const BLUEPRINT_GRID_CLASS =
+  "[background-image:linear-gradient(to_right,color-mix(in_oklab,var(--ink)_5%,transparent)_1px,transparent_1px),linear-gradient(to_bottom,color-mix(in_oklab,var(--ink)_5%,transparent)_1px,transparent_1px)] [background-size:24px_24px] [mask-image:radial-gradient(130%_130%_at_0%_0%,black,transparent_72%)] dark:[background-image:linear-gradient(to_right,color-mix(in_oklab,var(--foreground)_6%,transparent)_1px,transparent_1px),linear-gradient(to_bottom,color-mix(in_oklab,var(--foreground)_6%,transparent)_1px,transparent_1px)]";
+
+export function BlueprintOverlay({ className }: { className?: string }) {
+  return (
+    <div
+      aria-hidden
+      className={cn(
+        "pointer-events-none absolute inset-0",
+        BLUEPRINT_GRID_CLASS,
+        className,
+      )}
+    />
+  );
+}
+
+export function Panel({
+  className,
+  children,
+  ...props
+}: ComponentProps<"section">) {
+  return (
+    <section className={cn(PANEL_CLASS, className)} {...props}>
+      {children}
+    </section>
+  );
+}
+
+export function PanelHeader({
+  title,
+  description,
+  action,
+  className,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  action?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between",
+        className,
+      )}
+    >
+      <div className="min-w-0">
+        <h2 className="text-balance text-base font-semibold sm:text-lg">
+          {title}
+        </h2>
+        {description ? (
+          <p className="mt-1 text-pretty text-sm text-muted-foreground">
+            {description}
+          </p>
+        ) : null}
+      </div>
+      {action ? (
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          {action}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Small info affordance — an "ⓘ" that reveals a regulatory/explanatory note on
+ * hover or focus. Use it to attach the exact ISO/IEC 17025 clause or GUM concept
+ * to a label instead of crowding the UI with prose.
+ */
+export function InfoHint({
+  children,
+  label = "Mais informações",
+  side = "top",
+  className,
+}: {
+  children: ReactNode;
+  label?: string;
+  side?: "top" | "right" | "bottom" | "left";
+  className?: string;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            aria-label={label}
+            className={cn(
+              "relative inline-flex size-5 items-center justify-center rounded-full text-muted-foreground/70 transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 before:absolute before:-inset-2.5 before:content-['']",
+              className,
+            )}
+          />
+        }
+      >
+        <HugeiconsIcon icon={InformationCircleIcon} className="size-3.5" />
+      </TooltipTrigger>
+      <TooltipContent side={side} className="max-w-xs leading-relaxed">
+        {children}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+export function SignalTile({
+  icon,
+  label,
+  value,
+  hint,
+  tone = "neutral",
+  className,
+}: {
+  icon?: IconType;
+  label: ReactNode;
+  value: ReactNode;
+  hint?: ReactNode;
+  tone?: SignalTone;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-xl p-3 sm:p-3.5 shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--ink)_7%,transparent)] dark:shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--foreground)_9%,transparent)]",
+        STATUS_TONE[tone].tile,
+        className,
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+          {label}
+        </span>
+        {icon ? (
+          <HugeiconsIcon
+            icon={icon}
+            className={cn("size-4", STATUS_TONE[tone].icon)}
+          />
+        ) : null}
+      </div>
+      <div className="mt-1.5 flex min-w-0 items-baseline gap-1.5 sm:mt-2">
+        <span
+          className={cn(
+            "shrink-0 font-mono text-xl font-semibold leading-none tabular-nums sm:text-2xl",
+            STATUS_TONE[tone].value,
+          )}
+        >
+          {value}
+        </span>
+        {hint ? (
+          <span className="min-w-0 truncate text-xs text-muted-foreground">
+            {hint}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/** A single cell inside a hairline-separated blueprint info grid. */
+export function BlueprintField({
+  label,
+  children,
+  mono = false,
+  className,
+}: {
+  label: ReactNode;
+  children: ReactNode;
+  mono?: boolean;
+  className?: string;
+}) {
+  return (
+    <div className={cn("bg-background p-3", className)}>
+      <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+        {label}
+      </p>
+      <div className={cn("mt-1 text-sm", mono && "font-mono tabular-nums")}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+export function BlueprintGrid({
+  className,
+  children,
+}: {
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        "grid gap-px overflow-hidden rounded-xl bg-foreground/10",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+// — Enter animation: split + stagger, subtle, spring with bounce 0 —
+
+const GROUP_VARIANTS: Variants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.06, delayChildren: 0.03 } },
+};
+
+const ITEM_VARIANTS: Variants = {
+  hidden: { opacity: 0, y: 8 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { type: "spring", duration: 0.3, bounce: 0 },
+  },
+};
+
+export function StaggerGroup({
+  className,
+  children,
+}: {
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <motion.div
+      variants={GROUP_VARIANTS}
+      initial="hidden"
+      animate="show"
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+export function StaggerItem({
+  className,
+  children,
+}: {
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <motion.div variants={ITEM_VARIANTS} className={cn("min-w-0", className)}>
+      {children}
+    </motion.div>
+  );
+}
