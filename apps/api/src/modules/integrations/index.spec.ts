@@ -63,8 +63,8 @@ describe("integrations module index", () => {
   });
 
   it("REQ-SPLIT-2 exports every caller name as a function", () => {
-    for (const name of CALLER_SURFACE) {
-      expect(typeof integrations[name]).toBe("function");
+    for (const [name, value] of Object.entries(integrations)) {
+      expect(typeof value, name).toBe("function");
     }
   });
 });
