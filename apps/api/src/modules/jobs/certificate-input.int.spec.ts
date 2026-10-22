@@ -433,6 +433,72 @@ describe("REQ-CIN-1: approval freezes the certificate input", () => {
     expect(await frozenRows(jobId)).toHaveLength(0);
   });
 
+  it("REQ-CIN-1 [HIGH RISK] the images are read from storage BEFORE the approval transaction: the job row is not locked while storage is called", async () => {
+    const fixture = await seedFixture();
+    const jobId = await seedReviewJob(fixture);
+    const lockedDuringRead: boolean[] = [];
+    mocks.readImage.mockImplementation(async (key: string) => {
+      // The approval's own transaction holds FOR UPDATE on the job: FOR SHARE NOWAIT
+      // fails (55P03) if a storage read were made while it is open.
+      try {
+        await db.transaction((tx) =>
+          tx.execute(
+            sql`select id from calibration_job where id = ${jobId} for share nowait`,
+          ),
+        );
+        lockedDuringRead.push(false);
+      } catch {
+        lockedDuringRead.push(true);
+      }
+      return key === LOGO_KEY ? LOGO_BYTES : SIGNATURE_BYTES;
+    });
+
+    expect((await approve(jobId)).status).toBe(200);
+
+    // the logo and the signature were both read
+    expect(lockedDuringRead).toEqual([false, false]);
+  });
+
+  it("REQ-CIN-1 [HIGH RISK] a logo replaced between the storage read and the lock is a retryable conflict: nothing frozen, the retry freezes the new one", async () => {
+    const fixture = await seedFixture();
+    const jobId = await seedReviewJob(fixture);
+    const newKey = organizationLogoKey({
+      org: { id: ORG, slug: ORG },
+      timestamp: 1_770_000_000_000,
+      uniqueId: "logo-2",
+    }).key;
+    const newBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 4, 4, 4]);
+    let replaced = false;
+    mocks.readImage.mockImplementation(async (key: string) => {
+      if (key === LOGO_KEY && !replaced) {
+        replaced = true;
+        // the lab uploads another logo while the approval is being prepared
+        await db
+          .update(organization)
+          .set({
+            logo: buildOrganizationLogoUrl(newKey, "https://api.example.com"),
+          })
+          .where(eq(organization.id, ORG));
+        return LOGO_BYTES;
+      }
+      if (key === newKey) return newBytes;
+      return key === LOGO_KEY ? LOGO_BYTES : SIGNATURE_BYTES;
+    });
+
+    const conflict = await approve(jobId);
+
+    expect(conflict.status).toBe(409);
+    expect(await jobStatus(jobId)).toBe("REVIEW");
+    expect(await frozenRows(jobId)).toHaveLength(0);
+    expect(await approveAuditRows(jobId)).toHaveLength(0);
+
+    expect((await approve(jobId)).status).toBe(200);
+    const [row] = await frozenRows(jobId);
+    expect(field(field(field(row?.input, "job"), "lab"), "logo")).toBe(
+      dataUrl(newBytes, "image/png"),
+    );
+  });
+
   it("REQ-CIN-1 an image that no object backs is frozen as absent (logo kept as stored, no signature), like the render did before", async () => {
     const fixture = await seedFixture();
     const jobId = await seedReviewJob(fixture);

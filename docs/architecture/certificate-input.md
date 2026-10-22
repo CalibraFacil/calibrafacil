@@ -25,9 +25,14 @@ migration 0118). The document type is `CertificateInput`
   deviations, the amendment link, and the service-order receipt data
 
 The logo and the signature are embedded as `data:` URIs: the logo object is
-deleted when the lab uploads another one. A storage failure while reading them
-aborts the approval (it is retried), it does not freeze a certificate without
-the image.
+deleted when the lab uploads another one. They are read from object storage
+BEFORE the approval opens its transaction (no network I/O while the job row is
+locked), each read under a 10 s timeout. A storage failure or timeout aborts the
+approval (retryable), and so does a missing storage configuration in production
+when an image key exists; only a key that no object backs is frozen as absent
+(and, in development and test, an unconfigured storage). If the lab or the
+approver changed the image between the read and the lock, the transaction
+refuses it and the approval answers `concurrent_approval` (409): retry.
 
 `certificate_input.sha256` is the SHA-256 of the canonical JSON of the document
 (keys sorted, since `jsonb` does not keep their order). The approve audit event
@@ -49,12 +54,17 @@ document and the same render data on a seeded job.
 ## The worker
 
 `processJob` renders from the frozen input when there is one and logs
-`Rendering from the frozen certificate input (sha256 …)`. A job with no frozen
-input renders through the legacy live read, logs `LEGACY render path`, and the
-issued snapshot's `render_metadata.certificateInput.source` says `legacy_live`
-(`frozen` otherwise, with the input's `sha256`). A stored document whose hash no
-longer matches is refused (permanent failure): it is never replaced by a live
-read.
+`Rendering from the frozen certificate input (sha256 …)`, for the first issuance
+and for the SUPERSEDED watermark re-render alike. The legacy live read is used
+only when the job's latest `approve` audit event records no
+`certificateInputSha256` (an approval made before migration 0120): it logs
+`LEGACY render path`, and the issued snapshot's
+`render_metadata.certificateInput.source` says `legacy_live` (`frozen`
+otherwise, with the input's `sha256`). An approval that DID record a hash whose
+`certificate_input` row is missing fails permanently
+(`certificate_input missing for a post-0120 approval`), like a stored document
+whose hash no longer matches its content or the hash the approval recorded: it
+is never replaced by a live read.
 
 `render_metadata.certificateInput.layoutDataSha256` is the hash of exactly what
 the template was handed. The same frozen input and layout version give the same

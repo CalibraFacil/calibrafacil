@@ -150,11 +150,23 @@ describe("REQ-CIN-4: the data handed to the template depends on the frozen input
   });
 });
 
-function clientReturning(rows: Record<string, unknown>[]): {
+/**
+ * A client answering both reads: the `certificate_input` row(s), and the sha256
+ * the latest approve audit row recorded (`null`: an approval made before 0120,
+ * or no approval event at all).
+ */
+function clientReturning(
+  rows: Record<string, unknown>[],
+  recordedSha256: string | null = null,
+): {
   client: RowQuery;
   query: ReturnType<typeof vi.fn>;
 } {
-  const query = vi.fn(async () => ({ rows }));
+  const query = vi.fn(async (text: string) =>
+    text.includes("job_audit_log")
+      ? { rows: recordedSha256 ? [{ sha256: recordedSha256 }] : [] }
+      : { rows },
+  );
   return { client: { query }, query };
 }
 
@@ -236,6 +248,53 @@ describe("REQ-CIN-2: which source a certificate is rendered from", () => {
       );
       expect(legacy, label).not.toHaveBeenCalled();
     }
+  });
+
+  it("REQ-CIN-2 [HIGH RISK] an approval that recorded a frozen input whose row is missing fails: it is never rendered through the live path", async () => {
+    const input = frozen();
+    const { client } = clientReturning([], certificateInputSha256(input));
+    const legacy = vi.fn(async () => job());
+
+    const source = await loadCertificateRenderSource(client, params, legacy);
+
+    expect(source.status).toBe("corrupt");
+    expect(source.status === "corrupt" ? source.reason : "").toMatch(
+      /certificate_input missing for a post-0120 approval/,
+    );
+    expect(legacy).not.toHaveBeenCalled();
+  });
+
+  it("REQ-CIN-2 [HIGH RISK] a frozen input whose hash differs from the one the approval recorded is refused, even when it is self-consistent", async () => {
+    const input = frozen();
+    const replaced: CertificateInput = {
+      ...input,
+      job: { ...input.job, customer: { name: "Outro", address: null } },
+    };
+    const { client } = clientReturning(
+      [storedRow(replaced)],
+      certificateInputSha256(input),
+    );
+    const legacy = vi.fn(async () => job());
+
+    const source = await loadCertificateRenderSource(client, params, legacy);
+
+    expect(source.status).toBe("corrupt");
+    expect(source.status === "corrupt" ? source.reason : "").toMatch(
+      /differs from the one the approval recorded/,
+    );
+    expect(legacy).not.toHaveBeenCalled();
+  });
+
+  it("REQ-CIN-2 a frozen input that matches the hash the approval recorded is used", async () => {
+    const input = frozen();
+    const { client } = clientReturning(
+      [storedRow(input)],
+      certificateInputSha256(input),
+    );
+
+    const source = await loadCertificateRenderSource(client, params, vi.fn());
+
+    expect(source.status).toBe("ok");
   });
 
   it("REQ-CIN-2 a job without an organization has no frozen input to look up and falls to the legacy read", async () => {

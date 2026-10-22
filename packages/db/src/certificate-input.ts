@@ -104,15 +104,81 @@ function certificateView<T>(snapshot: unknown): T {
   return copy;
 }
 
-/** A logo stored in the bucket becomes a data URI; anything else is kept as stored. */
-async function resolveLogo(
-  logo: string | null,
+/** An image object read BEFORE the approval transaction: the key it was read under, and its bytes (null: no object). */
+export type PrefetchedImage = { key: string; bytes: Uint8Array | null };
+
+/** The images a certificate embeds, read ahead of the approval transaction. */
+export type PrefetchedImages = {
+  logo: PrefetchedImage | null;
+  signature: PrefetchedImage | null;
+};
+
+/**
+ * The lab's logo or the approver's signature is not the one that was read before
+ * the transaction (the lab uploaded another logo in between). Nothing was
+ * written; the approval is retried.
+ */
+export class CertificateImagesChangedError extends Error {
+  constructor(readonly slot: "logo" | "signature") {
+    super(`The certificate ${slot} changed while the approval was prepared`);
+    this.name = "CertificateImagesChangedError";
+  }
+}
+
+/**
+ * Reads the images a certificate embeds BEFORE the approval opens its
+ * transaction and takes the job lock: object storage is network I/O and must
+ * not run while a row is locked. The keys are the lab's logo and the approver's
+ * drawn signature, resolved from the same rows the freeze re-reads under the
+ * lock (`freezeCertificateInput` refuses the images if those keys moved).
+ */
+export async function prefetchCertificateImages(
+  executor: Pick<typeof db, "select">,
+  params: { organizationId: string; approverId: string },
   readImage: CertificateImageReader,
-): Promise<string | null> {
-  const key = getLogoKeyFromUrl(logo);
-  if (!key) return logo;
-  const bytes = await readImage(key);
-  return bytes ? imageDataUrl(bytes, null) : logo;
+): Promise<PrefetchedImages> {
+  const [lab] = await executor
+    .select({ logo: organization.logo })
+    .from(organization)
+    .where(eq(organization.id, params.organizationId))
+    .limit(1);
+  const [signature] = await executor
+    .select({ r2Key: memberVisualSignature.r2Key })
+    .from(memberVisualSignature)
+    .innerJoin(member, eq(memberVisualSignature.memberId, member.id))
+    .where(
+      and(
+        eq(member.userId, params.approverId),
+        eq(member.organizationId, params.organizationId),
+        eq(memberVisualSignature.organizationId, params.organizationId),
+      ),
+    )
+    .limit(1);
+
+  const logoKey = getLogoKeyFromUrl(lab?.logo ?? null);
+  const signatureKey = signature?.r2Key ?? null;
+  const [logoBytes, signatureBytes] = await Promise.all([
+    logoKey ? readImage(logoKey) : null,
+    signatureKey ? readImage(signatureKey) : null,
+  ]);
+  return {
+    logo: logoKey ? { key: logoKey, bytes: logoBytes } : null,
+    signature: signatureKey
+      ? { key: signatureKey, bytes: signatureBytes }
+      : null,
+  };
+}
+
+/** The bytes prefetched for `key`; refuses a key other than the one that was read. */
+function prefetchedBytes(
+  slot: "logo" | "signature",
+  prefetched: PrefetchedImage | null,
+  key: string | null,
+): Uint8Array | null {
+  if ((prefetched?.key ?? null) !== key) {
+    throw new CertificateImagesChangedError(slot);
+  }
+  return prefetched?.bytes ?? null;
 }
 
 /**
@@ -127,7 +193,7 @@ async function resolveLogo(
 export async function loadCertificateJobSource(
   tx: Transaction,
   job: JobRow,
-  readImage: CertificateImageReader,
+  images: PrefetchedImages,
 ): Promise<CertificateJobSource> {
   const organizationId = job.organizationId;
 
@@ -241,7 +307,14 @@ export async function loadCertificateJobSource(
     )
     .limit(1);
 
-  const signatureBytes = signature ? await readImage(signature.r2Key) : null;
+  // The images were read before the transaction: only the keys are checked here.
+  const logoKey = getLogoKeyFromUrl(lab.logo);
+  const logoBytes = prefetchedBytes("logo", images.logo, logoKey);
+  const signatureBytes = prefetchedBytes(
+    "signature",
+    images.signature,
+    signature?.r2Key ?? null,
+  );
 
   return {
     jobId: job.jobId,
@@ -287,7 +360,8 @@ export async function loadCertificateJobSource(
       phone: lab.phone,
       email: lab.email,
       website: lab.website,
-      logo: await resolveLogo(lab.logo, readImage),
+      // A logo stored in the bucket becomes a data URI; anything else is kept as stored.
+      logo: logoKey && logoBytes ? imageDataUrl(logoBytes, null) : lab.logo,
       technicalManagerName: lab.technicalManagerName,
       technicalManagerTitle: lab.technicalManagerTitle,
     },
@@ -327,9 +401,9 @@ export async function loadCertificateJobSource(
 export async function freezeCertificateInput(
   tx: Transaction,
   job: JobRow,
-  readImage: CertificateImageReader,
+  images: PrefetchedImages,
 ): Promise<{ sha256: string; input: CertificateInput }> {
-  const source = await loadCertificateJobSource(tx, job, readImage);
+  const source = await loadCertificateJobSource(tx, job, images);
   const input = buildCertificateInput(assembleCertificateJobData(source));
   const sha256 = certificateInputSha256(input);
 

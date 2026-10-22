@@ -6,7 +6,11 @@ import {
   certificateInputSha256,
   isCertificateInput,
 } from "@calibra-facil/certificate-data";
-import { freezeCertificateInput } from "@calibra-facil/db/certificate-input";
+import {
+  freezeCertificateInput,
+  prefetchCertificateImages,
+} from "@calibra-facil/db/certificate-input";
+import { appendJobEvent } from "@calibra-facil/db/job-events";
 import {
   calibrationJob,
   certificateInput,
@@ -26,6 +30,7 @@ import { createHash } from "node:crypto";
 import { db, truncateAll } from "../test/integration/db";
 import { makeTestEnv } from "../test/integration/env";
 import { seedOrg } from "../test/integration/seed";
+import { setJobStatus } from "../test/integration/job-fixtures";
 import { seedIssuableJob } from "../test/integration/seed-certificate";
 import { seedServiceOrder } from "../test/integration/seed-service-order";
 import { buildCertificateLayoutData } from "./certificate/layout-data";
@@ -138,8 +143,12 @@ async function snapshots(jobId: number) {
 
 /** An approved job whose approval froze its input, with the lab accredited. */
 async function seedApprovedJob(
-  options: { freeze: boolean } = { freeze: true },
+  options: {
+    freeze?: boolean;
+    status?: Parameters<typeof seedIssuableJob>[0]["status"];
+  } = {},
 ) {
+  const freeze = options.freeze ?? true;
   const org = await seedOrg({ orgId: "org-1", userId: USER_ID });
   const job = await seedIssuableJob({
     organizationId: org.orgId,
@@ -172,10 +181,16 @@ async function seedApprovedJob(
     .update(user)
     .set({ name: "Ana Aprovadora" })
     .where(eq(user.id, USER_ID));
-  if (options.freeze) await freezeJob(job.jobId, org.orgId);
+  if (freeze) await freezeJob(job.jobId, org.orgId);
+  // Released after the fact: a superseded job is frozen content, so it is moved last.
+  if (options.status) await setJobStatus(job.jobId, options.status);
   return { org, job };
 }
 
+/**
+ * What the approval command does for a job: read the images, freeze the input
+ * and record its hash on the approve audit event.
+ */
 async function freezeJob(jobId: number, organizationId: string) {
   const [row] = await db
     .select()
@@ -187,7 +202,36 @@ async function freezeJob(jobId: number, organizationId: string) {
       ),
     );
   if (!row) throw new Error("job not seeded");
-  return db.transaction((tx) => freezeCertificateInput(tx, row, readTestImage));
+  const images = await prefetchCertificateImages(
+    db,
+    { organizationId, approverId: USER_ID },
+    readTestImage,
+  );
+  const frozen = await db.transaction((tx) =>
+    freezeCertificateInput(tx, row, images),
+  );
+  await recordApproval(jobId, organizationId, frozen.sha256);
+  return frozen;
+}
+
+/** The approve audit event: with the frozen input's hash (since 0120), or without. */
+async function recordApproval(
+  jobId: number,
+  organizationId: string,
+  certificateInputSha256: string | null,
+) {
+  await appendJobEvent(db, {
+    action: "approve",
+    organizationId,
+    jobId,
+    actor: { kind: "user", userId: USER_ID },
+    changes: {
+      status: { old: "REVIEW", new: "GENERATING_PDF" },
+      ...(certificateInputSha256 ? { certificateInputSha256 } : {}),
+    },
+    ipAddress: null,
+    reason: "Aprovado - Gerando PDF",
+  });
 }
 
 /** The lab, the signatory, the customer and the asset change after the approval. */
@@ -357,6 +401,166 @@ describe("REQ-CIN-2: the worker renders from the frozen certificate input", () =
     // recorded rather than stranded in GENERATING_PDF.
     expect(await jobStatus(job.jobId)).toBe("REJECTED");
     expect(await snapshots(job.jobId)).toHaveLength(0);
+  });
+});
+
+describe("REQ-CIN-2: a post-0120 approval is never rendered through the live path", () => {
+  it("REQ-CIN-2 [HIGH RISK] an approval that recorded a frozen input whose row is missing fails permanently, with its reason", async () => {
+    const rendered: string[] = [];
+    stubGotenberg(rendered);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { job } = await seedApprovedJob();
+    await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select set_config('calibra.allow_audit_rewrite', 'on', true)`,
+      );
+      await tx.execute(
+        sql`DELETE FROM certificate_input WHERE job_id = ${job.jobId}`,
+      );
+    });
+
+    await expect(
+      processBackgroundJob(makeEnv(), {
+        type: "CERTIFICATE",
+        jobId: job.jobId,
+        userId: USER_ID,
+      }),
+    ).rejects.toThrow(/certificate_input missing for a post-0120 approval/);
+
+    expect(rendered).toHaveLength(0);
+    expect(await jobStatus(job.jobId)).toBe("REJECTED");
+    expect(await snapshots(job.jobId)).toHaveLength(0);
+  });
+
+  it("REQ-CIN-2 [HIGH RISK] a frozen input replaced by another self-consistent document is refused: its hash is not the one the approval recorded", async () => {
+    const rendered: string[] = [];
+    stubGotenberg(rendered);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { job } = await seedApprovedJob();
+    const [row] = await db
+      .select()
+      .from(certificateInput)
+      .where(eq(certificateInput.jobId, job.jobId));
+    const original = row?.input;
+    if (!isCertificateInput(original)) throw new Error("no frozen input");
+    const replaced = {
+      ...original,
+      job: {
+        ...original.job,
+        lab: { ...original.job.lab, name: "Laboratório Substituído" },
+      },
+    };
+    await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select set_config('calibra.allow_audit_rewrite', 'on', true)`,
+      );
+      await tx
+        .update(certificateInput)
+        .set({ input: replaced, sha256: certificateInputSha256(replaced) })
+        .where(eq(certificateInput.jobId, job.jobId));
+    });
+
+    await expect(
+      processBackgroundJob(makeEnv(), {
+        type: "CERTIFICATE",
+        jobId: job.jobId,
+        userId: USER_ID,
+      }),
+    ).rejects.toThrow(/differs from the one the approval recorded/);
+
+    expect(rendered).toHaveLength(0);
+    expect(await snapshots(job.jobId)).toHaveLength(0);
+  });
+
+  it("REQ-CIN-2 an approval made before 0120 (its audit row records no hash) still renders through the legacy path", async () => {
+    const rendered: string[] = [];
+    stubGotenberg(rendered);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { org, job } = await seedApprovedJob({ freeze: false });
+    await recordApproval(job.jobId, org.orgId, null);
+
+    await processBackgroundJob(makeEnv(), {
+      type: "CERTIFICATE",
+      jobId: job.jobId,
+      userId: USER_ID,
+    });
+
+    expect(await jobStatus(job.jobId)).toBe("APPROVED");
+    const [issued] = await snapshots(job.jobId);
+    expect(
+      field(field(issued?.renderMetadata, "certificateInput"), "source"),
+    ).toBe("legacy_live");
+  });
+
+  it("REQ-CIN-2 [HIGH RISK] the SUPERSEDED watermark re-render is also rendered from the frozen input, hash checked, whatever changed since", async () => {
+    const rendered: string[] = [];
+    stubGotenberg(rendered);
+    const { org, job } = await seedApprovedJob({ status: "SUPERSEDED" });
+    const [frozen] = await db
+      .select()
+      .from(certificateInput)
+      .where(eq(certificateInput.jobId, job.jobId));
+    await changeEverythingAfterApproval(org.orgId, job.customerId);
+
+    await processBackgroundJob(makeEnv(), {
+      type: "CERTIFICATE",
+      jobId: job.jobId,
+      userId: USER_ID,
+    });
+
+    // still SUPERSEDED, refreshed (not re-issued)
+    expect(await jobStatus(job.jobId)).toBe("SUPERSEDED");
+    const actions = (
+      toRows(
+        await db.execute(
+          sql`SELECT action FROM job_audit_log WHERE job_id = ${job.jobId}`,
+        ),
+      ) ?? []
+    ).map((row) => String(field(row, "action")));
+    expect(actions).toContain("certificate_watermarked");
+
+    expect(rendered).toHaveLength(1);
+    const html = rendered[0] ?? "";
+    expect(html).toContain("Laboratório Aprovado");
+    expect(html).toContain("Cliente Aprovado SA");
+    expect(html).toContain("Ana Aprovadora");
+    expect(html).not.toContain("Laboratório Renomeado");
+    expect(html).not.toContain("Cliente Renomeado Ltda");
+    expect(html).not.toContain("Bruno Substituto");
+
+    const [issued] = await snapshots(job.jobId);
+    const marker = field(issued?.renderMetadata, "certificateInput");
+    expect(field(marker, "source")).toBe("frozen");
+    expect(field(marker, "sha256")).toBe(frozen?.sha256);
+  });
+
+  it("REQ-CIN-2 [HIGH RISK] the SUPERSEDED watermark re-render refuses a frozen input that fails its hash check", async () => {
+    const rendered: string[] = [];
+    stubGotenberg(rendered);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { job } = await seedApprovedJob({ status: "SUPERSEDED" });
+    await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select set_config('calibra.allow_audit_rewrite', 'on', true)`,
+      );
+      await tx.execute(
+        sql`UPDATE certificate_input
+            SET input = jsonb_set(input, '{job,lab,name}', '"Adulterado"')
+            WHERE job_id = ${job.jobId}`,
+      );
+    });
+
+    await expect(
+      processBackgroundJob(makeEnv(), {
+        type: "CERTIFICATE",
+        jobId: job.jobId,
+        userId: USER_ID,
+      }),
+    ).rejects.toThrow(/sha256 mismatch/);
+
+    expect(rendered).toHaveLength(0);
+    expect(await snapshots(job.jobId)).toHaveLength(0);
+    expect(await jobStatus(job.jobId)).toBe("SUPERSEDED");
   });
 });
 

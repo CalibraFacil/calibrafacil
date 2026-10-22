@@ -1,9 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
   const env: { value: Record<string, string> | null } = { value: null };
-  return { env, downloadFromR2: vi.fn() };
+  const runtime = { isProduction: false };
+  return { env, runtime, downloadFromR2: vi.fn() };
 });
+
+vi.mock("@calibra-facil/config", () => ({
+  readRuntimeConfig: () => ({ isProduction: mocks.runtime.isProduction }),
+}));
 
 vi.mock("./storage", () => ({
   r2EnvFromStorageConfig: () => mocks.env.value,
@@ -15,7 +20,11 @@ vi.mock("./storage", () => ({
   downloadFromR2: mocks.downloadFromR2,
 }));
 
-import { readCertificateImage } from "./certificate-input-images";
+import {
+  CERTIFICATE_IMAGE_READ_TIMEOUT_MS,
+  CertificateImageStorageError,
+  readCertificateImage,
+} from "./certificate-input-images";
 
 const STORAGE = {
   R2_ACCOUNT_ID: "a",
@@ -32,7 +41,12 @@ function noSuchKey() {
   return error;
 }
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 beforeEach(() => {
+  mocks.runtime.isProduction = false;
   mocks.env.value = STORAGE;
   mocks.downloadFromR2.mockReset();
 });
@@ -79,10 +93,44 @@ describe("REQ-CIN-1: reading the images a certificate embeds", () => {
     );
   });
 
-  it("REQ-CIN-1 without configured storage nothing is read (a development setup without a bucket)", async () => {
+  it("REQ-CIN-1 without configured storage nothing is read in development and test (no bucket on a laptop)", async () => {
     mocks.env.value = null;
+    mocks.runtime.isProduction = false;
 
     await expect(readCertificateImage("org/logo")).resolves.toBeNull();
     expect(mocks.downloadFromR2).not.toHaveBeenCalled();
+  });
+
+  it("REQ-CIN-1 [HIGH RISK] without configured storage in production an image that exists cannot be read: the approval fails instead of freezing the certificate without it", async () => {
+    mocks.env.value = null;
+    mocks.runtime.isProduction = true;
+
+    await expect(readCertificateImage("org/logo")).rejects.toBeInstanceOf(
+      CertificateImageStorageError,
+    );
+    expect(mocks.downloadFromR2).not.toHaveBeenCalled();
+  });
+
+  it("REQ-CIN-1 [HIGH RISK] a stalled storage read gives up after the timeout and fails the approval instead of hanging it", async () => {
+    vi.useFakeTimers();
+    mocks.downloadFromR2.mockReturnValue(new Promise<never>(() => undefined));
+
+    const read = readCertificateImage("org/logo");
+    const outcome = expect(read).rejects.toThrow(/took longer than/);
+    await vi.advanceTimersByTimeAsync(CERTIFICATE_IMAGE_READ_TIMEOUT_MS + 1);
+
+    await outcome;
+    await expect(read).rejects.toBeInstanceOf(CertificateImageStorageError);
+    // one stalled call: the other bucket is not tried after a timeout
+    expect(mocks.downloadFromR2).toHaveBeenCalledTimes(1);
+  });
+
+  it("REQ-CIN-1 a read that completes in time does not leave its timer running", async () => {
+    vi.useFakeTimers();
+    mocks.downloadFromR2.mockResolvedValueOnce(BYTES);
+
+    await expect(readCertificateImage("org/logo")).resolves.toBe(BYTES);
+
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

@@ -19,6 +19,8 @@ const {
   mockLockJob,
   mockFreezeInput,
   mockDiscardInput,
+  mockPrefetchImages,
+  ImagesChangedError,
 } = vi.hoisted(() => {
   const state: {
     jobRows: unknown[];
@@ -58,6 +60,9 @@ const {
       input: {},
     })),
     mockDiscardInput: vi.fn(async () => undefined),
+    // The images are read from object storage BEFORE the transaction.
+    mockPrefetchImages: vi.fn(async () => ({ logo: null, signature: null })),
+    ImagesChangedError: class ImagesChangedError extends Error {},
     // Issuance is disabled in production while the certificate layout is
     // redesigned (#865), so approveJob can never reach "approved" for real.
     // Default the mock to available so the approval-effect assertions below
@@ -132,6 +137,8 @@ vi.mock("@calibra-facil/db/certificate-input", () => ({
   lockJobForApproval: mockLockJob,
   freezeCertificateInput: mockFreezeInput,
   discardUnreleasedCertificateInput: mockDiscardInput,
+  prefetchCertificateImages: mockPrefetchImages,
+  CertificateImagesChangedError: ImagesChangedError,
 }));
 vi.mock("../../lib/certificate-input-images", () => ({
   readCertificateImage: vi.fn(async () => null),
@@ -200,6 +207,7 @@ beforeEach(() => {
   mockFindServiceOrders.mockResolvedValue([]);
   mockLockJob.mockResolvedValue(true);
   mockFreezeInput.mockResolvedValue({ sha256: "f".repeat(64), input: {} });
+  mockPrefetchImages.mockResolvedValue({ logo: null, signature: null });
 });
 
 describe("approveJob gates", () => {
@@ -469,6 +477,10 @@ describe("approveJob freezes the certificate input (REQ-CIN-1)", () => {
     });
     expect(mockFreezeInput).toHaveBeenCalledTimes(1);
     expect(mockFreezeInput.mock.calls[0]?.[1]).toBe(written);
+    // frozen with the images that were read before the transaction
+    expect(mockFreezeInput.mock.calls[0]?.[2]).toBe(
+      await mockPrefetchImages.mock.results[0]?.value,
+    );
     expect(state.insertCalls[0]).toMatchObject({
       action: "approve",
       changes: { certificateInputSha256: "f".repeat(64) },
@@ -498,5 +510,47 @@ describe("approveJob freezes the certificate input (REQ-CIN-1)", () => {
 
     expect(state.insertCalls).toHaveLength(0);
     expect(mockEnqueueBackgroundJob).not.toHaveBeenCalled();
+  });
+
+  it("REQ-CIN-1 [HIGH RISK]: the images are read from storage before the transaction takes the job lock, for this organization and approver", async () => {
+    state.jobRows = [reviewJob()];
+    state.updateReturning = [reviewJob({ status: "GENERATING_PDF" })];
+
+    await callApprove();
+
+    expect(mockPrefetchImages).toHaveBeenCalledTimes(1);
+    expect(mockPrefetchImages.mock.calls[0]?.[1]).toEqual({
+      organizationId: "org-1",
+      approverId: "approver-1",
+    });
+    expect(mockPrefetchImages.mock.invocationCallOrder[0]).toBeLessThan(
+      mockLockJob.mock.invocationCallOrder[0] ?? 0,
+    );
+  });
+
+  it("REQ-CIN-1: a storage failure while reading the images aborts before anything is written or locked", async () => {
+    state.jobRows = [reviewJob()];
+    state.updateReturning = [reviewJob({ status: "GENERATING_PDF" })];
+    mockPrefetchImages.mockRejectedValue(new Error("storage down"));
+
+    await expect(callApprove()).rejects.toThrow("storage down");
+
+    expect(mockLockJob).not.toHaveBeenCalled();
+    expect(state.updateCalls).toHaveLength(0);
+    expect(state.insertCalls).toHaveLength(0);
+    expect(mockEnqueueBackgroundJob).not.toHaveBeenCalled();
+  });
+
+  it("REQ-CIN-1 [HIGH RISK]: images that no longer match the rows under the lock (the lab changed its logo) are a retryable conflict, nothing enqueued", async () => {
+    state.jobRows = [reviewJob()];
+    state.updateReturning = [reviewJob({ status: "GENERATING_PDF" })];
+    mockFreezeInput.mockRejectedValue(new ImagesChangedError("logo"));
+
+    await expect(callApprove()).resolves.toEqual({
+      status: "concurrent_approval",
+    });
+
+    expect(mockEnqueueBackgroundJob).not.toHaveBeenCalled();
+    expect(mockNotifyJobApproved).not.toHaveBeenCalled();
   });
 });

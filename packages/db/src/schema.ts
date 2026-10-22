@@ -893,7 +893,7 @@ export const issuedCertificateSnapshot = pgTable(
  * calibration_job: the document is large (it embeds the logo and the signature
  * image as data URIs, plus the execution data and results) and calibration_job
  * is read whole (`select()`) on most paths. It is immutable once the job is
- * released (trigger `certificate_input_immutable_guard`, migration 0119): the
+ * released (trigger `certificate_input_immutable_guard`, migration 0120): the
  * only way out is the approval being reverted to REVIEW.
  *
  * `jobId` is RESTRICT, like the issued certificate snapshot: evidence is never
