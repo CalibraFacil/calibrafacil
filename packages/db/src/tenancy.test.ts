@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import * as prettier from "prettier";
 import { describe, expect, it } from "vitest";
 import {
+  CREATED_AFTER_0118,
   GLOBAL_TABLES,
   ORGANIZATION_BACKFILL,
   TENANT_COLUMNS,
@@ -262,14 +263,18 @@ describe("REQ-ORG-2: organization_id is NOT NULL, RESTRICT, indexed", () => {
         ? { when: Number(entry.when), tag: String(entry.tag) }
         : { when: Number.NaN, tag: "" },
     );
+    // Later migrations (0119, 0120...) follow it: it stays journaled, and what matters
+    // is that no entry is older than the one before it.
     const index = rows.findIndex(
       (row) => row.tag === "0118_organization_id_everywhere",
     );
     expect(index).toBeGreaterThan(0);
     // drizzle applies a migration only when its `when` is newer than the last
     // applied one: the new entry must be larger than every earlier one.
-    const earlier = rows.slice(0, index).map((row) => row.when);
-    expect(rows[index]?.when).toBeGreaterThan(Math.max(...earlier));
+    for (let position = index; position < rows.length; position += 1) {
+      const earlier = rows.slice(0, position).map((row) => row.when);
+      expect(rows[position]?.when).toBeGreaterThan(Math.max(...earlier));
+    }
   });
 });
 
@@ -326,12 +331,16 @@ describe("REQ-ORG-3: composite (organization_id, parent_id) keys", () => {
         ),
       ),
     ];
-    const fromSchema = listTenancy().flatMap((table) =>
-      table.compositeKeys.map(
-        (key) =>
-          `${key.name}:${key.table}.${key.column}>${key.parent}.${key.parentOrgColumn}:${key.onDelete.toUpperCase()}`,
-      ),
-    );
+    // Tables created by later migrations carry their own composite keys in
+    // their own migration (0120 certificate_input).
+    const fromSchema = listTenancy()
+      .filter((table) => !CREATED_AFTER_0118.includes(table.name))
+      .flatMap((table) =>
+        table.compositeKeys.map(
+          (key) =>
+            `${key.name}:${key.table}.${key.column}>${key.parent}.${key.parentOrgColumn}:${key.onDelete.toUpperCase()}`,
+        ),
+      );
     expect(composites.toSorted()).toEqual(fromSchema.toSorted());
     expect(composites.length).toBeGreaterThan(20);
 

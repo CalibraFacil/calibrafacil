@@ -156,6 +156,13 @@ export type JobApprovedChanges = {
   };
   scopeComplianceStatus?: Change;
   scopeOverrideJustification?: Change;
+  /**
+   * SHA-256 (hex) of the frozen certificate input written in the same
+   * transaction (`certificate_input.sha256`): what the certificate will be
+   * rendered from. Absent on approvals recorded before migration 0120, whose
+   * certificates render through the legacy live path.
+   */
+  certificateInputSha256?: string;
 };
 
 /** Whether the issued PDF was signed, and by whom (never the key material). */
