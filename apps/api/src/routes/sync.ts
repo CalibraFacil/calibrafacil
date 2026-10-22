@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { createHash } from "node:crypto";
 import {
   syncBootstrapResponseSchema,
   syncAckRequestSchema,
@@ -39,7 +38,6 @@ import {
   environmentalLimits,
   type EnvironmentalSnapshot,
   member,
-  organization,
   organizationEventLog,
   massCompositionProfile,
   referenceStandard,
@@ -79,7 +77,6 @@ import {
   inArray,
   isNull,
   like,
-  ne,
   not,
   sql,
 } from "drizzle-orm";
@@ -156,6 +153,11 @@ import {
   replaceExecutionItems,
   replaceQuoteItems,
 } from "../lib/service-order-workflow";
+import {
+  desktopCustomerOrganizationMetadata,
+  desktopCustomerSlug,
+  findOrganizationCreatedForEvent,
+} from "../modules/sync/desktop-customer-org";
 import { createClientOrganizationAsServiceOwner } from "../lib/portal-service-account";
 import {
   loadCustomerActiveCommercialAgreement,
@@ -223,6 +225,9 @@ export function stripDesktopNullEntries(
 function getMemberData(c: { get: (key: "member") => MemberData }) {
   return c.get("member");
 }
+
+// Re-exported for spec coverage; not part of the route surface.
+export { desktopCustomerSlug };
 
 export const syncRouter = new Hono<{
   Variables: AuthVariables;
@@ -4218,108 +4223,6 @@ function getJobStatus(row: Record<string, unknown>, key: string) {
 
 function parseSyncDate(value: string | null | undefined) {
   return value ? new Date(value) : null;
-}
-
-/**
- * The slug of the client organization a `create_local_customer` event creates:
- * the customer's name (30 characters at most) plus the SHA-256 of the
- * laboratory and the event id, 128 bits of it, so the same event always finds
- * the organization it created before (a retry after a rolled-back transaction
- * reuses it instead of creating a second one) and nobody can grind a colliding
- * digest. At most 63 characters. Knowing a slug is NOT a claim on the
- * organization: see `findOrganizationCreatedForEvent`.
- * Exported for spec coverage; not part of the route surface.
- */
-export function desktopCustomerSlug(
-  name: string,
-  laboratoryId: string,
-  eventId: string,
-) {
-  const base = name
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .substring(0, 30)
-    .replace(/-+$/g, "");
-  const digest = createHash("sha256")
-    .update(`${laboratoryId}:${eventId}`)
-    .digest("hex")
-    .slice(0, 32);
-
-  return `${base || "cliente"}-${digest}`;
-}
-
-/** What the pre-phase stamps on the organization it creates (better-auth `metadata`). */
-function desktopCustomerOrganizationMetadata(
-  laboratoryId: string,
-  eventId: string,
-) {
-  return { desktopSync: { laboratoryId, eventId } };
-}
-
-type ExistingEventOrganization =
-  | { state: "none" }
-  | { state: "ours"; id: string }
-  | { state: "foreign" };
-
-/**
- * The organization this very event created for this laboratory, if one exists.
- * A slug that merely matches proves nothing (it is visible to whoever can read
- * the customer), so an organization is adopted only when it is a CLIENT
- * organization stamped with this laboratory AND this event, and no customer of
- * another laboratory references it. Anything else with that slug is `foreign`.
- */
-async function findOrganizationCreatedForEvent(
-  slug: string,
-  laboratoryId: string,
-  eventId: string,
-): Promise<ExistingEventOrganization> {
-  const [existing] = await db
-    .select({
-      id: organization.id,
-      type: organization.type,
-      metadata: organization.metadata,
-    })
-    .from(organization)
-    .where(eq(organization.slug, slug))
-    .limit(1);
-  if (!existing) return { state: "none" };
-  if (existing.type !== "CLIENT") return { state: "foreign" };
-
-  const stamp = readDesktopCustomerOrganizationStamp(existing.metadata);
-  if (stamp?.laboratoryId !== laboratoryId || stamp.eventId !== eventId) {
-    return { state: "foreign" };
-  }
-
-  const [otherLaboratory] = await db
-    .select({ id: customer.id })
-    .from(customer)
-    .where(
-      and(
-        eq(customer.authOrganizationId, existing.id),
-        ne(customer.labOrganizationId, laboratoryId),
-      ),
-    )
-    .limit(1);
-  return otherLaboratory
-    ? { state: "foreign" }
-    : { state: "ours", id: existing.id };
-}
-
-function readDesktopCustomerOrganizationStamp(metadata: string | null) {
-  if (!metadata) return null;
-  try {
-    const parsed: unknown = JSON.parse(metadata);
-    const stamp = asRecord(asRecord(parsed).desktopSync);
-    return typeof stamp.laboratoryId === "string" &&
-      typeof stamp.eventId === "string"
-      ? { laboratoryId: stamp.laboratoryId, eventId: stamp.eventId }
-      : null;
-  } catch {
-    return null;
-  }
 }
 
 async function prepareDesktopEventSideEffects(
