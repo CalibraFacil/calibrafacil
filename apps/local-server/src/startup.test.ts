@@ -2,8 +2,12 @@ import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ConfigError } from "@calibra-facil/config";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { readLocalServerConfig } from "./bootstrap";
+
+// Some cases start a real process (bun/tsx); under a parallel `turbo test` the
+// default 5s is not enough.
+vi.setConfig({ testTimeout: 60_000 });
 
 const serverRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 

@@ -5,6 +5,10 @@ import { ConfigError } from "@calibra-facil/config";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApiBootEnv } from "./startup";
 
+// Some cases start a real process (bun/tsx); under a parallel `turbo test` the
+// default 5s is not enough.
+vi.setConfig({ testTimeout: 60_000 });
+
 const apiRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const KEY = Buffer.alloc(32, 5).toString("base64");
 
@@ -138,7 +142,7 @@ const bun = spawnSync("bun", ["--version"], { encoding: "utf8" });
 
 describe.skipIf(bun.status !== 0)("the Bun entry (src/bun.ts)", () => {
   it("REQ-CFG-2: exits non-zero with the aggregated message when production variables are missing", () => {
-    const run = spawnSync("bun", ["src/bun.ts"], {
+    const run = spawnSync("bun", [join(apiRoot, "src", "bun.ts")], {
       cwd: apiRoot,
       encoding: "utf8",
       timeout: 60_000,

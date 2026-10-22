@@ -5,6 +5,10 @@ import { ConfigError } from "@calibra-facil/config";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createWorkerEnv } from "./queue-runtime.js";
 
+// Some cases start a real process (bun/tsx); under a parallel `turbo test` the
+// default 5s is not enough.
+vi.setConfig({ testTimeout: 60_000 });
+
 const workerRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 const REQUIRED = [
