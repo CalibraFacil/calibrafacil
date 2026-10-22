@@ -32,6 +32,12 @@ import { createAssetOotEventForApprovedJob } from "../../lib/asset-oot-events";
 import { advanceAssetCalibrationDatesOnApproval } from "../../lib/asset-calibration-advance";
 import { checkApproverIsAuthorizedSignatory } from "../../lib/signatory";
 import {
+  discardUnreleasedCertificateInput,
+  freezeCertificateInput,
+  lockJobForApproval,
+} from "@calibra-facil/db/certificate-input";
+import { readCertificateImage } from "../../lib/certificate-input-images";
+import {
   findServiceOrdersForCalibrationJob,
   triggerAutomaticSendForMilestone,
 } from "../../lib/automatic-send";
@@ -388,6 +394,17 @@ export async function approveJob(
 
   const approvedStatus = requireTargetOf(existing.status, "approve");
   const outcome = await db.transaction(async (tx) => {
+    // Serialise on the job and clear what an earlier, unfinished approval of it
+    // left behind (its frozen certificate input) while it is still in REVIEW.
+    const locked = await lockJobForApproval(tx, {
+      jobId,
+      organizationId: memberData.organizationId,
+      status: existing.status,
+    });
+    if (!locked) {
+      return null;
+    }
+
     const [updated] = await tx
       .update(calibrationJob)
       .set({
@@ -422,6 +439,17 @@ export async function approveJob(
       return null;
     }
 
+    // ISO/IEC 17025 §7.8: the certificate reflects the approved record. What the
+    // renderer reads (lab, signatory, seal decision, customer, asset, results,
+    // standards, method, layout) is frozen HERE, in the approval's own
+    // transaction: it commits or rolls back with the status change and its audit
+    // row, and the worker never reads that data live again.
+    const frozen = await freezeCertificateInput(
+      tx,
+      updated,
+      readCertificateImage,
+    );
+
     await appendJobEvent(tx, {
       action: "approve",
       organizationId: memberData.organizationId,
@@ -430,6 +458,7 @@ export async function approveJob(
       changes: {
         status: { old: existing.status, new: approvedStatus },
         ...approvedVia,
+        certificateInputSha256: frozen.sha256,
         // Recorded on ANY transition — including adverse → null when the
         // guard stopped applying (scope lines deleted, vigência lapsed).
         // Erasing a previously frozen verdict without an audit entry
@@ -566,6 +595,12 @@ async function revertApprovalAfterDispatchFailure(params: {
         .returning();
 
       if (!reverted) return;
+
+      // The approval did not complete: what it froze documents nothing released.
+      await discardUnreleasedCertificateInput(tx, {
+        jobId: existing.id,
+        organizationId: existing.organizationId,
+      });
 
       await appendJobEvent(tx, {
         action: "approve_reverted",

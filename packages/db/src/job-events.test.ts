@@ -232,6 +232,26 @@ describe("appendJobEvent stored row shapes (REQ-AUD-2)", () => {
     });
   });
 
+  it("REQ-CIN-6: approve stores the sha256 of the frozen certificate input", async () => {
+    const sha256 = "a".repeat(64);
+    const row = await storedRow({
+      action: "approve",
+      organizationId: ORG,
+      jobId: 7,
+      actor,
+      ipAddress: null,
+      reason: "Aprovado - Gerando PDF",
+      changes: {
+        status: { old: "REVIEW", new: "GENERATING_PDF" },
+        certificateInputSha256: sha256,
+      },
+    });
+    expect(row.changes).toEqual({
+      status: { old: "REVIEW", new: "GENERATING_PDF" },
+      certificateInputSha256: sha256,
+    });
+  });
+
   it("REQ-AUD-2: approve_reverted stores only the status move", async () => {
     const row = await storedRow({
       action: "approve_reverted",

@@ -119,6 +119,9 @@ importers:
       '@calibra-facil/auth':
         specifier: workspace:^
         version: link:../../packages/auth
+      '@calibra-facil/certificate-data':
+        specifier: workspace:^
+        version: link:../../packages/certificate-data
       '@calibra-facil/config':
         specifier: workspace:^
         version: link:../../packages/config
@@ -960,6 +963,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@calibra-facil/certificate-data':
+        specifier: workspace:^
+        version: link:../certificate-data
       '@calibra-facil/config':
         specifier: workspace:^
         version: link:../config

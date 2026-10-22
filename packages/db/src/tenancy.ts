@@ -67,6 +67,15 @@ export const GLOBAL_TABLES: Readonly<Record<string, string>> = {
 };
 
 /**
+ * Tenant tables created by migrations AFTER 0118. They are born with
+ * `organization_id` (NOT NULL, RESTRICT) and, where they point at a tenant
+ * parent, with the same composite (parent_id, organization_id) key, but they are
+ * not part of 0118's backfill: its specs and its emulation of the database as it
+ * was before the migration leave them out.
+ */
+export const CREATED_AFTER_0118: readonly string[] = ["certificate_input"];
+
+/**
  * Tenant children that gained `organization_id` in migration 0118. `column` is
  * the child column that points at `parent` (its `id`); `parentOrgColumn` is the
  * parent's own organization column the value was backfilled from. A `soft`

@@ -1,5 +1,12 @@
 /**
- * The SQL projection from an approved calibration job to `CertificateJobData`.
+ * LEGACY live-read path. The SQL projection from an approved calibration job to
+ * `CertificateJobData`, for jobs approved before the frozen `certificate_input`
+ * existed (migration 0120). Jobs approved since are rendered from the frozen
+ * document and never reach this module: the approval command reads the same
+ * data once, at approval (`@calibra-facil/db/certificate-input`), and both go
+ * through the same pure assembly, `assembleCertificateJobData`.
+ *
+ * Originally:
  *
  * Restored for Phase 3 from the pre-removal worker (`git show abfea552`), with
  * three deliberate differences from what was deleted:
@@ -21,7 +28,10 @@
  * without scrolling past it.
  */
 
-import type { CertificateJobData } from "@calibra-facil/certificate-data";
+import {
+  assembleCertificateJobData,
+  type CertificateJobData,
+} from "@calibra-facil/certificate-data";
 import type { Client } from "pg";
 
 /**
@@ -174,7 +184,9 @@ export async function fetchCertificateJobData(
     }
   }
 
-  return {
+  // The columns are read as-is; the mapping to the certificate's data is the
+  // shared pure assembly, so the frozen and the legacy path cannot drift.
+  return assembleCertificateJobData({
     jobId: row.job_id,
     verificationToken: row.verification_token,
     certificateName: row.certificate_name,
@@ -183,8 +195,23 @@ export async function fetchCertificateJobData(
     unitId: row.unit_id,
     performedAt: row.performed_at,
     approvedAt: row.approved_at,
+    methodSnapshot: row.method_snapshot,
+    methodAccreditedScopeCurrent: row.method_accredited_scope_current,
+    assetSnapshot: row.asset_snapshot,
+    standardsSnapshot: row.standards_snapshot,
+    environmentalSnapshot: row.environmental_snapshot,
+    calibrationLocationSnapshot: row.calibration_location_snapshot,
+    calibrationPhaseSnapshot: row.calibration_phase_snapshot,
+    data: row.data,
+    results: row.results,
+    scopeOverrideJustification: row.scope_override_justification,
+    methodDeviations: row.method_deviations,
+    supersedesId: row.supersedes_id,
+    supersededById: row.superseded_by_id,
+    amendmentNumber: row.amendment_number,
+    amendmentReason: row.amendment_reason,
     lab: {
-      name: row.lab_name || "Laboratório de Calibração",
+      name: row.lab_name,
       cnpj: row.lab_cnpj,
       accreditationNumber: row.lab_accreditation_number,
       accreditationBody: row.lab_accreditation_body,
@@ -219,39 +246,18 @@ export async function fetchCertificateJobData(
       model: row.model,
       manufacturer: row.manufacturer,
     },
-    // Legacy and offline snapshots may predate the accredited-scope flag; fall
-    // back to the method's current flag so older jobs still seal correctly.
-    methodSnapshot: row.method_snapshot
-      ? {
-          ...row.method_snapshot,
-          accreditedScope:
-            row.method_snapshot.accreditedScope ??
-            row.method_accredited_scope_current ??
-            false,
-        }
-      : row.method_snapshot,
-    assetSnapshot: row.asset_snapshot,
-    scopeOverrideJustification: row.scope_override_justification,
-    standardsSnapshot: row.standards_snapshot,
-    methodDeviations: row.method_deviations,
+    approver: {
+      name: row.approver_name,
+      signatureDataUrl: approverSignatureUrl,
+    },
+    original: row.original_job_id
+      ? { jobId: row.original_job_id, approvedAt: row.original_approved_at }
+      : null,
     serviceOrder: {
       inmetroRepairMarkNumber: row.inmetro_repair_mark_number,
       receivedAt: row.service_order_received_at,
       intakeCondition: row.service_order_intake_condition,
       accessories: row.service_order_accessories,
     },
-    environmentalSnapshot: row.environmental_snapshot,
-    calibrationLocationSnapshot: row.calibration_location_snapshot,
-    calibrationPhaseSnapshot: row.calibration_phase_snapshot,
-    data: row.data,
-    results: row.results,
-    approverName: row.approver_name,
-    approverSignatureUrl,
-    supersedesId: row.supersedes_id,
-    supersededById: row.superseded_by_id,
-    amendmentNumber: row.amendment_number,
-    amendmentReason: row.amendment_reason,
-    originalJobId: row.original_job_id,
-    originalApprovedAt: row.original_approved_at,
-  };
+  });
 }

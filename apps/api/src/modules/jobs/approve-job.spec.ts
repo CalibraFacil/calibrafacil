@@ -16,6 +16,9 @@ const {
   mockCreateOotEvent,
   mockFindServiceOrders,
   mockTriggerAutomaticSend,
+  mockLockJob,
+  mockFreezeInput,
+  mockDiscardInput,
 } = vi.hoisted(() => {
   const state: {
     jobRows: unknown[];
@@ -44,6 +47,17 @@ const {
     mockCreateOotEvent: vi.fn(async () => undefined),
     mockFindServiceOrders: vi.fn(async () => []),
     mockTriggerAutomaticSend: vi.fn(async () => undefined),
+    // The frozen certificate input reads the lab, customer, asset and approver
+    // rows and writes `certificate_input`; it is covered against a real Postgres
+    // by certificate-input.int.spec.ts. Here only the command's wiring of it is
+    // asserted: the lock decides concurrency, the freeze runs after the status
+    // write, and its hash reaches the audit row.
+    mockLockJob: vi.fn(async () => true),
+    mockFreezeInput: vi.fn(async () => ({
+      sha256: "f".repeat(64),
+      input: {},
+    })),
+    mockDiscardInput: vi.fn(async () => undefined),
     // Issuance is disabled in production while the certificate layout is
     // redesigned (#865), so approveJob can never reach "approved" for real.
     // Default the mock to available so the approval-effect assertions below
@@ -114,6 +128,14 @@ vi.mock("../../lib/automatic-send", () => ({
 vi.mock("../../lib/units", () => ({
   buildUnitScopeCondition: () => undefined,
 }));
+vi.mock("@calibra-facil/db/certificate-input", () => ({
+  lockJobForApproval: mockLockJob,
+  freezeCertificateInput: mockFreezeInput,
+  discardUnreleasedCertificateInput: mockDiscardInput,
+}));
+vi.mock("../../lib/certificate-input-images", () => ({
+  readCertificateImage: vi.fn(async () => null),
+}));
 
 import { approveJob } from "./approve-job";
 
@@ -176,6 +198,8 @@ beforeEach(() => {
   mockCheckSignatory.mockResolvedValue({ ok: true });
   mockBuildVerdict.mockReturnValue({ conformity: "CONFORMING", margins: null });
   mockFindServiceOrders.mockResolvedValue([]);
+  mockLockJob.mockResolvedValue(true);
+  mockFreezeInput.mockResolvedValue({ sha256: "f".repeat(64), input: {} });
 });
 
 describe("approveJob gates", () => {
@@ -427,5 +451,52 @@ describe("approveJob actor, role gate and compare-and-set", () => {
     expect(state.insertCalls).toHaveLength(0);
     expect(mockEnqueueBackgroundJob).not.toHaveBeenCalled();
     expect(mockNotifyJobApproved).not.toHaveBeenCalled();
+  });
+});
+
+describe("approveJob freezes the certificate input (REQ-CIN-1)", () => {
+  it("REQ-CIN-1: freezes the row the approval just wrote and records its sha256 on the approve audit row", async () => {
+    state.jobRows = [reviewJob()];
+    const written = reviewJob({ status: "GENERATING_PDF" });
+    state.updateReturning = [written];
+
+    await callApprove({ reason: "OK" });
+
+    expect(mockLockJob).toHaveBeenCalledWith(expect.anything(), {
+      jobId: 10,
+      organizationId: "org-1",
+      status: "REVIEW",
+    });
+    expect(mockFreezeInput).toHaveBeenCalledTimes(1);
+    expect(mockFreezeInput.mock.calls[0]?.[1]).toBe(written);
+    expect(state.insertCalls[0]).toMatchObject({
+      action: "approve",
+      changes: { certificateInputSha256: "f".repeat(64) },
+    });
+  });
+
+  it("REQ-CIN-1: a lost lock (concurrent approval) writes nothing and freezes nothing", async () => {
+    state.jobRows = [reviewJob()];
+    state.updateReturning = [reviewJob({ status: "GENERATING_PDF" })];
+    mockLockJob.mockResolvedValue(false);
+
+    await expect(callApprove()).resolves.toEqual({
+      status: "concurrent_approval",
+    });
+
+    expect(state.updateCalls).toHaveLength(0);
+    expect(mockFreezeInput).not.toHaveBeenCalled();
+    expect(state.insertCalls).toHaveLength(0);
+  });
+
+  it("REQ-CIN-1: a failing freeze aborts the approval: no audit row, nothing enqueued", async () => {
+    state.jobRows = [reviewJob()];
+    state.updateReturning = [reviewJob({ status: "GENERATING_PDF" })];
+    mockFreezeInput.mockRejectedValue(new Error("storage unavailable"));
+
+    await expect(callApprove()).rejects.toThrow("storage unavailable");
+
+    expect(state.insertCalls).toHaveLength(0);
+    expect(mockEnqueueBackgroundJob).not.toHaveBeenCalled();
   });
 });

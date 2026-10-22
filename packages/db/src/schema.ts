@@ -881,6 +881,55 @@ export const issuedCertificateSnapshot = pgTable(
   ],
 );
 
+/**
+ * The frozen input of a certificate (ISO/IEC 17025 §7.8: the report reflects
+ * the approved record). Written once, by the approval transaction itself, and
+ * read by the worker as the only source of what the certificate says: lab
+ * identity and accreditation, signatory, seal decision, customer, asset,
+ * results, standards, method, layout and engine identity. See
+ * `@calibra-facil/certificate-data` (`certificate-input.ts`) for the document.
+ *
+ * A 1:1 table keyed by (job_id, organization_id), not a column of
+ * calibration_job: the document is large (it embeds the logo and the signature
+ * image as data URIs, plus the execution data and results) and calibration_job
+ * is read whole (`select()`) on most paths. It is immutable once the job is
+ * released (trigger `certificate_input_immutable_guard`, migration 0119): the
+ * only way out is the approval being reverted to REVIEW.
+ *
+ * `jobId` is RESTRICT, like the issued certificate snapshot: evidence is never
+ * erased by deleting the job it documents.
+ */
+export const certificateInput = pgTable(
+  "certificate_input",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "restrict" }),
+    jobId: integer("job_id")
+      .notNull()
+      .references(() => calibrationJob.id, { onDelete: "restrict" }),
+    /** `CertificateInput.schemaVersion`, readable without parsing the document. */
+    schemaVersion: integer("schema_version").notNull(),
+    input: jsonb("input").$type<Record<string, unknown>>().notNull(),
+    /** SHA-256 (hex) of the canonical JSON of `input`; also on the approve audit row. */
+    sha256: text("sha256").notNull(),
+    layoutKey: text("layout_key").notNull(),
+    layoutVersion: text("layout_version").notNull(),
+    engineVersion: text("engine_version"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("certificate_input_job_uidx").on(table.jobId),
+    index("certificate_input_org_idx").on(table.organizationId),
+    foreignKey({
+      columns: [table.jobId, table.organizationId],
+      foreignColumns: [calibrationJob.id, calibrationJob.organizationId],
+      name: "certificate_input_job_id_tenant_fk",
+    }).onDelete("restrict"),
+  ],
+);
+
 export const organizationApiKey = pgTable(
   "organization_api_key",
   {
