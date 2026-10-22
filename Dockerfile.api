@@ -28,7 +28,6 @@ COPY --from=build /repo/package.json ./
 COPY --from=build /repo/node_modules ./node_modules
 COPY --from=build /repo/packages ./packages
 COPY --from=build /repo/apps/api ./apps/api
-COPY --from=build /repo/apps/worker ./apps/worker
 
 WORKDIR /repo/apps/api
 EXPOSE 3000

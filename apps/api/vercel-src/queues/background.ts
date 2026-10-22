@@ -6,7 +6,7 @@ import {
   runWithQueueReceipt,
   vercelQueueReceiptKey,
 } from "@calibra-facil/db/queue-receipts";
-import { processBackgroundJob } from "@calibra-facil/worker";
+import { processBackgroundJob } from "@calibra-facil/jobs-core";
 import { resolveQueueJobType } from "../../src/lib/background-jobs";
 import { runIntegrationSync } from "../../src/lib/integrations";
 import {

@@ -6,7 +6,7 @@ import {
   type AppQueueJobType,
 } from "@calibra-facil/db/schema";
 import { parseQueueMessage } from "@calibra-facil/schemas";
-import { processBackgroundJob } from "@calibra-facil/worker";
+import { processBackgroundJob } from "@calibra-facil/jobs-core";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { createWorkerRuntimeEnv } from "../../lib/runtime-env";

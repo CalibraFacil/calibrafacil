@@ -6,11 +6,13 @@ covers the big-picture architecture; `CONTRIBUTING.md` covers the contribution f
 ## Project Structure & Module Organization
 
 - `apps/`: deployable services. Key apps: `apps/api` (Hono REST API), `apps/web` (lab app),
-  `apps/portal` (client portal), `apps/worker` (background jobs), `apps/desktop` +
+  `apps/portal` (client portal), `apps/worker` (background-job runtime; the handlers live in `packages/jobs-core`), `apps/desktop` +
   `apps/local-server` (offline desktop app), `apps/docs` (user documentation), `apps/site`
   (project website).
 - `packages/`: shared libraries such as `db` (Drizzle schema + migrations), `schemas` (Zod),
-  `auth`, `math-engine` (GUM uncertainty engine), `documents`, `shared`.
+  `auth`, `math-engine` (GUM uncertainty engine), `documents`, `shared`, `jobs-core`
+  (background-job dispatcher and handlers). Apps never depend on other apps
+  (`scripts/check-app-boundaries.mjs`): shared code goes in a package.
 - `docs/`: architecture notes, audits and normative references.
 - `validation/`: versioned validation dossiers of the math engine (LaTeX).
 - Root config: `package.json`, `turbo.json`, `pnpm-workspace.yaml`, `.oxlintrc.json`,

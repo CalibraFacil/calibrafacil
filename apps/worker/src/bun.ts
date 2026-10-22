@@ -4,8 +4,8 @@ import {
   rawEnv,
   setProcessEnvDefault,
 } from "@calibra-facil/config";
-import { processScheduledNotifications } from "./scheduled.js";
-import { processScheduledIntegrationSyncs } from "./integrations.js";
+import { processScheduledNotifications } from "@calibra-facil/jobs-core/scheduled";
+import { processScheduledIntegrationSyncs } from "@calibra-facil/jobs-core/integrations";
 import {
   createWorkerEnv,
   processQueueBatch,

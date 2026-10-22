@@ -28,11 +28,11 @@ async function runtimeImport<T>(specifier: string): Promise<T> {
 }
 
 export function importWorkerModule() {
-  return runtimeImport<WorkerModule>("@calibra-facil/worker");
+  return runtimeImport<WorkerModule>("@calibra-facil/jobs-core");
 }
 
 export function importWorkerIntegrationsModule() {
   return runtimeImport<IntegrationsModule>(
-    "@calibra-facil/worker/integrations",
+    "@calibra-facil/jobs-core/integrations",
   );
 }

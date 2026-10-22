@@ -100,7 +100,9 @@ keep these in parity:
 - **Cloud:** `apps/api` (Hono) → PostgreSQL + S3-compatible object storage (Cloudflare R2 in
   the original deployment), Gotenberg for PDFs and SMTP or Resend for email
   (`packages/email-sender/src/transport.ts`). Background work (PDF
-  generation, compliance checks, syncs) runs in `apps/worker`: in-process in development, via
+  generation, compliance checks, syncs) is implemented in `packages/jobs-core` (the dispatcher and
+  the per-type handlers) and driven by `apps/worker`, a thin runtime (queue drain loop, Bun entry,
+  HTTP drain server): in-process in development, via
   Vercel Queue + Cron or the always-on worker in production. On Vercel the API entrypoints are
   the generated functions in `apps/api/api/` (`[...route].js`, `cron/`, `queues/`); elsewhere
   `apps/api/src/bun.ts` serves the same app plus the `/api/cron/*` handlers. The Hono app itself
@@ -203,6 +205,7 @@ AppType), `client-runtime` (frontend SDK + transport), `auth` (Better-Auth), `ma
 uncertainty engine, versioned with dossiers in `validation/`), `method-definition` (method
 compiler), `method-templates` (catalog of calibration methods), `certificate-data` +
 `documents` (certificate/label data and templates), `signing` (PAdES / ICP-Brasil),
+`jobs-core` (background-job dispatcher + handlers, shared by `apps/api` and `apps/worker`),
 `label-rendering` (ZPL/TSPL thermal labels), `ui` (shared shadcn primitives,
 instrument-panel and status-tone for web and portal; see `docs/architecture/shared-ui-package.md`), `email` (React Email), `email-sender`,
 `notifications`, `interval-analysis` (calibration intervals), `local-db` (SQLite offline

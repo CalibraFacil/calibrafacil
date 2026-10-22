@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { organization } from "@calibra-facil/db/schema";
-import type { Env } from "@calibra-facil/worker";
+import type { Env } from "@calibra-facil/jobs-core";
 import { db, truncateAll } from "../test/integration/db";
 import { makeTestEnv } from "../test/integration/env";
 import { seedOrg } from "../test/integration/seed";
@@ -63,7 +63,7 @@ vi.mock("@calibra-facil/notifications", () => ({
 
 // vitest hoists vi.mock above the imports. processBackgroundJob is the PUBLIC
 // queue entrypoint (index.ts:3600).
-import { processBackgroundJob } from "./index";
+import { processBackgroundJob } from "@calibra-facil/jobs-core";
 
 // ---- row-reader helpers (no `as`; same pattern as certificate-issuance spec) ----
 function toRows(result: unknown): unknown[] {

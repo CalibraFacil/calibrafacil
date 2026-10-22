@@ -28,7 +28,7 @@ vi.mock("../../lib/integrations", () => ({
   processScheduledContaAzulPolls: mocks.processScheduledContaAzulPolls,
 }));
 
-vi.mock("@calibra-facil/worker/integrations", () => ({
+vi.mock("@calibra-facil/jobs-core/integrations", () => ({
   processScheduledIntegrationSyncs: mocks.processScheduledIntegrationSyncs,
 }));
 

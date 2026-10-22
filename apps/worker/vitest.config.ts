@@ -1,7 +1,8 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
-// Fast unit tier for apps/worker — mirrors apps/api's split between a fast
+// Fast unit tier for apps/worker (the runtime around packages/jobs-core; the
+// handlers' own unit specs run in that package) — mirrors apps/api's split between a fast
 // unit tier (`vitest.config.ts` / `test:run`) and the real-DB integration tier
 // (`vitest.integration.config.ts` / `test:integration`, Docker-gated).
 //

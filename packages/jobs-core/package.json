@@ -1,0 +1,50 @@
+{
+  "name": "@calibra-facil/jobs-core",
+  "version": "1.0.0",
+  "description": "Background-job processing: the dispatcher and the per-type handlers (certificate render, labels, service-order documents, OOT notifications, integration sync, audit packs, SPC recompute, e-mail domain health, scheduled notifications). Runtime-agnostic: apps/worker and apps/api drive it.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test": "vitest",
+    "test:run": "vitest run",
+    "check-types": "node ../../scripts/typecheck.mjs --noEmit",
+    "lint": "oxlint"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./integrations": "./src/integrations.ts",
+    "./scheduled": "./src/scheduled.ts",
+    "./certificate/layout-data": "./src/certificate/layout-data.ts",
+    "./certificate/fetch-job-data": "./src/certificate/fetch-job-data.ts"
+  },
+  "dependencies": {
+    "@calibra-facil/certificate-data": "workspace:^",
+    "@calibra-facil/config": "workspace:^",
+    "@calibra-facil/db": "workspace:^",
+    "@calibra-facil/documents": "workspace:^",
+    "@calibra-facil/email-sender": "workspace:^",
+    "@calibra-facil/interval-analysis": "workspace:^",
+    "@calibra-facil/notifications": "workspace:^",
+    "@calibra-facil/schemas": "workspace:^",
+    "@calibra-facil/shared": "workspace:^",
+    "@calibra-facil/signing": "workspace:^",
+    "@cj-tech-master/excelts": "^9.6.0",
+    "drizzle-orm": "^0.45.2",
+    "fflate": "^0.8.3",
+    "pg": "^8.21.0",
+    "qrcode": "^1.5.4",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.0",
+    "@types/pg": "^8.20.0",
+    "@types/qrcode": "^1.5.5",
+    "@types/react": "^19.2.16",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "6.0.2",
+    "vitest": "^4.1.11"
+  }
+}

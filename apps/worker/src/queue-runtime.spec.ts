@@ -62,7 +62,7 @@ vi.mock("@calibra-facil/db/queue-receipts", () => ({
   readQueueReceiptsMode,
 }));
 
-vi.mock("./index.js", () => ({
+vi.mock("@calibra-facil/jobs-core", () => ({
   default: { queue: workerQueue },
 }));
 
