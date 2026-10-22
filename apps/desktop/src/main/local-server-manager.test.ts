@@ -146,7 +146,14 @@ describe("LocalServerManager", () => {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
     for (const directory of tempDirectories.splice(0)) {
-      rmSync(directory, { force: true, recursive: true });
+      // The spawned local server can still be flushing files into the directory
+      // when the test ends; retry instead of failing with ENOTEMPTY.
+      rmSync(directory, {
+        force: true,
+        recursive: true,
+        maxRetries: 10,
+        retryDelay: 50,
+      });
     }
     delete process.env.CALIBRA_DESKTOP_SKIP_LOCAL_SERVER;
     delete process.env.CALIBRA_LOCAL_PORT;
