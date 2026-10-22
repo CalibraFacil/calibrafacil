@@ -1,8 +1,8 @@
 import { db } from "@calibra-facil/db";
+import { insertJobs } from "./job-fixtures";
 import {
   asset,
   assetType,
-  calibrationJob,
   certificateRelease,
   customer,
   portalExportJob,
@@ -124,26 +124,23 @@ export async function seedApprovedCertificate(params: {
     .returning();
   if (!serviceRow) throw new Error("seedApprovedCertificate: service failed");
 
-  const [jobRow] = await db
-    .insert(calibrationJob)
-    .values({
-      jobId: params.jobNumber,
-      certificateName: params.jobNumber,
-      organizationId: params.organizationId,
-      unitId: params.unitId,
-      customerId: params.customerId,
-      assetId: assetRow.id,
-      serviceId: serviceRow.id,
-      methodSnapshot: minimalMethodSnapshot(),
-      status: "APPROVED",
-      certificateUrl: storedObjectUrl(certificateR2Key),
-      performedAt: approvedAt,
-      approvedAt,
-      approvedBy: params.userId,
-      createdBy: params.userId,
-      createdAt: EPOCH,
-    })
-    .returning();
+  const [jobRow] = await insertJobs({
+    jobId: params.jobNumber,
+    certificateName: params.jobNumber,
+    organizationId: params.organizationId,
+    unitId: params.unitId,
+    customerId: params.customerId,
+    assetId: assetRow.id,
+    serviceId: serviceRow.id,
+    methodSnapshot: minimalMethodSnapshot(),
+    status: "APPROVED",
+    certificateUrl: storedObjectUrl(certificateR2Key),
+    performedAt: approvedAt,
+    approvedAt,
+    approvedBy: params.userId,
+    createdBy: params.userId,
+    createdAt: EPOCH,
+  });
   if (!jobRow) throw new Error("seedApprovedCertificate: job failed");
 
   if (params.releaseStatus) {

@@ -8,6 +8,7 @@
  * it expired; what matters is when the work was done.
  */
 
+import { insertJobs } from "../../test/integration/job-fixtures";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
@@ -84,36 +85,33 @@ async function seedWorld(options: { validThrough?: Date } = {}) {
       isActive: true,
     })
     .returning({ id: service.id });
-  const [job] = await db
-    .insert(calibrationJob)
-    .values({
-      jobId: "CAL-SV-1",
-      organizationId: org.orgId,
-      unitId: org.unitId,
-      customerId,
+  const [job] = await insertJobs({
+    jobId: "CAL-SV-1",
+    organizationId: org.orgId,
+    unitId: org.unitId,
+    customerId,
+    assetId: instrument?.id ?? 0,
+    serviceId: svc?.id ?? 0,
+    createdBy: org.userId,
+    status: "IN_PROGRESS",
+    methodSnapshot: executableMethodSnapshot(),
+    // The desktop apply needs the frozen asset snapshot a started job carries.
+    assetSnapshot: {
       assetId: instrument?.id ?? 0,
-      serviceId: svc?.id ?? 0,
-      createdBy: org.userId,
-      status: "IN_PROGRESS",
-      methodSnapshot: executableMethodSnapshot(),
-      // The desktop apply needs the frozen asset snapshot a started job carries.
-      assetSnapshot: {
-        assetId: instrument?.id ?? 0,
-        assetTypeId: type?.id ?? 0,
-        assetTypeName: "AT",
-        assetTypeSlug: "at-sv",
-        baseMeasurementUnit: null,
-        name: "Instrumento",
-        tag: "TAG-SV",
-        serialNumber: "SN-SV",
-        manufacturer: null,
-        model: null,
-        specifications: null,
-        capturedAt: "2026-01-01T00:00:00.000Z",
-      },
-      certificateName: "CAL-SV-1",
-    })
-    .returning({ id: calibrationJob.id });
+      assetTypeId: type?.id ?? 0,
+      assetTypeName: "AT",
+      assetTypeSlug: "at-sv",
+      baseMeasurementUnit: null,
+      name: "Instrumento",
+      tag: "TAG-SV",
+      serialNumber: "SN-SV",
+      manufacturer: null,
+      model: null,
+      specifications: null,
+      capturedAt: "2026-01-01T00:00:00.000Z",
+    },
+    certificateName: "CAL-SV-1",
+  });
   const [standard] = await db
     .insert(referenceStandard)
     .values({

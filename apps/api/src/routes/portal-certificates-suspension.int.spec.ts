@@ -1,13 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { insertJobs } from "../../test/integration/job-fixtures";
 import { eq, sql } from "drizzle-orm";
 import { portalRouter } from "./portal";
 import { db } from "@calibra-facil/db";
-import {
-  asset,
-  assetType,
-  calibrationJob,
-  organization,
-} from "@calibra-facil/db/schema";
+import { asset, assetType, organization } from "@calibra-facil/db/schema";
 import { loginAsPortal } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import {
@@ -94,22 +90,19 @@ async function seedApprovedCertificate(params: {
   jobId: string;
 }): Promise<number> {
   const now = new Date("2026-01-01T00:00:00.000Z");
-  const [row] = await db
-    .insert(calibrationJob)
-    .values({
-      jobId: params.jobId,
-      organizationId: params.labOrgId,
-      unitId: params.labUnitId,
-      customerId: params.customerId,
-      assetId: params.assetId,
-      serviceId: params.serviceId,
-      methodSnapshot: { accreditedScope: false },
-      status: "APPROVED",
-      createdBy: params.createdBy,
-      performedAt: now,
-      approvedAt: now,
-    })
-    .returning({ id: calibrationJob.id });
+  const [row] = await insertJobs({
+    jobId: params.jobId,
+    organizationId: params.labOrgId,
+    unitId: params.labUnitId,
+    customerId: params.customerId,
+    assetId: params.assetId,
+    serviceId: params.serviceId,
+    methodSnapshot: { accreditedScope: false },
+    status: "APPROVED",
+    createdBy: params.createdBy,
+    performedAt: now,
+    approvedAt: now,
+  });
   if (!row) throw new Error("seedApprovedCertificate: insert failed");
   return row.id;
 }

@@ -7,13 +7,13 @@
  * and the empty overview a customer without data receives is checked too.
  */
 
+import { insertJobs } from "../../test/integration/job-fixtures";
 import { beforeEach, describe, expect, it } from "vitest";
 import { portalOverviewResponseSchema } from "@calibra-facil/contracts";
 import { db } from "@calibra-facil/db";
 import {
   asset,
   assetType,
-  calibrationJob,
   calibrationRequest,
   service,
   serviceOrder,
@@ -102,7 +102,7 @@ describe("portal overview: the real response honors the contract schema (REQ-TC-
         isActive: true,
       })
       .returning({ id: service.id });
-    await db.insert(calibrationJob).values({
+    await insertJobs({
       jobId: "CAL-PORTAL-1",
       organizationId: ctx.labOrgId,
       unitId: ctx.labUnitId,

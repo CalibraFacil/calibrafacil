@@ -26,6 +26,7 @@
  * organizationApiKeyAuditLog below (same structural change, same migration).
  */
 
+import { insertJobs } from "../../test/integration/job-fixtures";
 import { beforeEach, describe, expect, it } from "vitest";
 import { organizationOf } from "../../test/integration/organization-of";
 import { db } from "@calibra-facil/db";
@@ -34,7 +35,6 @@ import {
   assetType,
   authorizedSignatory,
   authorizedSignatoryAuditLog,
-  calibrationJob,
   certificateRelease,
   certificateReleaseAuditLog,
   customer,
@@ -154,20 +154,17 @@ async function seedJob(params: {
   serviceId: number;
   createdBy: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(calibrationJob)
-    .values({
-      jobId: `CAL-${params.assetId}`,
-      organizationId: params.organizationId,
-      unitId: params.unitId,
-      customerId: params.customerId,
-      assetId: params.assetId,
-      serviceId: params.serviceId,
-      createdBy: params.createdBy,
-      status: "APPROVED",
-      methodSnapshot: minimalMethodSnapshot(),
-    })
-    .returning({ id: calibrationJob.id });
+  const [row] = await insertJobs({
+    jobId: `CAL-${params.assetId}`,
+    organizationId: params.organizationId,
+    unitId: params.unitId,
+    customerId: params.customerId,
+    assetId: params.assetId,
+    serviceId: params.serviceId,
+    createdBy: params.createdBy,
+    status: "APPROVED",
+    methodSnapshot: minimalMethodSnapshot(),
+  });
   if (!row) throw new Error("seedJob: insert failed");
   return row.id;
 }

@@ -25,6 +25,7 @@
  * triggers are present in a freshly built database.
  */
 
+import { insertJobs } from "../../test/integration/job-fixtures";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { organizationOf } from "../../test/integration/organization-of";
 import { db } from "@calibra-facil/db";
@@ -185,28 +186,25 @@ async function seedJob(
   status: Status,
   overrides: Partial<typeof calibrationJob.$inferInsert> = {},
 ): Promise<number> {
-  const [row] = await db
-    .insert(calibrationJob)
-    .values({
-      jobId: overrides.jobId ?? `CAL-${status}-${Math.random()}`,
-      organizationId: fixture.orgId,
-      unitId: fixture.unitId,
-      customerId: fixture.customerId,
-      assetId: fixture.assetId,
-      serviceId: fixture.serviceId,
-      createdBy: fixture.userId,
-      status,
-      methodSnapshot: MINIMAL_METHOD_SNAPSHOT,
-      data: { indication: "10" },
-      results: { value: 10.01, expandedUncertainty: 0.02, k: 2 },
-      performedAt: new Date("2026-02-01T10:00:00.000Z"),
-      approvedBy: status === "APPROVED" ? fixture.userId : null,
-      approvedAt:
-        status === "APPROVED" ? new Date("2026-02-02T10:00:00.000Z") : null,
-      certificateUrl: status === "APPROVED" ? "https://files.test/c.pdf" : null,
-      ...overrides,
-    })
-    .returning({ id: calibrationJob.id });
+  const [row] = await insertJobs({
+    jobId: overrides.jobId ?? `CAL-${status}-${Math.random()}`,
+    organizationId: fixture.orgId,
+    unitId: fixture.unitId,
+    customerId: fixture.customerId,
+    assetId: fixture.assetId,
+    serviceId: fixture.serviceId,
+    createdBy: fixture.userId,
+    status,
+    methodSnapshot: MINIMAL_METHOD_SNAPSHOT,
+    data: { indication: "10" },
+    results: { value: 10.01, expandedUncertainty: 0.02, k: 2 },
+    performedAt: new Date("2026-02-01T10:00:00.000Z"),
+    approvedBy: status === "APPROVED" ? fixture.userId : null,
+    approvedAt:
+      status === "APPROVED" ? new Date("2026-02-02T10:00:00.000Z") : null,
+    certificateUrl: status === "APPROVED" ? "https://files.test/c.pdf" : null,
+    ...overrides,
+  });
   if (!row) throw new Error("seedJob: insert failed");
   return row.id;
 }
