@@ -1,6 +1,6 @@
-import { db } from "@calibra-facil/db";
 import { calibrationJob, type JobStatus } from "@calibra-facil/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
+import { orgSetDb } from "./org-db";
 
 /**
  * Portal-facing amendment-chain resolution — ISO/IEC 17025:2017 §7.8.8
@@ -146,10 +146,13 @@ export async function resolvePortalAmendmentInfo(
  */
 export function createPortalAmendmentChainLoader(params: {
   customerIds: number[];
+  /** The laboratories those customers belong to (see orgSetDb). */
+  organizationIds: readonly string[];
 }): AmendmentChainLoader {
+  const o = orgSetDb(params.organizationIds);
   return async (id) => {
     if (params.customerIds.length === 0) return null;
-    const [row] = await db
+    const [row] = await o
       .select({
         id: calibrationJob.id,
         jobId: calibrationJob.jobId,

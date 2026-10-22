@@ -23,6 +23,7 @@ import {
 } from "drizzle-orm";
 import type { AuthVariables } from "../../middleware/permission";
 import { buildUnitScopeCondition } from "../../lib/units";
+import { orgDb } from "../../lib/org-db";
 
 type ServiceOrderRow = typeof serviceOrder.$inferSelect;
 
@@ -64,14 +65,16 @@ export async function getPortalCustomerForAuthOrganization(
 
 /**
  * Resolve a service order's opaque public id to its numeric id, scoped to the
- * given customer. Returns null when the order doesn't exist or isn't theirs,
- * so the portal can route by `publicId` without exposing the serial id.
+ * given customer inside the customer's laboratory. Returns null when the order
+ * doesn't exist, isn't theirs or belongs to another laboratory, so the portal
+ * can route by `publicId` without exposing the serial id.
  */
 export async function resolvePortalServiceOrderIdByPublicId(
   publicId: string,
   customerId: number,
+  labOrganizationId: string,
 ): Promise<number | null> {
-  const [row] = await db
+  const [row] = await orgDb(labOrganizationId)
     .select({ id: serviceOrder.id })
     .from(serviceOrder)
     .where(
@@ -366,7 +369,9 @@ export async function getServiceOrderSummaryReport(
 export async function listServiceOrdersForPortalCustomer(
   customerId: number,
   query: ServiceOrdersListQuery,
+  labOrganizationId: string,
 ) {
+  const o = orgDb(labOrganizationId);
   const searchTerm = query.query?.trim();
   const whereCondition = and(
     eq(serviceOrder.customerId, customerId),
@@ -380,13 +385,13 @@ export async function listServiceOrdersForPortalCustomer(
       : undefined,
   );
 
-  const [countResult] = await db
+  const [countResult] = await o
     .select({ total: count() })
     .from(serviceOrder)
     .innerJoin(asset, eq(serviceOrder.assetId, asset.id))
     .where(whereCondition);
 
-  const rows = await db
+  const rows = await o
     .select({
       id: serviceOrder.id,
       publicId: serviceOrder.publicId,

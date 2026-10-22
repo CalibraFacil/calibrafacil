@@ -1,16 +1,17 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db } from "@calibra-facil/db";
 import { organizationCustomDomain } from "@calibra-facil/db/schema";
 import {
   buildPortalDomainVerificationHost,
   createPortalDomainVerificationToken,
+  findPortalHostnameOwnedByOtherOrganization,
   getOrganizationCustomDomain,
   getPortalBaseUrlForLabOrganization,
   sanitizePortalHostname,
 } from "../lib/portal-domains";
 import { writeOrganizationAuditEvent } from "../lib/audit";
+import { orgDb } from "../lib/org-db";
 import {
   type AuthVariables,
   requireLabProtected,
@@ -18,7 +19,7 @@ import {
   requireRole,
   withLabPermission,
 } from "../middleware/permission";
-import { and, eq, ne } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 const CreatePortalDomainSchema = z.object({
   hostname: z.string().trim().min(3).max(255),
@@ -214,12 +215,10 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      const collision = await db.query.organizationCustomDomain.findFirst({
-        where: and(
-          eq(organizationCustomDomain.hostname, hostname),
-          ne(organizationCustomDomain.organizationId, member.organizationId),
-        ),
-      });
+      const collision = await findPortalHostnameOwnedByOtherOrganization(
+        hostname,
+        member.organizationId,
+      );
 
       if (collision) {
         return c.json(
@@ -232,7 +231,7 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
       const verificationToken = createPortalDomainVerificationToken();
 
       if (existing) {
-        const [updated] = await db
+        const [updated] = await orgDb(member.organizationId)
           .update(organizationCustomDomain)
           .set({
             hostname,
@@ -267,7 +266,7 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ domain: serializeDomain(updated || null) });
       }
 
-      const [created] = await db
+      const [created] = await orgDb(member.organizationId)
         .insert(organizationCustomDomain)
         .values({
           id: crypto.randomUUID(),
@@ -329,7 +328,7 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      const [updated] = await db
+      const [updated] = await orgDb(member.organizationId)
         .update(organizationCustomDomain)
         .set({
           verifiedAt: record.verifiedAt ?? new Date(),
@@ -376,7 +375,7 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Verifique o domínio antes de ativá-lo" }, 400);
       }
 
-      const [updated] = await db
+      const [updated] = await orgDb(member.organizationId)
         .update(organizationCustomDomain)
         .set({
           isActive: true,
@@ -416,7 +415,7 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ success: true });
       }
 
-      await db
+      await orgDb(member.organizationId)
         .delete(organizationCustomDomain)
         .where(eq(organizationCustomDomain.id, record.id));
 

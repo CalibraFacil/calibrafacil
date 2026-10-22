@@ -15,6 +15,7 @@ import {
 import { and, eq, lt, ne, or, SQL } from "drizzle-orm";
 import { getPortalBaseUrlForClientOrganization } from "./portal-domains";
 import { portalBaseUrl } from "@calibra-facil/shared/public-urls";
+import { orgDb } from "./org-db";
 
 const DEFAULT_INVITATION_EXPIRATION_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
@@ -242,22 +243,18 @@ export async function enforceClientPortalMembershipBoundary(
     };
   }
 
-  const [existingServiceMembership] = await db
+  const clientOrg = orgDb(organizationId);
+  const [existingServiceMembership] = await clientOrg
     .select({ id: member.id, role: member.role })
     .from(member)
-    .where(
-      and(
-        eq(member.organizationId, organizationId),
-        eq(member.userId, serviceUser.id),
-      ),
-    )
+    .where(eq(member.userId, serviceUser.id))
     .limit(1);
 
   let serviceOwnerAdded = false;
   let serviceOwnerPromoted = false;
 
   if (!existingServiceMembership) {
-    await db.insert(member).values({
+    await clientOrg.insert(member).values({
       id: crypto.randomUUID(),
       organizationId,
       userId: serviceUser.id,
@@ -266,7 +263,7 @@ export async function enforceClientPortalMembershipBoundary(
     });
     serviceOwnerAdded = true;
   } else if (existingServiceMembership.role !== "owner") {
-    await db
+    await clientOrg
       .update(member)
       .set({ role: "owner" })
       .where(eq(member.id, existingServiceMembership.id));
@@ -276,11 +273,10 @@ export async function enforceClientPortalMembershipBoundary(
   const removableInternalRoleConditions: Array<SQL<unknown>> =
     INTERNAL_ROLES.map((role) => eq(member.role, role));
 
-  const removedMembers = await db
+  const removedMembers = await clientOrg
     .delete(member)
     .where(
       and(
-        eq(member.organizationId, organizationId),
         ne(member.userId, serviceUser.id),
         or(...removableInternalRoleConditions),
       ),
@@ -329,16 +325,12 @@ export async function createPortalInvitationAsService(params: {
     );
   }
 
-  const [existingMember] = await db
+  const clientOrg = orgDb(params.organizationId);
+  const [existingMember] = await clientOrg
     .select({ id: member.id })
     .from(member)
     .innerJoin(user, eq(member.userId, user.id))
-    .where(
-      and(
-        eq(member.organizationId, params.organizationId),
-        eq(user.email, normalizedEmail),
-      ),
-    )
+    .where(eq(user.email, normalizedEmail))
     .limit(1);
 
   if (existingMember) {
@@ -350,24 +342,22 @@ export async function createPortalInvitationAsService(params: {
   }
 
   // Normalize old pending invites that already expired
-  await db
+  await clientOrg
     .update(invitation)
     .set({ status: "expired" })
     .where(
       and(
-        eq(invitation.organizationId, params.organizationId),
         eq(invitation.email, normalizedEmail),
         eq(invitation.status, "pending"),
         lt(invitation.expiresAt, new Date()),
       ),
     );
 
-  const [pendingInvitation] = await db
+  const [pendingInvitation] = await clientOrg
     .select({ id: invitation.id })
     .from(invitation)
     .where(
       and(
-        eq(invitation.organizationId, params.organizationId),
         eq(invitation.email, normalizedEmail),
         eq(invitation.status, "pending"),
       ),
@@ -388,7 +378,7 @@ export async function createPortalInvitationAsService(params: {
     createdAt.getTime() + getInvitationExpirationSeconds() * 1000,
   );
 
-  await db.insert(invitation).values({
+  await clientOrg.insert(invitation).values({
     id: invitationId,
     organizationId: params.organizationId,
     email: normalizedEmail,
@@ -421,13 +411,12 @@ export async function cancelPortalInvitationAsService(params: {
   invitationId: string;
   organizationId: string;
 }) {
-  const [updated] = await db
+  const [updated] = await orgDb(params.organizationId)
     .update(invitation)
     .set({ status: "canceled" })
     .where(
       and(
         eq(invitation.id, params.invitationId),
-        eq(invitation.organizationId, params.organizationId),
         eq(invitation.status, "pending"),
       ),
     )
@@ -448,15 +437,11 @@ export async function removePortalMemberAsService(params: {
   memberId: string;
   organizationId: string;
 }) {
-  const [target] = await db
+  const clientOrg = orgDb(params.organizationId);
+  const [target] = await clientOrg
     .select({ id: member.id, role: member.role })
     .from(member)
-    .where(
-      and(
-        eq(member.id, params.memberId),
-        eq(member.organizationId, params.organizationId),
-      ),
-    )
+    .where(eq(member.id, params.memberId))
     .limit(1);
 
   if (!target) {
@@ -475,14 +460,9 @@ export async function removePortalMemberAsService(params: {
     );
   }
 
-  const [deleted] = await db
+  const [deleted] = await clientOrg
     .delete(member)
-    .where(
-      and(
-        eq(member.id, target.id),
-        eq(member.organizationId, params.organizationId),
-      ),
-    )
+    .where(eq(member.id, target.id))
     .returning();
 
   if (!deleted) {

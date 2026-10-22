@@ -994,6 +994,7 @@ export const portalServiceOrdersRouter = new Hono<{
         (await listServiceOrdersForPortalCustomer(
           linkedCustomer.id,
           query,
+          linkedCustomer.labOrganizationId,
         )) satisfies ServerShape<PortalServiceOrdersResponse>,
       );
     },
@@ -1017,6 +1018,7 @@ export const portalServiceOrdersRouter = new Hono<{
       const id = await resolvePortalServiceOrderIdByPublicId(
         c.req.valid("param").id,
         linkedCustomer.id,
+        linkedCustomer.labOrganizationId,
       );
       if (id === null) return c.json({ error: "OS nao encontrada" }, 404);
       const detail = await getServiceOrderDetail(
@@ -1070,6 +1072,7 @@ export const portalServiceOrdersRouter = new Hono<{
       const orderId = await resolvePortalServiceOrderIdByPublicId(
         c.req.valid("param").id,
         linkedCustomer.id,
+        linkedCustomer.labOrganizationId,
       );
       if (orderId === null) return c.json({ error: "OS nao encontrada" }, 404);
       const detail = await getServiceOrderDetail(
@@ -1103,6 +1106,7 @@ export const portalServiceOrdersRouter = new Hono<{
       const id = await resolvePortalServiceOrderIdByPublicId(
         publicId,
         linkedCustomer.id,
+        linkedCustomer.labOrganizationId,
       );
       if (id === null) {
         return c.json({ error: "Orcamento nao encontrado" }, 404);
@@ -1148,6 +1152,7 @@ export const portalServiceOrdersRouter = new Hono<{
       const id = await resolvePortalServiceOrderIdByPublicId(
         publicId,
         linkedCustomer.id,
+        linkedCustomer.labOrganizationId,
       );
       if (id === null) {
         return c.json({ error: "Orcamento nao encontrado" }, 404);
