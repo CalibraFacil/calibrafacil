@@ -34,7 +34,7 @@ export type LocalServiceOrderIntakeType =
   | "internal"
   | "warranty_return";
 
-export type LocalServiceOrderDeliveryMethod =
+type LocalServiceOrderDeliveryMethod =
   | "pickup_at_lab"
   | "ship_to_client"
   | "third_party_pickup";

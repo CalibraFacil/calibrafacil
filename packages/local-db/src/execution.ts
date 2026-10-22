@@ -17,7 +17,7 @@ import type { LocalJobStatus } from "./jobs";
 
 type JsonRecord = Record<string, unknown>;
 
-export type LocalJobCommandInput = {
+type LocalJobCommandInput = {
   actorUserId?: string | null;
   deviceId?: string | null;
 };

@@ -75,9 +75,9 @@ describe("REQ-OFF-2: the policy registry matches the Q13 offline scope", () => {
     const offline = listCalibraApiPolicyEntries()
       .filter((entry) => entry.policy !== "cloud-only")
       .map(qualified)
-      .toSorted();
+      .sort();
 
-    expect(offline).toEqual([...Q13_OFFLINE_METHODS].toSorted());
+    expect(offline).toEqual([...Q13_OFFLINE_METHODS].sort());
   });
 
   it("keeps every reclassified method online-only", () => {
@@ -124,7 +124,7 @@ describe("REQ-OFF-2: the policy registry matches the Q13 offline scope", () => {
     const localWrites = listCalibraApiPolicyEntries()
       .filter((entry) => entry.policy === "local-command-sync")
       .map(qualified)
-      .toSorted();
+      .sort();
 
     expect(localWrites).toEqual([
       "assets.create",

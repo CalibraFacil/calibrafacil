@@ -129,7 +129,7 @@ try {
   await verifyOfflineWorkflowPersisted(baseUrl, workflow);
 
   console.log(
-    `Desktop local-server smoke passed on ${baseUrl} (${checks.length + 15} checks).`,
+    `Desktop local-server smoke passed on ${baseUrl} (${checks.length + 14} checks).`,
   );
 } catch (error) {
   await writeCapturedLog();
@@ -210,13 +210,10 @@ async function waitForReadiness(url) {
 }
 
 async function runOfflineWorkflowSmoke(baseUrl) {
-  const customer = await postJson(baseUrl, "/api/customers", {
-    name: "Cliente Smoke Offline",
-    taxId: "12345678000199",
-    email: "smoke@example.test",
-    phone: "51999999999",
-  });
-  assert(customer.id, "customer creation did not return an id");
+  // Offline intake starts from a customer the device already has (seeded
+  // above as if synced): customer creation is online-only since Q13.
+  const customer = await getJson(baseUrl, "/api/customers/12345678000199");
+  assert(customer.id === 123, "synced customer was not served from the cache");
 
   const asset = await postJson(baseUrl, "/api/assets", {
     customerId: customer.id,
@@ -292,7 +289,7 @@ async function runOfflineWorkflowSmoke(baseUrl) {
 
   const diagnostics = await getJson(baseUrl, "/api/local/diagnostics");
   assert(
-    diagnostics.database?.pendingOutboxCount >= 4,
+    diagnostics.database?.pendingOutboxCount >= 3,
     "offline workflow did not queue expected outbox events",
   );
   assert(
@@ -455,6 +452,36 @@ INSERT INTO asset_types (
   'org-1',
   'Balanca',
   '{}',
+  @now,
+  'synced'
+)
+ON CONFLICT(id) DO NOTHING
+`,
+      )
+      .run({ now });
+    database
+      .prepare(
+        `
+INSERT INTO customers (
+  id,
+  remote_id,
+  organization_id,
+  unit_id,
+  name,
+  tax_id,
+  email,
+  phone,
+  updated_at,
+  sync_state
+) VALUES (
+  'customer:123',
+  123,
+  'org-1',
+  1,
+  'Cliente Smoke Offline',
+  '12345678000199',
+  'smoke@example.test',
+  '51999999999',
   @now,
   'synced'
 )
