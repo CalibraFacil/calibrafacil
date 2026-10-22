@@ -22,10 +22,13 @@ import type { FileRouteTypes } from '@/routeTree.gen'
  * the default for every new route, so adding a screen can never silently
  * promise offline support.
  *
- * `renders` lists the reads a route needs to show its primary content. Actions
- * a page offers on top of that (approve, edit, issue a document, ...) are gated
- * one by one by `useOperationAvailability`, which reads the same registry, so a
- * page that works offline does not offer an action that does not.
+ * `renders` lists the reads a route needs to show its primary content. It does
+ * NOT gate the actions a page offers on top of that (approve, edit, issue a
+ * document, ...). Each of those has to be gated by the page itself with
+ * `useOperationAvailability` + `ActionAvailabilityGate`, which read the same
+ * registry. Allowlisting a route therefore means auditing its actions: the
+ * service-order detail page's quote, execution and delivery-document actions
+ * are covered by `detail-page-offline-gating.test.tsx`.
  */
 
 type ApiMethodRef = {

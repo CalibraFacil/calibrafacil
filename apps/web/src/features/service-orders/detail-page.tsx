@@ -587,6 +587,24 @@ function ServiceOrderDetailContent({
     'sendQuote',
     orderTarget,
   )
+  // Saving a quote draft, recording the execution and issuing the delivery
+  // document used to be queued offline. They are online-only since Q13, so
+  // they are gated like every other cloud command on this page.
+  const saveQuoteAvailability = useOperationAvailability(
+    'serviceOrders',
+    'createQuote',
+    orderTarget,
+  )
+  const executionAvailability = useOperationAvailability(
+    'serviceOrders',
+    'saveExecution',
+    orderTarget,
+  )
+  const issueDeliveryDocumentAvailability = useOperationAvailability(
+    'serviceOrders',
+    'issueDeliveryDocument',
+    orderTarget,
+  )
   const generateIntakeAvailability = useOperationAvailability(
     'serviceOrders',
     'generateIntakeDocument',
@@ -1800,14 +1818,20 @@ function ServiceOrderDetailContent({
                     </div>
                   </div>
                   <div className="flex flex-wrap justify-end gap-2">
-                    <Button
-                      variant="outline"
-                      className="active:scale-[0.96] transition-transform"
-                      onClick={() => createQuote.mutate()}
-                      disabled={createQuote.isPending}
+                    <ActionAvailabilityGate
+                      availability={saveQuoteAvailability}
                     >
-                      Salvar rascunho
-                    </Button>
+                      {({ disabled }) => (
+                        <Button
+                          variant="outline"
+                          className="active:scale-[0.96] transition-transform"
+                          onClick={() => createQuote.mutate()}
+                          disabled={disabled || createQuote.isPending}
+                        >
+                          Salvar rascunho
+                        </Button>
+                      )}
+                    </ActionAvailabilityGate>
                     {draftQuotes.map((quote) => (
                       <ActionAvailabilityGate
                         key={quote.id}
@@ -1975,18 +1999,24 @@ function ServiceOrderDetailContent({
                           passa para “Em execução” e a data é registrada
                           automaticamente.
                         </p>
-                        <Button
-                          variant="outline"
-                          className="active:scale-[0.96] transition-transform"
-                          onClick={() => startExecution.mutate()}
-                          disabled={startExecution.isPending}
+                        <ActionAvailabilityGate
+                          availability={executionAvailability}
                         >
-                          <HugeiconsIcon
-                            icon={Wrench01Icon}
-                            className="mr-2 size-4"
-                          />
-                          Iniciar execução
-                        </Button>
+                          {({ disabled }) => (
+                            <Button
+                              variant="outline"
+                              className="active:scale-[0.96] transition-transform"
+                              onClick={() => startExecution.mutate()}
+                              disabled={disabled || startExecution.isPending}
+                            >
+                              <HugeiconsIcon
+                                icon={Wrench01Icon}
+                                className="mr-2 size-4"
+                              />
+                              Iniciar execução
+                            </Button>
+                          )}
+                        </ActionAvailabilityGate>
                       </div>
                     )}
                     <div className="grid gap-4 md:grid-cols-2">
@@ -2067,17 +2097,27 @@ function ServiceOrderDetailContent({
                       Encaminhar para calibração após o reparo
                     </label>
                     <div className="flex justify-end">
-                      <Button
-                        className="active:scale-[0.96] transition-transform"
-                        onClick={() => finishExecution.mutate()}
-                        disabled={!execution || finishExecution.isPending}
+                      <ActionAvailabilityGate
+                        availability={executionAvailability}
                       >
-                        <HugeiconsIcon
-                          icon={CheckmarkCircle02Icon}
-                          className="mr-2 size-4"
-                        />
-                        Finalizar execução
-                      </Button>
+                        {({ disabled }) => (
+                          <Button
+                            className="active:scale-[0.96] transition-transform"
+                            onClick={() => finishExecution.mutate()}
+                            disabled={
+                              disabled ||
+                              !execution ||
+                              finishExecution.isPending
+                            }
+                          >
+                            <HugeiconsIcon
+                              icon={CheckmarkCircle02Icon}
+                              className="mr-2 size-4"
+                            />
+                            Finalizar execução
+                          </Button>
+                        )}
+                      </ActionAvailabilityGate>
                     </div>
                   </>
                 )}
@@ -2290,17 +2330,25 @@ function ServiceOrderDetailContent({
                           </Button>
                         )}
                       </ActionAvailabilityGate>
-                      <Button
-                        className="active:scale-[0.96] transition-transform"
-                        onClick={() => issueDeliveryDocument.mutate()}
-                        disabled={issueDeliveryDocument.isPending}
+                      <ActionAvailabilityGate
+                        availability={issueDeliveryDocumentAvailability}
                       >
-                        <HugeiconsIcon
-                          icon={File02Icon}
-                          className="mr-2 size-4"
-                        />
-                        Gerar comprovante de entrega
-                      </Button>
+                        {({ disabled }) => (
+                          <Button
+                            className="active:scale-[0.96] transition-transform"
+                            onClick={() => issueDeliveryDocument.mutate()}
+                            disabled={
+                              disabled || issueDeliveryDocument.isPending
+                            }
+                          >
+                            <HugeiconsIcon
+                              icon={File02Icon}
+                              className="mr-2 size-4"
+                            />
+                            Gerar comprovante de entrega
+                          </Button>
+                        )}
+                      </ActionAvailabilityGate>
                       <ActionAvailabilityGate
                         availability={openDeliveryDocumentAvailability}
                       >
