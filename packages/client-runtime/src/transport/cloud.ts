@@ -1,6 +1,8 @@
 import { hc } from "hono/client";
 import type { Hono } from "hono";
 
+import type { ResponseValidationOptions } from "@calibra-facil/contracts";
+
 export type HonoCloudClient<
   TApp extends Hono<any, any, any> = Hono<any, any, any>,
 > = ReturnType<typeof hc<TApp>>;
@@ -11,7 +13,7 @@ export type CreateCloudApiClientOptions = {
   baseUrl: string;
   activeUnitProvider?: ActiveUnitProvider;
   fetch?: typeof fetch;
-};
+} & ResponseValidationOptions;
 
 export function createRawCloudClient<
   TApp extends Hono<any, any, any> = Hono<any, any, any>,
