@@ -501,7 +501,8 @@ async function runJobExecution(
   // the desktop's too (its frozen snapshots are what it recorded offline). The
   // one exception is an event a desktop build wrote before it enforced this
   // offline (`legacyUnvalidatedRecord`): applied as before, not dead-lettered.
-  if (isSubmit && !(isDesktop && command.legacyUnvalidatedRecord)) {
+  const recordCheckExempt = isDesktop && command.legacyUnvalidatedRecord;
+  if (isSubmit && !recordCheckExempt) {
     const incomplete = validateCalibrationRecordForSubmit({
       location: nextCalibrationLocationSnapshot,
       phases: nextCalibrationPhaseSnapshot,
@@ -721,6 +722,15 @@ async function runJobExecution(
               old: existing.calibrationPhaseSnapshot,
               new: nextCalibrationPhaseSnapshot,
             }
+          : undefined,
+        // Whether the calibration location and phase reasons were validated
+        // when the job was submitted. "legacy_exempt" is a desktop submit from
+        // a build that predates the rule: an auditor lists jobs whose location
+        // was never validated by filtering on it.
+        calibrationRecordCheck: isSubmit
+          ? recordCheckExempt
+            ? "legacy_exempt"
+            : "enforced"
           : undefined,
         unitConversions:
           normalizedData.conversions.length > 0

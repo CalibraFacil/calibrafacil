@@ -16,7 +16,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
-import { calibrationJob, type JobStatus } from "@calibra-facil/db/schema";
+import {
+  calibrationJob,
+  jobAuditLog,
+  type JobStatus,
+} from "@calibra-facil/db/schema";
 import { DESKTOP_EXECUTION_PAYLOAD_VERSION } from "@calibra-facil/schemas";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
@@ -72,6 +76,20 @@ async function seedWorld() {
 }
 
 type World = Awaited<ReturnType<typeof seedWorld>>;
+
+/**
+ * What the submit's audit row says about the calibration record check: the
+ * marker an auditor filters on to list jobs whose location was never validated.
+ */
+async function recordCheckOfSubmit(world: World) {
+  const rows = await db
+    .select({ action: jobAuditLog.action, changes: jobAuditLog.changes })
+    .from(jobAuditLog)
+    .where(eq(jobAuditLog.jobId, world.jobId));
+  const submit = rows.find((row) => row.action === "submit");
+  if (!submit) throw new Error("no submit audit row");
+  return submit.changes?.calibrationRecordCheck;
+}
 
 /** What the push answered for the one event it carried. */
 async function pushSubmit(world: World, payload: Record<string, unknown>) {
@@ -222,6 +240,24 @@ describe("desktop sync submit: the calibration record rule (REQ-P112-3)", () => 
         ensaio_b: { mode: "not_performed", reason: "Sem acesso ao ponto" },
       },
     });
+    expect(await recordCheckOfSubmit(world)).toBe("enforced");
+  });
+
+  it("REQ-P112-3: a stamped submit with no location key on a cloud job that already holds one is applied and keeps it", async () => {
+    const world = await seedWorld();
+    await db
+      .update(calibrationJob)
+      .set({ calibrationLocationSnapshot: LOCATION })
+      .where(eq(calibrationJob.id, world.jobId));
+
+    const body = await pushSubmit(world, { ...STAMP });
+
+    expect(body.rejected).toEqual([]);
+    expect(body.accepted).toHaveLength(1);
+    const after = await jobRow(world.jobId);
+    expect(after.status).toBe("REVIEW");
+    expect(after.calibrationLocationSnapshot).toEqual(LOCATION);
+    expect(await recordCheckOfSubmit(world)).toBe("enforced");
   });
 
   it("REQ-P112-3 [HIGH RISK]: a legacy event (no payload version, no location key at all) is still applied, not dead-lettered", async () => {
@@ -232,6 +268,8 @@ describe("desktop sync submit: the calibration record rule (REQ-P112-3)", () => 
     expect(body.rejected).toEqual([]);
     expect(body.accepted).toHaveLength(1);
     expect((await jobRow(world.jobId)).status).toBe("REVIEW");
+    // Applied without the check, and the audit row says so.
+    expect(await recordCheckOfSubmit(world)).toBe("legacy_exempt");
   });
 
   it("REQ-P112-3 [HIGH RISK]: a legacy event that carries an explicit null location is still applied too", async () => {
@@ -247,5 +285,6 @@ describe("desktop sync submit: the calibration record rule (REQ-P112-3)", () => 
     expect(body.rejected).toEqual([]);
     expect(body.accepted).toHaveLength(1);
     expect((await jobRow(world.jobId)).status).toBe("REVIEW");
+    expect(await recordCheckOfSubmit(world)).toBe("legacy_exempt");
   });
 });

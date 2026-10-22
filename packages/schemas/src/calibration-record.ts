@@ -67,6 +67,8 @@ export function validateCalibrationRecordForSubmit(record: {
  * (null when nothing had been recorded), so neither the key's absence nor an
  * explicit null identifies them. A positive stamp does: it is only ever written
  * by a build that refused to submit without the record.
+ *
+ * The legacy exemption stays until P2-4's typed sync protocol enforces a minimum desktop version (Q28).
  */
 export const DESKTOP_EXECUTION_PAYLOAD_VERSION = 2;
 
