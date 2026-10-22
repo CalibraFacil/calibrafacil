@@ -4,10 +4,10 @@ import {
   type FinancialFreshness,
   type ServiceOrderFinancialStatus,
 } from "@calibra-facil/shared";
-import { db } from "@calibra-facil/db";
 import { integrationObjectLink } from "@calibra-facil/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { buildServiceOrderFinancialStatus } from "./financial-timeline";
+import { orgDb } from "./org-db";
 import type { buildUnitScopeCondition } from "./units";
 
 type PortalFinancialScope = Parameters<typeof buildUnitScopeCondition>[1];
@@ -173,9 +173,9 @@ export async function resolvePortalFinancialDocumentHrefs(params: {
   if (candidateLocalEntityIds.length === 0) return {};
 
   // Candidate IDs are derived from the already-authorized service order's
-  // billing document, fiscal access key, and receipts; the org predicate keeps
-  // the signed artifact lookup inside the lab tenant.
-  const links = await db
+  // billing document, fiscal access key, and receipts; the org-bound handle
+  // keeps the signed artifact lookup inside the lab tenant.
+  const links = await orgDb(params.organizationId)
     .select({
       localEntityId: integrationObjectLink.localEntityId,
       metadata: integrationObjectLink.metadata,
@@ -183,7 +183,6 @@ export async function resolvePortalFinancialDocumentHrefs(params: {
     .from(integrationObjectLink)
     .where(
       and(
-        eq(integrationObjectLink.organizationId, params.organizationId),
         eq(integrationObjectLink.target, "remote_document"),
         inArray(integrationObjectLink.localEntityId, candidateLocalEntityIds),
       ),

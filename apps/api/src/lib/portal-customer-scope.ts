@@ -6,7 +6,7 @@ import {
   organization,
 } from "@calibra-facil/db/schema";
 import { PORTAL_ACCESS_ROLES } from "@calibra-facil/auth/access";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 
 /**
  * Portal customer scope resolution.
@@ -222,10 +222,21 @@ export async function resolvePortalNotificationOrgIds(params: {
   return [...orgIds];
 }
 
-export async function resolvePortalAccessibleCustomerIds(params: {
+export type PortalAccessibleCustomers = {
+  customerIds: number[];
+  /**
+   * The laboratories those customers belong to. A customer user can belong to
+   * customers of more than one laboratory (on the default portal host nothing
+   * narrows it), so a query over `customerIds` runs through
+   * `orgSetDb(labOrganizationIds)` and cannot reach any other laboratory.
+   */
+  labOrganizationIds: string[];
+};
+
+export async function resolvePortalAccessibleCustomers(params: {
   userId: string;
   labScope: string | null;
-}): Promise<number[]> {
+}): Promise<PortalAccessibleCustomers> {
   const { userId, labScope } = params;
 
   const orgs = await db
@@ -241,13 +252,13 @@ export async function resolvePortalAccessibleCustomerIds(params: {
     );
 
   const orgIds = orgs.map((row) => row.orgId);
-  if (orgIds.length === 0) return [];
+  if (orgIds.length === 0) return { customerIds: [], labOrganizationIds: [] };
 
-  const ids = new Set<number>();
+  const labByCustomerId = new Map<number, string>();
 
   // Direct branch memberships.
   const directCustomers = await db
-    .select({ id: customer.id })
+    .select({ id: customer.id, labOrganizationId: customer.labOrganizationId })
     .from(customer)
     .where(
       and(
@@ -255,7 +266,9 @@ export async function resolvePortalAccessibleCustomerIds(params: {
         labScope ? eq(customer.labOrganizationId, labScope) : undefined,
       ),
     );
-  for (const row of directCustomers) ids.add(row.id);
+  for (const row of directCustomers) {
+    labByCustomerId.set(row.id, row.labOrganizationId);
+  }
 
   // Group memberships → expand to branch customers.
   const groups = await db
@@ -270,7 +283,10 @@ export async function resolvePortalAccessibleCustomerIds(params: {
   const groupIds = groups.map((row) => row.id);
   if (groupIds.length > 0) {
     const groupCustomers = await db
-      .select({ id: customer.id })
+      .select({
+        id: customer.id,
+        labOrganizationId: customer.labOrganizationId,
+      })
       .from(customer)
       .where(
         and(
@@ -278,8 +294,90 @@ export async function resolvePortalAccessibleCustomerIds(params: {
           labScope ? eq(customer.labOrganizationId, labScope) : undefined,
         ),
       );
-    for (const row of groupCustomers) ids.add(row.id);
+    for (const row of groupCustomers) {
+      labByCustomerId.set(row.id, row.labOrganizationId);
+    }
   }
 
-  return [...ids];
+  return {
+    customerIds: [...labByCustomerId.keys()],
+    labOrganizationIds: [...new Set(labByCustomerId.values())],
+  };
+}
+
+/**
+ * The customer a CLIENT organization is linked to, for the endpoints that act
+ * for exactly one branch customer (creating a request). It is the lookup that
+ * learns WHICH laboratory the portal session belongs to, so it cannot be bound
+ * to a laboratory yet; it is narrowed to the host laboratory when there is one.
+ */
+export async function resolvePortalLinkedCustomer(params: {
+  authOrganizationId: string;
+  labScope: string | null;
+}) {
+  const [linkedCustomer] = await db
+    .select({
+      id: customer.id,
+      name: customer.name,
+      labOrganizationId: customer.labOrganizationId,
+      address: customer.address,
+    })
+    .from(customer)
+    .where(
+      and(
+        eq(customer.authOrganizationId, params.authOrganizationId),
+        params.labScope
+          ? eq(customer.labOrganizationId, params.labScope)
+          : undefined,
+      ),
+    )
+    .limit(1);
+
+  return linkedCustomer ?? null;
+}
+
+/**
+ * The CLIENT organizations a portal user belongs to (the organization
+ * switcher), each tagged as a branch ("unit") or a customer group. A person's
+ * memberships are cross-organization by design: the signed-in user, not a
+ * laboratory, is the boundary. Narrowed to the host laboratory when there is one.
+ */
+export async function listPortalClientOrganizations(params: {
+  userId: string;
+  labScope: string | null;
+}) {
+  return db
+    .select({
+      id: organization.id,
+      name: organization.name,
+      slug: organization.slug,
+      logo: organization.logo,
+      type: organization.type,
+      createdAt: organization.createdAt,
+      memberRole: member.role,
+      // A group org has no `customer` row: left-join both so it is not dropped.
+      kind: sql<
+        "unit" | "group"
+      >`case when ${customerGroup.id} is not null then 'group' else 'unit' end`,
+    })
+    .from(member)
+    .innerJoin(organization, eq(member.organizationId, organization.id))
+    .leftJoin(customer, eq(customer.authOrganizationId, organization.id))
+    .leftJoin(
+      customerGroup,
+      eq(customerGroup.authOrganizationId, organization.id),
+    )
+    .where(
+      and(
+        eq(member.userId, params.userId),
+        eq(organization.type, "CLIENT"),
+        inArray(member.role, PORTAL_ACCESS_ROLES),
+        params.labScope
+          ? or(
+              eq(customer.labOrganizationId, params.labScope),
+              eq(customerGroup.labOrganizationId, params.labScope),
+            )
+          : undefined,
+      ),
+    );
 }

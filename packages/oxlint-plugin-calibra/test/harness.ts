@@ -76,6 +76,54 @@ export async function lintFixtures(
   }
 }
 
+/**
+ * Lint real files of this repository with ONLY `ruleName` on (same loader and
+ * parser as `pnpm lint`). For ratchet tests that must see the live source:
+ * a baseline that no longer matches the code, in either direction.
+ */
+export async function lintRepoPaths(
+  ruleName: string,
+  paths: string[],
+): Promise<LintOutcome> {
+  const configDir = await mkdtemp(join(tmpdir(), "calibra-oxlint-cfg-"));
+  try {
+    const configPath = join(configDir, ".oxlintrc.json");
+    await writeFile(
+      configPath,
+      JSON.stringify({
+        jsPlugins: [pluginPath],
+        categories: { correctness: "off" },
+        rules: { [`calibra/${ruleName}`]: "error" },
+      }),
+    );
+    try {
+      const { stdout, stderr } = await execFileAsync(
+        oxlintBin,
+        ["--config", configPath, ...paths],
+        { cwd: repoRoot, maxBuffer: 64 * 1024 * 1024 },
+      );
+      return { exitCode: 0, output: `${stdout}${stderr}` };
+    } catch (error) {
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        typeof error.code === "number" &&
+        "stdout" in error &&
+        "stderr" in error
+      ) {
+        return {
+          exitCode: error.code,
+          output: `${String(error.stdout)}${String(error.stderr)}`,
+        };
+      }
+      throw error;
+    }
+  } finally {
+    await rm(configDir, { recursive: true, force: true });
+  }
+}
+
 /** Expect the rule to pass (exit 0, no diagnostic from this rule). */
 export async function expectClean(
   ruleName: string,

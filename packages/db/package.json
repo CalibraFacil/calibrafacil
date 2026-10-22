@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "exports": {
     ".": "./src/db.ts",
+    "./for-org": "./src/for-org.ts",
     "./certificate-input": "./src/certificate-input.ts",
     "./job-events": "./src/job-events.ts",
     "./queue": "./src/queue.ts",

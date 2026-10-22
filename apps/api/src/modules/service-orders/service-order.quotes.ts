@@ -740,7 +740,12 @@ export async function approveServiceOrderQuoteByPortalUser(input: {
   const [order] = await db
     .select()
     .from(serviceOrder)
-    .where(eq(serviceOrder.id, input.serviceOrderId))
+    .where(
+      and(
+        eq(serviceOrder.id, input.serviceOrderId),
+        eq(serviceOrder.organizationId, linkedCustomer.labOrganizationId),
+      ),
+    )
     .limit(1);
 
   if (
@@ -787,7 +792,12 @@ export async function approveServiceOrderQuoteByPortalUser(input: {
         approvedAt: new Date(),
         totalApprovedCents: quote.totalCents,
       })
-      .where(eq(serviceOrder.id, input.serviceOrderId));
+      .where(
+        and(
+          eq(serviceOrder.id, input.serviceOrderId),
+          eq(serviceOrder.organizationId, linkedCustomer.labOrganizationId),
+        ),
+      );
     await recordServiceOrderEvent(
       {
         organizationId: order.organizationId,
@@ -852,7 +862,12 @@ export async function rejectServiceOrderQuoteByPortalUser(input: {
   const [order] = await db
     .select()
     .from(serviceOrder)
-    .where(eq(serviceOrder.id, input.serviceOrderId))
+    .where(
+      and(
+        eq(serviceOrder.id, input.serviceOrderId),
+        eq(serviceOrder.organizationId, linkedCustomer.labOrganizationId),
+      ),
+    )
     .limit(1);
 
   if (
@@ -902,7 +917,12 @@ export async function rejectServiceOrderQuoteByPortalUser(input: {
           : {}),
         rejectedAt: new Date(),
       })
-      .where(eq(serviceOrder.id, input.serviceOrderId));
+      .where(
+        and(
+          eq(serviceOrder.id, input.serviceOrderId),
+          eq(serviceOrder.organizationId, linkedCustomer.labOrganizationId),
+        ),
+      );
     await recordServiceOrderEvent(
       {
         organizationId: order.organizationId,
