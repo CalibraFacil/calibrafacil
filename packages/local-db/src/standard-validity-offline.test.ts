@@ -112,6 +112,14 @@ const baseInput = {
   deviceId: "device-1",
   data: { reading: 1 },
   selectedStandardIds: [999],
+  // A submit needs the calibration location (REQ-P112-1); these cases are about
+  // the standards, so the location is just there.
+  calibrationLocationSnapshot: {
+    type: "lab",
+    addressText: "Laboratório",
+    recordedAt: "2026-01-15T12:00:00.000Z",
+    recordedBy: "user-1",
+  },
 };
 
 describe("offline standard validity at the performed date (REQ-CAL-004)", () => {

@@ -12,6 +12,10 @@ import {
   unitKind,
   type MeasurementUnit,
 } from '@calibra-facil/shared/units'
+import {
+  validateCalibrationLocationForSubmit,
+  validateCalibrationPhasesForSubmit,
+} from '@calibra-facil/schemas'
 import type { MassCompositionProfileDto } from '@calibra-facil/client-runtime'
 import {
   compiledMethodSnapshotSchema,
@@ -795,9 +799,16 @@ export function findMissingNotPerformedPhaseReasons({
   phaseBlocks: CalibrationPhaseBlock[]
   calibrationPhases: CalibrationPhaseSnapshot
 }) {
+  // The submit's own rule (shared with the cloud and the desktop store), asked
+  // one block at a time so the form can name the ones that fail.
   return phaseBlocks.filter((block) => {
     const snapshot = calibrationPhases.blocks[block.key]
-    return snapshot?.mode === 'not_performed' && !snapshot.reason?.trim()
+    return (
+      snapshot !== undefined &&
+      validateCalibrationPhasesForSubmit({
+        blocks: { [block.key]: snapshot },
+      }) !== null
+    )
   })
 }
 
@@ -877,7 +888,8 @@ export function canSubmitExecution({
       return value !== undefined && value !== ''
     })
   const hasRequiredAssetSpecs = missingAssetSpecFields.length === 0
-  const hasCalibrationLocation = calibrationLocation.addressText.trim() !== ''
+  const hasCalibrationLocation =
+    validateCalibrationLocationForSubmit(calibrationLocation) === null
   const hasNotPerformedReasons = missingNotPerformedPhaseReasons.length === 0
   return (
     hasRequiredFields &&

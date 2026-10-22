@@ -6,6 +6,7 @@ import {
   jobAmendResponseSchema,
   jobDetailSchema,
   jobDownloadUrlResponseSchema,
+  jobExecutionWarningSchema,
   jobMethodSnapshotSchema,
   jobMutationResponseSchema,
   jobRowSchema,
@@ -23,6 +24,10 @@ const registry = {
   buildJobMutationResponse: [
     fixtures.buildJobMutationResponse,
     jobMutationResponseSchema,
+  ],
+  buildJobExecutionWarning: [
+    fixtures.buildJobExecutionWarning,
+    jobExecutionWarningSchema,
   ],
   buildJobDetail: [fixtures.buildJobDetail, jobDetailSchema],
   buildJobsList: [fixtures.buildJobsList, jobsListResponseSchema],
@@ -73,6 +78,13 @@ describe("shared contract fixtures", () => {
     expect(
       jobMutationResponseSchema.safeParse(
         fixtures.buildJobMutationResponse({ status: "REVIEW" }, "Enviado"),
+      ).success,
+    ).toBe(true);
+    expect(
+      jobMutationResponseSchema.safeParse(
+        fixtures.buildJobMutationResponse({}, "Salvo", [
+          fixtures.buildJobExecutionWarning(),
+        ]),
       ).success,
     ).toBe(true);
     expect(

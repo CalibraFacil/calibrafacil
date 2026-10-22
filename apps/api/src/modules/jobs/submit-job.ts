@@ -1,7 +1,10 @@
 import { db } from "@calibra-facil/db";
 import {
+  appendJobEvent,
+  type JobExecutionChanges,
+} from "@calibra-facil/db/job-events";
+import {
   calibrationJob,
-  jobAuditLog,
   referenceStandard,
   type AssetSnapshot,
   type CalibrationLocationSnapshot,
@@ -12,9 +15,12 @@ import {
 } from "@calibra-facil/db/schema";
 import {
   resolveExecutionPerformedAt,
+  validateCalibrationRecordForSubmit,
   type CalibrationLocationInput,
   type CalibrationPhaseInput,
   type EnvironmentalDataInput,
+  type StandardsDraftWarning,
+  type StandardsJudgement,
   type StandardsJudgementMode,
 } from "@calibra-facil/schemas";
 import { targetOf } from "@calibra-facil/schemas/job-transitions";
@@ -36,10 +42,9 @@ import {
   buildCalibrationPhaseSnapshot,
   buildEnvironmentalSnapshot,
   buildStandardsSnapshot,
+  replaceStaleFrozenStandards,
   resolveAssetSnapshot,
   standardsPerformedAt,
-  validateCalibrationLocationForSubmit,
-  validateCalibrationPhasesForSubmit,
 } from "./execution-snapshots";
 import {
   jobActorAuditFields,
@@ -56,6 +61,7 @@ import {
   type CompiledSnapshotFailureKind,
 } from "./official-execution";
 import {
+  judgeDraftSnapshotStandards,
   judgeSnapshotStandards,
   snapshotStandardIds,
   standardsRefusalDomainError,
@@ -74,7 +80,10 @@ import {
  *      status its payload claims (Q20: the server derives the target)
  *   3. when the work was performed (`resolveExecutionPerformedAt`: not in the
  *      future, a written reason beyond 7 days)
- *   4. the reference standards (`judgeSnapshotStandards`, the one judgement)
+ *   4. the reference standards (`judgeSnapshotStandards`, the one judgement).
+ *      A submit refuses any invalid standard; a draft save still refuses one
+ *      it ADDS but accepts, with a warning, one already in the saved snapshot
+ *      that went stale, so autosave never loses the readings
  *   5. the asset snapshot (and its required specifications)
  *   6. environment, calibration location and phases
  *   7. the official compiled execution: `results` are RECOMPUTED from `data`;
@@ -135,6 +144,12 @@ export type JobExecutionCommand = {
   calibrationPhases?: CalibrationPhaseInput;
   frozen?: FrozenExecutionSnapshots;
   /**
+   * A desktop submit written by a build that predates the offline calibration
+   * record rule (no location, no phase reasons collected): the only submit that
+   * is not held to it. Ignored for every other actor.
+   */
+  legacyUnvalidatedRecord?: boolean;
+  /**
    * The status the caller's payload says the job lands in (the desktop sends
    * its own). It is only checked against the transition table, never written:
    * a payload that disagrees is refused (Q20).
@@ -162,6 +177,12 @@ export type JobExecutionResult =
       status: "ok";
       job: JobRow;
       previousStatus: JobStatus;
+      /**
+       * A draft save accepted standards of the saved snapshot that have since
+       * gone stale (deleted, inactive, expired): the submit will refuse until
+       * they are replaced. Always empty for a submit, which never accepts one.
+       */
+      warnings: StandardsDraftWarning[];
     }
   | { status: "not_found" }
   | {
@@ -364,6 +385,7 @@ async function runJobExecution(
   let nextStandardsSnapshot: StandardSnapshot[] | null | undefined =
     existing.standardsSnapshot;
   let standardsTouched = false;
+  let standardsWarnings: StandardsDraftWarning[] = [];
   if (command.frozen?.standards) {
     nextStandardsSnapshot = command.frozen.standards.value;
     standardsTouched = true;
@@ -379,6 +401,8 @@ async function runJobExecution(
         command.performedAt,
         isSubmit ? null : existing.performedAt,
       ),
+      // Only a draft save is lenient about a standard it already carries.
+      isSubmit ? null : existing.standardsSnapshot,
     );
     if (!built.ok) {
       return {
@@ -387,6 +411,7 @@ async function runJobExecution(
         error: standardsRefusalDomainError(built.refusal),
       };
     }
+    standardsWarnings = built.warnings;
     if (built.snapshot !== undefined) {
       nextStandardsSnapshot = built.snapshot;
       standardsTouched = true;
@@ -395,14 +420,14 @@ async function runJobExecution(
 
   // A submit re-judges EVERY standard of the final snapshot (whether or not
   // this request names standards), at the final performed day, from the
-  // standards table. A desktop save is judged too: it sends the whole snapshot.
-  let standardsJudgement: Extract<
-    Awaited<ReturnType<typeof judgeSnapshotStandards>>,
-    { ok: true }
-  > | null = null;
+  // standards table. A desktop save is judged too: it sends the whole snapshot,
+  // and, like the cloud's draft save, accepts with a warning a standard of the
+  // saved snapshot that went stale.
+  let standardsJudgement: Extract<StandardsJudgement, { ok: true }> | null =
+    null;
   if (isSubmit || isDesktop) {
     const explicitPerformedAt = Boolean(command.performedAt?.trim());
-    const judged = await judgeSnapshotStandards({
+    const judgeInput = {
       standardIds: snapshotStandardIds(nextStandardsSnapshot),
       organizationId,
       unitScope:
@@ -418,12 +443,45 @@ async function runJobExecution(
             : null
           : (performedAt ?? now),
       now,
-      backdateReason,
       mode: jobExecutionStandardsMode(actor, explicitPerformedAt),
-      // A submission must justify a standard that is valid only because the
-      // work is back-dated; a draft save is advisory.
-      requireBackdateReason: isSubmit,
-    });
+    };
+    let judged: StandardsJudgement;
+    if (isSubmit) {
+      judged = await judgeSnapshotStandards({
+        ...judgeInput,
+        backdateReason,
+        // A submission must justify a standard that is valid only because the
+        // work is back-dated.
+        requireBackdateReason: true,
+      });
+    } else {
+      // A desktop draft carries every standard of its own snapshot: the
+      // desktop judged each one strictly when the technician added it, and a
+      // standard that went stale before the first sync must not strand the
+      // readings. Anything else is judged as the cloud's saved snapshot says.
+      const draft = await judgeDraftSnapshotStandards({
+        ...judgeInput,
+        savedStandardIds: [
+          ...snapshotStandardIds(existing.standardsSnapshot),
+          ...snapshotStandardIds(command.frozen?.standards?.value),
+        ],
+      });
+      if (draft.ok) {
+        standardsWarnings = draft.warnings;
+        if (command.frozen?.standards && nextStandardsSnapshot) {
+          // Never store the desktop's copy of a stale standard's entry.
+          nextStandardsSnapshot = await replaceStaleFrozenStandards({
+            frozen: nextStandardsSnapshot,
+            staleIds: new Set(
+              draft.warnings.flatMap((warning) => warning.standardIds),
+            ),
+            savedSnapshot: existing.standardsSnapshot,
+            organizationId,
+          });
+        }
+      }
+      judged = draft;
+    }
     if (!judged.ok) {
       return {
         status: "standards_refused",
@@ -492,13 +550,16 @@ async function runJobExecution(
         actor.userId,
       ) ?? null);
 
-  // A submission from an online caller carries its calibration location and
-  // phase justifications; a desktop's frozen snapshots are what it recorded
-  // offline.
-  if (isSubmit && !isDesktop) {
-    const incomplete =
-      validateCalibrationLocationForSubmit(nextCalibrationLocationSnapshot) ??
-      validateCalibrationPhasesForSubmit(nextCalibrationPhaseSnapshot);
+  // Every submit carries its calibration location and phase justifications,
+  // the desktop's too (its frozen snapshots are what it recorded offline). The
+  // one exception is an event a desktop build wrote before it enforced this
+  // offline (`legacyUnvalidatedRecord`): applied as before, not dead-lettered.
+  const recordCheckExempt = isDesktop && command.legacyUnvalidatedRecord;
+  if (isSubmit && !recordCheckExempt) {
+    const incomplete = validateCalibrationRecordForSubmit({
+      location: nextCalibrationLocationSnapshot,
+      phases: nextCalibrationPhaseSnapshot,
+    });
     if (incomplete) {
       return {
         status: "record_incomplete",
@@ -648,92 +709,91 @@ async function runJobExecution(
       .returning();
     if (!row) return null;
 
-    await tx.insert(jobAuditLog).values({
+    const executionChanges: JobExecutionChanges = {
+      ...jobActorAuditFields(actor),
+      // Evidence that the frozen compiled method was re-pointed at the
+      // method's current compilation (same definition, new engine).
+      methodSnapshotEngine: reconciledMethod.adopted
+        ? {
+            old: {
+              engineVersion: existing.methodSnapshot.engineVersion,
+              methodFingerprint: existing.methodSnapshot.methodFingerprint,
+            },
+            new: {
+              engineVersion: nextMethodSnapshot.engineVersion,
+              methodFingerprint: nextMethodSnapshot.methodFingerprint,
+            },
+          }
+        : undefined,
+      status:
+        isSubmit || existing.status !== nextStatus
+          ? { old: existing.status, new: nextStatus }
+          : undefined,
+      data: { old: existing.data, new: nextData },
+      results: { old: existing.results, new: nextResults },
+      // What the client claimed its results were; they were not used.
+      ...(command.clientResults
+        ? actor.kind === "desktop_session"
+          ? { desktopSubmittedResults: command.clientResults }
+          : { clientSubmittedResults: command.clientResults }
+        : {}),
+      // §7.8.2.1(n) is printed on the certificate, so a change to it is
+      // evidence an assessor may ask about. Logged only when it moved.
+      methodDeviations:
+        nextDeviations !== undefined &&
+        nextDeviations !== existing.methodDeviations
+          ? { old: existing.methodDeviations, new: nextDeviations }
+          : undefined,
+      officialExecution: {
+        methodFingerprint: officialExecution.execution.methodFingerprint,
+        inputFingerprint: officialExecution.execution.inputFingerprint,
+        calculationFingerprint:
+          officialExecution.execution.calculationFingerprint,
+        resultFingerprint: officialExecution.execution.resultFingerprint,
+      },
+      standardsSnapshot: standardsTouched
+        ? { old: existing.standardsSnapshot, new: nextStandardsSnapshot }
+        : undefined,
+      environmentalSnapshot: environmentalTouched
+        ? {
+            old: existing.environmentalSnapshot,
+            new: nextEnvironmentalSnapshot,
+          }
+        : undefined,
+      calibrationLocationSnapshot: locationTouched
+        ? {
+            old: existing.calibrationLocationSnapshot,
+            new: nextCalibrationLocationSnapshot,
+          }
+        : undefined,
+      calibrationPhaseSnapshot: phasesTouched
+        ? {
+            old: existing.calibrationPhaseSnapshot,
+            new: nextCalibrationPhaseSnapshot,
+          }
+        : undefined,
+      unitConversions:
+        normalizedData.conversions.length > 0
+          ? normalizedData.conversions
+          : undefined,
+      assetSnapshot: assetResult.built
+        ? { old: null, new: nextAssetSnapshot }
+        : undefined,
+      // Every standard of the final snapshot was judged at the day the work
+      // is recorded as performed, not at the day it is submitted.
+      standardsJudgedAt:
+        standardsJudgement && standardsJudgement.standardIds.length > 0
+          ? {
+              performedAt: (performedAt ?? now).toISOString(),
+              standardIds: standardsJudgement.standardIds,
+              validOnlyBecauseBackdated: backdatedStandardNames,
+            }
+          : undefined,
+    };
+    const eventBase = {
       organizationId,
       jobId: existing.id,
-      action: command.command,
-      changes: {
-        ...jobActorAuditFields(actor),
-        // Evidence that the frozen compiled method was re-pointed at the
-        // method's current compilation (same definition, new engine).
-        methodSnapshotEngine: reconciledMethod.adopted
-          ? {
-              old: {
-                engineVersion: existing.methodSnapshot.engineVersion,
-                methodFingerprint: existing.methodSnapshot.methodFingerprint,
-              },
-              new: {
-                engineVersion: nextMethodSnapshot.engineVersion,
-                methodFingerprint: nextMethodSnapshot.methodFingerprint,
-              },
-            }
-          : undefined,
-        status:
-          isSubmit || existing.status !== nextStatus
-            ? { old: existing.status, new: nextStatus }
-            : undefined,
-        data: { old: existing.data, new: nextData },
-        results: { old: existing.results, new: nextResults },
-        // What the client claimed its results were; they were not used.
-        ...(command.clientResults
-          ? actor.kind === "desktop_session"
-            ? { desktopSubmittedResults: command.clientResults }
-            : { clientSubmittedResults: command.clientResults }
-          : {}),
-        // §7.8.2.1(n) is printed on the certificate, so a change to it is
-        // evidence an assessor may ask about. Logged only when it moved.
-        methodDeviations:
-          nextDeviations !== undefined &&
-          nextDeviations !== existing.methodDeviations
-            ? { old: existing.methodDeviations, new: nextDeviations }
-            : undefined,
-        officialExecution: {
-          methodFingerprint: officialExecution.execution.methodFingerprint,
-          inputFingerprint: officialExecution.execution.inputFingerprint,
-          calculationFingerprint:
-            officialExecution.execution.calculationFingerprint,
-          resultFingerprint: officialExecution.execution.resultFingerprint,
-        },
-        standardsSnapshot: standardsTouched
-          ? { old: existing.standardsSnapshot, new: nextStandardsSnapshot }
-          : undefined,
-        environmentalSnapshot: environmentalTouched
-          ? {
-              old: existing.environmentalSnapshot,
-              new: nextEnvironmentalSnapshot,
-            }
-          : undefined,
-        calibrationLocationSnapshot: locationTouched
-          ? {
-              old: existing.calibrationLocationSnapshot,
-              new: nextCalibrationLocationSnapshot,
-            }
-          : undefined,
-        calibrationPhaseSnapshot: phasesTouched
-          ? {
-              old: existing.calibrationPhaseSnapshot,
-              new: nextCalibrationPhaseSnapshot,
-            }
-          : undefined,
-        unitConversions:
-          normalizedData.conversions.length > 0
-            ? normalizedData.conversions
-            : undefined,
-        assetSnapshot: assetResult.built
-          ? { old: null, new: nextAssetSnapshot }
-          : undefined,
-        // Every standard of the final snapshot was judged at the day the work
-        // is recorded as performed, not at the day it is submitted.
-        standardsJudgedAt:
-          standardsJudgement && standardsJudgement.standardIds.length > 0
-            ? {
-                performedAt: (performedAt ?? now).toISOString(),
-                standardIds: standardsJudgement.standardIds,
-                validOnlyBecauseBackdated: backdatedStandardNames,
-              }
-            : undefined,
-      },
-      performedBy: actor.userId,
+      actor: { kind: "user" as const, userId: actor.userId },
       ipAddress: actor.ipAddress ?? null,
       reason: isSubmit
         ? [
@@ -755,7 +815,34 @@ async function runJobExecution(
             .filter(Boolean)
             .join(" | ") || undefined
         : undefined,
-    });
+    };
+    if (isSubmit) {
+      await appendJobEvent(tx, {
+        action: "submit",
+        ...eventBase,
+        changes: {
+          ...executionChanges,
+          // Whether the calibration location and phase reasons were validated
+          // at this submit; "legacy_exempt" is a desktop submit from a build
+          // that predates the rule (see `recordCheckExempt`).
+          calibrationRecordCheck: recordCheckExempt
+            ? "legacy_exempt"
+            : "enforced",
+        },
+      });
+    } else {
+      await appendJobEvent(tx, {
+        action: "execute",
+        ...eventBase,
+        changes: {
+          ...executionChanges,
+          // A draft accepted standards that are no longer valid: the evidence
+          // that the save knew, and what the submit will refuse.
+          standardsWarnings:
+            standardsWarnings.length > 0 ? standardsWarnings : undefined,
+        },
+      });
+    }
     return row;
   });
   if (!updated) return { status: "concurrent_update" };
@@ -778,5 +865,10 @@ async function runJobExecution(
     }
   }
 
-  return { status: "ok", job: updated, previousStatus: existing.status };
+  return {
+    status: "ok",
+    job: updated,
+    previousStatus: existing.status,
+    warnings: standardsWarnings,
+  };
 }

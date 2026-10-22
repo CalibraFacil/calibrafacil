@@ -3726,7 +3726,9 @@ publicApiV2Router
         }
 
         const updated = result.job;
-        const body = { data: updated };
+        // `warnings`: standards of the saved snapshot that went stale; the
+        // results are saved, the submit will refuse until they are replaced.
+        const body = { data: updated, warnings: result.warnings };
 
         await emitPublicApiWebhookEvent({
           organizationId: apiKey.organizationId,
