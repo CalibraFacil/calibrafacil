@@ -4,7 +4,9 @@ import {
   type StandardSnapshot,
 } from "@calibra-facil/db/schema";
 import {
+  judgeDraftExecutionStandards,
   judgeExecutionStandards,
+  type DraftStandardsJudgement,
   type JudgedStandardFacts,
   type StandardsJudgement,
   type StandardsJudgementMode,
@@ -85,6 +87,33 @@ export async function judgeSnapshotStandards(input: {
       backdateReason: input.backdateReason,
       mode: input.mode,
       requireBackdateReason: input.requireBackdateReason,
+    },
+    facts,
+  );
+}
+
+/**
+ * The same, for a DRAFT save: a standard of the job's saved snapshot
+ * (`savedStandardIds`) that has since gone stale is accepted and comes back as
+ * a warning; every other standard is judged strictly.
+ */
+export async function judgeDraftSnapshotStandards(input: {
+  standardIds: readonly number[];
+  savedStandardIds: readonly number[];
+  organizationId: string;
+  unitScope?: SQL;
+  performedAt: Date | null;
+  now: Date;
+  mode: StandardsJudgementMode;
+}): Promise<DraftStandardsJudgement> {
+  const facts = await loadStandardFacts(input);
+  return judgeDraftExecutionStandards(
+    {
+      standardIds: input.standardIds,
+      savedStandardIds: input.savedStandardIds,
+      performedAt: input.performedAt,
+      today: input.now,
+      mode: input.mode,
     },
     facts,
   );

@@ -30,6 +30,13 @@
  *
  * When several causes apply, the refusal reports the first in this order:
  * not found, deleted, inactive, expired, back-date reason required.
+ *
+ * A DRAFT save (`judgeDraftExecutionStandards`) is the same judgement with one
+ * exception, so a standard that went stale mid-job cannot make every autosave
+ * fail and lose the readings: a standard already in the job's saved snapshot,
+ * re-sent as it is, that has since become deleted, inactive or expired is
+ * accepted and reported back as a warning. A standard the draft ADDS is judged
+ * strictly. The submit never takes this exception.
  */
 import { isStandardValidOn } from "./standard-validity";
 
@@ -186,4 +193,124 @@ export function judgeExecutionStandards(
       name: fact.name,
     })),
   };
+}
+
+/** Why a standard the job already carries is no longer fit to be used. */
+export const STANDARDS_DRAFT_WARNING_REASONS = [
+  "standard_deleted",
+  "standard_inactive",
+  "standard_expired",
+] as const satisfies readonly StandardsJudgementRefusalCode[];
+
+export type StandardsDraftWarningReason =
+  (typeof STANDARDS_DRAFT_WARNING_REASONS)[number];
+
+/**
+ * What a draft save answers, next to the saved job, for standards of the saved
+ * snapshot that are no longer valid: the save was accepted, the submit will
+ * refuse until they are replaced.
+ */
+export type StandardsDraftWarning = {
+  code: "standard_no_longer_valid";
+  reason: StandardsDraftWarningReason;
+  standardIds: number[];
+  standardNames: string[];
+};
+
+export type DraftStandardsJudgementInput = Omit<
+  StandardsJudgementInput,
+  "requireBackdateReason"
+> & {
+  /** The standards of the job's current saved snapshot. */
+  savedStandardIds: readonly number[];
+};
+
+export type DraftStandardsJudgement =
+  | (Extract<StandardsJudgement, { ok: true }> & {
+      warnings: StandardsDraftWarning[];
+    })
+  | Extract<StandardsJudgement, { ok: false }>;
+
+function isDraftWarningReason(
+  code: StandardsJudgementRefusalCode,
+): code is StandardsDraftWarningReason {
+  return (
+    code === "standard_deleted" ||
+    code === "standard_inactive" ||
+    code === "standard_expired"
+  );
+}
+
+/**
+ * The judgement of a draft save (autosave and manual save of the worksheet).
+ * Standards the save adds to the job are judged exactly as the submit judges
+ * them and refused with the same codes. A standard already in the saved
+ * snapshot is judged too, but when it has become deleted, inactive or expired
+ * the save is accepted and the standard is listed in `warnings`, one entry per
+ * reason. A standard that no longer exists in the caller's scope is refused
+ * either way. The back-date reason is never required on a draft.
+ */
+export function judgeDraftExecutionStandards(
+  input: DraftStandardsJudgementInput,
+  facts: readonly JudgedStandardFacts[],
+): DraftStandardsJudgement {
+  const { savedStandardIds, ...rest } = input;
+  const standardIds = [...new Set(rest.standardIds)];
+  const saved = new Set(savedStandardIds);
+  const judge = (ids: readonly number[]) =>
+    judgeExecutionStandards(
+      { ...rest, standardIds: ids, requireBackdateReason: false },
+      facts,
+    );
+
+  const added = judge(standardIds.filter((id) => !saved.has(id)));
+  if (!added.ok) return added;
+
+  const notFound: number[] = [];
+  const staleIds = new Set<number>();
+  const byReason = new Map<
+    StandardsDraftWarningReason,
+    { ids: number[]; names: string[] }
+  >();
+  for (const id of standardIds.filter((candidate) => saved.has(candidate))) {
+    const carried = judge([id]);
+    if (carried.ok) continue;
+    if (!isDraftWarningReason(carried.code)) {
+      notFound.push(id);
+      continue;
+    }
+    staleIds.add(id);
+    const group = byReason.get(carried.code) ?? { ids: [], names: [] };
+    group.ids.push(...carried.standardIds);
+    group.names.push(...carried.standardNames);
+    byReason.set(carried.code, group);
+  }
+  if (notFound.length > 0) {
+    return {
+      ok: false,
+      code: "standard_not_found",
+      standardIds: notFound,
+      standardNames: [],
+    };
+  }
+
+  const warnings: StandardsDraftWarning[] = [];
+  for (const reason of STANDARDS_DRAFT_WARNING_REASONS) {
+    const group = byReason.get(reason);
+    if (!group) continue;
+    warnings.push({
+      code: "standard_no_longer_valid",
+      reason,
+      standardIds: group.ids,
+      standardNames: group.names,
+    });
+  }
+
+  // The standards that are still valid decide the back-date facts: one that
+  // warns is not "valid only because the work is back-dated".
+  const valid = judge(standardIds.filter((id) => !staleIds.has(id)));
+  if (!valid.ok) return valid;
+  // `standardIds` stays the judged-valid ones (the audit records them as
+  // judged); a stale one appears only under `warnings`.
+  return { ...valid, warnings };
 }
