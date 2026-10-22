@@ -133,7 +133,7 @@ describe("background job union", () => {
     }
   });
 
-  it("REQ-Q-1 every member is keyed by a distinct `type`", () => {
+  it("REQ-Q-1 the certificate render is the only member that may omit `type`", () => {
     const types = BackgroundJobMessageSchema.options.map(
       (member) => member.shape.type,
     );
@@ -189,7 +189,12 @@ describe("background job union", () => {
     const bad: unknown[] = [
       { type: "LABEL", jobId: "1", userId: "u" },
       { type: "LABEL", jobId: 1 },
-      { type: "SERVICE_ORDER_QUOTE", serviceOrderId: 1, userId: "u" },
+      {
+        type: "SERVICE_ORDER_QUOTE",
+        serviceOrderId: 1,
+        quoteId: "9",
+        userId: "u",
+      },
       { type: "SERVICE_ORDER_TAG", serviceOrderId: "1", userId: "u" },
       { type: "OOT_NOTIFICATION", notificationId: 1 },
       {
