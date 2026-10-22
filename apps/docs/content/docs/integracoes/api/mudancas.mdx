@@ -1,0 +1,38 @@
+---
+title: Mudanças da API
+description: Registro datado das mudanças de comportamento da API pública v2 que exigem atenção das integrações.
+---
+
+Mudanças aditivas (campos novos) são descritas em [Conceitos](/docs/integracoes/api/conceitos). Esta página registra mudanças de **comportamento** que podem fazer uma chamada que antes passava ser recusada.
+
+## 2026-10-21: `POST /jobs/{id}/results` e `POST /jobs/{id}/submit` seguem as mesmas regras da aplicação
+
+Salvar resultados e submeter uma OS para revisão agora passam pela mesma lógica usada pela aplicação web e pelo aplicativo desktop. Antes, a API gravava o que recebia, sem recalcular nem validar. Isso podia deixar `results` fora de sincronia com `data` em uma OS em revisão.
+
+### O que mudou
+
+- **`results` é calculado pelo servidor.** O campo `results` enviado no corpo é ignorado: o servidor recalcula os resultados a partir de `data` com o método compilado congelado na OS. O objeto `results` da resposta inclui o bloco `__compiledExecution` (versão do método e do engine, fingerprints de entrada e de resultado, resultados das fórmulas e dos modelos de medição). O valor enviado fica apenas na trilha de auditoria.
+- **Uma OS rejeitada continua rejeitada ao salvar.** `POST /jobs/{id}/results` em uma OS `REJECTED` mantém o status `REJECTED`; antes ela passava para `IN_PROGRESS`. Somente `POST /jobs/{id}/submit` leva a OS adiante, para `REVIEW`.
+- **`data` é normalizado.** Os valores são convertidos para a unidade base do ativo e as chaves que vêm da especificação do ativo não são gravadas em `data`, como na aplicação.
+- **Campos agora respeitados.** Em ambos os endpoints: `selectedStandardIds`, `environment`, `calibrationLocation`, `calibrationPhases` e `performedAt`. Em `results`: também `methodDeviations`. Em `submit`: também `backdateReason`. Antes eles eram aceitos e ignorados. Em `submit`, sem `performedAt` o trabalho continua sendo registrado como realizado no momento da chamada.
+- **Padrões de referência** são julgados na data de execução: vencido, inativo, excluído ou fora da organização é recusado. Um padrão que só é válido porque a data foi retroativa exige `backdateReason`.
+- **Competência.** Quando o laboratório mantém competências, o técnico responsável pela OS precisa ter competência ativa para o tipo de instrumento na data de execução para submeter.
+- **Escopo acreditado (CMC).** A classificação é calculada e gravada na OS ao submeter, sem bloquear.
+- **Auditoria.** A trilha registra o criador da chave (responsável) e a chave usada.
+
+### Novas recusas
+
+| Status | `error.code`                                                                                                           | Quando                                                                                                                            |
+| ------ | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| 400    | `performed_at_invalid`                                                                                                 | `performedAt` não é uma data válida                                                                                               |
+| 400    | `performed_at_future`                                                                                                  | `performedAt` está no futuro                                                                                                      |
+| 400    | `backdate_reason_required`                                                                                             | `performedAt` com mais de 7 dias sem `backdateReason`                                                                             |
+| 400    | `calibration_record_incomplete`                                                                                        | `submit` sem local da calibração, ou bloco de fases "não executado" sem motivo                                                    |
+| 400    | `asset_specification_missing`                                                                                          | o ativo não tem uma especificação exigida pelo método                                                                             |
+| 409    | `job_not_submittable` / `job_not_executable`                                                                           | a OS não está em um status que aceite a operação (já existia)                                                                     |
+| 409    | `job_status_conflict`                                                                                                  | a OS mudou de status durante a operação (já existia)                                                                              |
+| 422    | `official_execution_failed`                                                                                            | a OS não tem método compilado utilizável, ou (em `submit`) o cálculo oficial falhou; `error.details.diagnostics` traz os detalhes |
+| 422    | `technician_competence_missing`                                                                                        | o técnico responsável não tem competência ativa para o instrumento                                                                |
+| 422    | `standard_expired`, `standard_inactive`, `standard_deleted`, `standard_not_found`, `standard_backdate_reason_required` | padrão de referência recusado                                                                                                     |
+
+Para continuar funcionando, envie em `submit` os dados do método em `data` e o `calibrationLocation`, e não dependa de `results` enviado pelo cliente.

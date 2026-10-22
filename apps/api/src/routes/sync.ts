@@ -21,7 +21,6 @@ import {
   asset,
   assetAuditLog,
   assetType,
-  type AssetSnapshot,
   type CalibrationPhaseSnapshot,
   type CalibrationLocationSnapshot,
   calibrationJob,
@@ -30,7 +29,6 @@ import {
   customerAuditLog,
   environmentalLimits,
   type EnvironmentalSnapshot,
-  jobAuditLog,
   member,
   organizationEventLog,
   massCompositionProfile,
@@ -41,21 +39,9 @@ import {
   serviceOrderDeliveryDocument,
   serviceOrderExecution,
   serviceOrderQuote,
-  type MethodSnapshot,
   type StandardSnapshot,
   type ReferenceStandardCertificateDocumentSnapshot,
 } from "@calibra-facil/db/schema";
-import {
-  executeCompiledMethod,
-  type CalculationEngineLike,
-  type CompiledMethod,
-  type MethodDiagnostic,
-} from "@calibra-facil/method-definition";
-import {
-  createCalculationEngine,
-  METHOD_ENGINE_OPTIONS,
-} from "@calibra-facil/math-engine";
-import { normalizeStandardsForOfficialExecution } from "@calibra-facil/shared";
 import {
   buildDesktopSyncConflictId,
   buildSyncPushCursor,
@@ -73,12 +59,7 @@ import {
   UpdateCustomerSchema,
   UpdateServiceOrderExecutionSchema,
   METHOD_DEVIATIONS_MAX_LENGTH,
-  resolveExecutionPerformedAt,
 } from "@calibra-facil/schemas";
-import {
-  canTransition,
-  requireTargetOf,
-} from "@calibra-facil/schemas/job-transitions";
 import {
   and,
   asc,
@@ -104,14 +85,18 @@ import {
 } from "../middleware/permission";
 import { buildUnitScopeCondition } from "../lib/units";
 import {
-  judgeSnapshotStandards,
-  type StandardsRefusal,
-} from "../modules/jobs/standards-judgement";
+  executeJob,
+  submitJob,
+  type FrozenExecutionSnapshots,
+  type JobExecutionCommand,
+  type JobExecutionResult,
+  type OfficialExecutionFailure,
+} from "../modules/jobs/submit-job";
+import { type StandardsRefusal } from "../modules/jobs/standards-judgement";
 import {
   isAssignableTechnician,
   serviceOrderBelongsToOrganization,
 } from "../lib/tenant-refs";
-import { reconcileMethodSnapshotEngine } from "../lib/method-snapshot-engine";
 import { resolveAssetRegimeWrite } from "../lib/asset-regime";
 import { deriveRegulatedNextDate } from "../lib/regulated-interval";
 import { deriveNextCalibrationDate } from "../lib/portal-asset-interval";
@@ -148,7 +133,6 @@ import {
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
 import { createNonConformanceRecord } from "../lib/non-conformances";
 import { ensureOotNotificationForNc } from "../lib/oot-notifications";
-import { syncJobStandardLinks } from "../lib/job-standards";
 import {
   normalizeAssetSpecificationsFromInput,
   resolveAssetBaseMeasurementUnit,
@@ -2607,272 +2591,231 @@ async function applyLocalJobExecution(
     };
   }
 
-  const [existing] = await db
-    .select()
-    .from(calibrationJob)
-    .where(
-      and(
-        eq(calibrationJob.id, remoteEntityId),
-        eq(calibrationJob.organizationId, input.memberData.organizationId),
-        buildUnitScopeCondition(calibrationJob.unitId, input.memberData),
-      ),
-    )
-    .limit(1);
-
-  if (!existing) {
-    return {
-      ok: false,
-      code: "REMOTE_ENTITY_NOT_FOUND",
-      reason: "Cloud job for desktop execution event was not found.",
-    };
-  }
-
-  const executionCommand =
-    input.event.operation === "submit_local_execution" ? "submit" : "execute";
-  if (!canTransition(existing.status, executionCommand)) {
-    return {
-      ok: false,
-      code: "INVALID_STATUS_TRANSITION",
-      reason: `Cannot apply desktop execution to job with status ${existing.status}.`,
-      conflict: {
-        conflictType: "status_transition",
-        remotePayload: {
-          id: existing.id,
-          jobId: existing.jobId,
-          status: existing.status,
-          updatedAt:
-            existing.updatedAt instanceof Date
-              ? existing.updatedAt.toISOString()
-              : existing.updatedAt,
-        },
-      },
-    };
-  }
-
-  // A submit lands where the table says; a plain save keeps the status the
-  // desktop reported (the offline store applies the same execute rule).
-  const nextStatus =
-    executionCommand === "submit"
-      ? requireTargetOf(existing.status, "submit")
-      : (getJobStatus(payload, "status") ?? "IN_PROGRESS");
-  const nextData = getRecordOrNull(payload, "data") ?? {};
+  // The payload is read here and handed to the one submit/execute command as
+  // what the desktop froze offline. The command owns every decision (the
+  // transition, the status the payload claims, the performed date, the
+  // standards, the official execution, the compare-and-set write); this only
+  // translates the event and maps each result to a sync outcome.
+  const isSubmit = input.event.operation === "submit_local_execution";
   const standardsSnapshotResult = hasOwn(payload, "standardsSnapshot")
     ? getStandardSnapshotsResult(payload, "standardsSnapshot")
-    : { ok: true as const, value: existing.standardsSnapshot };
-  if (!standardsSnapshotResult.ok) {
-    return {
-      ok: false,
-      code: "INVALID_STANDARD_SNAPSHOT",
-      reason: standardsSnapshotResult.reason,
-    };
-  }
-  const nextStandardsSnapshot = standardsSnapshotResult.value;
-  const nextEnvironmentalSnapshot = hasOwn(payload, "environmentalSnapshot")
-    ? getEnvironmentalSnapshotOrNull(payload, "environmentalSnapshot")
-    : existing.environmentalSnapshot;
-  const nextCalibrationLocationSnapshot = hasOwn(
-    payload,
-    "calibrationLocationSnapshot",
-  )
-    ? getCalibrationLocationSnapshotOrNull(
-        payload,
-        "calibrationLocationSnapshot",
-      )
-    : existing.calibrationLocationSnapshot;
-  const nextCalibrationPhaseSnapshot = hasOwn(
-    payload,
-    "calibrationPhaseSnapshot",
-  )
-    ? getCalibrationPhaseSnapshotOrNull(payload, "calibrationPhaseSnapshot")
-    : existing.calibrationPhaseSnapshot;
-  // §7.8.2.1(n). Absent means "not edited offline" and must not clear a value
-  // the cloud already holds; an explicit null or empty string clears it.
-  const nextMethodDeviations = hasOwn(payload, "methodDeviations")
-    ? getMethodDeviationsOrNull(payload, "methodDeviations")
-    : existing.methodDeviations;
-  // When the calibration was performed. A submit carries the explicit date the
-  // technician chose (older clients send none: the submit time stands in).
-  const executionTime = resolveDesktopExecutionTime(
-    payload,
-    input.event.occurredAt,
-    nextStatus === "REVIEW",
-  );
-  if (!executionTime.ok) {
-    return {
-      ok: false,
-      code: "INVALID_DESKTOP_EVENT_PAYLOAD",
-      reason: executionTime.reason,
-    };
-  }
+    : null;
+  const frozen: FrozenExecutionSnapshots = {
+    ...(standardsSnapshotResult?.ok
+      ? { standards: { value: standardsSnapshotResult.value } }
+      : {}),
+    ...(hasOwn(payload, "environmentalSnapshot")
+      ? {
+          environmental: {
+            value: getEnvironmentalSnapshotOrNull(
+              payload,
+              "environmentalSnapshot",
+            ),
+          },
+        }
+      : {}),
+    ...(hasOwn(payload, "calibrationLocationSnapshot")
+      ? {
+          calibrationLocation: {
+            value: getCalibrationLocationSnapshotOrNull(
+              payload,
+              "calibrationLocationSnapshot",
+            ),
+          },
+        }
+      : {}),
+    ...(hasOwn(payload, "calibrationPhaseSnapshot")
+      ? {
+          calibrationPhases: {
+            value: getCalibrationPhaseSnapshotOrNull(
+              payload,
+              "calibrationPhaseSnapshot",
+            ),
+          },
+        }
+      : {}),
+  };
+  const nextData = getRecordOrNull(payload, "data") ?? {};
 
-  const explicitPerformedAt = Boolean(
-    getNullableString(payload, "performedAt")?.trim(),
-  );
-  const standardsValidation = await validateDesktopExecutionStandardsSnapshot(
-    nextStandardsSnapshot,
-    nextData,
-    input.memberData,
-    {
-      // Only an EXPLICIT performed date moves the judgement off the sync day.
-      performedAt: explicitPerformedAt ? executionTime.performedAt : null,
-      backdateReason:
-        getNullableString(payload, "backdateReason")?.trim() || null,
-      requireBackdateReason: nextStatus === "REVIEW",
-    },
-  );
-
-  if (!standardsValidation.ok) {
-    return {
-      ok: false,
-      code: standardsValidation.code,
-      reason: standardsValidation.reason,
-    };
-  }
-
-  // Desktop jobs freeze their own compiled method too, so a job started before
-  // an engine release reaches the cloud with the old snapshot; adopt the
-  // method's current compilation when it is provably the same definition
-  // (review of the 0.4.0 execution guard).
-  const reconciledMethod = await reconcileMethodSnapshotEngine({
-    methodSnapshot: existing.methodSnapshot,
+  const execution: JobExecutionCommand = {
+    actor: { kind: "desktop_session", userId: actorUserId },
+    jobId: remoteEntityId,
     organizationId: input.memberData.organizationId,
-    engine: await createMethodExecutionEngine(),
-  });
-  const nextMethodSnapshot = reconciledMethod.methodSnapshot;
-
-  const officialExecution = await executeOfficialDesktopSyncSnapshot({
-    methodSnapshot: nextMethodSnapshot,
+    unitScope: input.memberData,
     data: nextData,
-    assetSnapshot: existing.assetSnapshot,
-    standardsSnapshot: nextStandardsSnapshot,
-    environmentalSnapshot: nextEnvironmentalSnapshot,
-    calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
-  });
+    // What the desktop computed: never stored, only recorded.
+    clientResults: getRecordOrNull(payload, "results"),
+    performedAt: getNullableString(payload, "performedAt")?.trim() || null,
+    backdateReason:
+      getNullableString(payload, "backdateReason")?.trim() || null,
+    // The backdate rule counts from when the technician recorded the
+    // submission, not from the sync: a laptop offline for ten days must not
+    // push a same-day entry past the threshold. Clamped to the server clock.
+    recordedAt: resolveDesktopPerformedAt(input.event.occurredAt, new Date()),
+    // §7.8.2.1(n). Absent means "not edited offline" and must not clear a
+    // value the cloud already holds; an explicit null or empty string clears it.
+    methodDeviations: hasOwn(payload, "methodDeviations")
+      ? getMethodDeviationsOrNull(payload, "methodDeviations")
+      : undefined,
+    frozen,
+    // The desktop reports the status its own store moved the job to; the
+    // server derives the target from the transition table and refuses a
+    // payload that disagrees (Q20).
+    claimedStatus: getJobStatus(payload, "status"),
+    // Payload integrity, checked once the job is loaded and its transition is
+    // known to be legal: a malformed snapshot, or data that uses standards the
+    // snapshot does not carry.
+    precondition: (job) => {
+      if (standardsSnapshotResult && !standardsSnapshotResult.ok) {
+        return {
+          code: "INVALID_STANDARD_SNAPSHOT",
+          reason: standardsSnapshotResult.reason,
+        };
+      }
+      return validateDesktopExecutionStandardsPayload(
+        frozen.standards ? frozen.standards.value : job.standardsSnapshot,
+        nextData,
+      );
+    },
+  };
 
-  if (!officialExecution.ok) {
-    return {
-      ok: false,
-      code: officialExecution.code,
-      reason: officialExecution.reason,
-    };
+  const result = isSubmit
+    ? await submitJob(execution)
+    : await executeJob(execution);
+
+  if (result.status !== "ok") {
+    return await desktopExecutionRefusal(input, remoteEntityId, result);
   }
 
-  const submittedResults = getRecordOrNull(payload, "results");
-  const nextResults = officialExecution.results;
-  const compiledExecution = asRecord(nextResults.__compiledExecution);
-
-  // Compare-and-set on the status the pre-check validated, in the caller's
-  // organization; the audit row commits with it.
-  const updated = await db.transaction(async (tx) => {
-    const [row] = await tx
-      .update(calibrationJob)
-      .set({
-        data: nextData,
-        results: nextResults,
-        ...(reconciledMethod.adopted
-          ? { methodSnapshot: nextMethodSnapshot }
-          : {}),
-        standardsSnapshot: nextStandardsSnapshot,
-        environmentalSnapshot: nextEnvironmentalSnapshot,
-        calibrationLocationSnapshot: nextCalibrationLocationSnapshot,
-        calibrationPhaseSnapshot: nextCalibrationPhaseSnapshot,
-        methodDeviations: nextMethodDeviations,
-        status: nextStatus,
-        performedAt: executionTime.performedAt ?? existing.performedAt,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(calibrationJob.id, existing.id),
-          eq(calibrationJob.organizationId, input.memberData.organizationId),
-          eq(calibrationJob.status, existing.status),
-        ),
-      )
-      .returning();
-    if (!row) return null;
-
-    await tx.insert(jobAuditLog).values({
-      organizationId: input.memberData.organizationId,
-      jobId: existing.id,
-      action:
-        input.event.operation === "submit_local_execution"
-          ? "submit"
-          : "execute",
-      changes: {
-        source: "desktop_sync",
-        status: { old: existing.status, new: row.status },
-        data: { old: existing.data, new: nextData },
-        results: { old: existing.results, new: nextResults },
-        desktopSubmittedResults: submittedResults,
-        officialExecution: {
-          methodFingerprint: compiledExecution.methodFingerprint ?? null,
-          resultFingerprint: compiledExecution.resultFingerprint ?? null,
-        },
-        standardsSnapshot: {
-          old: existing.standardsSnapshot,
-          new: nextStandardsSnapshot,
-        },
-        environmentalSnapshot: {
-          old: existing.environmentalSnapshot,
-          new: nextEnvironmentalSnapshot,
-        },
-        calibrationLocationSnapshot: {
-          old: existing.calibrationLocationSnapshot,
-          new: nextCalibrationLocationSnapshot,
-        },
-        calibrationPhaseSnapshot: {
-          old: existing.calibrationPhaseSnapshot,
-          new: nextCalibrationPhaseSnapshot,
-        },
-      },
-      performedBy: actorUserId,
-      // Same wording as the cloud's own submit, so the audit trail reads alike.
-      reason:
-        [
-          executionTime.backdateReason ||
-          standardsValidation.validOnlyBecauseBackdated.length > 0
-            ? `Registro retroativo (${executionTime.backdateDays} dias): ${executionTime.backdateReason ?? getNullableString(payload, "backdateReason")?.trim()}`
-            : null,
-          standardsValidation.validOnlyBecauseBackdated.length > 0
-            ? `Padroes julgados na data de execucao (${(executionTime.performedAt ?? new Date()).toISOString()}): ${standardsValidation.validOnlyBecauseBackdated.join(", ")} venceu apos essa data`
-            : null,
-        ]
-          .filter(Boolean)
-          .join(" | ") || undefined,
-    });
-    return row;
-  });
-  if (!updated) {
-    return await rejectLostDesktopExecutionRace(input, existing.id);
-  }
-
-  // Reverse traceability (#426 Phase 1): mirror the frozen snapshot into the
-  // indexed job_standard projection.
-  await syncJobStandardLinks(
-    existing.id,
-    nextStandardsSnapshot,
-    updated.performedAt ?? existing.performedAt,
-    input.memberData.organizationId,
-  );
-
+  const updated = result.job;
   await writeDesktopSyncAudit(input, actorUserId, {
-    remoteEntityId: existing.id,
-    remoteJobId: existing.jobId,
+    remoteEntityId: updated.id,
+    remoteJobId: updated.jobId,
   });
 
   return {
     ok: true,
-    remoteEntityId: existing.id,
+    remoteEntityId: updated.id,
     remoteEntity: {
-      id: existing.id,
-      jobId: existing.jobId,
+      id: updated.id,
+      jobId: updated.jobId,
       status: updated.status,
-      performedAt:
-        updated.performedAt?.toISOString?.() ??
-        existing.performedAt?.toISOString?.() ??
-        null,
+      performedAt: updated.performedAt?.toISOString?.() ?? null,
     },
   };
+}
+
+/** The sync outcome (rejection or reviewable conflict) of a command that did not write. */
+async function desktopExecutionRefusal(
+  input: ApplyDesktopSyncEventInput,
+  jobId: number,
+  result: Exclude<JobExecutionResult, { status: "ok" }>,
+): Promise<ApplyDesktopSyncEventResult> {
+  switch (result.status) {
+    case "not_found":
+      return {
+        ok: false,
+        code: "REMOTE_ENTITY_NOT_FOUND",
+        reason: "Cloud job for desktop execution event was not found.",
+      };
+    case "illegal_transition":
+      return {
+        ok: false,
+        code: "INVALID_STATUS_TRANSITION",
+        reason: `Cannot apply desktop execution to job with status ${result.job.status}.`,
+        conflict: {
+          conflictType: "status_transition",
+          remotePayload: {
+            id: result.job.id,
+            jobId: result.job.jobId,
+            status: result.job.status,
+            updatedAt:
+              result.job.updatedAt instanceof Date
+                ? result.job.updatedAt.toISOString()
+                : result.job.updatedAt,
+          },
+        },
+      };
+    case "status_payload_mismatch":
+      return {
+        ok: false,
+        code: "STATUS_PAYLOAD_MISMATCH",
+        reason: `The desktop reported status ${result.claimedStatus}, but applying this event to a cloud job in ${result.job.status} lands it in ${result.expectedStatus}. The server derives the status from the job state machine and does not take the one the desktop sends.`,
+      };
+    case "precondition_failed":
+      return { ok: false, code: result.code, reason: result.reason };
+    case "invalid_performed_at":
+      return {
+        ok: false,
+        code: "INVALID_DESKTOP_EVENT_PAYLOAD",
+        reason: result.error.message,
+      };
+    case "standards_refused":
+      return desktopStandardsRejection(result.refusal);
+    case "asset_unavailable":
+      return {
+        ok: false,
+        code:
+          result.error.code === "asset_not_found"
+            ? "ASSET_NOT_FOUND"
+            : "ASSET_SPECIFICATION_MISSING",
+        reason: result.error.message,
+      };
+    case "record_incomplete":
+      return {
+        ok: false,
+        code: "CALIBRATION_RECORD_INCOMPLETE",
+        reason: result.error.message,
+      };
+    case "official_execution_failed":
+      return desktopOfficialExecutionRejection(result.failure);
+    case "competence_missing":
+      return {
+        ok: false,
+        code: "TECHNICIAN_COMPETENCE_MISSING",
+        reason:
+          "The technician assigned to the job has no active competence for this instrument type.",
+      };
+    case "concurrent_update":
+      return await rejectLostDesktopExecutionRace(input, jobId);
+  }
+}
+
+/** The sync rejection for a job whose frozen compiled method could not be run. */
+function desktopOfficialExecutionRejection(failure: OfficialExecutionFailure): {
+  ok: false;
+  code: string;
+  reason: string;
+} {
+  switch (failure.kind) {
+    case "snapshot_required":
+      return {
+        ok: false,
+        code: "COMPILED_METHOD_SNAPSHOT_INVALID",
+        reason:
+          "Compiled method snapshot is required for desktop execution sync.",
+      };
+    case "snapshot_invalid":
+      return {
+        ok: false,
+        code: "COMPILED_METHOD_SNAPSHOT_INVALID",
+        reason: "Compiled method snapshot has an invalid shape.",
+      };
+    case "snapshot_mismatch":
+      return {
+        ok: false,
+        code: "COMPILED_METHOD_SNAPSHOT_INVALID",
+        reason: "Compiled method snapshot does not match job metadata.",
+      };
+    case "execution_failed":
+      return {
+        ok: false,
+        code: "OFFICIAL_EXECUTION_FAILED",
+        reason:
+          failure.diagnostics.find((item) => item.severity === "error")
+            ?.message ?? "Cloud verification of desktop execution failed.",
+      };
+  }
 }
 
 /**
@@ -2924,100 +2867,30 @@ async function rejectLostDesktopExecutionRace(
   };
 }
 
-type DesktopExecutionTime =
-  | {
-      ok: true;
-      /** null: leave the stored value alone (draft save without a date). */
-      performedAt: Date | null;
-      backdateDays: number;
-      backdateReason: string | null;
-    }
-  | { ok: false; reason: string };
+type DesktopPayloadRefusal = { code: string; reason: string };
 
 /**
- * The performed date of an offline execution, under the cloud's submit rules
- * (`resolveExecutionPerformedAt`): it must parse, may not be in the future and
- * needs a reason beyond 7 days.
- *
- * "Days back" is measured from when the technician recorded the submission
- * (`occurredAt`, clamped to now), not from the sync: a laptop that was offline
- * for ten days would otherwise push a same-day entry past the threshold with no
- * way left to add the reason. "Future" is measured against the server clock.
- * A draft save only remembers a valid date, like the cloud's /execute. Events
- * from older clients carry no date: the submit time is used, as before.
+ * The checks of a desktop execution payload that need no database: the standard
+ * snapshot is internally consistent and carries what the data uses (mass
+ * composition items must be in the snapshot, with certified values). The
+ * judgement of the standards themselves (active, not deleted, certificate
+ * valid on the performed day) is the cloud's one judgement, run by the
+ * submit/execute command.
  */
-function resolveDesktopExecutionTime(
-  payload: Record<string, unknown>,
-  occurredAt: string,
-  isSubmit: boolean,
-  now: Date = new Date(),
-): DesktopExecutionTime {
-  const rawPerformedAt = getNullableString(payload, "performedAt")?.trim();
-  const recordedAt = resolveDesktopPerformedAt(occurredAt, now);
-
-  if (!isSubmit) {
-    const parsed = rawPerformedAt ? new Date(rawPerformedAt) : null;
-    return {
-      ok: true,
-      performedAt: parsed && !Number.isNaN(parsed.getTime()) ? parsed : null,
-      backdateDays: 0,
-      backdateReason: null,
-    };
-  }
-
-  if (!rawPerformedAt) {
-    return {
-      ok: true,
-      performedAt: recordedAt,
-      backdateDays: 0,
-      backdateReason: null,
-    };
-  }
-
-  const parsed = new Date(rawPerformedAt);
-  const referenceNow =
-    parsed.getTime() > recordedAt.getTime() && parsed.getTime() <= now.getTime()
-      ? parsed
-      : recordedAt;
-  const resolved = resolveExecutionPerformedAt({
-    performedAt: rawPerformedAt,
-    backdateReason: getNullableString(payload, "backdateReason"),
-    now: referenceNow,
-  });
-  if (!resolved.ok) return { ok: false, reason: resolved.message };
-
-  return {
-    ok: true,
-    performedAt: resolved.performedAt,
-    backdateDays: resolved.backdateDays,
-    backdateReason: resolved.backdateReason,
-  };
-}
-
-async function validateDesktopExecutionStandardsSnapshot(
+function validateDesktopExecutionStandardsPayload(
   standardsSnapshot: StandardSnapshot[] | null,
   data: Record<string, unknown>,
-  memberData: MemberData,
-  judgementInput: DesktopStandardsJudgementInput,
-): Promise<
-  | { ok: true; validOnlyBecauseBackdated: string[] }
-  | {
-      ok: false;
-      code: string;
-      reason: string;
-    }
-> {
+): DesktopPayloadRefusal | null {
   const compositionStandardIds = collectCompositionStandardIds(data);
 
   if (!standardsSnapshot || standardsSnapshot.length === 0) {
     if (compositionStandardIds.length > 0) {
       return {
-        ok: false,
         code: "INVALID_STANDARD_SNAPSHOT",
         reason: `Desktop execution mass composition references standards missing from standardsSnapshot: ${compositionStandardIds.join(", ")}.`,
       };
     }
-    return { ok: true, validOnlyBecauseBackdated: [] };
+    return null;
   }
 
   const selectedStandardIds = standardsSnapshot.map((standard) => standard.id);
@@ -3025,13 +2898,11 @@ async function validateDesktopExecutionStandardsSnapshot(
 
   if (invalidIds.length > 0) {
     return {
-      ok: false,
       code: "INVALID_STANDARD_SNAPSHOT",
       reason: "Desktop execution standard snapshot contains invalid ids.",
     };
   }
 
-  const uniqueIds = [...new Set(selectedStandardIds.filter(isIntegerNumber))];
   const snapshotsById = new Map(
     standardsSnapshot
       .filter((standard) => isIntegerNumber(standard.id))
@@ -3042,7 +2913,6 @@ async function validateDesktopExecutionStandardsSnapshot(
   );
   if (compositionIdsMissingSnapshot.length > 0) {
     return {
-      ok: false,
       code: "INVALID_STANDARD_SNAPSHOT",
       reason: `Desktop execution mass composition references standards missing from standardsSnapshot: ${compositionIdsMissingSnapshot.join(", ")}.`,
     };
@@ -3054,37 +2924,12 @@ async function validateDesktopExecutionStandardsSnapshot(
   );
   if (compositionIdsMissingCertifiedValues.length > 0) {
     return {
-      ok: false,
       code: "STANDARD_CERTIFIED_VALUES_MISSING",
       reason: `Desktop execution mass composition references standards without certified values: ${compositionIdsMissingCertifiedValues.join(", ")}.`,
     };
   }
 
-  // The one standards judgement (Q12), shared with the cloud submit, the public
-  // API and the offline database; this only maps its refusals to the codes the
-  // desktop already handles. An explicit performed date (new desktop builds)
-  // judges on the laboratory day the work was performed; a legacy event carries
-  // none and is judged at sync time, as it always was.
-  const judgement = await judgeSnapshotStandards({
-    standardIds: uniqueIds,
-    organizationId: memberData.organizationId,
-    unitScope: buildUnitScopeCondition(referenceStandard.unitId, memberData),
-    performedAt: judgementInput.performedAt,
-    now: new Date(),
-    backdateReason: judgementInput.backdateReason,
-    mode: judgementInput.performedAt ? "desktop_explicit" : "desktop_legacy",
-    // A submission must justify a backdate-dependent standard; the draft saves
-    // are advisory.
-    requireBackdateReason: judgementInput.requireBackdateReason,
-  });
-  if (!judgement.ok) return desktopStandardsRejection(judgement);
-
-  return {
-    ok: true,
-    validOnlyBecauseBackdated: judgement.validOnlyBecauseBackdated.map(
-      (standard) => standard.name,
-    ),
-  };
+  return null;
 }
 
 /** The sync rejection (code + reason) the desktop sees for a judgement refusal. */
@@ -3127,16 +2972,6 @@ function desktopStandardsRejection(refusal: StandardsRefusal): {
       };
   }
 }
-
-/** How a desktop execution event's standards are judged (Q12). */
-type DesktopStandardsJudgementInput = {
-  /** The explicit performed date; null for a legacy event (judged at sync). */
-  performedAt: Date | null;
-  /** The written justification sent with the event, if any. */
-  backdateReason: string | null;
-  /** A submission (not a draft save) must justify a backdate-dependent standard. */
-  requireBackdateReason: boolean;
-};
 
 async function applyCreateLocalServiceOrderIntake(
   input: ApplyDesktopSyncEventInput,
@@ -3834,243 +3669,6 @@ async function applyCreateLocalServiceOrderDeliveryDocumentDraft(
   };
 }
 
-async function executeOfficialDesktopSyncSnapshot(params: {
-  methodSnapshot: MethodSnapshot | null;
-  data: Record<string, unknown>;
-  assetSnapshot: AssetSnapshot | null;
-  standardsSnapshot: StandardSnapshot[] | null;
-  environmentalSnapshot: EnvironmentalSnapshot | null;
-  calibrationPhaseSnapshot: CalibrationPhaseSnapshot | null;
-}): Promise<
-  | { ok: true; results: Record<string, unknown> }
-  | {
-      ok: false;
-      code: string;
-      reason: string;
-      diagnostics: MethodDiagnostic[];
-    }
-> {
-  if (!params.methodSnapshot || !params.assetSnapshot) {
-    return {
-      ok: false,
-      code: "COMPILED_METHOD_SNAPSHOT_REQUIRED",
-      reason:
-        "Desktop execution sync requires frozen method and asset snapshots.",
-      diagnostics: [],
-    };
-  }
-
-  const methodSnapshot = params.methodSnapshot;
-  const assetSnapshot = params.assetSnapshot;
-  const compiled = getCompiledMethodSnapshot(methodSnapshot);
-  if (!compiled.ok) {
-    return {
-      ok: false,
-      code: "COMPILED_METHOD_SNAPSHOT_INVALID",
-      reason: compiled.reason,
-      diagnostics: compiled.diagnostics,
-    };
-  }
-
-  const execution = executeCompiledMethod(
-    compiled.compiledMethod,
-    {
-      inputs: buildOfficialExecutionInputs({
-        ...params,
-        methodSnapshot,
-        assetSnapshot,
-      }),
-      calibrationPhases: params.calibrationPhaseSnapshot ?? undefined,
-    },
-    { engine: await createMethodExecutionEngine() },
-  );
-
-  if (!execution.ok) {
-    return {
-      ok: false,
-      code: "OFFICIAL_EXECUTION_FAILED",
-      reason:
-        execution.diagnostics.find((item) => item.severity === "error")
-          ?.message ?? "Cloud verification of desktop execution failed.",
-      diagnostics: execution.diagnostics,
-    };
-  }
-
-  return {
-    ok: true,
-    results: {
-      ...execution.outputs,
-      __compiledExecution: {
-        methodFingerprint: execution.methodFingerprint,
-        engineVersion: execution.engineVersion,
-        engineOptionsFingerprint: execution.engineOptionsFingerprint,
-        inputFingerprint: execution.inputFingerprint,
-        calculationFingerprint: execution.calculationFingerprint,
-        resultFingerprint: execution.resultFingerprint,
-        canonicalResultJson: execution.canonicalResultJson,
-        formulaResults: execution.formulaResults,
-        measurementModelResults: execution.measurementModelResults,
-        acceptanceCriteriaResults: execution.acceptanceCriteriaResults,
-        diagnostics: execution.diagnostics,
-      },
-    },
-  };
-}
-
-function getCompiledMethodSnapshot(
-  methodSnapshot: MethodSnapshot,
-):
-  | { ok: true; compiledMethod: CompiledMethod }
-  | { ok: false; diagnostics: MethodDiagnostic[]; reason: string } {
-  const compiledMethod = methodSnapshot.compiledMethod;
-  if (
-    !compiledMethod ||
-    typeof compiledMethod !== "object" ||
-    Array.isArray(compiledMethod) ||
-    !methodSnapshot.methodFingerprint ||
-    !methodSnapshot.engineVersion ||
-    !methodSnapshot.engineOptionsFingerprint ||
-    !methodSnapshot.normalizedMethodJson
-  ) {
-    const reason =
-      "Compiled method snapshot is required for desktop execution sync.";
-    return {
-      ok: false,
-      reason,
-      diagnostics: [
-        methodDiagnostic(
-          "COMPILED_METHOD_SNAPSHOT_REQUIRED",
-          reason,
-          "methodSnapshot.compiledMethod",
-        ),
-      ],
-    };
-  }
-
-  if (!isCompiledMethodCandidate(compiledMethod)) {
-    const reason = "Compiled method snapshot has an invalid shape.";
-    return {
-      ok: false,
-      reason,
-      diagnostics: [
-        methodDiagnostic(
-          "COMPILED_METHOD_SNAPSHOT_INVALID",
-          reason,
-          "methodSnapshot.compiledMethod",
-        ),
-      ],
-    };
-  }
-  const candidate = compiledMethod;
-
-  const mismatches: MethodDiagnostic[] = [];
-  if (candidate.methodFingerprint !== methodSnapshot.methodFingerprint) {
-    mismatches.push(
-      methodDiagnostic(
-        "COMPILED_METHOD_SNAPSHOT_MISMATCH",
-        "Compiled method fingerprint differs from the job snapshot.",
-        "methodSnapshot.methodFingerprint",
-      ),
-    );
-  }
-
-  if (candidate.engine.version !== methodSnapshot.engineVersion) {
-    mismatches.push(
-      methodDiagnostic(
-        "COMPILED_METHOD_SNAPSHOT_MISMATCH",
-        "Compiled engine version differs from the job snapshot.",
-        "methodSnapshot.engineVersion",
-      ),
-    );
-  }
-
-  if (
-    candidate.engine.optionsFingerprint !==
-    methodSnapshot.engineOptionsFingerprint
-  ) {
-    mismatches.push(
-      methodDiagnostic(
-        "COMPILED_METHOD_SNAPSHOT_MISMATCH",
-        "Compiled engine options fingerprint differs from the job snapshot.",
-        "methodSnapshot.engineOptionsFingerprint",
-      ),
-    );
-  }
-
-  if (candidate.normalizedMethodJson !== methodSnapshot.normalizedMethodJson) {
-    mismatches.push(
-      methodDiagnostic(
-        "COMPILED_METHOD_SNAPSHOT_MISMATCH",
-        "Compiled normalized method JSON differs from the job snapshot.",
-        "methodSnapshot.normalizedMethodJson",
-      ),
-    );
-  }
-
-  if (mismatches.length > 0) {
-    return {
-      ok: false,
-      reason: "Compiled method snapshot does not match job metadata.",
-      diagnostics: mismatches,
-    };
-  }
-
-  return { ok: true, compiledMethod: candidate };
-}
-
-function buildOfficialExecutionInputs(params: {
-  methodSnapshot: MethodSnapshot;
-  data: Record<string, unknown>;
-  assetSnapshot: AssetSnapshot;
-  standardsSnapshot: StandardSnapshot[] | null;
-  environmentalSnapshot: EnvironmentalSnapshot | null;
-}): Record<string, unknown> {
-  const inputs: Record<string, unknown> = { ...params.data };
-
-  for (const field of params.methodSnapshot.dataFields ?? []) {
-    if (field.source !== "asset_spec" || !field.assetSpecKey) continue;
-    const value = params.assetSnapshot.specifications?.[field.assetSpecKey];
-    if (value !== undefined) {
-      inputs[field.key] = value;
-    }
-  }
-
-  if (params.environmentalSnapshot) {
-    inputs.environment = {
-      temperature: params.environmentalSnapshot.temperature,
-      humidity: params.environmentalSnapshot.humidity,
-      pressure: params.environmentalSnapshot.pressure,
-    };
-  }
-
-  if (params.standardsSnapshot !== undefined) {
-    inputs.standards =
-      normalizeStandardsForOfficialExecution(params.standardsSnapshot) ?? [];
-  }
-
-  return inputs;
-}
-
-async function createMethodExecutionEngine(): Promise<CalculationEngineLike> {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- math-engine v0.3.0 has narrower input parameter types than method-definition's adapter interface, but the runtime method surface is compatible.
-  return createCalculationEngine(
-    METHOD_ENGINE_OPTIONS,
-  ) as unknown as CalculationEngineLike;
-}
-
-function methodDiagnostic(
-  code: string,
-  message: string,
-  path: string,
-): MethodDiagnostic {
-  return {
-    code,
-    severity: "error",
-    message,
-    path,
-  };
-}
-
 async function findDesktopSyncRemoteEntityId(
   organizationId: string,
   localEntityId: string,
@@ -4277,22 +3875,6 @@ function collectCompositionStandardIds(data: Record<string, unknown>) {
 
   visit(data);
   return Array.from(ids);
-}
-
-function isCompiledMethodCandidate(value: unknown): value is CompiledMethod {
-  const candidate = asRecord(value);
-  const engine = asRecord(candidate.engine);
-
-  return (
-    candidate.status === "compiled" &&
-    typeof candidate.methodFingerprint === "string" &&
-    typeof engine.version === "string" &&
-    typeof engine.optionsFingerprint === "string" &&
-    Array.isArray(candidate.inputs) &&
-    Array.isArray(candidate.formulas) &&
-    Array.isArray(candidate.measurementModels) &&
-    Array.isArray(candidate.acceptanceCriteria)
-  );
 }
 
 function getStandardSnapshotsResult(
