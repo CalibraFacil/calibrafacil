@@ -90,6 +90,7 @@ export const EVIDENCE_REGISTRY: Readonly<Record<string, EvidenceCategory>> = {
   oot_notification: "technical-record",
   // certificates
   issued_certificate_snapshot: "certificate",
+  certificate_input: "certificate",
   certificate_release: "certificate",
   certificate_numbering_sequence: "certificate",
   // reference standards

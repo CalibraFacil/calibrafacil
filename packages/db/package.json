@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "exports": {
     ".": "./src/db.ts",
+    "./certificate-input": "./src/certificate-input.ts",
     "./job-events": "./src/job-events.ts",
     "./queue": "./src/queue.ts",
     "./queue-receipts": "./src/queue-receipts.ts",
@@ -36,6 +37,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@calibra-facil/certificate-data": "workspace:^",
     "@calibra-facil/config": "workspace:^",
     "@calibra-facil/schemas": "workspace:^",
     "@calibra-facil/shared": "workspace:^",

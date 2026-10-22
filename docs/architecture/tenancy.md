@@ -96,7 +96,7 @@ columns, foreign keys, unique constraints and indexes are all expressed in
 
 ## Summary
 
-134 tables: 118 tenant (an organization column), 16 global (no organization column, with the reason below). Of the tenant tables, 102 have the column NOT NULL and 16 (the audit logs) have it nullable, guarded by a `CHECK (organization_id IS NOT NULL) NOT VALID` that refuses every new row without one. 37 tenant tables gained `organization_id` in migration 0118.
+135 tables: 119 tenant (an organization column), 16 global (no organization column, with the reason below). Of the tenant tables, 103 have the column NOT NULL and 16 (the audit logs) have it nullable, guarded by a `CHECK (organization_id IS NOT NULL) NOT VALID` that refuses every new row without one. 37 tenant tables gained `organization_id` in migration 0118.
 
 ## Global tables
 
@@ -180,6 +180,7 @@ The value was backfilled from the parent along the path shown (parents first).
 | `calibration_method`                      | `organization_id`     | CASCADE            |
 | `calibration_request`                     | `organization_id`     | RESTRICT           |
 | `calibration_visit`                       | `organization_id`     | RESTRICT           |
+| `certificate_input`                       | `organization_id`     | RESTRICT           |
 | `certificate_numbering_audit_log`         | `organization_id`     | none               |
 | `certificate_numbering_profile`           | `organization_id`     | CASCADE            |
 | `certificate_numbering_sequence`          | `organization_id`     | RESTRICT           |
@@ -268,7 +269,7 @@ Parents that expose 14 `UNIQUE (id, organization)` targets:
 - `service_order_execution`: `service_order_execution_id_org_uidx` on (`id`, `organization_id`)
 - `service_order_quote`: `service_order_quote_id_org_uidx` on (`id`, `organization_id`)
 
-29 composite foreign keys `(pointer, organization_id) → parent (id, organization)`; each repeats the delete action of the single-column key beside it:
+30 composite foreign keys `(pointer, organization_id) → parent (id, organization)`; each repeats the delete action of the single-column key beside it:
 
 - `asset_oot_impact_assessment`.`event_id` → `asset_oot_event` (`id`, `lab_organization_id`): CASCADE
 - `billing_document_item`.`document_id` → `billing_document` (`id`, `organization_id`): CASCADE
@@ -276,6 +277,7 @@ Parents that expose 14 `UNIQUE (id, organization)` targets:
 - `billing_group_service_order`.`service_order_id` → `service_order` (`id`, `organization_id`): RESTRICT
 - `calibration_request_item`.`request_id` → `calibration_request` (`id`, `organization_id`): CASCADE
 - `calibration_request_item`.`asset_id` → `asset` (`id`, `lab_organization_id`): RESTRICT
+- `certificate_input`.`job_id` → `calibration_job` (`id`, `organization_id`): RESTRICT
 - `commercial_agreement_service_term`.`agreement_id` → `commercial_agreement` (`id`, `organization_id`): CASCADE
 - `commercial_agreement_service_term`.`service_id` → `service` (`id`, `organization_id`): CASCADE
 - `commercial_agreement_service_term`.`unit_id` → `organization_unit` (`id`, `organization_id`): CASCADE
