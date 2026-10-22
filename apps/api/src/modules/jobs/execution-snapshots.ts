@@ -51,19 +51,6 @@ export function buildCalibrationLocationSnapshot(
   };
 }
 
-export function validateCalibrationLocationForSubmit(
-  snapshot: CalibrationLocationSnapshot | null | undefined,
-): string | null {
-  if (!snapshot) return "Local da calibração é obrigatório";
-  if (!["customer_site", "lab", "other"].includes(snapshot.type)) {
-    return "Tipo de local da calibração é inválido";
-  }
-  if (!snapshot.addressText.trim()) {
-    return "Endereço/local da calibração é obrigatório";
-  }
-  return null;
-}
-
 export function buildCalibrationPhaseSnapshot(
   input:
     | {
@@ -111,18 +98,6 @@ function isCalibrationPhaseMode(
     mode === "after_only" ||
     mode === "not_performed"
   );
-}
-
-export function validateCalibrationPhasesForSubmit(
-  snapshot: CalibrationPhaseSnapshot | null | undefined,
-): string | null {
-  for (const [blockKey, block] of Object.entries(snapshot?.blocks ?? {})) {
-    if (block.mode !== "not_performed") continue;
-    if (!block.reason?.trim()) {
-      return `Informe o motivo para não executar o bloco ${blockKey}`;
-    }
-  }
-  return null;
 }
 
 function standardCertificateDocumentSnapshot(

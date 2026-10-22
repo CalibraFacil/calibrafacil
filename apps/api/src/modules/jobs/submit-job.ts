@@ -12,6 +12,7 @@ import {
 } from "@calibra-facil/db/schema";
 import {
   resolveExecutionPerformedAt,
+  validateCalibrationRecordForSubmit,
   type CalibrationLocationInput,
   type CalibrationPhaseInput,
   type EnvironmentalDataInput,
@@ -38,8 +39,6 @@ import {
   buildStandardsSnapshot,
   resolveAssetSnapshot,
   standardsPerformedAt,
-  validateCalibrationLocationForSubmit,
-  validateCalibrationPhasesForSubmit,
 } from "./execution-snapshots";
 import {
   jobActorAuditFields,
@@ -134,6 +133,12 @@ export type JobExecutionCommand = {
   calibrationLocation?: CalibrationLocationInput;
   calibrationPhases?: CalibrationPhaseInput;
   frozen?: FrozenExecutionSnapshots;
+  /**
+   * A desktop submit written by a build that predates the offline calibration
+   * record rule (no location, no phase reasons collected): the only submit that
+   * is not held to it. Ignored for every other actor.
+   */
+  legacyUnvalidatedRecord?: boolean;
   /**
    * The status the caller's payload says the job lands in (the desktop sends
    * its own). It is only checked against the transition table, never written:
@@ -492,13 +497,15 @@ async function runJobExecution(
         actor.userId,
       ) ?? null);
 
-  // A submission from an online caller carries its calibration location and
-  // phase justifications; a desktop's frozen snapshots are what it recorded
-  // offline.
-  if (isSubmit && !isDesktop) {
-    const incomplete =
-      validateCalibrationLocationForSubmit(nextCalibrationLocationSnapshot) ??
-      validateCalibrationPhasesForSubmit(nextCalibrationPhaseSnapshot);
+  // Every submit carries its calibration location and phase justifications,
+  // the desktop's too (its frozen snapshots are what it recorded offline). The
+  // one exception is an event a desktop build wrote before it enforced this
+  // offline (`legacyUnvalidatedRecord`): applied as before, not dead-lettered.
+  if (isSubmit && !(isDesktop && command.legacyUnvalidatedRecord)) {
+    const incomplete = validateCalibrationRecordForSubmit({
+      location: nextCalibrationLocationSnapshot,
+      phases: nextCalibrationPhaseSnapshot,
+    });
     if (incomplete) {
       return {
         status: "record_incomplete",

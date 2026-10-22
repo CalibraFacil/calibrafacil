@@ -47,6 +47,7 @@ import {
   CreateServiceOrderSchema,
   METHOD_DEVIATIONS_MAX_LENGTH,
   resolveExecutionPerformedAt,
+  validateCalibrationRecordForSubmit,
 } from "@calibra-facil/schemas";
 import {
   localAttachmentSchema,
@@ -189,52 +190,6 @@ function isCalibrationPhaseMode(mode: unknown) {
     mode === "after_only" ||
     mode === "not_performed"
   );
-}
-
-function validateCalibrationLocationForSubmit(
-  snapshot: Record<string, unknown> | null | undefined,
-): string | null {
-  if (!snapshot) return "Local da calibração é obrigatório";
-  if (
-    snapshot.type !== "customer_site" &&
-    snapshot.type !== "lab" &&
-    snapshot.type !== "other"
-  ) {
-    return "Tipo de local da calibração é inválido";
-  }
-  if (
-    typeof snapshot.addressText !== "string" ||
-    !snapshot.addressText.trim()
-  ) {
-    return "Endereço/local da calibração é obrigatório";
-  }
-  return null;
-}
-
-function validateCalibrationPhasesForSubmit(
-  snapshot: Record<string, unknown> | null | undefined,
-): string | null {
-  const blocks = snapshot?.blocks;
-  if (!blocks || typeof blocks !== "object" || Array.isArray(blocks)) {
-    return null;
-  }
-
-  for (const [blockKey, block] of Object.entries(blocks)) {
-    if (!block || typeof block !== "object" || Array.isArray(block)) {
-      continue;
-    }
-    const blockRecord = recordFromUnknown(block);
-    const mode = blockRecord.mode;
-    const reason = blockRecord.reason;
-    if (
-      mode === "not_performed" &&
-      (typeof reason !== "string" || reason.trim() === "")
-    ) {
-      return `Informe o motivo para não executar o bloco ${blockKey}`;
-    }
-  }
-
-  return null;
 }
 
 /**
@@ -696,17 +651,13 @@ export function createLocalServerRuntime(
       recordOrNull(current.calibrationPhaseSnapshot),
       context.userId ?? "local",
     );
-    const calibrationLocationError = validateCalibrationLocationForSubmit(
-      calibrationLocationSnapshot,
-    );
-    if (calibrationLocationError) {
-      return c.json({ error: calibrationLocationError }, 400);
-    }
-    const calibrationPhaseError = validateCalibrationPhasesForSubmit(
-      calibrationPhaseSnapshot,
-    );
-    if (calibrationPhaseError) {
-      return c.json({ error: calibrationPhaseError }, 400);
+    // The cloud's rule, the same function the local database applies again.
+    const calibrationRecordError = validateCalibrationRecordForSubmit({
+      location: calibrationLocationSnapshot,
+      phases: calibrationPhaseSnapshot,
+    });
+    if (calibrationRecordError) {
+      return c.json({ error: calibrationRecordError }, 400);
     }
     // The cloud's rules for the performed date, answered the same way (400):
     // not in the future, and a reason once it is more than 7 days back.
