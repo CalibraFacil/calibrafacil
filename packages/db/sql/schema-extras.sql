@@ -368,6 +368,69 @@ BEGIN
   END LOOP;
 END
 $$;
+
+-- calibration_job status machine, enforced in Postgres (migration 0119, roadmap P2-6).
+-- The function is generated from packages/schemas/src/job-transitions.ts
+-- (`pnpm --filter @calibra-facil/db gen:job-transitions-sql`); the drift guard
+-- packages/db/src/job-transitions-sql.test.ts keeps it equal to the migration.
+-- Audited repairs: `SET LOCAL calibra.allow_status_repair = 'on'` in a transaction.
+-- BEGIN generated: calibra_calibration_job_status_guard
+CREATE OR REPLACE FUNCTION calibra_calibration_job_status_guard()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF calibra_history_rewrite_allowed()
+     OR coalesce(current_setting('calibra.allow_status_repair', true), '') = 'on' THEN
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.status IN ('DRAFT') THEN
+      RETURN NEW;
+    END IF;
+    RAISE EXCEPTION 'calibra: illegal job creation status %', NEW.status
+      USING ERRCODE = 'CF001',
+            TABLE = TG_TABLE_NAME,
+            COLUMN = 'status',
+            HINT = 'A calibration job is created in DRAFT and walks the state machine.';
+  END IF;
+
+  IF NEW.status IS NOT DISTINCT FROM OLD.status THEN
+    RETURN NEW;
+  END IF;
+
+  IF (OLD.status, NEW.status) IN (
+    ('DRAFT', 'IN_PROGRESS'),
+    ('DRAFT', 'REVIEW'),
+    ('IN_PROGRESS', 'REVIEW'),
+    ('REJECTED', 'REVIEW'),
+    ('REVIEW', 'REJECTED'),
+    ('REVIEW', 'GENERATING_PDF'),
+    ('GENERATING_PDF', 'APPROVED'),
+    ('GENERATING_PDF', 'REJECTED'),
+    ('GENERATING_PDF', 'REVIEW'),
+    ('DRAFT', 'CANCELED'),
+    ('IN_PROGRESS', 'CANCELED'),
+    ('REVIEW', 'CANCELED'),
+    ('REJECTED', 'CANCELED'),
+    ('APPROVED', 'SUPERSEDED')
+  ) THEN
+    RETURN NEW;
+  END IF;
+
+  RAISE EXCEPTION 'calibra: illegal job transition % -> %', OLD.status, NEW.status
+    USING ERRCODE = 'CF001',
+          TABLE = TG_TABLE_NAME,
+          COLUMN = 'status',
+          HINT = 'Move the job with the lifecycle commands (packages/schemas job-transitions.ts); an audited repair sets calibra.allow_status_repair = on for one transaction.';
+END
+$$;
+-- END generated: calibra_calibration_job_status_guard
+DROP TRIGGER IF EXISTS calibration_job_status_transition_guard ON public.calibration_job;
+CREATE TRIGGER calibration_job_status_transition_guard
+  BEFORE INSERT OR UPDATE OF status ON public.calibration_job
+  FOR EACH ROW EXECUTE FUNCTION calibra_calibration_job_status_guard();
 -- certificate_input guard (migration 0120): the frozen input never changes. UPDATE is
 -- always refused. DELETE is allowed only while the job is in REVIEW: the approval that
 -- wrote the row did not complete (dispatch failed and was reverted, or the job was

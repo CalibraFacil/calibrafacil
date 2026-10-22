@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { insertJobs } from "../../test/integration/job-fixtures";
 import { beforeEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db, truncateAll } from "../../test/integration/db";
@@ -6,7 +7,6 @@ import { seedOrg } from "../../test/integration/seed";
 import {
   asset,
   assetType,
-  calibrationJob,
   customer,
   issuedCertificateSnapshot,
   organizationEventLog,
@@ -66,34 +66,31 @@ async function seedSnapshot(orgId: string, userId: string, unitId: number) {
       createdAt: EPOCH,
     })
     .returning();
-  const [jobRow] = await db
-    .insert(calibrationJob)
-    .values({
-      jobId: "CAL-DRIFT-0001",
-      certificateName: "CAL-DRIFT-0001",
-      organizationId: orgId,
-      unitId,
-      customerId: customerRow!.id,
-      assetId: assetRow!.id,
-      serviceId: serviceRow!.id,
-      methodSnapshot: {
-        methodId: 0,
-        methodName: "M",
-        methodVersion: 1,
-        accreditedScope: false,
-        dataFields: [],
-        variableBindings: [],
-        formulas: [],
-        measurementModels: [],
-        validations: [],
-        uncertaintyParams: [],
-      },
-      status: "APPROVED",
-      performedAt: EPOCH,
-      createdBy: userId,
-      createdAt: EPOCH,
-    })
-    .returning();
+  const [jobRow] = await insertJobs({
+    jobId: "CAL-DRIFT-0001",
+    certificateName: "CAL-DRIFT-0001",
+    organizationId: orgId,
+    unitId,
+    customerId: customerRow!.id,
+    assetId: assetRow!.id,
+    serviceId: serviceRow!.id,
+    methodSnapshot: {
+      methodId: 0,
+      methodName: "M",
+      methodVersion: 1,
+      accreditedScope: false,
+      dataFields: [],
+      variableBindings: [],
+      formulas: [],
+      measurementModels: [],
+      validations: [],
+      uncertaintyParams: [],
+    },
+    status: "APPROVED",
+    performedAt: EPOCH,
+    createdBy: userId,
+    createdAt: EPOCH,
+  });
   const [snapshotRow] = await db
     .insert(issuedCertificateSnapshot)
     .values({

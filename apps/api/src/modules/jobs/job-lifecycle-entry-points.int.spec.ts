@@ -27,12 +27,12 @@
  *              SUPERSEDED
  */
 
+import { setJobStatus } from "../../../test/integration/job-fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, asc, eq } from "drizzle-orm";
 import { organizationOf } from "../../../test/integration/organization-of";
 import { db } from "@calibra-facil/db";
 import {
-  calibrationJob,
   calibrationVisit,
   jobAuditLog,
   type JobStatus,
@@ -130,10 +130,7 @@ async function seedWorld(status: JobStatus) {
     })
     .returning({ id: calibrationVisit.id });
   if (!visit) throw new Error("seedWorld: visit insert failed");
-  await db
-    .update(calibrationJob)
-    .set({ status, visitId: visit.id })
-    .where(eq(calibrationJob.id, jobId));
+  await setJobStatus(jobId, status, { visitId: visit.id });
 
   return {
     org,

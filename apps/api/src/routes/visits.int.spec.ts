@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { insertJobs } from "../../test/integration/job-fixtures";
 import {
   visitJobsRouter,
   visitRescheduleRequestsRouter,
@@ -531,22 +532,19 @@ async function seedVisitJob(params: {
   visitId: number;
   status?: "DRAFT" | "IN_PROGRESS";
 }): Promise<number> {
-  const [row] = await db
-    .insert(calibrationJob)
-    .values({
-      jobId: params.jobId,
-      organizationId: params.organizationId,
-      unitId: params.unitId,
-      customerId: params.customerId,
-      assetId: params.assetId,
-      serviceId: params.serviceId,
-      createdBy: params.createdBy,
-      status: params.status ?? "DRAFT",
-      methodSnapshot: minimalMethodSnapshot(),
-      certificateName: params.jobId,
-      visitId: params.visitId,
-    })
-    .returning({ id: calibrationJob.id });
+  const [row] = await insertJobs({
+    jobId: params.jobId,
+    organizationId: params.organizationId,
+    unitId: params.unitId,
+    customerId: params.customerId,
+    assetId: params.assetId,
+    serviceId: params.serviceId,
+    createdBy: params.createdBy,
+    status: params.status ?? "DRAFT",
+    methodSnapshot: minimalMethodSnapshot(),
+    certificateName: params.jobId,
+    visitId: params.visitId,
+  });
   if (!row) throw new Error("seedVisitJob: insert failed");
   return row.id;
 }

@@ -18,15 +18,12 @@
  *   REQ-LC-1g  the audit row names the actor, and the key for an API key
  */
 
+import { setJobStatus } from "../../../test/integration/job-fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { organizationOf } from "../../../test/integration/organization-of";
 import { db } from "@calibra-facil/db";
-import {
-  calibrationJob,
-  jobAuditLog,
-  type JobStatus,
-} from "@calibra-facil/db/schema";
+import { jobAuditLog, type JobStatus } from "@calibra-facil/db/schema";
 import { JobStatusSchema } from "@calibra-facil/schemas";
 import { allowedFrom } from "@calibra-facil/schemas/job-transitions";
 import { truncateAll } from "../../../test/integration/db";
@@ -81,10 +78,7 @@ async function seedWorld(status: JobStatus) {
     unitId: org.unitId,
     createdBy: USER,
   });
-  await db
-    .update(calibrationJob)
-    .set({ status })
-    .where(eq(calibrationJob.id, jobId));
+  await setJobStatus(jobId, status);
   const technician = await seedExtraMember({
     orgId: ORG,
     userId: "user-lc-tech",
@@ -872,10 +866,7 @@ describe("job lifecycle commands (real Postgres)", () => {
     it("REQ-LC-1f: an already amended certificate is job_already_amended with the successor", async () => {
       // An approved job is frozen: it is linked to its successor on the way in.
       const { jobId } = await seedWorld("DRAFT");
-      await db
-        .update(calibrationJob)
-        .set({ status: "APPROVED", supersededById: jobId })
-        .where(eq(calibrationJob.id, jobId));
+      await setJobStatus(jobId, "APPROVED", { supersededById: jobId });
 
       const result = await COMMANDS.amend(jobId);
 

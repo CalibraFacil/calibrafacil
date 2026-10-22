@@ -15,6 +15,7 @@
  * REQ-OOT-003    Tenant scoping on events + assessments
  */
 
+import { insertJobs } from "../../test/integration/job-fixtures";
 import { beforeEach, describe, expect, it } from "vitest";
 import { portalRouter } from "./portal";
 import { db } from "@calibra-facil/db";
@@ -23,7 +24,6 @@ import {
   assetType,
   assetOotAuditLog,
   assetOotEvent,
-  calibrationJob,
 } from "@calibra-facil/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { createAssetOotEventForApprovedJob } from "../lib/asset-oot-events";
@@ -103,24 +103,21 @@ async function seedApprovedJob(params: {
   margins?: number[] | null;
 }): Promise<number> {
   jobSeq += 1;
-  const [row] = await db
-    .insert(calibrationJob)
-    .values({
-      jobId: `JOB-OOT-${jobSeq}`,
-      organizationId: params.labOrgId,
-      unitId: params.labUnitId,
-      customerId: params.customerId,
-      assetId: params.assetId,
-      serviceId: params.serviceId,
-      createdBy: params.createdBy,
-      status: "APPROVED",
-      approvedAt: params.approvedAt,
-      asFoundConformity: params.conformity,
-      asFoundMargins: params.margins ?? null,
-      methodSnapshot: minimalMethodSnapshot(),
-      certificateName: `JOB-OOT-${jobSeq}`,
-    })
-    .returning({ id: calibrationJob.id });
+  const [row] = await insertJobs({
+    jobId: `JOB-OOT-${jobSeq}`,
+    organizationId: params.labOrgId,
+    unitId: params.labUnitId,
+    customerId: params.customerId,
+    assetId: params.assetId,
+    serviceId: params.serviceId,
+    createdBy: params.createdBy,
+    status: "APPROVED",
+    approvedAt: params.approvedAt,
+    asFoundConformity: params.conformity,
+    asFoundMargins: params.margins ?? null,
+    methodSnapshot: minimalMethodSnapshot(),
+    certificateName: `JOB-OOT-${jobSeq}`,
+  });
   if (!row) throw new Error("seedApprovedJob failed");
   return row.id;
 }

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setJobStatus } from "../../test/integration/job-fixtures";
 import { organizationOf } from "../../test/integration/organization-of";
 import { publicApiV2Router } from "./public-api-v2";
 import { db, getDb } from "@calibra-facil/db";
@@ -883,10 +884,7 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
       unitId: orgA.unitId,
       createdBy: orgA.userId,
     });
-    await db
-      .update(calibrationJob)
-      .set({ status })
-      .where(eq(calibrationJob.id, jobId));
+    await setJobStatus(jobId, status);
     return { rawKey, jobId };
   }
 
@@ -958,10 +956,7 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
     const originalTransaction = instance.transaction.bind(instance);
     vi.spyOn(instance, "transaction").mockImplementationOnce(
       async (callback, config) => {
-        await db
-          .update(calibrationJob)
-          .set({ status: "GENERATING_PDF" })
-          .where(eq(calibrationJob.id, jobId));
+        await setJobStatus(jobId, "GENERATING_PDF");
         return originalTransaction(callback, config);
       },
     );

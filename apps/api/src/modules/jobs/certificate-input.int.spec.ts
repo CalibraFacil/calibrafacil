@@ -38,6 +38,10 @@ import { createHash } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { loginPerRequestHeader } from "../../../test/integration/setup";
 import { truncateAll } from "../../../test/integration/db";
+import {
+  insertJob,
+  setJobStatus,
+} from "../../../test/integration/job-fixtures";
 import { seedOrg } from "../../../test/integration/seed";
 import { jobsRouter } from "../../routes/jobs";
 
@@ -209,52 +213,48 @@ async function seedReviewJob(
   fixture: Fixture,
   overrides: Partial<typeof calibrationJob.$inferInsert> = {},
 ): Promise<number> {
-  const [row] = await db
-    .insert(calibrationJob)
-    .values({
-      jobId: `CAL-2026-${Math.floor(Math.random() * 1e6)}`,
-      organizationId: ORG,
-      unitId: fixture.unitId,
-      customerId: fixture.customerId,
-      assetId: fixture.assetId,
-      serviceId: fixture.serviceId,
-      createdBy: MAKER,
-      technicianId: MAKER,
-      status: "REVIEW",
-      performedAt: new Date("2026-03-09T09:00:00.000Z"),
-      methodSnapshot: {
-        methodId: 1,
-        methodName: "Calibração de balança",
-        methodVersion: 2,
-        accreditedScope: true,
-        engineVersion: "1.4.0",
-        dataFields: [],
-        variableBindings: [],
-        formulas: [],
-        measurementModels: [],
-        validations: [],
-        uncertaintyParams: [],
+  const row = await insertJob({
+    jobId: `CAL-2026-${Math.floor(Math.random() * 1e6)}`,
+    organizationId: ORG,
+    unitId: fixture.unitId,
+    customerId: fixture.customerId,
+    assetId: fixture.assetId,
+    serviceId: fixture.serviceId,
+    createdBy: MAKER,
+    technicianId: MAKER,
+    status: "REVIEW",
+    performedAt: new Date("2026-03-09T09:00:00.000Z"),
+    methodSnapshot: {
+      methodId: 1,
+      methodName: "Calibração de balança",
+      methodVersion: 2,
+      accreditedScope: true,
+      engineVersion: "1.4.0",
+      dataFields: [],
+      variableBindings: [],
+      formulas: [],
+      measurementModels: [],
+      validations: [],
+      uncertaintyParams: [],
+    },
+    data: { pontos: [{ carga_nominal: "500" }] },
+    results: { erro: ["-0.52"], u_expandida: ["0.12"], fator_k: ["2"] },
+    standardsSnapshot: [
+      {
+        id: 11,
+        name: "Massa padrão 1 kg",
+        certificateNumber: "RBC-777",
+        calibratedBy: "Laboratório RBC",
+        calibrationDate: "2025-12-01",
+        nextCalibrationDate: "2027-12-01",
+        uncertainty: 0.001,
+        uncertaintyUnit: "g",
+        coverageFactor: 2,
       },
-      data: { pontos: [{ carga_nominal: "500" }] },
-      results: { erro: ["-0.52"], u_expandida: ["0.12"], fator_k: ["2"] },
-      standardsSnapshot: [
-        {
-          id: 11,
-          name: "Massa padrão 1 kg",
-          certificateNumber: "RBC-777",
-          calibratedBy: "Laboratório RBC",
-          calibrationDate: "2025-12-01",
-          nextCalibrationDate: "2027-12-01",
-          uncertainty: 0.001,
-          uncertaintyUnit: "g",
-          coverageFactor: 2,
-        },
-      ],
-      certificateName: "cert",
-      ...overrides,
-    })
-    .returning({ id: calibrationJob.id });
-  if (!row) throw new Error("seedReviewJob failed");
+    ],
+    certificateName: "cert",
+    ...overrides,
+  });
   return row.id;
 }
 
@@ -493,15 +493,7 @@ describe("REQ-CIN-1: approval freezes the certificate input", () => {
     const [first] = await frozenRows(jobId);
 
     // the worker rejected the render; the job is corrected and resubmitted
-    await db
-      .update(calibrationJob)
-      .set({ status: "REVIEW" })
-      .where(
-        and(
-          eq(calibrationJob.id, jobId),
-          eq(calibrationJob.organizationId, ORG),
-        ),
-      );
+    await setJobStatus(jobId, "REVIEW");
     await db
       .update(organization)
       .set({ name: "Laboratório Renomeado" })
@@ -543,15 +535,7 @@ describe("REQ-CIN-3: the frozen input is immutable after approval", () => {
     );
 
     // APPROVED: issued
-    await db
-      .update(calibrationJob)
-      .set({ status: "APPROVED" })
-      .where(
-        and(
-          eq(calibrationJob.id, jobId),
-          eq(calibrationJob.organizationId, ORG),
-        ),
-      );
+    await setJobStatus(jobId, "APPROVED");
     await expectTriggerRefusal(() =>
       db
         .update(certificateInput)
@@ -572,15 +556,7 @@ describe("REQ-CIN-3: the frozen input is immutable after approval", () => {
     const jobId = await seedReviewJob(fixture);
     expect((await approve(jobId)).status).toBe(200);
 
-    await db
-      .update(calibrationJob)
-      .set({ status: "REVIEW" })
-      .where(
-        and(
-          eq(calibrationJob.id, jobId),
-          eq(calibrationJob.organizationId, ORG),
-        ),
-      );
+    await setJobStatus(jobId, "REVIEW");
     await db.delete(certificateInput).where(eq(certificateInput.jobId, jobId));
 
     expect(await frozenRows(jobId)).toHaveLength(0);
@@ -615,15 +591,7 @@ describe("REQ-CIN-3: the frozen input is immutable after approval", () => {
     const [originalFrozen] = await frozenRows(originalId);
 
     // the worker issued the certificate
-    await db
-      .update(calibrationJob)
-      .set({ status: "APPROVED" })
-      .where(
-        and(
-          eq(calibrationJob.id, originalId),
-          eq(calibrationJob.organizationId, ORG),
-        ),
-      );
+    await setJobStatus(originalId, "APPROVED");
 
     loginPerRequestHeader(ORG);
     const amend = await jobsRouter.request(`/${originalId}/amend`, {
@@ -646,15 +614,7 @@ describe("REQ-CIN-3: the frozen input is immutable after approval", () => {
     // the clone starts without a frozen input: it is approved on its own
     expect(await frozenRows(amended.id)).toHaveLength(0);
 
-    await db
-      .update(calibrationJob)
-      .set({ status: "REVIEW" })
-      .where(
-        and(
-          eq(calibrationJob.id, amended.id),
-          eq(calibrationJob.organizationId, ORG),
-        ),
-      );
+    await setJobStatus(amended.id, "REVIEW");
     await db
       .update(customer)
       .set({ name: "Cliente SA (corrigido)" })

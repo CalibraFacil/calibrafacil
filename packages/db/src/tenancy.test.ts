@@ -248,7 +248,7 @@ describe("REQ-ORG-2: organization_id is NOT NULL, RESTRICT, indexed", () => {
     );
   });
 
-  it("REQ-ORG-2: the migration is journaled last with the largest timestamp", () => {
+  it("REQ-ORG-2: the migration is journaled with a timestamp larger than every earlier entry", () => {
     const journal: unknown = JSON.parse(read("../drizzle/meta/_journal.json"));
     const entries =
       typeof journal === "object" && journal !== null && "entries" in journal
@@ -263,7 +263,7 @@ describe("REQ-ORG-2: organization_id is NOT NULL, RESTRICT, indexed", () => {
         ? { when: Number(entry.when), tag: String(entry.tag) }
         : { when: Number.NaN, tag: "" },
     );
-    // Later migrations (0119...) follow it: it stays journaled, and what matters
+    // Later migrations (0119, 0120...) follow it: it stays journaled, and what matters
     // is that no entry is older than the one before it.
     const index = rows.findIndex(
       (row) => row.tag === "0118_organization_id_everywhere",
