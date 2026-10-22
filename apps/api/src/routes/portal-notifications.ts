@@ -6,7 +6,6 @@ import type {
   ServerShape,
 } from "@calibra-facil/contracts";
 import { zValidator } from "@hono/zod-validator";
-import { db } from "@calibra-facil/db";
 import { notification } from "@calibra-facil/db/schema";
 import {
   MarkNotificationsReadSchema,
@@ -31,6 +30,7 @@ import {
 } from "../middleware/permission";
 import { resolveLabOrganizationIdByPortalHostname } from "../lib/portal-domains";
 import { resolvePortalNotificationOrgIds } from "../lib/portal-customer-scope";
+import { orgDb, orgSetDb } from "../lib/org-db";
 
 async function getPortalLabScope(c: {
   req: { header: (name: string) => string | undefined };
@@ -63,14 +63,14 @@ function windowStart(): Date {
 }
 
 /**
- * Conditions shared by every handler: only the caller's own rows, only inside
- * their portal CLIENT orgs (never a dual-role user's lab org), and only the
- * customer-facing types the portal is allowed to surface.
+ * Conditions shared by every handler: only the caller's own rows and only the
+ * customer-facing types the portal is allowed to surface. The rows are inside
+ * the caller's portal CLIENT orgs (never a dual-role user's lab org) because
+ * every handler reads them through `orgSetDb(orgIds)`.
  */
-function portalNotificationConditions(userId: string, orgIds: string[]) {
+function portalNotificationConditions(userId: string) {
   return [
     eq(notification.recipientUserId, userId),
-    inArray(notification.organizationId, orgIds),
     inArray(notification.type, [...PORTAL_NOTIFICATION_TYPES]),
   ];
 }
@@ -101,7 +101,7 @@ export const portalNotificationsRouter = new Hono<{
 
         const now = new Date();
         const conditions = [
-          ...portalNotificationConditions(session.user.id, orgIds),
+          ...portalNotificationConditions(session.user.id),
           gt(notification.createdAt, windowStart()),
           or(isNull(notification.expiresAt), gt(notification.expiresAt, now)),
           status
@@ -112,7 +112,7 @@ export const portalNotificationsRouter = new Hono<{
           conditions.push(lt(notification.id, cursor));
         }
 
-        const rows = await db
+        const rows = await orgSetDb(orgIds)
           .select({
             id: notification.id,
             type: notification.type,
@@ -163,12 +163,12 @@ export const portalNotificationsRouter = new Hono<{
       }
 
       const now = new Date();
-      const [result] = await db
+      const [result] = await orgSetDb(orgIds)
         .select({ count: count() })
         .from(notification)
         .where(
           and(
-            ...portalNotificationConditions(session.user.id, orgIds),
+            ...portalNotificationConditions(session.user.id),
             eq(notification.status, "UNREAD"),
             gt(notification.createdAt, windowStart()),
             or(isNull(notification.expiresAt), gt(notification.expiresAt, now)),
@@ -207,20 +207,48 @@ export const portalNotificationsRouter = new Hono<{
           } satisfies ServerShape<PortalNotificationMarkReadResponse>);
         }
 
-        const updated = await db
-          .update(notification)
-          .set({ status: "READ", readAt: new Date() })
+        // The set handle only reads: find which organization each of the
+        // caller's unread rows belongs to, then write through a handle bound to
+        // exactly that organization.
+        const candidates = await orgSetDb(orgIds)
+          .select({
+            id: notification.id,
+            organizationId: notification.organizationId,
+          })
+          .from(notification)
           .where(
             and(
               inArray(notification.id, notificationIds),
-              ...portalNotificationConditions(session.user.id, orgIds),
+              ...portalNotificationConditions(session.user.id),
               eq(notification.status, "UNREAD"),
             ),
-          )
-          .returning();
+          );
+
+        const idsByOrganization = new Map<string, number[]>();
+        for (const row of candidates) {
+          const ids = idsByOrganization.get(row.organizationId) ?? [];
+          ids.push(row.id);
+          idsByOrganization.set(row.organizationId, ids);
+        }
+
+        const updatedPerOrganization = await Promise.all(
+          [...idsByOrganization].map(([organizationId, ids]) =>
+            orgDb(organizationId)
+              .update(notification)
+              .set({ status: "READ", readAt: new Date() })
+              .where(
+                and(
+                  inArray(notification.id, ids),
+                  ...portalNotificationConditions(session.user.id),
+                  eq(notification.status, "UNREAD"),
+                ),
+              )
+              .returning({ id: notification.id }),
+          ),
+        );
 
         return c.json({
-          updatedIds: updated.map((row) => row.id),
+          updatedIds: updatedPerOrganization.flat().map((row) => row.id),
         } satisfies ServerShape<PortalNotificationMarkReadResponse>);
       } catch (error) {
         console.error("Error marking portal notifications read:", error);
@@ -248,16 +276,23 @@ export const portalNotificationsRouter = new Hono<{
         } satisfies ServerShape<PortalNotificationCountResponse>);
       }
 
-      const updated = await db
-        .update(notification)
-        .set({ status: "READ", readAt: new Date() })
-        .where(
-          and(
-            ...portalNotificationConditions(session.user.id, orgIds),
-            eq(notification.status, "UNREAD"),
-          ),
-        )
-        .returning();
+      // One write per organization, each through a handle bound to it (the
+      // set handle is read-only).
+      const updatedPerOrganization = await Promise.all(
+        orgIds.map((organizationId) =>
+          orgDb(organizationId)
+            .update(notification)
+            .set({ status: "READ", readAt: new Date() })
+            .where(
+              and(
+                ...portalNotificationConditions(session.user.id),
+                eq(notification.status, "UNREAD"),
+              ),
+            )
+            .returning({ id: notification.id }),
+        ),
+      );
+      const updated = updatedPerOrganization.flat();
 
       return c.json({
         count: updated.length,
