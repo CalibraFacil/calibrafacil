@@ -4,11 +4,11 @@ import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Building02Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
 
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Spinner } from '@/components/ui/spinner'
-import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
-import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
+import { Button } from '@calibra-facil/ui/button'
+import { Input } from '@calibra-facil/ui/input'
+import { Spinner } from '@calibra-facil/ui/spinner'
+import { ACTION_BUTTON_CLASS, Panel } from '@calibra-facil/ui/instrument-panel'
+import { Field, FieldDescription, FieldLabel } from '@calibra-facil/ui/field'
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
+} from '@calibra-facil/ui/dialog'
 import {
   Empty,
   EmptyContent,
@@ -24,8 +24,8 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from '@/components/ui/empty'
-import { DataTable } from '@/components/ui/data-table'
+} from '@calibra-facil/ui/empty'
+import { DataTable } from '@calibra-facil/ui/data-table'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 import {
   type CustomerGroupRow,

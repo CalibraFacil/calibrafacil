@@ -14,9 +14,9 @@ import {
   useQueryState,
 } from 'nuqs'
 
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
+import { Button } from '@calibra-facil/ui/button'
+import { Input } from '@calibra-facil/ui/input'
+import { ACTION_BUTTON_CLASS, Panel } from '@calibra-facil/ui/instrument-panel'
 import {
   Empty,
   EmptyContent,
@@ -24,13 +24,13 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from '@/components/ui/empty'
+} from '@calibra-facil/ui/empty'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
+} from '@calibra-facil/ui/select'
 import {
   Combobox,
   ComboboxContent,
@@ -38,9 +38,9 @@ import {
   ComboboxInput,
   ComboboxItem,
   ComboboxList,
-} from '@/components/ui/combobox'
+} from '@calibra-facil/ui/combobox'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
-import { DataTable } from '@/components/ui/data-table'
+import { DataTable } from '@calibra-facil/ui/data-table'
 import {
   type Asset,
   type AssetsTableMeta,

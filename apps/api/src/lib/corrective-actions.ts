@@ -122,6 +122,7 @@ export async function createCorrectiveActionRecord(
   }
 
   await db.insert(correctiveActionAuditLog).values({
+    organizationId: params.organizationId,
     capaId: newCapa.id,
     action: "create",
     changes: params.auditChanges ?? {

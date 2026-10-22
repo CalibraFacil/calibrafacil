@@ -10,8 +10,8 @@ import {
   PanelHeader,
   StaggerGroup,
   StaggerItem,
-} from '@/components/instrument-panel'
-import { DataTableColumnHeader } from '@/components/ui/data-table-column-header'
+} from '@calibra-facil/ui/instrument-panel'
+import { DataTableColumnHeader } from '@calibra-facil/ui/data-table-column-header'
 import { FinanceDataTable } from '@/features/finance/components/finance-data-table'
 import { formatPercentPoints } from '@calibra-facil/shared/format'
 

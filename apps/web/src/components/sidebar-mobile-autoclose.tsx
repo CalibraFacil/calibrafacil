@@ -1,6 +1,6 @@
 import { useRouter } from '@tanstack/react-router'
 
-import { useSidebar } from '@/components/ui/sidebar'
+import { useSidebar } from '@calibra-facil/ui/sidebar'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 
 /**

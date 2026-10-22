@@ -1,19 +1,19 @@
 import { useCompetenceDetailData } from '@/features/personnel/queries'
-import { Badge } from '@/components/ui/badge'
+import { Badge } from '@calibra-facil/ui/badge'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { Label } from '@/components/ui/label'
+} from '@calibra-facil/ui/card'
+import { Label } from '@calibra-facil/ui/label'
 import {
   Empty,
   EmptyDescription,
   EmptyHeader,
   EmptyTitle,
-} from '@/components/ui/empty'
+} from '@calibra-facil/ui/empty'
 import { getStatusBadge } from '@/features/personnel/components/columns'
 import { formatInstant } from '@calibra-facil/shared/format'
 

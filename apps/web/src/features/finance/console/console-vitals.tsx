@@ -9,7 +9,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { formatFinanceMoney } from '@/lib/finance-formatters'
-import { SignalTile, type SignalTone } from '@/components/instrument-panel'
+import { SignalTile, type SignalTone } from '@calibra-facil/ui/instrument-panel'
 import { cn } from '@/lib/utils'
 import type { FinanceOverviewResponse } from '@/features/finance/types'
 import type { ReceivablesSearch } from '@/features/finance/receivables/receivables-search'

@@ -11,7 +11,7 @@ import {
   UserAdd02Icon,
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { Badge } from '@/components/ui/badge'
+import { Badge } from '@calibra-facil/ui/badge'
 import { cn } from '@/lib/utils'
 import { formatInstant } from '@calibra-facil/shared/format'
 

@@ -6,18 +6,18 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { toast } from 'sonner'
 
 import { FINANCE_CURRENCY } from '@/lib/finance-formatters'
-import { Panel, PanelHeader } from '@/components/instrument-panel'
-import { Button } from '@/components/ui/button'
-import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
+import { Panel, PanelHeader } from '@calibra-facil/ui/instrument-panel'
+import { Button } from '@calibra-facil/ui/button'
+import { Field, FieldGroup, FieldLabel } from '@calibra-facil/ui/field'
+import { Input } from '@calibra-facil/ui/input'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
+} from '@calibra-facil/ui/select'
+import { Textarea } from '@calibra-facil/ui/textarea'
 import { calibraApi } from '@/utils/api'
 import {
   useFinanceContractCustomerOptionsData,

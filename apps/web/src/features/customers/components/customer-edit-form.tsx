@@ -22,23 +22,23 @@ import {
   FieldError,
   FieldGroup,
   FieldLabel,
-} from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
+} from '@calibra-facil/ui/field'
+import { Input } from '@calibra-facil/ui/input'
 import { MaskedInput } from '@/components/ui/masked-input'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
-import { Button } from '@/components/ui/button'
-import { Spinner } from '@/components/ui/spinner'
+} from '@calibra-facil/ui/select'
+import { Button } from '@calibra-facil/ui/button'
+import { Spinner } from '@calibra-facil/ui/spinner'
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from '@/components/ui/collapsible'
-import { ACTION_BUTTON_CLASS } from '@/components/instrument-panel'
+} from '@calibra-facil/ui/collapsible'
+import { ACTION_BUTTON_CLASS } from '@calibra-facil/ui/instrument-panel'
 import { brazilPhoneMask, cepMask, cpfCnpjMask } from '@/lib/input-masks'
 import { isValidCnpj, normalizeCnpj } from '@calibra-facil/shared/cnpj'
 import {

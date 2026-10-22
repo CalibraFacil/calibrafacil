@@ -5,11 +5,11 @@ import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { FloppyDiskIcon } from '@hugeicons/core-free-icons'
 
-import { Button } from '@/components/ui/button'
-import { Spinner } from '@/components/ui/spinner'
+import { Button } from '@calibra-facil/ui/button'
+import { Spinner } from '@calibra-facil/ui/spinner'
 import { calibraApi } from '@/utils/api'
 import { StandardFormSections } from '@/features/standards/components/standard-form-sections'
-import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
+import { ACTION_BUTTON_CLASS, Panel } from '@calibra-facil/ui/instrument-panel'
 import {
   createStandardFormData,
   parseStandardForm,

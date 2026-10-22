@@ -40,6 +40,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { organizationOf } from "../../test/integration/organization-of";
 import { calibrationRequestsRouter } from "./calibration-requests";
 import { db } from "@calibra-facil/db";
 import {
@@ -271,6 +272,7 @@ async function seedRequest(params: {
   const [itemRow] = await db
     .insert(calibrationRequestItem)
     .values({
+      organizationId: organizationOf("calibration_request", reqRow.id),
       requestId: reqRow.id,
       assetId: params.assetId,
       convertedJobId: null,
@@ -925,7 +927,11 @@ describe("calibrationRequestsRouter — convert: visit.technicianId is tenant-sc
     if (!reqRow) throw new Error("seed onsite request failed");
     const [itemRow] = await db
       .insert(calibrationRequestItem)
-      .values({ requestId: reqRow.id, assetId: fixture.assetId })
+      .values({
+        organizationId: organizationOf("calibration_request", reqRow.id),
+        requestId: reqRow.id,
+        assetId: fixture.assetId,
+      })
       .returning({ id: calibrationRequestItem.id });
     if (!itemRow) throw new Error("seed onsite item failed");
     return { fixture, requestId: reqRow.id, itemId: itemRow.id };

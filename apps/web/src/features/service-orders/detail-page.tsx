@@ -76,29 +76,37 @@ import {
   StageRecordGrid,
   StageRecordStrip,
 } from '@/features/service-orders/components/stage-state'
-import { DatePicker } from '@/components/ui/date-picker'
+import { DatePicker } from '@calibra-facil/ui/date-picker'
 import { EventTimeline } from '@/components/event-timeline'
 import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Textarea } from '@/components/ui/textarea'
-import { Input } from '@/components/ui/input'
+import { Button } from '@calibra-facil/ui/button'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Textarea } from '@calibra-facil/ui/textarea'
+import { Input } from '@calibra-facil/ui/input'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
+} from '@calibra-facil/ui/card'
 import {
   ACTION_BUTTON_CLASS,
   BlueprintOverlay,
   Panel,
-} from '@/components/instrument-panel'
-import { Label } from '@/components/ui/label'
-import { Checkbox } from '@/components/ui/checkbox'
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+} from '@calibra-facil/ui/instrument-panel'
+import { Label } from '@calibra-facil/ui/label'
+import { Checkbox } from '@calibra-facil/ui/checkbox'
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from '@calibra-facil/ui/native-select'
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@calibra-facil/ui/tabs'
 import {
   ActionAvailabilityGate,
   OperationUnavailableNotice,

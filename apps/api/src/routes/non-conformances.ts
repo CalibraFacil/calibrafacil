@@ -500,6 +500,7 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
 
       // Audit log
       await db.insert(nonConformanceAuditLog).values({
+        organizationId: member.organizationId,
         ncId: id,
         action: "disposition",
         changes: {
@@ -582,6 +583,7 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
 
       // Audit log
       await db.insert(nonConformanceAuditLog).values({
+        organizationId: member.organizationId,
         ncId: id,
         action: "resolve",
         changes: {
@@ -695,6 +697,7 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
 
       // Audit log
       await db.insert(nonConformanceAuditLog).values({
+        organizationId: member.organizationId,
         ncId: id,
         action: "escalate_to_capa",
         changes: {
@@ -899,6 +902,7 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
         .returning();
 
       await db.insert(nonConformanceAuditLog).values({
+        organizationId: member.organizationId,
         ncId: id,
         action: "oot_acknowledged",
         changes: { acknowledgedVia: "manual" },
@@ -1044,6 +1048,7 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
             .returning();
 
       await db.insert(nonConformanceAuditLog).values({
+        organizationId: member.organizationId,
         ncId: id,
         action: "impact_assessment_saved",
         changes: { conclusion: input.conclusion ?? null },
@@ -1145,6 +1150,7 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       await db.insert(nonConformanceAuditLog).values({
+        organizationId: member.organizationId,
         ncId: id,
         action: "impact_assessment_signed",
         changes: { conclusion: signed.conclusion },

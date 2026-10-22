@@ -1,21 +1,21 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { InboxIcon, Tick02Icon } from "@hugeicons/core-free-icons";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@calibra-facil/ui/button";
 import {
   Empty,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from "@/components/ui/empty";
-import { Skeleton } from "@/components/ui/skeleton";
+} from "@calibra-facil/ui/empty";
+import { Skeleton } from "@calibra-facil/ui/skeleton";
 import { PageHeader } from "@/components/page-header";
 import {
   Panel,
   StaggerGroup,
   StaggerItem,
-} from "@/components/instrument-panel";
+} from "@calibra-facil/ui/instrument-panel";
 import { NotificationItem } from "./notification-item";
 import {
   useMarkAllNotificationsRead,

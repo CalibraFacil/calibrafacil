@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { organizationOf } from "../../test/integration/organization-of";
 import { serviceOrdersRouter } from "./service-orders";
 import { db } from "@calibra-facil/db";
 import {
@@ -704,6 +705,7 @@ describe("serviceOrdersRouter — state-machine transition enforcement (real gra
     // transition check rather than the "not started" guard.
     const { org, orderId } = await setupOrderAt("delivered", "tst-finish-bad");
     await db.insert(serviceOrderExecution).values({
+      organizationId: organizationOf("service_order", orderId),
       serviceOrderId: orderId,
       startedByUserId: org.userId,
     });
@@ -732,6 +734,7 @@ describe("serviceOrdersRouter — state-machine transition enforcement (real gra
       "tst-finish-ok",
     );
     await db.insert(serviceOrderExecution).values({
+      organizationId: organizationOf("service_order", orderId),
       serviceOrderId: orderId,
       startedByUserId: org.userId,
     });
@@ -915,6 +918,7 @@ describe("serviceOrdersRouter — state-machine transition enforcement (real gra
     const [row] = await db
       .insert(serviceOrderEvaluation)
       .values({
+        organizationId: organizationOf("service_order", orderId),
         serviceOrderId: orderId,
         technicianId,
         diagnosis: "Diagnostico original",
@@ -937,6 +941,7 @@ describe("serviceOrdersRouter — state-machine transition enforcement (real gra
     // quote_number and created_by_user_id are NOT NULL — omitting them fails
     // the insert before any assertion runs.
     await db.insert(serviceOrderQuote).values({
+      organizationId: organizationOf("service_order", orderId),
       serviceOrderId: orderId,
       quoteNumber: `ORC-${orderId}-1`,
       version: 1,
@@ -1060,6 +1065,7 @@ describe("serviceOrdersRouter — state-machine transition enforcement (real gra
     const [quoteRow] = await db
       .insert(serviceOrderQuote)
       .values({
+        organizationId: organizationOf("service_order", orderId),
         serviceOrderId: orderId,
         quoteNumber: `ORC-${orderId}-2`,
         version: 2,
@@ -1103,6 +1109,7 @@ describe("serviceOrdersRouter — state-machine transition enforcement (real gra
     const [quoteRow] = await db
       .insert(serviceOrderQuote)
       .values({
+        organizationId: organizationOf("service_order", orderId),
         serviceOrderId: orderId,
         quoteNumber: `ORC-${orderId}-1`,
         version: 1,
@@ -1237,6 +1244,7 @@ describe("serviceOrdersRouter — state-machine transition enforcement (real gra
 
     // sent: ledger row + processed outbox counterpart
     await db.insert(serviceOrderEmailLog).values({
+      organizationId: organizationOf("service_order", orderId),
       serviceOrderId: orderId,
       eventKey: "status_email:ready_for_pickup",
       recipientEmail: "cliente@exemplo.com.br",
@@ -1360,6 +1368,7 @@ describe("serviceOrdersRouter — state-machine transition enforcement (real gra
       serviceOrderNumber: "OS-COMM-B-002",
     });
     await db.insert(serviceOrderEmailLog).values({
+      organizationId: organizationOf("service_order", orderBId),
       serviceOrderId: orderBId,
       eventKey: "nova_os",
       recipientEmail: "segredo@exemplo.com.br",

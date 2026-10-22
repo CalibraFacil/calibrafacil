@@ -16,24 +16,24 @@ import {
   type AssetEditFormField,
 } from '@/features/assets/forms'
 import { MetrologyRegimeFields } from '@/features/assets/components/metrology-regime-fields'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Field, FieldError, FieldLabel } from '@/components/ui/field'
+import { Button } from '@calibra-facil/ui/button'
+import { Input } from '@calibra-facil/ui/input'
+import { Textarea } from '@calibra-facil/ui/textarea'
+import { Field, FieldError, FieldLabel } from '@calibra-facil/ui/field'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
-import { Spinner } from '@/components/ui/spinner'
-import { DatePicker } from '@/components/ui/date-picker'
+} from '@calibra-facil/ui/select'
+import { Spinner } from '@calibra-facil/ui/spinner'
+import { DatePicker } from '@calibra-facil/ui/date-picker'
 import { DynamicSpecsForm } from '@/components/dynamic-specs-form'
 import {
   ACTION_BUTTON_CLASS,
   Panel,
   PanelHeader,
-} from '@/components/instrument-panel'
+} from '@calibra-facil/ui/instrument-panel'
 import {
   FormSectionNav,
   type FormNavSection,

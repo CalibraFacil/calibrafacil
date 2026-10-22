@@ -21,13 +21,16 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 
-import { useIsMobile } from '@/hooks/use-mobile'
+import { useIsMobile } from '@calibra-facil/ui/use-mobile'
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from '@/components/ui/collapsible'
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
+} from '@calibra-facil/ui/collapsible'
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from '@calibra-facil/ui/native-select'
 import { cn } from '@/lib/utils'
 
 interface SettingsNavItem {

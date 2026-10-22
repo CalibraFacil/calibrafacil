@@ -36,28 +36,28 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
+} from '@calibra-facil/ui/card'
 import {
   Field,
   FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
-} from '@/components/ui/field'
+} from '@calibra-facil/ui/field'
 import { DateInput } from '@/components/ui/date-input'
-import { Input } from '@/components/ui/input'
+import { Input } from '@calibra-facil/ui/input'
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
   InputGroupText,
-} from '@/components/ui/input-group'
+} from '@calibra-facil/ui/input-group'
 import { MaskedInput } from '@/components/ui/masked-input'
-import { Switch } from '@/components/ui/switch'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Separator } from '@/components/ui/separator'
+import { Switch } from '@calibra-facil/ui/switch'
+import { Button } from '@calibra-facil/ui/button'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
+import { Separator } from '@calibra-facil/ui/separator'
 import { brazilPhoneMask, cepMask, cnpjMask } from '@/lib/input-masks'
 
 // The vigência drafts stay "yyyy-MM-dd" strings (what buildOrganizationIsoPayload

@@ -336,6 +336,7 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
 
       // Audit log
       await db.insert(serviceAuditLog).values({
+        organizationId: member.organizationId,
         serviceId: newService.id,
         action: "create",
         changes: { initial: input },
@@ -500,6 +501,7 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
 
       // Audit log
       await db.insert(serviceAuditLog).values({
+        organizationId: member.organizationId,
         serviceId: id,
         action: "update",
         changes,
@@ -549,6 +551,7 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
 
     // Audit log
     await db.insert(serviceAuditLog).values({
+      organizationId: member.organizationId,
       serviceId: id,
       action: "deactivate",
       changes: { isActive: { old: true, new: false } },

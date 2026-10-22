@@ -7,8 +7,8 @@ import type {
   IntegrationScheduleFrequency,
 } from '@calibra-facil/shared'
 import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
-import { Spinner } from '@/components/ui/spinner'
+import { Button } from '@calibra-facil/ui/button'
+import { Spinner } from '@calibra-facil/ui/spinner'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,8 +17,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { Progress } from '@/components/ui/progress'
+} from '@calibra-facil/ui/dropdown-menu'
+import { Progress } from '@calibra-facil/ui/progress'
 import {
   formatIntegrationDateTime,
   getIntegrationTargetSummary,

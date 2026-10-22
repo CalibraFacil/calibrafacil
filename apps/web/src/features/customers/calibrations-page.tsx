@@ -15,21 +15,21 @@ import {
   useCustomerJobsData,
 } from '@/features/customers/queries'
 import type { CustomerJob, CustomerJobStatus } from '@/features/customers/types'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { Button } from '@calibra-facil/ui/button'
+import { Input } from '@calibra-facil/ui/input'
+import { Badge } from '@calibra-facil/ui/badge'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+} from '@calibra-facil/ui/dropdown-menu'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
+} from '@calibra-facil/ui/select'
 import {
   Empty,
   EmptyContent,
@@ -37,8 +37,8 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from '@/components/ui/empty'
-import { DataTable } from '@/components/ui/data-table'
+} from '@calibra-facil/ui/empty'
+import { DataTable } from '@calibra-facil/ui/data-table'
 import { cn } from '@/lib/utils'
 import { jobRouteId } from '@/lib/route-identifiers'
 import {
@@ -196,7 +196,11 @@ const calibrationColumns: ColumnDef<CustomerJob>[] = [
     id: 'actions',
     cell: ({ row }) => (
       <DropdownMenu>
-        <DropdownMenuTrigger render={<Button variant="ghost" size="icon" />}>
+        <DropdownMenuTrigger
+          render={
+            <Button variant="ghost" size="icon" aria-label="Mais ações" />
+          }
+        >
           <HugeiconsIcon icon={MoreHorizontalIcon} className="h-4 w-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">

@@ -13,8 +13,8 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { PlusSignIcon, RulerIcon } from '@hugeicons/core-free-icons'
 
 import { calibraApi } from '@/utils/api'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Button } from '@calibra-facil/ui/button'
+import { Input } from '@calibra-facil/ui/input'
 import {
   Empty,
   EmptyContent,
@@ -22,16 +22,16 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from '@/components/ui/empty'
-import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
+} from '@calibra-facil/ui/empty'
+import { ACTION_BUTTON_CLASS, Panel } from '@calibra-facil/ui/instrument-panel'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
+} from '@calibra-facil/ui/select'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
-import { DataTable } from '@/components/ui/data-table'
+import { DataTable } from '@calibra-facil/ui/data-table'
 import {
   type ReferenceStandard,
   type StandardsTableMeta,

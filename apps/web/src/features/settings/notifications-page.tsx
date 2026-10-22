@@ -1,9 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
-import { Switch } from '@/components/ui/switch'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Panel, PanelHeader } from '@/components/instrument-panel'
+import { Switch } from '@calibra-facil/ui/switch'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
+import { Panel, PanelHeader } from '@calibra-facil/ui/instrument-panel'
 import { calibraApi } from '@/utils/api'
 import { useNotificationPreferencesData } from '@/features/settings/queries'
 

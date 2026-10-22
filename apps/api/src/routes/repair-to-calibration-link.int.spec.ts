@@ -20,6 +20,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { organizationOf } from "../../test/integration/organization-of";
 import { serviceOrdersRouter } from "./service-orders";
 import { createCalibrationJob } from "../lib/jobs";
 import { db } from "@calibra-facil/db";
@@ -244,6 +245,7 @@ async function seedExecution(params: {
   finished: boolean;
 }): Promise<void> {
   await db.insert(serviceOrderExecution).values({
+    organizationId: organizationOf("service_order", params.serviceOrderId),
     serviceOrderId: params.serviceOrderId,
     startedByUserId: params.startedByUserId,
     calibrationRequiredAfterRepair: params.calibrationRequiredAfterRepair,

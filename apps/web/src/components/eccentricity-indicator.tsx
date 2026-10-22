@@ -1,9 +1,9 @@
-import { Badge } from '@/components/ui/badge'
+import { Badge } from '@calibra-facil/ui/badge'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '@/components/ui/tooltip'
+} from '@calibra-facil/ui/tooltip'
 import { cn } from '@/lib/utils'
 
 export const ECCENTRICITY_INDICATOR_SPEC_KEY = 'eccentricityIndicatorPosition'

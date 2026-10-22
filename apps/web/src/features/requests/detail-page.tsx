@@ -3,17 +3,17 @@ import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 import { calibraApi } from '@/utils/api'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
+import { Button } from '@calibra-facil/ui/button'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Input } from '@calibra-facil/ui/input'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
-import { Spinner } from '@/components/ui/spinner'
-import { Textarea } from '@/components/ui/textarea'
+} from '@calibra-facil/ui/select'
+import { Spinner } from '@calibra-facil/ui/spinner'
+import { Textarea } from '@calibra-facil/ui/textarea'
 import {
   BlueprintField,
   BlueprintGrid,
@@ -23,7 +23,7 @@ import {
   SignalTile,
   StaggerGroup,
   StaggerItem,
-} from '@/components/instrument-panel'
+} from '@calibra-facil/ui/instrument-panel'
 import {
   ToolsIcon,
   CheckmarkCircle02Icon,

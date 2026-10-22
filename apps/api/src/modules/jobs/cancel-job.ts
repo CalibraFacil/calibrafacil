@@ -110,6 +110,7 @@ export async function cancelJob(
     if (!row) return null;
 
     await tx.insert(jobAuditLog).values({
+      organizationId,
       jobId: existing.id,
       action: "cancel",
       changes: {

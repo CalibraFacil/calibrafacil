@@ -1,19 +1,19 @@
 import { Add01Icon, Delete02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
-import { Button } from '@/components/ui/button'
-import { Panel, PanelHeader } from '@/components/instrument-panel'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Button } from '@calibra-facil/ui/button'
+import { Panel, PanelHeader } from '@calibra-facil/ui/instrument-panel'
+import { Input } from '@calibra-facil/ui/input'
+import { Label } from '@calibra-facil/ui/label'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
-import { Separator } from '@/components/ui/separator'
-import { Textarea } from '@/components/ui/textarea'
-import { FormField as Field } from '@/shared/forms/form-field'
+} from '@calibra-facil/ui/select'
+import { Separator } from '@calibra-facil/ui/separator'
+import { Textarea } from '@calibra-facil/ui/textarea'
+import { Field } from '@calibra-facil/ui/field'
 
 import type { MethodDraftCertificateContent } from './types'
 

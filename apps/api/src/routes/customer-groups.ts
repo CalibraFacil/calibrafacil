@@ -327,6 +327,7 @@ export const customerGroupsRouter = new Hono<{ Variables: AuthVariables }>()
           .where(eq(customer.id, customerId));
 
         await db.insert(customerAuditLog).values({
+          organizationId: memberData.organizationId,
           customerId,
           action: "group_assignment",
           changes: { groupId: { old: branch.groupId, new: group.id } },
@@ -376,6 +377,7 @@ export const customerGroupsRouter = new Hono<{ Variables: AuthVariables }>()
         }
 
         await db.insert(customerAuditLog).values({
+          organizationId: memberData.organizationId,
           customerId,
           action: "group_removal",
           changes: { groupId: { old: id, new: null } },

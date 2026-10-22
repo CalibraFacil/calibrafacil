@@ -11,7 +11,7 @@ import { CommandPalette } from '@/components/command-palette/command-palette'
 import { CommandPaletteProvider } from '@/components/command-palette/command-context'
 import { DashboardHeader } from '@/components/dashboard-header'
 import { SidebarMobileAutoClose } from '@/components/sidebar-mobile-autoclose'
-import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
+import { SidebarInset, SidebarProvider } from '@calibra-facil/ui/sidebar'
 import { DashboardContextStateContext } from '@/contexts/dashboard-context'
 import {
   CloudOnlyOfflineState,

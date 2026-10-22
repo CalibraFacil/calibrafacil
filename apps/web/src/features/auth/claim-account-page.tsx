@@ -8,7 +8,8 @@ import {
   AuthStatusMessage,
   type AuthStatus,
 } from '@/components/auth-status-message'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@calibra-facil/ui/button'
+import { buttonVariants } from '@calibra-facil/ui/button-variants'
 import {
   Card,
   CardContent,
@@ -16,10 +17,10 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
+} from '@calibra-facil/ui/card'
+import { Field, FieldGroup, FieldLabel } from '@calibra-facil/ui/field'
 import { OTP_CODE_LENGTH, OtpCodeField } from '@/components/otp-code-field'
-import { Spinner } from '@/components/ui/spinner'
+import { Spinner } from '@calibra-facil/ui/spinner'
 import { calibraApi } from '@/utils/api'
 import { startDesktopInitialSync } from '@/components/sign-in-form'
 import { cn } from '@/lib/utils'

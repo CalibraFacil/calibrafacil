@@ -293,6 +293,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
 
         // Log audit entry
         await db.insert(assetAuditLog).values({
+          organizationId: newAsset.labOrganizationId,
           assetId: newAsset.id,
           action: "create",
           changes: {
@@ -886,6 +887,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         if (Object.keys(changes).length > 0) {
           const isStatusChange = "status" in changes;
           await db.insert(assetAuditLog).values({
+            organizationId: updatedAsset.labOrganizationId,
             assetId: id,
             action: isStatusChange ? "status_change" : "update",
             changes,
@@ -992,6 +994,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
 
         // Log audit entry before deletion
         await db.insert(assetAuditLog).values({
+          organizationId: deletedAsset.labOrganizationId,
           assetId: id,
           action: "delete",
           changes: { asset: { old: existingAsset, new: null } },

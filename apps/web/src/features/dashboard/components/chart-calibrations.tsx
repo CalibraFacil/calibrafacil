@@ -7,22 +7,22 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
+} from '@calibra-facil/ui/card'
 import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
-} from '@/components/ui/chart'
-import { Button } from '@/components/ui/button'
+} from '@calibra-facil/ui/chart'
+import { Button } from '@calibra-facil/ui/button'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { Skeleton } from '@/components/ui/skeleton'
+} from '@calibra-facil/ui/select'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
 import { formatCalendarDate } from '@calibra-facil/shared/format'
 
 const chartConfig: ChartConfig = {

@@ -1,17 +1,17 @@
 import { Delete02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
-import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
+import { Button } from '@calibra-facil/ui/button'
+import { Checkbox } from '@calibra-facil/ui/checkbox'
+import { Input } from '@calibra-facil/ui/input'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
-import { FormField as Field } from '@/shared/forms/form-field'
+} from '@calibra-facil/ui/select'
+import { Textarea } from '@calibra-facil/ui/textarea'
+import { Field } from '@calibra-facil/ui/field'
 
 import type { MethodDraftFormula, MethodDraftInput } from './types'
 

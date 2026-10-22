@@ -1,8 +1,8 @@
-import { Badge } from '@/components/ui/badge'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { FormField } from '@/shared/forms/form-field'
-import { Panel, PanelHeader } from '@/components/instrument-panel'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Label } from '@calibra-facil/ui/label'
+import { Textarea } from '@calibra-facil/ui/textarea'
+import { Field } from '@calibra-facil/ui/field'
+import { Panel, PanelHeader } from '@calibra-facil/ui/instrument-panel'
 
 import type {
   MethodCompileResult,
@@ -69,14 +69,14 @@ export function CompilePreviewPanel({
           description="Dados de exemplo enviados ao endpoint de preview."
         />
         <div className="mt-4 space-y-4">
-          <FormField label="Dados de exemplo">
+          <Field label="Dados de exemplo">
             <Textarea
               value={sampleDataText}
               onChange={(event) => onSampleDataTextChange(event.target.value)}
               rows={10}
               className="font-mono text-xs"
             />
-          </FormField>
+          </Field>
           <JsonBlock label="Resultados" value={previewResult?.results} />
           {previewResult?.normalizedData && (
             <JsonBlock

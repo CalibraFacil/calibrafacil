@@ -11,9 +11,13 @@ import {
   formatFinanceMoney,
   getBillingModeLabel,
 } from '@/lib/finance-formatters'
-import { Panel, PanelHeader, SignalTile } from '@/components/instrument-panel'
-import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Panel,
+  PanelHeader,
+  SignalTile,
+} from '@calibra-facil/ui/instrument-panel'
+import { Button } from '@calibra-facil/ui/button'
+import { Checkbox } from '@calibra-facil/ui/checkbox'
 import { CurrencyInput } from '@/components/ui/currency-input'
 import {
   Dialog,
@@ -22,16 +26,16 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
+} from '@calibra-facil/ui/dialog'
+import { Field, FieldGroup, FieldLabel } from '@calibra-facil/ui/field'
+import { Input } from '@calibra-facil/ui/input'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
+} from '@calibra-facil/ui/select'
+import { Textarea } from '@calibra-facil/ui/textarea'
 import { calibraApi } from '@/utils/api'
 import { useFinanceEligibleJobsData } from '@/features/finance/queries'
 import type { FinanceBillingMode } from '@/features/finance/types'

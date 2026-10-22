@@ -1,6 +1,6 @@
 import { parseAsString, useQueryState } from 'nuqs'
 
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsList, TabsTrigger } from '@calibra-facil/ui/tabs'
 import { CashForecastPage } from '@/features/finance/cash-forecast-page'
 import { OperationsToCashPage } from '@/features/finance/operations-to-cash-page'
 import { MarginDashboardsPage } from '@/features/finance/margin-dashboards-page'

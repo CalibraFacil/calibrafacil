@@ -13,6 +13,7 @@ import {
   serviceOrderSettings,
   serviceOrderTag,
 } from "@calibra-facil/db/schema";
+import { eq } from "drizzle-orm";
 
 // Seed helpers SPECIFIC to the worker's SERVICE_ORDER document handlers
 // (processServiceOrderIntakeDocument / Tag / Quote / DeliveryReceipt). These read
@@ -114,6 +115,7 @@ export async function seedServiceOrder(params: {
     throw new Error("seedServiceOrder: service_order insert failed");
 
   await db.insert(serviceOrderAssetSnapshot).values({
+    organizationId: params.organizationId,
     serviceOrderId: orderRow.id,
     assetId: assetRow.id,
     assetName: params.assetName,
@@ -142,6 +144,19 @@ export async function seedServiceOrder(params: {
   };
 }
 
+/** The laboratory that owns a seeded service order (children carry it too). */
+async function organizationOfServiceOrder(
+  serviceOrderId: number,
+): Promise<string> {
+  const [row] = await db
+    .select({ organizationId: serviceOrder.organizationId })
+    .from(serviceOrder)
+    .where(eq(serviceOrder.id, serviceOrderId))
+    .limit(1);
+  if (!row) throw new Error(`service order ${serviceOrderId} is not seeded`);
+  return row.organizationId;
+}
+
 /**
  * Pre-create a service_order_intake_document row (no pdf yet) so the INTAKE
  * handler takes the UPDATE branch (sets pdf_r2_key + issued_at + issued_by).
@@ -153,6 +168,7 @@ export async function seedIntakeDocument(params: {
   const [row] = await db
     .insert(serviceOrderIntakeDocument)
     .values({
+      organizationId: await organizationOfServiceOrder(params.serviceOrderId),
       serviceOrderId: params.serviceOrderId,
       documentNumber: `${params.serviceOrderNumber}/REC`,
       version: 1,
@@ -176,6 +192,7 @@ export async function seedTag(params: {
   const [row] = await db
     .insert(serviceOrderTag)
     .values({
+      organizationId: await organizationOfServiceOrder(params.serviceOrderId),
       serviceOrderId: params.serviceOrderId,
       tagNumber,
       createdAt: EPOCH,
@@ -195,9 +212,13 @@ export async function seedQuote(params: {
   userId: string;
 }): Promise<{ quoteId: number; quoteNumber: string }> {
   const quoteNumber = `${params.serviceOrderNumber}-ORC`;
+  const organizationId = await organizationOfServiceOrder(
+    params.serviceOrderId,
+  );
   const [row] = await db
     .insert(serviceOrderQuote)
     .values({
+      organizationId,
       serviceOrderId: params.serviceOrderId,
       quoteNumber,
       version: 1,
@@ -214,6 +235,7 @@ export async function seedQuote(params: {
 
   await db.insert(serviceOrderQuoteItem).values([
     {
+      organizationId,
       quoteId: row.id,
       type: "service",
       description: "Mão de obra de reparo",
@@ -225,6 +247,7 @@ export async function seedQuote(params: {
       createdAt: EPOCH,
     },
     {
+      organizationId,
       quoteId: row.id,
       type: "part",
       description: "Peça de reposição",
@@ -251,9 +274,13 @@ export async function seedDeliveryDocument(params: {
   userId: string;
 }): Promise<{ documentId: number; documentNumber: string }> {
   const documentNumber = `${params.serviceOrderNumber}-ENT`;
+  const organizationId = await organizationOfServiceOrder(
+    params.serviceOrderId,
+  );
   const [row] = await db
     .insert(serviceOrderDeliveryDocument)
     .values({
+      organizationId,
       serviceOrderId: params.serviceOrderId,
       documentNumber,
       version: 1,
@@ -263,6 +290,7 @@ export async function seedDeliveryDocument(params: {
   if (!row) throw new Error("seedDeliveryDocument: insert failed");
 
   await db.insert(serviceOrderExecution).values({
+    organizationId,
     serviceOrderId: params.serviceOrderId,
     startedByUserId: params.userId,
     finishedAt: EPOCH,

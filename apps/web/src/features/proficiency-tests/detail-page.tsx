@@ -27,17 +27,17 @@ import {
   type PtResultPoint,
   type PtScoreType,
 } from '@/features/proficiency-tests/types'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { DatePicker } from '@/components/ui/date-picker'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Button } from '@calibra-facil/ui/button'
+import { DatePicker } from '@calibra-facil/ui/date-picker'
+import { Input } from '@calibra-facil/ui/input'
+import { Label } from '@calibra-facil/ui/label'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
+} from '@calibra-facil/ui/select'
 import {
   ACTION_BUTTON_CLASS,
   BlueprintField,
@@ -49,7 +49,7 @@ import {
   StaggerGroup,
   StaggerItem,
   type SignalTone,
-} from '@/components/instrument-panel'
+} from '@calibra-facil/ui/instrument-panel'
 import {
   CloudOnlyOfflineState,
   useDesktopCloudOnlyUnavailable,

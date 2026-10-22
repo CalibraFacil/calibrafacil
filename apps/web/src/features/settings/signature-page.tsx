@@ -17,9 +17,9 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
+} from '@calibra-facil/ui/card'
+import { Button } from '@calibra-facil/ui/button'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
 import { useMySignatureData } from '@/features/settings/queries'
 import { cn } from '@/lib/utils'
 

@@ -15,13 +15,13 @@ import { RefreshIcon } from '@hugeicons/core-free-icons'
 import type { SyncState, SyncStatusSnapshot } from '@calibra-facil/contracts'
 import { toast } from 'sonner'
 
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Button } from '@calibra-facil/ui/button'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '@/components/ui/tooltip'
+} from '@calibra-facil/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { getDeadEventsBannerLabel } from '@/runtime/sync-dead-events'
 import {

@@ -9,8 +9,8 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+} from '@calibra-facil/ui/card'
+import { Button } from '@calibra-facil/ui/button'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,7 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
+} from '@calibra-facil/ui/alert-dialog'
 
 export function DangerSettingsPage() {
   const { revokeAllSessions, isUpdating } = useSettings()

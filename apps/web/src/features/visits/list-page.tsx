@@ -3,17 +3,17 @@ import { useState } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Location01Icon, ArrowRight01Icon } from '@hugeicons/core-free-icons'
 
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Spinner } from '@/components/ui/spinner'
+import { Button } from '@calibra-facil/ui/button'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Spinner } from '@calibra-facil/ui/spinner'
 import {
   Empty,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from '@/components/ui/empty'
-import { Panel } from '@/components/instrument-panel'
+} from '@calibra-facil/ui/empty'
+import { Panel } from '@calibra-facil/ui/instrument-panel'
 import { cn } from '@/lib/utils'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 import {

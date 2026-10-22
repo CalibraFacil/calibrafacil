@@ -1,4 +1,4 @@
-import { CommandGroup, CommandItem } from '@/components/ui/command'
+import { CommandGroup, CommandItem } from '@calibra-facil/ui/command'
 import { useCommandPalette } from '../command-context'
 
 // Feature pages own workflow actions, including permissions and confirmation.

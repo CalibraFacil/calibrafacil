@@ -8,9 +8,13 @@ import {
   LockIcon,
 } from '@hugeicons/core-free-icons'
 
-import { Panel, StaggerGroup, StaggerItem } from '@/components/instrument-panel'
-import { Button } from '@/components/ui/button'
-import { Progress } from '@/components/ui/progress'
+import {
+  Panel,
+  StaggerGroup,
+  StaggerItem,
+} from '@calibra-facil/ui/instrument-panel'
+import { Button } from '@calibra-facil/ui/button'
+import { Progress } from '@calibra-facil/ui/progress'
 import { cn } from '@/lib/utils'
 
 import { startInterfaceTour } from './interface-tour'

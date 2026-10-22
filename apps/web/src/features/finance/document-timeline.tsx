@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/timeline'
 import { formatFinanceDate } from '@/lib/finance-formatters'
 import { Money } from '@/features/finance/finance-display'
-import type { SignalTone } from '@/components/instrument-panel'
+import type { SignalTone } from '@calibra-facil/ui/status-tone'
 import type { BillingDocumentDetails } from '@/features/finance/types'
 
 type TimelineEvent = {

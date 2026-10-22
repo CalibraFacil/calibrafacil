@@ -16,8 +16,8 @@ import {
   PlusSignIcon,
 } from '@hugeicons/core-free-icons'
 
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Button } from '@calibra-facil/ui/button'
+import { Input } from '@calibra-facil/ui/input'
 import {
   Empty,
   EmptyContent,
@@ -25,7 +25,7 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from '@/components/ui/empty'
+} from '@calibra-facil/ui/empty'
 import {
   Dialog,
   DialogContent,
@@ -33,8 +33,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
+} from '@calibra-facil/ui/dialog'
+import { Field, FieldDescription, FieldLabel } from '@calibra-facil/ui/field'
 import {
   ACTION_BUTTON_CLASS,
   Panel,
@@ -42,14 +42,14 @@ import {
   StaggerGroup,
   StaggerItem,
   type SignalTone,
-} from '@/components/instrument-panel'
+} from '@calibra-facil/ui/instrument-panel'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
-import { DataTable } from '@/components/ui/data-table'
+} from '@calibra-facil/ui/select'
+import { DataTable } from '@calibra-facil/ui/data-table'
 import { cn } from '@/lib/utils'
 import {
   CloudOnlyOfflineState,

@@ -22,7 +22,7 @@ import {
   Calendar03Icon,
 } from '@hugeicons/core-free-icons'
 
-import { Button } from '@/components/ui/button'
+import { Button } from '@calibra-facil/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,7 +31,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+} from '@calibra-facil/ui/dropdown-menu'
 import {
   Dialog,
   DialogContent,
@@ -39,10 +39,15 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
+} from '@calibra-facil/ui/dialog'
+import { Badge } from '@calibra-facil/ui/badge'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@calibra-facil/ui/card'
+import { Separator } from '@calibra-facil/ui/separator'
 import {
   Table,
   TableBody,
@@ -50,16 +55,16 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'
+} from '@calibra-facil/ui/table'
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from '@/components/ui/accordion'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+} from '@calibra-facil/ui/accordion'
+import { Checkbox } from '@calibra-facil/ui/checkbox'
+import { Label } from '@calibra-facil/ui/label'
+import { Textarea } from '@calibra-facil/ui/textarea'
 import {
   AuditTimeline,
   buildJobTimelineEvents,
@@ -81,7 +86,7 @@ import {
 } from '@calibra-facil/shared'
 import { useActiveOrganization } from '@calibra-facil/auth/client'
 import { AccreditationSeal } from '@/components/accreditation-seal'
-import { Spinner } from '@/components/ui/spinner'
+import { Spinner } from '@calibra-facil/ui/spinner'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import { isMassCompositionValue } from '@/components/method-runtime/mass-composition-utils'
 import { RepeatabilityTable } from '@/features/jobs/components/repeatability-table'
@@ -104,7 +109,7 @@ import {
   SignalTile,
   StaggerGroup,
   StaggerItem,
-} from '@/components/instrument-panel'
+} from '@calibra-facil/ui/instrument-panel'
 import { cn } from '@/lib/utils'
 import { CertificateReleaseControl } from '@/features/finance/certificate-release'
 import { PrintLabelButton } from '@/features/printing/print-label-button'
@@ -462,6 +467,7 @@ export function ApprovedJobRecord({
               <Button
                 variant="outline"
                 size="icon"
+                aria-label="Mais ações"
                 className={`${REVIEW_ACTION_BUTTON_CLASS} size-10 shadow-[0_1px_2px_rgba(15,23,42,0.08)]`}
                 {...props}
               >

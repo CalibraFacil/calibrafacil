@@ -9,9 +9,9 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 import { parseAsInteger, parseAsString, useQueryState } from 'nuqs'
 
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
+import { Button } from '@calibra-facil/ui/button'
+import { Input } from '@calibra-facil/ui/input'
+import { ACTION_BUTTON_CLASS, Panel } from '@calibra-facil/ui/instrument-panel'
 import {
   Empty,
   EmptyContent,
@@ -19,8 +19,8 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from '@/components/ui/empty'
-import { DataTable } from '@/components/ui/data-table'
+} from '@calibra-facil/ui/empty'
+import { DataTable } from '@calibra-facil/ui/data-table'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 import {
   CUSTOMERS_LIST_LIMIT,

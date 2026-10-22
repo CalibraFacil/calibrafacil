@@ -372,6 +372,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
 
       // Audit log
       await db.insert(personnelCompetenceAuditLog).values({
+        organizationId: memberData.organizationId,
         competenceId: created.id,
         action: "create",
         changes: {
@@ -452,6 +453,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
         .returning();
 
       await db.insert(personnelCompetenceAuditLog).values({
+        organizationId: memberData.organizationId,
         competenceId: id,
         action: "update",
         changes: updateData,
@@ -550,6 +552,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
         .returning();
 
       await db.insert(personnelCompetenceAuditLog).values({
+        organizationId: memberData.organizationId,
         competenceId: id,
         action: "assign_training",
         changes: {
@@ -612,6 +615,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
         .returning();
 
       await db.insert(personnelCompetenceAuditLog).values({
+        organizationId: memberData.organizationId,
         competenceId: id,
         action: "start_training",
         changes: {
@@ -672,6 +676,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
         .returning();
 
       await db.insert(personnelCompetenceAuditLog).values({
+        organizationId: memberData.organizationId,
         competenceId: id,
         action: "complete_training",
         changes: {
@@ -748,6 +753,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
           .returning();
 
         await db.insert(personnelCompetenceAuditLog).values({
+          organizationId: memberData.organizationId,
           competenceId: id,
           action: "approve",
           changes: {
@@ -789,6 +795,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
           .returning();
 
         await db.insert(personnelCompetenceAuditLog).values({
+          organizationId: memberData.organizationId,
           competenceId: id,
           action: "reject",
           changes: {
@@ -866,6 +873,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
         .returning();
 
       await db.insert(personnelCompetenceAuditLog).values({
+        organizationId: memberData.organizationId,
         competenceId: id,
         action: "cancel",
         changes: {
@@ -925,6 +933,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
         .returning();
 
       await db.insert(personnelCompetenceAuditLog).values({
+        organizationId: memberData.organizationId,
         competenceId: id,
         action: "suspend",
         changes: { status: { old: "ACTIVE", new: "SUSPENDED" } },
@@ -994,6 +1003,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
         .returning();
 
       await db.insert(personnelCompetenceAuditLog).values({
+        organizationId: memberData.organizationId,
         competenceId: id,
         action: "renew",
         changes: {
@@ -1047,6 +1057,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
         .where(eq(personnelCompetence.id, id));
 
       await db.insert(personnelCompetenceAuditLog).values({
+        organizationId: memberData.organizationId,
         competenceId: id,
         action: "delete",
         changes: { deletedAt: new Date().toISOString() },

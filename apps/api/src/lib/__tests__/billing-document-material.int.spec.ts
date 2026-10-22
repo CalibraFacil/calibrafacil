@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { organizationOf } from "../../../test/integration/organization-of";
 import { db } from "@calibra-facil/db";
 import {
   asset,
@@ -119,6 +120,7 @@ async function seedBillingContext(tag: string) {
   const [quote] = await db
     .insert(serviceOrderQuote)
     .values({
+      organizationId: organizationOf("service_order", order.id),
       serviceOrderId: order.id,
       quoteNumber: `OS-${tag}/ORC`,
       version: 1,
@@ -131,6 +133,7 @@ async function seedBillingContext(tag: string) {
 
   await db.insert(serviceOrderQuoteItem).values([
     {
+      organizationId: organizationOf("service_order_quote", quote.id),
       quoteId: quote.id,
       type: "part",
       description: "Célula de carga 50kg",
@@ -142,6 +145,7 @@ async function seedBillingContext(tag: string) {
       sortOrder: 0,
     },
     {
+      organizationId: organizationOf("service_order_quote", quote.id),
       quoteId: quote.id,
       type: "part",
       description: "Peça avulsa sem catálogo",
@@ -153,6 +157,7 @@ async function seedBillingContext(tag: string) {
       sortOrder: 1,
     },
     {
+      organizationId: organizationOf("service_order_quote", quote.id),
       quoteId: quote.id,
       type: "service",
       description: "Mão de obra",

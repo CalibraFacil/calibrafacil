@@ -2,7 +2,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { Moon01Icon, Sun01Icon } from '@hugeicons/core-free-icons'
 import { useTheme } from 'next-themes'
 
-import { Button } from '@/components/ui/button'
+import { Button } from '@calibra-facil/ui/button'
 
 export function ModeToggle() {
   const { setTheme, resolvedTheme } = useTheme()

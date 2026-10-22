@@ -4,7 +4,7 @@ import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 import { cn } from "@/lib/utils";
-import { TONE } from "@/components/status-pill";
+import { STATUS_TONE } from "@calibra-facil/ui/status-tone";
 import { getNotificationTypeMeta, normalizeActionUrl } from "./lib";
 import {
   useMarkNotificationsRead,
@@ -54,7 +54,7 @@ export function NotificationItem({
       <span
         className={cn(
           "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg",
-          TONE[meta.tone].soft,
+          STATUS_TONE[meta.tone].soft,
         )}
       >
         <HugeiconsIcon icon={meta.icon} className="size-4" strokeWidth={2} />

@@ -13,13 +13,13 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+} from '@calibra-facil/ui/card'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Button } from '@calibra-facil/ui/button'
+import { Field, FieldDescription, FieldLabel } from '@calibra-facil/ui/field'
+import { Input } from '@calibra-facil/ui/input'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
+import { Alert, AlertDescription } from '@calibra-facil/ui/alert'
 import { formatInstant } from '@calibra-facil/shared/format'
 
 function statusVariant(

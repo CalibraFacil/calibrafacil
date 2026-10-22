@@ -11,7 +11,7 @@ import {
   createRouter,
 } from '@tanstack/react-router'
 
-import { DataTable } from '@/components/ui/data-table'
+import { DataTable } from '@calibra-facil/ui/data-table'
 import { methodsColumns, type Method } from './columns'
 import type { MethodStatus } from '@/features/methods/types'
 

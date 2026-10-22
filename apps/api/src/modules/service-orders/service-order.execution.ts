@@ -39,6 +39,7 @@ export async function startServiceOrderExecution(input: {
   const [execution] = await db
     .insert(serviceOrderExecution)
     .values({
+      organizationId: input.member.organizationId,
       serviceOrderId: input.serviceOrderId,
       startedByUserId: input.actorUserId,
       technicalNotes: input.values.notes ?? null,
@@ -129,7 +130,12 @@ export async function updateServiceOrderExecution(input: {
       result: input.values.result,
       updatedAt: new Date(),
     })
-    .where(eq(serviceOrderExecution.id, execution.id))
+    .where(
+      and(
+        eq(serviceOrderExecution.id, execution.id),
+        eq(serviceOrderExecution.organizationId, input.member.organizationId),
+      ),
+    )
     .returning();
 
   if (!updated) return { status: "not_started" as const };
@@ -205,7 +211,12 @@ export async function finishServiceOrderExecution(input: {
         finishedAt: new Date(),
         finishedByUserId: input.actorUserId,
       })
-      .where(eq(serviceOrderExecution.id, execution.id));
+      .where(
+        and(
+          eq(serviceOrderExecution.id, execution.id),
+          eq(serviceOrderExecution.organizationId, input.member.organizationId),
+        ),
+      );
     await tx
       .update(serviceOrder)
       .set({

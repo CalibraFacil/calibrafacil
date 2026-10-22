@@ -1,15 +1,15 @@
 import { Delete02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Button } from '@calibra-facil/ui/button'
+import { Input } from '@calibra-facil/ui/input'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
-import { FormField as Field } from '@/shared/forms/form-field'
+} from '@calibra-facil/ui/select'
+import { Field } from '@calibra-facil/ui/field'
 
 import type { MethodDraftInput, MethodDraftVariableBinding } from './types'
 

@@ -15,19 +15,19 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { useActiveOrganization } from '@calibra-facil/auth/client'
 import { useSettings } from '@/contexts/settings-context'
 import { calibraApi, resolveCloudApiUrl } from '@/utils/api'
-import { Panel, PanelHeader } from '@/components/instrument-panel'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Panel, PanelHeader } from '@calibra-facil/ui/instrument-panel'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Button } from '@calibra-facil/ui/button'
 import {
   Field,
   FieldDescription,
   FieldGroup,
   FieldLabel,
-} from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
-import { Separator } from '@/components/ui/separator'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Textarea } from '@/components/ui/textarea'
+} from '@calibra-facil/ui/field'
+import { Input } from '@calibra-facil/ui/input'
+import { Separator } from '@calibra-facil/ui/separator'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
+import { Textarea } from '@calibra-facil/ui/textarea'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,7 +38,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
+} from '@calibra-facil/ui/alert-dialog'
 import { useApiKeysData, useSsoSettingsData } from '@/features/settings/queries'
 import { formatInstant } from '@calibra-facil/shared/format'
 

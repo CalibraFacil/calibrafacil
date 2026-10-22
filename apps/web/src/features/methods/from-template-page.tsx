@@ -10,17 +10,17 @@ import type {
 } from '@calibra-facil/client-runtime'
 
 import { calibraApi } from '@/utils/api'
-import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@calibra-facil/ui/button'
+import { Checkbox } from '@calibra-facil/ui/checkbox'
+import { Input } from '@calibra-facil/ui/input'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
+} from '@calibra-facil/ui/select'
 import {
   ACTION_BUTTON_CLASS,
   BlueprintField,
@@ -30,8 +30,8 @@ import {
   SignalTile,
   StaggerGroup,
   StaggerItem,
-} from '@/components/instrument-panel'
-import { Badge } from '@/components/ui/badge'
+} from '@calibra-facil/ui/instrument-panel'
+import { Badge } from '@calibra-facil/ui/badge'
 import { cn } from '@/lib/utils'
 import { assetTypesQueryOptions } from '@/features/assets/queries'
 

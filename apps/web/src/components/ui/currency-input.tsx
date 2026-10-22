@@ -1,5 +1,5 @@
 import { ChangeEvent, ComponentProps, FocusEvent, useState } from 'react'
-import { Input } from '@/components/ui/input'
+import { Input } from '@calibra-facil/ui/input'
 import { parseFinanceCurrencyInputToCents } from '@/lib/finance-formatters'
 import { cn } from '@/lib/utils'
 import { formatNumber } from '@calibra-facil/shared/format'

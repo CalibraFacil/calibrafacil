@@ -9,23 +9,23 @@ import type {
 } from '@calibra-facil/client-runtime'
 
 import { calibraApi } from '@/utils/api'
-import { Button } from '@/components/ui/button'
+import { Button } from '@calibra-facil/ui/button'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
+} from '@calibra-facil/ui/card'
+import { Input } from '@calibra-facil/ui/input'
+import { Field, FieldDescription, FieldLabel } from '@calibra-facil/ui/field'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
-import { Skeleton } from '@/components/ui/skeleton'
+} from '@calibra-facil/ui/select'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
 import { useHasPermission } from '@/components/permission-gate'
 import { useCertificateNumberingProfileData } from '@/features/settings/queries'
 

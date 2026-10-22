@@ -28,8 +28,8 @@ apps/portal/src/
     v/               # Public certificate verification (/v/$token)
     service-order-access/  # Public service-order view (/service-order-access/$token)
   features/          # Extracted domain modules (page + queries + types + components + tests)
-  components/        # Shared components: instrument-panel, status-pill, timeline, command-menu…
-    ui/              # base-ui primitives (button, card, dialog, checkbox, tabs…)
+  components/        # App components: status-pill, timeline, command-menu…
+                     # (primitives and instrument-panel come from @calibra-facil/ui)
   lib/               # calibration-status, status-labels, format, platform, utils (getApiBaseUrl)
   hooks/             # use-mount-effect, use-mobile
 ```
@@ -50,8 +50,10 @@ add route-local `-components` folders.
 ## Design System: instrument-panel
 
 The portal's design system is the **instrument-panel** "metrology console" look,
-ported from `apps/web/src/components/instrument-panel.tsx` into
-`apps/portal/src/components/instrument-panel.tsx`. It is **not** plain
+shared with `apps/web` through `@calibra-facil/ui/instrument-panel` (see
+`docs/architecture/shared-ui-package.md`). The shadcn/base-ui primitives
+(`button`, `card`, `dialog`, ...) come from the same package; the portal has no
+`components/ui` of its own. It is **not** plain
 `Card`/`Badge`. New surfaces compose these primitives:
 
 - `Panel`, `PanelHeader` — the framed console surface and its header.
@@ -84,7 +86,8 @@ All status is expressed through one tone vocabulary, `SignalTone`:
   `DUE_SOON_DAYS = 30`). It also exports the deep-linkable `CALIBRATION_FILTERS`.
   It is unit-tested (`calibration-status.test.ts`) — keep it pure and testable.
 - `lib/status-labels.ts` — request and service-order status → label + `SignalTone`.
-- `components/status-pill.tsx` — the `TONE` class map + `StatusPill`, keyed by
+- `@calibra-facil/ui/status-tone` — the `STATUS_TONE` class map (theme tokens, no
+  raw palette steps). `components/status-pill.tsx` — `StatusPill`, keyed by
   `SignalTone`, used everywhere a status renders.
 
 Do not introduce ad-hoc color choices for status; map to a tone instead.
@@ -148,8 +151,10 @@ imports `client-runtime` or `@calibra-facil/api`. Only business data under
   `defaultOnCatch`). Crashes are reported through `lib/report-client-error.ts`:
   one structured `console.error` line (JSON), no third-party SDK, no network
   call. The boundaries are in the
-  initial graph, so they use `panel-styles`, `button-variants` and inline glyphs
-  instead of `instrument-panel.tsx`, `ui/button.tsx` or the icon barrel.
+  initial graph, so they use `@calibra-facil/ui/panel-styles`,
+  `@calibra-facil/ui/button-variants` and inline glyphs instead of
+  `instrument-panel`, the `button` primitive or the icon barrel. The package
+  toaster takes no icon set for the same reason: the lab app passes its own.
 - **Paginated lists keep their rows while the next page loads**: pass
   `placeholderData: keepPreviousDataInScope(key("portal-<list>"))`
   (`lib/keep-previous-page.ts`). The scope guard (portal root + active
@@ -206,6 +211,9 @@ its own chunk and `index.html` only loads the shell. Keep it that way:
 - Heavy, decorative or chart-only code is imported with `React.lazy` where it is
   used (`SignInShaderPanel`, `DriftChart`, `TrendBarChartBody`) — never from a
   module the entry or layout imports statically.
+- `styles.css` excludes the `@calibra-facil/ui` components the portal never renders
+  from Tailwind's scan (`@source not`); `src/lib/ui-source-coverage.test.ts` fails
+  if the portal starts importing one of them.
 - `vite.config.ts` pins vendor chunks (`vendor-react`, `vendor-ui-utils`,
   `vendor-motion`, `vendor-charts`). `clsx`/`tailwind-merge`/`cva` have their own
   higher-priority chunk because recharts imports `clsx` too: without it Rolldown

@@ -542,6 +542,7 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
 
         await tx.insert(billingDocumentItem).values(
           jobs.map((job, index) => ({
+            organizationId: member.organizationId,
             documentId: document.id,
             jobId: job.id,
             jobCommercialSnapshotId: snapshots[index]?.id ?? null,
@@ -782,6 +783,7 @@ export const financeDocumentsRouter = new Hono<{ Variables: AuthVariables }>()
 
         if (!existingInstallment) {
           await tx.insert(receivableInstallment).values({
+            organizationId: member.organizationId,
             documentId: id,
             installmentNumber: 1,
             status: "OPEN",

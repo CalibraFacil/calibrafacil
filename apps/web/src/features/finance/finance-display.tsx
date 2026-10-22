@@ -17,7 +17,7 @@ import type {
 } from '@calibra-facil/shared'
 
 import { formatFinanceMoney } from '@/lib/finance-formatters'
-import type { SignalTone } from '@/components/instrument-panel'
+import type { SignalTone } from '@calibra-facil/ui/status-tone'
 import { cn } from '@/lib/utils'
 
 // — Tone maps. Each is `satisfies Record<Union, SignalTone>` so that if a

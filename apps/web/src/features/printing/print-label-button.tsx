@@ -5,8 +5,8 @@ import { toast } from 'sonner'
 
 import { isDesktopRuntime } from '@calibra-facil/client-runtime'
 
-import { Button } from '@/components/ui/button'
-import { Spinner } from '@/components/ui/spinner'
+import { Button } from '@calibra-facil/ui/button'
+import { Spinner } from '@calibra-facil/ui/spinner'
 
 import { NoCloudPrinterError } from './print-label'
 import { PrinterSettingsDialog } from './printer-settings-dialog'

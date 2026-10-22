@@ -40,9 +40,24 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # The test setup runs psql against the container it starts.
-      - name: Ensure psql
-        run: command -v psql || (sudo apt-get update && sudo apt-get install -y postgresql-client)
+      # The test setup runs psql against the container it starts, and the
+      # migration specs clone schemas with pg_dump, which refuses a server newer
+      # than itself. Install the client matching docker-compose.yml's postgres
+      # major (the runner image ships an older one; its PGDG source has 17).
+      - name: Ensure psql and pg_dump match the test server
+        run: |
+          major=$(sed -nE 's/^[[:space:]]*image:[[:space:]]*postgres:([0-9]+).*/\1/p' docker-compose.yml | head -1)
+          if ! pg_dump --version 2>/dev/null | grep -qE " ${major}\."; then
+            sudo apt-get update
+            sudo apt-get install -y "postgresql-client-${major}" || {
+              sudo install -d /usr/share/postgresql-common/pgdg
+              sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+              echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+              sudo apt-get update
+              sudo apt-get install -y "postgresql-client-${major}"
+            }
+          fi
+          pg_dump --version
 
       - name: Integration tests (apps/${{ matrix.app }})
         run: pnpm --dir apps/${{ matrix.app }} test:integration

@@ -1,8 +1,8 @@
 import { type ReactNode } from 'react'
 import type { MethodGovernance } from '@calibra-facil/client-runtime'
 
-import { Badge } from '@/components/ui/badge'
-import { Panel, PanelHeader } from '@/components/instrument-panel'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Panel, PanelHeader } from '@calibra-facil/ui/instrument-panel'
 import { cn } from '@/lib/utils'
 
 /**

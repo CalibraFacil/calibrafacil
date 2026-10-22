@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Button } from '@calibra-facil/ui/button'
+import { ScrollArea } from '@calibra-facil/ui/scroll-area'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
 import { integrationRunItemsQueryOptions } from '@/features/settings/queries'
 import {
   formatIntegrationDateTime,

@@ -8,15 +8,15 @@ import {
   MoreHorizontalIcon,
 } from '@hugeicons/core-free-icons'
 
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Button } from '@calibra-facil/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+} from '@calibra-facil/ui/dropdown-menu'
 import type { MaterialListItem } from '@/features/materials/types'
 import { cn } from '@/lib/utils'
 import { formatFinanceMoney } from '@/lib/finance-formatters'
@@ -134,7 +134,11 @@ export const materialsColumns: ColumnDef<Material>[] = [
 
       return (
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="ghost" size="icon" />}>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="ghost" size="icon" aria-label="Mais ações" />
+            }
+          >
             <HugeiconsIcon icon={MoreHorizontalIcon} className="h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">

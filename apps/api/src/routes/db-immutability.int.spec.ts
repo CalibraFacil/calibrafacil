@@ -26,6 +26,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { organizationOf } from "../../test/integration/organization-of";
 import { db } from "@calibra-facil/db";
 import {
   accreditedScopeLineAuditLog,
@@ -692,7 +693,12 @@ describe("append-only evidence tables (migration 0115)", () => {
     const jobId = await seedJob(fixture, "REVIEW", { jobId: "CAL-AUD" });
     const [audit] = await db
       .insert(jobAuditLog)
-      .values({ jobId, action: "create", performedBy: fixture.userId })
+      .values({
+        organizationId: organizationOf("calibration_job", jobId),
+        jobId,
+        action: "create",
+        performedBy: fixture.userId,
+      })
       .returning({ id: jobAuditLog.id });
     const [event] = await db
       .insert(organizationEventLog)
@@ -779,7 +785,12 @@ describe("seed escape hatch calibra.allow_audit_rewrite (migration 0115)", () =>
     const jobId = await seedJob(fixture, "APPROVED", { jobId: "CAL-SEED" });
     const [audit] = await db
       .insert(jobAuditLog)
-      .values({ jobId, action: "approve", performedBy: fixture.userId })
+      .values({
+        organizationId: organizationOf("calibration_job", jobId),
+        jobId,
+        action: "approve",
+        performedBy: fixture.userId,
+      })
       .returning({ id: jobAuditLog.id });
     if (!audit) throw new Error("audit insert failed");
 
@@ -831,6 +842,7 @@ describe("seed escape hatch calibra.allow_audit_rewrite (migration 0115)", () =>
     const fixture = await seedFixture();
     const jobId = await seedJob(fixture, "APPROVED", { jobId: "CAL-TIMELINE" });
     await db.insert(jobAuditLog).values({
+      organizationId: organizationOf("calibration_job", jobId),
       jobId,
       action: "approve",
       performedBy: fixture.userId,
@@ -880,7 +892,12 @@ describe("seed escape hatch calibra.allow_audit_rewrite (migration 0115)", () =>
     const jobId = await seedJob(fixture, "REVIEW", { jobId: "CAL-RB" });
     const [audit] = await db
       .insert(jobAuditLog)
-      .values({ jobId, action: "create", performedBy: fixture.userId })
+      .values({
+        organizationId: organizationOf("calibration_job", jobId),
+        jobId,
+        action: "create",
+        performedBy: fixture.userId,
+      })
       .returning({ id: jobAuditLog.id });
     if (!audit) throw new Error("audit insert failed");
 

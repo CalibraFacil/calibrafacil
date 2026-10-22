@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 
 import { calibraApi } from '@/utils/api'
 import { methodRouteId } from '@/lib/route-identifiers'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
 import {
   draftToMethodSavePayload,
   methodDataToDraft,

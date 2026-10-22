@@ -7,17 +7,17 @@ import { InformationCircleIcon } from '@hugeicons/core-free-icons'
 import type { CreateJobInput } from '@calibra-facil/schemas'
 
 import { calibraApi } from '@/utils/api'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
-import { DatePicker } from '@/components/ui/date-picker'
+import { Button } from '@calibra-facil/ui/button'
+import { Badge } from '@calibra-facil/ui/badge'
+import { ACTION_BUTTON_CLASS, Panel } from '@calibra-facil/ui/instrument-panel'
+import { DatePicker } from '@calibra-facil/ui/date-picker'
 import { formatFinanceMoney } from '@/lib/finance-formatters'
 import {
   Field,
   FieldDescription,
   FieldError,
   FieldLabel,
-} from '@/components/ui/field'
+} from '@calibra-facil/ui/field'
 import {
   Combobox,
   ComboboxContent,
@@ -25,7 +25,7 @@ import {
   ComboboxInput,
   ComboboxItem,
   ComboboxList,
-} from '@/components/ui/combobox'
+} from '@calibra-facil/ui/combobox'
 import {
   useJobTechniciansData,
   useNewJobCustomerAssetsData,

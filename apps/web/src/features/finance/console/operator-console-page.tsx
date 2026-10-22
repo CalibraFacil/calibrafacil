@@ -21,17 +21,17 @@ import {
   StaggerGroup,
   StaggerItem,
   type SignalTone,
-} from '@/components/instrument-panel'
-import { Button } from '@/components/ui/button'
+} from '@calibra-facil/ui/instrument-panel'
+import { Button } from '@calibra-facil/ui/button'
 import {
   Empty,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from '@/components/ui/empty'
-import { Skeleton } from '@/components/ui/skeleton'
-import { DataTableColumnHeader } from '@/components/ui/data-table-column-header'
+} from '@calibra-facil/ui/empty'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
+import { DataTableColumnHeader } from '@calibra-facil/ui/data-table-column-header'
 import {
   FinanceDataTable,
   type FacetConfig,

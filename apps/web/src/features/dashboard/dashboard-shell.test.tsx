@@ -70,7 +70,7 @@ vi.mock('@/components/dashboard-header', () => ({
   }) => <header>{suspendEntityQueries ? 'header suspended' : 'header'}</header>,
 }))
 
-vi.mock('@/components/ui/sidebar', () => ({
+vi.mock('@calibra-facil/ui/sidebar', () => ({
   SidebarInset: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),

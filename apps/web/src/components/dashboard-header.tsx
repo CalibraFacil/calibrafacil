@@ -9,9 +9,9 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
-} from '@/components/ui/breadcrumb'
-import { Separator } from '@/components/ui/separator'
-import { SidebarTrigger } from '@/components/ui/sidebar'
+} from '@calibra-facil/ui/breadcrumb'
+import { Separator } from '@calibra-facil/ui/separator'
+import { SidebarTrigger } from '@calibra-facil/ui/sidebar'
 import { NotificationBell } from '@/components/notifications/notification-bell'
 import {
   useAssetLabelData,

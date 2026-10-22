@@ -2,7 +2,8 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { authClient, useSession } from '@calibra-facil/auth/client'
 import { translateAuthErrorMessage } from '@calibra-facil/auth/error-messages'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@calibra-facil/ui/button'
+import { buttonVariants } from '@calibra-facil/ui/button-variants'
 import {
   Card,
   CardContent,
@@ -10,7 +11,7 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
+} from '@calibra-facil/ui/card'
 import { toast } from 'sonner'
 import { useInvitationData } from '@/features/public/queries'
 import { calibraApi } from '@/utils/api'

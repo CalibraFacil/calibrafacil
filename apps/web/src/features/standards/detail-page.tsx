@@ -20,9 +20,9 @@ import {
   AuditTimeline,
   buildAuditTimelineEvents,
 } from '@/components/audit-timeline'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Button } from '@calibra-facil/ui/button'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
 import {
   ACTION_BUTTON_CLASS,
   BlueprintField,
@@ -34,7 +34,7 @@ import {
   StaggerGroup,
   StaggerItem,
   type SignalTone,
-} from '@/components/instrument-panel'
+} from '@calibra-facil/ui/instrument-panel'
 import { formatStandardDate } from '@/features/standards/dates'
 import { metrologyKindDefinition } from '@/features/standards/metrology-kinds'
 import { StandardCertificateDocumentPanel } from '@/features/standards/components/standard-certificate-document-panel'
