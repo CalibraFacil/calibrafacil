@@ -127,6 +127,7 @@ import {
 } from '@/features/jobs/execution'
 import { parseExecutionPerformedAt } from '@/features/jobs/forms'
 import { standardWarningItems } from '@/features/jobs/standard-warnings'
+import { STATUS_TONE } from '@calibra-facil/ui/status-tone'
 import {
   clearExecutionDraft,
   hashExecutionValues,
@@ -1493,12 +1494,12 @@ function ExecuteJobForm({
           {staleStandardItems.length > 0 && (
             <div
               role="status"
-              className="space-y-2 rounded-xl bg-amber-50 p-3 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.25)] dark:bg-amber-950"
+              className={`space-y-2 rounded-xl border p-3 ${STATUS_TONE.warning.alert}`}
             >
               {staleStandardItems.map((item) => (
                 <div
                   key={item.standardId}
-                  className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200"
+                  className="flex items-center gap-2 text-sm"
                 >
                   <HugeiconsIcon
                     icon={Alert02Icon}
