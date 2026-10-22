@@ -2,66 +2,12 @@ import {
   portalOverviewResponseSchema,
   ResponseContractError,
 } from "@calibra-facil/contracts";
+import { buildPortalOverview } from "@calibra-facil/contracts/jobs-fixtures";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { fetchPortalJson } from "./api-fetch";
 
-const overview = {
-  equipment: {
-    total: 1,
-    overdue: 0,
-    dueSoon: 1,
-    scheduled: 0,
-    unscheduled: 0,
-    inLab: 0,
-    attention: [
-      {
-        id: 1,
-        publicId: "6f1c1d1e-0000-4000-8000-000000000001",
-        name: "Balança A",
-        tag: "EQ-A1",
-        nextCalibrationDate: "2026-11-01T00:00:00.000Z",
-        customerId: 4,
-        customerName: "Customer A",
-      },
-    ],
-  },
-  certificates: {
-    available: 1,
-    recent: [
-      {
-        id: 7,
-        jobId: "CAL-0007",
-        approvedAt: "2026-05-20T10:00:00.000Z",
-        assetName: "Balança A",
-        assetTag: "EQ-A1",
-        releaseStatus: "RELEASED",
-        ready: true,
-      },
-    ],
-  },
-  requests: {
-    total: 1,
-    open: 1,
-    rejected: 0,
-    recent: [
-      {
-        id: 3,
-        status: "PENDING",
-        submittedAt: "2026-05-21T10:00:00.000Z",
-        itemCount: 2,
-      },
-    ],
-  },
-  serviceOrders: {
-    total: 0,
-    inProgress: 0,
-    awaitingQuoteApproval: 0,
-    readyForPickup: 0,
-    awaitingQuote: [],
-    recent: [],
-  },
-};
+const overview = buildPortalOverview();
 
 function stubFetch(body: unknown, status = 200) {
   const fetchMock = vi.fn(

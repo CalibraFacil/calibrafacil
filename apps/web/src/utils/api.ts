@@ -133,8 +133,8 @@ export async function getDesktopLocalApiToken() {
  * A mismatch throws in development and tests (drift fails where it is
  * introduced) and only logs a structured warning in production, so a contract
  * slip never takes the UI down. `VITE_RESPONSE_VALIDATION=warn` opts a dev
- * server into the production behavior (the mocked-API Playwright run, whose
- * hand-written fixtures are not full API responses).
+ * server into the production behavior. The mocked-API Playwright run does not:
+ * its fixtures are contract-valid (`@calibra-facil/contracts/jobs-fixtures`).
  */
 const RESPONSE_VALIDATION =
   import.meta.env.PROD || import.meta.env.VITE_RESPONSE_VALIDATION === 'warn'
