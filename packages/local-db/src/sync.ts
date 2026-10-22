@@ -1139,7 +1139,7 @@ function loadPendingLocalChanges(database: LocalDatabase): PendingLocalChanges {
 SELECT DISTINCT e.aggregate_kind AS kind, e.aggregate_id AS id
 FROM outbox o
 JOIN domain_events e ON e.event_id = o.event_id
-WHERE o.status <> 'synced'
+WHERE o.status NOT IN ('synced', 'discarded')
 `,
     )
     .all();

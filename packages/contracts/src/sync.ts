@@ -216,6 +216,30 @@ export const localSyncConflictResolutionSchema = z.object({
   status: z.enum(["resolved", "ignored"]).default("resolved"),
 });
 
+/**
+ * An outbox event the cloud refused permanently. The code is the cloud's own
+ * (`UNSUPPORTED_SYNC_OPERATION`, `STANDARD_EXPIRED`, ...); the UI maps it to a
+ * pt-BR reason and keeps the cloud's message as detail.
+ */
+export const localDeadOutboxEventSchema = z.object({
+  eventId: z.string(),
+  entityType: z.string(),
+  entityId: z.string(),
+  operation: z.string(),
+  errorCode: z.string().nullable(),
+  errorMessage: z.string().nullable(),
+  attemptCount: z.number().int().nonnegative(),
+  occurredAt: z.string(),
+  deadAt: z.string().nullable(),
+  /** Carries calibration readings: discarding leaves them only on this computer. */
+  regulated: z.boolean(),
+});
+
+export const localDeadOutboxEventsResponseSchema = z.object({
+  data: z.array(localDeadOutboxEventSchema),
+  total: z.number().int().nonnegative(),
+});
+
 export const syncConflictResolutionRequestSchema =
   localSyncConflictResolutionSchema;
 
@@ -256,6 +280,10 @@ export type SyncAttachmentDownloadResponse = z.infer<
 export type LocalSyncConflict = z.infer<typeof localSyncConflictSchema>;
 export type LocalSyncConflictsResponse = z.infer<
   typeof localSyncConflictsResponseSchema
+>;
+export type LocalDeadOutboxEvent = z.infer<typeof localDeadOutboxEventSchema>;
+export type LocalDeadOutboxEventsResponse = z.infer<
+  typeof localDeadOutboxEventsResponseSchema
 >;
 export type LocalSyncConflictResolution = z.infer<
   typeof localSyncConflictResolutionSchema

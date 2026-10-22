@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { DeadEventsSection } from '@/features/sync/components/dead-events-section'
 import { useOpenSyncConflictsData } from '@/features/sync/queries'
 import { calibraApi } from '@/utils/api'
 import { useSyncStatus } from '@/runtime/sync-status'
@@ -182,6 +183,8 @@ export function SyncConflictsPage() {
           )
         })
       )}
+
+      <DeadEventsSection />
     </div>
   )
 }

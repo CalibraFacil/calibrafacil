@@ -28,14 +28,20 @@ export {
 } from "./execution";
 export {
   applySyncPushResult,
+  countDeadOutbox,
+  countDeferredOutbox,
   countOpenSyncConflicts,
   countPendingOutbox,
   countPendingOutboxForOtherUsers,
+  discardDeadOutboxEvent,
   getSyncCursor,
   getSyncCursorUpdatedAt,
+  listDeadOutboxEvents,
   listPendingOutboxEvents,
   markOutboxEventsFailedForRetry,
+  requeueDeadOutboxEvent,
   setSyncCursor,
+  type DeadOutboxEvent,
   type PendingOutboxEvent,
 } from "./outbox";
 export {

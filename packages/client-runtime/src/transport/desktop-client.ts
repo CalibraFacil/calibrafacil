@@ -2,6 +2,7 @@ import type {
   JobDetail,
   JobTechniciansResponse,
   JobsListResponse,
+  SyncStatusSnapshot,
 } from "@calibra-facil/contracts";
 import type {
   AssetAuditLogData,
@@ -25,6 +26,8 @@ import type {
   FinanceAccessResponse,
   LocalAttachment,
   LocalAttachmentsResponse,
+  LocalDeadOutboxEvent,
+  LocalDeadOutboxEventsResponse,
   LocalSessionSnapshotResponse,
   LocalSyncConflict,
   LocalSyncConflictsResponse,
@@ -1887,6 +1890,65 @@ export function createDesktopApiClient(
         }
 
         return readDesktopJson<{ data: LocalSyncConflict }>(response);
+      },
+      async listDeadEvents() {
+        const response = await fetchImpl(
+          new URL("/api/local/sync/dead-events", options.baseUrl),
+          {
+            credentials: "include",
+            headers: await createDesktopHeaders(options.tokenProvider),
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error("Falha ao carregar eventos recusados");
+        }
+
+        return readDesktopJson<LocalDeadOutboxEventsResponse>(response);
+      },
+      async discardDeadEvent(eventId) {
+        const response = await fetchImpl(
+          new URL(
+            `/api/local/sync/dead-events/${encodeURIComponent(eventId)}/discard`,
+            options.baseUrl,
+          ),
+          {
+            method: "POST",
+            credentials: "include",
+            headers: await createDesktopHeaders(options.tokenProvider),
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error("Falha ao descartar o evento recusado");
+        }
+
+        return readDesktopJson<{
+          data: LocalDeadOutboxEvent;
+          syncStatus: SyncStatusSnapshot;
+        }>(response);
+      },
+      async requeueDeadEvent(eventId) {
+        const response = await fetchImpl(
+          new URL(
+            `/api/local/sync/dead-events/${encodeURIComponent(eventId)}/requeue`,
+            options.baseUrl,
+          ),
+          {
+            method: "POST",
+            credentials: "include",
+            headers: await createDesktopHeaders(options.tokenProvider),
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error("Falha ao reenviar o evento recusado");
+        }
+
+        return readDesktopJson<{
+          data: { eventId: string };
+          syncStatus: SyncStatusSnapshot;
+        }>(response);
       },
     },
     attachments: {

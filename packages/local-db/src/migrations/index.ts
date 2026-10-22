@@ -19,6 +19,7 @@ import { migration0018CalibrationJobMethodDeviations } from "./0018_calibration_
 
 import { migration0019LocalDatabaseOwner } from "./0019_local_database_owner";
 import { migration0020SyncSkippedRows } from "./0020_sync_skipped_rows";
+import { migration0021OutboxDeadEvents } from "./0021_outbox_dead_events";
 
 export type LocalDbMigration = {
   id: number;
@@ -47,6 +48,7 @@ export const localDbMigrations: LocalDbMigration[] = [
   migration0018CalibrationJobMethodDeviations,
   migration0019LocalDatabaseOwner,
   migration0020SyncSkippedRows,
+  migration0021OutboxDeadEvents,
 ];
 
 export const currentLocalDbSchemaVersion =

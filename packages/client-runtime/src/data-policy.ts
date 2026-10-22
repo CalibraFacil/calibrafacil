@@ -328,6 +328,9 @@ export const calibraApiPolicyRegistry = {
     reconcile: "local-only",
     listConflicts: "local-only",
     resolveConflict: "local-only",
+    listDeadEvents: "local-only",
+    discardDeadEvent: "local-only",
+    requeueDeadEvent: "local-only",
   },
   attachments: {
     list: "local-only",

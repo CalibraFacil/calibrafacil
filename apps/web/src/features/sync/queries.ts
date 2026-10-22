@@ -15,3 +15,17 @@ export function useOpenSyncConflictsData({ enabled }: { enabled: boolean }) {
     enabled,
   })
 }
+
+export function deadSyncEventsQueryOptions() {
+  return queryOptions({
+    queryKey: ['desktop-sync-dead-events'],
+    queryFn: () => calibraApi.sync.listDeadEvents(),
+  })
+}
+
+export function useDeadSyncEventsData({ enabled }: { enabled: boolean }) {
+  return useQuery({
+    ...deadSyncEventsQueryOptions(),
+    enabled,
+  })
+}

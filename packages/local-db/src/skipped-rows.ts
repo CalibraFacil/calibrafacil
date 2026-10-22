@@ -121,7 +121,7 @@ function hasUnsettledChanges(database: LocalDatabase, row: SkippedRow) {
 SELECT 1 AS one
 FROM outbox o
 JOIN domain_events e ON e.event_id = o.event_id
-WHERE o.status <> 'synced'
+WHERE o.status NOT IN ('synced', 'discarded')
   AND e.aggregate_kind = @kind
   AND (
     e.aggregate_id = @localId
