@@ -10,11 +10,15 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { catalogFor, variableNames } from "./catalog";
 import { DEPLOY_SECTIONS } from "./deploy";
 import { renderApiEnvExample, renderDeployEnvExample } from "./env-example";
 import { loadApiConfig } from "./index";
+
+// The generator cases start real processes (tsx); under a parallel `turbo test`
+// the default 5s is not enough.
+vi.setConfig({ testTimeout: 60_000 });
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = join(packageRoot, "..", "..");

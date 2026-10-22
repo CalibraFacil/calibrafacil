@@ -177,11 +177,11 @@ first used):
 | `BETTER_AUTH_SECRET`                                                                                | at least 32 characters                                                    |
 
 Everywhere (not only in production) a variable that is set must now have the right type: a
-number must be a whole number (`SMTP_PORT`, `PORT`), an address must be an `http://` or `https://` URL, and `EMAIL_TRANSPORT`,
-`BACKGROUND_JOBS_MODE` and `CRON_SCHEDULER` must be one of their documented values. The switches
+number must be a whole number (`SMTP_PORT`, `PORT`), an address must be an `http://` or `https://` URL, and `EMAIL_TRANSPORT` and
+`BACKGROUND_JOBS_MODE` must be one of their documented values. The switches
 that document a safe fallback (`QUEUE_RECEIPTS_MODE`, `RECORDS_PURGE_ENABLED`,
-`RECORDS_PURGE_MODE`, `BACKGROUND_JOBS_MAX_DELIVERIES`, `STUCK_RENDER_AFTER_MS`,
-`QUEUE_STALE_AFTER_MS`) keep it: an unusable value still means the default.
+`RECORDS_PURGE_MODE`, `CRON_SCHEDULER`, `BACKGROUND_JOBS_MAX_DELIVERIES`,
+`STUCK_RENDER_AFTER_MS`, `QUEUE_STALE_AFTER_MS`, `DATABASE_POOL_MAX`) keep it: an unusable value still means the default.
 
 **Before deploying**, validate the environment you are about to run, without starting anything,
 from a checkout of this release:
