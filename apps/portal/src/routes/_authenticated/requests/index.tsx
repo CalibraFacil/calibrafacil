@@ -40,7 +40,9 @@ import {
 } from "@calibra-facil/ui/instrument-panel";
 import { StatusPill } from "@/components/status-pill";
 import { useOverview } from "@/features/dashboard/queries";
-import { cn, getApiBaseUrl } from "@/lib/utils";
+import { portalRequestsResponseSchema } from "@calibra-facil/contracts";
+import { PortalApiError, fetchPortalJson } from "@/lib/api-fetch";
+import { cn } from "@/lib/utils";
 import { keepPreviousDataInScope } from "@/lib/keep-previous-page";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import {
@@ -197,31 +199,23 @@ function RequestsPage() {
       if (deferredSearch) params.set("query", deferredSearch);
       if (statusFilter) params.set("status", statusFilter);
 
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/requests?${params.toString()}`,
-        { credentials: "include" },
-      );
-
-      if (!response.ok) {
-        let errorMessage = `Falha ao carregar solicitacoes (${response.status})`;
-        const jsonResponse = response.clone();
-        try {
-          const errorBody: unknown = await jsonResponse.json();
-          errorMessage = getPortalErrorMessage(errorBody) || errorMessage;
-        } catch {
-          try {
-            const errorText = await response.text();
-            if (errorText.trim()) {
-              errorMessage = `${errorText.trim()} (${response.status})`;
-            }
-          } catch {
-            // Ignore parse failures and keep the default message.
-          }
-        }
-        throw new Error(errorMessage);
+      try {
+        return await fetchPortalJson(
+          `/api/portal/requests?${params.toString()}`,
+          portalRequestsResponseSchema,
+          { errorMessage: "Falha ao carregar solicitacoes" },
+        );
+      } catch (failure) {
+        if (!(failure instanceof PortalApiError)) throw failure;
+        // Show the API's own message (or its validation errors) with the status.
+        const apiMessage = getPortalErrorMessage(failure.body);
+        throw new Error(
+          apiMessage
+            ? `${apiMessage} (${failure.status})`
+            : `Falha ao carregar solicitacoes (${failure.status})`,
+          { cause: failure },
+        );
       }
-
-      return response.json();
     },
     placeholderData: keepPreviousDataInScope(key("portal-requests")),
   });

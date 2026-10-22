@@ -15,6 +15,7 @@ import noJobAuditInsertOutsideOwner from "./rules/no-job-audit-insert-outside-ow
 import noRawLocaleFormatting from "./rules/no-raw-locale-formatting.ts";
 import noJsonErrorBodyInRoutes from "./rules/no-json-error-body-in-routes.ts";
 import noProcessEnv from "./rules/no-process-env.ts";
+import noUnparsedPortalFetch from "./rules/no-unparsed-portal-fetch.ts";
 import noRouterCouplingInFeatures from "./rules/no-router-coupling-in-features.ts";
 import noRawPaletteColorClasses from "./rules/no-raw-palette-color-classes.ts";
 import noAppUiPrimitiveRecreation from "./rules/no-app-ui-primitive-recreation.ts";
@@ -33,6 +34,7 @@ export default {
     "no-json-error-body-in-routes": noJsonErrorBodyInRoutes,
     "no-router-coupling-in-features": noRouterCouplingInFeatures,
     "no-process-env": noProcessEnv,
+    "no-unparsed-portal-fetch": noUnparsedPortalFetch,
     "no-raw-palette-color-classes": noRawPaletteColorClasses,
     "no-app-ui-primitive-recreation": noAppUiPrimitiveRecreation,
   },

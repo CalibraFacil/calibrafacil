@@ -49,7 +49,11 @@ import {
 import { AccreditationSeal } from "@/components/accreditation-seal";
 import { StatusPill } from "@/components/status-pill";
 import { STATUS_TONE } from "@calibra-facil/ui/status-tone";
-import { getApiBaseUrl } from "@/lib/utils";
+import {
+  portalDownloadLinkResponseSchema,
+  type PortalCertificateDetail,
+} from "@calibra-facil/contracts";
+import { fetchPortalJson } from "@/lib/api-fetch";
 import {
   useSignatureVerdict,
   type SignatureVerdictOverall,
@@ -58,8 +62,6 @@ import {
   buildScalarResults,
   describeDueDate,
   summarizeConformity,
-  type CertificateVerdict,
-  type MethodSnapshotLike,
 } from "@/features/certificates/verdict";
 import {
   formatCalendarDate,
@@ -71,81 +73,12 @@ import {
  * GET /api/portal/certificates/:id. Neighbour links are only present once the
  * neighbour is itself an issued, portal-visible certificate.
  */
-export type CertificateAmendment = {
-  isAmendment: boolean;
-  isSuperseded: boolean;
-  amendmentNumber: number | null;
-  amendmentReason: string | null;
-  supersededAt: string | null;
-  supersedes: { id: number; jobId: string } | null;
-  supersededBy: {
-    id: number;
-    jobId: string;
-    amendmentNumber: number | null;
-    approvedAt: string | null;
-  } | null;
-  chain: Array<{
-    id: number;
-    jobId: string;
-    amendmentNumber: number | null;
-    approvedAt: string | null;
-    isCurrent: boolean;
-  }>;
-};
+export type CertificateAmendment = NonNullable<
+  PortalCertificateDetail["amendment"]
+>;
 
-export type Certificate = {
-  id: number;
-  jobId: string;
-  status: string;
-  performedAt: string | null;
-  approvedAt: string | null;
-  dueDate: string | null;
-  certificateUrl: string | null;
-  releaseStatus?: "RELEASED" | "PAYMENT_PENDING";
-  verificationToken: string;
-  verdict?: CertificateVerdict | null;
-  methodSnapshot: MethodSnapshotLike;
-  results: Record<string, unknown> | null;
-  assetId: number;
-  assetPublicId: string;
-  assetName: string;
-  assetTag: string;
-  assetManufacturer: string | null;
-  assetModel: string | null;
-  assetSerialNumber: string;
-  serviceName: string;
-  labName: string;
-  labLogo: string | null;
-  labEmail: string | null;
-  labPhone: string | null;
-  accreditation?: {
-    accredited: boolean;
-    number: string | null;
-  };
-  amendment?: CertificateAmendment | null;
-  onSite?: {
-    executedOnSite: boolean;
-    addressText: string | null;
-  };
-  referenceStandards: Array<{
-    id: number;
-    name: string;
-    type?: string | null;
-    certificateNumber: string;
-    calibratedBy?: string | null;
-    calibrationDate: string | Date;
-    nextCalibrationDate: string | Date | null;
-    certificateDocument: {
-      documentId: number;
-      fileName: string;
-      fileSize: number;
-      uploadedAt: string | Date;
-      certificateNumber: string;
-      calibrationDate: string | Date;
-      nextCalibrationDate: string | Date;
-    } | null;
-  }>;
-};
+/** The certificate the API sends (contract type). */
+export type Certificate = PortalCertificateDetail;
 
 async function downloadFromUrl(url: string, filename: string) {
   const link = document.createElement("a");
@@ -546,12 +479,11 @@ export function CertificateDetailView({
     if (isDownloading || !certificate.certificateUrl) return;
     setIsDownloading(true);
     try {
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/certificates/${certPath}/download`,
-        { credentials: "include" },
+      const { url, filename } = await fetchPortalJson(
+        `/api/portal/certificates/${certPath}/download`,
+        portalDownloadLinkResponseSchema,
+        { errorMessage: "Falha ao baixar o certificado" },
       );
-      if (!response.ok) throw new Error("Falha ao baixar o certificado");
-      const { url, filename } = await response.json();
       await downloadFromUrl(url, filename);
     } catch {
       toast.error("Não foi possível baixar o certificado");
@@ -571,12 +503,11 @@ export function CertificateDetailView({
     if (downloadingStandardId) return;
     setDownloadingStandardId(standardId);
     try {
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/certificates/${certPath}/reference-standards/${standardId}/certificate/download`,
-        { credentials: "include" },
+      const { url, filename } = await fetchPortalJson(
+        `/api/portal/certificates/${certPath}/reference-standards/${standardId}/certificate/download`,
+        portalDownloadLinkResponseSchema,
+        { errorMessage: "Falha ao baixar" },
       );
-      if (!response.ok) throw new Error("Falha ao baixar");
-      const { url, filename } = await response.json();
       await downloadFromUrl(url, filename);
     } catch {
       toast.error("Não foi possível baixar o certificado do padrão");
@@ -587,7 +518,7 @@ export function CertificateDetailView({
 
   // Customer-facing: just the method name — the internal "vX.Y" revision is
   // engineering detail that lives on the PDF, not the portal summary.
-  const method = certificate.methodSnapshot?.name || "—";
+  const method = certificate.methodSnapshot?.methodName || "—";
 
   const verdict = certificate.verdict ?? null;
   const accredited = certificate.accreditation?.accredited ?? false;

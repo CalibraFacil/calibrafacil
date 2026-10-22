@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { getApiBaseUrl } from "@/lib/utils";
+import {
+  portalVisitConfirmResponseSchema,
+  portalVisitRescheduleResponseSchema,
+  portalVisitsResponseSchema,
+} from "@calibra-facil/contracts";
+
+import { fetchPortalJson, jsonInit } from "@/lib/api-fetch";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 
 export type PortalVisitStatus =
@@ -61,14 +67,10 @@ type PortalVisitsResponse = {
 
 const PORTAL_VISITS_SCOPE = "portal-visits";
 
-async function fetchVisits(): Promise<PortalVisitsResponse> {
-  const response = await fetch(`${getApiBaseUrl()}/api/portal/visits`, {
-    credentials: "include",
+function fetchVisits(): Promise<PortalVisitsResponse> {
+  return fetchPortalJson("/api/portal/visits", portalVisitsResponseSchema, {
+    errorMessage: "Falha ao carregar as visitas",
   });
-  if (!response.ok) {
-    throw new Error("Falha ao carregar as visitas");
-  }
-  return response.json();
 }
 
 /** On-site visits scheduled for the customer (excludes cancelled). */
@@ -79,22 +81,6 @@ export function usePortalVisits() {
     queryFn: fetchVisits,
     staleTime: 60_000,
   });
-}
-
-async function throwResponseError(
-  response: Response,
-  fallback: string,
-): Promise<never> {
-  const body: unknown = await response.json().catch(() => null);
-  if (
-    body !== null &&
-    typeof body === "object" &&
-    "error" in body &&
-    typeof body.error === "string"
-  ) {
-    throw new Error(body.error);
-  }
-  throw new Error(fallback);
 }
 
 function useInvalidateVisits() {
@@ -110,19 +96,15 @@ export function useConfirmVisitPresence() {
   const invalidate = useInvalidateVisits();
   return useMutation({
     mutationFn: async (visitId: number): Promise<void> => {
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/visits/${visitId}/confirm`,
+      await fetchPortalJson(
+        `/api/portal/visits/${visitId}/confirm`,
+        portalVisitConfirmResponseSchema,
         {
-          method: "POST",
-          credentials: "include",
+          errorMessage: "Não foi possível confirmar a presença.",
+          serverErrorMessage: true,
+          init: jsonInit("POST"),
         },
       );
-      if (!response.ok) {
-        return throwResponseError(
-          response,
-          "Não foi possível confirmar a presença.",
-        );
-      }
     },
     onSuccess: invalidate,
   });
@@ -143,24 +125,18 @@ export function useRequestVisitReschedule() {
       reason,
       preferredWindows,
     }: RequestVisitRescheduleInput): Promise<void> => {
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/visits/${visitId}/reschedule-request`,
+      await fetchPortalJson(
+        `/api/portal/visits/${visitId}/reschedule-request`,
+        portalVisitRescheduleResponseSchema,
         {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+          errorMessage: "Não foi possível solicitar o reagendamento.",
+          serverErrorMessage: true,
+          init: jsonInit("POST", {
             reason: reason.trim() === "" ? null : reason.trim(),
             preferredWindows,
           }),
         },
       );
-      if (!response.ok) {
-        return throwResponseError(
-          response,
-          "Não foi possível solicitar o reagendamento.",
-        );
-      }
     },
     onSuccess: invalidate,
   });

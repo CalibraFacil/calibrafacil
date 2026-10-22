@@ -114,6 +114,7 @@ type LocalAssetListRow = {
   asset_type_id: string;
   asset_type_remote_id: number | null;
   asset_type_name: string | null;
+  asset_type_slug: string | null;
   asset_type_definition_json: string | null;
   name: string;
   manufacturer: string | null;
@@ -350,6 +351,7 @@ SELECT
   a.asset_type_id,
   at.remote_id AS asset_type_remote_id,
   at.name AS asset_type_name,
+  at.slug AS asset_type_slug,
   at.specifications_schema_json AS asset_type_definition_json,
   a.name,
   a.manufacturer,
@@ -403,6 +405,7 @@ SELECT
   a.asset_type_id,
   at.remote_id AS asset_type_remote_id,
   at.name AS asset_type_name,
+  at.slug AS asset_type_slug,
   at.specifications_schema_json AS asset_type_definition_json,
   a.name,
   a.manufacturer,
@@ -460,6 +463,7 @@ SELECT
   a.asset_type_id,
   at.remote_id AS asset_type_remote_id,
   at.name AS asset_type_name,
+  at.slug AS asset_type_slug,
   at.specifications_schema_json AS asset_type_definition_json,
   a.name,
   a.manufacturer,
@@ -659,6 +663,7 @@ SELECT
   a.asset_type_id,
   at.remote_id AS asset_type_remote_id,
   at.name AS asset_type_name,
+  at.slug AS asset_type_slug,
   at.specifications_schema_json AS asset_type_definition_json,
   a.name,
   a.manufacturer,
@@ -732,6 +737,7 @@ SELECT
   a.asset_type_id,
   at.remote_id AS asset_type_remote_id,
   at.name AS asset_type_name,
+  at.slug AS asset_type_slug,
   at.specifications_schema_json AS asset_type_definition_json,
   a.name,
   a.manufacturer,
@@ -789,7 +795,7 @@ function toLocalAsset(row: LocalAssetListRow): LocalAsset {
     assetTypeId:
       row.asset_type_remote_id ?? stableLocalNumericId(row.asset_type_id),
     assetTypeName: row.asset_type_name ?? "Tipo local",
-    assetTypeSlug: null,
+    assetTypeSlug: row.asset_type_slug,
     assetTypeDefinition: parseJson(row.asset_type_definition_json) ?? null,
     name: row.name,
     manufacturer: row.manufacturer,

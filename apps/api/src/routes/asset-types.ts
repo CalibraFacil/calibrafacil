@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { AssetTypesResponse, ServerShape } from "@calibra-facil/contracts";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@calibra-facil/db";
 import { assetType } from "@calibra-facil/db/schema";
@@ -51,7 +52,9 @@ export const assetTypesRouter = new Hono<{ Variables: AuthVariables }>()
           .where(whereCondition)
           .orderBy(assetType.name);
 
-        return c.json({ data: types });
+        return c.json({
+          data: types,
+        } satisfies ServerShape<AssetTypesResponse>);
       } catch (error) {
         console.error("Error listing asset types:", error);
         return c.json({ error: "Erro ao listar tipos de ativo" }, 500);

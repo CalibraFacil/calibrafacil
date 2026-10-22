@@ -1,4 +1,4 @@
-import { isCalendarDatePast } from "@calibra-facil/schemas";
+import { isCalendarDatePast, labDaysUntil } from "@calibra-facil/schemas";
 import type { LocalDatabase } from "./database";
 import { stableLocalNumericId } from "./ids";
 
@@ -24,14 +24,24 @@ export type LocalJobsListData = {
   data: Array<{
     id: number;
     jobId: string;
+    certificateName: string | null;
+    customerId: number;
     customerName: string | null;
+    assetId: number;
     assetName: string | null;
+    assetTag: string | null;
+    serviceId: number;
     serviceName: string | null;
+    technicianId: string | null;
     technicianName: string | null;
     status: LocalJobStatus;
     dueDate: string | null;
+    performedAt: string | null;
+    approvedAt: string | null;
     isOverdue: boolean | null;
+    daysUntilDue: number | null;
     createdAt: string;
+    updatedAt: string;
     syncState: string;
   }>;
   pagination: {
@@ -71,13 +81,25 @@ type LocalJobListRow = {
   remote_id: number | null;
   local_id: string;
   job_id: string | null;
+  certificate_name: string | null;
+  customer_local_id: string;
+  customer_remote_id: number | null;
   customer_name: string | null;
+  asset_local_id: string;
+  asset_remote_id: number | null;
   asset_name: string | null;
+  asset_tag: string | null;
+  service_local_id: string;
+  service_remote_id: number | null;
   service_name: string | null;
+  technician_id: string | null;
   technician_name: string | null;
   status: LocalJobStatus;
   due_date: string | null;
+  performed_at: string | null;
+  approved_at: string | null;
   created_at: string;
+  updated_at: string;
   sync_state: string;
 };
 
@@ -138,13 +160,25 @@ SELECT
   j.remote_id,
   j.id AS local_id,
   j.job_id,
+  j.certificate_name,
+  j.customer_id AS customer_local_id,
+  c.remote_id AS customer_remote_id,
   c.name AS customer_name,
+  j.asset_id AS asset_local_id,
+  a.remote_id AS asset_remote_id,
   a.name AS asset_name,
+  a.tag AS asset_tag,
+  j.service_id AS service_local_id,
+  s.remote_id AS service_remote_id,
   s.name AS service_name,
+  j.technician_id,
   NULL AS technician_name,
   j.status,
   j.due_date,
+  j.performed_at,
+  j.approved_at,
   j.created_at,
+  j.updated_at,
   j.sync_state
 FROM calibration_jobs j
 LEFT JOIN customers c ON c.id = j.customer_id
@@ -161,18 +195,31 @@ LIMIT @limit OFFSET @offset
     data: rows.map((row) => ({
       id: row.remote_id ?? stableLocalNumericId(row.local_id),
       jobId: row.job_id ?? row.local_id,
+      certificateName: row.certificate_name,
+      customerId:
+        row.customer_remote_id ?? stableLocalNumericId(row.customer_local_id),
       customerName: row.customer_name,
+      assetId: row.asset_remote_id ?? stableLocalNumericId(row.asset_local_id),
       assetName: row.asset_name,
+      assetTag: row.asset_tag,
+      serviceId:
+        row.service_remote_id ?? stableLocalNumericId(row.service_local_id),
       serviceName: row.service_name,
+      technicianId: row.technician_id,
       technicianName: row.technician_name,
       status: row.status,
       dueDate: row.due_date,
+      performedAt: row.performed_at,
+      approvedAt: row.approved_at,
       // The due date is a calendar day: overdue once that day is over in the
       // laboratory, not when its instant has passed on the UTC clock.
       isOverdue: row.due_date
         ? isCalendarDatePast(new Date(row.due_date))
         : false,
+      // Whole laboratory days to the due day (negative once it is past).
+      daysUntilDue: row.due_date ? labDaysUntil(new Date(row.due_date)) : null,
       createdAt: row.created_at,
+      updatedAt: row.updated_at,
       syncState: row.sync_state,
     })),
     pagination: {

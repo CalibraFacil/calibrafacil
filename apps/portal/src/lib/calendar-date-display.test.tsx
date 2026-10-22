@@ -79,7 +79,7 @@ describe("stored calendar dates show on the day they name (portal)", () => {
           metrologyRegime: "LEGAL",
           nextLegalVerificationDate: STORED,
           regulatedInterval: {
-            kind: "fixed",
+            kind: "fixed_months",
             regulationReference: "Portaria",
             operationalizedByDelegate: false,
           },

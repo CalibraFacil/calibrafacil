@@ -25,11 +25,15 @@ import { StatusPill } from "@/components/status-pill";
 import { Timeline, type TimelineItem } from "@/components/timeline";
 import {
   FinancialSummaryCard,
-  isFinancialSummary,
   type PortalFinancialSummary,
 } from "@/features/service-orders/financial-summary-card";
 import { getServiceOrderStatus } from "@/lib/status-labels";
-import { getApiBaseUrl } from "@/lib/utils";
+import {
+  portalFinancialSummaryResponseSchema,
+  portalQuoteDecisionResponseSchema,
+  portalServiceOrderDetailResponseSchema,
+} from "@calibra-facil/contracts";
+import { fetchPortalJson, jsonInit } from "@/lib/api-fetch";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import { formatInstant, formatMoneyBRL } from "@calibra-facil/shared/format";
 
@@ -232,57 +236,37 @@ function ServiceOrderDetailPage() {
   const orderQuery = useQuery({
     queryKey: key("portal-service-order", id),
     queryFn: async (): Promise<ServiceOrderDetail> => {
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/service-orders/${id}`,
-        { credentials: "include" },
+      const result = await fetchPortalJson(
+        `/api/portal/service-orders/${id}`,
+        portalServiceOrderDetailResponseSchema,
+        { errorMessage: "Falha ao carregar ordem de serviço." },
       );
-      if (!response.ok) {
-        throw new Error("Falha ao carregar ordem de serviço.");
-      }
-      const result: unknown = await response.json();
-      if (!result || typeof result !== "object" || !("data" in result)) {
-        throw new Error("Resposta inválida.");
-      }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- portal SO endpoint returns the ServiceOrderDetail DTO.
-      return result.data as ServiceOrderDetail;
+      return result.data;
     },
   });
 
   const financialSummaryQuery = useQuery({
     queryKey: key("portal-service-order", id, "financial-summary"),
     queryFn: async (): Promise<PortalFinancialSummary> => {
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/service-orders/${id}/financial-summary`,
-        { credentials: "include" },
+      const result = await fetchPortalJson(
+        `/api/portal/service-orders/${id}/financial-summary`,
+        portalFinancialSummaryResponseSchema,
+        { errorMessage: "Falha ao carregar informações financeiras." },
       );
-      if (!response.ok) {
-        throw new Error("Falha ao carregar informações financeiras.");
-      }
-      const result: unknown = await response.json();
-      const data =
-        result && typeof result === "object" && "data" in result
-          ? result.data
-          : null;
-      if (!isFinancialSummary(data)) {
-        throw new Error("Resposta financeira inválida.");
-      }
-      return data;
+      return result.data;
     },
   });
 
   const approveMutation = useMutation({
     mutationFn: async (quoteId: number) => {
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/service-orders/${id}/quotes/${quoteId}/approve`,
+      return fetchPortalJson(
+        `/api/portal/service-orders/${id}/quotes/${quoteId}/approve`,
+        portalQuoteDecisionResponseSchema,
         {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
+          errorMessage: "Falha ao aprovar orçamento.",
+          init: jsonInit("POST", {}),
         },
       );
-      if (!response.ok) throw new Error("Falha ao aprovar orçamento.");
-      return response.json();
     },
     onSuccess: async () => {
       toast.success("Orçamento aprovado.");
@@ -298,17 +282,14 @@ function ServiceOrderDetailPage() {
 
   const rejectMutation = useMutation({
     mutationFn: async (quoteId: number) => {
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/service-orders/${id}/quotes/${quoteId}/reject`,
+      return fetchPortalJson(
+        `/api/portal/service-orders/${id}/quotes/${quoteId}/reject`,
+        portalQuoteDecisionResponseSchema,
         {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rejectionReason }),
+          errorMessage: "Falha ao recusar orçamento.",
+          init: jsonInit("POST", { rejectionReason }),
         },
       );
-      if (!response.ok) throw new Error("Falha ao recusar orçamento.");
-      return response.json();
     },
     onSuccess: async () => {
       toast.success("Orçamento recusado.");

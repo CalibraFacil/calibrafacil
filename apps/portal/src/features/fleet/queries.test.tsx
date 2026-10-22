@@ -5,12 +5,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { buildPortalFleetAsset } from "@calibra-facil/contracts/portal-fixtures";
 import { PortalOrgProvider } from "@/lib/portal-org-context";
 import { useFleetAssets } from "./queries";
 
 function pageOf(page: number, ids: Array<number>) {
   return {
-    data: ids.map((id) => ({ id })),
+    data: ids.map((id) => buildPortalFleetAsset({ id })),
     pagination: { page, limit: 20, total: 40, totalPages: 2 },
   };
 }

@@ -8,6 +8,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@calibra-facil/ui/avatar";
 import { Button } from "@calibra-facil/ui/button";
 import { Card, CardContent, CardFooter } from "@calibra-facil/ui/card";
 import { Spinner } from "@calibra-facil/ui/spinner";
+import {
+  magicLinkPreviewResponseSchema,
+  type MagicLinkPreviewResponse,
+} from "@calibra-facil/contracts";
+import { fetchPortalResponse, readPortalJsonResult } from "@/lib/api-fetch";
 import { getApiBaseUrl } from "@/lib/utils";
 
 const searchSchema = z.object({
@@ -20,27 +25,18 @@ export const Route = createFileRoute("/magic-link")({
   component: MagicLinkPage,
 });
 
-const previewSchema = z.discriminatedUnion("found", [
-  z.object({ found: z.literal(false) }),
-  z.object({
-    found: z.literal(true),
-    name: z.string(),
-    email: z.string(),
-    image: z.string().nullable(),
-    organizationName: z.string().nullable(),
-    organizationLogo: z.string().nullable(),
-  }),
-]);
-
-type MagicLinkPreview = z.infer<typeof previewSchema>;
+type MagicLinkPreview = MagicLinkPreviewResponse;
 
 async function fetchPreview(token: string): Promise<MagicLinkPreview> {
-  const url = new URL("/api/magic-link/preview", getApiBaseUrl());
-  url.searchParams.set("surface", "portal");
-  url.searchParams.set("token", token);
-  const response = await fetch(url.toString(), { credentials: "include" });
+  const params = new URLSearchParams({ surface: "portal", token });
+  const response = await fetchPortalResponse(
+    `/api/magic-link/preview?${params.toString()}`,
+  );
   if (!response.ok) return { found: false };
-  const parsed = previewSchema.safeParse(await response.json());
+  const parsed = await readPortalJsonResult(
+    response,
+    magicLinkPreviewResponseSchema,
+  );
   return parsed.success ? parsed.data : { found: false };
 }
 

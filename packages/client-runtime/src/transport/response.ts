@@ -89,6 +89,26 @@ export async function readValidatedJsonResponse<TSchema extends z.ZodType>(
   return validateResponsePayload(schema, payload, context.endpoint, context);
 }
 
+/**
+ * {@link readValidatedJsonResponse} with the client's validation mode bound
+ * once: a domain module builds one reader from its options and calls it as
+ * `read(response, schema, "GET /api/x", "pt-BR failure message")`.
+ */
+export function createValidatedReader(options: ResponseValidationOptions) {
+  return <TSchema extends z.ZodType>(
+    response: Response,
+    schema: TSchema,
+    endpoint: string,
+    fallback: string,
+  ): Promise<z.output<TSchema>> =>
+    readValidatedJsonResponse(response, schema, {
+      endpoint,
+      fallback,
+      responseValidation: options.responseValidation,
+      onResponseContractViolation: options.onResponseContractViolation,
+    });
+}
+
 function hasApiError(value: unknown): value is { error?: unknown } {
   return typeof value === "object" && value !== null && "error" in value;
 }

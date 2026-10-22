@@ -2,6 +2,7 @@ import os from "node:os";
 import path from "node:path";
 import { mkdtempSync, rmSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
+import { labDaysUntil } from "@calibra-facil/schemas";
 import {
   applySyncBootstrap,
   applySyncPullResponse,
@@ -565,14 +566,25 @@ INSERT INTO services (
         {
           id: 123,
           jobId: "CAL-2026-0001",
+          certificateName: null,
+          customerId: expect.any(Number),
           customerName: "Acme Lab",
+          assetId: expect.any(Number),
           assetName: "Scale 01",
+          assetTag: expect.any(String),
+          serviceId: expect.any(Number),
           serviceName: "Mass calibration",
+          technicianId: null,
           technicianName: null,
           status: "IN_PROGRESS",
           dueDate: "2026-01-20T00:00:00.000Z",
+          performedAt: null,
+          approvedAt: null,
           isOverdue: true,
+          // Whole laboratory days to the due day: the same list shape the cloud sends.
+          daysUntilDue: labDaysUntil(new Date("2026-01-20T00:00:00.000Z")),
           createdAt: now,
+          updatedAt: now,
           syncState: "local",
         },
       ],
