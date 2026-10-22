@@ -107,6 +107,14 @@ const baseInput = {
   actorUserId: "user-1",
   deviceId: "device-1",
   data: { reading: 1 },
+  // A submit needs the calibration location (REQ-P112-1); these cases are about
+  // the date, so the location is just there.
+  calibrationLocationSnapshot: {
+    type: "lab",
+    addressText: "Laboratório",
+    recordedAt: "2026-01-15T12:00:00.000Z",
+    recordedBy: "user-1",
+  },
 };
 
 describe("explicit execution time on the desktop", () => {

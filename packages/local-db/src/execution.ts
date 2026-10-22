@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 import {
+  DESKTOP_EXECUTION_PAYLOAD_VERSION,
   isCalendarDatePast,
   judgeDraftExecutionStandards,
   judgeExecutionStandards,
   labDaysUntil,
   resolveExecutionPerformedAt,
+  validateCalibrationRecordForSubmit,
   type DraftStandardsJudgement,
   type JudgedStandardFacts,
   type StandardsDraftWarning,
@@ -131,6 +133,17 @@ export function saveLocalJobExecution(
       ? parseJson(existing.calibration_phase_snapshot_json)
       : input.calibrationPhaseSnapshot;
 
+  // The cloud's rule, the same function: a submit needs the calibration
+  // location and a reason for every phase block not performed. A draft save
+  // does not (the technician fills these in as the work goes).
+  if (nextStatus === "REVIEW") {
+    const incomplete = validateCalibrationRecordForSubmit({
+      location: calibrationLocationSnapshot,
+      phases: calibrationPhaseSnapshot,
+    });
+    if (incomplete) throw new Error(incomplete);
+  }
+
   database.transaction(() => {
     database
       .prepare(
@@ -206,6 +219,9 @@ WHERE id = @id
           ? existing.method_deviations
           : input.methodDeviations?.trim() || null,
       status: nextStatus,
+      // Tells the cloud this build enforced the calibration record offline, so
+      // it checks it again; an event without it predates the rule.
+      executionPayloadVersion: DESKTOP_EXECUTION_PAYLOAD_VERSION,
     };
     if (existing.remote_id !== null) {
       payload.remoteId = existing.remote_id;
