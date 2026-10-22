@@ -93,7 +93,7 @@ export type OperationAvailability =
 
 const unavailableMessages = {
   "cloud-unreachable":
-    "Esta ação precisa da API da nuvem. Verifique a conexão e tente novamente.",
+    "Disponível apenas online. Esta ação precisa da API da nuvem: verifique a conexão e tente novamente.",
   "local-runtime-unavailable":
     "O serviço local do desktop não está disponível. Reinicie o aplicativo e tente novamente.",
   "initial-sync-required":

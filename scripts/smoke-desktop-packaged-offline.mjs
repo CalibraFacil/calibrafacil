@@ -177,15 +177,36 @@ try {
     Array.isArray(localAssets.data) && localAssets.data.length > 0,
     "local assets missing after sync",
   );
-  const localServices = await localJson(
+  const localMethods = await localJson(
     firstBootstrap.httpBaseUrl,
-    "/api/services?page=1&limit=20&isActive=true",
+    "/api/methods?page=1&limit=20",
     firstLocalHeaders,
   );
   assert(
-    Array.isArray(localServices.data) && localServices.data.length > 0,
-    "local services missing after sync",
+    Array.isArray(localMethods.data) && localMethods.data.length > 0,
+    "local methods missing after sync",
   );
+  const localJobs = await localJson(
+    firstBootstrap.httpBaseUrl,
+    "/api/jobs?page=1&limit=50",
+    firstLocalHeaders,
+  );
+  // Field capture runs on a job the cloud already assigned; offline mode no
+  // longer creates jobs (Q13).
+  const localJob = localJobs.data?.find(
+    (job) => job.status === "DRAFT" || job.status === "IN_PROGRESS",
+  );
+  assert(
+    localJob,
+    "no assigned DRAFT/IN_PROGRESS job synced for offline execution",
+  );
+  const localCustomers = await localJson(
+    firstBootstrap.httpBaseUrl,
+    "/api/customers?page=1&limit=1",
+    firstLocalHeaders,
+  );
+  const localCustomer = localCustomers.data?.[0];
+  assert(localCustomer?.id, "no synced customer available offline");
 
   const onlineWebParity = await runOnlineWebParitySmoke(
     firstPage,
@@ -193,10 +214,10 @@ try {
   );
 
   cloudOnline = false;
-  const customerName = `Smoke Offline Restart ${Date.now()}`;
-  const localCustomer = await localJson(
+  const assetName = `Smoke Offline Restart ${Date.now()}`;
+  const localAsset = await localJson(
     firstBootstrap.httpBaseUrl,
-    "/api/customers",
+    "/api/assets",
     firstLocalHeaders,
     {
       method: "POST",
@@ -205,32 +226,16 @@ try {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        name: customerName,
-        taxId: createPseudoCnpj(),
-        email: `offline-${Date.now()}@laboratorio.test`,
-        phone: "51999999999",
+        customerId: localAssets.data[0].customerId,
+        assetTypeId: localAssets.data[0].assetTypeId,
+        name: assetName,
+        serialNumber: `SMOKE-${Date.now()}`,
+        tag: `SMOKE-${Date.now()}`,
+        status: "ACTIVE",
       }),
     },
   );
-  assert(localCustomer.id, "local customer did not return an id");
-
-  const localJob = await localJson(
-    firstBootstrap.httpBaseUrl,
-    "/api/jobs",
-    firstLocalHeaders,
-    {
-      method: "POST",
-      headers: {
-        ...firstLocalHeaders,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        assetId: localAssets.data[0].id,
-        serviceId: localServices.data[0].id,
-      }),
-    },
-  );
-  assert(localJob.id, "local calibration job did not return an id");
+  assert(localAsset.id, "local asset stub did not return an id");
 
   const execution = await localJson(
     firstBootstrap.httpBaseUrl,
@@ -329,14 +334,14 @@ try {
   );
   await waitForSyncSettled(secondPage);
 
-  const localCustomers = await localJson(
+  const restartedAssets = await localJson(
     secondBootstrap.httpBaseUrl,
-    `/api/customers?query=${encodeURIComponent(customerName)}&page=1&limit=5`,
+    `/api/assets?query=${encodeURIComponent(assetName)}&page=1&limit=5`,
     secondLocalHeaders,
   );
   assert(
-    localCustomers.data?.some((customer) => customer.name === customerName),
-    "offline customer not readable after restart",
+    restartedAssets.data?.some((asset) => asset.name === assetName),
+    "offline asset stub not readable after restart",
   );
   const restartedJob = await localJson(
     secondBootstrap.httpBaseUrl,
@@ -399,10 +404,10 @@ try {
         local: {
           standards: localStandards.data.length,
           assets: localAssets.data.length,
-          services: localServices.data.length,
+          methods: localMethods.data.length,
         },
         localWrite: {
-          customerId: localCustomer.id,
+          assetId: localAsset.id,
           jobId: localJob.id,
           attachmentId: jobAttachment.id,
         },
@@ -1007,7 +1012,7 @@ async function verifyRouteLoads(page, route) {
   await navigateHash(page, route.path);
   await waitForHashIncludes(page, route.path);
   await waitForText(page, route.text);
-  await assertPageDoesNotInclude(page, "Tela indisponível offline");
+  await assertPageDoesNotInclude(page, "Disponível apenas online");
   await assertPageDoesNotInclude(page, "Cache não pronto");
   await assertPageDoesNotInclude(page, "Erro ao carregar");
 }
@@ -1270,11 +1275,6 @@ function localDatabasePath() {
 
 function authHeaders(bootstrap) {
   return { Authorization: `Bearer ${bootstrap.localApiToken}` };
-}
-
-function createPseudoCnpj() {
-  const suffix = String(Date.now()).slice(-8).padStart(8, "0");
-  return `99${suffix}0001${Math.floor(Math.random() * 90 + 10)}`;
 }
 
 function normalizeBaseUrl(value) {

@@ -496,6 +496,12 @@ WHERE a.deleted_at IS NULL
   return row ? toLocalAsset(row) : null;
 }
 
+/**
+ * Offline mode no longer exposes this write (Q13: asset editing is online-only), so no
+ * route calls it. It stays because a database upgraded from an earlier build can
+ * still hold its queued outbox events, and the sync anchor/conflict suites use it
+ * to put a pending local change on an already-synced row.
+ */
 export function updateLocalAsset(
   database: LocalDatabase,
   input: UpdateLocalAssetInput,

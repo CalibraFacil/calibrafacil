@@ -17,18 +17,9 @@ import type { LocalJobStatus } from "./jobs";
 
 type JsonRecord = Record<string, unknown>;
 
-export type LocalJobCommandInput = {
+type LocalJobCommandInput = {
   actorUserId?: string | null;
   deviceId?: string | null;
-};
-
-export type CreateLocalJobDraftInput = LocalJobCommandInput & {
-  organizationId?: string | null;
-  unitId?: number | null;
-  assetId: number;
-  serviceId: number;
-  technicianId?: string | null;
-  dueDate?: string | null;
 };
 
 export type SaveLocalExecutionInput = LocalJobCommandInput & {
@@ -59,179 +50,6 @@ export type SaveLocalExecutionInput = LocalJobCommandInput & {
   backdateReason?: string;
   requireResults?: boolean;
 };
-
-export function createLocalJobDraft(
-  database: LocalDatabase,
-  input: CreateLocalJobDraftInput,
-) {
-  const now = new Date().toISOString();
-  const asset = getAssetByRemoteId(database, input.assetId);
-  if (!asset) {
-    throw new Error("Ativo nao encontrado");
-  }
-
-  const service = getServiceByRemoteId(database, input.serviceId);
-  if (!service) {
-    throw new Error("Servico nao encontrado");
-  }
-
-  if (service.status !== "ACTIVE") {
-    throw new Error("Servico esta inativo");
-  }
-
-  const method = service.method_id
-    ? getPublishedMethod(database, service.method_id)
-    : null;
-  if (!method) {
-    throw new Error("Servico nao possui metodo vinculado");
-  }
-
-  const methodPayload = parseJsonRecord(method.normalized_method_json);
-  const methodSnapshot = {
-    methodId: method.remote_id,
-    methodName: method.name,
-    methodVersion: method.version,
-    compiledMethod: parseJson(method.compiled_method_json),
-    methodFingerprint: method.method_fingerprint,
-    engineVersion: method.engine_version,
-    engineOptionsFingerprint: method.engine_options_fingerprint,
-    normalizedMethodJson:
-      getCompiledNormalizedMethodJson(method.compiled_method_json) ??
-      method.normalized_method_json,
-    publicationEvidence: parseJson(method.publication_evidence_json),
-    dataFields: getArray(methodPayload.dataFields),
-    variableBindings: getArray(methodPayload.variableBindings),
-    formulas: getArray(methodPayload.formulas),
-    measurementModels: getArray(methodPayload.measurementModels),
-    validations: getArray(methodPayload.validations),
-    uncertaintyParams: getArray(methodPayload.uncertaintyParams),
-    certificateContent: methodPayload.certificateContent ?? null,
-    // Freeze the ISO 17025 accredited-scope flag into the offline snapshot,
-    // matching the cloud path (see apps/api/src/lib/jobs.ts).
-    accreditedScope: methodPayload.accreditedScope === true,
-  };
-  const assetSnapshot = {
-    assetId: asset.remote_id ?? stableLocalNumericId(asset.id),
-    assetTypeId:
-      asset.asset_type_remote_id ?? stableLocalNumericId(asset.asset_type_id),
-    assetTypeName: asset.asset_type_name ?? "Tipo local",
-    assetTypeSlug: asset.asset_type_slug ?? "local",
-    baseMeasurementUnit: asset.base_measurement_unit,
-    name: asset.name,
-    tag: asset.tag,
-    serialNumber: asset.serial_number,
-    manufacturer: asset.manufacturer,
-    model: asset.model,
-    specifications: parseJsonRecord(asset.specifications_json),
-    capturedAt: now,
-  };
-  const localId = `job:local:${randomUUID()}`;
-  const jobId = nextLocalJobId(database);
-  const organizationId = input.organizationId ?? asset.organization_id;
-  const unitId = input.unitId ?? asset.unit_id;
-
-  database.transaction(() => {
-    database
-      .prepare(
-        `
-INSERT INTO calibration_jobs (
-  id,
-  remote_id,
-  job_id,
-  certificate_name,
-  organization_id,
-  unit_id,
-  customer_id,
-  asset_id,
-  service_id,
-  technician_id,
-  method_snapshot_json,
-  asset_snapshot_json,
-  standards_snapshot_json,
-  environmental_snapshot_json,
-  calibration_location_snapshot_json,
-  calibration_phase_snapshot_json,
-  data_json,
-  results_json,
-  status,
-  due_date,
-  version,
-  created_at,
-  updated_at,
-  sync_state
-) VALUES (
-  @id,
-  NULL,
-  @jobId,
-  NULL,
-  @organizationId,
-  @unitId,
-  @customerId,
-  @assetId,
-  @serviceId,
-  @technicianId,
-  @methodSnapshotJson,
-  @assetSnapshotJson,
-  NULL,
-  NULL,
-  NULL,
-  NULL,
-  NULL,
-  NULL,
-  @status,
-  @dueDate,
-  0,
-  @createdAt,
-  @updatedAt,
-  'local'
-)
-`,
-      )
-      .run({
-        id: localId,
-        jobId,
-        organizationId,
-        unitId,
-        customerId: asset.customer_id,
-        assetId: asset.id,
-        serviceId: service.id,
-        technicianId: input.technicianId ?? null,
-        methodSnapshotJson: JSON.stringify(methodSnapshot),
-        assetSnapshotJson: JSON.stringify(assetSnapshot),
-        status: requireTargetOf(null, "create"),
-        dueDate: input.dueDate ?? null,
-        createdAt: now,
-        updatedAt: now,
-      });
-
-    appendLocalAudit(database, {
-      entityType: "calibration_job",
-      entityId: localId,
-      action: "create",
-      actorUserId: input.actorUserId,
-      details: { jobId, assetId: input.assetId, serviceId: input.serviceId },
-      createdAt: now,
-    });
-    appendOutboxEvent(database, {
-      entityType: "calibration_job",
-      entityId: localId,
-      operation: "create_local_job_draft",
-      payload: {
-        jobId,
-        assetId: input.assetId,
-        serviceId: input.serviceId,
-        technicianId: input.technicianId ?? null,
-        dueDate: input.dueDate ?? null,
-        unitId,
-      },
-      actorUserId: input.actorUserId,
-      deviceId: input.deviceId,
-      occurredAt: now,
-    });
-  })();
-
-  return getLocalJobDetail(database, String(stableLocalNumericId(localId)));
-}
 
 export function getLocalJobDetail(database: LocalDatabase, routeId: string) {
   const job = findLocalJob(database, routeId);
@@ -560,53 +378,6 @@ function toJobDetail(job: LocalJobRow) {
     updatedAt: job.updated_at,
     syncState: job.sync_state,
   };
-}
-
-function getAssetByRemoteId(database: LocalDatabase, remoteId: number) {
-  const remoteRow = database
-    .prepare<{ remoteId: number }, LocalAssetCommandRow>(
-      `
-SELECT a.*, at.remote_id AS asset_type_remote_id, at.name AS asset_type_name,
-  NULL AS asset_type_slug
-FROM assets a
-LEFT JOIN asset_types at ON at.id = a.asset_type_id
-WHERE a.remote_id = @remoteId AND a.deleted_at IS NULL
-`,
-    )
-    .get({ remoteId });
-  if (remoteRow) return remoteRow;
-
-  const rows = database
-    .prepare<[], LocalAssetCommandRow>(
-      `
-SELECT a.*, at.remote_id AS asset_type_remote_id, at.name AS asset_type_name,
-  NULL AS asset_type_slug
-FROM assets a
-LEFT JOIN asset_types at ON at.id = a.asset_type_id
-WHERE a.deleted_at IS NULL
-`,
-    )
-    .all();
-
-  return rows.find((row) => stableLocalNumericId(row.id) === remoteId);
-}
-
-function getServiceByRemoteId(database: LocalDatabase, remoteId: number) {
-  return database
-    .prepare<
-      { remoteId: number },
-      LocalServiceCommandRow
-    >("SELECT * FROM services WHERE remote_id = @remoteId")
-    .get({ remoteId });
-}
-
-function getPublishedMethod(database: LocalDatabase, localMethodId: string) {
-  return database
-    .prepare<
-      { id: string },
-      LocalPublishedMethodRow
-    >("SELECT * FROM published_methods WHERE id = @id")
-    .get({ id: localMethodId });
 }
 
 /**
@@ -1128,25 +899,6 @@ INSERT INTO outbox (
     });
 }
 
-function nextLocalJobId(database: LocalDatabase) {
-  const year = new Date().getFullYear();
-  const row = database
-    .prepare<{ prefix: string }, { total: number }>(
-      `
-SELECT COUNT(*) AS total
-FROM calibration_jobs
-WHERE job_id LIKE @prefix
-`,
-    )
-    .get({ prefix: `LOCAL-${year}-%` });
-
-  return `LOCAL-${year}-${String((row?.total ?? 0) + 1).padStart(4, "0")}`;
-}
-
-function getArray(value: unknown) {
-  return Array.isArray(value) ? value : [];
-}
-
 function recordFromUnknown(value: unknown): JsonRecord {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
@@ -1193,12 +945,6 @@ function parseJsonRecordOrNull(value: string | null | undefined) {
   return Object.keys(parsed).length > 0 ? parsed : null;
 }
 
-function getCompiledNormalizedMethodJson(value: string | null | undefined) {
-  const compiledMethod = parseJsonRecord(value);
-  const normalizedMethodJson = compiledMethod.normalizedMethodJson;
-  return typeof normalizedMethodJson === "string" ? normalizedMethodJson : null;
-}
-
 function getNumber(row: JsonRecord, key: string) {
   const value = row[key];
   return typeof value === "number" ? value : null;
@@ -1207,45 +953,6 @@ function getNumber(row: JsonRecord, key: string) {
 function getNullableNumber(row: JsonRecord, key: string) {
   return getNumber(row, key);
 }
-
-type LocalAssetCommandRow = {
-  id: string;
-  remote_id: number | null;
-  organization_id: string;
-  unit_id: number;
-  customer_id: string;
-  asset_type_id: string;
-  asset_type_remote_id: number | null;
-  asset_type_name: string | null;
-  asset_type_slug: string | null;
-  name: string;
-  serial_number: string;
-  tag: string;
-  manufacturer: string | null;
-  model: string | null;
-  base_measurement_unit: string | null;
-  specifications_json: string | null;
-};
-
-type LocalServiceCommandRow = {
-  id: string;
-  remote_id: number | null;
-  method_id: string | null;
-  status: string;
-};
-
-type LocalPublishedMethodRow = {
-  id: string;
-  remote_id: number;
-  name: string;
-  version: number;
-  method_fingerprint: string;
-  engine_version: string;
-  engine_options_fingerprint: string;
-  normalized_method_json: string;
-  compiled_method_json: string;
-  publication_evidence_json: string | null;
-};
 
 type LocalReferenceStandardRow = {
   id: string;

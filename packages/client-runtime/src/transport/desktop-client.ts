@@ -1,25 +1,18 @@
 import type {
   JobDetail,
-  JobTechniciansResponse,
   JobsListResponse,
   SyncStatusSnapshot,
 } from "@calibra-facil/contracts";
 import type {
-  AssetAuditLogData,
   AssetDetailData,
   AssetTypesListData,
   AssetsListData,
   CalibraApi,
   CertificateNumberingConfig,
   CertificateNumberingProfileResponse,
-  CreateJobResult,
-  CreateNonConformanceInput,
-  CreateNonConformanceResult,
   CreateServiceOrderResult,
-  CustomerAuditLogData,
   CustomerDetailData,
   CustomersListData,
-  DashboardStats,
   DashboardUnitsResponse,
   EffectiveEnvironmentalLimitsResponse,
   EnvironmentalLimit,
@@ -31,30 +24,18 @@ import type {
   LocalSessionSnapshotResponse,
   LocalSyncConflict,
   LocalSyncConflictsResponse,
-  MethodAuditLogData,
   MethodDetailData,
-  MethodWriteInput,
   MethodsListData,
-  NonConformanceListInput,
   NotificationPreferencesResponse,
   EmailDomainResponse,
   PortalDomainResponse,
   ReferenceStandardsResponse,
-  ServiceAuditLogData,
-  ServiceDetailData,
   ServiceOrderDetail,
   ServiceOrdersListData,
-  ServicesListData,
   SsoSettingsResponse,
-  StandardAuditLogData,
-  MassCompositionProfileDto,
   MassCompositionProfilesData,
-  MassCompositionProfileWriteInput,
   StandardData,
   StandardsListData,
-  UpdateAssetInput,
-  UpdateCustomerComplianceInput,
-  UpdateCustomerInput,
 } from "../types";
 import {
   getDesktopDataPolicyUnavailableMessage,
@@ -193,23 +174,7 @@ export function createDesktopApiClient(
   }
 
   return {
-    dashboard: {
-      async getStats<TStats = DashboardStats>() {
-        const response = await fetchImpl(
-          new URL("/api/dashboard/stats", options.baseUrl),
-          {
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error("Falha ao carregar estatísticas");
-        }
-
-        return readDesktopJson<TStats>(response);
-      },
-    },
+    dashboard: desktopCloudOnlyStubs("dashboard", { action: "Painel" }),
     units: {
       ...desktopCloudOnlyStubs("units", { action: "Governança de unidades" }),
       async getDashboardUnits() {
@@ -398,27 +363,6 @@ export function createDesktopApiClient(
 
         return readDesktopJson<CustomersListData>(response);
       },
-      async create(input) {
-        const response = await fetchImpl(
-          new URL("/api/customers", options.baseUrl),
-          {
-            method: "POST",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider, {
-              "Content-Type": "application/json",
-            }),
-            body: JSON.stringify(input),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            await readApiError(response, "Erro ao criar cliente"),
-          );
-        }
-
-        return readDesktopJson<CustomersListData["data"][number]>(response);
-      },
       // Cloud-only enrichment: it reaches the external Receita Federal mirrors,
       // which the offline local server can't proxy. The cadastro still works
       // with manual entry; the autofill is simply unavailable in desktop mode.
@@ -440,216 +384,9 @@ export function createDesktopApiClient(
 
         return readDesktopJson<TCustomer>(response);
       },
-      async update<TCustomer = CustomerDetailData>(
-        id: string | number,
-        input: UpdateCustomerInput,
-      ) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/customers/${encodeURIComponent(String(id))}`,
-            options.baseUrl,
-          ),
-          {
-            method: "PUT",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider, {
-              "Content-Type": "application/json",
-            }),
-            body: JSON.stringify(input),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            await readApiError(response, "Falha ao atualizar cliente"),
-          );
-        }
-
-        return readDesktopJson<TCustomer>(response);
-      },
-      async auditLog<TRecord = unknown>(
-        id: string | number,
-        input: { page?: number; limit?: number } = {},
-      ) {
-        const url = new URL(
-          `/api/customers/${encodeURIComponent(String(id))}/audit-log`,
-          options.baseUrl,
-        );
-        url.searchParams.set("page", String(input.page ?? 1));
-        url.searchParams.set("limit", String(input.limit ?? 50));
-
-        const response = await fetchImpl(url, {
-          credentials: "include",
-          headers: await createDesktopHeaders(options.tokenProvider),
-        });
-
-        if (!response.ok) {
-          throw new Error("Falha ao carregar historico");
-        }
-
-        return readDesktopJson<CustomerAuditLogData<TRecord>>(response);
-      },
-      async updateCompliance<TCustomer = CustomerDetailData>(
-        id: string | number,
-        input: UpdateCustomerComplianceInput,
-      ) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/customers/${encodeURIComponent(String(id))}/compliance`,
-            options.baseUrl,
-          ),
-          {
-            method: "PUT",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider, {
-              "Content-Type": "application/json",
-            }),
-            body: JSON.stringify(input),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            await readApiError(response, "Falha ao atualizar conformidade"),
-          );
-        }
-
-        return readDesktopJson<TCustomer>(response);
-      },
-      async listMembers<TMember = unknown>(id: string | number) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/customers/${encodeURIComponent(String(id))}/members`,
-            options.baseUrl,
-          ),
-          {
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error("Falha ao carregar usuarios");
-        }
-
-        return readDesktopJson<TMember[]>(response);
-      },
-      async listInvitations<TInvitation = unknown>(id: string | number) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/customers/${encodeURIComponent(String(id))}/invitations`,
-            options.baseUrl,
-          ),
-          {
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error("Falha ao carregar convites");
-        }
-
-        return readDesktopJson<TInvitation[]>(response);
-      },
-      async createInvitation<TInvitation = unknown>(
-        id: string | number,
-        input: { email: string; role: string },
-      ) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/customers/${encodeURIComponent(String(id))}/invitations`,
-            options.baseUrl,
-          ),
-          {
-            method: "POST",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider, {
-              "Content-Type": "application/json",
-            }),
-            body: JSON.stringify(input),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            await readApiError(response, "Falha ao enviar convite"),
-          );
-        }
-
-        return readDesktopJson<TInvitation>(response);
-      },
-      async resendInvitation(id: string | number, invitationId: string) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/customers/${encodeURIComponent(
-              String(id),
-            )}/invitations/${encodeURIComponent(invitationId)}/resend`,
-            options.baseUrl,
-          ),
-          {
-            method: "POST",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            await readApiError(response, "Falha ao reenviar convite"),
-          );
-        }
-
-        return response.json();
-      },
-      async cancelInvitation(id: string | number, invitationId: string) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/customers/${encodeURIComponent(
-              String(id),
-            )}/invitations/${encodeURIComponent(invitationId)}`,
-            options.baseUrl,
-          ),
-          {
-            method: "DELETE",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            await readApiError(response, "Falha ao cancelar convite"),
-          );
-        }
-
-        return response.json();
-      },
-      async removeMember(id: string | number, memberId: string) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/customers/${encodeURIComponent(
-              String(id),
-            )}/members/${encodeURIComponent(memberId)}`,
-            options.baseUrl,
-          ),
-          {
-            method: "DELETE",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            await readApiError(response, "Falha ao remover usuário"),
-          );
-        }
-
-        return response.json();
-      },
     },
     assets: {
+      ...desktopCloudOnlyStubs("assets", { action: "Edição de ativos" }),
       async list(input) {
         const url = new URL("/api/assets", options.baseUrl);
         url.searchParams.set("page", String(input.page));
@@ -715,51 +452,6 @@ export function createDesktopApiClient(
 
         return readDesktopJson<TAsset>(response);
       },
-      async update<TAsset = AssetDetailData>(
-        id: string | number,
-        input: UpdateAssetInput,
-      ) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/assets/${encodeURIComponent(String(id))}`,
-            options.baseUrl,
-          ),
-          {
-            method: "PUT",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider, {
-              "Content-Type": "application/json",
-            }),
-            body: JSON.stringify(input),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            await readApiError(response, "Erro ao atualizar ativo"),
-          );
-        }
-
-        return readDesktopJson<TAsset>(response);
-      },
-      async auditLog<TRecord = unknown>(id: string | number) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/assets/${encodeURIComponent(String(id))}/audit-log`,
-            options.baseUrl,
-          ),
-          {
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error("Falha ao carregar histórico");
-        }
-
-        return readDesktopJson<AssetAuditLogData<TRecord>>(response);
-      },
     },
     assetTypes: {
       async list() {
@@ -817,55 +509,9 @@ export function createDesktopApiClient(
     labSetup: desktopCloudOnlyStubs("labSetup", {
       action: "Configuração de acesso",
     }),
-    nonConformances: {
-      ...desktopCloudOnlyStubs("nonConformances", {
-        action: "Não conformidades",
-      }),
-      async list<TResponse = unknown>(input: NonConformanceListInput) {
-        const url = new URL("/api/nc", options.baseUrl);
-        url.searchParams.set("page", String(input.page));
-        url.searchParams.set("limit", String(input.limit));
-
-        if (input.query) {
-          url.searchParams.set("query", input.query);
-        }
-
-        if (input.status) {
-          url.searchParams.set("status", input.status);
-        }
-
-        if (input.type) {
-          url.searchParams.set("type", input.type);
-        }
-
-        const response = await fetchImpl(url, {
-          credentials: "include",
-          headers: await createDesktopHeaders(options.tokenProvider),
-        });
-
-        if (!response.ok) {
-          throw new Error("Falha ao carregar não conformidades");
-        }
-
-        return readDesktopJson<TResponse>(response);
-      },
-      async create(input: CreateNonConformanceInput) {
-        const response = await fetchImpl(new URL("/api/nc", options.baseUrl), {
-          method: "POST",
-          credentials: "include",
-          headers: await createDesktopHeaders(options.tokenProvider, {
-            "Content-Type": "application/json",
-          }),
-          body: JSON.stringify(input),
-        });
-
-        if (!response.ok) {
-          throw new Error(await readApiError(response, "Erro ao registrar NC"));
-        }
-
-        return readDesktopJson<CreateNonConformanceResult>(response);
-      },
-    },
+    nonConformances: desktopCloudOnlyStubs("nonConformances", {
+      action: "Não conformidades",
+    }),
     capas: desktopCloudOnlyStubs("capas", { action: "CAPA" }),
     proficiencyTests: desktopCloudOnlyStubs("proficiencyTests", {
       action: "Ensaios de proficiência",
@@ -906,142 +552,9 @@ export function createDesktopApiClient(
         return { data: [] };
       },
     },
-    services: {
-      async list(input = {}) {
-        const url = new URL("/api/services", options.baseUrl);
-        url.searchParams.set("page", String(input.page ?? 1));
-        url.searchParams.set("limit", String(input.limit ?? 20));
-
-        if (input.query) {
-          url.searchParams.set("query", input.query);
-        }
-
-        if (input.assetTypeId) {
-          url.searchParams.set("assetTypeId", String(input.assetTypeId));
-        }
-
-        if (input.methodId) {
-          url.searchParams.set("methodId", String(input.methodId));
-        }
-
-        if (input.isActive !== undefined) {
-          url.searchParams.set("isActive", String(input.isActive));
-        }
-
-        const response = await fetchImpl(url, {
-          credentials: "include",
-          headers: await createDesktopHeaders(options.tokenProvider),
-        });
-
-        if (!response.ok) {
-          throw new Error("Falha ao carregar serviços");
-        }
-
-        return readDesktopJson<ServicesListData>(response);
-      },
-      async get(id) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/services/${encodeURIComponent(String(id))}`,
-            options.baseUrl,
-          ),
-          {
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error("Falha ao carregar serviço");
-        }
-
-        return readDesktopJson<ServiceDetailData>(response);
-      },
-      async auditLog<TRecord = unknown>(id: string | number) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/services/${encodeURIComponent(String(id))}/audit-log`,
-            options.baseUrl,
-          ),
-          {
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error("Falha ao carregar histórico");
-        }
-
-        return readDesktopJson<ServiceAuditLogData<TRecord>>(response);
-      },
-      async create(input) {
-        const response = await fetchImpl(
-          new URL("/api/services", options.baseUrl),
-          {
-            method: "POST",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider, {
-              "Content-Type": "application/json",
-            }),
-            body: JSON.stringify(input),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            await readApiError(response, "Erro ao criar serviço"),
-          );
-        }
-
-        return readDesktopJson<{ id: number }>(response);
-      },
-      async update(id, input) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/services/${encodeURIComponent(String(id))}`,
-            options.baseUrl,
-          ),
-          {
-            method: "PUT",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider, {
-              "Content-Type": "application/json",
-            }),
-            body: JSON.stringify(input),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            await readApiError(response, "Erro ao atualizar serviço"),
-          );
-        }
-
-        return readDesktopJson<ServiceDetailData>(response);
-      },
-      async deactivate(id) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/services/${encodeURIComponent(String(id))}`,
-            options.baseUrl,
-          ),
-          {
-            method: "DELETE",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            await readApiError(response, "Erro ao desativar serviço"),
-          );
-        }
-
-        return readDesktopJson<unknown>(response);
-      },
-    },
+    services: desktopCloudOnlyStubs("services", {
+      action: "Catálogo de serviços",
+    }),
     methods: {
       ...desktopCloudOnlyStubs("methods", {
         action: "Métodos",
@@ -1099,117 +612,6 @@ export function createDesktopApiClient(
         }
 
         return readDesktopJson<MethodDetailData>(response);
-      },
-      async audit<TRecord = unknown>(id: string | number) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/methods/${encodeURIComponent(String(id))}/audit`,
-            options.baseUrl,
-          ),
-          {
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error("Falha ao carregar histórico");
-        }
-
-        return readDesktopJson<MethodAuditLogData<TRecord>>(response);
-      },
-      async create(input) {
-        const response = await fetchImpl(
-          new URL("/api/methods", options.baseUrl),
-          {
-            method: "POST",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider, {
-              "Content-Type": "application/json",
-            }),
-            body: JSON.stringify(input),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(await readApiError(response, "Erro ao criar método"));
-        }
-
-        return readDesktopJson<MethodDetailData>(response);
-      },
-      async update(id, input) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/methods/${encodeURIComponent(String(id))}`,
-            options.baseUrl,
-          ),
-          {
-            method: "PUT",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider, {
-              "Content-Type": "application/json",
-            }),
-            body: JSON.stringify(input),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            await readApiError(response, "Erro ao atualizar método"),
-          );
-        }
-
-        return readDesktopJson<MethodDetailData>(response);
-      },
-      async archive(id) {
-        return postDesktopMethodAction(
-          fetchImpl,
-          options,
-          id,
-          "archive",
-          undefined,
-          "Erro ao arquivar método",
-        );
-      },
-      async createNewVersion(id) {
-        return postDesktopMethodAction<MethodDetailData>(
-          fetchImpl,
-          options,
-          id,
-          "new-version",
-          undefined,
-          "Erro ao criar nova versão",
-        );
-      },
-      async technicalReview(id) {
-        return postDesktopMethodAction(
-          fetchImpl,
-          options,
-          id,
-          "technical-review",
-          undefined,
-          "Erro ao revisar tecnicamente",
-        );
-      },
-      async qualityApprove(id, input = {}) {
-        return postDesktopMethodAction(
-          fetchImpl,
-          options,
-          id,
-          "quality-approve",
-          input,
-          "Erro ao aprovar qualidade",
-        );
-      },
-      async returnToDraft(id, reason) {
-        return postDesktopMethodAction(
-          fetchImpl,
-          options,
-          id,
-          "return-to-draft",
-          { reason },
-          "Erro ao retornar para rascunho",
-        );
       },
     },
     standards: {
@@ -1280,175 +682,6 @@ export function createDesktopApiClient(
 
         return readDesktopJson<MassCompositionProfilesData>(response);
       },
-      async createCompositionProfile(input: MassCompositionProfileWriteInput) {
-        const response = await fetchImpl(
-          new URL("/api/standards/composition-profiles", options.baseUrl),
-          {
-            method: "POST",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider, {
-              "Content-Type": "application/json",
-            }),
-            body: JSON.stringify(input),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error("Erro ao criar perfil de composição");
-        }
-
-        return readDesktopJson<MassCompositionProfileDto>(response);
-      },
-      async updateCompositionProfile(
-        id: number,
-        input: Partial<MassCompositionProfileWriteInput>,
-      ) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/standards/composition-profiles/${encodeURIComponent(String(id))}`,
-            options.baseUrl,
-          ),
-          {
-            method: "PUT",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider, {
-              "Content-Type": "application/json",
-            }),
-            body: JSON.stringify(input),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error("Erro ao atualizar perfil de composição");
-        }
-
-        return readDesktopJson<MassCompositionProfileDto>(response);
-      },
-      async deleteCompositionProfile(id: number) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/standards/composition-profiles/${encodeURIComponent(String(id))}`,
-            options.baseUrl,
-          ),
-          {
-            method: "DELETE",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error("Erro ao remover perfil de composição");
-        }
-
-        return readDesktopJson<{ success: boolean; id: number }>(response);
-      },
-      async auditLog<TRecord = unknown>(id: string | number) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/standards/${encodeURIComponent(String(id))}/audit-log`,
-            options.baseUrl,
-          ),
-          {
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error("Falha ao carregar histórico");
-        }
-
-        return readDesktopJson<StandardAuditLogData<TRecord>>(response);
-      },
-      async create(input) {
-        const response = await fetchImpl(
-          new URL("/api/standards", options.baseUrl),
-          {
-            method: "POST",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider, {
-              "Content-Type": "application/json",
-            }),
-            body: JSON.stringify(input),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(await readApiError(response, "Erro ao criar padrão"));
-        }
-
-        return readDesktopJson<{ id: number }>(response);
-      },
-      async update(id, input) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/standards/${encodeURIComponent(String(id))}`,
-            options.baseUrl,
-          ),
-          {
-            method: "PUT",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider, {
-              "Content-Type": "application/json",
-            }),
-            body: JSON.stringify(input),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            await readApiError(response, "Erro ao atualizar padrão"),
-          );
-        }
-
-        return readDesktopJson<StandardData>(response);
-      },
-      async delete(id) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/standards/${encodeURIComponent(String(id))}`,
-            options.baseUrl,
-          ),
-          {
-            method: "DELETE",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            await readApiError(response, "Erro ao remover padrão"),
-          );
-        }
-
-        return readDesktopJson<unknown>(response);
-      },
-      async renew(id, input) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/standards/${encodeURIComponent(String(id))}/renew`,
-            options.baseUrl,
-          ),
-          {
-            method: "POST",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider, {
-              "Content-Type": "application/json",
-            }),
-            body: JSON.stringify(input),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            await readApiError(response, "Erro ao renovar certificado"),
-          );
-        }
-
-        return readDesktopJson<unknown>(response);
-      },
     },
     jobs: {
       ...desktopCloudOnlyStubs("jobs", {
@@ -1494,25 +727,6 @@ export function createDesktopApiClient(
 
         return readDesktopJson<JobsListResponse>(response);
       },
-      async create(input) {
-        const response = await fetchImpl(
-          new URL("/api/jobs", options.baseUrl),
-          {
-            method: "POST",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider, {
-              "Content-Type": "application/json",
-            }),
-            body: JSON.stringify(input),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(await readApiError(response, "Erro ao criar ordem"));
-        }
-
-        return readDesktopJson<CreateJobResult>(response);
-      },
       async get(jobId: string | number) {
         const response = await fetchImpl(
           new URL(`/api/jobs/${apiRouteParam(jobId)}`, options.baseUrl),
@@ -1527,21 +741,6 @@ export function createDesktopApiClient(
         }
 
         return readDesktopJson<JobDetail>(response);
-      },
-      async listTechnicians() {
-        const response = await fetchImpl(
-          new URL("/api/jobs/technicians/list", options.baseUrl),
-          {
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error("Falha ao carregar técnicos");
-        }
-
-        return readDesktopJson<JobTechniciansResponse>(response);
       },
       async listStandards<TStandard = unknown>() {
         const url = new URL("/api/standards", options.baseUrl);
@@ -1632,6 +831,9 @@ export function createDesktopApiClient(
         actionByMethod: {
           listCommunications: "Comunicações da OS",
           update: "Atualização da OS",
+          createQuote: "Orçamento da OS",
+          saveExecution: "Execução da OS",
+          issueDeliveryDocument: "Documento de entrega",
           saveEvaluation: "Avaliação técnica",
           sendQuote: "Emissão de orçamento",
           generateIntakeDocument: "Geração de comprovante",
@@ -1732,83 +934,6 @@ export function createDesktopApiClient(
         }
 
         return readDesktopJson<CreateServiceOrderResult>(response);
-      },
-      async createQuote(id, input) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/service-orders/${encodeURIComponent(String(id))}/quotes`,
-            options.baseUrl,
-          ),
-          {
-            method: "POST",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider, {
-              "Content-Type": "application/json",
-            }),
-            body: JSON.stringify(input),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            await readApiError(response, "Erro ao salvar orçamento"),
-          );
-        }
-
-        return response.json();
-      },
-      async saveExecution(id, input) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/service-orders/${encodeURIComponent(String(id))}/execution`,
-            options.baseUrl,
-          ),
-          {
-            method: "PATCH",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider, {
-              "Content-Type": "application/json",
-            }),
-            body: JSON.stringify(input),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            await readApiError(response, "Erro ao salvar execução"),
-          );
-        }
-
-        return response.json();
-      },
-      async issueDeliveryDocument(id, input) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/service-orders/${encodeURIComponent(
-              String(id),
-            )}/delivery-document`,
-            options.baseUrl,
-          ),
-          {
-            method: "POST",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider, {
-              "Content-Type": "application/json",
-            }),
-            body: JSON.stringify(input),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            await readApiError(
-              response,
-              "Erro ao gerar comprovante de entrega",
-            ),
-          );
-        }
-
-        return response.json();
       },
     },
     sync: {
@@ -2447,37 +1572,4 @@ function desktopNotificationPreferences(): NotificationPreferencesResponse {
     notifySelfActions: false,
     digestFrequency: "NONE",
   };
-}
-
-async function postDesktopMethodAction<TResponse = unknown>(
-  fetchImpl: typeof fetch,
-  options: CreateDesktopApiClientOptions,
-  id: string | number,
-  action: string,
-  input: MethodWriteInput | undefined,
-  fallback: string,
-): Promise<TResponse> {
-  const response = await fetchImpl(
-    new URL(
-      `/api/methods/${encodeURIComponent(String(id))}/${action}`,
-      options.baseUrl,
-    ),
-    {
-      method: "POST",
-      credentials: "include",
-      headers: await createDesktopHeaders(
-        options.tokenProvider,
-        input === undefined
-          ? undefined
-          : { "Content-Type": "application/json" },
-      ),
-      body: input === undefined ? undefined : JSON.stringify(input),
-    },
-  );
-
-  if (!response.ok) {
-    throw new Error(await readApiError(response, fallback));
-  }
-
-  return readDesktopJson<TResponse>(response);
 }
