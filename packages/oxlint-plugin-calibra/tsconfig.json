@@ -6,9 +6,10 @@
     // oxlint's plugin loader wants explicit .ts specifiers; noEmit makes that
     // legal for the native tsc too.
     "allowImportingTsExtensions": true,
+    "lib": ["ES2023"],
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["src/**/*", "test/**/*"],
+  "include": ["src/**/*", "test/**/*", "scripts/**/*"],
   "exclude": ["node_modules", "dist"]
 }

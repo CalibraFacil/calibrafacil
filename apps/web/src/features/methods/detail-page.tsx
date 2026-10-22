@@ -24,15 +24,15 @@ import {
   AuditTimeline,
   buildAuditTimelineEvents,
 } from '@/components/audit-timeline'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@calibra-facil/ui/button'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from '@/components/ui/accordion'
+} from '@calibra-facil/ui/accordion'
 import { RoleGate } from '@/components/permission-gate'
 import {
   ACTION_BUTTON_CLASS,
@@ -41,7 +41,7 @@ import {
   BlueprintOverlay,
   Panel,
   PanelHeader,
-} from '@/components/instrument-panel'
+} from '@calibra-facil/ui/instrument-panel'
 import { cn } from '@/lib/utils'
 import { formatInstant } from '@calibra-facil/shared/format'
 

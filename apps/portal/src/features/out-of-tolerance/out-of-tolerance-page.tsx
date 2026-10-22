@@ -6,14 +6,14 @@ import {
 } from "@hugeicons/core-free-icons";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@calibra-facil/ui/button";
 import {
   Empty,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from "@/components/ui/empty";
+} from "@calibra-facil/ui/empty";
 import { PageHeader } from "@/components/page-header";
 import {
   BlueprintField,
@@ -22,7 +22,7 @@ import {
   SignalTile,
   StaggerGroup,
   StaggerItem,
-} from "@/components/instrument-panel";
+} from "@calibra-facil/ui/instrument-panel";
 import { StatusPill } from "@/components/status-pill";
 import { getOotNotificationStatus } from "@/lib/status-labels";
 import {

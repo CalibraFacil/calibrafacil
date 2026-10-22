@@ -40,13 +40,16 @@ import {
   CustomerEditSheetBody,
 } from '@/features/service-orders/components/entity-edit-sheet-bodies'
 import { assetRouteId, clientRouteId } from '@/lib/route-identifiers'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
-import { SegmentedControl } from '@/components/ui/segmented-control'
-import { Textarea } from '@/components/ui/textarea'
-import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
+import { Button } from '@calibra-facil/ui/button'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Input } from '@calibra-facil/ui/input'
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from '@calibra-facil/ui/native-select'
+import { SegmentedControl } from '@calibra-facil/ui/segmented-control'
+import { Textarea } from '@calibra-facil/ui/textarea'
+import { ACTION_BUTTON_CLASS, Panel } from '@calibra-facil/ui/instrument-panel'
 import {
   Combobox,
   ComboboxContent,
@@ -54,13 +57,13 @@ import {
   ComboboxInput,
   ComboboxItem,
   ComboboxList,
-} from '@/components/ui/combobox'
+} from '@calibra-facil/ui/combobox'
 import {
   Field,
   FieldDescription,
   FieldError,
   FieldLabel,
-} from '@/components/ui/field'
+} from '@calibra-facil/ui/field'
 
 type EntitySheetKind =
   | 'customer-create'

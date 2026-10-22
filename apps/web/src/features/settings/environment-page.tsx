@@ -17,12 +17,12 @@ import {
   useEnvironmentalLimitsData,
   useSettingsAssetTypesData,
 } from '@/features/settings/queries'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Badge } from '@/components/ui/badge'
-import { Field, FieldLabel } from '@/components/ui/field'
-import { Panel, PanelHeader } from '@/components/instrument-panel'
+import { Button } from '@calibra-facil/ui/button'
+import { Input } from '@calibra-facil/ui/input'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Field, FieldLabel } from '@calibra-facil/ui/field'
+import { Panel, PanelHeader } from '@calibra-facil/ui/instrument-panel'
 import {
   Dialog,
   DialogContent,
@@ -31,20 +31,20 @@ import {
   DialogHeader,
   DialogTitle,
   DialogClose,
-} from '@/components/ui/dialog'
+} from '@calibra-facil/ui/dialog'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
+} from '@calibra-facil/ui/select'
 import {
   Empty,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from '@/components/ui/empty'
+} from '@calibra-facil/ui/empty'
 
 interface LimitFormState {
   assetTypeId: number | null
@@ -391,6 +391,7 @@ export function EnvironmentSettingsPage() {
                           <Button
                             variant="ghost"
                             size="icon-sm"
+                            aria-label="Remover substituição"
                             onClick={() => deleteMutation.mutate(override.id)}
                           >
                             <HugeiconsIcon

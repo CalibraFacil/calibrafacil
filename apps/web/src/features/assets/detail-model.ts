@@ -8,7 +8,7 @@
  */
 import { formatCalendarDate } from '@calibra-facil/shared/format'
 
-import type { SignalTone } from '@/components/instrument-panel'
+import type { SignalTone } from '@calibra-facil/ui/status-tone'
 import { dateOnlyDaysBetween } from '@/lib/date-only'
 
 export type AssetCalibrationLevel =

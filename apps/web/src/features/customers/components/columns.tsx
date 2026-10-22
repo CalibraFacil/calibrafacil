@@ -1,5 +1,5 @@
 import { type ColumnDef } from '@tanstack/react-table'
-import { Badge } from '@/components/ui/badge'
+import { Badge } from '@calibra-facil/ui/badge'
 import { SyncStateBadge } from '@/components/sync-state-badge'
 import type { CustomerListItem } from '@/features/customers/types'
 

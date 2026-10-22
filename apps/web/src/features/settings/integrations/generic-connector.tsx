@@ -9,31 +9,31 @@ import {
   type IntegrationMappingsConfig,
 } from '@calibra-facil/shared'
 import { calibraApi } from '@/utils/api'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
+import { Alert, AlertDescription } from '@calibra-facil/ui/alert'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Button } from '@calibra-facil/ui/button'
+import { Card, CardContent } from '@calibra-facil/ui/card'
+import { Checkbox } from '@calibra-facil/ui/checkbox'
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from '@/components/ui/collapsible'
+} from '@calibra-facil/ui/collapsible'
 import {
   Field,
   FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
-} from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
+} from '@calibra-facil/ui/field'
+import { Input } from '@calibra-facil/ui/input'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
+} from '@calibra-facil/ui/select'
 import {
   appendIntegrationMappingRule,
   cloneIntegrationMappings,

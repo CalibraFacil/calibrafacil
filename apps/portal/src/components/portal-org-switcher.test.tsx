@@ -53,7 +53,7 @@ vi.mock("@/lib/runtime-env", () => ({
 }));
 
 import { useOverview } from "@/features/dashboard/queries";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@calibra-facil/ui/sidebar";
 import { PortalOrgProvider } from "@/lib/portal-org-context";
 import { PortalOrgSwitcher } from "./portal-org-switcher";
 

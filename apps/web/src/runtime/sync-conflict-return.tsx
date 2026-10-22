@@ -1,13 +1,13 @@
 import { Link } from '@tanstack/react-router'
 
-import { Button } from '@/components/ui/button'
+import { Button } from '@calibra-facil/ui/button'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
+} from '@calibra-facil/ui/card'
 
 export type SyncConflictReturnSearch = {
   syncConflictId?: string

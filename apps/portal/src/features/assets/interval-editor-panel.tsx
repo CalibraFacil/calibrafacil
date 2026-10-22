@@ -7,15 +7,15 @@ import {
   CheckmarkCircle02Icon,
 } from "@hugeicons/core-free-icons";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@calibra-facil/ui/button";
+import { Input } from "@calibra-facil/ui/input";
+import { Label } from "@calibra-facil/ui/label";
+import { Textarea } from "@calibra-facil/ui/textarea";
 import {
   ACTION_BUTTON_CLASS,
   Panel,
   PanelHeader,
-} from "@/components/instrument-panel";
+} from "@calibra-facil/ui/instrument-panel";
 import { getApiBaseUrl } from "@/lib/utils";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import type { AssetDetail } from "./types";

@@ -13,8 +13,8 @@ import {
   SignalTile,
   StaggerGroup,
   StaggerItem,
-} from '@/components/instrument-panel'
-import { Skeleton } from '@/components/ui/skeleton'
+} from '@calibra-facil/ui/instrument-panel'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
 
 type Bucket =
   | 'THIS_WEEK'

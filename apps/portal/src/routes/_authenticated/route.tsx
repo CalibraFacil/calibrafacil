@@ -20,8 +20,8 @@ import { translateAuthErrorMessage } from "@calibra-facil/auth/error-messages";
 import { toast } from "sonner";
 import { PortalSidebar } from "@/components/portal-sidebar";
 import { PortalHeader } from "@/components/portal-header";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { Spinner } from "@/components/ui/spinner";
+import { SidebarInset, SidebarProvider } from "@calibra-facil/ui/sidebar";
+import { Spinner } from "@calibra-facil/ui/spinner";
 import { getWebAppUrl } from "@/lib/runtime-env";
 import {
   Card,
@@ -29,10 +29,10 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "@calibra-facil/ui/card";
+import { Button } from "@calibra-facil/ui/button";
+import { Input } from "@calibra-facil/ui/input";
+import { Label } from "@calibra-facil/ui/label";
 import { sanitizePortalRedirect } from "@/lib/auth-redirect";
 import { readSessionWithRetry } from "@/lib/auth-session";
 import { PortalOrgProvider } from "@/lib/portal-org-context";

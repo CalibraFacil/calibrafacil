@@ -10,10 +10,10 @@ import {
   type AuthStatus,
 } from '@/components/auth-status-message'
 import { BrandMark } from '@/components/brand'
-import { Button } from '@/components/ui/button'
-import { Spinner } from '@/components/ui/spinner'
-import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
+import { Button } from '@calibra-facil/ui/button'
+import { Spinner } from '@calibra-facil/ui/spinner'
+import { Field, FieldGroup, FieldLabel } from '@calibra-facil/ui/field'
+import { Input } from '@calibra-facil/ui/input'
 
 interface SsoSignInFormProps extends React.ComponentProps<'form'> {
   redirect?: string

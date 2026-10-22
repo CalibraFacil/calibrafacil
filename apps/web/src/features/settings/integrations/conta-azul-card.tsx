@@ -17,24 +17,29 @@ import {
 
 import type { ContaAzulConnectionConfig } from '@calibra-facil/shared'
 import { calibraApi } from '@/utils/api'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import { Alert, AlertDescription } from '@calibra-facil/ui/alert'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
+import { Button } from '@calibra-facil/ui/button'
+import { Card, CardContent } from '@calibra-facil/ui/card'
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from '@/components/ui/collapsible'
+} from '@calibra-facil/ui/collapsible'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+} from '@calibra-facil/ui/dropdown-menu'
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@calibra-facil/ui/tabs'
 import {
   formatIntegrationDateTime,
   getSharedIntegrationWarnings,

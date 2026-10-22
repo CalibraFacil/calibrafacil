@@ -56,13 +56,13 @@ vi.mock('sonner', () => ({
   },
 }))
 
-vi.mock('@/components/ui/badge', () => ({
+vi.mock('@calibra-facil/ui/badge', () => ({
   Badge: ({ children }: { children?: React.ReactNode }) => (
     <span>{children}</span>
   ),
 }))
 
-vi.mock('@/components/ui/button', () => ({
+vi.mock('@calibra-facil/ui/button', () => ({
   Button: ({
     children,
     disabled,
@@ -86,7 +86,7 @@ vi.mock('@/components/ui/button', () => ({
   },
 }))
 
-vi.mock('@/components/ui/card', () => ({
+vi.mock('@calibra-facil/ui/card', () => ({
   Card: ({ children }: { children?: React.ReactNode }) => (
     <section>{children}</section>
   ),
@@ -104,7 +104,7 @@ vi.mock('@/components/ui/card', () => ({
   ),
 }))
 
-vi.mock('@/components/ui/skeleton', () => ({
+vi.mock('@calibra-facil/ui/skeleton', () => ({
   Skeleton: () => <div data-testid="skeleton" />,
 }))
 

@@ -8,15 +8,18 @@ import {
   parsePastedCertifiedValues,
 } from '@/features/standards/paste'
 import { describeStandardWarnings } from '@/features/standards/warnings'
-import { Button } from '@/components/ui/button'
+import { Button } from '@calibra-facil/ui/button'
 import {
   Field,
   FieldDescription,
   FieldError,
   FieldLabel,
-} from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
+} from '@calibra-facil/ui/field'
+import { Input } from '@calibra-facil/ui/input'
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from '@calibra-facil/ui/native-select'
 import {
   Table,
   TableBody,
@@ -24,7 +27,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'
+} from '@calibra-facil/ui/table'
 import {
   createChannelsForKind,
   createStandardCertifiedValueDraft,

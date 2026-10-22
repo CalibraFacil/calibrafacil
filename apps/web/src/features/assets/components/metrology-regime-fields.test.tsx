@@ -67,7 +67,7 @@ vi.mock('@/features/assets/queries', () => ({
   useLegalMetrologyRegulationsData: () => ({ data: queryMocks.data }),
 }))
 
-vi.mock('@/components/ui/select', () => ({
+vi.mock('@calibra-facil/ui/select', () => ({
   Select: ({
     value,
     onValueChange,

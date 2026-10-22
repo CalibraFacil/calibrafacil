@@ -18,19 +18,19 @@ import {
   type NonConformanceFormData,
 } from '@/features/quality/forms'
 import { useNonConformanceJobsData } from '@/features/quality/queries'
-import { Button } from '@/components/ui/button'
-import { DatePicker } from '@/components/ui/date-picker'
-import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+import { Button } from '@calibra-facil/ui/button'
+import { DatePicker } from '@calibra-facil/ui/date-picker'
+import { Field, FieldGroup, FieldLabel } from '@calibra-facil/ui/field'
+import { Input } from '@calibra-facil/ui/input'
+import { Label } from '@calibra-facil/ui/label'
+import { Textarea } from '@calibra-facil/ui/textarea'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
-import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
+} from '@calibra-facil/ui/select'
+import { ACTION_BUTTON_CLASS, Panel } from '@calibra-facil/ui/instrument-panel'
 import { cn } from '@/lib/utils'
 import { useDesktopCloudOnlyUnavailable } from '@/runtime/sync-status'
 

@@ -11,9 +11,9 @@ import {
   SignalTile,
   StaggerGroup,
   StaggerItem,
-} from "@/components/instrument-panel";
-import type { SignalTone } from "@/components/instrument-panel";
-import { Button } from "@/components/ui/button";
+} from "@calibra-facil/ui/instrument-panel";
+import type { SignalTone } from "@calibra-facil/ui/status-tone";
+import { Button } from "@calibra-facil/ui/button";
 import {
   Dialog,
   DialogClose,
@@ -22,8 +22,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
+} from "@calibra-facil/ui/dialog";
+import { Textarea } from "@calibra-facil/ui/textarea";
 import { cn } from "@/lib/utils";
 import { usePublicServiceOrder, submitQuoteDecision } from "./queries";
 import type { QuoteDecision } from "./queries";

@@ -1,6 +1,6 @@
 import { type ColumnDef } from '@tanstack/react-table'
 import { Link } from '@tanstack/react-router'
-import { Badge } from '@/components/ui/badge'
+import { Badge } from '@calibra-facil/ui/badge'
 import type { CapaRow } from '@/features/quality/types'
 import { formatCalendarDate } from '@calibra-facil/shared/format'
 

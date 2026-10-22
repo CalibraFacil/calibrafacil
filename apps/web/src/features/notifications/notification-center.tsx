@@ -15,27 +15,32 @@ import {
 } from './queries'
 import { useDesktopNotificationBridge } from './desktop-bridge'
 import { isDesktopRuntime } from '@/runtime/desktop'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { Button } from '@calibra-facil/ui/button'
+import { Badge } from '@calibra-facil/ui/badge'
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
   PopoverTitle,
   PopoverDescription,
-} from '@/components/ui/popover'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+} from '@calibra-facil/ui/popover'
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from '@calibra-facil/ui/tabs'
 import {
   Empty,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
   EmptyDescription,
-} from '@/components/ui/empty'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Separator } from '@/components/ui/separator'
-import { Spinner } from '@/components/ui/spinner'
+} from '@calibra-facil/ui/empty'
+import { Alert, AlertDescription } from '@calibra-facil/ui/alert'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
+import { Separator } from '@calibra-facil/ui/separator'
+import { Spinner } from '@calibra-facil/ui/spinner'
 import { calibraApi } from '@/utils/api'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 

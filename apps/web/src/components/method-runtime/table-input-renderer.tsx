@@ -9,8 +9,8 @@ import {
   applyPastedReadings,
   parsePastedReadings,
 } from '@/features/jobs/execution'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Button } from '@calibra-facil/ui/button'
+import { Input } from '@calibra-facil/ui/input'
 import { MassCompositionCell } from './mass-composition-cell'
 import {
   isMassCompositionValue,
@@ -45,7 +45,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'
+} from '@calibra-facil/ui/table'
 
 export interface CertifiedValueOption {
   label: string // e.g., "100g"
@@ -1083,6 +1083,7 @@ export function TableInputRenderer({
                       <Button
                         variant="ghost"
                         size="icon"
+                        aria-label="Remover linha"
                         onClick={() => removeRow(rowIndex)}
                         disabled={disabled}
                         className="h-10 w-10 active:scale-[0.96]"
@@ -1229,6 +1230,7 @@ export function TableInputRenderer({
                         <Button
                           variant="ghost"
                           size="icon"
+                          aria-label="Remover linha"
                           onClick={() => removeRow(rowIndex)}
                           disabled={disabled}
                           className="h-8 w-8"

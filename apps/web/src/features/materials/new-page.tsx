@@ -12,18 +12,18 @@ import {
   type MaterialFormData,
   type MaterialFormField,
 } from '@/features/materials/forms'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Switch } from '@/components/ui/switch'
-import { Spinner } from '@/components/ui/spinner'
+import { Button } from '@calibra-facil/ui/button'
+import { Input } from '@calibra-facil/ui/input'
+import { Textarea } from '@calibra-facil/ui/textarea'
+import { Switch } from '@calibra-facil/ui/switch'
+import { Spinner } from '@calibra-facil/ui/spinner'
 import {
   Field,
   FieldDescription,
   FieldError,
   FieldLabel,
-} from '@/components/ui/field'
-import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
+} from '@calibra-facil/ui/field'
+import { ACTION_BUTTON_CLASS, Panel } from '@calibra-facil/ui/instrument-panel'
 import { cn } from '@/lib/utils'
 
 const initialFormData: MaterialFormData = {

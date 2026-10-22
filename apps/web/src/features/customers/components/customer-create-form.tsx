@@ -11,21 +11,21 @@ import {
   type CustomerFormData,
   type CustomerFormField,
 } from '@/features/customers/forms'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Button } from '@calibra-facil/ui/button'
+import { Input } from '@calibra-facil/ui/input'
 import { MaskedInput } from '@/components/ui/masked-input'
-import { Spinner } from '@/components/ui/spinner'
+import { Spinner } from '@calibra-facil/ui/spinner'
 import {
   Field,
   FieldDescription,
   FieldError,
   FieldLabel,
-} from '@/components/ui/field'
+} from '@calibra-facil/ui/field'
 import {
   ACTION_BUTTON_CLASS,
   Panel,
   PanelHeader,
-} from '@/components/instrument-panel'
+} from '@calibra-facil/ui/instrument-panel'
 import { brazilPhoneMask, cepMask, cpfCnpjMask } from '@/lib/input-masks'
 import { isValidCnpj, normalizeCnpj } from '@calibra-facil/shared/cnpj'
 import {

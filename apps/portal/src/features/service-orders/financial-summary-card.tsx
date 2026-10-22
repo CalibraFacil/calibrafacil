@@ -4,7 +4,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "../../components/ui/card";
+} from "@calibra-facil/ui/card";
 import { dateOnlyDaysBetween } from "../../lib/date-only";
 import {
   formatCalendarDate,

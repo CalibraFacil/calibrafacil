@@ -2,16 +2,16 @@ import { Link } from '@tanstack/react-router'
 import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Button } from '@calibra-facil/ui/button'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
+} from '@calibra-facil/ui/card'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
 import { DeadEventsSection } from '@/features/sync/components/dead-events-section'
 import { useOpenSyncConflictsData } from '@/features/sync/queries'
 import { calibraApi } from '@/utils/api'

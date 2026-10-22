@@ -12,8 +12,8 @@ import {
 } from "@hugeicons/core-free-icons";
 
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { Button } from "@calibra-facil/ui/button";
+import { Spinner } from "@calibra-facil/ui/spinner";
 import { AccreditationSeal } from "@/components/accreditation-seal";
 import {
   ACTION_BUTTON_CLASS,
@@ -24,7 +24,7 @@ import {
   PanelHeader,
   SignalTile,
   type SignalTone,
-} from "@/components/instrument-panel";
+} from "@calibra-facil/ui/instrument-panel";
 
 import {
   fetchCertificateDownloadUrl,

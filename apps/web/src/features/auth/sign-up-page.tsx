@@ -6,16 +6,16 @@ import {
   type AuthStatus,
 } from '@/components/auth-status-message'
 import { BrandLockup, BrandMark } from '@/components/brand'
-import { Button } from '@/components/ui/button'
+import { Button } from '@calibra-facil/ui/button'
 import {
   Field,
   FieldDescription,
   FieldGroup,
   FieldLabel,
-} from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
+} from '@calibra-facil/ui/field'
+import { Input } from '@calibra-facil/ui/input'
 import { MaskedInput } from '@/components/ui/masked-input'
-import { Spinner } from '@/components/ui/spinner'
+import { Spinner } from '@calibra-facil/ui/spinner'
 import { AuthShaderPanel } from '@/features/auth/components/auth-shader-panel'
 import { brazilPhoneMask, cnpjMask } from '@/lib/input-masks'
 import { calibraApi } from '@/utils/api'

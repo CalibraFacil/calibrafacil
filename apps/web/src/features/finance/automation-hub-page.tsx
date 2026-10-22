@@ -1,6 +1,6 @@
 import { parseAsString, useQueryState } from 'nuqs'
 
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsList, TabsTrigger } from '@calibra-facil/ui/tabs'
 import { CertificateReleasePolicyPage } from '@/features/settings/certificate-release-page'
 import { AutomaticSendSettingsPage } from '@/features/settings/automatic-send-page'
 

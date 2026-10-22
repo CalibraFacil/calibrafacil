@@ -18,22 +18,22 @@ import {
   YAxis,
 } from 'recharts'
 
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Button } from '@calibra-facil/ui/button'
+import { Input } from '@calibra-facil/ui/input'
+import { Label } from '@calibra-facil/ui/label'
 import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
-} from '@/components/ui/chart'
+} from '@calibra-facil/ui/chart'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
+} from '@calibra-facil/ui/select'
 import {
   ACTION_BUTTON_CLASS,
   BlueprintOverlay,
@@ -42,7 +42,7 @@ import {
   SignalTile,
   StaggerGroup,
   StaggerItem,
-} from '@/components/instrument-panel'
+} from '@calibra-facil/ui/instrument-panel'
 import {
   CloudOnlyOfflineState,
   useDesktopCloudOnlyUnavailable,

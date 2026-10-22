@@ -136,6 +136,11 @@
         "src/testing/index.ts"
       ]
     },
+    "packages/oxlint-plugin-calibra": {
+      // The palette-baseline generator is run by `pnpm baseline:palette`.
+      "entry": ["scripts/*.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts", "scripts/*.ts"]
+    },
     "packages/notifications": {
       // Specs `vi.mock("resend")`; the mock only intercepts when the package
       // resolves from this package.

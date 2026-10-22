@@ -1,5 +1,5 @@
-import { Badge } from '@/components/ui/badge'
-import type { SignalTone } from '@/components/instrument-panel'
+import { Badge } from '@calibra-facil/ui/badge'
+import type { SignalTone } from '@calibra-facil/ui/status-tone'
 import { SPC_STATUS_LABELS, type SpcStatus } from '@/features/spc/types'
 
 export const SPC_STATUS_TONES: Record<SpcStatus, SignalTone> = {

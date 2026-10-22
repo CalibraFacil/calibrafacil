@@ -5,8 +5,8 @@ import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { FloppyDiskIcon, RefreshIcon } from '@hugeicons/core-free-icons'
 
-import { Button } from '@/components/ui/button'
-import { Spinner } from '@/components/ui/spinner'
+import { Button } from '@calibra-facil/ui/button'
+import { Spinner } from '@calibra-facil/ui/spinner'
 import {
   Dialog,
   DialogContent,
@@ -14,11 +14,11 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Field, FieldError, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Textarea } from '@/components/ui/textarea'
+} from '@calibra-facil/ui/dialog'
+import { Field, FieldError, FieldLabel } from '@calibra-facil/ui/field'
+import { Input } from '@calibra-facil/ui/input'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
+import { Textarea } from '@calibra-facil/ui/textarea'
 import { calibraApi } from '@/utils/api'
 import { StandardFormSections } from '@/features/standards/components/standard-form-sections'
 import { StandardCertificateDocumentPanel } from '@/features/standards/components/standard-certificate-document-panel'
@@ -26,7 +26,7 @@ import {
   ACTION_BUTTON_CLASS,
   Panel,
   PanelHeader,
-} from '@/components/instrument-panel'
+} from '@calibra-facil/ui/instrument-panel'
 import {
   createStandardFormData,
   createStandardRenewFormData,

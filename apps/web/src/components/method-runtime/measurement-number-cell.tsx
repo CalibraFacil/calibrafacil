@@ -4,13 +4,13 @@ import { ArrowDown01Icon } from '@hugeicons/core-free-icons'
 
 import { convertUnitValue, unitKind } from '@calibra-facil/shared/units'
 
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Button } from '@calibra-facil/ui/button'
+import { Input } from '@calibra-facil/ui/input'
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from '@/components/ui/popover'
+} from '@calibra-facil/ui/popover'
 
 export interface MeasurementPickerOption {
   label: string
@@ -185,6 +185,7 @@ export function MeasurementNumberCell({
               {...props}
               variant="ghost"
               size="icon"
+              aria-label="Inserir valor certificado"
               disabled={disabled}
               className="h-8 w-8 shrink-0"
               title="Inserir valor certificado"

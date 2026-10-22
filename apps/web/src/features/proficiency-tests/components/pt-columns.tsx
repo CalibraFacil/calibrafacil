@@ -1,7 +1,7 @@
 import { type ColumnDef } from '@tanstack/react-table'
 import { Link } from '@tanstack/react-router'
 
-import { Badge } from '@/components/ui/badge'
+import { Badge } from '@calibra-facil/ui/badge'
 import {
   PT_ACTIVITY_TYPE_LABELS,
   PT_STATUS_BADGE_CLASSES,

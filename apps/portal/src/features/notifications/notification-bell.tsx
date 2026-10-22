@@ -8,21 +8,21 @@ import {
   Tick02Icon,
 } from "@hugeicons/core-free-icons";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@calibra-facil/ui/button";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover";
+} from "@calibra-facil/ui/popover";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-} from "@/components/ui/sheet";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useIsMobile } from "@/hooks/use-mobile";
+} from "@calibra-facil/ui/sheet";
+import { Skeleton } from "@calibra-facil/ui/skeleton";
+import { useIsMobile } from "@calibra-facil/ui/use-mobile";
 import { formatBadgeCount } from "./lib";
 import { NotificationItem } from "./notification-item";
 import {

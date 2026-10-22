@@ -2,7 +2,7 @@ import { type ColumnDef } from '@tanstack/react-table'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Building03Icon } from '@hugeicons/core-free-icons'
 
-import { Badge } from '@/components/ui/badge'
+import { Badge } from '@calibra-facil/ui/badge'
 import type { CustomerGroupsListData } from '@calibra-facil/client-runtime'
 
 export type CustomerGroupRow = CustomerGroupsListData['data'][number]

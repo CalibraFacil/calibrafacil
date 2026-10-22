@@ -1,11 +1,4 @@
-import { clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
-
-import type { ClassValue } from "clsx";
-
-export function cn(...inputs: Array<ClassValue>) {
-  return twMerge(clsx(inputs));
-}
+export { cn } from "@calibra-facil/ui/utils";
 
 export function getApiBaseUrl(): string {
   if (import.meta.env.VITE_API_URL) {

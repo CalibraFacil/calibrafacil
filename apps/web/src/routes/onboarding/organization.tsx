@@ -8,21 +8,21 @@ import {
 } from '@calibra-facil/auth/client'
 import { translateAuthErrorMessage } from '@calibra-facil/auth/error-messages'
 import { BrandLockup } from '@/components/brand'
-import { Button } from '@/components/ui/button'
+import { Button } from '@calibra-facil/ui/button'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
+} from '@calibra-facil/ui/card'
 import {
   Field,
   FieldDescription,
   FieldGroup,
   FieldLabel,
-} from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
+} from '@calibra-facil/ui/field'
+import { Input } from '@calibra-facil/ui/input'
 import { MaskedInput } from '@/components/ui/masked-input'
 import { setStoredDashboardOrganizationId } from '@/features/dashboard/dashboard-scope-storage'
 import { brazilPhoneMask, cnpjMask } from '@/lib/input-masks'

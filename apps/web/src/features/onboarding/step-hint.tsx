@@ -1,6 +1,6 @@
 import type { ActivationStepId } from '@calibra-facil/client-runtime'
 
-import { Button } from '@/components/ui/button'
+import { Button } from '@calibra-facil/ui/button'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 
 import { ACTIVATION_STEPS, type ActivationStep } from './steps'

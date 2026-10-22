@@ -23,10 +23,10 @@ import {
   Search01Icon,
 } from '@hugeicons/core-free-icons'
 
-import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@calibra-facil/ui/button'
+import { Checkbox } from '@calibra-facil/ui/checkbox'
+import { Input } from '@calibra-facil/ui/input'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
 import {
   Table,
   TableBody,
@@ -34,12 +34,12 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'
+} from '@calibra-facil/ui/table'
 import {
   DataTableFacetedFilter,
   type FacetOption,
-} from '@/components/ui/data-table-faceted-filter'
-import { DataTableViewOptions } from '@/components/ui/data-table-view-options'
+} from '@calibra-facil/ui/data-table-faceted-filter'
+import { DataTableViewOptions } from '@calibra-facil/ui/data-table-view-options'
 
 // Optional per-column display label used by the column-visibility menu.
 declare module '@tanstack/react-table' {

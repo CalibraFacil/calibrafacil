@@ -1,10 +1,10 @@
 import { Add01Icon, Delete02Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
-import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Button } from '@calibra-facil/ui/button'
+import { Checkbox } from '@calibra-facil/ui/checkbox'
+import { Input } from '@calibra-facil/ui/input'
+import { Label } from '@calibra-facil/ui/label'
 import {
   Select,
   SelectContent,
@@ -12,9 +12,9 @@ import {
   SelectItem,
   SelectLabel,
   SelectTrigger,
-} from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
-import { FormField as Field } from '@/shared/forms/form-field'
+} from '@calibra-facil/ui/select'
+import { Textarea } from '@calibra-facil/ui/textarea'
+import { Field } from '@calibra-facil/ui/field'
 
 import { SectionCard } from './section-card'
 import {

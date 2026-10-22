@@ -7,6 +7,8 @@
 export interface RuleContext {
   /** Absolute path of the file being linted. */
   readonly filename: string;
+  /** The linted file's source text (ESLint-compatible `context.sourceCode`). */
+  readonly sourceCode: { readonly text: string };
   report(descriptor: { node: unknown; message: string }): void;
 }
 

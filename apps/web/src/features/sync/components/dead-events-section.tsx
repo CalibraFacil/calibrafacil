@@ -4,15 +4,15 @@ import { toast } from 'sonner'
 import type { LocalDeadOutboxEvent } from '@calibra-facil/contracts'
 import { formatInstant } from '@calibra-facil/shared/format'
 
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Button } from '@calibra-facil/ui/button'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
+} from '@calibra-facil/ui/card'
 import { useDeadSyncEventsData } from '@/features/sync/queries'
 import {
   describeDeadEvent,

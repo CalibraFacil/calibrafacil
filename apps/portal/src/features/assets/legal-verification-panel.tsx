@@ -1,7 +1,7 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Calendar03Icon } from "@hugeicons/core-free-icons";
 
-import { Panel, PanelHeader } from "@/components/instrument-panel";
+import { Panel, PanelHeader } from "@calibra-facil/ui/instrument-panel";
 import type { AssetDetail } from "./types";
 import { formatCalendarDate } from "@calibra-facil/shared/format";
 

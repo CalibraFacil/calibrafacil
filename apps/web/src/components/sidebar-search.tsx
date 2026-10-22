@@ -3,13 +3,13 @@ import { SearchIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { useCommandPalette } from './command-palette/command-context'
-import { Kbd } from '@/components/ui/kbd'
+import { Kbd } from '@calibra-facil/ui/kbd'
 import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
-} from '@/components/ui/sidebar'
+} from '@calibra-facil/ui/sidebar'
 
 export function SidebarSearch() {
   const { setOpen } = useCommandPalette()

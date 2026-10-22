@@ -17,7 +17,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-} from "@/components/ui/sidebar";
+} from "@calibra-facil/ui/sidebar";
 
 const navSecondary = [
   {

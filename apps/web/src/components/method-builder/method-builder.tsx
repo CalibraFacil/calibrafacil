@@ -9,24 +9,24 @@ import {
   PlayIcon,
 } from '@hugeicons/core-free-icons'
 
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
+import { Button } from '@calibra-facil/ui/button'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Input } from '@calibra-facil/ui/input'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
-import { Textarea } from '@/components/ui/textarea'
+} from '@calibra-facil/ui/select'
+import { Switch } from '@calibra-facil/ui/switch'
+import { Textarea } from '@calibra-facil/ui/textarea'
 import { useAssetTypesData } from '@/features/assets/queries'
-import { FormField as Field } from '@/shared/forms/form-field'
+import { Field } from '@calibra-facil/ui/field'
 import {
   ACTION_BUTTON_CLASS,
   Panel,
   PanelHeader,
-} from '@/components/instrument-panel'
+} from '@calibra-facil/ui/instrument-panel'
 import { cn } from '@/lib/utils'
 
 import { cloneMethodDraft } from './adapters'

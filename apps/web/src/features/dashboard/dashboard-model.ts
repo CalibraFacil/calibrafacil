@@ -1,7 +1,7 @@
 import { getLabCalendarDay } from '@calibra-facil/shared/calendar-date'
 import { formatCalendarDate } from '@calibra-facil/shared/format'
 
-import type { SignalTone } from '@/components/instrument-panel'
+import type { SignalTone } from '@calibra-facil/ui/status-tone'
 import type {
   DashboardJob,
   DashboardJobStatus,

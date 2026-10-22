@@ -1,6 +1,6 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
-@import './shadcn.css';
+@import '@calibra-facil/ui/tokens.css';
 @import 'driver.js/dist/driver.css';
 
 /* Figtree — the app's primary sans (the `font-sans` utility / body default). */

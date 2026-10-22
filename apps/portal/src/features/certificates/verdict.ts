@@ -1,6 +1,6 @@
 import { formatCalibrationValue } from "@calibra-facil/shared";
 
-import type { SignalTone } from "@/components/instrument-panel";
+import type { SignalTone } from "@calibra-facil/ui/status-tone";
 import { dateOnlyDaysBetween } from "@/lib/date-only";
 
 /**
