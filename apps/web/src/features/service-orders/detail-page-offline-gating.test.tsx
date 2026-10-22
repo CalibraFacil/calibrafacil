@@ -20,7 +20,7 @@ import type { ServiceOrderDetail } from './types'
 // no connection must show those actions disabled, not let them fail with a
 // network error.
 
-const orderMock = vi.hoisted(() => ({ current: null as unknown }))
+const orderMock = vi.hoisted((): { current: unknown } => ({ current: null }))
 
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, to }: { children?: React.ReactNode; to: string }) => (
