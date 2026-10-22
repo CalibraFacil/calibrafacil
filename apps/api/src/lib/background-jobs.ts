@@ -33,7 +33,7 @@ async function importLocalWorkerModule() {
 async function processContaAzulSyncMessage(
   message: IntegrationSyncBackgroundJobMessage,
 ) {
-  const modulePath = "../modules/integrations";
+  const modulePath = "../modules/integrations/index";
   const { runIntegrationSync } = await import(modulePath);
   await runIntegrationSync({
     integrationId: message.integrationId,
