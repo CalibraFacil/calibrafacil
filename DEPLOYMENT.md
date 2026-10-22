@@ -151,6 +151,65 @@ in the `x-app-env` block of `compose.yaml` elsewhere (`DATABASE_URL` for a manag
 `R2_PUBLIC_ENDPOINT` and the `FILES_URL` site in the `Caddyfile`. Resend works instead of
 SMTP: set `RESEND_API_KEY` and leave `SMTP_HOST` empty.
 
+## Upgrading to this release
+
+Configuration is now validated when each process starts (see [Configuration](#configuration)):
+**the API, the worker and the local server refuse to start, with one message listing every
+problem, when production is missing a required variable or one has the wrong shape.** Before,
+most of these only failed at first use, deep inside a request, or never. Check your environment
+**before** you deploy.
+
+**Newly required in production** (`NODE_ENV=production`, or any Vercel deployment):
+
+| Variable                     | Who is affected                                                                                                                                       |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CRON_SECRET`                | Bun and hand-built images. Without it the API used to start and every `/api/cron/*` job answered 503. (Docker Compose and Vercel already require it.) |
+| `QUOTE_APPROVAL_CODE_PEPPER` | Bun and hand-built images. Only Vercel enforced it; elsewhere a built-in development pepper was used silently. (Docker Compose already requires it.)  |
+| `API_URL` and `APP_URL`      | Everyone who left one out. The auth layer used to throw on first use.                                                                                 |
+| `R2_MEDIA_BUCKET_NAME`       | The worker, which used to fall back to a development bucket name.                                                                                     |
+
+**Newly shape-checked in production** (the variable was accepted before and only failed when
+first used):
+
+| Variable                                                                                            | Rule                                                                      |
+| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `SIGNING_MASTER_KEY`, `INTEGRATIONS_MASTER_KEY`, `PUBLIC_API_MASTER_KEY`, `EMAIL_DOMAIN_MASTER_KEY` | 32 random bytes, base64 encoded (`EMAIL_DOMAIN_MASTER_KEY` only when set) |
+| `BETTER_AUTH_SECRET`                                                                                | at least 32 characters                                                    |
+
+Everywhere (not only in production) a variable that is set must now have the right type: a
+number must be a whole number (`SMTP_PORT`, `PORT`), an address must be an `http://` or `https://` URL, and `EMAIL_TRANSPORT`,
+`BACKGROUND_JOBS_MODE` and `CRON_SCHEDULER` must be one of their documented values. The switches
+that document a safe fallback (`QUEUE_RECEIPTS_MODE`, `RECORDS_PURGE_ENABLED`,
+`RECORDS_PURGE_MODE`, `BACKGROUND_JOBS_MAX_DELIVERIES`, `STUCK_RENDER_AFTER_MS`,
+`QUEUE_STALE_AFTER_MS`) keep it: an unusable value still means the default.
+
+**Before deploying**, validate the environment you are about to run, without starting anything,
+from a checkout of this release:
+
+```bash
+pnpm config:check --runtime api --env-file <your production env file>
+pnpm config:check --runtime worker --env-file <your production env file>
+```
+
+The file is read instead of your shell's environment; it must be a `KEY=VALUE` file that includes
+`NODE_ENV=production` (add `--production` otherwise, to apply the production requirements). Run
+the command from the repository root, and use the pinned pnpm (`corepack enable`): the report
+lists variable names and reasons and never prints a value, and the exit code is non-zero when
+anything is wrong.
+
+With the Docker setup the API's environment is assembled by `compose.yaml`, so check it inside the
+image the same way the containers will see it:
+
+```bash
+docker compose run --rm --no-deps api bun ../../packages/config/scripts/check-config.ts --runtime api
+docker compose run --rm --no-deps worker bun ../../packages/config/scripts/check-config.ts --runtime worker
+```
+
+Generate a missing key or secret with `openssl rand -base64 32` (never reuse one key for two
+purposes, and never replace `SIGNING_MASTER_KEY`, `INTEGRATIONS_MASTER_KEY`,
+`PUBLIC_API_MASTER_KEY` or `EMAIL_DOMAIN_MASTER_KEY` once data is encrypted with it: add only the
+ones you do not have yet).
+
 ## Other ways to host
 
 ### What the pieces need
