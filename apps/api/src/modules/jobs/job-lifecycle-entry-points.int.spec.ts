@@ -21,6 +21,8 @@
  *              -> 409, the other actor's status stands, NO audit row
  *   REQ-LC-4d  the audit row names the actor, and for an API key the channel
  *              and the key's identity
+ *   REQ-LC-4e  Q25 / Q26: PUT, PATCH and assign refuse the same technicians
+ *              with the same code, and all run the competence gate
  *   REQ-LC-3   Q19: assign is refused on CANCELED, GENERATING_PDF, APPROVED and
  *              SUPERSEDED
  */
@@ -41,6 +43,7 @@ import {
   type JobCommand,
 } from "@calibra-facil/schemas/job-transitions";
 import { loginAs, logout } from "../../../test/integration/setup";
+import { requireCompetenceForJob } from "../../../test/integration/job-competence";
 import { truncateAll } from "../../../test/integration/db";
 import { seedApiKey, seedOrg } from "../../../test/integration/seed";
 import {
@@ -586,3 +589,156 @@ describe("assign refuses a job that is closed or being approved (Q19)", () => {
     },
   );
 });
+
+/**
+ * Q25 / Q26: naming a technician is one policy. The cloud `PUT`, the public
+ * `PATCH` and the cloud `assign` refuse the same people with the same code, and
+ * all three run the §6.2.5 competence gate.
+ */
+type TechnicianEntry = {
+  name: string;
+  /** The status a competence refusal answers with on this transport. */
+  competenceStatus: number;
+  send: (world: World, technicianId: string) => Promise<Outcome>;
+};
+
+const TECHNICIAN_ENTRIES: TechnicianEntry[] = [
+  {
+    name: "cloud PUT /jobs/:id",
+    competenceStatus: 400,
+    async send(world, technicianId) {
+      login("member");
+      return outcomeOf(
+        await jobsRouter.request(`/${world.jobId}`, {
+          method: "PUT",
+          headers: JSON_HEADERS,
+          body: JSON.stringify({ technicianId }),
+        }),
+      );
+    },
+  },
+  {
+    name: "public API PATCH /jobs/:id",
+    competenceStatus: 422,
+    async send(world, technicianId) {
+      return outcomeOf(
+        await publicApiV2Router.request(`/jobs/${world.jobId}`, {
+          method: "PATCH",
+          headers: apiKeyHeaders(world, "member"),
+          body: JSON.stringify({ technicianId }),
+        }),
+      );
+    },
+  },
+  {
+    name: "cloud POST /jobs/:id/assign",
+    competenceStatus: 400,
+    async send(world, technicianId) {
+      login("member");
+      return outcomeOf(
+        await jobsRouter.request(`/${world.jobId}/assign`, {
+          method: "POST",
+          headers: JSON_HEADERS,
+          body: JSON.stringify({ technicianId }),
+        }),
+      );
+    },
+  },
+];
+
+describe.each(TECHNICIAN_ENTRIES)(
+  "one technician rule and one competence gate: $name",
+  (entry) => {
+    beforeEach(async () => {
+      await truncateAll();
+    });
+
+    afterEach(() => {
+      logout();
+    });
+
+    async function seedCandidates() {
+      const world = await seedWorld("IN_PROGRESS");
+      // Holds a technician assignment in the job's unit: qualifies.
+      await seedExtraMember({
+        orgId: ORG,
+        userId: "user-lcm-operator",
+        role: "operator",
+        unitId: world.org.unitId,
+        unitRole: "technician",
+      });
+      // An org technician with no assignment in the job's unit: does not.
+      await seedExtraMember({
+        orgId: ORG,
+        userId: "user-lcm-unassigned",
+        role: "technician",
+      });
+      return world;
+    }
+
+    it.each(["user-lcm-unassigned", OTHER_ADMIN, "user-lcm-nobody"])(
+      "REQ-LC-4e [HIGH RISK]: Q25, %s does not qualify -> 400 technician_not_found; nothing written",
+      async (technicianId) => {
+        const world = await seedCandidates();
+        const before = await jobRow(world.jobId);
+
+        const outcome = await entry.send(world, technicianId);
+
+        expect(outcome).toEqual({
+          ok: false,
+          status: 400,
+          code: "technician_not_found",
+        });
+        expect(await jobRow(world.jobId)).toEqual(before);
+        expect(await auditOf(world.jobId)).toEqual([]);
+      },
+    );
+
+    it("REQ-LC-4e: Q25, a member holding a technician assignment in the unit qualifies whatever their organization role", async () => {
+      const world = await seedCandidates();
+
+      expect(await entry.send(world, "user-lcm-operator")).toEqual({
+        ok: true,
+      });
+
+      expect((await jobRow(world.jobId)).technicianId).toBe(
+        "user-lcm-operator",
+      );
+    });
+
+    it("REQ-LC-4e [HIGH RISK]: Q26, a technician without an active competence for the instrument type is refused (technician_competence_missing) once the organization keeps competence records; nothing written", async () => {
+      const world = await seedCandidates();
+      await requireCompetenceForJob({
+        jobId: world.jobId,
+        organizationId: ORG,
+        competentUserId: TECHNICIAN,
+        createdBy: ADMIN,
+      });
+      const before = await jobRow(world.jobId);
+
+      const outcome = await entry.send(world, "user-lcm-operator");
+
+      expect(outcome).toEqual({
+        ok: false,
+        status: entry.competenceStatus,
+        code: "technician_competence_missing",
+      });
+      expect(await jobRow(world.jobId)).toEqual(before);
+      expect(await auditOf(world.jobId)).toEqual([]);
+    });
+
+    it("REQ-LC-4e: Q26, the competent technician is accepted", async () => {
+      const world = await seedCandidates();
+      await requireCompetenceForJob({
+        jobId: world.jobId,
+        organizationId: ORG,
+        competentUserId: TECHNICIAN,
+        createdBy: ADMIN,
+      });
+
+      expect(await entry.send(world, TECHNICIAN)).toEqual({ ok: true });
+
+      expect((await jobRow(world.jobId)).technicianId).toBe(TECHNICIAN);
+    });
+  },
+);

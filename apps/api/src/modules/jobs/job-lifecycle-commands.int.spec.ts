@@ -9,7 +9,9 @@
  *   REQ-LC-1a  rejectJob: REVIEW -> REJECTED, reason and rejector stored
  *   REQ-LC-1b  cancelJob: the cancelable statuses -> CANCELED
  *   REQ-LC-1c  assignJob: open statuses only (Q19), technician checked
- *   REQ-LC-1d  editJob: technician / due date, no-op writes nothing
+ *   REQ-LC-1d  editJob: technician / due date, no-op writes nothing; the
+ *              technician rule (Q25) and the competence gate (Q26) are
+ *              assignJob's
  *   REQ-LC-1e  amendJob: APPROVED -> SUPERSEDED plus the DRAFT amendment
  *   REQ-LC-1f  every refusal writes nothing; a lost compare-and-set is
  *              `concurrent_update` with no audit row
@@ -37,6 +39,7 @@ import {
   failJobAuditInserts,
   jobRow,
 } from "../../../test/integration/job-cas";
+import { requireCompetenceForJob } from "../../../test/integration/job-competence";
 import type { JobLifecycleActor } from "./job-actor";
 import { amendJob } from "./amend-job";
 import { assignJob } from "./assign-job";
@@ -646,8 +649,10 @@ describe("job lifecycle commands (real Postgres)", () => {
       });
     });
 
-    it("REQ-LC-1d: technicianRoles restricts the technician's organization role (the cloud route's rule)", async () => {
+    it("REQ-LC-1d: Q25, edit and assign take the same technician rule (an org member with a unit assignment, or an admin or owner)", async () => {
       const { jobId, org } = await seedWorld("DRAFT");
+      // An `operator` with a technician assignment in the unit qualifies, as it
+      // always did for assign and the public API.
       await seedExtraMember({
         orgId: ORG,
         userId: "user-lc-operator",
@@ -655,25 +660,140 @@ describe("job lifecycle commands (real Postgres)", () => {
         unitId: org.unitId,
         unitRole: "technician",
       });
+      // A technician with no assignment in the job's unit does not.
+      await seedExtraMember({
+        orgId: ORG,
+        userId: "user-lc-unassigned",
+        role: "technician",
+      });
 
-      const restricted = await editJob({
+      for (const technicianId of ["user-lc-unassigned", "user-lc-other"]) {
+        // eslint-disable-next-line no-await-in-loop -- sequential, same job
+        const viaEdit = await editJob({
+          actor: user,
+          jobId,
+          organizationId: ORG,
+          unitScope: null,
+          technicianId,
+        });
+        // eslint-disable-next-line no-await-in-loop -- sequential, same job
+        const viaAssign = await assignJob({
+          actor: user,
+          jobId,
+          organizationId: ORG,
+          unitScope: null,
+          technicianId,
+        });
+        expect(viaEdit).toMatchObject({
+          status: "technician_not_found",
+          error: { code: "technician_not_found" },
+        });
+        expect(viaAssign).toMatchObject({
+          status: "technician_not_found",
+          error: { code: "technician_not_found" },
+        });
+      }
+      expect(await auditRows(jobId)).toEqual([]);
+
+      const accepted = await editJob({
         actor: user,
         jobId,
         organizationId: ORG,
         unitScope: null,
         technicianId: "user-lc-operator",
-        technicianRoles: ["technician", "admin", "owner"],
       });
-      expect(restricted.status).toBe("technician_not_found");
+      expect(accepted.status).toBe("ok");
+    });
 
-      const open = await editJob({
-        actor: apiKey,
+    it("REQ-LC-1d: Q26, edit and assign run the same competence gate once the organization keeps competence records", async () => {
+      const { jobId, technician } = await seedWorld("DRAFT");
+      await seedExtraMember({
+        orgId: ORG,
+        userId: "user-lc-competent",
+        role: "technician",
+        unitId: (await jobRow(jobId)).unitId ?? undefined,
+        unitRole: "technician",
+      });
+      await requireCompetenceForJob({
+        jobId,
+        organizationId: ORG,
+        competentUserId: "user-lc-competent",
+        createdBy: USER,
+      });
+
+      const viaEdit = await editJob({
+        actor: user,
         jobId,
         organizationId: ORG,
         unitScope: null,
-        technicianId: "user-lc-operator",
+        technicianId: technician.userId,
       });
-      expect(open.status).toBe("ok");
+      const viaAssign = await assignJob({
+        actor: user,
+        jobId,
+        organizationId: ORG,
+        unitScope: null,
+        technicianId: technician.userId,
+      });
+      for (const result of [viaEdit, viaAssign]) {
+        expect(result).toMatchObject({
+          status: "competence_missing",
+          error: {
+            code: "technician_competence_missing",
+            status: 400,
+            message:
+              "Técnico não possui competência ativa para este tipo de instrumento",
+          },
+        });
+      }
+      expect((await jobRow(jobId)).technicianId).toBeNull();
+      expect(await auditRows(jobId)).toEqual([]);
+
+      // The competent technician passes both.
+      expect(
+        (
+          await editJob({
+            actor: user,
+            jobId,
+            organizationId: ORG,
+            unitScope: null,
+            technicianId: "user-lc-competent",
+          })
+        ).status,
+      ).toBe("ok");
+      expect(
+        (
+          await assignJob({
+            actor: user,
+            jobId,
+            organizationId: ORG,
+            unitScope: null,
+            technicianId: "user-lc-competent",
+          })
+        ).status,
+      ).toBe("ok");
+    });
+
+    it("REQ-LC-1d: Q26, an edit that does not change the technician does not run the gate", async () => {
+      const { jobId } = await seedWorld("DRAFT");
+      await seedExtraMember({
+        orgId: ORG,
+        userId: "user-lc-competent",
+        role: "technician",
+      });
+      await requireCompetenceForJob({
+        jobId,
+        organizationId: ORG,
+        competentUserId: "user-lc-competent",
+        createdBy: USER,
+      });
+
+      const result = await COMMANDS.edit(jobId);
+
+      expect(result).toMatchObject({
+        status: "ok",
+        changed: { dueDate: true },
+      });
     });
 
     it("REQ-LC-1f [HIGH RISK]: a job approved between the read and the write is concurrent_update; no audit row", async () => {

@@ -2,7 +2,6 @@ import { db } from "@calibra-facil/db";
 import {
   calibrationJob,
   jobAuditLog,
-  service,
   type JobStatus,
 } from "@calibra-facil/db/schema";
 import { targetOf } from "@calibra-facil/schemas/job-transitions";
@@ -17,7 +16,9 @@ import {
 } from "./job-actor";
 import {
   findAssignableTechnician,
-  technicianHasCompetence,
+  technicianCompetenceMissing,
+  technicianCompetentForJobService,
+  technicianNotFound,
 } from "./technician-assignment";
 
 /**
@@ -92,40 +93,19 @@ export async function assignJob(
     unitId: existing.unitId,
   });
   if (!technician) {
-    return {
-      status: "technician_not_found",
-      error: invalid(
-        "technician_not_found",
-        "Tecnico nao encontrado ou sem permissao",
-      ),
-    };
+    return { status: "technician_not_found", error: technicianNotFound() };
   }
 
-  const [jobService] = await db
-    .select({ assetTypeId: service.assetTypeId })
-    .from(service)
-    .where(
-      and(
-        eq(service.id, existing.serviceId),
-        eq(service.organizationId, organizationId),
-      ),
-    )
-    .limit(1);
   if (
-    jobService?.assetTypeId &&
-    !(await technicianHasCompetence({
+    !(await technicianCompetentForJobService({
       organizationId,
       technicianId: technician.userId,
-      assetTypeId: jobService.assetTypeId,
-      performedAt: new Date(),
+      serviceId: existing.serviceId,
     }))
   ) {
     return {
       status: "competence_missing",
-      error: invalid(
-        "technician_competence_missing",
-        "Técnico não possui competência ativa para este tipo de instrumento",
-      ),
+      error: technicianCompetenceMissing(),
     };
   }
 

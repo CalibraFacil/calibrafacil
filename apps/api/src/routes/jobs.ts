@@ -722,14 +722,13 @@ export const jobsRouter = new Hono<{
         unitScope: memberData,
         technicianId: input.technicianId,
         dueDate: input.dueDate,
-        // The cloud route has always taken technicians, admins and owners.
-        technicianRoles: ["technician", "admin", "owner"],
       });
       switch (result.status) {
         case "not_found":
           return c.json({ error: "Job nao encontrado" }, 404);
         case "illegal_transition":
         case "technician_not_found":
+        case "competence_missing":
           return domainErrorResponse(c, result.error);
         case "concurrent_update":
           return domainErrorResponse(c, await jobStatusConflict(id));

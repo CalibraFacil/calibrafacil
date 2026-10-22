@@ -3617,6 +3617,14 @@ publicApiV2Router
             }),
             400,
           );
+        case "competence_missing":
+          return c.json(
+            buildPublicApiError({
+              code: result.error.code,
+              message: result.error.message,
+            }),
+            422,
+          );
         case "concurrent_update":
           return c.json(jobStatusConflictBody(), 409);
         case "ok":

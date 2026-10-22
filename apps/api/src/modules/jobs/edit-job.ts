@@ -15,7 +15,12 @@ import {
   type JobRow,
   type UnitScope,
 } from "./job-actor";
-import { findAssignableTechnician } from "./technician-assignment";
+import {
+  findAssignableTechnician,
+  technicianCompetenceMissing,
+  technicianCompetentForJobService,
+  technicianNotFound,
+} from "./technician-assignment";
 
 /**
  * Edit the plain fields of a job (technician, due date): the ONE implementation
@@ -25,7 +30,9 @@ import { findAssignableTechnician } from "./technician-assignment";
  *   1. load the job (organization + unit scope)
  *   2. the transition table (`edit`): APPROVED, SUPERSEDED (an issued
  *      certificate an amendment replaced) and CANCELED jobs are frozen
- *   3. a changed technician must be assignable in the job's unit
+ *   3. a changed technician must be assignable in the job's unit (decision
+ *      Q25, the same rule as `assignJob`) and hold an active competence for
+ *      the job's instrument type (§6.2.5, decision Q26, the same gate)
  *   4. what actually changed: a field sent with its current value is not a
  *      change, and the due date is a calendar day (the same day at another
  *      hour is not a change). Nothing changed: nothing is written
@@ -44,12 +51,6 @@ export type EditJobCommand = {
   technicianId?: string | null;
   /** `undefined` leaves the due date alone; `null` clears it. */
   dueDate?: string | null;
-  /**
-   * Restricts the organization role of a changed technician. The cloud route
-   * allows technician, admin and owner; the public API sets none (any member
-   * with a unit assignment, or an admin or owner).
-   */
-  technicianRoles?: readonly string[];
 };
 
 export type EditJobResult =
@@ -67,6 +68,7 @@ export type EditJobResult =
       error: DomainError;
     }
   | { status: "technician_not_found"; error: DomainError }
+  | { status: "competence_missing"; error: DomainError }
   /** The job left the status (or organization) it was judged in; nothing written. */
   | { status: "concurrent_update" };
 
@@ -98,22 +100,29 @@ export async function editJob(command: EditJobCommand): Promise<EditJobResult> {
     command.technicianId !== undefined &&
     command.technicianId !== existing.technicianId
   ) {
-    if (
-      command.technicianId &&
-      !(await findAssignableTechnician({
+    if (command.technicianId) {
+      // Q25: the one technician rule; Q26: the one competence gate, as in
+      // `assignJob`.
+      const technician = await findAssignableTechnician({
         organizationId,
         userId: command.technicianId,
         unitId: existing.unitId,
-        organizationRoles: command.technicianRoles,
-      }))
-    ) {
-      return {
-        status: "technician_not_found",
-        error: invalid(
-          "technician_not_found",
-          "Tecnico nao encontrado ou sem permissao",
-        ),
-      };
+      });
+      if (!technician) {
+        return { status: "technician_not_found", error: technicianNotFound() };
+      }
+      if (
+        !(await technicianCompetentForJobService({
+          organizationId,
+          technicianId: technician.userId,
+          serviceId: existing.serviceId,
+        }))
+      ) {
+        return {
+          status: "competence_missing",
+          error: technicianCompetenceMissing(),
+        };
+      }
     }
     changes.technicianId = {
       old: existing.technicianId,
