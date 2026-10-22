@@ -1,9 +1,6 @@
 import { db } from "@calibra-facil/db";
-import {
-  calibrationJob,
-  jobAuditLog,
-  type JobStatus,
-} from "@calibra-facil/db/schema";
+import { appendJobEvent } from "@calibra-facil/db/job-events";
+import { calibrationJob, type JobStatus } from "@calibra-facil/db/schema";
 import { requireTargetOf } from "@calibra-facil/schemas/job-transitions";
 import { and, eq } from "drizzle-orm";
 import { invalid, type DomainError } from "../../lib/domain-errors";
@@ -109,15 +106,15 @@ export async function cancelJob(
       .returning();
     if (!row) return null;
 
-    await tx.insert(jobAuditLog).values({
+    await appendJobEvent(tx, {
+      action: "cancel",
       organizationId,
       jobId: existing.id,
-      action: "cancel",
+      actor: { kind: "user", userId: actor.userId },
       changes: {
         ...jobActorAuditFields(actor),
         status: { old: existing.status, new: canceledStatus },
       },
-      performedBy: actor.userId,
       ipAddress: actor.ipAddress ?? null,
       reason: command.reason,
     });

@@ -3,6 +3,12 @@ import { flushWorkerErrorReporter, reportWorkerError } from "./observability";
 import { processSpcRecompute } from "./spc-recompute";
 import { processEmailDomainHealth } from "./email-domain-health";
 import { Client } from "pg";
+import { drizzle } from "drizzle-orm/node-postgres";
+import {
+  appendJobEvent,
+  type JobEventActor,
+  type SignatureAudit,
+} from "@calibra-facil/db/job-events";
 import { renderToString } from "react-dom/server";
 import {
   LabelHtml,
@@ -561,33 +567,39 @@ async function updateJobWithCertificate(
     return { outcome: "skipped", currentStatus };
   }
 
-  // Log appropriate action based on whether this is a watermark regeneration
-  const action = isSuperseded
-    ? "certificate_watermarked"
-    : "certificate_generated";
-  const statusChange = isSuperseded
-    ? { status: "SUPERSEDED (watermark added)" }
-    : { status: { old: currentStatus, new: renderedStatus } };
-
-  await client.query(
-    `
-    INSERT INTO job_audit_log (organization_id, job_id, action, changes, performed_by, performed_at)
-    VALUES ($6, $1, $2, $3, $4, $5)
-    `,
-    [
-      jobId,
-      action,
-      JSON.stringify({
-        ...statusChange,
-        certificateUrl: { old: null, new: certificateUrl },
-        signatureMetadata: auditSignatureMetadata
-          ? { signed: true, signerName: auditSignatureMetadata.signerName }
-          : { signed: false },
-      }),
-      userId,
-      now,
-      jobOrganizationOf(updated.rows, jobId),
-    ],
+  // Watermark regeneration of a SUPERSEDED job vs. the first issuance.
+  const signatureAudit: SignatureAudit = auditSignatureMetadata
+    ? { signed: true, signerName: auditSignatureMetadata.signerName }
+    : { signed: false };
+  const organizationId = jobOrganizationOf(updated.rows, jobId);
+  const actor = workerJobActor(userId);
+  await appendJobEvent(
+    jobEventTransaction(client),
+    isSuperseded
+      ? {
+          action: "certificate_watermarked",
+          organizationId,
+          jobId,
+          actor,
+          performedAt: now,
+          changes: {
+            status: "SUPERSEDED (watermark added)",
+            certificateUrl: { old: null, new: certificateUrl },
+            signatureMetadata: signatureAudit,
+          },
+        }
+      : {
+          action: "certificate_generated",
+          organizationId,
+          jobId,
+          actor,
+          performedAt: now,
+          changes: {
+            status: { old: currentStatus, new: renderedStatus },
+            certificateUrl: { old: null, new: certificateUrl },
+            signatureMetadata: signatureAudit,
+          },
+        },
   );
 
   return { outcome: isSuperseded ? "watermarked" : "issued" };
@@ -735,6 +747,22 @@ async function signPdfWithUnitCertificate(
 }
 
 /**
+ * The transaction handle appendJobEvent writes on: Drizzle over the worker's own
+ * pg client, so the audit row is part of whatever BEGIN the caller opened on it.
+ */
+function jobEventTransaction(client: Client) {
+  return drizzle(client);
+}
+
+/**
+ * The worker records its events against the user whose release it is finishing
+ * (job_audit_log.performed_by is a NOT NULL foreign key to the user table).
+ */
+function workerJobActor(userId: string): JobEventActor {
+  return { kind: "system", source: "worker", onBehalfOf: userId };
+}
+
+/**
  * The organization a job row returned by the statement that just updated it belongs
  * to. The audit rows below name it explicitly (never through a SELECT that could
  * silently insert nothing): a job that is gone means there is no audit row to write.
@@ -796,21 +824,15 @@ async function setJobError(
       return;
     }
 
-    await client.query(
-      `
-      INSERT INTO job_audit_log (organization_id, job_id, action, changes, performed_by, performed_at, reason)
-      VALUES ($7, $1, $2, $3, $4, $5, $6)
-      `,
-      [
-        jobId,
-        "certificate_error",
-        JSON.stringify({ status: { old: renderingStatus, new: failedStatus } }),
-        userId,
-        now,
-        error,
-        jobOrganizationOf(updated.rows, jobId),
-      ],
-    );
+    await appendJobEvent(jobEventTransaction(client), {
+      action: "certificate_error",
+      organizationId: jobOrganizationOf(updated.rows, jobId),
+      jobId,
+      actor: workerJobActor(userId),
+      performedAt: now,
+      reason: error,
+      changes: { status: { old: renderingStatus, new: failedStatus } },
+    });
   });
 }
 
@@ -881,20 +903,14 @@ async function updateJobWithLabel(
     [jobId, labelUrl, now],
   );
 
-  await client.query(
-    `
-    INSERT INTO job_audit_log (organization_id, job_id, action, changes, performed_by, performed_at)
-    VALUES ($6, $1, $2, $3, $4, $5)
-    `,
-    [
-      jobId,
-      "label_generated",
-      JSON.stringify({ labelUrl: { old: null, new: labelUrl } }),
-      userId,
-      now,
-      jobOrganizationOf(updated.rows, jobId),
-    ],
-  );
+  await appendJobEvent(jobEventTransaction(client), {
+    action: "label_generated",
+    organizationId: jobOrganizationOf(updated.rows, jobId),
+    jobId,
+    actor: workerJobActor(userId),
+    performedAt: now,
+    changes: { labelUrl: { old: null, new: labelUrl } },
+  });
 }
 
 function formatAddress(parts: Record<string, unknown> | null | undefined) {
