@@ -249,9 +249,21 @@ export function useDesktopCloudOnlyUnavailable() {
   return isDesktopCloudOnlyUnavailableSnapshot(sync, { isBrowserOnline })
 }
 
+/**
+ * What the desktop can do without a connection (audit decision Q13). The routes
+ * are the entries of `desktopOfflineRoutes`; this is the short list shown to a
+ * user who landed on an online-only screen.
+ */
+const OFFLINE_AREAS = [
+  { to: '/dashboard/jobs', label: 'Calibrações' },
+  { to: '/dashboard/service-orders', label: 'Ordens de serviço' },
+  { to: '/dashboard/assets', label: 'Ativos' },
+  { to: '/dashboard/clients', label: 'Clientes' },
+] as const
+
 export function CloudOnlyOfflineState({
   title,
-  description = 'Esta tela depende da API da nuvem para manter paridade com o web app. Conecte-se à internet e sincronize antes de acessá-la no desktop.',
+  description = 'Esta área precisa da conexão com a nuvem. Conecte-se à internet para usá-la. Sem conexão, o desktop permite executar calibrações atribuídas, abrir ordens de serviço e cadastrar ativos, além de consultar clientes, ativos, padrões e métodos.',
 }: {
   title: string
   description?: string
@@ -262,9 +274,7 @@ export function CloudOnlyOfflineState({
   return (
     <div className="rounded-lg border bg-card p-8">
       <div className="mx-auto flex max-w-xl flex-col items-center gap-3 text-center">
-        <Badge variant="outline">
-          {sync.lastSyncedAt ? 'Tela cloud-only' : 'Cache não pronto'}
-        </Badge>
+        <Badge variant="outline">Disponível apenas online</Badge>
         <div className="space-y-1">
           <h2 className="text-lg font-semibold">{title}</h2>
           <p className="text-sm text-muted-foreground">{description}</p>
@@ -273,7 +283,26 @@ export function CloudOnlyOfflineState({
           <p className="text-xs text-muted-foreground">
             Última sincronização local: {formatSyncTimestamp(sync.lastSyncedAt)}
           </p>
-        ) : null}
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            O cache local ainda não foi baixado. Sincronize ao menos uma vez com
+            conexão para usar o modo offline.
+          </p>
+        )}
+        <nav
+          aria-label="Disponível offline"
+          className="flex flex-wrap justify-center gap-2"
+        >
+          {OFFLINE_AREAS.map((area) => (
+            <Link
+              key={area.to}
+              to={area.to}
+              className="rounded-md border px-3 py-1 text-xs font-medium hover:bg-muted"
+            >
+              {area.label}
+            </Link>
+          ))}
+        </nav>
         {syncAction.canSync ? (
           <Button
             type="button"

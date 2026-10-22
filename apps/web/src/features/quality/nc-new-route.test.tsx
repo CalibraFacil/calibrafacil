@@ -43,11 +43,6 @@ vi.mock('@/features/quality/queries', () => ({
   }),
 }))
 
-vi.mock('@/runtime/sync-status', () => ({
-  CloudOnlyOfflineState: ({ title }: { title: string }) => <div>{title}</div>,
-  useDesktopCloudOnlyUnavailable: () => false,
-}))
-
 vi.mock('sonner', () => ({
   toast: toastMocks,
 }))
