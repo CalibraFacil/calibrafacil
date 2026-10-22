@@ -89,7 +89,7 @@ export function mountApiRoutes(
       // backlog; 503 when a dependency is down. `GET /api` above stays the
       // static liveness response.
       .get("/api/health", async (c) => {
-        const report = await runApiHealthCheck(c.env);
+        const report = await runApiHealthCheck({ ...c.env });
         return c.json(report, report.status === "ok" ? 200 : 503);
       })
       .route("/api/customers", customersRouter)
