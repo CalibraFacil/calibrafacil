@@ -8,6 +8,7 @@
     ".": "./src/index.ts",
     "./desktop": "./src/desktop.ts",
     "./jobs-fixtures": "./src/jobs.fixtures.ts",
+    "./standards-fixtures": "./src/standards.fixtures.ts",
     "./sync": "./src/sync.ts"
   },
   "scripts": {

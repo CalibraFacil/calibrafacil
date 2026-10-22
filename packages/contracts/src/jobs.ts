@@ -2,6 +2,8 @@ import { z } from "zod";
 import {
   JobStatusSchema,
   MeasurementUnitSchema,
+  NonConformanceStatusSchema,
+  NonConformanceTypeSchema,
   ReferenceStandardKindSchema,
   UncertaintyDistributionSchema,
 } from "@calibra-facil/schemas";
@@ -383,7 +385,7 @@ export const jobMethodSnapshotSchema = z.object({
 });
 export type JobMethodSnapshot = z.infer<typeof jobMethodSnapshotSchema>;
 
-const certifiedValueSchema = z.object({
+export const certifiedValueSchema = z.object({
   nominal: z.string(),
   authentication: nullableString.optional(),
   value: z.number(),
@@ -415,7 +417,7 @@ const metrologyPointSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
-const metrologyDataSchema = z.object({
+export const metrologyDataSchema = z.object({
   version: z.literal(1),
   channels: z.array(
     z.object({
@@ -798,6 +800,41 @@ export const jobMutationResponseSchema = z.object({
 });
 export type JobMutationResponse = z.infer<typeof jobMutationResponseSchema>;
 
+/**
+ * What a save / submit (POST /:id/execute, /:id/submit) guarantees on EVERY
+ * transport: the cloud answers with its whole `calibration_job` row
+ * ({@link jobMutationResponseSchema}), the desktop local-server with its local
+ * job read model, which has no cloud-only columns (`verificationToken`,
+ * signature data, `createdBy`...). The worksheet relies on this common core
+ * (and `warnings`) only, so the shared SDK method is typed by it.
+ */
+export const jobExecutionResponseSchema = jobMutationResponseSchema.extend({
+  data: jobRowSchema.pick({
+    id: true,
+    jobId: true,
+    status: true,
+    unitId: true,
+    customerId: true,
+    assetId: true,
+    serviceId: true,
+    technicianId: true,
+    methodSnapshot: true,
+    dueDate: true,
+    performedAt: true,
+    data: true,
+    results: true,
+    standardsSnapshot: true,
+    environmentalSnapshot: true,
+    calibrationLocationSnapshot: true,
+    calibrationPhaseSnapshot: true,
+    methodDeviations: true,
+    certificateUrl: true,
+    createdAt: true,
+    updatedAt: true,
+  }),
+});
+export type JobExecutionResponse = z.infer<typeof jobExecutionResponseSchema>;
+
 /** POST /:id/amend */
 export const jobAmendResponseSchema = z.object({
   message: z.string(),
@@ -834,4 +871,75 @@ export type JobTechniciansResponse = z.infer<
 export const jobDownloadUrlResponseSchema = z.object({ url: z.string() });
 export type JobDownloadUrlResponse = z.infer<
   typeof jobDownloadUrlResponseSchema
+>;
+
+// ---------------------------------------------------------------------------
+// POST /api/jobs, POST /:id/flag-oot, POST /:id/generate-label
+// ---------------------------------------------------------------------------
+
+/**
+ * POST / (201): the created `calibration_job` row (`.returning()`), the same
+ * row the mutations answer with.
+ */
+export const jobCreateResponseSchema = jobRowSchema;
+export type JobCreateResponse = z.infer<typeof jobCreateResponseSchema>;
+
+/** The out-of-tolerance non-conformance a flag opens (or finds already open). */
+export const jobOotNonConformanceSchema = z.object({
+  id: z.number(),
+  ncNumber: z.string(),
+  organizationId: z.string(),
+  jobId: nullableNumber,
+  type: NonConformanceTypeSchema,
+  triggerSource: z
+    .enum(["manual", "as_found_verdict", "standard_recall"])
+    .nullable(),
+  description: z.string(),
+  detectedBy: z.string(),
+  detectedAt: isoTimestamp,
+  status: NonConformanceStatusSchema,
+  capaId: nullableNumber,
+  createdBy: z.string(),
+  createdAt: isoTimestamp,
+  updatedAt: isoTimestamp,
+});
+export type JobOotNonConformance = z.infer<typeof jobOotNonConformanceSchema>;
+
+/** The §7.10 customer notification record created with the flag. */
+export const jobOotNotificationSchema = z.object({
+  id: z.number(),
+  organizationId: z.string(),
+  ncId: z.number(),
+  jobId: z.number(),
+  recallId: nullableNumber,
+  certificateNumber: nullableString,
+  recipientName: nullableString,
+  recipientEmail: nullableString,
+  affectedScope: nullableString,
+  status: z.enum(["PENDING", "GENERATED", "SENT", "ACKNOWLEDGED"]),
+  sentAt: nullableTimestamp,
+  acknowledgedAt: nullableTimestamp,
+  approvedBy: z.string(),
+  createdAt: isoTimestamp,
+  updatedAt: isoTimestamp,
+});
+export type JobOotNotification = z.infer<typeof jobOotNotificationSchema>;
+
+/** POST /:id/flag-oot (201). `notification` is null when the lab chose not to notify. */
+export const jobFlagOotResponseSchema = z.object({
+  message: z.string(),
+  data: z.object({
+    nc: jobOotNonConformanceSchema,
+    notification: jobOotNotificationSchema.nullable(),
+  }),
+});
+export type JobFlagOotResponse = z.infer<typeof jobFlagOotResponseSchema>;
+
+/** POST /:id/generate-label: the label render was queued. */
+export const jobGenerateLabelResponseSchema = z.object({
+  message: z.string(),
+  jobId: z.number(),
+});
+export type JobGenerateLabelResponse = z.infer<
+  typeof jobGenerateLabelResponseSchema
 >;

@@ -9,7 +9,6 @@ import {
 import { keepPreviousDataInScope } from '@/lib/keep-previous-page'
 import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import {
-  type EffectiveEnvironmentalLimitsData,
   JOBS_LIST_STATUSES,
   type JobTechniciansData,
   type JobsListData,
@@ -18,7 +17,6 @@ import {
   type NewJobAssetsData,
   type NewJobCustomersData,
   type NewJobServicesData,
-  type ReferenceStandardsData,
 } from './types'
 
 const JOBS_LIST_LIMIT = 20
@@ -112,11 +110,10 @@ export function newJobServicesQueryOptions(assetTypeId: number | null) {
   })
 }
 
-export function activeReferenceStandardsQueryOptions<TStandard = unknown>() {
+export function activeReferenceStandardsQueryOptions() {
   return queryOptions({
     queryKey: ['standards', 'active'],
-    queryFn: (): Promise<ReferenceStandardsData<TStandard>> =>
-      calibraApi.jobs.listStandards<TStandard>(),
+    queryFn: () => calibraApi.jobs.listStandards(),
   })
 }
 
@@ -127,7 +124,7 @@ export function compositionProfilesQueryOptions() {
   })
 }
 
-export function effectiveEnvironmentalLimitsQueryOptions<TLimits = unknown>({
+export function effectiveEnvironmentalLimitsQueryOptions({
   assetTypeId,
   unitId,
 }: {
@@ -136,8 +133,8 @@ export function effectiveEnvironmentalLimitsQueryOptions<TLimits = unknown>({
 }) {
   return queryOptions({
     queryKey: ['environmental-limits', 'effective', assetTypeId, unitId],
-    queryFn: (): Promise<EffectiveEnvironmentalLimitsData<TLimits>> =>
-      calibraApi.jobs.getEffectiveEnvironmentalLimits<TLimits>(assetTypeId!, {
+    queryFn: () =>
+      calibraApi.jobs.getEffectiveEnvironmentalLimits(assetTypeId!, {
         unitId,
       }),
     staleTime: 60_000,
@@ -287,15 +284,15 @@ export function useNewJobServicesData({
   })
 }
 
-export function useActiveReferenceStandardsData<TStandard = unknown>() {
-  return useQuery(activeReferenceStandardsQueryOptions<TStandard>())
+export function useActiveReferenceStandardsData() {
+  return useQuery(activeReferenceStandardsQueryOptions())
 }
 
 export function useCompositionProfilesData() {
   return useQuery(compositionProfilesQueryOptions())
 }
 
-export function useEffectiveEnvironmentalLimitsData<TLimits = unknown>({
+export function useEffectiveEnvironmentalLimitsData({
   assetTypeId,
   unitId,
   enabled,
@@ -305,7 +302,7 @@ export function useEffectiveEnvironmentalLimitsData<TLimits = unknown>({
   enabled: boolean
 }) {
   return useQuery({
-    ...effectiveEnvironmentalLimitsQueryOptions<TLimits>({
+    ...effectiveEnvironmentalLimitsQueryOptions({
       assetTypeId,
       unitId,
     }),

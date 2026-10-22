@@ -75,12 +75,3 @@ export type NewJobService = {
 export type NewJobServicesData = {
   data: Array<NewJobService>
 }
-
-export type ReferenceStandardsData<TStandard = unknown> = {
-  data: Array<TStandard>
-}
-
-export type EffectiveEnvironmentalLimitsData<TLimits = unknown> = {
-  limits: TLimits | null
-  source: string | null
-}

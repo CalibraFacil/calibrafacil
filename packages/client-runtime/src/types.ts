@@ -84,9 +84,16 @@ export type CustomerDetailData = CustomersListData["data"][number] & {
 };
 
 import type {
+  DeleteEnvironmentalLimitResponse,
+  EffectiveEnvironmentalLimitsResponse,
+  EnvironmentalLimitsResponse,
   JobAmendResponse,
+  JobCreateResponse,
   JobDetail,
   JobDownloadUrlResponse,
+  JobExecutionResponse,
+  JobFlagOotResponse,
+  JobGenerateLabelResponse,
   JobMutationResponse,
   JobTechniciansResponse,
   JobsListResponse,
@@ -98,13 +105,18 @@ import type {
   LocalSessionSnapshotResponse,
   LocalSyncConflict,
   LocalSyncConflictsResponse,
+  MassCompositionProfile,
+  MassCompositionProfilesResponse,
+  SaveEnvironmentalLimitResponse,
+  Standard,
+  StandardCertificateDocument,
+  StandardCertificateDocumentDownloadResponse,
+  StandardCertificateDocumentUploadResponse,
+  StandardRecord,
+  StandardsListResponse,
   SyncStatusSnapshot,
 } from "@calibra-facil/contracts";
-import type {
-  JobExecutionPayload,
-  EffectiveEnvironmentalLimitsResponse,
-  ReferenceStandardsResponse,
-} from "./jobs";
+import type { JobExecutionPayload } from "./jobs";
 import type {
   CreateServiceOrderInput,
   CreateServiceOrderQuoteInput,
@@ -122,11 +134,16 @@ import type {
   ServiceOrdersListInput,
   UpdateServiceOrderInput,
 } from "./service-orders";
+export type { JobExecutionPayload } from "./jobs";
 export type {
-  JobExecutionPayload,
   EffectiveEnvironmentalLimitsResponse,
-  ReferenceStandardsResponse,
-} from "./jobs";
+  EnvironmentalLimit,
+  EnvironmentalLimitsResponse,
+  SaveEnvironmentalLimitResponse,
+  StandardCertificateDocumentDownloadResponse,
+  StandardCertificateDocumentUploadResponse,
+  StandardRecord,
+} from "@calibra-facil/contracts";
 export type {
   CreateServiceOrderInput,
   CreateServiceOrderQuoteInput,
@@ -166,11 +183,8 @@ export type JobsListInput = {
   status?: JobStatus;
 };
 
-export type CreateJobResult = {
-  id: number;
-  jobId: string;
-  status?: string;
-};
+/** POST /api/jobs answers with the created job row. */
+export type CreateJobResult = JobCreateResponse;
 
 export interface JobsApi {
   list(input: JobsListInput): Promise<JobsListResponse>;
@@ -191,25 +205,24 @@ export interface JobsApi {
     jobId: string | number,
     technicianId: string,
   ): Promise<JobMutationResponse>;
-  listStandards<TStandard = unknown>(): Promise<
-    ReferenceStandardsResponse<TStandard>
-  >;
-  getEffectiveEnvironmentalLimits<TLimits = unknown>(
+  /** The active reference standards a worksheet can pick from. */
+  listStandards(): Promise<StandardsListResponse>;
+  getEffectiveEnvironmentalLimits(
     assetTypeId: string | number,
     input?: { unitId?: string | number | null },
-  ): Promise<EffectiveEnvironmentalLimitsResponse<TLimits>>;
+  ): Promise<EffectiveEnvironmentalLimitsResponse>;
   saveExecution(
     jobId: string | number,
     input: JobExecutionPayload,
-  ): Promise<JobMutationResponse>;
+  ): Promise<JobExecutionResponse>;
   submitExecution(
     jobId: string | number,
     input: JobExecutionPayload,
-  ): Promise<JobMutationResponse>;
+  ): Promise<JobExecutionResponse>;
   getCertificateDownloadUrl(
     jobId: string | number,
   ): Promise<JobDownloadUrlResponse>;
-  generateLabel(jobId: string | number): Promise<unknown>;
+  generateLabel(jobId: string | number): Promise<JobGenerateLabelResponse>;
   getLabelDownloadUrl(jobId: string | number): Promise<JobDownloadUrlResponse>;
   /** Native printer commands (ZPL/TSPL) for direct thermal printing (text). */
   getLabelCommands(
@@ -229,7 +242,7 @@ export interface JobsApi {
       affectedScope?: string;
       notifyCustomer: boolean;
     },
-  ): Promise<unknown>;
+  ): Promise<JobFlagOotResponse>;
 }
 
 /**
@@ -711,45 +724,10 @@ export type ReferenceStandardMetrologyData = {
   notes?: string | null;
 };
 
-export type ReferenceStandardCertificateDocument = {
-  documentId: number;
-  r2Key: string;
-  fileName: string;
-  fileSize: number;
-  sha256: string;
-  uploadedAt: string | Date;
-  certificateNumber: string;
-  calibrationDate: string | Date;
-  nextCalibrationDate: string | Date;
-};
+export type ReferenceStandardCertificateDocument = StandardCertificateDocument;
 
-export type StandardData = {
-  id: number;
-  name: string;
-  kind: ReferenceStandardKind;
-  type: string | null;
-  serialNumber: string;
-  manufacturer: string | null;
-  model: string | null;
-  certificateNumber: string;
-  calibratedBy: string | null;
-  calibrationDate: string;
-  nextCalibrationDate: string;
-  referenceValue: number | null;
-  uncertainty: number | null;
-  uncertaintyUnit: string | null;
-  coverageFactor: number;
-  distribution: "normal" | "rectangular";
-  drift: number | null;
-  certifiedValues: CertifiedValue[] | null;
-  metrologyData: ReferenceStandardMetrologyData | null;
-  certificateDocument?: ReferenceStandardCertificateDocument | null;
-  status: StandardStatus;
-  isExpired: boolean;
-  daysUntilExpiry: number;
-  createdAt: string | Date;
-  updatedAt: string | Date;
-};
+/** A standard as the list and the detail return it (contract type). */
+export type StandardData = Standard;
 
 export type StandardsListInput = {
   page?: number;
@@ -758,15 +736,7 @@ export type StandardsListInput = {
   status?: StandardStatus;
 };
 
-export type StandardsListData = {
-  data: StandardData[];
-  pagination?: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-};
+export type StandardsListData = StandardsListResponse;
 
 export type StandardWriteInput = Record<string, unknown>;
 
@@ -774,36 +744,10 @@ export type StandardAuditLogData<TRecord = unknown> = {
   data: TRecord[];
 };
 
-export type StandardCertificateDocumentUploadResponse = {
-  message: string;
-  document: ReferenceStandardCertificateDocument;
-};
-
-export type StandardCertificateDocumentDownloadResponse = {
-  url: string;
-  filename: string;
-};
-
 /** A row of the normalized mass composition-profile catalog (per organization). */
-export type MassCompositionProfileDto = {
-  id: number;
-  profileKey: string;
-  profileClass: string;
-  nominal: string;
-  nominalG: number;
-  value: number;
-  uncertainty: number;
-  unit: string;
-  maxError: number | null;
-  drift: number | null;
-  buoyancy: number | null;
-  coverageFactor: number | null;
-  quantityAvailable: number | null;
-};
+export type MassCompositionProfileDto = MassCompositionProfile;
 
-export type MassCompositionProfilesData = {
-  data: MassCompositionProfileDto[];
-};
+export type MassCompositionProfilesData = MassCompositionProfilesResponse;
 
 export type MassCompositionProfileWriteInput = {
   profileKey: string;
@@ -837,8 +781,12 @@ export interface StandardsApi {
   auditLog<TRecord = unknown>(
     id: string | number,
   ): Promise<StandardAuditLogData<TRecord>>;
-  create(input: StandardWriteInput): Promise<{ id: number }>;
-  update(id: string | number, input: StandardWriteInput): Promise<StandardData>;
+  create(input: StandardWriteInput): Promise<StandardRecord>;
+  /** The stored row: no validity verdict (`isExpired`) or certificate document. */
+  update(
+    id: string | number,
+    input: StandardWriteInput,
+  ): Promise<StandardRecord>;
   delete(id: string | number): Promise<unknown>;
   renew(id: string | number, input: StandardWriteInput): Promise<unknown>;
   /** #426 Phase 1: certificates issued using this standard, date-bounded. */
@@ -1174,26 +1122,6 @@ export interface AssetTypesApi {
   list(): Promise<AssetTypesListData>;
 }
 
-export type EnvironmentalLimit = {
-  id: number;
-  unitId: number;
-  assetTypeId: number | null;
-  assetTypeName: string | null;
-  temperatureMin: number | null;
-  temperatureMax: number | null;
-  humidityMin: number | null;
-  humidityMax: number | null;
-  pressureMin: number | null;
-  pressureMax: number | null;
-  createdAt?: string | Date | null;
-  updatedAt?: string | Date | null;
-};
-
-export type EnvironmentalLimitsResponse = {
-  limits: EnvironmentalLimit[];
-  unit: { unitId: number | null; unitName: string | null };
-};
-
 export type SaveEnvironmentalLimitInput = {
   assetTypeId: number | null;
   temperatureMin: number | null;
@@ -1204,18 +1132,12 @@ export type SaveEnvironmentalLimitInput = {
   pressureMax: number | null;
 };
 
-export type SaveEnvironmentalLimitResponse = {
-  message: string;
-  data: EnvironmentalLimit;
-  unit: { unitId: number | null; unitName: string | null };
-};
-
 export interface EnvironmentalLimitsApi {
   list(): Promise<EnvironmentalLimitsResponse>;
   save(
     input: SaveEnvironmentalLimitInput,
   ): Promise<SaveEnvironmentalLimitResponse>;
-  delete(id: number): Promise<{ message: string }>;
+  delete(id: number): Promise<DeleteEnvironmentalLimitResponse>;
 }
 
 /** Accredited-scope (CMC) line — ISO/IEC 17025 §7.6/§7.8.3, ILAC P14 (#427). */

@@ -730,7 +730,7 @@ export function createCloudApiClient(
     customerGroups: createCustomerGroupsApi(rawCloudClient),
     assets: createAssetsApi(rawCloudClient),
     assetTypes: createAssetTypesApi(rawCloudClient),
-    environmentalLimits: createEnvironmentalLimitsApi(rawCloudClient),
+    environmentalLimits: createEnvironmentalLimitsApi(rawCloudClient, options),
     accreditedScope: createAccreditedScopeApi(rawCloudClient),
     integrations: createIntegrationsApi(rawCloudClient),
     services: createServicesApi(rawCloudClient),

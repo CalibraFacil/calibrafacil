@@ -29,7 +29,6 @@ import type {
   NotificationPreferencesResponse,
   EmailDomainResponse,
   PortalDomainResponse,
-  ReferenceStandardsResponse,
   ServiceOrderDetail,
   ServiceOrdersListData,
   SsoSettingsResponse,
@@ -742,7 +741,7 @@ export function createDesktopApiClient(
 
         return readDesktopJson<JobDetail>(response);
       },
-      async listStandards<TStandard = unknown>() {
+      async listStandards() {
         const url = new URL("/api/standards", options.baseUrl);
         url.searchParams.set("status", "ACTIVE");
         url.searchParams.set("limit", "100");
@@ -756,9 +755,9 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar padrões");
         }
 
-        return readDesktopJson<ReferenceStandardsResponse<TStandard>>(response);
+        return readDesktopJson<StandardsListData>(response);
       },
-      async getEffectiveEnvironmentalLimits<TLimits = unknown>(
+      async getEffectiveEnvironmentalLimits(
         assetTypeId: string | number,
         input: { unitId?: string | number | null } = {},
       ) {
@@ -782,9 +781,7 @@ export function createDesktopApiClient(
           return { limits: null, source: null };
         }
 
-        return readDesktopJson<EffectiveEnvironmentalLimitsResponse<TLimits>>(
-          response,
-        );
+        return readDesktopJson<EffectiveEnvironmentalLimitsResponse>(response);
       },
       async saveExecution(jobId, input) {
         const response = await fetchImpl(

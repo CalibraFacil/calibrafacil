@@ -1,3 +1,4 @@
+import { buildStandard } from "@calibra-facil/contracts/standards-fixtures";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -2621,15 +2622,15 @@ describe("desktop hybrid runtime adapter", () => {
       ) {
         return Response.json({
           data: [
-            {
+            buildStandard({
               id: 1,
               name: "Peso padrao 20 kg",
               serialNumber: "STD-20KG",
               certificateNumber: "CERT-1",
-              nextCalibrationDate: "2026-12-31",
+              nextCalibrationDate: "2026-12-31T00:00:00.000Z",
               status: "ACTIVE",
               isExpired: false,
-            },
+            }),
           ],
           pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
         });
@@ -2942,6 +2943,7 @@ describe("desktop hybrid runtime adapter", () => {
         data: [],
         pagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
         limits: [],
+        unit: { unitId: 10, unitName: "Central" },
         source: null,
       });
     };
@@ -3352,6 +3354,8 @@ describe("environmental limits runtime adapter", () => {
       humidityMax: 60,
       pressureMin: null,
       pressureMax: null,
+      createdAt: "2026-01-12T12:00:00.000Z",
+      updatedAt: "2026-01-12T12:00:00.000Z",
     };
     const fetchMock: typeof fetch = async (input, init) => {
       fetchCalls.push([input, init]);

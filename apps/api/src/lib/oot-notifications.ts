@@ -92,7 +92,12 @@ async function createNotificationForNc(input: {
   const [customerRow] = await db
     .select({ name: customer.name, email: customer.email })
     .from(customer)
-    .where(eq(customer.id, input.job.customerId))
+    .where(
+      and(
+        eq(customer.id, input.job.customerId),
+        eq(customer.labOrganizationId, input.organizationId),
+      ),
+    )
     .limit(1);
 
   const recipientEmail = customerRow?.email?.trim() || null;
