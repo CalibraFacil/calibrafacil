@@ -73,3 +73,4 @@ export {
   readStorageConfig,
 } from "./runtimes";
 export { rawEnv, setProcessEnv, setProcessEnvDefault } from "./process-env";
+export { failFast } from "./startup";

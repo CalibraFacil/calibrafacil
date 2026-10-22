@@ -1,3 +1,4 @@
+import "./assert-config";
 import app from "../src/index";
 import { createApiRuntimeEnv } from "../src/lib/runtime-env";
 

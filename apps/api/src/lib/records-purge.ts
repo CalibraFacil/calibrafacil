@@ -1,3 +1,4 @@
+import { readRetentionConfig } from "@calibra-facil/config";
 /**
  * Records purge (decision Q16, docs/architecture/records-retention.md).
  *
@@ -34,15 +35,10 @@ export type PurgeConfig = { enabled: boolean; mode: PurgeMode };
 
 /** Disabled and dry-run unless the environment says otherwise, exactly. */
 export function readPurgeConfig(
-  env: Record<string, string | undefined> = process.env,
+  env?: Record<string, string | undefined>,
 ): PurgeConfig {
-  return {
-    enabled: env.RECORDS_PURGE_ENABLED?.trim().toLowerCase() === "true",
-    mode:
-      env.RECORDS_PURGE_MODE?.trim().toLowerCase() === "execute"
-        ? "execute"
-        : "dry-run",
-  };
+  const { purgeEnabled, purgeMode } = readRetentionConfig(env);
+  return { enabled: purgeEnabled, mode: purgeMode };
 }
 
 export type PurgeDecision = {

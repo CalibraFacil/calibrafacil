@@ -1,3 +1,4 @@
+import "../assert-config";
 import { handleCallback } from "@vercel/queue";
 import { isBackgroundJobMessage } from "@calibra-facil/shared";
 import {

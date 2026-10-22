@@ -124,7 +124,11 @@ describe("REQ-CFG-1 defaults", () => {
       RECORDS_PURGE_ENABLED: "yes",
       RECORDS_PURGE_MODE: "x",
       BACKGROUND_JOBS_MAX_DELIVERIES: "abc",
+      STUCK_RENDER_AFTER_MS: "soon",
+      QUEUE_STALE_AFTER_MS: "0",
     });
+    expect(config.jobs.stuckRenderAfterMs).toBe(3_600_000);
+    expect(config.jobs.queueStaleAfterMs).toBe(600_000);
     expect(config.jobs.queueReceiptsMode).toBe("enforce");
     expect(config.retention.purgeEnabled).toBe(false);
     expect(config.retention.purgeMode).toBe("dry-run");

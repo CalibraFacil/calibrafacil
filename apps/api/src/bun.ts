@@ -1,7 +1,8 @@
-import { resolvePlatformEmailTransport } from "@calibra-facil/email-sender";
+import { failFast, rawEnv, setProcessEnv } from "@calibra-facil/config";
 import app from "./index";
 import { GET as dispatchCron } from "../vercel-src/cron/dispatch";
 import { readCronEntries, startCronScheduler } from "./lib/cron-scheduler";
+import { buildApiBootEnv } from "./server/startup";
 
 type BunServer = {
   hostname: string;
@@ -9,7 +10,6 @@ type BunServer = {
 };
 
 type BunRuntime = {
-  env: Record<string, string | undefined>;
   file(path: URL): {
     exists(): Promise<boolean>;
     text(): Promise<string>;
@@ -23,15 +23,9 @@ type BunRuntime = {
 
 declare const Bun: BunRuntime;
 
-type BunApiEnv = Record<string, unknown>;
-
 const appDirectory = new URL("..", import.meta.url);
-const isProduction = Bun.env.NODE_ENV === "production";
-const localUrlDefaults = {
-  API_URL: "http://localhost:3000",
-  APP_URL: "http://localhost:5173",
-  PORTAL_APP_URL: "http://localhost:5174",
-};
+const processEnv = rawEnv();
+const isProduction = processEnv.NODE_ENV === "production";
 
 function parseLocalEnv(contents: string): Record<string, string> {
   const env: Record<string, string> = {};
@@ -74,84 +68,26 @@ async function loadLocalEnv() {
   return env;
 }
 
-async function createEnv(): Promise<BunApiEnv> {
+async function createEnv() {
   const localEnv = await loadLocalEnv();
-  const defaults = isProduction
-    ? {
-        NODE_ENV: "production",
-      }
-    : {
-        NODE_ENV: Bun.env.NODE_ENV ?? "development",
-        ...localUrlDefaults,
-        R2_ACCOUNT_ID: "local",
-        R2_BUCKET_NAME: "calibrafacil-documents-dev",
-        R2_MEDIA_BUCKET_NAME: "calibrafacil-media-dev",
-        RESEND_FROM_EMAIL: "Calibra Facil <noreply@example.com>",
-      };
+  // Assemble the bindings and validate the configuration: a bad deploy stops
+  // here with one message that lists every problem.
+  const { bindings, config } = failFast(() =>
+    buildApiBootEnv(processEnv, localEnv),
+  );
 
-  const env: Record<string, unknown> = {
-    ...defaults,
-    ...localEnv,
-    ...Bun.env,
-  };
-
-  if (!isProduction) {
-    for (const [key, fallback] of Object.entries(localUrlDefaults)) {
-      const configuredValue =
-        typeof env[key] === "string" ? env[key].trim() : undefined;
-      env[key] = configuredValue || fallback;
-    }
-  }
-
-  const hyperdriveLocalConnectionString =
-    env.HYPERDRIVE_LOCAL_CONNECTION_STRING ?? env.DATABASE_URL;
-
-  if (typeof hyperdriveLocalConnectionString === "string") {
-    env.DATABASE_URL = hyperdriveLocalConnectionString;
-  }
-
-  if (isProduction) {
-    for (const key of [
-      "DATABASE_URL",
-      "BETTER_AUTH_SECRET",
-      "PUBLIC_API_MASTER_KEY",
-      "INTEGRATIONS_MASTER_KEY",
-      "SIGNING_MASTER_KEY",
-      "PORTAL_SERVICE_USER_ID",
-      "R2_ACCESS_KEY_ID",
-      "R2_SECRET_ACCESS_KEY",
-      "R2_BUCKET_NAME",
-      "R2_MEDIA_BUCKET_NAME",
-    ]) {
-      if (typeof env[key] !== "string" || env[key].length === 0) {
-        throw new Error(`${key} is required in production`);
-      }
-    }
-    if (!env.R2_ACCOUNT_ID && !env.R2_ENDPOINT) {
-      throw new Error("R2_ACCOUNT_ID or R2_ENDPOINT is required in production");
-    }
-    // Sign-in is passwordless, so production cannot run without e-mail.
-    if (!resolvePlatformEmailTransport(Bun.env)) {
-      throw new Error(
-        "E-mail is required in production: set SMTP_HOST (SMTP) or RESEND_API_KEY (Resend)",
-      );
-    }
-  }
-
-  const apiEnv: BunApiEnv = { ...env };
-
-  for (const [key, value] of Object.entries(apiEnv)) {
+  for (const [key, value] of Object.entries(bindings)) {
     if (typeof value === "string") {
-      process.env[key] = value;
+      setProcessEnv(key, value);
     }
   }
 
-  return apiEnv;
+  return { env: bindings, config };
 }
 
-const env = await createEnv();
-const port = Number(Bun.env.PORT ?? Bun.env.API_PORT ?? 3000);
-const hostname = Bun.env.HOST ?? "0.0.0.0";
+const { env, config } = await createEnv();
+const port = config.runtime.listenPort ?? 3000;
+const hostname = config.runtime.host;
 
 const server = Bun.serve({
   hostname,
@@ -176,7 +112,7 @@ console.info(
 
 // CRON_SCHEDULER=internal runs the vercel.json schedule in this process, for
 // installs without an external scheduler (the Docker setup turns it on).
-if (Bun.env.CRON_SCHEDULER === "internal") {
+if (config.jobs.cronScheduler === "internal") {
   const jobs = startCronScheduler({
     entries: readCronEntries(
       JSON.parse(
@@ -184,7 +120,7 @@ if (Bun.env.CRON_SCHEDULER === "internal") {
       ),
     ),
     dispatch: dispatchCron,
-    secret: Bun.env.CRON_SECRET,
+    secret: config.jobs.cronSecret,
   });
   console.info(`Scheduled ${jobs.length} cron jobs in-process (UTC)`);
 }

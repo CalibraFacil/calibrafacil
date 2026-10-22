@@ -1,3 +1,4 @@
+import { rawEnv, readOriginsConfig } from "@calibra-facil/config";
 import type { Hono } from "hono";
 import { cors } from "hono/cors";
 import { isAllowedPortalOrigin } from "../lib/portal-domains";
@@ -12,28 +13,49 @@ function originOf(value: string | undefined): string | null {
   }
 }
 
+const ORIGIN_SETTINGS = [
+  "APP_URL",
+  "PORTAL_APP_URL",
+  "SITE_URL",
+  "API_URL",
+  "VERIFY_URL",
+  "CORS_ALLOWED_ORIGINS",
+] as const;
+
 // Browser origins allowed to call the API with credentials: the desktop shell,
 // the configured deployment (APP_URL, PORTAL_APP_URL, SITE_URL, API_URL,
 // VERIFY_URL) and any extra origins in CORS_ALLOWED_ORIGINS (comma-separated).
-// Read per request so tests and runtimes that inject env late still apply.
+// Read per request so tests and runtimes that inject env late still apply; a
+// binding wins over the process environment.
 function configuredAllowedOrigins(env?: Env): Set<string> {
-  const read = (name: string): string | undefined => {
-    const fromBindings = env?.[name];
-    return typeof fromBindings === "string" ? fromBindings : process.env[name];
-  };
-  const extra = (read("CORS_ALLOWED_ORIGINS") ?? "")
-    .split(",")
+  const processEnv = rawEnv();
+  const source: Record<string, string | undefined> = {};
+  for (const name of ORIGIN_SETTINGS) {
+    const fromBindings = env ? Reflect.get(env, name) : undefined;
+    source[name] =
+      typeof fromBindings === "string" ? fromBindings : processEnv[name];
+  }
+
+  let origins: ReturnType<typeof readOriginsConfig> | null = null;
+  try {
+    origins = readOriginsConfig(source);
+  } catch {
+    // A malformed address is reported once, at start-up; here it allows nothing.
+  }
+  if (!origins) return new Set(["app://calibra-facil"]);
+
+  const extra = origins.corsAllowedOrigins
     .map((entry) => originOf(entry))
     .filter((origin): origin is string => origin !== null);
 
   return new Set(
     [
       "app://calibra-facil",
-      originOf(read("APP_URL")),
-      originOf(read("PORTAL_APP_URL")),
-      originOf(read("SITE_URL")),
-      originOf(read("API_URL")),
-      originOf(read("VERIFY_URL")),
+      originOf(origins.appUrl),
+      originOf(origins.portalAppUrl),
+      originOf(origins.siteUrl),
+      originOf(origins.apiUrl),
+      originOf(origins.verifyUrl),
       ...extra,
     ].filter((origin): origin is string => origin !== null),
   );

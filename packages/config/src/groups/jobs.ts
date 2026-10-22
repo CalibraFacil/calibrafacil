@@ -89,17 +89,19 @@ export const jobsGroup = defineGroup({
     stuckRenderAfterMs: integer({
       env: "STUCK_RENDER_AFTER_MS",
       description:
-        "A GENERATING_PDF certificate older than this with no live queue row is rejected (default 60 minutes).",
+        "A GENERATING_PDF certificate older than this with no live queue row is rejected (default 60 minutes). An unusable value means the default.",
       min: 1,
       default: 3_600_000,
+      tolerant: true,
       example: example.commented("3600000"),
     }),
     queueStaleAfterMs: integer({
       env: "QUEUE_STALE_AFTER_MS",
       description:
-        "A claimed queue job idle for longer than this is released for another worker (default 10 minutes).",
+        "A claimed queue job idle for longer than this is released for another worker (default 10 minutes). An unusable value means the default.",
       min: 1,
       default: 600_000,
+      tolerant: true,
       example: example.commented("600000"),
     }),
     queueReceiptsMode: choice({

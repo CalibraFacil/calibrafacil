@@ -1,3 +1,4 @@
+import { readObservabilityConfig } from "@calibra-facil/config";
 import {
   createLogErrorReporter,
   createLogger,
@@ -13,11 +14,11 @@ import {
 let reporter: ErrorReporter | null = null;
 
 export function getErrorReporter(): ErrorReporter {
+  const observability = readObservabilityConfig();
   reporter ??= createLogErrorReporter({
     service: "api",
-    environment:
-      process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "development",
-    release: process.env.VERCEL_GIT_COMMIT_SHA,
+    environment: observability.environment,
+    release: observability.release,
   });
   return reporter;
 }

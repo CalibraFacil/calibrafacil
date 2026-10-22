@@ -1,3 +1,4 @@
+import { readEmailConfig } from "@calibra-facil/config";
 import { db } from "@calibra-facil/db";
 import {
   organization,
@@ -45,7 +46,7 @@ export function emailProviderError(failureClass: ResendFailureClass): never {
 
 function platformKey(): string {
   return (
-    process.env.RESEND_API_KEY ||
+    readEmailConfig().resendApiKey ||
     emailDomainError(
       "O serviço de envio ainda não está configurado. Contate o suporte.",
       500,

@@ -128,8 +128,4 @@ export const localServerGroup = defineGroup({
       default: "local-server-dev-run",
     }),
   },
-  derive: (values) => ({
-    /** The envelope arrives on standard input. */
-    readBootstrapFromStdin: values.bootstrapFromStdin === "1",
-  }),
 });
