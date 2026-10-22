@@ -143,6 +143,9 @@ importers:
       '@calibra-facil/interval-analysis':
         specifier: workspace:^
         version: link:../../packages/interval-analysis
+      '@calibra-facil/jobs-core':
+        specifier: workspace:^
+        version: link:../../packages/jobs-core
       '@calibra-facil/label-rendering':
         specifier: workspace:^
         version: link:../../packages/label-rendering
@@ -167,9 +170,6 @@ importers:
       '@calibra-facil/signing':
         specifier: workspace:^
         version: link:../../packages/signing
-      '@calibra-facil/worker':
-        specifier: workspace:^
-        version: link:../worker
       '@hono/zod-validator':
         specifier: ^0.8.0
         version: 0.8.0(hono@4.13.13)(zod@4.4.3)
@@ -747,15 +747,9 @@ importers:
       '@calibra-facil/db':
         specifier: workspace:^
         version: link:../../packages/db
-      '@calibra-facil/documents':
+      '@calibra-facil/jobs-core':
         specifier: workspace:^
-        version: link:../../packages/documents
-      '@calibra-facil/email-sender':
-        specifier: workspace:^
-        version: link:../../packages/email-sender
-      '@calibra-facil/interval-analysis':
-        specifier: workspace:^
-        version: link:../../packages/interval-analysis
+        version: link:../../packages/jobs-core
       '@calibra-facil/notifications':
         specifier: workspace:^
         version: link:../../packages/notifications
@@ -768,9 +762,6 @@ importers:
       '@calibra-facil/signing':
         specifier: workspace:^
         version: link:../../packages/signing
-      '@cj-tech-master/excelts':
-        specifier: ^9.6.0
-        version: 9.6.0
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@neondatabase/serverless@1.1.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@12.11.1)(kysely@0.28.17)(pg@8.21.0)(postgres@3.4.9)
@@ -780,15 +771,6 @@ importers:
       pg:
         specifier: ^8.21.0
         version: 8.21.0
-      qrcode:
-        specifier: ^1.5.4
-        version: 1.5.4
-      react:
-        specifier: ^19.2.7
-        version: 19.2.7
-      react-dom:
-        specifier: ^19.2.7
-        version: 19.2.7(react@19.2.7)
     devDependencies:
       '@types/node':
         specifier: ^24.13.0
@@ -799,15 +781,6 @@ importers:
       '@types/pg':
         specifier: ^8.20.0
         version: 8.20.0
-      '@types/qrcode':
-        specifier: ^1.5.5
-        version: 1.5.6
-      '@types/react':
-        specifier: ^19.2.16
-        version: 19.2.16
-      '@types/react-dom':
-        specifier: ^19.2.3
-        version: 19.2.3(@types/react@19.2.16)
       '@vitejs/plugin-react':
         specifier: 6.0.2
         version: 6.0.2(vite@8.1.6(@types/node@24.13.0)(esbuild@0.25.12)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.1))
@@ -1118,6 +1091,82 @@ importers:
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@types/node@24.13.0)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.6(@types/node@24.13.0)(esbuild@0.25.12)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.1))
+
+  packages/jobs-core:
+    dependencies:
+      '@calibra-facil/certificate-data':
+        specifier: workspace:^
+        version: link:../certificate-data
+      '@calibra-facil/config':
+        specifier: workspace:^
+        version: link:../config
+      '@calibra-facil/db':
+        specifier: workspace:^
+        version: link:../db
+      '@calibra-facil/documents':
+        specifier: workspace:^
+        version: link:../documents
+      '@calibra-facil/email-sender':
+        specifier: workspace:^
+        version: link:../email-sender
+      '@calibra-facil/interval-analysis':
+        specifier: workspace:^
+        version: link:../interval-analysis
+      '@calibra-facil/notifications':
+        specifier: workspace:^
+        version: link:../notifications
+      '@calibra-facil/schemas':
+        specifier: workspace:^
+        version: link:../schemas
+      '@calibra-facil/shared':
+        specifier: workspace:^
+        version: link:../shared
+      '@calibra-facil/signing':
+        specifier: workspace:^
+        version: link:../signing
+      '@cj-tech-master/excelts':
+        specifier: ^9.6.0
+        version: 9.6.0
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@neondatabase/serverless@1.1.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@12.11.1)(kysely@0.28.17)(pg@8.21.0)(postgres@3.4.9)
+      fflate:
+        specifier: ^0.8.3
+        version: 0.8.3
+      pg:
+        specifier: ^8.21.0
+        version: 8.21.0
+      qrcode:
+        specifier: ^1.5.4
+        version: 1.5.4
+      react:
+        specifier: ^19.2.7
+        version: 19.2.7
+      react-dom:
+        specifier: ^19.2.7
+        version: 19.2.7(react@19.2.7)
+    devDependencies:
+      '@types/node':
+        specifier: ^24.13.0
+        version: 24.13.0
+      '@types/pg':
+        specifier: ^8.20.0
+        version: 8.20.0
+      '@types/qrcode':
+        specifier: ^1.5.5
+        version: 1.5.6
+      '@types/react':
+        specifier: ^19.2.16
+        version: 19.2.16
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.16)
+      '@vitejs/plugin-react':
+        specifier: 6.0.2
+        version: 6.0.2(vite@8.1.6(@types/node@24.13.0)(esbuild@0.25.12)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.1))
       vitest:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@24.13.0)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.6(@types/node@24.13.0)(esbuild@0.25.12)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.1))

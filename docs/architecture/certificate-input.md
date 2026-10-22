@@ -45,10 +45,11 @@ records it as `changes.certificateInputSha256`.
 
 - `@calibra-facil/db/certificate-input` (drizzle, on the approval transaction,
   every read scoped by the job's organization) — the **frozen** path;
-- `apps/worker/src/certificate/fetch-job-data.ts` (SQL) — the **legacy** path,
+- `packages/jobs-core/src/certificate/fetch-job-data.ts` (SQL) — the **legacy** path,
   for jobs approved before migration 0120.
 
-`apps/worker/src/certificate-input.int.spec.ts` asserts both produce the same
+`apps/worker/src/certificate-input.int.spec.ts` (the real-database tier for
+`packages/jobs-core` lives in `apps/worker`) asserts both produce the same
 document and the same render data on a seeded job.
 
 ## The worker

@@ -30,10 +30,10 @@
 //                      cloud route and the public API)
 //   approve          apps/api/src/modules/jobs/approve-job.ts:274,385
 //                      (REVIEW only: a REJECTED job must be resubmitted first)
-//   complete_render  apps/worker/src/index.ts:488-489,529,1809,1959 (the render
+//   complete_render  packages/jobs-core/src/index.ts:488-489,529,1809,1959 (the render
 //                      worker: GENERATING_PDF -> APPROVED; SUPERSEDED keeps its
 //                      status while the watermarked PDF is regenerated)
-//   fail_render      apps/worker/src/index.ts:727,732 (setJobError)
+//   fail_render      packages/jobs-core/src/index.ts:727,732 (setJobError)
 //                    packages/db/src/queue-render-recovery.ts:80,90 (backstop)
 //   revert_approval  apps/api/src/modules/jobs/approve-job.ts:532,549 (dispatch
 //                      failed after the approval: back to the status approved from)

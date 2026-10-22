@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sql } from "drizzle-orm";
-import type { Env } from "@calibra-facil/worker";
+import type { Env } from "@calibra-facil/jobs-core";
 import { db, truncateAll } from "../test/integration/db";
 import { makeTestEnv } from "../test/integration/env";
 import { seedOrg } from "../test/integration/seed";
@@ -34,7 +34,7 @@ vi.mock("@calibra-facil/notifications", () => ({
 }));
 
 import { notifyCertificateReady } from "@calibra-facil/notifications";
-import worker, { processBackgroundJob } from "./index";
+import worker, { processBackgroundJob } from "@calibra-facil/jobs-core";
 
 const GOTENBERG_URL = "http://gotenberg.test";
 const FAKE_PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]); // "%PDF-"

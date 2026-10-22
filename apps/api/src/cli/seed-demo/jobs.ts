@@ -1,7 +1,7 @@
 import { db } from "@calibra-facil/db";
 import { calibrationJob, notification } from "@calibra-facil/db/schema";
 import { forceCompleteQueueJob } from "@calibra-facil/db/queue";
-import { processBackgroundJob } from "@calibra-facil/worker";
+import { processBackgroundJob } from "@calibra-facil/jobs-core";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { createWorkerRuntimeEnv } from "../../lib/runtime-env";

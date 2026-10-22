@@ -21,7 +21,7 @@ vi.mock("@vercel/queue", () => ({
   ) => callback,
 }));
 
-vi.mock("@calibra-facil/worker", () => ({
+vi.mock("@calibra-facil/jobs-core", () => ({
   processBackgroundJob: mocks.processBackgroundJob,
 }));
 
