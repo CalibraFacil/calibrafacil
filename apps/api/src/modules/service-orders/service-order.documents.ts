@@ -7,7 +7,7 @@ import {
   serviceOrderTag,
   type ServiceOrderSignatureData,
 } from "@calibra-facil/db/schema";
-import type { BackgroundJobMessage } from "@calibra-facil/shared";
+import type { BackgroundJobMessage } from "@calibra-facil/schemas";
 import { and, desc, eq } from "drizzle-orm";
 import { enqueueBackgroundJob } from "../../lib/background-jobs";
 import { recordServiceOrderEvent } from "../../lib/service-order-workflow";

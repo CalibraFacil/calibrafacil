@@ -1,10 +1,11 @@
 import { db } from "@calibra-facil/db";
-import { forceCompleteQueueJob, isQueueMessage } from "@calibra-facil/db/queue";
+import { forceCompleteQueueJob } from "@calibra-facil/db/queue";
 import {
   appQueueJob,
   serviceOrder,
   type AppQueueJobType,
 } from "@calibra-facil/db/schema";
+import { parseQueueMessage } from "@calibra-facil/schemas";
 import { processBackgroundJob } from "@calibra-facil/worker";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
@@ -52,16 +53,15 @@ export async function renderServiceOrderDocuments(
   const env = createWorkerRuntimeEnv();
   let rendered = 0;
   for (const row of queued) {
-    const message = row.payload;
-    const orderId = message.serviceOrderId;
+    const parsed = parseQueueMessage(row.payload);
     if (
-      !isQueueMessage(message) ||
-      typeof orderId !== "number" ||
-      !orders.has(orderId)
+      !parsed.ok ||
+      !("serviceOrderId" in parsed.message) ||
+      !orders.has(parsed.message.serviceOrderId)
     ) {
       continue;
     }
-    await processBackgroundJob(env, message);
+    await processBackgroundJob(env, parsed.message);
     await forceCompleteQueueJob(row.id);
     rendered += 1;
   }
