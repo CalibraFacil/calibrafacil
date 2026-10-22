@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { loadWorkerConfig, workerSigningEnv } from "./index";
 
@@ -53,5 +56,56 @@ describe("REQ-TSA-1 the shared worker signing environment", () => {
     expect(() =>
       loadWorkerConfig({ ...BASE, SIGNING_TSA_TIMEOUT_MS: "5" }),
     ).toThrow(/SIGNING_TSA_TIMEOUT_MS/);
+  });
+});
+
+describe("REQ-TSA-1 the Cloudflare document-worker forwards what the builder returns", () => {
+  // services/document-worker is not part of the pnpm workspace, so it cannot
+  // import the builder; this keeps its hand-kept lists from drifting from it.
+  const repoRoot = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "..",
+    "..",
+  );
+  const read = (path: string) => readFileSync(join(repoRoot, path), "utf8");
+
+  const everySigningKey = Object.keys(
+    workerSigningEnv({
+      masterKey: KEY,
+      tsaUrl: "https://act.example/tsa",
+      tsaAuth: "Basic abc123",
+      tsaIcpConformant: true,
+      tsaTimeoutMs: 15000,
+    }),
+  );
+
+  it("REQ-TSA-1: CONTAINER_ENV_KEYS includes every key workerSigningEnv returns", () => {
+    const source = read("services/document-worker/src/index.ts");
+    const block = source.match(/CONTAINER_ENV_KEYS = \[([\s\S]*?)\]/)?.[1];
+    expect(block, "CONTAINER_ENV_KEYS in the document-worker").toBeDefined();
+    const forwarded = new Set(
+      [...(block ?? "").matchAll(/"([A-Z][A-Z0-9_]*)"/g)].map(
+        (match) => match[1],
+      ),
+    );
+
+    expect(everySigningKey.length).toBeGreaterThan(4);
+    for (const key of everySigningKey) {
+      expect(forwarded.has(key), `${key} is not forwarded`).toBe(true);
+    }
+  });
+
+  it("REQ-TSA-1: put-secrets.sh and the README set every key workerSigningEnv returns", () => {
+    const script = read("services/document-worker/scripts/put-secrets.sh");
+    const readme = read("services/document-worker/README.md");
+    for (const key of everySigningKey) {
+      expect(script, `${key} in put-secrets.sh`).toMatch(
+        new RegExp(`\\b${key}\\b`),
+      );
+      expect(readme, `${key} in the README`).toContain(
+        `wrangler secret put ${key}`,
+      );
+    }
   });
 });

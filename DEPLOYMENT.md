@@ -331,10 +331,20 @@ byte-identical to what earlier releases produced.
 
 **With a TSA configured, time-stamping fails closed.** A certificate is never issued unstamped:
 
-- Each delivery asks the authority up to four times when it cannot be reached or answers with an
-  HTTP error (waiting 1, 2 and 4 seconds between tries); an unusable answer fails at once. When
-  no stamp is obtained the render fails before anything is uploaded: no PDF is stored, no
-  certificate snapshot is written and no "certificate ready" e-mail is sent.
+- Each delivery makes one request to the authority and retries it up to three more times (four in
+  all; the retry count is not configurable) when the request fails: connection error, no answer
+  within `SIGNING_TSA_TIMEOUT_MS`, or any non-2xx HTTP status. It waits 1, 2 and 4 seconds after
+  the first, second and third failure (doubling from 1 second; nothing after the last). The
+  timeout covers the wait for the response headers. An answer that arrives but is unusable (not a
+  valid time-stamp response, a rejection status, or no token) is not retried: the delivery fails at
+  once. When no stamp is obtained the render fails before anything is uploaded: no PDF is stored,
+  no certificate snapshot is written and no "certificate ready" e-mail is sent.
+- Keep the worst case inside the function's time limit. An unreachable authority that hangs costs
+  up to `4 × SIGNING_TSA_TIMEOUT_MS + 7 seconds` per delivery (127 seconds at the default 30000),
+  on top of the render itself. The Vercel Queue function (`api/queues/background.js`) has a
+  `maxDuration` of 300 seconds, so keep `SIGNING_TSA_TIMEOUT_MS × 4` well under it: a timeout above
+  about 60000 can exhaust the function before the delivery fails cleanly. A value that large is
+  accepted by the validation (the maximum is 120000) but is not recommended.
 - While the queue still has deliveries left (Vercel: `BACKGROUND_JOBS_MAX_DELIVERIES`, default 3;
   database queue: the row's `max_attempts`), the job stays `GENERATING_PDF` and the message is
   redelivered, so a short outage of the authority heals itself.

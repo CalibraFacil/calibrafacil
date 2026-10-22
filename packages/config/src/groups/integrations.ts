@@ -69,7 +69,8 @@ export const signingGroup = defineGroup({
     }),
     tsaUrl: url({
       env: "SIGNING_TSA_URL",
-      description: "RFC 3161 time-stamp authority endpoint.",
+      description:
+        "RFC 3161 time-stamp authority endpoint. In local or inline job mode an unreachable authority rejects the job on the first try, so leave it unset in development.",
     }),
     tsaAuth: text({
       env: "SIGNING_TSA_AUTH",
