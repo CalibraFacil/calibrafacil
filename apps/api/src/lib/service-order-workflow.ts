@@ -1,3 +1,4 @@
+import { readAuthConfig, readRuntimeConfig } from "@calibra-facil/config";
 import { db } from "@calibra-facil/db";
 import {
   asset,
@@ -147,9 +148,9 @@ export async function hashServiceOrderApprovalCode(
  * outstanding codes (acceptable — codes die with the decision/expiry anyway).
  */
 export function resolveApprovalCodePepper(): string {
-  const configured = process.env.QUOTE_APPROVAL_CODE_PEPPER?.trim();
+  const configured = readAuthConfig().quoteApprovalCodePepper;
   if (configured) return configured;
-  if (process.env.VERCEL_ENV === "production") {
+  if (readRuntimeConfig().vercelEnv === "production") {
     throw new Error("QUOTE_APPROVAL_CODE_PEPPER is required");
   }
   return "dev-approval-code-pepper";

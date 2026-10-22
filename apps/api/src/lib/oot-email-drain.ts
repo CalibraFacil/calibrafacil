@@ -11,6 +11,7 @@
  * Invoked by the `oot-emails` cron handler in vercel-src/cron/dispatch.ts.
  */
 
+import { readOriginsConfig, readStorageConfig } from "@calibra-facil/config";
 import { db } from "@calibra-facil/db";
 import {
   asset,
@@ -51,21 +52,18 @@ export interface DrainOotEmailsResult {
   errors: number;
 }
 
-function getString(value: unknown): string | null {
-  return typeof value === "string" && value.length > 0 ? value : null;
-}
-
 /**
- * R2 credentials from process.env (the drain runs from a cron handler, outside
- * any Hono context). Null when unconfigured — the email is then sent without
- * the PDF attachment rather than failing the row forever.
+ * R2 credentials from the storage configuration (the drain runs from a cron
+ * handler, outside any Hono context). Null when unconfigured — the email is
+ * then sent without the PDF attachment rather than failing the row forever.
  */
 function getR2EnvFromProcess(): R2Env | null {
-  const accountId = getString(process.env.R2_ACCOUNT_ID);
-  const accessKeyId = getString(process.env.R2_ACCESS_KEY_ID);
-  const secretAccessKey = getString(process.env.R2_SECRET_ACCESS_KEY);
-  const bucketName = getString(process.env.R2_BUCKET_NAME);
-  const mediaBucketName = getString(process.env.R2_MEDIA_BUCKET_NAME);
+  const storage = readStorageConfig();
+  const accountId = storage.accountId;
+  const accessKeyId = storage.accessKeyId;
+  const secretAccessKey = storage.secretAccessKey;
+  const bucketName = storage.bucketName;
+  const mediaBucketName = storage.mediaBucketName;
   if (
     !accountId ||
     !accessKeyId ||
@@ -283,7 +281,8 @@ export async function drainOotEmailOutbox(options?: {
         }
 
         const brand = await getLabEmailBrand(row.organizationId);
-        const apiBaseUrl = process.env.API_URL ?? "http://localhost:3000";
+        const apiBaseUrl =
+          readOriginsConfig().apiUrl ?? "http://localhost:3000";
         const ackUrl = `${apiBaseUrl}/api/public/oot-ack/${notification.ackToken}`;
 
         const sendResult = await sendOotCustomerEmail({

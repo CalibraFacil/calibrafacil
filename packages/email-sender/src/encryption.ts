@@ -8,6 +8,7 @@
  * responses expose only the last 4 characters (see maskResendApiKey).
  */
 
+import { readEmailConfig } from "@calibra-facil/config";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 const ALGORITHM = "aes-256-gcm";
@@ -17,8 +18,7 @@ const AUTH_TAG_LENGTH = 16;
 export const EMAIL_DOMAIN_MASTER_KEY_ENV = "EMAIL_DOMAIN_MASTER_KEY";
 
 export function getEmailDomainMasterKey(): string | undefined {
-  const key = process.env[EMAIL_DOMAIN_MASTER_KEY_ENV]?.trim();
-  return key || undefined;
+  return readEmailConfig().domainMasterKey;
 }
 
 function getValidatedKey(masterKey: string): Buffer {

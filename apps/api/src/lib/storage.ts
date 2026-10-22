@@ -1,3 +1,4 @@
+import { readStorageConfig } from "@calibra-facil/config";
 import {
   S3Client,
   GetObjectCommand,
@@ -128,15 +129,16 @@ let publicPresignClient: { endpoint: string; client: R2S3Client } | undefined;
  * to that address from here.
  */
 export function presignClientFor(client: R2S3Client): R2S3Client {
-  const endpoint = process.env.R2_PUBLIC_ENDPOINT?.trim().replace(/\/+$/, "");
-  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+  const storage = readStorageConfig();
+  const endpoint = storage.publicEndpoint?.replace(/\/+$/, "");
+  const accessKeyId = storage.accessKeyId;
+  const secretAccessKey = storage.secretAccessKey;
   if (!endpoint || !accessKeyId || !secretAccessKey) return client;
 
   if (publicPresignClient?.endpoint !== endpoint) {
     const config = resolveS3EndpointConfig({
       R2_ENDPOINT: endpoint,
-      R2_REGION: process.env.R2_REGION,
+      R2_REGION: storage.region,
     });
     // oxlint-disable-next-line typescript/consistent-type-assertions -- AWS S3Client exposes command-specific send overloads through the concrete client.
     const presigner = new S3Client({

@@ -1,3 +1,4 @@
+import { readJobsConfig } from "@calibra-facil/config";
 import {
   countRecoverableQueueJobs,
   releaseStaleQueueJobs,
@@ -38,9 +39,6 @@ import { wakeDocumentWorker } from "./background-jobs";
 // write-once `on conflict (job_id) do nothing` issued-snapshot insert keeps
 // issuance idempotent — so re-driving can never mint a second certificate number.
 
-const DEFAULT_STALE_AFTER_MS = 10 * 60_000;
-const DEFAULT_STUCK_RENDER_AFTER_MS = 60 * 60_000;
-
 export type StaleJobBackstopResult = {
   /** How many expired PROCESSING leases were reclaimed to PENDING. */
   released: number;
@@ -75,14 +73,8 @@ export type StaleJobBackstopDeps = {
   stuckRenderAfterMs: number;
 };
 
-function readPositiveMs(name: string, fallback: number): number {
-  const value = Number(process.env[name]);
-  return Number.isFinite(value) && value > 0 ? value : fallback;
-}
-
 function resolveDocumentWorkerUrl(): string | null {
-  const url = process.env.DOCUMENT_WORKER_URL?.trim();
-  return url ? url : null;
+  return readJobsConfig().documentWorkerUrl ?? null;
 }
 
 function defaultDeps(): StaleJobBackstopDeps {
@@ -94,14 +86,8 @@ function defaultDeps(): StaleJobBackstopDeps {
     resolveDocumentWorkerUrl,
     wake: wakeDocumentWorker,
     pruneReceipts: pruneQueueReceipts,
-    staleAfterMs: readPositiveMs(
-      "QUEUE_STALE_AFTER_MS",
-      DEFAULT_STALE_AFTER_MS,
-    ),
-    stuckRenderAfterMs: readPositiveMs(
-      "STUCK_RENDER_AFTER_MS",
-      DEFAULT_STUCK_RENDER_AFTER_MS,
-    ),
+    staleAfterMs: readJobsConfig().queueStaleAfterMs,
+    stuckRenderAfterMs: readJobsConfig().stuckRenderAfterMs,
   };
 }
 

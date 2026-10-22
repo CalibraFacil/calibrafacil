@@ -23,6 +23,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@calibra-facil/config": "workspace:^",
     "@calibra-facil/db": "workspace:*",
     "@react-email/render": "^2.0.8",
     "drizzle-orm": "^0.45.2",

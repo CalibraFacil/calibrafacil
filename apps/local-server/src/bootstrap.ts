@@ -1,4 +1,5 @@
 import path from "node:path";
+import { loadLocalServerConfig } from "@calibra-facil/config";
 import { Buffer } from "node:buffer";
 import {
   localServerBootstrapConfigSchema,
@@ -67,36 +68,40 @@ export function readLocalServerConfig(
     return bootstrapConfig;
   }
 
+  // The development fallback: individual variables, validated as a whole by
+  // the local-server schema (a bad port or URL throws one aggregated error).
+  const { localServer } = loadLocalServerConfig(env);
+
   const dbPath =
-    env.CALIBRA_LOCAL_DB_PATH ??
+    localServer.dbPath ??
     new URL(
       /* @vite-ignore */ "../../../.calibra-local/calibra.sqlite",
       import.meta.url,
     ).pathname;
 
   return {
-    dataRoot: env.CALIBRA_LOCAL_DATA_ROOT ?? null,
-    requirePartition: env.CALIBRA_LOCAL_REQUIRE_PARTITION === "true",
-    host: env.CALIBRA_LOCAL_HOST ?? "127.0.0.1",
-    port: Number(env.CALIBRA_LOCAL_PORT ?? "4317"),
-    appVersion: env.CALIBRA_APP_VERSION ?? "0.0.0-dev",
-    localServerVersion: env.CALIBRA_LOCAL_SERVER_VERSION ?? "0.0.0-dev",
+    dataRoot: localServer.dataRoot ?? null,
+    requirePartition: localServer.requirePartition,
+    host: localServer.host,
+    port: localServer.port,
+    appVersion: localServer.appVersion,
+    localServerVersion: localServer.localServerVersion,
     dbPath,
     storageRoot:
-      env.CALIBRA_LOCAL_STORAGE_DIR ?? path.join(path.dirname(dbPath), "files"),
-    deviceId: env.CALIBRA_DEVICE_ID ?? "local-dev-device",
-    tenantId: env.CALIBRA_TENANT_ID ?? null,
-    organizationId: env.CALIBRA_ORGANIZATION_ID ?? null,
-    unitId: env.CALIBRA_UNIT_ID ? Number(env.CALIBRA_UNIT_ID) : null,
-    userId: env.CALIBRA_USER_ID ?? null,
-    syncEnabled: env.CALIBRA_SYNC_ENABLED !== "false",
-    autoStartSync: env.CALIBRA_LOCAL_AUTO_START_SYNC !== "false",
-    bootstrapToken: env.CALIBRA_LOCAL_BOOTSTRAP_TOKEN ?? null,
-    cloudApiUrl: env.CALIBRA_CLOUD_API_URL ?? null,
-    cloudAuthToken: env.CALIBRA_CLOUD_AUTH_TOKEN ?? null,
-    cloudProxyToken: env.CALIBRA_CLOUD_PROXY_TOKEN ?? null,
-    desktopRunId: env.CALIBRA_DESKTOP_RUN_ID ?? "desktop-dev-run",
-    localServerRunId: env.CALIBRA_LOCAL_SERVER_RUN_ID ?? "local-server-dev-run",
+      localServer.storageDir ?? path.join(path.dirname(dbPath), "files"),
+    deviceId: localServer.deviceId,
+    tenantId: localServer.tenantId ?? null,
+    organizationId: localServer.organizationId ?? null,
+    unitId: localServer.unitId ?? null,
+    userId: localServer.userId ?? null,
+    syncEnabled: localServer.syncEnabled,
+    autoStartSync: localServer.autoStartSync,
+    bootstrapToken: localServer.bootstrapToken ?? null,
+    cloudApiUrl: localServer.cloudApiUrl ?? null,
+    cloudAuthToken: localServer.cloudAuthToken ?? null,
+    cloudProxyToken: localServer.cloudProxyToken ?? null,
+    desktopRunId: localServer.desktopRunId,
+    localServerRunId: localServer.localServerRunId,
   };
 }
 
