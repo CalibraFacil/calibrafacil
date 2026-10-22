@@ -9,6 +9,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { buildPortalOverview } from "@calibra-facil/contracts/jobs-fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // A tiny external store stands in for better-auth's active-organization atom
@@ -56,11 +57,24 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { PortalOrgProvider } from "@/lib/portal-org-context";
 import { PortalOrgSwitcher } from "./portal-org-switcher";
 
+// A contract-valid overview whose first attention row names the organization
+// the API answered for, so the test can tell whose data is on screen.
+function overviewFor(orgId: string) {
+  const base = buildPortalOverview();
+  const [row] = base.equipment.attention;
+  return buildPortalOverview({
+    equipment: {
+      ...base.equipment,
+      attention: row ? [{ ...row, customerName: `Painel ${orgId}` }] : [],
+    },
+  });
+}
+
 function Overview() {
   const { data } = useOverview();
   return (
     <p data-testid="overview">
-      {data ? String(Reflect.get(data, "organizationName")) : "carregando"}
+      {data?.equipment.attention[0]?.customerName ?? "carregando"}
     </p>
   );
 }
@@ -115,10 +129,7 @@ describe("PortalOrgSwitcher cache isolation", () => {
             deferred.push({ orgId, resolve });
           });
         }
-        return new Response(
-          JSON.stringify({ organizationName: `Painel ${orgId}` }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
+        return Response.json(overviewFor(orgId));
       }),
     );
   });

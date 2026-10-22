@@ -1,15 +1,19 @@
 import type {
   JobAmendResponse,
   JobDetail,
+  JobDownloadUrlResponse,
   JobMutationResponse,
   JobRow,
   JobsListResponse,
 } from "./jobs";
+import type { PortalOverviewResponse } from "./portal";
 
 /**
- * Contract-valid example payloads for the jobs endpoints, for tests in any
- * package. Every value mirrors what the handlers return today; a test that
- * needs a variation spreads over the builder.
+ * Contract-valid example payloads for the jobs and portal endpoints, for tests
+ * in any package (unit specs and the mocked-API Playwright specs alike). Every
+ * value mirrors what the handlers return today; a test that needs a variation
+ * passes overrides to the builder. `fixtures.test.ts` parses every builder
+ * against its response schema, so a fixture cannot drift from the contract.
  */
 
 const method = {
@@ -302,5 +306,143 @@ export function buildJobAmendResponse(): JobAmendResponse {
       status: "DRAFT",
       amendmentNumber: 1,
     },
+  };
+}
+
+/**
+ * A method with a single numeric reading ("load") and nothing computed from
+ * it: the smallest compiled method a worksheet can execute. Use it as the
+ * `methodSnapshot` override when a test does not care about formulas.
+ */
+export function buildSimpleMethodSnapshot(): JobDetail["methodSnapshot"] {
+  return {
+    ...method,
+    methodId: 1,
+    methodName: "Método de Massa",
+    methodVersion: 1,
+    dataFields: [
+      {
+        key: "load",
+        label: "Carga",
+        type: "number",
+        required: true,
+        unit: "g",
+      },
+    ],
+    variableBindings: [],
+    formulas: [],
+    validations: [],
+    uncertaintyParams: [],
+  };
+}
+
+/**
+ * GET /api/jobs/:id for a draft the worksheet can execute: one numeric reading
+ * (`load` = 10), no standards chosen yet, no environment recorded.
+ */
+export function buildExecutableJobDetail(
+  overrides: Partial<JobDetail> = {},
+): JobDetail {
+  return buildJobDetail({
+    status: "DRAFT",
+    methodSnapshot: buildSimpleMethodSnapshot(),
+    standardsSnapshot: [],
+    environmentalSnapshot: null,
+    ...overrides,
+  });
+}
+
+/**
+ * GET /api/jobs/:id for a job approved and carrying its signed certificate
+ * (`certificateUrl` set, so the download action is offered).
+ */
+export function buildApprovedJobDetail(
+  overrides: Partial<JobDetail> = {},
+): JobDetail {
+  return buildJobDetail({
+    status: "APPROVED",
+    methodSnapshot: buildSimpleMethodSnapshot(),
+    standardsSnapshot: [],
+    environmentalSnapshot: null,
+    data: null,
+    approvedBy: "approver-1",
+    approverName: "Aprovador Técnico",
+    approvedAt: "2026-05-20T10:00:00.000Z",
+    performedAt: "2026-05-20T09:00:00.000Z",
+    certificateUrl: "/certificates/7.pdf",
+    ...overrides,
+  });
+}
+
+/** GET /api/jobs/:id/download and /download-label: a short-lived signed URL. */
+export function buildJobDownloadUrlResponse(
+  url = "https://signed-download.example.test/certificates/7.pdf",
+): JobDownloadUrlResponse {
+  return { url };
+}
+
+/**
+ * GET /api/portal/overview for a customer with one asset due soon, one
+ * released certificate, one open request and no service orders.
+ */
+export function buildPortalOverview(
+  overrides: Partial<PortalOverviewResponse> = {},
+): PortalOverviewResponse {
+  return {
+    equipment: {
+      total: 1,
+      overdue: 0,
+      dueSoon: 1,
+      scheduled: 0,
+      unscheduled: 0,
+      inLab: 0,
+      attention: [
+        {
+          id: 1,
+          publicId: "6f1c1d1e-0000-4000-8000-000000000001",
+          name: "Balança A",
+          tag: "EQ-A1",
+          nextCalibrationDate: "2026-11-01T00:00:00.000Z",
+          customerId: 4,
+          customerName: "Cliente Exemplo",
+        },
+      ],
+    },
+    certificates: {
+      available: 1,
+      recent: [
+        {
+          id: 7,
+          jobId: "CAL-0007",
+          approvedAt: "2026-05-20T10:00:00.000Z",
+          assetName: "Balança A",
+          assetTag: "EQ-A1",
+          releaseStatus: "RELEASED",
+          ready: true,
+        },
+      ],
+    },
+    requests: {
+      total: 1,
+      open: 1,
+      rejected: 0,
+      recent: [
+        {
+          id: 3,
+          status: "PENDING",
+          submittedAt: "2026-05-21T10:00:00.000Z",
+          itemCount: 2,
+        },
+      ],
+    },
+    serviceOrders: {
+      total: 0,
+      inProgress: 0,
+      awaitingQuoteApproval: 0,
+      readyForPickup: 0,
+      awaitingQuote: [],
+      recent: [],
+    },
+    ...overrides,
   };
 }
