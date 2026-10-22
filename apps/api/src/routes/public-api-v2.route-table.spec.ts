@@ -12,17 +12,16 @@ import { describe, expect, it, vi } from "vitest";
 // source with module-import indirection and whitespace normalised away, so
 // moving a helper between files does not change the fingerprint but editing
 // the handler does.
-vi.mock("../middleware/api-key-auth", () => {
-  const named = <T extends (...args: never[]) => unknown>(
-    fn: T,
-    name: string,
-  ) => Object.defineProperty(fn, "name", { value: name });
-  return {
-    requireApiKeyAuth: named(async () => undefined, "requireApiKeyAuth"),
-    requireApiScope: (scope: string) =>
-      named(async () => undefined, `requireApiScope(${scope})`),
-  };
-});
+const { named } = vi.hoisted(() => ({
+  named: <T extends (...args: never[]) => unknown>(fn: T, name: string) =>
+    Object.defineProperty(fn, "name", { value: name }),
+}));
+
+vi.mock("../middleware/api-key-auth", () => ({
+  requireApiKeyAuth: named(async () => undefined, "requireApiKeyAuth"),
+  requireApiScope: (scope: string) =>
+    named(async () => undefined, `requireApiScope(${scope})`),
+}));
 
 function schemaKeys(schema: unknown) {
   if (typeof schema !== "object" || schema === null) return "";
@@ -34,16 +33,14 @@ function schemaKeys(schema: unknown) {
 
 vi.mock("@hono/zod-validator", () => ({
   zValidator: (target: string, schema: unknown) =>
-    Object.defineProperty(async () => undefined, "name", {
-      value: `zValidator(${target}:${schemaKeys(schema)})`,
-    }),
+    named(async () => undefined, `zValidator(${target}:${schemaKeys(schema)})`),
 }));
 
 function fingerprint(handler: (...args: never[]) => unknown) {
   const source = handler
     .toString()
-    .replace(/\(0,\s*__vi_import_\d+__\.(\w+)\)/g, "$1")
-    .replace(/__vi_import_\d+__\./g, "")
+    .replace(/\(0,\s*__(?:vi|vite_ssr)_import_\d+__\.(\w+)\)/g, "$1")
+    .replace(/__(?:vi|vite_ssr)_import_\d+__\./g, "")
     .replace(/\s+/g, "");
   return createHash("sha256").update(source).digest("hex").slice(0, 10);
 }
