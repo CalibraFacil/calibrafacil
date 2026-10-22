@@ -283,6 +283,7 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       await db.insert(controlChartAuditLog).values({
+        organizationId: member.organizationId,
         controlChartId: created.id,
         action: "create",
         changes: { initial: input },
@@ -334,6 +335,7 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
         .returning();
 
       await db.insert(controlChartAuditLog).values({
+        organizationId: member.organizationId,
         controlChartId: id,
         action: "update",
         changes: { input },
@@ -375,6 +377,7 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Carta de controle não encontrada" }, 404);
       }
       await db.insert(controlChartAuditLog).values({
+        organizationId: member.organizationId,
         controlChartId: id,
         action: "delete",
         performedBy: session.user.id,
@@ -405,6 +408,7 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
       const evaluation = await recomputeControlChart(chart);
 
       await db.insert(controlChartAuditLog).values({
+        organizationId: member.organizationId,
         controlChartId: id,
         action: "recalculate",
         changes: {
@@ -487,6 +491,7 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
         );
 
       await db.insert(controlChartAuditLog).values({
+        organizationId: member.organizationId,
         controlChartId: id,
         action: "escalate",
         changes: {

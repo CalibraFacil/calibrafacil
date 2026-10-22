@@ -12,17 +12,17 @@ import {
 } from '@hugeicons/core-free-icons'
 
 import { calibraApi } from '@/utils/api'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Spinner } from '@/components/ui/spinner'
+import { Button } from '@calibra-facil/ui/button'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Input } from '@calibra-facil/ui/input'
+import { Textarea } from '@calibra-facil/ui/textarea'
+import { Spinner } from '@calibra-facil/ui/spinner'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
+} from '@calibra-facil/ui/select'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,8 +33,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
-import { Panel } from '@/components/instrument-panel'
+} from '@calibra-facil/ui/alert-dialog'
+import { Panel } from '@calibra-facil/ui/instrument-panel'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 import {
   CloudOnlyOfflineState,

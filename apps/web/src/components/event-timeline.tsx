@@ -2,9 +2,14 @@ import { useState } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ArrowDown01Icon, ArrowUp01Icon } from '@hugeicons/core-free-icons'
 
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Button } from '@calibra-facil/ui/button'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@calibra-facil/ui/card'
 import { cn } from '@/lib/utils'
 import {
   Timeline,

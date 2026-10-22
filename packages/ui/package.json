@@ -1,0 +1,55 @@
+{
+  "name": "@calibra-facil/ui",
+  "version": "1.0.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "description": "Shared shadcn/base-ui primitives, instrument-panel design system and status-tone vocabulary for the lab app and the client portal",
+  "exports": {
+    "./utils": "./src/lib/utils.ts",
+    "./status-tone": "./src/lib/status-tone.ts",
+    "./panel-styles": "./src/lib/panel-styles.ts",
+    "./button-variants": "./src/lib/button-variants.ts",
+    "./use-mobile": "./src/hooks/use-mobile.ts",
+    "./tokens.css": "./src/styles/tokens.css",
+    "./*": "./src/components/*.tsx"
+  },
+  "scripts": {
+    "test": "vitest run --passWithNoTests",
+    "test:run": "vitest run --passWithNoTests",
+    "check-types": "node ../../scripts/typecheck.mjs --noEmit",
+    "lint": "oxlint"
+  },
+  "dependencies": {
+    "@base-ui/react": "^1.5.0",
+    "@calibra-facil/shared": "workspace:^",
+    "@hugeicons/core-free-icons": "^4.2.0",
+    "@hugeicons/react": "^1.1.6",
+    "@tanstack/react-table": "8.21.3",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
+    "date-fns": "^4.4.0",
+    "motion": "^12.40.0",
+    "react-day-picker": "^10.0.1",
+    "recharts": "3.8.1",
+    "sonner": "^2.0.7",
+    "tailwind-merge": "^3.6.0"
+  },
+  "peerDependencies": {
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:^",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^24.13.0",
+    "@types/react": "^19.2.16",
+    "@types/react-dom": "^19.2.0",
+    "jsdom": "^29.1.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  }
+}

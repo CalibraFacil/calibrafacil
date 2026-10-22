@@ -10,14 +10,14 @@ import type {
   ContaAzulConnectionConfig,
   ContaAzulConnectionConfigInput,
 } from '@calibra-facil/shared'
-import { Button } from '@/components/ui/button'
-import { Spinner } from '@/components/ui/spinner'
+import { Button } from '@calibra-facil/ui/button'
+import { Spinner } from '@calibra-facil/ui/spinner'
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from '@/components/ui/accordion'
+} from '@calibra-facil/ui/accordion'
 import {
   buildIntegrationChecklist,
   formatIntegrationDateTime,
@@ -42,7 +42,7 @@ import {
   contaAzulScheduleRows,
   contaAzulSaleTriggerOptions,
 } from './conta-azul-constants'
-import { Badge } from '@/components/ui/badge'
+import { Badge } from '@calibra-facil/ui/badge'
 import { cn } from '@/lib/utils'
 import {
   ContaAzulCatalogSelect,

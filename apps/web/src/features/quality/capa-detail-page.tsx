@@ -8,20 +8,20 @@ import {
   useCapaAuditLogData,
   useCapaDetailData,
 } from '@/features/quality/queries'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { Button } from '@calibra-facil/ui/button'
+import { Badge } from '@calibra-facil/ui/badge'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { BlueprintOverlay, Panel } from '@/components/instrument-panel'
-import { Separator } from '@/components/ui/separator'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
+} from '@calibra-facil/ui/card'
+import { BlueprintOverlay, Panel } from '@calibra-facil/ui/instrument-panel'
+import { Separator } from '@calibra-facil/ui/separator'
+import { Textarea } from '@calibra-facil/ui/textarea'
+import { Label } from '@calibra-facil/ui/label'
+import { Switch } from '@calibra-facil/ui/switch'
 import {
   CloudOnlyOfflineState,
   useDesktopCloudOnlyUnavailable,

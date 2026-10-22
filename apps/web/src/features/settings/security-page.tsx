@@ -5,11 +5,11 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
-import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
+} from '@calibra-facil/ui/card'
+import { Button } from '@calibra-facil/ui/button'
+import { Separator } from '@calibra-facil/ui/separator'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
 import { formatInstant } from '@calibra-facil/shared/format'
 
 export function SecuritySettingsPage() {

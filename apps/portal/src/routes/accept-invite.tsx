@@ -12,11 +12,11 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Spinner } from "@/components/ui/spinner";
+} from "@calibra-facil/ui/card";
+import { Button } from "@calibra-facil/ui/button";
+import { Input } from "@calibra-facil/ui/input";
+import { Label } from "@calibra-facil/ui/label";
+import { Spinner } from "@calibra-facil/ui/spinner";
 import { useMountEffect } from "@/hooks/use-mount-effect";
 import { getApiBaseUrl } from "@/lib/utils";
 

@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Alert02Icon } from '@hugeicons/core-free-icons'
 
-import { Panel } from '@/components/instrument-panel'
+import { Panel } from '@calibra-facil/ui/instrument-panel'
 
 /**
  * §7.10 tie-in: an out-of-control chart (or unsatisfactory PT) suggests the

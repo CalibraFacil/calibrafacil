@@ -192,6 +192,7 @@ export async function amendJob(
       }
 
       await tx.insert(jobAuditLog).values({
+        organizationId,
         jobId: originalJob.id,
         action: "supersede",
         changes: {
@@ -205,6 +206,7 @@ export async function amendJob(
       });
 
       await tx.insert(jobAuditLog).values({
+        organizationId,
         jobId: amendedJob.id,
         action: "create_amendment",
         changes: {

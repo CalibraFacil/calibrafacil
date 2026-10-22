@@ -97,6 +97,7 @@ export async function rejectJob(
     if (!row) return null;
 
     await tx.insert(jobAuditLog).values({
+      organizationId,
       jobId: existing.id,
       action: "reject",
       changes: {

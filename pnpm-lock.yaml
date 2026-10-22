@@ -375,9 +375,6 @@ importers:
 
   apps/portal:
     dependencies:
-      '@base-ui/react':
-        specifier: ^1.5.0
-        version: 1.5.0(@date-fns/tz@1.5.0)(@types/react@19.2.16)(date-fns@4.4.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@calibra-facil/auth':
         specifier: workspace:^
         version: link:../../packages/auth
@@ -393,6 +390,9 @@ importers:
       '@calibra-facil/shared':
         specifier: workspace:^
         version: link:../../packages/shared
+      '@calibra-facil/ui':
+        specifier: workspace:^
+        version: link:../../packages/ui
       '@fontsource-variable/figtree':
         specifier: ^5.2.10
         version: 5.2.10
@@ -426,9 +426,6 @@ importers:
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
-      clsx:
-        specifier: ^2.1.1
-        version: 2.1.1
       cmdk:
         specifier: ^1.1.1
         version: 1.1.1(@types/react-dom@19.2.3(@types/react@19.2.16))(@types/react@19.2.16)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -453,9 +450,6 @@ importers:
       sonner:
         specifier: ^2.0.7
         version: 2.0.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      tailwind-merge:
-        specifier: ^3.6.0
-        version: 3.6.0
       tailwindcss:
         specifier: ^4.3.0
         version: 4.3.0
@@ -587,6 +581,9 @@ importers:
       '@calibra-facil/shared':
         specifier: workspace:^
         version: link:../../packages/shared
+      '@calibra-facil/ui':
+        specifier: workspace:^
+        version: link:../../packages/ui
       '@fontsource-variable/figtree':
         specifier: ^5.2.10
         version: 5.2.10
@@ -629,12 +626,6 @@ importers:
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
-      clsx:
-        specifier: ^2.1.1
-        version: 2.1.1
-      cmdk:
-        specifier: ^1.1.1
-        version: 1.1.1(@types/react-dom@19.2.3(@types/react@19.2.16))(@types/react@19.2.16)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       date-fns:
         specifier: ^4.4.0
         version: 4.4.0
@@ -656,9 +647,6 @@ importers:
       react:
         specifier: ^19.2.7
         version: 19.2.7
-      react-day-picker:
-        specifier: ^10.0.1
-        version: 10.0.1(@types/react@19.2.16)(react@19.2.7)
       react-dom:
         specifier: ^19.2.7
         version: 19.2.7(react@19.2.7)
@@ -671,9 +659,6 @@ importers:
       sonner:
         specifier: ^2.0.7
         version: 2.0.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      tailwind-merge:
-        specifier: ^3.6.0
-        version: 3.6.0
       tailwindcss:
         specifier: ^4.3.0
         version: 4.3.0
@@ -1301,6 +1286,9 @@ importers:
       '@types/node':
         specifier: ^24.13.0
         version: 24.13.0
+      tsx:
+        specifier: ^4.22.4
+        version: 4.22.4
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -1380,6 +1368,82 @@ importers:
         version: 4.1.11(@types/node@24.13.0)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.6(@types/node@24.13.0)(esbuild@0.25.12)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.1))
 
   packages/typescript-config: {}
+
+  packages/ui:
+    dependencies:
+      '@base-ui/react':
+        specifier: ^1.5.0
+        version: 1.5.0(@date-fns/tz@1.5.0)(@types/react@19.2.16)(date-fns@4.4.0)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@calibra-facil/shared':
+        specifier: workspace:^
+        version: link:../shared
+      '@hugeicons/core-free-icons':
+        specifier: ^4.2.0
+        version: 4.2.0
+      '@hugeicons/react':
+        specifier: ^1.1.6
+        version: 1.1.6(react@19.2.7)
+      '@tanstack/react-table':
+        specifier: 8.21.3
+        version: 8.21.3(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      class-variance-authority:
+        specifier: ^0.7.1
+        version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      cmdk:
+        specifier: ^1.1.1
+        version: 1.1.1(@types/react-dom@19.2.3(@types/react@19.2.16))(@types/react@19.2.16)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      date-fns:
+        specifier: ^4.4.0
+        version: 4.4.0
+      motion:
+        specifier: ^12.40.0
+        version: 12.40.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      react-day-picker:
+        specifier: ^10.0.1
+        version: 10.0.1(@types/react@19.2.16)(react@19.2.7)
+      recharts:
+        specifier: 3.8.1
+        version: 3.8.1(@types/react@19.2.16)(react-dom@19.2.7(react@19.2.7))(react-is@19.2.7)(react@19.2.7)(redux@5.0.1)
+      sonner:
+        specifier: ^2.0.7
+        version: 2.0.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      tailwind-merge:
+        specifier: ^3.6.0
+        version: 3.6.0
+    devDependencies:
+      '@repo/typescript-config':
+        specifier: workspace:^
+        version: link:../typescript-config
+      '@testing-library/react':
+        specifier: ^16.3.2
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.16))(@types/react@19.2.16)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@types/node':
+        specifier: ^24.13.0
+        version: 24.13.0
+      '@types/react':
+        specifier: ^19.2.16
+        version: 19.2.16
+      '@types/react-dom':
+        specifier: ^19.2.0
+        version: 19.2.3(@types/react@19.2.16)
+      jsdom:
+        specifier: ^29.1.1
+        version: 29.1.1(@noble/hashes@2.2.0)
+      react:
+        specifier: ^19.2.7
+        version: 19.2.7
+      react-dom:
+        specifier: ^19.2.7
+        version: 19.2.7(react@19.2.7)
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@types/node@24.13.0)(@vitest/coverage-v8@4.1.11)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.6(@types/node@24.13.0)(esbuild@0.25.12)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.1))
 
 packages:
 

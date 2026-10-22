@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { LockIcon } from '@hugeicons/core-free-icons'
 
-import { Button } from '@/components/ui/button'
+import { Button } from '@calibra-facil/ui/button'
 import {
   Empty,
   EmptyContent,
@@ -10,7 +10,7 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from '@/components/ui/empty'
+} from '@calibra-facil/ui/empty'
 import { cn } from '@/lib/utils'
 
 /**

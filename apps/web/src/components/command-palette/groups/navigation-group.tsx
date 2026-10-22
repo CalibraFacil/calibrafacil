@@ -17,7 +17,7 @@ import {
 import { toast } from 'sonner'
 
 import { signOut } from '@calibra-facil/auth/client'
-import { CommandGroup, CommandItem } from '@/components/ui/command'
+import { CommandGroup, CommandItem } from '@calibra-facil/ui/command'
 import { useCommandPalette } from '../command-context'
 
 export function NavigationGroup() {

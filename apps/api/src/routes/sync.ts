@@ -1908,6 +1908,7 @@ async function applyCreateLocalAsset(
     if (!created) throw new Error("Erro ao criar ativo");
 
     await tx.insert(assetAuditLog).values({
+      organizationId: created.labOrganizationId,
       assetId: created.id,
       action: "create",
       changes: {
@@ -2187,6 +2188,7 @@ async function applyUpdateLocalAsset(
 
   if (Object.keys(changes).length > 0) {
     await db.insert(assetAuditLog).values({
+      organizationId: updatedAsset.labOrganizationId,
       assetId: remoteEntityId,
       action: "status" in changes ? "status_change" : "update",
       changes,
@@ -2271,6 +2273,7 @@ async function applyCreateLocalCustomer(
     if (!created) throw new Error("Erro ao criar cliente");
 
     await tx.insert(customerAuditLog).values({
+      organizationId: created.labOrganizationId,
       customerId: created.id,
       action: "create",
       changes: {
@@ -2405,6 +2408,7 @@ async function applyUpdateLocalCustomer(
 
     if (Object.keys(changes).length > 0) {
       await tx.insert(customerAuditLog).values({
+        organizationId: input.memberData.organizationId,
         customerId: remoteEntityId,
         action: "update",
         changes: {
@@ -2539,6 +2543,7 @@ async function applyUpdateLocalCustomerCompliance(
   if (!updatedCustomer) throw new Error("Erro ao atualizar conformidade");
 
   await db.insert(customerAuditLog).values({
+    organizationId: input.memberData.organizationId,
     customerId: remoteEntityId,
     action: "compliance_change",
     changes: { old: existing.compliance, new: updatedCompliance },
@@ -3017,7 +3022,12 @@ async function applyCreateLocalServiceOrderIntake(
     })
     .from(asset)
     .innerJoin(customer, eq(asset.customerId, customer.id))
-    .where(eq(asset.id, values.assetId))
+    .where(
+      and(
+        eq(asset.id, values.assetId),
+        eq(customer.labOrganizationId, input.memberData.organizationId),
+      ),
+    )
     .limit(1);
 
   if (
@@ -3286,6 +3296,7 @@ async function applyCreateLocalServiceOrderQuoteDraft(
     const [created] = await tx
       .insert(serviceOrderQuote)
       .values({
+        organizationId: order.organizationId,
         serviceOrderId: order.id,
         quoteNumber: `${order.serviceOrderNumber}/ORC`,
         version,
@@ -3320,7 +3331,12 @@ async function applyCreateLocalServiceOrderQuoteDraft(
         freightCents: totals.freightCents,
         totalCents: totals.totalCents,
       })
-      .where(eq(serviceOrderQuote.id, created.id));
+      .where(
+        and(
+          eq(serviceOrderQuote.id, created.id),
+          eq(serviceOrderQuote.organizationId, order.organizationId),
+        ),
+      );
     await recordServiceOrderEvent(
       {
         organizationId: order.organizationId,
@@ -3457,7 +3473,12 @@ async function applyLocalServiceOrderExecutionNotes(
     const [existing] = await tx
       .select()
       .from(serviceOrderExecution)
-      .where(eq(serviceOrderExecution.serviceOrderId, order.id))
+      .where(
+        and(
+          eq(serviceOrderExecution.serviceOrderId, order.id),
+          eq(serviceOrderExecution.organizationId, order.organizationId),
+        ),
+      )
       .limit(1);
     const [current] =
       existing !== undefined
@@ -3465,6 +3486,7 @@ async function applyLocalServiceOrderExecutionNotes(
         : await tx
             .insert(serviceOrderExecution)
             .values({
+              organizationId: order.organizationId,
               serviceOrderId: order.id,
               startedByUserId: actorUserId,
               technicalNotes: values.technicalNotes ?? null,
@@ -3496,7 +3518,12 @@ async function applyLocalServiceOrderExecutionNotes(
         result: values.result,
         updatedAt: new Date(),
       })
-      .where(eq(serviceOrderExecution.id, current.id))
+      .where(
+        and(
+          eq(serviceOrderExecution.id, current.id),
+          eq(serviceOrderExecution.organizationId, order.organizationId),
+        ),
+      )
       .returning();
     await tx
       .update(serviceOrder)
@@ -3609,6 +3636,7 @@ async function applyCreateLocalServiceOrderDeliveryDocumentDraft(
   const [document] = await db
     .insert(serviceOrderDeliveryDocument)
     .values({
+      organizationId: order.organizationId,
       serviceOrderId: order.id,
       documentNumber: `${order.serviceOrderNumber}/ENT`,
       version,

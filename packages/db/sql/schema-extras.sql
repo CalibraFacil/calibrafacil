@@ -329,3 +329,42 @@ AS $$
     )
   )
 $$;
+-- Organization on every audit log (migration 0118, docs/architecture/tenancy.md).
+-- The audit logs outlive the entity they document, so rows written before the column
+-- existed may stay without an organization: the column is nullable and this CHECK is
+-- NOT VALID, which refuses every NEW row without one while tolerating legacy orphans
+-- (VALIDATE CONSTRAINT works once they are attributed or archived).
+DO $$
+DECLARE
+  t text;
+BEGIN
+  FOREACH t IN ARRAY ARRAY[
+    'asset_audit_log',
+    'asset_oot_audit_log',
+    'authorized_signatory_audit_log',
+    'calibration_request_audit_log',
+    'control_chart_audit_log',
+    'corrective_action_audit_log',
+    'customer_audit_log',
+    'job_audit_log',
+    'method_audit_log',
+    'non_conformance_audit_log',
+    'personnel_competence_audit_log',
+    'proficiency_test_audit_log',
+    'reference_standard_audit_log',
+    'service_audit_log',
+    'training_record_audit_log',
+    'visit_audit_log'
+  ] LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint
+       WHERE conrelid = to_regclass(format('public.%I', t))
+         AND conname = left(t || '_organization_id_required', 63)
+    ) THEN
+      EXECUTE format(
+        'ALTER TABLE public.%I ADD CONSTRAINT %I CHECK (organization_id IS NOT NULL) NOT VALID',
+        t, left(t || '_organization_id_required', 63));
+    END IF;
+  END LOOP;
+END
+$$;

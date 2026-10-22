@@ -356,7 +356,9 @@ async function auditRows(jobId: number) {
       changes: jobAuditLog.changes,
     })
     .from(jobAuditLog)
-    .where(eq(jobAuditLog.jobId, jobId));
+    .where(
+      and(eq(jobAuditLog.jobId, jobId), eq(jobAuditLog.organizationId, ORG)),
+    );
 }
 
 /** The job as a refusal must leave it: untouched, no audit row. */
@@ -889,6 +891,7 @@ describe("public API: results and submit run the whole policy (REQ-SUB-5i)", () 
       .where(
         and(
           eq(jobAuditLog.jobId, world.jobId),
+          eq(jobAuditLog.organizationId, ORG),
           eq(jobAuditLog.action, "submit"),
         ),
       );

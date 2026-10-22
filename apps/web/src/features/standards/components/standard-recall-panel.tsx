@@ -4,9 +4,9 @@ import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { PlusSignIcon } from '@hugeicons/core-free-icons'
 
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Button } from '@calibra-facil/ui/button'
+import { Checkbox } from '@calibra-facil/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -14,18 +14,18 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Field, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Spinner } from '@/components/ui/spinner'
+} from '@calibra-facil/ui/dialog'
+import { Field, FieldLabel } from '@calibra-facil/ui/field'
+import { Input } from '@calibra-facil/ui/input'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
+import { Spinner } from '@calibra-facil/ui/spinner'
 import {
   BlueprintField,
   BlueprintGrid,
   Panel,
   PanelHeader,
   SignalTile,
-} from '@/components/instrument-panel'
+} from '@calibra-facil/ui/instrument-panel'
 import { HideFromRole, ShowForRole } from '@/components/permission-gate'
 import { OperationUnavailableNotice } from '@/components/availability/action-availability-gate'
 import {

@@ -3,9 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowLeft02Icon } from "@hugeicons/core-free-icons";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Spinner } from "@/components/ui/spinner";
+import { Button } from "@calibra-facil/ui/button";
+import { Card, CardContent } from "@calibra-facil/ui/card";
+import { Spinner } from "@calibra-facil/ui/spinner";
 import { getApiBaseUrl } from "@/lib/utils";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import {

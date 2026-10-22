@@ -10,21 +10,21 @@ import {
   type CompetenceRequestFormData,
   type CompetenceRequestFormField,
 } from '@/features/personnel/forms'
-import { Button } from '@/components/ui/button'
+import { Button } from '@calibra-facil/ui/button'
 import {
   Field,
   FieldGroup,
   FieldLabel,
   FieldError,
-} from '@/components/ui/field'
-import { Textarea } from '@/components/ui/textarea'
+} from '@calibra-facil/ui/field'
+import { Textarea } from '@calibra-facil/ui/textarea'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
-import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
+} from '@calibra-facil/ui/select'
+import { ACTION_BUTTON_CLASS, Panel } from '@calibra-facil/ui/instrument-panel'
 import { cn } from '@/lib/utils'
 
 const COMPETENCE_LIFECYCLE = [

@@ -75,6 +75,7 @@ export async function createServiceOrderEvaluation(input: {
     const [created] = await tx
       .insert(serviceOrderEvaluation)
       .values({
+        organizationId: input.member.organizationId,
         serviceOrderId: input.serviceOrderId,
         technicianId,
         diagnosis: input.values.diagnosis,

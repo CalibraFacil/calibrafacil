@@ -23,12 +23,17 @@ import {
 } from '@hugeicons/core-free-icons'
 
 import { calibraApi } from '@/utils/api'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Textarea } from '@/components/ui/textarea'
-import { Spinner } from '@/components/ui/spinner'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@calibra-facil/ui/button'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
+import { Textarea } from '@calibra-facil/ui/textarea'
+import { Spinner } from '@calibra-facil/ui/spinner'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@calibra-facil/ui/card'
 import {
   Table,
   TableBody,
@@ -36,13 +41,13 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'
+} from '@calibra-facil/ui/table'
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from '@/components/ui/accordion'
+} from '@calibra-facil/ui/accordion'
 import {
   Dialog,
   DialogContent,
@@ -50,14 +55,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
+} from '@calibra-facil/ui/dialog'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
-import { Field, FieldLabel } from '@/components/ui/field'
+} from '@calibra-facil/ui/select'
+import { Field, FieldLabel } from '@calibra-facil/ui/field'
 import {
   formatCalibrationValue,
   getFinancialStatusLabel,
@@ -110,7 +115,7 @@ import {
   StaggerGroup,
   StaggerItem,
   type SignalTone,
-} from '@/components/instrument-panel'
+} from '@calibra-facil/ui/instrument-panel'
 import { cn } from '@/lib/utils'
 
 type HugeIcon = Parameters<typeof HugeiconsIcon>[0]['icon']

@@ -5,10 +5,10 @@ import { translateAuthErrorMessage } from "@calibra-facil/auth/error-messages";
 import { z } from "zod";
 
 import { BrandLockup } from "@/components/brand";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Spinner } from "@/components/ui/spinner";
+import { Button } from "@calibra-facil/ui/button";
+import { Input } from "@calibra-facil/ui/input";
+import { Label } from "@calibra-facil/ui/label";
+import { Spinner } from "@calibra-facil/ui/spinner";
 import { useIsLargeScreen } from "@/hooks/use-large-screen";
 import { sanitizePortalRedirect } from "@/lib/auth-redirect";
 

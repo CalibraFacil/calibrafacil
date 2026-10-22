@@ -16,9 +16,9 @@ import {
   SignalTile,
   StaggerGroup,
   StaggerItem,
-} from '@/components/instrument-panel'
-import { Button } from '@/components/ui/button'
-import { DataTableColumnHeader } from '@/components/ui/data-table-column-header'
+} from '@calibra-facil/ui/instrument-panel'
+import { Button } from '@calibra-facil/ui/button'
+import { DataTableColumnHeader } from '@calibra-facil/ui/data-table-column-header'
 import {
   FinanceDataTable,
   type FacetConfig,

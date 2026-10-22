@@ -20,19 +20,19 @@ import type { SigningCertificate } from '@calibra-facil/client-runtime'
 
 import { useDashboardUnits } from '@/hooks/use-dashboard-units'
 import { calibraApi } from '@/utils/api'
-import { Panel, PanelHeader } from '@/components/instrument-panel'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Input } from '@/components/ui/input'
-import { Checkbox } from '@/components/ui/checkbox'
+import { Panel, PanelHeader } from '@calibra-facil/ui/instrument-panel'
+import { Button } from '@calibra-facil/ui/button'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
+import { Input } from '@calibra-facil/ui/input'
+import { Checkbox } from '@calibra-facil/ui/checkbox'
 import {
   Field,
   FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
-} from '@/components/ui/field'
+} from '@calibra-facil/ui/field'
 import {
   Dialog,
   DialogContent,
@@ -42,7 +42,7 @@ import {
   DialogTitle,
   DialogTrigger,
   DialogClose,
-} from '@/components/ui/dialog'
+} from '@calibra-facil/ui/dialog'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,16 +52,16 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+} from '@calibra-facil/ui/alert-dialog'
 import {
   Empty,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from '@/components/ui/empty'
-import { Switch } from '@/components/ui/switch'
-import { Textarea } from '@/components/ui/textarea'
+} from '@calibra-facil/ui/empty'
+import { Switch } from '@calibra-facil/ui/switch'
+import { Textarea } from '@calibra-facil/ui/textarea'
 import { cn } from '@/lib/utils'
 import { useSigningCertificatesData } from '@/features/settings/queries'
 import { formatInstant } from '@calibra-facil/shared/format'
@@ -437,13 +437,19 @@ function CertificateCard({
 
         {/* Actions */}
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Button variant="ghost" size="icon-sm" onClick={onView}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Visualizar certificado"
+            onClick={onView}
+          >
             <HugeiconsIcon icon={ViewIcon} className="size-4" />
           </Button>
           {certificate.status === 'valid' && !certificate.isDefault && (
             <Button
               variant="ghost"
               size="icon-sm"
+              aria-label="Definir como padrão"
               onClick={onSetDefault}
               disabled={isSettingDefault}
             >
@@ -451,7 +457,12 @@ function CertificateCard({
             </Button>
           )}
           {certificate.status === 'valid' && (
-            <Button variant="ghost" size="icon-sm" onClick={onRevoke}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Revogar certificado"
+              onClick={onRevoke}
+            >
               <HugeiconsIcon
                 icon={Delete02Icon}
                 className="size-4 text-destructive"

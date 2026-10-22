@@ -10,17 +10,17 @@ import {
   File01Icon,
 } from "@hugeicons/core-free-icons";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Spinner } from "@/components/ui/spinner";
-import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@calibra-facil/ui/button";
+import { Card, CardContent } from "@calibra-facil/ui/card";
+import { Spinner } from "@calibra-facil/ui/spinner";
+import { Textarea } from "@calibra-facil/ui/textarea";
 import {
   BlueprintField,
   BlueprintGrid,
   Panel,
   PanelHeader,
   type SignalTone,
-} from "@/components/instrument-panel";
+} from "@calibra-facil/ui/instrument-panel";
 import { StatusPill } from "@/components/status-pill";
 import { Timeline, type TimelineItem } from "@/components/timeline";
 import {

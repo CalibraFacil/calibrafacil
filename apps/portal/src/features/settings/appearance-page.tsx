@@ -7,7 +7,7 @@ import {
 } from "@hugeicons/core-free-icons";
 
 import { cn } from "@/lib/utils";
-import { Panel, PanelHeader } from "@/components/instrument-panel";
+import { Panel, PanelHeader } from "@calibra-facil/ui/instrument-panel";
 import { getStoredTheme, setTheme, type Theme } from "./theme";
 
 /**

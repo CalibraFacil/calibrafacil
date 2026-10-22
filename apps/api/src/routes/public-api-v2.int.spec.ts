@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { organizationOf } from "../../test/integration/organization-of";
 import { publicApiV2Router } from "./public-api-v2";
 import { db, getDb } from "@calibra-facil/db";
 import {
@@ -677,12 +678,14 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
     // Pre-existing history for each asset (would be cascade-erased today).
     await db.insert(assetAuditLog).values([
       {
+        organizationId: organizationOf("asset", assetA),
         assetId: assetA,
         action: "create",
         changes: { asset: { old: null, new: { tag: "PAPI-AUD-A" } } },
         performedBy: orgA.userId,
       },
       {
+        organizationId: organizationOf("asset", assetB),
         assetId: assetB,
         action: "create",
         changes: { asset: { old: null, new: { tag: "PAPI-AUD-B" } } },

@@ -7,16 +7,16 @@ import {
   usePortalSession,
 } from "@calibra-facil/auth/client";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Avatar, AvatarFallback, AvatarImage } from "@calibra-facil/ui/avatar";
+import { Button } from "@calibra-facil/ui/button";
+import { Skeleton } from "@calibra-facil/ui/skeleton";
 import {
   BlueprintField,
   BlueprintGrid,
   BlueprintOverlay,
   Panel,
   PanelHeader,
-} from "@/components/instrument-panel";
+} from "@calibra-facil/ui/instrument-panel";
 
 function getInitials(name: string) {
   return name

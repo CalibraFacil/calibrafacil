@@ -6,15 +6,15 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import { calibraApi } from '@/utils/api'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Button } from '@calibra-facil/ui/button'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
+} from '@calibra-facil/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -22,10 +22,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
-import { Spinner } from '@/components/ui/spinner'
-import { Textarea } from '@/components/ui/textarea'
+} from '@calibra-facil/ui/dialog'
+import { Label } from '@calibra-facil/ui/label'
+import { Spinner } from '@calibra-facil/ui/spinner'
+import { Textarea } from '@calibra-facil/ui/textarea'
 import { toast } from 'sonner'
 import { formatInstant } from '@calibra-facil/shared/format'
 

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { organizationOf } from "../../test/integration/organization-of";
 import { portalRequestsRouter } from "./portal-requests";
 import { db } from "@calibra-facil/db";
 import {
@@ -413,9 +414,11 @@ describe("portalRequestsRouter — real DB + real portal middleware", () => {
       submittedBy: ctx.portalUserId,
       observations: "Minha solicitação",
     });
-    await db
-      .insert(calibrationRequestItem)
-      .values({ requestId: reqId, assetId });
+    await db.insert(calibrationRequestItem).values({
+      organizationId: organizationOf("calibration_request", reqId),
+      requestId: reqId,
+      assetId,
+    });
 
     loginAsPortal({
       userId: ctx.portalUserId,

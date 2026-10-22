@@ -8,13 +8,13 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
+} from '@calibra-facil/ui/card'
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from '@/components/ui/collapsible'
-import { Skeleton } from '@/components/ui/skeleton'
+} from '@calibra-facil/ui/collapsible'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
 import {
   canManageIntegrationSettings,
   getIntegrationSettingsRole,

@@ -6,11 +6,11 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsMobile } from "@calibra-facil/ui/use-mobile";
 import {
   NativeSelect,
   NativeSelectOption,
-} from "@/components/ui/native-select";
+} from "@calibra-facil/ui/native-select";
 import { cn } from "@/lib/utils";
 
 /**

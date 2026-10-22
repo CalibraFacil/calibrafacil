@@ -6,19 +6,19 @@ import { Calendar01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
-import { Calendar } from '@/components/ui/calendar'
-import type { DatePickerPreset } from '@/components/ui/date-picker'
+import { Button } from '@calibra-facil/ui/button'
+import { Calendar } from '@calibra-facil/ui/calendar'
+import type { DatePickerPreset } from '@calibra-facil/ui/date-picker'
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
-} from '@/components/ui/input-group'
+} from '@calibra-facil/ui/input-group'
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from '@/components/ui/popover'
+} from '@calibra-facil/ui/popover'
 
 interface DateInputProps {
   id?: string
@@ -103,6 +103,7 @@ function DateInput({
                 type="button"
                 variant="ghost"
                 size="icon-xs"
+                aria-label="Abrir calendário"
                 disabled={disabled}
               />
             }

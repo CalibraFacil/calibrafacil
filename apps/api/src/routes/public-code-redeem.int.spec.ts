@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { organizationOf } from "../../test/integration/organization-of";
 import { publicServiceOrderAccessRouter } from "./service-orders";
 import { db } from "@calibra-facil/db";
 import {
@@ -118,6 +119,7 @@ async function seedWorld(tag: string) {
   const [quote] = await db
     .insert(serviceOrderQuote)
     .values({
+      organizationId: organizationOf("service_order", serviceOrderId),
       serviceOrderId,
       quoteNumber: `OS-${tag}/ORC`,
       version: 1,

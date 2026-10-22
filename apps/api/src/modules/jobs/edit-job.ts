@@ -172,6 +172,7 @@ export async function editJob(command: EditJobCommand): Promise<EditJobResult> {
     if (!row) return null;
 
     await tx.insert(jobAuditLog).values({
+      organizationId,
       jobId: existing.id,
       action: "update",
       changes: { ...jobActorAuditFields(actor), ...changes },

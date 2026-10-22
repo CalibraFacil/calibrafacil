@@ -3,17 +3,17 @@ import { toast } from 'sonner'
 import { FingerPrintIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Spinner } from '@/components/ui/spinner'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@calibra-facil/ui/button'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Spinner } from '@calibra-facil/ui/spinner'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
+} from '@calibra-facil/ui/card'
 import {
   Empty,
   EmptyContent,
@@ -21,7 +21,7 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from '@/components/ui/empty'
+} from '@calibra-facil/ui/empty'
 import {
   Dialog,
   DialogContent,
@@ -29,7 +29,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
+} from '@calibra-facil/ui/dialog'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,10 +40,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
-import { Field, FieldError, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+} from '@calibra-facil/ui/alert-dialog'
+import { Field, FieldError, FieldLabel } from '@calibra-facil/ui/field'
+import { Input } from '@calibra-facil/ui/input'
+import { Alert, AlertDescription, AlertTitle } from '@calibra-facil/ui/alert'
 
 import {
   useAddPasskey,

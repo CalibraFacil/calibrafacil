@@ -20,18 +20,29 @@ import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
  * but never propagate: a derived-index hiccup must not fail a calibration
  * save; drift is repairable by re-running the same rewrite (or the migration
  * backfill logic) since the snapshot is retained.
+ *
+ * `organizationId` is the job's laboratory; the composite (organization_id,
+ * job_id) foreign key rejects a pair that is not the same tenant.
  */
 export async function syncJobStandardLinks(
   jobId: number,
   snapshot: StandardSnapshot[] | null | undefined,
-  usedAt?: Date | null,
+  usedAt: Date | null | undefined,
+  organizationId: string,
 ): Promise<void> {
   // undefined = "snapshot untouched by this write" — keep existing links.
   if (snapshot === undefined) return;
 
   try {
     await db.transaction(async (tx) => {
-      await tx.delete(jobStandard).where(eq(jobStandard.jobId, jobId));
+      await tx
+        .delete(jobStandard)
+        .where(
+          and(
+            eq(jobStandard.jobId, jobId),
+            eq(jobStandard.organizationId, organizationId),
+          ),
+        );
 
       const standardIds = [
         ...new Set(
@@ -46,6 +57,7 @@ export async function syncJobStandardLinks(
         .insert(jobStandard)
         .values(
           standardIds.map((standardId) => ({
+            organizationId,
             jobId,
             standardId,
             usedAt: usedAt ?? new Date(),

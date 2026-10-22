@@ -422,6 +422,14 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   {
     category: "provisioning",
     file: "apps/api/src/cli/seed-demo/history-rewrite.ts",
+    tables: ["job_audit_log", "job_standard", "asset_audit_log"],
+    kinds: ["select", "update"],
+    reason:
+      "Demo seed only: back-dates the audit rows and standards links of the jobs/assets it just created, by their entity id, inside the calibra.allow_audit_rewrite transaction (these tables gained organization_id in migration 0118). No route reaches it.",
+  },
+  {
+    category: "provisioning",
+    file: "apps/api/src/cli/seed-demo/history-rewrite.ts",
     tables: [
       "calibration_job",
       "job_commercial_snapshot",

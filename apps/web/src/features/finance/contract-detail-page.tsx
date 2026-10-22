@@ -14,8 +14,8 @@ import {
   PanelHeader,
   StaggerGroup,
   StaggerItem,
-} from '@/components/instrument-panel'
-import { Button } from '@/components/ui/button'
+} from '@calibra-facil/ui/instrument-panel'
+import { Button } from '@calibra-facil/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -23,7 +23,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
+} from '@calibra-facil/ui/dialog'
 import {
   Table,
   TableBody,
@@ -31,7 +31,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'
+} from '@calibra-facil/ui/table'
 import {
   useFinanceContractDetailData,
   useFinanceContractServiceOptionsData,

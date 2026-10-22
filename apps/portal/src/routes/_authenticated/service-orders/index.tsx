@@ -10,17 +10,17 @@ import {
   Search01Icon,
 } from "@hugeicons/core-free-icons";
 
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@calibra-facil/ui/button";
+import { Badge } from "@calibra-facil/ui/badge";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { DataTable } from "@/components/ui/data-table";
-import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+} from "@calibra-facil/ui/card";
+import { DataTable } from "@calibra-facil/ui/data-table";
+import { DataTableColumnHeader } from "@calibra-facil/ui/data-table-column-header";
 import {
   Empty,
   EmptyContent,
@@ -28,14 +28,14 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from "@/components/ui/empty";
-import { Input } from "@/components/ui/input";
+} from "@calibra-facil/ui/empty";
+import { Input } from "@calibra-facil/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from "@/components/ui/select";
+} from "@calibra-facil/ui/select";
 import { getApiBaseUrl } from "@/lib/utils";
 import { keepPreviousDataInScope } from "@/lib/keep-previous-page";
 import { usePortalQueryKey } from "@/lib/portal-org-context";

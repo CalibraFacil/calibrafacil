@@ -16,18 +16,18 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
+} from '@calibra-facil/ui/card'
 import {
   Field,
   FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
-} from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Skeleton } from '@/components/ui/skeleton'
+} from '@calibra-facil/ui/field'
+import { Input } from '@calibra-facil/ui/input'
+import { Button } from '@calibra-facil/ui/button'
+import { Avatar, AvatarFallback, AvatarImage } from '@calibra-facil/ui/avatar'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
 
 export function ProfileSettingsPage() {
   const { user, isLoading, isUpdating, updateProfile, clearError } =

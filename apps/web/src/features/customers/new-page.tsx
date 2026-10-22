@@ -10,9 +10,9 @@ import {
   type CreatedCustomer,
   getCustomerInvitationId,
 } from '@/features/customers/components/customer-create-form'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
+import { Button } from '@calibra-facil/ui/button'
+import { Input } from '@calibra-facil/ui/input'
+import { Field, FieldDescription, FieldLabel } from '@calibra-facil/ui/field'
 import {
   Dialog,
   DialogContent,
@@ -20,7 +20,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
+} from '@calibra-facil/ui/dialog'
 
 export function NewClientPage() {
   const navigate = useNavigate()

@@ -731,7 +731,12 @@ export const portalRouter = new Hono<{
       );
       // Group mode aggregates requests across branches whose authOrg differs
       // from the active (group) org, so scope by customerId alone.
-      const requestWhere = inArray(calibrationRequest.customerId, customerIds);
+      // The counts and the recent list share one predicate: the portal customer's
+      // requests, inside the laboratory the scope resolved to.
+      const requestWhere = and(
+        inArray(calibrationRequest.customerId, customerIds),
+        eq(calibrationRequest.organizationId, scope.labOrganizationId),
+      );
       const certificateWhere = and(
         inArray(calibrationJob.customerId, customerIds),
         eq(calibrationJob.status, "APPROVED"),
@@ -1738,6 +1743,7 @@ export const portalRouter = new Hono<{
         const [existing] = await db
           .select({
             id: asset.id,
+            labOrganizationId: asset.labOrganizationId,
             customerId: asset.customerId,
             lastCalibrationDate: asset.lastCalibrationDate,
             calibrationIntervalMonths: asset.calibrationIntervalMonths,
@@ -1794,6 +1800,7 @@ export const portalRouter = new Hono<{
           );
 
         await db.insert(assetAuditLog).values({
+          organizationId: existing.labOrganizationId,
           assetId: id,
           action: "interval_change",
           changes: {
@@ -3058,7 +3065,10 @@ export const portalRouter = new Hono<{
           return c.json({ data: [] });
         }
 
-        const conditions = [inArray(assetOotEvent.customerId, customerIds)];
+        const conditions = [
+          inArray(assetOotEvent.customerId, customerIds),
+          eq(assetOotEvent.labOrganizationId, scope.labOrganizationId),
+        ];
         if (status) {
           conditions.push(eq(assetOotEvent.status, status));
         }
@@ -3164,7 +3174,15 @@ export const portalRouter = new Hono<{
         const [existingAssessment] = await db
           .select({ id: assetOotImpactAssessment.id })
           .from(assetOotImpactAssessment)
-          .where(eq(assetOotImpactAssessment.eventId, id))
+          .where(
+            and(
+              eq(assetOotImpactAssessment.eventId, id),
+              eq(
+                assetOotImpactAssessment.organizationId,
+                event.labOrganizationId,
+              ),
+            ),
+          )
           .limit(1);
         if (existingAssessment) {
           return c.json(
@@ -3180,6 +3198,7 @@ export const portalRouter = new Hono<{
         const [assessment] = await db
           .insert(assetOotImpactAssessment)
           .values({
+            organizationId: event.labOrganizationId,
             eventId: id,
             decision: input.decision,
             rationale: input.rationale,
@@ -3208,6 +3227,7 @@ export const portalRouter = new Hono<{
           );
 
         await db.insert(assetOotAuditLog).values({
+          organizationId: event.labOrganizationId,
           eventId: id,
           action: "assess",
           changes: {

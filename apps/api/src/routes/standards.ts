@@ -888,6 +888,7 @@ export const standardsRouter = new Hono<{
         }
 
         await db.insert(referenceStandardAuditLog).values({
+          organizationId: member.organizationId,
           standardId: standard.id,
           action: "certificate_document_upload",
           changes: {
@@ -1028,6 +1029,7 @@ export const standardsRouter = new Hono<{
 
       // Audit log
       await db.insert(referenceStandardAuditLog).values({
+        organizationId: member.organizationId,
         standardId: newStandard.id,
         action: "create",
         changes: {
@@ -1264,6 +1266,7 @@ export const standardsRouter = new Hono<{
 
       // Audit log
       await db.insert(referenceStandardAuditLog).values({
+        organizationId: member.organizationId,
         standardId: id,
         action: changes.status ? "status_change" : "update",
         changes,
@@ -1588,6 +1591,7 @@ export const standardsRouter = new Hono<{
         .returning();
 
       await db.insert(referenceStandardAuditLog).values({
+        organizationId: member.organizationId,
         standardId: id,
         action: "recall_send",
         changes: {
@@ -1657,6 +1661,7 @@ export const standardsRouter = new Hono<{
 
     // Audit log
     await db.insert(referenceStandardAuditLog).values({
+      organizationId: member.organizationId,
       standardId: id,
       action: "delete",
       changes: { deletedAt: { old: null, new: new Date().toISOString() } },
@@ -1801,6 +1806,7 @@ export const standardsRouter = new Hono<{
 
       // Audit log with reason (required for ISO 17025)
       await db.insert(referenceStandardAuditLog).values({
+        organizationId: member.organizationId,
         standardId: id,
         action: "renew",
         changes,

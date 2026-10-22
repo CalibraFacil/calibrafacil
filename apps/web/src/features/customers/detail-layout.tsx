@@ -17,11 +17,14 @@ import { HugeiconsIcon } from '@hugeicons/react'
 
 import { useCustomerDetailData } from '@/features/customers/queries'
 import type { CustomerCompliance } from '@/features/customers/types'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Badge } from '@/components/ui/badge'
-import { useIsMobile } from '@/hooks/use-mobile'
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
+import { Badge } from '@calibra-facil/ui/badge'
+import { useIsMobile } from '@calibra-facil/ui/use-mobile'
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from '@calibra-facil/ui/native-select'
+import { Tabs, TabsList, TabsTrigger } from '@calibra-facil/ui/tabs'
 
 const tabs = [
   {

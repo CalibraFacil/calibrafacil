@@ -11,7 +11,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import type { DateRange } from "react-day-picker";
 
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@calibra-facil/ui/badge";
 import { StatusPill } from "@/components/status-pill";
 import {
   Card,
@@ -19,7 +19,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "@calibra-facil/ui/card";
 import {
   Empty,
   EmptyContent,
@@ -27,13 +27,13 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from "@/components/ui/empty";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { DateRangePicker } from "@/components/ui/date-picker";
-import { Spinner } from "@/components/ui/spinner";
-import { DataTable } from "@/components/ui/data-table";
-import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+} from "@calibra-facil/ui/empty";
+import { Input } from "@calibra-facil/ui/input";
+import { Button } from "@calibra-facil/ui/button";
+import { DateRangePicker } from "@calibra-facil/ui/date-range-picker";
+import { Spinner } from "@calibra-facil/ui/spinner";
+import { DataTable } from "@calibra-facil/ui/data-table";
+import { DataTableColumnHeader } from "@calibra-facil/ui/data-table-column-header";
 import { getApiBaseUrl } from "@/lib/utils";
 import { keepPreviousDataInScope } from "@/lib/keep-previous-page";
 import { usePortalQueryKey } from "@/lib/portal-org-context";

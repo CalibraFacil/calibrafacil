@@ -21,8 +21,8 @@ import {
   customerFinancialTimelineRow,
   customerTimelineFreshnessLabel,
 } from '@/features/customers/financial-timeline-model'
-import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@calibra-facil/ui/button'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
 import { clientRouteId } from '@/lib/route-identifiers'
 import {
   ClientMetric,

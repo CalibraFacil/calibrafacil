@@ -8,7 +8,7 @@ import {
 } from '@hugeicons/core-free-icons'
 
 import { useCommandPalette } from '../command-context'
-import { CommandGroup, CommandItem } from '@/components/ui/command'
+import { CommandGroup, CommandItem } from '@calibra-facil/ui/command'
 
 export function QuickCreateGroup() {
   const navigate = useNavigate()

@@ -649,6 +649,7 @@ async function runJobExecution(
     if (!row) return null;
 
     await tx.insert(jobAuditLog).values({
+      organizationId,
       jobId: existing.id,
       action: command.command,
       changes: {
@@ -765,6 +766,7 @@ async function runJobExecution(
     existing.id,
     nextStandardsSnapshot,
     updated.performedAt ?? existing.performedAt,
+    organizationId,
   );
 
   // On-site visits roll forward to IN_PROGRESS once any of their jobs starts.

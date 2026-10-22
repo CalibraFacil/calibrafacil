@@ -5,7 +5,7 @@ import {
   PanelHeader,
   StaggerGroup,
   StaggerItem,
-} from '@/components/instrument-panel'
+} from '@calibra-facil/ui/instrument-panel'
 import { cn } from '@/lib/utils'
 
 /**

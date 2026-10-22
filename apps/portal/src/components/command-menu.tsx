@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import { getApiBaseUrl } from "@/lib/utils";
 import { getCalibrationStatus } from "@/lib/calibration-status";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@calibra-facil/ui/dialog";
 import { StatusPill } from "@/components/status-pill";
 
 type AssetHit = {

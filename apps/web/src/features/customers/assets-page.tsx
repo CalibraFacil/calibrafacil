@@ -12,8 +12,8 @@ import {
   useCustomerDetailData,
 } from '@/features/customers/queries'
 import type { CustomerAssetStatus } from '@/features/customers/types'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Button } from '@calibra-facil/ui/button'
+import { Input } from '@calibra-facil/ui/input'
 import {
   Table,
   TableBody,
@@ -21,9 +21,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
+} from '@calibra-facil/ui/table'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
 import {
   Empty,
   EmptyContent,
@@ -31,7 +31,7 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from '@/components/ui/empty'
+} from '@calibra-facil/ui/empty'
 import { assetRouteId } from '@/lib/route-identifiers'
 import {
   ClientPanel,

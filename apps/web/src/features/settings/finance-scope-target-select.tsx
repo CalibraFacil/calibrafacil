@@ -10,7 +10,7 @@ import { HugeiconsIcon } from '@hugeicons/react'
 import { Tick02Icon, UnfoldMoreIcon } from '@hugeicons/core-free-icons'
 
 import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
+import { Button } from '@calibra-facil/ui/button'
 import {
   Command,
   CommandEmpty,
@@ -18,12 +18,12 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from '@/components/ui/command'
+} from '@calibra-facil/ui/command'
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from '@/components/ui/popover'
+} from '@calibra-facil/ui/popover'
 import {
   useFinanceContractCustomerOptionsData,
   useFinanceContractServiceOptionsData,

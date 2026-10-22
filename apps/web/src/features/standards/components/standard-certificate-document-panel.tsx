@@ -8,8 +8,8 @@ import {
   File01Icon,
 } from '@hugeicons/core-free-icons'
 
-import { Button } from '@/components/ui/button'
-import { Spinner } from '@/components/ui/spinner'
+import { Button } from '@calibra-facil/ui/button'
+import { Spinner } from '@calibra-facil/ui/spinner'
 import { calibraApi } from '@/utils/api'
 import { formatStandardDate } from '@/features/standards/dates'
 import type { StandardDetail } from '@/features/standards/types'

@@ -580,6 +580,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         // Log audit entry if there were changes
         if (Object.keys(changes).length > 0) {
           await db.insert(customerAuditLog).values({
+            organizationId: memberData.organizationId,
             customerId: id,
             action: "update",
             changes,
@@ -640,6 +641,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           // Log audit entry before deletion. CMP-06 (#649): the customer_id FK no
           // longer cascades (soft reference), so this row survives the delete below.
           await tx.insert(customerAuditLog).values({
+            organizationId: memberData.organizationId,
             customerId: id,
             action: "delete",
             changes: { customer: { old: existingCustomer, new: null } },
@@ -658,6 +660,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           if (customerAssets.length > 0) {
             await tx.insert(assetAuditLog).values(
               customerAssets.map((assetRow) => ({
+                organizationId: memberData.organizationId,
                 assetId: assetRow.id,
                 action: "delete",
                 changes: { asset: { old: assetRow, new: null } },
@@ -862,6 +865,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
 
         // Log audit entry
         await db.insert(customerAuditLog).values({
+          organizationId: memberData.organizationId,
           customerId: id,
           action: "user_invited",
           changes: {
@@ -1045,6 +1049,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
 
         // Log audit entry
         await db.insert(customerAuditLog).values({
+          organizationId: memberData.organizationId,
           customerId: id,
           action: "invitation_canceled",
           changes: { email: foundInvitation.email, invitationId: invId },
@@ -1146,6 +1151,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
 
         // Log audit entry
         await db.insert(customerAuditLog).values({
+          organizationId: memberData.organizationId,
           customerId: id,
           action: "user_removed",
           changes: {
@@ -1260,6 +1266,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
 
         // Log audit entry with reason (required for compliance changes per ISO 17025)
         await db.insert(customerAuditLog).values({
+          organizationId: memberData.organizationId,
           customerId: id,
           action: "compliance_change",
           changes: { old: existingCustomer.compliance, new: updatedCompliance },
