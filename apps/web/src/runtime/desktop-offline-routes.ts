@@ -26,9 +26,9 @@ import type { FileRouteTypes } from '@/routeTree.gen'
  * NOT gate the actions a page offers on top of that (approve, edit, issue a
  * document, ...). Each of those has to be gated by the page itself with
  * `useOperationAvailability` + `ActionAvailabilityGate`, which read the same
- * registry. Allowlisting a route therefore means auditing its actions: the
- * service-order detail page's quote, execution and delivery-document actions
- * are covered by `detail-page-offline-gating.test.tsx`.
+ * registry. Allowlisting a route therefore means auditing its actions; the
+ * `*offline-gating.test.tsx` suites cover the service-order, method and
+ * standard-certificate actions.
  */
 
 type ApiMethodRef = {
