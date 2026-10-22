@@ -1,7 +1,7 @@
-import { db } from "@calibra-facil/db";
 import { certificateRelease } from "@calibra-facil/db/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import type { CertificateReleaseStatus } from "@calibra-facil/shared";
+import { orgSetDb } from "./org-db";
 
 /**
  * Customer-facing release indicator. Provider-neutral. The portal must not
@@ -27,45 +27,33 @@ export function toPortalReleaseStatus(
 /**
  * Read certificate_release for a list of calibration job ids. Returns a
  * map of jobId → portal release status that callers can use to gate
- * `certificateUrl` for the portal. Callers must already have scoped the
- * job ids by tenant (the portal customer / org access check that precedes
- * the query in the portal route).
+ * `certificateUrl` for the portal.
  *
- * `organizationId` is optional defense-in-depth: when provided, the lookup
- * restricts to that org (single-tenant route). For multi-org portal
- * surfaces, pass null/undefined — the unique index on
- * `certificate_release.calibration_job_id` keeps the lookup deterministic.
+ * `organizationId` is the laboratory (or, for the surfaces that list across
+ * every laboratory a customer user belongs to, the set of laboratories) the
+ * job ids belong to: the lookup runs through the org-bound handle, so a
+ * release row of any other laboratory can never be read.
  */
 export async function loadPortalReleaseStatuses(params: {
-  organizationId?: string | null;
+  organizationId: string | readonly string[];
   calibrationJobIds: number[];
 }): Promise<Map<number, PortalReleaseStatus>> {
   const out = new Map<number, PortalReleaseStatus>();
   if (params.calibrationJobIds.length === 0) return out;
 
-  const orgScope = params.organizationId
-    ? eq(certificateRelease.organizationId, params.organizationId)
-    : undefined;
+  const organizationIds =
+    typeof params.organizationId === "string"
+      ? [params.organizationId]
+      : params.organizationId;
 
-  const rows = await db
+  const rows = await orgSetDb(organizationIds)
     .select({
       calibrationJobId: certificateRelease.calibrationJobId,
       status: certificateRelease.status,
     })
     .from(certificateRelease)
     .where(
-      orgScope
-        ? and(
-            orgScope,
-            inArray(
-              certificateRelease.calibrationJobId,
-              params.calibrationJobIds,
-            ),
-          )
-        : inArray(
-            certificateRelease.calibrationJobId,
-            params.calibrationJobIds,
-          ),
+      inArray(certificateRelease.calibrationJobId, params.calibrationJobIds),
     );
 
   for (const row of rows) {
@@ -87,7 +75,7 @@ export async function applyPortalCertificateReleaseGate<
   T extends { id: number; certificateUrl: string | null },
 >(
   rows: T[],
-  organizationId?: string | null,
+  organizationId: string | readonly string[],
 ): Promise<Array<T & { releaseStatus: PortalReleaseStatus }>> {
   const statuses = await loadPortalReleaseStatuses({
     organizationId,

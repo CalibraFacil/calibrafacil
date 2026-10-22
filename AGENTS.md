@@ -90,7 +90,10 @@ covers the big-picture architecture; `CONTRIBUTING.md` covers the contribution f
 
 ## Guardrails for Regulated Code
 
-- Preserve tenant, organization, and unit scoping in every query.
+- Preserve tenant, organization, and unit scoping in every query. Route handlers query through the
+  org-bound handle `orgDb(organizationId)` (`apps/api/src/lib/org-db.ts`), which adds the
+  organization predicate itself; the raw `db` is a lint error in `apps/api/src/routes` beyond the
+  grandfathered per-file counts (`docs/architecture/org-bound-db.md`).
 - Preserve Better Auth patterns and RBAC permission boundaries.
 - The math engine (`packages/math-engine`) is versioned: any change to a numeric result needs
   a new `ENGINE_VERSION` and a new dossier directory under `validation/math-engine/`. Never

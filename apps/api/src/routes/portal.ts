@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
-import { db } from "@calibra-facil/db";
 import {
   member,
   user,
@@ -207,13 +206,14 @@ const PortalAuditPackRequestSchema = z
 // serial id or null when the param matches nothing. Scope checks still happen
 // downstream — this only translates the identifier.
 async function resolvePortalAssetIdParam(
+  o: Pick<OrgDb, "select">,
   param: string,
 ): Promise<number | null> {
   if (/^\d+$/.test(param)) {
     const id = Number.parseInt(param, 10);
     return Number.isNaN(id) ? null : id;
   }
-  const [row] = await db
+  const [row] = await o
     .select({ id: asset.id })
     .from(asset)
     .where(eq(asset.publicId, param))
@@ -225,8 +225,8 @@ async function resolvePortalAssetIdParam(
 // service order — i.e. it is physically at the laboratory right now. Open job
 // statuses are every non-terminal JobStatus; open service orders mirror the
 // /overview "inProgress" definition (anything not yet returned to the client).
-function assetInLabSql() {
-  const openJob = db
+function assetInLabSql(o: Pick<OrgDb, "select">) {
+  const openJob = o
     .select({ one: sql`1` })
     .from(calibrationJob)
     .where(
@@ -240,7 +240,7 @@ function assetInLabSql() {
         ]),
       ),
     );
-  const openServiceOrder = db
+  const openServiceOrder = o
     .select({ one: sql`1` })
     .from(serviceOrder)
     .where(
@@ -253,7 +253,10 @@ function assetInLabSql() {
   return sql<boolean>`(${exists(openJob)} or ${exists(openServiceOrder)})`;
 }
 
-function buildDueStatusCondition(dueStatus: DueStatus) {
+function buildDueStatusCondition(
+  dueStatus: DueStatus,
+  o: Pick<OrgDb, "select">,
+) {
   if (!dueStatus) return undefined;
   // next_calibration_date is a calendar day: compare it with the laboratory's
   // today (a calibration due on D is not overdue until D is over).
@@ -273,7 +276,7 @@ function buildDueStatusCondition(dueStatus: DueStatus) {
     case "unscheduled":
       return isNull(asset.nextCalibrationDate);
     case "in_lab":
-      return assetInLabSql();
+      return assetInLabSql(o);
   }
 }
 
@@ -333,9 +336,13 @@ import { renderIntervalReportHtml } from "@calibra-facil/documents";
 import { DEFAULT_INTERVAL_CONFIG } from "@calibra-facil/interval-analysis";
 import {
   applyUnitFilter,
-  resolvePortalAccessibleCustomerIds,
+  listPortalClientOrganizations,
+  resolvePortalAccessibleCustomers,
   resolvePortalCustomerScope,
 } from "../lib/portal-customer-scope";
+import { orgDb, orgSetDb } from "../lib/org-db";
+import { domainErrorResponse, notFound } from "../lib/domain-errors";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   createPortalAmendmentChainLoader,
   resolvePortalAmendmentInfo,
@@ -501,6 +508,7 @@ function portalStandardDocumentResponse(
 }
 
 async function withMatchingPortalStandardDocuments(
+  o: Pick<OrgDb, "select">,
   referenceStandards: PortalReferenceStandardSnapshot[],
 ): Promise<PortalReferenceStandardSnapshot[]> {
   const missingDocumentStandards = referenceStandards.filter(
@@ -523,7 +531,7 @@ async function withMatchingPortalStandardDocuments(
     ),
   );
 
-  const documents = await db
+  const documents = await o
     .select()
     .from(referenceStandardCertificateDocument)
     .where(or(...conditions))
@@ -633,7 +641,7 @@ export const portalRouter = new Hono<{
       } satisfies ServerShape<PortalBrandingResponse>);
     }
 
-    const [labOrganization] = await db
+    const [labOrganization] = await orgDb(portalLabScope.labOrganizationId)
       .select({ name: organization.name, logo: organization.logo })
       .from(organization)
       .where(eq(organization.id, portalLabScope.labOrganizationId))
@@ -667,45 +675,10 @@ export const portalRouter = new Hono<{
       // customer-group org (the consolidated "rede" view). Left-join both so a
       // group org — which has no `customer` row — is not dropped, and tag each
       // with `kind` to drive the switcher label ("unit" vs "group · consolidado").
-      const clientOrganizations = await db
-        .select({
-          id: organization.id,
-          name: organization.name,
-          slug: organization.slug,
-          logo: organization.logo,
-          type: organization.type,
-          createdAt: organization.createdAt,
-          memberRole: member.role,
-          kind: sql<
-            "unit" | "group"
-          >`case when ${customerGroup.id} is not null then 'group' else 'unit' end`,
-        })
-        .from(member)
-        .innerJoin(organization, eq(member.organizationId, organization.id))
-        .leftJoin(customer, eq(customer.authOrganizationId, organization.id))
-        .leftJoin(
-          customerGroup,
-          eq(customerGroup.authOrganizationId, organization.id),
-        )
-        .where(
-          and(
-            eq(member.userId, session.user.id),
-            eq(organization.type, "CLIENT"),
-            inArray(member.role, PORTAL_ACCESS_ROLES),
-            portalLabScope.labOrganizationId
-              ? or(
-                  eq(
-                    customer.labOrganizationId,
-                    portalLabScope.labOrganizationId,
-                  ),
-                  eq(
-                    customerGroup.labOrganizationId,
-                    portalLabScope.labOrganizationId,
-                  ),
-                )
-              : undefined,
-          ),
-        );
+      const clientOrganizations = await listPortalClientOrganizations({
+        userId: session.user.id,
+        labScope: portalLabScope.labOrganizationId,
+      });
 
       return c.json(
         clientOrganizations satisfies ServerShape<PortalOrganizationsResponse>,
@@ -742,6 +715,7 @@ export const portalRouter = new Hono<{
         return c.json(emptyOverview());
       }
       const { customerIds } = scope;
+      const o = orgDb(scope.labOrganizationId);
 
       // next_calibration_date is a calendar day: compare it with the
       // laboratory's today, derived from the DB clock in SQL (binding raw JS
@@ -759,10 +733,7 @@ export const portalRouter = new Hono<{
       // from the active (group) org, so scope by customerId alone.
       // The counts and the recent list share one predicate: the portal customer's
       // requests, inside the laboratory the scope resolved to.
-      const requestWhere = and(
-        inArray(calibrationRequest.customerId, customerIds),
-        eq(calibrationRequest.organizationId, scope.labOrganizationId),
-      );
+      const requestWhere = inArray(calibrationRequest.customerId, customerIds);
       const certificateWhere = and(
         inArray(calibrationJob.customerId, customerIds),
         eq(calibrationJob.status, "APPROVED"),
@@ -780,18 +751,18 @@ export const portalRouter = new Hono<{
         awaitingQuoteOrders,
         recentServiceOrders,
       ] = await Promise.all([
-        db
+        o
           .select({
             total: sql<number>`cast(count(*) as int)`,
             overdue: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} < ${labToday}) as int)`,
             dueSoon: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} >= ${labToday} and ${asset.nextCalibrationDate} <= ${labSoon}) as int)`,
             scheduled: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} > ${labSoon}) as int)`,
             unscheduled: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} is null) as int)`,
-            inLab: sql<number>`cast(count(*) filter (where ${assetInLabSql()}) as int)`,
+            inLab: sql<number>`cast(count(*) filter (where ${assetInLabSql(o)}) as int)`,
           })
           .from(asset)
           .where(equipmentWhere),
-        db
+        o
           .select({
             id: asset.id,
             publicId: asset.publicId,
@@ -806,11 +777,11 @@ export const portalRouter = new Hono<{
           .where(and(equipmentWhere, isNotNull(asset.nextCalibrationDate)))
           .orderBy(asc(asset.nextCalibrationDate))
           .limit(6),
-        db
+        o
           .select({ available: sql<number>`cast(count(*) as int)` })
           .from(calibrationJob)
           .where(certificateWhere),
-        db
+        o
           .select({
             id: calibrationJob.id,
             jobId: calibrationJob.jobId,
@@ -824,7 +795,7 @@ export const portalRouter = new Hono<{
           .where(certificateWhere)
           .orderBy(desc(calibrationJob.approvedAt))
           .limit(5),
-        db
+        o
           .select({
             total: sql<number>`cast(count(*) as int)`,
             open: sql<number>`cast(count(*) filter (where ${calibrationRequest.status} in ('PENDING','UNDER_REVIEW')) as int)`,
@@ -832,7 +803,7 @@ export const portalRouter = new Hono<{
           })
           .from(calibrationRequest)
           .where(requestWhere),
-        db
+        o
           .select({
             id: calibrationRequest.id,
             status: calibrationRequest.status,
@@ -843,7 +814,7 @@ export const portalRouter = new Hono<{
           .where(requestWhere)
           .orderBy(desc(calibrationRequest.submittedAt))
           .limit(5),
-        db
+        o
           .select({
             total: sql<number>`cast(count(*) as int)`,
             inProgress: sql<number>`cast(count(*) filter (where ${serviceOrder.status} not in ('delivered','closed','canceled')) as int)`,
@@ -852,7 +823,7 @@ export const portalRouter = new Hono<{
           })
           .from(serviceOrder)
           .where(serviceOrderWhere),
-        db
+        o
           .select({
             id: serviceOrder.id,
             publicId: serviceOrder.publicId,
@@ -871,7 +842,7 @@ export const portalRouter = new Hono<{
           )
           .orderBy(desc(serviceOrder.openedAt))
           .limit(5),
-        db
+        o
           .select({
             id: serviceOrder.id,
             publicId: serviceOrder.publicId,
@@ -977,6 +948,7 @@ export const portalRouter = new Hono<{
           });
         }
 
+        const o = orgDb(scope.labOrganizationId);
         const whereCondition = and(
           inArray(asset.customerId, customerIds),
           eq(asset.status, "ACTIVE"),
@@ -991,10 +963,10 @@ export const portalRouter = new Hono<{
                 ilike(asset.model, `%${query}%`),
               )
             : undefined,
-          buildDueStatusCondition(dueStatus),
+          buildDueStatusCondition(dueStatus, o),
         );
 
-        const [countResult] = await db
+        const [countResult] = await o
           .select({ total: count() })
           .from(asset)
           .where(whereCondition);
@@ -1012,7 +984,7 @@ export const portalRouter = new Hono<{
             ? sql`${sortColumn} desc nulls last`
             : sql`${sortColumn} asc nulls last`;
 
-        const assets = await db
+        const assets = await o
           .select({
             id: asset.id,
             publicId: asset.publicId,
@@ -1032,7 +1004,7 @@ export const portalRouter = new Hono<{
             specifications: asset.specifications,
             lastCalibrationDate: asset.lastCalibrationDate,
             nextCalibrationDate: asset.nextCalibrationDate,
-            inLab: assetInLabSql(),
+            inLab: assetInLabSql(o),
             comments: asset.comments,
             createdAt: asset.createdAt,
             updatedAt: asset.updatedAt,
@@ -1052,7 +1024,7 @@ export const portalRouter = new Hono<{
           { id: number; jobId: string; approvedAt: string | Date | null }
         >();
         if (assetIds.length > 0) {
-          const lastCertificates = await db
+          const lastCertificates = await o
             .selectDistinctOn([calibrationJob.assetId], {
               assetId: calibrationJob.assetId,
               id: calibrationJob.id,
@@ -1116,11 +1088,6 @@ export const portalRouter = new Hono<{
       if (portalLabScope.blocked) {
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }
-      const id = await resolvePortalAssetIdParam(c.req.param("id"));
-      if (id === null) {
-        return c.json({ error: "Ativo nao encontrado" }, 404);
-      }
-
       try {
         const scope = await resolvePortalCustomerScope({
           activeOrgId: portalMember.organizationId,
@@ -1130,9 +1097,14 @@ export const portalRouter = new Hono<{
         if (!scope || scope.customerIds.length === 0) {
           return c.json({ error: "Ativo nao encontrado" }, 404);
         }
+        const o = orgDb(scope.labOrganizationId);
+        const id = await resolvePortalAssetIdParam(o, c.req.param("id"));
+        if (id === null) {
+          return c.json({ error: "Ativo nao encontrado" }, 404);
+        }
         const { customerIds } = scope;
 
-        const [assetDetails] = await db
+        const [assetDetails] = await o
           .select({
             id: asset.id,
             publicId: asset.publicId,
@@ -1161,7 +1133,7 @@ export const portalRouter = new Hono<{
             metrologyRegime: asset.metrologyRegime,
             regulatedInterval: asset.regulatedInterval,
             nextLegalVerificationDate: asset.nextLegalVerificationDate,
-            inLab: assetInLabSql(),
+            inLab: assetInLabSql(o),
             comments: asset.comments,
             createdAt: asset.createdAt,
             updatedAt: asset.updatedAt,
@@ -1188,12 +1160,12 @@ export const portalRouter = new Hono<{
           eq(calibrationJob.status, "APPROVED"),
         );
 
-        const [certificateCountResult] = await db
+        const [certificateCountResult] = await o
           .select({ total: count() })
           .from(calibrationJob)
           .where(assetCertificateWhere);
 
-        const certificatesRaw = await db
+        const certificatesRaw = await o
           .select({
             id: calibrationJob.id,
             jobId: calibrationJob.jobId,
@@ -1291,7 +1263,8 @@ export const portalRouter = new Hono<{
           return c.json({ data: [] });
         }
 
-        const dues = await db
+        const o = orgDb(scope.labOrganizationId);
+        const dues = await o
           .select({
             id: asset.id,
             publicId: asset.publicId,
@@ -1299,7 +1272,7 @@ export const portalRouter = new Hono<{
             tag: asset.tag,
             assetTypeName: sql<string>`coalesce(${assetType.name}, 'Sem tipo')`,
             nextCalibrationDate: asset.nextCalibrationDate,
-            inLab: assetInLabSql(),
+            inLab: assetInLabSql(o),
             customerId: asset.customerId,
             customerName: customer.name,
           })
@@ -1396,7 +1369,7 @@ export const portalRouter = new Hono<{
       const labToday = sql.raw(LAB_TODAY_SQL);
       const labSoon = sql`(${labToday} + ${sql.raw(String(DUE_SOON_DAYS))})`;
 
-      const rows = await db
+      const rows = await orgDb(scope.labOrganizationId)
         .select({
           customerId: asset.customerId,
           total: sql<number>`cast(count(*) as int)`,
@@ -1454,7 +1427,7 @@ export const portalRouter = new Hono<{
     }
 
     try {
-      const [prefs] = await db
+      const [prefs] = await orgDb(c.get("member").organizationId)
         .select({
           preferences: notificationPreference.preferences,
           emailEnabled: notificationPreference.emailEnabled,
@@ -1498,11 +1471,6 @@ export const portalRouter = new Hono<{
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }
 
-      const id = await resolvePortalAssetIdParam(c.req.param("id"));
-      if (id === null) {
-        return c.json({ error: "Ativo nao encontrado" }, 404);
-      }
-
       try {
         const scope = await resolvePortalCustomerScope({
           activeOrgId: portalMember.organizationId,
@@ -1511,9 +1479,14 @@ export const portalRouter = new Hono<{
         if (!scope || scope.customerIds.length === 0) {
           return c.json({ error: "Ativo nao encontrado" }, 404);
         }
+        const o = orgDb(scope.labOrganizationId);
+        const id = await resolvePortalAssetIdParam(o, c.req.param("id"));
+        if (id === null) {
+          return c.json({ error: "Ativo nao encontrado" }, 404);
+        }
         const { customerIds } = scope;
 
-        const [existing] = await db
+        const [existing] = await o
           .select({
             assetTypeId: asset.assetTypeId,
             model: asset.model,
@@ -1533,7 +1506,7 @@ export const portalRouter = new Hono<{
           return c.json({ error: "Ativo nao encontrado" }, 404);
         }
 
-        const rows = await db
+        const rows = await o
           .select({
             approvedAt: calibrationJob.approvedAt,
             asFoundConformity: calibrationJob.asFoundConformity,
@@ -1568,7 +1541,7 @@ export const portalRouter = new Hono<{
           (singleKnown < DEFAULT_INTERVAL_CONFIG.minKnownCycles ||
             singleCoverageLow) &&
           familyModel !== null
-            ? await db
+            ? await o
                 .select({
                   assetId: calibrationJob.assetId,
                   approvedAt: calibrationJob.approvedAt,
@@ -1621,11 +1594,6 @@ export const portalRouter = new Hono<{
       if (portalLabScope.blocked) {
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }
-      const id = await resolvePortalAssetIdParam(c.req.param("id"));
-      if (id === null) {
-        return c.json({ error: "Ativo nao encontrado" }, 404);
-      }
-
       try {
         const scope = await resolvePortalCustomerScope({
           activeOrgId: portalMember.organizationId,
@@ -1634,9 +1602,14 @@ export const portalRouter = new Hono<{
         if (!scope || scope.customerIds.length === 0) {
           return c.json({ error: "Ativo nao encontrado" }, 404);
         }
+        const o = orgDb(scope.labOrganizationId);
+        const id = await resolvePortalAssetIdParam(o, c.req.param("id"));
+        if (id === null) {
+          return c.json({ error: "Ativo nao encontrado" }, 404);
+        }
         const { customerIds } = scope;
 
-        const [existing] = await db
+        const [existing] = await o
           .select({
             name: asset.name,
             tag: asset.tag,
@@ -1661,7 +1634,7 @@ export const portalRouter = new Hono<{
           return c.json({ error: "Ativo nao encontrado" }, 404);
         }
 
-        const rows = await db
+        const rows = await o
           .select({
             approvedAt: calibrationJob.approvedAt,
             asFoundConformity: calibrationJob.asFoundConformity,
@@ -1693,7 +1666,7 @@ export const portalRouter = new Hono<{
           (singleKnown < DEFAULT_INTERVAL_CONFIG.minKnownCycles ||
             singleCoverageLow) &&
           familyModel !== null
-            ? await db
+            ? await o
                 .select({
                   assetId: calibrationJob.assetId,
                   approvedAt: calibrationJob.approvedAt,
@@ -1765,11 +1738,6 @@ export const portalRouter = new Hono<{
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }
 
-      const id = await resolvePortalAssetIdParam(c.req.param("id"));
-      if (id === null) {
-        return c.json({ error: "Ativo nao encontrado" }, 404);
-      }
-
       const { intervalMonths, rationale, source } = c.req.valid("json");
       // REQ-ENGINE-APPLY-001: applying an engine suggestion records `engine_applied`.
       const intervalSetBy =
@@ -1780,9 +1748,20 @@ export const portalRouter = new Hono<{
           activeOrgId: portalMember.organizationId,
           labScope: portalLabScope.labOrganizationId,
         });
-        const scopedCustomerIds = scope?.customerIds ?? [];
+        if (!scope) {
+          return domainErrorResponse(
+            c,
+            notFound("asset_not_found", "Ativo nao encontrado"),
+          );
+        }
+        const scopedCustomerIds = scope.customerIds;
+        const o = orgDb(scope.labOrganizationId);
+        const id = await resolvePortalAssetIdParam(o, c.req.param("id"));
+        if (id === null) {
+          return c.json({ error: "Ativo nao encontrado" }, 404);
+        }
 
-        const [existing] = await db
+        const [existing] = await o
           .select({
             id: asset.id,
             labOrganizationId: asset.labOrganizationId,
@@ -1822,7 +1801,7 @@ export const portalRouter = new Hono<{
             intervalMonths,
           ) ?? existing.nextCalibrationDate;
 
-        await db
+        await o
           .update(asset)
           .set({
             calibrationIntervalMonths: intervalMonths,
@@ -1841,7 +1820,7 @@ export const portalRouter = new Hono<{
             and(eq(asset.id, id), inArray(asset.customerId, scopedCustomerIds)),
           );
 
-        await db.insert(assetAuditLog).values({
+        await o.insert(assetAuditLog).values({
           organizationId: existing.labOrganizationId,
           assetId: id,
           action: "interval_change",
@@ -1890,7 +1869,8 @@ export const portalRouter = new Hono<{
       const input = c.req.valid("json");
 
       try {
-        const [existing] = await db
+        const o = orgDb(c.get("member").organizationId);
+        const [existing] = await o
           .select({
             preferences: notificationPreference.preferences,
             emailEnabled: notificationPreference.emailEnabled,
@@ -1914,7 +1894,7 @@ export const portalRouter = new Hono<{
             input.digestFrequency ?? existing?.digestFrequency ?? "NONE",
         };
 
-        await db
+        await o
           .insert(notificationPreference)
           .values({ userId: session.user.id, ...merged })
           .onConflictDoUpdate({
@@ -1971,10 +1951,11 @@ export const portalRouter = new Hono<{
       }
 
       // All customers this user can access (direct branch orgs + group orgs).
-      const customerIds = await resolvePortalAccessibleCustomerIds({
-        userId: session.user.id,
-        labScope: portalLabScope.labOrganizationId,
-      });
+      const { customerIds, labOrganizationIds } =
+        await resolvePortalAccessibleCustomers({
+          userId: session.user.id,
+          labScope: portalLabScope.labOrganizationId,
+        });
 
       if (customerIds.length === 0) {
         return c.json({
@@ -1982,6 +1963,8 @@ export const portalRouter = new Hono<{
           pagination: { page, limit, total: 0, totalPages: 0 },
         });
       }
+
+      const o = orgSetDb(labOrganizationIds);
 
       const approvedAtPortalDate = sql`(${calibrationJob.approvedAt} AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::date`;
 
@@ -2007,7 +1990,7 @@ export const portalRouter = new Hono<{
       );
 
       // Count total certificates
-      const [totalResult] = await db
+      const [totalResult] = await o
         .select({ count: count() })
         .from(calibrationJob)
         .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
@@ -2017,7 +2000,7 @@ export const portalRouter = new Hono<{
       const total = totalResult?.count ?? 0;
 
       // Get certificates with pagination
-      const certificatesRaw = await db
+      const certificatesRaw = await o
         .select({
           id: calibrationJob.id,
           jobId: calibrationJob.jobId,
@@ -2055,7 +2038,7 @@ export const portalRouter = new Hono<{
       // Phase 2 slice 1: hide certificateUrl for held releases.
       const gatedCertificates = await applyPortalCertificateReleaseGate(
         certificatesRaw,
-        portalLabScope.labOrganizationId,
+        labOrganizationIds,
       );
 
       // Amendment chips (§7.8.8) — derived from the row's own links, same
@@ -2097,17 +2080,20 @@ export const portalRouter = new Hono<{
     const certificateParam = c.req.param("id");
 
     try {
-      const customerIds = await resolvePortalAccessibleCustomerIds({
-        userId: session.user.id,
-        labScope: portalLabScope.labOrganizationId,
-      });
+      const { customerIds, labOrganizationIds } =
+        await resolvePortalAccessibleCustomers({
+          userId: session.user.id,
+          labScope: portalLabScope.labOrganizationId,
+        });
 
       if (customerIds.length === 0) {
         return c.json({ error: "Certificado nao encontrado" }, 404);
       }
 
+      const o = orgSetDb(labOrganizationIds);
+
       // Get certificate with all details
-      const [certificate] = await db
+      const [certificate] = await o
         .select({
           id: calibrationJob.id,
           jobId: calibrationJob.jobId,
@@ -2173,13 +2159,14 @@ export const portalRouter = new Hono<{
       }
 
       const referenceStandards = await withMatchingPortalStandardDocuments(
+        o,
         normalizePortalReferenceStandards(certificate.standardsSnapshot),
       );
 
       // Phase 2 slice 1: hide certificateUrl when the release is held.
       const [gated] = await applyPortalCertificateReleaseGate(
         [certificate],
-        portalLabScope.labOrganizationId,
+        labOrganizationIds,
       );
       const releaseStatus = gated?.releaseStatus ?? "RELEASED";
 
@@ -2222,7 +2209,10 @@ export const portalRouter = new Hono<{
           approvedAt: certificate.approvedAt,
           supersededAt: certificate.supersededAt,
         },
-        createPortalAmendmentChainLoader({ customerIds }),
+        createPortalAmendmentChainLoader({
+          customerIds,
+          organizationIds: labOrganizationIds,
+        }),
       );
 
       // Surface where the calibration was performed (frozen at execution).
@@ -2287,18 +2277,21 @@ export const portalRouter = new Hono<{
     const certificateParam = c.req.param("id");
 
     try {
-      const customerIds = await resolvePortalAccessibleCustomerIds({
-        userId: session.user.id,
-        labScope: portalLabScope.labOrganizationId,
-      });
+      const { customerIds, labOrganizationIds } =
+        await resolvePortalAccessibleCustomers({
+          userId: session.user.id,
+          labScope: portalLabScope.labOrganizationId,
+        });
 
       if (customerIds.length === 0) {
         return c.json({ error: "Certificado nao encontrado" }, 404);
       }
 
+      const o = orgSetDb(labOrganizationIds);
+
       // Get certificate. Superseded originals stay downloadable — auditors
       // need the historical document (§7.8.8 keeps it identified, not gone).
-      const [certificate] = await db
+      const [certificate] = await o
         .select({
           id: calibrationJob.id,
           certificateUrl: calibrationJob.certificateUrl,
@@ -2325,7 +2318,7 @@ export const portalRouter = new Hono<{
       // Phase 2 slice 1: deny download when the release is held for billing
       // or for payment. Customer-facing copy is provider-neutral.
       const releaseStatuses = await loadPortalReleaseStatuses({
-        organizationId: portalLabScope.labOrganizationId,
+        organizationId: labOrganizationIds,
         calibrationJobIds: [certificate.id],
       });
       const portalReleaseStatus =
@@ -2396,11 +2389,13 @@ export const portalRouter = new Hono<{
           return c.json({ error: "Unidade inválida" }, 400);
         }
 
+        const o = orgDb(scope.labOrganizationId);
+
         // Candidate set: latest (non-superseded) approved certificates whose
         // approval date falls in the requested window. Same timezone
         // semantics as the /certificates list.
         const approvedAtPortalDate = sql`(${calibrationJob.approvedAt} AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::date`;
-        const candidates = await db
+        const candidates = await o
           .select({ id: calibrationJob.id })
           .from(calibrationJob)
           .where(
@@ -2441,7 +2436,7 @@ export const portalRouter = new Hono<{
           );
         }
 
-        const [exportRow] = await db
+        const [exportRow] = await o
           .insert(portalExportJob)
           .values({
             kind: "AUDIT_PACK",
@@ -2505,8 +2500,9 @@ export const portalRouter = new Hono<{
       if (!scope) {
         return c.json({ data: [] });
       }
+      const o = orgDb(scope.labOrganizationId);
 
-      const rows = await db
+      const rows = await o
         .select({
           id: portalExportJob.id,
           status: portalExportJob.status,
@@ -2519,10 +2515,7 @@ export const portalRouter = new Hono<{
         })
         .from(portalExportJob)
         .where(
-          and(
-            eq(portalExportJob.authOrganizationId, portalMember.organizationId),
-            eq(portalExportJob.labOrganizationId, scope.labOrganizationId),
-          ),
+          eq(portalExportJob.authOrganizationId, portalMember.organizationId),
         )
         .orderBy(desc(portalExportJob.createdAt))
         .limit(20);
@@ -2570,7 +2563,18 @@ export const portalRouter = new Hono<{
     }
 
     try {
-      const [row] = await db
+      const scope = await resolvePortalCustomerScope({
+        activeOrgId: portalMember.organizationId,
+        labScope: portalLabScope.labOrganizationId,
+      });
+      if (!scope) {
+        return domainErrorResponse(
+          c,
+          notFound("not_found", "Pacote nao encontrado"),
+        );
+      }
+
+      const [row] = await orgDb(scope.labOrganizationId)
         .select({
           id: portalExportJob.id,
           status: portalExportJob.status,
@@ -2585,12 +2589,6 @@ export const portalRouter = new Hono<{
           and(
             eq(portalExportJob.id, id),
             eq(portalExportJob.authOrganizationId, portalMember.organizationId),
-            portalLabScope.labOrganizationId
-              ? eq(
-                  portalExportJob.labOrganizationId,
-                  portalLabScope.labOrganizationId,
-                )
-              : undefined,
           ),
         )
         .limit(1);
@@ -2676,7 +2674,7 @@ export const portalRouter = new Hono<{
         return c.json({ data: [], counts: { total: 0, pending: 0 } });
       }
 
-      const rows = await db
+      const rows = await orgDb(scope.labOrganizationId)
         .select({
           token: ootNotification.ackToken,
           ncNumber: nonConformance.ncNumber,
@@ -2695,12 +2693,7 @@ export const portalRouter = new Hono<{
         .innerJoin(calibrationJob, eq(ootNotification.jobId, calibrationJob.id))
         .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
         .innerJoin(nonConformance, eq(ootNotification.ncId, nonConformance.id))
-        .where(
-          and(
-            eq(ootNotification.organizationId, scope.labOrganizationId),
-            inArray(calibrationJob.customerId, scope.customerIds),
-          ),
-        )
+        .where(inArray(calibrationJob.customerId, scope.customerIds))
         .orderBy(desc(ootNotification.createdAt))
         .limit(100);
 
@@ -2757,7 +2750,8 @@ export const portalRouter = new Hono<{
           return c.json({ error: "Notificação não encontrada" }, 404);
         }
 
-        const [notification] = await db
+        const o = orgDb(scope.labOrganizationId);
+        const [notification] = await o
           .select({
             id: ootNotification.id,
             ncId: ootNotification.ncId,
@@ -2777,7 +2771,6 @@ export const portalRouter = new Hono<{
           .where(
             and(
               eq(ootNotification.ackToken, token),
-              eq(ootNotification.organizationId, scope.labOrganizationId),
               inArray(calibrationJob.customerId, scope.customerIds),
             ),
           )
@@ -2788,7 +2781,7 @@ export const portalRouter = new Hono<{
         }
 
         if (!notification.acknowledgedAt) {
-          const [updated] = await db
+          const [updated] = await o
             .update(ootNotification)
             .set({
               status: "ACKNOWLEDGED",
@@ -2848,16 +2841,19 @@ export const portalRouter = new Hono<{
       }
 
       try {
-        const customerIds = await resolvePortalAccessibleCustomerIds({
-          userId: session.user.id,
-          labScope: portalLabScope.labOrganizationId,
-        });
+        const { customerIds, labOrganizationIds } =
+          await resolvePortalAccessibleCustomers({
+            userId: session.user.id,
+            labScope: portalLabScope.labOrganizationId,
+          });
 
         if (customerIds.length === 0) {
           return c.json({ error: "Certificado nao encontrado" }, 404);
         }
 
-        const [certificate] = await db
+        const o = orgSetDb(labOrganizationIds);
+
+        const [certificate] = await o
           .select({
             standardsSnapshot: calibrationJob.standardsSnapshot,
           })
@@ -2888,7 +2884,7 @@ export const portalRouter = new Hono<{
 
         let document = standard.certificateDocument;
         if (!document) {
-          const [matchingDocument] = await db
+          const [matchingDocument] = await o
             .select()
             .from(referenceStandardCertificateDocument)
             .where(
@@ -2985,7 +2981,7 @@ export const portalRouter = new Hono<{
           conditions.push(eq(asset.assetTypeId, assetTypeId));
         }
 
-        const rows = await db
+        const rows = await orgDb(scope.labOrganizationId)
           .select({
             approvedAt: calibrationJob.approvedAt,
             asFoundConformity: calibrationJob.asFoundConformity,
@@ -3040,11 +3036,6 @@ export const portalRouter = new Hono<{
       if (portalLabScope.blocked) {
         return c.json({ error: "Acesso nao permitido neste dominio" }, 403);
       }
-      const id = await resolvePortalAssetIdParam(c.req.param("id"));
-      if (id === null) {
-        return c.json({ error: "Ativo nao encontrado" }, 404);
-      }
-
       try {
         const scope = await resolvePortalCustomerScope({
           activeOrgId: portalMember.organizationId,
@@ -3053,8 +3044,13 @@ export const portalRouter = new Hono<{
         if (!scope || scope.customerIds.length === 0) {
           return c.json({ error: "Ativo nao encontrado" }, 404);
         }
+        const o = orgDb(scope.labOrganizationId);
+        const id = await resolvePortalAssetIdParam(o, c.req.param("id"));
+        if (id === null) {
+          return c.json({ error: "Ativo nao encontrado" }, 404);
+        }
 
-        const [existing] = await db
+        const [existing] = await o
           .select({ id: asset.id })
           .from(asset)
           .where(
@@ -3069,7 +3065,7 @@ export const portalRouter = new Hono<{
           return c.json({ error: "Ativo nao encontrado" }, 404);
         }
 
-        const rows = await db
+        const rows = await o
           .select({
             approvedAt: calibrationJob.approvedAt,
             asFoundConformity: calibrationJob.asFoundConformity,
@@ -3133,15 +3129,12 @@ export const portalRouter = new Hono<{
           return c.json({ data: [] });
         }
 
-        const conditions = [
-          inArray(assetOotEvent.customerId, customerIds),
-          eq(assetOotEvent.labOrganizationId, scope.labOrganizationId),
-        ];
+        const conditions = [inArray(assetOotEvent.customerId, customerIds)];
         if (status) {
           conditions.push(eq(assetOotEvent.status, status));
         }
 
-        const events = await db
+        const events = await orgDb(scope.labOrganizationId)
           .select({
             id: assetOotEvent.id,
             status: assetOotEvent.status,
@@ -3227,7 +3220,8 @@ export const portalRouter = new Hono<{
           return c.json({ error: "Evento nao encontrado" }, 404);
         }
 
-        const [event] = await db
+        const o = orgDb(scope.labOrganizationId);
+        const [event] = await o
           .select()
           .from(assetOotEvent)
           .where(
@@ -3241,18 +3235,10 @@ export const portalRouter = new Hono<{
           return c.json({ error: "Evento nao encontrado" }, 404);
         }
 
-        const [existingAssessment] = await db
+        const [existingAssessment] = await o
           .select({ id: assetOotImpactAssessment.id })
           .from(assetOotImpactAssessment)
-          .where(
-            and(
-              eq(assetOotImpactAssessment.eventId, id),
-              eq(
-                assetOotImpactAssessment.organizationId,
-                event.labOrganizationId,
-              ),
-            ),
-          )
+          .where(eq(assetOotImpactAssessment.eventId, id))
           .limit(1);
         if (existingAssessment) {
           return c.json(
@@ -3265,7 +3251,7 @@ export const portalRouter = new Hono<{
           c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null;
         const userAgent = c.req.header("user-agent") ?? null;
 
-        const [assessment] = await db
+        const [assessment] = await o
           .insert(assetOotImpactAssessment)
           .values({
             organizationId: event.labOrganizationId,
@@ -3289,7 +3275,7 @@ export const portalRouter = new Hono<{
         if (!assessment)
           throw new Error("OOT assessment insert returned no row");
 
-        await db
+        await o
           .update(assetOotEvent)
           .set({ status: "ASSESSED" })
           .where(
@@ -3299,7 +3285,7 @@ export const portalRouter = new Hono<{
             ),
           );
 
-        await db.insert(assetOotAuditLog).values({
+        await o.insert(assetOotAuditLog).values({
           organizationId: event.labOrganizationId,
           eventId: id,
           action: "assess",

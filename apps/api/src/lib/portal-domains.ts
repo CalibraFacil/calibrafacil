@@ -7,7 +7,7 @@ import {
   normalizeHostname,
   normalizeOrigin,
 } from "@calibra-facil/shared";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { portalBaseUrl } from "@calibra-facil/shared/public-urls";
 
 function derivePortalBaseUrlFromAppUrl(appUrl: string): string | null {
@@ -47,6 +47,23 @@ export function sanitizePortalHostname(input: string): string | null {
 export async function getOrganizationCustomDomain(organizationId: string) {
   return db.query.organizationCustomDomain.findFirst({
     where: eq(organizationCustomDomain.organizationId, organizationId),
+  });
+}
+
+/**
+ * Whether ANOTHER laboratory already holds this hostname. A hostname is unique
+ * across the platform (it is how a request finds its laboratory), so this check
+ * is cross-organization by design and cannot run through an org-bound handle.
+ */
+export async function findPortalHostnameOwnedByOtherOrganization(
+  hostname: string,
+  organizationId: string,
+) {
+  return db.query.organizationCustomDomain.findFirst({
+    where: and(
+      eq(organizationCustomDomain.hostname, hostname),
+      ne(organizationCustomDomain.organizationId, organizationId),
+    ),
   });
 }
 
