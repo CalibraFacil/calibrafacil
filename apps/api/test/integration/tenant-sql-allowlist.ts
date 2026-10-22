@@ -163,8 +163,13 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
       "queue-backstop dead-letter handling: the app_queue_job payload carries only the job id, so the owning organization is read from the job itself and every following write is scoped by it.",
   },
   // -------------------------------------------------------------------------
-  // portal-cross-org: the client portal reads across laboratories; its tenant
-  // boundary is the customer (portal customer scope), not organization_id.
+  // portal-cross-org: the portal's data statements all run through the
+  // org-bound handle (forOrg / forOrgs, packages/db/src/for-org.ts), so they
+  // carry the organization predicate and need no entry. What stays is the
+  // lookup that LEARNS the laboratory (or the set of laboratories) of a portal
+  // session, which cannot be bound to one yet: it starts from the signed-in
+  // user or from the CLIENT organization, both of which are outside any
+  // laboratory.
   // -------------------------------------------------------------------------
   {
     category: "portal-cross-org",
@@ -172,67 +177,16 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     tables: ["member", "customer"],
     kinds: ["select"],
     reason:
-      "Resolves WHICH customers a portal session may see (memberships by user_id, group branches by group_id); it produces the scope the other portal queries filter by.",
+      "Resolves WHICH customers (and therefore which laboratory) a portal session belongs to: the user's CLIENT memberships by user_id, a group's branches by group_id. It produces the laboratory every other portal statement is then bound to.",
   },
   {
     category: "portal-cross-org",
-    file: "apps/api/src/lib/portal-certificate-release-gate.ts",
-    tables: ["certificate_release"],
+    file: "apps/api/src/lib/portal-customer-scope.ts",
+    tables: ["member", "customer", "customer_group"],
     kinds: ["select"],
+    sql: /left join "customer_group" on/,
     reason:
-      "Release state for job ids that a customer-scoped portal query already returned.",
-  },
-  {
-    category: "portal-cross-org",
-    file: "apps/api/src/routes/portal.ts",
-    tables: [
-      "asset",
-      "asset_oot_event",
-      "calibration_job",
-      "calibration_method",
-      "calibration_request",
-      "customer",
-      "service",
-      "service_order",
-    ],
-    sql: /"customer_id" (?:in|=) |customer_id in /,
-    reason:
-      "Client portal: every statement is filtered by the session's in-scope customer ids (customer_id IN (...)); the portal spans laboratories so organization_id is not the boundary.",
-  },
-  {
-    category: "portal-cross-org",
-    file: "apps/api/src/routes/portal.ts",
-    tables: ["asset"],
-    kinds: ["select"],
-    sql: /where \("asset"\."id" = \$\d+ and "asset"\."deleted_at" is null\) limit/,
-    reason:
-      "PUT /assets/:id/interval loads the asset by id, then decidePortalIntervalWrite answers an identical 404 unless its customer is in scope; the UPDATE repeats the customer_id IN (...) predicate.",
-  },
-  {
-    category: "portal-cross-org",
-    file: "apps/api/src/routes/portal-requests.ts",
-    tables: [
-      "asset",
-      "calibration_job",
-      "calibration_request",
-      "customer",
-      "service",
-    ],
-    kinds: ["select"],
-    reason:
-      "Portal requests: customer_id IN (session scope) on the request, then its items/assets/jobs by the request ids just returned.",
-  },
-  {
-    category: "portal-cross-org",
-    file: "apps/api/src/routes/portal-visits.ts",
-    tables: [
-      "calibration_job",
-      "calibration_visit",
-      "customer",
-      "visit_reschedule_request",
-    ],
-    reason:
-      "Portal visits: customer_id IN (session scope) on the visit, then children / the confirm UPDATE by the visit id that scoped read returned.",
+      "GET /organizations (the portal's organization switcher): the signed-in user's own CLIENT memberships by member.user_id. A person belongs to organizations of several laboratories, so this is cross-organization by design; it is the only portal endpoint that lists across laboratories on purpose.",
   },
   // -------------------------------------------------------------------------
   // ownership-checked-in-code: the row is read by id and its organization is

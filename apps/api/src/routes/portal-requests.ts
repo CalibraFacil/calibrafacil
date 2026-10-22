@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { db } from "@calibra-facil/db";
 import {
   asset,
   assetType,
@@ -25,7 +24,12 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { resolveLabOrganizationIdByPortalHostname } from "../lib/portal-domains";
-import { resolvePortalCustomerScope } from "../lib/portal-customer-scope";
+import {
+  resolvePortalCustomerScope,
+  resolvePortalLinkedCustomer,
+} from "../lib/portal-customer-scope";
+import { orgDb } from "../lib/org-db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 
 function getPortalHostOrigin(c: {
   req: { header: (name: string) => string | undefined };
@@ -47,38 +51,10 @@ async function getPortalLabScope(c: {
   }
 }
 
-async function getPortalCustomer(
-  authOrganizationId: string,
-  portalLabScope?: string | null,
-) {
-  const [linkedCustomer] = await db
-    .select({
-      id: customer.id,
-      name: customer.name,
-      labOrganizationId: customer.labOrganizationId,
-      address: customer.address,
-    })
-    .from(customer)
-    .where(
-      and(
-        eq(customer.authOrganizationId, authOrganizationId),
-        portalLabScope
-          ? eq(customer.labOrganizationId, portalLabScope)
-          : undefined,
-      ),
-    )
-    .limit(1);
+async function getRequestItems(o: OrgDb, requestIds: number[]) {
+  if (requestIds.length === 0) return [];
 
-  return linkedCustomer ?? null;
-}
-
-async function getRequestItems(
-  requestIds: number[],
-  organizationIds: string[],
-) {
-  if (requestIds.length === 0 || organizationIds.length === 0) return [];
-
-  return db
+  return o
     .select({
       requestId: calibrationRequestItem.requestId,
       id: calibrationRequestItem.id,
@@ -102,12 +78,7 @@ async function getRequestItems(
       eq(calibrationRequestItem.convertedJobId, calibrationJob.id),
     )
     .leftJoin(service, eq(calibrationJob.serviceId, service.id))
-    .where(
-      and(
-        inArray(calibrationRequestItem.requestId, requestIds),
-        inArray(calibrationRequestItem.organizationId, organizationIds),
-      ),
-    )
+    .where(inArray(calibrationRequestItem.requestId, requestIds))
     .orderBy(calibrationRequestItem.id);
 }
 
@@ -156,12 +127,13 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
 
       const whereCondition = and(...conditions);
 
-      const [countResult] = await db
+      const o = orgDb(scope.labOrganizationId);
+      const [countResult] = await o
         .select({ total: count() })
         .from(calibrationRequest)
         .where(whereCondition);
 
-      const requests = await db
+      const requests = await o
         .select({
           id: calibrationRequest.id,
           organizationId: calibrationRequest.organizationId,
@@ -182,8 +154,8 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
         .offset(offset);
 
       const items = await getRequestItems(
+        o,
         requests.map((request) => request.id),
-        [...new Set(requests.map((request) => request.organizationId))],
       );
       const itemCountByRequestId = new Map<number, number>();
 
@@ -230,7 +202,8 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Solicitacao nao encontrada" }, 404);
       }
 
-      const [request] = await db
+      const o = orgDb(scope.labOrganizationId);
+      const [request] = await o
         .select({
           id: calibrationRequest.id,
           organizationId: calibrationRequest.organizationId,
@@ -268,13 +241,10 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Solicitacao nao encontrada" }, 404);
       }
 
-      const items = await getRequestItems(
-        [request.id],
-        [request.organizationId],
-      );
+      const items = await getRequestItems(o, [request.id]);
 
       // On-site: the visit scheduled when the lab converted this request (if any).
-      const [visit] = await db
+      const [visit] = await o
         .select({
           status: calibrationVisit.status,
           scheduledAt: calibrationVisit.scheduledAt,
@@ -306,16 +276,17 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
       const ipAddress =
         c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null;
 
-      const linkedCustomer = await getPortalCustomer(
-        member.organizationId,
-        portalLabScope,
-      );
+      const linkedCustomer = await resolvePortalLinkedCustomer({
+        authOrganizationId: member.organizationId,
+        labScope: portalLabScope,
+      });
 
       if (!linkedCustomer) {
         return c.json({ error: "Cliente vinculado nao encontrado" }, 404);
       }
 
-      const assets = await db
+      const o = orgDb(linkedCustomer.labOrganizationId);
+      const assets = await o
         .select({
           id: asset.id,
           unitId: asset.unitId,
@@ -373,15 +344,13 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
           ? new Date(input.preferredVisitDate)
           : null;
 
-      const request = await db.transaction(async (tx) => {
+      const request = await o.transaction(async (tx) => {
         const lockAssetIds = [...input.assetIds].sort(
           (left, right) => left - right,
         );
 
         for (const assetId of lockAssetIds) {
-          await tx.execute(
-            sql`select pg_advisory_xact_lock(${linkedCustomer.id}, ${assetId})`,
-          );
+          await tx.advisoryXactLock(linkedCustomer.id, assetId);
         }
 
         const existingItems = await tx
@@ -518,7 +487,8 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Cliente vinculado nao encontrado" }, 404);
       }
 
-      const assets = await db
+      const o = orgDb(scope.labOrganizationId);
+      const assets = await o
         .select({
           id: asset.id,
           unitId: asset.unitId,
@@ -588,7 +558,7 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
           ? new Date(input.preferredVisitDate)
           : null;
 
-      const created = await db.transaction(async (tx) => {
+      const created = await o.transaction(async (tx) => {
         // Lock every (customer, asset) pair, globally ordered for deadlock safety.
         const lockPairs = assets
           .map((item) => ({ customerId: item.customerId, assetId: item.id }))
@@ -598,9 +568,7 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
               left.assetId - right.assetId,
           );
         for (const pair of lockPairs) {
-          await tx.execute(
-            sql`select pg_advisory_xact_lock(${pair.customerId}, ${pair.assetId})`,
-          );
+          await tx.advisoryXactLock(pair.customerId, pair.assetId);
         }
 
         // All-or-nothing dedup across the whole batch.

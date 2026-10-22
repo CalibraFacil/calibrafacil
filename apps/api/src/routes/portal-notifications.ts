@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { db } from "@calibra-facil/db";
 import { notification } from "@calibra-facil/db/schema";
 import {
   MarkNotificationsReadSchema,
@@ -25,6 +24,7 @@ import {
 } from "../middleware/permission";
 import { resolveLabOrganizationIdByPortalHostname } from "../lib/portal-domains";
 import { resolvePortalNotificationOrgIds } from "../lib/portal-customer-scope";
+import { orgSetDb } from "../lib/org-db";
 
 async function getPortalLabScope(c: {
   req: { header: (name: string) => string | undefined };
@@ -57,14 +57,14 @@ function windowStart(): Date {
 }
 
 /**
- * Conditions shared by every handler: only the caller's own rows, only inside
- * their portal CLIENT orgs (never a dual-role user's lab org), and only the
- * customer-facing types the portal is allowed to surface.
+ * Conditions shared by every handler: only the caller's own rows and only the
+ * customer-facing types the portal is allowed to surface. The rows are inside
+ * the caller's portal CLIENT orgs (never a dual-role user's lab org) because
+ * every handler reads them through `orgSetDb(orgIds)`.
  */
-function portalNotificationConditions(userId: string, orgIds: string[]) {
+function portalNotificationConditions(userId: string) {
   return [
     eq(notification.recipientUserId, userId),
-    inArray(notification.organizationId, orgIds),
     inArray(notification.type, [...PORTAL_NOTIFICATION_TYPES]),
   ];
 }
@@ -95,7 +95,7 @@ export const portalNotificationsRouter = new Hono<{
 
         const now = new Date();
         const conditions = [
-          ...portalNotificationConditions(session.user.id, orgIds),
+          ...portalNotificationConditions(session.user.id),
           gt(notification.createdAt, windowStart()),
           or(isNull(notification.expiresAt), gt(notification.expiresAt, now)),
           status
@@ -106,7 +106,7 @@ export const portalNotificationsRouter = new Hono<{
           conditions.push(lt(notification.id, cursor));
         }
 
-        const rows = await db
+        const rows = await orgSetDb(orgIds)
           .select({
             id: notification.id,
             type: notification.type,
@@ -155,12 +155,12 @@ export const portalNotificationsRouter = new Hono<{
       }
 
       const now = new Date();
-      const [result] = await db
+      const [result] = await orgSetDb(orgIds)
         .select({ count: count() })
         .from(notification)
         .where(
           and(
-            ...portalNotificationConditions(session.user.id, orgIds),
+            ...portalNotificationConditions(session.user.id),
             eq(notification.status, "UNREAD"),
             gt(notification.createdAt, windowStart()),
             or(isNull(notification.expiresAt), gt(notification.expiresAt, now)),
@@ -195,13 +195,13 @@ export const portalNotificationsRouter = new Hono<{
           return c.json({ updatedIds: [] });
         }
 
-        const updated = await db
+        const updated = await orgSetDb(orgIds)
           .update(notification)
           .set({ status: "READ", readAt: new Date() })
           .where(
             and(
               inArray(notification.id, notificationIds),
-              ...portalNotificationConditions(session.user.id, orgIds),
+              ...portalNotificationConditions(session.user.id),
               eq(notification.status, "UNREAD"),
             ),
           )
@@ -232,12 +232,12 @@ export const portalNotificationsRouter = new Hono<{
         return c.json({ count: 0 });
       }
 
-      const updated = await db
+      const updated = await orgSetDb(orgIds)
         .update(notification)
         .set({ status: "READ", readAt: new Date() })
         .where(
           and(
-            ...portalNotificationConditions(session.user.id, orgIds),
+            ...portalNotificationConditions(session.user.id),
             eq(notification.status, "UNREAD"),
           ),
         )

@@ -70,6 +70,7 @@
     "calibra/no-job-audit-insert-outside-owner": "error",
     "calibra/no-raw-locale-formatting": "error",
     "calibra/no-json-error-body-in-routes": "error",
+    "calibra/no-raw-db-in-routes": "error",
     "calibra/no-router-coupling-in-features": "error",
     "calibra/no-process-env": "error",
     "calibra/no-raw-palette-color-classes": "error",

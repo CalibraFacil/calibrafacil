@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { db } from "@calibra-facil/db";
 import {
   calibrationJob,
   calibrationVisit,
@@ -22,6 +21,7 @@ import {
 } from "../middleware/permission";
 import { resolveLabOrganizationIdByPortalHostname } from "../lib/portal-domains";
 import { resolvePortalCustomerScope } from "../lib/portal-customer-scope";
+import { orgDb } from "../lib/org-db";
 
 async function getPortalLabScope(c: {
   req: { header: (name: string) => string | undefined };
@@ -50,9 +50,16 @@ function requestUserAgent(c: {
   return c.req.header("user-agent") ?? null;
 }
 
-/** Loads a visit only if it belongs to a customer in the portal scope. */
-async function getPortalScopedVisit(id: number, customerIds: number[]) {
-  const [visit] = await db
+/**
+ * Loads a visit only if it belongs to a customer in the portal scope, inside
+ * the laboratory that scope resolved to.
+ */
+async function getPortalScopedVisit(
+  id: number,
+  customerIds: number[],
+  labOrganizationId: string,
+) {
+  const [visit] = await orgDb(labOrganizationId)
     .select()
     .from(calibrationVisit)
     .where(
@@ -89,7 +96,8 @@ export const portalVisitsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ data: [] });
       }
 
-      const visits = await db
+      const o = orgDb(scope.labOrganizationId);
+      const visits = await o
         .select({
           id: calibrationVisit.id,
           status: calibrationVisit.status,
@@ -119,7 +127,7 @@ export const portalVisitsRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       const visitIds = visits.map((visit) => visit.id);
-      const counts = await db
+      const counts = await o
         .select({
           visitId: calibrationJob.visitId,
           total: count(),
@@ -138,7 +146,7 @@ export const portalVisitsRouter = new Hono<{ Variables: AuthVariables }>()
       // Latest reschedule request per visit (any status): the panel shows a
       // "reagendamento solicitado" chip while PENDING and the resolution
       // (accepted date / decline note) afterwards.
-      const rescheduleRows = await db
+      const rescheduleRows = await o
         .select({
           id: visitRescheduleRequest.id,
           visitId: visitRescheduleRequest.visitId,
@@ -200,7 +208,11 @@ export const portalVisitsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Visita nao encontrada" }, 404);
       }
 
-      const visit = await getPortalScopedVisit(id, scope.customerIds);
+      const visit = await getPortalScopedVisit(
+        id,
+        scope.customerIds,
+        scope.labOrganizationId,
+      );
       if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
       if (visit.status !== "PROPOSED" && visit.status !== "CONFIRMED") {
         return c.json(
@@ -223,7 +235,7 @@ export const portalVisitsRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       const customerConfirmedAt = new Date();
-      await db.transaction(async (tx) => {
+      await orgDb(scope.labOrganizationId).transaction(async (tx) => {
         await tx
           .update(calibrationVisit)
           .set({
@@ -284,7 +296,11 @@ export const portalVisitsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Visita nao encontrada" }, 404);
       }
 
-      const visit = await getPortalScopedVisit(id, scope.customerIds);
+      const visit = await getPortalScopedVisit(
+        id,
+        scope.customerIds,
+        scope.labOrganizationId,
+      );
       if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
       if (visit.status !== "PROPOSED" && visit.status !== "CONFIRMED") {
         return c.json(
@@ -293,7 +309,7 @@ export const portalVisitsRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      const [pending] = await db
+      const [pending] = await orgDb(scope.labOrganizationId)
         .select({ id: visitRescheduleRequest.id })
         .from(visitRescheduleRequest)
         .where(
@@ -311,38 +327,40 @@ export const portalVisitsRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       try {
-        const requestId = await db.transaction(async (tx) => {
-          const [created] = await tx
-            .insert(visitRescheduleRequest)
-            .values({
-              visitId: id,
+        const requestId = await orgDb(scope.labOrganizationId).transaction(
+          async (tx) => {
+            const [created] = await tx
+              .insert(visitRescheduleRequest)
+              .values({
+                visitId: id,
+                organizationId: visit.organizationId,
+                customerId: visit.customerId,
+                requestedBy: session.user.id,
+                reason: input.reason ?? null,
+                preferredWindows: input.preferredWindows,
+              })
+              .returning();
+            if (!created) {
+              throw new Error("Falha ao criar a solicitacao de reagendamento");
+            }
+
+            await tx.insert(visitAuditLog).values({
               organizationId: visit.organizationId,
-              customerId: visit.customerId,
-              requestedBy: session.user.id,
+              visitId: id,
+              action: "reschedule_request",
+              changes: {
+                rescheduleRequestId: created.id,
+                preferredWindows: input.preferredWindows,
+              },
+              performedBy: session.user.id,
+              ipAddress: requestIp(c),
+              userAgent: requestUserAgent(c),
               reason: input.reason ?? null,
-              preferredWindows: input.preferredWindows,
-            })
-            .returning();
-          if (!created) {
-            throw new Error("Falha ao criar a solicitacao de reagendamento");
-          }
+            });
 
-          await tx.insert(visitAuditLog).values({
-            organizationId: visit.organizationId,
-            visitId: id,
-            action: "reschedule_request",
-            changes: {
-              rescheduleRequestId: created.id,
-              preferredWindows: input.preferredWindows,
-            },
-            performedBy: session.user.id,
-            ipAddress: requestIp(c),
-            userAgent: requestUserAgent(c),
-            reason: input.reason ?? null,
-          });
-
-          return created.id;
-        });
+            return created.id;
+          },
+        );
 
         try {
           await notifyVisitRescheduleRequested(id, session.user.id);
