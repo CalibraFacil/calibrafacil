@@ -102,6 +102,7 @@ export async function createNonConformanceRecord(
   }
 
   await db.insert(nonConformanceAuditLog).values({
+    organizationId: params.organizationId,
     ncId: newNc.id,
     action: "create",
     changes: params.auditChanges ?? {

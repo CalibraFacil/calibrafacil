@@ -17,7 +17,7 @@ import {
 import { useActiveOrganization } from '@calibra-facil/auth/client'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 import { ChartCalibrations } from '@/features/dashboard/components/chart-calibrations'
-import { Button } from '@/components/ui/button'
+import { Button } from '@calibra-facil/ui/button'
 import {
   Table,
   TableBody,
@@ -25,9 +25,9 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
+} from '@calibra-facil/ui/table'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
 import {
   ACTION_BUTTON_CLASS,
   BlueprintOverlay,
@@ -37,7 +37,7 @@ import {
   StaggerGroup,
   StaggerItem,
   type SignalTone,
-} from '@/components/instrument-panel'
+} from '@calibra-facil/ui/instrument-panel'
 import { cn } from '@/lib/utils'
 import {
   CloudOnlyOfflineState,

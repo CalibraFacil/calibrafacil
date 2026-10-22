@@ -31,15 +31,15 @@ import {
   buildAssetCalibrationStatus,
   formatDate,
 } from '@/features/assets/detail-model'
-import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
 import {
   Panel,
   PanelHeader,
   SignalTile,
   StaggerGroup,
   StaggerItem,
-} from '@/components/instrument-panel'
+} from '@calibra-facil/ui/instrument-panel'
 import { jobRouteId } from '@/lib/route-identifiers'
 import { cn } from '@/lib/utils'
 

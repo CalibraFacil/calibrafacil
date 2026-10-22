@@ -4,12 +4,12 @@ import { RefreshIcon } from '@hugeicons/core-free-icons'
 import type { OperationAvailability } from '@calibra-facil/client-runtime'
 import type { SyncStatusContextValue } from '@/runtime/sync-status'
 
-import { Button } from '@/components/ui/button'
+import { Button } from '@calibra-facil/ui/button'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '@/components/ui/tooltip'
+} from '@calibra-facil/ui/tooltip'
 import { cn } from '@/lib/utils'
 import {
   useDesktopManualSyncAction,

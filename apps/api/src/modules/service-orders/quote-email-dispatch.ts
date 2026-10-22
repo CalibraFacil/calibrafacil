@@ -113,6 +113,7 @@ export function dispatchApprovedQuoteEmailOnce(
         .limit(1);
 
       await sendServiceOrderEmailOnce({
+        organizationId: input.order.organizationId,
         serviceOrderId: input.serviceOrderId,
         eventKey: `orcamento_approved:${input.quoteId}`,
         dispatch: () =>
@@ -152,6 +153,7 @@ export function dispatchApprovedQuoteEmailOncePortal(
   void (async () => {
     try {
       await sendServiceOrderEmailOnce({
+        organizationId: input.order.organizationId,
         serviceOrderId: input.serviceOrderId,
         eventKey: `orcamento_approved:${input.quoteId}`,
         dispatch: () =>
@@ -202,6 +204,7 @@ export function dispatchRejectedQuoteEmailOnce(
         .limit(1);
 
       await sendServiceOrderEmailOnce({
+        organizationId: input.order.organizationId,
         serviceOrderId: input.serviceOrderId,
         eventKey: `orcamento_rejected:${input.quoteId}`,
         dispatch: () =>
@@ -240,6 +243,7 @@ export function dispatchRejectedQuoteEmailOncePortal(
   void (async () => {
     try {
       await sendServiceOrderEmailOnce({
+        organizationId: input.order.organizationId,
         serviceOrderId: input.serviceOrderId,
         eventKey: `orcamento_rejected:${input.quoteId}`,
         dispatch: () =>

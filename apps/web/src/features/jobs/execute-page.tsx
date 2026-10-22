@@ -15,11 +15,11 @@ import { GaugeIcon, ThermometerIcon } from '@phosphor-icons/react'
 
 import { calibraApi } from '@/utils/api'
 import { apiRouteParam } from '@/lib/route-identifiers'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
+import { Button } from '@calibra-facil/ui/button'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Input } from '@calibra-facil/ui/input'
 import { DateInput } from '@/components/ui/date-input'
-import { type DatePickerPreset } from '@/components/ui/date-picker'
+import { type DatePickerPreset } from '@calibra-facil/ui/date-picker'
 import { SaveButton } from '@/components/ui/save-button'
 import {
   Card,
@@ -27,22 +27,22 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { BlueprintOverlay, Panel } from '@/components/instrument-panel'
-import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
-import { Textarea } from '@/components/ui/textarea'
+} from '@calibra-facil/ui/card'
+import { BlueprintOverlay, Panel } from '@calibra-facil/ui/instrument-panel'
+import { Field, FieldDescription, FieldLabel } from '@calibra-facil/ui/field'
+import { Textarea } from '@calibra-facil/ui/textarea'
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from '@/components/ui/collapsible'
+} from '@calibra-facil/ui/collapsible'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
-import { Spinner } from '@/components/ui/spinner'
+} from '@calibra-facil/ui/select'
+import { Spinner } from '@calibra-facil/ui/spinner'
 import {
   TableInputRenderer,
   type CertifiedValueOption,

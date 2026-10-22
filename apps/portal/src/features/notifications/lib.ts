@@ -10,7 +10,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 
-import type { SignalTone } from "@/components/instrument-panel";
+import type { SignalTone } from "@calibra-facil/ui/status-tone";
 
 /**
  * The general in-app notification center (issue #741) — distinct from the

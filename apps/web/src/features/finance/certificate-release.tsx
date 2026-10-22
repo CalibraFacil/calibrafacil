@@ -10,8 +10,8 @@ import type {
   CertificateReleaseStatus,
 } from '@calibra-facil/shared'
 import { calibraApi } from '@/utils/api'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Button } from '@calibra-facil/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -19,10 +19,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Spinner } from '@/components/ui/spinner'
+} from '@calibra-facil/ui/dialog'
+import { Label } from '@calibra-facil/ui/label'
+import { Textarea } from '@calibra-facil/ui/textarea'
+import { Spinner } from '@calibra-facil/ui/spinner'
 import { toast } from 'sonner'
 
 export interface CertificateReleaseDto {

@@ -8,8 +8,8 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ClipboardIcon, PlusSignIcon } from '@hugeicons/core-free-icons'
 
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Button } from '@calibra-facil/ui/button'
+import { Input } from '@calibra-facil/ui/input'
 import {
   Empty,
   EmptyContent,
@@ -17,15 +17,15 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from '@/components/ui/empty'
-import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
+} from '@calibra-facil/ui/empty'
+import { ACTION_BUTTON_CLASS, Panel } from '@calibra-facil/ui/instrument-panel'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
-import { DataTable } from '@/components/ui/data-table'
+} from '@calibra-facil/ui/select'
+import { DataTable } from '@calibra-facil/ui/data-table'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 import { JOBS_LIST_STATUSES, type JobsListStatus } from '@/features/jobs/types'
 import { useJobsListData } from '@/features/jobs/use-jobs-list-data'

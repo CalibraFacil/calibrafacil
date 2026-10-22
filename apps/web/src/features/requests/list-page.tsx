@@ -8,9 +8,9 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ClipboardIcon, PlusSignIcon } from '@hugeicons/core-free-icons'
 
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { Button } from '@calibra-facil/ui/button'
+import { Input } from '@calibra-facil/ui/input'
+import { Badge } from '@calibra-facil/ui/badge'
 import {
   Empty,
   EmptyContent,
@@ -18,9 +18,9 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from '@/components/ui/empty'
-import { DataTable } from '@/components/ui/data-table'
-import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
+} from '@calibra-facil/ui/empty'
+import { DataTable } from '@calibra-facil/ui/data-table'
+import { ACTION_BUTTON_CLASS, Panel } from '@calibra-facil/ui/instrument-panel'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 import {
   CloudOnlyOfflineState,

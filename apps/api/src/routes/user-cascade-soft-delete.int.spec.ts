@@ -38,6 +38,7 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
+import { organizationOf } from "../../test/integration/organization-of";
 import { preserveRegulatedRecordsOnUserDeletion } from "@calibra-facil/auth";
 import { db } from "@calibra-facil/db";
 import {
@@ -146,6 +147,7 @@ async function seedSubjectWithRecords(params: {
   const [compAudit] = await db
     .insert(personnelCompetenceAuditLog)
     .values({
+      organizationId: organizationOf("personnel_competence", competence.id),
       competenceId: competence.id,
       action: "create",
       changes: { created: true },
@@ -155,6 +157,7 @@ async function seedSubjectWithRecords(params: {
   const [trainAudit] = await db
     .insert(trainingRecordAuditLog)
     .values({
+      organizationId: organizationOf("training_record", training.id),
       trainingRecordId: training.id,
       action: "create",
       changes: { created: true },
@@ -164,6 +167,7 @@ async function seedSubjectWithRecords(params: {
   const [sigAudit] = await db
     .insert(authorizedSignatoryAuditLog)
     .values({
+      organizationId: organizationOf("authorized_signatory", signatory.id),
       signatoryId: signatory.id,
       action: "grant",
       changes: { granted: true },

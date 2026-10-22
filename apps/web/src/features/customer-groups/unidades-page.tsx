@@ -3,23 +3,23 @@ import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Building03Icon, Delete02Icon } from '@hugeicons/core-free-icons'
 
-import { Button } from '@/components/ui/button'
-import { Spinner } from '@/components/ui/spinner'
-import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
+import { Button } from '@calibra-facil/ui/button'
+import { Spinner } from '@calibra-facil/ui/spinner'
+import { Field, FieldDescription, FieldLabel } from '@calibra-facil/ui/field'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
+} from '@calibra-facil/ui/select'
 import {
   Empty,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from '@/components/ui/empty'
-import { ACTION_BUTTON_CLASS } from '@/components/instrument-panel'
+} from '@calibra-facil/ui/empty'
+import { ACTION_BUTTON_CLASS } from '@calibra-facil/ui/instrument-panel'
 import {
   ClientPanel,
   ClientPanelBody,

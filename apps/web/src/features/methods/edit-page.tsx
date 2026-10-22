@@ -5,9 +5,9 @@ import { toast } from 'sonner'
 
 import { calibraApi } from '@/utils/api'
 import { useMethodEditData } from '@/features/methods/queries'
-import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
-import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
+import { Button } from '@calibra-facil/ui/button'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
+import { ACTION_BUTTON_CLASS, Panel } from '@calibra-facil/ui/instrument-panel'
 import {
   draftToMethodSavePayload,
   methodDataToDraft,

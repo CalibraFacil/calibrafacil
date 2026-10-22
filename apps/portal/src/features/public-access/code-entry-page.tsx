@@ -7,9 +7,9 @@ import {
   BlueprintOverlay,
   Panel,
   PanelHeader,
-} from "@/components/instrument-panel";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+} from "@calibra-facil/ui/instrument-panel";
+import { Button } from "@calibra-facil/ui/button";
+import { Input } from "@calibra-facil/ui/input";
 import { cn } from "@/lib/utils";
 import { redeemAccessCode } from "./queries";
 

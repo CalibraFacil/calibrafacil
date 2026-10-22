@@ -12,8 +12,8 @@ import {
   CommandInput,
   CommandList,
   CommandSeparator,
-} from '@/components/ui/command'
-import { Button } from '@/components/ui/button'
+} from '@calibra-facil/ui/command'
+import { Button } from '@calibra-facil/ui/button'
 import { OrganizationGroup } from './groups/organization-group'
 
 export function CommandPalette() {

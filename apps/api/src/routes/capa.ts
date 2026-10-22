@@ -551,6 +551,7 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
 
       // Audit log
       await db.insert(correctiveActionAuditLog).values({
+        organizationId: member.organizationId,
         capaId: id,
         action: "update",
         changes: { before: existing, after: input },
@@ -628,6 +629,7 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
 
       // Audit log
       await db.insert(correctiveActionAuditLog).values({
+        organizationId: member.organizationId,
         capaId: id,
         action: "implement",
         changes: {
@@ -709,6 +711,7 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
 
       // Audit log
       await db.insert(correctiveActionAuditLog).values({
+        organizationId: member.organizationId,
         capaId: id,
         action: "verify",
         changes: {
@@ -788,6 +791,7 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
 
       // Audit log
       await db.insert(correctiveActionAuditLog).values({
+        organizationId: member.organizationId,
         capaId: id,
         action: "close",
         changes: {

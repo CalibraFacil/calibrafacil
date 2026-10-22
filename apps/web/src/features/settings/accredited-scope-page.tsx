@@ -28,14 +28,14 @@ import {
 } from '@/features/settings/accredited-scope-forms'
 import { calibraApi } from '@/utils/api'
 import { useAccreditedScopeData } from '@/features/settings/queries'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Badge } from '@/components/ui/badge'
+import { Button } from '@calibra-facil/ui/button'
+import { Input } from '@calibra-facil/ui/input'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
+import { Badge } from '@calibra-facil/ui/badge'
 import { useHasPermission } from '@/components/permission-gate'
-import { Field, FieldLabel } from '@/components/ui/field'
+import { Field, FieldLabel } from '@calibra-facil/ui/field'
 import { DateInput } from '@/components/ui/date-input'
-import { Panel, PanelHeader } from '@/components/instrument-panel'
+import { Panel, PanelHeader } from '@calibra-facil/ui/instrument-panel'
 import {
   Dialog,
   DialogContent,
@@ -44,20 +44,20 @@ import {
   DialogHeader,
   DialogTitle,
   DialogClose,
-} from '@/components/ui/dialog'
+} from '@calibra-facil/ui/dialog'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
+} from '@calibra-facil/ui/select'
 import {
   Empty,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from '@/components/ui/empty'
+} from '@calibra-facil/ui/empty'
 
 export function AccreditedScopeSettingsPage() {
   const queryClient = useQueryClient()
@@ -317,6 +317,7 @@ export function AccreditedScopeSettingsPage() {
                           <Button
                             variant="ghost"
                             size="icon-sm"
+                            aria-label="Remover item do escopo"
                             onClick={() => deleteMutation.mutate(line.id)}
                           >
                             <HugeiconsIcon

@@ -10,7 +10,7 @@ import {
   CommandEmpty,
   CommandGroup,
   CommandItem,
-} from '@/components/ui/command'
+} from '@calibra-facil/ui/command'
 import { setStoredDashboardOrganizationId } from '@/features/dashboard/dashboard-scope-storage'
 import { useCommandPalette } from '../command-context'
 

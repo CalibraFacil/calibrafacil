@@ -17,7 +17,12 @@ const jsBudget = Number(process.env.WEB_BUNDLE_BUDGET_JS ?? 650_000)
 // (blueprint grids, spreadsheet/agenda mocks, image-hero). Arbitrary classes
 // were normalized to the standard scale and the old landing's dead components
 // were removed first; the remainder is the page's real styling cost.
-const cssBudget = Number(process.env.WEB_BUNDLE_BUDGET_CSS ?? 236_000)
+// Raised 236_000 -> 243_000 for @calibra-facil/ui (measured 231.3 -> 236.9 KiB
+// raw): the status vocabulary now ships as theme tokens (--signal-* plus the
+// tone classes built on them) instead of raw palette utilities, and the shared
+// shadows/blueprint grid mix their colour from CSS variables, which is longer
+// than the old rgba() literals. Keep it above the measured size by ~2.5%.
+const cssBudget = Number(process.env.WEB_BUNDLE_BUDGET_CSS ?? 243_000)
 const jsChunkBudget = Number(process.env.WEB_BUNDLE_BUDGET_JS_CHUNK ?? 850_000)
 const appChunkBudget = Number(
   process.env.WEB_BUNDLE_BUDGET_APP_CHUNK ?? 180_000,

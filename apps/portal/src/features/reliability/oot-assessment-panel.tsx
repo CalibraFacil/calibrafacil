@@ -9,17 +9,17 @@ import {
 
 import { getApiBaseUrl } from "@/lib/utils";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@calibra-facil/ui/button";
+import { Checkbox } from "@calibra-facil/ui/checkbox";
+import { Input } from "@calibra-facil/ui/input";
+import { Label } from "@calibra-facil/ui/label";
+import { Textarea } from "@calibra-facil/ui/textarea";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from "@/components/ui/select";
+} from "@calibra-facil/ui/select";
 import { StatusPill } from "@/components/status-pill";
 import {
   ACTION_BUTTON_CLASS,
@@ -28,7 +28,7 @@ import {
   Panel,
   PanelHeader,
   type SignalTone,
-} from "@/components/instrument-panel";
+} from "@calibra-facil/ui/instrument-panel";
 import { dateInputToNoonIso, instantToDateInputValue } from "@/lib/date-only";
 import { useOotEvents } from "./queries";
 import { isOotDecision, type OotDecision, type OotEvent } from "./types";

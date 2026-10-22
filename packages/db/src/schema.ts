@@ -457,6 +457,8 @@ export const organizationUnit = pgTable(
       table.organizationId,
       table.slug,
     ),
+    // Target of the composite (id, organization) foreign keys of tenant children.
+    unique("organization_unit_id_org_uidx").on(table.id, table.organizationId),
   ],
 );
 
@@ -1619,6 +1621,13 @@ export const customerAuditLog = pgTable(
   "customer_audit_log",
   {
     id: serial("id").primaryKey(),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // CMP-06 (#649): soft reference on purpose — NO FK. The audit trail is
     // append-only (ISO/IEC 17025): the "delete" row must survive the deletion
     // of the customer it documents, so it keeps the id as a plain integer.
@@ -1635,6 +1644,10 @@ export const customerAuditLog = pgTable(
   (table) => [
     index("customer_audit_log_customer_id_idx").on(table.customerId),
     index("customer_audit_log_performed_at_idx").on(table.performedAt),
+    index("customer_audit_log_org_performed_at_idx").on(
+      table.organizationId,
+      table.performedAt,
+    ),
   ],
 );
 
@@ -2200,6 +2213,8 @@ export const asset = pgTable(
     index("asset_legal_verification_due_idx")
       .on(table.nextLegalVerificationDate)
       .where(sql`${table.metrologyRegime} = 'LEGAL'`),
+    // Target of the composite (id, organization) foreign keys of tenant children.
+    unique("asset_id_org_uidx").on(table.id, table.labOrganizationId),
   ],
 );
 
@@ -2215,6 +2230,13 @@ export const assetAuditLog = pgTable(
   "asset_audit_log",
   {
     id: serial("id").primaryKey(),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the "delete" row must survive the deletion of the asset it
     // documents (assets cascade when their customer is deleted), so it keeps the
@@ -2232,6 +2254,10 @@ export const assetAuditLog = pgTable(
   (table) => [
     index("asset_audit_log_asset_id_idx").on(table.assetId),
     index("asset_audit_log_performed_at_idx").on(table.performedAt),
+    index("asset_audit_log_org_performed_at_idx").on(
+      table.organizationId,
+      table.performedAt,
+    ),
   ],
 );
 
@@ -2682,6 +2708,13 @@ export const methodAuditLog = pgTable(
   "method_audit_log",
   {
     id: serial("id").primaryKey(),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // CMP-06 (#649): soft reference on purpose — NO FK. The audit trail is
     // append-only (ISO/IEC 17025 §7.2): the "delete" row must survive the
     // deletion of the method it documents, so it keeps the id as a plain integer.
@@ -2698,6 +2731,10 @@ export const methodAuditLog = pgTable(
   (table) => [
     index("method_audit_log_method_id_idx").on(table.methodId),
     index("method_audit_log_performed_at_idx").on(table.performedAt),
+    index("method_audit_log_org_performed_at_idx").on(
+      table.organizationId,
+      table.performedAt,
+    ),
   ],
 );
 
@@ -2814,6 +2851,8 @@ export const service = pgTable(
     index("service_method_id_idx").on(table.methodId),
     index("service_asset_type_id_idx").on(table.assetTypeId),
     index("service_is_active_idx").on(table.isActive),
+    // Target of the composite (id, organization) foreign keys of tenant children.
+    unique("service_id_org_uidx").on(table.id, table.organizationId),
   ],
 );
 
@@ -2829,6 +2868,13 @@ export const serviceAuditLog = pgTable(
   "service_audit_log",
   {
     id: serial("id").primaryKey(),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the row must survive deletion of the service it documents.
     serviceId: integer("service_id").notNull(),
@@ -2844,6 +2890,10 @@ export const serviceAuditLog = pgTable(
   (table) => [
     index("service_audit_log_service_id_idx").on(table.serviceId),
     index("service_audit_log_performed_at_idx").on(table.performedAt),
+    index("service_audit_log_org_performed_at_idx").on(
+      table.organizationId,
+      table.performedAt,
+    ),
   ],
 );
 
@@ -3148,6 +3198,8 @@ export const referenceStandard = pgTable(
     index("standard_organization_id_idx").on(table.organizationId),
     index("standard_status_idx").on(table.status),
     index("standard_next_cal_date_idx").on(table.nextCalibrationDate),
+    // Target of the composite (id, organization) foreign keys of tenant children.
+    unique("reference_standard_id_org_uidx").on(table.id, table.organizationId),
   ],
 );
 
@@ -3262,6 +3314,13 @@ export const referenceStandardAuditLog = pgTable(
   "reference_standard_audit_log",
   {
     id: serial("id").primaryKey(),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the row must survive deletion of the reference standard.
     standardId: integer("standard_id").notNull(),
@@ -3277,6 +3336,10 @@ export const referenceStandardAuditLog = pgTable(
   (table) => [
     index("standard_audit_log_standard_id_idx").on(table.standardId),
     index("standard_audit_log_performed_at_idx").on(table.performedAt),
+    index("reference_standard_audit_log_org_performed_at_idx").on(
+      table.organizationId,
+      table.performedAt,
+    ),
   ],
 );
 
@@ -3773,6 +3836,8 @@ export const calibrationJob = pgTable(
     // DOM-02: resolve "does this repair OS already have a calibration opened?"
     // (the pending-after-repair queue leftJoins on this column).
     index("job_source_service_order_id_idx").on(table.sourceServiceOrderId),
+    // Target of the composite (id, organization) foreign keys of tenant children.
+    unique("calibration_job_id_org_uidx").on(table.id, table.organizationId),
   ],
 );
 
@@ -3789,6 +3854,13 @@ export const jobAuditLog = pgTable(
   "job_audit_log",
   {
     id: serial("id").primaryKey(),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the row must survive deletion of the calibration job.
     jobId: integer("job_id").notNull(),
@@ -3805,6 +3877,10 @@ export const jobAuditLog = pgTable(
     index("job_audit_log_job_id_idx").on(table.jobId),
     index("job_audit_log_performed_at_idx").on(table.performedAt),
     index("job_audit_log_action_idx").on(table.action),
+    index("job_audit_log_org_performed_at_idx").on(
+      table.organizationId,
+      table.performedAt,
+    ),
   ],
 );
 
@@ -3865,6 +3941,11 @@ export const commercialAgreement = pgTable(
       table.organizationId,
       table.agreementCode,
     ),
+    // Target of the composite (id, organization) foreign keys of tenant children.
+    unique("commercial_agreement_id_org_uidx").on(
+      table.id,
+      table.organizationId,
+    ),
   ],
 );
 
@@ -3872,6 +3953,9 @@ export const commercialAgreementUnitScope = pgTable(
   "commercial_agreement_unit_scope",
   {
     id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "restrict" }),
     agreementId: integer("agreement_id")
       .notNull()
       .references(() => commercialAgreement.id, { onDelete: "cascade" }),
@@ -3886,6 +3970,20 @@ export const commercialAgreementUnitScope = pgTable(
       table.unitId,
     ),
     index("commercial_agreement_unit_scope_unit_idx").on(table.unitId),
+    index("commercial_agreement_unit_scope_org_idx").on(table.organizationId),
+    foreignKey({
+      columns: [table.agreementId, table.organizationId],
+      foreignColumns: [
+        commercialAgreement.id,
+        commercialAgreement.organizationId,
+      ],
+      name: "commercial_agreement_unit_scope_agreement_id_tenant_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.unitId, table.organizationId],
+      foreignColumns: [organizationUnit.id, organizationUnit.organizationId],
+      name: "commercial_agreement_unit_scope_unit_id_tenant_fk",
+    }).onDelete("cascade"),
   ],
 );
 
@@ -3893,6 +3991,9 @@ export const commercialAgreementServiceTerm = pgTable(
   "commercial_agreement_service_term",
   {
     id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "restrict" }),
     agreementId: integer("agreement_id")
       .notNull()
       .references(() => commercialAgreement.id, { onDelete: "cascade" }),
@@ -3918,6 +4019,25 @@ export const commercialAgreementServiceTerm = pgTable(
     ),
     index("commercial_agreement_service_term_service_idx").on(table.serviceId),
     index("commercial_agreement_service_term_unit_idx").on(table.unitId),
+    index("commercial_agreement_service_term_org_idx").on(table.organizationId),
+    foreignKey({
+      columns: [table.agreementId, table.organizationId],
+      foreignColumns: [
+        commercialAgreement.id,
+        commercialAgreement.organizationId,
+      ],
+      name: "commercial_agreement_service_term_agreement_id_tenant_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.serviceId, table.organizationId],
+      foreignColumns: [service.id, service.organizationId],
+      name: "commercial_agreement_service_term_service_id_tenant_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.unitId, table.organizationId],
+      foreignColumns: [organizationUnit.id, organizationUnit.organizationId],
+      name: "commercial_agreement_service_term_unit_id_tenant_fk",
+    }).onDelete("cascade"),
   ],
 );
 
@@ -4037,6 +4157,8 @@ export const billingDocument = pgTable(
       table.organizationId,
       table.documentNumber,
     ),
+    // Target of the composite (id, organization) foreign keys of tenant children.
+    unique("billing_document_id_org_uidx").on(table.id, table.organizationId),
   ],
 );
 
@@ -4044,6 +4166,9 @@ export const billingDocumentItem = pgTable(
   "billing_document_item",
   {
     id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "restrict" }),
     documentId: integer("document_id")
       .notNull()
       .references(() => billingDocument.id, { onDelete: "cascade" }),
@@ -4080,6 +4205,12 @@ export const billingDocumentItem = pgTable(
     ),
     index("billing_document_item_service_order_idx").on(table.serviceOrderId),
     index("billing_document_item_material_idx").on(table.materialId),
+    index("billing_document_item_org_idx").on(table.organizationId),
+    foreignKey({
+      columns: [table.documentId, table.organizationId],
+      foreignColumns: [billingDocument.id, billingDocument.organizationId],
+      name: "billing_document_item_document_id_tenant_fk",
+    }).onDelete("cascade"),
   ],
 );
 
@@ -4087,6 +4218,9 @@ export const receivableInstallment = pgTable(
   "receivable_installment",
   {
     id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "restrict" }),
     documentId: integer("document_id")
       .notNull()
       .references(() => billingDocument.id, { onDelete: "cascade" }),
@@ -4114,6 +4248,17 @@ export const receivableInstallment = pgTable(
     ),
     index("receivable_installment_status_idx").on(table.status),
     index("receivable_installment_due_date_idx").on(table.dueDate),
+    index("receivable_installment_org_idx").on(table.organizationId),
+    foreignKey({
+      columns: [table.documentId, table.organizationId],
+      foreignColumns: [billingDocument.id, billingDocument.organizationId],
+      name: "receivable_installment_document_id_tenant_fk",
+    }).onDelete("cascade"),
+    // Target of the composite (id, organization) foreign keys of tenant children.
+    unique("receivable_installment_id_org_uidx").on(
+      table.id,
+      table.organizationId,
+    ),
   ],
 );
 
@@ -4121,6 +4266,9 @@ export const paymentReceipt = pgTable(
   "payment_receipt",
   {
     id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "restrict" }),
     installmentId: integer("installment_id")
       .notNull()
       .references(() => receivableInstallment.id, { onDelete: "cascade" }),
@@ -4143,6 +4291,15 @@ export const paymentReceipt = pgTable(
   (table) => [
     index("payment_receipt_installment_idx").on(table.installmentId),
     index("payment_receipt_received_at_idx").on(table.receivedAt),
+    index("payment_receipt_org_idx").on(table.organizationId),
+    foreignKey({
+      columns: [table.installmentId, table.organizationId],
+      foreignColumns: [
+        receivableInstallment.id,
+        receivableInstallment.organizationId,
+      ],
+      name: "payment_receipt_installment_id_tenant_fk",
+    }).onDelete("cascade"),
   ],
 );
 
@@ -4381,6 +4538,8 @@ export const billingGroup = pgTable(
       table.customerId,
     ),
     index("billing_group_status_idx").on(table.organizationId, table.status),
+    // Target of the composite (id, organization) foreign keys of tenant children.
+    unique("billing_group_id_org_uidx").on(table.id, table.organizationId),
   ],
 );
 
@@ -4388,6 +4547,9 @@ export const billingGroupServiceOrder = pgTable(
   "billing_group_service_order",
   {
     id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "restrict" }),
     groupId: integer("group_id")
       .notNull()
       .references(() => billingGroup.id, { onDelete: "cascade" }),
@@ -4402,6 +4564,17 @@ export const billingGroupServiceOrder = pgTable(
       table.serviceOrderId,
     ),
     index("billing_group_service_order_so_idx").on(table.serviceOrderId),
+    index("billing_group_service_order_org_idx").on(table.organizationId),
+    foreignKey({
+      columns: [table.groupId, table.organizationId],
+      foreignColumns: [billingGroup.id, billingGroup.organizationId],
+      name: "billing_group_service_order_group_id_tenant_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.serviceOrderId, table.organizationId],
+      foreignColumns: [serviceOrder.id, serviceOrder.organizationId],
+      name: "billing_group_service_order_service_order_id_tenant_fk",
+    }).onDelete("restrict"),
   ],
 );
 
@@ -4648,6 +4821,8 @@ export const serviceOrder = pgTable(
     index("service_order_technician_idx").on(table.responsibleTechnicianId),
     index("service_order_source_idx").on(table.sourceServiceOrderId),
     index("service_order_billing_document_idx").on(table.billingDocumentId),
+    // Target of the composite (id, organization) foreign keys of tenant children.
+    unique("service_order_id_org_uidx").on(table.id, table.organizationId),
   ],
 );
 
@@ -4655,6 +4830,9 @@ export const serviceOrderAssetSnapshot = pgTable(
   "service_order_asset_snapshot",
   {
     id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "restrict" }),
     serviceOrderId: integer("service_order_id")
       .notNull()
       .unique()
@@ -4685,6 +4863,17 @@ export const serviceOrderAssetSnapshot = pgTable(
   },
   (table) => [
     index("service_order_asset_snapshot_asset_idx").on(table.assetId),
+    index("service_order_asset_snapshot_org_idx").on(table.organizationId),
+    foreignKey({
+      columns: [table.serviceOrderId, table.organizationId],
+      foreignColumns: [serviceOrder.id, serviceOrder.organizationId],
+      name: "service_order_asset_snapshot_service_order_id_tenant_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.assetId, table.organizationId],
+      foreignColumns: [asset.id, asset.labOrganizationId],
+      name: "service_order_asset_snapshot_asset_id_tenant_fk",
+    }).onDelete("restrict"),
   ],
 );
 
@@ -4692,6 +4881,9 @@ export const serviceOrderIntakeDocument = pgTable(
   "service_order_intake_document",
   {
     id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "restrict" }),
     serviceOrderId: integer("service_order_id")
       .notNull()
       .references(() => serviceOrder.id, { onDelete: "cascade" }),
@@ -4716,6 +4908,12 @@ export const serviceOrderIntakeDocument = pgTable(
       table.documentNumber,
       table.version,
     ),
+    index("service_order_intake_document_org_idx").on(table.organizationId),
+    foreignKey({
+      columns: [table.serviceOrderId, table.organizationId],
+      foreignColumns: [serviceOrder.id, serviceOrder.organizationId],
+      name: "service_order_intake_document_service_order_id_tenant_fk",
+    }).onDelete("cascade"),
   ],
 );
 
@@ -4723,6 +4921,9 @@ export const serviceOrderTag = pgTable(
   "service_order_tag",
   {
     id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "restrict" }),
     serviceOrderId: integer("service_order_id")
       .notNull()
       .references(() => serviceOrder.id, { onDelete: "cascade" }),
@@ -4738,6 +4939,12 @@ export const serviceOrderTag = pgTable(
   (table) => [
     index("service_order_tag_order_idx").on(table.serviceOrderId),
     uniqueIndex("service_order_tag_number_uidx").on(table.tagNumber),
+    index("service_order_tag_org_idx").on(table.organizationId),
+    foreignKey({
+      columns: [table.serviceOrderId, table.organizationId],
+      foreignColumns: [serviceOrder.id, serviceOrder.organizationId],
+      name: "service_order_tag_service_order_id_tenant_fk",
+    }).onDelete("cascade"),
   ],
 );
 
@@ -4745,6 +4952,9 @@ export const serviceOrderDeliveryDocument = pgTable(
   "service_order_delivery_document",
   {
     id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "restrict" }),
     serviceOrderId: integer("service_order_id")
       .notNull()
       .references(() => serviceOrder.id, { onDelete: "cascade" }),
@@ -4769,6 +4979,12 @@ export const serviceOrderDeliveryDocument = pgTable(
       table.documentNumber,
       table.version,
     ),
+    index("service_order_delivery_document_org_idx").on(table.organizationId),
+    foreignKey({
+      columns: [table.serviceOrderId, table.organizationId],
+      foreignColumns: [serviceOrder.id, serviceOrder.organizationId],
+      name: "service_order_delivery_document_service_order_id_tenant_fk",
+    }).onDelete("cascade"),
   ],
 );
 
@@ -4776,6 +4992,9 @@ export const serviceOrderEvaluation = pgTable(
   "service_order_evaluation",
   {
     id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "restrict" }),
     serviceOrderId: integer("service_order_id")
       .notNull()
       .references(() => serviceOrder.id, { onDelete: "cascade" }),
@@ -4807,6 +5026,12 @@ export const serviceOrderEvaluation = pgTable(
   (table) => [
     index("service_order_evaluation_order_idx").on(table.serviceOrderId),
     index("service_order_evaluation_technician_idx").on(table.technicianId),
+    index("service_order_evaluation_org_idx").on(table.organizationId),
+    foreignKey({
+      columns: [table.serviceOrderId, table.organizationId],
+      foreignColumns: [serviceOrder.id, serviceOrder.organizationId],
+      name: "service_order_evaluation_service_order_id_tenant_fk",
+    }).onDelete("cascade"),
   ],
 );
 
@@ -4814,6 +5039,9 @@ export const serviceOrderQuote = pgTable(
   "service_order_quote",
   {
     id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "restrict" }),
     serviceOrderId: integer("service_order_id")
       .notNull()
       .references(() => serviceOrder.id, { onDelete: "cascade" }),
@@ -4881,6 +5109,17 @@ export const serviceOrderQuote = pgTable(
       table.version,
     ),
     index("service_order_quote_token_idx").on(table.portalAccessTokenHash),
+    index("service_order_quote_org_idx").on(table.organizationId),
+    foreignKey({
+      columns: [table.serviceOrderId, table.organizationId],
+      foreignColumns: [serviceOrder.id, serviceOrder.organizationId],
+      name: "service_order_quote_service_order_id_tenant_fk",
+    }).onDelete("cascade"),
+    // Target of the composite (id, organization) foreign keys of tenant children.
+    unique("service_order_quote_id_org_uidx").on(
+      table.id,
+      table.organizationId,
+    ),
   ],
 );
 
@@ -4888,6 +5127,9 @@ export const serviceOrderQuoteItem = pgTable(
   "service_order_quote_item",
   {
     id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "restrict" }),
     quoteId: integer("quote_id")
       .notNull()
       .references(() => serviceOrderQuote.id, { onDelete: "cascade" }),
@@ -4912,6 +5154,12 @@ export const serviceOrderQuoteItem = pgTable(
   (table) => [
     index("service_order_quote_item_quote_idx").on(table.quoteId),
     index("service_order_quote_item_material_idx").on(table.materialId),
+    index("service_order_quote_item_org_idx").on(table.organizationId),
+    foreignKey({
+      columns: [table.quoteId, table.organizationId],
+      foreignColumns: [serviceOrderQuote.id, serviceOrderQuote.organizationId],
+      name: "service_order_quote_item_quote_id_tenant_fk",
+    }).onDelete("cascade"),
   ],
 );
 
@@ -4919,6 +5167,9 @@ export const serviceOrderExecution = pgTable(
   "service_order_execution",
   {
     id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "restrict" }),
     serviceOrderId: integer("service_order_id")
       .notNull()
       .unique()
@@ -4952,6 +5203,17 @@ export const serviceOrderExecution = pgTable(
   },
   (table) => [
     index("service_order_execution_order_idx").on(table.serviceOrderId),
+    index("service_order_execution_org_idx").on(table.organizationId),
+    foreignKey({
+      columns: [table.serviceOrderId, table.organizationId],
+      foreignColumns: [serviceOrder.id, serviceOrder.organizationId],
+      name: "service_order_execution_service_order_id_tenant_fk",
+    }).onDelete("cascade"),
+    // Target of the composite (id, organization) foreign keys of tenant children.
+    unique("service_order_execution_id_org_uidx").on(
+      table.id,
+      table.organizationId,
+    ),
   ],
 );
 
@@ -4959,6 +5221,9 @@ export const serviceOrderExecutionItem = pgTable(
   "service_order_execution_item",
   {
     id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "restrict" }),
     executionId: integer("execution_id")
       .notNull()
       .references(() => serviceOrderExecution.id, { onDelete: "cascade" }),
@@ -4987,6 +5252,15 @@ export const serviceOrderExecutionItem = pgTable(
     index("service_order_execution_item_execution_idx").on(table.executionId),
     index("service_order_execution_item_quote_item_idx").on(table.quoteItemId),
     index("service_order_execution_item_material_idx").on(table.materialId),
+    index("service_order_execution_item_org_idx").on(table.organizationId),
+    foreignKey({
+      columns: [table.executionId, table.organizationId],
+      foreignColumns: [
+        serviceOrderExecution.id,
+        serviceOrderExecution.organizationId,
+      ],
+      name: "service_order_execution_item_execution_id_tenant_fk",
+    }).onDelete("cascade"),
   ],
 );
 
@@ -5028,6 +5302,9 @@ export const serviceOrderAttachment = pgTable(
   "service_order_attachment",
   {
     id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "restrict" }),
     serviceOrderId: integer("service_order_id")
       .notNull()
       .references(() => serviceOrder.id, { onDelete: "cascade" }),
@@ -5044,6 +5321,12 @@ export const serviceOrderAttachment = pgTable(
   },
   (table) => [
     index("service_order_attachment_order_idx").on(table.serviceOrderId),
+    index("service_order_attachment_org_idx").on(table.organizationId),
+    foreignKey({
+      columns: [table.serviceOrderId, table.organizationId],
+      foreignColumns: [serviceOrder.id, serviceOrder.organizationId],
+      name: "service_order_attachment_service_order_id_tenant_fk",
+    }).onDelete("cascade"),
   ],
 );
 
@@ -5051,6 +5334,9 @@ export const serviceOrderCertificateLink = pgTable(
   "service_order_certificate_link",
   {
     id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "restrict" }),
     serviceOrderId: integer("service_order_id")
       .notNull()
       .references(() => serviceOrder.id, { onDelete: "cascade" }),
@@ -5068,6 +5354,17 @@ export const serviceOrderCertificateLink = pgTable(
       table.certificateJobId,
     ),
     index("service_order_certificate_link_job_idx").on(table.certificateJobId),
+    index("service_order_certificate_link_org_idx").on(table.organizationId),
+    foreignKey({
+      columns: [table.serviceOrderId, table.organizationId],
+      foreignColumns: [serviceOrder.id, serviceOrder.organizationId],
+      name: "service_order_certificate_link_service_order_id_tenant_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.certificateJobId, table.organizationId],
+      foreignColumns: [calibrationJob.id, calibrationJob.organizationId],
+      name: "service_order_certificate_link_certificate_job_id_tenant_fk",
+    }).onDelete("restrict"),
   ],
 );
 
@@ -5236,6 +5533,9 @@ export const serviceOrderEmailLog = pgTable(
   "service_order_email_log",
   {
     id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "restrict" }),
     serviceOrderId: integer("service_order_id")
       .notNull()
       .references(() => serviceOrder.id, { onDelete: "cascade" }),
@@ -5251,6 +5551,12 @@ export const serviceOrderEmailLog = pgTable(
       table.eventKey,
     ),
     index("service_order_email_log_so_idx").on(table.serviceOrderId),
+    index("service_order_email_log_org_idx").on(table.organizationId),
+    foreignKey({
+      columns: [table.serviceOrderId, table.organizationId],
+      foreignColumns: [serviceOrder.id, serviceOrder.organizationId],
+      name: "service_order_email_log_service_order_id_tenant_fk",
+    }).onDelete("cascade"),
   ],
 );
 
@@ -5425,6 +5731,11 @@ export const calibrationRequest = pgTable(
     index("calibration_request_auth_org_id_idx").on(table.authOrganizationId),
     index("calibration_request_status_idx").on(table.status),
     index("calibration_request_submitted_at_idx").on(table.submittedAt),
+    // Target of the composite (id, organization) foreign keys of tenant children.
+    unique("calibration_request_id_org_uidx").on(
+      table.id,
+      table.organizationId,
+    ),
   ],
 );
 
@@ -5432,6 +5743,9 @@ export const calibrationRequestItem = pgTable(
   "calibration_request_item",
   {
     id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "restrict" }),
     requestId: integer("request_id")
       .notNull()
       .references(() => calibrationRequest.id, { onDelete: "cascade" }),
@@ -5454,6 +5768,20 @@ export const calibrationRequestItem = pgTable(
       table.requestId,
       table.assetId,
     ),
+    index("calibration_request_item_org_idx").on(table.organizationId),
+    foreignKey({
+      columns: [table.requestId, table.organizationId],
+      foreignColumns: [
+        calibrationRequest.id,
+        calibrationRequest.organizationId,
+      ],
+      name: "calibration_request_item_request_id_tenant_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.assetId, table.organizationId],
+      foreignColumns: [asset.id, asset.labOrganizationId],
+      name: "calibration_request_item_asset_id_tenant_fk",
+    }).onDelete("restrict"),
   ],
 );
 
@@ -5461,6 +5789,13 @@ export const calibrationRequestAuditLog = pgTable(
   "calibration_request_audit_log",
   {
     id: serial("id").primaryKey(),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the row must survive deletion of the calibration request.
     requestId: integer("request_id").notNull(),
@@ -5478,6 +5813,10 @@ export const calibrationRequestAuditLog = pgTable(
   (table) => [
     index("cal_request_audit_log_request_id_idx").on(table.requestId),
     index("cal_request_audit_log_performed_at_idx").on(table.performedAt),
+    index("calibration_request_audit_log_org_performed_at_idx").on(
+      table.organizationId,
+      table.performedAt,
+    ),
   ],
 );
 
@@ -5645,6 +5984,13 @@ export const visitAuditLog = pgTable(
   "visit_audit_log",
   {
     id: serial("id").primaryKey(),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     visitId: integer("visit_id").notNull(),
     action: text("action").notNull(),
     changes: jsonb("changes"),
@@ -5661,6 +6007,10 @@ export const visitAuditLog = pgTable(
   (table) => [
     index("visit_audit_log_visit_id_idx").on(table.visitId),
     index("visit_audit_log_performed_at_idx").on(table.performedAt),
+    index("visit_audit_log_org_performed_at_idx").on(
+      table.organizationId,
+      table.performedAt,
+    ),
   ],
 );
 
@@ -7022,6 +7372,13 @@ export const correctiveActionAuditLog = pgTable(
   "corrective_action_audit_log",
   {
     id: serial("id").primaryKey(),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the row must survive deletion of the corrective action.
     capaId: integer("capa_id").notNull(),
@@ -7037,6 +7394,10 @@ export const correctiveActionAuditLog = pgTable(
   (table) => [
     index("capa_audit_log_capa_id_idx").on(table.capaId),
     index("capa_audit_log_performed_at_idx").on(table.performedAt),
+    index("corrective_action_audit_log_org_performed_at_idx").on(
+      table.organizationId,
+      table.performedAt,
+    ),
   ],
 );
 
@@ -7158,6 +7519,13 @@ export const nonConformanceAuditLog = pgTable(
   "non_conformance_audit_log",
   {
     id: serial("id").primaryKey(),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the row must survive deletion of the non-conformance.
     ncId: integer("nc_id").notNull(),
@@ -7173,6 +7541,10 @@ export const nonConformanceAuditLog = pgTable(
   (table) => [
     index("nc_audit_log_nc_id_idx").on(table.ncId),
     index("nc_audit_log_performed_at_idx").on(table.performedAt),
+    index("non_conformance_audit_log_org_performed_at_idx").on(
+      table.organizationId,
+      table.performedAt,
+    ),
   ],
 );
 
@@ -7295,6 +7667,9 @@ export const jobStandard = pgTable(
   "job_standard",
   {
     id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "restrict" }),
     jobId: integer("job_id")
       .notNull()
       .references(() => calibrationJob.id, { onDelete: "cascade" }),
@@ -7310,6 +7685,17 @@ export const jobStandard = pgTable(
     unique("job_standard_job_standard_uidx").on(table.jobId, table.standardId),
     index("job_standard_job_id_idx").on(table.jobId),
     index("job_standard_standard_id_idx").on(table.standardId),
+    index("job_standard_org_idx").on(table.organizationId),
+    foreignKey({
+      columns: [table.jobId, table.organizationId],
+      foreignColumns: [calibrationJob.id, calibrationJob.organizationId],
+      name: "job_standard_job_id_tenant_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.standardId, table.organizationId],
+      foreignColumns: [referenceStandard.id, referenceStandard.organizationId],
+      name: "job_standard_standard_id_tenant_fk",
+    }).onDelete("restrict"),
   ],
 );
 
@@ -7859,6 +8245,13 @@ export const personnelCompetenceAuditLog = pgTable(
   "personnel_competence_audit_log",
   {
     id: serial("id").primaryKey(),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the row must survive deletion of the competence record
     // (which itself cascades from user self-delete), so it keeps a plain integer.
@@ -7873,6 +8266,10 @@ export const personnelCompetenceAuditLog = pgTable(
   (table) => [
     index("competence_audit_log_competence_id_idx").on(table.competenceId),
     index("competence_audit_log_performed_at_idx").on(table.performedAt),
+    index("personnel_competence_audit_log_org_performed_at_idx").on(
+      table.organizationId,
+      table.performedAt,
+    ),
   ],
 );
 
@@ -7884,6 +8281,13 @@ export const trainingRecordAuditLog = pgTable(
   "training_record_audit_log",
   {
     id: serial("id").primaryKey(),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the row must survive deletion of the training record
     // (which itself cascades from user self-delete), so it keeps a plain integer.
@@ -7898,6 +8302,10 @@ export const trainingRecordAuditLog = pgTable(
   (table) => [
     index("training_audit_log_training_id_idx").on(table.trainingRecordId),
     index("training_audit_log_performed_at_idx").on(table.performedAt),
+    index("training_record_audit_log_org_performed_at_idx").on(
+      table.organizationId,
+      table.performedAt,
+    ),
   ],
 );
 
@@ -7987,6 +8395,13 @@ export const authorizedSignatoryAuditLog = pgTable(
   "authorized_signatory_audit_log",
   {
     id: serial("id").primaryKey(),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025 §6.2.6): the record of who was an authorized signatory must
     // survive deletion of the authorization row, so it keeps a plain integer.
@@ -8003,6 +8418,10 @@ export const authorizedSignatoryAuditLog = pgTable(
       table.signatoryId,
     ),
     index("authorized_signatory_audit_log_performed_at_idx").on(
+      table.performedAt,
+    ),
+    index("authorized_signatory_audit_log_org_performed_at_idx").on(
+      table.organizationId,
       table.performedAt,
     ),
   ],
@@ -8272,6 +8691,13 @@ export const proficiencyTestAuditLog = pgTable(
   "proficiency_test_audit_log",
   {
     id: serial("id").primaryKey(),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // Soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the row must survive deletion of the PT round.
     proficiencyTestId: integer("proficiency_test_id").notNull(),
@@ -8287,6 +8713,10 @@ export const proficiencyTestAuditLog = pgTable(
   (table) => [
     index("pt_audit_log_pt_id_idx").on(table.proficiencyTestId),
     index("pt_audit_log_performed_at_idx").on(table.performedAt),
+    index("proficiency_test_audit_log_org_performed_at_idx").on(
+      table.organizationId,
+      table.performedAt,
+    ),
   ],
 );
 
@@ -8450,6 +8880,13 @@ export const controlChartAuditLog = pgTable(
   "control_chart_audit_log",
   {
     id: serial("id").primaryKey(),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // Soft reference on purpose — NO FK (append-only audit trail).
     controlChartId: integer("control_chart_id").notNull(),
     action: text("action").notNull(), // 'create', 'update', 'recalculate', 'escalate'
@@ -8464,6 +8901,10 @@ export const controlChartAuditLog = pgTable(
   (table) => [
     index("control_chart_audit_log_chart_id_idx").on(table.controlChartId),
     index("control_chart_audit_log_performed_at_idx").on(table.performedAt),
+    index("control_chart_audit_log_org_performed_at_idx").on(
+      table.organizationId,
+      table.performedAt,
+    ),
   ],
 );
 
@@ -8635,6 +9076,8 @@ export const assetOotEvent = pgTable(
     ),
     index("asset_oot_event_asset_id_idx").on(table.assetId),
     index("asset_oot_event_lab_org_idx").on(table.labOrganizationId),
+    // Target of the composite (id, organization) foreign keys of tenant children.
+    unique("asset_oot_event_id_org_uidx").on(table.id, table.labOrganizationId),
   ],
 );
 
@@ -8642,6 +9085,9 @@ export const assetOotImpactAssessment = pgTable(
   "asset_oot_impact_assessment",
   {
     id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "restrict" }),
     eventId: integer("event_id")
       .notNull()
       .references(() => assetOotEvent.id, { onDelete: "cascade" }),
@@ -8663,6 +9109,12 @@ export const assetOotImpactAssessment = pgTable(
   },
   (table) => [
     uniqueIndex("asset_oot_impact_assessment_event_uidx").on(table.eventId),
+    index("asset_oot_impact_assessment_org_idx").on(table.organizationId),
+    foreignKey({
+      columns: [table.eventId, table.organizationId],
+      foreignColumns: [assetOotEvent.id, assetOotEvent.labOrganizationId],
+      name: "asset_oot_impact_assessment_event_id_tenant_fk",
+    }).onDelete("cascade"),
   ],
 );
 
@@ -8670,6 +9122,13 @@ export const assetOotAuditLog = pgTable(
   "asset_oot_audit_log",
   {
     id: serial("id").primaryKey(),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // Soft reference on purpose — NO FK. Append-only audit trail: the row
     // must survive deletion of the event (customer's own audit evidence).
     eventId: integer("event_id").notNull(),
@@ -8685,6 +9144,10 @@ export const assetOotAuditLog = pgTable(
   (table) => [
     index("asset_oot_audit_log_event_id_idx").on(table.eventId),
     index("asset_oot_audit_log_performed_at_idx").on(table.performedAt),
+    index("asset_oot_audit_log_org_performed_at_idx").on(
+      table.organizationId,
+      table.performedAt,
+    ),
   ],
 );
 

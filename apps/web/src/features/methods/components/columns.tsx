@@ -9,14 +9,14 @@ import {
   ViewIcon,
 } from '@hugeicons/core-free-icons'
 
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Button } from '@calibra-facil/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+} from '@calibra-facil/ui/dropdown-menu'
 import type { MethodListItem, MethodStatus } from '@/features/methods/types'
 import { cn } from '@/lib/utils'
 import { methodRouteId } from '@/lib/route-identifiers'
@@ -108,7 +108,11 @@ export const methodsColumns: ColumnDef<Method>[] = [
 
       return (
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="ghost" size="icon" />}>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="ghost" size="icon" aria-label="Mais ações" />
+            }
+          >
             <HugeiconsIcon icon={MoreHorizontalIcon} className="h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">

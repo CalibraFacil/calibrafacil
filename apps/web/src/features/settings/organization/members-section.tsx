@@ -42,12 +42,12 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { FieldError, FieldGroup } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
+} from '@calibra-facil/ui/card'
+import { FieldError, FieldGroup } from '@calibra-facil/ui/field'
+import { Input } from '@calibra-facil/ui/input'
+import { Button } from '@calibra-facil/ui/button'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Separator } from '@calibra-facil/ui/separator'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -57,14 +57,14 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+} from '@calibra-facil/ui/alert-dialog'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
+} from '@calibra-facil/ui/select'
 
 export function OrganizationMembersSection({
   activeOrg,
@@ -315,6 +315,7 @@ export function OrganizationMembersSection({
                           <Button
                             variant="ghost"
                             size="icon-sm"
+                            aria-label="Remover membro"
                             onClick={() => setMemberToRemove(member)}
                           >
                             <HugeiconsIcon
@@ -464,6 +465,7 @@ export function OrganizationMembersSection({
                             <Button
                               variant="ghost"
                               size="icon-sm"
+                              aria-label="Cancelar convite"
                               onClick={() =>
                                 handleCancelInvitation(invitation.id)
                               }

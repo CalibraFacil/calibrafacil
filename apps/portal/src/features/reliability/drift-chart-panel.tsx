@@ -4,9 +4,9 @@ import {
   ACTION_BUTTON_CLASS,
   Panel,
   PanelHeader,
-} from "@/components/instrument-panel";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+} from "@calibra-facil/ui/instrument-panel";
+import { Button } from "@calibra-facil/ui/button";
+import { Skeleton } from "@calibra-facil/ui/skeleton";
 import { useDriftSeries } from "./queries";
 
 // recharts/d3 weigh ~350 kB: only fetch them once a chart is drawn.

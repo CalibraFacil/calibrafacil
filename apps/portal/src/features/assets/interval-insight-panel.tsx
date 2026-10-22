@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { CheckmarkCircle02Icon, File01Icon } from "@hugeicons/core-free-icons";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@calibra-facil/ui/button";
 import {
   Dialog,
   DialogClose,
@@ -13,8 +13,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Skeleton } from "@/components/ui/skeleton";
+} from "@calibra-facil/ui/dialog";
+import { Skeleton } from "@calibra-facil/ui/skeleton";
 import { StatusPill } from "@/components/status-pill";
 import {
   ACTION_BUTTON_CLASS,
@@ -23,7 +23,7 @@ import {
   Panel,
   PanelHeader,
   type SignalTone,
-} from "@/components/instrument-panel";
+} from "@calibra-facil/ui/instrument-panel";
 import { getApiBaseUrl } from "@/lib/utils";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import { useIntervalInsight } from "./queries";

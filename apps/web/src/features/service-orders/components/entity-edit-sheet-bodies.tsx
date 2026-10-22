@@ -8,7 +8,7 @@ import {
   type UpdatedAsset,
 } from '@/features/assets/components/asset-edit-form'
 import { useAssetDetailData } from '@/features/assets/queries'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
 import { isDesktopRuntime } from '@/runtime/desktop'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 import { useCustomerGroupsList } from '@/features/customer-groups/queries'

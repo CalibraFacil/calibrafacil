@@ -52,7 +52,7 @@ vi.mock('sonner', () => ({
   toast: toastMocks,
 }))
 
-vi.mock('@/components/ui/date-picker', () => ({
+vi.mock('@calibra-facil/ui/date-picker', () => ({
   DatePicker: ({
     onChange,
     placeholder,
@@ -75,7 +75,7 @@ vi.mock('@/components/ui/date-picker', () => ({
   ),
 }))
 
-vi.mock('@/components/ui/select', () => ({
+vi.mock('@calibra-facil/ui/select', () => ({
   Select: ({
     value,
     onValueChange,

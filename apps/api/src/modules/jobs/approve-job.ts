@@ -419,6 +419,7 @@ export async function approveJob(
     }
 
     await tx.insert(jobAuditLog).values({
+      organizationId: memberData.organizationId,
       jobId,
       action: "approve",
       changes: {
@@ -563,6 +564,7 @@ async function revertApprovalAfterDispatchFailure(params: {
       if (!reverted) return;
 
       await tx.insert(jobAuditLog).values({
+        organizationId: existing.organizationId,
         jobId: existing.id,
         action: "approve_reverted",
         changes: {

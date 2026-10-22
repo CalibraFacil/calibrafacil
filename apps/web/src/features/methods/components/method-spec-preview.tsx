@@ -6,7 +6,7 @@ import {
   TextFontIcon,
 } from '@hugeicons/core-free-icons'
 
-import { Badge } from '@/components/ui/badge'
+import { Badge } from '@calibra-facil/ui/badge'
 import {
   BlueprintField,
   BlueprintGrid,
@@ -15,7 +15,7 @@ import {
   SignalTile,
   StaggerGroup,
   StaggerItem,
-} from '@/components/instrument-panel'
+} from '@calibra-facil/ui/instrument-panel'
 
 /**
  * The read-only "specification" view of a method: input fields, formulas,

@@ -27,14 +27,14 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+} from '@calibra-facil/ui/dropdown-menu'
 import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
-} from '@/components/ui/sidebar'
-import { Skeleton } from '@/components/ui/skeleton'
+} from '@calibra-facil/ui/sidebar'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
 import {
   setStoredDashboardActiveUnitIdForOrganization,
   setStoredDashboardOrganizationId,

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { organizationOf } from "../../test/integration/organization-of";
 import {
   publicServiceOrderAccessRouter,
   serviceOrdersRouter,
@@ -161,6 +162,7 @@ async function seedQuote(params: {
   const [row] = await db
     .insert(serviceOrderQuote)
     .values({
+      organizationId: organizationOf("service_order", params.serviceOrderId),
       serviceOrderId: params.serviceOrderId,
       quoteNumber: `${params.serviceOrderNumber}/ORC`,
       version: params.version ?? 1,

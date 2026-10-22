@@ -13,17 +13,17 @@ import {
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Spinner } from "@/components/ui/spinner";
-import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@calibra-facil/ui/button";
+import { Checkbox } from "@calibra-facil/ui/checkbox";
+import { Input } from "@calibra-facil/ui/input";
+import { Spinner } from "@calibra-facil/ui/spinner";
+import { Textarea } from "@calibra-facil/ui/textarea";
 import { PageHeader } from "@/components/page-header";
 import {
   ACTION_BUTTON_CLASS,
   Panel,
   PanelHeader,
-} from "@/components/instrument-panel";
+} from "@calibra-facil/ui/instrument-panel";
 import { StatusPill } from "@/components/status-pill";
 import { getCalibrationStatus } from "@/lib/calibration-status";
 import { cn, getApiBaseUrl } from "@/lib/utils";

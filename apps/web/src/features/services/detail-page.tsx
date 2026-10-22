@@ -18,9 +18,9 @@ import {
   AuditTimeline,
   buildAuditTimelineEvents,
 } from '@/components/audit-timeline'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@calibra-facil/ui/button'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
 import {
   ACTION_BUTTON_CLASS,
   BlueprintField,
@@ -31,7 +31,7 @@ import {
   SignalTile,
   StaggerGroup,
   StaggerItem,
-} from '@/components/instrument-panel'
+} from '@calibra-facil/ui/instrument-panel'
 import { methodRouteId } from '@/lib/route-identifiers'
 import { formatFinanceMoney } from '@/lib/finance-formatters'
 

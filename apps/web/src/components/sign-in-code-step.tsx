@@ -8,9 +8,9 @@ import {
 } from '@hugeicons/core-free-icons'
 
 import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
-import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
-import { Spinner } from '@/components/ui/spinner'
+import { Button } from '@calibra-facil/ui/button'
+import { Field, FieldDescription, FieldLabel } from '@calibra-facil/ui/field'
+import { Spinner } from '@calibra-facil/ui/spinner'
 import { OTP_CODE_LENGTH, OtpCodeField } from '@/components/otp-code-field'
 
 export type SignInCodeStatus = 'idle' | 'validating' | 'verified'

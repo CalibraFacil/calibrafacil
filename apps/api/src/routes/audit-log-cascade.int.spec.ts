@@ -27,6 +27,7 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
+import { organizationOf } from "../../test/integration/organization-of";
 import { db } from "@calibra-facil/db";
 import {
   asset,
@@ -367,6 +368,7 @@ describe("audit-log subject FKs no longer self-delete the trail (CMP-07 #692)", 
     const [auditRow] = await db
       .insert(personnelCompetenceAuditLog)
       .values({
+        organizationId: organizationOf("personnel_competence", pc.id),
         competenceId: pc.id,
         action: "qualify",
         performedBy: org.userId,
@@ -413,6 +415,7 @@ describe("audit-log subject FKs no longer self-delete the trail (CMP-07 #692)", 
     const [auditRow] = await db
       .insert(authorizedSignatoryAuditLog)
       .values({
+        organizationId: organizationOf("authorized_signatory", sig.id),
         signatoryId: sig.id,
         action: "authorize",
         performedBy: org.userId,

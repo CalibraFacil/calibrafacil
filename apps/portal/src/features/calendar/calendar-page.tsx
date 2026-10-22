@@ -23,7 +23,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@calibra-facil/ui/button";
 import { PageHeader } from "@/components/page-header";
 import {
   ACTION_BUTTON_CLASS,
@@ -33,8 +33,9 @@ import {
   StaggerGroup,
   StaggerItem,
   type SignalTone,
-} from "@/components/instrument-panel";
-import { StatusPill, TONE } from "@/components/status-pill";
+} from "@calibra-facil/ui/instrument-panel";
+import { StatusPill } from "@/components/status-pill";
+import { STATUS_TONE } from "@calibra-facil/ui/status-tone";
 import { getInstrumentStatus } from "@/lib/calibration-status";
 import { formatLocalDay } from "@calibra-facil/shared/format";
 import { cn } from "@/lib/utils";
@@ -277,13 +278,13 @@ export function CalendarPage({
                         <span
                           className={cn(
                             "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-medium",
-                            TONE[tone].surface,
+                            STATUS_TONE[tone].surface,
                           )}
                         >
                           <span
                             className={cn(
                               "size-1.5 rounded-full",
-                              TONE[tone].dot,
+                              STATUS_TONE[tone].dot,
                             )}
                           />
                           {dues.length}

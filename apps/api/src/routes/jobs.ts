@@ -1245,6 +1245,7 @@ export const jobsRouter = new Hono<{
         amendedJob.id,
         originalJob.standardsSnapshot,
         originalJob.performedAt,
+        memberData.organizationId,
       );
 
       await enqueueBackgroundJob({

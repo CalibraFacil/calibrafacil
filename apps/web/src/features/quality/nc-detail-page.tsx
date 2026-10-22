@@ -12,25 +12,25 @@ import {
 } from '@/features/quality/queries'
 import { ImpactAssessmentCard } from '@/features/quality/components/impact-assessment-card'
 import { ShowForRole } from '@/components/permission-gate'
-import { Button } from '@/components/ui/button'
+import { Button } from '@calibra-facil/ui/button'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { BlueprintOverlay, Panel } from '@/components/instrument-panel'
-import { Badge } from '@/components/ui/badge'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
+} from '@calibra-facil/ui/card'
+import { BlueprintOverlay, Panel } from '@calibra-facil/ui/instrument-panel'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Textarea } from '@calibra-facil/ui/textarea'
+import { Label } from '@calibra-facil/ui/label'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
+} from '@calibra-facil/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -38,7 +38,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog'
+} from '@calibra-facil/ui/dialog'
 import {
   CloudOnlyOfflineState,
   useDesktopCloudOnlyUnavailable,

@@ -29,17 +29,17 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Input } from '@/components/ui/input'
+} from '@calibra-facil/ui/table'
+import { Button } from '@calibra-facil/ui/button'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
+import { Input } from '@calibra-facil/ui/input'
 import {
   Field,
   FieldError,
   FieldGroup,
   FieldLabel,
-} from '@/components/ui/field'
+} from '@calibra-facil/ui/field'
 import {
   Dialog,
   DialogClose,
@@ -49,7 +49,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog'
+} from '@calibra-facil/ui/dialog'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -60,14 +60,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
+} from '@calibra-facil/ui/alert-dialog'
 import {
   Empty,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from '@/components/ui/empty'
+} from '@calibra-facil/ui/empty'
 import {
   ClientMetric,
   ClientMetricStrip,
@@ -266,7 +266,13 @@ export function CustomerGroupGestorTab({ groupId }: { groupId: number }) {
                         {isPortalManageableMemberRole(m.role) && (
                           <AlertDialog>
                             <AlertDialogTrigger
-                              render={<Button variant="ghost" size="icon-sm" />}
+                              render={
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  aria-label="Remover"
+                                />
+                              }
                               aria-label={`Remover ${m.userName}`}
                             >
                               <HugeiconsIcon
@@ -385,7 +391,11 @@ export function CustomerGroupGestorTab({ groupId }: { groupId: number }) {
                               <AlertDialog>
                                 <AlertDialogTrigger
                                   render={
-                                    <Button variant="ghost" size="icon-sm" />
+                                    <Button
+                                      variant="ghost"
+                                      size="icon-sm"
+                                      aria-label="Cancelar convite"
+                                    />
                                   }
                                   aria-label={`Cancelar convite para ${inv.email}`}
                                 >

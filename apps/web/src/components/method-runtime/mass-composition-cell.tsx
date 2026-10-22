@@ -33,8 +33,8 @@ import {
 } from './mass-composition-suggest'
 import { parseNumericValue } from './weighing-range-utils'
 
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Button } from '@calibra-facil/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -42,9 +42,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Kbd } from '@/components/ui/kbd'
+} from '@calibra-facil/ui/dialog'
+import { Input } from '@calibra-facil/ui/input'
+import { Kbd } from '@calibra-facil/ui/kbd'
 import { cn } from '@/lib/utils'
 
 interface MassCompositionCellProps {

@@ -21,19 +21,19 @@ import {
 } from "@hugeicons/core-free-icons";
 
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { Button } from "@calibra-facil/ui/button";
+import { Spinner } from "@calibra-facil/ui/spinner";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "@calibra-facil/ui/tooltip";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+} from "@calibra-facil/ui/collapsible";
+import { Alert, AlertDescription, AlertTitle } from "@calibra-facil/ui/alert";
 import {
   ACTION_BUTTON_CLASS,
   BlueprintField,
@@ -45,9 +45,10 @@ import {
   StaggerGroup,
   StaggerItem,
   type SignalTone,
-} from "@/components/instrument-panel";
+} from "@calibra-facil/ui/instrument-panel";
 import { AccreditationSeal } from "@/components/accreditation-seal";
-import { StatusPill, TONE } from "@/components/status-pill";
+import { StatusPill } from "@/components/status-pill";
+import { STATUS_TONE } from "@calibra-facil/ui/status-tone";
 import { getApiBaseUrl } from "@/lib/utils";
 import {
   useSignatureVerdict,
@@ -210,7 +211,7 @@ function CheckItem({
   );
   const className = cn(
     "inline-flex items-center gap-1 text-xs font-medium whitespace-nowrap",
-    TONE[tone].text,
+    STATUS_TONE[tone].text,
     hint && "cursor-help",
   );
   if (!hint) {
@@ -259,11 +260,14 @@ function SignatureStrip({ token }: { token: string }) {
         <span
           className={cn(
             "flex shrink-0 items-center gap-1.5 text-sm font-medium",
-            TONE[tone].text,
+            STATUS_TONE[tone].text,
           )}
         >
           <span
-            className={cn("size-2 shrink-0 rounded-full", TONE[tone].dot)}
+            className={cn(
+              "size-2 shrink-0 rounded-full",
+              STATUS_TONE[tone].dot,
+            )}
           />
           {OVERALL_STRIP_LABEL[verdict.overall]}
         </span>
@@ -471,7 +475,7 @@ function AmendmentChainTimeline({
                 aria-hidden
                 className={cn(
                   "relative mt-1.5 size-[11px] shrink-0 rounded-full",
-                  TONE[tone].dot,
+                  STATUS_TONE[tone].dot,
                 )}
               />
               <div className="min-w-0 text-sm">
@@ -853,7 +857,7 @@ export function CertificateDetailView({
           className={cn(
             "mt-4 flex items-start gap-3 rounded-xl p-4",
             "shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)]",
-            TONE[conformityTone].surface,
+            STATUS_TONE[conformityTone].surface,
           )}
         >
           <HugeiconsIcon

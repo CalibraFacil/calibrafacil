@@ -3,15 +3,15 @@ import { CreditCardIcon, ShieldKeyIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { useFinanceAccess } from '@/hooks/use-finance-access'
-import { BlueprintOverlay, Panel } from '@/components/instrument-panel'
+import { BlueprintOverlay, Panel } from '@calibra-facil/ui/instrument-panel'
 import {
   Empty,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from '@/components/ui/empty'
-import { Skeleton } from '@/components/ui/skeleton'
+} from '@calibra-facil/ui/empty'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
 
 export function FinanceLayout() {
   const accessQuery = useFinanceAccess()

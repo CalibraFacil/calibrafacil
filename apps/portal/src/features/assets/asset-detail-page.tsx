@@ -9,9 +9,9 @@ import {
   Wrench01Icon,
 } from "@hugeicons/core-free-icons";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@calibra-facil/ui/badge";
+import { Button } from "@calibra-facil/ui/button";
+import { Skeleton } from "@calibra-facil/ui/skeleton";
 import { StatusPill } from "@/components/status-pill";
 import { Timeline } from "@/components/timeline";
 import {
@@ -24,7 +24,7 @@ import {
   SignalTile,
   StaggerGroup,
   StaggerItem,
-} from "@/components/instrument-panel";
+} from "@calibra-facil/ui/instrument-panel";
 import { getInstrumentStatus } from "@/lib/calibration-status";
 import { DriftChartPanel } from "@/features/reliability/drift-chart-panel";
 import { OotAssessmentPanel } from "@/features/reliability/oot-assessment-panel";

@@ -16,15 +16,15 @@ import {
 import { Area, AreaChart, CartesianGrid, XAxis } from 'recharts'
 import { useActiveOrganization, useSession } from '@calibra-facil/auth/client'
 
-import { Button } from '@/components/ui/button'
+import { Button } from '@calibra-facil/ui/button'
 import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
-} from '@/components/ui/chart'
-import { SegmentedControl } from '@/components/ui/segmented-control'
-import { Skeleton } from '@/components/ui/skeleton'
+} from '@calibra-facil/ui/chart'
+import { SegmentedControl } from '@calibra-facil/ui/segmented-control'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
 import {
   ACTION_BUTTON_CLASS,
   Panel,
@@ -33,7 +33,7 @@ import {
   StaggerGroup,
   StaggerItem,
   type SignalTone,
-} from '@/components/instrument-panel'
+} from '@calibra-facil/ui/instrument-panel'
 import { ActivationChecklist } from '@/features/onboarding/activation-checklist'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 import { useMountEffect } from '@/hooks/use-mount-effect'

@@ -124,6 +124,7 @@ export async function assignJob(
     if (!row) return null;
 
     await tx.insert(jobAuditLog).values({
+      organizationId,
       jobId: existing.id,
       action: "assign",
       changes: {

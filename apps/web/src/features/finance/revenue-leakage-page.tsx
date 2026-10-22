@@ -13,9 +13,9 @@ import {
   StaggerGroup,
   StaggerItem,
   type SignalTone,
-} from '@/components/instrument-panel'
-import { Badge } from '@/components/ui/badge'
-import { DataTableColumnHeader } from '@/components/ui/data-table-column-header'
+} from '@calibra-facil/ui/instrument-panel'
+import { Badge } from '@calibra-facil/ui/badge'
+import { DataTableColumnHeader } from '@calibra-facil/ui/data-table-column-header'
 import {
   FinanceDataTable,
   type FacetConfig,

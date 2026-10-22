@@ -26,22 +26,23 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { Button, buttonVariants } from '@/components/ui/button'
+} from '@calibra-facil/ui/alert-dialog'
+import { Button } from '@calibra-facil/ui/button'
+import { buttonVariants } from '@calibra-facil/ui/button-variants'
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
+} from '@calibra-facil/ui/dialog'
 import {
   Field,
   FieldDescription,
   FieldError,
   FieldLabel,
-} from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
+} from '@calibra-facil/ui/field'
+import { Input } from '@calibra-facil/ui/input'
 import type {
   ContaAzulAppSaveResponse,
   ContaAzulAppSummary,

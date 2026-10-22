@@ -10,15 +10,15 @@ import {
 } from "@hugeicons/core-free-icons";
 
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@calibra-facil/ui/button";
+import { Label } from "@calibra-facil/ui/label";
+import { Skeleton } from "@calibra-facil/ui/skeleton";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from "@/components/ui/select";
+} from "@calibra-facil/ui/select";
 import {
   Table,
   TableBody,
@@ -26,7 +26,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@calibra-facil/ui/table";
 import {
   BlueprintOverlay,
   Panel,
@@ -35,7 +35,7 @@ import {
   StaggerGroup,
   StaggerItem,
   type SignalTone,
-} from "@/components/instrument-panel";
+} from "@calibra-facil/ui/instrument-panel";
 import { usePortalUnits } from "@/features/fleet/queries";
 import { useFleetAnalytics } from "./queries";
 import type {

@@ -15,15 +15,15 @@ import type { ActiveOrganization } from '@/features/settings/organization/shared
 import { OrganizationProfileSection } from '@/features/settings/organization/profile-section'
 import { OrganizationUnitsSection } from '@/features/settings/organization/units-section'
 import { OrganizationMembersSection } from '@/features/settings/organization/members-section'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Card, CardContent, CardHeader } from '@calibra-facil/ui/card'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
 import {
   Empty,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from '@/components/ui/empty'
+} from '@calibra-facil/ui/empty'
 
 export type OrganizationSection = 'profile' | 'units' | 'members'
 

@@ -233,6 +233,7 @@ export const portalVisitsRouter = new Hono<{ Variables: AuthVariables }>()
           .where(eq(calibrationVisit.id, id));
 
         await tx.insert(visitAuditLog).values({
+          organizationId: visit.organizationId,
           visitId: id,
           action: "customer_confirm",
           changes: {
@@ -327,6 +328,7 @@ export const portalVisitsRouter = new Hono<{ Variables: AuthVariables }>()
           }
 
           await tx.insert(visitAuditLog).values({
+            organizationId: visit.organizationId,
             visitId: id,
             action: "reschedule_request",
             changes: {

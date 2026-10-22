@@ -21,11 +21,11 @@ import {
   StaggerGroup,
   StaggerItem,
   type SignalTone,
-} from '@/components/instrument-panel'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { DataTableColumnHeader } from '@/components/ui/data-table-column-header'
+} from '@calibra-facil/ui/instrument-panel'
+import { Alert, AlertDescription, AlertTitle } from '@calibra-facil/ui/alert'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Button } from '@calibra-facil/ui/button'
+import { DataTableColumnHeader } from '@calibra-facil/ui/data-table-column-header'
 import {
   FinanceDataTable,
   type FacetConfig,

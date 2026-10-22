@@ -19,7 +19,8 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { organizationOf } from "../../../test/integration/organization-of";
 import { db } from "@calibra-facil/db";
 import {
   calibrationJob,
@@ -98,7 +99,15 @@ async function auditRows(jobId: number) {
   return db
     .select()
     .from(jobAuditLog)
-    .where(eq(jobAuditLog.jobId, jobId))
+    .where(
+      and(
+        eq(jobAuditLog.jobId, jobId),
+        eq(
+          jobAuditLog.organizationId,
+          organizationOf("calibration_job", jobId),
+        ),
+      ),
+    )
     .orderBy(jobAuditLog.id);
 }
 

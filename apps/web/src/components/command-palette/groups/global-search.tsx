@@ -18,7 +18,7 @@ import {
   useCommandSearchJobsData,
   useCommandSearchStandardsData,
 } from '@/features/command-palette/global-search'
-import { CommandGroup, CommandItem } from '@/components/ui/command'
+import { CommandGroup, CommandItem } from '@calibra-facil/ui/command'
 import {
   assetRouteId,
   clientRouteId,

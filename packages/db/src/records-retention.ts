@@ -24,6 +24,7 @@
 import { is, sql, type SQL } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import * as schema from "./schema";
+import { TENANT_FK_SUFFIX } from "./tenancy";
 
 export type ReferentialAction =
   | "cascade"
@@ -287,8 +288,9 @@ export const OWNED_PART_EDGES: readonly OwnedPartEdge[] = [
 
 /**
  * Audit logs that point at the entity they document through a plain column with
- * NO foreign key (CMP-06 / CMP-07 soft references), and carry no organization
- * column of their own. The purge job reaches them through the entity.
+ * NO foreign key (CMP-06 / CMP-07 soft references). Since migration 0118 each of
+ * them also carries its own organization_id (tenancy.ts), which the purge job
+ * uses; the entity pointer stays the way to reach the entity the row documents.
  */
 export type SoftReference = { table: string; column: string; entity: string };
 
@@ -428,17 +430,22 @@ function readTables(): readonly TableMeta[] {
   for (const value of Object.values(schema)) {
     if (!is(value, PgTable)) continue;
     const config = getTableConfig(value);
-    const foreignKeys = config.foreignKeys.map((foreignKey): ForeignKeyEdge => {
-      const reference = foreignKey.reference();
-      return {
-        table: config.name,
-        columns: reference.columns.map((column) => column.name),
-        parent: getTableConfig(reference.foreignTable).name,
-        parentColumns: reference.foreignColumns.map((column) => column.name),
-        onDelete: referentialAction(foreignKey.onDelete),
-        nullable: reference.columns.some((column) => !column.notNull),
-      };
-    });
+    // The composite (organization_id, parent_id) keys of migration 0118 repeat
+    // the action of the single-column key next to them: they pair a child with
+    // its parent's tenant (tenancy.ts), they are not another delete edge.
+    const foreignKeys = config.foreignKeys
+      .filter((foreignKey) => !foreignKey.getName().endsWith(TENANT_FK_SUFFIX))
+      .map((foreignKey): ForeignKeyEdge => {
+        const reference = foreignKey.reference();
+        return {
+          table: config.name,
+          columns: reference.columns.map((column) => column.name),
+          parent: getTableConfig(reference.foreignTable).name,
+          parentColumns: reference.foreignColumns.map((column) => column.name),
+          onDelete: referentialAction(foreignKey.onDelete),
+          nullable: reference.columns.some((column) => !column.notNull),
+        };
+      });
     tables.push({
       name: config.name,
       columns: config.columns.map((column) => column.name),

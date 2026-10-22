@@ -2,7 +2,7 @@ import { ComponentProps, forwardRef } from 'react'
 import type { MaskitoOptions } from '@maskito/core'
 import { useMaskito } from '@maskito/react'
 
-import { Input } from '@/components/ui/input'
+import { Input } from '@calibra-facil/ui/input'
 import { useComposedRefs } from '@/lib/compose-refs'
 
 type MaskedInputProps = ComponentProps<typeof Input> & {
