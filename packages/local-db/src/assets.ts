@@ -1,3 +1,4 @@
+import type { SyncCommandOperation } from "@calibra-facil/contracts";
 import { randomUUID } from "node:crypto";
 import type { MetrologyRegime } from "@calibra-facil/schemas";
 import type { LocalDatabase } from "./database";
@@ -854,7 +855,7 @@ function enqueueLocalAssetEvent(
   database: LocalDatabase,
   input: {
     entityId: string;
-    operation: string;
+    operation: SyncCommandOperation;
     payload: unknown;
     actorUserId: string | null;
     deviceId: string;

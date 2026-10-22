@@ -68,7 +68,9 @@ export function validateCalibrationRecordForSubmit(record: {
  * explicit null identifies them. A positive stamp does: it is only ever written
  * by a build that refused to submit without the record.
  *
- * The legacy exemption stays until P2-4's typed sync protocol enforces a minimum desktop version (Q28).
+ * The legacy exemption ends once the cloud enforces a minimum desktop version
+ * (`SYNC_MIN_DESKTOP_VERSION`, Q28; see DEPLOYMENT.md): from then on an unstamped
+ * submit is held to the rule like every other.
  */
 export const DESKTOP_EXECUTION_PAYLOAD_VERSION = 2;
 

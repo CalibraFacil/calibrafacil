@@ -1,3 +1,4 @@
+import type { SyncCommandOperation } from "@calibra-facil/contracts";
 import { randomUUID } from "node:crypto";
 import type { LocalDatabase } from "./database";
 import { stableLocalNumericId } from "./ids";
@@ -1223,7 +1224,7 @@ function appendOutboxEvent(
   input: {
     entityType: string;
     entityId: string;
-    operation: string;
+    operation: SyncCommandOperation;
     payload: unknown;
     actorUserId?: string | null;
     deviceId?: string | null;

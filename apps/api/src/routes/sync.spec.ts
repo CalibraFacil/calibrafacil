@@ -122,8 +122,15 @@ const mocks = vi.hoisted(() => {
   };
 });
 
+// The per-event transaction scope (runInTransactionScope) is exercised against
+// a real database in sync-protocol.int.spec.ts. Here it is a pass-through, so
+// the mocked select queue is consumed exactly as before.
 vi.mock("@calibra-facil/db", () => ({
   db: mocks.db,
+  runInTransactionScope: async (work: () => Promise<unknown>) => work(),
+  afterTransactionCommit: (callback: () => unknown) => {
+    void callback();
+  },
 }));
 
 // The claim table (sync_applied_event) is exercised against a real database in
@@ -142,7 +149,6 @@ vi.mock("../modules/sync/applied-events", () => ({
       : { state: "claimed", claimId: 1 };
   },
   completeDesktopSyncClaim: async () => undefined,
-  releaseDesktopSyncClaim: async () => undefined,
 }));
 
 vi.mock("../middleware/permission", () => ({

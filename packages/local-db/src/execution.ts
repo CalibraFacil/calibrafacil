@@ -1,3 +1,4 @@
+import type { SyncCommandOperation } from "@calibra-facil/contracts";
 import { randomUUID } from "node:crypto";
 import {
   DESKTOP_EXECUTION_PAYLOAD_VERSION,
@@ -226,6 +227,13 @@ WHERE id = @id
     if (existing.remote_id !== null) {
       payload.remoteId = existing.remote_id;
     }
+    // The cloud job version this execution was made against (REQ-SP-5). The
+    // outbox lifts it into the event's `baseUpdatedAt`, and moves it forward
+    // when the cloud accepts an earlier event of this job.
+    const baseUpdatedAt = resolveExecutionBase(database, existing);
+    if (baseUpdatedAt !== null) {
+      payload.baseUpdatedAt = baseUpdatedAt;
+    }
     if (executionTime.performedAt) {
       payload.performedAt = executionTime.performedAt;
     }
@@ -255,6 +263,43 @@ WHERE id = @id
   })();
 
   return getLocalJobDetail(database, input.routeId);
+}
+
+/**
+ * The base version of a job execution: the cloud job's `updatedAt` as this
+ * desktop last saw it.
+ *
+ * - An execution still queued for this job keeps the base of the earliest one:
+ *   the cloud has not seen any of them, so they are all made against the same
+ *   cloud version, and the local `updated_at` is the clock of the last local
+ *   save, not a cloud value.
+ * - With nothing queued, a job the cloud knows and the desktop holds as synced
+ *   has the cloud value in `updated_at` (written by the pull, or by the accept
+ *   of this desktop's last execution).
+ * - A job the cloud has never seen has no base: there is nothing to compare.
+ */
+function resolveExecutionBase(
+  database: LocalDatabase,
+  job: Pick<LocalJobRow, "id" | "remote_id" | "sync_state" | "updated_at">,
+): string | null {
+  const queued = database
+    .prepare<{ id: string }, { base: string | null }>(
+      `
+SELECT json_extract(payload_json, '$.baseUpdatedAt') AS base
+FROM domain_events
+WHERE aggregate_kind = 'calibration_job'
+  AND aggregate_id = @id
+  AND sync_state IN ('pending', 'failed', 'conflict')
+ORDER BY sequence ASC
+LIMIT 1
+`,
+    )
+    .get({ id: job.id });
+  if (queued) return queued.base;
+
+  return job.remote_id !== null && job.sync_state === "synced"
+    ? job.updated_at
+    : null;
 }
 
 function resolveLocalExecutionTime(
@@ -958,7 +1003,7 @@ function appendOutboxEvent(
   input: {
     entityType: string;
     entityId: string;
-    operation: string;
+    operation: SyncCommandOperation;
     payload: unknown;
     actorUserId?: string | null;
     deviceId?: string | null;

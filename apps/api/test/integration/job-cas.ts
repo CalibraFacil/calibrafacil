@@ -1,6 +1,10 @@
 import { vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { db, getDb } from "@calibra-facil/db";
+import {
+  isTransactionScopeCallback,
+  outsideTransactionScope,
+} from "@calibra-facil/db/testing";
 import { calibrationJob, jobAuditLog } from "@calibra-facil/db/schema";
 import { setJobStatus } from "./job-fixtures";
 
@@ -11,6 +15,9 @@ import { setJobStatus } from "./job-fixtures";
 type JobChange = Partial<{
   status: typeof calibrationJob.$inferSelect.status;
   organizationId: string;
+  /** A write that keeps the status: another actor saved the worksheet. */
+  data: Record<string, unknown>;
+  updatedAt: Date;
 }>;
 
 /**
@@ -47,10 +54,30 @@ export function changeJobBeforeNextTransaction(
   // `db` is a Proxy over the cached instance; spy on the instance itself.
   const instance = getDb();
   const originalTransaction = instance.transaction.bind(instance);
+  // Another actor's committed write, on its own connection: inside a
+  // transaction scope `db` is the request's transaction, which the other actor
+  // is not part of.
+  const otherActorChangesJob = () =>
+    outsideTransactionScope(() => applyChange(jobId, change));
   vi.spyOn(instance, "transaction").mockImplementationOnce(
     async (callback, config) => {
-      await applyChange(jobId, change);
-      return originalTransaction(callback, config);
+      if (!isTransactionScopeCallback(callback)) {
+        await otherActorChangesJob();
+        return originalTransaction(callback, config);
+      }
+      // A request that runs in a transaction scope (the desktop sync apply):
+      // the write's own transaction is the savepoint it opens inside the scope,
+      // so that is the moment right before which the other actor writes.
+      return originalTransaction(async (tx) => {
+        const savepoint = tx.transaction.bind(tx);
+        vi.spyOn(tx, "transaction").mockImplementationOnce(
+          async (inner, innerConfig) => {
+            await otherActorChangesJob();
+            return savepoint(inner, innerConfig);
+          },
+        );
+        return callback(tx);
+      }, config);
     },
   );
 }

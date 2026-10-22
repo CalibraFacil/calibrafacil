@@ -30,6 +30,10 @@ const REASONS: ReadonlyArray<readonly [string, string]> = [
     'Os dados desta alteração estão incompletos ou inválidos para a nuvem.',
   ],
   [
+    'INVALID_SYNC_COMMAND',
+    'Esta alteração não está no formato que a nuvem aceita. Atualize o aplicativo e, se persistir, descarte-a.',
+  ],
+  [
     'INVALID_STANDARD_SNAPSHOT',
     'O registro dos padrões usados nesta calibração está incompleto.',
   ],
