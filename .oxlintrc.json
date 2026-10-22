@@ -78,6 +78,7 @@
     "calibra/no-json-error-body-in-routes": "error",
     "calibra/no-router-coupling-in-features": "error",
     "calibra/no-process-env": "error",
+    "calibra/no-unparsed-portal-fetch": "error",
     "calibra/no-raw-palette-color-classes": "error",
     "calibra/no-app-ui-primitive-recreation": "error"
   },

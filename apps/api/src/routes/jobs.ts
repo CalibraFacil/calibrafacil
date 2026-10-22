@@ -50,7 +50,10 @@ import {
 import type {
   JobAmendResponse,
   JobDetail,
+  JobCreateResponse,
   JobDownloadUrlResponse,
+  JobFlagOotResponse,
+  JobGenerateLabelResponse,
   JobMutationResponse,
   JobTechniciansResponse,
   JobsListResponse,
@@ -672,7 +675,7 @@ export const jobsRouter = new Hono<{
           }
         }
 
-        return c.json(newJob, 201);
+        return c.json(newJob satisfies ServerShape<JobCreateResponse>, 201);
       } catch (error) {
         console.error("Error creating job:", error);
         const message =
@@ -1146,7 +1149,7 @@ export const jobsRouter = new Hono<{
         {
           message: "Nao conformidade registrada",
           data: { nc: result.nc, notification: result.notification },
-        },
+        } satisfies ServerShape<JobFlagOotResponse>,
         201,
       );
     },
@@ -1702,7 +1705,7 @@ export const jobsRouter = new Hono<{
       return c.json({
         message: "Gerando etiqueta...",
         jobId: id,
-      });
+      } satisfies ServerShape<JobGenerateLabelResponse>);
     },
   )
 

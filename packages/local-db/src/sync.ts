@@ -154,6 +154,7 @@ INSERT INTO asset_types (
   remote_id,
   organization_id,
   name,
+  slug,
   description,
   measurement_family,
   specifications_schema_json,
@@ -164,6 +165,7 @@ INSERT INTO asset_types (
   @remoteId,
   @organizationId,
   @name,
+  @slug,
   @description,
   NULL,
   @schemaJson,
@@ -172,6 +174,7 @@ INSERT INTO asset_types (
 )
 ON CONFLICT(id) DO UPDATE SET
   name = excluded.name,
+  slug = excluded.slug,
   description = excluded.description,
   specifications_schema_json = excluded.specifications_schema_json,
   pulled_at = excluded.pulled_at,
@@ -183,6 +186,7 @@ ON CONFLICT(id) DO UPDATE SET
           remoteId: id,
           organizationId,
           name: getString(row, "name") ?? `Tipo ${id}`,
+          slug: getNullableString(row, "slug"),
           description: getNullableString(row, "description"),
           schemaJson: JSON.stringify(row.definition ?? null),
           pulledAt,
@@ -707,7 +711,7 @@ INSERT INTO calibration_jobs (
   @id,
   @remoteId,
   @jobId,
-  NULL,
+  @certificateName,
   @organizationId,
   @unitId,
   @customerId,
@@ -735,6 +739,7 @@ INSERT INTO calibration_jobs (
 )
 ON CONFLICT(id) DO UPDATE SET
   job_id = excluded.job_id,
+  certificate_name = excluded.certificate_name,
   status = excluded.status,
   method_snapshot_json = excluded.method_snapshot_json,
   asset_snapshot_json = excluded.asset_snapshot_json,
@@ -757,6 +762,7 @@ ON CONFLICT(id) DO UPDATE SET
           id: remoteLocalId("job", id),
           remoteId: id,
           jobId: getString(row, "jobId") ?? String(id),
+          certificateName: getNullableString(row, "certificateName"),
           organizationId,
           unitId: getNumber(row, "unitId") ?? activeUnitId ?? 0,
           customerId: remoteLocalId(

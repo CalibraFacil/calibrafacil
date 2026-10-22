@@ -1,9 +1,17 @@
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@calibra-facil/db";
 import { environmentalLimits, assetType } from "@calibra-facil/db/schema";
 import { eq, and, isNull, desc } from "drizzle-orm";
 import { EnvironmentalLimitsSchema } from "@calibra-facil/schemas";
+import type {
+  DeleteEnvironmentalLimitResponse,
+  EffectiveEnvironmentalLimitsResponse,
+  EnvironmentalLimitsResponse,
+  SaveEnvironmentalLimitResponse,
+  ServerShape,
+} from "@calibra-facil/contracts";
 import {
   requireLabProtected,
   requireOrgType,
@@ -54,7 +62,7 @@ export const environmentalLimitsRouter = new Hono<{
     return c.json({
       limits,
       unit,
-    });
+    } satisfies ServerShape<EnvironmentalLimitsResponse>);
   })
 
   // ===========================================================================
@@ -109,11 +117,12 @@ export const environmentalLimitsRouter = new Hono<{
           ...candidateLimits,
         ]);
 
-      return c.json({
-        limits: resolvedLimits,
-        source,
-        unit,
-      });
+      // `unit` rides along for the cloud caller; the contract (shared with the
+      // desktop local-server, which has no unit lookup) is `limits` + `source`.
+      const body = { limits: resolvedLimits, source, unit };
+      return c.json(
+        body satisfies ServerShape<EffectiveEnvironmentalLimitsResponse>,
+      );
     },
   )
 
@@ -164,11 +173,17 @@ export const environmentalLimitsRouter = new Hono<{
         })
         .returning();
 
+      if (!result) {
+        throw new HTTPException(500, {
+          message: "Falha ao salvar limites ambientais",
+        });
+      }
+
       return c.json({
         message: "Limites ambientais atualizados",
         data: result,
         unit,
-      });
+      } satisfies ServerShape<SaveEnvironmentalLimitResponse>);
     },
   )
 
@@ -200,5 +215,7 @@ export const environmentalLimitsRouter = new Hono<{
       return c.json({ error: "Configuração não encontrada" }, 404);
     }
 
-    return c.json({ message: "Limites removidos" });
+    return c.json({
+      message: "Limites removidos",
+    } satisfies ServerShape<DeleteEnvironmentalLimitResponse>);
   });

@@ -3,6 +3,7 @@ import {
   buildExecutableJobDetail,
   buildJobMutationResponse,
 } from '@calibra-facil/contracts/jobs-fixtures'
+import { buildStandardsList } from '@calibra-facil/contracts/standards-fixtures'
 
 import {
   expectRequestPayload,
@@ -32,7 +33,7 @@ test.describe('method execution', () => {
       body: buildExecutableJobDetail(),
     })
     await routeJson(page, '**/api/standards?*', {
-      body: { data: [] },
+      body: buildStandardsList([]),
     })
     await routeJson(page, '**/api/jobs/CAL-0007/submit', {
       body: buildJobMutationResponse(

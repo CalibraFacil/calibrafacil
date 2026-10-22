@@ -34,7 +34,11 @@ import { DateRangePicker } from "@calibra-facil/ui/date-range-picker";
 import { Spinner } from "@calibra-facil/ui/spinner";
 import { DataTable } from "@calibra-facil/ui/data-table";
 import { DataTableColumnHeader } from "@calibra-facil/ui/data-table-column-header";
-import { getApiBaseUrl } from "@/lib/utils";
+import {
+  portalCertificatesResponseSchema,
+  portalDownloadLinkResponseSchema,
+} from "@calibra-facil/contracts";
+import { fetchPortalJson } from "@/lib/api-fetch";
 import { keepPreviousDataInScope } from "@/lib/keep-previous-page";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import { AuditPacksPanel } from "@/features/certificates/audit-packs";
@@ -105,14 +109,11 @@ function DownloadButton({ certificate }: { certificate: Certificate }) {
 
     setIsDownloading(true);
     try {
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/certificates/${certificate.id}/download`,
-        { credentials: "include" },
+      const { url, filename } = await fetchPortalJson(
+        `/api/portal/certificates/${certificate.id}/download`,
+        portalDownloadLinkResponseSchema,
+        { errorMessage: "Falha ao baixar" },
       );
-
-      if (!response.ok) throw new Error("Falha ao baixar");
-
-      const { url, filename } = await response.json();
 
       const link = document.createElement("a");
       link.href = url;
@@ -274,16 +275,11 @@ function CertificatesPage() {
         params.set("assetId", String(assetId));
       }
 
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/certificates?${params.toString()}`,
-        {
-          credentials: "include",
-        },
+      return fetchPortalJson(
+        `/api/portal/certificates?${params.toString()}`,
+        portalCertificatesResponseSchema,
+        { errorMessage: "Falha ao carregar certificados" },
       );
-      if (!response.ok) {
-        throw new Error("Falha ao carregar certificados");
-      }
-      return response.json();
     },
     placeholderData: keepPreviousDataInScope(key("portal-certificates")),
   });

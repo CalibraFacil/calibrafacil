@@ -5,43 +5,18 @@
  * "in lab"), and the latest approved certificate per instrument.
  */
 
+import type {
+  PortalFleetAsset,
+  PortalFleetAssetsResponse,
+} from "@calibra-facil/contracts";
+
 export type FleetAssetStatus =
   | "ACTIVE"
   | "INACTIVE"
   | "MAINTENANCE"
   | "SCRAPPED";
 
-export type FleetLastCertificate = {
-  id: number;
-  jobId: string;
-  approvedAt: string | null;
-};
-
-export type FleetAsset = {
-  id: number;
-  /** Opaque identifier used in portal URLs (never the serial id). */
-  publicId: string;
-  customerId: number;
-  customerName: string;
-  assetTypeId: number;
-  assetTypeName: string;
-  assetTypeSlug: string;
-  name: string;
-  manufacturer: string | null;
-  model: string | null;
-  serialNumber: string;
-  tag: string;
-  status: FleetAssetStatus;
-  specifications: Record<string, unknown> | null;
-  lastCalibrationDate: string | null;
-  nextCalibrationDate: string | null;
-  /** True while the instrument has an open calibration job or service order. */
-  inLab: boolean;
-  lastCertificate: FleetLastCertificate | null;
-  comments: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
+export type FleetAsset = PortalFleetAsset;
 
 /** Server-side sort fields accepted by `/api/portal/assets`. */
 export const FLEET_SORT_FIELDS = [
@@ -60,12 +35,4 @@ export function isFleetSortBy(value: unknown): value is FleetSortBy {
   );
 }
 
-export type FleetAssetsResponse = {
-  data: Array<FleetAsset>;
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-};
+export type FleetAssetsResponse = PortalFleetAssetsResponse;

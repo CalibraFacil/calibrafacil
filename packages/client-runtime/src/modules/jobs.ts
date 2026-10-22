@@ -1,32 +1,23 @@
 import {
+  effectiveEnvironmentalLimitsResponseSchema,
   jobAmendResponseSchema,
+  jobCreateResponseSchema,
   jobDetailSchema,
   jobDownloadUrlResponseSchema,
+  jobFlagOotResponseSchema,
+  jobGenerateLabelResponseSchema,
   jobMutationResponseSchema,
   jobTechniciansResponseSchema,
   jobsListResponseSchema,
+  standardsListResponseSchema,
   type JobStatus,
   type ResponseValidationOptions,
 } from "@calibra-facil/contracts";
-import type { z } from "zod";
 
-import type {
-  CreateJobInput,
-  CreateJobResult,
-  JobsApi,
-  JobsListInput,
-} from "../types";
-import type {
-  EffectiveEnvironmentalLimitsResponse,
-  JobExecutionPayload,
-  ReferenceStandardsResponse,
-} from "../jobs";
+import type { CreateJobInput, JobsApi, JobsListInput } from "../types";
+import type { JobExecutionPayload } from "../jobs";
 import { CalibraApiError } from "../transport/errors";
-import {
-  readApiError,
-  readJsonResponse,
-  readValidatedJsonResponse,
-} from "../transport/response";
+import { createValidatedReader, readApiError } from "../transport/response";
 import { apiRouteParam } from "../transport/url";
 
 type JobIdParam = { param: { id: string } };
@@ -113,18 +104,7 @@ export function createJobsApi(
   // Every contract-covered response below is checked against its
   // `@calibra-facil/contracts` schema; see `validateResponsePayload` for the
   // strict (dev/test) vs warn (production) behavior on a mismatch.
-  const validated = <TSchema extends z.ZodType>(
-    response: Response,
-    schema: TSchema,
-    endpoint: string,
-    fallback: string,
-  ) =>
-    readValidatedJsonResponse(response, schema, {
-      endpoint,
-      fallback,
-      responseValidation: options.responseValidation,
-      onResponseContractViolation: options.onResponseContractViolation,
-    });
+  const validated = createValidatedReader(options);
 
   return {
     async list(input: JobsListInput) {
@@ -144,8 +124,10 @@ export function createJobsApi(
       );
     },
     async create(input: CreateJobInput) {
-      return readJsonResponse<CreateJobResult>(
+      return validated(
         await rawCloudClient.api.jobs.$post({ json: input }),
+        jobCreateResponseSchema,
+        "POST /api/jobs",
         "Erro ao criar ordem",
       );
     },
@@ -205,11 +187,13 @@ export function createJobsApi(
         notifyCustomer: boolean;
       },
     ) {
-      return readJsonResponse<unknown>(
+      return validated(
         await rawCloudClient.api.jobs[":id"]["flag-oot"].$post({
           param: { id: apiRouteParam(jobId) },
           json: input,
         }),
+        jobFlagOotResponseSchema,
+        "POST /api/jobs/:id/flag-oot",
         "Erro ao registrar fora de tolerância",
       );
     },
@@ -235,15 +219,17 @@ export function createJobsApi(
         "Erro ao atribuir",
       );
     },
-    async listStandards<TStandard = unknown>() {
-      return readJsonResponse<ReferenceStandardsResponse<TStandard>>(
+    async listStandards() {
+      return validated(
         await rawCloudClient.api.standards.$get({
           query: { status: "ACTIVE", limit: "100" },
         }),
+        standardsListResponseSchema,
+        "GET /api/standards",
         "Falha ao carregar padrões",
       );
     },
-    async getEffectiveEnvironmentalLimits<TLimits = unknown>(
+    async getEffectiveEnvironmentalLimits(
       assetTypeId: string | number,
       input: { unitId?: string | number | null } = {},
     ) {
@@ -258,9 +244,12 @@ export function createJobsApi(
         return { limits: null, source: null };
       }
 
-      const result: EffectiveEnvironmentalLimitsResponse<TLimits> =
-        await response.json();
-      return result;
+      return validated(
+        response,
+        effectiveEnvironmentalLimitsResponseSchema,
+        "GET /api/environmental-limits/effective/:assetTypeId",
+        "Falha ao carregar limites ambientais",
+      );
     },
     async saveExecution(jobId: string | number, input: JobExecutionPayload) {
       return validated(
@@ -295,10 +284,12 @@ export function createJobsApi(
       );
     },
     async generateLabel(jobId: string | number) {
-      return readJsonResponse<unknown>(
+      return validated(
         await rawCloudClient.api.jobs[":id"]["generate-label"].$post({
           param: { id: apiRouteParam(jobId) },
         }),
+        jobGenerateLabelResponseSchema,
+        "POST /api/jobs/:id/generate-label",
         "Falha ao gerar etiqueta",
       );
     },

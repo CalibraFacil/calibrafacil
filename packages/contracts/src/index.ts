@@ -24,3 +24,13 @@ export {
   type ResponseValidationOptions,
 } from "./response-validation";
 export * from "./portal";
+export * from "./common";
+export * from "./standards";
+export * from "./environmental-limits";
+export * from "./reference-data";
+export * from "./service-orders";
+export * from "./portal-fleet";
+export * from "./portal-certificates";
+export * from "./portal-engagement";
+export * from "./portal-reliability";
+export * from "./public-access";

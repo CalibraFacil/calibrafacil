@@ -1,13 +1,15 @@
 /**
- * jobs-contract.int.spec.ts: REQ-TC-5. The jobs endpoints' REAL responses
+ * jobs-contract.int.spec.ts: REQ-TC-5 (and P2-15 REQ-TC-2: create, flag-oot and
+ * generate-label). The jobs endpoints' REAL responses
  * (real handlers, real middleware, real Postgres) must parse with the response
  * schemas in `@calibra-facil/contracts` that the client SDK validates against.
  * If a handler changes the shape it returns, this fails in CI before a client
  * ever sees it. (The handlers also `satisfies` the same types at compile time;
  * this proves the runtime values do, including the JSON snapshot columns.)
  *
- * Covered: GET /, GET /:id, POST /:id/execute, /submit, /approve, /reject,
- * /assign, DELETE /:id, POST /:id/amend, GET /technicians/list.
+ * Covered: GET /, GET /:id, POST /, POST /:id/execute, /submit, /approve,
+ * /reject, /assign, /flag-oot, /generate-label, DELETE /:id, POST /:id/amend,
+ * GET /technicians/list.
  * Not covered here: GET /:id/download and /download-label (they sign an object
  * storage URL; the handlers still `satisfies` the contract type).
  */
@@ -27,7 +29,10 @@ import {
 } from "@calibra-facil/math-engine";
 import {
   jobAmendResponseSchema,
+  jobCreateResponseSchema,
   jobDetailSchema,
+  jobFlagOotResponseSchema,
+  jobGenerateLabelResponseSchema,
   jobMutationResponseSchema,
   jobTechniciansResponseSchema,
   jobsListResponseSchema,
@@ -37,6 +42,7 @@ import {
   asset,
   assetType,
   calibrationJob,
+  calibrationMethod,
   member,
   referenceStandard,
   service,
@@ -59,6 +65,7 @@ vi.mock("@calibra-facil/notifications", () => ({
   notifyJobRejected: vi.fn().mockResolvedValue(undefined),
   notifyJobAssigned: vi.fn().mockResolvedValue(undefined),
   notifyCertificateAmended: vi.fn().mockResolvedValue(undefined),
+  notifyNCCreated: vi.fn().mockResolvedValue(undefined),
 }));
 
 const JSON_HEADERS = { "content-type": "application/json" };
@@ -208,6 +215,7 @@ async function seedLab() {
   return {
     unitId: org.unitId,
     customerId,
+    assetTypeId: type?.id ?? 0,
     assetId: assetRow?.id ?? 0,
     serviceId: serviceRow?.id ?? 0,
     standardId: standard?.id ?? 0,
@@ -430,5 +438,105 @@ describe("jobs endpoints: real responses honor the contract schemas (REQ-TC-5)",
       jobMutationResponseSchema,
     );
     expect(assigned.data.technicianId).toBe(TECHNICIAN);
+  });
+
+  it("P2-15 REQ-TC-2: POST / answers 201 with the created job row", async () => {
+    const lab = await seedLab();
+    // A service with a PUBLISHED method: the snapshot the job freezes.
+    const snapshot = executableMethodSnapshot();
+    const [method] = await db
+      .insert(calibrationMethod)
+      .values({
+        organizationId: ORG,
+        assetTypeId: lab.assetTypeId,
+        name: "Erro de indicação",
+        version: 1,
+        status: "PUBLISHED",
+        dataFields: [],
+        variableBindings: [],
+        formulas: [],
+        measurementModels: [],
+        validations: [],
+        uncertaintyParams: [],
+        methodFingerprint: snapshot.methodFingerprint,
+        compiledMethod: snapshot.compiledMethod,
+        methodEngine: {
+          version: snapshot.engineVersion,
+          optionsFingerprint: snapshot.engineOptionsFingerprint,
+        },
+        publicationEvidence: { publishedAt: "2026-01-01T00:00:00.000Z" },
+        createdBy: TECHNICIAN,
+      })
+      .returning({ id: calibrationMethod.id });
+    await db
+      .update(service)
+      .set({ methodId: method?.id })
+      .where(eq(service.id, lab.serviceId));
+    loginAs({ userId: TECHNICIAN, organizationId: ORG });
+
+    const response = await jobsRouter.request("/", {
+      method: "POST",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(lab.unitId) },
+      body: JSON.stringify({
+        assetId: lab.assetId,
+        serviceId: lab.serviceId,
+        technicianId: TECHNICIAN,
+      }),
+    });
+    const created = await parsedBody(response, jobCreateResponseSchema, 201);
+
+    expect(created.status).toBe("DRAFT");
+    expect(created.assetId).toBe(lab.assetId);
+    expect(created.technicianId).toBe(TECHNICIAN);
+    expect(created.methodSnapshot.methodName).toBe("Erro de indicação");
+    // The create answer is the same row the detail then serves.
+    const detail = await parsedBody(
+      await jobsRouter.request(`/${created.id}`),
+      jobDetailSchema,
+    );
+    expect(detail.jobId).toBe(created.jobId);
+  });
+
+  it("P2-15 REQ-TC-2: POST /:id/flag-oot answers 201 with the NC and the customer notification (or none)", async () => {
+    const lab = await seedLab();
+    const notified = await seedJob(lab, "JOB-TC-OOT-1", "APPROVED");
+    const silent = await seedJob(lab, "JOB-TC-OOT-2", "APPROVED");
+    loginAs({ userId: APPROVER, organizationId: ORG });
+
+    const withNotice = await parsedBody(
+      await post(`/${notified}/flag-oot`, {
+        description: "Fora de tolerância",
+        affectedScope: "Janela de medição de março",
+        notifyCustomer: true,
+      }),
+      jobFlagOotResponseSchema,
+      201,
+    );
+    expect(withNotice.data.nc.type).toBe("out_of_tolerance");
+    expect(withNotice.data.nc.jobId).toBe(notified);
+    expect(withNotice.data.notification?.status).toBe("PENDING");
+    expect(withNotice.data.notification?.affectedScope).toBe(
+      "Janela de medição de março",
+    );
+
+    const withoutNotice = await parsedBody(
+      await post(`/${silent}/flag-oot`, { notifyCustomer: false }),
+      jobFlagOotResponseSchema,
+      201,
+    );
+    expect(withoutNotice.data.notification).toBeNull();
+  });
+
+  it("P2-15 REQ-TC-2: POST /:id/generate-label answers with the queued acknowledgement", async () => {
+    const lab = await seedLab();
+    const id = await seedJob(lab, "JOB-TC-LABEL", "APPROVED");
+    loginAs({ userId: TECHNICIAN, organizationId: ORG });
+
+    const queued = await parsedBody(
+      await post(`/${id}/generate-label`, {}),
+      jobGenerateLabelResponseSchema,
+    );
+
+    expect(queued.jobId).toBe(id);
   });
 });

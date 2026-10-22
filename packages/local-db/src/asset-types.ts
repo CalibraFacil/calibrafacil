@@ -4,7 +4,7 @@ import { stableLocalNumericId } from "./ids";
 export type LocalAssetType = {
   id: number;
   name: string;
-  slug: string | null;
+  slug: string;
   description: string | null;
   definition: unknown;
 };
@@ -13,6 +13,7 @@ type LocalAssetTypeRow = {
   id: string;
   remote_id: number | null;
   name: string;
+  slug: string | null;
   description: string | null;
   specifications_schema_json: string | null;
 };
@@ -27,6 +28,7 @@ SELECT
   id,
   remote_id,
   name,
+  slug,
   description,
   specifications_schema_json
 FROM asset_types
@@ -39,7 +41,9 @@ ORDER BY name ASC
     data: rows.map((row) => ({
       id: row.remote_id ?? stableLocalNumericId(row.id),
       name: row.name,
-      slug: row.id,
+      // Rows pulled before the slug was mirrored keep the local id until the
+      // next sync refreshes them.
+      slug: row.slug ?? row.id,
       description: row.description,
       definition: parseJson(row.specifications_schema_json) ?? [],
     })),

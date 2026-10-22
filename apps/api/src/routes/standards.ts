@@ -27,6 +27,15 @@ import {
   ImpactedCertificatesQuerySchema,
   SendStandardRecallSchema,
 } from "@calibra-facil/schemas";
+import type {
+  MassCompositionProfilesResponse,
+  ServerShape,
+  Standard,
+  StandardCertificateDocumentDownloadResponse,
+  StandardCertificateDocumentUploadResponse,
+  StandardRecord,
+  StandardsListResponse,
+} from "@calibra-facil/contracts";
 import {
   ensureStandardRecall,
   createStandardRecallNotifications,
@@ -51,6 +60,7 @@ import {
   inArray,
 } from "drizzle-orm";
 import { buildUnitScopeCondition } from "../lib/units";
+import { notFound } from "../lib/domain-errors";
 import {
   parseLegacyNumericIdentifier,
   slugifyRouteIdentifier,
@@ -436,7 +446,7 @@ export const standardsRouter = new Hono<{
           total: countResult?.total ?? 0,
           totalPages: Math.ceil((countResult?.total ?? 0) / limit),
         },
-      });
+      } satisfies ServerShape<StandardsListResponse>);
     },
   )
 
@@ -467,7 +477,9 @@ export const standardsRouter = new Hono<{
           massCompositionProfile.nominalG,
         );
 
-      return c.json({ data: profiles });
+      return c.json({
+        data: profiles,
+      } satisfies ServerShape<MassCompositionProfilesResponse>);
     },
   )
 
@@ -734,7 +746,7 @@ export const standardsRouter = new Hono<{
       daysUntilExpiry: labDaysUntil(found.nextCalibrationDate, now),
     };
 
-    return c.json(result);
+    return c.json(result satisfies ServerShape<Standard>);
   })
 
   // =========================================================================
@@ -879,7 +891,15 @@ export const standardsRouter = new Hono<{
           return tx
             .update(referenceStandardCertificateDocument)
             .set({ r2Key, isCurrent: true })
-            .where(eq(referenceStandardCertificateDocument.id, created.id))
+            .where(
+              and(
+                eq(referenceStandardCertificateDocument.id, created.id),
+                eq(
+                  referenceStandardCertificateDocument.organizationId,
+                  standard.organizationId,
+                ),
+              ),
+            )
             .returning();
         });
 
@@ -906,7 +926,7 @@ export const standardsRouter = new Hono<{
         return c.json({
           message: "Certificado enviado com sucesso",
           document: standardCertificateDocumentResponse(updated),
-        });
+        } satisfies ServerShape<StandardCertificateDocumentUploadResponse>);
       } catch (error) {
         console.error("Error uploading standard certificate:", error);
         return c.json({ error: "Erro ao enviar certificado" }, 500);
@@ -967,7 +987,10 @@ export const standardsRouter = new Hono<{
           STANDARD_CERTIFICATE_URL_EXPIRY,
         );
 
-        return c.json({ url, filename: document.fileName });
+        return c.json({
+          url,
+          filename: document.fileName,
+        } satisfies ServerShape<StandardCertificateDocumentDownloadResponse>);
       } catch (error) {
         console.error("Error downloading standard certificate:", error);
         return c.json({ error: "Erro ao gerar link de download" }, 500);
@@ -1045,7 +1068,7 @@ export const standardsRouter = new Hono<{
         ipAddress: c.req.header("x-forwarded-for") || null,
       });
 
-      return c.json(newStandard, 201);
+      return c.json(newStandard satisfies ServerShape<StandardRecord>, 201);
     },
   )
 
@@ -1254,7 +1277,7 @@ export const standardsRouter = new Hono<{
 
       // If no changes, return existing
       if (Object.keys(updateData).length === 0) {
-        return c.json(existing);
+        return c.json(existing satisfies ServerShape<StandardRecord>);
       }
 
       // Update the standard
@@ -1263,6 +1286,11 @@ export const standardsRouter = new Hono<{
         .set(updateData)
         .where(eq(referenceStandard.id, id))
         .returning();
+
+      // Deleted between the read above and this write.
+      if (!updated) {
+        throw notFound("standard_not_found", "Padrão não encontrado");
+      }
 
       // Audit log
       await db.insert(referenceStandardAuditLog).values({
@@ -1280,7 +1308,6 @@ export const standardsRouter = new Hono<{
       // send endpoint re-ensures the recall exists.
       if (
         changes.status &&
-        updated &&
         updated.status === "OUT_OF_TOLERANCE" &&
         existing.status !== "OUT_OF_TOLERANCE"
       ) {
@@ -1303,7 +1330,7 @@ export const standardsRouter = new Hono<{
         );
       }
 
-      return c.json(updated);
+      return c.json(updated satisfies ServerShape<StandardRecord>);
     },
   )
 

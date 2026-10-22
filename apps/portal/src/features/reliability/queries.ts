@@ -1,6 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { getApiBaseUrl } from "@/lib/utils";
+import {
+  portalDriftSeriesResponseSchema,
+  portalFleetAnalyticsResponseSchema,
+  portalOotEventsResponseSchema,
+} from "@calibra-facil/contracts";
+
+import { fetchPortalJson } from "@/lib/api-fetch";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import type {
   AssetDriftSeries,
@@ -26,14 +32,11 @@ async function fetchFleetAnalytics(
   });
   if (params.unitId) searchParams.set("unitId", String(params.unitId));
 
-  const response = await fetch(
-    `${getApiBaseUrl()}/api/portal/analytics/fleet?${searchParams.toString()}`,
-    { credentials: "include" },
+  return fetchPortalJson(
+    `/api/portal/analytics/fleet?${searchParams.toString()}`,
+    portalFleetAnalyticsResponseSchema,
+    { errorMessage: "Falha ao carregar os indicadores de confiabilidade" },
   );
-  if (!response.ok) {
-    throw new Error("Falha ao carregar os indicadores de confiabilidade");
-  }
-  return response.json();
 }
 
 /** Fleet as-found reliability analytics (EOPR) — lab verdicts, never recomputed. */
@@ -51,16 +54,12 @@ export function useDriftSeries(assetId: number) {
   const key = usePortalQueryKey();
   return useQuery({
     queryKey: key("portal-drift-series", assetId),
-    queryFn: async (): Promise<AssetDriftSeries> => {
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/assets/${assetId}/drift-series`,
-        { credentials: "include" },
-      );
-      if (!response.ok) {
-        throw new Error("Falha ao carregar a análise de deriva");
-      }
-      return response.json();
-    },
+    queryFn: (): Promise<AssetDriftSeries> =>
+      fetchPortalJson(
+        `/api/portal/assets/${assetId}/drift-series`,
+        portalDriftSeriesResponseSchema,
+        { errorMessage: "Falha ao carregar a análise de deriva" },
+      ),
     staleTime: 60_000,
   });
 }
@@ -77,14 +76,11 @@ export function useOotEvents(status?: OotEventStatus) {
       const searchParams = new URLSearchParams();
       if (status) searchParams.set("status", status);
       const suffix = status ? `?${searchParams.toString()}` : "";
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/oot-events${suffix}`,
-        { credentials: "include" },
+      const payload = await fetchPortalJson(
+        `/api/portal/oot-events${suffix}`,
+        portalOotEventsResponseSchema,
+        { errorMessage: "Falha ao carregar eventos fora de tolerância" },
       );
-      if (!response.ok) {
-        throw new Error("Falha ao carregar eventos fora de tolerância");
-      }
-      const payload: { data: Array<OotEvent> } = await response.json();
       return payload.data;
     },
     staleTime: 60_000,

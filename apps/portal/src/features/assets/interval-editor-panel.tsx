@@ -16,7 +16,8 @@ import {
   Panel,
   PanelHeader,
 } from "@calibra-facil/ui/instrument-panel";
-import { getApiBaseUrl } from "@/lib/utils";
+import { portalIntervalUpdateResponseSchema } from "@calibra-facil/contracts";
+import { fetchPortalJson, jsonInit } from "@/lib/api-fetch";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import type { AssetDetail } from "./types";
 
@@ -43,18 +44,14 @@ export function IntervalEditorPanel({ asset }: { asset: AssetDetail }) {
       intervalMonths: number;
       rationale: string;
     }) => {
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/assets/${asset.id}/interval`,
+      await fetchPortalJson(
+        `/api/portal/assets/${asset.id}/interval`,
+        portalIntervalUpdateResponseSchema,
         {
-          method: "PUT",
-          credentials: "include",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(input),
+          errorMessage: "Não foi possível salvar a periodicidade.",
+          init: jsonInit("PUT", input),
         },
       );
-      if (!response.ok) {
-        throw new Error("Não foi possível salvar a periodicidade.");
-      }
     },
     onSuccess: () => {
       toast.success("Periodicidade atualizada.");

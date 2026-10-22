@@ -7,7 +7,8 @@ import {
   CheckmarkCircle02Icon,
 } from "@hugeicons/core-free-icons";
 
-import { getApiBaseUrl } from "@/lib/utils";
+import { portalOotAssessmentResponseSchema } from "@calibra-facil/contracts";
+import { fetchPortalJson, jsonInit } from "@/lib/api-fetch";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import { Button } from "@calibra-facil/ui/button";
 import { Checkbox } from "@calibra-facil/ui/checkbox";
@@ -117,18 +118,14 @@ function OotAssessmentForm({ event }: { event: OotEvent }) {
       // checkbox IS the answer (checked = sim, unchecked = não).
       if (suspectShipped) body.customerNotified = customerNotified;
 
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/oot-events/${event.id}/assessment`,
+      await fetchPortalJson(
+        `/api/portal/oot-events/${event.id}/assessment`,
+        portalOotAssessmentResponseSchema,
         {
-          method: "POST",
-          credentials: "include",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(body),
+          errorMessage: "Não foi possível registrar a avaliação.",
+          init: jsonInit("POST", body),
         },
       );
-      if (!response.ok) {
-        throw new Error("Não foi possível registrar a avaliação.");
-      }
     },
     onSuccess: () => {
       toast.success("Avaliação registrada");

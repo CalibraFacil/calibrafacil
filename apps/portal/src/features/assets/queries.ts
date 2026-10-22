@@ -1,6 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { getApiBaseUrl } from "@/lib/utils";
+import {
+  portalAssetDetailResponseSchema,
+  portalIntervalInsightSchema,
+} from "@calibra-facil/contracts";
+
+import { fetchPortalJson } from "@/lib/api-fetch";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import type { AssetDetail, IntervalInsight } from "./types";
 
@@ -9,15 +14,11 @@ export function useAssetDetail(assetId: string) {
   return useQuery({
     queryKey: key("portal-asset", assetId),
     queryFn: async (): Promise<AssetDetail> => {
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/assets/${assetId}`,
-        { credentials: "include" },
+      const result = await fetchPortalJson(
+        `/api/portal/assets/${encodeURIComponent(assetId)}`,
+        portalAssetDetailResponseSchema,
+        { errorMessage: "Falha ao carregar ativo." },
       );
-      if (!response.ok) {
-        throw new Error("Falha ao carregar ativo.");
-      }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- portal asset endpoint returns the AssetDetail DTO.
-      const result = (await response.json()) as { data: AssetDetail };
       return result.data;
     },
   });
@@ -31,14 +32,12 @@ export function useIntervalInsight(assetId: number) {
   const key = usePortalQueryKey();
   return useQuery({
     queryKey: key("portal-interval-insight", assetId),
-    queryFn: async (): Promise<IntervalInsight> => {
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/assets/${assetId}/interval-insight`,
-        { credentials: "include" },
-      );
-      if (!response.ok) throw new Error("Falha ao carregar a análise.");
-      return response.json();
-    },
+    queryFn: (): Promise<IntervalInsight> =>
+      fetchPortalJson(
+        `/api/portal/assets/${assetId}/interval-insight`,
+        portalIntervalInsightSchema,
+        { errorMessage: "Falha ao carregar a análise." },
+      ),
     staleTime: 60_000,
   });
 }

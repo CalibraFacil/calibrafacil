@@ -1,6 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { getApiBaseUrl } from "@/lib/utils";
+import {
+  portalFleetAssetsResponseSchema,
+  portalUnitsResponseSchema,
+} from "@calibra-facil/contracts";
+
+import { fetchPortalJson } from "@/lib/api-fetch";
 import { keepPreviousDataInScope } from "@/lib/keep-previous-page";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import type { CalibrationFilter } from "@/lib/calibration-status";
@@ -30,14 +35,11 @@ async function fetchFleetAssets(
   if (params.dueStatus) searchParams.set("dueStatus", params.dueStatus);
   if (params.unitId) searchParams.set("unitId", String(params.unitId));
 
-  const response = await fetch(
-    `${getApiBaseUrl()}/api/portal/assets?${searchParams.toString()}`,
-    { credentials: "include" },
+  return fetchPortalJson(
+    `/api/portal/assets?${searchParams.toString()}`,
+    portalFleetAssetsResponseSchema,
+    { errorMessage: "Falha ao carregar ativos" },
   );
-  if (!response.ok) {
-    throw new Error("Falha ao carregar ativos");
-  }
-  return response.json();
 }
 
 export function useFleetAssets(params: FleetAssetsParams) {
@@ -51,25 +53,15 @@ export function useFleetAssets(params: FleetAssetsParams) {
 
 export type PortalUnit = { id: number; name: string };
 
-type PortalUnitsResponse = {
-  mode?: "single" | "group";
-  units: Array<PortalUnit>;
-};
-
 /** Units (branch customers) in the active scope; more than one only in group mode. */
 export function usePortalUnits() {
   const key = usePortalQueryKey();
   return useQuery({
     queryKey: key("portal-units"),
-    queryFn: async (): Promise<PortalUnitsResponse> => {
-      const response = await fetch(`${getApiBaseUrl()}/api/portal/units`, {
-        credentials: "include",
-      });
-      if (!response.ok) {
-        throw new Error("Falha ao carregar unidades");
-      }
-      return response.json();
-    },
+    queryFn: () =>
+      fetchPortalJson("/api/portal/units", portalUnitsResponseSchema, {
+        errorMessage: "Falha ao carregar unidades",
+      }),
     staleTime: 60_000,
   });
 }

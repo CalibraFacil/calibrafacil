@@ -34,12 +34,3 @@ export type JobExecutionPayload = {
    */
   methodDeviations?: string | null;
 };
-
-export type ReferenceStandardsResponse<TStandard = unknown> = {
-  data: TStandard[];
-};
-
-export type EffectiveEnvironmentalLimitsResponse<TLimits = unknown> = {
-  limits: TLimits | null;
-  source: string | null;
-};
