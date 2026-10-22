@@ -6,7 +6,7 @@ import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { buildJobDetail } from '@calibra-facil/contracts/jobs-fixtures'
-import { JobStatusSchema } from '@calibra-facil/schemas'
+import { JobStatusSchema, type JobStatus } from '@calibra-facil/schemas'
 import { allowedFrom } from '@calibra-facil/schemas/job-transitions'
 
 const queryMocks = vi.hoisted(() => ({
@@ -46,7 +46,7 @@ import { JobDetailPage } from './detail-page'
 
 const ASSIGN_ACTION = 'Atribuir técnico'
 
-function renderDetail(status: Parameters<typeof buildJobDetail>[0]['status']) {
+function renderDetail(status: JobStatus) {
   queryMocks.useJobDetailData.mockReturnValue({
     data: buildJobDetail({ status }),
     error: null,
