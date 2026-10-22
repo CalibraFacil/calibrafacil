@@ -22,6 +22,7 @@
  *   REQ-SUB-5j  a sync event for a job outside the session's unit scope is out of reach
  */
 
+import { setJobStatus } from "../../../test/integration/job-fixtures";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
@@ -102,14 +103,10 @@ async function seedWorld(options: { status: JobStatus }) {
     unitId: org.unitId,
     createdBy: TECHNICIAN,
   });
-  await db
-    .update(calibrationJob)
-    .set({
-      status: options.status,
-      methodSnapshot: executableMethodSnapshot(),
-      technicianId: TECHNICIAN,
-    })
-    .where(eq(calibrationJob.id, jobId));
+  await setJobStatus(jobId, options.status, {
+    methodSnapshot: executableMethodSnapshot(),
+    technicianId: TECHNICIAN,
+  });
   const { rawKey } = await seedApiKey({
     organizationId: ORG,
     createdBy: TECHNICIAN,
@@ -733,13 +730,9 @@ describe("desktop sync: a job outside the session's unit scope is out of reach (
       unitId: other.id,
       createdBy: TECHNICIAN,
     });
-    await db
-      .update(calibrationJob)
-      .set({
-        status: "IN_PROGRESS",
-        methodSnapshot: executableMethodSnapshot(),
-      })
-      .where(eq(calibrationJob.id, jobId));
+    await setJobStatus(jobId, "IN_PROGRESS", {
+      methodSnapshot: executableMethodSnapshot(),
+    });
     await seedExtraMember({
       orgId: ORG,
       userId: "user-sub-scoped",

@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { insertJobs } from "../../test/integration/job-fixtures";
 import { portalRouter } from "./portal";
 import { db } from "@calibra-facil/db";
-import { asset, assetType, calibrationJob } from "@calibra-facil/db/schema";
+import { asset, assetType } from "@calibra-facil/db/schema";
 import { sql } from "drizzle-orm";
 
 type AsFoundConformity = "CONFORMING" | "NON_CONFORMING" | "UNKNOWN";
@@ -84,7 +85,7 @@ async function seedApprovedJob(params: {
   margins: number[] | null;
 }): Promise<void> {
   jobSeq += 1;
-  await db.insert(calibrationJob).values({
+  await insertJobs({
     jobId: `JOB-INS-${jobSeq}`,
     organizationId: params.labOrgId,
     unitId: params.labUnitId,

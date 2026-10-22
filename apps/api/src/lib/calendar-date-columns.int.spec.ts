@@ -12,6 +12,7 @@
  *   REQ-CAL-003  a Drizzle operator on such a column compares DAYS
  */
 
+import { insertJobs } from "../../test/integration/job-fixtures";
 import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
 import { and, eq, gte, lt, sql } from "drizzle-orm";
@@ -340,37 +341,34 @@ describe("calendar-date columns (migration 0116)", () => {
           isActive: true,
         })
         .returning({ id: service.id });
-      const [job] = await db
-        .insert(calibrationJob)
-        .values({
-          jobId: "CAL-GUARD-1",
-          organizationId: org.orgId,
-          unitId: org.unitId,
-          customerId,
-          assetId: instrument?.id ?? 0,
-          serviceId: svc?.id ?? 0,
-          createdBy: org.userId,
-          status: "APPROVED",
-          methodSnapshot: {
-            methodId: 1,
-            methodName: "M",
-            methodVersion: 1,
-            dataFields: [],
-            variableBindings: [],
-            formulas: [],
-            measurementModels: [],
-            validations: [],
-            uncertaintyParams: [],
-          },
-          data: {},
-          results: { value: 1, expandedUncertainty: 0.1, k: 2 },
-          dueDate,
-          performedAt: new Date("2026-02-01T10:00:00.000Z"),
-          approvedBy: org.userId,
-          approvedAt: new Date("2026-02-02T10:00:00.000Z"),
-          certificateUrl: "https://files.test/c.pdf",
-        })
-        .returning({ id: calibrationJob.id });
+      const [job] = await insertJobs({
+        jobId: "CAL-GUARD-1",
+        organizationId: org.orgId,
+        unitId: org.unitId,
+        customerId,
+        assetId: instrument?.id ?? 0,
+        serviceId: svc?.id ?? 0,
+        createdBy: org.userId,
+        status: "APPROVED",
+        methodSnapshot: {
+          methodId: 1,
+          methodName: "M",
+          methodVersion: 1,
+          dataFields: [],
+          variableBindings: [],
+          formulas: [],
+          measurementModels: [],
+          validations: [],
+          uncertaintyParams: [],
+        },
+        data: {},
+        results: { value: 1, expandedUncertainty: 0.1, k: 2 },
+        dueDate,
+        performedAt: new Date("2026-02-01T10:00:00.000Z"),
+        approvedBy: org.userId,
+        approvedAt: new Date("2026-02-02T10:00:00.000Z"),
+        certificateUrl: "https://files.test/c.pdf",
+      });
       if (!job) throw new Error("job insert failed");
       return { ...org, id: job.id };
     }

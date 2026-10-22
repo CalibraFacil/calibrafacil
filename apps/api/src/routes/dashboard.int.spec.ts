@@ -34,11 +34,11 @@
  *   jobUnitScopeCondition = buildUnitScopeCondition(calibrationJob.unitId, memberData)
  */
 
+import { insertJobs } from "../../test/integration/job-fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { dashboardRouter } from "./dashboard";
 import { db } from "@calibra-facil/db";
 import {
-  calibrationJob,
   organization,
   organizationUnit,
   assetType,
@@ -177,21 +177,18 @@ async function seedJob(params: {
   createdBy: string;
   status?: JobStatus;
 }): Promise<number> {
-  const [row] = await db
-    .insert(calibrationJob)
-    .values({
-      jobId: params.jobId,
-      organizationId: params.organizationId,
-      unitId: params.unitId,
-      customerId: params.customerId,
-      assetId: params.assetId,
-      serviceId: params.serviceId,
-      createdBy: params.createdBy,
-      status: params.status ?? "DRAFT",
-      methodSnapshot: minimalMethodSnapshot(),
-      certificateName: params.jobId,
-    })
-    .returning({ id: calibrationJob.id });
+  const [row] = await insertJobs({
+    jobId: params.jobId,
+    organizationId: params.organizationId,
+    unitId: params.unitId,
+    customerId: params.customerId,
+    assetId: params.assetId,
+    serviceId: params.serviceId,
+    createdBy: params.createdBy,
+    status: params.status ?? "DRAFT",
+    methodSnapshot: minimalMethodSnapshot(),
+    certificateName: params.jobId,
+  });
   if (!row) throw new Error("seedJob: insert failed");
   return row.id;
 }
@@ -648,7 +645,7 @@ describe("dashboardRouter — real DB + real middleware (READ-ONLY aggregation)"
         createdBy: org.userId,
         methodSnapshot: minimalMethodSnapshot(),
       };
-      await db.insert(calibrationJob).values([
+      await insertJobs([
         {
           // Approved 09:00 on May 31 in Sao Paulo: May's, even though the
           // UTC clock is already in June.

@@ -31,6 +31,7 @@
  *                 unique index); scoped policies alongside the default → 200.
  */
 
+import { insertJobs } from "../../../test/integration/job-fixtures";
 import { beforeEach, describe, expect, it } from "vitest";
 import { organizationOf } from "../../../test/integration/organization-of";
 import {
@@ -42,7 +43,6 @@ import {
   asset,
   assetType,
   billingDocument,
-  calibrationJob,
   certificateRelease,
   certificateReleasePolicy,
   customer,
@@ -191,21 +191,18 @@ async function seedJob(params: {
   createdBy: string;
   status?: JobStatus;
 }): Promise<number> {
-  const [row] = await db
-    .insert(calibrationJob)
-    .values({
-      jobId: params.jobId,
-      organizationId: params.organizationId,
-      unitId: params.unitId,
-      customerId: params.customerId,
-      assetId: params.assetId,
-      serviceId: params.serviceId,
-      createdBy: params.createdBy,
-      status: params.status ?? "APPROVED",
-      methodSnapshot: minimalMethodSnapshot(),
-      certificateName: params.jobId,
-    })
-    .returning({ id: calibrationJob.id });
+  const [row] = await insertJobs({
+    jobId: params.jobId,
+    organizationId: params.organizationId,
+    unitId: params.unitId,
+    customerId: params.customerId,
+    assetId: params.assetId,
+    serviceId: params.serviceId,
+    createdBy: params.createdBy,
+    status: params.status ?? "APPROVED",
+    methodSnapshot: minimalMethodSnapshot(),
+    certificateName: params.jobId,
+  });
   if (!row) throw new Error("seedJob: insert failed");
   return row.id;
 }

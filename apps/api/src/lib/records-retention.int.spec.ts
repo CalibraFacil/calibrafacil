@@ -17,6 +17,7 @@
  *              organizations, never touches legal-hold or in-retention ones,
  *              writes the platform audit event first
  */
+import { insertJobs } from "../../test/integration/job-fixtures";
 import { beforeEach, describe, expect, it } from "vitest";
 import { organizationOf } from "../../test/integration/organization-of";
 import { and, eq, sql } from "drizzle-orm";
@@ -206,29 +207,26 @@ async function seedJob(
   at: Date,
   overrides: Partial<typeof calibrationJob.$inferInsert> = {},
 ) {
-  const [job] = await db
-    .insert(calibrationJob)
-    .values({
-      jobId: `CAL-${fixture.orgId}`,
-      organizationId: fixture.orgId,
-      unitId: fixture.unitId,
-      customerId: fixture.customerId,
-      assetId: fixture.assetId,
-      serviceId: fixture.serviceId,
-      createdBy: fixture.userId,
-      status: "APPROVED",
-      methodSnapshot: METHOD_SNAPSHOT,
-      data: { indication: "10" },
-      results: { value: 10.01, expandedUncertainty: 0.02, k: 2 },
-      performedAt: at,
-      approvedBy: fixture.userId,
-      approvedAt: at,
-      certificateUrl: "https://files.test/c.pdf",
-      createdAt: at,
-      updatedAt: at,
-      ...overrides,
-    })
-    .returning({ id: calibrationJob.id });
+  const [job] = await insertJobs({
+    jobId: `CAL-${fixture.orgId}`,
+    organizationId: fixture.orgId,
+    unitId: fixture.unitId,
+    customerId: fixture.customerId,
+    assetId: fixture.assetId,
+    serviceId: fixture.serviceId,
+    createdBy: fixture.userId,
+    status: "APPROVED",
+    methodSnapshot: METHOD_SNAPSHOT,
+    data: { indication: "10" },
+    results: { value: 10.01, expandedUncertainty: 0.02, k: 2 },
+    performedAt: at,
+    approvedBy: fixture.userId,
+    approvedAt: at,
+    certificateUrl: "https://files.test/c.pdf",
+    createdAt: at,
+    updatedAt: at,
+    ...overrides,
+  });
   if (!job) throw new Error("seedJob: insert failed");
   fixture.jobId = job.id;
   return job.id;

@@ -19,6 +19,7 @@
  *   REQ-JOB-008  Unauthenticated approve → 401
  */
 
+import { insertJobs, setJobStatus } from "../../test/integration/job-fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { jobsRouter } from "./jobs";
 import {
@@ -218,24 +219,21 @@ async function seedJob(params: {
   methodSnapshot?: typeof calibrationJob.$inferInsert.methodSnapshot;
 }): Promise<number> {
   const status: JobStatus = params.status ?? "DRAFT";
-  const [row] = await db
-    .insert(calibrationJob)
-    .values({
-      jobId: params.jobId,
-      organizationId: params.organizationId,
-      unitId: params.unitId,
-      customerId: params.customerId,
-      assetId: params.assetId,
-      serviceId: params.serviceId,
-      createdBy: params.createdBy,
-      technicianId: params.technicianId ?? null,
-      status,
-      methodSnapshot: params.methodSnapshot ?? minimalMethodSnapshot(),
-      certificateName: params.jobId,
-      results: params.results,
-      performedAt: params.performedAt,
-    })
-    .returning({ id: calibrationJob.id });
+  const [row] = await insertJobs({
+    jobId: params.jobId,
+    organizationId: params.organizationId,
+    unitId: params.unitId,
+    customerId: params.customerId,
+    assetId: params.assetId,
+    serviceId: params.serviceId,
+    createdBy: params.createdBy,
+    technicianId: params.technicianId ?? null,
+    status,
+    methodSnapshot: params.methodSnapshot ?? minimalMethodSnapshot(),
+    certificateName: params.jobId,
+    results: params.results,
+    performedAt: params.performedAt,
+  });
   if (!row) throw new Error("seedJob: insert failed");
   return row.id;
 }
@@ -1057,27 +1055,24 @@ async function seedScopeGuardWorld(params: {
     updatedBy: params.userId,
   });
 
-  const [job] = await db
-    .insert(calibrationJob)
-    .values({
-      jobId: `JOB-${params.tagSuffix}`,
-      organizationId: params.orgId,
-      unitId: fixture.unitId,
-      customerId: fixture.customerId,
-      assetId: fixture.assetId,
-      serviceId: fixture.serviceId,
-      createdBy: params.userId, // solo lab: self-approval exempt
-      status: "REVIEW",
-      methodSnapshot: scopeGuardMethodSnapshot(),
-      certificateName: `JOB-${params.tagSuffix}`,
-      data: { pontos_indicacao: [{ carga_nominal: 100 }] },
-      results: {
-        incerteza_expandida_apos: [params.reportedU],
-        fator_k_apos: [2],
-      },
-      performedAt: new Date("2026-07-01T12:00:00.000Z"),
-    })
-    .returning({ id: calibrationJob.id });
+  const [job] = await insertJobs({
+    jobId: `JOB-${params.tagSuffix}`,
+    organizationId: params.orgId,
+    unitId: fixture.unitId,
+    customerId: fixture.customerId,
+    assetId: fixture.assetId,
+    serviceId: fixture.serviceId,
+    createdBy: params.userId, // solo lab: self-approval exempt
+    status: "REVIEW",
+    methodSnapshot: scopeGuardMethodSnapshot(),
+    certificateName: `JOB-${params.tagSuffix}`,
+    data: { pontos_indicacao: [{ carga_nominal: 100 }] },
+    results: {
+      incerteza_expandida_apos: [params.reportedU],
+      fator_k_apos: [2],
+    },
+    performedAt: new Date("2026-07-01T12:00:00.000Z"),
+  });
   if (!job) throw new Error("seedScopeGuardWorld: job insert failed");
 
   return { ...fixture, jobId: job.id };
@@ -1319,10 +1314,7 @@ function changeStatusBeforeNextTransaction(id: number, status: JobStatus) {
   const originalTransaction = instance.transaction.bind(instance);
   vi.spyOn(instance, "transaction").mockImplementationOnce(
     async (callback, config) => {
-      await db
-        .update(calibrationJob)
-        .set({ status })
-        .where(eq(calibrationJob.id, id));
+      await setJobStatus(id, status);
       return originalTransaction(callback, config);
     },
   );

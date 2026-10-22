@@ -28,7 +28,8 @@
     "lint": "oxlint",
     "check-types": "node ../../scripts/typecheck.mjs --noEmit",
     "retention:inventory": "tsx ./scripts/records-retention-inventory.ts",
-    "tenancy:doc": "tsx ./scripts/tenancy-doc.ts"
+    "tenancy:doc": "tsx ./scripts/tenancy-doc.ts",
+    "gen:job-transitions-sql": "tsx ./scripts/gen-job-transitions-sql.ts"
   },
   "keywords": [],
   "author": "",

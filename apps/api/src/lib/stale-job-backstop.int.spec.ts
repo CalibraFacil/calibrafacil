@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { insertJobs } from "../../test/integration/job-fixtures";
 import { eq, sql } from "drizzle-orm";
 import { releaseStaleQueueJobs } from "@calibra-facil/db/queue";
 import { rejectCertificateRender } from "@calibra-facil/db/queue-render-recovery";
@@ -95,38 +96,35 @@ async function seedJob(
       createdAt: EPOCH,
     })
     .returning();
-  const [seeded] = await db
-    .insert(calibrationJob)
-    .values({
-      jobId: params.jobNumber,
-      certificateName: params.jobNumber,
-      organizationId: org.orgId,
-      unitId: org.unitId,
-      customerId: customerRow!.id,
-      assetId: assetRow!.id,
-      serviceId: serviceRow!.id,
-      methodSnapshot: {
-        methodId: 0,
-        methodName: "M",
-        methodVersion: 1,
-        accreditedScope: false,
-        dataFields: [],
-        variableBindings: [],
-        formulas: [],
-        measurementModels: [],
-        validations: [],
-        uncertaintyParams: [],
-      },
-      status: params.status ?? "GENERATING_PDF",
-      performedAt: EPOCH,
-      createdBy: params.createdBy ?? org.userId,
-      approvedBy:
-        params.approvedBy === undefined ? org.userId : params.approvedBy,
-      rejectionReason: params.rejectionReason,
-      createdAt: EPOCH,
-      updatedAt: params.updatedAt ?? new Date(),
-    })
-    .returning();
+  const [seeded] = await insertJobs({
+    jobId: params.jobNumber,
+    certificateName: params.jobNumber,
+    organizationId: org.orgId,
+    unitId: org.unitId,
+    customerId: customerRow!.id,
+    assetId: assetRow!.id,
+    serviceId: serviceRow!.id,
+    methodSnapshot: {
+      methodId: 0,
+      methodName: "M",
+      methodVersion: 1,
+      accreditedScope: false,
+      dataFields: [],
+      variableBindings: [],
+      formulas: [],
+      measurementModels: [],
+      validations: [],
+      uncertaintyParams: [],
+    },
+    status: params.status ?? "GENERATING_PDF",
+    performedAt: EPOCH,
+    createdBy: params.createdBy ?? org.userId,
+    approvedBy:
+      params.approvedBy === undefined ? org.userId : params.approvedBy,
+    rejectionReason: params.rejectionReason,
+    createdAt: EPOCH,
+    updatedAt: params.updatedAt ?? new Date(),
+  });
   return seeded!;
 }
 

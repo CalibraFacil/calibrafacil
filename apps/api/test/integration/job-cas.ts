@@ -2,6 +2,7 @@ import { vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { db, getDb } from "@calibra-facil/db";
 import { calibrationJob, jobAuditLog } from "@calibra-facil/db/schema";
+import { setJobStatus } from "./job-fixtures";
 
 // Shared fixtures for the compare-and-set specs on calibration_job writes
 // (jobs.ts, public-api-v2.ts, sync.ts). Harness code: statements issued here are
@@ -11,6 +12,26 @@ type JobChange = Partial<{
   status: typeof calibrationJob.$inferSelect.status;
   organizationId: string;
 }>;
+
+/**
+ * What another actor does to the job: a status change walks the legal
+ * transitions (the database refuses any other), the rest is a plain update.
+ */
+async function applyChange(
+  jobId: number,
+  change: JobChange,
+  executor: Parameters<typeof setJobStatus>[3] = db,
+): Promise<void> {
+  const { status, ...columns } = change;
+  if (status !== undefined) {
+    await setJobStatus(jobId, status, columns, executor);
+    return;
+  }
+  await executor
+    .update(calibrationJob)
+    .set(columns)
+    .where(eq(calibrationJob.id, jobId));
+}
 
 /**
  * Forces the interleaving of a lost compare-and-set, deterministically: the
@@ -28,10 +49,7 @@ export function changeJobBeforeNextTransaction(
   const originalTransaction = instance.transaction.bind(instance);
   vi.spyOn(instance, "transaction").mockImplementationOnce(
     async (callback, config) => {
-      await db
-        .update(calibrationJob)
-        .set(change)
-        .where(eq(calibrationJob.id, jobId));
+      await applyChange(jobId, change);
       return originalTransaction(callback, config);
     },
   );
@@ -111,10 +129,7 @@ export async function raceWithRowLock(params: {
     await tx.execute(
       sql`SELECT 1 FROM calibration_job WHERE id = ${params.jobId} FOR UPDATE`,
     );
-    await tx
-      .update(calibrationJob)
-      .set(params.change)
-      .where(eq(calibrationJob.id, params.jobId));
+    await applyChange(params.jobId, params.change, tx);
     locked();
     await gate;
   });

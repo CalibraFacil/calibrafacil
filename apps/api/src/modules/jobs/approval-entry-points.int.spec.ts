@@ -24,6 +24,7 @@
  *   REQ-APPROVAL-009  public API PATCH cannot move a job into an approval-side status
  */
 
+import { insertJobs } from "../../../test/integration/job-fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@calibra-facil/db";
 import {
@@ -210,33 +211,30 @@ async function seedReviewJob(
   fixture: Fixture,
   overrides: Partial<typeof calibrationJob.$inferInsert> = {},
 ): Promise<number> {
-  const [row] = await db
-    .insert(calibrationJob)
-    .values({
-      jobId: `CAL-2026-${Math.floor(Math.random() * 1e6)}`,
-      organizationId: ORG,
-      unitId: fixture.unitId,
-      customerId: fixture.customerId,
-      assetId: fixture.assetId,
-      serviceId: fixture.serviceId,
-      createdBy: MAKER,
-      technicianId: MAKER,
-      status: "REVIEW",
-      methodSnapshot: {
-        methodId: 1,
-        methodName: "Test Method",
-        methodVersion: 1,
-        dataFields: [],
-        variableBindings: [],
-        formulas: [],
-        measurementModels: [],
-        validations: [],
-        uncertaintyParams: [],
-      },
-      certificateName: "cert",
-      ...overrides,
-    })
-    .returning({ id: calibrationJob.id });
+  const [row] = await insertJobs({
+    jobId: `CAL-2026-${Math.floor(Math.random() * 1e6)}`,
+    organizationId: ORG,
+    unitId: fixture.unitId,
+    customerId: fixture.customerId,
+    assetId: fixture.assetId,
+    serviceId: fixture.serviceId,
+    createdBy: MAKER,
+    technicianId: MAKER,
+    status: "REVIEW",
+    methodSnapshot: {
+      methodId: 1,
+      methodName: "Test Method",
+      methodVersion: 1,
+      dataFields: [],
+      variableBindings: [],
+      formulas: [],
+      measurementModels: [],
+      validations: [],
+      uncertaintyParams: [],
+    },
+    certificateName: "cert",
+    ...overrides,
+  });
   if (!row) throw new Error("seedReviewJob failed");
   return row.id;
 }
