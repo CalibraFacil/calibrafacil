@@ -47,6 +47,7 @@ import { sql } from "drizzle-orm";
 import { portalRouter } from "./portal";
 import { verifyRouter } from "./verify";
 import { createAssetOotEventForApprovedJob } from "../lib/asset-oot-events";
+import { insertJobs } from "../../test/integration/job-fixtures";
 import { loginAsPortal } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedPortalContext } from "../../test/integration/seed";
@@ -153,27 +154,24 @@ async function seedFleet() {
     conformity: "CONFORMING" | "NON_CONFORMING",
     margins: number[],
   ) {
-    const [row] = await db
-      .insert(calibrationJob)
-      .values({
-        jobId,
-        certificateName: jobId,
-        organizationId: ctx.labOrgId,
-        unitId: ctx.labUnitId,
-        customerId: ctx.customerId,
-        assetId,
-        serviceId,
-        createdBy: ctx.portalUserId,
-        status: "APPROVED",
-        approvedAt,
-        performedAt: approvedAt,
-        certificateUrl: `https://storage.example.test/certificates/${jobId}.pdf`,
-        asFoundConformity: conformity,
-        asFoundMargins: margins,
-        methodSnapshot: methodSnapshot(),
-        results: { erro: 0.01, margem_conformidade_antes: margins },
-      })
-      .returning({ id: calibrationJob.id });
+    const [row] = await insertJobs({
+      jobId,
+      certificateName: jobId,
+      organizationId: ctx.labOrgId,
+      unitId: ctx.labUnitId,
+      customerId: ctx.customerId,
+      assetId,
+      serviceId,
+      createdBy: ctx.portalUserId,
+      status: "APPROVED",
+      approvedAt,
+      performedAt: approvedAt,
+      certificateUrl: `https://storage.example.test/certificates/${jobId}.pdf`,
+      asFoundConformity: conformity,
+      asFoundMargins: margins,
+      methodSnapshot: methodSnapshot(),
+      results: { erro: 0.01, margem_conformidade_antes: margins },
+    });
     return row?.id ?? 0;
   }
 

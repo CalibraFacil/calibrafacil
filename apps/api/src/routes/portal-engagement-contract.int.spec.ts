@@ -22,7 +22,6 @@ import { db } from "@calibra-facil/db";
 import {
   asset,
   assetType,
-  calibrationJob,
   calibrationRequest,
   calibrationRequestItem,
   calibrationVisit,
@@ -36,6 +35,7 @@ import { portalNotificationsRouter } from "./portal-notifications";
 import { portalRequestsRouter } from "./portal-requests";
 import { portalVisitsRouter } from "./portal-visits";
 import { portalRouter } from "./portal";
+import { insertJobs } from "../../test/integration/job-fixtures";
 import { loginAsPortal } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedPortalContext } from "../../test/integration/seed";
@@ -239,30 +239,27 @@ describe("portal engagement endpoints: real responses honor the contract schemas
         isActive: true,
       })
       .returning({ id: service.id });
-    const [job] = await db
-      .insert(calibrationJob)
-      .values({
-        jobId: "CAL-OOT-1",
-        organizationId: ctx.labOrgId,
-        unitId: ctx.labUnitId,
-        customerId: ctx.customerId,
-        assetId,
-        serviceId: service_?.id ?? 0,
-        createdBy: ctx.portalUserId,
-        status: "APPROVED",
-        methodSnapshot: {
-          methodId: 1,
-          methodName: "Método",
-          methodVersion: 1,
-          dataFields: [],
-          variableBindings: [],
-          formulas: [],
-          measurementModels: [],
-          validations: [],
-          uncertaintyParams: [],
-        },
-      })
-      .returning({ id: calibrationJob.id });
+    const [job] = await insertJobs({
+      jobId: "CAL-OOT-1",
+      organizationId: ctx.labOrgId,
+      unitId: ctx.labUnitId,
+      customerId: ctx.customerId,
+      assetId,
+      serviceId: service_?.id ?? 0,
+      createdBy: ctx.portalUserId,
+      status: "APPROVED",
+      methodSnapshot: {
+        methodId: 1,
+        methodName: "Método",
+        methodVersion: 1,
+        dataFields: [],
+        variableBindings: [],
+        formulas: [],
+        measurementModels: [],
+        validations: [],
+        uncertaintyParams: [],
+      },
+    });
     const [nc] = await db
       .insert(nonConformance)
       .values({
