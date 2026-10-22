@@ -45,15 +45,24 @@ describe("client runtime data policy registry", () => {
     expect(getCalibraApiDataPolicy("serviceOrders", "create")).toBe(
       "local-command-sync",
     );
+    // Q13: everything outside field capture, intake and reference reads is
+    // online-only.
     expect(getCalibraApiDataPolicy("serviceOrders", "createQuote")).toBe(
-      "local-command-sync",
+      "cloud-only",
     );
     expect(getCalibraApiDataPolicy("serviceOrders", "saveExecution")).toBe(
-      "local-command-sync",
+      "cloud-only",
     );
     expect(
       getCalibraApiDataPolicy("serviceOrders", "issueDeliveryDocument"),
-    ).toBe("local-command-sync");
+    ).toBe("cloud-only");
+    expect(getCalibraApiDataPolicy("customers", "create")).toBe("cloud-only");
+    expect(getCalibraApiDataPolicy("customers", "update")).toBe("cloud-only");
+    expect(getCalibraApiDataPolicy("assets", "update")).toBe("cloud-only");
+    expect(getCalibraApiDataPolicy("nonConformances", "create")).toBe(
+      "cloud-only",
+    );
+    expect(getCalibraApiDataPolicy("dashboard", "getStats")).toBe("cloud-only");
   });
 
   it("exposes every namespace as policy entries for runtime inspection", () => {
@@ -75,7 +84,7 @@ describe("client runtime data policy registry", () => {
         {
           "method": "getStats",
           "namespace": "dashboard",
-          "policy": "local-first-read-through-sync",
+          "policy": "cloud-only",
         },
         {
           "method": "getDashboardUnits",
@@ -535,7 +544,7 @@ describe("client runtime data policy registry", () => {
         {
           "method": "create",
           "namespace": "customers",
-          "policy": "local-command-sync",
+          "policy": "cloud-only",
         },
         {
           "method": "get",
@@ -545,7 +554,7 @@ describe("client runtime data policy registry", () => {
         {
           "method": "update",
           "namespace": "customers",
-          "policy": "local-command-sync",
+          "policy": "cloud-only",
         },
         {
           "method": "auditLog",
@@ -660,7 +669,7 @@ describe("client runtime data policy registry", () => {
         {
           "method": "update",
           "namespace": "assets",
-          "policy": "local-command-sync",
+          "policy": "cloud-only",
         },
         {
           "method": "auditLog",
@@ -675,12 +684,12 @@ describe("client runtime data policy registry", () => {
         {
           "method": "list",
           "namespace": "services",
-          "policy": "local-first-read-through-sync",
+          "policy": "cloud-only",
         },
         {
           "method": "get",
           "namespace": "services",
-          "policy": "local-first-read-through-sync",
+          "policy": "cloud-only",
         },
         {
           "method": "auditLog",
@@ -1015,7 +1024,7 @@ describe("client runtime data policy registry", () => {
         {
           "method": "createQuote",
           "namespace": "serviceOrders",
-          "policy": "local-command-sync",
+          "policy": "cloud-only",
         },
         {
           "method": "saveEvaluation",
@@ -1030,7 +1039,7 @@ describe("client runtime data policy registry", () => {
         {
           "method": "saveExecution",
           "namespace": "serviceOrders",
-          "policy": "local-command-sync",
+          "policy": "cloud-only",
         },
         {
           "method": "generateIntakeDocument",
@@ -1065,7 +1074,7 @@ describe("client runtime data policy registry", () => {
         {
           "method": "issueDeliveryDocument",
           "namespace": "serviceOrders",
-          "policy": "local-command-sync",
+          "policy": "cloud-only",
         },
         {
           "method": "getDeliveryDocumentPdf",
@@ -1225,7 +1234,7 @@ describe("client runtime data policy registry", () => {
         {
           "method": "create",
           "namespace": "nonConformances",
-          "policy": "local-command-sync",
+          "policy": "cloud-only",
         },
         {
           "method": "setDisposition",
@@ -2790,13 +2799,6 @@ describe("desktop hybrid runtime adapter", () => {
       },
     });
 
-    await client.customers.create({
-      name: "Cliente local",
-      email: "cliente@example.test",
-      phone: "555",
-      taxId: "123",
-    });
-    await client.customers.update(1, { name: "Cliente atualizado" });
     await client.assets.create({
       customerId: 1,
       assetTypeId: 2,
@@ -2806,7 +2808,6 @@ describe("desktop hybrid runtime adapter", () => {
       manufacturer: "Fabricante",
       model: "Modelo",
     });
-    await client.assets.update(1, { name: "Ativo atualizado" });
     await client.jobs.saveExecution(
       "job-1",
       testPayload<JobExecutionPayload>({
@@ -2829,41 +2830,67 @@ describe("desktop hybrid runtime adapter", () => {
         items: [],
       }),
     );
-    await client.serviceOrders.createQuote("service-order-1", {
-      items: [],
-    });
-    await client.serviceOrders.saveExecution("service-order-1", {
-      technicalNotes: "Execução local",
-    });
-    await client.serviceOrders.issueDeliveryDocument("service-order-1", {
-      technicianSignatureData: null,
-      clientSignatureData: null,
-    });
 
     expect(fetchCalls.map(([input]) => String(input))).toEqual([
-      "http://127.0.0.1:4317/api/customers",
-      "http://127.0.0.1:4317/api/customers/1",
       "http://127.0.0.1:4317/api/assets",
-      "http://127.0.0.1:4317/api/assets/1",
       "http://127.0.0.1:4317/api/jobs/job-1/execute",
       "http://127.0.0.1:4317/api/jobs/job-1/submit",
       "http://127.0.0.1:4317/api/service-orders",
-      "http://127.0.0.1:4317/api/service-orders/service-order-1/quotes",
-      "http://127.0.0.1:4317/api/service-orders/service-order-1/execution",
-      "http://127.0.0.1:4317/api/service-orders/service-order-1/delivery-document",
     ]);
     expect(fetchCalls.map(([, init]) => init?.method)).toEqual([
       "POST",
-      "PUT",
-      "POST",
-      "PUT",
       "POST",
       "POST",
-      "POST",
-      "POST",
-      "PATCH",
       "POST",
     ]);
+  });
+
+  it("Q13: methods outside field capture and intake never reach the local server", async () => {
+    const fetchCalls: Array<[RequestInfo | URL, RequestInit | undefined]> = [];
+    const fetchMock: typeof fetch = async (input, init) => {
+      fetchCalls.push([input, init]);
+      const url = new URL(String(input));
+
+      if (url.origin !== "https://api.example.test") {
+        throw new Error(`Unexpected local request: ${url.toString()}`);
+      }
+
+      return Response.json({ ok: true, data: { id: "cloud-1" } });
+    };
+    const client = createDesktopHybridApiClient({
+      cloud: {
+        baseUrl: "https://api.example.test",
+        fetch: fetchMock,
+      },
+      local: {
+        baseUrl: "http://127.0.0.1:4317",
+        tokenProvider: () => "local-token",
+        fetch: fetchMock,
+      },
+    });
+
+    await client.customers.create({
+      name: "Cliente",
+      email: "cliente@example.test",
+      phone: "555",
+      taxId: "123",
+    });
+    await client.customers.update(1, { name: "Cliente atualizado" });
+    await client.assets.update(1, { name: "Ativo atualizado" });
+    await client.serviceOrders.createQuote("service-order-1", { items: [] });
+    await client.serviceOrders.saveExecution("service-order-1", {
+      technicalNotes: "Execução",
+    });
+    await client.dashboard.getStats();
+    await client.services.list({ page: 1, limit: 20 });
+
+    expect(
+      fetchCalls.every(
+        ([input]) =>
+          new URL(String(input)).origin === "https://api.example.test",
+      ),
+    ).toBe(true);
+    expect(fetchCalls).toHaveLength(7);
   });
 
   it("routes approved desktop parity reads to the cloud until local bootstrap completes", async () => {
@@ -2930,11 +2957,9 @@ describe("desktop hybrid runtime adapter", () => {
       },
     });
 
-    await client.dashboard.getStats();
     await client.customers.list({ page: 1, limit: 20 });
     await client.assets.list({ page: 1, limit: 20 });
     await client.assetTypes.list();
-    await client.services.list({ page: 1, limit: 20 });
     await client.methods.list({ page: 1, limit: 20 });
     await client.standards.list({ page: 1, limit: 20 });
     await client.environmentalLimits.list();
@@ -2943,11 +2968,9 @@ describe("desktop hybrid runtime adapter", () => {
 
     expect(fetchCalls.map(([input]) => String(input))).toEqual([
       "http://127.0.0.1:4317/api/local/session",
-      "https://api.example.test/api/dashboard/stats",
       "https://api.example.test/api/customers?page=1&limit=20",
       "https://api.example.test/api/assets?page=1&limit=20",
       "https://api.example.test/api/asset-types",
-      "https://api.example.test/api/services?page=1&limit=20",
       "https://api.example.test/api/methods?page=1&limit=20",
       "https://api.example.test/api/standards?page=1&limit=20",
       "https://api.example.test/api/environmental-limits",
@@ -3032,14 +3055,11 @@ describe("desktop hybrid runtime adapter", () => {
       },
     });
 
-    await client.dashboard.getStats();
     await client.customers.list({ page: 1, limit: 20 });
     await client.customers.get(1);
     await client.assets.list({ page: 1, limit: 20 });
     await client.assets.get(1);
     await client.assetTypes.list();
-    await client.services.list({ page: 1, limit: 20 });
-    await client.services.get(1);
     await client.methods.list({ page: 1, limit: 20 });
     await client.methods.get(1);
     await client.standards.list({ page: 1, limit: 20 });
@@ -3056,15 +3076,12 @@ describe("desktop hybrid runtime adapter", () => {
 
     expect(fetchCalls.map(([input]) => String(input))).toEqual([
       "http://127.0.0.1:4317/api/local/session",
-      "http://127.0.0.1:4317/api/dashboard/stats",
-      "http://127.0.0.1:4317/api/local/sync/retry",
       "http://127.0.0.1:4317/api/customers?page=1&limit=20",
+      "http://127.0.0.1:4317/api/local/sync/retry",
       "http://127.0.0.1:4317/api/customers/1",
       "http://127.0.0.1:4317/api/assets?page=1&limit=20",
       "http://127.0.0.1:4317/api/assets/1",
       "http://127.0.0.1:4317/api/asset-types",
-      "http://127.0.0.1:4317/api/services?page=1&limit=20",
-      "http://127.0.0.1:4317/api/services/1",
       "http://127.0.0.1:4317/api/methods?page=1&limit=20",
       "http://127.0.0.1:4317/api/methods/1",
       "http://127.0.0.1:4317/api/standards?page=1&limit=20",
