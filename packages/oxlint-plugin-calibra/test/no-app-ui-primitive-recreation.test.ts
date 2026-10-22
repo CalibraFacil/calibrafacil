@@ -46,4 +46,12 @@ describe("calibra/no-app-ui-primitive-recreation (real oxlint)", () => {
       "apps/web/src/components/button.tsx": "export const Button = 1;\n",
     });
   });
+
+  it("REQ-UI-4: leaves apps outside web/portal (the marketing site) alone", async () => {
+    await expectClean(RULE, {
+      "apps/site/src/components/ui/button.tsx": "export const Button = 1;\n",
+      "apps/site/src/components/hero.tsx":
+        'import { Button } from "@/components/ui/button";\nexport const Hero = Button;\n',
+    });
+  });
 });

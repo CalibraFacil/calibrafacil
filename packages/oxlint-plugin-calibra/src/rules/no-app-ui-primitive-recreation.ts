@@ -21,8 +21,13 @@ import {
 // Components only one app renders (web's currency-input, timeline, ...) may
 // stay in that app's components/ui: only names the package owns are flagged.
 // The list is read from packages/ui/src/components, so it cannot go stale.
+//
+// Only the two product frontends share the package. apps/site (marketing) has
+// its own small design system and is not covered.
 
-const APP_UI_FILE = /(^|\/)apps\/[^/]+\/src\/components\/ui\/([^/]+)\.tsx?$/;
+const APP_UI_FILE =
+  /(^|\/)apps\/(?:web|portal)\/src\/components\/ui\/([^/]+)\.tsx?$/;
+const SHARED_UI_APP = /(^|\/)apps\/(?:web|portal)\//;
 const APP_UI_IMPORT = /^@\/components\/ui\/([^/]+)$/;
 
 const COMPONENTS_DIR = new URL("../../../ui/src/components/", import.meta.url);
@@ -52,6 +57,7 @@ const rule: RuleModule = {
   },
   create(context: RuleContext) {
     const filename = normalizedFilename(context);
+    if (!SHARED_UI_APP.test(filename)) return {};
 
     return {
       Program(node: unknown) {
