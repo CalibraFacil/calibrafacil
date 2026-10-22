@@ -12,6 +12,7 @@
  * storage URL; the handlers still `satisfies` the contract type).
  */
 
+import { insertJobs, setJobStatus } from "../../test/integration/job-fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { z } from "zod";
 import {
@@ -220,22 +221,19 @@ async function seedJob(
   jobId: string,
   status: typeof calibrationJob.$inferInsert.status,
 ) {
-  const [row] = await db
-    .insert(calibrationJob)
-    .values({
-      jobId,
-      certificateName: jobId,
-      organizationId: ORG,
-      unitId: lab.unitId,
-      customerId: lab.customerId,
-      assetId: lab.assetId,
-      serviceId: lab.serviceId,
-      createdBy: TECHNICIAN,
-      technicianId: TECHNICIAN,
-      status,
-      methodSnapshot: executableMethodSnapshot(),
-    })
-    .returning({ id: calibrationJob.id });
+  const [row] = await insertJobs({
+    jobId,
+    certificateName: jobId,
+    organizationId: ORG,
+    unitId: lab.unitId,
+    customerId: lab.customerId,
+    assetId: lab.assetId,
+    serviceId: lab.serviceId,
+    createdBy: TECHNICIAN,
+    technicianId: TECHNICIAN,
+    status,
+    methodSnapshot: executableMethodSnapshot(),
+  });
   if (!row) throw new Error("seedJob: insert failed");
   return row.id;
 }
@@ -351,10 +349,9 @@ describe("jobs endpoints: real responses honor the contract schemas (REQ-TC-5)",
     expect(generating.approverName).toBe("Aprovador");
 
     // The certificate worker is not part of this test: finish the approval.
-    await db
-      .update(calibrationJob)
-      .set({ status: "APPROVED", certificateUrl: "/certificates/x.pdf" })
-      .where(eq(calibrationJob.id, id));
+    await setJobStatus(id, "APPROVED", {
+      certificateUrl: "/certificates/x.pdf",
+    });
     const amended = await parsedBody(
       await post(`/${id}/amend`, {
         reason: "Correção do valor de referência",

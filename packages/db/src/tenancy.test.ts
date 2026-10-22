@@ -247,7 +247,7 @@ describe("REQ-ORG-2: organization_id is NOT NULL, RESTRICT, indexed", () => {
     );
   });
 
-  it("REQ-ORG-2: the migration is journaled last with the largest timestamp", () => {
+  it("REQ-ORG-2: the migration is journaled with a timestamp larger than every earlier entry", () => {
     const journal: unknown = JSON.parse(read("../drizzle/meta/_journal.json"));
     const entries =
       typeof journal === "object" && journal !== null && "entries" in journal
@@ -262,11 +262,14 @@ describe("REQ-ORG-2: organization_id is NOT NULL, RESTRICT, indexed", () => {
         ? { when: Number(entry.when), tag: String(entry.tag) }
         : { when: Number.NaN, tag: "" },
     );
-    expect(rows.at(-1)?.tag).toBe("0118_organization_id_everywhere");
+    const index = rows.findIndex(
+      (row) => row.tag === "0118_organization_id_everywhere",
+    );
+    expect(index).toBeGreaterThan(0);
     // drizzle applies a migration only when its `when` is newer than the last
     // applied one: the new entry must be larger than every earlier one.
-    const earlier = rows.slice(0, -1).map((row) => row.when);
-    expect(rows.at(-1)?.when).toBeGreaterThan(Math.max(...earlier));
+    const earlier = rows.slice(0, index).map((row) => row.when);
+    expect(rows[index]?.when).toBeGreaterThan(Math.max(...earlier));
   });
 });
 

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { insertJobs } from "../../test/integration/job-fixtures";
 import { reportsRouter } from "./reports";
 import { db } from "@calibra-facil/db";
 import {
@@ -7,7 +8,6 @@ import {
   assetType,
   asset,
   service,
-  calibrationJob,
 } from "@calibra-facil/db/schema";
 import { sql } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
@@ -148,23 +148,20 @@ async function seedCalibrationJob(params: {
   dueDate?: Date;
 }): Promise<number> {
   const counter = Math.floor(Math.random() * 9999999);
-  const [row] = await db
-    .insert(calibrationJob)
-    .values({
-      jobId: `JOB-${params.organizationId.slice(0, 4)}-${counter}`,
-      organizationId: params.organizationId,
-      unitId: params.unitId,
-      customerId: params.customerId,
-      assetId: params.assetId,
-      serviceId: params.serviceId,
-      createdBy: params.createdBy,
-      methodSnapshot: {},
-      status: params.status ?? "DRAFT",
-      approvedAt: params.approvedAt ?? null,
-      rejectedAt: params.rejectedAt ?? null,
-      dueDate: params.dueDate ?? null,
-    })
-    .returning({ id: calibrationJob.id });
+  const [row] = await insertJobs({
+    jobId: `JOB-${params.organizationId.slice(0, 4)}-${counter}`,
+    organizationId: params.organizationId,
+    unitId: params.unitId,
+    customerId: params.customerId,
+    assetId: params.assetId,
+    serviceId: params.serviceId,
+    createdBy: params.createdBy,
+    methodSnapshot: {},
+    status: params.status ?? "DRAFT",
+    approvedAt: params.approvedAt ?? null,
+    rejectedAt: params.rejectedAt ?? null,
+    dueDate: params.dueDate ?? null,
+  });
 
   if (!row) throw new Error("seedCalibrationJob: insert failed");
   return row.id;

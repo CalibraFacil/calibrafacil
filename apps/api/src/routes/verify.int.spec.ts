@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { insertJobs } from "../../test/integration/job-fixtures";
 import { verifyRouter } from "./verify";
 import { db } from "@calibra-facil/db";
 import {
@@ -194,27 +195,24 @@ async function seedVerifiableCert(params: {
     .returning({ id: service.id });
   if (!serviceRow) throw new Error("seedVerifiableCert: service insert failed");
 
-  const [jobRow] = await db
-    .insert(calibrationJob)
-    .values({
-      jobId,
-      organizationId: orgId,
-      unitId: unit.id,
-      customerId: customerRow.id,
-      assetId: assetRow.id,
-      serviceId: serviceRow.id,
-      methodSnapshot: { accreditedScope: methodAccreditedScope },
-      status,
-      verificationToken: token,
-      createdBy: userId,
-      performedAt: NOW,
-      approvedAt: status === "APPROVED" ? (params.approvedAt ?? NOW) : null,
-      signatureMetadata: params.signatureMetadata,
-      signatureVerdict: params.signatureVerdict,
-      supersedesId: params.supersedesId,
-      supersededById: params.supersededById,
-    })
-    .returning({ id: calibrationJob.id });
+  const [jobRow] = await insertJobs({
+    jobId,
+    organizationId: orgId,
+    unitId: unit.id,
+    customerId: customerRow.id,
+    assetId: assetRow.id,
+    serviceId: serviceRow.id,
+    methodSnapshot: { accreditedScope: methodAccreditedScope },
+    status,
+    verificationToken: token,
+    createdBy: userId,
+    performedAt: NOW,
+    approvedAt: status === "APPROVED" ? (params.approvedAt ?? NOW) : null,
+    signatureMetadata: params.signatureMetadata,
+    signatureVerdict: params.signatureVerdict,
+    supersedesId: params.supersedesId,
+    supersededById: params.supersededById,
+  });
   if (!jobRow) throw new Error("seedVerifiableCert: job insert failed");
 
   return {

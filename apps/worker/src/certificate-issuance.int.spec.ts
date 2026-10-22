@@ -188,10 +188,16 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+// These specs are about a job that left GENERATING_PDF behind the worker's back
+// (GENERATING_PDF -> CANCELED is not a move of the state machine, so the database
+// refuses it): the audited-repair hatch, for this transaction only (migration 0119).
 async function setStatus(jobId: number, status: string) {
-  await db.execute(
-    sql`UPDATE calibration_job SET status = ${status} WHERE id = ${jobId}`,
-  );
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`set local calibra.allow_status_repair = 'on'`);
+    await tx.execute(
+      sql`UPDATE calibration_job SET status = ${status} WHERE id = ${jobId}`,
+    );
+  });
 }
 
 describe("fixed-layout certificate issuance (worker real-DB integration)", () => {

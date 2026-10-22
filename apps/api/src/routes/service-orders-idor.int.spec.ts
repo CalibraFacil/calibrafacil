@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { insertJobs } from "../../test/integration/job-fixtures";
 import { organizationOf } from "../../test/integration/organization-of";
 import { serviceOrdersRouter } from "./service-orders";
 import { db } from "@calibra-facil/db";
 import {
   asset,
   assetType,
-  calibrationJob,
   customer,
   organization,
   organizationUnit,
@@ -197,21 +197,18 @@ async function seedCalibrationJob(params: {
   serviceId: number;
   createdBy: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(calibrationJob)
-    .values({
-      jobId: params.jobId,
-      organizationId: params.organizationId,
-      unitId: params.unitId,
-      customerId: params.customerId,
-      assetId: params.assetId,
-      serviceId: params.serviceId,
-      createdBy: params.createdBy,
-      status: "APPROVED",
-      methodSnapshot: minimalMethodSnapshot(),
-      certificateName: params.jobId,
-    })
-    .returning({ id: calibrationJob.id });
+  const [row] = await insertJobs({
+    jobId: params.jobId,
+    organizationId: params.organizationId,
+    unitId: params.unitId,
+    customerId: params.customerId,
+    assetId: params.assetId,
+    serviceId: params.serviceId,
+    createdBy: params.createdBy,
+    status: "APPROVED",
+    methodSnapshot: minimalMethodSnapshot(),
+    certificateName: params.jobId,
+  });
   if (!row) throw new Error("seedCalibrationJob: insert failed");
   return row.id;
 }

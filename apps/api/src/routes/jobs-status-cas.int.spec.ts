@@ -14,12 +14,10 @@
  *   REQ-CAS-4  the happy path is unchanged
  */
 
+import { setJobStatus } from "../../test/integration/job-fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { jobsRouter } from "./jobs";
-import { db } from "@calibra-facil/db";
-import { calibrationJob } from "@calibra-facil/db/schema";
 import type { JobStatus } from "@calibra-facil/db/schema";
-import { eq } from "drizzle-orm";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
@@ -56,10 +54,9 @@ async function seedWorld(from: JobStatus) {
     unitId: orgA.unitId,
     createdBy: orgA.userId,
   });
-  await db
-    .update(calibrationJob)
-    .set({ status: from, methodSnapshot: executableMethodSnapshot() })
-    .where(eq(calibrationJob.id, jobId));
+  await setJobStatus(jobId, from, {
+    methodSnapshot: executableMethodSnapshot(),
+  });
   loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
   return { orgA, orgB, jobId };
 }
