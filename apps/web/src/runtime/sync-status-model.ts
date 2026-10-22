@@ -4,6 +4,8 @@ import type {
   SyncStatusSnapshot,
 } from '@calibra-facil/contracts'
 
+import { getDeadEventsBannerLabel } from '@/runtime/sync-dead-events'
+
 export type DesktopSyncAvailabilitySnapshot = {
   isDesktop: boolean
   state: SyncState
@@ -14,6 +16,8 @@ export type DataSourceIndicatorSnapshot = DesktopSyncAvailabilitySnapshot & {
   pendingOutboxCount: number
   /** Part of `pendingOutboxCount` recorded by a different signed-in user. */
   pendingForOtherUserCount?: number
+  /** Events the cloud refused for good: not pending, waiting for a decision. */
+  deadOutboxCount?: number
   conflictCount: number
 }
 
@@ -77,6 +81,17 @@ export function getDataSourceIndicatorModel(
       variant: 'secondary',
       className: 'text-blue-700 dark:text-blue-300',
       dotClassName: 'bg-blue-500',
+    }
+  }
+
+  const deadLabel = getDeadEventsBannerLabel(sync.deadOutboxCount)
+  if (deadLabel) {
+    return {
+      label: 'Recusadas',
+      title: 'Alterações recusadas pela nuvem',
+      description: `${deadLabel} Revise-as em Conflitos de sincronização: descarte ou tente novamente.`,
+      variant: 'destructive',
+      dotClassName: 'bg-destructive',
     }
   }
 

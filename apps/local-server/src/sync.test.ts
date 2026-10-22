@@ -717,18 +717,21 @@ describe("createLocalSyncRuntime", () => {
 
     const status = await runtime.runPushSync();
 
-    expect(status.state).toBe("error");
-    expect(status.pendingOutboxCount).toBe(1);
+    // REQ-OB-1: an unsupported operation is refused for good, so it leaves the
+    // push queue (dead) instead of being retried every cycle, and is counted.
+    expect(status.state).toBe("idle");
+    expect(status.pendingOutboxCount).toBe(0);
+    expect(status.deadOutboxCount).toBe(1);
     const rows = database
       .prepare("SELECT status, last_error FROM outbox")
       .all();
     expect(rows).toEqual([
       expect.objectContaining({
-        status: "failed",
+        status: "dead",
         last_error: expect.stringContaining("UNSUPPORTED_SYNC_OPERATION"),
       }),
     ]);
-    expect(listPendingOutboxEvents(database)).toHaveLength(1);
+    expect(listPendingOutboxEvents(database)).toHaveLength(0);
     database.close();
   });
 });

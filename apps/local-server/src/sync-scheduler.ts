@@ -245,7 +245,12 @@ export function createLocalSyncScheduler(
     waiters = [];
 
     try {
-      const snapshot = await runtime.runPushSync();
+      // Events backing off after a failure wait out their delay in scheduled
+      // runs; a deliberate trigger (the user, a reconnect, process start) tries
+      // them again now, after everything that is due.
+      const snapshot = await runtime.runPushSync({
+        includeDeferred: isDeliberateTrigger(lastTrigger),
+      });
 
       // A resolved run is not necessarily a successful one. `runPushSync`
       // resolves with `state: "error"` when the cloud accepted the request but
@@ -293,9 +298,12 @@ export function createLocalSyncScheduler(
     // the queue keeps its cloud actions blocked.
     // (Another user's queued events do not count: they wait for their author
     // and draining would spin on them.)
+    // (Nor do events waiting out a retry delay: they are not due, and a run
+    // would find nothing to send.)
     if (
       (lastSnapshot?.pendingOutboxCount ?? 0) -
-        (lastSnapshot?.pendingForOtherUserCount ?? 0) >
+        (lastSnapshot?.pendingForOtherUserCount ?? 0) -
+        (lastSnapshot?.deferredOutboxCount ?? 0) >
       0
     ) {
       schedule(drainIntervalMs, "poll");
@@ -303,6 +311,12 @@ export function createLocalSyncScheduler(
     }
 
     schedule(pollIntervalMs, "poll");
+  }
+
+  function isDeliberateTrigger(trigger: SyncTrigger | null) {
+    return (
+      trigger === "manual" || trigger === "reconnect" || trigger === "startup"
+    );
   }
 
   function backoffDelay() {

@@ -1,5 +1,9 @@
 import type { SyncPushResponse } from "@calibra-facil/contracts";
-import { stringifySyncConflictPayload } from "@calibra-facil/contracts";
+import {
+  classifyOutboxRejection,
+  isRegulatedOutboxOperation,
+  stringifySyncConflictPayload,
+} from "@calibra-facil/contracts";
 import type { LocalDatabase } from "./database";
 import { releaseSettledSkippedRows } from "./skipped-rows";
 import {
@@ -194,7 +198,13 @@ WHERE outbox.status IN ('pending', 'failed')
     OR NOT ${RECORDED_ACTOR_SQL}
     OR domain_events.actor_user_id = @actorUserId
   )
-ORDER BY outbox.created_at ASC
+ORDER BY
+  CASE
+    WHEN outbox.next_attempt_at IS NOT NULL AND outbox.next_attempt_at > @now
+      THEN 1
+    ELSE 0
+  END ASC,
+  outbox.created_at ASC
 LIMIT @limit
 `,
     )
@@ -219,6 +229,208 @@ LIMIT @limit
     baseUpdatedAt: row.remote_base_updated_at,
   }));
 }
+
+/**
+ * An event the cloud refused for good (see `@calibra-facil/contracts` outbox-rejections). It is not
+ * pending: nothing selects it, and it waits for a person to discard or
+ * re-queue it.
+ */
+export type DeadOutboxEvent = {
+  eventId: string;
+  entityType: string;
+  entityId: string;
+  operation: string;
+  errorCode: string | null;
+  errorMessage: string | null;
+  attemptCount: number;
+  occurredAt: string;
+  deadAt: string | null;
+  /** Carries calibration readings: discarding it leaves them only on this computer. */
+  regulated: boolean;
+};
+
+/** Pending events that are waiting out a retry delay, so not due yet. */
+export function countDeferredOutbox(database: LocalDatabase) {
+  const row = database
+    .prepare<{ now: string }, { total: number }>(
+      `
+SELECT COUNT(*) AS total
+FROM outbox
+WHERE status IN ('pending', 'failed')
+  AND next_attempt_at IS NOT NULL
+  AND next_attempt_at > @now
+`,
+    )
+    .get({ now: new Date().toISOString() });
+
+  return row?.total ?? 0;
+}
+
+export function countDeadOutbox(database: LocalDatabase) {
+  const row = database
+    .prepare<
+      [],
+      { total: number }
+    >("SELECT COUNT(*) AS total FROM outbox WHERE status = 'dead'")
+    .get();
+
+  return row?.total ?? 0;
+}
+
+export function listDeadOutboxEvents(
+  database: LocalDatabase,
+  options: { limit?: number } = {},
+): DeadOutboxEvent[] {
+  const limit = Math.max(1, Math.min(options.limit ?? 100, 500));
+
+  return database
+    .prepare<{ limit: number }, DeadOutboxEventRow>(
+      `${DEAD_OUTBOX_SELECT}
+WHERE outbox.status = 'dead'
+ORDER BY outbox.dead_at DESC, outbox.created_at DESC
+LIMIT @limit`,
+    )
+    .all({ limit })
+    .map(mapDeadOutboxEvent);
+}
+
+/**
+ * Takes a dead event out of the queue for good. The row stays, as `discarded`
+ * with its code, message and time, and the event stays in `domain_events`: that
+ * is the local audit trace. Only a dead event can be discarded. The local data
+ * the event described is not touched.
+ */
+export function discardDeadOutboxEvent(
+  database: LocalDatabase,
+  eventId: string,
+): DeadOutboxEvent | null {
+  const existing = database
+    .prepare<{ eventId: string }, DeadOutboxEventRow>(
+      `${DEAD_OUTBOX_SELECT}
+WHERE outbox.status = 'dead' AND outbox.event_id = @eventId`,
+    )
+    .get({ eventId });
+  if (!existing) return null;
+
+  database.transaction(() => {
+    database
+      .prepare(
+        `
+UPDATE outbox
+SET status = 'discarded',
+  discarded_at = @now,
+  next_attempt_at = NULL
+WHERE event_id = @eventId AND status = 'dead'
+`,
+      )
+      .run({ eventId, now: new Date().toISOString() });
+    database
+      .prepare(
+        `
+UPDATE domain_events
+SET sync_state = 'discarded'
+WHERE event_id = @eventId
+`,
+      )
+      .run({ eventId });
+
+    // Discarding gives up the local change: a pull that skipped the row while
+    // the change was queued can bring the cloud's version in now.
+    releaseSettledSkippedRows(database);
+  })();
+
+  return mapDeadOutboxEvent(existing);
+}
+
+/**
+ * Sends a dead event through the queue again, for when whatever the cloud
+ * refused it over has been fixed (a renewed standard, a granted competence).
+ * Only a dead event can be re-queued; one refused again goes back to dead.
+ */
+export function requeueDeadOutboxEvent(
+  database: LocalDatabase,
+  eventId: string,
+): boolean {
+  let requeued = false;
+
+  database.transaction(() => {
+    const result = database
+      .prepare(
+        `
+UPDATE outbox
+SET status = 'pending',
+  last_error = NULL,
+  error_code = NULL,
+  dead_at = NULL,
+  next_attempt_at = NULL
+WHERE event_id = @eventId AND status = 'dead'
+`,
+      )
+      .run({ eventId });
+    if (result.changes === 0) return;
+
+    database
+      .prepare(
+        `
+UPDATE domain_events
+SET sync_state = 'pending'
+WHERE event_id = @eventId
+`,
+      )
+      .run({ eventId });
+    requeued = true;
+  })();
+
+  return requeued;
+}
+
+const DEAD_OUTBOX_SELECT = `
+SELECT
+  outbox.event_id,
+  outbox.attempt_count,
+  outbox.last_error,
+  outbox.error_code,
+  outbox.dead_at,
+  domain_events.aggregate_kind,
+  domain_events.aggregate_id,
+  domain_events.event_type,
+  domain_events.occurred_at
+FROM outbox
+INNER JOIN domain_events ON domain_events.event_id = outbox.event_id`;
+
+function mapDeadOutboxEvent(row: DeadOutboxEventRow): DeadOutboxEvent {
+  const prefix = row.error_code === null ? null : `${row.error_code}: `;
+
+  return {
+    eventId: row.event_id,
+    entityType: row.aggregate_kind,
+    entityId: row.aggregate_id,
+    operation: row.event_type,
+    errorCode: row.error_code,
+    errorMessage:
+      row.last_error !== null &&
+      prefix !== null &&
+      row.last_error.startsWith(prefix)
+        ? row.last_error.slice(prefix.length)
+        : row.last_error,
+    attemptCount: row.attempt_count,
+    occurredAt: row.occurred_at,
+    deadAt: row.dead_at,
+    regulated: isRegulatedOutboxOperation(row.event_type),
+  };
+}
+
+type DeadOutboxEventRow = {
+  event_id: string;
+  attempt_count: number;
+  last_error: string | null;
+  error_code: string | null;
+  dead_at: string | null;
+  aggregate_kind: string;
+  aggregate_id: string;
+  event_type: string;
+  occurred_at: string;
+};
 
 export function markOutboxEventsFailedForRetry(
   database: LocalDatabase,
@@ -331,6 +543,44 @@ WHERE event_id = @eventId
     );
 
     for (const [eventId, rejection] of rejectedById) {
+      const attemptCount =
+        database
+          .prepare<
+            { eventId: string },
+            { attempt_count: number }
+          >("SELECT attempt_count FROM outbox WHERE event_id = @eventId")
+          .get({ eventId })?.attempt_count ?? 0;
+      const lastError = `${rejection.code}: ${rejection.reason}`;
+
+      if (classifyOutboxRejection(rejection.code) === "permanent") {
+        // Never going to be accepted as it stands: park it where nothing
+        // selects it, keeping the code and message for the person who decides.
+        database
+          .prepare(
+            `
+UPDATE outbox
+SET status = 'dead',
+  attempt_count = attempt_count + 1,
+  last_error = @lastError,
+  error_code = @errorCode,
+  dead_at = @now,
+  next_attempt_at = NULL
+WHERE event_id = @eventId
+`,
+          )
+          .run({ eventId, lastError, errorCode: rejection.code, now });
+        database
+          .prepare(
+            `
+UPDATE domain_events
+SET sync_state = 'dead'
+WHERE event_id = @eventId
+`,
+          )
+          .run({ eventId });
+        continue;
+      }
+
       database
         .prepare(
           `
@@ -338,13 +588,18 @@ UPDATE outbox
 SET status = 'failed',
   attempt_count = attempt_count + 1,
   last_error = @lastError,
-  next_attempt_at = NULL
+  error_code = @errorCode,
+  next_attempt_at = @nextAttemptAt
 WHERE event_id = @eventId
 `,
         )
         .run({
           eventId,
-          lastError: `${rejection.code}: ${rejection.reason}`,
+          lastError,
+          errorCode: rejection.code,
+          nextAttemptAt: new Date(
+            Date.now() + getOutboxRetryDelayMs(attemptCount),
+          ).toISOString(),
         });
       database
         .prepare(

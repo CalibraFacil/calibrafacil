@@ -40,9 +40,13 @@ import {
   listLocalStandards,
   adoptLegacyLocalDatabase,
   assertLocalDatabaseOwner,
+  countDeadOutbox,
   countPendingOutbox,
+  discardDeadOutboxEvent,
+  listDeadOutboxEvents,
   listSyncConflicts,
   openLocalDatabase,
+  requeueDeadOutboxEvent,
   resolveSyncConflict,
   saveLocalServiceOrderExecutionNotes,
   saveLocalJobExecution,
@@ -68,6 +72,8 @@ import {
 import {
   localAttachmentSchema,
   localAttachmentsResponseSchema,
+  localDeadOutboxEventSchema,
+  localDeadOutboxEventsResponseSchema,
   localDiagnosticsSchema,
   localSessionSnapshotResponseSchema,
   localSyncConflictResolutionSchema,
@@ -537,6 +543,49 @@ export function createLocalServerRuntime(
       data: conflict,
       syncStatus: syncRuntime.getStatus(),
       cloudResolution,
+    });
+  });
+
+  // Events the cloud refused for good. They are out of the push queue; the user
+  // decides here whether to discard one (the local data stays) or to send it
+  // again once whatever the cloud objected to has been fixed.
+  app.get("/api/local/sync/dead-events", (c) => {
+    return c.json(
+      localDeadOutboxEventsResponseSchema.parse({
+        data: listDeadOutboxEvents(database, {
+          limit: Number(c.req.query("limit") ?? "100"),
+        }),
+        total: countDeadOutbox(database),
+      }),
+    );
+  });
+
+  app.post("/api/local/sync/dead-events/:eventId/discard", (c) => {
+    const discarded = discardDeadOutboxEvent(database, c.req.param("eventId"));
+
+    if (!discarded) {
+      return c.json({ error: "Evento recusado nao encontrado" }, 404);
+    }
+
+    return c.json({
+      data: localDeadOutboxEventSchema.parse(discarded),
+      syncStatus: syncRuntime.getStatus(),
+    });
+  });
+
+  app.post("/api/local/sync/dead-events/:eventId/requeue", (c) => {
+    const eventId = c.req.param("eventId");
+
+    if (!requeueDeadOutboxEvent(database, eventId)) {
+      return c.json({ error: "Evento recusado nao encontrado" }, 404);
+    }
+
+    // The queue has work again: let a running loop send it.
+    nudgeScheduler("local-mutation");
+
+    return c.json({
+      data: { eventId },
+      syncStatus: syncRuntime.getStatus(),
     });
   });
 

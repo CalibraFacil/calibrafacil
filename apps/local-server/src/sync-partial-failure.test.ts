@@ -754,7 +754,8 @@ INSERT INTO outbox (
       requestedUrls.filter((url) => url.includes("certificate-pdfs")),
     ).toEqual([]);
     expect(requestedUrls).toContain("https://api.example.test/api/sync/push");
-    expect(readOutboxStatus(database, "event-legacy-cert")).toBe("failed");
+    // REQ-OB-1: refused for good, so dead (kept, never retried), not failed.
+    expect(readOutboxStatus(database, "event-legacy-cert")).toBe("dead");
 
     database.close();
   });

@@ -21,5 +21,17 @@ export function createCloudSyncApi(): SyncApi {
     async resolveConflict() {
       throw new Error("Conflitos locais estão disponíveis apenas no desktop");
     },
+    async listDeadEvents() {
+      return {
+        data: [],
+        total: 0,
+      };
+    },
+    async discardDeadEvent() {
+      throw new Error("A fila local de envio existe apenas no desktop");
+    },
+    async requeueDeadEvent() {
+      throw new Error("A fila local de envio existe apenas no desktop");
+    },
   };
 }
