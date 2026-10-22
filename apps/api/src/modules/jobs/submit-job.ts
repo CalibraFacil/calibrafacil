@@ -1,5 +1,8 @@
 import { db } from "@calibra-facil/db";
-import { appendJobEvent } from "@calibra-facil/db/job-events";
+import {
+  appendJobEvent,
+  type JobExecutionChanges,
+} from "@calibra-facil/db/job-events";
 import {
   calibrationJob,
   referenceStandard,
@@ -698,96 +701,91 @@ async function runJobExecution(
       .returning();
     if (!row) return null;
 
-    await appendJobEvent(tx, {
-      action: command.command,
+    const executionChanges: JobExecutionChanges = {
+      ...jobActorAuditFields(actor),
+      // Evidence that the frozen compiled method was re-pointed at the
+      // method's current compilation (same definition, new engine).
+      methodSnapshotEngine: reconciledMethod.adopted
+        ? {
+            old: {
+              engineVersion: existing.methodSnapshot.engineVersion,
+              methodFingerprint: existing.methodSnapshot.methodFingerprint,
+            },
+            new: {
+              engineVersion: nextMethodSnapshot.engineVersion,
+              methodFingerprint: nextMethodSnapshot.methodFingerprint,
+            },
+          }
+        : undefined,
+      status:
+        isSubmit || existing.status !== nextStatus
+          ? { old: existing.status, new: nextStatus }
+          : undefined,
+      data: { old: existing.data, new: nextData },
+      results: { old: existing.results, new: nextResults },
+      // What the client claimed its results were; they were not used.
+      ...(command.clientResults
+        ? actor.kind === "desktop_session"
+          ? { desktopSubmittedResults: command.clientResults }
+          : { clientSubmittedResults: command.clientResults }
+        : {}),
+      // §7.8.2.1(n) is printed on the certificate, so a change to it is
+      // evidence an assessor may ask about. Logged only when it moved.
+      methodDeviations:
+        nextDeviations !== undefined &&
+        nextDeviations !== existing.methodDeviations
+          ? { old: existing.methodDeviations, new: nextDeviations }
+          : undefined,
+      officialExecution: {
+        methodFingerprint: officialExecution.execution.methodFingerprint,
+        inputFingerprint: officialExecution.execution.inputFingerprint,
+        calculationFingerprint:
+          officialExecution.execution.calculationFingerprint,
+        resultFingerprint: officialExecution.execution.resultFingerprint,
+      },
+      standardsSnapshot: standardsTouched
+        ? { old: existing.standardsSnapshot, new: nextStandardsSnapshot }
+        : undefined,
+      environmentalSnapshot: environmentalTouched
+        ? {
+            old: existing.environmentalSnapshot,
+            new: nextEnvironmentalSnapshot,
+          }
+        : undefined,
+      calibrationLocationSnapshot: locationTouched
+        ? {
+            old: existing.calibrationLocationSnapshot,
+            new: nextCalibrationLocationSnapshot,
+          }
+        : undefined,
+      calibrationPhaseSnapshot: phasesTouched
+        ? {
+            old: existing.calibrationPhaseSnapshot,
+            new: nextCalibrationPhaseSnapshot,
+          }
+        : undefined,
+      unitConversions:
+        normalizedData.conversions.length > 0
+          ? normalizedData.conversions
+          : undefined,
+      assetSnapshot: assetResult.built
+        ? { old: null, new: nextAssetSnapshot }
+        : undefined,
+      // Every standard of the final snapshot was judged at the day the work
+      // is recorded as performed, not at the day it is submitted.
+      standardsJudgedAt:
+        standardsJudgement && standardsJudgement.standardIds.length > 0
+          ? {
+              performedAt: (performedAt ?? now).toISOString(),
+              standardIds: standardsJudgement.standardIds,
+              validOnlyBecauseBackdated: backdatedStandardNames,
+            }
+          : undefined,
+    };
+    const eventBase = {
       organizationId,
       jobId: existing.id,
-      actor: { kind: "user", userId: actor.userId },
-      changes: {
-        ...jobActorAuditFields(actor),
-        // Evidence that the frozen compiled method was re-pointed at the
-        // method's current compilation (same definition, new engine).
-        methodSnapshotEngine: reconciledMethod.adopted
-          ? {
-              old: {
-                engineVersion: existing.methodSnapshot.engineVersion,
-                methodFingerprint: existing.methodSnapshot.methodFingerprint,
-              },
-              new: {
-                engineVersion: nextMethodSnapshot.engineVersion,
-                methodFingerprint: nextMethodSnapshot.methodFingerprint,
-              },
-            }
-          : undefined,
-        status:
-          isSubmit || existing.status !== nextStatus
-            ? { old: existing.status, new: nextStatus }
-            : undefined,
-        data: { old: existing.data, new: nextData },
-        results: { old: existing.results, new: nextResults },
-        // What the client claimed its results were; they were not used.
-        ...(command.clientResults
-          ? actor.kind === "desktop_session"
-            ? { desktopSubmittedResults: command.clientResults }
-            : { clientSubmittedResults: command.clientResults }
-          : {}),
-        // §7.8.2.1(n) is printed on the certificate, so a change to it is
-        // evidence an assessor may ask about. Logged only when it moved.
-        methodDeviations:
-          nextDeviations !== undefined &&
-          nextDeviations !== existing.methodDeviations
-            ? { old: existing.methodDeviations, new: nextDeviations }
-            : undefined,
-        officialExecution: {
-          methodFingerprint: officialExecution.execution.methodFingerprint,
-          inputFingerprint: officialExecution.execution.inputFingerprint,
-          calculationFingerprint:
-            officialExecution.execution.calculationFingerprint,
-          resultFingerprint: officialExecution.execution.resultFingerprint,
-        },
-        standardsSnapshot: standardsTouched
-          ? { old: existing.standardsSnapshot, new: nextStandardsSnapshot }
-          : undefined,
-        // A draft accepted standards that are no longer valid: the evidence
-        // that the save knew, and what the submit will refuse.
-        standardsWarnings:
-          standardsWarnings.length > 0 ? standardsWarnings : undefined,
-        environmentalSnapshot: environmentalTouched
-          ? {
-              old: existing.environmentalSnapshot,
-              new: nextEnvironmentalSnapshot,
-            }
-          : undefined,
-        calibrationLocationSnapshot: locationTouched
-          ? {
-              old: existing.calibrationLocationSnapshot,
-              new: nextCalibrationLocationSnapshot,
-            }
-          : undefined,
-        calibrationPhaseSnapshot: phasesTouched
-          ? {
-              old: existing.calibrationPhaseSnapshot,
-              new: nextCalibrationPhaseSnapshot,
-            }
-          : undefined,
-        unitConversions:
-          normalizedData.conversions.length > 0
-            ? normalizedData.conversions
-            : undefined,
-        assetSnapshot: assetResult.built
-          ? { old: null, new: nextAssetSnapshot }
-          : undefined,
-        // Every standard of the final snapshot was judged at the day the work
-        // is recorded as performed, not at the day it is submitted.
-        standardsJudgedAt:
-          standardsJudgement && standardsJudgement.standardIds.length > 0
-            ? {
-                performedAt: (performedAt ?? now).toISOString(),
-                standardIds: standardsJudgement.standardIds,
-                validOnlyBecauseBackdated: backdatedStandardNames,
-              }
-            : undefined,
-      },
+      actor: { kind: "user" as const, userId: actor.userId },
       ipAddress: actor.ipAddress ?? null,
       reason: isSubmit
         ? [
@@ -809,7 +807,26 @@ async function runJobExecution(
             .filter(Boolean)
             .join(" | ") || undefined
         : undefined,
-    });
+    };
+    if (isSubmit) {
+      await appendJobEvent(tx, {
+        action: "submit",
+        ...eventBase,
+        changes: executionChanges,
+      });
+    } else {
+      await appendJobEvent(tx, {
+        action: "execute",
+        ...eventBase,
+        changes: {
+          ...executionChanges,
+          // A draft accepted standards that are no longer valid: the evidence
+          // that the save knew, and what the submit will refuse.
+          standardsWarnings:
+            standardsWarnings.length > 0 ? standardsWarnings : undefined,
+        },
+      });
+    }
     return row;
   });
   if (!updated) return { status: "concurrent_update" };
