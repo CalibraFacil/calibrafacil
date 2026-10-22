@@ -35,7 +35,7 @@ vi.mock("../background-jobs", () => ({
   resolveQueueJobType: () => "CERTIFICATE",
 }));
 
-vi.mock("../integrations", () => ({
+vi.mock("../../modules/integrations", () => ({
   runIntegrationSync: mocks.runIntegrationSync,
 }));
 

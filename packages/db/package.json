@@ -13,6 +13,7 @@
     "./records-retention": "./src/records-retention.ts",
     "./schema": "./src/schema.ts",
     "./tenancy": "./src/tenancy.ts",
+    "./testing": "./src/testing.ts",
     "./seed-asset-types": "./src/seed-asset-types.ts",
     "./seed-legal-metrology-regulations": "./src/seed-legal-metrology-regulations.ts"
   },

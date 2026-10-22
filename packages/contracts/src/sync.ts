@@ -19,13 +19,6 @@ export const syncEventSchema = z.object({
   baseUpdatedAt: z.string().nullable().optional(),
 });
 
-export const syncPushRequestSchema = z.object({
-  deviceId: z.string(),
-  clientBatchId: z.string(),
-  baseCursor: z.string().nullable(),
-  events: z.array(syncEventSchema),
-});
-
 export const syncPushResponseSchema = z.object({
   accepted: z.array(
     z.object({
@@ -252,7 +245,6 @@ export const syncConflictResolutionResponseSchema = z.object({
 });
 
 export type SyncEvent = z.infer<typeof syncEventSchema>;
-export type SyncPushRequest = z.infer<typeof syncPushRequestSchema>;
 export type SyncPushResponse = z.infer<typeof syncPushResponseSchema>;
 export type SyncBootstrapResponse = z.infer<typeof syncBootstrapResponseSchema>;
 export type LocalSessionSnapshotResponse = z.infer<

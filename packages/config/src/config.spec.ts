@@ -9,6 +9,7 @@ import {
   readDatabaseConfig,
   readJobsConfig,
   readRetentionConfig,
+  readSyncConfig,
 } from "./index";
 
 const SECRET_SENTINEL = "s3cr3t-sentinel-value-0123456789";
@@ -406,5 +407,34 @@ describe("REQ-CFG-1 other runtimes", () => {
     const error = loadFailure(() => loadWorkerConfig({}));
     expect(error.message).toMatch(/^Invalid worker configuration/);
     expect(error.message).toContain("\n  - DATABASE_URL: ");
+  });
+});
+
+describe("REQ-SP-6 SYNC_MIN_DESKTOP_VERSION", () => {
+  it("REQ-SP-6: unset means no minimum", () => {
+    expect(readSyncConfig({}).minDesktopVersion).toBeUndefined();
+    expect(
+      readSyncConfig({ SYNC_MIN_DESKTOP_VERSION: "  " }).minDesktopVersion,
+    ).toBeUndefined();
+    expect(loadApiConfig({}).sync.minDesktopVersion).toBeUndefined();
+  });
+
+  it("REQ-SP-6: a version is read as written", () => {
+    expect(
+      readSyncConfig({ SYNC_MIN_DESKTOP_VERSION: "1.4.0" }).minDesktopVersion,
+    ).toBe("1.4.0");
+    expect(
+      loadApiConfig({ SYNC_MIN_DESKTOP_VERSION: "2.0.0-rc.1" }).sync
+        .minDesktopVersion,
+    ).toBe("2.0.0-rc.1");
+  });
+
+  it("REQ-SP-6: a value that is not a version stops the API at start-up, in development too", () => {
+    const error = loadFailure(() =>
+      loadApiConfig({ SYNC_MIN_DESKTOP_VERSION: "soon" }),
+    );
+    expect(error.issues.map((issue) => issue.variable)).toContain(
+      "SYNC_MIN_DESKTOP_VERSION",
+    );
   });
 });

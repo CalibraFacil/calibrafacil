@@ -21,7 +21,7 @@ import {
   mapServiceOrderToSalePayload,
   shouldRefreshContaAzulTokenBeforeUse,
   summarizeRemoteDocumentLinks,
-} from "../integrations";
+} from "../../modules/integrations";
 
 const emptyCoverage = {
   catalog_item: {

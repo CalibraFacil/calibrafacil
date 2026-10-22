@@ -70,6 +70,7 @@ export {
   readRetentionConfig,
   readRuntimeConfig,
   readSigningConfig,
+  readSyncConfig,
   readStorageConfig,
 } from "./runtimes";
 export { rawEnv, setProcessEnv, setProcessEnvDefault } from "./process-env";

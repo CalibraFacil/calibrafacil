@@ -9,6 +9,7 @@ import { localServerGroup } from "./groups/local-server";
 import { originsGroup } from "./groups/origins";
 import { observabilityGroup, retentionGroup } from "./groups/retention";
 import { runtimeGroup } from "./groups/runtime";
+import { SYNC_MIN_DESKTOP_VERSION_PATTERN, syncGroup } from "./groups/sync";
 import { renderingGroup, storageGroup } from "./groups/storage";
 
 type StorageSettings = {
@@ -43,14 +44,26 @@ export const apiRuntime = defineRuntime({
     storage: storageGroup,
     rendering: renderingGroup,
     jobs: jobsGroup,
+    sync: syncGroup,
     integrations: integrationsGroup,
     signing: signingGroup,
     retention: retentionGroup,
     observability: observabilityGroup,
   },
   rules: (config, { isProduction }) => {
-    if (!isProduction) return [];
-    const issues = storageIssues(config.storage);
+    const minimum = config.sync.minDesktopVersion;
+    const versionIssues: ConfigIssue[] =
+      minimum === undefined || SYNC_MIN_DESKTOP_VERSION_PATTERN.test(minimum)
+        ? []
+        : [
+            {
+              variable: "SYNC_MIN_DESKTOP_VERSION",
+              message:
+                "must be a version such as 1.4.0 (MAJOR.MINOR.PATCH): an unreadable minimum would leave the legacy calibration-record exemption open",
+            },
+          ];
+    if (!isProduction) return versionIssues;
+    const issues = [...versionIssues, ...storageIssues(config.storage)];
     // Sign-in is passwordless, so production cannot run without e-mail.
     if (config.email.transport === null) {
       issues.push({
@@ -133,6 +146,7 @@ export const readEmailConfig = defineReader(emailGroup);
 export const readStorageConfig = defineReader(storageGroup);
 export const readRenderingConfig = defineReader(renderingGroup);
 export const readJobsConfig = defineReader(jobsGroup);
+export const readSyncConfig = defineReader(syncGroup);
 export const readIntegrationsConfig = defineReader(integrationsGroup);
 export const readSigningConfig = defineReader(signingGroup);
 export const readRetentionConfig = defineReader(retentionGroup);

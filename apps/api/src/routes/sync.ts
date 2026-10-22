@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { randomUUID } from "node:crypto";
 import {
   syncBootstrapResponseSchema,
   syncAckRequestSchema,
@@ -11,11 +10,20 @@ import {
   syncAttachmentInitUploadResponseSchema,
   syncConflictResolutionRequestSchema,
   syncConflictResolutionResponseSchema,
+  type SyncCommand,
   type SyncEvent,
+  LEGACY_SYNC_PROTOCOL_VERSION,
+  SYNC_PROTOCOL_VERSION,
+  buildSyncProtocolUnsupportedResponse,
+  buildSyncUpdateRequiredResponse,
+  evaluateDesktopVersionGate,
+  parseSyncCommand,
+  syncEventSchema,
   syncPullResponseSchema,
-  syncPushRequestSchema,
+  syncPushRequestEnvelopeSchema,
   syncPushResponseSchema,
 } from "@calibra-facil/contracts";
+import { readSyncConfig } from "@calibra-facil/config";
 import { db } from "@calibra-facil/db";
 import {
   asset,
@@ -73,6 +81,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { writeOrganizationAuditEvent } from "../lib/audit";
+import { domainErrorResponse, invalid } from "../lib/domain-errors";
 import {
   createR2Client,
   generatePresignedUploadUrl,
@@ -102,10 +111,10 @@ import { resolveAssetRegimeWrite } from "../lib/asset-regime";
 import { deriveRegulatedNextDate } from "../lib/regulated-interval";
 import { deriveNextCalibrationDate } from "../lib/portal-asset-interval";
 import {
-  claimDesktopSyncEvent,
-  completeDesktopSyncClaim,
-  releaseDesktopSyncClaim,
-} from "../modules/sync/applied-events";
+  applyDesktopEventAtomically,
+  type AppliedEventResult,
+  type RefusedEventResult,
+} from "../modules/sync/event-transaction";
 import {
   asRecord,
   buildSyncAttachmentObjectKey,
@@ -144,6 +153,11 @@ import {
   replaceExecutionItems,
   replaceQuoteItems,
 } from "../lib/service-order-workflow";
+import {
+  desktopCustomerOrganizationMetadata,
+  desktopCustomerSlug,
+  findOrganizationCreatedForEvent,
+} from "../modules/sync/desktop-customer-org";
 import { createClientOrganizationAsServiceOwner } from "../lib/portal-service-account";
 import {
   loadCustomerActiveCommercialAgreement,
@@ -211,6 +225,9 @@ export function stripDesktopNullEntries(
 function getMemberData(c: { get: (key: "member") => MemberData }) {
   return c.get("member");
 }
+
+// Re-exported for spec coverage; not part of the route surface.
+export { desktopCustomerSlug };
 
 export const syncRouter = new Hono<{
   Variables: AuthVariables;
@@ -549,7 +566,44 @@ export const syncRouter = new Hono<{
     async (c) => {
       const memberData = getMemberData(c);
       const session = c.get("session");
-      const body = syncPushRequestSchema.parse(await c.req.json());
+      // The header is validated here; each event is validated on its own below
+      // so one malformed event is refused permanently instead of failing (and
+      // endlessly retrying) the whole batch.
+      const request = syncPushRequestEnvelopeSchema.safeParse(
+        await c.req.json().catch(() => null),
+      );
+      if (!request.success) {
+        // Not a push request at all (a client bug, never a server fault).
+        return domainErrorResponse(
+          c,
+          invalid("invalid_request", "Requisição de sincronização inválida."),
+        );
+      }
+      const body = request.data;
+
+      // A push from a protocol newer than this cloud speaks cannot be read
+      // safely; its events stay queued on the desktop until the cloud catches up.
+      const protocolVersion =
+        body.protocolVersion ?? LEGACY_SYNC_PROTOCOL_VERSION;
+      if (protocolVersion > SYNC_PROTOCOL_VERSION) {
+        return c.json(
+          buildSyncProtocolUnsupportedResponse(protocolVersion),
+          400,
+        );
+      }
+
+      // Minimum desktop version (Q28). Answered before any event is looked at:
+      // nothing is applied, claimed or dead-lettered, so the queue survives the
+      // upgrade untouched.
+      const minimumDesktopVersion = readSyncConfig().minDesktopVersion;
+      const versionGate = evaluateDesktopVersionGate({
+        minimumVersion: minimumDesktopVersion,
+        desktopVersion: body.desktopVersion,
+      });
+      if (!versionGate.ok) {
+        return c.json(buildSyncUpdateRequiredResponse(versionGate), 426);
+      }
+
       const accepted: Array<{
         eventId: string;
         remoteEntityId?: number | string;
@@ -574,8 +628,24 @@ export const syncRouter = new Hono<{
       }> = [];
 
       const actorMembershipCache = new Map<string, boolean>();
+      const batch: PushBatchState = { jobUpdatedAtMs: new Map() };
 
-      for (const event of body.events) {
+      for (const [index, rawEvent] of body.events.entries()) {
+        const envelope = syncEventSchema.safeParse(rawEvent);
+        if (!envelope.success) {
+          // Permanent: the same bytes will fail the same way every time.
+          const parsed = parseSyncCommand(rawEvent);
+          rejected.push({
+            eventId: rejectedEventId(rawEvent, index),
+            code: "INVALID_SYNC_COMMAND",
+            reason: `Event ${index} of the batch: ${
+              parsed.ok ? "Sync event is invalid." : parsed.reason
+            }`,
+          });
+          continue;
+        }
+        const event = envelope.data;
+
         if (event.organizationId !== memberData.organizationId) {
           rejected.push({
             eventId: event.eventId,
@@ -615,105 +685,137 @@ export const syncRouter = new Hono<{
           continue;
         }
 
-        const claim = await claimDesktopSyncEvent(
-          memberData.organizationId,
-          event,
-          () => findAppliedDesktopSyncEvent(memberData.organizationId, event),
-        );
-        if (claim.state === "applied") {
-          accepted.push({
-            eventId: event.eventId,
-            remoteEntityId: claim.remoteEntityId,
-            remoteEntity: claim.remoteEntity,
-            remoteVersion: event.localVersion + 1,
-            cloudEventId: `cloud:${event.eventId}`,
-          });
-          continue;
-        }
-        if (claim.state === "in_progress") {
-          // Another push of this very op is applying it right now. Not
-          // acknowledged (it may still fail) and not applied a second time:
-          // the desktop keeps it queued and retries.
+        // The typed protocol: an operation this server does not know, or an
+        // event that does not fit its operation's schema, can never be applied.
+        const parsed = parseSyncCommand(event);
+        if (!parsed.ok) {
           rejected.push({
             eventId: event.eventId,
-            code: "SYNC_EVENT_IN_PROGRESS",
-            reason: "This sync event is being applied by another request.",
+            code:
+              parsed.kind === "unsupported_operation"
+                ? "UNSUPPORTED_SYNC_OPERATION"
+                : "INVALID_SYNC_COMMAND",
+            reason: parsed.reason,
           });
           continue;
         }
+        const command = parsed.command;
 
-        let result: ApplyDesktopSyncEventResult;
+        let prepared: PreparedDesktopEventSideEffects;
         try {
-          result = await applyDesktopSyncEvent({
-            event,
-            memberData,
-            sessionUserId: session.user.id,
-            deviceId: body.deviceId,
-            clientBatchId: body.clientBatchId,
-          });
+          prepared = await prepareDesktopEventSideEffects(command, memberData);
         } catch (error) {
-          await releaseDesktopSyncClaim(
-            memberData.organizationId,
-            claim.claimId,
+          console.error(
+            "[Sync] Preparing a desktop sync event failed:",
+            event.eventId,
+            error,
           );
-          throw error;
-        }
-
-        if (result.ok) {
-          // The op is applied whatever happens to the bookkeeping. If marking
-          // the claim fails it is picked up after the lease from the audit log
-          // (see claimDesktopSyncEvent); failing the request here would only
-          // make the desktop retry into "in progress".
-          await completeDesktopSyncClaim(
-            memberData.organizationId,
-            claim.claimId,
-            result,
-          ).catch((error: unknown) => {
-            console.error(
-              "[Sync] Failed to mark desktop sync event applied:",
-              event.eventId,
-              error,
-            );
-          });
-        } else {
-          // Not applied (rejected or conflicting): free the op id so the
-          // corrected or re-based event can be pushed again.
-          await releaseDesktopSyncClaim(
-            memberData.organizationId,
-            claim.claimId,
-          );
-        }
-
-        if (!result.ok) {
-          if (result.conflict) {
-            conflicts.push({
-              id: buildDesktopSyncConflictId(event),
-              eventId: event.eventId,
-              entityType: event.entityType,
-              entityId: event.entityId,
-              conflictType: result.conflict.conflictType,
-              status: "open",
-              localPayload: event.payload,
-              remotePayload: result.conflict.remotePayload ?? {},
-            });
-            continue;
-          }
-
           rejected.push({
             eventId: event.eventId,
-            code: result.code,
-            reason: result.reason,
+            code: "DESKTOP_SYNC_APPLY_FAILED",
+            reason:
+              error instanceof Error
+                ? error.message
+                : "Desktop sync event could not be prepared.",
           });
           continue;
         }
 
-        accepted.push({
-          eventId: event.eventId,
-          remoteEntityId: result.remoteEntityId,
-          remoteEntity: result.remoteEntity,
-          remoteVersion: event.localVersion + 1,
-          cloudEventId: `cloud:${event.eventId}`,
+        if (prepared.refusal) {
+          rejected.push({ eventId: event.eventId, ...prepared.refusal });
+          continue;
+        }
+
+        const outcome = await applyDesktopEventAtomically({
+          organizationId: memberData.organizationId,
+          event,
+          findLegacyApplied: () =>
+            findAppliedDesktopSyncEvent(memberData.organizationId, event),
+          apply: () =>
+            applyDesktopSyncEvent({
+              event: command,
+              memberData,
+              sessionUserId: session.user.id,
+              deviceId: body.deviceId,
+              clientBatchId: body.clientBatchId,
+              minimumDesktopVersion,
+              batch,
+              prepared,
+            }),
         });
+
+        switch (outcome.state) {
+          case "already_applied": {
+            noteAppliedJobVersion(batch, command, outcome.remoteEntity);
+            accepted.push({
+              eventId: event.eventId,
+              remoteEntityId: outcome.remoteEntityId,
+              remoteEntity: outcome.remoteEntity,
+              remoteVersion: event.localVersion + 1,
+              cloudEventId: `cloud:${event.eventId}`,
+            });
+            break;
+          }
+          case "in_progress": {
+            // Another push of this very op is applying it right now. Not
+            // acknowledged (it may still fail) and not applied a second time:
+            // the desktop keeps it queued and retries.
+            rejected.push({
+              eventId: event.eventId,
+              code: "SYNC_EVENT_IN_PROGRESS",
+              reason: "This sync event is being applied by another request.",
+            });
+            break;
+          }
+          case "failed": {
+            // Rolled back whole; reported for this event only. Transient: the
+            // cause (a write, an audit row, the commit) may not repeat.
+            console.error(
+              "[Sync] Desktop sync event failed and was rolled back:",
+              event.eventId,
+              outcome.message,
+            );
+            rejected.push({
+              eventId: event.eventId,
+              code: "DESKTOP_SYNC_APPLY_FAILED",
+              reason: outcome.message,
+            });
+            break;
+          }
+          case "refused": {
+            const result = outcome.result;
+            if (result.conflict) {
+              conflicts.push({
+                id: buildDesktopSyncConflictId(event),
+                eventId: event.eventId,
+                entityType: event.entityType,
+                entityId: event.entityId,
+                conflictType: result.conflict.conflictType,
+                status: "open",
+                localPayload: event.payload,
+                remotePayload: result.conflict.remotePayload ?? {},
+              });
+              break;
+            }
+            rejected.push({
+              eventId: event.eventId,
+              code: result.code,
+              reason: result.reason,
+            });
+            break;
+          }
+          case "applied": {
+            noteAppliedJobVersion(batch, command, outcome.result.remoteEntity);
+            accepted.push({
+              eventId: event.eventId,
+              remoteEntityId: outcome.result.remoteEntityId,
+              remoteEntity: outcome.result.remoteEntity,
+              remoteVersion: event.localVersion + 1,
+              cloudEventId: `cloud:${event.eventId}`,
+            });
+            break;
+          }
+        }
       }
 
       return c.json(
@@ -883,25 +985,78 @@ export const syncRouter = new Hono<{
     },
   );
 
+/**
+ * What one push request remembers across its events. A desktop queues several
+ * edits of one job (autosaves, then the submit), all made against the same
+ * pulled base; the first one's write moves the job's `updatedAt`, which must
+ * not make the next one look like somebody else's change.
+ */
+type PushBatchState = {
+  /** Cloud job id -> the `updatedAt` (epoch ms) this request's last event left it at. */
+  jobUpdatedAtMs: Map<number, number>;
+};
+
 type ApplyDesktopSyncEventInput = {
-  event: SyncEvent;
+  event: SyncCommand;
   memberData: MemberData;
   sessionUserId: string;
   deviceId: string;
   clientBatchId: string;
+  /** `SYNC_MIN_DESKTOP_VERSION`: when set, the legacy calibration-record exemption is over. */
+  minimumDesktopVersion: string | undefined;
+  batch: PushBatchState;
+  /** What `prepareDesktopEventSideEffects` did before the event's transaction. */
+  prepared: PreparedDesktopEventSideEffects;
 };
 
-type ApplyDesktopSyncEventResult =
-  | { ok: true; remoteEntityId?: number | string; remoteEntity?: unknown }
-  | {
-      ok: false;
-      code: string;
-      reason: string;
-      conflict?: {
-        conflictType: string;
-        remotePayload?: unknown;
-      };
-    };
+/**
+ * Side effects of an event that need a database connection of their own
+ * (better-auth creates an organization through its own adapter) cannot run in
+ * the event's transaction: with a small pool the transaction holds the only
+ * connection and the side effect waits for it forever, and what it writes would
+ * survive the rollback of the event. They run first, outside the transaction,
+ * idempotently on the event id, and the transaction only references the result.
+ */
+type PreparedDesktopEventSideEffects = {
+  /** `create_local_customer`: the client organization created for this event. */
+  clientOrganizationId?: string;
+  /** The event cannot be applied (permanent): reported without opening a transaction. */
+  refusal?: { code: string; reason: string };
+};
+
+type ApplyDesktopSyncEventResult = AppliedEventResult | RefusedEventResult;
+
+/**
+ * The id a rejection names for an event that cannot be read. An event with no
+ * usable `eventId` is named by its position in the batch (zero-based), so the
+ * refusal is traceable instead of anonymous.
+ */
+function rejectedEventId(rawEvent: unknown, index: number): string {
+  const record = asRecord(rawEvent);
+  return typeof record.eventId === "string" && record.eventId.length > 0
+    ? record.eventId
+    : `batch-index:${index}`;
+}
+
+/** Records the `updatedAt` a job execution left the cloud job at, for the events after it. */
+function noteAppliedJobVersion(
+  batch: PushBatchState,
+  command: SyncCommand,
+  remoteEntity: unknown,
+) {
+  if (
+    command.operation !== "save_local_execution" &&
+    command.operation !== "submit_local_execution"
+  ) {
+    return;
+  }
+  const entity = asRecord(remoteEntity);
+  const id = entity.id;
+  const updatedAt = entity.updatedAt;
+  if (typeof id !== "number" || typeof updatedAt !== "string") return;
+  const ms = Date.parse(updatedAt);
+  if (!Number.isNaN(ms)) batch.jobUpdatedAtMs.set(id, ms);
+}
 
 // ============================================================================
 // Optimistic-concurrency guard for the blind desktop applies (REL-01 slice 2)
@@ -1494,22 +1649,6 @@ function standardCertificateDocumentSnapshot(
   };
 }
 
-const AUDIT_ONLY_DESKTOP_SYNC_EVENTS = [
-  { entityType: "attachment", operation: "create_local_attachment" },
-  {
-    entityType: "certificate_draft",
-    operation: "create_local_certificate_draft",
-  },
-] as const;
-
-function isAuditOnlyDesktopSyncEvent(event: SyncEvent) {
-  return AUDIT_ONLY_DESKTOP_SYNC_EVENTS.some(
-    (known) =>
-      known.entityType === event.entityType &&
-      known.operation === event.operation,
-  );
-}
-
 /**
  * When an offline calibration was performed. The desktop stamps the submit
  * event with the local time it happened; using the sync time instead would put
@@ -1540,125 +1679,60 @@ async function applyDesktopSyncEvent(
   const actorUserId = input.sessionUserId;
 
   try {
-    if (
-      input.event.entityType === "calibration_job" &&
-      input.event.operation === "create_local_job_draft"
-    ) {
-      return await applyCreateLocalJobDraft(input, actorUserId);
+    // One case per member of the typed push protocol (packages/contracts
+    // sync-protocol.ts): adding an operation there fails to compile here until
+    // the cloud says what it does with it.
+    switch (input.event.operation) {
+      case "create_local_job_draft":
+        return await applyCreateLocalJobDraft(input, actorUserId);
+      case "create_local_asset":
+        return await applyCreateLocalAsset(input, actorUserId);
+      case "update_local_asset":
+        return await applyUpdateLocalAsset(input, actorUserId);
+      case "create_local_customer":
+        return await applyCreateLocalCustomer(input, actorUserId);
+      case "update_local_customer":
+        return await applyUpdateLocalCustomer(input, actorUserId);
+      case "update_local_customer_compliance":
+        return await applyUpdateLocalCustomerCompliance(input, actorUserId);
+      case "save_local_execution":
+      case "submit_local_execution":
+        return await applyLocalJobExecution(input, actorUserId);
+      case "create_local_service_order_intake":
+        return await applyCreateLocalServiceOrderIntake(input, actorUserId);
+      case "create_local_non_conformance":
+        return await applyCreateLocalNonConformance(input, actorUserId);
+      case "create_local_service_order_quote_draft":
+        return await applyCreateLocalServiceOrderQuoteDraft(input, actorUserId);
+      case "save_local_service_order_execution_notes":
+        return await applyLocalServiceOrderExecutionNotes(input, actorUserId);
+      case "create_local_service_order_delivery_document_draft":
+        return await applyCreateLocalServiceOrderDeliveryDocumentDraft(
+          input,
+          actorUserId,
+        );
+      // Certificates are issued online only: the cloud worker renders and signs
+      // them after the cloud approval. A queued offline "publish certificate
+      // PDF" event (an older desktop build) is refused with its own code, never
+      // applied, never acknowledged, so the desktop keeps showing it as refused.
+      case "generate_local_certificate_pdf":
+        return {
+          ok: false,
+          code: "OFFLINE_CERTIFICATE_PUBLICATION_NOT_SUPPORTED",
+          reason:
+            "Certificates are issued online only: approve the job in the cloud app and the certificate is generated and signed there. Client-rendered certificate PDFs are not accepted.",
+        };
+      // Audit-only events: the desktop records them in its outbox, but the
+      // cloud has nothing to apply (attachment bytes travel through the
+      // attachment endpoints, the legacy certificate-draft marker carries no
+      // data).
+      case "create_local_attachment":
+      case "create_local_certificate_draft":
+        await writeDesktopSyncAudit(input, actorUserId);
+        return { ok: true };
+      default:
+        return assertNever(input.event);
     }
-
-    if (
-      input.event.entityType === "asset" &&
-      input.event.operation === "create_local_asset"
-    ) {
-      return await applyCreateLocalAsset(input, actorUserId);
-    }
-
-    if (
-      input.event.entityType === "asset" &&
-      input.event.operation === "update_local_asset"
-    ) {
-      return await applyUpdateLocalAsset(input, actorUserId);
-    }
-
-    if (
-      input.event.entityType === "customer" &&
-      input.event.operation === "create_local_customer"
-    ) {
-      return await applyCreateLocalCustomer(input, actorUserId);
-    }
-
-    if (
-      input.event.entityType === "customer" &&
-      input.event.operation === "update_local_customer"
-    ) {
-      return await applyUpdateLocalCustomer(input, actorUserId);
-    }
-
-    if (
-      input.event.entityType === "customer" &&
-      input.event.operation === "update_local_customer_compliance"
-    ) {
-      return await applyUpdateLocalCustomerCompliance(input, actorUserId);
-    }
-
-    if (
-      input.event.entityType === "calibration_job" &&
-      (input.event.operation === "save_local_execution" ||
-        input.event.operation === "submit_local_execution")
-    ) {
-      return await applyLocalJobExecution(input, actorUserId);
-    }
-
-    if (
-      input.event.entityType === "service_order" &&
-      input.event.operation === "create_local_service_order_intake"
-    ) {
-      return await applyCreateLocalServiceOrderIntake(input, actorUserId);
-    }
-
-    if (
-      input.event.entityType === "non_conformance" &&
-      input.event.operation === "create_local_non_conformance"
-    ) {
-      return await applyCreateLocalNonConformance(input, actorUserId);
-    }
-
-    if (
-      input.event.entityType === "service_order_quote" &&
-      input.event.operation === "create_local_service_order_quote_draft"
-    ) {
-      return await applyCreateLocalServiceOrderQuoteDraft(input, actorUserId);
-    }
-
-    if (
-      input.event.entityType === "service_order_execution" &&
-      input.event.operation === "save_local_service_order_execution_notes"
-    ) {
-      return await applyLocalServiceOrderExecutionNotes(input, actorUserId);
-    }
-
-    if (
-      input.event.entityType === "service_order_delivery_document" &&
-      input.event.operation ===
-        "create_local_service_order_delivery_document_draft"
-    ) {
-      return await applyCreateLocalServiceOrderDeliveryDocumentDraft(
-        input,
-        actorUserId,
-      );
-    }
-
-    // Certificates are issued online only: the cloud worker renders and signs
-    // them after the cloud approval. A queued offline "publish certificate PDF"
-    // event (an older desktop build) is refused with its own code — never
-    // applied, never acknowledged, so the desktop keeps showing it as refused.
-    if (input.event.operation === "generate_local_certificate_pdf") {
-      return {
-        ok: false,
-        code: "OFFLINE_CERTIFICATE_PUBLICATION_NOT_SUPPORTED",
-        reason:
-          "Certificates are issued online only: approve the job in the cloud app and the certificate is generated and signed there. Client-rendered certificate PDFs are not accepted.",
-      };
-    }
-
-    // Audit-only events: the desktop records them in its outbox, but the cloud
-    // has nothing to apply (attachment bytes travel through the attachment
-    // endpoints, the legacy certificate-draft marker carries no data).
-    // Everything else is unknown to this server, and acknowledging it would
-    // make the desktop mark the event synced and never send it again: reject
-    // it so the outbox keeps it (and does NOT write an audit row, which would
-    // make the dedup lookup treat the event as applied).
-    if (isAuditOnlyDesktopSyncEvent(input.event)) {
-      await writeDesktopSyncAudit(input, actorUserId);
-      return { ok: true };
-    }
-
-    return {
-      ok: false,
-      code: "UNSUPPORTED_SYNC_OPERATION",
-      reason: `Sync operation ${input.event.operation} on ${input.event.entityType} is not supported by this server.`,
-    };
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Desktop sync event failed.";
@@ -1671,6 +1745,12 @@ async function applyDesktopSyncEvent(
       reason: message,
     };
   }
+}
+
+function assertNever(command: never): never {
+  throw new Error(
+    `Unhandled sync command: ${JSON.stringify(command, (key, value) => (key === "payload" ? undefined : value))}`,
+  );
 }
 
 async function applyCreateLocalJobDraft(
@@ -2243,13 +2323,9 @@ async function applyCreateLocalCustomer(
   }
 
   const values = parseResult.data;
-  const slug = generateDesktopCustomerSlug(values.name);
-  const orgResult = await createClientOrganizationAsServiceOwner({
-    name: values.name,
-    slug,
-  });
-
-  if (!orgResult?.id) {
+  // Created before this transaction (see PreparedDesktopEventSideEffects).
+  const clientOrganizationId = input.prepared.clientOrganizationId;
+  if (!clientOrganizationId) {
     return {
       ok: false,
       code: "DOMAIN_VALIDATION_FAILED",
@@ -2266,7 +2342,7 @@ async function applyCreateLocalCustomer(
         email: values.email || null,
         phone: values.phone || null,
         address: values.address || null,
-        authOrganizationId: orgResult.id,
+        authOrganizationId: clientOrganizationId,
         labOrganizationId: input.memberData.organizationId,
       })
       .returning();
@@ -2638,6 +2714,12 @@ async function applyLocalJobExecution(
   };
   const nextData = getRecordOrNull(payload, "data") ?? {};
 
+  const stale: {
+    conflict: RefusedEventResult | null;
+    /** The job as the command read it (set once its transition is legal). */
+    read: { status: string } | null;
+  } = { conflict: null, read: null };
+
   const execution: JobExecutionCommand = {
     actor: { kind: "desktop_session", userId: actorUserId },
     jobId: remoteEntityId,
@@ -2662,15 +2744,34 @@ async function applyLocalJobExecution(
     // A submit from a build that enforced the calibration record offline is
     // held to the rule here too; one from a build before it (no payload
     // version) is applied as before so an upgrade does not dead-letter it.
-    legacyUnvalidatedRecord: !desktopEventCarriesCalibrationRecordRule(payload),
+    // That exemption ends once a minimum desktop version is configured (Q28):
+    // every desktop that reaches this point is then at or above it.
+    legacyUnvalidatedRecord:
+      input.minimumDesktopVersion === undefined &&
+      !desktopEventCarriesCalibrationRecordRule(payload),
     // The desktop reports the status its own store moved the job to; the
     // server derives the target from the transition table and refuses a
     // payload that disagrees (Q20).
     claimedStatus: getJobStatus(payload, "status"),
+    // With a base version, the write holds only if the job is still what the
+    // stale-base check saw (a content-only write in between is a conflict).
+    requireUnchangedSinceRead: Number.isFinite(
+      Date.parse(input.event.baseUpdatedAt ?? ""),
+    ),
     // Payload integrity, checked once the job is loaded and its transition is
     // known to be legal: a malformed snapshot, or data that uses standards the
     // snapshot does not carry.
     precondition: (job) => {
+      // Stale base (REQ-SP-5): the cloud job moved since the desktop pulled it
+      // (someone else saved, reassigned or changed it). Answered as a
+      // reviewable conflict; applying the desktop's execution would overwrite
+      // that change.
+      stale.read = { status: job.status };
+      const staleBase = detectStaleJobExecutionBase(input, job);
+      if (staleBase) {
+        stale.conflict = staleBase;
+        return { code: staleBase.code, reason: staleBase.reason };
+      }
       if (standardsSnapshotResult && !standardsSnapshotResult.ok) {
         return {
           code: "INVALID_STANDARD_SNAPSHOT",
@@ -2688,8 +2789,16 @@ async function applyLocalJobExecution(
     ? await submitJob(execution)
     : await executeJob(execution);
 
+  if (result.status === "precondition_failed" && stale.conflict) {
+    return stale.conflict;
+  }
   if (result.status !== "ok") {
-    return await desktopExecutionRefusal(input, remoteEntityId, result);
+    return await desktopExecutionRefusal(
+      input,
+      remoteEntityId,
+      result,
+      stale.read?.status ?? null,
+    );
   }
 
   const updated = result.job;
@@ -2706,8 +2815,67 @@ async function applyLocalJobExecution(
       jobId: updated.jobId,
       status: updated.status,
       performedAt: updated.performedAt?.toISOString?.() ?? null,
+      // The desktop's base for its next edit of this job: what it must send as
+      // `baseUpdatedAt` so its own write is not mistaken for somebody else's.
+      updatedAt: updated.updatedAt?.toISOString?.(),
     },
   };
+}
+
+/**
+ * The stale-base check of a job execution (REQ-SP-5).
+ *
+ * The base version of a job is its cloud `updatedAt` as the desktop last saw
+ * it: captured when the job was pulled, and moved forward each time the cloud
+ * accepts one of the desktop's own executions (the accept answer carries the
+ * new value, `remoteEntity.updatedAt`). The event carries it as
+ * `baseUpdatedAt`. Any write to the job moves `updatedAt`, so a cloud value
+ * after the base means the job changed since the desktop's copy: its status,
+ * its execution data, its assignment.
+ *
+ * Not stale (nothing to check or nothing foreign): no base, an unreadable
+ * base, a cloud value at or before the base, or a cloud value this very push
+ * request left the job at (an earlier event of the same desktop, in this
+ * batch, made against the same pulled base).
+ */
+function detectStaleJobExecutionBase(
+  input: ApplyDesktopSyncEventInput,
+  job: {
+    id: number;
+    jobId: string;
+    status: string;
+    data: unknown;
+    methodDeviations: string | null;
+    updatedAt: Date | string | null;
+  },
+): RefusedEventResult | null {
+  const stale = detectStaleDesktopBase({
+    baseUpdatedAt: input.event.baseUpdatedAt,
+    serverUpdatedAt: job.updatedAt,
+  });
+  if (!stale.diverged) return null;
+
+  const ownWrite = input.batch.jobUpdatedAtMs.get(job.id);
+  if (
+    ownWrite !== undefined &&
+    ownWrite === Date.parse(stale.serverUpdatedAtIso)
+  ) {
+    return null;
+  }
+
+  const conflict = buildStaleDesktopBaseConflict({
+    entity: "calibration_job",
+    id: job.id,
+    serverUpdatedAtIso: stale.serverUpdatedAtIso,
+    baseUpdatedAt: stale.baseUpdatedAt,
+    remoteFields: {
+      jobId: job.jobId,
+      status: job.status,
+      data: job.data,
+      methodDeviations: job.methodDeviations,
+    },
+  });
+  return conflict.ok ? null : conflict;
 }
 
 /** The sync outcome (rejection or reviewable conflict) of a command that did not write. */
@@ -2715,6 +2883,7 @@ async function desktopExecutionRefusal(
   input: ApplyDesktopSyncEventInput,
   jobId: number,
   result: Exclude<JobExecutionResult, { status: "ok" }>,
+  statusAtRead: string | null,
 ): Promise<ApplyDesktopSyncEventResult> {
   switch (result.status) {
     case "not_found":
@@ -2782,7 +2951,7 @@ async function desktopExecutionRefusal(
           "The technician assigned to the job has no active competence for this instrument type.",
       };
     case "concurrent_update":
-      return await rejectLostDesktopExecutionRace(input, jobId);
+      return await rejectLostDesktopExecutionRace(input, jobId, statusAtRead);
   }
 }
 
@@ -2832,6 +3001,7 @@ function desktopOfficialExecutionRejection(failure: OfficialExecutionFailure): {
 async function rejectLostDesktopExecutionRace(
   input: ApplyDesktopSyncEventInput,
   jobId: number,
+  statusAtRead: string | null,
 ): Promise<ApplyDesktopSyncEventResult> {
   const [current] = await db
     .select()
@@ -2851,6 +3021,30 @@ async function rejectLostDesktopExecutionRace(
       code: "REMOTE_ENTITY_NOT_FOUND",
       reason: "Cloud job for desktop execution event was not found.",
     };
+  }
+
+  // The status is what the command read: the job changed without changing
+  // status (someone else saved it between the stale-base check and the write).
+  // The same concurrent_update conflict the check itself answers, with nothing
+  // written.
+  const baseUpdatedAt = input.event.baseUpdatedAt;
+  if (
+    current.status === statusAtRead &&
+    typeof baseUpdatedAt === "string" &&
+    current.updatedAt instanceof Date
+  ) {
+    return buildStaleDesktopBaseConflict({
+      entity: "calibration_job",
+      id: current.id,
+      serverUpdatedAtIso: current.updatedAt.toISOString(),
+      baseUpdatedAt,
+      remoteFields: {
+        jobId: current.jobId,
+        status: current.status,
+        data: current.data,
+        methodDeviations: current.methodDeviations,
+      },
+    });
   }
 
   return {
@@ -4031,14 +4225,65 @@ function parseSyncDate(value: string | null | undefined) {
   return value ? new Date(value) : null;
 }
 
-function generateDesktopCustomerSlug(name: string) {
-  const base = name
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .substring(0, 50);
+async function prepareDesktopEventSideEffects(
+  command: SyncCommand,
+  memberData: MemberData,
+): Promise<PreparedDesktopEventSideEffects> {
+  if (command.operation !== "create_local_customer") return {};
 
-  return `${base || "cliente"}-${randomUUID().slice(0, 8)}`;
+  // Already applied (a retried push): the transaction answers from its record.
+  if (
+    (await findDesktopSyncRemoteEntityId(
+      memberData.organizationId,
+      command.entityId,
+    )) !== null ||
+    (await findAppliedDesktopSyncEvent(memberData.organizationId, command))
+  ) {
+    return {};
+  }
+  const parsed = CreateCustomerSchema.safeParse(asRecord(command.payload));
+  // The apply refuses an invalid payload with its own code.
+  if (!parsed.success) return {};
+
+  const slug = desktopCustomerSlug(
+    parsed.data.name,
+    memberData.organizationId,
+    command.eventId,
+  );
+  const foreign: PreparedDesktopEventSideEffects = {
+    refusal: {
+      code: "DOMAIN_VALIDATION_FAILED",
+      reason:
+        "Ja existe uma organizacao com o identificador reservado para este cliente e ela nao foi criada por este evento deste laboratorio; o cliente nao foi criado.",
+    },
+  };
+  const existing = await findOrganizationCreatedForEvent(
+    slug,
+    memberData.organizationId,
+    command.eventId,
+  );
+  if (existing.state === "foreign") return foreign;
+  if (existing.state === "ours") return { clientOrganizationId: existing.id };
+
+  try {
+    const created = await createClientOrganizationAsServiceOwner({
+      name: parsed.data.name,
+      slug,
+      metadata: desktopCustomerOrganizationMetadata(
+        memberData.organizationId,
+        command.eventId,
+      ),
+    });
+    return { clientOrganizationId: created.id };
+  } catch (error) {
+    // A concurrent push of this event created it first.
+    const raced = await findOrganizationCreatedForEvent(
+      slug,
+      memberData.organizationId,
+      command.eventId,
+    );
+    if (raced.state === "ours") return { clientOrganizationId: raced.id };
+    if (raced.state === "foreign") return foreign;
+    throw error;
+  }
 }

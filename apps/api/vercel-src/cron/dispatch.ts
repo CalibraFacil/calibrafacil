@@ -8,7 +8,7 @@ import { enqueueBackgroundJob } from "../../src/lib/background-jobs";
 import {
   processScheduledContaAzulIntegrationSyncs,
   processScheduledContaAzulPolls,
-} from "../../src/lib/integrations";
+} from "../../src/modules/integrations";
 import { processScheduledIntegrationSyncs } from "@calibra-facil/jobs-core/integrations";
 import { cleanupExpiredAuthRecords } from "../../src/lib/auth-maintenance";
 import { drainOotEmailOutbox } from "../../src/lib/oot-email-drain";

@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import { afterTransactionCommit, db } from "@calibra-facil/db";
 import {
   nonConformance,
   nonConformanceAuditLog,
@@ -75,21 +75,27 @@ export async function createNonConformanceRecord(
   for (let attempt = 0; attempt < MAX_SEQ_RETRIES; attempt++) {
     const ncNumber = await generateNcNumber(params.organizationId);
     try {
-      const [inserted] = await db
-        .insert(nonConformance)
-        .values({
-          ncNumber,
-          organizationId: params.organizationId,
-          jobId: params.jobId ?? null,
-          type: params.type,
-          triggerSource: params.triggerSource ?? null,
-          description: params.description,
-          detectedBy: params.actorUserId,
-          detectedAt: params.detectedAt,
-          status: "open",
-          createdBy: params.actorUserId,
-        })
-        .returning();
+      // Its own transaction (a savepoint when the caller already runs in one,
+      // as the desktop sync apply does): a unique violation on the sequential
+      // number aborts a Postgres transaction, and the retry below would fail
+      // with it unless only this attempt is rolled back.
+      const [inserted] = await db.transaction((tx) =>
+        tx
+          .insert(nonConformance)
+          .values({
+            ncNumber,
+            organizationId: params.organizationId,
+            jobId: params.jobId ?? null,
+            type: params.type,
+            triggerSource: params.triggerSource ?? null,
+            description: params.description,
+            detectedBy: params.actorUserId,
+            detectedAt: params.detectedAt,
+            status: "open",
+            createdBy: params.actorUserId,
+          })
+          .returning(),
+      );
       newNc = inserted ?? null;
       break;
     } catch (err) {
@@ -116,15 +122,19 @@ export async function createNonConformanceRecord(
     ipAddress: params.ipAddress ?? null,
   });
 
-  notifyNCCreated(
-    newNc.id,
-    newNc.ncNumber,
-    newNc.type,
-    newNc.description,
-    params.organizationId,
-    params.actorUserId,
-  ).catch((err) =>
-    console.error("[NC] Failed to send NC-created notification:", err),
+  // After the surrounding transaction commits, when there is one: the
+  // notification reads the NC back, and must not run on a rolled-back record.
+  afterTransactionCommit(() =>
+    notifyNCCreated(
+      newNc.id,
+      newNc.ncNumber,
+      newNc.type,
+      newNc.description,
+      params.organizationId,
+      params.actorUserId,
+    ).catch((err) =>
+      console.error("[NC] Failed to send NC-created notification:", err),
+    ),
   );
 
   return newNc;

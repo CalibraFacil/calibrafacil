@@ -28,6 +28,8 @@ export const OUTBOX_REJECTION_CLASSES = {
   OFFLINE_CERTIFICATE_PUBLICATION_NOT_SUPPORTED: "permanent",
   STATUS_PAYLOAD_MISMATCH: "permanent",
   INVALID_DESKTOP_EVENT_PAYLOAD: "permanent",
+  // The event does not fit the typed push protocol (envelope or payload schema).
+  INVALID_SYNC_COMMAND: "permanent",
   INVALID_STANDARD_SNAPSHOT: "permanent",
   COMPILED_METHOD_SNAPSHOT_INVALID: "permanent",
   CALIBRATION_RECORD_INCOMPLETE: "permanent",

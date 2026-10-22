@@ -8,7 +8,7 @@ import {
 } from "@calibra-facil/db/queue-receipts";
 import { processBackgroundJob } from "@calibra-facil/jobs-core";
 import { resolveQueueJobType } from "../../src/lib/background-jobs";
-import { runIntegrationSync } from "../../src/lib/integrations";
+import { runIntegrationSync } from "../../src/modules/integrations";
 import {
   vercelDeliveryAttempt,
   vercelRetryDirective,
