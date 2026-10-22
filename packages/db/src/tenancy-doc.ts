@@ -41,8 +41,8 @@ function renderGlobal(): string[] {
 function renderBackfilled(): string[] {
   const tenancy = new Map(listTenancy().map((table) => [table.name, table]));
   const lines = [
-    "| Table | Parent path to the organization | Pointer | Organization FK | Composite keys |",
-    "| --- | --- | --- | --- | --- |",
+    "| Table | Parent path to the organization | Pointer | organization_id | Organization FK | Composite keys |",
+    "| --- | --- | --- | --- | --- | --- |",
   ];
   for (const entry of ORGANIZATION_BACKFILL) {
     const table = tenancy.get(entry.table);
@@ -61,7 +61,7 @@ function renderBackfilled(): string[] {
     const composite =
       table?.compositeKeys.map((key) => code(key.column)).join(", ") || "-";
     lines.push(
-      `| ${code(entry.table)} | ${path} | ${pointer} | ${fk} | ${composite} |`,
+      `| ${code(entry.table)} | ${path} | ${pointer} | ${column?.notNull ? "NOT NULL" : "nullable + CHECK NOT VALID"} | ${fk} | ${composite} |`,
     );
   }
   lines.push("");

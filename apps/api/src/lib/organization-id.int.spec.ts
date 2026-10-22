@@ -51,7 +51,7 @@ describe("organization_id on every tenant table (migration 0118)", () => {
   });
 
   describe("REQ-ORG-2: NOT NULL, foreign key to organization ON DELETE RESTRICT", () => {
-    it("REQ-ORG-2: every table of the migration has organization_id NOT NULL in Postgres", async () => {
+    it("REQ-ORG-2: every table of the migration has organization_id NOT NULL in Postgres, except the 16 audit logs (nullable, CHECK NOT VALID)", async () => {
       const rows = getExecuteRows<{ table_name: string; is_nullable: string }>(
         await db.execute(sql`
           select table_name, is_nullable from information_schema.columns
@@ -64,9 +64,26 @@ describe("organization_id on every tenant table (migration 0118)", () => {
       expect(rows.map((row) => row.table_name).toSorted()).toEqual(
         ORGANIZATION_BACKFILL.map((entry) => entry.table).toSorted(),
       );
+      const auditLogs = new Set(
+        ORGANIZATION_BACKFILL.filter((entry) => entry.soft).map(
+          (entry) => entry.table,
+        ),
+      );
       for (const row of rows) {
-        expect(row.is_nullable, row.table_name).toBe("NO");
+        expect(row.is_nullable, row.table_name).toBe(
+          auditLogs.has(row.table_name) ? "YES" : "NO",
+        );
       }
+      // ... and each of those carries the CHECK, which stays NOT VALID.
+      const checks = getExecuteRows<{ table_name: string; validated: boolean }>(
+        await db.execute(sql`
+          select conrelid::regclass::text as table_name, convalidated as validated
+            from pg_constraint
+           where contype = 'c' and conname like '%\_organization\_id\_required'`),
+      );
+      expect(checks.map((row) => row.table_name).toSorted()).toEqual(
+        [...auditLogs].toSorted(),
+      );
     });
 
     it("REQ-ORG-2: ... and a foreign key to organization(id) with ON DELETE RESTRICT", async () => {
@@ -97,7 +114,15 @@ describe("organization_id on every tenant table (migration 0118)", () => {
           sql`insert into job_audit_log (job_id, action, performed_by) values (${t.jobId}, 'x', ${t.userId})`,
         ),
       );
-      expect(missing.code).toBe("23502");
+      // 23514 = check_violation: the audit logs refuse a NEW row without an organization.
+      expect(missing.code).toBe("23514");
+      expect(missing.constraint).toBe("job_audit_log_organization_id_required");
+      const missingChild = await rejection(
+        db.execute(
+          sql`insert into job_standard (job_id, standard_id) values (${t.jobId}, ${t.standardId})`,
+        ),
+      );
+      expect(missingChild.code).toBe("23502");
       const unknown = await rejection(
         db.insert(jobAuditLog).values({
           organizationId: "no-such-organization",

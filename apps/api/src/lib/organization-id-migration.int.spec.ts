@@ -6,8 +6,12 @@
  *              (checked row by row, for a finance chain, a service-order chain,
  *              the audit logs and both naming conventions of the parents' own
  *              organization column); it is idempotent; its pre-check raises,
- *              changing nothing, on rows it cannot attribute and on rows that
- *              already point across tenants; the audit logs stay append-only
+ *              changing nothing, on an orphan child and on rows that already
+ *              point across tenants, but NOT on orphan audit rows (their entity
+ *              was hard-deleted): those are attributed from their own data or
+ *              stay NULL and are counted; a NEW audit row without an
+ *              organization is refused by the CHECK; the audit logs stay
+ *              append-only
  *   REQ-ORG-3  the composite keys and the (id, organization) uniques exist after
  *              it, once, however often it runs
  *
@@ -209,11 +213,13 @@ describe("migration 0118 on a database in main's shape", () => {
     expect(constraintCount(scratchName, "unique")).toBe(0);
   });
 
-  it("REQ-ORG-2: the pre-check raises on an audit row whose entity is gone and applies nothing", () => {
+  it("REQ-ORG-2: the pre-check still raises on an orphan child (a non-audit table) and applies nothing", () => {
     const before = rowCounts(scratchName);
+    // A real orphan cannot be written with the foreign keys on: bypass them for the probe row.
     mustPsql(
       scratchName,
-      `insert into job_audit_log (job_id, action, performed_by) values (987654, 'delete', 'user-org-a');`,
+      `set session_replication_role = replica;
+       insert into job_standard (job_id, standard_id) values (987654, ${org.a.standardId});`,
     );
 
     const result = psql(scratchName, MIGRATION);
@@ -222,19 +228,15 @@ describe("migration 0118 on a database in main's shape", () => {
       "migration 0118 cannot attribute rows to an organization",
     );
     expect(result.stderr).toContain(
-      "job_audit_log: 1 row(s) whose job_id matches no calibration_job row",
+      "job_standard: 1 row(s) whose job_id matches no calibration_job row",
     );
-    // Only the orphan is named: nothing else is unattributable.
-    expect(result.stderr).not.toContain("asset_audit_log:");
+    // Only the orphan child is named: no audit log is.
+    expect(result.stderr).not.toContain("_audit_log:");
 
     // Atomic: no column, no key, no row changed.
     expect(columnCount(scratchName)).toBe(0);
     expect(constraintCount(scratchName, "tenant_fk")).toBe(0);
-    // The audit logs are append-only: removing the probe row needs the seed hatch.
-    mustPsql(
-      scratchName,
-      `begin; select set_config('calibra.allow_audit_rewrite', 'on', true); delete from job_audit_log where job_id = 987654; commit;`,
-    );
+    mustPsql(scratchName, `delete from job_standard where job_id = 987654;`);
     expect(rowCounts(scratchName)).toEqual(before);
   });
 
@@ -263,33 +265,75 @@ describe("migration 0118 on a database in main's shape", () => {
     );
   });
 
-  it("REQ-ORG-2: it backfills every child with the organization of its parent, row by row", () => {
+  it("REQ-ORG-2: it backfills every child with the organization of its parent, row by row, and does not block on orphan audit rows", () => {
+    // Audit rows of entities that were hard-deleted before the column existed.
+    // (a) nothing on the row names the laboratory; (b) a hard-delete row carries the deleted
+    // asset's snapshot, and an earlier row of the same asset has no data of its own;
+    // (c) the snapshot names an organization that does not exist.
+    mustPsql(
+      scratchName,
+      `insert into job_audit_log (job_id, action, performed_by) values (987654, 'delete', 'user-org-a');
+       insert into asset_audit_log (asset_id, action, performed_by) values (777001, 'update', 'user-org-a');
+       insert into asset_audit_log (asset_id, action, changes, performed_by)
+         values (777001, 'delete', '{"asset":{"old":{"labOrganizationId":"org-a"},"new":null}}', 'user-org-a');
+       insert into customer_audit_log (customer_id, action, changes, performed_by)
+         values (777002, 'delete', '{"customer":{"old":{"labOrganizationId":"ghost-org"},"new":null}}', 'user-org-a');`,
+    );
+
     const applied = psql(scratchName, MIGRATION);
-    expect(applied.stderr).toBe("");
-    expect(applied.ok).toBe(true);
+    expect(applied.ok, applied.stderr).toBe(true);
+    // The unattributable rows are counted, not raised.
+    expect(applied.stderr).toContain(
+      "job_audit_log has 1 audit row(s) of a deleted entity",
+    );
+    expect(applied.stderr).toContain(
+      "customer_audit_log has 1 audit row(s) of a deleted entity",
+    );
+    expect(applied.stderr).not.toContain("asset_audit_log has");
 
     expect(columnCount(scratchName)).toBe(ORGANIZATION_BACKFILL.length);
     const after = snapshot(scratchName);
     for (const table of SEEDED_CHILD_TABLES) {
+      const rows = new Set(after[table]?.trim().split("\n"));
       if (table === "job_standard") {
         // Re-inserted above: same rows, new ids.
-        const owners = after[table]
-          ?.trim()
-          .split("\n")
-          .map((line) => line.split("|")[1]);
-        expect(owners?.toSorted(), table).toEqual(["org-a", "org-b"]);
+        const owners = [...rows].map((line) => line.split("|")[1]);
+        expect(owners.toSorted(), table).toEqual(["org-a", "org-b"]);
         continue;
       }
-      expect(after[table], table).toEqual(expected[table]);
+      // Every seeded row got its parent's organization (the probe rows are extra).
+      for (const line of expected[table]?.trim().split("\n") ?? []) {
+        expect(rows.has(line), `${table}: ${line}`).toBe(true);
+      }
     }
 
-    // NOT NULL, RESTRICT, in Postgres.
+    // The orphans: attributed from their own snapshot / siblings, or left NULL.
+    expect(
+      mustPsql(
+        scratchName,
+        `select coalesce(organization_id, 'NULL') from asset_audit_log where asset_id = 777001 order by id;`,
+      ).trim(),
+    ).toBe("org-a\norg-a");
+    expect(
+      mustPsql(
+        scratchName,
+        `select coalesce(organization_id, 'NULL') from job_audit_log where job_id = 987654;`,
+      ).trim(),
+    ).toBe("NULL");
+    expect(
+      mustPsql(
+        scratchName,
+        `select coalesce(organization_id, 'NULL') from customer_audit_log where customer_id = 777002;`,
+      ).trim(),
+    ).toBe("NULL");
+
+    // NOT NULL on the children, nullable on exactly the 16 audit logs; RESTRICT on all.
     expect(
       mustPsql(
         scratchName,
         `select count(*) from information_schema.columns where table_schema = 'public' and column_name = 'organization_id' and is_nullable = 'YES' and table_name in (${tableList()});`,
       ).trim(),
-    ).toBe("0");
+    ).toBe("16");
     expect(
       mustPsql(
         scratchName,
@@ -312,7 +356,7 @@ describe("migration 0118 on a database in main's shape", () => {
     expect(refused.stderr).toContain("job_standard_standard_id_tenant_fk");
   });
 
-  it("REQ-ORG-2: the audit logs are append-only again after the backfill", () => {
+  it("REQ-ORG-2: a NEW audit row without an organization is refused by the CHECK; the audit logs are append-only again", () => {
     const update = psql(
       scratchName,
       `update job_audit_log set reason = 'rewritten';`,
@@ -325,8 +369,19 @@ describe("migration 0118 on a database in main's shape", () => {
     );
     expect(insertWithout.ok).toBe(false);
     expect(insertWithout.stderr).toContain(
-      'null value in column "organization_id"',
+      'violates check constraint "job_audit_log_organization_id_required"',
     );
+    // With an organization it is accepted.
+    mustPsql(
+      scratchName,
+      `insert into job_audit_log (organization_id, job_id, action, performed_by) values ('org-a', ${org.a.jobId}, 'x', 'user-org-a');`,
+    );
+    // The constraint is NOT VALID while orphans remain: VALIDATE fails until they are attributed or archived.
+    const validate = psql(
+      scratchName,
+      `alter table job_audit_log validate constraint job_audit_log_organization_id_required;`,
+    );
+    expect(validate.ok).toBe(false);
   });
 
   it("REQ-ORG-2: running it again changes nothing", () => {

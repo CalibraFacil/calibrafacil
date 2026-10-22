@@ -7,7 +7,8 @@
 -- a few more. Each gets:
 --
 --   1. `organization_id text`, backfilled from its parent (set-based UPDATE ... FROM
---      parent, parents first), then NOT NULL, with a foreign key to organization
+--      parent, parents first), then NOT NULL (the audit logs: CHECK ... NOT VALID, see
+--      below), with a foreign key to organization
 --      ON DELETE RESTRICT (evidence must not cascade, records-retention.md) and an
 --      index led by organization_id.
 --   2. A composite foreign key (parent_id, organization_id) -> parent
@@ -17,12 +18,19 @@
 --      foreign key that stays in place. Nullable ON DELETE SET NULL pointers are
 --      not paired: a composite SET NULL would also null organization_id.
 --
--- Safety: the whole migration is one transaction. Rows that cannot be attributed
--- (an audit-log row whose entity row is gone, an orphan child) or that already
--- point across tenants make it RAISE with the table names and counts before any
--- constraint is added; nothing is applied. The *_audit_log tables are append-only
--- (migration 0115), so the backfill lifts that guard with the documented
--- transaction-local calibra.allow_audit_rewrite and puts it back.
+-- Safety: the whole migration is one transaction. An orphan child (no parent row) or
+-- a row that already points across tenants makes it RAISE with the table names and
+-- counts before any constraint is added; nothing is applied.
+-- The 16 *_audit_log tables are different: they are soft references that outlive the
+-- entity they document (migration 0115), so an audit row whose entity was hard-deleted
+-- is expected. Those are attributed from what the row itself carries (the snapshot of
+-- the deleted row in "changes", the attributed siblings of the same entity); the rest
+-- stays NULL and is only counted (RAISE NOTICE). Their organization_id is nullable and
+-- guarded by CHECK (organization_id IS NOT NULL) NOT VALID: every new row must carry it,
+-- legacy orphans are tolerated, and VALIDATE CONSTRAINT works once they are attributed
+-- or archived. The audit logs are append-only (migration 0115), so the backfill lifts
+-- that guard with the documented transaction-local calibra.allow_audit_rewrite and
+-- puts it back.
 --
 -- Idempotent, because this project applies migration DDL by hand and the drizzle
 -- bookkeeping table lags behind it: ADD COLUMN IF NOT EXISTS, the backfill only
@@ -85,9 +93,53 @@ BEGIN
       'UPDATE public.%I c SET organization_id = p.%I FROM public.%I p WHERE p.id = c.%I AND c.organization_id IS NULL',
       child.child_table, child.parent_org_column, child.parent_table, child.fk_column);
   END LOOP;
+
+  -- 1b. Audit logs whose entity row is gone (they outlive it by design, 0115):
+  -- attribute them from what the rows themselves carry, nothing heuristic.
+  --   * the log of a hard delete keeps the deleted row's snapshot in "changes"
+  --     (changes -> <entity> -> 'old'): its organization, when that organization exists;
+  --   * every other row of the same entity in the same log takes the organization
+  --     of its attributed siblings, when they all agree.
+  FOR child IN
+    SELECT * FROM (VALUES
+        ('asset_audit_log', 'asset', 'labOrganizationId'),
+        ('customer_audit_log', 'customer', 'labOrganizationId'),
+        ('method_audit_log', 'method', 'organizationId')
+    ) AS v(log_table, snapshot_key, snapshot_field)
+  LOOP
+    EXECUTE format(
+      'UPDATE public.%I a SET organization_id = o.id FROM public.organization o WHERE a.organization_id IS NULL AND o.id = a.changes -> %L -> ''old'' ->> %L',
+      child.log_table, child.snapshot_key, child.snapshot_field);
+  END LOOP;
+  FOR child IN
+    SELECT * FROM (VALUES
+        ('asset_audit_log', 'asset_id'),
+        ('asset_oot_audit_log', 'event_id'),
+        ('authorized_signatory_audit_log', 'signatory_id'),
+        ('calibration_request_audit_log', 'request_id'),
+        ('control_chart_audit_log', 'control_chart_id'),
+        ('corrective_action_audit_log', 'capa_id'),
+        ('customer_audit_log', 'customer_id'),
+        ('job_audit_log', 'job_id'),
+        ('method_audit_log', 'method_id'),
+        ('non_conformance_audit_log', 'nc_id'),
+        ('personnel_competence_audit_log', 'competence_id'),
+        ('proficiency_test_audit_log', 'proficiency_test_id'),
+        ('reference_standard_audit_log', 'standard_id'),
+        ('service_audit_log', 'service_id'),
+        ('training_record_audit_log', 'training_record_id'),
+        ('visit_audit_log', 'visit_id')
+    ) AS v(log_table, entity_column)
+  LOOP
+    EXECUTE format(
+      'UPDATE public.%I a SET organization_id = s.organization_id FROM (SELECT %I AS entity_id, min(organization_id) AS organization_id FROM public.%I WHERE organization_id IS NOT NULL GROUP BY %I HAVING count(DISTINCT organization_id) = 1) s WHERE a.organization_id IS NULL AND a.%I = s.entity_id',
+      child.log_table, child.entity_column, child.log_table, child.entity_column, child.entity_column);
+  END LOOP;
   PERFORM set_config('calibra.allow_audit_rewrite', '', true);
 
-  -- 2. Pre-check: every row has an organization.
+  -- 2. Pre-check: every row of a child table has an organization (an orphan there is
+  -- corruption: fix it first). The audit logs are the exception: they outlive their
+  -- entity, so a row nobody can attribute stays NULL and is only counted.
   FOR child IN
     SELECT * FROM (VALUES
         ('receivable_installment', 'document_id', 'billing_document'),
@@ -110,23 +162,7 @@ BEGIN
         ('service_order_intake_document', 'service_order_id', 'service_order'),
         ('service_order_quote', 'service_order_id', 'service_order'),
         ('service_order_quote_item', 'quote_id', 'service_order_quote'),
-        ('service_order_tag', 'service_order_id', 'service_order'),
-        ('asset_audit_log', 'asset_id', 'asset'),
-        ('asset_oot_audit_log', 'event_id', 'asset_oot_event'),
-        ('authorized_signatory_audit_log', 'signatory_id', 'authorized_signatory'),
-        ('calibration_request_audit_log', 'request_id', 'calibration_request'),
-        ('control_chart_audit_log', 'control_chart_id', 'control_chart'),
-        ('corrective_action_audit_log', 'capa_id', 'corrective_action'),
-        ('customer_audit_log', 'customer_id', 'customer'),
-        ('job_audit_log', 'job_id', 'calibration_job'),
-        ('method_audit_log', 'method_id', 'calibration_method'),
-        ('non_conformance_audit_log', 'nc_id', 'non_conformance'),
-        ('personnel_competence_audit_log', 'competence_id', 'personnel_competence'),
-        ('proficiency_test_audit_log', 'proficiency_test_id', 'proficiency_test'),
-        ('reference_standard_audit_log', 'standard_id', 'reference_standard'),
-        ('service_audit_log', 'service_id', 'service'),
-        ('training_record_audit_log', 'training_record_id', 'training_record'),
-        ('visit_audit_log', 'visit_id', 'calibration_visit')
+        ('service_order_tag', 'service_order_id', 'service_order')
     ) AS v(child_table, fk_column, parent_table)
   LOOP
     EXECUTE format('SELECT count(*) FROM public.%I WHERE organization_id IS NULL', child.child_table) INTO missing;
@@ -136,8 +172,33 @@ BEGIN
   END LOOP;
   IF report <> '' THEN
     RAISE EXCEPTION 'migration 0118 cannot attribute rows to an organization:%', report
-      USING HINT = 'Each row above has no parent to take its organization from (an audit-log row of a hard-deleted entity, or an orphan). Attribute it to its laboratory with an UPDATE (under SET LOCAL calibra.allow_audit_rewrite = ''on'' for the append-only audit logs) or remove it, then re-run.';
+      USING HINT = 'Each row above has no parent to take its organization from (an orphan). Attribute it to its laboratory with an UPDATE or remove it, then re-run.';
   END IF;
+  FOR child IN
+    SELECT * FROM (VALUES
+        ('asset_audit_log'),
+        ('asset_oot_audit_log'),
+        ('authorized_signatory_audit_log'),
+        ('calibration_request_audit_log'),
+        ('control_chart_audit_log'),
+        ('corrective_action_audit_log'),
+        ('customer_audit_log'),
+        ('job_audit_log'),
+        ('method_audit_log'),
+        ('non_conformance_audit_log'),
+        ('personnel_competence_audit_log'),
+        ('proficiency_test_audit_log'),
+        ('reference_standard_audit_log'),
+        ('service_audit_log'),
+        ('training_record_audit_log'),
+        ('visit_audit_log')
+    ) AS v(log_table)
+  LOOP
+    EXECUTE format('SELECT count(*) FROM public.%I WHERE organization_id IS NULL', child.log_table) INTO missing;
+    IF missing > 0 THEN
+      RAISE NOTICE 'migration 0118: % has % audit row(s) of a deleted entity that no organization could be attributed to; they keep organization_id NULL (invisible to tenant-scoped reads)', child.log_table, missing;
+    END IF;
+  END LOOP;
 
   -- 3. Pre-check: no composite foreign key would be violated by existing rows.
   FOR edge IN
@@ -185,49 +246,64 @@ BEGIN
       USING HINT = 'Fix the rows above (they cross tenants), then re-run.';
   END IF;
 
-  -- 4. NOT NULL, foreign key to organization (RESTRICT), index.
+  -- 4. NOT NULL (the audit logs get a CHECK ... NOT VALID instead), foreign key to
+  -- organization (RESTRICT), index.
   FOR child IN
     SELECT * FROM (VALUES
-        ('receivable_installment', 'organization_id', 'receivable_installment_org_idx'),
-        ('payment_receipt', 'organization_id', 'payment_receipt_org_idx'),
-        ('billing_document_item', 'organization_id', 'billing_document_item_org_idx'),
-        ('billing_group_service_order', 'organization_id', 'billing_group_service_order_org_idx'),
-        ('commercial_agreement_service_term', 'organization_id', 'commercial_agreement_service_term_org_idx'),
-        ('commercial_agreement_unit_scope', 'organization_id', 'commercial_agreement_unit_scope_org_idx'),
-        ('job_standard', 'organization_id', 'job_standard_org_idx'),
-        ('asset_oot_impact_assessment', 'organization_id', 'asset_oot_impact_assessment_org_idx'),
-        ('calibration_request_item', 'organization_id', 'calibration_request_item_org_idx'),
-        ('service_order_asset_snapshot', 'organization_id', 'service_order_asset_snapshot_org_idx'),
-        ('service_order_attachment', 'organization_id', 'service_order_attachment_org_idx'),
-        ('service_order_certificate_link', 'organization_id', 'service_order_certificate_link_org_idx'),
-        ('service_order_delivery_document', 'organization_id', 'service_order_delivery_document_org_idx'),
-        ('service_order_email_log', 'organization_id', 'service_order_email_log_org_idx'),
-        ('service_order_evaluation', 'organization_id', 'service_order_evaluation_org_idx'),
-        ('service_order_execution', 'organization_id', 'service_order_execution_org_idx'),
-        ('service_order_execution_item', 'organization_id', 'service_order_execution_item_org_idx'),
-        ('service_order_intake_document', 'organization_id', 'service_order_intake_document_org_idx'),
-        ('service_order_quote', 'organization_id', 'service_order_quote_org_idx'),
-        ('service_order_quote_item', 'organization_id', 'service_order_quote_item_org_idx'),
-        ('service_order_tag', 'organization_id', 'service_order_tag_org_idx'),
-        ('asset_audit_log', 'organization_id, performed_at', 'asset_audit_log_org_performed_at_idx'),
-        ('asset_oot_audit_log', 'organization_id, performed_at', 'asset_oot_audit_log_org_performed_at_idx'),
-        ('authorized_signatory_audit_log', 'organization_id, performed_at', 'authorized_signatory_audit_log_org_performed_at_idx'),
-        ('calibration_request_audit_log', 'organization_id, performed_at', 'calibration_request_audit_log_org_performed_at_idx'),
-        ('control_chart_audit_log', 'organization_id, performed_at', 'control_chart_audit_log_org_performed_at_idx'),
-        ('corrective_action_audit_log', 'organization_id, performed_at', 'corrective_action_audit_log_org_performed_at_idx'),
-        ('customer_audit_log', 'organization_id, performed_at', 'customer_audit_log_org_performed_at_idx'),
-        ('job_audit_log', 'organization_id, performed_at', 'job_audit_log_org_performed_at_idx'),
-        ('method_audit_log', 'organization_id, performed_at', 'method_audit_log_org_performed_at_idx'),
-        ('non_conformance_audit_log', 'organization_id, performed_at', 'non_conformance_audit_log_org_performed_at_idx'),
-        ('personnel_competence_audit_log', 'organization_id, performed_at', 'personnel_competence_audit_log_org_performed_at_idx'),
-        ('proficiency_test_audit_log', 'organization_id, performed_at', 'proficiency_test_audit_log_org_performed_at_idx'),
-        ('reference_standard_audit_log', 'organization_id, performed_at', 'reference_standard_audit_log_org_performed_at_idx'),
-        ('service_audit_log', 'organization_id, performed_at', 'service_audit_log_org_performed_at_idx'),
-        ('training_record_audit_log', 'organization_id, performed_at', 'training_record_audit_log_org_performed_at_idx'),
-        ('visit_audit_log', 'organization_id, performed_at', 'visit_audit_log_org_performed_at_idx')
-    ) AS v(child_table, index_columns, index_name)
+        ('receivable_installment', 'organization_id', 'receivable_installment_org_idx', false),
+        ('payment_receipt', 'organization_id', 'payment_receipt_org_idx', false),
+        ('billing_document_item', 'organization_id', 'billing_document_item_org_idx', false),
+        ('billing_group_service_order', 'organization_id', 'billing_group_service_order_org_idx', false),
+        ('commercial_agreement_service_term', 'organization_id', 'commercial_agreement_service_term_org_idx', false),
+        ('commercial_agreement_unit_scope', 'organization_id', 'commercial_agreement_unit_scope_org_idx', false),
+        ('job_standard', 'organization_id', 'job_standard_org_idx', false),
+        ('asset_oot_impact_assessment', 'organization_id', 'asset_oot_impact_assessment_org_idx', false),
+        ('calibration_request_item', 'organization_id', 'calibration_request_item_org_idx', false),
+        ('service_order_asset_snapshot', 'organization_id', 'service_order_asset_snapshot_org_idx', false),
+        ('service_order_attachment', 'organization_id', 'service_order_attachment_org_idx', false),
+        ('service_order_certificate_link', 'organization_id', 'service_order_certificate_link_org_idx', false),
+        ('service_order_delivery_document', 'organization_id', 'service_order_delivery_document_org_idx', false),
+        ('service_order_email_log', 'organization_id', 'service_order_email_log_org_idx', false),
+        ('service_order_evaluation', 'organization_id', 'service_order_evaluation_org_idx', false),
+        ('service_order_execution', 'organization_id', 'service_order_execution_org_idx', false),
+        ('service_order_execution_item', 'organization_id', 'service_order_execution_item_org_idx', false),
+        ('service_order_intake_document', 'organization_id', 'service_order_intake_document_org_idx', false),
+        ('service_order_quote', 'organization_id', 'service_order_quote_org_idx', false),
+        ('service_order_quote_item', 'organization_id', 'service_order_quote_item_org_idx', false),
+        ('service_order_tag', 'organization_id', 'service_order_tag_org_idx', false),
+        ('asset_audit_log', 'organization_id, performed_at', 'asset_audit_log_org_performed_at_idx', true),
+        ('asset_oot_audit_log', 'organization_id, performed_at', 'asset_oot_audit_log_org_performed_at_idx', true),
+        ('authorized_signatory_audit_log', 'organization_id, performed_at', 'authorized_signatory_audit_log_org_performed_at_idx', true),
+        ('calibration_request_audit_log', 'organization_id, performed_at', 'calibration_request_audit_log_org_performed_at_idx', true),
+        ('control_chart_audit_log', 'organization_id, performed_at', 'control_chart_audit_log_org_performed_at_idx', true),
+        ('corrective_action_audit_log', 'organization_id, performed_at', 'corrective_action_audit_log_org_performed_at_idx', true),
+        ('customer_audit_log', 'organization_id, performed_at', 'customer_audit_log_org_performed_at_idx', true),
+        ('job_audit_log', 'organization_id, performed_at', 'job_audit_log_org_performed_at_idx', true),
+        ('method_audit_log', 'organization_id, performed_at', 'method_audit_log_org_performed_at_idx', true),
+        ('non_conformance_audit_log', 'organization_id, performed_at', 'non_conformance_audit_log_org_performed_at_idx', true),
+        ('personnel_competence_audit_log', 'organization_id, performed_at', 'personnel_competence_audit_log_org_performed_at_idx', true),
+        ('proficiency_test_audit_log', 'organization_id, performed_at', 'proficiency_test_audit_log_org_performed_at_idx', true),
+        ('reference_standard_audit_log', 'organization_id, performed_at', 'reference_standard_audit_log_org_performed_at_idx', true),
+        ('service_audit_log', 'organization_id, performed_at', 'service_audit_log_org_performed_at_idx', true),
+        ('training_record_audit_log', 'organization_id, performed_at', 'training_record_audit_log_org_performed_at_idx', true),
+        ('visit_audit_log', 'organization_id, performed_at', 'visit_audit_log_org_performed_at_idx', true)
+    ) AS v(child_table, index_columns, index_name, is_audit_log)
   LOOP
-    EXECUTE format('ALTER TABLE public.%I ALTER COLUMN organization_id SET NOT NULL', child.child_table);
+    IF child.is_audit_log THEN
+      -- Every NEW row must carry its organization; legacy orphans are tolerated until
+      -- they are attributed or archived and the constraint is VALIDATEd.
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+         WHERE conrelid = to_regclass(format('public.%I', child.child_table))
+           AND conname = left(child.child_table || '_organization_id_required', 63)
+      ) THEN
+        EXECUTE format(
+          'ALTER TABLE public.%I ADD CONSTRAINT %I CHECK (organization_id IS NOT NULL) NOT VALID',
+          child.child_table, left(child.child_table || '_organization_id_required', 63));
+      END IF;
+    ELSE
+      EXECUTE format('ALTER TABLE public.%I ALTER COLUMN organization_id SET NOT NULL', child.child_table);
+    END IF;
     IF NOT EXISTS (
       SELECT 1 FROM pg_constraint
        WHERE conrelid = to_regclass(format('public.%I', child.child_table))

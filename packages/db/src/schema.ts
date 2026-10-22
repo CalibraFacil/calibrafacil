@@ -1621,9 +1621,13 @@ export const customerAuditLog = pgTable(
   "customer_audit_log",
   {
     id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "restrict" }),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // CMP-06 (#649): soft reference on purpose — NO FK. The audit trail is
     // append-only (ISO/IEC 17025): the "delete" row must survive the deletion
     // of the customer it documents, so it keeps the id as a plain integer.
@@ -2226,9 +2230,13 @@ export const assetAuditLog = pgTable(
   "asset_audit_log",
   {
     id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "restrict" }),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the "delete" row must survive the deletion of the asset it
     // documents (assets cascade when their customer is deleted), so it keeps the
@@ -2700,9 +2708,13 @@ export const methodAuditLog = pgTable(
   "method_audit_log",
   {
     id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "restrict" }),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // CMP-06 (#649): soft reference on purpose — NO FK. The audit trail is
     // append-only (ISO/IEC 17025 §7.2): the "delete" row must survive the
     // deletion of the method it documents, so it keeps the id as a plain integer.
@@ -2856,9 +2868,13 @@ export const serviceAuditLog = pgTable(
   "service_audit_log",
   {
     id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "restrict" }),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the row must survive deletion of the service it documents.
     serviceId: integer("service_id").notNull(),
@@ -3298,9 +3314,13 @@ export const referenceStandardAuditLog = pgTable(
   "reference_standard_audit_log",
   {
     id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "restrict" }),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the row must survive deletion of the reference standard.
     standardId: integer("standard_id").notNull(),
@@ -3834,9 +3854,13 @@ export const jobAuditLog = pgTable(
   "job_audit_log",
   {
     id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "restrict" }),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the row must survive deletion of the calibration job.
     jobId: integer("job_id").notNull(),
@@ -5765,9 +5789,13 @@ export const calibrationRequestAuditLog = pgTable(
   "calibration_request_audit_log",
   {
     id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "restrict" }),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the row must survive deletion of the calibration request.
     requestId: integer("request_id").notNull(),
@@ -5956,9 +5984,13 @@ export const visitAuditLog = pgTable(
   "visit_audit_log",
   {
     id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "restrict" }),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     visitId: integer("visit_id").notNull(),
     action: text("action").notNull(),
     changes: jsonb("changes"),
@@ -7340,9 +7372,13 @@ export const correctiveActionAuditLog = pgTable(
   "corrective_action_audit_log",
   {
     id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "restrict" }),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the row must survive deletion of the corrective action.
     capaId: integer("capa_id").notNull(),
@@ -7483,9 +7519,13 @@ export const nonConformanceAuditLog = pgTable(
   "non_conformance_audit_log",
   {
     id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "restrict" }),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the row must survive deletion of the non-conformance.
     ncId: integer("nc_id").notNull(),
@@ -8205,9 +8245,13 @@ export const personnelCompetenceAuditLog = pgTable(
   "personnel_competence_audit_log",
   {
     id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "restrict" }),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the row must survive deletion of the competence record
     // (which itself cascades from user self-delete), so it keeps a plain integer.
@@ -8237,9 +8281,13 @@ export const trainingRecordAuditLog = pgTable(
   "training_record_audit_log",
   {
     id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "restrict" }),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the row must survive deletion of the training record
     // (which itself cascades from user self-delete), so it keeps a plain integer.
@@ -8347,9 +8395,13 @@ export const authorizedSignatoryAuditLog = pgTable(
   "authorized_signatory_audit_log",
   {
     id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "restrict" }),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // CMP-07 (#692): soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025 §6.2.6): the record of who was an authorized signatory must
     // survive deletion of the authorization row, so it keeps a plain integer.
@@ -8639,9 +8691,13 @@ export const proficiencyTestAuditLog = pgTable(
   "proficiency_test_audit_log",
   {
     id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "restrict" }),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // Soft reference on purpose — NO FK. Append-only audit trail
     // (ISO/IEC 17025): the row must survive deletion of the PT round.
     proficiencyTestId: integer("proficiency_test_id").notNull(),
@@ -8824,9 +8880,13 @@ export const controlChartAuditLog = pgTable(
   "control_chart_audit_log",
   {
     id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "restrict" }),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // Soft reference on purpose — NO FK (append-only audit trail).
     controlChartId: integer("control_chart_id").notNull(),
     action: text("action").notNull(), // 'create', 'update', 'recalculate', 'escalate'
@@ -9062,9 +9122,13 @@ export const assetOotAuditLog = pgTable(
   "asset_oot_audit_log",
   {
     id: serial("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "restrict" }),
+    // Nullable only for the orphans of migration 0118 (audit rows of an entity that
+    // was hard-deleted before the column existed); the CHECK
+    // `<table>_organization_id_required ... NOT VALID` (migration 0118,
+    // sql/schema-extras.sql) refuses every new row without it.
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
     // Soft reference on purpose — NO FK. Append-only audit trail: the row
     // must survive deletion of the event (customer's own audit evidence).
     eventId: integer("event_id").notNull(),

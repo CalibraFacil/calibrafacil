@@ -98,23 +98,57 @@ describe("REQ-ORG-1: every table is classified tenant or global", () => {
 });
 
 describe("REQ-ORG-2: organization_id is NOT NULL, RESTRICT, indexed", () => {
-  it("REQ-ORG-2: every tenant table has a NOT NULL organization column", () => {
+  it("REQ-ORG-2: every tenant table has a NOT NULL organization column, except the soft-reference audit logs (nullable + CHECK NOT VALID)", () => {
+    const auditLogs = new Set(
+      ORGANIZATION_BACKFILL.filter((entry) => entry.soft).map(
+        (entry) => entry.table,
+      ),
+    );
+    expect(auditLogs.size).toBe(16);
     for (const table of classifyTables().tenant) {
       expect(table.tenantColumns.length, table.name).toBeGreaterThan(0);
       for (const column of table.tenantColumns) {
-        expect(column.notNull, `${table.name}.${column.name}`).toBe(true);
+        expect(column.notNull, `${table.name}.${column.name}`).toBe(
+          !auditLogs.has(table.name),
+        );
         expect(TENANT_COLUMNS).toContain(column.name);
       }
     }
   });
 
-  it("REQ-ORG-2: every table of migration 0118 has organization_id NOT NULL with an FK to organization ON DELETE RESTRICT", () => {
+  it("REQ-ORG-2: every audit log has the CHECK (organization_id IS NOT NULL) NOT VALID in the migration and in schema-extras.sql", () => {
+    const extras = read("../sql/schema-extras.sql");
+    const audit = ORGANIZATION_BACKFILL.filter((entry) => entry.soft);
+    expect(MIGRATION).toContain(
+      "CHECK (organization_id IS NOT NULL) NOT VALID",
+    );
+    expect(extras).toContain("CHECK (organization_id IS NOT NULL) NOT VALID");
+    expect(extras).toContain("_organization_id_required");
+    for (const entry of audit) {
+      expect(extras, entry.table).toContain(`'${entry.table}'`);
+      // The migration marks it as an audit log in its index list.
+      expect(MIGRATION, entry.table).toContain(
+        `('${entry.table}', 'organization_id, performed_at', '${entry.table}_org_performed_at_idx', true)`,
+      );
+      expect(
+        `${entry.table}_organization_id_required`.length,
+      ).toBeLessThanOrEqual(63);
+    }
+    // The hard children keep SET NOT NULL and the pre-check; none is flagged as an audit log.
+    for (const entry of ORGANIZATION_BACKFILL.filter((other) => !other.soft)) {
+      expect(MIGRATION, entry.table).toContain(
+        `('${entry.table}', 'organization_id', '${entry.table}_org_idx', false)`,
+      );
+    }
+  });
+
+  it("REQ-ORG-2: every table of migration 0118 has organization_id with an FK to organization ON DELETE RESTRICT (NOT NULL except the audit logs)", () => {
     for (const entry of ORGANIZATION_BACKFILL) {
       const column = tenancyOf(entry.table)?.tenantColumns.find(
         (candidate) => candidate.name === "organization_id",
       );
       expect(column, entry.table).toBeDefined();
-      expect(column?.notNull, entry.table).toBe(true);
+      expect(column?.notNull, entry.table).toBe(!entry.soft);
       expect(column?.organizationFk, entry.table).toBe("restrict");
     }
   });
@@ -178,7 +212,7 @@ describe("REQ-ORG-2: organization_id is NOT NULL, RESTRICT, indexed", () => {
     }
   });
 
-  it("REQ-ORG-2: the migration is idempotent, set-based and raises on orphans before NOT NULL", () => {
+  it("REQ-ORG-2: the migration is idempotent, set-based, raises on orphan children before NOT NULL and only NOTICEs orphan audit rows", () => {
     expect(MIGRATION).toContain("ADD COLUMN IF NOT EXISTS organization_id");
     expect(MIGRATION).toMatch(
       /UPDATE public\.%I c SET organization_id = p\.%I FROM public\.%I p/,
@@ -189,6 +223,17 @@ describe("REQ-ORG-2: organization_id is NOT NULL, RESTRICT, indexed", () => {
     const notNull = MIGRATION.indexOf("SET NOT NULL");
     expect(raise).toBeGreaterThan(0);
     expect(notNull).toBeGreaterThan(raise);
+    // Orphan audit rows (entity hard-deleted) are attributed from their own data, counted, never raised.
+    expect(MIGRATION).toContain(
+      "RAISE NOTICE 'migration 0118: % has % audit row(s)",
+    );
+    expect(MIGRATION).toContain("changes -> %L -> ''old'' ->> %L");
+    const raiseSection = MIGRATION.slice(
+      MIGRATION.indexOf("-- 2. Pre-check"),
+      MIGRATION.indexOf("-- 3. Pre-check"),
+    );
+    expect(raiseSection).not.toContain("'job_audit_log', 'job_id'");
+    expect(raiseSection).toContain("'job_standard', 'job_id'");
     // The append-only audit logs need the transaction-local escape hatch, and it is put back.
     expect(MIGRATION).toContain(
       "set_config('calibra.allow_audit_rewrite', 'on', true)",

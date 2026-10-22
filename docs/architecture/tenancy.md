@@ -37,7 +37,17 @@ pnpm --dir packages/db tenancy:doc
    point at the entity they document through a soft reference (no foreign key, so
    the "delete" row survives the entity). They now also carry `organization_id`,
    written by the code that appends the row, so the retention purge, the tenant
-   SQL guard and row-level security see them without a join.
+   SQL guard and row-level security see them without a join. Unlike the other
+   children the column is **nullable**, guarded by
+   `CHECK (organization_id IS NOT NULL) NOT VALID` (migration 0118 and
+   `schema-extras.sql`): every new row must carry it, while legacy rows of an
+   entity that was hard-deleted before the column existed are tolerated.
+   **Those legacy rows keep `organization_id` NULL and are invisible to
+   tenant-scoped reads and to row-level security**; they are only reachable by
+   the platform. Once they are attributed or archived,
+   `ALTER TABLE <log> VALIDATE CONSTRAINT <log>_organization_id_required` turns
+   the guarantee into a full one. The foreign key to `organization` stays
+   `RESTRICT`.
 5. **Every insert sets the organization.** TypeScript forces it (the column is
    `NOT NULL` without a default). The integration tier's tenant SQL guard
    (`apps/api/test/integration/tenant-sql-*.ts`) derives its tenant tables from
@@ -52,13 +62,20 @@ pnpm --dir packages/db tenancy:doc
    `UPDATE ... FROM parent`, parents first (the `*_audit_log` tables are
    append-only, so the backfill lifts that trigger with the transaction-local
    `calibra.allow_audit_rewrite` and puts it back);
-2. **pre-check**: any row left without an organization (an orphan, or an audit
-   row whose entity was hard-deleted) makes the migration `RAISE` with the table
-   and the count, before any constraint is added; so does any existing row that
-   points across tenants;
-3. `SET NOT NULL`, foreign key to `organization` `RESTRICT`, an index led by
-   `organization_id` (`(organization_id, performed_at)` on the audit logs);
-4. `UNIQUE (id, organization)` on the parents, then the composite foreign keys.
+2. **audit logs whose entity is gone** (expected: they outlive it) are
+   attributed only from what the row itself carries: the snapshot of the deleted
+   row in `changes` (`asset`, `customer`, `method` deletes) and the attributed
+   siblings of the same entity when they agree. Nothing heuristic (no actor
+   membership). The rest stay NULL and the migration only `RAISE NOTICE`s the
+   count per table;
+3. **pre-check for every other child** (finance, service-order children,
+   `job_standard`, ...): a row left without an organization is real corruption
+   and makes the migration `RAISE` with the table and the count, before any
+   constraint is added; so does any existing row that points across tenants;
+4. `SET NOT NULL` (audit logs: the `CHECK ... NOT VALID` instead), foreign key to
+   `organization` `RESTRICT`, an index led by `organization_id`
+   (`(organization_id, performed_at)` on the audit logs);
+5. `UNIQUE (id, organization)` on the parents, then the composite foreign keys.
 
 Every step is idempotent (the project applies migration DDL by hand and the
 drizzle bookkeeping table lags behind). Nothing in it needs `schema-extras.sql`:
@@ -98,45 +115,45 @@ columns, foreign keys, unique constraints and indexes are all expressed in
 
 The value was backfilled from the parent along the path shown (parents first).
 
-| Table                               | Parent path to the organization                                                               | Pointer                             | Organization FK | Composite keys                           |
-| ----------------------------------- | --------------------------------------------------------------------------------------------- | ----------------------------------- | --------------- | ---------------------------------------- |
-| `receivable_installment`            | `receivable_installment` → `billing_document` → `organization`                                | `document_id`                       | RESTRICT        | `document_id`                            |
-| `payment_receipt`                   | `payment_receipt` → `receivable_installment` → `billing_document` → `organization`            | `installment_id`                    | RESTRICT        | `installment_id`                         |
-| `billing_document_item`             | `billing_document_item` → `billing_document` → `organization`                                 | `document_id`                       | RESTRICT        | `document_id`                            |
-| `billing_group_service_order`       | `billing_group_service_order` → `billing_group` → `organization`                              | `group_id`                          | RESTRICT        | `group_id`, `service_order_id`           |
-| `commercial_agreement_service_term` | `commercial_agreement_service_term` → `commercial_agreement` → `organization`                 | `agreement_id`                      | RESTRICT        | `agreement_id`, `service_id`, `unit_id`  |
-| `commercial_agreement_unit_scope`   | `commercial_agreement_unit_scope` → `commercial_agreement` → `organization`                   | `agreement_id`                      | RESTRICT        | `agreement_id`, `unit_id`                |
-| `job_standard`                      | `job_standard` → `calibration_job` → `organization`                                           | `job_id`                            | RESTRICT        | `job_id`, `standard_id`                  |
-| `asset_oot_impact_assessment`       | `asset_oot_impact_assessment` → `asset_oot_event` → `organization`                            | `event_id`                          | RESTRICT        | `event_id`                               |
-| `calibration_request_item`          | `calibration_request_item` → `calibration_request` → `organization`                           | `request_id`                        | RESTRICT        | `request_id`, `asset_id`                 |
-| `service_order_asset_snapshot`      | `service_order_asset_snapshot` → `service_order` → `organization`                             | `service_order_id`                  | RESTRICT        | `service_order_id`, `asset_id`           |
-| `service_order_attachment`          | `service_order_attachment` → `service_order` → `organization`                                 | `service_order_id`                  | RESTRICT        | `service_order_id`                       |
-| `service_order_certificate_link`    | `service_order_certificate_link` → `service_order` → `organization`                           | `service_order_id`                  | RESTRICT        | `service_order_id`, `certificate_job_id` |
-| `service_order_delivery_document`   | `service_order_delivery_document` → `service_order` → `organization`                          | `service_order_id`                  | RESTRICT        | `service_order_id`                       |
-| `service_order_email_log`           | `service_order_email_log` → `service_order` → `organization`                                  | `service_order_id`                  | RESTRICT        | `service_order_id`                       |
-| `service_order_evaluation`          | `service_order_evaluation` → `service_order` → `organization`                                 | `service_order_id`                  | RESTRICT        | `service_order_id`                       |
-| `service_order_execution`           | `service_order_execution` → `service_order` → `organization`                                  | `service_order_id`                  | RESTRICT        | `service_order_id`                       |
-| `service_order_execution_item`      | `service_order_execution_item` → `service_order_execution` → `service_order` → `organization` | `execution_id`                      | RESTRICT        | `execution_id`                           |
-| `service_order_intake_document`     | `service_order_intake_document` → `service_order` → `organization`                            | `service_order_id`                  | RESTRICT        | `service_order_id`                       |
-| `service_order_quote`               | `service_order_quote` → `service_order` → `organization`                                      | `service_order_id`                  | RESTRICT        | `service_order_id`                       |
-| `service_order_quote_item`          | `service_order_quote_item` → `service_order_quote` → `service_order` → `organization`         | `quote_id`                          | RESTRICT        | `quote_id`                               |
-| `service_order_tag`                 | `service_order_tag` → `service_order` → `organization`                                        | `service_order_id`                  | RESTRICT        | `service_order_id`                       |
-| `asset_audit_log`                   | `asset_audit_log` → `asset` → `organization`                                                  | `asset_id` (soft: no FK)            | RESTRICT        | -                                        |
-| `asset_oot_audit_log`               | `asset_oot_audit_log` → `asset_oot_event` → `organization`                                    | `event_id` (soft: no FK)            | RESTRICT        | -                                        |
-| `authorized_signatory_audit_log`    | `authorized_signatory_audit_log` → `authorized_signatory` → `organization`                    | `signatory_id` (soft: no FK)        | RESTRICT        | -                                        |
-| `calibration_request_audit_log`     | `calibration_request_audit_log` → `calibration_request` → `organization`                      | `request_id` (soft: no FK)          | RESTRICT        | -                                        |
-| `control_chart_audit_log`           | `control_chart_audit_log` → `control_chart` → `organization`                                  | `control_chart_id` (soft: no FK)    | RESTRICT        | -                                        |
-| `corrective_action_audit_log`       | `corrective_action_audit_log` → `corrective_action` → `organization`                          | `capa_id` (soft: no FK)             | RESTRICT        | -                                        |
-| `customer_audit_log`                | `customer_audit_log` → `customer` → `organization`                                            | `customer_id` (soft: no FK)         | RESTRICT        | -                                        |
-| `job_audit_log`                     | `job_audit_log` → `calibration_job` → `organization`                                          | `job_id` (soft: no FK)              | RESTRICT        | -                                        |
-| `method_audit_log`                  | `method_audit_log` → `calibration_method` → `organization`                                    | `method_id` (soft: no FK)           | RESTRICT        | -                                        |
-| `non_conformance_audit_log`         | `non_conformance_audit_log` → `non_conformance` → `organization`                              | `nc_id` (soft: no FK)               | RESTRICT        | -                                        |
-| `personnel_competence_audit_log`    | `personnel_competence_audit_log` → `personnel_competence` → `organization`                    | `competence_id` (soft: no FK)       | RESTRICT        | -                                        |
-| `proficiency_test_audit_log`        | `proficiency_test_audit_log` → `proficiency_test` → `organization`                            | `proficiency_test_id` (soft: no FK) | RESTRICT        | -                                        |
-| `reference_standard_audit_log`      | `reference_standard_audit_log` → `reference_standard` → `organization`                        | `standard_id` (soft: no FK)         | RESTRICT        | -                                        |
-| `service_audit_log`                 | `service_audit_log` → `service` → `organization`                                              | `service_id` (soft: no FK)          | RESTRICT        | -                                        |
-| `training_record_audit_log`         | `training_record_audit_log` → `training_record` → `organization`                              | `training_record_id` (soft: no FK)  | RESTRICT        | -                                        |
-| `visit_audit_log`                   | `visit_audit_log` → `calibration_visit` → `organization`                                      | `visit_id` (soft: no FK)            | RESTRICT        | -                                        |
+| Table                               | Parent path to the organization                                                               | Pointer                             | organization_id            | Organization FK | Composite keys                           |
+| ----------------------------------- | --------------------------------------------------------------------------------------------- | ----------------------------------- | -------------------------- | --------------- | ---------------------------------------- |
+| `receivable_installment`            | `receivable_installment` → `billing_document` → `organization`                                | `document_id`                       | NOT NULL                   | RESTRICT        | `document_id`                            |
+| `payment_receipt`                   | `payment_receipt` → `receivable_installment` → `billing_document` → `organization`            | `installment_id`                    | NOT NULL                   | RESTRICT        | `installment_id`                         |
+| `billing_document_item`             | `billing_document_item` → `billing_document` → `organization`                                 | `document_id`                       | NOT NULL                   | RESTRICT        | `document_id`                            |
+| `billing_group_service_order`       | `billing_group_service_order` → `billing_group` → `organization`                              | `group_id`                          | NOT NULL                   | RESTRICT        | `group_id`, `service_order_id`           |
+| `commercial_agreement_service_term` | `commercial_agreement_service_term` → `commercial_agreement` → `organization`                 | `agreement_id`                      | NOT NULL                   | RESTRICT        | `agreement_id`, `service_id`, `unit_id`  |
+| `commercial_agreement_unit_scope`   | `commercial_agreement_unit_scope` → `commercial_agreement` → `organization`                   | `agreement_id`                      | NOT NULL                   | RESTRICT        | `agreement_id`, `unit_id`                |
+| `job_standard`                      | `job_standard` → `calibration_job` → `organization`                                           | `job_id`                            | NOT NULL                   | RESTRICT        | `job_id`, `standard_id`                  |
+| `asset_oot_impact_assessment`       | `asset_oot_impact_assessment` → `asset_oot_event` → `organization`                            | `event_id`                          | NOT NULL                   | RESTRICT        | `event_id`                               |
+| `calibration_request_item`          | `calibration_request_item` → `calibration_request` → `organization`                           | `request_id`                        | NOT NULL                   | RESTRICT        | `request_id`, `asset_id`                 |
+| `service_order_asset_snapshot`      | `service_order_asset_snapshot` → `service_order` → `organization`                             | `service_order_id`                  | NOT NULL                   | RESTRICT        | `service_order_id`, `asset_id`           |
+| `service_order_attachment`          | `service_order_attachment` → `service_order` → `organization`                                 | `service_order_id`                  | NOT NULL                   | RESTRICT        | `service_order_id`                       |
+| `service_order_certificate_link`    | `service_order_certificate_link` → `service_order` → `organization`                           | `service_order_id`                  | NOT NULL                   | RESTRICT        | `service_order_id`, `certificate_job_id` |
+| `service_order_delivery_document`   | `service_order_delivery_document` → `service_order` → `organization`                          | `service_order_id`                  | NOT NULL                   | RESTRICT        | `service_order_id`                       |
+| `service_order_email_log`           | `service_order_email_log` → `service_order` → `organization`                                  | `service_order_id`                  | NOT NULL                   | RESTRICT        | `service_order_id`                       |
+| `service_order_evaluation`          | `service_order_evaluation` → `service_order` → `organization`                                 | `service_order_id`                  | NOT NULL                   | RESTRICT        | `service_order_id`                       |
+| `service_order_execution`           | `service_order_execution` → `service_order` → `organization`                                  | `service_order_id`                  | NOT NULL                   | RESTRICT        | `service_order_id`                       |
+| `service_order_execution_item`      | `service_order_execution_item` → `service_order_execution` → `service_order` → `organization` | `execution_id`                      | NOT NULL                   | RESTRICT        | `execution_id`                           |
+| `service_order_intake_document`     | `service_order_intake_document` → `service_order` → `organization`                            | `service_order_id`                  | NOT NULL                   | RESTRICT        | `service_order_id`                       |
+| `service_order_quote`               | `service_order_quote` → `service_order` → `organization`                                      | `service_order_id`                  | NOT NULL                   | RESTRICT        | `service_order_id`                       |
+| `service_order_quote_item`          | `service_order_quote_item` → `service_order_quote` → `service_order` → `organization`         | `quote_id`                          | NOT NULL                   | RESTRICT        | `quote_id`                               |
+| `service_order_tag`                 | `service_order_tag` → `service_order` → `organization`                                        | `service_order_id`                  | NOT NULL                   | RESTRICT        | `service_order_id`                       |
+| `asset_audit_log`                   | `asset_audit_log` → `asset` → `organization`                                                  | `asset_id` (soft: no FK)            | nullable + CHECK NOT VALID | RESTRICT        | -                                        |
+| `asset_oot_audit_log`               | `asset_oot_audit_log` → `asset_oot_event` → `organization`                                    | `event_id` (soft: no FK)            | nullable + CHECK NOT VALID | RESTRICT        | -                                        |
+| `authorized_signatory_audit_log`    | `authorized_signatory_audit_log` → `authorized_signatory` → `organization`                    | `signatory_id` (soft: no FK)        | nullable + CHECK NOT VALID | RESTRICT        | -                                        |
+| `calibration_request_audit_log`     | `calibration_request_audit_log` → `calibration_request` → `organization`                      | `request_id` (soft: no FK)          | nullable + CHECK NOT VALID | RESTRICT        | -                                        |
+| `control_chart_audit_log`           | `control_chart_audit_log` → `control_chart` → `organization`                                  | `control_chart_id` (soft: no FK)    | nullable + CHECK NOT VALID | RESTRICT        | -                                        |
+| `corrective_action_audit_log`       | `corrective_action_audit_log` → `corrective_action` → `organization`                          | `capa_id` (soft: no FK)             | nullable + CHECK NOT VALID | RESTRICT        | -                                        |
+| `customer_audit_log`                | `customer_audit_log` → `customer` → `organization`                                            | `customer_id` (soft: no FK)         | nullable + CHECK NOT VALID | RESTRICT        | -                                        |
+| `job_audit_log`                     | `job_audit_log` → `calibration_job` → `organization`                                          | `job_id` (soft: no FK)              | nullable + CHECK NOT VALID | RESTRICT        | -                                        |
+| `method_audit_log`                  | `method_audit_log` → `calibration_method` → `organization`                                    | `method_id` (soft: no FK)           | nullable + CHECK NOT VALID | RESTRICT        | -                                        |
+| `non_conformance_audit_log`         | `non_conformance_audit_log` → `non_conformance` → `organization`                              | `nc_id` (soft: no FK)               | nullable + CHECK NOT VALID | RESTRICT        | -                                        |
+| `personnel_competence_audit_log`    | `personnel_competence_audit_log` → `personnel_competence` → `organization`                    | `competence_id` (soft: no FK)       | nullable + CHECK NOT VALID | RESTRICT        | -                                        |
+| `proficiency_test_audit_log`        | `proficiency_test_audit_log` → `proficiency_test` → `organization`                            | `proficiency_test_id` (soft: no FK) | nullable + CHECK NOT VALID | RESTRICT        | -                                        |
+| `reference_standard_audit_log`      | `reference_standard_audit_log` → `reference_standard` → `organization`                        | `standard_id` (soft: no FK)         | nullable + CHECK NOT VALID | RESTRICT        | -                                        |
+| `service_audit_log`                 | `service_audit_log` → `service` → `organization`                                              | `service_id` (soft: no FK)          | nullable + CHECK NOT VALID | RESTRICT        | -                                        |
+| `training_record_audit_log`         | `training_record_audit_log` → `training_record` → `organization`                              | `training_record_id` (soft: no FK)  | nullable + CHECK NOT VALID | RESTRICT        | -                                        |
+| `visit_audit_log`                   | `visit_audit_log` → `calibration_visit` → `organization`                                      | `visit_id` (soft: no FK)            | nullable + CHECK NOT VALID | RESTRICT        | -                                        |
 
 ## Tenant tables with their own organization column
 
