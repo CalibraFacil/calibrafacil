@@ -23,16 +23,9 @@ import type {
   IntegrationTargetScheduleConfig,
   IntegrationTransporterPayload,
 } from "@calibra-facil/shared";
+import type { IntegrationSyncBackgroundJobMessage } from "@calibra-facil/schemas";
 
-export interface IntegrationSyncQueueMessage {
-  type: "INTEGRATION_SYNC";
-  integrationId: string;
-  organizationId: string;
-  runId: string;
-  target: IntegrationSyncTarget;
-  limit: number;
-  trigger: IntegrationSyncTrigger;
-}
+export type IntegrationSyncQueueMessage = IntegrationSyncBackgroundJobMessage;
 
 type ScheduledIntegrationSyncOptions = {
   dispatch?: (message: IntegrationSyncQueueMessage) => Promise<void>;

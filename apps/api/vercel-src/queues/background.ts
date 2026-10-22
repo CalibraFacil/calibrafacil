@@ -1,6 +1,6 @@
 import "../assert-config";
 import { handleCallback } from "@vercel/queue";
-import { isBackgroundJobMessage } from "@calibra-facil/shared";
+import { parseBackgroundJobMessage } from "@calibra-facil/schemas";
 import {
   QueueReceiptHeldError,
   runWithQueueReceipt,
@@ -16,10 +16,18 @@ import {
 import { createWorkerRuntimeEnv } from "../../src/lib/runtime-env";
 
 export const POST = handleCallback(
-  async (message, metadata) => {
-    if (!isBackgroundJobMessage(message)) {
-      throw new Error(`Invalid background job message ${metadata.messageId}`);
+  async (body, metadata) => {
+    // The same parse step the database drain runs before a handler. A message
+    // that cannot parse can never succeed, so it is dead-lettered (logged with
+    // its reason and acknowledged) instead of thrown into redelivery.
+    const parsed = parseBackgroundJobMessage(body);
+    if (!parsed.ok) {
+      console.error(
+        `[Queue] dead-lettering Vercel Queue message ${metadata.messageId}: ${parsed.reason}`,
+      );
+      return;
     }
+    const message = parsed.message;
 
     // Vercel Queue is at-least-once: an unacknowledged (or slow) delivery is
     // redelivered with the SAME messageId. The receipt ledger keyed

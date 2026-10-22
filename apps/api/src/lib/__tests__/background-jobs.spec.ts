@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { BackgroundJobMessage } from "@calibra-facil/shared";
+import type { BackgroundJobMessage } from "@calibra-facil/schemas";
 
 const mocks = vi.hoisted(() => ({
   send: vi.fn(),
