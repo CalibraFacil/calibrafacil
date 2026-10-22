@@ -7,8 +7,13 @@ import {
   formatCalendarDate,
   formatMoneyBRL,
 } from '@calibra-facil/shared/format'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@calibra-facil/ui/badge'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@calibra-facil/ui/card'
 import { cn } from '@/lib/utils'
 
 interface InstallmentsBlockProps {

@@ -27,19 +27,19 @@ import {
   TRAINING_STATUS_LABELS,
   TRAINING_TYPE_LABELS,
 } from '@/features/personnel/detail-model'
-import { Button } from '@/components/ui/button'
+import { Button } from '@calibra-facil/ui/button'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Input } from '@/components/ui/input'
+} from '@calibra-facil/ui/card'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Checkbox } from '@calibra-facil/ui/checkbox'
+import { Label } from '@calibra-facil/ui/label'
+import { Textarea } from '@calibra-facil/ui/textarea'
+import { Input } from '@calibra-facil/ui/input'
 import {
   Dialog,
   DialogClose,
@@ -49,13 +49,13 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog'
+} from '@calibra-facil/ui/dialog'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
+} from '@calibra-facil/ui/select'
 import { getStatusBadge } from '@/features/personnel/components/columns'
 
 export function CompetenceDetailPage({ id }: { id: string }) {

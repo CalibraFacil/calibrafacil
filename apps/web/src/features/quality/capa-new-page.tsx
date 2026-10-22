@@ -10,18 +10,18 @@ import type { CapaCreateInput } from '@calibra-facil/client-runtime'
 import { calibraApi } from '@/utils/api'
 import { parseCapaForm, type CapaFormData } from '@/features/quality/forms'
 import { useCapaResponsibleMembersData } from '@/features/quality/queries'
-import { Button } from '@/components/ui/button'
-import { DatePicker } from '@/components/ui/date-picker'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
+import { Button } from '@calibra-facil/ui/button'
+import { DatePicker } from '@calibra-facil/ui/date-picker'
+import { Input } from '@calibra-facil/ui/input'
+import { Label } from '@calibra-facil/ui/label'
+import { Textarea } from '@calibra-facil/ui/textarea'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
-import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
+} from '@calibra-facil/ui/select'
+import { ACTION_BUTTON_CLASS, Panel } from '@calibra-facil/ui/instrument-panel'
 import { cn } from '@/lib/utils'
 import {
   CloudOnlyOfflineState,

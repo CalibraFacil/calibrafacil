@@ -4,10 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 
 import { BrandLockup } from "@/components/brand";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
-import { Spinner } from "@/components/ui/spinner";
+import { Avatar, AvatarFallback, AvatarImage } from "@calibra-facil/ui/avatar";
+import { Button } from "@calibra-facil/ui/button";
+import { Card, CardContent, CardFooter } from "@calibra-facil/ui/card";
+import { Spinner } from "@calibra-facil/ui/spinner";
 import { getApiBaseUrl } from "@/lib/utils";
 
 const searchSchema = z.object({

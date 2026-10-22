@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-import { Button } from '@/components/ui/button'
+import { Button } from '@calibra-facil/ui/button'
 import {
   Dialog,
   DialogClose,
@@ -9,9 +9,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
-import { Textarea } from '@/components/ui/textarea'
+} from '@calibra-facil/ui/dialog'
+import { Field, FieldGroup, FieldLabel } from '@calibra-facil/ui/field'
+import { Textarea } from '@calibra-facil/ui/textarea'
 
 /**
  * Captures the motivo for changing an evaluation the customer has already been

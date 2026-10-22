@@ -8,16 +8,16 @@
 import { Delete02Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
-import { Button } from '@/components/ui/button'
+import { Button } from '@calibra-facil/ui/button'
 import { CurrencyInput } from '@/components/ui/currency-input'
-import { Field, FieldLabel } from '@/components/ui/field'
+import { Field, FieldLabel } from '@calibra-facil/ui/field'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
+} from '@calibra-facil/ui/select'
 import { FINANCE_CURRENCY } from '@/lib/finance-formatters'
 import type { FinanceContractServiceOption } from '@/features/finance/types'
 

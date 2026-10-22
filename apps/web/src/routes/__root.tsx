@@ -10,7 +10,7 @@ import { MotionConfig } from 'motion/react'
 import type { QueryClient } from '@tanstack/react-query'
 
 import { ThemeProvider } from '@/components/theme-provider'
-import { Toaster } from '@/components/ui/sonner'
+import { ThemedToaster } from '@/components/themed-toaster'
 import { usePrefersDark } from '@/hooks/use-prefers-dark'
 import { OfflineBanner, SyncStatusProvider } from '@/runtime/sync-status'
 import { DesktopLifecycleProvider } from '@/runtime/desktop-lifecycle'
@@ -52,7 +52,7 @@ function RootComponent() {
               </NuqsAdapter>
             </SyncStatusProvider>
           </DesktopLifecycleProvider>
-          <Toaster richColors position="top-center" />
+          <ThemedToaster richColors position="top-center" />
         </MotionConfig>
       </ThemeProvider>
     </QueryClientProvider>

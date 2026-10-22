@@ -6,7 +6,7 @@ import {
   SheetDescription,
   SheetHeader,
   SheetTitle,
-} from '@/components/ui/sheet'
+} from '@calibra-facil/ui/sheet'
 
 /**
  * Wide right-side sheet that hosts an entity form inside the Service Order

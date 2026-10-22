@@ -3,16 +3,17 @@ import type { PrinterProfile } from '@calibra-facil/schemas'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@calibra-facil/ui/button'
+import { buttonVariants } from '@calibra-facil/ui/button-variants'
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
-import { Spinner } from '@/components/ui/spinner'
+} from '@calibra-facil/ui/dialog'
+import { Label } from '@calibra-facil/ui/label'
+import { Spinner } from '@calibra-facil/ui/spinner'
 
 import {
   BROWSER_PRINT_DOWNLOAD_URL,

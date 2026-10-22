@@ -27,8 +27,8 @@ import {
 } from "@/lib/calibration-status";
 import { getRequestStatus, getServiceOrderStatus } from "@/lib/status-labels";
 import { StatusPill } from "@/components/status-pill";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@calibra-facil/ui/button";
+import { Skeleton } from "@calibra-facil/ui/skeleton";
 import {
   ACTION_BUTTON_CLASS,
   BlueprintOverlay,
@@ -38,7 +38,7 @@ import {
   StaggerGroup,
   StaggerItem,
   type SignalTone,
-} from "@/components/instrument-panel";
+} from "@calibra-facil/ui/instrument-panel";
 import { useOotEvents } from "@/features/reliability/queries";
 import {
   useOverview,

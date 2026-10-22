@@ -21,7 +21,7 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
-} from "@/components/ui/sidebar";
+} from "@calibra-facil/ui/sidebar";
 
 type BadgeKey = "overdue" | "awaitingQuote";
 

@@ -7,7 +7,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+} from '@calibra-facil/ui/alert-dialog'
 import { useMountEffect } from '@/hooks/use-mount-effect'
 import type { UnsavedChangesGate } from '@/lib/unsaved-changes-gate'
 import {

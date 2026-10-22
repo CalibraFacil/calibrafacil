@@ -14,8 +14,8 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
-import { Button } from "@/components/ui/button";
-import { DataTable } from "@/components/ui/data-table";
+import { Button } from "@calibra-facil/ui/button";
+import { DataTable } from "@calibra-facil/ui/data-table";
 import {
   Empty,
   EmptyContent,
@@ -23,8 +23,8 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from "@/components/ui/empty";
-import { Input } from "@/components/ui/input";
+} from "@calibra-facil/ui/empty";
+import { Input } from "@calibra-facil/ui/input";
 import { PageHeader } from "@/components/page-header";
 import {
   Panel,
@@ -32,8 +32,8 @@ import {
   StaggerGroup,
   StaggerItem,
   type SignalTone,
-} from "@/components/instrument-panel";
-import { TONE } from "@/components/status-pill";
+} from "@calibra-facil/ui/instrument-panel";
+import { STATUS_TONE } from "@calibra-facil/ui/status-tone";
 import { cn } from "@/lib/utils";
 import { useOverview } from "@/features/dashboard/queries";
 import { type CalibrationFilter } from "@/lib/calibration-status";
@@ -242,7 +242,10 @@ export function FleetPage({
                   className={cn(
                     "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-[background-color,border-color,color,transform] active:scale-[0.96]",
                     active
-                      ? cn(TONE[filter.tone].surface, "border-transparent")
+                      ? cn(
+                          STATUS_TONE[filter.tone].surface,
+                          "border-transparent",
+                        )
                       : "border-border text-muted-foreground hover:bg-muted hover:text-foreground",
                   )}
                 >
@@ -251,7 +254,7 @@ export function FleetPage({
                       className={cn(
                         "size-1.5 rounded-full",
                         active
-                          ? TONE[filter.tone].dot
+                          ? STATUS_TONE[filter.tone].dot
                           : "bg-muted-foreground/40",
                       )}
                     />

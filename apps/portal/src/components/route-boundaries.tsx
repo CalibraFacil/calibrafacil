@@ -1,8 +1,11 @@
 import { Link, useRouter } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 
-import { buttonVariants } from "@/components/ui/button-variants";
-import { ACTION_BUTTON_CLASS, PANEL_CLASS } from "@/components/panel-styles";
+import { buttonVariants } from "@calibra-facil/ui/button-variants";
+import {
+  ACTION_BUTTON_CLASS,
+  PANEL_CLASS,
+} from "@calibra-facil/ui/panel-styles";
 import { cn } from "@/lib/utils";
 import { reportClientError } from "@/lib/report-client-error";
 

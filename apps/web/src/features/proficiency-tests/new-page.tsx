@@ -17,23 +17,23 @@ import {
   PT_ACTIVITY_TYPE_LABELS,
   type PtActivityType,
 } from '@/features/proficiency-tests/types'
-import { Button } from '@/components/ui/button'
-import { DatePicker } from '@/components/ui/date-picker'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
+import { Button } from '@calibra-facil/ui/button'
+import { DatePicker } from '@calibra-facil/ui/date-picker'
+import { Input } from '@calibra-facil/ui/input'
+import { Textarea } from '@calibra-facil/ui/textarea'
 import {
   Field,
   FieldDescription,
   FieldError,
   FieldLabel,
-} from '@/components/ui/field'
+} from '@calibra-facil/ui/field'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
-import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
+} from '@calibra-facil/ui/select'
+import { ACTION_BUTTON_CLASS, Panel } from '@calibra-facil/ui/instrument-panel'
 import { cn } from '@/lib/utils'
 import {
   CloudOnlyOfflineState,

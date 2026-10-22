@@ -7,7 +7,7 @@ import {
   ComboboxInput,
   ComboboxItem,
   ComboboxList,
-} from '@/components/ui/combobox'
+} from '@calibra-facil/ui/combobox'
 import { formatCentsForMoneyInput, type MaterialOption } from '../detail-model'
 import { useServiceOrderMaterialsData } from '../queries'
 

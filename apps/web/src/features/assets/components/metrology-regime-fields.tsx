@@ -1,21 +1,21 @@
 import { regulationCategoryForAssetTypeSlug } from '@calibra-facil/shared'
 import { useState } from 'react'
 
-import { Checkbox } from '@/components/ui/checkbox'
+import { Checkbox } from '@calibra-facil/ui/checkbox'
 import {
   Field,
   FieldDescription,
   FieldError,
   FieldLabel,
-} from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
-import { SegmentedControl } from '@/components/ui/segmented-control'
+} from '@calibra-facil/ui/field'
+import { Input } from '@calibra-facil/ui/input'
+import { SegmentedControl } from '@calibra-facil/ui/segmented-control'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
+} from '@calibra-facil/ui/select'
 
 import {
   isMetrologyRegime,

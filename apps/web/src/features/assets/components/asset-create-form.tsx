@@ -17,12 +17,12 @@ import {
   ComboboxInput,
   ComboboxItem,
   ComboboxList,
-} from '@/components/ui/combobox'
+} from '@calibra-facil/ui/combobox'
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from '@/components/ui/collapsible'
+} from '@calibra-facil/ui/collapsible'
 
 import { calibraApi } from '@/utils/api'
 import {
@@ -40,29 +40,29 @@ import {
   type AssetFormField,
 } from '@/features/assets/forms'
 import { MetrologyRegimeFields } from '@/features/assets/components/metrology-regime-fields'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Spinner } from '@/components/ui/spinner'
+import { Button } from '@calibra-facil/ui/button'
+import { Input } from '@calibra-facil/ui/input'
+import { Textarea } from '@calibra-facil/ui/textarea'
+import { Spinner } from '@calibra-facil/ui/spinner'
 import {
   Field,
   FieldDescription,
   FieldError,
   FieldLabel,
-} from '@/components/ui/field'
+} from '@calibra-facil/ui/field'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
-import { DatePicker } from '@/components/ui/date-picker'
+} from '@calibra-facil/ui/select'
+import { DatePicker } from '@calibra-facil/ui/date-picker'
 import { DynamicSpecsForm } from '@/components/dynamic-specs-form'
 import {
   ACTION_BUTTON_CLASS,
   Panel,
   PanelHeader,
-} from '@/components/instrument-panel'
+} from '@calibra-facil/ui/instrument-panel'
 import {
   ECCENTRICITY_INDICATOR_SPEC_KEY,
   EccentricityIndicator,

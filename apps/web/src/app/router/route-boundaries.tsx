@@ -3,7 +3,7 @@ import { Alert02Icon, Compass01Icon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import type { ErrorComponentProps } from '@tanstack/react-router'
 
-import { Button } from '@/components/ui/button'
+import { Button } from '@calibra-facil/ui/button'
 import {
   Empty,
   EmptyContent,
@@ -11,9 +11,9 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from '@/components/ui/empty'
-import { Spinner } from '@/components/ui/spinner'
-import { ACTION_BUTTON_CLASS } from '@/components/instrument-panel'
+} from '@calibra-facil/ui/empty'
+import { Spinner } from '@calibra-facil/ui/spinner'
+import { ACTION_BUTTON_CLASS } from '@calibra-facil/ui/instrument-panel'
 import { reportClientError } from '@/lib/report-client-error'
 
 const BOUNDARY_WRAPPER_CLASS =

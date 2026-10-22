@@ -4,13 +4,13 @@ import { ArrowDown01Icon } from '@hugeicons/core-free-icons'
 
 import { convertUnitValue, unitKind } from '@calibra-facil/shared/units'
 
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Button } from '@calibra-facil/ui/button'
+import { Input } from '@calibra-facil/ui/input'
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from '@/components/ui/popover'
+} from '@calibra-facil/ui/popover'
 import type { StandardCertifiedValueOption } from './standard-value-utils'
 
 interface StandardValueCellProps {
@@ -153,6 +153,7 @@ export function StandardValueCell({
               {...props}
               variant="ghost"
               size="icon"
+              aria-label="Preencher a partir do padrão"
               disabled={disabled}
               className="h-8 w-8 shrink-0"
               title="Preencher a partir do padrão"

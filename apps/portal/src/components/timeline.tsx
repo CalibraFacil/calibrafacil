@@ -3,8 +3,8 @@ import { Tick02Icon } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 
 import { cn } from "@/lib/utils";
-import { TONE } from "@/components/status-pill";
-import type { SignalTone } from "@/components/instrument-panel";
+import { STATUS_TONE } from "@calibra-facil/ui/status-tone";
+import type { SignalTone } from "@calibra-facil/ui/status-tone";
 
 export type TimelineItemState = "done" | "current" | "upcoming";
 
@@ -49,7 +49,7 @@ export function Timeline({
                 "relative z-10 mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full",
                 state === "upcoming"
                   ? "border-border text-muted-foreground/50 border border-dashed bg-card"
-                  : TONE[tone].soft,
+                  : STATUS_TONE[tone].soft,
               )}
             >
               {state === "current" ? (
@@ -57,13 +57,13 @@ export function Timeline({
                   <span
                     className={cn(
                       "absolute inline-flex size-full animate-ping rounded-full opacity-60",
-                      TONE[tone].dot,
+                      STATUS_TONE[tone].dot,
                     )}
                   />
                   <span
                     className={cn(
                       "relative inline-flex size-2 rounded-full",
-                      TONE[tone].dot,
+                      STATUS_TONE[tone].dot,
                     )}
                   />
                 </span>

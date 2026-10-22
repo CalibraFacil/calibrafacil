@@ -27,9 +27,9 @@ import {
   buildAuditTimelineEvents,
 } from '@/components/audit-timeline'
 import { clientRouteId } from '@/lib/route-identifiers'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Button } from '@calibra-facil/ui/button'
 import { SpecificationsDisplay } from '@/components/specifications-display'
 import {
   ACTION_BUTTON_CLASS,
@@ -43,7 +43,7 @@ import {
   StaggerGroup,
   StaggerItem,
   type SignalTone,
-} from '@/components/instrument-panel'
+} from '@calibra-facil/ui/instrument-panel'
 import {
   ECCENTRICITY_INDICATOR_SPEC_KEY,
   EccentricityIndicator,

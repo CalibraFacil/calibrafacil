@@ -6,8 +6,8 @@ import { useSession } from '@calibra-facil/auth/client'
 import { Cancel01Icon, FingerPrintIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
-import { Button } from '@/components/ui/button'
-import { Spinner } from '@/components/ui/spinner'
+import { Button } from '@calibra-facil/ui/button'
+import { Spinner } from '@calibra-facil/ui/spinner'
 
 import { passkeysQueryOptions, useAddPasskey } from '../queries'
 import { defaultPasskeyName } from '../forms'

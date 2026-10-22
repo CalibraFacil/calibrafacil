@@ -11,16 +11,16 @@ import {
   type ImpactAssessmentFormData,
 } from '@/features/quality/forms'
 import { ShowForRole } from '@/components/permission-gate'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Alert, AlertDescription } from '@calibra-facil/ui/alert'
+import { Badge } from '@calibra-facil/ui/badge'
+import { Button } from '@calibra-facil/ui/button'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from '@/components/ui/card'
+} from '@calibra-facil/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -28,17 +28,17 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+} from '@calibra-facil/ui/dialog'
+import { Input } from '@calibra-facil/ui/input'
+import { Label } from '@calibra-facil/ui/label'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
+} from '@calibra-facil/ui/select'
+import { Textarea } from '@calibra-facil/ui/textarea'
 import { formatCalendarDate, formatInstant } from '@calibra-facil/shared/format'
 
 const ITEM_DISPOSITION_LABELS: Record<string, string> = {

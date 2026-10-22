@@ -1,13 +1,13 @@
-import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
+import { Field, FieldDescription, FieldLabel } from '@calibra-facil/ui/field'
+import { Input } from '@calibra-facil/ui/input'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
+} from '@calibra-facil/ui/select'
+import { Switch } from '@calibra-facil/ui/switch'
 import type { ContaAzulCatalogItem } from '@/features/settings/types'
 import { formatCatalogItemLabel } from './conta-azul-catalogs'
 

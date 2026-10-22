@@ -3,15 +3,15 @@ import { useQuery } from "@tanstack/react-query";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Add01Icon, ArrowLeft02Icon } from "@hugeicons/core-free-icons";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Spinner } from "@/components/ui/spinner";
+import { Button } from "@calibra-facil/ui/button";
+import { Card, CardContent } from "@calibra-facil/ui/card";
+import { Spinner } from "@calibra-facil/ui/spinner";
 import {
   BlueprintField,
   BlueprintGrid,
   Panel,
   PanelHeader,
-} from "@/components/instrument-panel";
+} from "@calibra-facil/ui/instrument-panel";
 import { StatusPill } from "@/components/status-pill";
 import { getRequestStatus, type RequestStatus } from "@/lib/status-labels";
 import { getApiBaseUrl } from "@/lib/utils";

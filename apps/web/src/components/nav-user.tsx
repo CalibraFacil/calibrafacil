@@ -16,7 +16,7 @@ import { resolveSignOutWarning } from '@/runtime/sign-out-warning'
 import { useSyncStatus } from '@/runtime/sync-status'
 import { Link } from '@tanstack/react-router'
 
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@calibra-facil/ui/avatar'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,14 +25,14 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+} from '@calibra-facil/ui/dropdown-menu'
 import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
-} from '@/components/ui/sidebar'
-import { Skeleton } from '@/components/ui/skeleton'
+} from '@calibra-facil/ui/sidebar'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
 import { startInterfaceTour } from '@/features/onboarding/interface-tour'
 import { markDesktopSignedOut } from '@/runtime/desktop-auth'
 

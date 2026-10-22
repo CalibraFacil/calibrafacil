@@ -3,8 +3,8 @@ import { Link } from "@tanstack/react-router";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { RepeatIcon } from "@hugeicons/core-free-icons";
 
-import { Button } from "@/components/ui/button";
-import { DataTableColumnHeader } from "@/components/ui/data-table-column-header";
+import { Button } from "@calibra-facil/ui/button";
+import { DataTableColumnHeader } from "@calibra-facil/ui/data-table-column-header";
 import { StatusPill } from "@/components/status-pill";
 import { getInstrumentStatus } from "@/lib/calibration-status";
 import type { FleetAsset } from "./types";

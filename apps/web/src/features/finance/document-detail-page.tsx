@@ -24,8 +24,8 @@ import {
   SignalTile,
   StaggerGroup,
   StaggerItem,
-} from '@/components/instrument-panel'
-import { Button } from '@/components/ui/button'
+} from '@calibra-facil/ui/instrument-panel'
+import { Button } from '@calibra-facil/ui/button'
 import { CurrencyInput } from '@/components/ui/currency-input'
 import {
   Dialog,
@@ -34,12 +34,12 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
-import { DataTableColumnHeader } from '@/components/ui/data-table-column-header'
+} from '@calibra-facil/ui/dialog'
+import { Field, FieldGroup, FieldLabel } from '@calibra-facil/ui/field'
+import { Input } from '@calibra-facil/ui/input'
+import { DataTableColumnHeader } from '@calibra-facil/ui/data-table-column-header'
 import { FinanceDataTable } from '@/features/finance/components/finance-data-table'
-import { Textarea } from '@/components/ui/textarea'
+import { Textarea } from '@calibra-facil/ui/textarea'
 import { useFinanceDocumentDetailData } from '@/features/finance/queries'
 import {
   useExportErpDocumentMutation,

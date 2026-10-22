@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "@calibra-facil/ui/tokens.css";
 @import "@fontsource-variable/figtree";
 @import "@fontsource-variable/geist-mono";
 

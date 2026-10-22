@@ -23,10 +23,10 @@ import type {
   ServiceDetail,
 } from '@/features/services/types'
 import { ServiceFormFields } from '@/features/services/new-page'
-import { Button } from '@/components/ui/button'
-import { Spinner } from '@/components/ui/spinner'
-import { Skeleton } from '@/components/ui/skeleton'
-import { ACTION_BUTTON_CLASS, Panel } from '@/components/instrument-panel'
+import { Button } from '@calibra-facil/ui/button'
+import { Spinner } from '@calibra-facil/ui/spinner'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
+import { ACTION_BUTTON_CLASS, Panel } from '@calibra-facil/ui/instrument-panel'
 import { cn } from '@/lib/utils'
 
 export function EditServicePage({ id }: { id: string }) {

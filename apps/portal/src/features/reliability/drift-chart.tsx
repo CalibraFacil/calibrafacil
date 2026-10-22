@@ -16,7 +16,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
-} from "@/components/ui/chart";
+} from "@calibra-facil/ui/chart";
 import type { AssetDriftSeries, DriftPointSeries } from "./types";
 import { formatInstant, formatNumber } from "@calibra-facil/shared/format";
 

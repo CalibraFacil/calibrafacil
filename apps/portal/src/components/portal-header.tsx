@@ -11,10 +11,10 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+} from "@calibra-facil/ui/breadcrumb";
+import { Button } from "@calibra-facil/ui/button";
+import { Separator } from "@calibra-facil/ui/separator";
+import { SidebarTrigger } from "@calibra-facil/ui/sidebar";
 import { CommandMenu } from "@/components/command-menu";
 import { NotificationBell } from "@/features/notifications/notification-bell";
 import { useMountEffect } from "@/hooks/use-mount-effect";

@@ -1,7 +1,7 @@
 import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
-import type { SignalTone } from "@/components/instrument-panel";
+import { STATUS_TONE, type SignalTone } from "@calibra-facil/ui/status-tone";
 
 /**
  * The portal's status vocabulary, in the canonical `SignalTone` language. One
@@ -10,42 +10,6 @@ import type { SignalTone } from "@/components/instrument-panel";
  * exact same color language — the literal Tailwind utilities below match
  * instrument-panel's tonal maps so the metrology look is identical to the app.
  */
-
-export const TONE: Record<
-  SignalTone,
-  { surface: string; text: string; dot: string; soft: string }
-> = {
-  ok: {
-    surface: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-    text: "text-emerald-700 dark:text-emerald-400",
-    dot: "bg-emerald-600 dark:bg-emerald-500",
-    soft: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  },
-  critical: {
-    surface: "bg-destructive/10 text-destructive",
-    text: "text-destructive",
-    dot: "bg-destructive",
-    soft: "bg-destructive/10 text-destructive",
-  },
-  warning: {
-    surface: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-    text: "text-amber-700 dark:text-amber-400",
-    dot: "bg-amber-600 dark:bg-amber-500",
-    soft: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  },
-  info: {
-    surface: "bg-primary/10 text-primary",
-    text: "text-primary",
-    dot: "bg-primary",
-    soft: "bg-primary/10 text-primary",
-  },
-  neutral: {
-    surface: "bg-muted text-muted-foreground",
-    text: "text-muted-foreground",
-    dot: "bg-muted-foreground",
-    soft: "bg-muted text-muted-foreground",
-  },
-};
 
 const pillVariants = cva(
   "inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full font-medium whitespace-nowrap",
@@ -81,7 +45,11 @@ export function StatusPill({
   return (
     <span
       data-slot="status-pill"
-      className={cn(pillVariants({ size }), TONE[tone].surface, className)}
+      className={cn(
+        pillVariants({ size }),
+        STATUS_TONE[tone].surface,
+        className,
+      )}
       {...props}
     >
       {dot ? (
@@ -90,14 +58,14 @@ export function StatusPill({
             <span
               className={cn(
                 "absolute inline-flex size-full animate-ping rounded-full opacity-60",
-                TONE[tone].dot,
+                STATUS_TONE[tone].dot,
               )}
             />
           ) : null}
           <span
             className={cn(
               "relative inline-flex size-1.5 rounded-full",
-              TONE[tone].dot,
+              STATUS_TONE[tone].dot,
             )}
           />
         </span>

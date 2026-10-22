@@ -93,7 +93,7 @@ function nativeSelectShell() {
   }
 }
 
-vi.mock('@/components/ui/select', () => {
+vi.mock('@calibra-facil/ui/select', () => {
   const shell = nativeSelectShell()
   return {
     Select: shell.Root,
@@ -103,7 +103,7 @@ vi.mock('@/components/ui/select', () => {
   }
 })
 
-vi.mock('@/components/ui/combobox', () => {
+vi.mock('@calibra-facil/ui/combobox', () => {
   const shell = nativeSelectShell()
   return {
     Combobox: shell.Root,
@@ -117,7 +117,7 @@ vi.mock('@/components/ui/combobox', () => {
   }
 })
 
-vi.mock('@/components/ui/date-picker', () => ({
+vi.mock('@calibra-facil/ui/date-picker', () => ({
   DatePicker: ({ id }: { id: string }) => <input id={id} type="date" />,
 }))
 

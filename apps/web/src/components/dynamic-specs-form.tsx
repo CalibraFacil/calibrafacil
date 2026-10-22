@@ -1,12 +1,12 @@
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import { Field, FieldError, FieldLabel } from '@/components/ui/field'
+import { Input } from '@calibra-facil/ui/input'
+import { Button } from '@calibra-facil/ui/button'
+import { Field, FieldError, FieldLabel } from '@calibra-facil/ui/field'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-} from '@/components/ui/select'
+} from '@calibra-facil/ui/select'
 import { resolveMassDisplayUnit, type MassUnit } from '@calibra-facil/shared'
 
 /**

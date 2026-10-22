@@ -7,12 +7,15 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import { useCompetenceDetailData } from '@/features/personnel/queries'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Badge } from '@/components/ui/badge'
-import { BlueprintOverlay, Panel } from '@/components/instrument-panel'
-import { useIsMobile } from '@/hooks/use-mobile'
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Skeleton } from '@calibra-facil/ui/skeleton'
+import { Badge } from '@calibra-facil/ui/badge'
+import { BlueprintOverlay, Panel } from '@calibra-facil/ui/instrument-panel'
+import { useIsMobile } from '@calibra-facil/ui/use-mobile'
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from '@calibra-facil/ui/native-select'
+import { Tabs, TabsList, TabsTrigger } from '@calibra-facil/ui/tabs'
 import { getStatusBadge } from '@/features/personnel/components/columns'
 
 const tabs = [
