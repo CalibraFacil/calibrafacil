@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "@calibra-facil/ui/tokens.css";
+@source not "../../../packages/ui/src/components/{accordion,alert-dialog,combobox,command,data-table-faceted-filter,data-table-view-options,date-picker,field,input-group,kbd,progress,scroll-area,segmented-control,tabs}.tsx";
 @import "@fontsource-variable/figtree";
 @import "@fontsource-variable/geist-mono";
 

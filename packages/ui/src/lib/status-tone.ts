@@ -3,7 +3,7 @@
  *
  * Every status in the product is one of five tones. `STATUS_TONE` maps a tone
  * to the Tailwind utility classes that paint it, so a status never reaches for
- * a raw palette colour (`text-red-500`, `bg-emerald-100`, ...):
+ * a raw palette colour:
  *
  * | Tone       | Meaning                        | Colour                  |
  * | :--------- | :----------------------------- | :---------------------- |

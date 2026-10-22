@@ -16,6 +16,7 @@
 /* Tailwind v4 scans the app's own sources only; the package's classes live in
    a workspace dependency, so register it (path is relative to this file). */
 @source "../";
+@source not "../**/*.test.{ts,tsx}";
 
 /*
  * Signal tokens: the two tones of the status vocabulary that have no shadcn
