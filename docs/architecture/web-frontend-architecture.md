@@ -22,7 +22,8 @@ apps/web/src/
   routes/            # Thin TanStack route adapters only
   features/          # Domain pages, layouts, forms, queries, models, types
   shared/            # Cross-domain API/form helpers
-  components/        # Shared components and UI primitives
+  components/        # App-level components; shadcn primitives, instrument-panel and
+                     # status-tone come from @calibra-facil/ui (packages/ui)
   hooks/             # Generic React hooks
   lib/               # Generic utilities and route helpers
   runtime/           # Desktop/offline/sync runtime concerns

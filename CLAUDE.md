@@ -70,7 +70,9 @@ added to `packages/db/sql/schema-extras.sql`.
 - **Linter is oxlint, not ESLint.** Config in `.oxlintrc.json`. `correctness` is an error.
   Architectural boundaries are lint rules too: the custom `calibra/*` plugin
   (`packages/oxlint-plugin-calibra`) blocks `@calibra-facil/api` imports in frontends,
-  `hono/client` outside `client-runtime`, and router coupling inside `apps/web/src/features`.
+  `hono/client` outside `client-runtime`, router coupling inside `apps/web/src/features`, app-local re-creations of `@calibra-facil/ui`
+  components, and new raw Tailwind palette colour classes (`text-red-500`...) in
+  `apps/*/src/features` (a per-file ratchet that steers to `status-tone`).
 - **`as` type assertions are banned** (`consistent-type-assertions: never`). Use type guards,
   `satisfies`, or schema parsing instead.
 - **`check-types` runs `tsrs`**, the Rust port of the TypeScript 7 compiler (Cloudflare/VoidZero)
@@ -154,8 +156,8 @@ See `docs/architecture/web-frontend-architecture.md`.
 
 See `docs/architecture/portal-frontend.md`. `apps/portal` is the cloud-only client portal.
 
-- **Reuse the `instrument-panel` design system** (ported into
-  `apps/portal/src/components/instrument-panel.tsx`) — `Panel`/`PanelHeader`/`SignalTile`/
+- **Reuse the `instrument-panel` design system** (from `@calibra-facil/ui/instrument-panel`,
+  shared with `apps/web`) — `Panel`/`PanelHeader`/`SignalTile`/
   `BlueprintGrid`/`StaggerGroup` + the `SignalTone` vocabulary (ok/critical/warning/info/neutral) +
   Geist Mono numerics. Not plain shadcn `Card`/`Badge`.
 - **Transport is its own narrow surface:** raw `fetch` to `/api/portal/*` with
@@ -196,7 +198,8 @@ AppType), `client-runtime` (frontend SDK + transport), `auth` (Better-Auth), `ma
 uncertainty engine, versioned with dossiers in `validation/`), `method-definition` (method
 compiler), `method-templates` (catalog of calibration methods), `certificate-data` +
 `documents` (certificate/label data and templates), `signing` (PAdES / ICP-Brasil),
-`label-rendering` (ZPL/TSPL thermal labels), `email` (React Email), `email-sender`,
+`label-rendering` (ZPL/TSPL thermal labels), `ui` (shared shadcn primitives,
+instrument-panel and status-tone for web and portal; see `docs/architecture/shared-ui-package.md`), `email` (React Email), `email-sender`,
 `notifications`, `interval-analysis` (calibration intervals), `local-db` (SQLite offline
 store), `shared` (domain vocabularies, units, public URLs, storage endpoints), `oxlint-plugin-calibra`
 (architecture lint rules).
