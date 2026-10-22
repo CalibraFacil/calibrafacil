@@ -63,7 +63,11 @@ const SAMPLES = [
   ["calibration_job", "generate_local_certificate_pdf", { pdf: "bytes" }],
 ] as const;
 
-function eventOf(sample: (typeof SAMPLES)[number]) {
+function sorted(values: readonly string[]): string[] {
+  return [...values].sort();
+}
+
+function eventOf(sample: readonly [string, string, unknown]) {
   const [entityType, operation, payload] = sample;
   return { ...envelope, entityType, operation, payload };
 }
@@ -75,22 +79,23 @@ describe("SyncCommand union (REQ-SP-1)", () => {
       expect(result.ok, sample[1]).toBe(true);
       if (result.ok) expect(result.command.operation).toBe(sample[1]);
     }
-    expect(SAMPLES.map((sample) => sample[1]).toSorted()).toEqual(
-      [...SYNC_COMMAND_OPERATIONS].toSorted(),
+    expect(sorted(SAMPLES.map((sample) => sample[1]))).toEqual(
+      sorted(SYNC_COMMAND_OPERATIONS),
     );
   });
 
   it("REQ-SP-1: the support table lists every member exactly once, with the operations a desktop still produces as current", () => {
-    expect(Object.keys(SYNC_COMMAND_SUPPORT).toSorted()).toEqual(
-      [...SYNC_COMMAND_OPERATIONS].toSorted(),
+    expect(sorted(Object.keys(SYNC_COMMAND_SUPPORT))).toEqual(
+      sorted(SYNC_COMMAND_OPERATIONS),
     );
     expect(new Set(SYNC_COMMAND_OPERATIONS).size).toBe(
       SYNC_COMMAND_OPERATIONS.length,
     );
-    const current = Object.entries(SYNC_COMMAND_SUPPORT)
-      .filter(([, support]) => support === "current")
-      .map(([operation]) => operation)
-      .toSorted();
+    const current = sorted(
+      Object.entries(SYNC_COMMAND_SUPPORT)
+        .filter(([, support]) => support === "current")
+        .map(([operation]) => operation),
+    );
     expect(current).toEqual([
       "create_local_asset",
       "create_local_attachment",
