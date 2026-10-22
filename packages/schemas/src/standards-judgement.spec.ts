@@ -225,7 +225,9 @@ describe("judgeDraftExecutionStandards: a draft save keeps a standard already in
       { ...base, standardIds: [1, 2, 3, 4], savedStandardIds: [1, 2, 3, 4] },
       facts,
     );
-    expect(result).toMatchObject({ ok: true, standardIds: [1, 2, 3, 4] });
+    // Only the standard judged valid is listed as judged; the stale ones are
+    // reported under `warnings` and nowhere else.
+    expect(result).toMatchObject({ ok: true, standardIds: [1] });
     if (!result.ok) throw new Error("expected ok");
     expect(result.warnings).toEqual([
       {

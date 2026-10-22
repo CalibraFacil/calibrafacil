@@ -263,6 +263,109 @@ export function standardsPerformedAt(
   return saved ?? now;
 }
 
+type ReferenceStandardRow = typeof referenceStandard.$inferSelect;
+
+/**
+ * The snapshot entry of each standard record, as the cloud freezes it (with the
+ * current certificate document). The one builder behind every entry this module
+ * writes, so a standard is frozen the same way whoever asked.
+ */
+async function standardSnapshotEntries(
+  standards: readonly ReferenceStandardRow[],
+): Promise<Map<number, StandardSnapshot>> {
+  if (standards.length === 0) return new Map();
+
+  const currentDocuments = await db
+    .select()
+    .from(referenceStandardCertificateDocument)
+    .where(
+      and(
+        eq(referenceStandardCertificateDocument.isCurrent, true),
+        finalizedStandardCertificateDocumentCondition(),
+        or(
+          ...standards.map((standard) =>
+            and(
+              eq(referenceStandardCertificateDocument.standardId, standard.id),
+              eq(
+                referenceStandardCertificateDocument.certificateNumber,
+                standard.certificateNumber,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  const documentsByStandardId = new Map(
+    currentDocuments.map((document) => [
+      document.standardId,
+      standardCertificateDocumentSnapshot(document),
+    ]),
+  );
+  return new Map(
+    standards.map((s) => [
+      s.id,
+      {
+        id: s.id,
+        name: s.name,
+        type: s.type,
+        kind: s.kind,
+        certificateNumber: s.certificateNumber,
+        calibratedBy: s.calibratedBy,
+        calibrationDate: s.calibrationDate,
+        nextCalibrationDate: s.nextCalibrationDate,
+        uncertainty: s.uncertainty,
+        uncertaintyUnit: s.uncertaintyUnit,
+        coverageFactor: s.coverageFactor,
+        distribution: s.distribution,
+        drift: s.drift,
+        certifiedValues: s.certifiedValues,
+        metrologyData: s.metrologyData,
+        certificateDocument: documentsByStandardId.get(s.id) ?? null,
+      } satisfies StandardSnapshot,
+    ]),
+  );
+}
+
+/**
+ * What a desktop draft save stores for a standard of its own snapshot that is
+ * no longer valid (P1-11). The desktop's copy of that entry is never trusted:
+ * the cloud's saved entry is kept verbatim when it has one, else the entry is
+ * built from the cloud's own standards record. Entries of valid standards are
+ * returned as the desktop froze them.
+ */
+export async function replaceStaleFrozenStandards(input: {
+  frozen: StandardSnapshot[];
+  staleIds: ReadonlySet<number>;
+  savedSnapshot: StandardSnapshot[] | null;
+  organizationId: string;
+}): Promise<StandardSnapshot[]> {
+  if (input.staleIds.size === 0) return input.frozen;
+
+  const saved = new Map(
+    (input.savedSnapshot ?? []).map((standard) => [standard.id, standard]),
+  );
+  const unsaved = [...input.staleIds].filter((id) => !saved.has(id));
+  const rows =
+    unsaved.length === 0
+      ? []
+      : await db
+          .select()
+          .from(referenceStandard)
+          .where(
+            and(
+              inArray(referenceStandard.id, unsaved),
+              eq(referenceStandard.organizationId, input.organizationId),
+            ),
+          );
+  const built = await standardSnapshotEntries(rows);
+
+  return input.frozen.flatMap((entry) => {
+    if (!input.staleIds.has(entry.id)) return [entry];
+    const trusted = saved.get(entry.id) ?? built.get(entry.id);
+    return trusted ? [trusted] : [];
+  });
+}
+
 /**
  * The standards snapshot a save is recorded with, built from the standards the
  * caller names. `savedSnapshot` is what the job already has FROZEN and is the
@@ -337,64 +440,8 @@ export async function buildStandardsSnapshot(
   const savedById = new Map(
     (savedSnapshot ?? []).map((standard) => [standard.id, standard]),
   );
-  const freshStandards = standards.filter(
-    (standard) => !staleIds.has(standard.id),
-  );
-
-  const currentDocuments =
-    freshStandards.length === 0
-      ? []
-      : await db
-          .select()
-          .from(referenceStandardCertificateDocument)
-          .where(
-            and(
-              eq(referenceStandardCertificateDocument.isCurrent, true),
-              finalizedStandardCertificateDocumentCondition(),
-              or(
-                ...freshStandards.map((standard) =>
-                  and(
-                    eq(
-                      referenceStandardCertificateDocument.standardId,
-                      standard.id,
-                    ),
-                    eq(
-                      referenceStandardCertificateDocument.certificateNumber,
-                      standard.certificateNumber,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-  const documentsByStandardId = new Map(
-    currentDocuments.map((document) => [
-      document.standardId,
-      standardCertificateDocumentSnapshot(document),
-    ]),
-  );
-  const freshById = new Map(
-    freshStandards.map((s) => [
-      s.id,
-      {
-        id: s.id,
-        name: s.name,
-        type: s.type,
-        kind: s.kind,
-        certificateNumber: s.certificateNumber,
-        calibratedBy: s.calibratedBy,
-        calibrationDate: s.calibrationDate,
-        nextCalibrationDate: s.nextCalibrationDate,
-        uncertainty: s.uncertainty,
-        uncertaintyUnit: s.uncertaintyUnit,
-        coverageFactor: s.coverageFactor,
-        distribution: s.distribution,
-        drift: s.drift,
-        certifiedValues: s.certifiedValues,
-        metrologyData: s.metrologyData,
-        certificateDocument: documentsByStandardId.get(s.id) ?? null,
-      } satisfies StandardSnapshot,
-    ]),
+  const freshById = await standardSnapshotEntries(
+    standards.filter((standard) => !staleIds.has(standard.id)),
   );
 
   return {

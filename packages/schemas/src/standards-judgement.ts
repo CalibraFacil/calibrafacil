@@ -310,5 +310,7 @@ export function judgeDraftExecutionStandards(
   // warns is not "valid only because the work is back-dated".
   const valid = judge(standardIds.filter((id) => !staleIds.has(id)));
   if (!valid.ok) return valid;
-  return { ...valid, standardIds, warnings };
+  // `standardIds` stays the judged-valid ones (the audit records them as
+  // judged); a stale one appears only under `warnings`.
+  return { ...valid, warnings };
 }

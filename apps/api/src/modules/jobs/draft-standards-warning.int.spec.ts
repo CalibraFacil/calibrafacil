@@ -23,6 +23,8 @@ import {
   asset,
   calibrationJob,
   jobAuditLog,
+  jobStandard,
+  organizationUnit,
   referenceStandard,
   type JobStatus,
 } from "@calibra-facil/db/schema";
@@ -150,6 +152,36 @@ const STALE = {
         .set({ nextCalibrationDate: addCalendarDays(labToday(), -3) })
         .where(eq(referenceStandard.id, standard.id)),
   },
+} as const;
+
+/** The ways a standard of the saved snapshot stops being reachable at all. */
+const UNREACHABLE = {
+  "out of the unit scope": async (world: World, standard: Standard) => {
+    const [unit] = await db
+      .insert(organizationUnit)
+      .values({ organizationId: ORG, name: "Outra unidade", slug: "outra" })
+      .returning({ id: organizationUnit.id });
+    if (!unit) throw new Error("unit not created");
+    await db
+      .update(referenceStandard)
+      .set({ unitId: unit.id })
+      .where(eq(referenceStandard.id, standard.id));
+    return world;
+  },
+  "gone from the standards table": async (world: World, standard: Standard) => {
+    await db.delete(jobStandard).where(eq(jobStandard.standardId, standard.id));
+    await db
+      .delete(referenceStandard)
+      .where(eq(referenceStandard.id, standard.id));
+    return world;
+  },
+} as const;
+
+/** The desktop sync's refusal vocabulary for each cloud code. */
+const DESKTOP_REFUSAL = {
+  standard_expired: "STANDARD_EXPIRED",
+  standard_inactive: "STANDARD_NOT_ACTIVE",
+  standard_deleted: "STANDARD_SCOPE_MISMATCH",
 } as const;
 
 type Outcome = {
@@ -285,7 +317,19 @@ describe.each([cloud, publicApi])(
         expect(
           await entry.save(world, { standardIds: [standard.id] }),
         ).toMatchObject({ status: 200 });
-        const saved = await jobRow(world.jobId);
+        // A value a re-read of the standards table would never produce, so
+        // only the saved entry itself can explain it afterwards.
+        const savedSnapshot = (
+          (await jobRow(world.jobId)).standardsSnapshot ?? []
+        ).map((entryOfJob) => ({
+          ...entryOfJob,
+          calibratedBy: "SENTINEL-FROZEN-ENTRY",
+          certificateNumber: "SENTINEL-CERT",
+        }));
+        await db
+          .update(calibrationJob)
+          .set({ standardsSnapshot: savedSnapshot })
+          .where(eq(calibrationJob.id, world.jobId));
         await stale.apply(standard);
 
         const outcome = await entry.save(world, {
@@ -301,7 +345,10 @@ describe.each([cloud, publicApi])(
         expect(after.data).toMatchObject({ indication: "11" });
         // The entry the technician picked is kept as frozen, not re-read from
         // the record that is no longer valid.
-        expect(after.standardsSnapshot).toEqual(saved.standardsSnapshot);
+        expect(after.standardsSnapshot).toEqual(savedSnapshot);
+        expect(after.standardsSnapshot?.[0]?.calibratedBy).toBe(
+          "SENTINEL-FROZEN-ENTRY",
+        );
         expect(after.status).toBe("IN_PROGRESS");
       },
     );
@@ -418,6 +465,62 @@ describe.each([cloud, publicApi])(
     });
 
     it.each(Object.entries(STALE))(
+      "REQ-P111-1 [HIGH RISK]: a standard removed in one save and re-added in a later one after it became %s is refused, not carried; nothing is written",
+      async (_name, stale) => {
+        const world = await seedWorld();
+        const standard = await addStandard(world);
+        // Save A names it, save B drops it ...
+        expect(
+          await entry.save(world, { standardIds: [standard.id] }),
+        ).toMatchObject({ status: 200 });
+        expect(await entry.save(world, { standardIds: [] })).toMatchObject({
+          status: 200,
+        });
+        expect(
+          (await jobRow(world.jobId)).standardsSnapshot ?? null,
+        ).toBeNull();
+        await stale.apply(standard);
+        const before = await jobRow(world.jobId);
+        const auditBefore = await auditCount(world.jobId);
+
+        // ... save C adds it back: it is not in the saved snapshot any more.
+        const outcome = await entry.save(world, {
+          standardIds: [standard.id],
+          data: SECOND_READING,
+        });
+
+        expect(outcome.code).toBe(stale.reason);
+        expect(outcome.status).toBeGreaterThanOrEqual(400);
+        expect(await jobRow(world.jobId)).toEqual(before);
+        expect(await auditCount(world.jobId)).toBe(auditBefore);
+      },
+    );
+
+    it.each(Object.entries(UNREACHABLE))(
+      "REQ-P111-1 [HIGH RISK]: a saved standard that is %s stays refused (standard_not_found); nothing is written",
+      async (_name, makeUnreachable) => {
+        const world = await seedWorld();
+        const standard = await addStandard(world);
+        expect(
+          await entry.save(world, { standardIds: [standard.id] }),
+        ).toMatchObject({ status: 200 });
+        await makeUnreachable(world, standard);
+        const before = await jobRow(world.jobId);
+        const auditBefore = await auditCount(world.jobId);
+
+        const outcome = await entry.save(world, {
+          standardIds: [standard.id],
+          data: SECOND_READING,
+        });
+
+        expect(outcome.code).toBe("standard_not_found");
+        expect(outcome.status).toBeGreaterThanOrEqual(400);
+        expect(await jobRow(world.jobId)).toEqual(before);
+        expect(await auditCount(world.jobId)).toBe(auditBefore);
+      },
+    );
+
+    it.each(Object.entries(STALE))(
       "REQ-P111-3 [HIGH RISK]: the submit still refuses a saved standard that became %s, with or without naming it again; the job is unchanged",
       async (_name, stale) => {
         const world = await seedWorld();
@@ -479,7 +582,10 @@ describe("desktop sync apply of a draft save (REQ-P111-1, REQ-P111-2, REQ-P111-3
     await truncateAll();
   });
 
-  function frozenEntry(standard: Standard, validThrough: Date) {
+  function frozenEntry(
+    standard: Pick<Standard, "id" | "name">,
+    validThrough: Date,
+  ) {
     return {
       id: standard.id,
       name: standard.name,
@@ -548,64 +654,157 @@ describe("desktop sync apply of a draft save (REQ-P111-1, REQ-P111-2, REQ-P111-3
     };
   }
 
-  it("REQ-P111-2 [HIGH RISK]: a desktop draft that carries a standard of the cloud's saved snapshot that went stale is applied", async () => {
+  it("REQ-P111-2 [HIGH RISK]: a desktop draft that carries a standard of the cloud's saved snapshot that went stale is applied, and the cloud's own saved entry is kept verbatim", async () => {
     const world = await seedWorld();
     const standard = await addStandard(world);
-    const validThrough = addCalendarDays(labToday(), 90);
     await cloud.save(world, { standardIds: [standard.id] });
+    const savedSnapshot = (
+      (await jobRow(world.jobId)).standardsSnapshot ?? []
+    ).map((entry) => ({ ...entry, calibratedBy: "SENTINEL-FROZEN-ENTRY" }));
+    await db
+      .update(calibrationJob)
+      .set({ standardsSnapshot: savedSnapshot })
+      .where(eq(calibrationJob.id, world.jobId));
     await STALE.expired.apply(standard);
 
     const outcome = await push(world, "save_local_execution", [
-      frozenEntry(standard, validThrough),
+      // What the desktop sends differs from the cloud's saved entry.
+      {
+        ...frozenEntry(standard, addCalendarDays(labToday(), 90)),
+        name: "Forjado pelo cliente",
+      },
     ]);
 
     expect(outcome).toEqual({ accepted: true, code: undefined });
-    expect((await jobRow(world.jobId)).data).toMatchObject({
-      indication: "11",
+    const after = await jobRow(world.jobId);
+    expect(after.data).toMatchObject({ indication: "11" });
+    expect(after.standardsSnapshot).toEqual(savedSnapshot);
+  });
+
+  it.each(Object.entries(STALE))(
+    "REQ-P111-2 [HIGH RISK]: a desktop draft whose standard was picked offline and became %s before the first sync is applied; the stored entry comes from the cloud's own record, never from the desktop's content",
+    async (_name, stale) => {
+      const world = await seedWorld();
+      // The cloud's saved snapshot has never heard of it.
+      const standard = await addStandard(world, { name: "Massa da nuvem" });
+      await stale.apply(standard);
+      const [cloudRow] = await db
+        .select()
+        .from(referenceStandard)
+        .where(eq(referenceStandard.id, standard.id));
+      expect((await jobRow(world.jobId)).standardsSnapshot ?? null).toBeNull();
+
+      const outcome = await push(world, "save_local_execution", [
+        // The desktop claims a certificate valid for 90 more days.
+        {
+          ...frozenEntry(standard, addCalendarDays(labToday(), 90)),
+          name: "Forjado pelo cliente",
+          certificateNumber: "CERT-FORJADO",
+          uncertainty: 999,
+        },
+      ]);
+
+      expect(outcome).toEqual({ accepted: true, code: undefined });
+      const after = await jobRow(world.jobId);
+      expect(after.data).toMatchObject({ indication: "11" });
+      expect(after.standardsSnapshot).toHaveLength(1);
+      const stored = after.standardsSnapshot?.[0];
+      expect(stored).toMatchObject({
+        id: standard.id,
+        name: "Massa da nuvem",
+        certificateNumber: cloudRow?.certificateNumber,
+        uncertainty: cloudRow?.uncertainty,
+      });
+      expect(new Date(stored?.nextCalibrationDate ?? 0)).toEqual(
+        cloudRow?.nextCalibrationDate,
+      );
+      // The cloud's judgement is what the audit trail records.
+      const audit = await db
+        .select({ changes: jobAuditLog.changes })
+        .from(jobAuditLog)
+        .where(eq(jobAuditLog.jobId, world.jobId));
+      expect(audit.map((row) => row.changes)).toContainEqual(
+        expect.objectContaining({
+          standardsWarnings: [warningFor(stale.reason, [standard])],
+        }),
+      );
+    },
+  );
+
+  it("REQ-P111-2: a stale standard of the event is rebuilt from the cloud, a valid one keeps the content the desktop froze, and the audit lists only the judged-valid ids", async () => {
+    const world = await seedWorld();
+    const stale = await addStandard(world, { name: "Massa vencida" });
+    const valid = await addStandard(world, { name: "Massa valida" });
+    await STALE.expired.apply(stale);
+    const validThrough = addCalendarDays(labToday(), 90);
+
+    const outcome = await push(world, "save_local_execution", [
+      frozenEntry(stale, validThrough),
+      { ...frozenEntry(valid, validThrough), certificateNumber: "CERT-FROZEN" },
+    ]);
+
+    expect(outcome).toEqual({ accepted: true, code: undefined });
+    const stored = (await jobRow(world.jobId)).standardsSnapshot ?? [];
+    expect(stored.map((entry) => entry.id)).toEqual([stale.id, valid.id]);
+    const [staleRow] = await db
+      .select({ certificateNumber: referenceStandard.certificateNumber })
+      .from(referenceStandard)
+      .where(eq(referenceStandard.id, stale.id));
+    expect(stored[0]?.certificateNumber).toBe(staleRow?.certificateNumber);
+    // Valid ids keep today's behaviour: the frozen entry is stored as sent.
+    expect(stored[1]?.certificateNumber).toBe("CERT-FROZEN");
+    const audit = await db
+      .select({ changes: jobAuditLog.changes })
+      .from(jobAuditLog)
+      .where(eq(jobAuditLog.jobId, world.jobId));
+    const judged = audit
+      .map((row) => row.changes)
+      .find((changes) => changes && "standardsJudgedAt" in changes);
+    expect(judged).toMatchObject({
+      standardsJudgedAt: { standardIds: [valid.id] },
+      standardsWarnings: [warningFor("standard_expired", [stale])],
     });
   });
 
-  it("REQ-P111-1 [HIGH RISK]: a desktop draft that adds an expired standard is refused, even while it carries a stale one that is accepted; the job is unchanged", async () => {
+  it("REQ-P111-1 [HIGH RISK]: a desktop draft whose standard the cloud cannot find is refused, even when the desktop froze it; the job is unchanged", async () => {
     const world = await seedWorld();
-    const kept = await addStandard(world);
-    const validThrough = addCalendarDays(labToday(), 90);
-    await cloud.save(world, { standardIds: [kept.id] });
-    await STALE.expired.apply(kept);
-    expect(
-      await push(world, "save_local_execution", [
-        frozenEntry(kept, validThrough),
-      ]),
-    ).toMatchObject({ accepted: true });
-    const added = await addStandard(world);
-    await STALE.expired.apply(added);
+    const ghost = { id: 987654, name: "Fantasma" };
     const before = await jobRow(world.jobId);
 
     const outcome = await push(world, "save_local_execution", [
-      frozenEntry(kept, validThrough),
-      frozenEntry(added, validThrough),
+      frozenEntry(ghost, addCalendarDays(labToday(), 90)),
     ]);
 
-    expect(outcome).toEqual({ accepted: false, code: "STANDARD_EXPIRED" });
+    expect(outcome).toEqual({
+      accepted: false,
+      code: "STANDARD_SCOPE_MISMATCH",
+    });
     expect(await jobRow(world.jobId)).toEqual(before);
   });
 
-  it("REQ-P111-3 [HIGH RISK]: a desktop submit with a stale standard of the saved snapshot is still refused", async () => {
-    const world = await seedWorld();
-    const standard = await addStandard(world);
-    await cloud.save(world, { standardIds: [standard.id] });
-    await STALE.expired.apply(standard);
-    expect(
-      await push(world, "save_local_execution", [
-        frozenEntry(standard, addCalendarDays(labToday(), 90)),
-      ]),
-    ).toMatchObject({ accepted: true });
-    const before = await jobRow(world.jobId);
+  it.each(Object.entries(STALE))(
+    "REQ-P111-3 [HIGH RISK]: a desktop SUBMIT with a standard that became %s is refused, whether or not the cloud had it saved; the job is unchanged",
+    async (_name, stale) => {
+      const world = await seedWorld();
+      const savedBefore = await addStandard(world);
+      const pickedOffline = await addStandard(world);
+      await cloud.save(world, { standardIds: [savedBefore.id] });
+      await stale.apply(savedBefore);
+      await stale.apply(pickedOffline);
+      const validThrough = addCalendarDays(labToday(), 90);
+      const before = await jobRow(world.jobId);
 
-    const outcome = await push(world, "submit_local_execution", [
-      frozenEntry(standard, addCalendarDays(labToday(), 90)),
-    ]);
+      for (const standard of [savedBefore, pickedOffline]) {
+        const outcome = await push(world, "submit_local_execution", [
+          frozenEntry(standard, validThrough),
+        ]);
+        expect(outcome).toEqual({
+          accepted: false,
+          code: DESKTOP_REFUSAL[stale.reason],
+        });
+      }
 
-    expect(outcome).toEqual({ accepted: false, code: "STANDARD_EXPIRED" });
-    expect(await jobRow(world.jobId)).toEqual(before);
-  });
+      expect(await jobRow(world.jobId)).toEqual(before);
+    },
+  );
 });

@@ -38,6 +38,7 @@ import {
   buildCalibrationPhaseSnapshot,
   buildEnvironmentalSnapshot,
   buildStandardsSnapshot,
+  replaceStaleFrozenStandards,
   resolveAssetSnapshot,
   standardsPerformedAt,
   validateCalibrationLocationForSubmit,
@@ -446,11 +447,31 @@ async function runJobExecution(
         requireBackdateReason: true,
       });
     } else {
+      // A desktop draft carries every standard of its own snapshot: the
+      // desktop judged each one strictly when the technician added it, and a
+      // standard that went stale before the first sync must not strand the
+      // readings. Anything else is judged as the cloud's saved snapshot says.
       const draft = await judgeDraftSnapshotStandards({
         ...judgeInput,
-        savedStandardIds: snapshotStandardIds(existing.standardsSnapshot),
+        savedStandardIds: [
+          ...snapshotStandardIds(existing.standardsSnapshot),
+          ...snapshotStandardIds(command.frozen?.standards?.value),
+        ],
       });
-      if (draft.ok) standardsWarnings = draft.warnings;
+      if (draft.ok) {
+        standardsWarnings = draft.warnings;
+        if (command.frozen?.standards && nextStandardsSnapshot) {
+          // Never store the desktop's copy of a stale standard's entry.
+          nextStandardsSnapshot = await replaceStaleFrozenStandards({
+            frozen: nextStandardsSnapshot,
+            staleIds: new Set(
+              draft.warnings.flatMap((warning) => warning.standardIds),
+            ),
+            savedSnapshot: existing.standardsSnapshot,
+            organizationId,
+          });
+        }
+      }
       judged = draft;
     }
     if (!judged.ok) {
