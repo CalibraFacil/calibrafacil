@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono } from "hono";
 import { dispatchSyncRun, integrationsRouter } from "../integrations";
 import type { AuthVariables } from "../../middleware/permission";
-import type { IntegrationOverview } from "../../lib/integrations";
+import type { IntegrationOverview } from "../../modules/integrations";
 import {
   getProviderCapabilities,
   normalizeContaAzulConnectionConfig,
@@ -49,7 +49,7 @@ vi.mock("../../lib/background-jobs", () => ({
   enqueueBackgroundJob: mocks.enqueueBackgroundJob,
 }));
 
-vi.mock("../../lib/integrations", () => ({
+vi.mock("../../modules/integrations", () => ({
   buildEmptyRemoteDocumentSummary: vi.fn(),
   buildGenericConnectionConfig: vi.fn(),
   buildInitialNextScheduledRunAt: vi.fn(),

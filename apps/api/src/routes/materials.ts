@@ -11,7 +11,7 @@ import {
 import {
   adjustMaterialErpStock,
   type IntegrationsEnv,
-} from "../lib/integrations";
+} from "../modules/integrations";
 import {
   withLabPermission,
   type AuthVariables,

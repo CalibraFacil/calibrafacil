@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mapServiceOrderToSalePayload } from "../integrations";
+import { mapServiceOrderToSalePayload } from "../../modules/integrations";
 
 const baseOrder = {
   externalId: "service_order:10",
