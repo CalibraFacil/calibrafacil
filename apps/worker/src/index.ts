@@ -530,7 +530,7 @@ async function updateJobWithCertificate(
   // Compare-and-set: SUPERSEDED jobs are being regenerated with watermark and
   // keep their status; GENERATING_PDF becomes APPROVED. A job that left the
   // expected status since the read above matches zero rows.
-  const updated = await client.query(
+  const updated = await client.query<{ id: number; organization_id: string }>(
     `
     UPDATE calibration_job
     SET
@@ -540,7 +540,7 @@ async function updateJobWithCertificate(
       signature_verdict = CASE WHEN $6 THEN $7::jsonb ELSE signature_verdict END,
       updated_at = $4
     WHERE id = $1 AND status = $9
-    RETURNING id
+    RETURNING id, organization_id
     `,
     [
       jobId,
@@ -569,8 +569,7 @@ async function updateJobWithCertificate(
   await client.query(
     `
     INSERT INTO job_audit_log (organization_id, job_id, action, changes, performed_by, performed_at)
-    SELECT organization_id, id, $2::text, $3::jsonb, $4::text, $5::timestamp
-      FROM calibration_job WHERE id = $1
+    VALUES ($6, $1, $2, $3, $4, $5)
     `,
     [
       jobId,
@@ -584,6 +583,7 @@ async function updateJobWithCertificate(
       }),
       userId,
       now,
+      jobOrganizationOf(updated.rows, jobId),
     ],
   );
 
@@ -732,6 +732,24 @@ async function signPdfWithUnitCertificate(
 }
 
 /**
+ * The organization a job row returned by the statement that just updated it belongs
+ * to. The audit rows below name it explicitly (never through a SELECT that could
+ * silently insert nothing): a job that is gone means there is no audit row to write.
+ */
+function jobOrganizationOf(
+  rows: ReadonlyArray<{ organization_id?: unknown }>,
+  jobId: number,
+): string {
+  const organizationId = rows[0]?.organization_id;
+  if (typeof organizationId !== "string" || organizationId.length === 0) {
+    throw new Error(
+      `Job ${jobId} has no organization_id to write its audit row`,
+    );
+  }
+  return organizationId;
+}
+
+/**
  * Records a failed emission: GENERATING_PDF -> REJECTED. Compare-and-set on
  * GENERATING_PDF, so a job that was cancelled, already approved or amended in the
  * meantime is never flipped to REJECTED by a late failure.
@@ -747,7 +765,7 @@ async function setJobError(
   const failedStatus = requireTargetOf(renderingStatus, "fail_render");
 
   await inTransaction(client, async () => {
-    const updated = await client.query(
+    const updated = await client.query<{ id: number; organization_id: string }>(
       `
       UPDATE calibration_job
       SET
@@ -757,7 +775,7 @@ async function setJobError(
         rejected_at = $4,
         updated_at = $4
       WHERE id = $1 AND status = ANY($6::text[])
-      RETURNING id
+      RETURNING id, organization_id
       `,
       [
         jobId,
@@ -778,8 +796,7 @@ async function setJobError(
     await client.query(
       `
       INSERT INTO job_audit_log (organization_id, job_id, action, changes, performed_by, performed_at, reason)
-      SELECT organization_id, id, $2::text, $3::jsonb, $4::text, $5::timestamp, $6::text
-        FROM calibration_job WHERE id = $1
+      VALUES ($7, $1, $2, $3, $4, $5, $6)
       `,
       [
         jobId,
@@ -788,6 +805,7 @@ async function setJobError(
         userId,
         now,
         error,
+        jobOrganizationOf(updated.rows, jobId),
       ],
     );
   });
@@ -850,11 +868,12 @@ async function updateJobWithLabel(
 ): Promise<void> {
   const now = new Date();
 
-  await client.query(
+  const updated = await client.query<{ organization_id: string }>(
     `
     UPDATE calibration_job
     SET label_url = $2, updated_at = $3
     WHERE id = $1
+    RETURNING organization_id
     `,
     [jobId, labelUrl, now],
   );
@@ -862,8 +881,7 @@ async function updateJobWithLabel(
   await client.query(
     `
     INSERT INTO job_audit_log (organization_id, job_id, action, changes, performed_by, performed_at)
-    SELECT organization_id, id, $2::text, $3::jsonb, $4::text, $5::timestamp
-      FROM calibration_job WHERE id = $1
+    VALUES ($6, $1, $2, $3, $4, $5)
     `,
     [
       jobId,
@@ -871,6 +889,7 @@ async function updateJobWithLabel(
       JSON.stringify({ labelUrl: { old: null, new: labelUrl } }),
       userId,
       now,
+      jobOrganizationOf(updated.rows, jobId),
     ],
   );
 }

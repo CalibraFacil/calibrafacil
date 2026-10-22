@@ -17,7 +17,8 @@ pnpm --dir packages/db tenancy:doc
 1. **Every table is tenant or global.** A tenant table carries
    `organization_id` (or `lab_organization_id` for the tables that predate the
    convention: `asset`, `customer`, `customer_group`, `asset_oot_event`,
-   `portal_export_job`), `NOT NULL`. A global table has no organization column and
+   `portal_export_job`), `NOT NULL` (except the 16 audit logs, rule 4). A global
+   table has no organization column and
    an entry with its reason in `GLOBAL_TABLES` (`tenancy.ts`): identity, platform
    plumbing, global catalogs. A new table without either fails the test.
 2. **Evidence is not cascaded.** The organization column of every table that
@@ -48,11 +49,14 @@ pnpm --dir packages/db tenancy:doc
    `ALTER TABLE <log> VALIDATE CONSTRAINT <log>_organization_id_required` turns
    the guarantee into a full one. The foreign key to `organization` stays
    `RESTRICT`.
-5. **Every insert sets the organization.** TypeScript forces it (the column is
-   `NOT NULL` without a default). The integration tier's tenant SQL guard
-   (`apps/api/test/integration/tenant-sql-*.ts`) derives its tenant tables from
-   these columns, so every statement on these tables must carry an organization
-   predicate (or a reasoned allowlist entry).
+5. **Every insert sets the organization.** For the 21 children whose column is
+   `NOT NULL` without a default, TypeScript forces it. It does **not** for the 16
+   nullable audit logs: there the `CHECK` in Postgres refuses a new row without an
+   organization, and the integration tier's tenant SQL guard
+   (`apps/api/test/integration/tenant-sql-*.ts`) flags an insert whose column list
+   omits it. The guard derives its tenant tables from these columns, so every
+   statement on these tables must also carry an organization predicate (or a
+   reasoned allowlist entry).
 
 ## Migration 0118
 
@@ -75,7 +79,11 @@ pnpm --dir packages/db tenancy:doc
 4. `SET NOT NULL` (audit logs: the `CHECK ... NOT VALID` instead), foreign key to
    `organization` `RESTRICT`, an index led by `organization_id`
    (`(organization_id, performed_at)` on the audit logs);
-5. `UNIQUE (id, organization)` on the parents, then the composite foreign keys.
+5. `UNIQUE (id, organization)` on the parents (an index pre-built `CONCURRENTLY`
+   under the constraint's name is adopted), then the composite foreign keys, added
+   `NOT VALID` (new rows are enforced at once; the existing rows were checked in
+   step 3; `VALIDATE CONSTRAINT` runs afterwards without blocking writes, see
+   `DEPLOYMENT.md`).
 
 Every step is idempotent (the project applies migration DDL by hand and the
 drizzle bookkeeping table lags behind). Nothing in it needs `schema-extras.sql`:
@@ -88,7 +96,7 @@ columns, foreign keys, unique constraints and indexes are all expressed in
 
 ## Summary
 
-134 tables: 118 tenant (an organization column, NOT NULL), 16 global (no organization column, with the reason below). 37 tenant tables gained `organization_id` in migration 0118.
+134 tables: 118 tenant (an organization column), 16 global (no organization column, with the reason below). Of the tenant tables, 102 have the column NOT NULL and 16 (the audit logs) have it nullable, guarded by a `CHECK (organization_id IS NOT NULL) NOT VALID` that refuses every new row without one. 37 tenant tables gained `organization_id` in migration 0118.
 
 ## Global tables
 

@@ -3022,7 +3022,12 @@ async function applyCreateLocalServiceOrderIntake(
     })
     .from(asset)
     .innerJoin(customer, eq(asset.customerId, customer.id))
-    .where(eq(asset.id, values.assetId))
+    .where(
+      and(
+        eq(asset.id, values.assetId),
+        eq(customer.labOrganizationId, input.memberData.organizationId),
+      ),
+    )
     .limit(1);
 
   if (
@@ -3326,7 +3331,12 @@ async function applyCreateLocalServiceOrderQuoteDraft(
         freightCents: totals.freightCents,
         totalCents: totals.totalCents,
       })
-      .where(eq(serviceOrderQuote.id, created.id));
+      .where(
+        and(
+          eq(serviceOrderQuote.id, created.id),
+          eq(serviceOrderQuote.organizationId, order.organizationId),
+        ),
+      );
     await recordServiceOrderEvent(
       {
         organizationId: order.organizationId,

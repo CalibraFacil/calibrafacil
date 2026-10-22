@@ -731,7 +731,12 @@ export const portalRouter = new Hono<{
       );
       // Group mode aggregates requests across branches whose authOrg differs
       // from the active (group) org, so scope by customerId alone.
-      const requestWhere = inArray(calibrationRequest.customerId, customerIds);
+      // The counts and the recent list share one predicate: the portal customer's
+      // requests, inside the laboratory the scope resolved to.
+      const requestWhere = and(
+        inArray(calibrationRequest.customerId, customerIds),
+        eq(calibrationRequest.organizationId, scope.labOrganizationId),
+      );
       const certificateWhere = and(
         inArray(calibrationJob.customerId, customerIds),
         eq(calibrationJob.status, "APPROVED"),
@@ -809,12 +814,7 @@ export const portalRouter = new Hono<{
             itemCount: sql<number>`cast((select count(*) from ${calibrationRequestItem} where ${calibrationRequestItem.requestId} = ${calibrationRequest.id}) as int)`,
           })
           .from(calibrationRequest)
-          .where(
-            and(
-              requestWhere,
-              eq(calibrationRequest.organizationId, scope.labOrganizationId),
-            ),
-          )
+          .where(requestWhere)
           .orderBy(desc(calibrationRequest.submittedAt))
           .limit(5),
         db

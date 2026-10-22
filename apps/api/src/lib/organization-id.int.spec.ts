@@ -24,7 +24,7 @@ import {
   serviceOrderExecutionItem,
   serviceOrderQuoteItem,
 } from "@calibra-facil/db/schema";
-import { ORGANIZATION_BACKFILL } from "@calibra-facil/db/tenancy";
+import { ORGANIZATION_BACKFILL, listTenancy } from "@calibra-facil/db/tenancy";
 import { truncateAll } from "../../test/integration/db";
 import { hardDeleteOrganizationAsPurge } from "../../test/integration/records-retention";
 import { QUOTE_ITEM, seedTenant } from "../../test/integration/tenancy-fixture";
@@ -344,4 +344,172 @@ describe("organization_id on every tenant table (migration 0118)", () => {
       expect(count).toBe("0");
     });
   });
+});
+
+/**
+ * A VALUES list that gives every NOT NULL column without a default of `table` a
+ * placeholder of its type, so a probe row can be written without knowing the table.
+ */
+async function fillerRow(
+  table: string,
+  explicit: Record<string, string>,
+): Promise<{ columns: string; values: string }> {
+  const columns = getExecuteRows<{
+    column_name: string;
+    data_type: string;
+    is_nullable: string;
+    column_default: string | null;
+    is_identity: string;
+    is_generated: string;
+  }>(
+    await db.execute(sql`
+      select column_name, data_type, is_nullable, column_default, is_identity, is_generated
+        from information_schema.columns
+       where table_schema = 'public' and table_name = ${table}
+       order by ordinal_position`),
+  );
+  const names: string[] = [];
+  const values: string[] = [];
+  for (const column of columns) {
+    const explicitValue = explicit[column.column_name];
+    if (explicitValue !== undefined) {
+      names.push(`"${column.column_name}"`);
+      values.push(explicitValue);
+      continue;
+    }
+    if (
+      column.is_nullable === "YES" ||
+      column.column_default !== null ||
+      column.is_identity === "YES" ||
+      column.is_generated === "ALWAYS"
+    ) {
+      continue;
+    }
+    names.push(`"${column.column_name}"`);
+    switch (column.data_type) {
+      case "integer":
+      case "bigint":
+      case "smallint":
+      case "numeric":
+      case "real":
+      case "double precision":
+        values.push("1");
+        break;
+      case "boolean":
+        values.push("false");
+        break;
+      case "jsonb":
+      case "json":
+        values.push("'{}'");
+        break;
+      case "ARRAY":
+        values.push("'{}'");
+        break;
+      case "date":
+      case "timestamp without time zone":
+      case "timestamp with time zone":
+        values.push("now()");
+        break;
+      default:
+        values.push("'x'");
+    }
+  }
+  return { columns: names.join(", "), values: values.join(", ") };
+}
+
+const COMPOSITE_KEYS = listTenancy().flatMap((table) => table.compositeKeys);
+
+describe("REQ-ORG-3: every composite tenant key refuses a cross-tenant child (all of them, from the registry)", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  it("REQ-ORG-3: the registry lists the 29 composite keys of migration 0118", () => {
+    expect(COMPOSITE_KEYS).toHaveLength(29);
+    expect(new Set(COMPOSITE_KEYS.map((key) => key.name)).size).toBe(29);
+  });
+
+  /**
+   * Per key, in a transaction that is always rolled back: with the foreign keys
+   * switched off for the session, store a probe parent of laboratory A and a probe
+   * child of laboratory B that points at it; then switch them back on and re-create
+   * the key from its own catalog definition. Re-creating validates the stored rows:
+   * the cross-tenant child must make Postgres name this very constraint, and a child
+   * of the parent's own laboratory must pass (the key is not vacuous).
+   */
+  async function recreateKeyOver(
+    key: (typeof COMPOSITE_KEYS)[number],
+    childOrganization: string,
+  ): Promise<{
+    code: string | undefined;
+    constraint: string | undefined;
+  } | null> {
+    class Rollback extends Error {}
+    let outcome: Awaited<ReturnType<typeof rejection>> | null = null;
+    try {
+      await db.transaction(async (tx) => {
+        const definition = getExecuteRows<{ definition: string }>(
+          await tx.execute(sql`
+            select pg_get_constraintdef(oid) as definition from pg_constraint
+             where conname = ${key.name} and conrelid = ${key.table}::regclass`),
+        )[0]?.definition;
+        if (!definition) throw new Error(`${key.name} does not exist`);
+
+        await tx.execute(sql`set local session_replication_role = replica`);
+        const parentRow = await fillerRow(key.parent, {
+          [key.parentOrgColumn]: "'org-xt-a'",
+        });
+        const [parent] = getExecuteRows<{ id: number }>(
+          await tx.execute(
+            sql.raw(
+              `insert into "${key.parent}" (${parentRow.columns}) values (${parentRow.values}) returning id`,
+            ),
+          ),
+        );
+        if (!parent) throw new Error("probe parent not stored");
+        const childRow = await fillerRow(key.table, {
+          organization_id: `'${childOrganization}'`,
+          [key.column]: String(parent.id),
+        });
+        await tx.execute(
+          sql.raw(
+            `insert into "${key.table}" (${childRow.columns}) values (${childRow.values})`,
+          ),
+        );
+        await tx.execute(sql`set local session_replication_role = origin`);
+
+        const recreate = async () => {
+          await tx.execute(
+            sql.raw(`alter table "${key.table}" drop constraint "${key.name}"`),
+          );
+          await tx.execute(
+            sql.raw(
+              `alter table "${key.table}" add constraint "${key.name}" ${definition}`,
+            ),
+          );
+        };
+        outcome = await rejection(recreate());
+        throw new Rollback();
+      });
+    } catch (error) {
+      if (!(error instanceof Rollback)) {
+        // The drop/add failed: that is the refusal being measured; anything else is a bug.
+        if (outcome === null) throw error;
+      }
+    }
+    return outcome;
+  }
+
+  it.each(COMPOSITE_KEYS.map((key) => [key.name, key] as const))(
+    "REQ-ORG-3: %s refuses a child of another laboratory and accepts a child of the parent's own",
+    async (_name, key) => {
+      const crossTenant = await recreateKeyOver(key, "org-xt-b");
+      expect(crossTenant?.code).toBe("23503");
+      expect(crossTenant?.constraint).toBe(key.name);
+      // Same laboratory as the parent: re-creating the key succeeds (no rejection recorded).
+      await expect(recreateKeyOver(key, "org-xt-a")).rejects.toThrow(
+        "expected Postgres to refuse the statement",
+      );
+    },
+  );
 });

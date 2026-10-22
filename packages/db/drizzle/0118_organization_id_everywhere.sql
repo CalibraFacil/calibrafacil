@@ -16,7 +16,11 @@
 --      (the column order of the integration_* composite keys), so a child cannot
 --      point at another tenant's row. It repeats the action of the single-column
 --      foreign key that stays in place. Nullable ON DELETE SET NULL pointers are
---      not paired: a composite SET NULL would also null organization_id.
+--      not paired: a composite SET NULL would also null organization_id. They are
+--      added NOT VALID (the existing rows are verified by the pre-check); VALIDATE
+--      CONSTRAINT runs afterwards without blocking writes (DEPLOYMENT.md).
+--      A UNIQUE (id, organization_id) index pre-built CONCURRENTLY under the
+--      constraint's name is adopted instead of being built under lock.
 --
 -- Safety: the whole migration is one transaction. An orphan child (no parent row) or
 -- a row that already points across tenants makes it RAISE with the table names and
@@ -340,11 +344,25 @@ BEGIN
        WHERE conrelid = to_regclass(format('public.%I', edge.parent_table))
          AND conname = edge.constraint_name
     ) THEN
-      EXECUTE format('ALTER TABLE public.%I ADD CONSTRAINT %I UNIQUE (id, %I)', edge.parent_table, edge.constraint_name, edge.org_column);
+      IF EXISTS (
+        SELECT 1 FROM pg_class c JOIN pg_index i ON i.indexrelid = c.oid
+         WHERE c.relname = edge.constraint_name
+           AND c.relnamespace = 'public'::regnamespace
+           AND c.relkind = 'i' AND i.indrelid = to_regclass(format('public.%I', edge.parent_table))
+           AND i.indisunique AND i.indisvalid AND i.indpred IS NULL
+      ) THEN
+        -- Pre-built with CREATE UNIQUE INDEX CONCURRENTLY (DEPLOYMENT.md): adopt it, no index build under lock.
+        EXECUTE format('ALTER TABLE public.%I ADD CONSTRAINT %I UNIQUE USING INDEX %I', edge.parent_table, edge.constraint_name, edge.constraint_name);
+      ELSE
+        EXECUTE format('ALTER TABLE public.%I ADD CONSTRAINT %I UNIQUE (id, %I)', edge.parent_table, edge.constraint_name, edge.org_column);
+      END IF;
     END IF;
   END LOOP;
 
-  -- 6. Composite (organization_id, parent_id) foreign keys.
+  -- 6. Composite (parent_id, organization_id) foreign keys, added NOT VALID: they are
+  -- enforced for every new row at once, and the existing rows were already checked by
+  -- pre-check 3 above, so no second scan runs under the lock. DEPLOYMENT.md has the
+  -- (non-blocking) VALIDATE CONSTRAINT step that marks them validated afterwards.
   FOR edge IN
     SELECT * FROM (VALUES
         ('receivable_installment', 'document_id', 'billing_document', 'organization_id', 'CASCADE', 'receivable_installment_document_id_tenant_fk'),
@@ -384,7 +402,7 @@ BEGIN
          AND conname = edge.constraint_name
     ) THEN
       EXECUTE format(
-        'ALTER TABLE public.%I ADD CONSTRAINT %I FOREIGN KEY (%I, organization_id) REFERENCES public.%I (id, %I) ON DELETE %s ON UPDATE NO ACTION',
+        'ALTER TABLE public.%I ADD CONSTRAINT %I FOREIGN KEY (%I, organization_id) REFERENCES public.%I (id, %I) ON DELETE %s ON UPDATE NO ACTION NOT VALID',
         edge.child_table, edge.constraint_name, edge.fk_column, edge.parent_table, edge.parent_org_column, edge.on_delete);
     END IF;
   END LOOP;

@@ -280,6 +280,17 @@ describe("migration 0118 on a database in main's shape", () => {
          values (777002, 'delete', '{"customer":{"old":{"labOrganizationId":"ghost-org"},"new":null}}', 'user-org-a');`,
     );
 
+    // Two parents' unique indexes pre-built the way DEPLOYMENT.md says (CONCURRENTLY, under the
+    // constraint's name): the migration must adopt them instead of building another.
+    mustPsql(
+      scratchName,
+      `create unique index concurrently if not exists calibration_job_id_org_uidx on calibration_job (id, organization_id);`,
+    );
+    mustPsql(
+      scratchName,
+      `create unique index concurrently if not exists asset_id_org_uidx on asset (id, lab_organization_id);`,
+    );
+
     const applied = psql(scratchName, MIGRATION);
     expect(applied.ok, applied.stderr).toBe(true);
     // The unattributable rows are counted, not raised.
@@ -347,13 +358,57 @@ describe("migration 0118 on a database in main's shape", () => {
     const uniques = listTenancy().flatMap((table) => table.orgIdUniques);
     expect(constraintCount(scratchName, "tenant_fk")).toBe(composites.length);
     expect(constraintCount(scratchName, "unique")).toBe(uniques.length);
-    // The cross-tenant row the pre-check refused cannot be inserted any more.
+    // The cross-tenant row the pre-check refused cannot be inserted any more
+    // (the keys are NOT VALID, which still enforces every new row).
     const refused = psql(
       scratchName,
       `insert into job_standard (organization_id, job_id, standard_id) values ('org-a', ${org.a.jobId}, ${org.b.standardId});`,
     );
     expect(refused.ok).toBe(false);
     expect(refused.stderr).toContain("job_standard_standard_id_tenant_fk");
+  });
+
+  it("REQ-ORG-3: the pre-built unique indexes were adopted (one index, now the constraint's), and the composite keys validate with the DEPLOYMENT.md step", () => {
+    // calibration_job / asset: the CONCURRENTLY-built index became the constraint, no duplicate.
+    for (const [table, name] of [
+      ["calibration_job", "calibration_job_id_org_uidx"],
+      ["asset", "asset_id_org_uidx"],
+    ] as const) {
+      expect(
+        mustPsql(
+          scratchName,
+          `select conindid::regclass::text from pg_constraint where conname = '${name}' and conrelid = '${table}'::regclass;`,
+        ).trim(),
+        name,
+      ).toBe(name);
+      expect(
+        mustPsql(
+          scratchName,
+          `select count(*) from pg_index i where i.indrelid = '${table}'::regclass and i.indisunique and i.indnatts = 2 and pg_get_indexdef(i.indexrelid) like '%(id, %organization_id)';`,
+        ).trim(),
+        `${table} unique (id, org) indexes`,
+      ).toBe("1");
+    }
+    // The composite keys were added NOT VALID: enforced, not yet marked validated.
+    const unvalidated = () =>
+      Number(
+        mustPsql(
+          scratchName,
+          `select count(*) from pg_constraint where contype = 'f' and conname like '%\\_tenant\\_fk' and not convalidated;`,
+        ).trim(),
+      );
+    const total = listTenancy().flatMap((table) => table.compositeKeys).length;
+    expect(unvalidated()).toBe(total);
+    // The step of DEPLOYMENT.md, verbatim; running it twice is harmless.
+    const step = readFileSync(
+      new URL("../../../../DEPLOYMENT.md", import.meta.url),
+      "utf8",
+    ).match(/DO \$\$\n\s*DECLARE c record;[\s\S]*?END \$\$;/)?.[0];
+    if (!step) throw new Error("DEPLOYMENT.md has no VALIDATE step");
+    mustPsql(scratchName, step.replace(/^ {2}/gm, ""));
+    expect(unvalidated()).toBe(0);
+    mustPsql(scratchName, step.replace(/^ {2}/gm, ""));
+    expect(unvalidated()).toBe(0);
   });
 
   it("REQ-ORG-2: a NEW audit row without an organization is refused by the CHECK; the audit logs are append-only again", () => {

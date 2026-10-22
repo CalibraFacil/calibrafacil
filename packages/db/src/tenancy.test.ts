@@ -223,6 +223,10 @@ describe("REQ-ORG-2: organization_id is NOT NULL, RESTRICT, indexed", () => {
     const notNull = MIGRATION.indexOf("SET NOT NULL");
     expect(raise).toBeGreaterThan(0);
     expect(notNull).toBeGreaterThan(raise);
+    // The composite keys are added NOT VALID (existing rows are checked by the pre-check) and a
+    // CONCURRENTLY pre-built unique index is adopted (DEPLOYMENT.md).
+    expect(MIGRATION).toContain("ON UPDATE NO ACTION NOT VALID");
+    expect(MIGRATION).toContain("UNIQUE USING INDEX");
     // Orphan audit rows (entity hard-deleted) are attributed from their own data, counted, never raised.
     expect(MIGRATION).toContain(
       "RAISE NOTICE 'migration 0118: % has % audit row(s)",

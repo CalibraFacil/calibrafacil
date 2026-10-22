@@ -133,6 +133,9 @@ function renderPairs(): string[] {
 function renderTenancyBlock(): string {
   const { tenant, global } = classifyTables();
   const total = listTenancy().length;
+  const nullable = tenant.filter((table) =>
+    table.tenantColumns.some((column) => !column.notNull),
+  );
   const lines: string[] = [
     TENANCY_BEGIN,
     "",
@@ -140,7 +143,7 @@ function renderTenancyBlock(): string {
     "",
     "## Summary",
     "",
-    `${total} tables: ${tenant.length} tenant (an organization column, NOT NULL), ${global.length} global (no organization column, with the reason below). ${ORGANIZATION_BACKFILL.length} tenant tables gained \`organization_id\` in migration 0118.`,
+    `${total} tables: ${tenant.length} tenant (an organization column), ${global.length} global (no organization column, with the reason below). Of the tenant tables, ${tenant.length - nullable.length} have the column NOT NULL and ${nullable.length} (the audit logs) have it nullable, guarded by a \`CHECK (organization_id IS NOT NULL) NOT VALID\` that refuses every new row without one. ${ORGANIZATION_BACKFILL.length} tenant tables gained \`organization_id\` in migration 0118.`,
     "",
     "## Global tables",
     "",
