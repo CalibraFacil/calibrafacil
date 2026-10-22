@@ -131,6 +131,7 @@ export interface Env {
   SIGNING_TSA_URL?: string;
   SIGNING_TSA_AUTH?: string; // Full Authorization header value for a contracted ACT (secret)
   SIGNING_TSA_ICP_CONFORMANT?: string; // "true" ONLY for a credentialed ICP-Brasil ACT
+  SIGNING_TSA_TIMEOUT_MS?: string; // TSA request timeout; unset => 30000
   INTEGRATIONS_MASTER_KEY?: string;
   RESEND_API_KEY?: string;
   RESEND_FROM_EMAIL?: string;

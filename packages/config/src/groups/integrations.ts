@@ -1,4 +1,4 @@
-import { defineGroup, example, flag, text, url } from "../define";
+import { defineGroup, example, flag, integer, text, url } from "../define";
 
 export const integrationsGroup = defineGroup({
   name: "integrations",
@@ -69,7 +69,8 @@ export const signingGroup = defineGroup({
     }),
     tsaUrl: url({
       env: "SIGNING_TSA_URL",
-      description: "RFC 3161 time-stamp authority endpoint.",
+      description:
+        "RFC 3161 time-stamp authority endpoint. In local or inline job mode an unreachable authority rejects the job on the first try, so leave it unset in development.",
     }),
     tsaAuth: text({
       env: "SIGNING_TSA_AUTH",
@@ -82,6 +83,14 @@ export const signingGroup = defineGroup({
       description:
         "`true` only when the endpoint is a credentialed ICP-Brasil authority; otherwise signatures record icpBrasilConformant=false.",
       default: false,
+    }),
+    tsaTimeoutMs: integer({
+      env: "SIGNING_TSA_TIMEOUT_MS",
+      description:
+        "Time-stamp request timeout in milliseconds (1000 to 60000). Unset: 30000. Capped at 60 s so four tries (plus 7 s of back-off) stay under the queue function's 300 s limit. A request that times out fails the certificate job (fail-closed).",
+      min: 1000,
+      max: 60_000,
+      example: example.commented("30000"),
     }),
   },
 });
