@@ -23,17 +23,11 @@
 //                      public API and the desktop sync apply alike:
 //                      DRAFT -> IN_PROGRESS, otherwise the status is kept)
 //                    packages/local-db/src/execution.ts:245,252-257 (offline save)
-//   record_results   no longer used. The public API results route moved a
-//                      REJECTED job to IN_PROGRESS; owner decision Q18 unified it
-//                      on the cloud/desktop rule (a save keeps a REJECTED job
-//                      REJECTED), so it now runs `execute` like every other
-//                      save. The rows stay only because the table's own test
-//                      pins them; retire the command with that test.
 //   submit           apps/api/src/modules/jobs/submit-job.ts (`submitJob`, for
 //                      the cloud route, the public API and the desktop sync)
 //                    packages/local-db/src/execution.ts:245,253
-//   reject           apps/api/src/routes/jobs.ts:2563,2578,2587
-//                    apps/api/src/routes/public-api-v2.ts:4059,4075,4084
+//   reject           apps/api/src/modules/jobs/reject-job.ts (`rejectJob`, for the
+//                      cloud route and the public API)
 //   approve          apps/api/src/modules/jobs/approve-job.ts:274,385
 //                      (REVIEW only: a REJECTED job must be resubmitted first)
 //   complete_render  apps/worker/src/index.ts:488-489,529,1809,1959 (the render
@@ -43,25 +37,31 @@
 //                    packages/db/src/queue-render-recovery.ts:80,90 (backstop)
 //   revert_approval  apps/api/src/modules/jobs/approve-job.ts:532,549 (dispatch
 //                      failed after the approval: back to the status approved from)
-//   cancel           apps/api/src/modules/jobs/job-status-transitions.ts
-//                    apps/api/src/routes/jobs.ts:2747,2761,2766
-//                    apps/api/src/routes/public-api-v2.ts:4160,4177,4182
-//                    apps/api/src/routes/visits.ts:736,753,758
-//   amend            apps/api/src/routes/jobs.ts:2838,2912,2921
-//   edit             apps/api/src/routes/jobs.ts:1370,1483 (technician / due date)
-//                    apps/api/src/routes/public-api-v2.ts:3486,3539
-//   assign           apps/api/src/routes/jobs.ts:1556,1692 (technician)
+//   cancel           apps/api/src/modules/jobs/cancel-job.ts (`cancelJob`, for the
+//                      cloud route, the public API DELETE and the visit's
+//                      remove-job)
+//                    apps/api/src/modules/jobs/job-status-transitions.ts
+//   amend            apps/api/src/modules/jobs/amend-job.ts (`amendJob`)
+//   edit             apps/api/src/modules/jobs/edit-job.ts (`editJob`: technician /
+//                      due date, for the cloud PUT and the public PATCH)
+//   assign           apps/api/src/modules/jobs/assign-job.ts (`assignJob`: technician,
+//                      with the competence gate)
 //
-// The pre-existing rules are kept exactly, including one that reads as an
-// accident (assign is accepted for CANCELED and GENERATING_PDF jobs). Changing
-// them is a product decision made here, in one place, with the tests beside it.
+// The rules are the ones the code paths had, except where an owner decision
+// changed them, in one place and with the tests beside it:
+//
+//   Q19  assign is allowed only for DRAFT, IN_PROGRESS, REVIEW and REJECTED. It
+//        used to be accepted for CANCELED and GENERATING_PDF jobs too, which
+//        read as an accident. APPROVED and SUPERSEDED were always refused.
+//   Q18  a save keeps a REJECTED job REJECTED (`execute`). The public API
+//        results route used to move it to IN_PROGRESS through a separate
+//        `record_results` command; that command is gone with the unification.
 
 import type { JobStatus } from "./job-status";
 
 export const JOB_COMMANDS = [
   "create",
   "execute",
-  "record_results",
   "submit",
   "reject",
   "approve",
@@ -89,10 +89,6 @@ export const JOB_TRANSITIONS: readonly JobTransition[] = [
   { from: "DRAFT", command: "execute", to: "IN_PROGRESS" },
   { from: "IN_PROGRESS", command: "execute", to: "IN_PROGRESS" },
   { from: "REJECTED", command: "execute", to: "REJECTED" },
-
-  { from: "DRAFT", command: "record_results", to: "IN_PROGRESS" },
-  { from: "IN_PROGRESS", command: "record_results", to: "IN_PROGRESS" },
-  { from: "REJECTED", command: "record_results", to: "IN_PROGRESS" },
 
   { from: "DRAFT", command: "submit", to: "REVIEW" },
   { from: "IN_PROGRESS", command: "submit", to: "REVIEW" },
@@ -126,8 +122,6 @@ export const JOB_TRANSITIONS: readonly JobTransition[] = [
   { from: "IN_PROGRESS", command: "assign", to: "IN_PROGRESS" },
   { from: "REVIEW", command: "assign", to: "REVIEW" },
   { from: "REJECTED", command: "assign", to: "REJECTED" },
-  { from: "GENERATING_PDF", command: "assign", to: "GENERATING_PDF" },
-  { from: "CANCELED", command: "assign", to: "CANCELED" },
 ];
 
 /**

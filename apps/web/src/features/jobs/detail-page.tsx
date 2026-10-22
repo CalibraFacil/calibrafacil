@@ -1,4 +1,5 @@
 import { Link, useNavigate } from '@tanstack/react-router'
+import { canTransition } from '@calibra-facil/schemas/job-transitions'
 import { formatCalendarDate } from '@calibra-facil/shared/format'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, useCallback, useMemo } from 'react'
@@ -562,7 +563,24 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
   const canCancel = ['DRAFT', 'IN_PROGRESS', 'REVIEW', 'REJECTED'].includes(
     job.status,
   )
-  const canAssign = ['DRAFT', 'IN_PROGRESS', 'REJECTED'].includes(job.status)
+  // The transition table decides, not a list kept here: a technician can be
+  // assigned while the job is open (DRAFT, IN_PROGRESS, REVIEW, REJECTED).
+  const canAssign = canTransition(job.status, 'assign')
+  const assignAction = canAssign ? (
+    <ActionAvailabilityGate availability={assignAvailability}>
+      {({ disabled }) => (
+        <Button
+          variant="outline"
+          disabled={disabled}
+          className={ACTION_BUTTON_CLASS}
+          onClick={() => setAssignDialogOpen(true)}
+        >
+          <HugeiconsIcon icon={UserAdd01Icon} className="mr-2 h-4 w-4" />
+          Atribuir técnico
+        </Button>
+      )}
+    </ActionAvailabilityGate>
+  ) : null
   const financialStatus =
     typeof job.financialStatus === 'string' ? job.financialStatus : 'UNBILLED'
   const normalizedFinancialStatus = toFinancialStatus(financialStatus)
@@ -898,6 +916,7 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
                       </Button>
                     )}
                   </ActionAvailabilityGate>
+                  {assignAction}
                 </>
               ) : canExecute ? (
                 <>
@@ -915,24 +934,7 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
                       ? 'Iniciar execução'
                       : 'Continuar execução'}
                   </Button>
-                  {canAssign && (
-                    <ActionAvailabilityGate availability={assignAvailability}>
-                      {({ disabled }) => (
-                        <Button
-                          variant="outline"
-                          disabled={disabled}
-                          className={ACTION_BUTTON_CLASS}
-                          onClick={() => setAssignDialogOpen(true)}
-                        >
-                          <HugeiconsIcon
-                            icon={UserAdd01Icon}
-                            className="mr-2 h-4 w-4"
-                          />
-                          Atribuir técnico
-                        </Button>
-                      )}
-                    </ActionAvailabilityGate>
-                  )}
+                  {assignAction}
                 </>
               ) : (
                 <p className="max-w-xs text-pretty text-sm text-muted-foreground">

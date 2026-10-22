@@ -2,7 +2,6 @@ import { db } from "@calibra-facil/db";
 import {
   calibrationJob,
   jobAuditLog,
-  personnelCompetence,
   referenceStandard,
   type AssetSnapshot,
   type CalibrationLocationSnapshot,
@@ -21,7 +20,7 @@ import {
 import { targetOf } from "@calibra-facil/schemas/job-transitions";
 import { normalizeMethodDataForStorage } from "@calibra-facil/shared/units";
 import type { MethodDiagnostic } from "@calibra-facil/method-definition";
-import { and, count, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   invalid,
   type DomainError,
@@ -30,10 +29,7 @@ import {
 import { syncJobStandardLinks } from "../../lib/job-standards";
 import { reconcileMethodSnapshotEngine } from "../../lib/method-snapshot-engine";
 import { classifyJobScopeCompliance } from "../../lib/scope-compliance";
-import {
-  buildUnitScopeCondition,
-  type ResolvedUnitScope,
-} from "../../lib/units";
+import { buildUnitScopeCondition } from "../../lib/units";
 import { syncVisitStatusFromJobs } from "../../lib/visits";
 import {
   buildCalibrationLocationSnapshot,
@@ -45,6 +41,14 @@ import {
   validateCalibrationLocationForSubmit,
   validateCalibrationPhasesForSubmit,
 } from "./execution-snapshots";
+import {
+  jobActorAuditFields,
+  loadScopedJob,
+  type JobActor,
+  type JobRow,
+  type UnitScope,
+} from "./job-actor";
+import { technicianHasCompetence } from "./technician-assignment";
 import { methodInputFieldsFromSnapshot, stripAssetSpecData } from "./helpers";
 import {
   createMethodExecutionEngine,
@@ -57,8 +61,6 @@ import {
   standardsRefusalDomainError,
   type StandardsRefusal,
 } from "./standards-judgement";
-
-type JobRow = typeof calibrationJob.$inferSelect;
 
 /**
  * Submit and execute (save the worksheet / record results) a calibration job:
@@ -89,33 +91,8 @@ type JobRow = typeof calibrationJob.$inferSelect;
 
 const SUBMIT_BACKDATE_NOTE = "Registro retroativo";
 
-/**
- * WHO is submitting / saving. Every entry point builds one explicitly; the
- * policy never infers it from a transport.
- *
- * - `user`: an authenticated lab member (the cloud routes).
- * - `api_key`: an organization API key acting for its creator, who is the
- *   accountable person recorded in the audit row; the key itself is recorded
- *   too, so the trail reads "creator X through key Y".
- * - `desktop_session`: the authenticated user whose desktop pushed an offline
- *   execution event. The identity is the session user, never the actor id
- *   claimed inside the event.
- */
-export type JobExecutionActor =
-  | { kind: "user"; userId: string; ipAddress?: string | null }
-  | {
-      kind: "api_key";
-      /** The key's creator. */
-      userId: string;
-      apiKey: { id: string; name: string; keyPrefix: string };
-      ipAddress?: string | null;
-    }
-  | { kind: "desktop_session"; userId: string; ipAddress?: string | null };
-
-type UnitScope = Pick<
-  ResolvedUnitScope,
-  "selectedUnitScope" | "activeUnitId" | "accessibleUnitIds"
->;
+/** WHO is submitting / saving: see `JobActor`. */
+export type JobExecutionActor = JobActor;
 
 /**
  * Snapshots a desktop froze offline and sends whole. A key that is present
@@ -258,52 +235,6 @@ function jobExecutionStandardsMode(
   return "cloud";
 }
 
-/**
- * Is the technician assigned to the job authorized for this instrument type
- * (ISO/IEC 17025 §6.2.5)? Auto-detected like the assignment gate: it only
- * applies once the organization keeps competence records at all.
- */
-async function technicianHasCompetence(params: {
-  organizationId: string;
-  technicianId: string | null;
-  assetTypeId: number;
-  performedAt: Date;
-}): Promise<boolean> {
-  if (!params.technicianId) return true;
-
-  const [competenceCount] = await db
-    .select({ total: count() })
-    .from(personnelCompetence)
-    .where(
-      and(
-        eq(personnelCompetence.organizationId, params.organizationId),
-        isNull(personnelCompetence.deletedAt),
-      ),
-    );
-  if ((competenceCount?.total ?? 0) === 0) return true;
-
-  const [active] = await db
-    .select({
-      id: personnelCompetence.id,
-      expiresAt: personnelCompetence.expiresAt,
-    })
-    .from(personnelCompetence)
-    .where(
-      and(
-        eq(personnelCompetence.userId, params.technicianId),
-        eq(personnelCompetence.organizationId, params.organizationId),
-        eq(personnelCompetence.assetTypeId, params.assetTypeId),
-        eq(personnelCompetence.status, "ACTIVE"),
-        isNull(personnelCompetence.deletedAt),
-      ),
-    )
-    .limit(1);
-
-  if (!active) return false;
-  // Judged on the day the work was performed, not the day it is recorded.
-  return !active.expiresAt || active.expiresAt >= params.performedAt;
-}
-
 type PerformedAtResolution =
   | { ok: true; performedAt: Date | null; backdateDays: number }
   | { ok: false; refusal: JobExecutionResult };
@@ -373,19 +304,11 @@ async function runJobExecution(
   const isDesktop = actor.kind === "desktop_session";
 
   // 1. Facts: the job, inside the caller's organization and unit scope.
-  const [existing] = await db
-    .select()
-    .from(calibrationJob)
-    .where(
-      and(
-        eq(calibrationJob.id, command.jobId),
-        eq(calibrationJob.organizationId, organizationId),
-        command.unitScope
-          ? buildUnitScopeCondition(calibrationJob.unitId, command.unitScope)
-          : undefined,
-      ),
-    )
-    .limit(1);
+  const existing = await loadScopedJob({
+    jobId: command.jobId,
+    organizationId,
+    unitScope: command.unitScope,
+  });
   if (!existing) return { status: "not_found" };
 
   // 2. The transition table.
@@ -729,20 +652,7 @@ async function runJobExecution(
       jobId: existing.id,
       action: command.command,
       changes: {
-        source:
-          actor.kind === "desktop_session"
-            ? "desktop_sync"
-            : actor.kind === "api_key"
-              ? "public_api"
-              : undefined,
-        ...(actor.kind === "api_key"
-          ? {
-              channel: "api_key",
-              apiKeyId: actor.apiKey.id,
-              apiKeyName: actor.apiKey.name,
-              apiKeyPrefix: actor.apiKey.keyPrefix,
-            }
-          : {}),
+        ...jobActorAuditFields(actor),
         // Evidence that the frozen compiled method was re-pointed at the
         // method's current compilation (same definition, new engine).
         methodSnapshotEngine: reconciledMethod.adopted

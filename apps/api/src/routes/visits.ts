@@ -13,13 +13,12 @@ import {
   sql,
 } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
-import { conflict, domainErrorResponse } from "../lib/domain-errors";
+import { conflict, domainErrorResponse, notFound } from "../lib/domain-errors";
 import {
   asset,
   calibrationJob,
   calibrationVisit,
   customer,
-  jobAuditLog,
   user,
   visitAuditLog,
   visitRescheduleRequest,
@@ -47,13 +46,10 @@ import {
   notifyVisitRescheduled,
   notifyVisitScheduled,
 } from "@calibra-facil/notifications";
-import { requireTargetOf } from "@calibra-facil/schemas/job-transitions";
+import { cancelJob } from "../modules/jobs/cancel-job";
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
 import { formatOnsiteAddressText } from "../lib/onsite-address";
-import {
-  jobStatusConflict,
-  isCancelableJobStatus,
-} from "../modules/jobs/job-status-transitions";
+import { jobStatusConflict } from "../modules/jobs/job-status-transitions";
 import {
   assertAssetBelongsToVisitCustomer,
   canAddJobToVisit,
@@ -732,54 +728,45 @@ export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Job nao encontrado nesta visita" }, 404);
       }
 
-      // The guard above allows DRAFT only; keep the transition table as the
-      // final word, so a status added later never slips in.
-      if (!isCancelableJobStatus(foundJob.status)) {
-        return domainErrorResponse(
-          c,
-          conflict(
-            "job_not_cancelable",
-            "Apenas jobs com status DRAFT podem ser removidos da visita",
-          ),
-        );
-      }
-
-      // REQ-VISITJOB-006: soft-cancel (CANCELED with single L per JobStatus enum).
-      // Compare-and-set on the status the guards validated; the audit row
-      // (append-only ISO 17025 trail, parity with the main job-cancel route)
-      // commits in the same transaction.
-      const canceledStatus = requireTargetOf(foundJob.status, "cancel");
-      const updatedJob = await db.transaction(async (tx) => {
-        const [row] = await tx
-          .update(calibrationJob)
-          .set({ status: canceledStatus })
-          .where(
-            and(
-              eq(calibrationJob.id, jobId),
-              eq(calibrationJob.organizationId, member.organizationId),
-              eq(calibrationJob.status, foundJob.status),
-            ),
-          )
-          .returning();
-        if (!row) return null;
-
-        await tx.insert(jobAuditLog).values({
-          jobId,
-          action: "cancel",
-          changes: {
-            status: { old: foundJob.status, new: canceledStatus },
-          },
-          performedBy: session.user.id,
+      // REQ-VISITJOB-006: soft-cancel (CANCELED with single L per JobStatus
+      // enum). The guards above allow DRAFT only; `cancelJob` keeps the
+      // transition table as the final word, pins the status the guards
+      // validated (a job that moved meanwhile is a 409) and commits the audit
+      // row (append-only ISO 17025 trail, parity with the main job-cancel
+      // route) with the write.
+      const result = await cancelJob({
+        actor: {
+          kind: "user",
+          userId: session.user.id,
           ipAddress: c.req.header("x-forwarded-for") || null,
-          reason: `Instrumento removido da visita #${id}`,
-        });
-        return row;
+        },
+        jobId,
+        organizationId: member.organizationId,
+        // The visit was scoped above (getScopedVisit) and the removal guard
+        // checked that the job belongs to it.
+        unitScope: null,
+        reason: `Instrumento removido da visita #${id}`,
+        expectedStatus: foundJob.status,
       });
-      if (!updatedJob) {
-        return domainErrorResponse(c, await jobStatusConflict(jobId));
+      switch (result.status) {
+        case "not_found":
+          return domainErrorResponse(
+            c,
+            notFound("job_not_found", "Job nao encontrado nesta visita"),
+          );
+        case "illegal_transition":
+          return domainErrorResponse(
+            c,
+            conflict(
+              "job_not_cancelable",
+              "Apenas jobs com status DRAFT podem ser removidos da visita",
+            ),
+          );
+        case "concurrent_update":
+          return domainErrorResponse(c, await jobStatusConflict(jobId));
+        case "ok":
+          return c.json(result.job);
       }
-
-      return c.json(updatedJob);
     },
   );
 

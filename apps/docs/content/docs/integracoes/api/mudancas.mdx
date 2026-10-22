@@ -5,6 +5,26 @@ description: Registro datado das mudanças de comportamento da API pública v2 q
 
 Mudanças aditivas (campos novos) são descritas em [Conceitos](/docs/integracoes/api/conceitos). Esta página registra mudanças de **comportamento** que podem fazer uma chamada que antes passava ser recusada.
 
+## 2026-10-22: `PATCH /jobs/{id}`, `POST /jobs/{id}/reject` e `DELETE /jobs/{id}` seguem as regras da aplicação
+
+Editar, rejeitar e cancelar uma OS pela API agora passam pelos mesmos comandos da aplicação web.
+
+### O que mudou
+
+- **Técnico responsável.** `PATCH /jobs/{id}` com `technicianId` exige que a pessoa tenha atribuição de técnico (ou administrador da unidade) na unidade da OS, ou seja administradora da organização; e, quando o laboratório mantém competências, competência ativa para o tipo de instrumento.
+- **Edição sem mudança não grava nada.** Um `PATCH` que não altera nenhum campo (inclusive um prazo no mesmo dia em outro horário) responde com a OS e não gera registro de auditoria.
+- **Auditoria por campo.** O registro de auditoria de um `PATCH` passa a listar só os campos alterados (`{ technicianId: { old, new }, dueDate: { old, new } }`) com a chave usada, em vez da OS inteira antes e depois.
+- **Concorrência.** Se o status da OS mudar entre a leitura e a gravação, a chamada responde 409 `job_status_conflict` em vez de gravar.
+- **Atribuição de técnico** é recusada para OS canceladas ou com certificado em geração (`job_not_assignable`), além de aprovadas e substituídas.
+
+### Novas recusas
+
+| Status | `error.code`                    | Quando                                                                              |
+| ------ | ------------------------------- | ----------------------------------------------------------------------------------- |
+| 400    | `technician_not_found`          | `technicianId` sem atribuição na unidade da OS, de outra organização ou inexistente |
+| 422    | `technician_competence_missing` | técnico sem competência ativa para o tipo de instrumento                            |
+| 409    | `job_status_conflict`           | o status da OS mudou durante a chamada                                              |
+
 ## 2026-10-21: `POST /jobs/{id}/results` e `POST /jobs/{id}/submit` seguem as mesmas regras da aplicação
 
 Salvar resultados e submeter uma OS para revisão agora passam pela mesma lógica usada pela aplicação web e pelo aplicativo desktop. Antes, a API gravava o que recebia, sem recalcular nem validar. Isso podia deixar `results` fora de sincronia com `data` em uma OS em revisão.
