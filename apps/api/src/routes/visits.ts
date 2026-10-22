@@ -47,6 +47,7 @@ import {
   notifyVisitRescheduled,
   notifyVisitScheduled,
 } from "@calibra-facil/notifications";
+import { requireTargetOf } from "@calibra-facil/schemas/job-transitions";
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
 import { formatOnsiteAddressText } from "../lib/onsite-address";
 import {
@@ -731,8 +732,8 @@ export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Job nao encontrado nesta visita" }, 404);
       }
 
-      // The guard above allows DRAFT only; keep the status machine's own
-      // allow-list as the final word, so a status added later never slips in.
+      // The guard above allows DRAFT only; keep the transition table as the
+      // final word, so a status added later never slips in.
       if (!isCancelableJobStatus(foundJob.status)) {
         return domainErrorResponse(
           c,
@@ -747,10 +748,11 @@ export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
       // Compare-and-set on the status the guards validated; the audit row
       // (append-only ISO 17025 trail, parity with the main job-cancel route)
       // commits in the same transaction.
+      const canceledStatus = requireTargetOf(foundJob.status, "cancel");
       const updatedJob = await db.transaction(async (tx) => {
         const [row] = await tx
           .update(calibrationJob)
-          .set({ status: "CANCELED" })
+          .set({ status: canceledStatus })
           .where(
             and(
               eq(calibrationJob.id, jobId),
@@ -766,7 +768,7 @@ export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
           jobId,
           action: "cancel",
           changes: {
-            status: { old: foundJob.status, new: "CANCELED" },
+            status: { old: foundJob.status, new: canceledStatus },
           },
           performedBy: session.user.id,
           ipAddress: c.req.header("x-forwarded-for") || null,

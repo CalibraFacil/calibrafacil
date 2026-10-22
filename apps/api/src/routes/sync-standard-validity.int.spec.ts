@@ -150,8 +150,23 @@ async function pushSubmit(
     performedAt?: string;
     backdateReason?: string;
     eventId: string;
+    /** List the standard twice in the snapshot, as a buggy client might. */
+    duplicateStandard?: boolean;
   },
 ) {
+  const standardEntry = {
+    id: world.standardId,
+    name: "Massa Padrao",
+    certificateNumber: "CERT-SV",
+    calibrationDate: "2025-01-10T00:00:00.000Z",
+    nextCalibrationDate: `${calendarDateKey(world.validThrough)}T00:00:00.000Z`,
+    uncertainty: 0.01,
+    uncertaintyUnit: "g",
+    coverageFactor: 2,
+    distribution: "normal",
+    drift: null,
+    certifiedValues: null,
+  };
   loginAs({ userId: world.org.userId, organizationId: world.org.orgId });
   const res = await syncRouter.request("/push", {
     method: "POST",
@@ -176,21 +191,9 @@ async function pushSubmit(
             ...(options.backdateReason
               ? { backdateReason: options.backdateReason }
               : {}),
-            standardsSnapshot: [
-              {
-                id: world.standardId,
-                name: "Massa Padrao",
-                certificateNumber: "CERT-SV",
-                calibrationDate: "2025-01-10T00:00:00.000Z",
-                nextCalibrationDate: `${calendarDateKey(world.validThrough)}T00:00:00.000Z`,
-                uncertainty: 0.01,
-                uncertaintyUnit: "g",
-                coverageFactor: 2,
-                distribution: "normal",
-                drift: null,
-                certifiedValues: null,
-              },
-            ],
+            standardsSnapshot: options.duplicateStandard
+              ? [standardEntry, standardEntry]
+              : [standardEntry],
             calibrationLocationSnapshot: {
               type: "lab",
               addressText: "Laboratório",
@@ -322,5 +325,117 @@ describe("syncRouter — desktop execution judges a standard by the performed da
 
     expect(body.rejected).toEqual([]);
     expect(await statusOf(world.jobId)).toBe("REVIEW");
+  });
+});
+
+describe("syncRouter — a standard listed twice is snapshotted once (REQ-SJ-1)", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  it("REQ-SJ-1: a snapshot naming the same standard twice is stored with one entry", async () => {
+    const world = await seedWorld({
+      validThrough: addCalendarDays(labToday(), 60),
+    });
+    const performedAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+    const body = await pushSubmit(world, {
+      eventId: "evt-duplicate",
+      occurredAt: performedAt,
+      performedAt,
+      duplicateStandard: true,
+    });
+
+    expect(body.rejected).toEqual([]);
+    const [row] = await db
+      .select({ standardsSnapshot: calibrationJob.standardsSnapshot })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, world.jobId));
+    expect(row?.standardsSnapshot?.map((standard) => standard.id)).toEqual([
+      world.standardId,
+    ]);
+  });
+});
+
+// REQ-SJ-2 / REQ-SJ-3: the desktop sync apply refuses, through the one
+// judgement, what the cloud refuses, mapped to the rejection codes the desktop
+// already handles.
+describe("syncRouter — the one standards judgement's refusals keep their sync codes (REQ-SJ-2, REQ-SJ-3)", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  async function pushValidSubmit(world: World, eventId: string) {
+    const performedAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    return pushSubmit(world, { eventId, occurredAt: performedAt, performedAt });
+  }
+
+  it("REQ-SJ-3 [HIGH RISK]: an INACTIVE standard is rejected STANDARD_NOT_ACTIVE and the job is untouched", async () => {
+    const world = await seedWorld({
+      validThrough: addCalendarDays(labToday(), 60),
+    });
+    await db
+      .update(referenceStandard)
+      .set({ status: "INACTIVE" })
+      .where(eq(referenceStandard.id, world.standardId));
+
+    const body = await pushValidSubmit(world, "evt-inactive");
+
+    expect(body.accepted).toEqual([]);
+    expect(body.rejected).toEqual([
+      expect.objectContaining({
+        eventId: "evt-inactive",
+        code: "STANDARD_NOT_ACTIVE",
+      }),
+    ]);
+    expect(await statusOf(world.jobId)).toBe("IN_PROGRESS");
+  });
+
+  it("REQ-SJ-3 [HIGH RISK]: a soft-deleted standard is rejected STANDARD_SCOPE_MISMATCH (as before) and the job is untouched", async () => {
+    const world = await seedWorld({
+      validThrough: addCalendarDays(labToday(), 60),
+    });
+    await db
+      .update(referenceStandard)
+      .set({ deletedAt: new Date() })
+      .where(eq(referenceStandard.id, world.standardId));
+
+    const body = await pushValidSubmit(world, "evt-deleted");
+
+    expect(body.accepted).toEqual([]);
+    expect(body.rejected).toEqual([
+      expect.objectContaining({
+        eventId: "evt-deleted",
+        code: "STANDARD_SCOPE_MISMATCH",
+      }),
+    ]);
+    expect(await statusOf(world.jobId)).toBe("IN_PROGRESS");
+  });
+
+  it("REQ-SJ-3 [HIGH RISK]: another organization's standard is rejected STANDARD_SCOPE_MISMATCH and its name is not disclosed", async () => {
+    const world = await seedWorld({
+      validThrough: addCalendarDays(labToday(), 60),
+    });
+    const intruder = await seedOrg({
+      orgId: "org-sv-2",
+      userId: "user-sv-2",
+      role: "admin",
+    });
+    await db
+      .update(referenceStandard)
+      .set({ organizationId: intruder.orgId, unitId: intruder.unitId })
+      .where(eq(referenceStandard.id, world.standardId));
+
+    const body = await pushValidSubmit(world, "evt-foreign");
+
+    expect(body.accepted).toEqual([]);
+    expect(body.rejected).toEqual([
+      expect.objectContaining({
+        eventId: "evt-foreign",
+        code: "STANDARD_SCOPE_MISMATCH",
+      }),
+    ]);
+    expect(body.rejected[0]?.reason).not.toContain("Massa Padrao");
+    expect(await statusOf(world.jobId)).toBe("IN_PROGRESS");
   });
 });

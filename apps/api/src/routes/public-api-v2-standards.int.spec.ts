@@ -217,3 +217,100 @@ describe("publicApiV2Router POST /jobs/:id/submit: standards are judged at the p
     expect((await jobState(world.jobId)).status).toBe("REVIEW");
   });
 });
+
+// REQ-SJ-2 / REQ-SJ-3: the same judgement refuses, on every path, a standard
+// that is no longer ACTIVE or was soft-deleted after the draft named it, each
+// with its own stable code. Before the one judgement the cloud submit and the
+// public API submit read neither status nor deletedAt.
+describe("a standard that is inactive or deleted after the draft was saved is refused at submit (REQ-SJ-2, REQ-SJ-3)", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  function cloudSubmit(world: World) {
+    loginAs({ userId: world.org.userId, organizationId: world.org.orgId });
+    return jobsRouter.request(`/${world.jobId}/submit`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        data: { indication: "10", reference: "9" },
+        calibrationLocation: { type: "lab", addressText: "Laboratório" },
+      }),
+    });
+  }
+
+  async function draftThen(
+    change: { status: "INACTIVE" } | { deletedAt: Date },
+  ) {
+    const world = await seedWorld(addCalendarDays(labToday(), 90));
+    await saveCloudDraft(world, new Date(Date.now() - 60 * 60 * 1000));
+    await db
+      .update(referenceStandard)
+      .set(change)
+      .where(eq(referenceStandard.id, world.standardId));
+    return world;
+  }
+
+  it("REQ-SJ-2 [HIGH RISK]: the public API refuses an INACTIVE standard (422 standard_inactive); the job is unchanged", async () => {
+    const world = await draftThen({ status: "INACTIVE" });
+
+    const res = await publicSubmit(world, "submit-inactive");
+
+    expect(res.status).toBe(422);
+    const body = await res.json();
+    expect(body.error.code).toBe("standard_inactive");
+    expect(body.error.message).toContain("Massa Padrao");
+    const after = await jobState(world.jobId);
+    expect(after.status).toBe("IN_PROGRESS");
+    expect(after.audit).not.toContain("submit");
+  });
+
+  it("REQ-SJ-2 [HIGH RISK]: the public API refuses a soft-deleted standard (422 standard_deleted)", async () => {
+    const world = await draftThen({ deletedAt: new Date() });
+
+    const res = await publicSubmit(world, "submit-deleted");
+
+    expect(res.status).toBe(422);
+    expect((await res.json()).error.code).toBe("standard_deleted");
+    expect((await jobState(world.jobId)).status).toBe("IN_PROGRESS");
+  });
+
+  it("REQ-SJ-2 [HIGH RISK]: the cloud submit refuses an INACTIVE standard of the saved snapshot (400 standard_inactive); the job is unchanged", async () => {
+    const world = await draftThen({ status: "INACTIVE" });
+
+    const res = await cloudSubmit(world);
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.code).toBe("standard_inactive");
+    expect(body.error).toContain("nao estao ativos");
+    const after = await jobState(world.jobId);
+    expect(after.status).toBe("IN_PROGRESS");
+    expect(after.audit).not.toContain("submit");
+  });
+
+  it("REQ-SJ-2 [HIGH RISK]: the cloud submit refuses a soft-deleted standard of the saved snapshot (400 standard_deleted)", async () => {
+    const world = await draftThen({ deletedAt: new Date() });
+
+    const res = await cloudSubmit(world);
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).code).toBe("standard_deleted");
+    expect((await jobState(world.jobId)).status).toBe("IN_PROGRESS");
+  });
+
+  it("REQ-SJ-3: the cloud submit keeps its stable code and 400 for an expired standard", async () => {
+    const world = await seedWorld(addCalendarDays(labToday(), -3));
+    await saveCloudDraft(
+      world,
+      new Date(
+        `${calendarDateKey(addCalendarDays(labToday(), -3))}T15:00:00-03:00`,
+      ),
+    );
+
+    const res = await cloudSubmit(world);
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).code).toBe("standard_expired");
+  });
+});

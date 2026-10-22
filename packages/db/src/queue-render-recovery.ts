@@ -1,4 +1,8 @@
 import { and, eq, inArray, lt, notExists, sql } from "drizzle-orm";
+import {
+  allowedFrom,
+  requireTargetOf,
+} from "@calibra-facil/schemas/job-transitions";
 import { db } from "./db.js";
 import { appQueueJob, calibrationJob, jobAuditLog } from "./schema.js";
 import type { DeadLetteredQueueJob } from "./queue.js";
@@ -20,6 +24,9 @@ import type { DeadLetteredQueueJob } from "./queue.js";
 // the status predicate (and by the calibration_job immutability trigger).
 
 const REASON_PREFIX = "Erro ao gerar certificado: ";
+
+/** The status a certificate render is in; `fail_render` leaves it (job-transitions). */
+const RENDERING_STATUS = "GENERATING_PDF";
 
 /**
  * Why the backstop rejected a render. Written to the audit row so an auditor can
@@ -72,12 +79,14 @@ export async function rejectCertificateRender(params: {
   notUpdatedSince?: Date;
 }): Promise<boolean> {
   const now = new Date();
+  const renderingStatus = RENDERING_STATUS;
+  const failedStatus = requireTargetOf(renderingStatus, "fail_render");
 
   return db.transaction(async (tx) => {
     const updated = await tx
       .update(calibrationJob)
       .set({
-        status: "REJECTED",
+        status: failedStatus,
         rejectionReason: `${REASON_PREFIX}${params.reason}`,
         rejectedBy: params.rejectedBy,
         rejectedAt: now,
@@ -87,7 +96,7 @@ export async function rejectCertificateRender(params: {
         and(
           eq(calibrationJob.id, params.jobId),
           eq(calibrationJob.organizationId, params.organizationId),
-          eq(calibrationJob.status, "GENERATING_PDF"),
+          inArray(calibrationJob.status, allowedFrom("fail_render")),
           params.notUpdatedSince
             ? lt(calibrationJob.updatedAt, params.notUpdatedSince)
             : undefined,
@@ -104,7 +113,7 @@ export async function rejectCertificateRender(params: {
       jobId: params.jobId,
       action: "certificate_error",
       changes: {
-        status: { old: "GENERATING_PDF", new: "REJECTED" },
+        status: { old: renderingStatus, new: failedStatus },
         source: RENDER_REJECTION_SOURCE,
         reason: params.trigger,
         ...(params.queueJobId === undefined

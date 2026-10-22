@@ -74,8 +74,11 @@ import {
   UpdateServiceOrderExecutionSchema,
   METHOD_DEVIATIONS_MAX_LENGTH,
   resolveExecutionPerformedAt,
-  assessStandardValidity,
 } from "@calibra-facil/schemas";
+import {
+  canTransition,
+  requireTargetOf,
+} from "@calibra-facil/schemas/job-transitions";
 import {
   and,
   asc,
@@ -100,6 +103,10 @@ import {
   withLabPermission,
 } from "../middleware/permission";
 import { buildUnitScopeCondition } from "../lib/units";
+import {
+  judgeSnapshotStandards,
+  type StandardsRefusal,
+} from "../modules/jobs/standards-judgement";
 import {
   isAssignableTechnician,
   serviceOrderBelongsToOrganization,
@@ -2620,7 +2627,9 @@ async function applyLocalJobExecution(
     };
   }
 
-  if (!["DRAFT", "IN_PROGRESS", "REJECTED"].includes(existing.status)) {
+  const executionCommand =
+    input.event.operation === "submit_local_execution" ? "submit" : "execute";
+  if (!canTransition(existing.status, executionCommand)) {
     return {
       ok: false,
       code: "INVALID_STATUS_TRANSITION",
@@ -2640,9 +2649,11 @@ async function applyLocalJobExecution(
     };
   }
 
+  // A submit lands where the table says; a plain save keeps the status the
+  // desktop reported (the offline store applies the same execute rule).
   const nextStatus =
-    input.event.operation === "submit_local_execution"
-      ? "REVIEW"
+    executionCommand === "submit"
+      ? requireTargetOf(existing.status, "submit")
       : (getJobStatus(payload, "status") ?? "IN_PROGRESS");
   const nextData = getRecordOrNull(payload, "data") ?? {};
   const standardsSnapshotResult = hasOwn(payload, "standardsSnapshot")
@@ -2987,7 +2998,7 @@ async function validateDesktopExecutionStandardsSnapshot(
   standardsSnapshot: StandardSnapshot[] | null,
   data: Record<string, unknown>,
   memberData: MemberData,
-  judgement: StandardsJudgement,
+  judgementInput: DesktopStandardsJudgementInput,
 ): Promise<
   | { ok: true; validOnlyBecauseBackdated: string[] }
   | {
@@ -3049,85 +3060,76 @@ async function validateDesktopExecutionStandardsSnapshot(
     };
   }
 
-  const standards = await db
-    .select({
-      id: referenceStandard.id,
-      name: referenceStandard.name,
-      status: referenceStandard.status,
-      nextCalibrationDate: referenceStandard.nextCalibrationDate,
-    })
-    .from(referenceStandard)
-    .where(
-      and(
-        inArray(referenceStandard.id, uniqueIds),
-        eq(referenceStandard.organizationId, memberData.organizationId),
-        buildUnitScopeCondition(referenceStandard.unitId, memberData),
-        isNull(referenceStandard.deletedAt),
-      ),
-    );
-
-  if (standards.length !== uniqueIds.length) {
-    const foundIds = new Set(standards.map((standard) => standard.id));
-    const missingIds = uniqueIds.filter((id) => !foundIds.has(id));
-    return {
-      ok: false,
-      code: "STANDARD_SCOPE_MISMATCH",
-      reason: `Desktop execution references standards that are missing or outside scope: ${missingIds.join(", ")}.`,
-    };
-  }
-
-  const inactiveStandards = standards.filter(
-    (standard) => standard.status !== "ACTIVE",
-  );
-  if (inactiveStandards.length > 0) {
-    return {
-      ok: false,
-      code: "STANDARD_NOT_ACTIVE",
-      reason: `Desktop execution references inactive standards: ${inactiveStandards.map((standard) => standard.name).join(", ")}.`,
-    };
-  }
-
-  // Valid THROUGH the certificate day. With an explicit performed date (new
-  // desktop builds) it is judged on the laboratory day the work was performed,
-  // not the sync day; a legacy event carries none, so it is judged at sync time
-  // as it always was (old builds get no loosening).
-  const syncedAt = new Date();
-  const assessment = assessStandardValidity(
-    standards,
-    judgement.performedAt ?? syncedAt,
-    syncedAt,
-  );
-
-  if (assessment.expiredAtPerformed.length > 0) {
-    return {
-      ok: false,
-      code: "STANDARD_EXPIRED",
-      reason: `Desktop execution references expired standards: ${assessment.expiredAtPerformed.join(", ")}.`,
-    };
-  }
-
-  // Valid only because the work is back-dated: a submission needs a written
-  // justification even within the usual 7 days (the draft saves are advisory).
-  if (
-    judgement.requireBackdateReason &&
-    assessment.validOnlyBecauseBackdated.length > 0 &&
-    !judgement.backdateReason
-  ) {
-    return {
-      ok: false,
-      code: "STANDARD_BACKDATE_REASON_REQUIRED",
-      reason: `The certificate of ${assessment.validOnlyBecauseBackdated.join(", ")} expired after the performed date; a justification for the back-dated record is required.`,
-    };
-  }
+  // The one standards judgement (Q12), shared with the cloud submit, the public
+  // API and the offline database; this only maps its refusals to the codes the
+  // desktop already handles. An explicit performed date (new desktop builds)
+  // judges on the laboratory day the work was performed; a legacy event carries
+  // none and is judged at sync time, as it always was.
+  const judgement = await judgeSnapshotStandards({
+    standardIds: uniqueIds,
+    organizationId: memberData.organizationId,
+    unitScope: buildUnitScopeCondition(referenceStandard.unitId, memberData),
+    performedAt: judgementInput.performedAt,
+    now: new Date(),
+    backdateReason: judgementInput.backdateReason,
+    mode: judgementInput.performedAt ? "desktop_explicit" : "desktop_legacy",
+    // A submission must justify a backdate-dependent standard; the draft saves
+    // are advisory.
+    requireBackdateReason: judgementInput.requireBackdateReason,
+  });
+  if (!judgement.ok) return desktopStandardsRejection(judgement);
 
   return {
     ok: true,
-    validOnlyBecauseBackdated: assessment.validOnlyBecauseBackdated,
+    validOnlyBecauseBackdated: judgement.validOnlyBecauseBackdated.map(
+      (standard) => standard.name,
+    ),
   };
 }
 
+/** The sync rejection (code + reason) the desktop sees for a judgement refusal. */
+function desktopStandardsRejection(refusal: StandardsRefusal): {
+  ok: false;
+  code: string;
+  reason: string;
+} {
+  const names = refusal.standardNames.join(", ");
+  switch (refusal.code) {
+    case "standard_not_found":
+      return {
+        ok: false,
+        code: "STANDARD_SCOPE_MISMATCH",
+        reason: `Desktop execution references standards that are missing or outside scope: ${refusal.standardIds.join(", ")}.`,
+      };
+    case "standard_deleted":
+      return {
+        ok: false,
+        code: "STANDARD_SCOPE_MISMATCH",
+        reason: `Desktop execution references standards that were deleted: ${names}.`,
+      };
+    case "standard_inactive":
+      return {
+        ok: false,
+        code: "STANDARD_NOT_ACTIVE",
+        reason: `Desktop execution references inactive standards: ${names}.`,
+      };
+    case "standard_expired":
+      return {
+        ok: false,
+        code: "STANDARD_EXPIRED",
+        reason: `Desktop execution references expired standards: ${names}.`,
+      };
+    case "standard_backdate_reason_required":
+      return {
+        ok: false,
+        code: "STANDARD_BACKDATE_REASON_REQUIRED",
+        reason: `The certificate of ${names} expired after the performed date; a justification for the back-dated record is required.`,
+      };
+  }
+}
+
 /** How a desktop execution event's standards are judged (Q12). */
-type StandardsJudgement = {
+type DesktopStandardsJudgementInput = {
   /** The explicit performed date; null for a legacy event (judged at sync). */
   performedAt: Date | null;
   /** The written justification sent with the event, if any. */
@@ -4311,7 +4313,11 @@ function getStandardSnapshotsResult(
     };
   }
   const normalized: StandardSnapshot[] = [];
+  const seenIds = new Set<number>();
   for (const standard of parseResult.data) {
+    // A standard listed twice is one standard: keep its first entry.
+    if (seenIds.has(standard.id)) continue;
+    seenIds.add(standard.id);
     const calibrationDate = parseSnapshotDate(standard.calibrationDate);
     const nextCalibrationDate =
       standard.nextCalibrationDate == null

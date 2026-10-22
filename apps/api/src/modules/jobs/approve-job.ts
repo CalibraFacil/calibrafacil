@@ -2,6 +2,11 @@ import { canPerformCalibrationAction } from "@calibra-facil/auth/access";
 import { db } from "@calibra-facil/db";
 import { calibrationJob, jobAuditLog, member } from "@calibra-facil/db/schema";
 import type { ApproveJobSchema } from "@calibra-facil/schemas";
+import {
+  allowedFrom,
+  canTransition,
+  requireTargetOf,
+} from "@calibra-facil/schemas/job-transitions";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import type { z } from "zod";
 import {
@@ -271,7 +276,7 @@ export async function approveJob(
   }
 
   // Can only approve from REVIEW status
-  if (existing.status !== "REVIEW") {
+  if (!canTransition(existing.status, "approve")) {
     return { status: "invalid_status", currentStatus: existing.status };
   }
 
@@ -377,12 +382,13 @@ export async function approveJob(
         }
       : {};
 
+  const approvedStatus = requireTargetOf(existing.status, "approve");
   const outcome = await db.transaction(async (tx) => {
     const [updated] = await tx
       .update(calibrationJob)
       .set({
         // We set approved_by now so the PDF worker can fetch it.
-        status: "GENERATING_PDF",
+        status: approvedStatus,
         approvedBy: approverId,
         approvedAt,
         ...(evaluation.environmentalSnapshot
@@ -417,7 +423,7 @@ export async function approveJob(
       jobId,
       action: "approve",
       changes: {
-        status: { old: existing.status, new: "GENERATING_PDF" },
+        status: { old: existing.status, new: approvedStatus },
         ...approvedVia,
         // Recorded on ANY transition — including adverse → null when the
         // guard stopped applying (scope lines deleted, vigência lapsed).
@@ -526,11 +532,13 @@ async function revertApprovalAfterDispatchFailure(params: {
   const message =
     params.error instanceof Error ? params.error.message : "unknown error";
   try {
+    const approvedStatus = requireTargetOf(existing.status, "approve");
+    const revertedStatus = requireTargetOf(approvedStatus, "revert_approval");
     await db.transaction(async (tx) => {
       const [reverted] = await tx
         .update(calibrationJob)
         .set({
-          status: existing.status,
+          status: revertedStatus,
           approvedBy: existing.approvedBy,
           approvedAt: existing.approvedAt,
           environmentalSnapshot: existing.environmentalSnapshot,
@@ -547,7 +555,7 @@ async function revertApprovalAfterDispatchFailure(params: {
           and(
             eq(calibrationJob.id, existing.id),
             eq(calibrationJob.organizationId, existing.organizationId),
-            eq(calibrationJob.status, "GENERATING_PDF"),
+            inArray(calibrationJob.status, allowedFrom("revert_approval")),
             eq(calibrationJob.approvedBy, approverId),
           ),
         )
@@ -560,7 +568,7 @@ async function revertApprovalAfterDispatchFailure(params: {
         jobId: existing.id,
         action: "approve_reverted",
         changes: {
-          status: { old: "GENERATING_PDF", new: existing.status },
+          status: { old: approvedStatus, new: revertedStatus },
         },
         performedBy: approverId,
         ipAddress: params.ipAddress,

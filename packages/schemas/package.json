@@ -10,9 +10,17 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./job-transitions": {
+      "types": "./src/job-transitions.ts",
+      "default": "./src/job-transitions.ts"
+    },
     "./quality": {
       "types": "./src/quality.ts",
       "default": "./src/quality.ts"
+    },
+    "./standards-judgement-fixtures": {
+      "types": "./src/standards-judgement.fixtures.ts",
+      "default": "./src/standards-judgement.fixtures.ts"
     }
   },
   "scripts": {
