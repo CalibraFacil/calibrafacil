@@ -312,7 +312,7 @@ laboratory instead, set `CONTA_AZUL_CLIENT_ID` and `CONTA_AZUL_CLIENT_SECRET`
 Set `SIGNING_TSA_URL` to the endpoint of a time-stamp authority and every signed certificate gets
 a carimbo do tempo (PAdES-T). The other variables are optional: `SIGNING_TSA_AUTH` is the full
 `Authorization` header value of a contracted authority (`Basic ...` or `Bearer ...`),
-`SIGNING_TSA_TIMEOUT_MS` the request timeout (1000 to 120000, default 30000), and
+`SIGNING_TSA_TIMEOUT_MS` the request timeout (1000 to 60000, default 30000; capped at 60000 so the worst case, 4 × 60 s + 7 s = 247 s, stays under the 300 s queue function limit), and
 `SIGNING_TSA_ICP_CONFORMANT=true` is to be set **only** for a credentialed ICP-Brasil authority:
 otherwise the signature records `icpBrasilConformant: false`, so a generic authority is never
 presented as legally conformant. The settings are validated at start-up (the address must be an
@@ -342,9 +342,8 @@ byte-identical to what earlier releases produced.
 - Keep the worst case inside the function's time limit. An unreachable authority that hangs costs
   up to `4 × SIGNING_TSA_TIMEOUT_MS + 7 seconds` per delivery (127 seconds at the default 30000),
   on top of the render itself. The Vercel Queue function (`api/queues/background.js`) has a
-  `maxDuration` of 300 seconds, so keep `SIGNING_TSA_TIMEOUT_MS × 4` well under it: a timeout above
-  about 60000 can exhaust the function before the delivery fails cleanly. A value that large is
-  accepted by the validation (the maximum is 120000) but is not recommended.
+  `maxDuration` of 300 seconds; the timeout is therefore capped at 60000 (247 seconds worst case),
+  and the validation refuses anything larger.
 - While the queue still has deliveries left (Vercel: `BACKGROUND_JOBS_MAX_DELIVERIES`, default 3;
   database queue: the row's `max_attempts`), the job stays `GENERATING_PDF` and the message is
   redelivered, so a short outage of the authority heals itself.

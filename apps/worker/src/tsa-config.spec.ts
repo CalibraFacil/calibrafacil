@@ -39,6 +39,15 @@ describe("resolveTsaConfig (#646 / CMP-03)", () => {
     }
   });
 
+  it("caps the timeout at 60000 ms so four tries stay under the 300 s queue function limit", () => {
+    expect(
+      resolveTsaConfig({
+        SIGNING_TSA_URL: "https://tsa.example.test",
+        SIGNING_TSA_TIMEOUT_MS: "120000",
+      })?.timeoutMs,
+    ).toBe(60_000);
+  });
+
   it("defaults icpBrasilConformant to FALSE — honest labeling for generic TSAs", () => {
     const generic = resolveTsaConfig({
       SIGNING_TSA_URL: "https://freetsa.example",

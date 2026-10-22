@@ -87,9 +87,9 @@ export const signingGroup = defineGroup({
     tsaTimeoutMs: integer({
       env: "SIGNING_TSA_TIMEOUT_MS",
       description:
-        "Time-stamp request timeout in milliseconds (1000 to 120000). Unset: 30000. A request that times out fails the certificate job (fail-closed).",
+        "Time-stamp request timeout in milliseconds (1000 to 60000). Unset: 30000. Capped at 60 s so four tries (plus 7 s of back-off) stay under the queue function's 300 s limit. A request that times out fails the certificate job (fail-closed).",
       min: 1000,
-      max: 120_000,
+      max: 60_000,
       example: example.commented("30000"),
     }),
   },
