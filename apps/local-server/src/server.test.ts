@@ -2042,7 +2042,7 @@ INSERT INTO environmental_limits (
       "/api/environmental-limits/effective/456?unitId=1",
     );
     await expect(limitsResponse.json()).resolves.toMatchObject({
-      source: "local",
+      source: "asset_type",
       limits: {
         assetTypeId: 456,
         temperatureMin: 18,

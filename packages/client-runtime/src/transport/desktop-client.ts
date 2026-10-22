@@ -6,6 +6,7 @@ import type {
 import type {
   AssetDetailData,
   AssetTypesListData,
+  AssetRecord,
   AssetsListData,
   CalibraApi,
   CertificateNumberingConfig,
@@ -431,7 +432,7 @@ export function createDesktopApiClient(
           throw new Error(await readApiError(response, "Erro ao criar ativo"));
         }
 
-        return readDesktopJson<AssetsListData["data"][number]>(response);
+        return readDesktopJson<AssetRecord>(response);
       },
       async get<TAsset = AssetDetailData>(id: string | number) {
         const response = await fetchImpl(

@@ -1,4 +1,10 @@
 import { Hono } from "hono";
+import type {
+  ServerShape,
+  ServiceOrderCreateResponse,
+  ServiceOrderDetailResponse,
+  ServiceOrdersListResponse,
+} from "@calibra-facil/contracts";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { serviceOrder } from "@calibra-facil/db/schema";
@@ -161,7 +167,12 @@ export const serviceOrdersRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       const query = c.req.valid("query");
-      return c.json(await listServiceOrdersForLab(member, query));
+      return c.json(
+        (await listServiceOrdersForLab(
+          member,
+          query,
+        )) satisfies ServerShape<ServiceOrdersListResponse>,
+      );
     },
   )
   .post(
@@ -193,7 +204,10 @@ export const serviceOrdersRouter = new Hono<{
       if (result.status === "invalid_source_order") {
         return c.json({ error: SERVICE_ORDER_SOURCE_REFUSED }, 400);
       }
-      return c.json({ data: result.data }, 201);
+      return c.json(
+        { data: result.data } satisfies ServerShape<ServiceOrderCreateResponse>,
+        201,
+      );
     },
   )
   .get(
@@ -271,7 +285,9 @@ export const serviceOrdersRouter = new Hono<{
         buildUnitScopeCondition(serviceOrder.unitId, member),
       );
       if (!detail) return c.json({ error: "OS nao encontrada" }, 404);
-      return c.json({ data: detail });
+      return c.json({
+        data: detail,
+      } satisfies ServerShape<ServiceOrderDetailResponse>);
     },
   )
   // #343 — per-OS customer-communication log ("Comunicações"): merges the

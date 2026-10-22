@@ -158,22 +158,43 @@ as `any`. Response contracts replace that, one domain at a time.
   parsed against its schema in `packages/contracts/src/fixtures.test.ts`, so a
   fixture cannot drift from the contract it stands in for.
 
-**Covered so far (first slice):** jobs domain (`GET /api/jobs`, `GET /api/jobs/:id`,
-the execute/submit/approve/reject/cancel/assign mutation responses, amend,
-technicians list, certificate/label download links) and `GET /api/portal/overview`.
+**Covered so far:** jobs domain (`GET /api/jobs`, `GET /api/jobs/:id`, the
+execute/submit/approve/reject/cancel/assign mutation responses, amend,
+technicians list, certificate/label download links, `POST /api/jobs` create,
+`flag-oot`, `generate-label`), `GET /api/portal/overview`, standards (list,
+detail, create, update, composition profiles, certificate document upload and
+download) and environmental limits (list, save, delete, effective lookup).
+`client-runtime` validates all of these.
+
+**Reference data and service orders** (customers, assets, asset types, methods,
+service orders: `packages/contracts/src/reference-data.ts`,
+`service-orders.ts`) have response schemas that the API contract spec
+(`reference-data-contract.int.spec.ts`) checks against the real cloud routes,
+with `satisfies ServerShape<...>` at the handlers. `client-runtime` does not
+validate them at run time yet.
+
+**Desktop parity.** The desktop local-server (SQLite mirror) answers the offline
+routes with the SAME schemas the cloud is held to:
+`apps/local-server/src/contract.test.ts` parses every offline route (jobs reads,
+execution save/submit, attachments, environmental limits, service-order
+create/list/get, asset create/list/get, asset types, customers / standards /
+methods reads, sync) with them. Where the mirror legitimately keeps less than
+the cloud, the test names the exact missing fields (`JOB_DETAIL_GAPS`: review
+trail, amendment chain, as-found verdict, letterhead, commercial terms) and
+fails when that set changes in either direction; the schema itself is never
+loosened to fit the mirror. Execute/submit are typed by the common core
+`jobExecutionResponseSchema` because the local job read model has no cloud-only
+columns (`verificationToken`, signature data).
 
 **Opaque by design, for now:** `methodSnapshot.compiledMethod` is `unknown` in the
 job schema because the database column is; the worksheet reads it through
 `compiledMethodSnapshotSchema.safeParse` (see `readCompiledMethodSnapshot` in
 `apps/web/src/features/jobs/execution.ts`).
 
-**Follow-ups (remaining domains, in rough priority):** `POST /api/jobs` create,
-`flag-oot`, `generate-label`; `standards` (incl. `jobs.listStandards`) and
-`environmental-limits` (`jobs.getEffectiveEnvironmentalLimits`), which still take
-a generic; service orders; customers/assets/services/methods; quality
-(NC/CAPA); finance; reports; the other ~60 portal `fetch` calls (move each to
-`fetchPortalJson` with a contract schema); the desktop transport
-(`desktop-client.ts` still reads local-server bodies with `readDesktopJson<T>`,
-unvalidated: give `apps/local-server` the same contract tests); and the
-hand-written `*Data` DTOs left in `packages/client-runtime/src/types.ts`.
-New endpoints should start with a schema in contracts rather than a generic.
+**Follow-ups (remaining domains, in rough priority):** run-time validation of
+the reference-data and service-order responses in `client-runtime`; the
+desktop transport (`desktop-client.ts`) still reads local-server bodies with
+`readDesktopJson<T>`, unvalidated (the local-server contract tests pin the
+shapes instead); services; quality (NC/CAPA); finance; reports; and the
+hand-written `*Data` DTOs left in `packages/client-runtime/src/types.ts`. New
+endpoints should start with a schema in contracts rather than a generic.

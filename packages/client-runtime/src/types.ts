@@ -84,6 +84,7 @@ export type CustomerDetailData = CustomersListData["data"][number] & {
 };
 
 import type {
+  AssetRecord,
   DeleteEnvironmentalLimitResponse,
   EffectiveEnvironmentalLimitsResponse,
   EnvironmentalLimitsResponse,
@@ -136,6 +137,7 @@ import type {
 } from "./service-orders";
 export type { JobExecutionPayload } from "./jobs";
 export type {
+  AssetRecord,
   EffectiveEnvironmentalLimitsResponse,
   EnvironmentalLimit,
   EnvironmentalLimitsResponse,
@@ -1095,7 +1097,8 @@ export type AssetDetailData = AssetsListData["data"][number] & {
 
 export interface AssetsApi {
   list(input: AssetsListInput): Promise<AssetsListData>;
-  create(input: CreateAssetInput): Promise<AssetsListData["data"][number]>;
+  /** The stored asset (no joined customer or type names). */
+  create(input: CreateAssetInput): Promise<AssetRecord>;
   get<TAsset = AssetDetailData>(id: string | number): Promise<TAsset>;
   update<TAsset = AssetDetailData>(
     id: string | number,

@@ -78,8 +78,14 @@ import {
 import type { CreateAssetInput } from '@calibra-facil/schemas'
 import { cn } from '@/lib/utils'
 
-/** The asset record returned by `assets.create` (used to auto-select it). */
-export type CreatedAsset = Awaited<ReturnType<typeof calibraApi.assets.create>>
+/**
+ * The asset `assets.create` stored (used to auto-select it), plus the name of
+ * its type: the API answers with the bare row, so the form adds the name it
+ * already shows.
+ */
+export type CreatedAsset = Awaited<
+  ReturnType<typeof calibraApi.assets.create>
+> & { assetTypeName: string }
 
 const statusLabels: Record<AssetFormData['status'], string> = {
   ACTIVE: 'Ativo',
@@ -262,7 +268,7 @@ export function AssetCreateForm({
     mutationFn: (data: CreateAssetInput) => calibraApi.assets.create(data),
     onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['assets'] })
-      onSaved(created)
+      onSaved({ ...created, assetTypeName: selectedAssetType?.name ?? '' })
     },
     onError: (error) => {
       toast.error(error.message)

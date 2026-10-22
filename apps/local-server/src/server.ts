@@ -11,7 +11,7 @@ import {
   getLocalAttachment,
   getLocalCustomerDetail,
   getLocalDatabaseDiagnostics,
-  getLocalEffectiveEnvironmentalLimits,
+  resolveLocalEffectiveEnvironmentalLimits,
   getLocalSessionSnapshot,
   getLocalSchemaVersion,
   getLocalJobDetail,
@@ -671,7 +671,11 @@ export function createLocalServerRuntime(
         deviceId: config.deviceId,
       });
 
-      return c.json({ data: job, warnings });
+      return c.json({
+        message: "Dados salvos com sucesso",
+        data: job,
+        warnings,
+      });
     } catch (error) {
       return c.json(
         {
@@ -766,7 +770,7 @@ export function createLocalServerRuntime(
         deviceId: config.deviceId,
       });
 
-      return c.json({ data: job });
+      return c.json({ message: "Job submetido para revisao", data: job });
     } catch (error) {
       return c.json(
         {
@@ -876,17 +880,17 @@ export function createLocalServerRuntime(
   app.get("/api/environmental-limits/effective/:assetTypeId", (c) => {
     const assetTypeId = parseNumber(c.req.param("assetTypeId"));
     const context = getLocalRequestContext(config, database);
-    const limits = assetTypeId
-      ? getLocalEffectiveEnvironmentalLimits(database, {
-          assetTypeId,
-          unitId: context.unitId,
-        })
-      : null;
 
-    return c.json({
-      limits,
-      source: limits ? "local" : null,
-    });
+    // Same answer as the cloud: the limits plus which row won (`asset_type`
+    // override or `unit_default`), both null when nothing is configured.
+    return c.json(
+      assetTypeId
+        ? resolveLocalEffectiveEnvironmentalLimits(database, {
+            assetTypeId,
+            unitId: context.unitId,
+          })
+        : { limits: null, source: null },
+    );
   });
 
   app.get("/api/assets", (c) => {

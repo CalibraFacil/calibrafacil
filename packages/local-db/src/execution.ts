@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import {
+  isCalendarDatePast,
   judgeDraftExecutionStandards,
   judgeExecutionStandards,
+  labDaysUntil,
   resolveExecutionPerformedAt,
   type DraftStandardsJudgement,
   type JudgedStandardFacts,
@@ -282,8 +284,13 @@ SELECT j.*,
   a.serial_number AS asset_serial_number,
   a.manufacturer AS asset_manufacturer,
   a.model AS asset_model,
+  a.base_measurement_unit AS asset_base_measurement_unit,
+  a.specifications_json AS asset_specifications_json,
+  a.asset_type_id AS asset_type_local_id,
   at.remote_id AS asset_type_remote_id,
   at.name AS asset_type_name,
+  at.slug AS asset_type_slug,
+  at.specifications_schema_json AS asset_type_definition_json,
   s.remote_id AS service_remote_id,
   s.name AS service_name
 FROM calibration_jobs j
@@ -311,8 +318,13 @@ SELECT j.*,
   a.serial_number AS asset_serial_number,
   a.manufacturer AS asset_manufacturer,
   a.model AS asset_model,
+  a.base_measurement_unit AS asset_base_measurement_unit,
+  a.specifications_json AS asset_specifications_json,
+  a.asset_type_id AS asset_type_local_id,
   at.remote_id AS asset_type_remote_id,
   at.name AS asset_type_name,
+  at.slug AS asset_type_slug,
+  at.specifications_schema_json AS asset_type_definition_json,
   s.remote_id AS service_remote_id,
   s.name AS service_name
 FROM calibration_jobs j
@@ -329,31 +341,62 @@ WHERE j.deleted_at IS NULL
 }
 
 function toJobDetail(job: LocalJobRow) {
-  const assetSnapshot = parseJsonRecord(job.asset_snapshot_json);
+  const storedAssetSnapshot = parseJsonRecord(job.asset_snapshot_json);
+  const assetId = job.asset_remote_id ?? stableLocalNumericId(job.asset_id);
+  const assetTypeId =
+    job.asset_type_remote_id ??
+    getNumber(storedAssetSnapshot, "assetTypeId") ??
+    stableLocalNumericId(job.asset_id);
+  const assetTypeName =
+    job.asset_type_name ??
+    (typeof storedAssetSnapshot.assetTypeName === "string"
+      ? storedAssetSnapshot.assetTypeName
+      : "");
+  const assetSpecifications = parseJsonRecordOrNull(
+    job.asset_specifications_json,
+  );
+  // Like the cloud: the frozen asset snapshot once the job has one, otherwise
+  // (a job still open) one derived from the live asset.
+  const assetSnapshot =
+    Object.keys(storedAssetSnapshot).length > 0
+      ? storedAssetSnapshot
+      : {
+          assetId,
+          assetTypeId,
+          assetTypeName,
+          assetTypeSlug: job.asset_type_slug ?? job.asset_type_local_id,
+          baseMeasurementUnit: job.asset_base_measurement_unit,
+          name: job.asset_name ?? "",
+          tag: job.asset_tag ?? "",
+          serialNumber: job.asset_serial_number ?? "",
+          manufacturer: job.asset_manufacturer,
+          model: job.asset_model,
+          specifications: assetSpecifications,
+          capturedAt: job.updated_at,
+        };
 
   return {
     id: job.remote_id ?? stableLocalNumericId(job.id),
     jobId: job.job_id ?? job.id,
+    certificateName: job.certificate_name,
+    organizationId: job.organization_id,
     status: job.status,
     customerId: job.customer_remote_id ?? stableLocalNumericId(job.customer_id),
     customerName: job.customer_name ?? "",
     customerTaxId: job.customer_tax_id,
-    assetId: job.asset_remote_id ?? stableLocalNumericId(job.asset_id),
+    assetId,
     assetName: job.asset_name ?? "",
     assetTag: job.asset_tag ?? "",
     assetSerialNumber: job.asset_serial_number ?? "",
     assetManufacturer: job.asset_manufacturer,
     assetModel: job.asset_model,
+    assetBaseMeasurementUnit: job.asset_base_measurement_unit,
+    assetSpecifications,
     unitId: job.unit_id,
-    assetTypeId:
-      job.asset_type_remote_id ??
-      getNumber(assetSnapshot, "assetTypeId") ??
-      stableLocalNumericId(job.asset_id),
-    assetTypeName:
-      job.asset_type_name ??
-      (typeof assetSnapshot.assetTypeName === "string"
-        ? assetSnapshot.assetTypeName
-        : ""),
+    assetTypeId,
+    assetTypeName,
+    assetTypeSlug: job.asset_type_slug,
+    assetTypeDefinition: parseJson(job.asset_type_definition_json) ?? null,
     serviceId: job.service_remote_id ?? stableLocalNumericId(job.service_id),
     serviceName: job.service_name ?? "",
     technicianId: job.technician_id,
@@ -377,6 +420,11 @@ function toJobDetail(job: LocalJobRow) {
     scopeOverrideJustification: job.scope_override_justification,
     methodDeviations: job.method_deviations,
     dueDate: job.due_date,
+    // The due date is a calendar day (laboratory time), as in the job list.
+    isOverdue: job.due_date
+      ? isCalendarDatePast(new Date(job.due_date))
+      : false,
+    daysUntilDue: job.due_date ? labDaysUntil(new Date(job.due_date)) : null,
     performedAt: job.performed_at,
     submittedAt: job.submitted_at,
     approvedAt: job.approved_at,
@@ -1052,6 +1100,8 @@ type LocalJobRow = {
   id: string;
   remote_id: number | null;
   job_id: string | null;
+  certificate_name: string | null;
+  organization_id: string;
   unit_id: number;
   customer_id: string;
   asset_id: string;
@@ -1088,8 +1138,13 @@ type LocalJobRow = {
   asset_serial_number: string | null;
   asset_manufacturer: string | null;
   asset_model: string | null;
+  asset_base_measurement_unit: string | null;
+  asset_specifications_json: string | null;
+  asset_type_local_id: string;
   asset_type_remote_id: number | null;
   asset_type_name: string | null;
+  asset_type_slug: string | null;
+  asset_type_definition_json: string | null;
   service_remote_id: number | null;
   service_name: string | null;
 };

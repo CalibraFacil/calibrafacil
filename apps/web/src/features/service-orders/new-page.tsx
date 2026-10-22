@@ -151,8 +151,9 @@ export function NewServiceOrderPage() {
   // immediately selectable, even before the underlying list query refetches.
   const [pendingCustomerOption, setPendingCustomerOption] =
     useState<NewServiceOrderCustomer | null>(null)
-  const [pendingAssetOption, setPendingAssetOption] =
-    useState<CreatedAsset | null>(null)
+  const [pendingAssetOption, setPendingAssetOption] = useState<
+    CreatedAsset | UpdatedAsset | null
+  >(null)
 
   const { data: customersData, isLoading: customersLoading } =
     useNewServiceOrderCustomersData(customerSearch)
