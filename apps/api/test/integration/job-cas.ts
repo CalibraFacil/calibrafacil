@@ -5,7 +5,7 @@ import { calibrationJob, jobAuditLog } from "@calibra-facil/db/schema";
 import { setJobStatus } from "./job-fixtures";
 
 // Shared fixtures for the compare-and-set specs on calibration_job writes
-// (jobs.ts, public-api-v2.ts, sync.ts). Harness code: statements issued here are
+// (jobs.ts, public-api-v2/, sync.ts). Harness code: statements issued here are
 // skipped by the tenant SQL guard (test/integration/ is classified as harness).
 
 type JobChange = Partial<{

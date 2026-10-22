@@ -78,7 +78,7 @@ const PRODUCER_FIXTURES = {
     limit: 50,
     trigger: "manual",
   },
-  // apps/api/src/routes/integrations.ts + src/lib/integrations.ts (Conta Azul)
+  // apps/api/src/routes/integrations.ts + src/modules/integrations/ (Conta Azul)
   "integration sync for conta_azul": {
     type: "INTEGRATION_SYNC",
     provider: "conta_azul",
