@@ -13,14 +13,11 @@
  *              packages/db/src/job-events.test.ts)
  */
 
+import { setJobStatus } from "../../../test/integration/job-fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
-import {
-  calibrationJob,
-  jobAuditLog,
-  type JobStatus,
-} from "@calibra-facil/db/schema";
+import { jobAuditLog, type JobStatus } from "@calibra-facil/db/schema";
 import { truncateAll } from "../../../test/integration/db";
 import { seedOrg } from "../../../test/integration/seed";
 import {
@@ -65,10 +62,7 @@ async function seedWorld(status: JobStatus) {
     unitId: org.unitId,
     createdBy: USER,
   });
-  await db
-    .update(calibrationJob)
-    .set({ status })
-    .where(eq(calibrationJob.id, jobId));
+  await setJobStatus(jobId, status);
   const technician = await seedExtraMember({
     orgId: ORG,
     userId: "user-ev-tech",
