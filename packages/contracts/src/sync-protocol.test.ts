@@ -244,6 +244,40 @@ describe("minimum desktop version (REQ-SP-6)", () => {
     expect(compareDesktopVersions("test", "1.2.3")).toBeNull();
   });
 
+  it("REQ-SP-6: prereleases order as semver says: numeric identifiers as numbers, numeric below alphanumeric, shorter below longer", () => {
+    const ordered = [
+      "1.0.0-alpha",
+      "1.0.0-alpha.1",
+      "1.0.0-alpha.beta",
+      "1.0.0-beta",
+      "1.0.0-beta.2",
+      "1.0.0-beta.11",
+      "1.0.0-rc.1",
+      "1.0.0",
+    ];
+    for (let index = 0; index < ordered.length - 1; index += 1) {
+      const lower = ordered[index] ?? "";
+      const higher = ordered[index + 1] ?? "";
+      expect(
+        compareDesktopVersions(lower, higher),
+        `${lower} < ${higher}`,
+      ).toBe(-1);
+      expect(
+        compareDesktopVersions(higher, lower),
+        `${higher} > ${lower}`,
+      ).toBe(1);
+    }
+    expect(compareDesktopVersions("2.0.0-rc.9", "2.0.0-rc.10")).toBe(-1);
+    expect(compareDesktopVersions("2.0.0-rc.10", "2.0.0-rc.9")).toBe(1);
+    expect(compareDesktopVersions("2.0.0-rc.10", "2.0.0-rc.10")).toBe(0);
+    expect(
+      evaluateDesktopVersionGate({
+        minimumVersion: "2.0.0-rc.10",
+        desktopVersion: "2.0.0-rc.9",
+      }),
+    ).toMatchObject({ ok: false });
+  });
+
   it("REQ-SP-6: no minimum configured lets every desktop through, versioned or not", () => {
     expect(
       evaluateDesktopVersionGate({
@@ -287,5 +321,64 @@ describe("minimum desktop version (REQ-SP-6)", () => {
     expect(response.message).toBe(desktopUpdateRequiredMessage("1.4.0"));
     expect(response.message).toContain("Atualize para a versão 1.4.0");
     expect(response.message).toContain("alterações pendentes");
+  });
+});
+
+describe("typed payloads of the current members (REQ-SP-1)", () => {
+  const event = (entityType: string, operation: string, payload: unknown) =>
+    parseSyncCommand({ ...envelope, entityType, operation, payload });
+
+  it("REQ-SP-1: the keys the cloud reads must be of the kind it reads, for each current member", () => {
+    expect(event("asset", "create_local_asset", { customerId: "abc" }).ok).toBe(
+      false,
+    );
+    expect(event("asset", "create_local_asset", { name: 5 }).ok).toBe(false);
+    expect(
+      event("service_order", "create_local_service_order_intake", {
+        claimedDefect: 5,
+      }).ok,
+    ).toBe(false);
+    expect(
+      event("service_order", "create_local_service_order_intake", {
+        assetId: "x",
+      }).ok,
+    ).toBe(false);
+    expect(
+      event("attachment", "create_local_attachment", { sizeBytes: "big" }).ok,
+    ).toBe(false);
+    expect(
+      event("calibration_job", "save_local_execution", { remoteId: "7" }).ok,
+    ).toBe(false);
+  });
+
+  it("REQ-SP-1: what a real desktop writes is accepted (explicit nulls, extra keys), and so is an empty payload an earlier push already applied", () => {
+    expect(
+      event("asset", "create_local_asset", {
+        customerId: 12,
+        assetTypeId: 3,
+        name: "Balança",
+        manufacturer: null,
+        model: null,
+        serialNumber: "SN",
+        tag: "T",
+        status: "ACTIVE",
+        baseMeasurementUnit: null,
+        comments: null,
+        specifications: { a: 1 },
+        regulatedInterval: null,
+      }).ok,
+    ).toBe(true);
+    expect(event("asset", "create_local_asset", {}).ok).toBe(true);
+    expect(
+      event("service_order", "create_local_service_order_intake", {
+        customerId: 1,
+        assetId: 2,
+        clientContactId: null,
+        claimedDefect: "x",
+        intakeCondition: "y",
+        priority: "normal",
+        sourceServiceOrderId: null,
+      }).ok,
+    ).toBe(true);
   });
 });

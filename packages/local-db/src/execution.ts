@@ -1,3 +1,4 @@
+import type { SyncCommandOperation } from "@calibra-facil/contracts";
 import { randomUUID } from "node:crypto";
 import {
   DESKTOP_EXECUTION_PAYLOAD_VERSION,
@@ -954,7 +955,7 @@ function appendOutboxEvent(
   input: {
     entityType: string;
     entityId: string;
-    operation: string;
+    operation: SyncCommandOperation;
     payload: unknown;
     actorUserId?: string | null;
     deviceId?: string | null;

@@ -35,7 +35,12 @@ import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { seedJobForOrg } from "../../test/integration/tenant-refs";
 import { executableMethodSnapshot } from "../../test/integration/executable-method";
-import { auditActions, jobRow } from "../../test/integration/job-cas";
+import {
+  auditActions,
+  changeJobBeforeNextTransaction,
+  jobRow,
+} from "../../test/integration/job-cas";
+import { failEventAuditInsert } from "../../test/integration/sync-faults";
 import { syncRouter } from "./sync";
 
 vi.mock("../lib/background-jobs", () => ({
@@ -217,31 +222,6 @@ async function claimsFor(eventId: string) {
     .where(eq(syncAppliedEvent.eventId, eventId));
 }
 
-/** A temporary trigger that makes the audit row of ONE event fail to insert. */
-async function failEventAuditInsert(eventId: string) {
-  await db.execute(sql`
-    CREATE OR REPLACE FUNCTION sp_test_fail_event_audit() RETURNS trigger AS $$
-    BEGIN
-      IF NEW.details->>'eventId' = ${sql.raw(`'${eventId}'`)} THEN
-        RAISE EXCEPTION 'sp_test: organization_event_log insert forced to fail';
-      END IF;
-      RETURN NEW;
-    END;
-    $$ LANGUAGE plpgsql
-  `);
-  await db.execute(sql`
-    CREATE TRIGGER sp_test_fail_event_audit
-    BEFORE INSERT ON organization_event_log
-    FOR EACH ROW EXECUTE FUNCTION sp_test_fail_event_audit()
-  `);
-  return async () => {
-    await db.execute(
-      sql`DROP TRIGGER IF EXISTS sp_test_fail_event_audit ON organization_event_log`,
-    );
-    await db.execute(sql`DROP FUNCTION IF EXISTS sp_test_fail_event_audit()`);
-  };
-}
-
 async function assetsByTag(tag: string) {
   return db.select({ id: asset.id }).from(asset).where(eq(asset.tag, tag));
 }
@@ -302,6 +282,12 @@ describe("REQ-SP-2: an event that fails its schema is refused for good", () => {
     for (const rejection of body.rejected) {
       expect(classifyOutboxRejection(rejection.code)).toBe("permanent");
     }
+    // Named by their position in the batch, not by an empty id.
+    expect(body.rejected.map((rejection) => rejection.eventId)).toEqual([
+      "batch-index:0",
+      "batch-index:2",
+    ]);
+    expect(body.rejected[0]?.reason).toContain("Event 0 of the batch");
   });
 
   it("REQ-SP-2: an operation outside the protocol stays UNSUPPORTED_SYNC_OPERATION (permanent), and a known operation sent for another entity type is the same", async () => {
@@ -540,6 +526,73 @@ describe("REQ-SP-5: a job execution made against a stale base is a conflict", ()
       expect(await eventLogFor("evt-sp5-stale")).toEqual([]);
     },
   );
+
+  it.each(["save_local_execution", "submit_local_execution"] as const)(
+    "REQ-SP-5 [HIGH RISK]: %s whose base was current at the check but whose job a foreign content-only write changed (status kept) before the write is a concurrent_update conflict, never an overwrite",
+    async (operation) => {
+      const world = await seedWorld();
+      await setJobUpdatedAt(world.jobId, BASE);
+      const before = await jobRow(world.jobId);
+      // After the check, before the write: someone else saves the worksheet.
+      // The status stays IN_PROGRESS, so only the updatedAt moves.
+      changeJobBeforeNextTransaction(world.jobId, {
+        data: { foreign: "write" },
+        updatedAt: new Date(NEWER),
+      });
+
+      const body = await push(world, [
+        executionEvent(world, "evt-sp5-toctou", operation, {
+          baseUpdatedAt: BASE,
+        }),
+      ]);
+
+      expect(body.accepted).toEqual([]);
+      expect(body.rejected).toEqual([]);
+      expect(body.conflicts).toEqual([
+        expect.objectContaining({
+          eventId: "evt-sp5-toctou",
+          conflictType: "concurrent_update",
+          status: "open",
+          remotePayload: expect.objectContaining({
+            entity: "calibration_job",
+            id: world.jobId,
+            updatedAt: NEWER,
+            baseUpdatedAt: BASE,
+            status: "IN_PROGRESS",
+            data: { foreign: "write" },
+          }),
+        }),
+      ]);
+      const after = await jobRow(world.jobId);
+      expect(after.data).toEqual({ foreign: "write" });
+      expect(after.status).toBe("IN_PROGRESS");
+      expect({ ...after, data: undefined, updatedAt: undefined }).toEqual({
+        ...before,
+        data: undefined,
+        updatedAt: undefined,
+      });
+      expect(await auditActions(world.jobId)).toEqual([]);
+      expect(await claimsFor("evt-sp5-toctou")).toEqual([]);
+      expect(await eventLogFor("evt-sp5-toctou")).toEqual([]);
+    },
+  );
+
+  it("REQ-SP-5: a foreign write that changes the status in the same window is still the status_transition conflict, as before", async () => {
+    const world = await seedWorld();
+    await setJobUpdatedAt(world.jobId, BASE);
+    changeJobBeforeNextTransaction(world.jobId, { status: "CANCELED" });
+
+    const body = await push(world, [
+      executionEvent(world, "evt-sp5-status-race", "save_local_execution", {
+        baseUpdatedAt: BASE,
+      }),
+    ]);
+
+    expect(body.accepted).toEqual([]);
+    expect(body.conflicts).toEqual([
+      expect.objectContaining({ conflictType: "status_transition" }),
+    ]);
+  });
 
   it("REQ-SP-5: the conflict shows the cloud's current execution so the desktop can compare", async () => {
     const world = await seedWorld();

@@ -21,13 +21,13 @@ import postgres from "postgres";
 import { Pool } from "@neondatabase/serverless";
 import * as schema from "./schema.js";
 import {
+  createTransactionScopeRunner,
   currentTransactionScope,
-  transactionScopeStorage,
 } from "./transaction-scope.js";
 
 export {
   afterTransactionCommit,
-  outsideTransactionScope,
+  isInTransactionScope,
 } from "./transaction-scope.js";
 
 type Database =
@@ -113,12 +113,23 @@ export function getDb(): Database {
   queryObserver?.onAccess?.();
   const config = readDatabaseConfig();
   const isProduction = config.nodeEnv === "production";
+  // Guard (development and test only): the instance is the pool, not the open
+  // transaction. Code that asks for it while a transaction scope is open (a
+  // library that builds its own adapter, as better-auth does) works on a second
+  // connection: with a pool of one it waits for the connection the scope holds,
+  // forever, and what it writes survives a rollback of the scope. Run such work
+  // before the scope, or after it (`afterTransactionCommit`).
+  if (!isProduction && currentTransactionScope()) {
+    throw new Error(
+      "getDb() was called inside a transaction scope: that is a second database connection. Do the work before the scope opens or in afterTransactionCommit.",
+    );
+  }
   const isCloudflare = isCloudflareWorkersRuntime();
 
   // Prefer direct DATABASE_URL in development to avoid Hyperdrive local overhead.
   const databaseUrl = config.url;
   if (!isProduction && databaseUrl) {
-    return cacheDatabase(`database:${databaseUrl}`, () => {
+    return cacheDatabase(`database:${databaseUrl}:${config.poolMax}`, () => {
       if (isCloudflare) return createNeonServerlessDatabase(databaseUrl);
       return createPostgresJsDatabase(databaseUrl, config.poolMax);
     });
@@ -127,14 +138,14 @@ export function getDb(): Database {
   // Hyperdrive - use postgres.js driver (recommended by Cloudflare and Neon)
   const hyperdriveUrl = config.hyperdriveUrl;
   if (hyperdriveUrl) {
-    return cacheDatabase(`hyperdrive:${hyperdriveUrl}`, () =>
+    return cacheDatabase(`hyperdrive:${hyperdriveUrl}:${config.poolMax}`, () =>
       createPostgresJsDatabase(hyperdriveUrl, config.poolMax),
     );
   }
 
   // Fallback to direct DATABASE_URL when Hyperdrive is not available
   if (databaseUrl) {
-    return cacheDatabase(`database:${databaseUrl}`, () => {
+    return cacheDatabase(`database:${databaseUrl}:${config.poolMax}`, () => {
       if (isCloudflare) return createNeonServerlessDatabase(databaseUrl);
       return createPostgresJsDatabase(databaseUrl, config.poolMax);
     });
@@ -145,20 +156,6 @@ export function getDb(): Database {
   );
 }
 
-const SCOPE_CALLBACK_NAME = "scopedTransaction";
-
-/**
- * Whether `callback` is the one a transaction scope hands to
- * `db.transaction`. A test seam: the integration harness that forces the
- * interleaving of a lost compare-and-set must wait for the write's own
- * transaction, which inside a scope is a savepoint and not this one.
- */
-export function isTransactionScopeCallback(
-  callback: (...args: never[]) => unknown,
-): boolean {
-  return callback.name === SCOPE_CALLBACK_NAME;
-}
-
 /**
  * Runs `work` in ONE database transaction that every `db` access in its async
  * call chain joins (see transaction-scope.ts). It commits when `work` resolves
@@ -166,31 +163,9 @@ export function isTransactionScopeCallback(
  * when it throws. Called inside a scope it just runs `work`: the outer
  * transaction owns the commit.
  */
-export async function runInTransactionScope<T>(
-  work: () => Promise<T>,
-): Promise<T> {
-  if (currentTransactionScope()) return work();
-
-  const afterCommit: Array<() => void | Promise<void>> = [];
-  const result = await getDb().transaction(
-    async function scopedTransaction(tx) {
-      const scope = { tx, afterCommit, closed: false };
-      try {
-        return await transactionScopeStorage.run(scope, work);
-      } finally {
-        scope.closed = true;
-      }
-    },
-  );
-  for (const callback of afterCommit) {
-    try {
-      await callback();
-    } catch (error) {
-      console.error("[db] An after-commit callback failed:", error);
-    }
-  }
-  return result;
-}
+export const runInTransactionScope = createTransactionScopeRunner((callback) =>
+  getDb().transaction(callback),
+);
 
 // For backwards compatibility - creates a fresh request-safe DB instance on access.
 // Inside `runInTransactionScope` it resolves to the open transaction instead.

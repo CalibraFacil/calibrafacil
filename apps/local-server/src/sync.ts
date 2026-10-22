@@ -6,6 +6,7 @@ import {
   syncPullResponseSchema,
   syncBootstrapResponseSchema,
   syncPushResponseSchema,
+  type SyncPushRequest,
   type SyncStatusSnapshot,
 } from "@calibra-facil/contracts";
 import {
@@ -452,34 +453,36 @@ async function pushOutboxEvents(
 
   applyCloudAuthHeaders(config, headers);
 
+  const request = {
+    deviceId: config.deviceId,
+    clientBatchId: `batch:${crypto.randomUUID()}`,
+    baseCursor: getSyncCursor(database),
+    // Which protocol and which build this push comes from: the cloud
+    // answers "update required" to a build below its minimum.
+    protocolVersion: SYNC_PROTOCOL_VERSION,
+    desktopVersion: config.appVersion,
+    events: pending.map((event) => ({
+      eventId: event.eventId,
+      entityType: event.entityType,
+      entityId: event.entityId,
+      operation: event.operation,
+      payload: event.payload,
+      occurredAt: event.occurredAt,
+      actorUserId: event.actorUserId ?? context.userId ?? "local",
+      organizationId: context.organizationId ?? "",
+      unitId: context.unitId,
+      idempotencyKey: event.idempotencyKey,
+      localVersion: event.localVersion,
+      baseUpdatedAt: event.baseUpdatedAt ?? null,
+    })),
+  } satisfies SyncPushRequest;
+
   let response: Response;
   try {
     response = await fetchImpl(pushUrl, {
       method: "POST",
       headers,
-      body: JSON.stringify({
-        deviceId: config.deviceId,
-        clientBatchId: `batch:${crypto.randomUUID()}`,
-        baseCursor: getSyncCursor(database),
-        // Which protocol and which build this push comes from: the cloud
-        // answers "update required" to a build below its minimum.
-        protocolVersion: SYNC_PROTOCOL_VERSION,
-        desktopVersion: config.appVersion,
-        events: pending.map((event) => ({
-          eventId: event.eventId,
-          entityType: event.entityType,
-          entityId: event.entityId,
-          operation: event.operation,
-          payload: event.payload,
-          occurredAt: event.occurredAt,
-          actorUserId: event.actorUserId ?? context.userId ?? "local",
-          organizationId: context.organizationId ?? "",
-          unitId: context.unitId,
-          idempotencyKey: event.idempotencyKey,
-          localVersion: event.localVersion,
-          baseUpdatedAt: event.baseUpdatedAt ?? null,
-        })),
-      }),
+      body: JSON.stringify(request),
     });
   } catch (error) {
     const message =

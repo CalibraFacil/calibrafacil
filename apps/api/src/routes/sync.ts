@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import {
   syncBootstrapResponseSchema,
   syncAckRequestSchema,
@@ -39,6 +39,7 @@ import {
   environmentalLimits,
   type EnvironmentalSnapshot,
   member,
+  organization,
   organizationEventLog,
   massCompositionProfile,
   referenceStandard,
@@ -623,15 +624,17 @@ export const syncRouter = new Hono<{
       const actorMembershipCache = new Map<string, boolean>();
       const batch: PushBatchState = { jobUpdatedAtMs: new Map() };
 
-      for (const rawEvent of body.events) {
+      for (const [index, rawEvent] of body.events.entries()) {
         const envelope = syncEventSchema.safeParse(rawEvent);
         if (!envelope.success) {
           // Permanent: the same bytes will fail the same way every time.
           const parsed = parseSyncCommand(rawEvent);
           rejected.push({
-            eventId: rawEventId(rawEvent),
+            eventId: rejectedEventId(rawEvent, index),
             code: "INVALID_SYNC_COMMAND",
-            reason: parsed.ok ? "Sync event is invalid." : parsed.reason,
+            reason: `Event ${index} of the batch: ${
+              parsed.ok ? "Sync event is invalid." : parsed.reason
+            }`,
           });
           continue;
         }
@@ -692,6 +695,26 @@ export const syncRouter = new Hono<{
         }
         const command = parsed.command;
 
+        let prepared: PreparedDesktopEventSideEffects;
+        try {
+          prepared = await prepareDesktopEventSideEffects(command, memberData);
+        } catch (error) {
+          console.error(
+            "[Sync] Preparing a desktop sync event failed:",
+            event.eventId,
+            error,
+          );
+          rejected.push({
+            eventId: event.eventId,
+            code: "DESKTOP_SYNC_APPLY_FAILED",
+            reason:
+              error instanceof Error
+                ? error.message
+                : "Desktop sync event could not be prepared.",
+          });
+          continue;
+        }
+
         const outcome = await applyDesktopEventAtomically({
           organizationId: memberData.organizationId,
           event,
@@ -706,6 +729,7 @@ export const syncRouter = new Hono<{
               clientBatchId: body.clientBatchId,
               minimumDesktopVersion,
               batch,
+              prepared,
             }),
         });
 
@@ -970,14 +994,35 @@ type ApplyDesktopSyncEventInput = {
   /** `SYNC_MIN_DESKTOP_VERSION`: when set, the legacy calibration-record exemption is over. */
   minimumDesktopVersion: string | undefined;
   batch: PushBatchState;
+  /** What `prepareDesktopEventSideEffects` did before the event's transaction. */
+  prepared: PreparedDesktopEventSideEffects;
+};
+
+/**
+ * Side effects of an event that need a database connection of their own
+ * (better-auth creates an organization through its own adapter) cannot run in
+ * the event's transaction: with a small pool the transaction holds the only
+ * connection and the side effect waits for it forever, and what it writes would
+ * survive the rollback of the event. They run first, outside the transaction,
+ * idempotently on the event id, and the transaction only references the result.
+ */
+type PreparedDesktopEventSideEffects = {
+  /** `create_local_customer`: the client organization created for this event. */
+  clientOrganizationId?: string;
 };
 
 type ApplyDesktopSyncEventResult = AppliedEventResult | RefusedEventResult;
 
-/** The id a rejection names for an event that is not even an object with one. */
-function rawEventId(rawEvent: unknown): string {
+/**
+ * The id a rejection names for an event that cannot be read. An event with no
+ * usable `eventId` is named by its position in the batch (zero-based), so the
+ * refusal is traceable instead of anonymous.
+ */
+function rejectedEventId(rawEvent: unknown, index: number): string {
   const record = asRecord(rawEvent);
-  return typeof record.eventId === "string" ? record.eventId : "";
+  return typeof record.eventId === "string" && record.eventId.length > 0
+    ? record.eventId
+    : `batch-index:${index}`;
 }
 
 /** Records the `updatedAt` a job execution left the cloud job at, for the events after it. */
@@ -2265,13 +2310,9 @@ async function applyCreateLocalCustomer(
   }
 
   const values = parseResult.data;
-  const slug = generateDesktopCustomerSlug(values.name);
-  const orgResult = await createClientOrganizationAsServiceOwner({
-    name: values.name,
-    slug,
-  });
-
-  if (!orgResult?.id) {
+  // Created before this transaction (see PreparedDesktopEventSideEffects).
+  const clientOrganizationId = input.prepared.clientOrganizationId;
+  if (!clientOrganizationId) {
     return {
       ok: false,
       code: "DOMAIN_VALIDATION_FAILED",
@@ -2288,7 +2329,7 @@ async function applyCreateLocalCustomer(
         email: values.email || null,
         phone: values.phone || null,
         address: values.address || null,
-        authOrganizationId: orgResult.id,
+        authOrganizationId: clientOrganizationId,
         labOrganizationId: input.memberData.organizationId,
       })
       .returning();
@@ -2660,7 +2701,11 @@ async function applyLocalJobExecution(
   };
   const nextData = getRecordOrNull(payload, "data") ?? {};
 
-  const stale: { conflict: RefusedEventResult | null } = { conflict: null };
+  const stale: {
+    conflict: RefusedEventResult | null;
+    /** The job as the command read it (set once its transition is legal). */
+    read: { status: string } | null;
+  } = { conflict: null, read: null };
 
   const execution: JobExecutionCommand = {
     actor: { kind: "desktop_session", userId: actorUserId },
@@ -2695,6 +2740,11 @@ async function applyLocalJobExecution(
     // server derives the target from the transition table and refuses a
     // payload that disagrees (Q20).
     claimedStatus: getJobStatus(payload, "status"),
+    // With a base version, the write holds only if the job is still what the
+    // stale-base check saw (a content-only write in between is a conflict).
+    requireUnchangedSinceRead: Number.isFinite(
+      Date.parse(input.event.baseUpdatedAt ?? ""),
+    ),
     // Payload integrity, checked once the job is loaded and its transition is
     // known to be legal: a malformed snapshot, or data that uses standards the
     // snapshot does not carry.
@@ -2703,6 +2753,7 @@ async function applyLocalJobExecution(
       // (someone else saved, reassigned or changed it). Answered as a
       // reviewable conflict; applying the desktop's execution would overwrite
       // that change.
+      stale.read = { status: job.status };
       const staleBase = detectStaleJobExecutionBase(input, job);
       if (staleBase) {
         stale.conflict = staleBase;
@@ -2729,7 +2780,12 @@ async function applyLocalJobExecution(
     return stale.conflict;
   }
   if (result.status !== "ok") {
-    return await desktopExecutionRefusal(input, remoteEntityId, result);
+    return await desktopExecutionRefusal(
+      input,
+      remoteEntityId,
+      result,
+      stale.read?.status ?? null,
+    );
   }
 
   const updated = result.job;
@@ -2814,6 +2870,7 @@ async function desktopExecutionRefusal(
   input: ApplyDesktopSyncEventInput,
   jobId: number,
   result: Exclude<JobExecutionResult, { status: "ok" }>,
+  statusAtRead: string | null,
 ): Promise<ApplyDesktopSyncEventResult> {
   switch (result.status) {
     case "not_found":
@@ -2881,7 +2938,7 @@ async function desktopExecutionRefusal(
           "The technician assigned to the job has no active competence for this instrument type.",
       };
     case "concurrent_update":
-      return await rejectLostDesktopExecutionRace(input, jobId);
+      return await rejectLostDesktopExecutionRace(input, jobId, statusAtRead);
   }
 }
 
@@ -2931,6 +2988,7 @@ function desktopOfficialExecutionRejection(failure: OfficialExecutionFailure): {
 async function rejectLostDesktopExecutionRace(
   input: ApplyDesktopSyncEventInput,
   jobId: number,
+  statusAtRead: string | null,
 ): Promise<ApplyDesktopSyncEventResult> {
   const [current] = await db
     .select()
@@ -2950,6 +3008,30 @@ async function rejectLostDesktopExecutionRace(
       code: "REMOTE_ENTITY_NOT_FOUND",
       reason: "Cloud job for desktop execution event was not found.",
     };
+  }
+
+  // The status is what the command read: the job changed without changing
+  // status (someone else saved it between the stale-base check and the write).
+  // The same concurrent_update conflict the check itself answers, with nothing
+  // written.
+  const baseUpdatedAt = input.event.baseUpdatedAt;
+  if (
+    current.status === statusAtRead &&
+    typeof baseUpdatedAt === "string" &&
+    current.updatedAt instanceof Date
+  ) {
+    return buildStaleDesktopBaseConflict({
+      entity: "calibration_job",
+      id: current.id,
+      serverUpdatedAtIso: current.updatedAt.toISOString(),
+      baseUpdatedAt,
+      remoteFields: {
+        jobId: current.jobId,
+        status: current.status,
+        data: current.data,
+        methodDeviations: current.methodDeviations,
+      },
+    });
   }
 
   return {
@@ -4130,7 +4212,17 @@ function parseSyncDate(value: string | null | undefined) {
   return value ? new Date(value) : null;
 }
 
-function generateDesktopCustomerSlug(name: string) {
+/**
+ * The slug of the client organization a `create_local_customer` event creates:
+ * the customer's name plus a digest of the laboratory and the event id, so the
+ * same event always finds the organization it created before (a retry after a
+ * rolled-back transaction reuses it instead of creating a second one).
+ */
+function desktopCustomerSlug(
+  name: string,
+  laboratoryId: string,
+  eventId: string,
+) {
   const base = name
     .toLowerCase()
     .normalize("NFD")
@@ -4138,6 +4230,61 @@ function generateDesktopCustomerSlug(name: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .substring(0, 50);
+  const digest = createHash("sha256")
+    .update(`${laboratoryId}:${eventId}`)
+    .digest("hex")
+    .slice(0, 12);
 
-  return `${base || "cliente"}-${randomUUID().slice(0, 8)}`;
+  return `${base || "cliente"}-${digest}`;
+}
+
+async function findOrganizationIdBySlug(slug: string) {
+  const [row] = await db
+    .select({ id: organization.id })
+    .from(organization)
+    .where(eq(organization.slug, slug))
+    .limit(1);
+  return row?.id ?? null;
+}
+
+async function prepareDesktopEventSideEffects(
+  command: SyncCommand,
+  memberData: MemberData,
+): Promise<PreparedDesktopEventSideEffects> {
+  if (command.operation !== "create_local_customer") return {};
+
+  // Already applied (a retried push): the transaction answers from its record.
+  if (
+    (await findDesktopSyncRemoteEntityId(
+      memberData.organizationId,
+      command.entityId,
+    )) !== null ||
+    (await findAppliedDesktopSyncEvent(memberData.organizationId, command))
+  ) {
+    return {};
+  }
+  const parsed = CreateCustomerSchema.safeParse(asRecord(command.payload));
+  // The apply refuses an invalid payload with its own code.
+  if (!parsed.success) return {};
+
+  const slug = desktopCustomerSlug(
+    parsed.data.name,
+    memberData.organizationId,
+    command.eventId,
+  );
+  const existing = await findOrganizationIdBySlug(slug);
+  if (existing) return { clientOrganizationId: existing };
+
+  try {
+    const created = await createClientOrganizationAsServiceOwner({
+      name: parsed.data.name,
+      slug,
+    });
+    return { clientOrganizationId: created.id };
+  } catch (error) {
+    // A concurrent push of this event created it first.
+    const raced = await findOrganizationIdBySlug(slug);
+    if (raced) return { clientOrganizationId: raced };
+    throw error;
+  }
 }

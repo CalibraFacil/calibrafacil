@@ -1,3 +1,4 @@
+import type { SyncCommandOperation } from "@calibra-facil/contracts";
 import { randomUUID } from "node:crypto";
 import type { LocalDatabase } from "./database";
 import { stableLocalNumericId } from "./ids";
@@ -142,6 +143,9 @@ INSERT INTO customers (
 
     enqueueLocalCustomerEvent(database, {
       entityId: id,
+      // A LEGACY command of the push protocol (`SYNC_COMMAND_SUPPORT`): no
+      // production route reaches this writer since Q13/Q27; it is kept for the
+      // outbox of an upgraded database and for the sync conflict suites.
       operation: "create_local_customer",
       payload,
       actorUserId: input.actorUserId ?? null,
@@ -286,6 +290,7 @@ WHERE id = @id
 
     enqueueLocalCustomerEvent(database, {
       entityId: row.id,
+      // LEGACY command, see `createLocalCustomer` above.
       operation: "update_local_customer",
       payload,
       actorUserId: input.actorUserId ?? null,
@@ -440,7 +445,7 @@ function enqueueLocalCustomerEvent(
   database: LocalDatabase,
   input: {
     entityId: string;
-    operation: string;
+    operation: SyncCommandOperation;
     payload: unknown;
     actorUserId: string | null;
     deviceId: string;

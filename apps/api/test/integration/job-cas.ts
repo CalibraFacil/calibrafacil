@@ -1,11 +1,10 @@
 import { vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
+import { db, getDb } from "@calibra-facil/db";
 import {
-  db,
-  getDb,
   isTransactionScopeCallback,
   outsideTransactionScope,
-} from "@calibra-facil/db";
+} from "@calibra-facil/db/testing";
 import { calibrationJob, jobAuditLog } from "@calibra-facil/db/schema";
 import { setJobStatus } from "./job-fixtures";
 
@@ -16,6 +15,9 @@ import { setJobStatus } from "./job-fixtures";
 type JobChange = Partial<{
   status: typeof calibrationJob.$inferSelect.status;
   organizationId: string;
+  /** A write that keeps the status: another actor saved the worksheet. */
+  data: Record<string, unknown>;
+  updatedAt: Date;
 }>;
 
 /**

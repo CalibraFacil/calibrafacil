@@ -35,6 +35,12 @@
             "importNames": ["useEffect"],
             "message": "Direct useEffect is banned. Use derived state, event handlers, data-fetching hooks, keyed remounts, or useMountEffect (apps/<app>/src/hooks/use-mount-effect.ts)."
           }
+        ],
+        "patterns": [
+          {
+            "group": ["@calibra-facil/db/testing"],
+            "message": "@calibra-facil/db/testing holds test seams for the transaction scope: tests and test harnesses only (the override below lists them), never production code."
+          }
         ]
       }
     ],
@@ -76,6 +82,31 @@
     "calibra/no-app-ui-primitive-recreation": "error"
   },
   "overrides": [
+    {
+      // Test code may use the db test seams; the useEffect ban stays.
+      "files": [
+        "**/*.spec.ts",
+        "**/*.spec.tsx",
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "apps/*/test/**",
+        "packages/db/src/testing.ts"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "react",
+                "importNames": ["useEffect"],
+                "message": "Direct useEffect is banned. Use derived state, event handlers, data-fetching hooks, keyed remounts, or useMountEffect (apps/<app>/src/hooks/use-mount-effect.ts)."
+              }
+            ]
+          }
+        ]
+      }
+    },
     {
       "files": [
         "apps/*/src/hooks/use-mount-effect.ts",

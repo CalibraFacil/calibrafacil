@@ -77,10 +77,52 @@ function command<
 
 // ---- current members: a desktop build of today still produces these --------
 
+/**
+ * `create_local_asset`: the fields the cloud reads (`CreateAssetSchema`, which
+ * owns the rules and the required ones). Typed when present, optional here so an
+ * event applied by an earlier push is still recognised and acknowledged.
+ */
+export const syncCreateAssetPayloadSchema = z.looseObject({
+  customerId: z.number().int().optional(),
+  assetTypeId: z.number().int().optional(),
+  name: z.string().optional(),
+  serialNumber: z.string().optional(),
+  tag: z.string().optional(),
+  manufacturer: z.string().nullable().optional(),
+  model: z.string().nullable().optional(),
+  status: z.string().optional(),
+  baseMeasurementUnit: z.string().nullable().optional(),
+  comments: z.string().nullable().optional(),
+  metrologyRegime: z.string().optional(),
+});
+
+/** `create_local_service_order_intake` (`CreateServiceOrderSchema` owns the rules). */
+export const syncServiceOrderIntakePayloadSchema = z.looseObject({
+  customerId: z.number().int().optional(),
+  assetId: z.number().int().optional(),
+  claimedDefect: z.string().optional(),
+  intakeCondition: z.string().optional(),
+  intakeType: z.string().optional(),
+  priority: z.string().optional(),
+  responsibleTechnicianId: z.string().nullable().optional(),
+  sourceServiceOrderId: z.number().int().nullable().optional(),
+});
+
+/** `create_local_attachment`: audit-only on the cloud; the bytes travel apart. */
+export const syncAttachmentPayloadSchema = z.looseObject({
+  attachmentId: z.string().optional(),
+  entityType: z.string().optional(),
+  entityId: z.string().optional(),
+  localPath: z.string().optional(),
+  contentHash: z.string().optional(),
+  mimeType: z.string().optional(),
+  sizeBytes: z.number().optional(),
+});
+
 export const createLocalAssetCommandSchema = command(
   "asset",
   "create_local_asset",
-  rowPayloadSchema,
+  syncCreateAssetPayloadSchema,
 );
 export const saveLocalExecutionCommandSchema = command(
   "calibration_job",
@@ -95,12 +137,12 @@ export const submitLocalExecutionCommandSchema = command(
 export const createLocalServiceOrderIntakeCommandSchema = command(
   "service_order",
   "create_local_service_order_intake",
-  rowPayloadSchema,
+  syncServiceOrderIntakePayloadSchema,
 );
 export const createLocalAttachmentCommandSchema = command(
   "attachment",
   "create_local_attachment",
-  rowPayloadSchema,
+  syncAttachmentPayloadSchema,
 );
 
 // ---- legacy members: only an older build's outbox can still hold these -----
@@ -447,7 +489,33 @@ export function compareDesktopVersions(
   if (a.prerelease === b.prerelease) return 0;
   if (a.prerelease === null) return 1;
   if (b.prerelease === null) return -1;
-  return a.prerelease < b.prerelease ? -1 : 1;
+  return comparePrerelease(a.prerelease, b.prerelease);
+}
+
+/**
+ * Semver 2.0 precedence of two prerelease strings: identifiers (split on `.`)
+ * left to right; numeric ones compare as numbers (`rc.9 < rc.10`) and sort below
+ * alphanumeric ones; when all shared identifiers are equal the shorter list is
+ * the lower.
+ */
+function comparePrerelease(left: string, right: string): -1 | 0 | 1 {
+  const a = left.split(".");
+  const b = right.split(".");
+  for (let index = 0; index < Math.min(a.length, b.length); index += 1) {
+    const x = a[index] ?? "";
+    const y = b[index] ?? "";
+    if (x === y) continue;
+    const xNumeric = /^\d+$/.test(x);
+    const yNumeric = /^\d+$/.test(y);
+    if (xNumeric && yNumeric) {
+      return BigInt(x) < BigInt(y) ? -1 : 1;
+    }
+    if (xNumeric) return -1;
+    if (yNumeric) return 1;
+    return x < y ? -1 : 1;
+  }
+  if (a.length === b.length) return 0;
+  return a.length < b.length ? -1 : 1;
 }
 
 export type DesktopVersionGate =

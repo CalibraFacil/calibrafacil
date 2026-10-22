@@ -73,6 +73,9 @@ const { getSessionMock, portalGetSessionMock } = vi.hoisted(() => ({
   portalGetSessionMock: vi.fn(),
 }));
 
+/** The mocked lab session, for a spec that builds its own `createLabAuth`. */
+export const labGetSessionMock = getSessionMock;
+
 vi.mock("@calibra-facil/auth", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@calibra-facil/auth")>();
   return {

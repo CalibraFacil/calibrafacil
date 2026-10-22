@@ -33,6 +33,11 @@ export function currentTransactionScope(): TransactionScope | undefined {
   return scope && !scope.closed ? scope : undefined;
 }
 
+/** Whether the running call chain is inside a transaction scope. */
+export function isInTransactionScope(): boolean {
+  return currentTransactionScope() !== undefined;
+}
+
 /**
  * Runs `callback` once the surrounding transaction committed (and never when it
  * rolled back). Outside a transaction scope it runs at once. Errors thrown by a
@@ -47,14 +52,71 @@ export function afterTransactionCommit(
     scope.afterCommit.push(callback);
     return;
   }
-  void callback();
+  try {
+    void Promise.resolve(callback()).catch(logAfterCommitFailure);
+  } catch (error) {
+    logAfterCommitFailure(error);
+  }
+}
+
+function logAfterCommitFailure(error: unknown) {
+  console.error("[db] An after-commit callback failed:", error);
+}
+
+/** Opens a database transaction and hands its handle to `callback`. */
+export type OpenTransaction = <T>(
+  callback: (tx: object) => Promise<T>,
+) => Promise<T>;
+
+/**
+ * The scope runner for a way of opening a transaction (`db.ts` passes the real
+ * one; the unit tests pass a fake). `work` runs in ONE transaction that every
+ * `db` access in its async call chain joins. The transaction commits when
+ * `work` resolves and rolls back, discarding the deferred
+ * `afterTransactionCommit` callbacks, when it throws. Called inside a scope it
+ * just runs `work`: the outer transaction owns the commit.
+ */
+export function createTransactionScopeRunner(open: OpenTransaction) {
+  return async function runInTransactionScope<T>(
+    work: () => Promise<T>,
+  ): Promise<T> {
+    if (currentTransactionScope()) return work();
+
+    const afterCommit: Array<() => void | Promise<void>> = [];
+    const scopedTransaction = async (tx: object) => {
+      const scope: TransactionScope = { tx, afterCommit, closed: false };
+      try {
+        return await transactionScopeStorage.run(scope, work);
+      } finally {
+        scope.closed = true;
+      }
+    };
+    markTransactionScopeCallback(scopedTransaction);
+    const result = await open(scopedTransaction);
+    for (const callback of afterCommit) {
+      try {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- in registration order, one at a time.
+        await callback();
+      } catch (error) {
+        logAfterCommitFailure(error);
+      }
+    }
+    return result;
+  };
 }
 
 /**
- * Runs `callback` as if no transaction scope were open: `db` resolves to a
- * connection of its own. A test seam, for the harness that plays another actor
- * writing while a request holds its transaction.
+ * The functions `runInTransactionScope` has handed to `db.transaction`. A
+ * WeakSet, not a name: a minifier renames functions, and the harness that needs
+ * to tell a scope's transaction from an ordinary one (db/testing.ts) must not
+ * depend on it.
  */
-export function outsideTransactionScope<T>(callback: () => T): T {
-  return transactionScopeStorage.exit(callback);
+const scopeCallbacks = new WeakSet<object>();
+
+export function markTransactionScopeCallback(callback: object): void {
+  scopeCallbacks.add(callback);
+}
+
+export function isMarkedTransactionScopeCallback(callback: object): boolean {
+  return scopeCallbacks.has(callback);
 }
