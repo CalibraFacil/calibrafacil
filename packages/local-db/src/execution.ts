@@ -1,10 +1,13 @@
 import { randomUUID } from "node:crypto";
 import {
   DESKTOP_EXECUTION_PAYLOAD_VERSION,
+  validateCalibrationRecordForSubmit,
+  judgeDraftExecutionStandards,
   judgeExecutionStandards,
   resolveExecutionPerformedAt,
-  validateCalibrationRecordForSubmit,
+  type DraftStandardsJudgement,
   type JudgedStandardFacts,
+  type StandardsDraftWarning,
   type StandardsJudgement,
   type StandardsJudgementMode,
 } from "@calibra-facil/schemas";
@@ -84,16 +87,21 @@ export function saveLocalJobExecution(
     nextStatus === "REVIEW",
     input,
   );
-  const standardsSnapshot = buildLocalStandardsSnapshot(
-    database,
-    input.selectedStandardIds,
-    input.data,
+  const standardsSnapshot = resolveLocalDraftStandards(database, {
+    selectedStandardIds: input.selectedStandardIds,
+    data: input.data,
     // The date the work is recorded at; a draft keeps the one already saved.
-    localStandardsPerformedAt(
+    performedAt: localStandardsPerformedAt(
       input.performedAt,
       nextStatus === "REVIEW" ? null : existing.performed_at,
     ),
-  );
+    // Only a draft is lenient about a standard it already carries; a submit
+    // judges every standard strictly.
+    savedStandardsSnapshot:
+      nextStatus === "REVIEW"
+        ? undefined
+        : parseJson(existing.standards_snapshot_json),
+  }).snapshot;
   // A submit re-judges EVERY standard of the final snapshot (also one saved
   // earlier and not named again) at the final performed day, like the cloud.
   const standardsJudgement =
@@ -515,6 +523,31 @@ export function judgeLocalStandards(
   );
 }
 
+/**
+ * The draft-save judgement offline (P1-11): the cloud's rule on the cached
+ * standards. A standard of the job's saved snapshot that went stale is
+ * accepted with a warning; every other standard is judged strictly.
+ */
+function judgeLocalDraftStandards(
+  database: LocalDatabase,
+  input: {
+    standardIds: readonly number[];
+    savedStandardIds: readonly number[];
+    performedAt: Date;
+  },
+): DraftStandardsJudgement {
+  return judgeDraftExecutionStandards(
+    {
+      standardIds: input.standardIds,
+      savedStandardIds: input.savedStandardIds,
+      performedAt: input.performedAt,
+      today: new Date(),
+      mode: "desktop_explicit",
+    },
+    localStandardFacts(loadLocalStandardRows(database, input.standardIds)),
+  );
+}
+
 /** The pt-BR error the offline paths throw for a refused judgement. */
 function localStandardsRefusalError(
   refusal: Extract<StandardsJudgement, { ok: false }>,
@@ -560,51 +593,102 @@ function judgeSubmittedLocalStandards(
   };
 }
 
+/**
+ * The standards snapshot a SUBMIT is recorded with, built from the cache. A
+ * draft save uses `resolveLocalDraftStandards`, which also knows the saved
+ * snapshot.
+ */
 export function buildLocalStandardsSnapshot(
   database: LocalDatabase,
   selectedStandardIds: number[] | undefined,
   data: JsonRecord = {},
   performedAt: Date = new Date(),
 ) {
+  return resolveLocalDraftStandards(database, {
+    selectedStandardIds,
+    data,
+    performedAt,
+  }).snapshot;
+}
+
+/** The ids of the standards a saved snapshot (parsed JSON) names. */
+function savedStandardEntries(snapshot: unknown): Map<number, JsonRecord> {
+  const entries = new Map<number, JsonRecord>();
+  if (!Array.isArray(snapshot)) return entries;
+  for (const entry of snapshot) {
+    if (!isJsonObject(entry)) continue;
+    const id = getNumber(entry, "id");
+    if (id !== null) entries.set(id, entry);
+  }
+  return entries;
+}
+
+/**
+ * The standards snapshot of a save, and the warnings a DRAFT save carries (P1-11,
+ * the cloud's rule): `savedStandardsSnapshot` is what the job already has
+ * frozen; a standard of it that is named again and has since gone stale
+ * (deleted, inactive, expired) is kept as frozen and reported in `warnings`
+ * instead of failing the save. Every other standard is judged strictly, as is
+ * every standard when no saved snapshot is given (a submit).
+ */
+export function resolveLocalDraftStandards(
+  database: LocalDatabase,
+  input: {
+    selectedStandardIds: number[] | undefined;
+    data?: JsonRecord;
+    performedAt?: Date;
+    savedStandardsSnapshot?: unknown;
+  },
+) {
+  const { selectedStandardIds, data = {} } = input;
+  const performedAt = input.performedAt ?? new Date();
+  const warnings: StandardsDraftWarning[] = [];
   const compositionStandardIds = collectCompositionStandardIds(data);
   if (
     selectedStandardIds === undefined &&
     compositionStandardIds.length === 0
   ) {
-    return undefined;
+    return { snapshot: undefined, warnings };
   }
 
   const standardIds = Array.from(
     new Set([...(selectedStandardIds ?? []), ...compositionStandardIds]),
   );
-  if (standardIds.length === 0) return [];
+  if (standardIds.length === 0) return { snapshot: [], warnings };
 
   const rows = loadLocalStandardRows(database, standardIds);
   const rowsByRemoteId = new Map(rows.map((row) => [row.remote_id, row]));
   const compositionStandardIdSet = new Set(compositionStandardIds);
+  const savedEntries = savedStandardEntries(input.savedStandardsSnapshot);
 
   // A draft save judges with the same function as a submit, at the day the work
   // is recorded as performed; only the back-date reason waits for the submit.
-  const judgement = judgeLocalStandards(database, {
+  const judgement = judgeLocalDraftStandards(database, {
     standardIds,
+    savedStandardIds: [...savedEntries.keys()],
     performedAt,
-    mode: "desktop_explicit",
-    requireBackdateReason: false,
   });
   if (!judgement.ok) throw localStandardsRefusalError(judgement);
+  warnings.push(...judgement.warnings);
+  const staleIds = new Set(
+    judgement.warnings.flatMap((warning) => warning.standardIds),
+  );
 
-  return standardIds.map((standardId) => {
+  const snapshot = standardIds.map((standardId) => {
     const row = rowsByRemoteId.get(standardId);
     if (!row) {
       throw new Error(`Padrao ${standardId} nao encontrado no cache local`);
     }
 
-    const snapshot = parseJsonRecord(row.snapshot_json);
+    // A stale standard keeps the entry the technician picked, frozen as saved.
+    const source =
+      (staleIds.has(standardId) ? savedEntries.get(standardId) : undefined) ??
+      parseJsonRecord(row.snapshot_json);
     const nextCalibrationDate =
-      getString(snapshot, "nextCalibrationDate") ?? row.next_calibration_date;
+      getString(source, "nextCalibrationDate") ?? row.next_calibration_date;
 
     const certifiedValues = parseSnapshotCertifiedValues(
-      snapshot.certifiedValues,
+      source.certifiedValues,
     );
     if (compositionStandardIdSet.has(standardId) && !certifiedValues?.length) {
       throw new Error(
@@ -614,33 +698,32 @@ export function buildLocalStandardsSnapshot(
 
     return {
       id: standardId,
-      name: getString(snapshot, "name") ?? row.name,
-      kind: getString(snapshot, "kind") ?? undefined,
-      type: getNullableString(snapshot, "type"),
+      name: getString(source, "name") ?? row.name,
+      kind: getString(source, "kind") ?? undefined,
+      type: getNullableString(source, "type"),
       certificateNumber:
-        getString(snapshot, "certificateNumber") ??
-        row.certificate_number ??
-        "",
-      calibratedBy: getNullableString(snapshot, "calibratedBy"),
-      calibrationDate: getString(snapshot, "calibrationDate") ?? "",
+        getString(source, "certificateNumber") ?? row.certificate_number ?? "",
+      calibratedBy: getNullableString(source, "calibratedBy"),
+      calibrationDate: getString(source, "calibrationDate") ?? "",
       nextCalibrationDate,
-      uncertainty: getNullableNumber(snapshot, "uncertainty"),
-      uncertaintyUnit: getNullableString(snapshot, "uncertaintyUnit"),
-      coverageFactor: getNumber(snapshot, "coverageFactor") ?? 2,
+      uncertainty: getNullableNumber(source, "uncertainty"),
+      uncertaintyUnit: getNullableString(source, "uncertaintyUnit"),
+      coverageFactor: getNumber(source, "coverageFactor") ?? 2,
       distribution:
-        getString(snapshot, "distribution") === "rectangular"
+        getString(source, "distribution") === "rectangular"
           ? "rectangular"
           : "normal",
-      drift: getNullableNumber(snapshot, "drift"),
+      drift: getNullableNumber(source, "drift"),
       certifiedValues,
-      metrologyData: isJsonObject(snapshot.metrologyData)
-        ? snapshot.metrologyData
+      metrologyData: isJsonObject(source.metrologyData)
+        ? source.metrologyData
         : null,
-      certificateDocument: isJsonObject(snapshot.certificateDocument)
-        ? snapshot.certificateDocument
+      certificateDocument: isJsonObject(source.certificateDocument)
+        ? source.certificateDocument
         : null,
     };
   });
+  return { snapshot, warnings };
 }
 
 function collectCompositionStandardIds(data: JsonRecord) {

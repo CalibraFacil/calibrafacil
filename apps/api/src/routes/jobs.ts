@@ -900,6 +900,9 @@ export const jobsRouter = new Hono<{
       return c.json({
         message: "Dados salvos com sucesso",
         data: result.job,
+        // Standards of the saved snapshot that went stale: the save is kept,
+        // the submit will refuse until they are replaced.
+        warnings: result.warnings,
       } satisfies ServerShape<JobMutationResponse>);
     },
   )
