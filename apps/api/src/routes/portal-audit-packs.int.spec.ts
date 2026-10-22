@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { insertJobs } from "../../test/integration/job-fixtures";
 import { db } from "@calibra-facil/db";
 import {
   asset,
   assetType,
-  calibrationJob,
   certificateRelease,
   portalExportJob,
   service,
@@ -122,25 +122,22 @@ async function seedApprovedCertificate(params: {
     .returning({ id: service.id });
   if (!serviceRow) throw new Error("service insert failed");
 
-  const [jobRow] = await db
-    .insert(calibrationJob)
-    .values({
-      jobId: params.jobNumber,
-      certificateName: params.jobNumber,
-      organizationId: params.labOrgId,
-      unitId: params.labUnitId,
-      customerId: params.customerId,
-      assetId: assetRow.id,
-      serviceId: serviceRow.id,
-      methodSnapshot: minimalMethodSnapshot(),
-      status: "APPROVED",
-      certificateUrl: `https://certificates.calibrafacil.com/org/test/${params.jobNumber}.pdf`,
-      performedAt: approvedAt,
-      approvedAt,
-      approvedBy: params.userId,
-      createdBy: params.userId,
-    })
-    .returning({ id: calibrationJob.id });
+  const [jobRow] = await insertJobs({
+    jobId: params.jobNumber,
+    certificateName: params.jobNumber,
+    organizationId: params.labOrgId,
+    unitId: params.labUnitId,
+    customerId: params.customerId,
+    assetId: assetRow.id,
+    serviceId: serviceRow.id,
+    methodSnapshot: minimalMethodSnapshot(),
+    status: "APPROVED",
+    certificateUrl: `https://certificates.calibrafacil.com/org/test/${params.jobNumber}.pdf`,
+    performedAt: approvedAt,
+    approvedAt,
+    approvedBy: params.userId,
+    createdBy: params.userId,
+  });
   if (!jobRow) throw new Error("calibration_job insert failed");
 
   if (params.releaseStatus) {

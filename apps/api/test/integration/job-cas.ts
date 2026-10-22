@@ -1,7 +1,13 @@
 import { vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
-import { db, getDb, isTransactionScopeCallback } from "@calibra-facil/db";
+import {
+  db,
+  getDb,
+  isTransactionScopeCallback,
+  outsideTransactionScope,
+} from "@calibra-facil/db";
 import { calibrationJob, jobAuditLog } from "@calibra-facil/db/schema";
+import { setJobStatus } from "./job-fixtures";
 
 // Shared fixtures for the compare-and-set specs on calibration_job writes
 // (jobs.ts, public-api-v2.ts, sync.ts). Harness code: statements issued here are
@@ -11,6 +17,26 @@ type JobChange = Partial<{
   status: typeof calibrationJob.$inferSelect.status;
   organizationId: string;
 }>;
+
+/**
+ * What another actor does to the job: a status change walks the legal
+ * transitions (the database refuses any other), the rest is a plain update.
+ */
+async function applyChange(
+  jobId: number,
+  change: JobChange,
+  executor: Parameters<typeof setJobStatus>[3] = db,
+): Promise<void> {
+  const { status, ...columns } = change;
+  if (status !== undefined) {
+    await setJobStatus(jobId, status, columns, executor);
+    return;
+  }
+  await executor
+    .update(calibrationJob)
+    .set(columns)
+    .where(eq(calibrationJob.id, jobId));
+}
 
 /**
  * Forces the interleaving of a lost compare-and-set, deterministically: the
@@ -26,18 +52,15 @@ export function changeJobBeforeNextTransaction(
   // `db` is a Proxy over the cached instance; spy on the instance itself.
   const instance = getDb();
   const originalTransaction = instance.transaction.bind(instance);
-  // On its own connection: inside a transaction scope `db` is the request's
-  // transaction, and the change must be another actor's committed write.
-  const applyChange = async () => {
-    await instance
-      .update(calibrationJob)
-      .set(change)
-      .where(eq(calibrationJob.id, jobId));
-  };
+  // Another actor's committed write, on its own connection: inside a
+  // transaction scope `db` is the request's transaction, which the other actor
+  // is not part of.
+  const otherActorChangesJob = () =>
+    outsideTransactionScope(() => applyChange(jobId, change));
   vi.spyOn(instance, "transaction").mockImplementationOnce(
     async (callback, config) => {
       if (!isTransactionScopeCallback(callback)) {
-        await applyChange();
+        await otherActorChangesJob();
         return originalTransaction(callback, config);
       }
       // A request that runs in a transaction scope (the desktop sync apply):
@@ -47,7 +70,7 @@ export function changeJobBeforeNextTransaction(
         const savepoint = tx.transaction.bind(tx);
         vi.spyOn(tx, "transaction").mockImplementationOnce(
           async (inner, innerConfig) => {
-            await applyChange();
+            await otherActorChangesJob();
             return savepoint(inner, innerConfig);
           },
         );
@@ -131,10 +154,7 @@ export async function raceWithRowLock(params: {
     await tx.execute(
       sql`SELECT 1 FROM calibration_job WHERE id = ${params.jobId} FOR UPDATE`,
     );
-    await tx
-      .update(calibrationJob)
-      .set(params.change)
-      .where(eq(calibrationJob.id, params.jobId));
+    await applyChange(params.jobId, params.change, tx);
     locked();
     await gate;
   });

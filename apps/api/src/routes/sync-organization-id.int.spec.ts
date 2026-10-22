@@ -9,13 +9,13 @@
  * organization, with a second laboratory seeded alongside so a mis-attribution would
  * show.
  */
+import { insertJobs } from "../../test/integration/job-fixtures";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { sql } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
 import {
   asset,
   assetType,
-  calibrationJob,
   calibrationMethod,
   referenceStandard,
   service,
@@ -164,35 +164,32 @@ async function seedWorld() {
   // A second laboratory with rows of its own: nothing the device pushes may land there.
   await seedLab(OTHER, "user-sync-b", "B");
 
-  const [job] = await db
-    .insert(calibrationJob)
-    .values({
-      jobId: "CAL-SYNC-1",
-      organizationId: lab.org.orgId,
-      unitId: lab.org.unitId,
-      customerId: lab.customerId,
+  const [job] = await insertJobs({
+    jobId: "CAL-SYNC-1",
+    organizationId: lab.org.orgId,
+    unitId: lab.org.unitId,
+    customerId: lab.customerId,
+    assetId: lab.assetId,
+    serviceId: lab.serviceId,
+    createdBy: lab.org.userId,
+    status: "IN_PROGRESS",
+    methodSnapshot: executableMethodSnapshot(),
+    assetSnapshot: {
       assetId: lab.assetId,
-      serviceId: lab.serviceId,
-      createdBy: lab.org.userId,
-      status: "IN_PROGRESS",
-      methodSnapshot: executableMethodSnapshot(),
-      assetSnapshot: {
-        assetId: lab.assetId,
-        assetTypeId: lab.assetTypeId,
-        assetTypeName: "Tipo A",
-        assetTypeSlug: "tipo-A",
-        baseMeasurementUnit: null,
-        name: "Instrumento A",
-        tag: "TAG-A",
-        serialNumber: "SN-A",
-        manufacturer: null,
-        model: null,
-        specifications: null,
-        capturedAt: "2026-01-01T00:00:00.000Z",
-      },
-      certificateName: "CAL-SYNC-1",
-    })
-    .returning({ id: calibrationJob.id });
+      assetTypeId: lab.assetTypeId,
+      assetTypeName: "Tipo A",
+      assetTypeSlug: "tipo-A",
+      baseMeasurementUnit: null,
+      name: "Instrumento A",
+      tag: "TAG-A",
+      serialNumber: "SN-A",
+      manufacturer: null,
+      model: null,
+      specifications: null,
+      capturedAt: "2026-01-01T00:00:00.000Z",
+    },
+    certificateName: "CAL-SYNC-1",
+  });
   const [standard] = await db
     .insert(referenceStandard)
     .values({

@@ -1,13 +1,13 @@
 import {
   asset,
   assetType,
-  calibrationJob,
   calibrationMethod,
   customer,
   service,
   type JobStatus,
   type MethodSnapshot,
 } from "@calibra-facil/db/schema";
+import { insertJobs } from "./job-fixtures";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 
@@ -213,27 +213,24 @@ export async function seedIssuableJob(params: {
     );
   }
 
-  const [jobRow] = await db
-    .insert(calibrationJob)
-    .values({
-      jobId: jobNumber,
-      certificateName: jobNumber,
-      organizationId: params.organizationId,
-      unitId: params.unitId,
-      customerId: customerRow.id,
-      assetId: assetRow.id,
-      serviceId: serviceRow.id,
-      methodSnapshot: snapshot,
-      data: ISSUABLE_DATA,
-      results: ISSUABLE_RESULTS,
-      status: params.status ?? "GENERATING_PDF",
-      performedAt: EPOCH,
-      approvedAt: EPOCH,
-      approvedBy: params.approvedBy ?? params.userId,
-      createdBy: params.userId,
-      createdAt: EPOCH,
-    })
-    .returning();
+  const [jobRow] = await insertJobs({
+    jobId: jobNumber,
+    certificateName: jobNumber,
+    organizationId: params.organizationId,
+    unitId: params.unitId,
+    customerId: customerRow.id,
+    assetId: assetRow.id,
+    serviceId: serviceRow.id,
+    methodSnapshot: snapshot,
+    data: ISSUABLE_DATA,
+    results: ISSUABLE_RESULTS,
+    status: params.status ?? "GENERATING_PDF",
+    performedAt: EPOCH,
+    approvedAt: EPOCH,
+    approvedBy: params.approvedBy ?? params.userId,
+    createdBy: params.userId,
+    createdAt: EPOCH,
+  });
   if (!jobRow)
     throw new Error("seedIssuableJob: calibration_job insert failed");
 

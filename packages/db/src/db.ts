@@ -25,7 +25,10 @@ import {
   transactionScopeStorage,
 } from "./transaction-scope.js";
 
-export { afterTransactionCommit } from "./transaction-scope.js";
+export {
+  afterTransactionCommit,
+  outsideTransactionScope,
+} from "./transaction-scope.js";
 
 type Database =
   | NeonDatabase<typeof schema>

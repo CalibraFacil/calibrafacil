@@ -49,3 +49,12 @@ export function afterTransactionCommit(
   }
   void callback();
 }
+
+/**
+ * Runs `callback` as if no transaction scope were open: `db` resolves to a
+ * connection of its own. A test seam, for the harness that plays another actor
+ * writing while a request holds its transaction.
+ */
+export function outsideTransactionScope<T>(callback: () => T): T {
+  return transactionScopeStorage.exit(callback);
+}
