@@ -24,7 +24,11 @@ import {
   serviceOrderExecutionItem,
   serviceOrderQuoteItem,
 } from "@calibra-facil/db/schema";
-import { ORGANIZATION_BACKFILL, listTenancy } from "@calibra-facil/db/tenancy";
+import {
+  CREATED_AFTER_0118,
+  ORGANIZATION_BACKFILL,
+  listTenancy,
+} from "@calibra-facil/db/tenancy";
 import { truncateAll } from "../../test/integration/db";
 import { hardDeleteOrganizationAsPurge } from "../../test/integration/records-retention";
 import { QUOTE_ITEM, seedTenant } from "../../test/integration/tenancy-fixture";
@@ -425,8 +429,15 @@ describe("REQ-ORG-3: every composite tenant key refuses a cross-tenant child (al
   });
 
   it("REQ-ORG-3: the registry lists the 29 composite keys of migration 0118", () => {
-    expect(COMPOSITE_KEYS).toHaveLength(29);
-    expect(new Set(COMPOSITE_KEYS.map((key) => key.name)).size).toBe(29);
+    const migration0118 = COMPOSITE_KEYS.filter(
+      (key) => !CREATED_AFTER_0118.includes(key.table),
+    );
+    expect(migration0118).toHaveLength(29);
+    expect(new Set(migration0118.map((key) => key.name)).size).toBe(29);
+    // later tables carry their own, and are held to the same refusal below
+    expect(new Set(COMPOSITE_KEYS.map((key) => key.name)).size).toBe(
+      COMPOSITE_KEYS.length,
+    );
   });
 
   /**

@@ -30,7 +30,7 @@ import {
 } from "../middleware/permission";
 import { resolveLabOrganizationIdByPortalHostname } from "../lib/portal-domains";
 import { resolvePortalNotificationOrgIds } from "../lib/portal-customer-scope";
-import { orgSetDb } from "../lib/org-db";
+import { orgDb, orgSetDb } from "../lib/org-db";
 
 async function getPortalLabScope(c: {
   req: { header: (name: string) => string | undefined };
@@ -207,20 +207,48 @@ export const portalNotificationsRouter = new Hono<{
           } satisfies ServerShape<PortalNotificationMarkReadResponse>);
         }
 
-        const updated = await orgSetDb(orgIds)
-          .update(notification)
-          .set({ status: "READ", readAt: new Date() })
+        // The set handle only reads: find which organization each of the
+        // caller's unread rows belongs to, then write through a handle bound to
+        // exactly that organization.
+        const candidates = await orgSetDb(orgIds)
+          .select({
+            id: notification.id,
+            organizationId: notification.organizationId,
+          })
+          .from(notification)
           .where(
             and(
               inArray(notification.id, notificationIds),
               ...portalNotificationConditions(session.user.id),
               eq(notification.status, "UNREAD"),
             ),
-          )
-          .returning();
+          );
+
+        const idsByOrganization = new Map<string, number[]>();
+        for (const row of candidates) {
+          const ids = idsByOrganization.get(row.organizationId) ?? [];
+          ids.push(row.id);
+          idsByOrganization.set(row.organizationId, ids);
+        }
+
+        const updatedPerOrganization = await Promise.all(
+          [...idsByOrganization].map(([organizationId, ids]) =>
+            orgDb(organizationId)
+              .update(notification)
+              .set({ status: "READ", readAt: new Date() })
+              .where(
+                and(
+                  inArray(notification.id, ids),
+                  ...portalNotificationConditions(session.user.id),
+                  eq(notification.status, "UNREAD"),
+                ),
+              )
+              .returning({ id: notification.id }),
+          ),
+        );
 
         return c.json({
-          updatedIds: updated.map((row) => row.id),
+          updatedIds: updatedPerOrganization.flat().map((row) => row.id),
         } satisfies ServerShape<PortalNotificationMarkReadResponse>);
       } catch (error) {
         console.error("Error marking portal notifications read:", error);
@@ -248,16 +276,23 @@ export const portalNotificationsRouter = new Hono<{
         } satisfies ServerShape<PortalNotificationCountResponse>);
       }
 
-      const updated = await orgSetDb(orgIds)
-        .update(notification)
-        .set({ status: "READ", readAt: new Date() })
-        .where(
-          and(
-            ...portalNotificationConditions(session.user.id),
-            eq(notification.status, "UNREAD"),
-          ),
-        )
-        .returning();
+      // One write per organization, each through a handle bound to it (the
+      // set handle is read-only).
+      const updatedPerOrganization = await Promise.all(
+        orgIds.map((organizationId) =>
+          orgDb(organizationId)
+            .update(notification)
+            .set({ status: "READ", readAt: new Date() })
+            .where(
+              and(
+                ...portalNotificationConditions(session.user.id),
+                eq(notification.status, "UNREAD"),
+              ),
+            )
+            .returning({ id: notification.id }),
+        ),
+      );
+      const updated = updatedPerOrganization.flat();
 
       return c.json({
         count: updated.length,

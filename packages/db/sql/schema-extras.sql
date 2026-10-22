@@ -431,3 +431,38 @@ DROP TRIGGER IF EXISTS calibration_job_status_transition_guard ON public.calibra
 CREATE TRIGGER calibration_job_status_transition_guard
   BEFORE INSERT OR UPDATE OF status ON public.calibration_job
   FOR EACH ROW EXECUTE FUNCTION calibra_calibration_job_status_guard();
+-- certificate_input guard (migration 0120): the frozen input never changes. UPDATE is
+-- always refused. DELETE is allowed only while the job is in REVIEW: the approval that
+-- wrote the row did not complete (dispatch failed and was reverted, or the job was
+-- rejected and is approved again), so the row documents nothing that was released. The
+-- seed / purge escape hatch (calibra.allow_audit_rewrite) lifts both for one transaction.
+CREATE OR REPLACE FUNCTION calibra_certificate_input_guard()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  job_status text;
+BEGIN
+  IF calibra_history_rewrite_allowed() THEN
+    IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'DELETE' THEN
+    SELECT status INTO job_status FROM public.calibration_job WHERE id = OLD.job_id;
+    IF job_status = 'REVIEW' THEN
+      RETURN OLD;
+    END IF;
+  END IF;
+
+  RAISE EXCEPTION 'certificate_input row % (job %): the frozen certificate input is immutable: % is not allowed',
+    OLD.id, OLD.job_id, TG_OP
+    USING ERRCODE = 'P0001',
+          TABLE = TG_TABLE_NAME,
+          HINT = 'The input of an approved certificate is frozen; amend the job instead of editing it.';
+END
+$$;
+DROP TRIGGER IF EXISTS certificate_input_immutable_guard ON public.certificate_input;
+CREATE TRIGGER certificate_input_immutable_guard
+  BEFORE UPDATE OR DELETE ON public.certificate_input
+  FOR EACH ROW EXECUTE FUNCTION calibra_certificate_input_guard();

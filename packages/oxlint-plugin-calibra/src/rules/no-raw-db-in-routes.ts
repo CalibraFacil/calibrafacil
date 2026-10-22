@@ -41,27 +41,79 @@ function toRecord(value: unknown): UnknownRecord | null {
   return value && typeof value === "object" ? Object(value) : null;
 }
 
-/** Local names the file binds to the `db` export of @calibra-facil/db. */
-function dbLocalNames(program: UnknownRecord): Set<string> {
+// The raw handle is exported as `db` and, as a function, `getDb()`.
+const RAW_EXPORTS = new Set(["db", "getDb"]);
+
+type Bindings = {
+  /** Local names bound to `db` / `getDb` (from the package or from any module). */
+  names: Set<string>;
+  /** Local names of `import * as x from "@calibra-facil/db"`. */
+  namespaces: Set<string>;
+};
+
+/**
+ * What the file binds to the raw handle. `db` / `getDb` imported BY NAME from any
+ * module counts, not only from @calibra-facil/db: a lib that re-exports the raw
+ * handle for routes to import would otherwise be a way around the rule.
+ */
+function dbBindings(program: UnknownRecord): Bindings {
   const names = new Set<string>();
+  const namespaces = new Set<string>();
   const body = program.body;
-  if (!Array.isArray(body)) return names;
+  if (!Array.isArray(body)) return { names, namespaces };
   for (const statement of body) {
     const record = toRecord(statement);
     if (record?.type !== "ImportDeclaration") continue;
-    if (importSourceOf(record) !== DB_PACKAGE) continue;
     const specifiers = record.specifiers;
     if (!Array.isArray(specifiers)) continue;
+    const fromPackage = importSourceOf(record) === DB_PACKAGE;
     for (const specifier of specifiers) {
       const spec = toRecord(specifier);
+      const local = toRecord(spec?.local);
+      if (typeof local?.name !== "string") continue;
+      if (spec?.type === "ImportNamespaceSpecifier" && fromPackage) {
+        namespaces.add(local.name);
+        continue;
+      }
       if (spec?.type !== "ImportSpecifier") continue;
       const imported = toRecord(spec.imported);
-      if (imported?.name !== "db") continue;
-      const local = toRecord(spec.local);
-      if (typeof local?.name === "string") names.add(local.name);
+      const importedName = imported?.name ?? imported?.value;
+      if (typeof importedName === "string" && RAW_EXPORTS.has(importedName)) {
+        names.add(local.name);
+      }
     }
   }
-  return names;
+  return { names, namespaces };
+}
+
+/** `import("@calibra-facil/db")`, in either AST spelling. */
+function isDynamicDbImport(record: UnknownRecord): boolean {
+  if (record.type === "ImportExpression") {
+    return importSourceOf(record) === DB_PACKAGE;
+  }
+  if (record.type !== "CallExpression") return false;
+  if (toRecord(record.callee)?.type !== "Import") return false;
+  const args = record.arguments;
+  return Array.isArray(args) && toRecord(args[0])?.value === DB_PACKAGE;
+}
+
+/**
+ * `export { db } from "..."` / `export * from "@calibra-facil/db"` in a route:
+ * the route would publish the raw handle for others to import.
+ */
+function isRawReExport(record: UnknownRecord): boolean {
+  if (record.type === "ExportAllDeclaration") {
+    return importSourceOf(record) === DB_PACKAGE;
+  }
+  if (record.type !== "ExportNamedDeclaration") return false;
+  if (importSourceOf(record) === null) return false;
+  const specifiers = record.specifiers;
+  if (!Array.isArray(specifiers)) return false;
+  return specifiers.some((specifier) => {
+    const local = toRecord(toRecord(specifier)?.local);
+    const name = local?.name ?? local?.value;
+    return typeof name === "string" && RAW_EXPORTS.has(name);
+  });
 }
 
 /** An Identifier that is a reference to the binding, not a name that merely matches. */
@@ -88,10 +140,26 @@ function isReference(
   }
 }
 
+/**
+ * A namespace identifier is a use when it reaches `db` / `getDb` (`pkg.db`) or
+ * is passed along whole; `pkg.setQueryObserver` is not.
+ */
+function isNamespaceUse(
+  parent: UnknownRecord | null,
+  key: string | null,
+): boolean {
+  if (parent?.type === "ImportNamespaceSpecifier") return false;
+  if (parent?.type !== "MemberExpression" || key !== "object") return true;
+  if (parent.computed === true) return true;
+  const property = toRecord(parent.property);
+  return typeof property?.name === "string" && RAW_EXPORTS.has(property.name);
+}
+
 function collectReferences(
   program: UnknownRecord,
-  names: ReadonlySet<string>,
+  bindings: Bindings,
 ): unknown[] {
+  const { names, namespaces } = bindings;
   const found: unknown[] = [];
   const visit = (
     node: unknown,
@@ -106,6 +174,19 @@ function collectReferences(
     }
     const record = toRecord(node);
     if (!record) return;
+    if (isDynamicDbImport(record) || isRawReExport(record)) {
+      found.push(record);
+      return;
+    }
+    if (
+      record.type === "Identifier" &&
+      typeof record.name === "string" &&
+      namespaces.has(record.name) &&
+      isNamespaceUse(parent, key)
+    ) {
+      found.push(record);
+      return;
+    }
     if (
       record.type === "Identifier" &&
       typeof record.name === "string" &&
@@ -149,7 +230,7 @@ const rule: RuleModule = {
       Program(program: unknown) {
         const root = toRecord(program);
         if (!root) return;
-        const found = collectReferences(root, dbLocalNames(root));
+        const found = collectReferences(root, dbBindings(root));
 
         for (const reference of found.slice(allowed)) {
           context.report({ node: reference, message: USE_MESSAGE });

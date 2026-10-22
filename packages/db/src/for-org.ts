@@ -14,12 +14,21 @@
  *   - `update` / `delete`: same WHERE rule; `set()` cannot touch the organization
  *     column, so a row cannot be moved to another organization;
  *   - `insert`: every row gets the organization column; a row addressed to
- *     another organization throws.
+ *     another organization throws. `onConflictDoUpdate` cannot set the
+ *     organization column and only updates a conflicting row of the bound
+ *     organization (the predicate is ANDed into its WHERE).
  *
  * Global tables (no organization column: `organization`, `user`, `asset_type`...)
  * pass through untouched. Shapes that cannot be scoped fail closed instead of
  * running unscoped: a non-table `from`/join source (subquery, `sql`), right/full/
- * cross/lateral joins, `update ... from`, `insert ... select`.
+ * cross/lateral joins, `update ... from`, `insert ... select`, and the set
+ * operators (`union`, `intersect`, `except`, with or without `all`).
+ *
+ * What the handle CANNOT scope: raw `sql` fragments. A `sql` template inside
+ * select fields or a `where` (a correlated subquery, `exists (...)`) is passed
+ * to Postgres as written; it must be correlated to the scoped parent row (or
+ * built from handle builders), and reviewers check that. `advisoryXactLock` is
+ * the one raw statement the handle runs itself, and it reads no tenant row.
  *
  * The handle is a thin Proxy over the Drizzle builders, so every query keeps its
  * Drizzle result type. It works on the global `db` and on the `tx` of
@@ -28,7 +37,8 @@
  *
  * `forOrgs(db, ids)` binds a bounded SET of organizations (`IN (...)`): for the
  * portal certificate endpoints, which list across every laboratory the signed-in
- * customer user belongs to. It cannot insert.
+ * customer user belongs to. It is READ-ONLY: it has no insert, update or delete
+ * (a write must name the one organization it writes to, with `forOrg`).
  */
 import { and, eq, getTableColumns, inArray, is, SQL, sql } from "drizzle-orm";
 import {
@@ -77,10 +87,12 @@ export type OrgDb = ScopedSurface &
     ): Promise<R>;
   };
 
-/** Handle bound to a bounded SET of organizations (reads and updates only). */
-export type OrgSetDb = ScopedSurface & {
+/** Handle bound to a bounded SET of organizations: reads only. */
+export type OrgSetDb = Pick<
+  OrgExecutor,
+  "select" | "selectDistinct" | "selectDistinctOn"
+> & {
   readonly organizationIds: readonly string[];
-  insert(table: PgTable): never;
   transaction<R>(
     run: (tx: OrgSetDb) => Promise<R>,
     config?: TransactionConfig,
@@ -231,6 +243,15 @@ function scopedJoin(name: string, scope: Scope): Hook<object> {
   };
 }
 
+const SET_OPERATORS = [
+  "union",
+  "unionAll",
+  "intersect",
+  "intersectAll",
+  "except",
+  "exceptAll",
+] as const;
+
 const UNSCOPABLE_JOINS = [
   "rightJoin",
   "fullJoin",
@@ -250,6 +271,9 @@ function selectQueryHooks(
     ["leftJoin", scopedJoin("leftJoin", scope)],
   ]);
   for (const name of UNSCOPABLE_JOINS) {
+    hooks.set(name, blocked(`${name}()`));
+  }
+  for (const name of SET_OPERATORS) {
     hooks.set(name, blocked(`${name}()`));
   }
   return hooks;
@@ -348,12 +372,65 @@ function withOrganization(
   return { ...row, [key]: organizationId };
 }
 
+function recordOf(value: unknown, what: string): Record<string, unknown> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return Object.fromEntries(Object.entries(value));
+  }
+  return refuse(`${what} must be an object`);
+}
+
+/**
+ * `insert(...).values(...)` returns the builder that takes `onConflict*`. Its
+ * DO UPDATE may only touch a conflicting row of the bound organization (a unique
+ * key that is not per organization could otherwise match another laboratory's
+ * row) and may not move the row to another organization.
+ */
+function scopeUpsertBuilder(
+  inserted: object,
+  base: SQL | undefined,
+  key: string | null,
+): object {
+  return intercept(
+    inserted,
+    new Map<string, Hook<object>>([
+      [
+        "onConflictDoUpdate",
+        (proxy, target) => (config: unknown) => {
+          const given = recordOf(config, "onConflictDoUpdate config");
+          const set: unknown = given.set;
+          if (key !== null && typeof set === "object" && set !== null) {
+            if (key in set) {
+              refuse(
+                `onConflictDoUpdate cannot set ${key}: a row cannot be moved to another organization`,
+              );
+            }
+          }
+          if (base === undefined) {
+            const result = invoke(target, "onConflictDoUpdate", [config]);
+            return result === target ? proxy : result;
+          }
+          // `where` is the deprecated spelling of `setWhere`; Drizzle refuses
+          // both together, so fold it into the one slot.
+          const { where: legacyWhere, setWhere, ...rest } = given;
+          const scoped = {
+            ...rest,
+            setWhere: and(base, asCondition(setWhere ?? legacyWhere)),
+          };
+          const result = invoke(target, "onConflictDoUpdate", [scoped]);
+          return result === target ? proxy : result;
+        },
+      ],
+    ]),
+  );
+}
+
 function scopeInsertBuilder(
   builder: object,
   table: PgTable,
   organizationId: string,
 ): object {
   const key = tenantKeyOf(table);
+  const base = predicateFor(table, { ids: [organizationId] });
   return intercept(
     builder,
     new Map<string, Hook<object>>([
@@ -361,11 +438,18 @@ function scopeInsertBuilder(
       [
         "values",
         () => (values: unknown) => {
-          if (key === null) return invoke(builder, "values", [values]);
-          const scoped = Array.isArray(values)
-            ? values.map((row) => withOrganization(row, key, organizationId))
-            : withOrganization(values, key, organizationId);
-          return invoke(builder, "values", [scoped]);
+          const scoped =
+            key === null
+              ? values
+              : Array.isArray(values)
+                ? values.map((row) =>
+                    withOrganization(row, key, organizationId),
+                  )
+                : withOrganization(values, key, organizationId);
+          const inserted: unknown = invoke(builder, "values", [scoped]);
+          return typeof inserted === "object" && inserted !== null
+            ? scopeUpsertBuilder(inserted, base, key)
+            : inserted;
         },
       ],
     ]),
@@ -517,16 +601,6 @@ function bindSet(
     get selectDistinctOn() {
       return scopedSelectDistinctOn(executor, scope);
     },
-    get update() {
-      return scopedUpdate(executor, scope);
-    },
-    get delete() {
-      return scopedDelete(executor, scope);
-    },
-    insert: () =>
-      refuse(
-        "forOrgs() cannot insert: a row needs exactly one organization, use forOrg()",
-      ),
     transaction: (run, config) =>
       executor.transaction((tx) => run(bindSet(tx, organizationIds)), config),
   };
@@ -544,8 +618,8 @@ export function forOrg(executor: OrgExecutor, organizationId: string): OrgDb {
 }
 
 /**
- * Handle bound to a bounded set of organizations (reads/updates/deletes with
- * `IN (...)`; no insert). An empty set matches no row.
+ * Handle bound to a bounded set of organizations: reads with `IN (...)`, and
+ * nothing else (no insert, update or delete). An empty set matches no row.
  */
 export function forOrgs(
   executor: OrgExecutor,

@@ -546,6 +546,14 @@ function customerAddress(job: CertificateJobData): string | null {
 export type BuildLayoutDataOptions = {
   /** Data URI for the public verification QR. */
   qrCodeDataUrl?: string | null;
+  /**
+   * The accreditation-seal decision frozen at approval (`CertificateInput.seal`).
+   * Absent only on the legacy live path, which evaluates the vigência at render
+   * time; with it the layout reads no clock.
+   */
+  accredited?: boolean;
+  /** The verification URL frozen at approval; derived from the token when absent (legacy). */
+  verificationUrl?: string;
 };
 
 /**
@@ -626,13 +634,17 @@ export function buildCertificateLayoutData(
     };
   }
 
-  // #647: accreditation vigência is evaluated at the EMISSION instant.
-  const accredited = shouldRenderAccreditationSeal({
-    lab: job.lab,
-    methodAccreditedScope: job.methodSnapshot?.accreditedScope,
-    scopeOverrideJustification: job.scopeOverrideJustification,
-    atDate: new Date(),
-  });
+  // #647: accreditation vigência is evaluated at the EMISSION instant. From a
+  // frozen certificate input the decision was taken at approval and is only
+  // read here; the legacy path (no frozen input) still evaluates it now.
+  const accredited =
+    options.accredited ??
+    shouldRenderAccreditationSeal({
+      lab: job.lab,
+      methodAccreditedScope: job.methodSnapshot?.accreditedScope,
+      scopeOverrideJustification: job.scopeOverrideJustification,
+      atDate: new Date(),
+    });
 
   const indicatorSvg = renderEccentricityIndicatorSvgMarkup(
     certificateImageContextFromJob(job),
@@ -642,7 +654,9 @@ export function buildCertificateLayoutData(
   const data: CalibrationCertificateData = {
     certificateNumber: job.jobId,
     qrCodeDataUrl: options.qrCodeDataUrl ?? null,
-    verificationUrl: certificateVerificationUrl(job.verificationToken),
+    verificationUrl:
+      options.verificationUrl ??
+      certificateVerificationUrl(job.verificationToken),
 
     lab: {
       name: job.lab.name,

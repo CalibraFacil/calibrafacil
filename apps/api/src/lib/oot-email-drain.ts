@@ -11,7 +11,7 @@
  * Invoked by the `oot-emails` cron handler in vercel-src/cron/dispatch.ts.
  */
 
-import { readOriginsConfig, readStorageConfig } from "@calibra-facil/config";
+import { readOriginsConfig } from "@calibra-facil/config";
 import { db } from "@calibra-facil/db";
 import {
   asset,
@@ -34,8 +34,8 @@ import { isReleaseExhausting } from "./outbox-release";
 import {
   createR2Client,
   downloadFromR2,
+  r2EnvFromStorageConfig,
   resolveBucketName,
-  type R2Env,
 } from "./storage";
 
 const DEFAULT_BATCH_SIZE = 20;
@@ -50,36 +50,6 @@ export interface DrainOotEmailsResult {
   deferred: number;
   released: number;
   errors: number;
-}
-
-/**
- * R2 credentials from the storage configuration (the drain runs from a cron
- * handler, outside any Hono context). Null when unconfigured — the email is
- * then sent without the PDF attachment rather than failing the row forever.
- */
-function getR2EnvFromProcess(): R2Env | null {
-  const storage = readStorageConfig();
-  const accountId = storage.accountId;
-  const accessKeyId = storage.accessKeyId;
-  const secretAccessKey = storage.secretAccessKey;
-  const bucketName = storage.bucketName;
-  const mediaBucketName = storage.mediaBucketName;
-  if (
-    !accountId ||
-    !accessKeyId ||
-    !secretAccessKey ||
-    !bucketName ||
-    !mediaBucketName
-  ) {
-    return null;
-  }
-  return {
-    R2_ACCOUNT_ID: accountId,
-    R2_ACCESS_KEY_ID: accessKeyId,
-    R2_SECRET_ACCESS_KEY: secretAccessKey,
-    R2_BUCKET_NAME: bucketName,
-    R2_MEDIA_BUCKET_NAME: mediaBucketName,
-  };
 }
 
 async function claimOutboxRow(rowId: number): Promise<boolean> {
@@ -266,7 +236,7 @@ export async function drainOotEmailOutbox(options?: {
         // Attachment: best-effort download; a transient R2 failure releases
         // the row for retry (the attachment is part of the deliverable).
         let attachment: { filename: string; content: Uint8Array } | undefined;
-        const r2Env = getR2EnvFromProcess();
+        const r2Env = r2EnvFromStorageConfig();
         if (r2Env) {
           const client = createR2Client(r2Env);
           const bytes = await downloadFromR2(

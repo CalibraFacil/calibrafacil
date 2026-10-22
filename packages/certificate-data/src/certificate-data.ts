@@ -31,8 +31,12 @@ export type CertificateJobData = {
   organizationId?: string | null;
   organizationSlug?: string | null;
   unitId?: number | null;
-  performedAt: Date | null;
-  approvedAt: Date | null;
+  /**
+   * Instants are `Date` when read from a live row and ISO strings when read
+   * back from the frozen `certificate_input` document (JSON has no dates).
+   */
+  performedAt: Date | string | null;
+  approvedAt: Date | string | null;
   environmentalSnapshot?: EnvironmentalSnapshot | null;
   calibrationLocationSnapshot?: CalibrationLocationSnapshot | null;
   calibrationPhaseSnapshot?: CalibrationPhaseSnapshot | null;
@@ -112,7 +116,7 @@ export type CertificateJobData = {
   amendmentNumber?: number | null;
   amendmentReason?: string | null;
   originalJobId?: string | null;
-  originalApprovedAt?: Date | null;
+  originalApprovedAt?: Date | string | null;
 };
 
 export type CustomerAddress = {

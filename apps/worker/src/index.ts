@@ -68,8 +68,15 @@ import {
   certificateFooterHtml,
   certificateHeaderHtml,
 } from "@calibra-facil/documents";
+import {
+  canonicalJson,
+  CERTIFICATE_LAYOUT_KEY,
+  CERTIFICATE_LAYOUT_VERSION,
+  type CertificateJobData,
+} from "@calibra-facil/certificate-data";
 import { buildCertificateLayoutData } from "./certificate/layout-data.js";
 import { fetchCertificateJobData } from "./certificate/fetch-job-data.js";
+import { loadCertificateRenderSource } from "./certificate/frozen-input.js";
 
 /**
  * Identifies the worker build that rendered a certificate, alongside the layout
@@ -1807,17 +1814,6 @@ async function generatePdfFromHtml(
 }
 
 /**
- * Identifies the layout that produced a certificate. Stored on every issued
- * snapshot so a re-render years later can be told apart from tampering.
- *
- * Bump LAYOUT_VERSION whenever the rendered output changes in a way an auditor
- * could see. It is not the package version: the layout can change while nothing
- * else does, and only the layout affects the bytes.
- */
-const CERTIFICATE_LAYOUT_KEY = "calibration-certificate-fixed";
-const CERTIFICATE_LAYOUT_VERSION = "1.0.0";
-
-/**
  * Renders, signs, stores and records one calibration certificate.
  *
  * The write-once contract (REQ-REL-PDF-002): the snapshot insert is
@@ -1852,12 +1848,13 @@ async function processJob(
   const existing = await withDbClient(env, async (client) => {
     const result = await client.query<{
       status: string;
+      organization_id: string;
       certificate_url: string | null;
       pdf_r2_key: string | null;
       signature_metadata: unknown;
     }>(
       `
-        select cj.status, cj.certificate_url, ics.pdf_r2_key, cj.signature_metadata
+        select cj.status, cj.organization_id, cj.certificate_url, ics.pdf_r2_key, cj.signature_metadata
         from calibration_job cj
         left join issued_certificate_snapshot ics on ics.job_id = cj.id
         where cj.id = $1
@@ -1927,18 +1924,40 @@ async function processJob(
   }
 
   try {
-    const job = await withDbClient(env, (client) =>
-      fetchCertificateJobData(client, jobId, {
-        resolveLogoDataUrl: (logo) =>
-          resolveOrganizationLogoDataUrl(env, logo, jobId),
-        resolveSignatureDataUrl: async (r2Key, contentType) => {
-          const object = await getStoredObject(env, "media", r2Key);
-          if (!object) return null;
-          const base64 = arrayBufferToBase64(await object.arrayBuffer());
-          return `data:${contentType};base64,${base64}`;
-        },
-      }),
+    // ISO/IEC 17025 §7.8: the certificate reflects the APPROVED record. When the
+    // approval froze a certificate_input, that document is the only source of
+    // what is printed; the lab, signatory, customer, asset and standards rows
+    // are not read again. Jobs approved before it existed render through the
+    // legacy live-read path, flagged as such in the log and on the snapshot.
+    const source = await withDbClient(env, (client) =>
+      loadCertificateRenderSource(
+        client,
+        { jobId, organizationId: existing?.organization_id ?? null },
+        () =>
+          fetchCertificateJobData(client, jobId, {
+            resolveLogoDataUrl: (logo) =>
+              resolveOrganizationLogoDataUrl(env, logo, jobId),
+            resolveSignatureDataUrl: async (r2Key, contentType) => {
+              const object = await getStoredObject(env, "media", r2Key);
+              if (!object) return null;
+              const base64 = arrayBufferToBase64(await object.arrayBuffer());
+              return `data:${contentType};base64,${base64}`;
+            },
+          }),
+      ),
     );
+    if (source.status === "corrupt") {
+      console.error(
+        `[JOB ${jobId}] The frozen certificate input cannot be trusted: ${source.reason}`,
+      );
+      return {
+        success: false,
+        error: `Entrada congelada do certificado inválida: ${source.reason}`,
+        permanent: true,
+      };
+    }
+    const job: CertificateJobData | null =
+      source.status === "ok" ? source.input.job : source.job;
     if (!job)
       return { success: false, error: "Job not found", permanent: true };
     if (!job.organizationId) {
@@ -1948,15 +1967,46 @@ async function processJob(
         permanent: true,
       };
     }
+    const certificateInputSource =
+      source.status === "ok"
+        ? { source: "frozen", sha256: source.sha256 }
+        : { source: "legacy_live" };
+    if (source.status === "ok") {
+      console.log(
+        `[JOB ${jobId}] Rendering from the frozen certificate input (sha256 ${source.sha256})`,
+      );
+      if (
+        source.input.layout.key !== CERTIFICATE_LAYOUT_KEY ||
+        source.input.layout.version !== CERTIFICATE_LAYOUT_VERSION
+      ) {
+        console.warn(
+          `[JOB ${jobId}] The input was frozen for layout ${source.input.layout.key}@${source.input.layout.version}; rendering with ${CERTIFICATE_LAYOUT_KEY}@${CERTIFICATE_LAYOUT_VERSION}`,
+        );
+      }
+    } else {
+      console.warn(
+        `[JOB ${jobId}] LEGACY render path: no frozen certificate_input (approved before migration 0120); reading the lab, signatory, customer and standards live`,
+      );
+    }
 
     // The layout refuses to guess: if the method does not declare enough to
     // build a correct results table, issuance stops here with the reasons
     // rather than producing a document that merely looks right.
+    const verificationUrl =
+      source.status === "ok"
+        ? source.input.verificationUrl
+        : certificateVerificationUrl(job.verificationToken);
     const layout = buildCertificateLayoutData(job, {
-      qrCodeDataUrl: await QRCode.toDataURL(
-        certificateVerificationUrl(job.verificationToken),
-        { margin: 0, width: 240 },
-      ),
+      qrCodeDataUrl: await QRCode.toDataURL(verificationUrl, {
+        margin: 0,
+        width: 240,
+      }),
+      ...(source.status === "ok"
+        ? {
+            accredited: source.input.seal.accredited,
+            verificationUrl: source.input.verificationUrl,
+          }
+        : {}),
     });
     if (!layout.ok) {
       return {
@@ -2017,6 +2067,16 @@ async function processJob(
       signature: signed.signatureMetadata
         ? { signed: true, signerName: signed.signatureMetadata.signerName }
         : { signed: false },
+      // Where the certificate's content came from, and a hash of exactly what
+      // the template was handed: the same frozen input and layout version give
+      // the same hash on any later render (the PDF bytes may differ, they embed
+      // timestamps and the signature).
+      certificateInput: {
+        ...certificateInputSource,
+        layoutDataSha256: createHash("sha256")
+          .update(canonicalJson(layout.data))
+          .digest("hex"),
+      },
       renderedAt: new Date().toISOString(),
     };
 

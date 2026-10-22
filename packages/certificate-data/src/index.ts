@@ -40,3 +40,17 @@ export {
   UNCERTAINTY_SIGNIFICANT_FIGURES,
   type RoundedMeasurement,
 } from "./reporting-rounding.js";
+export {
+  assembleCertificateJobData,
+  buildCertificateInput,
+  canonicalJson,
+  CERTIFICATE_INPUT_SCHEMA_VERSION,
+  CERTIFICATE_LAYOUT_KEY,
+  CERTIFICATE_LAYOUT_VERSION,
+  certificateInputSha256,
+  imageDataUrl,
+  inferImageContentType,
+  isCertificateInput,
+  type CertificateInput,
+  type CertificateJobSource,
+} from "./certificate-input.js";

@@ -45,6 +45,66 @@ describe("calibra/no-raw-db-in-routes (real oxlint)", () => {
     }
   }, 60_000);
 
+  it("REQ-ORGDB-2: getDb() is the raw db under another name", async () => {
+    await expectViolation(RULE, {
+      "apps/api/src/routes/get-db.ts":
+        'import { getDb } from "@calibra-facil/db";\nexport const a = () => getDb().select();\n',
+    });
+    await expectViolation(RULE, {
+      "apps/api/src/routes/get-db-alias.ts":
+        'import { getDb as open } from "@calibra-facil/db";\nexport const a = () => open().select();\n',
+    });
+  }, 60_000);
+
+  it("REQ-ORGDB-2: a namespace import reaches db and getDb too", async () => {
+    await expectViolation(RULE, {
+      "apps/api/src/routes/ns-db.ts":
+        'import * as pkg from "@calibra-facil/db";\nexport const a = () => pkg.db.select();\n',
+    });
+    await expectViolation(RULE, {
+      "apps/api/src/routes/ns-get-db.ts":
+        'import * as pkg from "@calibra-facil/db";\nexport const a = () => pkg.getDb().select();\n',
+    });
+    await expectClean(RULE, {
+      "apps/api/src/routes/ns-other.ts":
+        'import * as pkg from "@calibra-facil/db";\nexport const a = () => pkg.setQueryObserver;\n',
+    });
+  }, 60_000);
+
+  it("REQ-ORGDB-2: a dynamic import of the db package is a use", async () => {
+    await expectViolation(RULE, {
+      "apps/api/src/routes/dynamic.ts":
+        'export const a = async () => (await import("@calibra-facil/db")).db.select();\n',
+    });
+    await expectViolation(RULE, {
+      "apps/api/src/routes/dynamic-destructure.ts":
+        'export const a = async () => { const { db } = await import("@calibra-facil/db"); return db; };\n',
+    });
+    await expectClean(RULE, {
+      "apps/api/src/routes/dynamic-other.ts":
+        'export const a = async () => import("@calibra-facil/db/schema");\n',
+    });
+  }, 60_000);
+
+  it("REQ-ORGDB-2: importing db or getDb by name from ANY module (a lib that re-exports it) is a use", async () => {
+    await expectViolation(RULE, {
+      "apps/api/src/routes/reexported.ts":
+        'import { db } from "../lib/raw-db";\nexport const a = () => db.select();\n',
+    });
+    await expectViolation(RULE, {
+      "apps/api/src/routes/reexported-get-db.ts":
+        'import { getDb } from "../lib/raw-db";\nexport const a = () => getDb().select();\n',
+    });
+    await expectViolation(RULE, {
+      "apps/api/src/routes/reexported-alias.ts":
+        'import { db as handle } from "../lib/raw-db";\nexport const a = () => handle.select();\n',
+    });
+    await expectViolation(RULE, {
+      "apps/api/src/routes/reexport-statement.ts":
+        'export { db } from "@calibra-facil/db";\n',
+    });
+  }, 60_000);
+
   it("REQ-ORGDB-2: follows an aliased import", async () => {
     await expectViolation(RULE, {
       "apps/api/src/routes/aliased.ts":
@@ -62,10 +122,10 @@ describe("calibra/no-raw-db-in-routes (real oxlint)", () => {
     await expectClean(RULE, {
       "apps/api/src/routes/clean.ts":
         'import { orgDb } from "../lib/org-db";\n' +
-        'import { db } from "./other-module";\n' +
         'import { sql } from "@calibra-facil/db";\n' +
+        'import * as helpers from "./helpers";\n' +
         "export const a = (organizationId: string) => orgDb(organizationId).select();\n" +
-        "export const b = () => db.select();\n" +
+        "export const b = () => helpers.something();\n" +
         "export const c = (x: { db: number }) => ({ db: x.db });\n",
       // a binding that merely shares the name is not the imported one
       "apps/api/src/routes/no-import.ts":

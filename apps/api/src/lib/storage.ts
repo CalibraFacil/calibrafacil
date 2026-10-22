@@ -30,6 +30,35 @@ export interface R2Env {
   API_URL?: string;
 }
 
+/**
+ * R2 credentials from the storage configuration (for code that runs outside any Hono
+ * context: cron handlers, the approval command). Null when unconfigured.
+ */
+export function r2EnvFromStorageConfig(): R2Env | null {
+  const storage = readStorageConfig();
+  const accountId = storage.accountId;
+  const accessKeyId = storage.accessKeyId;
+  const secretAccessKey = storage.secretAccessKey;
+  const bucketName = storage.bucketName;
+  const mediaBucketName = storage.mediaBucketName;
+  if (
+    !accountId ||
+    !accessKeyId ||
+    !secretAccessKey ||
+    !bucketName ||
+    !mediaBucketName
+  ) {
+    return null;
+  }
+  return {
+    R2_ACCOUNT_ID: accountId,
+    R2_ACCESS_KEY_ID: accessKeyId,
+    R2_SECRET_ACCESS_KEY: secretAccessKey,
+    R2_BUCKET_NAME: bucketName,
+    R2_MEDIA_BUCKET_NAME: mediaBucketName,
+  };
+}
+
 /** Resolve a logical bucket to its concrete (env-configured) bucket name. */
 export function resolveBucketName(env: R2Env, bucket: StorageBucket): string {
   return bucket === "media" ? env.R2_MEDIA_BUCKET_NAME : env.R2_BUCKET_NAME;

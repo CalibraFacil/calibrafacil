@@ -32,6 +32,14 @@ import { createAssetOotEventForApprovedJob } from "../../lib/asset-oot-events";
 import { advanceAssetCalibrationDatesOnApproval } from "../../lib/asset-calibration-advance";
 import { checkApproverIsAuthorizedSignatory } from "../../lib/signatory";
 import {
+  CertificateImagesChangedError,
+  discardUnreleasedCertificateInput,
+  freezeCertificateInput,
+  lockJobForApproval,
+  prefetchCertificateImages,
+} from "@calibra-facil/db/certificate-input";
+import { readCertificateImage } from "../../lib/certificate-input-images";
+import {
   findServiceOrdersForCalibrationJob,
   triggerAutomaticSendForMilestone,
 } from "../../lib/automatic-send";
@@ -387,86 +395,127 @@ export async function approveJob(
       : {};
 
   const approvedStatus = requireTargetOf(existing.status, "approve");
-  const outcome = await db.transaction(async (tx) => {
-    const [updated] = await tx
-      .update(calibrationJob)
-      .set({
-        // We set approved_by now so the PDF worker can fetch it.
-        status: approvedStatus,
-        approvedBy: approverId,
-        approvedAt,
-        ...(evaluation.environmentalSnapshot
-          ? { environmentalSnapshot: evaluation.environmentalSnapshot }
-          : {}),
-        asFoundConformity: evaluation.asFound.conformity,
-        asFoundMargins: evaluation.asFound.margins,
-        scopeComplianceStatus: evaluation.scopeCompliance.status,
-        scopeComplianceFindings: evaluation.scopeCompliance.findings,
-        scopeOverrideJustification: evaluation.appliedScopeOverride,
-        // A resubmitted (previously rejected) job is released clean:
-        // the stale rejection must not read as the current state.
-        rejectedBy: null,
-        rejectedAt: null,
-        rejectionReason: null,
-      })
-      .where(
-        and(
-          eq(calibrationJob.id, jobId),
-          eq(calibrationJob.organizationId, memberData.organizationId),
-          eq(calibrationJob.status, existing.status),
-        ),
-      )
-      .returning();
 
-    if (!updated) {
-      return null;
-    }
+  // The logo and the signature the certificate embeds are read from object
+  // storage BEFORE the transaction: network I/O does not run while the job row
+  // is locked. A storage failure throws here, before anything is written, and
+  // the approval is retried. The transaction checks the keys it reads are the
+  // ones that were fetched.
+  const images = await prefetchCertificateImages(
+    db,
+    { organizationId: memberData.organizationId, approverId },
+    readCertificateImage,
+  );
 
-    await appendJobEvent(tx, {
-      action: "approve",
-      organizationId: memberData.organizationId,
-      jobId,
-      actor: { kind: "user", userId: approverId },
-      changes: {
-        status: { old: existing.status, new: approvedStatus },
-        ...approvedVia,
-        // Recorded on ANY transition — including adverse → null when the
-        // guard stopped applying (scope lines deleted, vigência lapsed).
-        // Erasing a previously frozen verdict without an audit entry
-        // would leave a §8.4 gap and make bypass-by-deleting-scope-lines
-        // invisible.
-        ...scopeChanges,
-        ...(appliedScopeOverride
-          ? {
-              scopeOverrideJustification: {
-                old: existing.scopeOverrideJustification,
-                new: appliedScopeOverride,
-              },
-            }
-          : {}),
-      },
-      ipAddress: input.metadata.ipAddress ?? null,
-      // Keep the approver's own notes alongside the override record —
-      // the downgrade must not erase the supplied approval reason from
-      // the trail.
-      reason: appliedScopeOverride
-        ? [
-            `Aprovado SEM selo de acreditação (violação de escopo/CMC documentada): ${appliedScopeOverride}`,
-            values.reason?.trim() || null,
-          ]
-            .filter(Boolean)
-            .join(" | ")
-        : values.reason || "Aprovado - Gerando PDF",
+  const outcome = await db
+    .transaction(async (tx) => {
+      // Serialise on the job and clear what an earlier, unfinished approval of it
+      // left behind (its frozen certificate input) while it is still in REVIEW.
+      const locked = await lockJobForApproval(tx, {
+        jobId,
+        organizationId: memberData.organizationId,
+        status: existing.status,
+      });
+      if (!locked) {
+        return null;
+      }
+
+      const [updated] = await tx
+        .update(calibrationJob)
+        .set({
+          // We set approved_by now so the PDF worker can fetch it.
+          status: approvedStatus,
+          approvedBy: approverId,
+          approvedAt,
+          ...(evaluation.environmentalSnapshot
+            ? { environmentalSnapshot: evaluation.environmentalSnapshot }
+            : {}),
+          asFoundConformity: evaluation.asFound.conformity,
+          asFoundMargins: evaluation.asFound.margins,
+          scopeComplianceStatus: evaluation.scopeCompliance.status,
+          scopeComplianceFindings: evaluation.scopeCompliance.findings,
+          scopeOverrideJustification: evaluation.appliedScopeOverride,
+          // A resubmitted (previously rejected) job is released clean:
+          // the stale rejection must not read as the current state.
+          rejectedBy: null,
+          rejectedAt: null,
+          rejectionReason: null,
+        })
+        .where(
+          and(
+            eq(calibrationJob.id, jobId),
+            eq(calibrationJob.organizationId, memberData.organizationId),
+            eq(calibrationJob.status, existing.status),
+          ),
+        )
+        .returning();
+
+      if (!updated) {
+        return null;
+      }
+
+      // ISO/IEC 17025 §7.8: the certificate reflects the approved record. What the
+      // renderer reads (lab, signatory, seal decision, customer, asset, results,
+      // standards, method, layout) is frozen HERE, in the approval's own
+      // transaction: it commits or rolls back with the status change and its audit
+      // row, and the worker never reads that data live again.
+      const frozen = await freezeCertificateInput(tx, updated, images);
+
+      await appendJobEvent(tx, {
+        action: "approve",
+        organizationId: memberData.organizationId,
+        jobId,
+        actor: { kind: "user", userId: approverId },
+        changes: {
+          status: { old: existing.status, new: approvedStatus },
+          ...approvedVia,
+          certificateInputSha256: frozen.sha256,
+          // Recorded on ANY transition — including adverse → null when the
+          // guard stopped applying (scope lines deleted, vigência lapsed).
+          // Erasing a previously frozen verdict without an audit entry
+          // would leave a §8.4 gap and make bypass-by-deleting-scope-lines
+          // invisible.
+          ...scopeChanges,
+          ...(appliedScopeOverride
+            ? {
+                scopeOverrideJustification: {
+                  old: existing.scopeOverrideJustification,
+                  new: appliedScopeOverride,
+                },
+              }
+            : {}),
+        },
+        ipAddress: input.metadata.ipAddress ?? null,
+        // Keep the approver's own notes alongside the override record —
+        // the downgrade must not erase the supplied approval reason from
+        // the trail.
+        reason: appliedScopeOverride
+          ? [
+              `Aprovado SEM selo de acreditação (violação de escopo/CMC documentada): ${appliedScopeOverride}`,
+              values.reason?.trim() || null,
+            ]
+              .filter(Boolean)
+              .join(" | ")
+          : values.reason || "Aprovado - Gerando PDF",
+      });
+
+      // Outbox: when certificate jobs are dispatched through `app_queue_job`
+      // (same Postgres) the queue row commits atomically with the approval, so a
+      // dispatch failure can never strand the job in GENERATING_PDF — the
+      // stale-lease backstop owns every row that exists.
+      const staged = await stageBackgroundJob(tx, {
+        jobId,
+        userId: approverId,
+      });
+
+      return { updated, staged };
+    })
+    .catch((error: unknown) => {
+      // The lab changed its logo (or the approver their signature) between the
+      // read and the lock: nothing was written, the approval is retried.
+      if (error instanceof CertificateImagesChangedError) return null;
+      throw error;
     });
-
-    // Outbox: when certificate jobs are dispatched through `app_queue_job`
-    // (same Postgres) the queue row commits atomically with the approval, so a
-    // dispatch failure can never strand the job in GENERATING_PDF — the
-    // stale-lease backstop owns every row that exists.
-    const staged = await stageBackgroundJob(tx, { jobId, userId: approverId });
-
-    return { updated, staged };
-  });
 
   if (!outcome) {
     return { status: "concurrent_approval" };
@@ -566,6 +615,12 @@ async function revertApprovalAfterDispatchFailure(params: {
         .returning();
 
       if (!reverted) return;
+
+      // The approval did not complete: what it froze documents nothing released.
+      await discardUnreleasedCertificateInput(tx, {
+        jobId: existing.id,
+        organizationId: existing.organizationId,
+      });
 
       await appendJobEvent(tx, {
         action: "approve_reverted",

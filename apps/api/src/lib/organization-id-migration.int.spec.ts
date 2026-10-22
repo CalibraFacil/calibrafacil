@@ -27,7 +27,11 @@ import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
 import { sql } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
-import { ORGANIZATION_BACKFILL, listTenancy } from "@calibra-facil/db/tenancy";
+import {
+  CREATED_AFTER_0118,
+  ORGANIZATION_BACKFILL,
+  listTenancy,
+} from "@calibra-facil/db/tenancy";
 import {
   SEEDED_CHILD_TABLES,
   seedTenant,
@@ -42,6 +46,11 @@ const MIGRATION = readFileSync(
     import.meta.url,
   ),
   "utf8",
+);
+
+/** The tables of the database this migration runs on: those created later do not exist yet. */
+const TABLES_AT_0118 = listTenancy().filter(
+  (table) => !CREATED_AFTER_0118.includes(table.name),
 );
 
 const baseUrl = inject("testDbBaseUrl");
@@ -95,18 +104,23 @@ function mustPsql(database: string, input: string): string {
 
 /** Drops the organization_id columns (keys, indexes) and (id, organization) uniques 0118 adds. */
 function revertToMain(): string {
+  // Tables created after 0118 do not exist yet (their keys also depend on the
+  // uniques dropped below).
+  const later = CREATED_AFTER_0118.map(
+    (table) => `DROP TABLE IF EXISTS ${table};`,
+  );
   const columns = ORGANIZATION_BACKFILL.map((entry) => entry.table)
     .toReversed()
     .map(
       (table) => `ALTER TABLE ${table} DROP COLUMN organization_id CASCADE;`,
     );
-  const uniques = listTenancy().flatMap((table) =>
+  const uniques = TABLES_AT_0118.flatMap((table) =>
     table.orgIdUniques.map(
       (unique) =>
         `ALTER TABLE ${table.name} DROP CONSTRAINT IF EXISTS ${unique.name};`,
     ),
   );
-  return [...columns, ...uniques].join("\n");
+  return [...later, ...columns, ...uniques].join("\n");
 }
 
 function tableList(): string {
@@ -129,10 +143,10 @@ function constraintCount(
 ): number {
   const names =
     kind === "tenant_fk"
-      ? listTenancy().flatMap((table) =>
+      ? TABLES_AT_0118.flatMap((table) =>
           table.compositeKeys.map((key) => key.name),
         )
-      : listTenancy().flatMap((table) =>
+      : TABLES_AT_0118.flatMap((table) =>
           table.orgIdUniques.map((unique) => unique.name),
         );
   const list = names.map((name) => `'${name}'`).join(", ");
@@ -424,8 +438,8 @@ describe("migration 0118 on a database in main's shape", () => {
   });
 
   it("REQ-ORG-3: the composite keys and the uniques exist, one of each", () => {
-    const composites = listTenancy().flatMap((table) => table.compositeKeys);
-    const uniques = listTenancy().flatMap((table) => table.orgIdUniques);
+    const composites = TABLES_AT_0118.flatMap((table) => table.compositeKeys);
+    const uniques = TABLES_AT_0118.flatMap((table) => table.orgIdUniques);
     expect(constraintCount(scratchName, "tenant_fk")).toBe(composites.length);
     expect(constraintCount(scratchName, "unique")).toBe(uniques.length);
     // The cross-tenant row the pre-check refused cannot be inserted any more
@@ -467,7 +481,7 @@ describe("migration 0118 on a database in main's shape", () => {
           `select count(*) from pg_constraint where contype = 'f' and conname like '%\\_tenant\\_fk' and not convalidated;`,
         ).trim(),
       );
-    const total = listTenancy().flatMap((table) => table.compositeKeys).length;
+    const total = TABLES_AT_0118.flatMap((table) => table.compositeKeys).length;
     expect(unvalidated()).toBe(total);
     // The step of DEPLOYMENT.md, verbatim: one statement per constraint, each in autocommit
     // (\\gexec), so psql sends no BEGIN around them. Running it twice is harmless.

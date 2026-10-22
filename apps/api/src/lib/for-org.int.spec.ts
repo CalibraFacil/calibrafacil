@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
 import { forOrg, forOrgs } from "@calibra-facil/db/for-org";
-import { customer, organization } from "@calibra-facil/db/schema";
+import {
+  customer,
+  organization,
+  organizationCustomDomain,
+} from "@calibra-facil/db/schema";
 import { truncateAll } from "../../test/integration/db";
 import { seedCustomer, seedOrg } from "../../test/integration/seed";
 
@@ -170,6 +174,67 @@ describe("forOrg on a real database", () => {
 
     expect(await namesOf("lab-a")).toEqual(["A1 renamed", "A2"]);
     expect(await namesOf("lab-b")).toEqual(["B1"]);
+  });
+
+  it("REQ-ORGDB-1: an upsert whose unique key matches another organization's row leaves that row untouched", async () => {
+    // organization_custom_domain.hostname is unique across the whole platform,
+    // so lab A's upsert can conflict with a row that belongs to lab B.
+    await seedTwoLabs();
+    await db.insert(organizationCustomDomain).values({
+      id: "domain-b",
+      organizationId: "lab-b",
+      hostname: "portal.lab-b.test",
+      verificationToken: "token-b",
+      createdBy: "user-lab-b",
+    });
+    const o = forOrg(db, "lab-a");
+
+    const returned = await o
+      .insert(organizationCustomDomain)
+      .values({
+        id: "domain-a",
+        organizationId: o.organizationId,
+        hostname: "portal.lab-b.test",
+        verificationToken: "stolen",
+        createdBy: "user-lab-a",
+      })
+      .onConflictDoUpdate({
+        target: organizationCustomDomain.hostname,
+        set: { verificationToken: "stolen" },
+      })
+      .returning({ id: organizationCustomDomain.id });
+
+    expect(returned).toEqual([]);
+    const rows = await db
+      .select({
+        id: organizationCustomDomain.id,
+        org: organizationCustomDomain.organizationId,
+        token: organizationCustomDomain.verificationToken,
+      })
+      .from(organizationCustomDomain);
+    expect(rows).toEqual([{ id: "domain-b", org: "lab-b", token: "token-b" }]);
+  });
+
+  it("REQ-ORGDB-1: an upsert conflicting with the bound organization's own row updates it", async () => {
+    await seedTwoLabs();
+    const o = forOrg(db, "lab-a");
+    const values = {
+      id: "domain-a",
+      organizationId: o.organizationId,
+      hostname: "portal.lab-a.test",
+      verificationToken: "first",
+      createdBy: "user-lab-a",
+    };
+    await o.insert(organizationCustomDomain).values(values);
+    const [row] = await o
+      .insert(organizationCustomDomain)
+      .values({ ...values, id: "domain-a-2" })
+      .onConflictDoUpdate({
+        target: organizationCustomDomain.hostname,
+        set: { verificationToken: "second" },
+      })
+      .returning({ token: organizationCustomDomain.verificationToken });
+    expect(row?.token).toBe("second");
   });
 
   it("REQ-ORGDB-1: forOrgs reads a bounded set of laboratories and nothing else", async () => {

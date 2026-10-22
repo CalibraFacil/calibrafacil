@@ -188,6 +188,15 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     reason:
       "GET /organizations (the portal's organization switcher): the signed-in user's own CLIENT memberships by member.user_id. A person belongs to organizations of several laboratories, so this is cross-organization by design; it is the only portal endpoint that lists across laboratories on purpose.",
   },
+  {
+    category: "portal-cross-org",
+    file: "apps/api/src/modules/service-orders/service-order.list-queries.ts",
+    tables: ["customer"],
+    kinds: ["select"],
+    sql: /from "customer" where .*"auth_organization_id" = \$\d+/,
+    reason:
+      "getPortalCustomerForAuthOrganization: the portal service-order scope resolver. It maps the session's CLIENT organization (customer.auth_organization_id) to its customer and therefore to the laboratory every following portal service-order statement is bound to (forOrg), like portal-customer-scope.ts for the other portal routes.",
+  },
   // -------------------------------------------------------------------------
   // ownership-checked-in-code: the row is read by id and its organization is
   // compared in application code before anything is used or written; another

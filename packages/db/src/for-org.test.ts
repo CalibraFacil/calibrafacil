@@ -146,6 +146,114 @@ describe("forOrg: select", () => {
   });
 });
 
+describe("forOrg: upsert (insert ... on conflict)", () => {
+  const row = {
+    unitId: 1,
+    customerId: 2,
+    assetTypeId: 3,
+    name: "Balanca",
+    serialNumber: "SN-1",
+    tag: "T-1",
+    labOrganizationId: ORG,
+  };
+
+  it("REQ-ORGDB-1: onConflictDoUpdate only updates a conflicting row of the bound organization", () => {
+    const o = forOrg(mock, ORG);
+    const { text, params } = sqlOf(
+      o
+        .insert(asset)
+        .values(row)
+        .onConflictDoUpdate({ target: asset.tag, set: { name: "novo" } }),
+    );
+    expect(text).toMatch(
+      /do update set .* where "asset"\."lab_organization_id" = \$\d+/,
+    );
+    expect(params.filter((param) => param === ORG)).toHaveLength(2);
+  });
+
+  it("REQ-ORGDB-1: the organization predicate is ANDed with the caller's setWhere and legacy where", () => {
+    const o = forOrg(mock, ORG);
+    const withSetWhere = sqlOf(
+      o
+        .insert(asset)
+        .values(row)
+        .onConflictDoUpdate({
+          target: asset.tag,
+          set: { name: "novo" },
+          setWhere: eq(asset.status, "ACTIVE"),
+        }),
+    );
+    expect(withSetWhere.text).toMatch(
+      /do update set .* where \("asset"\."lab_organization_id" = \$\d+ and "asset"\."status" = \$\d+\)/,
+    );
+    const legacy = sqlOf(
+      o
+        .insert(asset)
+        .values(row)
+        .onConflictDoUpdate({
+          target: asset.tag,
+          set: { name: "novo" },
+          where: eq(asset.status, "ACTIVE"),
+        }),
+    );
+    expect(legacy.text).toMatch(
+      /do update set .* where \("asset"\."lab_organization_id" = \$\d+ and "asset"\."status" = \$\d+\)/,
+    );
+  });
+
+  it("REQ-ORGDB-1: onConflictDoUpdate cannot set the organization column", () => {
+    const o = forOrg(mock, ORG);
+    expect(() =>
+      o
+        .insert(asset)
+        .values(row)
+        .onConflictDoUpdate({
+          target: asset.tag,
+          set: { labOrganizationId: "lab-b" },
+        }),
+    ).toThrow(/forOrg/);
+  });
+
+  it("REQ-ORGDB-1: onConflictDoNothing and returning stay allowed", () => {
+    const o = forOrg(mock, ORG);
+    const nothing = sqlOf(
+      o.insert(asset).values(row).onConflictDoNothing().returning(),
+    );
+    expect(nothing.text).toContain("on conflict do nothing");
+    expect(nothing.text).toContain("returning");
+  });
+
+  it("REQ-ORGDB-1: a global table upsert is untouched", () => {
+    const o = forOrg(mock, ORG);
+    const { text, params } = sqlOf(
+      o
+        .insert(assetType)
+        .values({ name: "Tipo", slug: "tipo", definition: [] })
+        .onConflictDoUpdate({ target: assetType.slug, set: { name: "x" } }),
+    );
+    expect(text).not.toMatch(/do update set .* where/);
+    expect(params).not.toContain(ORG);
+  });
+});
+
+describe("forOrg: set operators", () => {
+  it("REQ-ORGDB-1: union, intersect and except are refused (the other side cannot be scoped)", () => {
+    const o = forOrg(mock, ORG);
+    const other = o.select({ id: asset.id }).from(asset);
+    const base = () => o.select({ id: asset.id }).from(asset);
+    for (const run of [
+      () => base().union(other),
+      () => base().unionAll(other),
+      () => base().intersect(other),
+      () => base().intersectAll(other),
+      () => base().except(other),
+      () => base().exceptAll(other),
+    ]) {
+      expect(run).toThrow(/forOrg/);
+    }
+  });
+});
+
 describe("forOrg: update and delete", () => {
   it("REQ-ORGDB-1: update carries the predicate with and without a where", () => {
     const o = forOrg(mock, ORG);
@@ -263,7 +371,22 @@ describe("forOrgs: a bounded set of laboratories", () => {
     );
     expect(text).toMatch(/"asset"\."lab_organization_id" in \(\$1, \$2\)/);
     expect(params).toEqual(["lab-a", "lab-b", 1]);
-    expect(() => o.insert(asset)).toThrow(/forOrg/);
+  });
+
+  it("REQ-ORGDB-1: the set handle is read-only (no insert, update or delete, in the type and at runtime)", () => {
+    const o = forOrgs(mock, ["lab-a", "lab-b"]);
+    expect(Reflect.get(o, "update")).toBeUndefined();
+    expect(Reflect.get(o, "delete")).toBeUndefined();
+    expect(Reflect.get(o, "insert")).toBeUndefined();
+    // @ts-expect-error forOrgs(...).update does not exist
+    expect(() => o.update(asset)).toThrow();
+    // @ts-expect-error forOrgs(...).delete does not exist
+    expect(() => o.delete(asset)).toThrow();
+    // @ts-expect-error forOrgs(...).insert does not exist
+    expect(() => o.insert(asset)).toThrow();
+    // the read members stay
+    expect(typeof o.select).toBe("function");
+    expect(typeof o.selectDistinct).toBe("function");
   });
 
   it("REQ-ORGDB-1: an empty set matches nothing instead of everything", () => {
