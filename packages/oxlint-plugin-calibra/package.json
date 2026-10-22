@@ -9,11 +9,13 @@
   "scripts": {
     "test": "vitest run",
     "check-types": "node ../../scripts/typecheck.mjs --noEmit",
-    "lint": "oxlint"
+    "lint": "oxlint",
+    "baseline:palette": "tsx scripts/update-palette-baseline.ts"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:^",
     "@types/node": "^24.13.0",
+    "tsx": "^4.22.4",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
   }
