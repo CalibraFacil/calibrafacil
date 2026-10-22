@@ -128,12 +128,26 @@ export async function getDesktopLocalApiToken() {
   return (await localApiEndpointResolver.resolve()).token
 }
 
+/**
+ * API responses are checked against their `@calibra-facil/contracts` schemas.
+ * A mismatch throws in development and tests (drift fails where it is
+ * introduced) and only logs a structured warning in production, so a contract
+ * slip never takes the UI down. `VITE_RESPONSE_VALIDATION=warn` opts a dev
+ * server into the production behavior (the mocked-API Playwright run, whose
+ * hand-written fixtures are not full API responses).
+ */
+const RESPONSE_VALIDATION =
+  import.meta.env.PROD || import.meta.env.VITE_RESPONSE_VALIDATION === 'warn'
+    ? 'warn'
+    : 'strict'
+
 export const calibraClient = isDesktopRuntime()
   ? createDesktopHybridApiClient({
       cloud: {
         baseUrl: getCloudApiBaseUrl(),
         activeUnitProvider: getStoredDashboardActiveUnitId,
         fetch: desktopCloudFetch,
+        responseValidation: RESPONSE_VALIDATION,
       },
       local: {
         // A starting point only. The real origin is discovered from the host
@@ -147,6 +161,7 @@ export const calibraClient = isDesktopRuntime()
   : createCloudApiClient({
       baseUrl: getCloudApiBaseUrl(),
       activeUnitProvider: getStoredDashboardActiveUnitId,
+      responseValidation: RESPONSE_VALIDATION,
     })
 
 export const calibraApi = calibraClient

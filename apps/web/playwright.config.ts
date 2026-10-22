@@ -24,6 +24,9 @@ export default defineConfig({
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
         env: {
+          // The mocked-API specs serve hand-written partial fixtures, not full
+          // API responses: report contract mismatches instead of throwing.
+          VITE_RESPONSE_VALIDATION: 'warn',
           VITE_API_URL: process.env.VITE_API_URL ?? 'http://127.0.0.1:3000',
           VITE_PORTAL_APP_URL:
             process.env.VITE_PORTAL_APP_URL ?? 'http://127.0.0.1:5174',

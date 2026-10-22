@@ -1,3 +1,9 @@
+import {
+  validateResponsePayload,
+  type ResponseValidationOptions,
+} from "@calibra-facil/contracts";
+import type { z } from "zod";
+
 import { CalibraApiError } from "./errors";
 
 export async function readApiError(response: Response, fallback: string) {
@@ -66,6 +72,21 @@ export async function readMutationResponse<TResponse>(
   }
 
   return assumeClientResponse<TResponse>(data);
+}
+
+/**
+ * {@link readJsonResponse} + contract validation: HTTP errors are still raised
+ * as `CalibraApiError` first, only a successful body is checked against its
+ * `@calibra-facil/contracts` schema (see `validateResponsePayload` for the
+ * strict vs warn behavior).
+ */
+export async function readValidatedJsonResponse<TSchema extends z.ZodType>(
+  response: Response,
+  schema: TSchema,
+  context: { endpoint: string; fallback: string } & ResponseValidationOptions,
+): Promise<z.output<TSchema>> {
+  const payload = await readJsonResponse<unknown>(response, context.fallback);
+  return validateResponsePayload(schema, payload, context.endpoint, context);
 }
 
 function hasApiError(value: unknown): value is { error?: unknown } {

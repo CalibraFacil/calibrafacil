@@ -1,3 +1,5 @@
+import type { MeasurementUnit } from '@calibra-facil/shared/units'
+
 /**
  * Types for the Method Builder component
  */
@@ -17,7 +19,7 @@ export interface WeighingRangeResolverConfig {
   enabled?: boolean
   assetSpecKey?: string
   pointColumn?: string
-  pointUnit?: 'mg' | 'g' | 'kg'
+  pointUnit?: MeasurementUnit
   targetColumns?: {
     rangeLabel?: string
     rangeMin?: string

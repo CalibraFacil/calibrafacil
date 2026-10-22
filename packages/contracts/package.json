@@ -7,6 +7,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./desktop": "./src/desktop.ts",
+    "./jobs-fixtures": "./src/jobs.fixtures.ts",
     "./sync": "./src/sync.ts"
   },
   "scripts": {
@@ -16,6 +17,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@calibra-facil/schemas": "workspace:^",
     "hono": "^4.13.7",
     "zod": "^4.4.3"
   },

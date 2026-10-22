@@ -1,4 +1,9 @@
 import type {
+  JobDetail,
+  JobTechniciansResponse,
+  JobsListResponse,
+} from "@calibra-facil/contracts";
+import type {
   AssetAuditLogData,
   AssetDetailData,
   AssetTypesListData,
@@ -18,7 +23,6 @@ import type {
   EffectiveEnvironmentalLimitsResponse,
   EnvironmentalLimit,
   FinanceAccessResponse,
-  JobsListData,
   LocalAttachment,
   LocalAttachmentsResponse,
   LocalSessionSnapshotResponse,
@@ -45,7 +49,6 @@ import type {
   MassCompositionProfileWriteInput,
   StandardData,
   StandardsListData,
-  TechnicianListData,
   UpdateAssetInput,
   UpdateCustomerComplianceInput,
   UpdateCustomerInput,
@@ -1486,7 +1489,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar calibrações");
         }
 
-        return readDesktopJson<JobsListData>(response);
+        return readDesktopJson<JobsListResponse>(response);
       },
       async create(input) {
         const response = await fetchImpl(
@@ -1507,7 +1510,7 @@ export function createDesktopApiClient(
 
         return readDesktopJson<CreateJobResult>(response);
       },
-      async get<TJob = unknown>(jobId: string | number) {
+      async get(jobId: string | number) {
         const response = await fetchImpl(
           new URL(`/api/jobs/${apiRouteParam(jobId)}`, options.baseUrl),
           {
@@ -1520,7 +1523,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar job");
         }
 
-        return readDesktopJson<TJob>(response);
+        return readDesktopJson<JobDetail>(response);
       },
       async listTechnicians() {
         const response = await fetchImpl(
@@ -1535,7 +1538,7 @@ export function createDesktopApiClient(
           throw new Error("Falha ao carregar técnicos");
         }
 
-        return readDesktopJson<TechnicianListData>(response);
+        return readDesktopJson<JobTechniciansResponse>(response);
       },
       async listStandards<TStandard = unknown>() {
         const url = new URL("/api/standards", options.baseUrl);

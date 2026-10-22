@@ -372,6 +372,9 @@ importers:
       '@calibra-facil/auth':
         specifier: workspace:^
         version: link:../../packages/auth
+      '@calibra-facil/contracts':
+        specifier: workspace:^
+        version: link:../../packages/contracts
       '@calibra-facil/documents':
         specifier: workspace:^
         version: link:../../packages/documents
@@ -904,6 +907,9 @@ importers:
 
   packages/contracts:
     dependencies:
+      '@calibra-facil/schemas':
+        specifier: workspace:^
+        version: link:../schemas
       hono:
         specifier: ^4.13.7
         version: 4.13.13
