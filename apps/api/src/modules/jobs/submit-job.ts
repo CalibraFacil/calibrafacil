@@ -1,7 +1,7 @@
 import { db } from "@calibra-facil/db";
+import { appendJobEvent } from "@calibra-facil/db/job-events";
 import {
   calibrationJob,
-  jobAuditLog,
   referenceStandard,
   type AssetSnapshot,
   type CalibrationLocationSnapshot,
@@ -698,10 +698,11 @@ async function runJobExecution(
       .returning();
     if (!row) return null;
 
-    await tx.insert(jobAuditLog).values({
+    await appendJobEvent(tx, {
+      action: command.command,
       organizationId,
       jobId: existing.id,
-      action: command.command,
+      actor: { kind: "user", userId: actor.userId },
       changes: {
         ...jobActorAuditFields(actor),
         // Evidence that the frozen compiled method was re-pointed at the
@@ -787,7 +788,6 @@ async function runJobExecution(
               }
             : undefined,
       },
-      performedBy: actor.userId,
       ipAddress: actor.ipAddress ?? null,
       reason: isSubmit
         ? [

@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "exports": {
     ".": "./src/db.ts",
+    "./job-events": "./src/job-events.ts",
     "./queue": "./src/queue.ts",
     "./queue-receipts": "./src/queue-receipts.ts",
     "./queue-render-recovery": "./src/queue-render-recovery.ts",

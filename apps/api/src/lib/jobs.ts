@@ -1,11 +1,11 @@
 import { db } from "@calibra-facil/db";
+import { appendJobEvent } from "@calibra-facil/db/job-events";
 import {
   asset,
   assetType,
   calibrationJob,
   calibrationMethod,
   customer,
-  jobAuditLog,
   member,
   memberUnitAssignment,
   personnelCompetence,
@@ -488,10 +488,12 @@ async function persistCalibrationJob(
     executor,
   );
 
-  await executor.insert(jobAuditLog).values({
+  await appendJobEvent(executor, {
+    action: "create",
     organizationId: params.organizationId,
     jobId: newJob.id,
-    action: "create",
+    actor: { kind: "user", userId: params.createdBy },
+    ipAddress: params.ipAddress ?? null,
     changes: {
       initial: {
         assetId: params.assetId,
@@ -508,8 +510,6 @@ async function persistCalibrationJob(
         sourceServiceOrderId,
       },
     },
-    performedBy: params.createdBy,
-    ipAddress: params.ipAddress ?? null,
   });
 
   return newJob;

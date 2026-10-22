@@ -11,6 +11,7 @@
 import noApiImportInFrontend from "./rules/no-api-import-in-frontend.ts";
 import noHonoClientOutsideClientRuntime from "./rules/no-hono-client-outside-client-runtime.ts";
 import noCalibrationJobUpdateOutsideOwner from "./rules/no-calibration-job-update-outside-owner.ts";
+import noJobAuditInsertOutsideOwner from "./rules/no-job-audit-insert-outside-owner.ts";
 import noRawLocaleFormatting from "./rules/no-raw-locale-formatting.ts";
 import noJsonErrorBodyInRoutes from "./rules/no-json-error-body-in-routes.ts";
 import noProcessEnv from "./rules/no-process-env.ts";
@@ -27,6 +28,7 @@ export default {
     "no-hono-client-outside-client-runtime": noHonoClientOutsideClientRuntime,
     "no-calibration-job-update-outside-owner":
       noCalibrationJobUpdateOutsideOwner,
+    "no-job-audit-insert-outside-owner": noJobAuditInsertOutsideOwner,
     "no-raw-locale-formatting": noRawLocaleFormatting,
     "no-json-error-body-in-routes": noJsonErrorBodyInRoutes,
     "no-router-coupling-in-features": noRouterCouplingInFeatures,
