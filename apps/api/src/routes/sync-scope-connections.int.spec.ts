@@ -20,13 +20,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq, like } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
 import { customer, organization } from "@calibra-facil/db/schema";
-import { syncPushResponseSchema } from "@calibra-facil/contracts";
+import {
+  classifyOutboxRejection,
+  syncPushResponseSchema,
+} from "@calibra-facil/contracts";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { failEventAuditInsert } from "../../test/integration/sync-faults";
 import { ensurePortalServiceUser } from "../lib/portal-service-account";
-import { syncRouter } from "./sync";
+import { desktopCustomerSlug, syncRouter } from "./sync";
 
 vi.mock("@calibra-facil/auth", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@calibra-facil/auth")>();
@@ -187,4 +190,138 @@ describe("an event's transaction opens no second connection (D1)", () => {
     expect(again.accepted).toHaveLength(1);
     expect(await clientOrganizations()).toEqual(before);
   }, 60_000);
+
+  describe("an organization that merely has the expected slug is not adopted (D8)", () => {
+    const EVENT = "evt-conn-squat";
+    const NAME = "Cliente Pool Um Ltda";
+
+    async function squat(params: {
+      slug: string;
+      type: "CLIENT" | "LAB";
+      metadata: unknown;
+    }) {
+      await db.insert(organization).values({
+        id: "org-victim-client",
+        name: "Cliente da Vitima",
+        slug: params.slug,
+        type: params.type,
+        status: "ACTIVE",
+        metadata:
+          params.metadata === null ? null : JSON.stringify(params.metadata),
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      });
+    }
+
+    async function pushSquatted(org: Org) {
+      const body = await push(org, customerEvent(org, EVENT));
+      const created = await db
+        .select({ id: customer.id })
+        .from(customer)
+        .where(eq(customer.labOrganizationId, ORG));
+      return { body, created };
+    }
+
+    it("D8: the digest is 128 bits and the slug stays within 63 characters", () => {
+      const slug = desktopCustomerSlug(
+        "Um Cliente Com Um Nome Muito Muito Longo Mesmo Para Testar O Limite",
+        ORG,
+        EVENT,
+      );
+
+      expect(slug.length).toBeLessThanOrEqual(63);
+      expect(slug).toMatch(/-[0-9a-f]{32}$/);
+      expect(desktopCustomerSlug(NAME, ORG, EVENT)).toBe(
+        desktopCustomerSlug(NAME, ORG, EVENT),
+      );
+      expect(desktopCustomerSlug(NAME, ORG, EVENT)).not.toBe(
+        desktopCustomerSlug(NAME, "another-lab", EVENT),
+      );
+    });
+
+    it.each([
+      ["has no creation metadata at all", null],
+      [
+        "was created for another laboratory",
+        { desktopSync: { laboratoryId: "org-other-lab", eventId: EVENT } },
+      ],
+      [
+        "was created for another event of this laboratory",
+        { desktopSync: { laboratoryId: ORG, eventId: "evt-other" } },
+      ],
+    ] as const)(
+      "D8 [HIGH RISK]: an existing client organization with the expected slug that %s is refused for good, and no customer is linked to it",
+      async (_label, metadata) => {
+        const org = await seedOrg({ orgId: ORG, userId: USER, role: "admin" });
+        await squat({
+          slug: desktopCustomerSlug(NAME, ORG, EVENT),
+          type: "CLIENT",
+          metadata,
+        });
+
+        const { body, created } = await pushSquatted(org);
+
+        expect(body.accepted).toEqual([]);
+        expect(body.rejected).toEqual([
+          expect.objectContaining({
+            eventId: EVENT,
+            code: "DOMAIN_VALIDATION_FAILED",
+            reason: expect.stringContaining("organizacao"),
+          }),
+        ]);
+        expect(classifyOutboxRejection(body.rejected[0]?.code ?? "")).toBe(
+          "permanent",
+        );
+        expect(created).toEqual([]);
+      },
+    );
+
+    it("D8 [HIGH RISK]: an organization of this event that another laboratory's customer already references is refused", async () => {
+      const org = await seedOrg({ orgId: ORG, userId: USER, role: "admin" });
+      await seedOrg({ orgId: "org-other-lab", userId: "user-other-lab" });
+      await squat({
+        slug: desktopCustomerSlug(NAME, ORG, EVENT),
+        type: "CLIENT",
+        metadata: { desktopSync: { laboratoryId: ORG, eventId: EVENT } },
+      });
+      await db.insert(customer).values({
+        name: "Cliente de outro laboratorio",
+        authOrganizationId: "org-victim-client",
+        labOrganizationId: "org-other-lab",
+      });
+
+      const { body, created } = await pushSquatted(org);
+
+      expect(body.accepted).toEqual([]);
+      expect(body.rejected[0]?.code).toBe("DOMAIN_VALIDATION_FAILED");
+      expect(created).toEqual([]);
+    });
+
+    it("D8: an organization that is not a CLIENT is refused", async () => {
+      const org = await seedOrg({ orgId: ORG, userId: USER, role: "admin" });
+      await squat({
+        slug: desktopCustomerSlug(NAME, ORG, EVENT),
+        type: "LAB",
+        metadata: { desktopSync: { laboratoryId: ORG, eventId: EVENT } },
+      });
+
+      const { body, created } = await pushSquatted(org);
+
+      expect(body.rejected[0]?.code).toBe("DOMAIN_VALIDATION_FAILED");
+      expect(created).toEqual([]);
+    });
+
+    it("D8: the organization this event created is stamped with its laboratory and event, so the retry recognises it", async () => {
+      const org = await seedOrg({ orgId: ORG, userId: USER, role: "admin" });
+
+      await push(org, customerEvent(org, EVENT));
+
+      const [created] = await db
+        .select({ metadata: organization.metadata })
+        .from(organization)
+        .where(eq(organization.slug, desktopCustomerSlug(NAME, ORG, EVENT)));
+      expect(JSON.parse(created?.metadata ?? "null")).toMatchObject({
+        desktopSync: { laboratoryId: ORG, eventId: EVENT },
+      });
+    }, 60_000);
+  });
 });

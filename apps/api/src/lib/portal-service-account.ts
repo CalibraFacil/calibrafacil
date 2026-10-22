@@ -169,6 +169,8 @@ async function sendPortalInvitationEmail(params: {
 export async function createClientOrganizationAsServiceOwner(params: {
   name: string;
   slug: string;
+  /** Stored with the organization (better-auth `metadata`). */
+  metadata?: Record<string, unknown>;
 }) {
   const serviceUser = await getPortalServiceUser();
   const labAuth = createLabAuth();
@@ -195,6 +197,7 @@ export async function createClientOrganizationAsServiceOwner(params: {
       technicalManagerTitle: "",
       userId: serviceUser.id,
       keepCurrentActiveOrganization: true,
+      ...(params.metadata ? { metadata: params.metadata } : {}),
     },
   });
 

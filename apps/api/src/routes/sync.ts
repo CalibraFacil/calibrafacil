@@ -79,6 +79,7 @@ import {
   inArray,
   isNull,
   like,
+  ne,
   not,
   sql,
 } from "drizzle-orm";
@@ -715,6 +716,11 @@ export const syncRouter = new Hono<{
           continue;
         }
 
+        if (prepared.refusal) {
+          rejected.push({ eventId: event.eventId, ...prepared.refusal });
+          continue;
+        }
+
         const outcome = await applyDesktopEventAtomically({
           organizationId: memberData.organizationId,
           event,
@@ -1009,6 +1015,8 @@ type ApplyDesktopSyncEventInput = {
 type PreparedDesktopEventSideEffects = {
   /** `create_local_customer`: the client organization created for this event. */
   clientOrganizationId?: string;
+  /** The event cannot be applied (permanent): reported without opening a transaction. */
+  refusal?: { code: string; reason: string };
 };
 
 type ApplyDesktopSyncEventResult = AppliedEventResult | RefusedEventResult;
@@ -4214,11 +4222,15 @@ function parseSyncDate(value: string | null | undefined) {
 
 /**
  * The slug of the client organization a `create_local_customer` event creates:
- * the customer's name plus a digest of the laboratory and the event id, so the
- * same event always finds the organization it created before (a retry after a
- * rolled-back transaction reuses it instead of creating a second one).
+ * the customer's name (30 characters at most) plus the SHA-256 of the
+ * laboratory and the event id, 128 bits of it, so the same event always finds
+ * the organization it created before (a retry after a rolled-back transaction
+ * reuses it instead of creating a second one) and nobody can grind a colliding
+ * digest. At most 63 characters. Knowing a slug is NOT a claim on the
+ * organization: see `findOrganizationCreatedForEvent`.
+ * Exported for spec coverage; not part of the route surface.
  */
-function desktopCustomerSlug(
+export function desktopCustomerSlug(
   name: string,
   laboratoryId: string,
   eventId: string,
@@ -4229,22 +4241,85 @@ function desktopCustomerSlug(
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
-    .substring(0, 50);
+    .substring(0, 30)
+    .replace(/-+$/g, "");
   const digest = createHash("sha256")
     .update(`${laboratoryId}:${eventId}`)
     .digest("hex")
-    .slice(0, 12);
+    .slice(0, 32);
 
   return `${base || "cliente"}-${digest}`;
 }
 
-async function findOrganizationIdBySlug(slug: string) {
-  const [row] = await db
-    .select({ id: organization.id })
+/** What the pre-phase stamps on the organization it creates (better-auth `metadata`). */
+function desktopCustomerOrganizationMetadata(
+  laboratoryId: string,
+  eventId: string,
+) {
+  return { desktopSync: { laboratoryId, eventId } };
+}
+
+type ExistingEventOrganization =
+  | { state: "none" }
+  | { state: "ours"; id: string }
+  | { state: "foreign" };
+
+/**
+ * The organization this very event created for this laboratory, if one exists.
+ * A slug that merely matches proves nothing (it is visible to whoever can read
+ * the customer), so an organization is adopted only when it is a CLIENT
+ * organization stamped with this laboratory AND this event, and no customer of
+ * another laboratory references it. Anything else with that slug is `foreign`.
+ */
+async function findOrganizationCreatedForEvent(
+  slug: string,
+  laboratoryId: string,
+  eventId: string,
+): Promise<ExistingEventOrganization> {
+  const [existing] = await db
+    .select({
+      id: organization.id,
+      type: organization.type,
+      metadata: organization.metadata,
+    })
     .from(organization)
     .where(eq(organization.slug, slug))
     .limit(1);
-  return row?.id ?? null;
+  if (!existing) return { state: "none" };
+  if (existing.type !== "CLIENT") return { state: "foreign" };
+
+  const stamp = readDesktopCustomerOrganizationStamp(existing.metadata);
+  if (stamp?.laboratoryId !== laboratoryId || stamp.eventId !== eventId) {
+    return { state: "foreign" };
+  }
+
+  const [otherLaboratory] = await db
+    .select({ id: customer.id })
+    .from(customer)
+    .where(
+      and(
+        eq(customer.authOrganizationId, existing.id),
+        ne(customer.labOrganizationId, laboratoryId),
+      ),
+    )
+    .limit(1);
+  return otherLaboratory
+    ? { state: "foreign" }
+    : { state: "ours", id: existing.id };
+}
+
+function readDesktopCustomerOrganizationStamp(metadata: string | null) {
+  if (!metadata) return null;
+  try {
+    const parsed: unknown = JSON.parse(metadata);
+    const stamp = asRecord(asRecord(parsed).desktopSync);
+    return typeof stamp.laboratoryId === "string" &&
+      typeof stamp.eventId === "string"
+      ? { laboratoryId: stamp.laboratoryId, eventId: stamp.eventId }
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 async function prepareDesktopEventSideEffects(
@@ -4272,19 +4347,40 @@ async function prepareDesktopEventSideEffects(
     memberData.organizationId,
     command.eventId,
   );
-  const existing = await findOrganizationIdBySlug(slug);
-  if (existing) return { clientOrganizationId: existing };
+  const foreign: PreparedDesktopEventSideEffects = {
+    refusal: {
+      code: "DOMAIN_VALIDATION_FAILED",
+      reason:
+        "Ja existe uma organizacao com o identificador reservado para este cliente e ela nao foi criada por este evento deste laboratorio; o cliente nao foi criado.",
+    },
+  };
+  const existing = await findOrganizationCreatedForEvent(
+    slug,
+    memberData.organizationId,
+    command.eventId,
+  );
+  if (existing.state === "foreign") return foreign;
+  if (existing.state === "ours") return { clientOrganizationId: existing.id };
 
   try {
     const created = await createClientOrganizationAsServiceOwner({
       name: parsed.data.name,
       slug,
+      metadata: desktopCustomerOrganizationMetadata(
+        memberData.organizationId,
+        command.eventId,
+      ),
     });
     return { clientOrganizationId: created.id };
   } catch (error) {
     // A concurrent push of this event created it first.
-    const raced = await findOrganizationIdBySlug(slug);
-    if (raced) return { clientOrganizationId: raced };
+    const raced = await findOrganizationCreatedForEvent(
+      slug,
+      memberData.organizationId,
+      command.eventId,
+    );
+    if (raced.state === "ours") return { clientOrganizationId: raced.id };
+    if (raced.state === "foreign") return foreign;
     throw error;
   }
 }
