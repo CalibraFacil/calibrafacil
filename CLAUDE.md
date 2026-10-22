@@ -113,9 +113,14 @@ keep these in parity:
   online. `apps/web/src/runtime/` holds the client-side cloud-vs-desktop logic (cloud-only route
   blocking, desktop auth, sync-conflict UI).
 
-When changing behavior, preserve both modes. Routes that require the cloud must be marked so they
-are blocked in desktop/offline mode (see `apps/web/src/runtime/cloud-only-routes.ts` and
-`apps/web/src/app/router/route-meta.ts`).
+Offline mode is deliberately narrow (audit decision Q13): field capture (execute an assigned job from
+a read-only pack of method and standards), intake (a service order or a minimal asset stub) and
+reference reads (customers, assets, standards, methods). Everything else is online-only. The
+data-policy registry (`packages/client-runtime/src/data-policy.ts`) is the single source of truth:
+a method that is not `cloud-only` there needs a local implementation (`apps/local-server`,
+`packages/local-db`, the desktop client). Desktop-available routes are one allowlist in
+`apps/web/src/runtime/desktop-offline-routes.ts`; a route is available offline only if every method
+it renders from is non-cloud-only, and a new route is online-only on the desktop by default.
 
 ## Architecture: the API/client contract boundary (enforced)
 

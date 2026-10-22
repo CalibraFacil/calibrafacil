@@ -21,10 +21,8 @@ export {
   judgeLocalStandards,
   localStandardsPerformedAt,
   resolveLocalDraftStandards,
-  createLocalJobDraft,
   getLocalJobDetail,
   saveLocalJobExecution,
-  type CreateLocalJobDraftInput,
   type SaveLocalExecutionInput,
 } from "./execution";
 export {
@@ -76,21 +74,12 @@ export {
   getLocalCustomerDetail,
   listLocalCustomers,
   updateLocalCustomer,
-  updateLocalCustomerCompliance,
   type CreateLocalCustomerInput,
   type LocalCustomer,
   type LocalCustomersListData,
   type LocalCustomersListInput,
-  type UpdateLocalCustomerComplianceInput,
   type UpdateLocalCustomerInput,
 } from "./customers";
-export {
-  getLocalServiceDetail,
-  listLocalServices,
-  type LocalService,
-  type LocalServicesListData,
-  type LocalServicesListInput,
-} from "./services";
 export {
   getLocalMethodDetail,
   listLocalMethods,
@@ -120,15 +109,11 @@ export {
   upsertPrinterProfile,
 } from "./printer-profiles";
 export {
-  createLocalServiceOrderDeliveryDocumentDraft,
   createLocalServiceOrderIntake,
-  createLocalServiceOrderQuoteDraft,
   getLocalServiceOrderDetail,
   listLocalServiceOrders,
   saveLocalServiceOrderExecutionNotes,
-  type CreateLocalServiceOrderDeliveryDocumentDraftInput,
   type CreateLocalServiceOrderIntakeInput,
-  type CreateLocalServiceOrderQuoteDraftInput,
   type LocalServiceOrderIntakeType,
   type LocalServiceOrderItemType,
   type LocalServiceOrderPriority,
@@ -139,16 +124,6 @@ export {
   type LocalServiceOrderStatus,
   type SaveLocalServiceOrderExecutionNotesInput,
 } from "./service-orders";
-export {
-  createLocalNonConformance,
-  listLocalNonConformances,
-  type CreateLocalNonConformanceInput,
-  type LocalNonConformance,
-  type LocalNonConformanceStatus,
-  type LocalNonConformanceType,
-  type LocalNonConformancesListData,
-  type LocalNonConformancesListInput,
-} from "./non-conformances";
 export {
   currentLocalDbSchemaVersion,
   localDbMigrations,
@@ -164,6 +139,5 @@ export {
   getLocalDatabaseDiagnostics,
   type LocalDatabaseDiagnostics,
 } from "./diagnostics";
-export { getLocalDashboardStats, type LocalDashboardStats } from "./dashboard";
 export * from "./partitions";
 export * from "./legacy-adoption";

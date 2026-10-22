@@ -1,5 +1,5 @@
 import { enqueueQueueJob, type QueueExecutor } from "@calibra-facil/db/queue";
-import type { BackgroundJobMessage } from "@calibra-facil/shared";
+import type { BackgroundJobMessage } from "@calibra-facil/schemas";
 import {
   getDocumentWorkerUrl,
   routesToDatabaseQueue,

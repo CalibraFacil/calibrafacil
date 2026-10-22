@@ -2,8 +2,9 @@ import { readJobsConfig } from "@calibra-facil/config";
 import type {
   BackgroundJobMessage,
   IntegrationSyncBackgroundJobMessage,
-} from "@calibra-facil/shared";
-import { isQueueMessage, type QueueMessage } from "@calibra-facil/db/queue";
+  QueueMessage,
+} from "@calibra-facil/schemas";
+import { isQueueMessage } from "@calibra-facil/db/queue";
 
 // Where a background job is dispatched. Kept free of side effects (no queue
 // client, no worker imports) so the approval transaction can ask "does this

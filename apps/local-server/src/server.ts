@@ -6,23 +6,16 @@ import path from "node:path";
 import {
   createLocalAsset,
   createLocalAttachment,
-  createLocalCustomer,
-  createLocalNonConformance,
-  createLocalServiceOrderDeliveryDocumentDraft,
-  createLocalJobDraft,
   createLocalServiceOrderIntake,
-  createLocalServiceOrderQuoteDraft,
   getLocalAssetDetail,
   getLocalAttachment,
   getLocalCustomerDetail,
-  getLocalDashboardStats,
   getLocalDatabaseDiagnostics,
   getLocalEffectiveEnvironmentalLimits,
   getLocalSessionSnapshot,
   getLocalSchemaVersion,
   getLocalJobDetail,
   getLocalMethodDetail,
-  getLocalServiceDetail,
   getLocalServiceOrderDetail,
   getLocalStandardDetail,
   buildLocalStandardsSnapshot,
@@ -35,8 +28,6 @@ import {
   listLocalJobs,
   listLocalMethods,
   listLocalCompositionProfiles,
-  listLocalNonConformances,
-  listLocalServices,
   listLocalServiceOrders,
   listLocalStandards,
   adoptLegacyLocalDatabase,
@@ -49,24 +40,12 @@ import {
   openLocalDatabase,
   requeueDeadOutboxEvent,
   resolveSyncConflict,
-  saveLocalServiceOrderExecutionNotes,
   saveLocalJobExecution,
-  updateLocalCustomer,
-  updateLocalCustomerCompliance,
-  updateLocalAsset,
   type LocalDatabase,
 } from "@calibra-facil/local-db";
 import {
   CreateAssetSchema,
-  CreateCustomerSchema,
-  CreateNonConformanceSchema,
-  CreateServiceOrderQuoteSchema,
   CreateServiceOrderSchema,
-  IssueServiceOrderDeliveryDocumentSchema,
-  UpdateComplianceSchema,
-  UpdateAssetSchema,
-  UpdateCustomerSchema,
-  UpdateServiceOrderExecutionSchema,
   METHOD_DEVIATIONS_MAX_LENGTH,
   resolveExecutionPerformedAt,
 } from "@calibra-facil/schemas";
@@ -144,13 +123,6 @@ type CalibrationPhaseInput = {
       reason?: string | null;
     }
   >;
-};
-
-type LocalJobCreateInput = {
-  assetId?: number;
-  serviceId?: number;
-  technicianId?: string | null;
-  dueDate?: string | null;
 };
 
 type LocalJobExecutionInput = {
@@ -590,10 +562,6 @@ export function createLocalServerRuntime(
     });
   });
 
-  app.get("/api/dashboard/stats", (c) => {
-    return c.json(getLocalDashboardStats(database));
-  });
-
   app.get("/api/jobs", (c) => {
     return c.json({
       ...listLocalJobs(database, {
@@ -604,96 +572,6 @@ export function createLocalServerRuntime(
         status: parseJobStatus(c.req.query("status")),
       }),
     });
-  });
-
-  app.get("/api/jobs/technicians/list", (c) => {
-    return c.json({ data: [] });
-  });
-
-  app.post("/api/jobs", async (c) => {
-    const input = parseLocalJobCreateInput(await c.req.json());
-
-    if (!input.assetId || !input.serviceId) {
-      return c.json({ error: "Ativo e servico sao obrigatorios" }, 400);
-    }
-
-    const context = getLocalRequestContext(config, database);
-    try {
-      const job = createLocalJobDraft(database, {
-        organizationId: context.organizationId,
-        unitId: context.unitId,
-        assetId: input.assetId,
-        serviceId: input.serviceId,
-        technicianId: input.technicianId,
-        dueDate: input.dueDate,
-        actorUserId: context.userId,
-        deviceId: config.deviceId,
-      });
-
-      return c.json(job, 201);
-    } catch (error) {
-      return c.json({ error: errorMessage(error) }, 400);
-    }
-  });
-
-  app.get("/api/services", (c) => {
-    return c.json({
-      ...listLocalServices(database, {
-        page: Number(c.req.query("page") ?? "1"),
-        limit: Number(c.req.query("limit") ?? "20"),
-        query: c.req.query("query") || undefined,
-        assetTypeId: parseNumber(c.req.query("assetTypeId")),
-        isActive: parseBoolean(c.req.query("isActive")),
-      }),
-    });
-  });
-
-  app.post("/api/services", (c) => {
-    return c.json(
-      {
-        error:
-          "Edicao local do catalogo de servicos ainda nao esta disponivel no desktop",
-      },
-      409,
-    );
-  });
-
-  app.get("/api/services/:id/audit-log", (c) => {
-    const service = getLocalServiceDetail(database, c.req.param("id"));
-    if (!service) {
-      return c.json({ error: "Servico nao encontrado" }, 404);
-    }
-
-    return c.json({ data: [] });
-  });
-
-  app.get("/api/services/:id", (c) => {
-    const service = getLocalServiceDetail(database, c.req.param("id"));
-    if (!service) {
-      return c.json({ error: "Servico nao encontrado" }, 404);
-    }
-
-    return c.json(service);
-  });
-
-  app.put("/api/services/:id", (c) => {
-    return c.json(
-      {
-        error:
-          "Edicao local do catalogo de servicos ainda nao esta disponivel no desktop",
-      },
-      409,
-    );
-  });
-
-  app.delete("/api/services/:id", (c) => {
-    return c.json(
-      {
-        error:
-          "Edicao local do catalogo de servicos ainda nao esta disponivel no desktop",
-      },
-      409,
-    );
   });
 
   app.get("/api/methods", (c) => {
@@ -708,53 +586,6 @@ export function createLocalServerRuntime(
     );
   });
 
-  app.post("/api/methods", (c) => {
-    return c.json(
-      {
-        error: "Autoria local de metodos ainda nao esta disponivel no desktop",
-      },
-      409,
-    );
-  });
-
-  app.post("/api/methods/compile", (c) => {
-    return c.json(
-      {
-        error:
-          "Compilacao local de rascunhos de metodo ainda nao esta disponivel no desktop",
-      },
-      409,
-    );
-  });
-
-  app.post("/api/methods/preview", (c) => {
-    return c.json(
-      {
-        error:
-          "Previa local de rascunhos de metodo ainda nao esta disponivel no desktop",
-      },
-      409,
-    );
-  });
-
-  app.get("/api/methods/:id/audit", (c) => {
-    const method = getLocalMethodDetail(database, c.req.param("id"));
-    if (!method) {
-      return c.json({ error: "Metodo nao encontrado" }, 404);
-    }
-
-    return c.json({ data: [] });
-  });
-
-  app.get("/api/methods/:id/label", (c) => {
-    const method = getLocalMethodDetail(database, c.req.param("id"));
-    if (!method) {
-      return c.json({ error: "Metodo nao encontrado" }, 404);
-    }
-
-    return c.json({ id: method.id, label: method.name });
-  });
-
   app.get("/api/methods/:id", (c) => {
     const method = getLocalMethodDetail(database, c.req.param("id"));
     if (!method) {
@@ -762,84 +593,6 @@ export function createLocalServerRuntime(
     }
 
     return c.json(method);
-  });
-
-  app.put("/api/methods/:id", (c) => {
-    return c.json(
-      {
-        error: "Autoria local de metodos ainda nao esta disponivel no desktop",
-      },
-      409,
-    );
-  });
-
-  app.post("/api/methods/:id/archive", (c) => {
-    return c.json(
-      {
-        error:
-          "Arquivamento local de metodos ainda nao esta disponivel no desktop",
-      },
-      409,
-    );
-  });
-
-  app.post("/api/methods/:id/new-version", (c) => {
-    return c.json(
-      {
-        error:
-          "Versionamento local de metodos ainda nao esta disponivel no desktop",
-      },
-      409,
-    );
-  });
-
-  app.post("/api/methods/:id/technical-review", (c) => {
-    return c.json(
-      {
-        error: "Revisao local de metodos ainda nao esta disponivel no desktop",
-      },
-      409,
-    );
-  });
-
-  app.post("/api/methods/:id/quality-approve", (c) => {
-    return c.json(
-      {
-        error:
-          "Aprovacao local de metodos ainda nao esta disponivel no desktop",
-      },
-      409,
-    );
-  });
-
-  app.post("/api/methods/:id/return-to-draft", (c) => {
-    return c.json(
-      {
-        error:
-          "Retorno local de metodos para rascunho ainda nao esta disponivel no desktop",
-      },
-      409,
-    );
-  });
-
-  app.post("/api/methods/:id/publish", (c) => {
-    return c.json(
-      {
-        error:
-          "Publicacao local de metodos ainda nao esta disponivel no desktop",
-      },
-      409,
-    );
-  });
-
-  app.post("/api/methods/:id/request-approval", (c) => {
-    return c.json(
-      {
-        error:
-          "Solicitacao local de aprovacao de metodos ainda nao esta disponivel no desktop",
-      },
-      409,
-    );
   });
 
   app.get("/api/jobs/:id", (c) => {
@@ -1035,29 +788,6 @@ export function createLocalServerRuntime(
     });
   });
 
-  app.post("/api/customers", async (c) => {
-    const input = CreateCustomerSchema.parse(await c.req.json());
-    const context = getLocalRequestContext(config, database);
-
-    try {
-      const customer = createLocalCustomer(database, {
-        organizationId: context.organizationId,
-        unitId: context.unitId,
-        name: input.name,
-        taxId: input.taxId,
-        email: input.email || null,
-        phone: input.phone,
-        address: input.address,
-        actorUserId: context.userId,
-        deviceId: config.deviceId,
-      });
-
-      return c.json(customer, 201);
-    } catch (error) {
-      return c.json({ error: errorMessage(error) }, 400);
-    }
-  });
-
   app.get("/api/customers/:id", (c) => {
     const customer = getLocalCustomerDetail(database, c.req.param("id"));
 
@@ -1066,95 +796,6 @@ export function createLocalServerRuntime(
     }
 
     return c.json(customer);
-  });
-
-  app.put("/api/customers/:id", async (c) => {
-    const input = UpdateCustomerSchema.parse(await c.req.json());
-    const context = getLocalRequestContext(config, database);
-
-    try {
-      const customer = updateLocalCustomer(database, {
-        identifier: c.req.param("id"),
-        name: input.name,
-        taxId: input.taxId,
-        email: input.email,
-        phone: input.phone,
-        address: input.address,
-        actorUserId: context.userId,
-        deviceId: config.deviceId,
-      });
-
-      return c.json(customer);
-    } catch (error) {
-      return c.json({ error: errorMessage(error) }, 400);
-    }
-  });
-
-  app.get("/api/customers/:id/audit-log", (c) => {
-    return c.json({
-      data: [],
-      pagination: {
-        page: Number(c.req.query("page") ?? "1"),
-        limit: Number(c.req.query("limit") ?? "50"),
-        total: 0,
-        totalPages: 0,
-      },
-    });
-  });
-
-  app.put("/api/customers/:id/compliance", async (c) => {
-    const input = UpdateComplianceSchema.parse(await c.req.json());
-    const context = getLocalRequestContext(config, database);
-
-    try {
-      const customer = updateLocalCustomerCompliance(database, {
-        identifier: c.req.param("id"),
-        compliance: input.compliance,
-        reason: input.reason,
-        actorUserId: context.userId,
-        deviceId: config.deviceId,
-      });
-
-      return c.json(customer);
-    } catch (error) {
-      return c.json({ error: errorMessage(error) }, 400);
-    }
-  });
-
-  app.get("/api/customers/:id/members", (c) => {
-    return c.json([]);
-  });
-
-  app.get("/api/customers/:id/invitations", (c) => {
-    return c.json([]);
-  });
-
-  app.post("/api/customers/:id/invitations", (c) => {
-    return c.json(
-      { error: "Convites do portal exigem sincronizacao com a nuvem" },
-      409,
-    );
-  });
-
-  app.post("/api/customers/:id/invitations/:invId/resend", (c) => {
-    return c.json(
-      { error: "Reenvio de convite exige sincronizacao com a nuvem" },
-      409,
-    );
-  });
-
-  app.delete("/api/customers/:id/invitations/:invId", (c) => {
-    return c.json(
-      { error: "Cancelamento de convite exige sincronizacao com a nuvem" },
-      409,
-    );
-  });
-
-  app.delete("/api/customers/:id/members/:memberId", (c) => {
-    return c.json(
-      { error: "Remocao de usuario do portal exige sincronizacao com a nuvem" },
-      409,
-    );
   });
 
   app.get("/api/service-orders", (c) => {
@@ -1208,142 +849,6 @@ export function createLocalServerRuntime(
     return c.json({ data: serviceOrder });
   });
 
-  app.post("/api/service-orders/:id/quotes", async (c) => {
-    const parsed = CreateServiceOrderQuoteSchema.safeParse(await c.req.json());
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: "Dados invalidos para orcamento local",
-          issues: parsed.error.issues,
-        },
-        400,
-      );
-    }
-
-    const context = getLocalRequestContext(config, database);
-    try {
-      const quote = createLocalServiceOrderQuoteDraft(database, {
-        routeId: c.req.param("id"),
-        ...parsed.data,
-        actorUserId: context.userId,
-        deviceId: config.deviceId,
-      });
-
-      return c.json({ data: quote }, 201);
-    } catch (error) {
-      return c.json({ error: errorMessage(error) }, 400);
-    }
-  });
-
-  app.patch("/api/service-orders/:id/execution", async (c) => {
-    const parsed = UpdateServiceOrderExecutionSchema.safeParse(
-      await c.req.json(),
-    );
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: "Dados invalidos para execucao local",
-          issues: parsed.error.issues,
-        },
-        400,
-      );
-    }
-
-    const context = getLocalRequestContext(config, database);
-    try {
-      const execution = saveLocalServiceOrderExecutionNotes(database, {
-        routeId: c.req.param("id"),
-        ...parsed.data,
-        actorUserId: context.userId,
-        deviceId: config.deviceId,
-      });
-
-      return c.json({ data: execution });
-    } catch (error) {
-      return c.json({ error: errorMessage(error) }, 400);
-    }
-  });
-
-  app.post("/api/service-orders/:id/delivery-document", async (c) => {
-    const parsed = IssueServiceOrderDeliveryDocumentSchema.safeParse(
-      await c.req.json(),
-    );
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: "Dados invalidos para documento de entrega local",
-          issues: parsed.error.issues,
-        },
-        400,
-      );
-    }
-
-    const context = getLocalRequestContext(config, database);
-    try {
-      const document = createLocalServiceOrderDeliveryDocumentDraft(database, {
-        routeId: c.req.param("id"),
-        ...parsed.data,
-        actorUserId: context.userId,
-        deviceId: config.deviceId,
-      });
-
-      return c.json({ data: document }, 201);
-    } catch (error) {
-      return c.json({ error: errorMessage(error) }, 400);
-    }
-  });
-
-  app.get("/api/nc", (c) => {
-    return c.json({
-      ...listLocalNonConformances(database, {
-        page: Number(c.req.query("page") ?? "1"),
-        limit: Number(c.req.query("limit") ?? "20"),
-        query: c.req.query("query") || undefined,
-        status: parseNonConformanceStatus(c.req.query("status")),
-        type: parseNonConformanceType(c.req.query("type")),
-      }),
-    });
-  });
-
-  app.post("/api/nc", async (c) => {
-    const parsed = CreateNonConformanceSchema.safeParse(await c.req.json());
-    if (!parsed.success) {
-      return c.json(
-        {
-          error: "Dados invalidos para NC local",
-          issues: parsed.error.issues,
-        },
-        400,
-      );
-    }
-
-    // Phase 0 (issue #426): the offline create path deliberately excludes the
-    // calibration link — `jobId` is never part of the sync payload.
-    if (parsed.data.jobId !== undefined && parsed.data.jobId !== null) {
-      return c.json(
-        { error: "Vínculo com calibração não está disponível no desktop" },
-        409,
-      );
-    }
-
-    const context = getLocalRequestContext(config, database);
-    try {
-      const nonConformance = createLocalNonConformance(database, {
-        type: parsed.data.type,
-        description: parsed.data.description,
-        detectedAt: parsed.data.detectedAt,
-        organizationId: context.organizationId,
-        unitId: context.unitId,
-        actorUserId: context.userId,
-        deviceId: config.deviceId,
-      });
-
-      return c.json(nonConformance, 201);
-    } catch (error) {
-      return c.json({ error: errorMessage(error) }, 400);
-    }
-  });
-
   app.get("/api/standards", (c) => {
     return c.json(
       listLocalStandards(database, {
@@ -1355,27 +860,8 @@ export function createLocalServerRuntime(
     );
   });
 
-  app.post("/api/standards", (c) => {
-    return c.json(
-      {
-        error:
-          "Edicao local de padroes de referencia ainda nao esta disponivel no desktop",
-      },
-      409,
-    );
-  });
-
   app.get("/api/standards/composition-profiles", (c) => {
     return c.json(listLocalCompositionProfiles(database));
-  });
-
-  app.get("/api/standards/:id/audit-log", (c) => {
-    const standard = getLocalStandardDetail(database, c.req.param("id"));
-    if (!standard) {
-      return c.json({ error: "Padrao nao encontrado" }, 404);
-    }
-
-    return c.json({ data: [] });
   });
 
   app.get("/api/standards/:id", (c) => {
@@ -1385,45 +871,6 @@ export function createLocalServerRuntime(
     }
 
     return c.json(standard);
-  });
-
-  app.get("/api/standards/:id/label", (c) => {
-    const standard = getLocalStandardDetail(database, c.req.param("id"));
-    if (!standard) {
-      return c.json({ error: "Padrao nao encontrado" }, 404);
-    }
-
-    return c.json({ id: standard.id, label: standard.name });
-  });
-
-  app.put("/api/standards/:id", (c) => {
-    return c.json(
-      {
-        error:
-          "Edicao local de padroes de referencia ainda nao esta disponivel no desktop",
-      },
-      409,
-    );
-  });
-
-  app.delete("/api/standards/:id", (c) => {
-    return c.json(
-      {
-        error:
-          "Edicao local de padroes de referencia ainda nao esta disponivel no desktop",
-      },
-      409,
-    );
-  });
-
-  app.post("/api/standards/:id/renew", (c) => {
-    return c.json(
-      {
-        error:
-          "Renovacao local de certificado de padrao ainda nao esta disponivel no desktop",
-      },
-      409,
-    );
   });
 
   app.get("/api/environmental-limits/effective/:assetTypeId", (c) => {
@@ -1501,42 +948,6 @@ export function createLocalServerRuntime(
     }
 
     return c.json(asset);
-  });
-
-  app.put("/api/assets/:id", async (c) => {
-    const input = UpdateAssetSchema.parse(await c.req.json());
-    const context = getLocalRequestContext(config, database);
-
-    try {
-      const asset = updateLocalAsset(database, {
-        identifier: c.req.param("id"),
-        name: input.name,
-        manufacturer: input.manufacturer,
-        model: input.model,
-        serialNumber: input.serialNumber,
-        tag: input.tag,
-        status: input.status,
-        // No `nextCalibrationDate`: customer-owned (portal, §7.8.4.3); the local
-        // column is refreshed from the cloud on pull.
-        lastCalibrationDate: input.lastCalibrationDate,
-        // Legal-metrology regime (Track 2) + install anchor — previously dropped.
-        metrologyRegime: input.metrologyRegime,
-        regulatedInterval: input.regulatedInterval,
-        installedAt: input.installedAt,
-        comments: input.comments,
-        specifications: input.specifications,
-        actorUserId: context.userId,
-        deviceId: config.deviceId,
-      });
-
-      return c.json(asset);
-    } catch (error) {
-      return c.json({ error: errorMessage(error) }, 400);
-    }
-  });
-
-  app.get("/api/assets/:id/audit-log", (c) => {
-    return c.json({ data: [] });
   });
 
   app.get("/api/asset-types", (c) => {
@@ -1856,27 +1267,6 @@ function parseServiceOrderStatus(status: string | undefined) {
   return undefined;
 }
 
-function parseNonConformanceStatus(status: string | undefined) {
-  if (status === "open" || status === "under_review" || status === "resolved") {
-    return status;
-  }
-
-  return undefined;
-}
-
-function parseNonConformanceType(type: string | undefined) {
-  if (
-    type === "work" ||
-    type === "equipment" ||
-    type === "documentation" ||
-    type === "out_of_tolerance"
-  ) {
-    return type;
-  }
-
-  return undefined;
-}
-
 function parseStandardStatus(status: string | undefined) {
   if (
     status === "ACTIVE" ||
@@ -1904,12 +1294,6 @@ function parseNumber(value: string | undefined) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function parseBoolean(value: string | undefined) {
-  if (value === "true") return true;
-  if (value === "false") return false;
-  return undefined;
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -1934,16 +1318,6 @@ function recordFromUnknown(value: unknown): Record<string, unknown> {
 function recordOrNull(value: unknown): Record<string, unknown> | null {
   const record = recordFromUnknown(value);
   return Object.keys(record).length > 0 ? record : null;
-}
-
-function parseLocalJobCreateInput(value: unknown): LocalJobCreateInput {
-  const input = recordFromUnknown(value);
-  return {
-    assetId: numberFromUnknown(input.assetId),
-    serviceId: numberFromUnknown(input.serviceId),
-    technicianId: nullableStringFromUnknown(input.technicianId),
-    dueDate: nullableStringFromUnknown(input.dueDate),
-  };
 }
 
 function parseLocalJobExecutionInput(value: unknown): LocalJobExecutionInput {
@@ -2040,12 +1414,6 @@ function environmentFromUnknown(
 function numberArrayFromUnknown(value: unknown) {
   return Array.isArray(value)
     ? value.filter((item): item is number => Number.isInteger(item))
-    : undefined;
-}
-
-function numberFromUnknown(value: unknown) {
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
     : undefined;
 }
 

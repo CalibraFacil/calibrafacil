@@ -34,6 +34,8 @@ import {
   AccordionTrigger,
 } from '@calibra-facil/ui/accordion'
 import { RoleGate } from '@/components/permission-gate'
+import { ActionAvailabilityGate } from '@/components/availability/action-availability-gate'
+import { useOperationAvailability } from '@/runtime/use-operation-availability'
 import {
   ACTION_BUTTON_CLASS,
   BlueprintField,
@@ -380,6 +382,22 @@ function MethodActions({
   qualityApproveMutation: VoidMethodMutation
   returnToDraftMutation: ReturnToDraftMutation
 }) {
+  // The review workflow is online-only (Q13). This only disables the buttons
+  // while the cloud is unreachable; who may press them is still decided by the
+  // role gates below and by the API.
+  const technicalReviewAvailability = useOperationAvailability(
+    'methods',
+    'technicalReview',
+  )
+  const qualityApproveAvailability = useOperationAvailability(
+    'methods',
+    'qualityApprove',
+  )
+  const returnToDraftAvailability = useOperationAvailability(
+    'methods',
+    'returnToDraft',
+  )
+
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-2">
       {method.status === 'DRAFT' && (
@@ -405,19 +423,23 @@ function MethodActions({
             </PendingStepHint>
           }
         >
-          <Button
-            onClick={() => technicalReviewMutation.mutate()}
-            disabled={technicalReviewMutation.isPending}
-            className={ACTION_BUTTON_CLASS}
-          >
-            <HugeiconsIcon
-              icon={CheckmarkCircle02Icon}
-              className="mr-2 size-4"
-            />
-            {technicalReviewMutation.isPending
-              ? 'Revisando…'
-              : 'Revisar tecnicamente'}
-          </Button>
+          <ActionAvailabilityGate availability={technicalReviewAvailability}>
+            {({ disabled }) => (
+              <Button
+                onClick={() => technicalReviewMutation.mutate()}
+                disabled={disabled || technicalReviewMutation.isPending}
+                className={ACTION_BUTTON_CLASS}
+              >
+                <HugeiconsIcon
+                  icon={CheckmarkCircle02Icon}
+                  className="mr-2 size-4"
+                />
+                {technicalReviewMutation.isPending
+                  ? 'Revisando…'
+                  : 'Revisar tecnicamente'}
+              </Button>
+            )}
+          </ActionAvailabilityGate>
         </RoleGate>
       )}
 
@@ -431,50 +453,60 @@ function MethodActions({
             </PendingStepHint>
           }
         >
-          <Button
-            onClick={() => qualityApproveMutation.mutate()}
-            disabled={qualityApproveMutation.isPending}
-            className={ACTION_BUTTON_CLASS}
-          >
-            <HugeiconsIcon
-              icon={CheckmarkCircle02Icon}
-              className="mr-2 size-4"
-            />
-            {qualityApproveMutation.isPending
-              ? 'Aprovando…'
-              : 'Aprovar qualidade'}
-          </Button>
+          <ActionAvailabilityGate availability={qualityApproveAvailability}>
+            {({ disabled }) => (
+              <Button
+                onClick={() => qualityApproveMutation.mutate()}
+                disabled={disabled || qualityApproveMutation.isPending}
+                className={ACTION_BUTTON_CLASS}
+              >
+                <HugeiconsIcon
+                  icon={CheckmarkCircle02Icon}
+                  className="mr-2 size-4"
+                />
+                {qualityApproveMutation.isPending
+                  ? 'Aprovando…'
+                  : 'Aprovar qualidade'}
+              </Button>
+            )}
+          </ActionAvailabilityGate>
         </RoleGate>
       )}
 
       <RoleGate roles={['admin', 'owner']}>
         {(method.status === 'PENDING_APPROVAL' ||
           method.status === 'TECHNICAL_REVIEWED') && (
-          <Button
-            variant="outline"
-            onClick={() => {
-              if (
-                !window.confirm('Deseja retornar este método para rascunho?')
-              ) {
-                return
-              }
-              const reason = window.prompt(
-                'Informe o motivo para retornar ao rascunho',
-              )
-              if (!reason || reason.trim().length < 3) {
-                toast.error('Motivo obrigatório (mín. 3 caracteres)')
-                return
-              }
-              returnToDraftMutation.mutate(reason.trim())
-            }}
-            disabled={returnToDraftMutation.isPending}
-            className={ACTION_BUTTON_CLASS}
-          >
-            <HugeiconsIcon icon={RefreshIcon} className="mr-2 size-4" />
-            {returnToDraftMutation.isPending
-              ? 'Retornando…'
-              : 'Retornar para rascunho'}
-          </Button>
+          <ActionAvailabilityGate availability={returnToDraftAvailability}>
+            {({ disabled }) => (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (
+                    !window.confirm(
+                      'Deseja retornar este método para rascunho?',
+                    )
+                  ) {
+                    return
+                  }
+                  const reason = window.prompt(
+                    'Informe o motivo para retornar ao rascunho',
+                  )
+                  if (!reason || reason.trim().length < 3) {
+                    toast.error('Motivo obrigatório (mín. 3 caracteres)')
+                    return
+                  }
+                  returnToDraftMutation.mutate(reason.trim())
+                }}
+                disabled={disabled || returnToDraftMutation.isPending}
+                className={ACTION_BUTTON_CLASS}
+              >
+                <HugeiconsIcon icon={RefreshIcon} className="mr-2 size-4" />
+                {returnToDraftMutation.isPending
+                  ? 'Retornando…'
+                  : 'Retornar para rascunho'}
+              </Button>
+            )}
+          </ActionAvailabilityGate>
         )}
       </RoleGate>
     </div>

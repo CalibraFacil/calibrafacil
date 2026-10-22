@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { JobStatusSchema } from "./job-status";
 import { ReferenceStandardKindSchema } from "./reference-standard-kind";
+export * from "./background-jobs";
 export * from "./execution-performed-at";
 export * from "./standard-validity";
 export * from "./standards-judgement";

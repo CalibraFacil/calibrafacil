@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Outlet, useLocation } from '@tanstack/react-router'
+import { Outlet, useLocation, useMatches } from '@tanstack/react-router'
 import {
   useActiveOrganization,
   useListOrganizations,
@@ -17,7 +17,7 @@ import {
   CloudOnlyOfflineState,
   useDesktopCloudOnlyUnavailable,
 } from '@/runtime/sync-status'
-import { isCloudOnlyDashboardPath } from '@/runtime/cloud-only-routes'
+import { isDesktopOfflineRoute } from '@/runtime/desktop-offline-routes'
 import {
   DashboardLayoutMountMarker,
   DashboardOrgSwitcher,
@@ -40,6 +40,11 @@ import { PasskeyNudgeBanner } from '@/features/passkeys/components/passkey-nudge
 
 export function DashboardLayout() {
   const location = useLocation()
+  // The route that actually rendered (the leaf match), not the URL: `/jobs/new`
+  // and `/jobs/$id` share a URL shape but not an offline story.
+  const leafRouteId = useMatches({
+    select: (matches) => matches.at(-1)?.routeId ?? '',
+  })
   const cloudOnlyUnavailable = useDesktopCloudOnlyUnavailable()
   const { data: organizations, isPending: organizationsLoading } =
     useListOrganizations()
@@ -69,7 +74,7 @@ export function DashboardLayout() {
   const shouldBlockCloudOnlyRoute =
     !shouldBlockChildRoutes &&
     cloudOnlyUnavailable &&
-    isCloudOnlyDashboardPath(pathname)
+    !isDesktopOfflineRoute(leafRouteId)
 
   // On desktop, nothing may render until the host has opened the local
   // database belonging to *this* account and organization. Rendering first and
@@ -136,7 +141,7 @@ export function DashboardLayout() {
                   <div className="h-64 rounded-lg border bg-card/60 animate-pulse" />
                 </div>
               ) : shouldBlockCloudOnlyRoute ? (
-                <CloudOnlyOfflineState title="Tela indisponível offline" />
+                <CloudOnlyOfflineState title="Disponível apenas online" />
               ) : (
                 <>
                   <PasskeyNudgeBanner />

@@ -10,6 +10,7 @@ import {
 
 import { createLocalServerFromConfig } from "./server";
 import type { LocalServerConfig } from "./bootstrap";
+import { createAssetStub, seedSyncedReferenceData } from "./test-support";
 
 /**
  * The account-switch scenario, end to end at the host level.
@@ -74,24 +75,31 @@ function configFor(
   };
 }
 
-async function createCustomer(
-  app: ReturnType<typeof createLocalServerFromConfig>["app"],
+type PartitionServer = ReturnType<typeof createLocalServerFromConfig>;
+
+/**
+ * A durable offline write the narrowed offline mode still has: an asset stub
+ * for a customer that already reached the device through sync.
+ */
+async function createAsset(
+  server: PartitionServer,
+  partition: { organizationId: string },
   name: string,
 ) {
-  const response = await app.request("/api/customers", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, document: "12345678000199" }),
+  seedSyncedReferenceData(server.database, {
+    organizationId: partition.organizationId,
+    unitId: 1,
   });
+  const response = await createAssetStub(server.app, name);
 
-  expect(response.status).toBe(201);
+  expect(response.status, await response.clone().text()).toBe(201);
   return response;
 }
 
-async function listCustomerNames(
+async function listAssetNames(
   app: ReturnType<typeof createLocalServerFromConfig>["app"],
 ) {
-  const response = await app.request("/api/customers");
+  const response = await app.request("/api/assets");
   expect(response.status).toBe(200);
 
   const body: unknown = await response.json();
@@ -113,18 +121,16 @@ describe("switching accounts on one machine", () => {
     const dataRoot = createDataRoot();
 
     const anaServer = createLocalServerFromConfig(configFor(dataRoot, ana));
-    await createCustomer(anaServer.app, "Cliente da Ana");
-    expect(await listCustomerNames(anaServer.app)).toEqual(["Cliente da Ana"]);
+    await createAsset(anaServer, ana, "Balanca da Ana");
+    expect(await listAssetNames(anaServer.app)).toEqual(["Balanca da Ana"]);
 
     // Bruno signs in on the same machine, same organization.
     const brunoServer = createLocalServerFromConfig(configFor(dataRoot, bruno));
 
-    expect(await listCustomerNames(brunoServer.app)).toEqual([]);
+    expect(await listAssetNames(brunoServer.app)).toEqual([]);
 
-    await createCustomer(brunoServer.app, "Cliente do Bruno");
-    expect(await listCustomerNames(brunoServer.app)).toEqual([
-      "Cliente do Bruno",
-    ]);
+    await createAsset(brunoServer, bruno, "Balanca do Bruno");
+    expect(await listAssetNames(brunoServer.app)).toEqual(["Balanca do Bruno"]);
   });
 
   it("leaves the outgoing account's data and queued work intact", async () => {
@@ -133,14 +139,14 @@ describe("switching accounts on one machine", () => {
     const dataRoot = createDataRoot();
 
     const anaServer = createLocalServerFromConfig(configFor(dataRoot, ana));
-    await createCustomer(anaServer.app, "Cliente da Ana");
+    await createAsset(anaServer, ana, "Balanca da Ana");
     const anaPendingBefore = countPendingOutbox(anaServer.database);
     expect(anaPendingBefore).toBeGreaterThan(0);
 
     createLocalServerFromConfig(configFor(dataRoot, bruno));
 
     const anaAgain = createLocalServerFromConfig(configFor(dataRoot, ana));
-    expect(await listCustomerNames(anaAgain.app)).toEqual(["Cliente da Ana"]);
+    expect(await listAssetNames(anaAgain.app)).toEqual(["Balanca da Ana"]);
     expect(countPendingOutbox(anaAgain.database)).toBe(anaPendingBefore);
   });
 
@@ -190,10 +196,10 @@ describe("switching accounts on one machine", () => {
     const anaOrg2 = { userId: "user-ana", organizationId: "org-2" };
 
     const first = createLocalServerFromConfig(configFor(dataRoot, ana));
-    await createCustomer(first.app, "Cliente da Org 1");
+    await createAsset(first, ana, "Balanca da Org 1");
 
     const second = createLocalServerFromConfig(configFor(dataRoot, anaOrg2));
 
-    expect(await listCustomerNames(second.app)).toEqual([]);
+    expect(await listAssetNames(second.app)).toEqual([]);
   });
 });
