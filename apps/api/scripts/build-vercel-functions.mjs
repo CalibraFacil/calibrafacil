@@ -17,7 +17,7 @@ const entries = [
   // portal-digest, auth-maintenance, service-order-emails, …). The dynamic
   // shim api/cron/[job].js routes every /api/cron/* path to it, so Vercel
   // packages one cron function instead of one per job.
-  ["vercel-src/cron/dispatch.ts", "vercel-functions/cron/dispatch.js"],
+  ["vercel-src/cron/main.ts", "vercel-functions/cron/dispatch.js"],
 ];
 
 for (const [, outfile] of entries) {

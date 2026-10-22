@@ -3,8 +3,12 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
-import { resolvePlatformEmailTransport } from "@calibra-facil/email-sender";
-import { resolveS3EndpointConfigFromProcess } from "@calibra-facil/shared/storage-endpoint";
+import {
+  loadWorkerConfig,
+  rawEnv,
+  readDatabaseConfig,
+} from "@calibra-facil/config";
+import { resolveS3EndpointConfig } from "@calibra-facil/shared/storage-endpoint";
 
 export type ApiRuntimeEnv = Record<string, unknown>;
 
@@ -46,28 +50,10 @@ export type WorkerRuntimeEnv = {
   APP_URL?: string;
 };
 
-const requiredProductionEnv = [
-  "DATABASE_URL",
-  "BETTER_AUTH_SECRET",
-  "PUBLIC_API_MASTER_KEY",
-  "INTEGRATIONS_MASTER_KEY",
-  "SIGNING_MASTER_KEY",
-  "QUOTE_APPROVAL_CODE_PEPPER",
-  "PORTAL_SERVICE_USER_ID",
-  "R2_ACCESS_KEY_ID",
-  "R2_SECRET_ACCESS_KEY",
-  "R2_BUCKET_NAME",
-  "R2_MEDIA_BUCKET_NAME",
-] as const;
+// The buckets come from the storage configuration: R2_BUCKET_NAME (documents)
+// and R2_MEDIA_BUCKET_NAME (media). createR2Bucket binds one of them.
+type StorageSettings = ReturnType<typeof loadWorkerConfig>["storage"];
 
-function requiredEnv(name: string) {
-  const value = process.env[name];
-  if (!value) throw new Error(`${name} is required`);
-  return value;
-}
-
-// R2 buckets are resolved from env: R2_BUCKET_NAME (documents) and
-// R2_MEDIA_BUCKET_NAME (media). createR2Bucket binds the documents bucket.
 type LocalS3Client = S3Client & {
   send(command: GetObjectCommand): Promise<{
     Body?: { transformToByteArray(): Promise<Uint8Array> };
@@ -75,17 +61,20 @@ type LocalS3Client = S3Client & {
   send(command: PutObjectCommand): Promise<unknown>;
 };
 
-function createR2Bucket(bucketName = requiredEnv("R2_BUCKET_NAME")) {
-  const { endpoint, region, forcePathStyle } =
-    resolveS3EndpointConfigFromProcess();
+function createR2Bucket(storage: StorageSettings, bucketName: string) {
+  const { endpoint, region, forcePathStyle } = resolveS3EndpointConfig({
+    R2_ACCOUNT_ID: storage.accountId,
+    R2_ENDPOINT: storage.endpoint,
+    R2_REGION: storage.region,
+  });
   // oxlint-disable-next-line typescript/consistent-type-assertions -- AWS S3Client has command-specific send overloads that are narrower than the base client type exposes.
   const client = new S3Client({
     region,
     endpoint,
     forcePathStyle,
     credentials: {
-      accessKeyId: requiredEnv("R2_ACCESS_KEY_ID"),
-      secretAccessKey: requiredEnv("R2_SECRET_ACCESS_KEY"),
+      accessKeyId: storage.accessKeyId ?? "",
+      secretAccessKey: storage.secretAccessKey ?? "",
     },
   }) as LocalS3Client;
 
@@ -121,34 +110,15 @@ function createR2Bucket(bucketName = requiredEnv("R2_BUCKET_NAME")) {
   };
 }
 
+/**
+ * The bindings handed to the Hono app on every request. The configuration is
+ * validated once, when the function starts (`loadApiConfig()` in the Vercel
+ * entry), so this only assembles the bag.
+ */
 export function createApiRuntimeEnv(): ApiRuntimeEnv {
-  const isProduction =
-    process.env.VERCEL === "1" || process.env.VERCEL_ENV === "production";
+  const env: ApiRuntimeEnv = { ...rawEnv() };
 
-  if (isProduction) {
-    for (const key of requiredProductionEnv) {
-      requiredEnv(key);
-    }
-    if (!process.env.R2_ACCOUNT_ID && !process.env.R2_ENDPOINT) {
-      throw new Error("R2_ACCOUNT_ID or R2_ENDPOINT is required");
-    }
-    if (!resolvePlatformEmailTransport()) {
-      throw new Error("SMTP_HOST or RESEND_API_KEY is required");
-    }
-  }
-
-  if (process.env.VERCEL) {
-    process.env.DATABASE_POOL_MAX ??= "1";
-  }
-
-  const databaseUrl = process.env.DATABASE_URL;
-  const env: ApiRuntimeEnv = {
-    API_URL: process.env.API_URL,
-    APP_URL: process.env.APP_URL,
-    PORTAL_APP_URL: process.env.PORTAL_APP_URL,
-    ...process.env,
-  };
-
+  const databaseUrl = readDatabaseConfig().url;
   if (databaseUrl) {
     env.HYPERDRIVE = { connectionString: databaseUrl };
   }
@@ -156,31 +126,34 @@ export function createApiRuntimeEnv(): ApiRuntimeEnv {
   return env;
 }
 
+/**
+ * The worker's environment (Vercel Queue consumer, cron handlers, the inline
+ * dev runner). The worker cannot do any work without its database, storage and
+ * keys, so a missing one throws one aggregated error.
+ */
 export function createWorkerRuntimeEnv(): WorkerRuntimeEnv {
-  const databaseUrl = requiredEnv("DATABASE_URL");
-
-  if (process.env.VERCEL) {
-    process.env.DATABASE_POOL_MAX ??= "1";
-  }
+  const config = loadWorkerConfig();
+  const { storage } = config;
 
   return {
-    DATABASE_URL: databaseUrl,
-    CERTIFICATES_BUCKET: createR2Bucket(),
-    MEDIA_BUCKET: createR2Bucket(requiredEnv("R2_MEDIA_BUCKET_NAME")),
+    DATABASE_URL: config.database.url ?? "",
+    CERTIFICATES_BUCKET: createR2Bucket(storage, storage.bucketName ?? ""),
+    MEDIA_BUCKET: createR2Bucket(storage, storage.mediaBucketName ?? ""),
     // Gotenberg HTML/XLSX->PDF service (services/gotenberg on Cloudflare Containers).
-    GOTENBERG_URL: process.env.GOTENBERG_URL,
-    GOTENBERG_TOKEN: process.env.GOTENBERG_TOKEN,
-    SIGNING_MASTER_KEY: requiredEnv("SIGNING_MASTER_KEY"),
-    INTEGRATIONS_MASTER_KEY: requiredEnv("INTEGRATIONS_MASTER_KEY"),
-    API_URL: process.env.API_URL,
-    CONTA_AZUL_CLIENT_ID: process.env.CONTA_AZUL_CLIENT_ID,
-    CONTA_AZUL_CLIENT_SECRET: process.env.CONTA_AZUL_CLIENT_SECRET,
-    CONTA_AZUL_OAUTH_REDIRECT_URI: process.env.CONTA_AZUL_OAUTH_REDIRECT_URI,
-    RESEND_API_KEY: process.env.RESEND_API_KEY,
-    RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
-    EMAIL_FROM: process.env.EMAIL_FROM,
-    EMAIL_LOGO_URL: process.env.EMAIL_LOGO_URL,
-    WEB_URL: process.env.WEB_URL,
-    APP_URL: process.env.APP_URL,
+    GOTENBERG_URL: config.rendering.gotenbergUrl,
+    GOTENBERG_TOKEN: config.rendering.gotenbergToken,
+    SIGNING_MASTER_KEY: config.signing.masterKey,
+    INTEGRATIONS_MASTER_KEY: config.integrations.masterKey,
+    API_URL: config.origins.apiUrl,
+    CONTA_AZUL_CLIENT_ID: config.integrations.contaAzulClientId,
+    CONTA_AZUL_CLIENT_SECRET: config.integrations.contaAzulClientSecret,
+    CONTA_AZUL_OAUTH_REDIRECT_URI:
+      config.integrations.contaAzulOauthRedirectUri,
+    RESEND_API_KEY: config.email.resendApiKey,
+    RESEND_FROM_EMAIL: config.email.resendFromEmail,
+    EMAIL_FROM: config.email.emailFrom,
+    EMAIL_LOGO_URL: config.email.emailLogoUrl,
+    WEB_URL: config.origins.webUrl,
+    APP_URL: config.origins.appUrl,
   };
 }

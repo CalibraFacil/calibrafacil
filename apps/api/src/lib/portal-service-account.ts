@@ -1,3 +1,4 @@
+import { readAuthConfig, readOriginsConfig } from "@calibra-facil/config";
 import { createLabAuth, createPortalAuth } from "@calibra-facil/auth";
 import {
   INTERNAL_ROLES,
@@ -56,7 +57,7 @@ export async function ensurePortalServiceUser(): Promise<{
 }
 
 function getPortalServiceUserId(): string {
-  const userId = process.env.PORTAL_SERVICE_USER_ID?.trim();
+  const userId = readAuthConfig().portalServiceUserId;
   if (!userId) {
     throw new PortalServiceAccountError(
       "PORTAL_SERVICE_USER_ID nao configurado",
@@ -68,24 +69,20 @@ function getPortalServiceUserId(): string {
 }
 
 function getInvitationExpirationSeconds(): number {
-  const raw = process.env.PORTAL_INVITATION_EXPIRES_IN?.trim();
-  if (!raw) return DEFAULT_INVITATION_EXPIRATION_SECONDS;
-
-  const value = Number(raw);
-  if (!Number.isFinite(value) || value <= 0) {
-    return DEFAULT_INVITATION_EXPIRATION_SECONDS;
-  }
-
-  return Math.floor(value);
+  return (
+    readAuthConfig().portalInvitationExpiresIn ??
+    DEFAULT_INVITATION_EXPIRATION_SECONDS
+  );
 }
 
 function getPortalAppUrlFallback(): string {
-  const explicit = process.env.PORTAL_APP_URL?.trim();
+  const origins = readOriginsConfig();
+  const explicit = origins.portalAppUrl;
   if (explicit) {
     return explicit.replace(/\/+$/, "");
   }
 
-  const appUrl = process.env.APP_URL?.trim();
+  const appUrl = origins.appUrl;
   if (appUrl) {
     try {
       const url = new URL(appUrl);

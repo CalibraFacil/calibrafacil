@@ -5,6 +5,7 @@ import {
   createLocalServerFromEnv,
 } from "./server";
 import { serve } from "@hono/node-server";
+import { rawEnv } from "@calibra-facil/config";
 
 void main().catch((error) => {
   console.error(
@@ -14,12 +15,16 @@ void main().catch((error) => {
 });
 
 async function main() {
+  // The configuration is validated at start (readLocalServerConfig): an invalid
+  // environment exits with one message that lists every problem (see the catch
+  // above). A bootstrap envelope takes precedence over the individual variables.
+  const env = rawEnv();
   const { app, config, database } =
-    process.env.CALIBRA_LOCAL_SERVER_BOOTSTRAP_STDIN === "1"
+    env.CALIBRA_LOCAL_SERVER_BOOTSTRAP_STDIN === "1"
       ? createLocalServerFromConfig(
           parseLocalServerBootstrapConfig(await readStdin()),
         )
-      : createLocalServerFromEnv(process.env);
+      : createLocalServerFromEnv(env);
 
   const server = serve({
     hostname: config.host,

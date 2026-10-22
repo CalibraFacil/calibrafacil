@@ -19,6 +19,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@calibra-facil/config": "workspace:^",
     "@calibra-facil/contracts": "workspace:^",
     "@calibra-facil/label-rendering": "workspace:^",
     "@calibra-facil/local-db": "workspace:^",

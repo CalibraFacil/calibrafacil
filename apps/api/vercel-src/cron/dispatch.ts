@@ -1,4 +1,9 @@
 import { timingSafeEqual } from "node:crypto";
+import {
+  readJobsConfig,
+  readRuntimeConfig,
+  readStorageConfig,
+} from "@calibra-facil/config";
 import { enqueueBackgroundJob } from "../../src/lib/background-jobs";
 import {
   processScheduledContaAzulIntegrationSyncs,
@@ -43,7 +48,8 @@ function getErrorMessage(error: unknown, fallback: string) {
 }
 
 function isCronSecretRequired() {
-  return process.env.NODE_ENV === "production" || Boolean(process.env.VERCEL);
+  const runtime = readRuntimeConfig();
+  return runtime.nodeEnv === "production" || runtime.isVercel;
 }
 
 function secretsEqual(expected: string, received: string | null) {
@@ -62,7 +68,7 @@ function secretsEqual(expected: string, received: string | null) {
 }
 
 function isCronAuthorized(request: Request) {
-  const secret = process.env.CRON_SECRET;
+  const secret = readJobsConfig().cronSecret;
   if (!secret) return !isCronSecretRequired();
 
   const authorization = request.headers.get("authorization");
@@ -77,13 +83,12 @@ function isCronAuthorized(request: Request) {
 }
 
 function cronAuthFailureResponse() {
+  const secretConfigured = Boolean(readJobsConfig().cronSecret);
   return Response.json(
     {
-      error: process.env.CRON_SECRET
-        ? "Unauthorized"
-        : "CRON_SECRET não configurado",
+      error: secretConfigured ? "Unauthorized" : "CRON_SECRET não configurado",
     },
-    { status: process.env.CRON_SECRET ? 401 : 503 },
+    { status: secretConfigured ? 401 : 503 },
   );
 }
 
@@ -247,13 +252,12 @@ async function handleEmailDomainHealth(request: Request) {
 }
 
 function getDriftR2Env(): R2Env | null {
-  const str = (value: unknown) =>
-    typeof value === "string" && value !== "" ? value : null;
-  const accountId = str(process.env.R2_ACCOUNT_ID);
-  const accessKeyId = str(process.env.R2_ACCESS_KEY_ID);
-  const secretAccessKey = str(process.env.R2_SECRET_ACCESS_KEY);
-  const bucketName = str(process.env.R2_BUCKET_NAME);
-  const mediaBucketName = str(process.env.R2_MEDIA_BUCKET_NAME);
+  const storage = readStorageConfig();
+  const accountId = storage.accountId;
+  const accessKeyId = storage.accessKeyId;
+  const secretAccessKey = storage.secretAccessKey;
+  const bucketName = storage.bucketName;
+  const mediaBucketName = storage.mediaBucketName;
   if (
     !accountId ||
     !accessKeyId ||

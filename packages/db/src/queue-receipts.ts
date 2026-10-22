@@ -1,3 +1,4 @@
+import { readJobsConfig } from "@calibra-facil/config";
 import { sql } from "drizzle-orm";
 import { db } from "./db.js";
 
@@ -26,17 +27,12 @@ import { db } from "./db.js";
 
 export type QueueReceiptsMode = "off" | "shadow" | "enforce";
 
-const DEFAULT_LEASE_MS = 10 * 60_000; // matches the app_queue_job stale-lease reclaim
-
 export function readQueueReceiptsMode(): QueueReceiptsMode {
-  const raw = process.env.QUEUE_RECEIPTS_MODE?.trim().toLowerCase();
-  if (raw === "off" || raw === "shadow") return raw;
-  return "enforce";
+  return readJobsConfig().queueReceiptsMode;
 }
 
 function readLeaseMs(): number {
-  const value = Number(process.env.QUEUE_RECEIPT_LEASE_MS);
-  return Number.isFinite(value) && value > 0 ? value : DEFAULT_LEASE_MS;
+  return readJobsConfig().queueReceiptLeaseMs;
 }
 
 /** Receipt key for an app_queue_job row — stable across reclaims/retries. */

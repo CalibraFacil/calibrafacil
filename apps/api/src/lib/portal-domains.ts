@@ -1,3 +1,4 @@
+import { readOriginsConfig } from "@calibra-facil/config";
 import { randomBytes } from "node:crypto";
 import { db } from "@calibra-facil/db";
 import { customer, organizationCustomDomain } from "@calibra-facil/db/schema";
@@ -73,10 +74,11 @@ export async function getPortalBaseUrlForLabOrganization(
     return `https://${customDomain.hostname}`;
   }
 
-  const configured = process.env.PORTAL_APP_URL?.trim();
+  const origins = readOriginsConfig();
+  const configured = origins.portalAppUrl;
   if (configured) return configured.replace(/\/+$/, "");
 
-  const appUrl = process.env.APP_URL?.trim();
+  const appUrl = origins.appUrl;
   if (appUrl) {
     const portalUrl = derivePortalBaseUrlFromAppUrl(appUrl);
     if (portalUrl) return portalUrl;

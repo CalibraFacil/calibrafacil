@@ -9,6 +9,11 @@
 // is only touched when there is real work — which is the whole point of moving
 // this off Vercel without re-introducing the "wake Neon every 2s" problem.
 import {
+  failFast,
+  loadWorkerConfig,
+  readRuntimeConfig,
+} from "@calibra-facil/config";
+import {
   createWorkerEnv,
   drainQueue,
   readQueueConfig,
@@ -24,12 +29,17 @@ declare const Bun: {
   }): unknown;
 };
 
-const config: QueueRuntimeConfig = readQueueConfig();
-const port = Number(process.env.PORT ?? 8080);
+// Validate the configuration before binding the port: a bad deploy exits here
+// with one message that lists every problem, instead of starting and failing
+// every drain later.
+const config: QueueRuntimeConfig = failFast(() => {
+  loadWorkerConfig();
+  return readQueueConfig();
+});
+const port = readRuntimeConfig().listenPort ?? 8080;
 
-// Build the worker Env lazily so the HTTP port binds immediately (Cloudflare
-// considers the container started once the port is listening) and a missing
-// secret surfaces as a loud drain error rather than a silent failed start.
+// Build the worker Env lazily (it opens the object-store clients) so the HTTP
+// port binds as soon as the configuration has been validated above.
 let cachedEnv: WorkerEnv | null = null;
 function getEnv(): WorkerEnv {
   if (!cachedEnv) cachedEnv = createWorkerEnv();

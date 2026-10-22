@@ -1,5 +1,10 @@
+import { readDatabaseConfig } from "@calibra-facil/config";
+
 // Conditionally load dotenv in Node.js environments (not needed in CF Workers)
-if (typeof process !== "undefined" && process.env.NODE_ENV !== "production") {
+if (
+  typeof process !== "undefined" &&
+  readDatabaseConfig().nodeEnv !== "production"
+) {
   try {
     await import("dotenv/config");
   } catch {
@@ -71,11 +76,9 @@ function cacheDatabase(key: string, createDatabase: () => Database): Database {
   return database;
 }
 
-function createPostgresJsDatabase(connectionString: string) {
-  const configuredMax = Number(process.env.DATABASE_POOL_MAX ?? 5);
+function createPostgresJsDatabase(connectionString: string, poolMax: number) {
   const sql = postgres(connectionString, {
-    max:
-      Number.isFinite(configuredMax) && configuredMax > 0 ? configuredMax : 5,
+    max: poolMax,
     fetch_types: false,
   });
   return drizzlePostgres(sql, { schema, logger: observingLogger });
@@ -99,23 +102,24 @@ function createNeonServerlessDatabase(connectionString: string) {
  */
 export function getDb(): Database {
   queryObserver?.onAccess?.();
-  const isProduction = process.env.NODE_ENV === "production";
+  const config = readDatabaseConfig();
+  const isProduction = config.nodeEnv === "production";
   const isCloudflare = isCloudflareWorkersRuntime();
 
   // Prefer direct DATABASE_URL in development to avoid Hyperdrive local overhead.
-  const databaseUrl = process.env.DATABASE_URL;
+  const databaseUrl = config.url;
   if (!isProduction && databaseUrl) {
     return cacheDatabase(`database:${databaseUrl}`, () => {
       if (isCloudflare) return createNeonServerlessDatabase(databaseUrl);
-      return createPostgresJsDatabase(databaseUrl);
+      return createPostgresJsDatabase(databaseUrl, config.poolMax);
     });
   }
 
   // Hyperdrive - use postgres.js driver (recommended by Cloudflare and Neon)
-  const hyperdriveUrl = process.env.HYPERDRIVE_URL;
+  const hyperdriveUrl = config.hyperdriveUrl;
   if (hyperdriveUrl) {
     return cacheDatabase(`hyperdrive:${hyperdriveUrl}`, () =>
-      createPostgresJsDatabase(hyperdriveUrl),
+      createPostgresJsDatabase(hyperdriveUrl, config.poolMax),
     );
   }
 
@@ -123,7 +127,7 @@ export function getDb(): Database {
   if (databaseUrl) {
     return cacheDatabase(`database:${databaseUrl}`, () => {
       if (isCloudflare) return createNeonServerlessDatabase(databaseUrl);
-      return createPostgresJsDatabase(databaseUrl);
+      return createPostgresJsDatabase(databaseUrl, config.poolMax);
     });
   }
 

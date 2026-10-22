@@ -1,3 +1,4 @@
+import { readJobsConfig } from "@calibra-facil/config";
 import { send } from "@vercel/queue";
 import {
   enqueueQueueJob,
@@ -19,8 +20,7 @@ import {
 
 export { resolveQueueJobType };
 
-export const BACKGROUND_JOBS_TOPIC =
-  process.env.BACKGROUND_JOBS_TOPIC ?? "calibra-facil-background-jobs";
+export const BACKGROUND_JOBS_TOPIC = readJobsConfig().topic;
 
 type EnqueueBackgroundJobOptions = {
   idempotencyKey?: string;
@@ -92,27 +92,14 @@ const DOCUMENT_WORKER_DRAIN_PATH = "/drain";
 // stranded in PENDING / `GENERATING_PDF` until the next enqueue or a manual
 // drain. We now use a longer per-attempt timeout plus a couple of retries so the
 // wake reliably lands. Tunable via env without a redeploy.
-const DEFAULT_WAKE_TIMEOUT_MS = 12_000;
-const DEFAULT_WAKE_ATTEMPTS = 2;
-const DEFAULT_WAKE_RETRY_DELAY_MS = 500;
+// The defaults live with the other settings in packages/config (jobs).
 
 function readWakeConfig() {
-  const timeoutMs = Number(process.env.DOCUMENT_WORKER_WAKE_TIMEOUT_MS);
-  const attempts = Number(process.env.DOCUMENT_WORKER_WAKE_ATTEMPTS);
-  const retryDelayMs = Number(process.env.DOCUMENT_WORKER_WAKE_RETRY_DELAY_MS);
+  const config = readJobsConfig();
   return {
-    timeoutMs:
-      Number.isFinite(timeoutMs) && timeoutMs > 0
-        ? timeoutMs
-        : DEFAULT_WAKE_TIMEOUT_MS,
-    attempts:
-      Number.isFinite(attempts) && attempts >= 1
-        ? Math.floor(attempts)
-        : DEFAULT_WAKE_ATTEMPTS,
-    retryDelayMs:
-      Number.isFinite(retryDelayMs) && retryDelayMs >= 0
-        ? retryDelayMs
-        : DEFAULT_WAKE_RETRY_DELAY_MS,
+    timeoutMs: config.documentWorkerWakeTimeoutMs,
+    attempts: config.documentWorkerWakeAttempts,
+    retryDelayMs: config.documentWorkerWakeRetryDelayMs,
   };
 }
 
@@ -124,7 +111,7 @@ function delay(ms: number): Promise<void> {
 // soon as any attempt gets a 2xx (the container answers 202, then drains), and
 // throws only after every attempt fails.
 export async function wakeDocumentWorker(baseUrl: string): Promise<void> {
-  const token = process.env.DOCUMENT_WORKER_TOKEN;
+  const token = readJobsConfig().documentWorkerToken;
   const { timeoutMs, attempts, retryDelayMs } = readWakeConfig();
   const headers: Record<string, string> = {};
   if (token) headers["X-Worker-Token"] = token;
@@ -229,7 +216,7 @@ export async function enqueueBackgroundJob(
   }
 
   const result = await send(BACKGROUND_JOBS_TOPIC, message, {
-    region: process.env.VERCEL_QUEUE_REGION ?? "gru1",
+    region: readJobsConfig().vercelQueueRegion,
     idempotencyKey: options.idempotencyKey,
   });
 
