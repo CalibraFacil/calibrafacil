@@ -144,19 +144,6 @@ export type LocalServiceOrdersListData = {
   };
 };
 
-export type CreateLocalServiceOrderQuoteDraftInput = {
-  routeId: string;
-  actorUserId?: string | null;
-  deviceId?: string | null;
-  validUntil?: string | null;
-  paymentTerms?: string | null;
-  deliveryEstimate?: string | null;
-  warrantyTerms?: string | null;
-  clientMessage?: string | null;
-  internalNotes?: string | null;
-  items: LocalServiceOrderPricedItemInput[];
-};
-
 export type SaveLocalServiceOrderExecutionNotesInput = {
   routeId: string;
   actorUserId?: string | null;
@@ -167,14 +154,6 @@ export type SaveLocalServiceOrderExecutionNotesInput = {
   calibrationRequiredAfterRepair?: boolean;
   result?: LocalServiceOrderExecutionResult;
   items?: LocalServiceOrderPricedItemInput[];
-};
-
-export type CreateLocalServiceOrderDeliveryDocumentDraftInput = {
-  routeId: string;
-  actorUserId?: string | null;
-  deviceId?: string | null;
-  technicianSignatureData?: JsonRecord | null;
-  clientSignatureData?: JsonRecord | null;
 };
 
 const SERVICE_ORDER_STATUS_LABELS: Record<LocalServiceOrderStatus, string> = {
@@ -635,129 +614,12 @@ export function getLocalServiceOrderDetail(
   };
 }
 
-export function createLocalServiceOrderQuoteDraft(
-  database: LocalDatabase,
-  input: CreateLocalServiceOrderQuoteDraftInput,
-) {
-  const serviceOrder = findLocalServiceOrder(database, input.routeId);
-  if (!serviceOrder) {
-    throw new Error("Ordem de servico nao encontrada");
-  }
-
-  if (input.items.length === 0) {
-    throw new Error("Orcamento deve ter ao menos um item");
-  }
-
-  const now = new Date().toISOString();
-  const quoteId = `service-order-quote:local:${randomUUID()}`;
-  const version = nextLocalQuoteVersion(database, serviceOrder.id);
-  const quoteNumber = `${serviceOrder.service_order_number}/ORC`;
-  const items = normalizePricedItems(input.items);
-  const totals = calculatePricedItems(items);
-  const payload = {
-    serviceOrderId: serviceOrder.id,
-    validUntil: input.validUntil ?? null,
-    paymentTerms: input.paymentTerms ?? null,
-    deliveryEstimate: input.deliveryEstimate ?? null,
-    warrantyTerms: input.warrantyTerms ?? null,
-    clientMessage: input.clientMessage ?? null,
-    internalNotes: input.internalNotes ?? null,
-    items: input.items,
-    localQuoteNumber: quoteNumber,
-    version,
-  };
-
-  database.transaction(() => {
-    database
-      .prepare(
-        `
-INSERT INTO service_order_quotes (
-  id,
-  remote_id,
-  service_order_id,
-  quote_number,
-  version,
-  status,
-  subtotal_services_cents,
-  subtotal_parts_cents,
-  discount_cents,
-  freight_cents,
-  total_cents,
-  valid_until,
-  payment_terms,
-  delivery_estimate,
-  warranty_terms,
-  client_message,
-  internal_notes,
-  created_by_user_id,
-  created_at,
-  updated_at,
-  sync_state
-) VALUES (
-  @id,
-  NULL,
-  @serviceOrderId,
-  @quoteNumber,
-  @version,
-  'draft',
-  @subtotalServicesCents,
-  @subtotalPartsCents,
-  @discountCents,
-  @freightCents,
-  @totalCents,
-  @validUntil,
-  @paymentTerms,
-  @deliveryEstimate,
-  @warrantyTerms,
-  @clientMessage,
-  @internalNotes,
-  @createdByUserId,
-  @createdAt,
-  @updatedAt,
-  'local'
-)
-`,
-      )
-      .run({
-        id: quoteId,
-        serviceOrderId: serviceOrder.id,
-        quoteNumber,
-        version,
-        ...totals,
-        validUntil: input.validUntil ?? null,
-        paymentTerms: input.paymentTerms ?? null,
-        deliveryEstimate: input.deliveryEstimate ?? null,
-        warrantyTerms: input.warrantyTerms ?? null,
-        clientMessage: input.clientMessage ?? null,
-        internalNotes: input.internalNotes ?? null,
-        createdByUserId: input.actorUserId ?? null,
-        createdAt: now,
-        updatedAt: now,
-      });
-    replaceLocalQuoteItems(database, quoteId, items);
-    markServiceOrderLocal(database, serviceOrder.id, now);
-    appendLocalAudit(database, {
-      entityType: "service_order_quote",
-      entityId: quoteId,
-      action: "create_draft",
-      actorUserId: input.actorUserId,
-      details: { serviceOrderId: serviceOrder.id, quoteNumber, version },
-      createdAt: now,
-    });
-    appendOutboxEvent(database, {
-      entityType: "service_order_quote",
-      entityId: quoteId,
-      operation: "create_local_service_order_quote_draft",
-      payload,
-      actorUserId: input.actorUserId,
-      deviceId: input.deviceId,
-      occurredAt: now,
-    });
-  })();
-
-  return getLocalServiceOrderQuote(database, quoteId);
-}
-
+/**
+ * Offline mode no longer exposes this write (Q13: repair execution on a service order is online-only), so no
+ * route calls it. It stays because a database upgraded from an earlier build can
+ * still hold its queued outbox events, and the sync anchor/conflict suites use it
+ * to put a pending local change on an already-synced row.
+ */
 export function saveLocalServiceOrderExecutionNotes(
   database: LocalDatabase,
   input: SaveLocalServiceOrderExecutionNotesInput,
@@ -891,95 +753,6 @@ WHERE id = @id
   })();
 
   return getLocalServiceOrderExecution(database, serviceOrder.id);
-}
-
-export function createLocalServiceOrderDeliveryDocumentDraft(
-  database: LocalDatabase,
-  input: CreateLocalServiceOrderDeliveryDocumentDraftInput,
-) {
-  const serviceOrder = findLocalServiceOrder(database, input.routeId);
-  if (!serviceOrder) {
-    throw new Error("Ordem de servico nao encontrada");
-  }
-
-  const now = new Date().toISOString();
-  const documentId = `service-order-delivery-document:local:${randomUUID()}`;
-  const version = nextLocalDeliveryDocumentVersion(database, serviceOrder.id);
-  const documentNumber = `${serviceOrder.service_order_number}/ENT`;
-  const payload = {
-    serviceOrderId: serviceOrder.id,
-    technicianSignatureData: input.technicianSignatureData ?? null,
-    clientSignatureData: input.clientSignatureData ?? null,
-    localDocumentNumber: documentNumber,
-    version,
-  };
-
-  database.transaction(() => {
-    database
-      .prepare(
-        `
-INSERT INTO service_order_delivery_documents (
-  id,
-  remote_id,
-  service_order_id,
-  document_number,
-  version,
-  issued_at,
-  issued_by_user_id,
-  technician_signature_data_json,
-  client_signature_data_json,
-  created_at,
-  sync_state
-) VALUES (
-  @id,
-  NULL,
-  @serviceOrderId,
-  @documentNumber,
-  @version,
-  NULL,
-  @issuedByUserId,
-  @technicianSignatureDataJson,
-  @clientSignatureDataJson,
-  @createdAt,
-  'local'
-)
-`,
-      )
-      .run({
-        id: documentId,
-        serviceOrderId: serviceOrder.id,
-        documentNumber,
-        version,
-        issuedByUserId: input.actorUserId ?? null,
-        technicianSignatureDataJson: JSON.stringify(
-          input.technicianSignatureData ?? null,
-        ),
-        clientSignatureDataJson: JSON.stringify(
-          input.clientSignatureData ?? null,
-        ),
-        createdAt: now,
-      });
-    markServiceOrderLocal(database, serviceOrder.id, now);
-    appendLocalAudit(database, {
-      entityType: "service_order_delivery_document",
-      entityId: documentId,
-      action: "create_draft",
-      actorUserId: input.actorUserId,
-      details: { serviceOrderId: serviceOrder.id, documentNumber, version },
-      createdAt: now,
-    });
-    appendOutboxEvent(database, {
-      entityType: "service_order_delivery_document",
-      entityId: documentId,
-      operation: "create_local_service_order_delivery_document_draft",
-      payload,
-      actorUserId: input.actorUserId,
-      deviceId: input.deviceId,
-      occurredAt: now,
-    });
-  })();
-
-  return getLocalServiceOrderDeliveryDocument(database, documentId);
 }
 
 /**
@@ -1140,17 +913,6 @@ ORDER BY version DESC
   return rows.map((row) => toLocalQuote(database, row));
 }
 
-function getLocalServiceOrderQuote(database: LocalDatabase, quoteId: string) {
-  const row = database
-    .prepare<
-      { quoteId: string },
-      LocalServiceOrderQuoteRow
-    >("SELECT * FROM service_order_quotes WHERE id = @quoteId")
-    .get({ quoteId });
-
-  return row ? toLocalQuote(database, row) : null;
-}
-
 function toLocalQuote(database: LocalDatabase, row: LocalServiceOrderQuoteRow) {
   return {
     id: row.remote_id ?? stableLocalNumericId(row.id),
@@ -1296,20 +1058,6 @@ ORDER BY version DESC
   return rows.map(toLocalDeliveryDocument);
 }
 
-function getLocalServiceOrderDeliveryDocument(
-  database: LocalDatabase,
-  documentId: string,
-) {
-  const row = database
-    .prepare<
-      { documentId: string },
-      LocalServiceOrderDeliveryDocumentRow
-    >("SELECT * FROM service_order_delivery_documents WHERE id = @documentId")
-    .get({ documentId });
-
-  return row ? toLocalDeliveryDocument(row) : null;
-}
-
 function toLocalDeliveryDocument(row: LocalServiceOrderDeliveryDocumentRow) {
   return {
     id: row.remote_id ?? stableLocalNumericId(row.id),
@@ -1347,101 +1095,6 @@ function normalizePricedItems(items: LocalServiceOrderPricedItemInput[]) {
       sortOrder: index,
     };
   });
-}
-
-function calculatePricedItems(items: ReturnType<typeof normalizePricedItems>) {
-  const subtotalServicesCents = items
-    .filter((item) =>
-      ["service", "external_service", "other", "evaluation_fee"].includes(
-        item.type,
-      ),
-    )
-    .reduce((sum, item) => sum + Math.max(item.totalPriceCents, 0), 0);
-  const subtotalPartsCents = items
-    .filter((item) => item.type === "part")
-    .reduce((sum, item) => sum + Math.max(item.totalPriceCents, 0), 0);
-  const freightCents = items
-    .filter((item) => item.type === "freight")
-    .reduce((sum, item) => sum + Math.max(item.totalPriceCents, 0), 0);
-  const discountCents = Math.abs(
-    items
-      .filter((item) => item.type === "discount")
-      .reduce((sum, item) => sum + item.totalPriceCents, 0),
-  );
-  const totalCents = Math.max(
-    items.reduce((sum, item) => sum + item.totalPriceCents, 0),
-    0,
-  );
-
-  return {
-    subtotalServicesCents,
-    subtotalPartsCents,
-    discountCents,
-    freightCents,
-    totalCents,
-  };
-}
-
-function replaceLocalQuoteItems(
-  database: LocalDatabase,
-  quoteId: string,
-  items: ReturnType<typeof normalizePricedItems>,
-) {
-  database
-    .prepare("DELETE FROM service_order_quote_items WHERE quote_id = @quoteId")
-    .run({ quoteId });
-
-  const insert = database.prepare(
-    `
-INSERT INTO service_order_quote_items (
-  id,
-  quote_id,
-  remote_id,
-  type,
-  description,
-  material_id,
-  quantity,
-  unit,
-  unit_cost_cents,
-  unit_price_cents,
-  total_price_cents,
-  taxable,
-  warranty_covered,
-  warranty_until,
-  warranty_terms,
-  notes,
-  sort_order
-) VALUES (
-  @id,
-  @quoteId,
-  NULL,
-  @type,
-  @description,
-  @materialId,
-  @quantity,
-  @unit,
-  @unitCostCents,
-  @unitPriceCents,
-  @totalPriceCents,
-  @taxable,
-  @warrantyCovered,
-  @warrantyUntil,
-  @warrantyTerms,
-  @notes,
-  @sortOrder
-)
-`,
-  );
-
-  for (const item of items) {
-    insert.run({
-      id: `service-order-quote-item:local:${randomUUID()}`,
-      quoteId,
-      ...item,
-      taxable: item.taxable ? 1 : 0,
-      warrantyCovered: item.warrantyCovered ? 1 : 0,
-    });
-  }
 }
 
 function replaceLocalExecutionItems(
@@ -1500,57 +1153,6 @@ INSERT INTO service_order_execution_items (
       unitCostCents: item.unitCostCents ?? 0,
     });
   }
-}
-
-function nextLocalQuoteVersion(
-  database: LocalDatabase,
-  serviceOrderId: string,
-) {
-  const row = database
-    .prepare<{ serviceOrderId: string }, { version: number }>(
-      `
-SELECT COALESCE(MAX(version), 0) + 1 AS version
-FROM service_order_quotes
-WHERE service_order_id = @serviceOrderId
-`,
-    )
-    .get({ serviceOrderId });
-
-  return row?.version ?? 1;
-}
-
-function nextLocalDeliveryDocumentVersion(
-  database: LocalDatabase,
-  serviceOrderId: string,
-) {
-  const row = database
-    .prepare<{ serviceOrderId: string }, { version: number }>(
-      `
-SELECT COALESCE(MAX(version), 0) + 1 AS version
-FROM service_order_delivery_documents
-WHERE service_order_id = @serviceOrderId
-`,
-    )
-    .get({ serviceOrderId });
-
-  return row?.version ?? 1;
-}
-
-function markServiceOrderLocal(
-  database: LocalDatabase,
-  id: string,
-  updatedAt: string,
-) {
-  database
-    .prepare(
-      `
-UPDATE service_orders
-SET updated_at = @updatedAt,
-  sync_state = 'local'
-WHERE id = @id
-`,
-    )
-    .run({ id, updatedAt });
 }
 
 function updateServiceOrderStatus(

@@ -15,6 +15,7 @@ import {
 } from "@calibra-facil/local-db";
 import { createLocalServer } from "./server";
 import { createMethodDefinitionEngine } from "./method-engine";
+import { createAssetStub, seedSyncedReferenceData } from "./test-support";
 import type { LocalServerConfig } from "./bootstrap";
 
 const tempDirectories: string[] = [];
@@ -100,64 +101,6 @@ function parseSyncPushBody(body: unknown) {
 }
 
 describe("local server", () => {
-  it("captures a non-conformance offline and rejects the cloud-only job link", async () => {
-    const dbPath = createTempDatabasePath();
-    const database = openLocalDatabase({ filePath: dbPath });
-    const app = createLocalServer(createConfig(dbPath), database);
-
-    // Phase 0 (issue #426): linking an NC to a calibration stays cloud-only.
-    const rejected = await app.request("/api/nc", {
-      method: "POST",
-      body: JSON.stringify({
-        type: "equipment",
-        description: "Instrumento apresentou desvio acima do criterio",
-        detectedAt: "2026-07-01T12:00:00.000Z",
-        jobId: 77,
-      }),
-      headers: { "Content-Type": "application/json" },
-    });
-    expect(rejected.status).toBe(409);
-    await expect(rejected.json()).resolves.toMatchObject({
-      error: "Vínculo com calibração não está disponível no desktop",
-    });
-
-    const created = await app.request("/api/nc", {
-      method: "POST",
-      body: JSON.stringify({
-        type: "equipment",
-        description: "Instrumento apresentou desvio acima do criterio",
-        detectedAt: "2026-07-01T12:00:00.000Z",
-      }),
-      headers: { "Content-Type": "application/json" },
-    });
-    expect(created.status).toBe(201);
-    const createdBody = recordFromUnknown(await created.json());
-    expect(stringFromRecord(createdBody, "ncNumber")).toMatch(/^LOCAL-NC-/);
-    expect(stringFromRecord(createdBody, "status")).toBe("open");
-    expect(stringFromRecord(createdBody, "syncState")).toBe("local");
-
-    const list = await app.request("/api/nc?page=1&limit=20");
-    expect(list.status).toBe(200);
-    const listBody = recordFromUnknown(await list.json());
-    expect(listBody.data).toHaveLength(1);
-    expect(listBody.pagination).toMatchObject({ page: 1, total: 1 });
-
-    const outboxRow = recordFromUnknown(
-      database
-        .prepare(
-          `
-SELECT aggregate_kind, event_type
-FROM domain_events
-WHERE aggregate_kind = 'non_conformance'
-`,
-        )
-        .get(),
-    );
-    expect(outboxRow.event_type).toBe("create_local_non_conformance");
-
-    database.close();
-  });
-
   it("uses synced tenant context for local writes after packaged startup", async () => {
     const dbPath = createTempDatabasePath();
     const database = openLocalDatabase({ filePath: dbPath });
@@ -213,19 +156,15 @@ WHERE aggregate_kind = 'non_conformance'
       userId: "user-synced",
     });
 
-    const response = await app.request("/api/customers", {
-      method: "POST",
-      body: JSON.stringify({
-        name: "Cliente Offline",
-        taxId: "12345678000199",
-        email: "offline@example.com",
-      }),
-      headers: { "Content-Type": "application/json" },
+    seedSyncedReferenceData(database, {
+      organizationId: "org-synced",
+      unitId: 42,
     });
+    const response = await createAssetStub(app, "Balanca de campo");
 
-    expect(response.status).toBe(201);
+    expect(response.status, await response.clone().text()).toBe(201);
     await expect(response.json()).resolves.toMatchObject({
-      name: "Cliente Offline",
+      name: "Balanca de campo",
       syncState: "local",
     });
 
@@ -234,8 +173,8 @@ WHERE aggregate_kind = 'non_conformance'
         .prepare(
           `
 SELECT organization_id, unit_id
-FROM customers
-WHERE name = 'Cliente Offline'
+FROM assets
+WHERE name = 'Balanca de campo'
 `,
         )
         .get(),
@@ -364,7 +303,7 @@ INSERT INTO services (
     database.close();
   });
 
-  it("serves service catalog detail and published method options locally", async () => {
+  it("serves published method options locally", async () => {
     const dbPath = createTempDatabasePath();
     const database = openLocalDatabase({ filePath: dbPath });
     const now = new Date("2026-01-15T10:00:00.000Z").toISOString();
@@ -419,57 +358,6 @@ INSERT INTO published_methods (
 `,
       )
       .run({ now });
-    database
-      .prepare(
-        `
-INSERT INTO services (
-  id,
-  remote_id,
-  organization_id,
-  asset_type_id,
-  name,
-  description,
-  method_id,
-  status,
-  pulled_at,
-  sync_state
-) VALUES (
-  'service:654',
-  654,
-  'org-1',
-  'asset-type:456',
-  'Mass calibration',
-  'Traceable mass service',
-  'method:321',
-  'ACTIVE',
-  @now,
-  'synced'
-)
-`,
-      )
-      .run({ now });
-
-    const serviceResponse = await app.request("/api/services/mass-calibration");
-    expect(serviceResponse.status).toBe(200);
-    await expect(serviceResponse.json()).resolves.toMatchObject({
-      id: 654,
-      name: "Mass calibration",
-      description: "Traceable mass service",
-      methodId: 321,
-      methodName: "Mass error",
-      methodVersion: 2,
-      methodStatus: "PUBLISHED",
-      assetTypeId: 456,
-      assetTypeName: "Balance",
-      isActive: true,
-    });
-
-    const auditResponse = await app.request(
-      "/api/services/mass-calibration/audit-log",
-    );
-    expect(auditResponse.status).toBe(200);
-    await expect(auditResponse.json()).resolves.toEqual({ data: [] });
-
     const methodsResponse = await app.request(
       "/api/methods?status=PUBLISHED&limit=100",
     );
@@ -507,23 +395,6 @@ INSERT INTO services (
         optionsFingerprint: "options",
       },
     });
-
-    const methodAuditResponse = await app.request(
-      "/api/methods/mass-error-v2/audit",
-    );
-    expect(methodAuditResponse.status).toBe(200);
-    await expect(methodAuditResponse.json()).resolves.toEqual({ data: [] });
-
-    const methodWriteResponse = await app.request("/api/methods/321/archive", {
-      method: "POST",
-    });
-    expect(methodWriteResponse.status).toBe(409);
-
-    const writeResponse = await app.request("/api/services/654", {
-      method: "PUT",
-      body: JSON.stringify({ isActive: false }),
-    });
-    expect(writeResponse.status).toBe(409);
 
     database.close();
   });
@@ -629,16 +500,6 @@ INSERT INTO reference_standards (
       distribution: "normal",
     });
 
-    const auditResponse = await app.request("/api/standards/std-001/audit-log");
-    expect(auditResponse.status).toBe(200);
-    await expect(auditResponse.json()).resolves.toEqual({ data: [] });
-
-    const writeResponse = await app.request("/api/standards/111", {
-      method: "PUT",
-      body: JSON.stringify({ status: "INACTIVE" }),
-    });
-    expect(writeResponse.status).toBe(409);
-
     database.close();
   });
 
@@ -667,14 +528,6 @@ INSERT INTO reference_standards (
             return Response.json({
               accepted: body.events.map((event) => ({
                 eventId: event.eventId,
-                remoteEntityId:
-                  event.operation === "create_local_job_draft"
-                    ? 12345
-                    : undefined,
-                remoteEntity:
-                  event.operation === "create_local_job_draft"
-                    ? { jobId: "CAL-2026-0001", status: "DRAFT" }
-                    : undefined,
                 remoteVersion: event.localVersion + 1,
                 cloudEventId: `cloud:${event.eventId}`,
               })),
@@ -856,160 +709,6 @@ INSERT INTO assets (
       },
     });
 
-    const createCustomerResponse = await app.request("/api/customers", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Beta Lab",
-        taxId: "98765432000100",
-        email: "beta@example.com",
-        phone: "(11) 98888-7777",
-        address: { city: "Sao Paulo", state: "SP" },
-      }),
-    });
-    expect(createCustomerResponse.status).toBe(201);
-    await expect(createCustomerResponse.json()).resolves.toMatchObject({
-      id: expect.any(Number),
-      name: "Beta Lab",
-      taxId: "98765432000100",
-      email: "beta@example.com",
-    });
-
-    const customerOutbox = recordFromUnknown(
-      database
-        .prepare(
-          `
-SELECT domain_events.aggregate_kind, domain_events.event_type
-FROM domain_events
-INNER JOIN outbox ON outbox.event_id = domain_events.event_id
-WHERE domain_events.aggregate_kind = 'customer'
-LIMIT 1
-`,
-        )
-        .get(),
-    );
-    expect(customerOutbox).toEqual({
-      aggregate_kind: "customer",
-      event_type: "create_local_customer",
-    });
-
-    const updateCustomerResponse = await app.request(
-      "/api/customers/12345678000199",
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: "Acme Lab Ltda",
-          email: "ops@example.com",
-          phone: "(11) 97777-6666",
-          address: { city: "Sao Paulo", state: "SP" },
-        }),
-      },
-    );
-    expect(updateCustomerResponse.status).toBe(200);
-    await expect(updateCustomerResponse.json()).resolves.toMatchObject({
-      id: 123,
-      name: "Acme Lab Ltda",
-      email: "ops@example.com",
-      phone: "(11) 97777-6666",
-      address: { city: "Sao Paulo", state: "SP" },
-    });
-
-    const updateCustomerOutbox = recordFromUnknown(
-      database
-        .prepare(
-          `
-SELECT domain_events.aggregate_kind, domain_events.event_type
-FROM domain_events
-INNER JOIN outbox ON outbox.event_id = domain_events.event_id
-WHERE domain_events.aggregate_kind = 'customer'
-  AND domain_events.event_type = 'update_local_customer'
-LIMIT 1
-`,
-        )
-        .get(),
-    );
-    expect(updateCustomerOutbox).toEqual({
-      aggregate_kind: "customer",
-      event_type: "update_local_customer",
-    });
-
-    const complianceResponse = await app.request(
-      "/api/customers/12345678000199/compliance",
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          compliance: {
-            qualificationStatus: "qualified",
-            qualityRequirementsAcknowledged: true,
-            notes: "Aprovado offline",
-          },
-          reason: "Qualificacao documental conferida",
-        }),
-      },
-    );
-    expect(complianceResponse.status).toBe(200);
-    await expect(complianceResponse.json()).resolves.toMatchObject({
-      id: 123,
-      compliance: {
-        qualificationStatus: "qualified",
-        qualityRequirementsAcknowledged: true,
-        notes: "Aprovado offline",
-        qualityRequirementsAcknowledgedAt: expect.any(String),
-      },
-    });
-
-    const complianceOutbox = recordFromUnknown(
-      database
-        .prepare(
-          `
-SELECT domain_events.aggregate_kind, domain_events.event_type
-FROM domain_events
-INNER JOIN outbox ON outbox.event_id = domain_events.event_id
-WHERE domain_events.aggregate_kind = 'customer'
-  AND domain_events.event_type = 'update_local_customer_compliance'
-LIMIT 1
-`,
-        )
-        .get(),
-    );
-    expect(complianceOutbox).toEqual({
-      aggregate_kind: "customer",
-      event_type: "update_local_customer_compliance",
-    });
-
-    const customerAuditResponse = await app.request(
-      "/api/customers/12345678000199/audit-log?page=1&limit=50",
-    );
-    expect(customerAuditResponse.status).toBe(200);
-    await expect(customerAuditResponse.json()).resolves.toMatchObject({
-      data: [],
-      pagination: { page: 1, limit: 50, total: 0, totalPages: 0 },
-    });
-
-    const membersResponse = await app.request(
-      "/api/customers/12345678000199/members",
-    );
-    expect(membersResponse.status).toBe(200);
-    await expect(membersResponse.json()).resolves.toEqual([]);
-
-    const invitationsResponse = await app.request(
-      "/api/customers/12345678000199/invitations",
-    );
-    expect(invitationsResponse.status).toBe(200);
-    await expect(invitationsResponse.json()).resolves.toEqual([]);
-
-    const inviteResponse = await app.request(
-      "/api/customers/12345678000199/invitations",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: "portal@example.com", role: "viewer" }),
-      },
-    );
-    expect(inviteResponse.status).toBe(409);
-
     const assetsResponse = await app.request(
       "/api/assets?page=1&limit=20&query=TAG",
     );
@@ -1019,7 +718,7 @@ LIMIT 1
         {
           id: 789,
           customerId: 123,
-          customerName: "Acme Lab Ltda",
+          customerName: "Acme Lab",
           assetTypeId: 456,
           assetTypeName: "Balance",
           name: "Scale 01",
@@ -1041,7 +740,7 @@ LIMIT 1
     await expect(assetDetailResponse.json()).resolves.toMatchObject({
       id: 789,
       customerId: 123,
-      customerName: "Acme Lab Ltda",
+      customerName: "Acme Lab",
       customerTaxId: "12345678000199",
       assetTypeId: 456,
       assetTypeName: "Balance",
@@ -1052,62 +751,6 @@ LIMIT 1
       tag: "TAG-001",
       status: "ACTIVE",
     });
-
-    const updateAssetResponse = await app.request("/api/assets/tag-001", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Scale 01 Updated",
-        manufacturer: "Acme Instruments",
-        model: "A-101",
-        serialNumber: "SN-001",
-        tag: "TAG-001A",
-        status: "MAINTENANCE",
-        lastCalibrationDate: "2026-01-01T00:00:00.000Z",
-        // Attempted lab attribution — the next-cal date is customer-owned
-        // (portal, §7.8.4.3): the field is stripped by the schema and must
-        // NOT be persisted by the local server either.
-        nextCalibrationDate: "2027-01-01T00:00:00.000Z",
-        comments: "Atualizado offline",
-        specifications: { capacity: 220 },
-      }),
-    });
-    expect(updateAssetResponse.status).toBe(200);
-    await expect(updateAssetResponse.json()).resolves.toMatchObject({
-      id: 789,
-      name: "Scale 01 Updated",
-      model: "A-101",
-      tag: "TAG-001A",
-      status: "MAINTENANCE",
-      lastCalibrationDate: "2026-01-01T00:00:00.000Z",
-      nextCalibrationDate: null,
-      comments: "Atualizado offline",
-    });
-
-    const updateAssetOutbox = recordFromUnknown(
-      database
-        .prepare(
-          `
-SELECT domain_events.aggregate_kind, domain_events.event_type
-FROM domain_events
-INNER JOIN outbox ON outbox.event_id = domain_events.event_id
-WHERE domain_events.aggregate_kind = 'asset'
-  AND domain_events.event_type = 'update_local_asset'
-LIMIT 1
-`,
-        )
-        .get(),
-    );
-    expect(updateAssetOutbox).toEqual({
-      aggregate_kind: "asset",
-      event_type: "update_local_asset",
-    });
-
-    const assetAuditLogResponse = await app.request(
-      "/api/assets/tag-001a/audit-log",
-    );
-    expect(assetAuditLogResponse.status).toBe(200);
-    await expect(assetAuditLogResponse.json()).resolves.toEqual({ data: [] });
 
     const createAssetResponse = await app.request("/api/assets", {
       method: "POST",
@@ -1167,23 +810,6 @@ LIMIT 1
       ],
     });
 
-    const servicesResponse = await app.request(
-      "/api/services?page=1&limit=20&assetTypeId=456&isActive=true",
-    );
-    expect(servicesResponse.status).toBe(200);
-    await expect(servicesResponse.json()).resolves.toMatchObject({
-      data: [],
-      pagination: {
-        page: 1,
-        limit: 20,
-        total: 0,
-      },
-    });
-
-    const techniciansResponse = await app.request("/api/jobs/technicians/list");
-    expect(techniciansResponse.status).toBe(200);
-    await expect(techniciansResponse.json()).resolves.toEqual({ data: [] });
-
     database.close();
   });
 
@@ -1213,39 +839,14 @@ LIMIT 1
               remoteEntityId:
                 event.operation === "create_local_service_order_intake"
                   ? 555
-                  : event.operation === "create_local_service_order_quote_draft"
-                    ? 556
-                    : event.operation ===
-                        "save_local_service_order_execution_notes"
-                      ? 557
-                      : event.operation ===
-                          "create_local_service_order_delivery_document_draft"
-                        ? 558
-                        : undefined,
+                  : undefined,
               remoteEntity:
                 event.operation === "create_local_service_order_intake"
                   ? {
                       serviceOrderNumber: "OS-2026-0009",
                       status: "awaiting_tech_evaluation",
                     }
-                  : event.operation === "create_local_service_order_quote_draft"
-                    ? {
-                        quoteNumber: "OS-2026-0009/ORC",
-                        status: "draft",
-                        totalCents: 15000,
-                      }
-                    : event.operation ===
-                        "save_local_service_order_execution_notes"
-                      ? {
-                          status: "repair_in_progress",
-                        }
-                      : event.operation ===
-                          "create_local_service_order_delivery_document_draft"
-                        ? {
-                            documentNumber: "OS-2026-0009/ENT",
-                            issuedAt: now,
-                          }
-                        : undefined,
+                  : undefined,
               remoteVersion: event.localVersion + 1,
               cloudEventId: `cloud:${event.eventId}`,
             })),
@@ -1404,59 +1005,6 @@ INSERT INTO assets (
       /^LOCAL-OS-/,
     );
 
-    const quoteResponse = await app.request(
-      `/api/service-orders/${createdId}/quotes`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          clientMessage: "Aguardando aprovacao",
-          items: [
-            {
-              type: "service",
-              description: "Reparo",
-              quantity: 1,
-              unit: "un",
-              unitPriceCents: 15000,
-            },
-          ],
-        }),
-        headers: { "Content-Type": "application/json" },
-      },
-    );
-    expect(quoteResponse.status, await quoteResponse.text()).toBe(201);
-
-    const executionResponse = await app.request(
-      `/api/service-orders/${createdId}/execution`,
-      {
-        method: "PATCH",
-        body: JSON.stringify({
-          servicePerformed: "Troca da fonte",
-          technicalNotes: "Teste de bancada aprovado",
-          result: "repaired",
-        }),
-        headers: { "Content-Type": "application/json" },
-      },
-    );
-    expect(executionResponse.status, await executionResponse.text()).toBe(200);
-
-    const deliveryDocumentResponse = await app.request(
-      `/api/service-orders/${createdId}/delivery-document`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          clientSignatureData: {
-            signerName: "Cliente",
-            dataUrl: "data:image/png;base64,abc",
-          },
-        }),
-        headers: { "Content-Type": "application/json" },
-      },
-    );
-    expect(
-      deliveryDocumentResponse.status,
-      await deliveryDocumentResponse.text(),
-    ).toBe(201);
-
     const listResponse = await app.request("/api/service-orders?query=Acme");
     expect(listResponse.status).toBe(200);
     await expect(listResponse.json()).resolves.toMatchObject({
@@ -1464,7 +1012,6 @@ INSERT INTO assets (
         {
           customerName: "Acme Lab",
           assetName: "Scale 01",
-          status: "repair_in_progress",
           syncState: "local",
         },
       ],
@@ -1505,7 +1052,6 @@ INSERT INTO assets (
         {
           customerName: "Acme Lab",
           assetName: "Scale 01",
-          status: "repair_in_progress",
           syncState: "local",
         },
       ],
@@ -1567,23 +1113,60 @@ WHERE service_order_number = 'OS-2026-0009'
       service_order_number: "OS-2026-0009",
       sync_state: "synced",
     });
-    const syncedWorkflow = recordFromUnknown(
-      database
-        .prepare(
-          `
-SELECT
-  (SELECT remote_id FROM service_order_quotes LIMIT 1) AS quote_remote_id,
-  (SELECT remote_id FROM service_order_executions LIMIT 1) AS execution_remote_id,
-  (SELECT remote_id FROM service_order_delivery_documents LIMIT 1) AS document_remote_id
-`,
-        )
-        .get(),
-    );
-    expect(syncedWorkflow).toEqual({
-      quote_remote_id: 556,
-      execution_remote_id: 557,
-      document_remote_id: 558,
-    });
+    database.close();
+  });
+
+  it("REQ-OFF-3: serves no cloud-only surface (Q13 keeps field capture, intake and reference reads)", async () => {
+    const dbPath = createTempDatabasePath();
+    const database = openLocalDatabase({ filePath: dbPath });
+    const app = createLocalServer(createConfig(dbPath), database);
+
+    const removed = [
+      ["GET", "/api/dashboard/stats"],
+      ["GET", "/api/services"],
+      ["GET", "/api/services/1"],
+      ["POST", "/api/services"],
+      ["GET", "/api/jobs/technicians/list"],
+      ["POST", "/api/jobs"],
+      ["POST", "/api/methods"],
+      ["PUT", "/api/methods/1"],
+      ["POST", "/api/methods/1/publish"],
+      ["POST", "/api/customers"],
+      ["PUT", "/api/customers/1"],
+      ["PUT", "/api/customers/1/compliance"],
+      ["GET", "/api/customers/1/members"],
+      ["POST", "/api/customers/1/invitations"],
+      ["POST", "/api/service-orders/1/quotes"],
+      ["PATCH", "/api/service-orders/1/execution"],
+      ["POST", "/api/service-orders/1/delivery-document"],
+      ["GET", "/api/nc"],
+      ["POST", "/api/nc"],
+      ["POST", "/api/standards"],
+      ["PUT", "/api/standards/1"],
+      ["PUT", "/api/assets/1"],
+      ["GET", "/api/assets/1/audit-log"],
+    ] as const;
+
+    for (const [method, route] of removed) {
+      const response = await app.request(route, { method });
+      expect(response.status, `${method} ${route}`).toBe(404);
+    }
+
+    const kept = [
+      "/api/customers",
+      "/api/assets",
+      "/api/asset-types",
+      "/api/methods",
+      "/api/standards",
+      "/api/standards/composition-profiles",
+      "/api/jobs",
+      "/api/service-orders",
+      "/api/environmental-limits/effective/1",
+    ];
+    for (const route of kept) {
+      const response = await app.request(route);
+      expect(response.status, route).not.toBe(404);
+    }
 
     database.close();
   });
@@ -2167,14 +1750,6 @@ INSERT INTO sync_conflicts (
           return Response.json({
             accepted: body.events.map((event) => ({
               eventId: event.eventId,
-              remoteEntityId:
-                event.operation === "create_local_job_draft"
-                  ? 12345
-                  : undefined,
-              remoteEntity:
-                event.operation === "create_local_job_draft"
-                  ? { jobId: "CAL-2026-0001", status: "DRAFT" }
-                  : undefined,
               remoteVersion: event.localVersion + 1,
               cloudEventId: `cloud:${event.eventId}`,
             })),
@@ -2476,16 +2051,54 @@ INSERT INTO environmental_limits (
       },
     });
 
-    const createResponse = await app.request("/api/jobs", {
-      method: "POST",
-      body: JSON.stringify({ assetId: 789, serviceId: 654 }),
-      headers: { "Content-Type": "application/json" },
+    // Field capture starts from a job the cloud already assigned: it reaches
+    // the device as a synced projection with its method frozen in the snapshot.
+    const methodRow = recordFromUnknown(
+      database
+        .prepare(
+          "SELECT normalized_method_json FROM published_methods WHERE id = 'method:321'",
+        )
+        .get(),
+    );
+    const normalizedMethod = recordFromUnknown(
+      JSON.parse(stringFromRecord(methodRow, "normalized_method_json")),
+    );
+    const createdId = 12345;
+    upsertLocalJobProjection(database, {
+      id: "job:12345",
+      remoteId: createdId,
+      jobId: "CAL-2026-0001",
+      organizationId: "org-1",
+      unitId: 1,
+      customerId: "customer:123",
+      assetId: "asset:789",
+      serviceId: "service:654",
+      methodSnapshotJson: JSON.stringify({
+        methodId: 321,
+        methodName: "Mass error",
+        methodVersion: 1,
+        compiledMethod,
+        methodFingerprint: compiledMethod.methodFingerprint,
+        engineVersion: compiledMethod.engine.version,
+        engineOptionsFingerprint: compiledMethod.engine.optionsFingerprint,
+        publicationEvidence: {},
+        ...normalizedMethod,
+        accreditedScope: false,
+      }),
+      assetSnapshotJson: JSON.stringify({
+        assetId: 789,
+        assetTypeId: 456,
+        assetTypeName: "Balance",
+        name: "Scale 01",
+        tag: "TAG-001",
+        serialNumber: "SN-001",
+        specifications: {},
+      }),
+      status: "DRAFT",
+      createdAt: now,
+      updatedAt: now,
+      syncState: "synced",
     });
-    expect(createResponse.status).toBe(201);
-    const created = recordFromUnknown(await createResponse.json());
-    const createdId = numberFromRecord(created, "id");
-    const createdJobId = stringFromRecord(created, "jobId");
-    expect(createdJobId).toMatch(/^LOCAL-/);
 
     const executeResponse = await app.request(
       `/api/jobs/${createdId}/execute`,
@@ -2655,7 +2268,7 @@ INSERT INTO environmental_limits (
     database = openLocalDatabase({ filePath: dbPath });
     app = createLocalServer(config, database, syncOptions);
 
-    const reopenedDetailResponse = await app.request(`/api/jobs/${created.id}`);
+    const reopenedDetailResponse = await app.request(`/api/jobs/${createdId}`);
     expect(reopenedDetailResponse.status).toBe(200);
     await expect(reopenedDetailResponse.json()).resolves.toMatchObject({
       status: "REVIEW",
@@ -2748,11 +2361,14 @@ WHERE calibration_jobs.remote_id = @remoteId
         )
         .get({ remoteId: 12345 }),
     );
+    // The job was assigned by the cloud, so a push only drains the execution
+    // events. The row's sync state is refreshed by the next pull projection,
+    // not by the push acceptance (only offline creates adopt a remote entity).
     expect(syncedJob).toEqual({
       job_id: "CAL-2026-0001",
       status: "REVIEW",
       certificate_url: null,
-      sync_state: "synced",
+      sync_state: "local",
     });
 
     database.close();

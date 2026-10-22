@@ -9,6 +9,7 @@ import {
   createLocalServerRuntime,
 } from "./server";
 import type { LocalServerConfig } from "./bootstrap";
+import { createAssetStub, seedSyncedReferenceData } from "./test-support";
 
 const tempDirectories: string[] = [];
 
@@ -347,21 +348,18 @@ describe("continuous sync lifecycle", () => {
   it("schedules a sync after a durable local write, without a screen read", async () => {
     // The Phase 3 requirement: reconnecting and finishing work offline must
     // drain the outbox even if the technician never opens a list screen.
-    const { app, syncScheduler, cloud } = createRuntime();
+    const { app, syncScheduler, cloud, database } = createRuntime();
     syncScheduler.start();
     await vi.waitFor(() => {
       expect(cloud.countOf("/api/sync/pull")).toBe(1);
     });
 
-    const created = await app.request("/api/customers", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Cliente Offline",
-        document: "12345678000199",
-      }),
+    seedSyncedReferenceData(database, {
+      organizationId: "org-1",
+      unitId: 1,
     });
-    expect(created.status).toBe(201);
+    const created = await createAssetStub(app, "Balanca Offline");
+    expect(created.status, await created.clone().text()).toBe(201);
 
     await vi.waitFor(() => {
       expect(cloud.countOf("/api/sync/push")).toBeGreaterThan(0);
@@ -377,7 +375,7 @@ describe("continuous sync lifecycle", () => {
       expect(cloud.countOf("/api/sync/pull")).toBe(1);
     });
 
-    await app.request("/api/customers");
+    await app.request("/api/assets");
     await new Promise((resolve) => setTimeout(resolve, 60));
 
     expect(cloud.countOf("/api/sync/pull")).toBe(1);
@@ -391,7 +389,7 @@ describe("continuous sync lifecycle", () => {
       expect(cloud.countOf("/api/sync/pull")).toBe(1);
     });
 
-    const rejected = await app.request("/api/customers", {
+    const rejected = await app.request("/api/assets", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({}),
