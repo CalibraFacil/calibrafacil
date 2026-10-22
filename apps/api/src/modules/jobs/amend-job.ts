@@ -1,9 +1,6 @@
 import { db } from "@calibra-facil/db";
-import {
-  calibrationJob,
-  jobAuditLog,
-  type JobStatus,
-} from "@calibra-facil/db/schema";
+import { appendJobEvent } from "@calibra-facil/db/job-events";
+import { calibrationJob, type JobStatus } from "@calibra-facil/db/schema";
 import {
   allowedFrom,
   requireTargetOf,
@@ -191,31 +188,31 @@ export async function amendJob(
         throw new JobStatusConflictError();
       }
 
-      await tx.insert(jobAuditLog).values({
+      await appendJobEvent(tx, {
+        action: "supersede",
         organizationId,
         jobId: originalJob.id,
-        action: "supersede",
+        actor: { kind: "user", userId: actor.userId },
         changes: {
           ...jobActorAuditFields(actor),
           status: { old: originalJob.status, new: supersededStatus },
           supersededById: amendedJob.id,
         },
-        performedBy: actor.userId,
         ipAddress: actor.ipAddress ?? null,
         reason: `Certificado retificado. Novo: ${amendedJob.jobId}. Motivo: ${command.reason}`,
       });
 
-      await tx.insert(jobAuditLog).values({
+      await appendJobEvent(tx, {
+        action: "create_amendment",
         organizationId,
         jobId: amendedJob.id,
-        action: "create_amendment",
+        actor: { kind: "user", userId: actor.userId },
         changes: {
           ...jobActorAuditFields(actor),
           supersedesId: originalJob.id,
           amendmentNumber,
           reason: command.reason,
         },
-        performedBy: actor.userId,
         ipAddress: actor.ipAddress ?? null,
         reason: command.reason,
       });

@@ -1,4 +1,5 @@
 import { db } from "@calibra-facil/db";
+import type { JobActorAuditFields } from "@calibra-facil/db/job-events";
 import { calibrationJob } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 import {
@@ -48,7 +49,7 @@ export type JobLifecycleActor = Exclude<JobActor, { kind: "desktop_session" }>;
  * every audit row of a command: nothing for a signed-in user (the plain trail),
  * the channel and key identity for an API key, the sync source for a desktop.
  */
-export function jobActorAuditFields(actor: JobActor) {
+export function jobActorAuditFields(actor: JobActor): JobActorAuditFields {
   switch (actor.kind) {
     case "user":
       return {};

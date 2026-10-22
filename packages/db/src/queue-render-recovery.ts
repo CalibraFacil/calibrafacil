@@ -4,7 +4,8 @@ import {
   requireTargetOf,
 } from "@calibra-facil/schemas/job-transitions";
 import { db } from "./db.js";
-import { appQueueJob, calibrationJob, jobAuditLog } from "./schema.js";
+import { appendJobEvent, type RenderRejectionTrigger } from "./job-events.js";
+import { appQueueJob, calibrationJob } from "./schema.js";
 import type { DeadLetteredQueueJob } from "./queue.js";
 
 // Recovery for certificate renders that a hard crash (or a dropped queue message)
@@ -34,7 +35,7 @@ const RENDERING_STATUS = "GENERATING_PDF";
  * `performed_by` carry the approver (job_audit_log.performed_by is a NOT NULL FK
  * to user and there is no system user), so the marker is the only difference.
  */
-export type RenderRejectionTrigger = "dead-lettered" | "stuck-render";
+export type { RenderRejectionTrigger };
 
 export const RENDER_REJECTION_SOURCE = "queue-backstop";
 
@@ -108,10 +109,15 @@ export async function rejectCertificateRender(params: {
 
     if (updated.length === 0) return false;
 
-    await tx.insert(jobAuditLog).values({
+    await appendJobEvent(tx, {
+      action: "certificate_error",
       organizationId: params.organizationId,
       jobId: params.jobId,
-      action: "certificate_error",
+      actor: {
+        kind: "system",
+        source: "queue-backstop",
+        onBehalfOf: params.rejectedBy,
+      },
       changes: {
         status: { old: renderingStatus, new: failedStatus },
         source: RENDER_REJECTION_SOURCE,
@@ -120,7 +126,6 @@ export async function rejectCertificateRender(params: {
           ? {}
           : { queueJobId: params.queueJobId }),
       },
-      performedBy: params.rejectedBy,
       performedAt: now,
       reason: params.reason,
     });

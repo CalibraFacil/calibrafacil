@@ -1,9 +1,6 @@
 import { db } from "@calibra-facil/db";
-import {
-  calibrationJob,
-  jobAuditLog,
-  type JobStatus,
-} from "@calibra-facil/db/schema";
+import { appendJobEvent } from "@calibra-facil/db/job-events";
+import { calibrationJob, type JobStatus } from "@calibra-facil/db/schema";
 import { targetOf } from "@calibra-facil/schemas/job-transitions";
 import { and, eq } from "drizzle-orm";
 import { invalid, type DomainError } from "../../lib/domain-errors";
@@ -123,10 +120,11 @@ export async function assignJob(
       .returning();
     if (!row) return null;
 
-    await tx.insert(jobAuditLog).values({
+    await appendJobEvent(tx, {
+      action: "assign",
       organizationId,
       jobId: existing.id,
-      action: "assign",
+      actor: { kind: "user", userId: actor.userId },
       changes: {
         ...jobActorAuditFields(actor),
         technicianId: {
@@ -135,7 +133,6 @@ export async function assignJob(
         },
         technicianName: { old: null, new: technician.name },
       },
-      performedBy: actor.userId,
       ipAddress: actor.ipAddress ?? null,
     });
     return row;
