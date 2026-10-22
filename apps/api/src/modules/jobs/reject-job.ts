@@ -1,9 +1,6 @@
 import { db } from "@calibra-facil/db";
-import {
-  calibrationJob,
-  jobAuditLog,
-  type JobStatus,
-} from "@calibra-facil/db/schema";
+import { appendJobEvent } from "@calibra-facil/db/job-events";
+import { calibrationJob, type JobStatus } from "@calibra-facil/db/schema";
 import {
   requireTargetOf,
   targetOf,
@@ -96,15 +93,15 @@ export async function rejectJob(
       .returning();
     if (!row) return null;
 
-    await tx.insert(jobAuditLog).values({
+    await appendJobEvent(tx, {
+      action: "reject",
       organizationId,
       jobId: existing.id,
-      action: "reject",
+      actor: { kind: "user", userId: actor.userId },
       changes: {
         ...jobActorAuditFields(actor),
         status: { old: existing.status, new: rejectedStatus },
       },
-      performedBy: actor.userId,
       ipAddress: actor.ipAddress ?? null,
       reason: command.reason,
     });

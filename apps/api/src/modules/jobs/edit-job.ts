@@ -1,9 +1,9 @@
 import { db } from "@calibra-facil/db";
 import {
-  calibrationJob,
-  jobAuditLog,
-  type JobStatus,
-} from "@calibra-facil/db/schema";
+  appendJobEvent,
+  type JobUpdatedChanges,
+} from "@calibra-facil/db/job-events";
+import { calibrationJob, type JobStatus } from "@calibra-facil/db/schema";
 import { targetOf } from "@calibra-facil/schemas/job-transitions";
 import { calendarDateKey } from "@calibra-facil/shared";
 import { and, eq } from "drizzle-orm";
@@ -93,7 +93,7 @@ export async function editJob(command: EditJobCommand): Promise<EditJobResult> {
     };
   }
 
-  const changes: Record<string, { old: unknown; new: unknown }> = {};
+  const changes: Pick<JobUpdatedChanges, "technicianId" | "dueDate"> = {};
   const set: Partial<Pick<JobRow, "technicianId" | "dueDate">> = {};
 
   if (
@@ -171,12 +171,12 @@ export async function editJob(command: EditJobCommand): Promise<EditJobResult> {
       .returning();
     if (!row) return null;
 
-    await tx.insert(jobAuditLog).values({
+    await appendJobEvent(tx, {
+      action: "update",
       organizationId,
       jobId: existing.id,
-      action: "update",
+      actor: { kind: "user", userId: actor.userId },
       changes: { ...jobActorAuditFields(actor), ...changes },
-      performedBy: actor.userId,
       ipAddress: actor.ipAddress ?? null,
     });
     return row;

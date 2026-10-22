@@ -1,6 +1,10 @@
 import { canPerformCalibrationAction } from "@calibra-facil/auth/access";
 import { db } from "@calibra-facil/db";
-import { calibrationJob, jobAuditLog, member } from "@calibra-facil/db/schema";
+import {
+  appendJobEvent,
+  type JobApprovedChanges,
+} from "@calibra-facil/db/job-events";
+import { calibrationJob, member } from "@calibra-facil/db/schema";
 import type { ApproveJobSchema } from "@calibra-facil/schemas";
 import {
   allowedFrom,
@@ -370,7 +374,7 @@ export async function approveJob(
   // audit failure rolls the approval back instead of releasing unaudited.
   // Approval through an API key: record the credential next to the person it
   // acted for (`performedBy`), so the trail shows creator X approved via key Y.
-  const approvedVia =
+  const approvedVia: Pick<JobApprovedChanges, "approvedVia"> =
     actor.kind === "api_key"
       ? {
           approvedVia: {
@@ -418,10 +422,11 @@ export async function approveJob(
       return null;
     }
 
-    await tx.insert(jobAuditLog).values({
+    await appendJobEvent(tx, {
+      action: "approve",
       organizationId: memberData.organizationId,
       jobId,
-      action: "approve",
+      actor: { kind: "user", userId: approverId },
       changes: {
         status: { old: existing.status, new: approvedStatus },
         ...approvedVia,
@@ -440,7 +445,6 @@ export async function approveJob(
             }
           : {}),
       },
-      performedBy: approverId,
       ipAddress: input.metadata.ipAddress ?? null,
       // Keep the approver's own notes alongside the override record —
       // the downgrade must not erase the supplied approval reason from
@@ -563,14 +567,14 @@ async function revertApprovalAfterDispatchFailure(params: {
 
       if (!reverted) return;
 
-      await tx.insert(jobAuditLog).values({
+      await appendJobEvent(tx, {
+        action: "approve_reverted",
         organizationId: existing.organizationId,
         jobId: existing.id,
-        action: "approve_reverted",
+        actor: { kind: "user", userId: approverId },
         changes: {
           status: { old: approvedStatus, new: revertedStatus },
         },
-        performedBy: approverId,
         ipAddress: params.ipAddress,
         reason: `Aprovação revertida: falha ao enfileirar a geração do certificado (${message})`,
       });
