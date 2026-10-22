@@ -5,6 +5,34 @@ description: Registro datado das mudanças de comportamento da API pública v2 q
 
 Mudanças aditivas (campos novos) são descritas em [Conceitos](/docs/integracoes/api/conceitos). Esta página registra mudanças de **comportamento** que podem fazer uma chamada que antes passava ser recusada.
 
+## 2026-10-22: `POST /jobs/{id}/results` não perde mais os dados quando um padrão já salvo deixa de ser válido
+
+Um padrão de referência que era válido quando foi escolhido pode vencer, ser inativado ou ser excluído no meio da execução. Antes, qualquer salvamento da OS que citasse esse padrão em `selectedStandardIds` era recusado (`standard_expired`, `standard_inactive` ou `standard_deleted`) e as leituras enviadas se perdiam.
+
+### O que mudou
+
+- **Padrão que a OS já tem salvo.** Se `POST /jobs/{id}/results` reenvia, sem alteração, um padrão que já faz parte do snapshot de padrões salvo na OS e esse padrão deixou de ser válido, o salvamento é **aceito**: os dados e os resultados são gravados e o padrão continua congelado no snapshot como estava.
+- **Campo `warnings` na resposta.** A resposta passa a trazer `warnings`, uma lista (vazia quando não há nada a avisar) com um item por motivo:
+
+```json
+{
+  "data": { "...": "..." },
+  "warnings": [
+    {
+      "code": "standard_no_longer_valid",
+      "reason": "standard_expired",
+      "standardIds": [11],
+      "standardNames": ["Massa Padrão 10 g"]
+    }
+  ]
+}
+```
+
+`reason` é `standard_expired` (certificado vencido), `standard_inactive` ou `standard_deleted`. `standardNames` segue a ordem de `standardIds`. O aviso também fica registrado na trilha de auditoria do salvamento.
+
+- **Padrão novo continua recusado.** Um padrão que o salvamento **acrescenta** à OS (ou que troca um já salvo) e que está vencido, inativo ou excluído continua sendo recusado com o mesmo `error.code`, sem gravar nada. Um padrão inexistente ou de outra organização também continua recusado (`standard_not_found`).
+- **`POST /jobs/{id}/submit` não mudou.** A submissão continua recusando qualquer padrão inválido, inclusive um que o salvamento aceitou com aviso. Substitua o padrão (reenviando `selectedStandardIds` sem ele) antes de submeter.
+
 ## 2026-10-22: `PATCH /jobs/{id}`, `POST /jobs/{id}/reject` e `DELETE /jobs/{id}` seguem as regras da aplicação
 
 Editar, rejeitar e cancelar uma OS pela API agora passam pelos mesmos comandos da aplicação web.

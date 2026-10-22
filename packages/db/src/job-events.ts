@@ -121,6 +121,30 @@ export type JobExecutionChanges = JobActorAuditFields & {
   };
 };
 
+/**
+ * What a submit recorded: the execution changes, and whether the calibration
+ * location and phase reasons were validated. "legacy_exempt" is a desktop event
+ * from a build that predates the rule, so an auditor can list jobs whose
+ * location was never validated.
+ */
+export type JobSubmitChanges = JobExecutionChanges & {
+  calibrationRecordCheck: "enforced" | "legacy_exempt";
+};
+
+/**
+ * What a draft save (`execute`) recorded when it accepted standards of the
+ * saved snapshot that have since gone stale: one entry per reason, the same
+ * shape the API answers. A submit never accepts one, so it never records this.
+ */
+export type JobExecuteChanges = JobExecutionChanges & {
+  standardsWarnings?: Array<{
+    code: "standard_no_longer_valid";
+    reason: "standard_deleted" | "standard_inactive" | "standard_expired";
+    standardIds: number[];
+    standardNames: string[];
+  }>;
+};
+
 export type JobApprovedChanges = {
   status: Change<string>;
   /** An API-key approval records the credential next to the person it acted for. */
@@ -149,8 +173,8 @@ export type SignatureAudit =
 export type JobEvent =
   | (JobEventBase & { action: "create"; changes: JobCreatedChanges })
   | (JobEventBase & { action: "update"; changes: JobUpdatedChanges })
-  | (JobEventBase & { action: "submit"; changes: JobExecutionChanges })
-  | (JobEventBase & { action: "execute"; changes: JobExecutionChanges })
+  | (JobEventBase & { action: "submit"; changes: JobSubmitChanges })
+  | (JobEventBase & { action: "execute"; changes: JobExecuteChanges })
   | (JobEventBase & { action: "approve"; changes: JobApprovedChanges })
   | (JobEventBase & {
       action: "approve_reverted";

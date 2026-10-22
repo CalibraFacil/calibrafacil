@@ -2,6 +2,7 @@ import type {
   JobAmendResponse,
   JobDetail,
   JobDownloadUrlResponse,
+  JobExecutionWarning,
   JobMutationResponse,
   JobRow,
   JobsListResponse,
@@ -129,11 +130,29 @@ export function buildJobRow(overrides: Partial<JobRow> = {}): JobRow {
   };
 }
 
+export function buildJobExecutionWarning(
+  overrides: Partial<JobExecutionWarning> = {},
+): JobExecutionWarning {
+  return {
+    code: "standard_no_longer_valid",
+    reason: "standard_expired",
+    standardIds: [11],
+    standardNames: ["Peso padrão 10 g"],
+    ...overrides,
+  };
+}
+
+/** `warnings` is what a draft save adds; leave it out for every other mutation. */
 export function buildJobMutationResponse(
   overrides: Partial<JobRow> = {},
   message = "Dados salvos com sucesso",
+  warnings?: JobExecutionWarning[],
 ): JobMutationResponse {
-  return { message, data: buildJobRow(overrides) };
+  return {
+    message,
+    data: buildJobRow(overrides),
+    ...(warnings ? { warnings } : {}),
+  };
 }
 
 export function buildJobDetail(overrides: Partial<JobDetail> = {}): JobDetail {

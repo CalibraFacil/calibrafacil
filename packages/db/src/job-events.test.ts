@@ -191,6 +191,68 @@ describe("appendJobEvent stored row shapes (REQ-AUD-2)", () => {
     },
   );
 
+  it("REQ-P111-2: an execute that accepted a stale standard stores the warnings and only the judged-valid ids as judged", async () => {
+    const warnings = [
+      {
+        code: "standard_no_longer_valid",
+        reason: "standard_expired",
+        standardIds: [2],
+        standardNames: ["Massa vencida"],
+      },
+    ] as const;
+    const execution = {
+      data: { old: { a: 1 }, new: { a: 2 } },
+      results: { old: null, new: { u: 0.1 } },
+      officialExecution: {
+        methodFingerprint: "m",
+        inputFingerprint: "i",
+        calculationFingerprint: "c",
+        resultFingerprint: "r",
+      },
+      standardsJudgedAt: {
+        performedAt: "2026-01-02T00:00:00.000Z",
+        standardIds: [1],
+        validOnlyBecauseBackdated: [],
+      },
+    };
+
+    const row = await storedRow({
+      action: "execute",
+      organizationId: ORG,
+      jobId: 7,
+      actor,
+      ipAddress: null,
+      changes: {
+        ...execution,
+        standardsWarnings: warnings.map((warning) => ({
+          ...warning,
+          standardIds: [...warning.standardIds],
+          standardNames: [...warning.standardNames],
+        })),
+      },
+    });
+
+    expect(row).toEqual({
+      organizationId: ORG,
+      jobId: 7,
+      action: "execute",
+      changes: {
+        ...execution,
+        standardsWarnings: [
+          {
+            code: "standard_no_longer_valid",
+            reason: "standard_expired",
+            standardIds: [2],
+            standardNames: ["Massa vencida"],
+          },
+        ],
+      },
+      performedBy: USER,
+      ipAddress: null,
+      reason: null,
+    });
+  });
+
   it("REQ-AUD-2: approve stores the status move, the API-key channel and the scope override", async () => {
     const row = await storedRow({
       action: "approve",

@@ -186,6 +186,8 @@ export function buildPublicApiV2OpenApiDocument(origin: string) {
       description:
         "API pública resource-first para integrações e conectores operacionais do CalibraFácil.\n\n" +
         "## Mudanças\n\n" +
+        "**2026-10-22: `POST /jobs/{id}/results`** aceita um padrão que a OS já tem salvo e que deixou de ser válido (vencido, inativo ou excluído) e responde `warnings` (`code` `standard_no_longer_valid`, `reason`, `standardIds`, `standardNames`) em vez de perder os dados; " +
+        "um padrão novo inválido continua recusado e `POST /jobs/{id}/submit` continua recusando qualquer padrão inválido. " +
         "**2026-10-21: `POST /jobs/{id}/results` e `POST /jobs/{id}/submit`** passam a seguir as mesmas regras da aplicação. " +
         "`results` é calculado pelo servidor a partir de `data` (a resposta inclui `__compiledExecution`) e o valor enviado é ignorado; " +
         "uma OS `REJECTED` continua `REJECTED` ao salvar resultados; `data` é normalizado (unidade base do ativo, chaves de especificação do ativo removidas); " +
@@ -638,7 +640,7 @@ export function buildPublicApiV2OpenApiDocument(origin: string) {
           summary: "Registrar resultados da OS",
           tag: "Jobs",
           description:
-            "Salva os dados da planilha da OS. Os `results` enviados nunca são gravados: o servidor os recalcula a partir de `data` com a execução oficial do método compilado congelado na OS, como na aplicação. Uma OS REJEITADA continua REJEITADA após salvar; só a submissão a leva adiante. Recusas: 409 `job_not_executable` (OS fora de um status que aceite resultados) ou `job_status_conflict`; 422 `official_execution_failed` (método sem execução oficial) e `standard_*` (padrão de referência vencido, inativo ou excluído).",
+            "Salva os dados da planilha da OS. Os `results` enviados nunca são gravados: o servidor os recalcula a partir de `data` com a execução oficial do método compilado congelado na OS, como na aplicação. Uma OS REJEITADA continua REJEITADA após salvar; só a submissão a leva adiante. Um padrão que a OS já tem salvo e que deixou de ser válido (vencido, inativo ou excluído) é aceito e vem em `warnings` na resposta (`code` `standard_no_longer_valid`, `reason`, `standardIds`, `standardNames`); a submissão o recusará até que seja substituído. Recusas: 409 `job_not_executable` (OS fora de um status que aceite resultados) ou `job_status_conflict`; 422 `official_execution_failed` (método sem execução oficial) e `standard_*` (padrão de referência novo na OS vencido, inativo ou excluído).",
           requestBodyDescription: "Envia resultados executados para o job.",
           pathParameters: [
             buildPathParameter("id", "Identificador interno ou externalId"),

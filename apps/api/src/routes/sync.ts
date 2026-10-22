@@ -59,6 +59,7 @@ import {
   UpdateCustomerSchema,
   UpdateServiceOrderExecutionSchema,
   METHOD_DEVIATIONS_MAX_LENGTH,
+  desktopEventCarriesCalibrationRecordRule,
 } from "@calibra-facil/schemas";
 import {
   and,
@@ -2658,6 +2659,10 @@ async function applyLocalJobExecution(
       ? getMethodDeviationsOrNull(payload, "methodDeviations")
       : undefined,
     frozen,
+    // A submit from a build that enforced the calibration record offline is
+    // held to the rule here too; one from a build before it (no payload
+    // version) is applied as before so an upgrade does not dead-letter it.
+    legacyUnvalidatedRecord: !desktopEventCarriesCalibrationRecordRule(payload),
     // The desktop reports the status its own store moved the job to; the
     // server derives the target from the transition table and refuses a
     // payload that disagrees (Q20).

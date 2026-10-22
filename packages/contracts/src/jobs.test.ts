@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildJobAmendResponse,
   buildJobDetail,
+  buildJobExecutionWarning,
   buildJobMutationResponse,
   buildJobRow,
   buildJobsList,
@@ -71,6 +72,52 @@ describe("jobs response schemas", () => {
         data: rowWithoutToken,
       }).success,
     ).toBe(false);
+  });
+
+  it("REQ-P111-4: a draft save response carries the structured standards warnings and parsing keeps them", () => {
+    const warning = buildJobExecutionWarning({
+      reason: "standard_expired",
+      standardIds: [11, 12],
+      standardNames: ["Massa A", "Massa B"],
+    });
+    const mutation = buildJobMutationResponse(
+      { status: "IN_PROGRESS" },
+      "Dados salvos com sucesso",
+      [warning],
+    );
+
+    const parsed = jobMutationResponseSchema.parse(mutation);
+
+    expect(parsed.warnings).toEqual([
+      {
+        code: "standard_no_longer_valid",
+        reason: "standard_expired",
+        standardIds: [11, 12],
+        standardNames: ["Massa A", "Massa B"],
+      },
+    ]);
+    // Other mutations (approve, reject, ...) carry none.
+    expect(
+      jobMutationResponseSchema.safeParse(buildJobMutationResponse()).success,
+    ).toBe(true);
+  });
+
+  it("REQ-P111-4: a warning with an unknown reason or a non-numeric standard id breaks the contract", () => {
+    const valid = buildJobExecutionWarning();
+    for (const broken of [
+      { ...valid, reason: "standard_backdate_reason_required" },
+      { ...valid, reason: "standard_not_found" },
+      { ...valid, standardIds: ["11"] },
+      { ...valid, standardNames: [11] },
+      { ...valid, code: "something_else" },
+    ]) {
+      expect(
+        jobMutationResponseSchema.safeParse({
+          ...buildJobMutationResponse(),
+          warnings: [broken],
+        }).success,
+      ).toBe(false);
+    }
   });
 
   it("REQ-TC-1: amend, technicians and download responses are covered", () => {

@@ -2,6 +2,7 @@ import { ResponseContractError } from "@calibra-facil/contracts";
 import {
   buildJobAmendResponse,
   buildJobDetail,
+  buildJobExecutionWarning,
   buildJobMutationResponse,
   buildJobsList,
 } from "@calibra-facil/contracts/jobs-fixtures";
@@ -84,6 +85,29 @@ describe("jobs module response contracts", () => {
       "POST",
       "POST",
     ]);
+  });
+
+  it("REQ-P111-4: saving a draft hands the standards warnings to the caller; a malformed warning breaks the contract", async () => {
+    const warning = buildJobExecutionWarning({
+      reason: "standard_inactive",
+      standardIds: [11],
+      standardNames: ["Peso padrão 10 g"],
+    });
+    const saved = await clientReplying({
+      body: buildJobMutationResponse({ status: "IN_PROGRESS" }, "Salvo", [
+        warning,
+      ]),
+    }).client.jobs.saveExecution(7, { data: { load: 10 } });
+    expect(saved.warnings).toEqual([warning]);
+
+    await expect(
+      clientReplying({
+        body: {
+          ...buildJobMutationResponse(),
+          warnings: [{ ...warning, standardIds: "11" }],
+        },
+      }).client.jobs.saveExecution(7, { data: { load: 10 } }),
+    ).rejects.toBeInstanceOf(ResponseContractError);
   });
 
   it("REQ-TC-2: amend and the download links are validated too", async () => {
