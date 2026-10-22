@@ -79,9 +79,8 @@ describe("calibra/no-calibration-job-update-outside-owner (real oxlint)", () => 
     const legacy: Record<string, number> = {
       "apps/api/src/cli/seed-demo/jobs.ts": 1,
       "apps/api/src/cli/seed-demo/timeline.ts": 1,
-      "apps/api/src/routes/jobs.ts": 8,
-      "apps/api/src/routes/public-api-v2.ts": 5,
-      "apps/api/src/routes/sync.ts": 1,
+      "apps/api/src/routes/jobs.ts": 5,
+      "apps/api/src/routes/public-api-v2.ts": 3,
       "apps/api/src/routes/visits.ts": 1,
     };
     for (const [file, count] of Object.entries(legacy)) {
@@ -90,6 +89,13 @@ describe("calibra/no-calibration-job-update-outside-owner (real oxlint)", () => 
       // eslint-disable-next-line no-await-in-loop -- see above
       await expectViolation(RULE, { [file]: updates(count + 1) });
     }
-    // Twelve real oxlint spawns: well above the default 5s on a busy machine.
+    // Ten real oxlint spawns: well above the default 5s on a busy machine.
   }, 60_000);
+
+  it("REQ-SUB-4: the desktop sync apply no longer writes the job itself (its grandfathered write moved into the submit/execute command)", async () => {
+    await expectViolation(RULE, { "apps/api/src/routes/sync.ts": UPDATE });
+    await expectClean(RULE, {
+      "apps/api/src/modules/jobs/submit-job.ts": UPDATE,
+    });
+  });
 });
