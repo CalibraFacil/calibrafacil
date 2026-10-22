@@ -90,7 +90,7 @@ under "Nulled".
 
 ## Evidence tables
 
-72 evidence tables out of 134; 392 foreign keys in schema.ts, 114 of them ON DELETE CASCADE.
+73 evidence tables out of 135; 394 foreign keys in schema.ts, 114 of them ON DELETE CASCADE.
 Each entry lists the foreign keys the table itself carries, which are the only way a parent's deletion reaches it.
 
 ### Technical records (calibration, SPC, OOT) (10)
@@ -154,8 +154,11 @@ Each entry lists the foreign keys the table itself carries, which are the only w
   - `unit_id` to `organization_unit`: RESTRICT. blocks the delete of the parent.
   - `created_by` to `user`: RESTRICT. blocks the delete of the parent.
 
-### Certificates (3)
+### Certificates (4)
 
+- `certificate_input`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
+  - `job_id` to `calibration_job`: RESTRICT. blocks the delete of the parent.
 - `certificate_numbering_sequence`
   - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `profile_id` to `certificate_numbering_profile`: RESTRICT. blocks the delete of the parent.
@@ -455,7 +458,7 @@ Rows Postgres deletes along with it (45 tables by CASCADE): `accredited_scope_li
 
 - Evidence deleted by CASCADE: **0**.
 - Evidence columns nulled by SET NULL: **9**.
-- Evidence tables that make Postgres refuse the delete (RESTRICT / NO ACTION): **94**.
+- Evidence tables that make Postgres refuse the delete (RESTRICT / NO ACTION): **95**.
 
 Nulled:
 
@@ -501,6 +504,7 @@ Refused by:
 - `organization` → `customer` (`auth_organization_id`) ⇒ `calibration_visit.customer_id` RESTRICT (`calibration_visit`)
 - `organization` ⇒ `calibration_visit.organization_id` RESTRICT (`calibration_visit`)
 - `organization` → `organization_unit` (`organization_id`) ⇒ `calibration_visit.unit_id` RESTRICT (`calibration_visit`)
+- `organization` ⇒ `certificate_input.organization_id` RESTRICT (`certificate_input`)
 - `organization` ⇒ `certificate_numbering_sequence.organization_id` RESTRICT (`certificate_numbering_sequence`)
 - `organization` → `certificate_numbering_profile` (`organization_id`) ⇒ `certificate_numbering_sequence.profile_id` RESTRICT (`certificate_numbering_sequence`)
 - `organization` ⇒ `certificate_release.organization_id` RESTRICT (`certificate_release`)
