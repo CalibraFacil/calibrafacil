@@ -2,6 +2,10 @@ import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Command } from "cmdk";
+import {
+  portalCertificatesResponseSchema,
+  portalFleetAssetsResponseSchema,
+} from "@calibra-facil/contracts";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Add01Icon,
@@ -18,7 +22,7 @@ import type { IconSvgElement } from "@hugeicons/react";
 
 import { cn } from "@/lib/utils";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
-import { getApiBaseUrl } from "@/lib/utils";
+import { fetchPortalJson } from "@/lib/api-fetch";
 import { getCalibrationStatus } from "@/lib/calibration-status";
 import { Dialog, DialogContent } from "@calibra-facil/ui/dialog";
 import { StatusPill } from "@/components/status-pill";
@@ -39,15 +43,35 @@ type CertificateHit = {
   assetTag: string;
 };
 
-async function searchEntity<T>(path: string, query: string): Promise<Array<T>> {
+/** The palette is best-effort: a failed or malformed search is an empty list. */
+async function searchAssets(query: string): Promise<Array<AssetHit>> {
   const params = new URLSearchParams({ query, page: "1", limit: "5" });
-  const response = await fetch(
-    `${getApiBaseUrl()}/api/portal/${path}?${params.toString()}`,
-    { credentials: "include" },
-  );
-  if (!response.ok) return [];
-  const body = await response.json();
-  return Array.isArray(body?.data) ? body.data : [];
+  try {
+    const result = await fetchPortalJson(
+      `/api/portal/assets?${params.toString()}`,
+      portalFleetAssetsResponseSchema,
+      { errorMessage: "Falha na busca" },
+    );
+    return result.data;
+  } catch {
+    return [];
+  }
+}
+
+async function searchCertificates(
+  query: string,
+): Promise<Array<CertificateHit>> {
+  const params = new URLSearchParams({ query, page: "1", limit: "5" });
+  try {
+    const result = await fetchPortalJson(
+      `/api/portal/certificates?${params.toString()}`,
+      portalCertificatesResponseSchema,
+      { errorMessage: "Falha na busca" },
+    );
+    return result.data;
+  } catch {
+    return [];
+  }
 }
 
 export function CommandMenu({
@@ -66,14 +90,14 @@ export function CommandMenu({
   const { data: assets = [] } = useQuery({
     queryKey: key("cmd-assets", term),
     enabled: open && isSearching,
-    queryFn: () => searchEntity<AssetHit>("assets", term),
+    queryFn: () => searchAssets(term),
     staleTime: 30_000,
   });
 
   const { data: certificates = [] } = useQuery({
     queryKey: key("cmd-certificates", term),
     enabled: open && isSearching,
-    queryFn: () => searchEntity<CertificateHit>("certificates", term),
+    queryFn: () => searchCertificates(term),
     staleTime: 30_000,
   });
 

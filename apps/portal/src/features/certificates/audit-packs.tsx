@@ -23,7 +23,12 @@ import { Panel, PanelHeader } from "@calibra-facil/ui/instrument-panel";
 import { StatusPill } from "@/components/status-pill";
 import type { SignalTone } from "@calibra-facil/ui/status-tone";
 import { usePortalUnits } from "@/features/fleet/queries";
-import { getApiBaseUrl } from "@/lib/utils";
+import {
+  portalAuditPackRequestedResponseSchema,
+  portalAuditPacksResponseSchema,
+  portalDownloadLinkResponseSchema,
+} from "@calibra-facil/contracts";
+import { fetchPortalJson, jsonInit } from "@/lib/api-fetch";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 
 type AuditPackStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
@@ -67,39 +72,17 @@ export function useAuditPacks() {
   const key = usePortalQueryKey();
   return useQuery({
     queryKey: key(AUDIT_PACKS_SCOPE),
-    queryFn: async (): Promise<AuditPacksResponse> => {
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/audit-packs`,
-        {
-          credentials: "include",
-        },
-      );
-      if (!response.ok) {
-        throw new Error("Falha ao carregar pacotes de auditoria");
-      }
-      return response.json();
-    },
+    queryFn: (): Promise<AuditPacksResponse> =>
+      fetchPortalJson(
+        "/api/portal/audit-packs",
+        portalAuditPacksResponseSchema,
+        { errorMessage: "Falha ao carregar pacotes de auditoria" },
+      ),
     // The pack is generated asynchronously — poll while one is in flight so
     // the row flips to "Pronto" without a manual refresh.
     refetchInterval: (query) =>
       query.state.data?.data.some(isInFlight) ? 5_000 : false,
   });
-}
-
-async function readErrorMessage(
-  response: Response,
-  fallback: string,
-): Promise<string> {
-  try {
-    const body: unknown = await response.json();
-    if (body && typeof body === "object" && "error" in body) {
-      const message = Object.fromEntries(Object.entries(body)).error;
-      if (typeof message === "string" && message) return message;
-    }
-  } catch {
-    // Non-JSON error body — use the fallback.
-  }
-  return fallback;
 }
 
 function toDateParam(date: Date): string {
@@ -146,16 +129,14 @@ function AuditPackDownloadButton({ pack }: { pack: AuditPack }) {
     if (isDownloading) return;
     setIsDownloading(true);
     try {
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/audit-packs/${pack.id}/download`,
-        { credentials: "include" },
+      const { url, filename } = await fetchPortalJson(
+        `/api/portal/audit-packs/${pack.id}/download`,
+        portalDownloadLinkResponseSchema,
+        {
+          errorMessage: "Falha ao baixar o pacote.",
+          serverErrorMessage: true,
+        },
       );
-      if (!response.ok) {
-        throw new Error(
-          await readErrorMessage(response, "Falha ao baixar o pacote."),
-        );
-      }
-      const { url, filename } = await response.json();
       const link = document.createElement("a");
       link.href = url;
       link.download = filename;
@@ -209,21 +190,15 @@ function AuditPackDialog() {
 
   const requestMutation = useMutation({
     mutationFn: async (body: AuditPackRequest) => {
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/audit-packs`,
+      return fetchPortalJson(
+        "/api/portal/audit-packs",
+        portalAuditPackRequestedResponseSchema,
         {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
+          errorMessage: "Falha ao solicitar o pacote.",
+          serverErrorMessage: true,
+          init: jsonInit("POST", body),
         },
       );
-      if (!response.ok) {
-        throw new Error(
-          await readErrorMessage(response, "Falha ao solicitar o pacote."),
-        );
-      }
-      return response.json();
     },
     onSuccess: async () => {
       setOpen(false);

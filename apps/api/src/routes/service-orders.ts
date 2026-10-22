@@ -1,5 +1,9 @@
 import { Hono } from "hono";
 import type {
+  PortalFinancialSummaryResponse,
+  PortalQuoteDecisionResponse,
+  PortalServiceOrderDetailResponse,
+  PortalServiceOrdersResponse,
   ServerShape,
   ServiceOrderCreateResponse,
   ServiceOrderDetailResponse,
@@ -987,7 +991,10 @@ export const portalServiceOrdersRouter = new Hono<{
         });
       const query = c.req.valid("query");
       return c.json(
-        await listServiceOrdersForPortalCustomer(linkedCustomer.id, query),
+        (await listServiceOrdersForPortalCustomer(
+          linkedCustomer.id,
+          query,
+        )) satisfies ServerShape<PortalServiceOrdersResponse>,
       );
     },
   )
@@ -1044,7 +1051,9 @@ export const portalServiceOrdersRouter = new Hono<{
       });
 
       if (!summary) return c.json({ error: "OS nao encontrada" }, 404);
-      return c.json({ data: summary });
+      return c.json({
+        data: summary,
+      } satisfies ServerShape<PortalFinancialSummaryResponse>);
     },
   )
   .get(
@@ -1070,7 +1079,9 @@ export const portalServiceOrdersRouter = new Hono<{
       if (!detail || detail.customerId !== linkedCustomer.id) {
         return c.json({ error: "OS nao encontrada" }, 404);
       }
-      return c.json({ data: toClientVisibleServiceOrderDetail(detail) });
+      return c.json({
+        data: toClientVisibleServiceOrderDetail(detail),
+      } satisfies ServerShape<PortalServiceOrderDetailResponse>);
     },
   )
   .post(
@@ -1112,7 +1123,9 @@ export const portalServiceOrdersRouter = new Hono<{
       if (result.status === "conflict") {
         return c.json({ error: "Orcamento nao pode ser aprovado" }, 409);
       }
-      return c.json({ ok: true });
+      return c.json({
+        ok: true,
+      } satisfies ServerShape<PortalQuoteDecisionResponse>);
     },
   )
   .post(
@@ -1156,7 +1169,9 @@ export const portalServiceOrdersRouter = new Hono<{
       if (result.status === "conflict") {
         return c.json({ error: "Este orcamento ja foi respondido" }, 409);
       }
-      return c.json({ ok: true });
+      return c.json({
+        ok: true,
+      } satisfies ServerShape<PortalQuoteDecisionResponse>);
     },
   );
 

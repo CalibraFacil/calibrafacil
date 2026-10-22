@@ -6,7 +6,8 @@ import { ArrowLeft02Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@calibra-facil/ui/button";
 import { Card, CardContent } from "@calibra-facil/ui/card";
 import { Spinner } from "@calibra-facil/ui/spinner";
-import { getApiBaseUrl } from "@/lib/utils";
+import { portalCertificateDetailSchema } from "@calibra-facil/contracts";
+import { fetchPortalJson } from "@/lib/api-fetch";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import {
   CertificateDetailView,
@@ -28,14 +29,11 @@ function CertificateDetailPage() {
   } = useQuery({
     queryKey: key("portal-certificate", id),
     queryFn: async (): Promise<Certificate> => {
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/certificates/${encodeURIComponent(id)}`,
-        { credentials: "include" },
+      return fetchPortalJson(
+        `/api/portal/certificates/${encodeURIComponent(id)}`,
+        portalCertificateDetailSchema,
+        { errorMessage: "Falha ao carregar certificado" },
       );
-      if (!response.ok) {
-        throw new Error("Falha ao carregar certificado");
-      }
-      return response.json();
     },
   });
 

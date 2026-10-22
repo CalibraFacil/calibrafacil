@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import type { ReactNode } from "react";
+import { buildPortalCertificateDetail } from "@calibra-facil/contracts/portal-fixtures";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -58,6 +59,9 @@ function certificate(overrides: Partial<Certificate> = {}): Certificate {
     labLogo: null,
     labEmail: null,
     labPhone: null,
+    accreditation: { accredited: false, number: null },
+    amendment: null,
+    onSite: { executedOnSite: false, addressText: null },
     referenceStandards: [],
     ...overrides,
   };
@@ -218,5 +222,21 @@ describe("CertificateDetailView — amendment chain (§7.8.8)", () => {
     expect(screen.getByText(/Emissão original/)).toBeDefined();
     expect(screen.getByText("Vigente")).toBeDefined();
     expect(screen.getByText(/· este certificado/)).toBeDefined();
+  });
+});
+
+describe("CertificateDetailView: method name (REQ-TC-3)", () => {
+  it("shows the method the API names in methodSnapshot.methodName", () => {
+    // The frozen snapshot carries `methodName`; the page used to read a
+    // `name` key the API never sends and always showed the placeholder.
+    render(
+      <CertificateDetailView
+        certificate={buildPortalCertificateDetail({
+          methodSnapshot: { methodName: "Erro de indicação", methodVersion: 3 },
+        })}
+      />,
+    );
+
+    expect(screen.getByText("Erro de indicação")).toBeDefined();
   });
 });

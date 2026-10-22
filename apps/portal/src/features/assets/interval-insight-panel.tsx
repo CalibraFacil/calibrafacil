@@ -24,6 +24,8 @@ import {
   PanelHeader,
   type SignalTone,
 } from "@calibra-facil/ui/instrument-panel";
+import { portalIntervalUpdateResponseSchema } from "@calibra-facil/contracts";
+import { fetchPortalJson, jsonInit } from "@/lib/api-fetch";
 import { getApiBaseUrl } from "@/lib/utils";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import { useIntervalInsight } from "./queries";
@@ -73,22 +75,18 @@ export function IntervalInsightPanel({
     mutationFn: async () => {
       const recommendation = insight?.recommendation;
       if (!recommendation) return;
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/assets/${assetId}/interval`,
+      await fetchPortalJson(
+        `/api/portal/assets/${assetId}/interval`,
+        portalIntervalUpdateResponseSchema,
         {
-          method: "PUT",
-          credentials: "include",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
+          errorMessage: "Não foi possível aplicar a sugestão.",
+          init: jsonInit("PUT", {
             intervalMonths: recommendation.proposedIntervalMonths,
             rationale: `Sugestão do motor de confiabilidade (ILAC-G24 / NCSL RP-1) aplicada — ${insight?.classification}, método ${recommendation.method}.`,
             source: "engine",
           }),
         },
       );
-      if (!response.ok) {
-        throw new Error("Não foi possível aplicar a sugestão.");
-      }
     },
     onSuccess: () => {
       setConfirmOpen(false);

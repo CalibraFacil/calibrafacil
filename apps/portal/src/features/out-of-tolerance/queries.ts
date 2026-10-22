@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { getApiBaseUrl } from "@/lib/utils";
+import {
+  portalOotAcknowledgeResponseSchema,
+  portalOotNotificationsResponseSchema,
+} from "@calibra-facil/contracts";
+
+import { fetchPortalJson, jsonInit } from "@/lib/api-fetch";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 
 /**
@@ -49,31 +54,14 @@ export function useOotNotifications() {
   const key = usePortalQueryKey();
   return useQuery({
     queryKey: key(OOT_NOTIFICATIONS_SCOPE),
-    queryFn: async (): Promise<OotNotificationsResponse> => {
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/oot-notifications`,
-        { credentials: "include" },
-      );
-      if (!response.ok) {
-        throw new Error("Falha ao carregar as notificações.");
-      }
-      const result: OotNotificationsResponse = await response.json();
-      return result;
-    },
+    queryFn: (): Promise<OotNotificationsResponse> =>
+      fetchPortalJson(
+        "/api/portal/oot-notifications",
+        portalOotNotificationsResponseSchema,
+        { errorMessage: "Falha ao carregar as notificações." },
+      ),
     staleTime: 60_000,
   });
-}
-
-function extractErrorMessage(body: unknown, fallback: string): string {
-  if (
-    body !== null &&
-    typeof body === "object" &&
-    "message" in body &&
-    typeof body.message === "string"
-  ) {
-    return body.message;
-  }
-  return fallback;
 }
 
 /** POST acknowledge (idempotent). `id` is the opaque token from the list. */
@@ -83,19 +71,15 @@ export function useAcknowledgeOotNotification() {
 
   return useMutation({
     mutationFn: async (id: string): Promise<void> => {
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/oot-notifications/${id}/acknowledge`,
-        { method: "POST", credentials: "include" },
+      await fetchPortalJson(
+        `/api/portal/oot-notifications/${id}/acknowledge`,
+        portalOotAcknowledgeResponseSchema,
+        {
+          errorMessage: "Não foi possível confirmar o recebimento.",
+          serverErrorMessage: true,
+          init: jsonInit("POST"),
+        },
       );
-      if (!response.ok) {
-        const body: unknown = await response.json().catch(() => null);
-        throw new Error(
-          extractErrorMessage(
-            body,
-            "Não foi possível confirmar o recebimento.",
-          ),
-        );
-      }
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({

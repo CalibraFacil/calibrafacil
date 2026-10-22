@@ -26,7 +26,15 @@ import {
 } from "@calibra-facil/ui/instrument-panel";
 import { StatusPill } from "@/components/status-pill";
 import { getCalibrationStatus } from "@/lib/calibration-status";
-import { cn, getApiBaseUrl } from "@/lib/utils";
+import { z } from "zod";
+import {
+  portalFleetAssetsResponseSchema,
+  portalRequestBatchResponseSchema,
+  type PortalFleetAssetsResponse,
+  type PortalRequestBatchResponse,
+} from "@calibra-facil/contracts";
+import { fetchExternalJson, fetchPortalJson, jsonInit } from "@/lib/api-fetch";
+import { cn } from "@/lib/utils";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import { pluralize } from "@calibra-facil/shared/format";
 
@@ -61,15 +69,7 @@ type PortalAsset = {
   nextCalibrationDate: string | null;
 };
 
-type AssetsResponse = {
-  data: Array<PortalAsset>;
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-};
+type AssetsResponse = PortalFleetAssetsResponse;
 
 type DeliveryMethod = "dropoff" | "carrier" | "onsite";
 
@@ -93,35 +93,24 @@ const EMPTY_ONSITE_ADDRESS: OnsiteAddress = {
   state: "",
 };
 
-function getResponseErrorMessage(result: unknown) {
-  if (!result || typeof result !== "object" || Array.isArray(result)) {
-    return null;
-  }
-  const error = Object.fromEntries(Object.entries(result)).error;
-  return typeof error === "string" ? error : null;
-}
+/** ViaCEP's answer (the fields the address autofill reads; `erro` = unknown CEP). */
+const viaCepResponseSchema = z.object({
+  erro: z.union([z.boolean(), z.string()]).optional(),
+  logradouro: z.string().optional(),
+  bairro: z.string().optional(),
+  localidade: z.string().optional(),
+  uf: z.string().optional(),
+});
 
 // The batch endpoint splits a (possibly cross-unit) selection into one request
 // per unit and returns `{ created: [{ id, ... }] }`.
-function getCreatedRequestIds(result: unknown): Array<number> {
-  if (!result || typeof result !== "object" || Array.isArray(result)) {
+function getCreatedRequestIds(
+  result: PortalRequestBatchResponse,
+): Array<number> {
+  if (result.created.length === 0) {
     throw new Error("Resposta inválida ao criar solicitação");
   }
-  const created = Object.fromEntries(Object.entries(result)).created;
-  if (!Array.isArray(created) || created.length === 0) {
-    throw new Error("Resposta inválida ao criar solicitação");
-  }
-  const ids = created.map((item) => {
-    const id =
-      item && typeof item === "object" && !Array.isArray(item)
-        ? Object.fromEntries(Object.entries(item)).id
-        : undefined;
-    return typeof id === "number" ? id : null;
-  });
-  if (ids.some((id) => id === null)) {
-    throw new Error("Resposta inválida ao criar solicitação");
-  }
-  return ids.filter((id): id is number => id !== null);
+  return result.created.map((item) => item.id);
 }
 
 function NewRequestPage() {
@@ -149,12 +138,11 @@ function NewRequestPage() {
         ids: preselectKey ?? "",
         limit: "50",
       });
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/assets?${params.toString()}`,
-        { credentials: "include" },
+      return fetchPortalJson(
+        `/api/portal/assets?${params.toString()}`,
+        portalFleetAssetsResponseSchema,
+        { errorMessage: "Falha ao carregar ativos" },
       );
-      if (!response.ok) throw new Error("Falha ao carregar ativos");
-      return response.json();
     },
   });
   const [seededKey, setSeededKey] = useState<string | null>(null);
@@ -190,21 +178,19 @@ function NewRequestPage() {
   async function lookupCep(rawCep: string) {
     const cep = rawCep.replace(/\D/g, "");
     if (cep.length !== 8) return;
-    try {
-      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-      if (!response.ok) return;
-      const data = await response.json();
-      if (!data || data.erro) return;
-      setOnsiteAddress((current) => ({
-        ...current,
-        street: data.logradouro || current.street,
-        neighbourhood: data.bairro || current.neighbourhood,
-        city: data.localidade || current.city,
-        state: data.uf || current.state,
-      }));
-    } catch {
-      // ignore — the customer can fill the address by hand
-    }
+    const data = await fetchExternalJson(
+      `https://viacep.com.br/ws/${cep}/json/`,
+      viaCepResponseSchema,
+    );
+    // Best-effort: a failed lookup leaves the address to be filled by hand.
+    if (!data || data.erro) return;
+    setOnsiteAddress((current) => ({
+      ...current,
+      street: data.logradouro || current.street,
+      neighbourhood: data.bairro || current.neighbourhood,
+      city: data.localidade || current.city,
+      state: data.uf || current.state,
+    }));
   }
 
   const { data, isLoading, error } = useQuery({
@@ -216,12 +202,11 @@ function NewRequestPage() {
       });
       if (deferredSearch) params.set("query", deferredSearch);
 
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/assets?${params.toString()}`,
-        { credentials: "include" },
+      return fetchPortalJson(
+        `/api/portal/assets?${params.toString()}`,
+        portalFleetAssetsResponseSchema,
+        { errorMessage: "Falha ao carregar ativos" },
       );
-      if (!response.ok) throw new Error("Falha ao carregar ativos");
-      return response.json();
     },
   });
 
@@ -245,13 +230,13 @@ function NewRequestPage() {
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/requests/batch`,
+      const result = await fetchPortalJson(
+        "/api/portal/requests/batch",
+        portalRequestBatchResponseSchema,
         {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+          errorMessage: "Erro ao criar solicitação",
+          serverErrorMessage: true,
+          init: jsonInit("POST", {
             assetIds: selectedAssets.map((asset) => asset.id),
             observations: observations || undefined,
             requestedDueDate: requestedDueDate
@@ -279,12 +264,6 @@ function NewRequestPage() {
         },
       );
 
-      const result: unknown = await response.json();
-      if (!response.ok) {
-        throw new Error(
-          getResponseErrorMessage(result) || "Erro ao criar solicitação",
-        );
-      }
       return { ids: getCreatedRequestIds(result) };
     },
     onSuccess: async (result) => {

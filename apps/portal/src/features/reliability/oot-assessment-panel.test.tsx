@@ -21,6 +21,7 @@ function ootEvent(overrides: Record<string, unknown> = {}) {
     detectedAt: "2026-06-15T12:00:00.000Z",
     customerId: 1,
     assetId: 5,
+    assetPublicId: "AST-0005",
     assetTag: "MAN-001",
     assetName: "Manômetro linha 2",
     jobId: 99,

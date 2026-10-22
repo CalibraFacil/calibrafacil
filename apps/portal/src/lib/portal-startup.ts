@@ -2,7 +2,9 @@ import { queryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
 import { prefetchBranding } from "@/features/branding/queries";
-import { getApiBaseUrl } from "@/lib/utils";
+import { portalOrganizationsResponseSchema } from "@calibra-facil/contracts";
+
+import { fetchPortalJson } from "@/lib/api-fetch";
 
 /**
  * Authenticated portal startup.
@@ -20,9 +22,11 @@ export type PortalOrganization = {
   name: string;
   slug: string;
   logo: string | null;
-  type: string;
+  type: string | null;
   createdAt: string;
   memberRole: string;
+  /** `group` = the consolidated "rede" organization. */
+  kind: "unit" | "group";
 };
 
 const PORTAL_ORGANIZATIONS_KEY = ["portal-organizations"] as const;
@@ -35,16 +39,12 @@ const PORTAL_ORGANIZATIONS_KEY = ["portal-organizations"] as const;
 export function portalOrganizationsQueryOptions() {
   return queryOptions({
     queryKey: PORTAL_ORGANIZATIONS_KEY,
-    queryFn: async (): Promise<Array<PortalOrganization>> => {
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/organizations`,
-        { credentials: "include" },
-      );
-      if (!response.ok) {
-        throw new Error("Falha ao carregar as organizações");
-      }
-      return response.json();
-    },
+    queryFn: (): Promise<Array<PortalOrganization>> =>
+      fetchPortalJson(
+        "/api/portal/organizations",
+        portalOrganizationsResponseSchema,
+        { errorMessage: "Falha ao carregar as organizações" },
+      ),
   });
 }
 

@@ -1,6 +1,7 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Calendar03Icon } from "@hugeicons/core-free-icons";
 
+import { portalRegulatedIntervalSchema } from "@calibra-facil/contracts";
 import { Panel, PanelHeader } from "@calibra-facil/ui/instrument-panel";
 import type { AssetDetail } from "./types";
 import { formatCalendarDate } from "@calibra-facil/shared/format";
@@ -13,7 +14,9 @@ import { formatCalendarDate } from "@calibra-facil/shared/format";
  */
 export function LegalVerificationPanel({ asset }: { asset: AssetDetail }) {
   if (asset.metrologyRegime !== "LEGAL") return null;
-  const regulated = asset.regulatedInterval;
+  const regulated =
+    portalRegulatedIntervalSchema.safeParse(asset.regulatedInterval).data ??
+    null;
   const noNationalPeriod =
     !regulated ||
     regulated.kind === "not_nationally_fixed" ||

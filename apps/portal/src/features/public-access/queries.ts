@@ -1,12 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
-import { z } from "zod";
 import {
-  PublicServiceOrderAccessViewSchema,
-  RedeemServiceOrderAccessCodeResponseSchema,
-} from "@calibra-facil/schemas";
+  publicServiceOrderAccessResponseSchema,
+  publicServiceOrderRedeemResponseSchema,
+} from "@calibra-facil/contracts";
 import type { PublicServiceOrderAccessView } from "@calibra-facil/schemas";
 
-import { getApiBaseUrl } from "@/lib/utils";
+import {
+  fetchPortalResponse,
+  jsonInit,
+  readPortalJsonResult,
+} from "@/lib/api-fetch";
 
 /**
  * Public quote-access transport (spec quote-approval-public-access, mini-spec E).
@@ -19,10 +22,6 @@ import { getApiBaseUrl } from "@/lib/utils";
  * state, never retry-loop or toast an error.
  */
 
-const viewEnvelopeSchema = z.object({
-  data: PublicServiceOrderAccessViewSchema,
-});
-
 export type PublicOrderResult =
   | { kind: "ok"; order: PublicServiceOrderAccessView }
   /** 410 — the quote was already approved/rejected; the link answered its purpose. */
@@ -33,12 +32,16 @@ export type PublicOrderResult =
 export async function fetchPublicServiceOrder(
   token: string,
 ): Promise<PublicOrderResult> {
-  const response = await fetch(
-    `${getApiBaseUrl()}/api/public/service-order-access/${token}`,
+  const response = await fetchPortalResponse(
+    `/api/public/service-order-access/${token}`,
+    { credentials: "omit" },
   );
   if (response.status === 410) return { kind: "responded" };
   if (!response.ok) return { kind: "invalid" };
-  const parsed = viewEnvelopeSchema.safeParse(await response.json());
+  const parsed = await readPortalJsonResult(
+    response,
+    publicServiceOrderAccessResponseSchema,
+  );
   if (!parsed.success) return { kind: "invalid" };
   return { kind: "ok", order: parsed.data.data };
 }
@@ -62,18 +65,15 @@ export type RedeemResult =
   | { kind: "throttled" };
 
 export async function redeemAccessCode(code: string): Promise<RedeemResult> {
-  const response = await fetch(
-    `${getApiBaseUrl()}/api/public/service-order-access/redeem-code`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code }),
-    },
+  const response = await fetchPortalResponse(
+    "/api/public/service-order-access/redeem-code",
+    { credentials: "omit", init: jsonInit("POST", { code }) },
   );
   if (response.status === 429) return { kind: "throttled" };
   if (!response.ok) return { kind: "invalid" };
-  const parsed = RedeemServiceOrderAccessCodeResponseSchema.safeParse(
-    await response.json(),
+  const parsed = await readPortalJsonResult(
+    response,
+    publicServiceOrderRedeemResponseSchema,
   );
   if (!parsed.success) return { kind: "invalid" };
   return { kind: "ok", token: parsed.data.data.token };
@@ -92,12 +92,12 @@ export async function submitQuoteDecision(params: {
 }): Promise<QuoteDecision> {
   const path =
     params.decision === "approved" ? "approve-quote" : "reject-quote";
-  const response = await fetch(
-    `${getApiBaseUrl()}/api/public/service-order-access/${params.token}/${path}`,
+  const response = await fetchPortalResponse(
+    `/api/public/service-order-access/${params.token}/${path}`,
     {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
+      credentials: "omit",
+      init: jsonInit(
+        "POST",
         params.decision === "rejected"
           ? { rejectionReason: params.rejectionReason ?? null }
           : {},

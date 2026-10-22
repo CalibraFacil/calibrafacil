@@ -18,7 +18,8 @@ import { Input } from "@calibra-facil/ui/input";
 import { Label } from "@calibra-facil/ui/label";
 import { Spinner } from "@calibra-facil/ui/spinner";
 import { useMountEffect } from "@/hooks/use-mount-effect";
-import { getApiBaseUrl } from "@/lib/utils";
+import { invitationLookupResponseSchema } from "@calibra-facil/contracts";
+import { PortalApiError, fetchPortalJson } from "@/lib/api-fetch";
 
 const searchSchema = z.object({
   token: z.string().optional(),
@@ -52,21 +53,16 @@ function AcceptInvitePage() {
         throw new Error("Token de convite não fornecido.");
       }
 
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/invitations/${token}`,
-        {
-          credentials: "include",
-        },
-      );
-
-      if (!response.ok) {
-        if (response.status === 404) {
+      const data = await fetchPortalJson(
+        `/api/invitations/${token}`,
+        invitationLookupResponseSchema,
+        { errorMessage: "Convite inválido ou expirado." },
+      ).catch((failure: unknown) => {
+        if (failure instanceof PortalApiError && failure.status === 404) {
           throw new Error("Convite não encontrado.");
         }
-        throw new Error("Convite inválido ou expirado.");
-      }
-
-      const data = await response.json();
+        throw failure;
+      });
       return {
         id: data.id,
         email: data.email,

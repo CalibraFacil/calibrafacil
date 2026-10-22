@@ -128,12 +128,18 @@ as `any`. Response contracts replace that, one domain at a time.
    where the wire has an ISO string and keeps literal unions exact). A handler
    change that breaks the shape fails `pnpm check-types`.
 3. **Client: run time.** `client-runtime` modules validate with
-   `readValidatedJsonResponse(response, schema, { endpoint, fallback })`; the
-   portal uses `fetchPortalJson(path, schema, { errorMessage })`
-   (`apps/portal/src/lib/api-fetch.ts`). Both call `validateResponsePayload`
-   from contracts. A valid payload is returned as-is (same object, every key the
-   server sent, so frozen evidence is never rewritten); call sites get inferred
-   types and no generic.
+   `readValidatedJsonResponse(response, schema, { endpoint, fallback })` (or the
+   per-client `createValidatedReader(options)`); the portal goes through ONE
+   module, `apps/portal/src/lib/api-fetch.ts`: `fetchPortalJson(path, schema,
+{ errorMessage })` for a read or a mutation, `fetchPortalResponse` +
+   `readPortalJson` / `readPortalJsonResult` when the HTTP status decides what
+   to render (the public links), `fetchExternalJson` for the one external
+   lookup. HTTP errors become a `PortalApiError` (status + body). All call
+   `validateResponsePayload` from contracts. A valid payload is returned as-is
+   (same object, every key the server sent, so frozen evidence is never
+   rewritten); call sites get inferred types and no generic. The
+   `calibra/no-unparsed-portal-fetch` oxlint rule fails any `fetch(...)` or
+   `.json()` under `apps/portal/src` outside that module (empty baseline).
 4. **CI: contract test.** An int spec calls the real route (real middleware, real
    Postgres) and `safeParse`s the body with the same schema:
    `apps/api/src/routes/jobs-contract.int.spec.ts`,
@@ -165,6 +171,21 @@ technicians list, certificate/label download links, `POST /api/jobs` create,
 detail, create, update, composition profiles, certificate document upload and
 download) and environmental limits (list, save, delete, effective lookup).
 `client-runtime` validates all of these.
+
+**The client portal** (`packages/contracts/src/portal*.ts`, `public-access.ts`):
+every `/api/portal/*` response the portal reads (branding, organizations, units,
+calendar, fleet, asset detail, interval insight/update, certificates and their
+downloads, audit packs, notifications and preferences, out-of-tolerance notices
+and events, drift series, fleet analytics, visits, requests, service orders,
+financial summary, quote decisions), the public verification endpoints, the
+invitation lookup and the magic-link preview. The handlers return
+`satisfies ServerShape<...>`; `portal-contract.int.spec.ts` and
+`portal-engagement-contract.int.spec.ts` parse the real responses. A few
+customer-scoped success paths (request detail/batch, service orders, OOT
+acknowledge, `GET /organizations`) are proven at compile time only because the
+tenant SQL guard of the integration tier flags their (customer- or user-scoped)
+statements. Portal unit tests build their bodies from
+`@calibra-facil/contracts/portal-fixtures`.
 
 **Reference data and service orders** (customers, assets, asset types, methods,
 service orders: `packages/contracts/src/reference-data.ts`,
