@@ -1,7 +1,8 @@
-import type {
-  SyncActionResult,
-  SyncState,
-  SyncStatusSnapshot,
+import {
+  desktopUpdateRequiredMessage,
+  type SyncActionResult,
+  type SyncState,
+  type SyncStatusSnapshot,
 } from '@calibra-facil/contracts'
 
 import { getDeadEventsBannerLabel } from '@/runtime/sync-dead-events'
@@ -18,6 +19,8 @@ export type DataSourceIndicatorSnapshot = DesktopSyncAvailabilitySnapshot & {
   pendingForOtherUserCount?: number
   /** Events the cloud refused for good: not pending, waiting for a decision. */
   deadOutboxCount?: number
+  /** The cloud's minimum desktop version when it refused this build's pushes. */
+  updateRequiredVersion?: string | null
   conflictCount: number
 }
 
@@ -61,6 +64,17 @@ export function isDesktopCloudOnlyUnavailableSnapshot(
 export function getDataSourceIndicatorModel(
   sync: DataSourceIndicatorSnapshot,
 ): DataSourceIndicatorModel {
+  // First of all: nothing syncs until the app is updated, whatever else is true.
+  if (sync.updateRequiredVersion) {
+    return {
+      label: 'Atualização necessária',
+      title: 'Atualize o aplicativo para sincronizar',
+      description: desktopUpdateRequiredMessage(sync.updateRequiredVersion),
+      variant: 'destructive',
+      dotClassName: 'bg-destructive',
+    }
+  }
+
   if (sync.conflictCount > 0 || sync.state === 'conflict') {
     return {
       label: 'Conflitos',

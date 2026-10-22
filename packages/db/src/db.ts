@@ -20,6 +20,12 @@ import {
 import postgres from "postgres";
 import { Pool } from "@neondatabase/serverless";
 import * as schema from "./schema.js";
+import {
+  currentTransactionScope,
+  transactionScopeStorage,
+} from "./transaction-scope.js";
+
+export { afterTransactionCommit } from "./transaction-scope.js";
 
 type Database =
   | NeonDatabase<typeof schema>
@@ -136,11 +142,68 @@ export function getDb(): Database {
   );
 }
 
+const SCOPE_CALLBACK_NAME = "scopedTransaction";
+
+/**
+ * Whether `callback` is the one a transaction scope hands to
+ * `db.transaction`. A test seam: the integration harness that forces the
+ * interleaving of a lost compare-and-set must wait for the write's own
+ * transaction, which inside a scope is a savepoint and not this one.
+ */
+export function isTransactionScopeCallback(
+  callback: (...args: never[]) => unknown,
+): boolean {
+  return callback.name === SCOPE_CALLBACK_NAME;
+}
+
+/**
+ * Runs `work` in ONE database transaction that every `db` access in its async
+ * call chain joins (see transaction-scope.ts). It commits when `work` resolves
+ * and rolls back, discarding the deferred `afterTransactionCommit` callbacks,
+ * when it throws. Called inside a scope it just runs `work`: the outer
+ * transaction owns the commit.
+ */
+export async function runInTransactionScope<T>(
+  work: () => Promise<T>,
+): Promise<T> {
+  if (currentTransactionScope()) return work();
+
+  const afterCommit: Array<() => void | Promise<void>> = [];
+  const result = await getDb().transaction(
+    async function scopedTransaction(tx) {
+      const scope = { tx, afterCommit, closed: false };
+      try {
+        return await transactionScopeStorage.run(scope, work);
+      } finally {
+        scope.closed = true;
+      }
+    },
+  );
+  for (const callback of afterCommit) {
+    try {
+      await callback();
+    } catch (error) {
+      console.error("[db] An after-commit callback failed:", error);
+    }
+  }
+  return result;
+}
+
 // For backwards compatibility - creates a fresh request-safe DB instance on access.
+// Inside `runInTransactionScope` it resolves to the open transaction instead.
 const dbProxyTarget: Database = Object.create(null);
 
 export const db = new Proxy(dbProxyTarget, {
   get(_, prop) {
+    const scope = currentTransactionScope();
+    if (scope) {
+      queryObserver?.onAccess?.();
+      const member = Reflect.get(scope.tx, prop);
+      // Bound to the transaction, not to this proxy: drizzle reads its own
+      // members (`this.session`) while building a query, and each of those
+      // reads would otherwise come back through here.
+      return typeof member === "function" ? member.bind(scope.tx) : member;
+    }
     return Reflect.get(getDb(), prop);
   },
 });

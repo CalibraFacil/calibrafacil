@@ -162,6 +162,12 @@ export const syncStatusSnapshotSchema = z.object({
   lastRunId: z.string().nullable().optional(),
   lastError: z.string().nullable().optional(),
   /**
+   * The minimum desktop version the cloud answered "update required" with: this
+   * build can no longer push. Its queued changes are kept untouched and are
+   * sent once the app is updated. Null/absent when the cloud accepts this build.
+   */
+  updateRequiredVersion: z.string().nullable().optional(),
+  /**
    * Absent when the local server runs without continuous sync (standalone dev,
    * or `CALIBRA_SYNC_ENABLED=false`).
    */

@@ -1,6 +1,6 @@
 import { vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
-import { db, getDb } from "@calibra-facil/db";
+import { db, getDb, isTransactionScopeCallback } from "@calibra-facil/db";
 import { calibrationJob, jobAuditLog } from "@calibra-facil/db/schema";
 
 // Shared fixtures for the compare-and-set specs on calibration_job writes
@@ -26,13 +26,33 @@ export function changeJobBeforeNextTransaction(
   // `db` is a Proxy over the cached instance; spy on the instance itself.
   const instance = getDb();
   const originalTransaction = instance.transaction.bind(instance);
+  // On its own connection: inside a transaction scope `db` is the request's
+  // transaction, and the change must be another actor's committed write.
+  const applyChange = async () => {
+    await instance
+      .update(calibrationJob)
+      .set(change)
+      .where(eq(calibrationJob.id, jobId));
+  };
   vi.spyOn(instance, "transaction").mockImplementationOnce(
     async (callback, config) => {
-      await db
-        .update(calibrationJob)
-        .set(change)
-        .where(eq(calibrationJob.id, jobId));
-      return originalTransaction(callback, config);
+      if (!isTransactionScopeCallback(callback)) {
+        await applyChange();
+        return originalTransaction(callback, config);
+      }
+      // A request that runs in a transaction scope (the desktop sync apply):
+      // the write's own transaction is the savepoint it opens inside the scope,
+      // so that is the moment right before which the other actor writes.
+      return originalTransaction(async (tx) => {
+        const savepoint = tx.transaction.bind(tx);
+        vi.spyOn(tx, "transaction").mockImplementationOnce(
+          async (inner, innerConfig) => {
+            await applyChange();
+            return savepoint(inner, innerConfig);
+          },
+        );
+        return callback(tx);
+      }, config);
     },
   );
 }

@@ -366,3 +366,47 @@ describe('getDataSourceIndicatorModel with refused events', () => {
     ).toBe('Cache local')
   })
 })
+
+describe('getDataSourceIndicatorModel when the cloud requires an update', () => {
+  const baseSnapshot: DataSourceIndicatorSnapshot = {
+    isDesktop: true,
+    state: 'error',
+    lastSyncedAt: '2026-05-09T22:00:00.000Z',
+    pendingOutboxCount: 3,
+    conflictCount: 0,
+  }
+
+  it('REQ-SP-6: says, in pt-BR, that this version can no longer sync and that the changes are kept', () => {
+    const model = getDataSourceIndicatorModel({
+      ...baseSnapshot,
+      updateRequiredVersion: '1.4.0',
+    })
+
+    expect(model).toMatchObject({
+      label: 'Atualização necessária',
+      variant: 'destructive',
+    })
+    expect(model.description).toContain('versão 1.4.0')
+    expect(model.description).toContain('alterações pendentes foram mantidas')
+  })
+
+  it('REQ-SP-6: it comes before every other state, because nothing syncs until the app is updated', () => {
+    expect(
+      getDataSourceIndicatorModel({
+        ...baseSnapshot,
+        updateRequiredVersion: '1.4.0',
+        conflictCount: 2,
+        deadOutboxCount: 1,
+      }).label,
+    ).toBe('Atualização necessária')
+  })
+
+  it('REQ-SP-6: without it the state is the ordinary one', () => {
+    expect(
+      getDataSourceIndicatorModel({
+        ...baseSnapshot,
+        updateRequiredVersion: null,
+      }).label,
+    ).toBe('Pendente')
+  })
+})

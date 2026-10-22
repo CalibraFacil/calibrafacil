@@ -1,5 +1,6 @@
 export * from "./desktop";
 export * from "./sync";
+export * from "./sync-protocol";
 export * from "./outbox-rejections";
 export * from "./attachments";
 export * from "./diagnostics";

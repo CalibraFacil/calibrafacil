@@ -12,7 +12,11 @@ import { useMountEffect } from '@/hooks/use-mount-effect'
 import { useQuery } from '@tanstack/react-query'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { RefreshIcon } from '@hugeicons/core-free-icons'
-import type { SyncState, SyncStatusSnapshot } from '@calibra-facil/contracts'
+import {
+  desktopUpdateRequiredMessage,
+  type SyncState,
+  type SyncStatusSnapshot,
+} from '@calibra-facil/contracts'
 import { toast } from 'sonner'
 
 import { Badge } from '@calibra-facil/ui/badge'
@@ -331,13 +335,18 @@ export function OfflineBanner() {
   // fully synced desktop can still be sitting on work the cloud will never take.
   const deadLabel = getDeadEventsBannerLabel(sync.deadOutboxCount)
 
-  if (!sync.isDesktop || (!showState && !deadLabel)) {
+  const updateRequired = sync.updateRequiredVersion
+    ? desktopUpdateRequiredMessage(sync.updateRequiredVersion)
+    : null
+
+  if (!sync.isDesktop || (!showState && !deadLabel && !updateRequired)) {
     return null
   }
 
   return (
     <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm font-medium text-amber-900">
-      {showState ? (
+      {updateRequired ? <span>{updateRequired}</span> : null}
+      {showState && !updateRequired ? (
         <div className="flex items-center gap-3">
           <span>{getSyncStatusLabel(sync.state)}</span>
           {sync.state === 'conflict' ? (

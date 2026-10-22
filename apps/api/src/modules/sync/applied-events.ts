@@ -30,14 +30,15 @@ export type DesktopSyncClaim =
  * (unique per organization and op id) is the arbiter: exactly one request
  * wins the claim; the others see it as applied or in progress.
  *
- * The claim is its own statement, not part of the change's transaction. The
- * handlers write through the shared `db` and through helpers in other modules
- * (job creation, NC, service-order records, audit) that each open their own
- * connection/transaction, so one transaction around a whole op would have to
- * hold a pooled connection while the handler asks for another (the pool is 5
- * by default: five concurrent pushes would deadlock) and would need every
- * helper rewritten to accept it. The claim is released when the op does not
- * apply and recorded as applied when it does.
+ * The caller (`applyDesktopEventAtomically`) runs this inside the event's own
+ * transaction, together with the change, its audit rows and
+ * `completeDesktopSyncClaim`. So the claim is never visible half-done: a push
+ * that loses the race blocks on the unique index until the winner commits (it
+ * then reads the recorded result) or rolls back (it then claims the op itself),
+ * and an op that does not apply leaves no claim behind. The lease below only
+ * matters for rows written before the claim moved into the transaction: a
+ * process that died mid-apply could leave a claim without `applied_at`, and
+ * after the lease that op is taken over instead of stuck forever.
  */
 export async function claimDesktopSyncEvent(
   organizationId: string,
@@ -143,21 +144,6 @@ export async function completeDesktopSyncClaim(
       and(
         eq(syncAppliedEvent.organizationId, organizationId),
         eq(syncAppliedEvent.id, claimId),
-      ),
-    );
-}
-
-export async function releaseDesktopSyncClaim(
-  organizationId: string,
-  claimId: number,
-) {
-  await db
-    .delete(syncAppliedEvent)
-    .where(
-      and(
-        eq(syncAppliedEvent.organizationId, organizationId),
-        eq(syncAppliedEvent.id, claimId),
-        isNull(syncAppliedEvent.appliedAt),
       ),
     );
 }

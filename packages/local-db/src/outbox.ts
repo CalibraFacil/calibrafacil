@@ -183,6 +183,10 @@ SELECT
       SELECT remote_base_updated_at FROM service_order_executions
       WHERE service_order_executions.id = domain_events.aggregate_id
     )
+    -- A job execution carries its base in the payload it was written with:
+    -- there is one per queued event, and the accept of an earlier one moves it.
+    WHEN 'calibration_job' THEN
+      json_extract(domain_events.payload_json, '$.baseUpdatedAt')
     ELSE NULL
   END AS remote_base_updated_at
 FROM outbox
@@ -740,6 +744,44 @@ function acceptedAggregates(
   return aggregates;
 }
 
+/**
+ * Moves the base version of every execution still queued for a job (not yet
+ * sent, or waiting for a review) to `baseUpdatedAt`: the cloud job's updatedAt
+ * after an accepted write, or the version the technician reviewed in a
+ * conflict they resolved by keeping the local execution.
+ */
+export function rebaseQueuedJobEvents(
+  database: LocalDatabase,
+  aggregateId: string,
+  baseUpdatedAt: string,
+) {
+  database
+    .prepare(
+      `
+UPDATE outbox
+SET payload_json = json_set(payload_json, '$.baseUpdatedAt', @baseUpdatedAt)
+WHERE event_id IN (
+  SELECT event_id FROM domain_events
+  WHERE aggregate_kind = 'calibration_job'
+    AND aggregate_id = @aggregateId
+    AND sync_state IN ('pending', 'failed', 'conflict')
+)
+`,
+    )
+    .run({ aggregateId, baseUpdatedAt });
+  database
+    .prepare(
+      `
+UPDATE domain_events
+SET payload_json = json_set(payload_json, '$.baseUpdatedAt', @baseUpdatedAt)
+WHERE aggregate_kind = 'calibration_job'
+  AND aggregate_id = @aggregateId
+  AND sync_state IN ('pending', 'failed', 'conflict')
+`,
+    )
+    .run({ aggregateId, baseUpdatedAt });
+}
+
 function applyAcceptedRemoteEntity(
   database: LocalDatabase,
   event: DomainEventRow | undefined,
@@ -753,12 +795,14 @@ function applyAcceptedRemoteEntity(
   ) {
     const remoteEntity = asRecord(accepted.remoteEntity);
     const officialJobId = getString(remoteEntity, "jobId");
+    const remoteUpdatedAt = getString(remoteEntity, "updatedAt");
     database
       .prepare(
         `
 UPDATE calibration_jobs
 SET remote_id = @remoteId,
   job_id = COALESCE(@officialJobId, job_id),
+  updated_at = COALESCE(@remoteUpdatedAt, updated_at),
   sync_state = 'synced'
 WHERE id = @localId
 `,
@@ -766,8 +810,15 @@ WHERE id = @localId
       .run({
         remoteId: accepted.remoteEntityId,
         officialJobId,
+        remoteUpdatedAt,
         localId: event.aggregate_id,
       });
+    // REQ-SP-5: the cloud job's updatedAt moved with this accepted write. The
+    // executions still queued for the job were made against the version before
+    // it; left alone they would be refused as somebody else's change.
+    if (remoteUpdatedAt !== null) {
+      rebaseQueuedJobEvents(database, event.aggregate_id, remoteUpdatedAt);
+    }
   }
 
   if (
