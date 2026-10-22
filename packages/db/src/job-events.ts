@@ -112,6 +112,12 @@ export type JobExecutionChanges = JobActorAuditFields & {
   environmentalSnapshot?: Change;
   calibrationLocationSnapshot?: Change;
   calibrationPhaseSnapshot?: Change;
+  /**
+   * A submit only: whether the calibration location and phase reasons were
+   * validated. "legacy_exempt" is a desktop event from a build that predates
+   * the rule, so an auditor can list jobs whose location was never validated.
+   */
+  calibrationRecordCheck?: "enforced" | "legacy_exempt";
   unitConversions?: unknown;
   assetSnapshot?: Change;
   standardsJudgedAt?: {
