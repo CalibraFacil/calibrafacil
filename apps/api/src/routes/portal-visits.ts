@@ -1,4 +1,10 @@
 import { Hono } from "hono";
+import type {
+  PortalVisitConfirmResponse,
+  PortalVisitRescheduleResponse,
+  PortalVisitsResponse,
+  ServerShape,
+} from "@calibra-facil/contracts";
 import { zValidator } from "@hono/zod-validator";
 import {
   calibrationJob,
@@ -180,7 +186,7 @@ export const portalVisitsRouter = new Hono<{ Variables: AuthVariables }>()
           assetCount: assetCountByVisit.get(visit.id) ?? 0,
           rescheduleRequest: latestRescheduleByVisit.get(visit.id) ?? null,
         })),
-      });
+      } satisfies ServerShape<PortalVisitsResponse>);
     },
   )
   /**
@@ -231,7 +237,7 @@ export const portalVisitsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({
           ok: true,
           customerConfirmedAt: visit.customerConfirmedAt,
-        });
+        } satisfies ServerShape<PortalVisitConfirmResponse>);
       }
 
       const customerConfirmedAt = new Date();
@@ -267,7 +273,10 @@ export const portalVisitsRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      return c.json({ ok: true, customerConfirmedAt });
+      return c.json({
+        ok: true,
+        customerConfirmedAt,
+      } satisfies ServerShape<PortalVisitConfirmResponse>);
     },
   )
   /**
@@ -371,7 +380,10 @@ export const portalVisitsRouter = new Hono<{ Variables: AuthVariables }>()
           );
         }
 
-        return c.json({ ok: true, requestId });
+        return c.json({
+          ok: true,
+          requestId,
+        } satisfies ServerShape<PortalVisitRescheduleResponse>);
       } catch (error) {
         // Unique partial index backstop: a concurrent request slipped past
         // the pre-check above.

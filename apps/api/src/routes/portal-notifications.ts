@@ -1,4 +1,10 @@
 import { Hono } from "hono";
+import type {
+  PortalNotificationCountResponse,
+  PortalNotificationFeedResponse,
+  PortalNotificationMarkReadResponse,
+  ServerShape,
+} from "@calibra-facil/contracts";
 import { zValidator } from "@hono/zod-validator";
 import { notification } from "@calibra-facil/db/schema";
 import {
@@ -130,7 +136,7 @@ export const portalNotificationsRouter = new Hono<{
         return c.json({
           data,
           nextCursor: hasMore && lastRow ? lastRow.id : null,
-        });
+        } satisfies ServerShape<PortalNotificationFeedResponse>);
       } catch (error) {
         console.error("Error listing portal notifications:", error);
         return c.json({ error: "Erro ao listar notificações" }, 500);
@@ -151,7 +157,9 @@ export const portalNotificationsRouter = new Hono<{
         labScope: portalLabScope,
       });
       if (orgIds.length === 0) {
-        return c.json({ count: 0 });
+        return c.json({
+          count: 0,
+        } satisfies ServerShape<PortalNotificationCountResponse>);
       }
 
       const now = new Date();
@@ -167,7 +175,9 @@ export const portalNotificationsRouter = new Hono<{
           ),
         );
 
-      return c.json({ count: result?.count ?? 0 });
+      return c.json({
+        count: result?.count ?? 0,
+      } satisfies ServerShape<PortalNotificationCountResponse>);
     } catch (error) {
       console.error("Error counting portal notifications:", error);
       return c.json({ error: "Erro ao contar notificações" }, 500);
@@ -192,7 +202,9 @@ export const portalNotificationsRouter = new Hono<{
           labScope: portalLabScope,
         });
         if (orgIds.length === 0) {
-          return c.json({ updatedIds: [] });
+          return c.json({
+            updatedIds: [],
+          } satisfies ServerShape<PortalNotificationMarkReadResponse>);
         }
 
         const updated = await orgSetDb(orgIds)
@@ -207,7 +219,9 @@ export const portalNotificationsRouter = new Hono<{
           )
           .returning();
 
-        return c.json({ updatedIds: updated.map((row) => row.id) });
+        return c.json({
+          updatedIds: updated.map((row) => row.id),
+        } satisfies ServerShape<PortalNotificationMarkReadResponse>);
       } catch (error) {
         console.error("Error marking portal notifications read:", error);
         return c.json({ error: "Erro ao marcar notificações" }, 500);
@@ -229,7 +243,9 @@ export const portalNotificationsRouter = new Hono<{
         labScope: portalLabScope,
       });
       if (orgIds.length === 0) {
-        return c.json({ count: 0 });
+        return c.json({
+          count: 0,
+        } satisfies ServerShape<PortalNotificationCountResponse>);
       }
 
       const updated = await orgSetDb(orgIds)
@@ -243,7 +259,9 @@ export const portalNotificationsRouter = new Hono<{
         )
         .returning();
 
-      return c.json({ count: updated.length });
+      return c.json({
+        count: updated.length,
+      } satisfies ServerShape<PortalNotificationCountResponse>);
     } catch (error) {
       console.error("Error marking all portal notifications read:", error);
       return c.json({ error: "Erro ao marcar notificações" }, 500);

@@ -128,12 +128,18 @@ as `any`. Response contracts replace that, one domain at a time.
    where the wire has an ISO string and keeps literal unions exact). A handler
    change that breaks the shape fails `pnpm check-types`.
 3. **Client: run time.** `client-runtime` modules validate with
-   `readValidatedJsonResponse(response, schema, { endpoint, fallback })`; the
-   portal uses `fetchPortalJson(path, schema, { errorMessage })`
-   (`apps/portal/src/lib/api-fetch.ts`). Both call `validateResponsePayload`
-   from contracts. A valid payload is returned as-is (same object, every key the
-   server sent, so frozen evidence is never rewritten); call sites get inferred
-   types and no generic.
+   `readValidatedJsonResponse(response, schema, { endpoint, fallback })` (or the
+   per-client `createValidatedReader(options)`); the portal goes through ONE
+   module, `apps/portal/src/lib/api-fetch.ts`: `fetchPortalJson(path, schema,
+{ errorMessage })` for a read or a mutation, `fetchPortalResponse` +
+   `readPortalJson` / `readPortalJsonResult` when the HTTP status decides what
+   to render (the public links), `fetchExternalJson` for the one external
+   lookup. HTTP errors become a `PortalApiError` (status + body). All call
+   `validateResponsePayload` from contracts. A valid payload is returned as-is
+   (same object, every key the server sent, so frozen evidence is never
+   rewritten); call sites get inferred types and no generic. The
+   `calibra/no-unparsed-portal-fetch` oxlint rule fails any `fetch(...)` or
+   `.json()` under `apps/portal/src` outside that module (empty baseline).
 4. **CI: contract test.** An int spec calls the real route (real middleware, real
    Postgres) and `safeParse`s the body with the same schema:
    `apps/api/src/routes/jobs-contract.int.spec.ts`,
@@ -158,22 +164,58 @@ as `any`. Response contracts replace that, one domain at a time.
   parsed against its schema in `packages/contracts/src/fixtures.test.ts`, so a
   fixture cannot drift from the contract it stands in for.
 
-**Covered so far (first slice):** jobs domain (`GET /api/jobs`, `GET /api/jobs/:id`,
-the execute/submit/approve/reject/cancel/assign mutation responses, amend,
-technicians list, certificate/label download links) and `GET /api/portal/overview`.
+**Covered so far:** jobs domain (`GET /api/jobs`, `GET /api/jobs/:id`, the
+execute/submit/approve/reject/cancel/assign mutation responses, amend,
+technicians list, certificate/label download links, `POST /api/jobs` create,
+`flag-oot`, `generate-label`), `GET /api/portal/overview`, standards (list,
+detail, create, update, composition profiles, certificate document upload and
+download) and environmental limits (list, save, delete, effective lookup).
+`client-runtime` validates all of these.
+
+**The client portal** (`packages/contracts/src/portal*.ts`, `public-access.ts`):
+every `/api/portal/*` response the portal reads (branding, organizations, units,
+calendar, fleet, asset detail, interval insight/update, certificates and their
+downloads, audit packs, notifications and preferences, out-of-tolerance notices
+and events, drift series, fleet analytics, visits, requests, service orders,
+financial summary, quote decisions), the public verification endpoints, the
+invitation lookup and the magic-link preview. The handlers return
+`satisfies ServerShape<...>`; `portal-contract.int.spec.ts` and
+`portal-engagement-contract.int.spec.ts` parse the real responses. A few
+customer-scoped success paths (request detail/batch, service orders, OOT
+acknowledge, `GET /organizations`) are proven at compile time only because the
+tenant SQL guard of the integration tier flags their (customer- or user-scoped)
+statements. Portal unit tests build their bodies from
+`@calibra-facil/contracts/portal-fixtures`.
+
+**Reference data and service orders** (customers, assets, asset types, methods,
+service orders: `packages/contracts/src/reference-data.ts`,
+`service-orders.ts`) have response schemas that the API contract spec
+(`reference-data-contract.int.spec.ts`) checks against the real cloud routes,
+with `satisfies ServerShape<...>` at the handlers. `client-runtime` does not
+validate them at run time yet.
+
+**Desktop parity.** The desktop local-server (SQLite mirror) answers the offline
+routes with the SAME schemas the cloud is held to:
+`apps/local-server/src/contract.test.ts` parses every offline route (jobs reads,
+execution save/submit, attachments, environmental limits, service-order
+create/list/get, asset create/list/get, asset types, customers / standards /
+methods reads, sync) with them. Where the mirror legitimately keeps less than
+the cloud, the test names the exact missing fields (`JOB_DETAIL_GAPS`: review
+trail, amendment chain, as-found verdict, letterhead, commercial terms) and
+fails when that set changes in either direction; the schema itself is never
+loosened to fit the mirror. Execute/submit are typed by the common core
+`jobExecutionResponseSchema` because the local job read model has no cloud-only
+columns (`verificationToken`, signature data).
 
 **Opaque by design, for now:** `methodSnapshot.compiledMethod` is `unknown` in the
 job schema because the database column is; the worksheet reads it through
 `compiledMethodSnapshotSchema.safeParse` (see `readCompiledMethodSnapshot` in
 `apps/web/src/features/jobs/execution.ts`).
 
-**Follow-ups (remaining domains, in rough priority):** `POST /api/jobs` create,
-`flag-oot`, `generate-label`; `standards` (incl. `jobs.listStandards`) and
-`environmental-limits` (`jobs.getEffectiveEnvironmentalLimits`), which still take
-a generic; service orders; customers/assets/services/methods; quality
-(NC/CAPA); finance; reports; the other ~60 portal `fetch` calls (move each to
-`fetchPortalJson` with a contract schema); the desktop transport
-(`desktop-client.ts` still reads local-server bodies with `readDesktopJson<T>`,
-unvalidated: give `apps/local-server` the same contract tests); and the
-hand-written `*Data` DTOs left in `packages/client-runtime/src/types.ts`.
-New endpoints should start with a schema in contracts rather than a generic.
+**Follow-ups (remaining domains, in rough priority):** run-time validation of
+the reference-data and service-order responses in `client-runtime`; the
+desktop transport (`desktop-client.ts`) still reads local-server bodies with
+`readDesktopJson<T>`, unvalidated (the local-server contract tests pin the
+shapes instead); services; quality (NC/CAPA); finance; reports; and the
+hand-written `*Data` DTOs left in `packages/client-runtime/src/types.ts`. New
+endpoints should start with a schema in contracts rather than a generic.

@@ -619,7 +619,12 @@ export async function ensureJobCommercialSnapshot(
   const [existing] = await runner
     .select()
     .from(jobCommercialSnapshot)
-    .where(eq(jobCommercialSnapshot.jobId, params.jobId))
+    .where(
+      and(
+        eq(jobCommercialSnapshot.jobId, params.jobId),
+        eq(jobCommercialSnapshot.organizationId, params.organizationId),
+      ),
+    )
     .limit(1);
 
   if (existing) {

@@ -1,4 +1,10 @@
 import { Hono } from "hono";
+import type {
+  AssetDetail,
+  AssetRecord,
+  AssetsListResponse,
+  ServerShape,
+} from "@calibra-facil/contracts";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@calibra-facil/db";
@@ -314,7 +320,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
           serializeAssetForResponse({
             ...newAsset,
             assetTypeDefinition: foundAssetType.definition,
-          }),
+          }) satisfies ServerShape<AssetRecord>,
           201,
         );
       } catch (error) {
@@ -504,7 +510,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             total,
             totalPages: Math.ceil(total / limit),
           },
-        });
+        } satisfies ServerShape<AssetsListResponse>);
       } catch (error) {
         console.error("Error listing assets:", error);
         return c.json({ error: "Erro ao listar ativos" }, 500);
@@ -638,7 +644,11 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
         }
       }
 
-      return c.json(serializeAssetForResponse(foundAsset));
+      return c.json(
+        serializeAssetForResponse(
+          foundAsset,
+        ) satisfies ServerShape<AssetDetail>,
+      );
     } catch (error) {
       console.error("Error getting asset:", error);
       return c.json({ error: "Erro ao buscar ativo" }, 500);

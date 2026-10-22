@@ -98,7 +98,7 @@ export {
   type LocalStandardStatus,
 } from "./standards";
 export {
-  getLocalEffectiveEnvironmentalLimits,
+  resolveLocalEffectiveEnvironmentalLimits,
   type LocalEffectiveEnvironmentalLimitsInput,
 } from "./environmental-limits";
 export {

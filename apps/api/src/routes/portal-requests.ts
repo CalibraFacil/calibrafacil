@@ -1,4 +1,10 @@
 import { Hono } from "hono";
+import type {
+  PortalRequestBatchResponse,
+  PortalRequestDetail,
+  PortalRequestsResponse,
+  ServerShape,
+} from "@calibra-facil/contracts";
 import { zValidator } from "@hono/zod-validator";
 import {
   asset,
@@ -177,7 +183,7 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
           total: countResult?.total ?? 0,
           totalPages: Math.ceil((countResult?.total ?? 0) / limit),
         },
-      });
+      } satisfies ServerShape<PortalRequestsResponse>);
     },
   )
   .get(
@@ -260,7 +266,7 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
         ...request,
         visit: visit ?? null,
         items: items.map(({ requestId: _requestId, ...item }) => item),
-      });
+      } satisfies ServerShape<PortalRequestDetail>);
     },
   )
   .post(
@@ -597,7 +603,7 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
 
         const results: Array<{
           id: number;
-          status: string;
+          status: typeof calibrationRequest.$inferSelect.status;
           customerId: number;
           unitId: number;
           itemCount: number;
@@ -685,6 +691,9 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
         }
       }
 
-      return c.json({ created }, 201);
+      return c.json(
+        { created } satisfies ServerShape<PortalRequestBatchResponse>,
+        201,
+      );
     },
   );

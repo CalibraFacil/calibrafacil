@@ -36,7 +36,8 @@ import {
   SelectItem,
   SelectTrigger,
 } from "@calibra-facil/ui/select";
-import { getApiBaseUrl } from "@/lib/utils";
+import { portalServiceOrdersResponseSchema } from "@calibra-facil/contracts";
+import { fetchPortalJson } from "@/lib/api-fetch";
 import { keepPreviousDataInScope } from "@/lib/keep-previous-page";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import { formatInstant } from "@calibra-facil/shared/format";
@@ -238,17 +239,11 @@ function ServiceOrdersPage() {
         params.set("status", statusFilter);
       }
 
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/service-orders?${params.toString()}`,
-        { credentials: "include" },
+      return fetchPortalJson(
+        `/api/portal/service-orders?${params.toString()}`,
+        portalServiceOrdersResponseSchema,
+        { errorMessage: "Falha ao carregar ordens de serviço." },
       );
-
-      if (!response.ok) {
-        throw new Error("Falha ao carregar ordens de serviço.");
-      }
-
-      const result: ServiceOrdersResponse = await response.json();
-      return result;
     },
     placeholderData: keepPreviousDataInScope(key("portal-service-orders")),
   });

@@ -1,4 +1,9 @@
 import { Hono } from "hono";
+import type {
+  CustomerDetail,
+  CustomersListResponse,
+  ServerShape,
+} from "@calibra-facil/contracts";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@calibra-facil/db";
@@ -374,7 +379,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
             total,
             totalPages: Math.ceil(total / limit),
           },
-        });
+        } satisfies ServerShape<CustomersListResponse>);
       } catch (error) {
         console.error("Error listing customers:", error);
         return c.json({ error: "Erro ao listar clientes" }, 500);
@@ -506,7 +511,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Cliente nao encontrado" }, 404);
       }
 
-      return c.json(foundCustomer);
+      return c.json(foundCustomer satisfies ServerShape<CustomerDetail>);
     } catch (error) {
       console.error("Error getting customer:", error);
       return c.json({ error: "Erro ao buscar cliente" }, 500);

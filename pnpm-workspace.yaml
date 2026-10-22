@@ -15,8 +15,10 @@ overrides:
   # <=1.6.2): seroval's JSON deserialization; reached through TanStack Router.
   seroval: ^1.6.3
   # GHSA-vcvr-r3jv-pc5j: next >=16.2.0 <16.3.6 remote code execution in
-  # next/og ImageResponse. apps/docs pins the same version.
-  next: 16.3.8
+  # next/og ImageResponse. GHSA-2464-fhr4-w9xw and GHSA-673q-mjm6-r5xr
+  # (critical, unauthenticated RCE) and GHSA-p3m5-59mp-jv5r (high, DoS):
+  # next >=16.0.0 <=16.4.0. apps/docs and packages/auth pin the same version.
+  next: 16.4.2
   fast-xml-parser: ^5.5.6
   fast-xml-builder: ^1.2.0
   # Held at ^0.25.12 for vite compatibility (vite 7.3.x pins esbuild ^0.27.0,

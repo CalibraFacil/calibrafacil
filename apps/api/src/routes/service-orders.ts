@@ -1,4 +1,14 @@
 import { Hono } from "hono";
+import type {
+  PortalFinancialSummaryResponse,
+  PortalQuoteDecisionResponse,
+  PortalServiceOrderDetailResponse,
+  PortalServiceOrdersResponse,
+  ServerShape,
+  ServiceOrderCreateResponse,
+  ServiceOrderDetailResponse,
+  ServiceOrdersListResponse,
+} from "@calibra-facil/contracts";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { serviceOrder } from "@calibra-facil/db/schema";
@@ -161,7 +171,12 @@ export const serviceOrdersRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       const query = c.req.valid("query");
-      return c.json(await listServiceOrdersForLab(member, query));
+      return c.json(
+        (await listServiceOrdersForLab(
+          member,
+          query,
+        )) satisfies ServerShape<ServiceOrdersListResponse>,
+      );
     },
   )
   .post(
@@ -193,7 +208,10 @@ export const serviceOrdersRouter = new Hono<{
       if (result.status === "invalid_source_order") {
         return c.json({ error: SERVICE_ORDER_SOURCE_REFUSED }, 400);
       }
-      return c.json({ data: result.data }, 201);
+      return c.json(
+        { data: result.data } satisfies ServerShape<ServiceOrderCreateResponse>,
+        201,
+      );
     },
   )
   .get(
@@ -271,7 +289,9 @@ export const serviceOrdersRouter = new Hono<{
         buildUnitScopeCondition(serviceOrder.unitId, member),
       );
       if (!detail) return c.json({ error: "OS nao encontrada" }, 404);
-      return c.json({ data: detail });
+      return c.json({
+        data: detail,
+      } satisfies ServerShape<ServiceOrderDetailResponse>);
     },
   )
   // #343 — per-OS customer-communication log ("Comunicações"): merges the
@@ -971,11 +991,11 @@ export const portalServiceOrdersRouter = new Hono<{
         });
       const query = c.req.valid("query");
       return c.json(
-        await listServiceOrdersForPortalCustomer(
+        (await listServiceOrdersForPortalCustomer(
           linkedCustomer.id,
           query,
           linkedCustomer.labOrganizationId,
-        ),
+        )) satisfies ServerShape<PortalServiceOrdersResponse>,
       );
     },
   )
@@ -1033,7 +1053,9 @@ export const portalServiceOrdersRouter = new Hono<{
       });
 
       if (!summary) return c.json({ error: "OS nao encontrada" }, 404);
-      return c.json({ data: summary });
+      return c.json({
+        data: summary,
+      } satisfies ServerShape<PortalFinancialSummaryResponse>);
     },
   )
   .get(
@@ -1060,7 +1082,9 @@ export const portalServiceOrdersRouter = new Hono<{
       if (!detail || detail.customerId !== linkedCustomer.id) {
         return c.json({ error: "OS nao encontrada" }, 404);
       }
-      return c.json({ data: toClientVisibleServiceOrderDetail(detail) });
+      return c.json({
+        data: toClientVisibleServiceOrderDetail(detail),
+      } satisfies ServerShape<PortalServiceOrderDetailResponse>);
     },
   )
   .post(
@@ -1103,7 +1127,9 @@ export const portalServiceOrdersRouter = new Hono<{
       if (result.status === "conflict") {
         return c.json({ error: "Orcamento nao pode ser aprovado" }, 409);
       }
-      return c.json({ ok: true });
+      return c.json({
+        ok: true,
+      } satisfies ServerShape<PortalQuoteDecisionResponse>);
     },
   )
   .post(
@@ -1148,7 +1174,9 @@ export const portalServiceOrdersRouter = new Hono<{
       if (result.status === "conflict") {
         return c.json({ error: "Este orcamento ja foi respondido" }, 409);
       }
-      return c.json({ ok: true });
+      return c.json({
+        ok: true,
+      } satisfies ServerShape<PortalQuoteDecisionResponse>);
     },
   );
 

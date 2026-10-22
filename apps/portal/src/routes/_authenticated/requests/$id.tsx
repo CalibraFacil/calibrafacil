@@ -14,7 +14,8 @@ import {
 } from "@calibra-facil/ui/instrument-panel";
 import { StatusPill } from "@/components/status-pill";
 import { getRequestStatus, type RequestStatus } from "@/lib/status-labels";
-import { getApiBaseUrl } from "@/lib/utils";
+import { portalRequestDetailSchema } from "@calibra-facil/contracts";
+import { fetchPortalJson } from "@/lib/api-fetch";
 import { usePortalQueryKey } from "@/lib/portal-org-context";
 import {
   formatCalendarDate,
@@ -111,14 +112,11 @@ function RequestDetailPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: key("portal-request-detail", id),
     queryFn: async (): Promise<RequestDetail> => {
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/portal/requests/${id}`,
-        { credentials: "include" },
+      return fetchPortalJson(
+        `/api/portal/requests/${id}`,
+        portalRequestDetailSchema,
+        { errorMessage: "Falha ao carregar solicitação" },
       );
-      if (!response.ok) {
-        throw new Error("Falha ao carregar solicitação");
-      }
-      return response.json();
     },
   });
 

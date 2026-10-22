@@ -1,48 +1,45 @@
+import {
+  massCompositionProfilesResponseSchema,
+  standardCertificateDocumentDownloadResponseSchema,
+  standardCertificateDocumentUploadResponseSchema,
+  standardRecordSchema,
+  standardSchema,
+  standardsListResponseSchema,
+} from "@calibra-facil/contracts";
 import type {
   MassCompositionProfileDto,
-  MassCompositionProfilesData,
   MassCompositionProfileWriteInput,
   StandardAuditLogData,
-  StandardCertificateDocumentDownloadResponse,
-  StandardCertificateDocumentUploadResponse,
-  StandardData,
   StandardsApi,
-  StandardsListData,
   StandardsListInput,
   StandardWriteInput,
 } from "../types";
 import type { CreateCloudApiClientOptions } from "../transport/cloud";
 import { createCloudHeaders } from "../transport/cloud";
 import { appendNamedBlob } from "../transport/form-data";
-import { readJsonResponse } from "../transport/response";
+import { createValidatedReader, readJsonResponse } from "../transport/response";
 
 export function createStandardsApi(
   rawCloudClient: any,
   options: CreateCloudApiClientOptions,
 ): StandardsApi {
-  const fetchJson = async <TResponse>(
-    path: string,
-    init: RequestInit,
-    fallback: string,
-  ) => {
+  const validated = createValidatedReader(options);
+  const fetchResponse = (path: string, init: RequestInit) => {
     const headers = createCloudHeaders(options.activeUnitProvider);
     if (init.body && !(init.body instanceof FormData)) {
       headers.set("Content-Type", "application/json");
     }
 
-    return readJsonResponse<TResponse>(
-      await (options.fetch ?? fetch)(new URL(path, options.baseUrl), {
-        ...init,
-        credentials: "include",
-        headers,
-      }),
-      fallback,
-    );
+    return (options.fetch ?? fetch)(new URL(path, options.baseUrl), {
+      ...init,
+      credentials: "include",
+      headers,
+    });
   };
 
   return {
     async list(input: StandardsListInput = {}) {
-      return readJsonResponse<StandardsListData>(
+      return validated(
         await rawCloudClient.api.standards.$get({
           query: {
             page: String(input.page ?? 1),
@@ -51,20 +48,26 @@ export function createStandardsApi(
             status: input.status || undefined,
           },
         }),
+        standardsListResponseSchema,
+        "GET /api/standards",
         "Falha ao carregar padrões",
       );
     },
     async get(id: string | number) {
-      return readJsonResponse<StandardData>(
+      return validated(
         await rawCloudClient.api.standards[":id"].$get({
           param: { id: String(id) },
         }),
+        standardSchema,
+        "GET /api/standards/:id",
         "Falha ao carregar padrão",
       );
     },
     async listCompositionProfiles() {
-      return readJsonResponse<MassCompositionProfilesData>(
+      return validated(
         await rawCloudClient.api.standards["composition-profiles"].$get(),
+        massCompositionProfilesResponseSchema,
+        "GET /api/standards/composition-profiles",
         "Falha ao carregar perfis de composição",
       );
     },
@@ -107,17 +110,21 @@ export function createStandardsApi(
       );
     },
     async create(input: StandardWriteInput) {
-      return readJsonResponse<{ id: number }>(
+      return validated(
         await rawCloudClient.api.standards.$post({ json: input }),
+        standardRecordSchema,
+        "POST /api/standards",
         "Erro ao criar padrão",
       );
     },
     async update(id: string | number, input: StandardWriteInput) {
-      return readJsonResponse<StandardData>(
+      return validated(
         await rawCloudClient.api.standards[":id"].$put({
           param: { id: String(id) },
           json: input,
         }),
+        standardRecordSchema,
+        "PUT /api/standards/:id",
         "Erro ao atualizar padrão",
       );
     },
@@ -176,16 +183,24 @@ export function createStandardsApi(
       const formData = new FormData();
       appendNamedBlob(formData, "certificate", file, input?.fileName);
 
-      return fetchJson<StandardCertificateDocumentUploadResponse>(
-        `/api/standards/${encodeURIComponent(String(id))}/certificate-document`,
-        { method: "POST", body: formData },
+      return validated(
+        await fetchResponse(
+          `/api/standards/${encodeURIComponent(String(id))}/certificate-document`,
+          { method: "POST", body: formData },
+        ),
+        standardCertificateDocumentUploadResponseSchema,
+        "POST /api/standards/:id/certificate-document",
         "Erro ao enviar certificado do padrão",
       );
     },
     async getCertificateDocumentDownloadUrl(id) {
-      return fetchJson<StandardCertificateDocumentDownloadResponse>(
-        `/api/standards/${encodeURIComponent(String(id))}/certificate-document/download`,
-        { method: "GET" },
+      return validated(
+        await fetchResponse(
+          `/api/standards/${encodeURIComponent(String(id))}/certificate-document/download`,
+          { method: "GET" },
+        ),
+        standardCertificateDocumentDownloadResponseSchema,
+        "GET /api/standards/:id/certificate-document/download",
         "Falha ao gerar link do certificado do padrão",
       );
     },

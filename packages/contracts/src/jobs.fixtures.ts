@@ -1,8 +1,11 @@
 import type {
   JobAmendResponse,
+  JobCreateResponse,
   JobDetail,
   JobDownloadUrlResponse,
   JobExecutionWarning,
+  JobFlagOotResponse,
+  JobGenerateLabelResponse,
   JobMutationResponse,
   JobRow,
   JobsListResponse,
@@ -398,6 +401,65 @@ export function buildJobDownloadUrlResponse(
   url = "https://signed-download.example.test/certificates/7.pdf",
 ): JobDownloadUrlResponse {
   return { url };
+}
+
+/** POST /api/jobs: the created row, still a DRAFT. */
+export function buildJobCreateResponse(
+  overrides: Partial<JobCreateResponse> = {},
+): JobCreateResponse {
+  return buildJobRow({ status: "DRAFT", data: null, ...overrides });
+}
+
+/** POST /api/jobs/:id/flag-oot: the opened NC and its customer notification. */
+export function buildJobFlagOotResponse(
+  overrides: Partial<JobFlagOotResponse["data"]> = {},
+): JobFlagOotResponse {
+  return {
+    message: "Nao conformidade registrada",
+    data: {
+      nc: {
+        id: 31,
+        ncNumber: "NC-2026-0001",
+        organizationId: "org-1",
+        jobId: 7,
+        type: "out_of_tolerance",
+        triggerSource: "manual",
+        description: "Fora de tolerância no estado como encontrado",
+        detectedBy: "user-1",
+        detectedAt: "2026-05-20T10:00:00.000Z",
+        status: "open",
+        capaId: null,
+        createdBy: "user-1",
+        createdAt: "2026-05-20T10:00:00.000Z",
+        updatedAt: "2026-05-20T10:00:00.000Z",
+      },
+      notification: {
+        id: 41,
+        organizationId: "org-1",
+        ncId: 31,
+        jobId: 7,
+        recallId: null,
+        certificateNumber: "CAL-0007",
+        recipientName: "Cliente Contrato",
+        recipientEmail: "cliente@exemplo.test",
+        affectedScope: null,
+        status: "PENDING",
+        sentAt: null,
+        acknowledgedAt: null,
+        approvedBy: "user-1",
+        createdAt: "2026-05-20T10:00:00.000Z",
+        updatedAt: "2026-05-20T10:00:00.000Z",
+      },
+      ...overrides,
+    },
+  };
+}
+
+/** POST /api/jobs/:id/generate-label: the render was queued. */
+export function buildJobGenerateLabelResponse(
+  jobId = 7,
+): JobGenerateLabelResponse {
+  return { message: "Gerando etiqueta...", jobId };
 }
 
 /**

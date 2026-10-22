@@ -4,9 +4,12 @@ import type { z } from "zod";
 import * as fixtures from "./jobs.fixtures";
 import {
   jobAmendResponseSchema,
+  jobCreateResponseSchema,
   jobDetailSchema,
   jobDownloadUrlResponseSchema,
   jobExecutionWarningSchema,
+  jobFlagOotResponseSchema,
+  jobGenerateLabelResponseSchema,
   jobMethodSnapshotSchema,
   jobMutationResponseSchema,
   jobRowSchema,
@@ -51,6 +54,18 @@ const registry = {
   buildPortalOverview: [
     fixtures.buildPortalOverview,
     portalOverviewResponseSchema,
+  ],
+  buildJobCreateResponse: [
+    fixtures.buildJobCreateResponse,
+    jobCreateResponseSchema,
+  ],
+  buildJobFlagOotResponse: [
+    fixtures.buildJobFlagOotResponse,
+    jobFlagOotResponseSchema,
+  ],
+  buildJobGenerateLabelResponse: [
+    fixtures.buildJobGenerateLabelResponse,
+    jobGenerateLabelResponseSchema,
   ],
 } satisfies Record<string, readonly [() => unknown, z.ZodType]>;
 

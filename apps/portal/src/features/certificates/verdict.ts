@@ -28,9 +28,10 @@ export type MethodFormula = {
   unit?: string | null;
 };
 
+/** The slice of the frozen method snapshot the portal reads (`methodName`, not `name`). */
 export type MethodSnapshotLike = {
-  name?: string;
-  version?: string;
+  methodName?: string;
+  methodVersion?: number;
   formulas?: MethodFormula[] | null;
 } | null;
 

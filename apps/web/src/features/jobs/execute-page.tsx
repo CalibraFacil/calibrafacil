@@ -275,8 +275,7 @@ export function ExecuteJobPage({
     apiJobId,
   })
 
-  const { data: standardsData } =
-    useActiveReferenceStandardsData<ReferenceStandard>()
+  const { data: standardsData } = useActiveReferenceStandardsData()
 
   // Composition-profile buildup options now come from the normalized catalog and
   // are reconstituted (by class) onto each standard, so buildMassCompositionOptions
@@ -291,12 +290,11 @@ export function ExecuteJobPage({
     [standardsData, compositionProfilesData],
   )
 
-  const { data: envLimitsData } =
-    useEffectiveEnvironmentalLimitsData<EffectiveLimits>({
-      assetTypeId: job?.assetTypeId,
-      unitId: job?.unitId,
-      enabled: !!job?.assetTypeId && !!job?.unitId,
-    })
+  const { data: envLimitsData } = useEffectiveEnvironmentalLimitsData({
+    assetTypeId: job?.assetTypeId,
+    unitId: job?.unitId,
+    enabled: !!job?.assetTypeId && !!job?.unitId,
+  })
 
   const envLimits = envLimitsData?.limits ?? null
 

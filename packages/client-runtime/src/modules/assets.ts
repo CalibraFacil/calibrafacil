@@ -2,6 +2,7 @@ import type {
   AssetAuditLogData,
   AssetDetailData,
   AssetsApi,
+  AssetRecord,
   AssetsListData,
   AssetsListInput,
   CreateAssetInput,
@@ -26,7 +27,7 @@ export function createAssetsApi(rawCloudClient: any): AssetsApi {
       );
     },
     async create(input: CreateAssetInput) {
-      return readJsonResponse<AssetsListData["data"][number]>(
+      return readJsonResponse<AssetRecord>(
         await rawCloudClient.api.assets.$post({ json: input }),
         "Erro ao criar ativo",
       );

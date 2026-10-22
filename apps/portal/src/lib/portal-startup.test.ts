@@ -30,6 +30,7 @@ const ORG_A = {
   type: "CLIENT",
   createdAt: "2026-01-01T00:00:00.000Z",
   memberRole: "CLIENT_ADMIN",
+  kind: "unit",
 };
 const ORG_B = { ...ORG_A, id: "org-b", name: "Cliente B", slug: "b" };
 

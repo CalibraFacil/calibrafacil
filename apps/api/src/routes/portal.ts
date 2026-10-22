@@ -26,7 +26,28 @@ import {
   assetOotAuditLog,
 } from "@calibra-facil/db/schema";
 import type {
+  PortalAssetDetailResponse,
+  PortalAuditPackRequestedResponse,
+  PortalAuditPacksResponse,
+  PortalBrandingResponse,
+  PortalCalendarResponse,
+  PortalCertificateDetail,
+  PortalOotAssessmentResponse,
+  PortalCertificatesResponse,
+  PortalDownloadLinkResponse,
+  PortalDriftSeriesResponse,
+  PortalFleetAnalyticsResponse,
+  PortalFleetAssetsResponse,
+  PortalIntervalInsight,
+  PortalIntervalUpdateResponse,
+  PortalNotificationPreferencesResponse,
+  PortalOotAcknowledgeResponse,
+  PortalOotEventsResponse,
+  PortalOotNotificationsResponse,
+  PortalOrganizationsResponse,
   PortalOverviewResponse,
+  PortalUnitsResponse,
+  PortalUnitsSummaryResponse,
   ServerShape,
 } from "@calibra-facil/contracts";
 import { notifyOotAcknowledged } from "@calibra-facil/notifications";
@@ -614,7 +635,10 @@ export const portalRouter = new Hono<{
   .get("/branding", async (c) => {
     const portalLabScope = await getPortalLabScope(c);
     if (!portalLabScope.labOrganizationId) {
-      return c.json({ name: null, logo: null });
+      return c.json({
+        name: null,
+        logo: null,
+      } satisfies ServerShape<PortalBrandingResponse>);
     }
 
     const [labOrganization] = await orgDb(portalLabScope.labOrganizationId)
@@ -626,7 +650,7 @@ export const portalRouter = new Hono<{
     return c.json({
       name: labOrganization?.name ?? null,
       logo: labOrganization?.logo ?? null,
-    });
+    } satisfies ServerShape<PortalBrandingResponse>);
   })
 
   // =========================================================================
@@ -656,7 +680,9 @@ export const portalRouter = new Hono<{
         labScope: portalLabScope.labOrganizationId,
       });
 
-      return c.json(clientOrganizations);
+      return c.json(
+        clientOrganizations satisfies ServerShape<PortalOrganizationsResponse>,
+      );
     } catch (error) {
       console.error("Error listing portal organizations:", error);
       return c.json({ error: "Erro ao listar organizações" }, 500);
@@ -1041,7 +1067,7 @@ export const portalRouter = new Hono<{
             total: countResult?.total ?? 0,
             totalPages: Math.ceil((countResult?.total ?? 0) / limit),
           },
-        });
+        } satisfies ServerShape<PortalFleetAssetsResponse>);
       } catch (error) {
         console.error("Error listing portal assets:", error);
         return c.json({ error: "Erro ao listar ativos" }, 500);
@@ -1180,7 +1206,7 @@ export const portalRouter = new Hono<{
             certificates,
             certificateCount: certificateCountResult?.total ?? 0,
           },
-        });
+        } satisfies ServerShape<PortalAssetDetailResponse>);
       } catch (error) {
         console.error("Error fetching portal asset:", error);
         return c.json({ error: "Erro ao buscar ativo" }, 500);
@@ -1264,7 +1290,13 @@ export const portalRouter = new Hono<{
           )
           .orderBy(asc(asset.nextCalibrationDate), asc(asset.tag));
 
-        return c.json({ data: dues });
+        // The window filter above keeps only dated assets; narrow the type with it.
+        const data = dues.flatMap((due) =>
+          due.nextCalibrationDate
+            ? [{ ...due, nextCalibrationDate: due.nextCalibrationDate }]
+            : [],
+        );
+        return c.json({ data } satisfies ServerShape<PortalCalendarResponse>);
       } catch (error) {
         console.error("Error building portal calendar:", error);
         return c.json({ error: "Erro ao carregar o calendário" }, 500);
@@ -1293,14 +1325,17 @@ export const portalRouter = new Hono<{
       });
 
       if (!scope) {
-        return c.json({ units: [] });
+        return c.json({ units: [] } satisfies ServerShape<PortalUnitsResponse>);
       }
 
       const units = [...scope.customerById.values()]
         .map((unit) => ({ id: unit.id, name: unit.name }))
         .sort((left, right) => left.name.localeCompare(right.name, "pt-BR"));
 
-      return c.json({ mode: scope.mode, units });
+      return c.json({
+        mode: scope.mode,
+        units,
+      } satisfies ServerShape<PortalUnitsResponse>);
     } catch (error) {
       console.error("Error listing portal units:", error);
       return c.json({ error: "Erro ao listar unidades" }, 500);
@@ -1370,7 +1405,10 @@ export const portalRouter = new Hono<{
             left.name.localeCompare(right.name, "pt-BR"),
         );
 
-      return c.json({ mode: scope.mode, units });
+      return c.json({
+        mode: scope.mode,
+        units,
+      } satisfies ServerShape<PortalUnitsSummaryResponse>);
     } catch (error) {
       console.error("Error building portal unit summary:", error);
       return c.json({ error: "Erro ao carregar o resumo por unidade" }, 500);
@@ -1399,7 +1437,11 @@ export const portalRouter = new Hono<{
         .where(eq(notificationPreference.userId, session.user.id))
         .limit(1);
 
-      return c.json(portalPreferencesPayload(prefs));
+      return c.json(
+        portalPreferencesPayload(
+          prefs,
+        ) satisfies ServerShape<PortalNotificationPreferencesResponse>,
+      );
     } catch (error) {
       console.error("Error reading portal notification preferences:", error);
       return c.json({ error: "Erro ao carregar preferências" }, 500);
@@ -1524,7 +1566,7 @@ export const portalRouter = new Hono<{
           currentIntervalMonths: existing.calibrationIntervalMonths,
           familyRows,
         });
-        return c.json(insight);
+        return c.json(insight satisfies ServerShape<PortalIntervalInsight>);
       } catch (error) {
         console.error("Error building interval insight:", error);
         return c.json(
@@ -1805,7 +1847,7 @@ export const portalRouter = new Hono<{
           calibrationIntervalMonths: intervalMonths,
           nextCalibrationDate,
           intervalSetBy,
-        });
+        } satisfies ServerShape<PortalIntervalUpdateResponse>);
       } catch (error) {
         console.error("Error setting calibration interval:", error);
         return c.json({ error: "Erro ao salvar periodicidade" }, 500);
@@ -1860,7 +1902,11 @@ export const portalRouter = new Hono<{
             set: merged,
           });
 
-        return c.json(portalPreferencesPayload(merged));
+        return c.json(
+          portalPreferencesPayload(
+            merged,
+          ) satisfies ServerShape<PortalNotificationPreferencesResponse>,
+        );
       } catch (error) {
         console.error("Error saving portal notification preferences:", error);
         return c.json({ error: "Erro ao salvar preferências" }, 500);
@@ -2015,7 +2061,7 @@ export const portalRouter = new Hono<{
           total,
           totalPages: Math.ceil(total / limit),
         },
-      });
+      } satisfies ServerShape<PortalCertificatesResponse>);
     } catch (error) {
       console.error("Error listing portal certificates:", error);
       return c.json({ error: "Erro ao listar certificados" }, 500);
@@ -2176,7 +2222,9 @@ export const portalRouter = new Hono<{
         addressText: locationSnapshot?.addressText?.trim() || null,
       };
 
-      return c.json({
+      // Held back from the client (and dropped by JSON): the keys set to
+      // `undefined` below, so the contract is checked on the object as a whole.
+      const body = {
         ...certificate,
         certificateUrl:
           releaseStatus === "PAYMENT_PENDING"
@@ -2209,7 +2257,8 @@ export const portalRouter = new Hono<{
         labAccreditationValidUntil: undefined,
         // Internal release-gate detail; the customer only sees `accredited`.
         scopeOverrideJustification: undefined,
-      });
+      };
+      return c.json(body satisfies ServerShape<PortalCertificateDetail>);
     } catch (error) {
       console.error("Error fetching portal certificate:", error);
       return c.json({ error: "Erro ao buscar certificado" }, 500);
@@ -2293,7 +2342,10 @@ export const portalRouter = new Hono<{
         responseContentDisposition: attachmentDisposition(filename),
       });
 
-      return c.json({ url, filename });
+      return c.json({
+        url,
+        filename,
+      } satisfies ServerShape<PortalDownloadLinkResponse>);
     } catch (error) {
       console.error("Error generating certificate download URL:", error);
       return c.json({ error: "Erro ao gerar link de download" }, 500);
@@ -2416,7 +2468,13 @@ export const portalRouter = new Hono<{
           { idempotencyKey: `audit-pack-${exportRow.id}` },
         );
 
-        return c.json({ id: exportRow.id, status: "PENDING" }, 201);
+        return c.json(
+          {
+            id: exportRow.id,
+            status: "PENDING",
+          } satisfies ServerShape<PortalAuditPackRequestedResponse>,
+          201,
+        );
       } catch (error) {
         console.error("Error requesting portal audit pack:", error);
         return c.json({ error: "Erro ao solicitar o pacote" }, 500);
@@ -2481,7 +2539,9 @@ export const portalRouter = new Hono<{
         createdAt: row.createdAt,
       }));
 
-      return c.json({ data });
+      return c.json({
+        data,
+      } satisfies ServerShape<PortalAuditPacksResponse>);
     } catch (error) {
       console.error("Error listing portal audit packs:", error);
       return c.json({ error: "Erro ao listar pacotes de auditoria" }, 500);
@@ -2581,7 +2641,10 @@ export const portalRouter = new Hono<{
         },
       );
 
-      return c.json({ url, filename });
+      return c.json({
+        url,
+        filename,
+      } satisfies ServerShape<PortalDownloadLinkResponse>);
     } catch (error) {
       console.error("Error generating audit pack download URL:", error);
       return c.json({ error: "Erro ao gerar link de download" }, 500);
@@ -2655,7 +2718,7 @@ export const portalRouter = new Hono<{
           total: data.length,
           pending: data.filter((row) => row.acknowledgedAt === null).length,
         },
-      });
+      } satisfies ServerShape<PortalOotNotificationsResponse>);
     } catch (error) {
       console.error("Error listing portal OOT notifications:", error);
       return c.json({ error: "Erro ao listar notificações" }, 500);
@@ -2748,7 +2811,9 @@ export const portalRouter = new Hono<{
           }
         }
 
-        return c.json({ message: "Recebimento confirmado" });
+        return c.json({
+          message: "Recebimento confirmado",
+        } satisfies ServerShape<PortalOotAcknowledgeResponse>);
       } catch (error) {
         console.error("Error acknowledging portal OOT notification:", error);
         return c.json({ error: "Erro ao confirmar recebimento" }, 500);
@@ -2856,7 +2921,10 @@ export const portalRouter = new Hono<{
           document.r2Key,
         );
 
-        return c.json({ url, filename: document.fileName });
+        return c.json({
+          url,
+          filename: document.fileName,
+        } satisfies ServerShape<PortalDownloadLinkResponse>);
       } catch (error) {
         console.error("Error generating standard certificate URL:", error);
         return c.json({ error: "Erro ao gerar link de download" }, 500);
@@ -2942,7 +3010,7 @@ export const portalRouter = new Hono<{
           ...summary,
           attribution:
             "Pareceres de conformidade conforme a regra de decisão aplicada pelo laboratório em cada certificado; o portal reproduz os pareceres sem reavaliação.",
-        });
+        } satisfies ServerShape<PortalFleetAnalyticsResponse>);
       } catch (error) {
         console.error("Error building fleet analytics:", error);
         return c.json({ error: "Erro ao calcular indicadores da frota" }, 500);
@@ -3018,7 +3086,7 @@ export const portalRouter = new Hono<{
           ...buildAssetDriftSeries(rows),
           attribution:
             "Margens conforme os resultados “como recebido” do certificado; parecer de conformidade do laboratório, reproduzido sem reavaliação.",
-        });
+        } satisfies ServerShape<PortalDriftSeriesResponse>);
       } catch (error) {
         console.error("Error building drift series:", error);
         return c.json({ error: "Erro ao montar série de deriva" }, 500);
@@ -3109,7 +3177,9 @@ export const portalRouter = new Hono<{
           .where(and(...conditions))
           .orderBy(desc(assetOotEvent.detectedAt));
 
-        return c.json({ data: events });
+        return c.json({
+          data: events,
+        } satisfies ServerShape<PortalOotEventsResponse>);
       } catch (error) {
         console.error("Error listing OOT events:", error);
         return c.json({ error: "Erro ao listar eventos" }, 500);
@@ -3201,6 +3271,9 @@ export const portalRouter = new Hono<{
             userAgent,
           })
           .returning();
+        // The catch below answers 500; never report a success without the row.
+        if (!assessment)
+          throw new Error("OOT assessment insert returned no row");
 
         await o
           .update(assetOotEvent)
@@ -3232,7 +3305,7 @@ export const portalRouter = new Hono<{
           {
             message: "Avaliação registrada",
             data: { event: { ...event, status: "ASSESSED" }, assessment },
-          },
+          } satisfies ServerShape<PortalOotAssessmentResponse>,
           201,
         );
       } catch (error) {

@@ -1,4 +1,9 @@
 import { Hono } from "hono";
+import type {
+  MethodDetail,
+  MethodsListResponse,
+  ServerShape,
+} from "@calibra-facil/contracts";
 import { zValidator } from "@hono/zod-validator";
 import { db } from "@calibra-facil/db";
 import {
@@ -1267,7 +1272,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             total,
             totalPages: Math.ceil(total / limit),
           },
-        });
+        } satisfies ServerShape<MethodsListResponse>);
       } catch (error) {
         console.error("Error listing methods:", error);
         return c.json({ error: "Erro ao listar métodos" }, 500);
@@ -1582,7 +1587,9 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Método nao encontrado" }, 404);
       }
 
-      return c.json(normalizeMethodRecord(method));
+      return c.json(
+        normalizeMethodRecord(method) satisfies ServerShape<MethodDetail>,
+      );
     } catch (error) {
       console.error("Error getting method:", error);
       return c.json({ error: "Erro ao buscar método" }, 500);
