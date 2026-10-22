@@ -27,11 +27,6 @@ const DOCUMENTED_MACHINE: Record<
     ["IN_PROGRESS", "IN_PROGRESS"],
     ["REJECTED", "REJECTED"],
   ],
-  record_results: [
-    ["DRAFT", "IN_PROGRESS"],
-    ["IN_PROGRESS", "IN_PROGRESS"],
-    ["REJECTED", "IN_PROGRESS"],
-  ],
   submit: [
     ["DRAFT", "REVIEW"],
     ["IN_PROGRESS", "REVIEW"],
@@ -64,8 +59,6 @@ const DOCUMENTED_MACHINE: Record<
     ["IN_PROGRESS", "IN_PROGRESS"],
     ["REVIEW", "REVIEW"],
     ["REJECTED", "REJECTED"],
-    ["GENERATING_PDF", "GENERATING_PDF"],
-    ["CANCELED", "CANCELED"],
   ],
 };
 
@@ -128,13 +121,19 @@ describe("job transition table", () => {
     ]);
     expect(allowedFrom("approve")).toEqual(["REVIEW"]);
     expect(allowedFrom("amend")).toEqual(["APPROVED"]);
+    // Q19: a technician is assigned only while the job is still open.
+    expect(allowedFrom("assign")).toEqual([
+      "DRAFT",
+      "IN_PROGRESS",
+      "REVIEW",
+      "REJECTED",
+    ]);
     expect(allowedFrom("create")).toEqual([]);
   });
 
   it("REQ-TR-1: targetOf resolves the destination or null", () => {
     expect(targetOf("DRAFT", "execute")).toBe("IN_PROGRESS");
     expect(targetOf("REJECTED", "execute")).toBe("REJECTED");
-    expect(targetOf("REJECTED", "record_results")).toBe("IN_PROGRESS");
     expect(targetOf("GENERATING_PDF", "revert_approval")).toBe("REVIEW");
     expect(targetOf("APPROVED", "cancel")).toBeNull();
     expect(targetOf(null, "create")).toBe("DRAFT");
