@@ -36,7 +36,6 @@ import {
   normalizeContaAzulConnectionConfig,
   type ContaAzulConnectionConfig,
   type ContaAzulReferenceItem,
-  type IntegrationSyncBackgroundJobMessage,
   type IntegrationMappedPreviewSample,
   type IntegrationMdfeLinkPayload,
   type IntegrationMappingsConfig,
@@ -76,6 +75,7 @@ import {
   type IntegrationTransporterPayload,
   type RemoteStatusPollResult,
 } from "@calibra-facil/shared";
+import type { IntegrationSyncBackgroundJobMessage } from "@calibra-facil/schemas";
 import { and, count, desc, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
 import {
   ContaAzulClient,

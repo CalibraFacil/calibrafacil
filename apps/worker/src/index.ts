@@ -84,11 +84,13 @@ import {
 } from "./integrations.js";
 import {
   formatSpecificationsForDisplay,
-  type AuditPackBackgroundJobMessage,
-  type BackgroundJobMessage,
-  type DocumentBackgroundJobMessage,
   formatAccreditationNumber,
 } from "@calibra-facil/shared";
+import type {
+  AuditPackBackgroundJobMessage,
+  BackgroundJobMessage,
+  DocumentBackgroundJobMessage,
+} from "@calibra-facil/schemas";
 import {
   getLogoKeyFromUrl,
   getYear,

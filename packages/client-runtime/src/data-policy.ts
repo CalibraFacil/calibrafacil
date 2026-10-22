@@ -61,9 +61,25 @@ export const desktopDataPolicyUnavailableMessages = {
     "Este recurso depende do runtime local do desktop. Reinicie o app se o serviço local não estiver disponível.",
 } as const satisfies Record<DataPolicy, string>;
 
+/**
+ * Where every client method runs on desktop. Offline scope is deliberately
+ * narrow (audit decision Q13) and this registry is its single source of truth:
+ *
+ * - field capture: an assigned job's execution from a read-only pack of method
+ *   and standards (`jobs.*` reads, `saveExecution`, `submitExecution`,
+ *   attachments), saved as a draft; the cloud checks the submit on sync;
+ * - intake: `serviceOrders.create` and a minimal `assets.create` stub;
+ * - reference reads: customers, assets, asset types, standards, methods,
+ *   environmental limits and the service orders already on the device.
+ *
+ * Everything else (approval, certificates, signing, finance, settings, method
+ * authoring, customer edits and compliance, NC/CAPA, quality, reports, portal
+ * management) is `cloud-only`. The web derives which routes work offline from
+ * these entries (`apps/web/src/runtime/desktop-offline-routes.ts`).
+ */
 export const calibraApiPolicyRegistry = {
   dashboard: {
-    getStats: "local-first-read-through-sync",
+    getStats: "cloud-only",
   },
   units: {
     getDashboardUnits: "cloud-only",
@@ -192,9 +208,9 @@ export const calibraApiPolicyRegistry = {
     list: "local-first-read-through-sync",
     lookupCnpj: "cloud-only",
     ootEvents: "cloud-only",
-    create: "local-command-sync",
+    create: "cloud-only",
     get: "local-first-read-through-sync",
-    update: "local-command-sync",
+    update: "cloud-only",
     auditLog: "cloud-only",
     updateCompliance: "cloud-only",
     listMembers: "cloud-only",
@@ -221,15 +237,15 @@ export const calibraApiPolicyRegistry = {
     list: "local-first-read-through-sync",
     create: "local-command-sync",
     get: "local-first-read-through-sync",
-    update: "local-command-sync",
+    update: "cloud-only",
     auditLog: "cloud-only",
   },
   assetTypes: {
     list: "local-first-read-through-sync",
   },
   services: {
-    list: "local-first-read-through-sync",
-    get: "local-first-read-through-sync",
+    list: "cloud-only",
+    get: "cloud-only",
     auditLog: "cloud-only",
     create: "cloud-only",
     update: "cloud-only",
@@ -310,17 +326,17 @@ export const calibraApiPolicyRegistry = {
     listCommunications: "cloud-only",
     create: "local-command-sync",
     update: "cloud-only",
-    createQuote: "local-command-sync",
+    createQuote: "cloud-only",
     saveEvaluation: "cloud-only",
     sendQuote: "cloud-only",
-    saveExecution: "local-command-sync",
+    saveExecution: "cloud-only",
     generateIntakeDocument: "cloud-only",
     getIntakeDocumentPdf: "cloud-only",
     generateTag: "cloud-only",
     getTagPdf: "cloud-only",
     updateRepairMark: "cloud-only",
     deliver: "cloud-only",
-    issueDeliveryDocument: "local-command-sync",
+    issueDeliveryDocument: "cloud-only",
     getDeliveryDocumentPdf: "cloud-only",
   },
   sync: {
@@ -374,10 +390,7 @@ export const calibraApiPolicyRegistry = {
     summary: "cloud-only",
     get: "cloud-only",
     auditLog: "cloud-only",
-    // #426 Phase 0: offline NC capture — create writes the local row + outbox
-    // event and syncs on reconnect. Reads stay cloud (no local mirror of
-    // cloud NCs).
-    create: "local-command-sync",
+    create: "cloud-only",
     setDisposition: "cloud-only",
     resolve: "cloud-only",
     escalateToCapa: "cloud-only",

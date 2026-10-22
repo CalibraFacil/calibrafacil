@@ -60,14 +60,6 @@ export type UpdateLocalCustomerInput = {
   deviceId?: string | null;
 };
 
-export type UpdateLocalCustomerComplianceInput = {
-  identifier: string;
-  compliance: Record<string, unknown>;
-  reason: string;
-  actorUserId?: string | null;
-  deviceId?: string | null;
-};
-
 export type LocalCustomer = LocalCustomersListData["data"][number];
 
 type LocalCustomerListRow = {
@@ -83,6 +75,12 @@ type LocalCustomerListRow = {
   sync_state: string;
 };
 
+/**
+ * Offline mode no longer exposes this write (Q13: customer creation is online-only), so no
+ * route calls it. It stays because a database upgraded from an earlier build can
+ * still hold its queued outbox events, and the sync anchor/conflict suites use it
+ * to put a pending local change on an already-synced row.
+ */
 export function createLocalCustomer(
   database: LocalDatabase,
   input: CreateLocalCustomerInput,
@@ -227,6 +225,12 @@ export function getLocalCustomerDetail(
   return row ? toLocalCustomer(row) : null;
 }
 
+/**
+ * Offline mode no longer exposes this write (Q13: customer editing is online-only), so no
+ * route calls it. It stays because a database upgraded from an earlier build can
+ * still hold its queued outbox events, and the sync anchor/conflict suites use it
+ * to put a pending local change on an already-synced row.
+ */
 export function updateLocalCustomer(
   database: LocalDatabase,
   input: UpdateLocalCustomerInput,
@@ -292,63 +296,6 @@ WHERE id = @id
 
   const updated = getLocalCustomerById(database, row.id);
   return updated;
-}
-
-export function updateLocalCustomerCompliance(
-  database: LocalDatabase,
-  input: UpdateLocalCustomerComplianceInput,
-): LocalCustomer {
-  const row = resolveLocalCustomerRow(database, input.identifier);
-  if (!row) {
-    throw new Error("Cliente local nao encontrado");
-  }
-
-  const currentCompliance = parseJsonRecordOrNull(row.compliance_json) ?? {};
-  const compliance = {
-    qualificationStatus: "pending",
-    qualityRequirementsAcknowledged: false,
-    ...currentCompliance,
-    ...input.compliance,
-    ...(input.compliance.qualityRequirementsAcknowledged &&
-    !currentCompliance.qualityRequirementsAcknowledged
-      ? { qualityRequirementsAcknowledgedAt: new Date().toISOString() }
-      : {}),
-  };
-  const now = new Date().toISOString();
-  const payload = {
-    remoteId: row.remote_id,
-    compliance,
-    reason: input.reason,
-  };
-
-  database.transaction(() => {
-    database
-      .prepare(
-        `
-UPDATE customers
-SET compliance_json = @complianceJson,
-  updated_at = @updatedAt,
-  sync_state = 'local'
-WHERE id = @id
-`,
-      )
-      .run({
-        id: row.id,
-        complianceJson: JSON.stringify(compliance),
-        updatedAt: now,
-      });
-
-    enqueueLocalCustomerEvent(database, {
-      entityId: row.id,
-      operation: "update_local_customer_compliance",
-      payload,
-      actorUserId: input.actorUserId ?? null,
-      deviceId: input.deviceId ?? "local",
-      occurredAt: now,
-    });
-  })();
-
-  return getLocalCustomerById(database, row.id);
 }
 
 function getLocalCustomerById(

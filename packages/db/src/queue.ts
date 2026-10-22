@@ -5,15 +5,9 @@ import {
   type AppQueueJobStatus,
   type AppQueueJobType,
 } from "./schema.js";
-import {
-  isBackgroundJobMessage,
-  type BackgroundJobMessage,
-} from "@calibra-facil/shared";
+import { parseQueueMessage, type QueueMessage } from "@calibra-facil/schemas";
 
-export type QueueMessage = Exclude<
-  BackgroundJobMessage,
-  { type: "SCHEDULED_NOTIFICATIONS" } | { type: "PORTAL_DIGEST" }
->;
+export type { QueueMessage };
 
 export type ClaimedQueueJob = {
   id: number;
@@ -45,11 +39,7 @@ function getInsertedQueueJobId(result: unknown): number | null {
 
 /** Whether a message can be written to `app_queue_job` (cron-only ones cannot). */
 export function isQueueMessage(value: unknown): value is QueueMessage {
-  return (
-    isBackgroundJobMessage(value) &&
-    value.type !== "SCHEDULED_NOTIFICATIONS" &&
-    value.type !== "PORTAL_DIGEST"
-  );
+  return parseQueueMessage(value).ok;
 }
 
 function getMessageType(message: QueueMessage): AppQueueJobType {
@@ -68,23 +58,37 @@ function getMessageType(message: QueueMessage): AppQueueJobType {
   }
 }
 
-function toClaimedQueueJob(value: unknown): ClaimedQueueJob | null {
+type ClaimedRow =
+  | { ok: true; job: ClaimedQueueJob }
+  | { ok: false; id: number | null; reason: string };
+
+// A claimed row either carries a payload that parses against its job schema
+// (the handler then receives the parsed, typed message) or it is rejected with
+// the reason a dead-letter records.
+function toClaimedRow(value: unknown): ClaimedRow {
   const row = toRecord(value);
   if (
     typeof row.id !== "number" ||
-    !isQueueMessage(row.payload) ||
     typeof row.attempts !== "number" ||
     typeof row.maxAttempts !== "number"
   ) {
-    return null;
+    return { ok: false, id: null, reason: "Malformed queue row" };
+  }
+
+  const parsed = parseQueueMessage(row.payload);
+  if (!parsed.ok) {
+    return { ok: false, id: row.id, reason: parsed.reason };
   }
 
   return {
-    id: row.id,
-    type: getMessageType(row.payload),
-    payload: row.payload,
-    attempts: row.attempts,
-    maxAttempts: row.maxAttempts,
+    ok: true,
+    job: {
+      id: row.id,
+      type: getMessageType(parsed.message),
+      payload: parsed.message,
+      attempts: row.attempts,
+      maxAttempts: row.maxAttempts,
+    },
   };
 }
 
@@ -109,12 +113,19 @@ export async function enqueueQueueJob(
   } = {},
 ) {
   const availableAt = options.availableAt ?? new Date();
+  // The queue only ever holds payloads its consumers can parse: a message that
+  // does not match its schema is refused here, not dead-lettered later.
+  const parsed = parseQueueMessage(message);
+  if (!parsed.ok) {
+    throw new Error(`Refusing to enqueue invalid queue job: ${parsed.reason}`);
+  }
+  const validMessage = parsed.message;
 
   const result = await (options.executor ?? db).execute(sql`
     insert into app_queue_job (type, payload, max_attempts, available_at)
     values (
-      ${getMessageType(message)},
-      ${JSON.stringify(message)}::jsonb,
+      ${getMessageType(validMessage)},
+      ${JSON.stringify(validMessage)}::jsonb,
       ${options.maxAttempts ?? 3},
       ${availableAt.toISOString()}::timestamptz
     )
@@ -129,10 +140,7 @@ export async function enqueueQueueJob(
   return jobId;
 }
 
-export async function claimQueueJobs(
-  workerId: string,
-  batchSize = 10,
-): Promise<ClaimedQueueJob[]> {
+async function claimQueueRows(workerId: string, batchSize: number) {
   const result = await db.execute(sql`
     with claimed as (
       select id
@@ -159,10 +167,50 @@ export async function claimQueueJobs(
       q.max_attempts as "maxAttempts"
   `);
 
-  return getExecuteRows(result).flatMap((row) => {
-    const job = toClaimedQueueJob(row);
-    return job ? [job] : [];
-  });
+  return getExecuteRows(result);
+}
+
+/**
+ * Claim up to `batchSize` rows that a handler can run. A claimed row whose
+ * payload fails its job schema (or whose type is unknown) can never succeed, so
+ * retrying it only burns attempts: it is dead-lettered on the spot (FAILED, the
+ * reason in `last_error`, fenced by this worker's lease) and a replacement row is
+ * claimed in its place, so one bad row never ends a drain early.
+ */
+export async function claimQueueJobs(
+  workerId: string,
+  batchSize = 10,
+): Promise<ClaimedQueueJob[]> {
+  const jobs: ClaimedQueueJob[] = [];
+  let wanted = batchSize;
+
+  while (wanted > 0) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- each round only claims as many rows as the previous one dead-lettered.
+    const rows = await claimQueueRows(workerId, wanted);
+    if (rows.length === 0) break;
+
+    let deadLettered = 0;
+    for (const raw of rows) {
+      const row = toClaimedRow(raw);
+      if (row.ok) {
+        jobs.push(row.job);
+        continue;
+      }
+      deadLettered += 1;
+      if (row.id === null) {
+        console.error(`[Queue] skipped a claimed row: ${row.reason}`);
+        continue;
+      }
+      console.error(
+        `[Queue] dead-lettering queue job ${row.id}: ${row.reason}`,
+      );
+      // oxlint-disable-next-line eslint/no-await-in-loop -- a handful of rows at most; each settle is one fenced update.
+      await deadLetterQueueJob(row.id, workerId, row.reason);
+    }
+    wanted = deadLettered;
+  }
+
+  return jobs;
 }
 
 // Lease fencing. `claimQueueJobs` stamps `locked_by` with the claiming worker,
@@ -268,6 +316,36 @@ export async function failQueueJob(
         eq(appQueueJob.attempts, job.attempts),
       ),
     )
+    .returning();
+
+  if (updated.length === 0) {
+    logFencedOut("fail", id, workerId);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Dead-letter a claimed row straight to FAILED, skipping the retry backoff: for
+ * a job that cannot succeed however often it runs (an unparseable payload).
+ * Fenced like the other settlements; returns whether it applied.
+ */
+export async function deadLetterQueueJob(
+  id: number,
+  workerId: string,
+  reason: string,
+): Promise<boolean> {
+  const updated = await db
+    .update(appQueueJob)
+    .set({
+      status: "FAILED",
+      availableAt: new Date(),
+      lockedBy: null,
+      lockedAt: null,
+      lastError: reason,
+      updatedAt: new Date(),
+    })
+    .where(ownedProcessingRow(id, workerId))
     .returning();
 
   if (updated.length === 0) {

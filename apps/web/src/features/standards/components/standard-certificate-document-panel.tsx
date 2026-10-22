@@ -11,6 +11,8 @@ import {
 import { Button } from '@calibra-facil/ui/button'
 import { Spinner } from '@calibra-facil/ui/spinner'
 import { calibraApi } from '@/utils/api'
+import { ActionAvailabilityGate } from '@/components/availability/action-availability-gate'
+import { useOperationAvailability } from '@/runtime/use-operation-availability'
 import { formatStandardDate } from '@/features/standards/dates'
 import type { StandardDetail } from '@/features/standards/types'
 
@@ -39,6 +41,15 @@ export function StandardCertificateDocumentPanel({
   const inputRef = useRef<HTMLInputElement | null>(null)
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null)
   const document = standard.certificateDocument
+  // The standard's certificate PDF lives in the cloud (online-only since Q13).
+  const uploadAvailability = useOperationAvailability(
+    'standards',
+    'uploadCertificateDocument',
+  )
+  const downloadAvailability = useOperationAvailability(
+    'standards',
+    'getCertificateDocumentDownloadUrl',
+  )
 
   const uploadMutation = useMutation({
     mutationFn: (file: File) =>
@@ -90,40 +101,48 @@ export function StandardCertificateDocumentPanel({
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
               {document && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => downloadMutation.mutate()}
-                  disabled={downloadMutation.isPending}
-                >
-                  {downloadMutation.isPending ? (
-                    <Spinner className="mr-2 size-4" />
-                  ) : (
-                    <HugeiconsIcon
-                      icon={Download04Icon}
-                      className="mr-2 size-4"
-                    />
+                <ActionAvailabilityGate availability={downloadAvailability}>
+                  {({ disabled }) => (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => downloadMutation.mutate()}
+                      disabled={disabled || downloadMutation.isPending}
+                    >
+                      {downloadMutation.isPending ? (
+                        <Spinner className="mr-2 size-4" />
+                      ) : (
+                        <HugeiconsIcon
+                          icon={Download04Icon}
+                          className="mr-2 size-4"
+                        />
+                      )}
+                      Baixar
+                    </Button>
                   )}
-                  Baixar
-                </Button>
+                </ActionAvailabilityGate>
               )}
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => inputRef.current?.click()}
-                disabled={uploadMutation.isPending}
-              >
-                {uploadMutation.isPending ? (
-                  <Spinner className="mr-2 size-4" />
-                ) : (
-                  <HugeiconsIcon
-                    icon={CloudUploadIcon}
-                    className="mr-2 size-4"
-                  />
+              <ActionAvailabilityGate availability={uploadAvailability}>
+                {({ disabled }) => (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => inputRef.current?.click()}
+                    disabled={disabled || uploadMutation.isPending}
+                  >
+                    {uploadMutation.isPending ? (
+                      <Spinner className="mr-2 size-4" />
+                    ) : (
+                      <HugeiconsIcon
+                        icon={CloudUploadIcon}
+                        className="mr-2 size-4"
+                      />
+                    )}
+                    {document ? 'Substituir PDF' : 'Enviar PDF'}
+                  </Button>
                 )}
-                {document ? 'Substituir PDF' : 'Enviar PDF'}
-              </Button>
+              </ActionAvailabilityGate>
             </div>
           </div>
           {document && (

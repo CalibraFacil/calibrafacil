@@ -372,11 +372,8 @@ export function useNonConformanceImpactAssessmentData({
   })
 }
 
-export function useNonConformanceJobsData({ enabled }: { enabled: boolean }) {
-  return useQuery({
-    ...nonConformanceJobsQueryOptions(),
-    enabled,
-  })
+export function useNonConformanceJobsData() {
+  return useQuery(nonConformanceJobsQueryOptions())
 }
 
 export function useCapaListData({

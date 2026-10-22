@@ -1,14 +1,12 @@
 import { readJobsConfig } from "@calibra-facil/config";
 import { send } from "@vercel/queue";
+import { enqueueQueueJob, isQueueMessage } from "@calibra-facil/db/queue";
 import {
-  enqueueQueueJob,
-  isQueueMessage,
+  parseBackgroundJobMessage,
+  type BackgroundJobMessage,
+  type IntegrationSyncBackgroundJobMessage,
   type QueueMessage,
-} from "@calibra-facil/db/queue";
-import type {
-  BackgroundJobMessage,
-  IntegrationSyncBackgroundJobMessage,
-} from "@calibra-facil/shared";
+} from "@calibra-facil/schemas";
 import { createWorkerRuntimeEnv } from "./runtime-env";
 import {
   getBackgroundJobsMode,
@@ -185,9 +183,19 @@ async function enqueueViaDocumentWorker(
 }
 
 export async function enqueueBackgroundJob(
-  message: BackgroundJobMessage,
+  input: BackgroundJobMessage,
   options: EnqueueBackgroundJobOptions = {},
 ) {
+  // Every dispatch path (Vercel Queue, the database queue, in-process) carries
+  // a message that matched its job schema; a producer that built one by hand
+  // and got it wrong fails here instead of in a consumer.
+  const parsed = parseBackgroundJobMessage(input);
+  if (!parsed.ok) {
+    throw new Error(
+      `Refusing to enqueue invalid background job: ${parsed.reason}`,
+    );
+  }
+  const message = parsed.message;
   const mode = getBackgroundJobsMode();
 
   if (mode === "local") {

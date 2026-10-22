@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const routerMocks = vi.hoisted(() => ({
   pathname: '/dashboard',
+  routeId: '/dashboard/',
 }))
 
 const authMocks = vi.hoisted(() => ({
@@ -22,6 +23,16 @@ const syncMocks = vi.hoisted(() => ({
 vi.mock('@tanstack/react-router', () => ({
   Outlet: () => <div>dashboard outlet</div>,
   useLocation: () => ({ pathname: routerMocks.pathname }),
+  useMatches: ({
+    select,
+  }: {
+    select: (matches: Array<{ routeId: string }>) => string
+  }) =>
+    select([
+      { routeId: '__root__' },
+      { routeId: '/dashboard' },
+      { routeId: routerMocks.routeId },
+    ]),
 }))
 
 vi.mock('@calibra-facil/auth/client', () => ({
@@ -105,6 +116,7 @@ describe('DashboardLayout bootstrap workflow', () => {
     vi.clearAllMocks()
     localStorage.clear()
     routerMocks.pathname = '/dashboard'
+    routerMocks.routeId = '/dashboard/'
     syncMocks.cloudOnlyUnavailable = false
     authMocks.setActive.mockResolvedValue(undefined)
     authMocks.useListOrganizations.mockReturnValue({
@@ -124,6 +136,7 @@ describe('DashboardLayout bootstrap workflow', () => {
 
   it('switches to the stored lab organization and blocks child routes while context is changing', async () => {
     routerMocks.pathname = '/dashboard/jobs'
+    routerMocks.routeId = '/dashboard/jobs/'
     localStorage.setItem(DASHBOARD_ORG_KEY, 'lab-2')
     authMocks.useListOrganizations.mockReturnValue({
       data: [
@@ -145,14 +158,47 @@ describe('DashboardLayout bootstrap workflow', () => {
     })
   })
 
-  it('renders the cloud-only offline state instead of child routes for cloud-only dashboard paths', () => {
+  it('REQ-OFF-4: renders the online-only state instead of child routes for areas outside the offline scope', () => {
     routerMocks.pathname = '/dashboard/finance'
+    routerMocks.routeId = '/dashboard/finance/'
     syncMocks.cloudOnlyUnavailable = true
 
     renderDashboard()
 
-    expect(screen.getByText('Tela indisponível offline')).toBeTruthy()
+    expect(screen.getByText('Disponível apenas online')).toBeTruthy()
     expect(screen.queryByText('dashboard outlet')).toBeNull()
     expect(authMocks.setActive).not.toHaveBeenCalled()
+  })
+
+  it('REQ-OFF-4: a route nobody classified is online-only on a disconnected desktop', () => {
+    routerMocks.pathname = '/dashboard/brand-new-page'
+    routerMocks.routeId = '/dashboard/brand-new-page'
+    syncMocks.cloudOnlyUnavailable = true
+
+    renderDashboard()
+
+    expect(screen.getByText('Disponível apenas online')).toBeTruthy()
+    expect(screen.queryByText('dashboard outlet')).toBeNull()
+  })
+
+  it('keeps field capture on screen while disconnected', () => {
+    routerMocks.pathname = '/dashboard/jobs/42/execute'
+    routerMocks.routeId = '/dashboard/jobs/$id/execute'
+    syncMocks.cloudOnlyUnavailable = true
+
+    renderDashboard()
+
+    expect(screen.getByText('dashboard outlet')).toBeTruthy()
+    expect(screen.queryByText('Disponível apenas online')).toBeNull()
+  })
+
+  it('shows online-only areas normally while connected', () => {
+    routerMocks.pathname = '/dashboard/finance'
+    routerMocks.routeId = '/dashboard/finance/'
+    syncMocks.cloudOnlyUnavailable = false
+
+    renderDashboard()
+
+    expect(screen.getByText('dashboard outlet')).toBeTruthy()
   })
 })
