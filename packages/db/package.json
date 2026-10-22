@@ -4,11 +4,8 @@
   "version": "1.0.0",
   "exports": {
     ".": "./src/db.ts",
-<<<<<<< HEAD
     "./for-org": "./src/for-org.ts",
-=======
     "./certificate-input": "./src/certificate-input.ts",
->>>>>>> origin/main
     "./job-events": "./src/job-events.ts",
     "./queue": "./src/queue.ts",
     "./queue-receipts": "./src/queue-receipts.ts",
