@@ -119,6 +119,7 @@ export const authorizedSignatoriesRouter = new Hono<{
 
       if (created) {
         await db.insert(authorizedSignatoryAuditLog).values({
+          organizationId: memberData.organizationId,
           signatoryId: created.id,
           action: "grant",
           changes: { status: { old: null, new: "ACTIVE" } },
@@ -182,6 +183,7 @@ export const authorizedSignatoriesRouter = new Hono<{
         .returning();
 
       await db.insert(authorizedSignatoryAuditLog).values({
+        organizationId: memberData.organizationId,
         signatoryId: id,
         action: "revoke",
         changes: { status: { old: existing.status, new: "REVOKED" } },

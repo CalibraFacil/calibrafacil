@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { organizationOf } from "../../test/integration/organization-of";
 import { serviceOrdersRouter } from "./service-orders";
 import { db } from "@calibra-facil/db";
 import {
@@ -159,6 +160,7 @@ async function seedQuote(params: {
   const [row] = await db
     .insert(serviceOrderQuote)
     .values({
+      organizationId: organizationOf("service_order", params.serviceOrderId),
       serviceOrderId: params.serviceOrderId,
       quoteNumber: `${params.serviceOrderNumber}/ORC`,
       version: 1,
@@ -221,6 +223,7 @@ async function seedCertificateLink(params: {
   linkedByUserId: string;
 }): Promise<void> {
   await db.insert(serviceOrderCertificateLink).values({
+    organizationId: organizationOf("service_order", params.serviceOrderId),
     serviceOrderId: params.serviceOrderId,
     certificateJobId: params.certificateJobId,
     linkedByUserId: params.linkedByUserId,
@@ -839,6 +842,7 @@ describe("serviceOrdersRouter — request-supplied foreign ids are tenant-scoped
     const [evaluation] = await db
       .insert(serviceOrderEvaluation)
       .values({
+        organizationId: organizationOf("service_order", fx.orderA),
         serviceOrderId: fx.orderA,
         technicianId: fx.orgA.userId,
         diagnosis: "Diagnóstico inicial",

@@ -90,7 +90,7 @@ under "Nulled".
 
 ## Evidence tables
 
-72 evidence tables out of 134; 355 foreign keys in schema.ts, 114 of them ON DELETE CASCADE.
+72 evidence tables out of 134; 392 foreign keys in schema.ts, 114 of them ON DELETE CASCADE.
 Each entry lists the foreign keys the table itself carries, which are the only way a parent's deletion reaches it.
 
 ### Technical records (calibration, SPC, OOT) (10)
@@ -101,6 +101,7 @@ Each entry lists the foreign keys the table itself carries, which are the only w
   - `customer_id` to `customer`: RESTRICT. blocks the delete of the parent.
   - `lab_organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
 - `asset_oot_impact_assessment`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `event_id` to `asset_oot_event`: CASCADE. owned part: removed only with its owner.
   - `portal_user_id` to `user`: RESTRICT. blocks the delete of the parent.
 - `calibration_job`
@@ -128,6 +129,7 @@ Each entry lists the foreign keys the table itself carries, which are the only w
   - `capa_id` to `corrective_action`: NO ACTION. blocks the delete of the parent.
   - `created_by` to `user`: RESTRICT. blocks the delete of the parent.
 - `job_standard`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `job_id` to `calibration_job`: CASCADE. owned part: removed only with its owner.
   - `standard_id` to `reference_standard`: RESTRICT. blocks the delete of the parent.
 - `oot_impact_assessment`
@@ -173,15 +175,19 @@ Each entry lists the foreign keys the table itself carries, which are the only w
 - `accredited_scope_line_audit_log`
   - `performed_by` to `user`: NO ACTION. blocks the delete of the parent.
 - `asset_audit_log`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `performed_by` to `user`: NO ACTION. blocks the delete of the parent.
 - `asset_oot_audit_log`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `performed_by` to `user`: NO ACTION. blocks the delete of the parent.
-- `authorized_signatory_audit_log`: no foreign keys (soft references only).
+- `authorized_signatory_audit_log`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
 - `automatic_send_audit_log`
   - `service_order_id` to `service_order`: SET NULL. pointer column: the row stays, the pointer is cleared.
   - `applied_rule_id` to `automatic_send_rule`: SET NULL. pointer column: the row stays, the pointer is cleared.
   - `actor_user_id` to `user`: SET NULL. actor column: the row stays, the actor reference is cleared.
 - `calibration_request_audit_log`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `performed_by` to `user`: NO ACTION. blocks the delete of the parent.
 - `certificate_numbering_audit_log`
   - `profile_id` to `certificate_numbering_profile`: SET NULL. pointer column: the row stays, the pointer is cleared.
@@ -190,30 +196,42 @@ Each entry lists the foreign keys the table itself carries, which are the only w
   - `actor_user_id` to `user`: SET NULL. actor column: the row stays, the actor reference is cleared.
   - `applied_policy_id` to `certificate_release_policy`: SET NULL. pointer column: the row stays, the pointer is cleared.
 - `control_chart_audit_log`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `performed_by` to `user`: NO ACTION. blocks the delete of the parent.
 - `corrective_action_audit_log`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `performed_by` to `user`: NO ACTION. blocks the delete of the parent.
 - `customer_audit_log`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `performed_by` to `user`: NO ACTION. blocks the delete of the parent.
 - `financial_audit_log`
   - `performed_by` to `user`: NO ACTION. blocks the delete of the parent.
 - `job_audit_log`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `performed_by` to `user`: NO ACTION. blocks the delete of the parent.
 - `method_audit_log`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `performed_by` to `user`: NO ACTION. blocks the delete of the parent.
 - `non_conformance_audit_log`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `performed_by` to `user`: NO ACTION. blocks the delete of the parent.
 - `organization_api_key_audit_log`
   - `performed_by` to `user`: SET NULL. actor column: the row stays, the actor reference is cleared.
-- `personnel_competence_audit_log`: no foreign keys (soft references only).
+- `personnel_competence_audit_log`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
 - `proficiency_test_audit_log`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `performed_by` to `user`: NO ACTION. blocks the delete of the parent.
 - `reference_standard_audit_log`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `performed_by` to `user`: NO ACTION. blocks the delete of the parent.
 - `service_audit_log`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `performed_by` to `user`: NO ACTION. blocks the delete of the parent.
-- `training_record_audit_log`: no foreign keys (soft references only).
+- `training_record_audit_log`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
 - `visit_audit_log`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `performed_by` to `user`: NO ACTION. blocks the delete of the parent.
 
 ### Event logs (4)
@@ -298,6 +316,7 @@ Each entry lists the foreign keys the table itself carries, which are the only w
   - `rejected_by` to `user`: SET NULL. actor column: the row stays, the actor reference is cleared.
   - `converted_by` to `user`: SET NULL. actor column: the row stays, the actor reference is cleared.
 - `calibration_request_item`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `request_id` to `calibration_request`: CASCADE. owned part: removed only with its owner.
   - `asset_id` to `asset`: RESTRICT. blocks the delete of the parent.
   - `converted_job_id` to `calibration_job`: SET NULL. pointer column: the row stays, the pointer is cleared.
@@ -321,31 +340,39 @@ Each entry lists the foreign keys the table itself carries, which are the only w
   - `inmetro_repair_mark_applied_by_user_id` to `user`: SET NULL. actor column: the row stays, the actor reference is cleared.
   - `billing_document_id` to `billing_document`: SET NULL. pointer column: the row stays, the pointer is cleared.
 - `service_order_asset_snapshot`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `service_order_id` to `service_order`: CASCADE. owned part: removed only with its owner.
   - `asset_id` to `asset`: RESTRICT. blocks the delete of the parent.
 - `service_order_attachment`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `service_order_id` to `service_order`: CASCADE. owned part: removed only with its owner.
   - `uploaded_by_user_id` to `user`: SET NULL. actor column: the row stays, the actor reference is cleared.
 - `service_order_certificate_link`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `service_order_id` to `service_order`: CASCADE. owned part: removed only with its owner.
   - `certificate_job_id` to `calibration_job`: RESTRICT. blocks the delete of the parent.
   - `linked_by_user_id` to `user`: RESTRICT. blocks the delete of the parent.
 - `service_order_delivery_document`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `service_order_id` to `service_order`: CASCADE. owned part: removed only with its owner.
   - `issued_by_user_id` to `user`: SET NULL. actor column: the row stays, the actor reference is cleared.
 - `service_order_evaluation`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `service_order_id` to `service_order`: CASCADE. owned part: removed only with its owner.
   - `technician_id` to `user`: RESTRICT. blocks the delete of the parent.
 - `service_order_execution`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `service_order_id` to `service_order`: CASCADE. owned part: removed only with its owner.
   - `started_by_user_id` to `user`: RESTRICT. blocks the delete of the parent.
   - `finished_by_user_id` to `user`: SET NULL. actor column: the row stays, the actor reference is cleared.
 - `service_order_execution_item`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `execution_id` to `service_order_execution`: CASCADE. owned part: removed only with its owner.
   - `quote_item_id` to `service_order_quote_item`: SET NULL. pointer column: the row stays, the pointer is cleared.
   - `material_id` to `material`: SET NULL. pointer column: the row stays, the pointer is cleared.
   - `technician_id` to `user`: SET NULL. actor column: the row stays, the actor reference is cleared.
 - `service_order_intake_document`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `service_order_id` to `service_order`: CASCADE. owned part: removed only with its owner.
   - `issued_by_user_id` to `user`: SET NULL. actor column: the row stays, the actor reference is cleared.
 - `service_order_numbering_sequence`
@@ -356,12 +383,14 @@ Each entry lists the foreign keys the table itself carries, which are the only w
   - `service_order_id` to `service_order`: CASCADE. owned part: removed only with its owner.
   - `created_by_user_id` to `user`: SET NULL. actor column: the row stays, the actor reference is cleared.
 - `service_order_quote`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `service_order_id` to `service_order`: CASCADE. owned part: removed only with its owner.
   - `sent_by_user_id` to `user`: SET NULL. actor column: the row stays, the actor reference is cleared.
   - `approved_by_portal_user_id` to `user`: SET NULL. actor column: the row stays, the actor reference is cleared.
   - `approved_manually_by_user_id` to `user`: SET NULL. actor column: the row stays, the actor reference is cleared.
   - `created_by_user_id` to `user`: RESTRICT. blocks the delete of the parent.
 - `service_order_quote_item`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `quote_id` to `service_order_quote`: CASCADE. owned part: removed only with its owner.
   - `material_id` to `material`: SET NULL. pointer column: the row stays, the pointer is cleared.
 - `visit_reschedule_request`
@@ -383,6 +412,7 @@ Each entry lists the foreign keys the table itself carries, which are the only w
   - `created_by` to `user`: NO ACTION. blocks the delete of the parent.
   - `updated_by` to `user`: NO ACTION. blocks the delete of the parent.
 - `billing_document_item`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `document_id` to `billing_document`: CASCADE. owned part: removed only with its owner.
   - `job_id` to `calibration_job`: SET NULL. pointer column: the row stays, the pointer is cleared.
   - `job_commercial_snapshot_id` to `job_commercial_snapshot`: SET NULL. pointer column: the row stays, the pointer is cleared.
@@ -392,6 +422,7 @@ Each entry lists the foreign keys the table itself carries, which are the only w
   - `customer_id` to `customer`: RESTRICT. blocks the delete of the parent.
   - `created_by_user_id` to `user`: SET NULL. actor column: the row stays, the actor reference is cleared.
 - `billing_group_service_order`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `group_id` to `billing_group`: CASCADE. owned part: removed only with its owner.
   - `service_order_id` to `service_order`: RESTRICT. blocks the delete of the parent.
 - `commercial_agreement`
@@ -407,9 +438,11 @@ Each entry lists the foreign keys the table itself carries, which are the only w
   - `service_id` to `service`: RESTRICT. blocks the delete of the parent.
   - `agreement_id` to `commercial_agreement`: SET NULL. pointer column: the row stays, the pointer is cleared.
 - `payment_receipt`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `installment_id` to `receivable_installment`: CASCADE. owned part: removed only with its owner.
   - `recorded_by` to `user`: NO ACTION. blocks the delete of the parent.
 - `receivable_installment`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `document_id` to `billing_document`: CASCADE. owned part: removed only with its owner.
 
 ## Delete paths from the roots
@@ -422,7 +455,7 @@ Rows Postgres deletes along with it (45 tables by CASCADE): `accredited_scope_li
 
 - Evidence deleted by CASCADE: **0**.
 - Evidence columns nulled by SET NULL: **9**.
-- Evidence tables that make Postgres refuse the delete (RESTRICT / NO ACTION): **61**.
+- Evidence tables that make Postgres refuse the delete (RESTRICT / NO ACTION): **94**.
 
 Nulled:
 
@@ -438,15 +471,21 @@ Nulled:
 
 Refused by:
 
+- `organization` ⇒ `asset_audit_log.organization_id` RESTRICT (`asset_audit_log`)
+- `organization` ⇒ `asset_oot_audit_log.organization_id` RESTRICT (`asset_oot_audit_log`)
 - `organization` → `asset` (`lab_organization_id`) ⇒ `asset_oot_event.asset_id` RESTRICT (`asset_oot_event`)
 - `organization` → `customer` (`auth_organization_id`) ⇒ `asset_oot_event.customer_id` RESTRICT (`asset_oot_event`)
 - `organization` ⇒ `asset_oot_event.lab_organization_id` RESTRICT (`asset_oot_event`)
+- `organization` ⇒ `asset_oot_impact_assessment.organization_id` RESTRICT (`asset_oot_impact_assessment`)
 - `organization` ⇒ `authorized_signatory.organization_id` RESTRICT (`authorized_signatory`)
+- `organization` ⇒ `authorized_signatory_audit_log.organization_id` RESTRICT (`authorized_signatory_audit_log`)
 - `organization` → `customer` (`auth_organization_id`) ⇒ `billing_document.customer_id` RESTRICT (`billing_document`)
 - `organization` ⇒ `billing_document.organization_id` RESTRICT (`billing_document`)
 - `organization` → `organization_unit` (`organization_id`) ⇒ `billing_document.unit_id` RESTRICT (`billing_document`)
+- `organization` ⇒ `billing_document_item.organization_id` RESTRICT (`billing_document_item`)
 - `organization` → `customer` (`auth_organization_id`) ⇒ `billing_group.customer_id` RESTRICT (`billing_group`)
 - `organization` ⇒ `billing_group.organization_id` RESTRICT (`billing_group`)
+- `organization` ⇒ `billing_group_service_order.organization_id` RESTRICT (`billing_group_service_order`)
 - `organization` → `asset` (`lab_organization_id`) ⇒ `calibration_job.asset_id` RESTRICT (`calibration_job`)
 - `organization` → `customer` (`auth_organization_id`) ⇒ `calibration_job.customer_id` RESTRICT (`calibration_job`)
 - `organization` ⇒ `calibration_job.organization_id` RESTRICT (`calibration_job`)
@@ -456,7 +495,9 @@ Refused by:
 - `organization` → `customer` (`auth_organization_id`) ⇒ `calibration_request.customer_id` RESTRICT (`calibration_request`)
 - `organization` ⇒ `calibration_request.organization_id` RESTRICT (`calibration_request`)
 - `organization` → `organization_unit` (`organization_id`) ⇒ `calibration_request.unit_id` RESTRICT (`calibration_request`)
+- `organization` ⇒ `calibration_request_audit_log.organization_id` RESTRICT (`calibration_request_audit_log`)
 - `organization` → `asset` (`lab_organization_id`) ⇒ `calibration_request_item.asset_id` RESTRICT (`calibration_request_item`)
+- `organization` ⇒ `calibration_request_item.organization_id` RESTRICT (`calibration_request_item`)
 - `organization` → `customer` (`auth_organization_id`) ⇒ `calibration_visit.customer_id` RESTRICT (`calibration_visit`)
 - `organization` ⇒ `calibration_visit.organization_id` RESTRICT (`calibration_visit`)
 - `organization` → `organization_unit` (`organization_id`) ⇒ `calibration_visit.unit_id` RESTRICT (`calibration_visit`)
@@ -469,34 +510,59 @@ Refused by:
 - `organization` ⇒ `commercial_agreement.organization_id` RESTRICT (`commercial_agreement`)
 - `organization` ⇒ `control_chart.organization_id` RESTRICT (`control_chart`)
 - `organization` → `organization_unit` (`organization_id`) ⇒ `control_chart.unit_id` RESTRICT (`control_chart`)
+- `organization` ⇒ `control_chart_audit_log.organization_id` RESTRICT (`control_chart_audit_log`)
 - `organization` ⇒ `corrective_action.organization_id` RESTRICT (`corrective_action`)
+- `organization` ⇒ `corrective_action_audit_log.organization_id` RESTRICT (`corrective_action_audit_log`)
+- `organization` ⇒ `customer_audit_log.organization_id` RESTRICT (`customer_audit_log`)
 - `organization` ⇒ `issued_certificate_snapshot.organization_id` RESTRICT (`issued_certificate_snapshot`)
+- `organization` ⇒ `job_audit_log.organization_id` RESTRICT (`job_audit_log`)
 - `organization` → `customer` (`auth_organization_id`) ⇒ `job_commercial_snapshot.customer_id` RESTRICT (`job_commercial_snapshot`)
 - `organization` ⇒ `job_commercial_snapshot.organization_id` RESTRICT (`job_commercial_snapshot`)
 - `organization` → `service` (`organization_id`) ⇒ `job_commercial_snapshot.service_id` RESTRICT (`job_commercial_snapshot`)
 - `organization` → `organization_unit` (`organization_id`) ⇒ `job_commercial_snapshot.unit_id` RESTRICT (`job_commercial_snapshot`)
+- `organization` ⇒ `job_standard.organization_id` RESTRICT (`job_standard`)
+- `organization` ⇒ `method_audit_log.organization_id` RESTRICT (`method_audit_log`)
 - `organization` ⇒ `non_conformance.organization_id` RESTRICT (`non_conformance`)
+- `organization` ⇒ `non_conformance_audit_log.organization_id` RESTRICT (`non_conformance_audit_log`)
 - `organization` ⇒ `oot_impact_assessment.organization_id` RESTRICT (`oot_impact_assessment`)
 - `organization` ⇒ `oot_notification.organization_id` RESTRICT (`oot_notification`)
+- `organization` ⇒ `payment_receipt.organization_id` RESTRICT (`payment_receipt`)
 - `organization` ⇒ `personnel_competence.organization_id` RESTRICT (`personnel_competence`)
+- `organization` ⇒ `personnel_competence_audit_log.organization_id` RESTRICT (`personnel_competence_audit_log`)
 - `organization` ⇒ `proficiency_test.organization_id` RESTRICT (`proficiency_test`)
 - `organization` → `organization_unit` (`organization_id`) ⇒ `proficiency_test.unit_id` RESTRICT (`proficiency_test`)
+- `organization` ⇒ `proficiency_test_audit_log.organization_id` RESTRICT (`proficiency_test_audit_log`)
 - `organization` ⇒ `pt_plan_item.organization_id` RESTRICT (`pt_plan_item`)
 - `organization` → `organization_unit` (`organization_id`) ⇒ `pt_plan_item.unit_id` RESTRICT (`pt_plan_item`)
+- `organization` ⇒ `receivable_installment.organization_id` RESTRICT (`receivable_installment`)
 - `organization` ⇒ `reference_standard.organization_id` RESTRICT (`reference_standard`)
 - `organization` → `organization_unit` (`organization_id`) ⇒ `reference_standard.unit_id` RESTRICT (`reference_standard`)
+- `organization` ⇒ `reference_standard_audit_log.organization_id` RESTRICT (`reference_standard_audit_log`)
 - `organization` ⇒ `reference_standard_certificate_document.organization_id` RESTRICT (`reference_standard_certificate_document`)
 - `organization` → `organization_unit` (`organization_id`) ⇒ `reference_standard_certificate_document.unit_id` RESTRICT (`reference_standard_certificate_document`)
+- `organization` ⇒ `service_audit_log.organization_id` RESTRICT (`service_audit_log`)
 - `organization` → `asset` (`lab_organization_id`) ⇒ `service_order.asset_id` RESTRICT (`service_order`)
 - `organization` → `customer` (`auth_organization_id`) ⇒ `service_order.customer_id` RESTRICT (`service_order`)
 - `organization` ⇒ `service_order.organization_id` RESTRICT (`service_order`)
 - `organization` → `organization_unit` (`organization_id`) ⇒ `service_order.unit_id` RESTRICT (`service_order`)
 - `organization` → `asset` (`lab_organization_id`) ⇒ `service_order_asset_snapshot.asset_id` RESTRICT (`service_order_asset_snapshot`)
+- `organization` ⇒ `service_order_asset_snapshot.organization_id` RESTRICT (`service_order_asset_snapshot`)
+- `organization` ⇒ `service_order_attachment.organization_id` RESTRICT (`service_order_attachment`)
+- `organization` ⇒ `service_order_certificate_link.organization_id` RESTRICT (`service_order_certificate_link`)
+- `organization` ⇒ `service_order_delivery_document.organization_id` RESTRICT (`service_order_delivery_document`)
+- `organization` ⇒ `service_order_evaluation.organization_id` RESTRICT (`service_order_evaluation`)
+- `organization` ⇒ `service_order_execution.organization_id` RESTRICT (`service_order_execution`)
+- `organization` ⇒ `service_order_execution_item.organization_id` RESTRICT (`service_order_execution_item`)
+- `organization` ⇒ `service_order_intake_document.organization_id` RESTRICT (`service_order_intake_document`)
 - `organization` ⇒ `service_order_numbering_sequence.organization_id` RESTRICT (`service_order_numbering_sequence`)
 - `organization` → `organization_unit` (`organization_id`) ⇒ `service_order_numbering_sequence.unit_id` RESTRICT (`service_order_numbering_sequence`)
 - `organization` ⇒ `service_order_outsourced_cost.organization_id` RESTRICT (`service_order_outsourced_cost`)
+- `organization` ⇒ `service_order_quote.organization_id` RESTRICT (`service_order_quote`)
+- `organization` ⇒ `service_order_quote_item.organization_id` RESTRICT (`service_order_quote_item`)
 - `organization` ⇒ `standard_recall.organization_id` RESTRICT (`standard_recall`)
 - `organization` ⇒ `training_record.organization_id` RESTRICT (`training_record`)
+- `organization` ⇒ `training_record_audit_log.organization_id` RESTRICT (`training_record_audit_log`)
+- `organization` ⇒ `visit_audit_log.organization_id` RESTRICT (`visit_audit_log`)
 - `organization` → `customer` (`auth_organization_id`) ⇒ `visit_reschedule_request.customer_id` RESTRICT (`visit_reschedule_request`)
 - `organization` ⇒ `visit_reschedule_request.organization_id` RESTRICT (`visit_reschedule_request`)
 

@@ -32,6 +32,7 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
+import { organizationOf } from "../../../test/integration/organization-of";
 import {
   financeCertificateReleaseRouter,
   settingsCertificateReleasePolicyRouter,
@@ -244,6 +245,7 @@ async function seedServiceOrderWithLink(params: {
   if (!soRow) throw new Error("seedServiceOrderWithLink: SO insert failed");
 
   await db.insert(serviceOrderCertificateLink).values({
+    organizationId: organizationOf("service_order", soRow.id),
     serviceOrderId: soRow.id,
     certificateJobId: params.jobId,
     linkedByUserId: params.openedByUserId,
@@ -286,6 +288,7 @@ async function seedInstallment(params: {
   status?: "OPEN" | "PAID" | "OVERDUE" | "VOID";
 }): Promise<void> {
   await db.insert(receivableInstallment).values({
+    organizationId: organizationOf("billing_document", params.documentId),
     documentId: params.documentId,
     installmentNumber: 1,
     status: params.status ?? "OPEN",

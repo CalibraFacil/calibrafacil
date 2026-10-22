@@ -18,6 +18,7 @@
  *              writes the platform audit event first
  */
 import { beforeEach, describe, expect, it } from "vitest";
+import { organizationOf } from "../../test/integration/organization-of";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
 import {
@@ -271,18 +272,21 @@ async function seedNonConformance(fixture: LabFixture, at: Date) {
 async function seedEvidence(fixture: LabFixture, at: Date) {
   const jobId = await seedJob(fixture, at);
   await db.insert(jobAuditLog).values({
+    organizationId: organizationOf("calibration_job", jobId),
     jobId,
     action: "approve",
     performedBy: fixture.userId,
     performedAt: at,
   });
   await db.insert(assetAuditLog).values({
+    organizationId: organizationOf("asset", fixture.assetId),
     assetId: fixture.assetId,
     action: "create",
     performedBy: fixture.userId,
     performedAt: at,
   });
   await db.insert(customerAuditLog).values({
+    organizationId: organizationOf("customer", fixture.customerId),
     customerId: fixture.customerId,
     action: "create",
     performedBy: fixture.userId,
@@ -475,7 +479,7 @@ describe("REQ-RET-2: evidence is never reached by a cascading foreign key", () =
       .where(eq(referenceStandard.organizationId, lab.orgId));
     if (!standard || lab.jobId === null) throw new Error("fixture");
     await db.execute(
-      sql`insert into job_standard (job_id, standard_id) values (${lab.jobId}, ${standard.id})`,
+      sql`insert into job_standard (organization_id, job_id, standard_id) values (${lab.orgId}, ${lab.jobId}, ${standard.id})`,
     );
 
     const failure = await failureOf(() =>

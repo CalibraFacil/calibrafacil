@@ -72,8 +72,11 @@ async function getPortalCustomer(
   return linkedCustomer ?? null;
 }
 
-async function getRequestItems(requestIds: number[]) {
-  if (requestIds.length === 0) return [];
+async function getRequestItems(
+  requestIds: number[],
+  organizationIds: string[],
+) {
+  if (requestIds.length === 0 || organizationIds.length === 0) return [];
 
   return db
     .select({
@@ -99,7 +102,12 @@ async function getRequestItems(requestIds: number[]) {
       eq(calibrationRequestItem.convertedJobId, calibrationJob.id),
     )
     .leftJoin(service, eq(calibrationJob.serviceId, service.id))
-    .where(inArray(calibrationRequestItem.requestId, requestIds))
+    .where(
+      and(
+        inArray(calibrationRequestItem.requestId, requestIds),
+        inArray(calibrationRequestItem.organizationId, organizationIds),
+      ),
+    )
     .orderBy(calibrationRequestItem.id);
 }
 
@@ -156,6 +164,7 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
       const requests = await db
         .select({
           id: calibrationRequest.id,
+          organizationId: calibrationRequest.organizationId,
           status: calibrationRequest.status,
           observations: calibrationRequest.observations,
           requestedDueDate: calibrationRequest.requestedDueDate,
@@ -174,6 +183,7 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
 
       const items = await getRequestItems(
         requests.map((request) => request.id),
+        [...new Set(requests.map((request) => request.organizationId))],
       );
       const itemCountByRequestId = new Map<number, number>();
 
@@ -223,6 +233,7 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
       const [request] = await db
         .select({
           id: calibrationRequest.id,
+          organizationId: calibrationRequest.organizationId,
           status: calibrationRequest.status,
           observations: calibrationRequest.observations,
           requestedDueDate: calibrationRequest.requestedDueDate,
@@ -257,7 +268,10 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Solicitacao nao encontrada" }, 404);
       }
 
-      const items = await getRequestItems([request.id]);
+      const items = await getRequestItems(
+        [request.id],
+        [request.organizationId],
+      );
 
       // On-site: the visit scheduled when the lab converted this request (if any).
       const [visit] = await db
@@ -425,12 +439,14 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
 
         await tx.insert(calibrationRequestItem).values(
           input.assetIds.map((assetId) => ({
+            organizationId: createdRequest.organizationId,
             requestId: createdRequest.id,
             assetId,
           })),
         );
 
         await tx.insert(calibrationRequestAuditLog).values({
+          organizationId: createdRequest.organizationId,
           requestId: createdRequest.id,
           action: "create",
           changes: {
@@ -650,12 +666,14 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
 
           await tx.insert(calibrationRequestItem).values(
             group.assetIds.map((assetId) => ({
+              organizationId: createdRequest.organizationId,
               requestId: createdRequest.id,
               assetId,
             })),
           );
 
           await tx.insert(calibrationRequestAuditLog).values({
+            organizationId: createdRequest.organizationId,
             requestId: createdRequest.id,
             action: "create",
             changes: {

@@ -19,6 +19,7 @@
   // (installed by the workflow itself) and `package` (a workflow step name).
   "ignoreBinaries": [
     "psql",
+    "pg_dump",
     "drizzle-kit",
     "ldconfig",
     "playwright",

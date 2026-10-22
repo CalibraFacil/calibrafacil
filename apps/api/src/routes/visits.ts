@@ -852,6 +852,7 @@ export const visitRescheduleRequestsRouter = new Hono<{
           .where(eq(visitRescheduleRequest.id, requestId));
 
         await tx.insert(visitAuditLog).values({
+          organizationId: member.organizationId,
           visitId: id,
           action: "reschedule_request_accept",
           changes: {
@@ -918,6 +919,7 @@ export const visitRescheduleRequestsRouter = new Hono<{
           .returning();
 
         await tx.insert(visitAuditLog).values({
+          organizationId: member.organizationId,
           visitId: id,
           action: "reschedule_request_decline",
           changes: { rescheduleRequestId: requestId },

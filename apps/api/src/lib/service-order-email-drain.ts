@@ -314,6 +314,7 @@ async function dispatchBcdEmailForRow(
   if (parseResult.namespace === "nova_os") {
     const p = parseResult.payload;
     const outcome = await sendServiceOrderEmailOnce({
+      organizationId: row.organizationId,
       serviceOrderId: row.serviceOrderId,
       eventKey: row.eventKey,
       dispatch: () =>
@@ -340,6 +341,7 @@ async function dispatchBcdEmailForRow(
   if (parseResult.namespace === "orcamento_sent") {
     const p = parseResult.payload;
     const outcome = await sendServiceOrderEmailOnce({
+      organizationId: row.organizationId,
       serviceOrderId: row.serviceOrderId,
       eventKey: row.eventKey,
       dispatch: () =>
@@ -380,6 +382,7 @@ async function dispatchBcdEmailForRow(
   if (parseResult.namespace === "quote_approved") {
     const p = parseResult.payload;
     const outcome = await sendServiceOrderEmailOnce({
+      organizationId: row.organizationId,
       serviceOrderId: row.serviceOrderId,
       eventKey: row.eventKey,
       dispatch: () =>
@@ -402,6 +405,7 @@ async function dispatchBcdEmailForRow(
   if (parseResult.namespace === "quote_rejected") {
     const p = parseResult.payload;
     const outcome = await sendServiceOrderEmailOnce({
+      organizationId: row.organizationId,
       serviceOrderId: row.serviceOrderId,
       eventKey: row.eventKey,
       dispatch: () =>
@@ -458,6 +462,7 @@ async function dispatchEmailForRow(
   // row is reclaimed, but the ledger key is already recorded → dispatch is
   // skipped ("deduped"), so the customer is NOT emailed twice.
   const outcome = await sendServiceOrderEmailOnce({
+    organizationId: so.organizationId,
     serviceOrderId: so.id,
     eventKey: row.eventKey ?? `status_email:${row.targetStatus}`,
     dispatch: () =>

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { organizationOf } from "../../../test/integration/organization-of";
 import { db } from "@calibra-facil/db";
 import {
   asset,
@@ -140,6 +141,7 @@ async function seedQuoteContext(tag: string) {
   const [quote] = await db
     .insert(serviceOrderQuote)
     .values({
+      organizationId: organizationOf("service_order", order.id),
       serviceOrderId: order.id,
       quoteNumber: `OS-${tag}/ORC`,
       version: 1,
@@ -151,6 +153,7 @@ async function seedQuoteContext(tag: string) {
   const [execution] = await db
     .insert(serviceOrderExecution)
     .values({
+      organizationId: organizationOf("service_order", order.id),
       serviceOrderId: order.id,
       startedByUserId: org.userId,
     })

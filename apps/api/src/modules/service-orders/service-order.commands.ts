@@ -208,7 +208,12 @@ export async function createServiceOrder(input: {
         serialNumber: serviceOrderAssetSnapshot.serialNumber,
       })
       .from(serviceOrderAssetSnapshot)
-      .where(eq(serviceOrderAssetSnapshot.serviceOrderId, created.id))
+      .where(
+        and(
+          eq(serviceOrderAssetSnapshot.serviceOrderId, created.id),
+          eq(serviceOrderAssetSnapshot.organizationId, created.organizationId),
+        ),
+      )
       .limit(1)
       .then((rows) => rows[0] ?? null),
   ]);

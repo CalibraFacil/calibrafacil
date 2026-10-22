@@ -36,6 +36,7 @@ export async function createAssetOotEventForApprovedJob(params: {
   }
 
   await db.insert(assetOotAuditLog).values({
+    organizationId: params.labOrganizationId,
     eventId: inserted.id,
     action: "create",
     changes: {
@@ -51,6 +52,7 @@ export async function createAssetOotEventForApprovedJob(params: {
   try {
     await notifyAssetFoundOutOfTolerance(params.jobId);
     await db.insert(assetOotAuditLog).values({
+      organizationId: params.labOrganizationId,
       eventId: inserted.id,
       action: "notify",
       performedBy: params.actorUserId,

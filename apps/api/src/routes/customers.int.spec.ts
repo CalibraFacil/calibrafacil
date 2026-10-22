@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { organizationOf } from "../../test/integration/organization-of";
 import { customersRouter } from "./customers";
 import { db } from "@calibra-facil/db";
 import {
@@ -458,12 +459,14 @@ describe("customersRouter — real DB + real middleware", () => {
     // Pre-existing history for each asset (would be cascade-erased today).
     await db.insert(assetAuditLog).values([
       {
+        organizationId: organizationOf("asset", assetA),
         assetId: assetA,
         action: "create",
         changes: { asset: { old: null, new: { tag: "AUD-A" } } },
         performedBy: org.userId,
       },
       {
+        organizationId: organizationOf("asset", assetB),
         assetId: assetB,
         action: "create",
         changes: { asset: { old: null, new: { tag: "AUD-B" } } },

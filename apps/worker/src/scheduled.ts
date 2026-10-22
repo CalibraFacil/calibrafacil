@@ -1094,9 +1094,10 @@ export async function processScheduledNotifications(
 
           // Log the auto-expiration in audit log
           await client.query(
-            `INSERT INTO personnel_competence_audit_log (competence_id, action, changes, performed_by)
-             VALUES ($1, 'expire', $2, 'system')`,
+            `INSERT INTO personnel_competence_audit_log (organization_id, competence_id, action, changes, performed_by)
+             VALUES ($1, $2, 'expire', $3, 'system')`,
             [
+              comp.organization_id,
               comp.id,
               JSON.stringify({
                 status: { old: "ACTIVE", new: "EXPIRED" },

@@ -3828,6 +3828,7 @@ async function upsertContaAzulPaymentReceipt(params: {
   const [created] = await db
     .insert(paymentReceipt)
     .values({
+      organizationId: params.organizationId,
       installmentId: params.installmentId,
       recordedBy: params.recordedBy,
       receivedAt: params.receivedAt,

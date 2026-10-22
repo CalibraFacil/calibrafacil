@@ -568,6 +568,7 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       await db.insert(proficiencyTestAuditLog).values({
+        organizationId: member.organizationId,
         proficiencyTestId: created.id,
         action: "create",
         changes: { initial: input },
@@ -667,6 +668,7 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
         .returning();
 
       await db.insert(proficiencyTestAuditLog).values({
+        organizationId: member.organizationId,
         proficiencyTestId: id,
         action: "update",
         changes: { input },
@@ -758,6 +760,7 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
         .returning();
 
       await db.insert(proficiencyTestAuditLog).values({
+        organizationId: member.organizationId,
         proficiencyTestId: id,
         action: capaId !== existing.capaId ? "escalate" : "record_results",
         changes: {
@@ -829,6 +832,7 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
 
       // Audit rows are FK-less on purpose — the trail survives the delete.
       await db.insert(proficiencyTestAuditLog).values({
+        organizationId: member.organizationId,
         proficiencyTestId: id,
         action: "delete",
         performedBy: session.user.id,
