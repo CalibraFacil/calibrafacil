@@ -1,8 +1,12 @@
 import {
+  SYNC_PROTOCOL_VERSION,
+  desktopUpdateRequiredMessage,
   syncConflictResolutionResponseSchema,
+  syncUpdateRequiredResponseSchema,
   syncPullResponseSchema,
   syncBootstrapResponseSchema,
   syncPushResponseSchema,
+  type SyncPushRequest,
   type SyncStatusSnapshot,
 } from "@calibra-facil/contracts";
 import {
@@ -37,6 +41,27 @@ export type LocalSyncRuntime = {
 };
 
 type PushSyncOptions = { includeDeferred?: boolean };
+
+/**
+ * The cloud will not take pushes from this build any more (its minimum desktop
+ * version is higher). Nothing was applied and nothing is changed locally: the
+ * queued events wait for the update.
+ */
+export class DesktopUpdateRequiredError extends Error {
+  readonly minimumVersion: string;
+
+  constructor(minimumVersion: string) {
+    super(desktopUpdateRequiredMessage(minimumVersion));
+    this.name = "DesktopUpdateRequiredError";
+    this.minimumVersion = minimumVersion;
+  }
+}
+
+function updateRequiredVersionOf(error: unknown): string | null {
+  return error instanceof DesktopUpdateRequiredError
+    ? error.minimumVersion
+    : null;
+}
 
 export type CloudConflictResolutionStatus =
   | { state: "skipped"; reason: string }
@@ -164,6 +189,7 @@ export function createLocalSyncRuntime(
         activeRunId: null,
         lastRunId: runId,
         lastError: null,
+        updateRequiredVersion: null,
       };
       console.log(`[sync:${runId}] initial sync finished with ${status.state}`);
       return status;
@@ -174,6 +200,7 @@ export function createLocalSyncRuntime(
         activeRunId: null,
         lastRunId: runId,
         lastError: error instanceof Error ? error.message : "Sync failed",
+        updateRequiredVersion: updateRequiredVersionOf(error),
       };
       console.error(`[sync:${runId}] initial sync failed: ${status.lastError}`);
       throw error;
@@ -240,6 +267,7 @@ export function createLocalSyncRuntime(
         activeRunId: null,
         lastRunId: runId,
         lastError: null,
+        updateRequiredVersion: null,
       };
       console.log(`[sync:${runId}] push sync finished with ${status.state}`);
       return status;
@@ -250,6 +278,7 @@ export function createLocalSyncRuntime(
         activeRunId: null,
         lastRunId: runId,
         lastError: error instanceof Error ? error.message : "Sync failed",
+        updateRequiredVersion: updateRequiredVersionOf(error),
       };
       console.error(`[sync:${runId}] push sync failed: ${status.lastError}`);
       throw error;
@@ -424,30 +453,36 @@ async function pushOutboxEvents(
 
   applyCloudAuthHeaders(config, headers);
 
+  const request = {
+    deviceId: config.deviceId,
+    clientBatchId: `batch:${crypto.randomUUID()}`,
+    baseCursor: getSyncCursor(database),
+    // Which protocol and which build this push comes from: the cloud
+    // answers "update required" to a build below its minimum.
+    protocolVersion: SYNC_PROTOCOL_VERSION,
+    desktopVersion: config.appVersion,
+    events: pending.map((event) => ({
+      eventId: event.eventId,
+      entityType: event.entityType,
+      entityId: event.entityId,
+      operation: event.operation,
+      payload: event.payload,
+      occurredAt: event.occurredAt,
+      actorUserId: event.actorUserId ?? context.userId ?? "local",
+      organizationId: context.organizationId ?? "",
+      unitId: context.unitId,
+      idempotencyKey: event.idempotencyKey,
+      localVersion: event.localVersion,
+      baseUpdatedAt: event.baseUpdatedAt ?? null,
+    })),
+  } satisfies SyncPushRequest;
+
   let response: Response;
   try {
     response = await fetchImpl(pushUrl, {
       method: "POST",
       headers,
-      body: JSON.stringify({
-        deviceId: config.deviceId,
-        clientBatchId: `batch:${crypto.randomUUID()}`,
-        baseCursor: getSyncCursor(database),
-        events: pending.map((event) => ({
-          eventId: event.eventId,
-          entityType: event.entityType,
-          entityId: event.entityId,
-          operation: event.operation,
-          payload: event.payload,
-          occurredAt: event.occurredAt,
-          actorUserId: event.actorUserId ?? context.userId ?? "local",
-          organizationId: context.organizationId ?? "",
-          unitId: context.unitId,
-          idempotencyKey: event.idempotencyKey,
-          localVersion: event.localVersion,
-          baseUpdatedAt: event.baseUpdatedAt ?? null,
-        })),
-      }),
+      body: JSON.stringify(request),
     });
   } catch (error) {
     const message =
@@ -458,6 +493,18 @@ async function pushOutboxEvents(
       message,
     );
     throw error;
+  }
+
+  if (response.status === 426) {
+    // "Update required" is not a failed attempt: the cloud looked at nothing,
+    // so the events are neither failed nor backing off. They stay exactly as
+    // they are until the app is updated.
+    const answer = syncUpdateRequiredResponseSchema.safeParse(
+      await response.json().catch(() => null),
+    );
+    if (answer.success) {
+      throw new DesktopUpdateRequiredError(answer.data.minimumVersion);
+    }
   }
 
   if (!response.ok) {

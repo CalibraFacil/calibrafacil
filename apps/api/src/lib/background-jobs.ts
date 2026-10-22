@@ -1,5 +1,9 @@
 import { readJobsConfig } from "@calibra-facil/config";
 import { send } from "@vercel/queue";
+import {
+  afterTransactionCommit,
+  isInTransactionScope,
+} from "@calibra-facil/db";
 import { enqueueQueueJob, isQueueMessage } from "@calibra-facil/db/queue";
 import {
   parseBackgroundJobMessage,
@@ -14,6 +18,7 @@ import {
   isContaAzulSyncMessage,
   isDocumentWorkerJobType,
   resolveQueueJobType,
+  routesToDatabaseQueue,
 } from "./background-job-routing";
 
 export { resolveQueueJobType };
@@ -33,7 +38,7 @@ async function importLocalWorkerModule() {
 async function processContaAzulSyncMessage(
   message: IntegrationSyncBackgroundJobMessage,
 ) {
-  const modulePath = "./integrations";
+  const modulePath = "../modules/integrations/index";
   const { runIntegrationSync } = await import(modulePath);
   await runIntegrationSync({
     integrationId: message.integrationId,
@@ -196,6 +201,51 @@ export async function enqueueBackgroundJob(
     );
   }
   const message = parsed.message;
+
+  // Inside a transaction scope (the desktop sync apply) the job must not leave
+  // the process before the state it is about for is durable, and must not leave
+  // at all when the transaction rolls back:
+  // - a row of the database queue is inserted in the transaction, so it commits
+  //   or rolls back with the change (the wake-up ping goes after the commit);
+  // - every other dispatch (Vercel Queue, the document-worker ping, in-process
+  //   `local`/`inline` work that reads the committed rows) is sent after the
+  //   commit and never on a rollback.
+  if (isInTransactionScope()) {
+    if (routesToDatabaseQueue(message)) {
+      const jobId = await enqueueQueueJob(message);
+      const documentWorkerUrl = getDocumentWorkerUrl();
+      if (documentWorkerUrl) {
+        // Fire-and-forget like the unscoped path: the row is durable already.
+        afterTransactionCommit(() => {
+          void wakeAfterCommit(message, documentWorkerUrl);
+        });
+      }
+      return { messageId: `app-queue-${jobId}` };
+    }
+    afterTransactionCommit(async () => {
+      await dispatchBackgroundJob(message, options);
+    });
+    return { messageId: `deferred-${Date.now()}` };
+  }
+
+  return dispatchBackgroundJob(message, options);
+}
+
+async function wakeAfterCommit(message: QueueMessage, baseUrl: string) {
+  try {
+    await wakeDocumentWorker(baseUrl);
+  } catch (error) {
+    console.error("[BackgroundJobs] Failed to wake document worker", {
+      type: resolveQueueJobType(message),
+      error: error instanceof Error ? error.message : "unknown error",
+    });
+  }
+}
+
+async function dispatchBackgroundJob(
+  message: BackgroundJobMessage,
+  options: EnqueueBackgroundJobOptions,
+) {
   const mode = getBackgroundJobsMode();
 
   if (mode === "local") {

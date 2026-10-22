@@ -24,7 +24,7 @@ vi.mock("../worker-modules", () => ({
   }),
 }));
 
-vi.mock("../integrations", () => ({
+vi.mock("../../modules/integrations", () => ({
   runIntegrationSync: mocks.runIntegrationSync,
 }));
 

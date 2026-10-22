@@ -3,6 +3,7 @@ import {
   type LocalSyncConflict,
 } from "@calibra-facil/contracts";
 import type { LocalDatabase } from "./database";
+import { rebaseQueuedJobEvents } from "./outbox";
 import { releaseSettledSkippedRows } from "./skipped-rows";
 
 export type ListSyncConflictsInput = {
@@ -75,6 +76,13 @@ WHERE id = @id
         eventSyncState: "pending",
         lastError: null,
       });
+      // Keeping the local job execution: it is pushed again against the cloud
+      // version the technician just reviewed (the conflict carries it), or the
+      // cloud would refuse it again for the very change they decided to override.
+      const reviewedAt = reviewedJobUpdatedAt(existing);
+      if (reviewedAt !== null) {
+        rebaseQueuedJobEvents(database, existing.entityId, reviewedAt);
+      }
     } else {
       moveConflictedEvents(database, existing.eventId, existing.entityId, {
         outboxStatus: "synced",
@@ -89,6 +97,18 @@ WHERE id = @id
   })();
 
   return getSyncConflict(database, id);
+}
+
+function reviewedJobUpdatedAt(conflict: LocalSyncConflict): string | null {
+  if (conflict.entityType !== "calibration_job") return null;
+  const remote = conflict.remotePayload;
+  if (!remote || typeof remote !== "object" || Array.isArray(remote)) {
+    return null;
+  }
+  const updatedAt = Object.fromEntries(Object.entries(remote)).updatedAt;
+  return typeof updatedAt === "string" && !Number.isNaN(Date.parse(updatedAt))
+    ? updatedAt
+    : null;
 }
 
 function moveConflictedEvents(

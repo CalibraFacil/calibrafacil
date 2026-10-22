@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { BillingReadinessStatus } from "@calibra-facil/shared";
 import { computeBillingReadinessQueue } from "../../lib/billing-readiness";
 import { sendServiceOrdersToFinance } from "../../lib/finance";
-import type { IntegrationsEnv } from "../../lib/integrations";
+import type { IntegrationsEnv } from "../../modules/integrations";
 import {
   withLabPermission,
   type AuthVariables,

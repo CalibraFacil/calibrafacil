@@ -26,7 +26,7 @@ import {
 import { targetOf } from "@calibra-facil/schemas/job-transitions";
 import { normalizeMethodDataForStorage } from "@calibra-facil/shared/units";
 import type { MethodDiagnostic } from "@calibra-facil/method-definition";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   invalid,
   type DomainError,
@@ -155,6 +155,15 @@ export type JobExecutionCommand = {
    * a payload that disagrees is refused (Q20).
    */
   claimedStatus?: JobStatus | null;
+  /**
+   * The write also requires the job's `updated_at` to be what this command
+   * read (to the millisecond, the precision the job was read at). A job that
+   * changed after the read without changing status (someone else saved the
+   * worksheet) matches no row and yields `concurrent_update`, like a status
+   * change does. The desktop sets it when it carries a base version, so a
+   * stale-base check that passed is still true when the write happens.
+   */
+  requireUnchangedSinceRead?: boolean;
   /**
    * A caller-specific check on the loaded job, run once its transition is
    * known to be legal and before anything else is read or written (the desktop
@@ -704,6 +713,14 @@ async function runJobExecution(
           // concurrent transition (approve, reject, cancel...) makes this
           // match zero rows instead of silently overwriting it.
           eq(calibrationJob.status, existing.status),
+          // Compared as epoch milliseconds in the database: the column holds
+          // microseconds, the Date this command read does not, and a JS round
+          // trip of the stored value would compare unequal.
+          ...(command.requireUnchangedSinceRead
+            ? [
+                sql`floor(extract(epoch from ${calibrationJob.updatedAt}) * 1000) = ${existing.updatedAt.getTime()}`,
+              ]
+            : []),
         ),
       )
       .returning();
