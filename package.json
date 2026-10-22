@@ -14,6 +14,7 @@
     "bench:api:bun": "bun scripts/bench-api.mjs",
     "test:desktop-release-gate": "node scripts/build-desktop-artifact.test.mjs",
     "test:desktop-release-local-gates": "pnpm test:desktop-release-gate",
+    "config:env-example": "pnpm --filter @calibra-facil/config run env-example",
     "check:blocked-deps": "node scripts/check-blocked-deps.mjs",
     "check:cycles": "node scripts/check-import-cycles.mjs",
     "knip": "knip --no-progress",

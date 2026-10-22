@@ -175,9 +175,32 @@ then set `AUTH_COOKIE_DOMAIN` and build the frontends with `VITE_API_URL`.
 | `portal.example.com` | client portal (`apps/portal`), including the `/v/:token` page that verifies certificates |
 | `api.example.com`    | API (`apps/api`), when not served under `/api`                                           |
 
+### Configuration
+
+Every environment variable the API, the worker, the local server and the frontends read is
+declared once, with its type, default, whether production requires it and a one-line description,
+in [`packages/config`](./packages/config/src). **That schema is the source of truth**; the tables
+below are a summary.
+
+- Each process validates its configuration when it starts (the API's Bun entry and Vercel
+  functions, the worker, the local server). A bad deploy fails immediately with one error that
+  lists every problem, by variable name and reason, never with a value:
+
+  ```text
+  Invalid api configuration (2 problems):
+    - DATABASE_URL: is required in production (PostgreSQL connection string)
+    - BETTER_AUTH_SECRET: must be at least 32 characters in production
+  ```
+
+- Outside production only the types are checked, so `pnpm dev` and the tests keep working with
+  the defaults of `apps/api/.env.example`.
+- `apps/api/.env.example` and `deploy/.env.example` are generated from the schema: change a
+  variable in `packages/config`, then run `pnpm config:env-example` and commit the result. A test
+  fails when a committed example differs from the schema.
+
 ### API (`apps/api`) and worker (`apps/worker`)
 
-`apps/api/.env.example` documents every variable. The essentials for production:
+`apps/api/.env.example` lists every variable with its description. The essentials for production:
 
 | Variable                                                                                            | Notes                                                                                 |
 | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
