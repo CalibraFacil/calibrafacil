@@ -144,6 +144,18 @@ export const syncStatusSnapshotSchema = z.object({
    * Absent from builds that predate it: read as 0.
    */
   pendingForOtherUserCount: z.number().int().nonnegative().optional(),
+  /**
+   * How many of `pendingOutboxCount` are waiting out a retry delay (a transient
+   * failure): they are not due yet, so a drain loop must not spin on them.
+   * Absent from builds that predate it: read as 0.
+   */
+  deferredOutboxCount: z.number().int().nonnegative().optional(),
+  /**
+   * Events the cloud refused for good. They are not part of
+   * `pendingOutboxCount` and are never retried: they wait for the user to
+   * discard or re-queue them. Absent from builds that predate it: read as 0.
+   */
+  deadOutboxCount: z.number().int().nonnegative().optional(),
   conflictCount: z.number().int().nonnegative(),
   lastSyncedAt: z.string().datetime().nullable(),
   activeRunId: z.string().nullable().optional(),

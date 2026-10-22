@@ -1,4 +1,8 @@
 import { expect, test, type Page } from '@playwright/test'
+import {
+  buildExecutableJobDetail,
+  buildJobMutationResponse,
+} from '@calibra-facil/contracts/jobs-fixtures'
 
 import {
   labOrganization,
@@ -24,10 +28,12 @@ async function openExecutionPage(page: Page) {
     activeOrganization: lab,
   })
   await mockNotifications(page)
-  await routeJson(page, '**/api/jobs/CAL-0007', { body: executableJob() })
+  await routeJson(page, '**/api/jobs/CAL-0007', {
+    body: buildExecutableJobDetail(),
+  })
   await routeJson(page, '**/api/standards?*', { body: { data: [] } })
   await routeJson(page, '**/api/jobs/CAL-0007/execute', {
-    body: { id: 7, jobId: 'CAL-0007', status: 'DRAFT' },
+    body: buildJobMutationResponse({ status: 'DRAFT' }),
   })
 
   await page.goto('/dashboard/jobs/CAL-0007/execute')
@@ -150,55 +156,3 @@ test.describe('execution unsaved-readings guard', () => {
     ).toBeNull()
   })
 })
-
-function executableJob() {
-  return {
-    id: 7,
-    jobId: 'CAL-0007',
-    status: 'DRAFT',
-    customerName: 'Cliente Exemplo',
-    assetName: 'Balança',
-    assetTag: 'BAL-01',
-    assetTypeId: 1,
-    unitId: null,
-    serviceName: 'Calibração',
-    updatedAt: '2026-05-20T12:00:00.000Z',
-    methodSnapshot: {
-      methodId: 1,
-      methodName: 'Método de Massa',
-      methodVersion: 1,
-      dataFields: [
-        {
-          key: 'load',
-          label: 'Carga',
-          type: 'number',
-          required: true,
-          unit: 'g',
-        },
-      ],
-      formulas: [],
-      validations: [],
-      uncertaintyParams: [],
-    },
-    data: { load: 10 },
-    results: null,
-    standardsSnapshot: [],
-    assetSnapshot: {
-      assetId: 1,
-      assetTypeId: 1,
-      assetTypeName: 'Balança',
-      assetTypeSlug: 'scale',
-      name: 'Balança',
-      tag: 'BAL-01',
-      serialNumber: 'SN-01',
-      manufacturer: null,
-      model: null,
-      specifications: {},
-      capturedAt: '2026-05-20T00:00:00.000Z',
-    },
-    calibrationLocationSnapshot: {
-      type: 'lab',
-      addressText: 'Rua Laboratório',
-    },
-  }
-}

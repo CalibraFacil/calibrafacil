@@ -1,4 +1,8 @@
 import { expect, test } from '@playwright/test'
+import {
+  buildApprovedJobDetail,
+  buildJobDownloadUrlResponse,
+} from '@calibra-facil/contracts/jobs-fixtures'
 
 import {
   labOrganization,
@@ -46,10 +50,12 @@ test.describe('certificate distribution', () => {
     })
     await mockNotifications(page)
     await routeJson(page, '**/api/jobs/CAL-0007', {
-      body: approvedJob(),
+      body: buildApprovedJobDetail({
+        customerName: 'Cliente Exemplo',
+      }),
     })
     await routeJson(page, '**/api/jobs/7/download*', {
-      body: { url: signedDownloadUrl },
+      body: buildJobDownloadUrlResponse(signedDownloadUrl),
       onRequest: (payload) => downloadRequests.push(payload),
     })
 
@@ -82,38 +88,3 @@ test.describe('certificate distribution', () => {
     })
   })
 })
-
-function approvedJob() {
-  return {
-    id: 7,
-    jobId: 'CAL-0007',
-    status: 'APPROVED',
-    customerName: 'Cliente Exemplo',
-    assetName: 'Balança analítica',
-    assetTag: 'BAL-01',
-    serviceName: 'Calibração de massa',
-    methodSnapshot: {
-      methodId: 3,
-      methodName: 'Método de massa',
-      methodVersion: 2,
-      dataFields: [],
-      formulas: [],
-      validations: [],
-    },
-    data: null,
-    results: null,
-    standardsSnapshot: [],
-    assetSnapshot: {
-      baseMeasurementUnit: 'g',
-      specifications: {},
-    },
-    technicianName: 'Técnico Responsável',
-    approvedBy: 'approver-1',
-    approverName: 'Aprovador Técnico',
-    approvedAt: '2026-05-20T10:00:00.000Z',
-    performedAt: '2026-05-20T09:00:00.000Z',
-    createdAt: '2026-05-19T10:00:00.000Z',
-    certificateUrl: '/certificates/7.pdf',
-    labelUrl: null,
-  }
-}

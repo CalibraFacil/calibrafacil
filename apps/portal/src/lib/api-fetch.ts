@@ -8,9 +8,7 @@ import type { z } from "zod";
 import { getApiBaseUrl } from "@/lib/utils";
 
 function defaultResponseValidation(): ResponseValidationMode {
-  return import.meta.env.PROD || import.meta.env.MODE === "test"
-    ? "warn"
-    : "strict";
+  return import.meta.env.PROD ? "warn" : "strict";
 }
 
 type FetchPortalJsonOptions = ResponseValidationOptions & {
@@ -28,9 +26,9 @@ type FetchPortalJsonOptions = ResponseValidationOptions & {
  * A body that does not match throws in development (so API/contract drift
  * fails where it is introduced) and only logs a structured warning in
  * production, returning the body as received so the page keeps working.
- * Component unit tests stub `fetch` with partial bodies, so they run in the
- * warn mode too; drift is caught by the API contract specs and by tests that
- * pass `responseValidation: "strict"`.
+ * Unit tests run strict too (as the web app does), so a stubbed `fetch` must
+ * serve a contract-valid body: build it from
+ * `@calibra-facil/contracts/jobs-fixtures`.
  */
 export async function fetchPortalJson<TSchema extends z.ZodType>(
   path: string,

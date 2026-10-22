@@ -93,9 +93,12 @@ import type {
   JobStatus,
   LocalAttachment,
   LocalAttachmentsResponse,
+  LocalDeadOutboxEvent,
+  LocalDeadOutboxEventsResponse,
   LocalSessionSnapshotResponse,
   LocalSyncConflict,
   LocalSyncConflictsResponse,
+  SyncStatusSnapshot,
 } from "@calibra-facil/contracts";
 import type {
   JobExecutionPayload,
@@ -148,6 +151,8 @@ export type {
 export type {
   LocalAttachment,
   LocalAttachmentsResponse,
+  LocalDeadOutboxEvent,
+  LocalDeadOutboxEventsResponse,
   LocalSessionSnapshotResponse,
   LocalSyncConflict,
   LocalSyncConflictsResponse,
@@ -259,6 +264,18 @@ export interface SyncApi {
     id: string,
     status?: "resolved" | "ignored",
   ): Promise<{ data: LocalSyncConflict }>;
+  /** Events the cloud refused for good: out of the push queue, awaiting a decision. */
+  listDeadEvents(): Promise<LocalDeadOutboxEventsResponse>;
+  /** Drop a dead event from the queue. The local data it described stays. */
+  discardDeadEvent(eventId: string): Promise<{
+    data: LocalDeadOutboxEvent;
+    syncStatus: SyncStatusSnapshot;
+  }>;
+  /** Send a dead event again, once whatever the cloud refused it over is fixed. */
+  requeueDeadEvent(eventId: string): Promise<{
+    data: { eventId: string };
+    syncStatus: SyncStatusSnapshot;
+  }>;
 }
 
 export interface AttachmentsApi {

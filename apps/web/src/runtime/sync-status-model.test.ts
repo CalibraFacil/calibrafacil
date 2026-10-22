@@ -329,3 +329,40 @@ describe('syncCompletionClearedBlockers', () => {
     ).toBe(false)
   })
 })
+
+describe('getDataSourceIndicatorModel with refused events', () => {
+  const baseSnapshot: DataSourceIndicatorSnapshot = {
+    isDesktop: true,
+    state: 'idle',
+    lastSyncedAt: '2026-05-09T22:00:00.000Z',
+    pendingOutboxCount: 0,
+    conflictCount: 0,
+  }
+
+  it('REQ-OB-3: surfaces events the cloud refused for good, which are not pending', () => {
+    expect(
+      getDataSourceIndicatorModel({ ...baseSnapshot, deadOutboxCount: 2 }),
+    ).toMatchObject({
+      label: 'Recusadas',
+      title: 'Alterações recusadas pela nuvem',
+      variant: 'destructive',
+      description: expect.stringContaining(
+        '2 alterações foram recusadas pela nuvem e não serão reenviadas.',
+      ),
+    })
+  })
+
+  it('REQ-OB-3: a conflict still comes first, and no refused events changes nothing', () => {
+    expect(
+      getDataSourceIndicatorModel({
+        ...baseSnapshot,
+        deadOutboxCount: 2,
+        conflictCount: 1,
+      }).label,
+    ).toBe('Conflitos')
+    expect(
+      getDataSourceIndicatorModel({ ...baseSnapshot, deadOutboxCount: 0 })
+        .label,
+    ).toBe('Cache local')
+  })
+})

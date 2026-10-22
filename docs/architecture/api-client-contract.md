@@ -149,11 +149,14 @@ as `any`. Response contracts replace that, one domain at a time.
 - `warn` (production): never break the UI. One structured JSON warning
   (`tag: "response-contract"`, endpoint, paths and codes, never response values:
   they can be customer data) and the payload is returned as received.
-  The web app selects it with `import.meta.env.PROD` (or
-  `VITE_RESPONSE_VALIDATION=warn`, used by the mocked-API Playwright run).
-  The portal helper is `strict` on the dev server and `warn` in production and
-  in its component unit tests (they stub `fetch` with partial bodies; tests of
-  the helper itself pass `responseValidation: "strict"`).
+  The web app selects it with `import.meta.env.PROD` (or an explicit
+  `VITE_RESPONSE_VALIDATION=warn`). The portal helper is `strict` everywhere
+  except production. Nothing in the test suites opts out: the mocked-API
+  Playwright specs and the component unit tests serve contract-valid bodies
+  built from the shared fixtures (`@calibra-facil/contracts/jobs-fixtures`,
+  `packages/contracts/src/jobs.fixtures.ts`). Every exported fixture builder is
+  parsed against its schema in `packages/contracts/src/fixtures.test.ts`, so a
+  fixture cannot drift from the contract it stands in for.
 
 **Covered so far (first slice):** jobs domain (`GET /api/jobs`, `GET /api/jobs/:id`,
 the execute/submit/approve/reject/cancel/assign mutation responses, amend,

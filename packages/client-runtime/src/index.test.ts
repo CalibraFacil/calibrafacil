@@ -1093,6 +1093,21 @@ describe("client runtime data policy registry", () => {
           "policy": "local-only",
         },
         {
+          "method": "listDeadEvents",
+          "namespace": "sync",
+          "policy": "local-only",
+        },
+        {
+          "method": "discardDeadEvent",
+          "namespace": "sync",
+          "policy": "local-only",
+        },
+        {
+          "method": "requeueDeadEvent",
+          "namespace": "sync",
+          "policy": "local-only",
+        },
+        {
           "method": "list",
           "namespace": "attachments",
           "policy": "local-only",

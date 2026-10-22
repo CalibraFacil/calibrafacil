@@ -9,6 +9,8 @@ import {
   applySyncPullResponse,
   applySyncBootstrap,
   applySyncPushResult,
+  countDeadOutbox,
+  countDeferredOutbox,
   countOpenSyncConflicts,
   countPendingOutbox,
   countPendingOutboxForOtherUsers,
@@ -25,8 +27,16 @@ import type { LocalServerConfig } from "./bootstrap";
 export type LocalSyncRuntime = {
   getStatus(): SyncStatusSnapshot;
   runInitialSync(): Promise<SyncStatusSnapshot>;
-  runPushSync(): Promise<SyncStatusSnapshot>;
+  /**
+   * Push and pull. A scheduled run respects each queued event's retry delay;
+   * a deliberate one (the user pressing sync, a reconnect) passes
+   * `includeDeferred` to try the events that are still backing off too, after
+   * the ones that are due.
+   */
+  runPushSync(options?: PushSyncOptions): Promise<SyncStatusSnapshot>;
 };
+
+type PushSyncOptions = { includeDeferred?: boolean };
 
 export type CloudConflictResolutionStatus =
   | { state: "skipped"; reason: string }
@@ -50,6 +60,8 @@ export function createLocalSyncRuntime(
       database,
       getLocalSyncContext(config, database).userId,
     ),
+    deferredOutboxCount: countDeferredOutbox(database),
+    deadOutboxCount: countDeadOutbox(database),
     conflictCount: countOpenSyncConflicts(database),
     lastSyncedAt: getSyncCursorUpdatedAt(database),
     activeRunId: null,
@@ -66,8 +78,8 @@ export function createLocalSyncRuntime(
     runInitialSync() {
       return enqueueSync(runInitialSyncOnce);
     },
-    runPushSync() {
-      return enqueueSync(runPushSyncOnce);
+    runPushSync(pushOptions = {}) {
+      return enqueueSync(() => runPushSyncOnce(pushOptions));
     },
   };
 
@@ -168,7 +180,7 @@ export function createLocalSyncRuntime(
     }
   }
 
-  async function runPushSyncOnce() {
+  async function runPushSyncOnce(pushOptions: PushSyncOptions) {
     // A delta sync against a database that was never bootstrapped cannot
     // succeed: the pull either throws because no snapshot exists, or records a
     // cursor without creating one, leaving automatic retries unable to ever
@@ -213,7 +225,7 @@ export function createLocalSyncRuntime(
 
     try {
       await pushPendingOutbox(config, database, fetchImpl, {
-        includeDeferred: true,
+        includeDeferred: pushOptions.includeDeferred === true,
       });
       await pullCloudChanges(config, database, fetchImpl);
       status = {
@@ -532,6 +544,8 @@ function withLocalCounts(
       database,
       getLocalSyncContext(config, database).userId,
     ),
+    deferredOutboxCount: countDeferredOutbox(database),
+    deadOutboxCount: countDeadOutbox(database),
     conflictCount: countOpenSyncConflicts(database),
     lastSyncedAt: snapshot.lastSyncedAt ?? getSyncCursorUpdatedAt(database),
   };

@@ -23,6 +23,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { getDeadEventsBannerLabel } from '@/runtime/sync-dead-events'
 import {
   getDataSourceIndicatorModel,
   isDesktopCloudOnlyUnavailableSnapshot,
@@ -296,20 +297,40 @@ export function CloudOnlyOfflineState({
 export function OfflineBanner() {
   const sync = useSyncStatus()
 
-  if (!sync.isDesktop || sync.state === 'idle' || sync.state === 'syncing') {
+  const showState = sync.state !== 'idle' && sync.state !== 'syncing'
+  // Refused events are not pending and do not move the sync state: an idle,
+  // fully synced desktop can still be sitting on work the cloud will never take.
+  const deadLabel = getDeadEventsBannerLabel(sync.deadOutboxCount)
+
+  if (!sync.isDesktop || (!showState && !deadLabel)) {
     return null
   }
 
   return (
-    <div className="flex items-center justify-center gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm font-medium text-amber-900">
-      <span>{getSyncStatusLabel(sync.state)}</span>
-      {sync.state === 'conflict' ? (
-        <Link
-          to="/dashboard/sync/conflicts"
-          className="underline underline-offset-4"
-        >
-          Revisar conflitos
-        </Link>
+    <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-sm font-medium text-amber-900">
+      {showState ? (
+        <div className="flex items-center gap-3">
+          <span>{getSyncStatusLabel(sync.state)}</span>
+          {sync.state === 'conflict' ? (
+            <Link
+              to="/dashboard/sync/conflicts"
+              className="underline underline-offset-4"
+            >
+              Revisar conflitos
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
+      {deadLabel ? (
+        <div className="flex items-center gap-3">
+          <span>{deadLabel}</span>
+          <Link
+            to="/dashboard/sync/conflicts"
+            className="underline underline-offset-4"
+          >
+            Revisar
+          </Link>
+        </div>
       ) : null}
     </div>
   )
