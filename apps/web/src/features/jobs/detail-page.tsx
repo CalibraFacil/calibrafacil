@@ -88,7 +88,6 @@ import {
   JOB_STATUS_VARIANTS,
   REVIEW_SURFACE_CLASS,
   type ApprovedJobRecordData,
-  type JobDetailData,
   type JobStatus,
   type JobVerdict,
   type JobVerdictLevel,
@@ -373,7 +372,7 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
     data: job,
     isLoading,
     error,
-  } = useJobDetailData<JobDetailData>({
+  } = useJobDetailData({
     id,
     apiJobId,
     refetchWhileGeneratingPdf: true,

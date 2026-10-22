@@ -26,6 +26,10 @@ import {
   assetOotImpactAssessment,
   assetOotAuditLog,
 } from "@calibra-facil/db/schema";
+import type {
+  PortalOverviewResponse,
+  ServerShape,
+} from "@calibra-facil/contracts";
 import { notifyOotAcknowledged } from "@calibra-facil/notifications";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
 import { DEFAULT_PREFERENCES } from "../lib/notification-defaults";
@@ -252,7 +256,7 @@ function buildDueStatusCondition(dueStatus: DueStatus) {
   }
 }
 
-function emptyOverview() {
+function emptyOverview(): ServerShape<PortalOverviewResponse> {
   return {
     equipment: {
       total: 0,
@@ -900,7 +904,7 @@ export const portalRouter = new Hono<{
           awaitingQuote: awaitingQuoteOrders,
           recent: recentServiceOrders,
         },
-      });
+      } satisfies ServerShape<PortalOverviewResponse>);
     } catch (error) {
       console.error("Error building portal overview:", error);
       return c.json({ error: "Erro ao carregar o painel" }, 500);

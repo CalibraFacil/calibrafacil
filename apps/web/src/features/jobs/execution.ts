@@ -1,7 +1,6 @@
 import {
   formatCalibrationValue,
   isMassMeasurementUnit,
-  type MassUnit,
 } from '@calibra-facil/shared'
 import {
   canonicalUnitFor,
@@ -14,6 +13,10 @@ import {
   type MeasurementUnit,
 } from '@calibra-facil/shared/units'
 import type { MassCompositionProfileDto } from '@calibra-facil/client-runtime'
+import {
+  compiledMethodSnapshotSchema,
+  type CompiledMethodSnapshot,
+} from '@calibra-facil/contracts'
 
 import type {
   FormulaResult,
@@ -254,7 +257,7 @@ export interface JobData {
   performedAt?: string | null
   /** ISO timestamp of the server's last write to the job. */
   updatedAt?: string | null
-  customerName: string
+  customerName: string | null
   customerAddress?: AddressData | null
   labName?: string | null
   labStreet?: string | null
@@ -264,16 +267,17 @@ export interface JobData {
   labCity?: string | null
   labState?: string | null
   labCep?: string | null
-  assetName: string
-  assetTag: string
+  assetName: string | null
+  assetTag: string | null
   unitId?: number | null
-  assetTypeId: number
-  serviceName: string
+  assetTypeId: number | null
+  serviceName: string | null
   methodSnapshot: {
     methodId: number
     methodName: string
     methodVersion: number
-    compiledMethod?: CompiledMethodSnapshot | null
+    /** Opaque in the job contract; read it with `readCompiledMethodSnapshot`. */
+    compiledMethod?: unknown
     methodFingerprint?: string | null
     engineVersion?: string | null
     engineOptionsFingerprint?: string | null
@@ -296,35 +300,16 @@ export interface JobData {
   methodDeviations?: string | null
 }
 
-export interface CompiledMethodSnapshot {
-  methodFingerprint: string
-  engine?: {
-    version?: string
-    optionsFingerprint?: string
-  }
-  formulas?: Array<{
-    key: string
-    label?: string
-    expression: string
-    scope?: MethodFormula['scope']
-    normalizedFormula?: string
-    formulaFingerprint?: string
-    variables?: string[]
-    outputUnit?: string
-    reporting?: MethodFormula['reporting']
-    metadata?: Record<string, unknown>
-  }>
-  acceptanceCriteria?: Array<{
-    key: string
-    label?: string
-    expression: string
-    severity: 'info' | 'warning' | 'blocking'
-    message: string
-    normalizedFormula?: string
-    criterionFingerprint?: string
-    metadata?: Record<string, unknown>
-  }>
-  measurementModels?: Array<unknown>
+/**
+ * The compiled method frozen on a job, or null when the snapshot has none (or
+ * a shape the worksheet cannot read: it then calculates from the plain
+ * formulas/validations of the snapshot).
+ */
+function readCompiledMethodSnapshot(
+  value: unknown,
+): CompiledMethodSnapshot | null {
+  const parsed = compiledMethodSnapshotSchema.safeParse(value)
+  return parsed.success ? parsed.data : null
 }
 
 export interface OfficialCompiledExecution {
@@ -400,14 +385,15 @@ function toOfficialCompiledExecution(
 }
 
 /**
- * The weighing-range resolver's `pointUnit` is mass-only by type. Resolve it to
- * the asset's base unit when both are mass; otherwise keep the original literal
- * (a non-mass base unit never retargets a mass weighing-range point).
+ * The weighing-range resolver's `pointUnit` is a mass unit in practice (the
+ * contract types it as any measurement unit, as the API stores it). Resolve it
+ * to the asset's base unit when both are mass; otherwise keep the original
+ * literal (a non-mass base unit never retargets a mass weighing-range point).
  */
 function resolvePointDisplayUnit(
   baseMeasurementUnit: MeasurementUnit | null | undefined,
-  pointUnit: MassUnit | undefined,
-): MassUnit | undefined {
+  pointUnit: MeasurementUnit | undefined,
+): MeasurementUnit | undefined {
   const displayUnit = resolveDisplayUnit(baseMeasurementUnit, pointUnit)
   return isMassMeasurementUnit(displayUnit) ? displayUnit : pointUnit
 }
@@ -1019,7 +1005,9 @@ export function getOfficialCompiledExecution(
 }
 
 export function getCalculationFormulas(job: JobData): MethodFormula[] {
-  const compiledFormulas = job.methodSnapshot.compiledMethod?.formulas
+  const compiledFormulas = readCompiledMethodSnapshot(
+    job.methodSnapshot.compiledMethod,
+  )?.formulas
   if (compiledFormulas?.length) {
     return compiledFormulas.map((formula) => ({
       outputKey: formula.key,
@@ -1035,7 +1023,9 @@ export function getCalculationFormulas(job: JobData): MethodFormula[] {
 }
 
 export function getCalculationValidations(job: JobData): MethodValidation[] {
-  const compiledCriteria = job.methodSnapshot.compiledMethod?.acceptanceCriteria
+  const compiledCriteria = readCompiledMethodSnapshot(
+    job.methodSnapshot.compiledMethod,
+  )?.acceptanceCriteria
   if (compiledCriteria?.length) {
     return compiledCriteria.map((criterion) => ({
       ...normalizeMethodValidations([

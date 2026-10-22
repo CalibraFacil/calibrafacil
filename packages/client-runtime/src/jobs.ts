@@ -1,34 +1,3 @@
-export type JobsListStatus =
-  | "DRAFT"
-  | "IN_PROGRESS"
-  | "REVIEW"
-  | "GENERATING_PDF"
-  | "APPROVED"
-  | "REJECTED"
-  | "CANCELED"
-  | "SUPERSEDED";
-
-export type JobsListData = {
-  data: Array<{
-    id: number;
-    jobId: string;
-    customerName: string | null;
-    assetName: string | null;
-    serviceName: string | null;
-    technicianName: string | null;
-    status: JobsListStatus;
-    dueDate: string | null;
-    isOverdue: boolean | null;
-    createdAt: string;
-  }>;
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-};
-
 export type JobExecutionPayload = {
   selectedStandardIds?: number[];
   data: Record<string, unknown>;

@@ -4,7 +4,6 @@ import type {
   CreateApiKeyInput,
   CreateAssetInput,
   CreateCustomerInput,
-  CreateJobInput,
   CreateMaterialInput,
   CreateServiceInput,
   CreateServiceOrderInput,
@@ -13,8 +12,6 @@ import type {
   SoftDeleteOrganizationRequest,
   DeliverServiceOrderInput,
   IssueServiceOrderDeliveryDocumentInput,
-  JobExecutionPayload,
-  JobsListStatus,
   MethodCompileDraftInput,
   MethodFromTemplateInput,
   MethodPreviewDraftInput,
@@ -74,7 +71,7 @@ import { createAccreditedScopeApi } from "./modules/accredited-scope";
 import { createEnvironmentalLimitsApi } from "./modules/environmental-limits";
 import { createFinanceApi } from "./modules/finance";
 import { createIntegrationsApi } from "./modules/integrations";
-import { createJobsApi } from "./modules/jobs";
+import { createJobsApi, type JobsRawCloudClient } from "./modules/jobs";
 import { createLabSetupApi } from "./modules/lab-setup";
 import { createMethodsApi } from "./modules/methods";
 import { createNotificationsApi } from "./modules/notifications";
@@ -369,75 +366,7 @@ export function createCloudApiClient(
           };
         };
       };
-      jobs: {
-        $post(input: { json: CreateJobInput }): Promise<Response>;
-        $get(input: {
-          query: {
-            page: string;
-            limit: string;
-            customerId?: string;
-            query?: string;
-            status?: JobsListStatus;
-          };
-        }): Promise<Response>;
-        ":id": {
-          $get(input: { param: { id: string } }): Promise<Response>;
-          $delete(input: {
-            param: { id: string };
-            json: { reason: string };
-          }): Promise<Response>;
-          approve: {
-            $post(input: {
-              param: { id: string };
-              json: { reason: string; environmentalJustification?: string };
-            }): Promise<Response>;
-          };
-          reject: {
-            $post(input: {
-              param: { id: string };
-              json: { reason: string };
-            }): Promise<Response>;
-          };
-          assign: {
-            $post(input: {
-              param: { id: string };
-              json: { technicianId: string };
-            }): Promise<Response>;
-          };
-          download: {
-            $get(input: { param: { id: string } }): Promise<Response>;
-          };
-          "generate-label": {
-            $post(input: { param: { id: string } }): Promise<Response>;
-          };
-          "download-label": {
-            $get(input: { param: { id: string } }): Promise<Response>;
-          };
-          amend: {
-            $post(input: {
-              param: { id: string };
-              json: { reason: string };
-            }): Promise<Response>;
-          };
-          execute: {
-            $post(input: {
-              param: { id: string };
-              json: JobExecutionPayload;
-            }): Promise<Response>;
-          };
-          submit: {
-            $post(input: {
-              param: { id: string };
-              json: JobExecutionPayload;
-            }): Promise<Response>;
-          };
-        };
-        technicians: {
-          list: {
-            $get(): Promise<Response>;
-          };
-        };
-      };
+      jobs: JobsRawCloudClient["api"]["jobs"];
       services: {
         $get(input: {
           query: {
@@ -808,7 +737,7 @@ export function createCloudApiClient(
     materials: createMaterialsApi(rawCloudClient),
     methods: createMethodsApi(rawCloudClient),
     standards: createStandardsApi(rawCloudClient, options),
-    jobs: createJobsApi(rawCloudClient),
+    jobs: createJobsApi(rawCloudClient, options),
     serviceOrders: createServiceOrdersApi(rawCloudClient),
     sync: createCloudSyncApi(),
     attachments: createCloudAttachmentsApi(),

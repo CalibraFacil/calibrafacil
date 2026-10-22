@@ -127,7 +127,7 @@ export type ApproveJobResult =
     }
   | {
       status: "approved";
-      job: JobRow | undefined;
+      job: JobRow;
       /** Accredited-scope (CMC) classification frozen at approval (#427). */
       scopeCompliance: JobRow["scopeComplianceStatus"];
     };

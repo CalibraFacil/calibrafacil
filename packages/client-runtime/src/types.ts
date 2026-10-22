@@ -84,6 +84,13 @@ export type CustomerDetailData = CustomersListData["data"][number] & {
 };
 
 import type {
+  JobAmendResponse,
+  JobDetail,
+  JobDownloadUrlResponse,
+  JobMutationResponse,
+  JobTechniciansResponse,
+  JobsListResponse,
+  JobStatus,
   LocalAttachment,
   LocalAttachmentsResponse,
   LocalSessionSnapshotResponse,
@@ -91,8 +98,6 @@ import type {
   LocalSyncConflictsResponse,
 } from "@calibra-facil/contracts";
 import type {
-  JobsListData,
-  JobsListStatus,
   JobExecutionPayload,
   EffectiveEnvironmentalLimitsResponse,
   ReferenceStandardsResponse,
@@ -115,8 +120,6 @@ import type {
   UpdateServiceOrderInput,
 } from "./service-orders";
 export type {
-  JobsListData,
-  JobsListStatus,
   JobExecutionPayload,
   EffectiveEnvironmentalLimitsResponse,
   ReferenceStandardsResponse,
@@ -155,7 +158,7 @@ export type JobsListInput = {
   limit: number;
   customerId?: number;
   query?: string;
-  status?: JobsListStatus;
+  status?: JobStatus;
 };
 
 export type CreateJobResult = {
@@ -164,32 +167,11 @@ export type CreateJobResult = {
   status?: string;
 };
 
-export type TechnicianListData = {
-  data: Array<{
-    id: string;
-    name: string;
-    email: string;
-    role: string;
-  }>;
-};
-
-export type JobDownloadUrlData = {
-  url: string;
-};
-
-export type JobAmendResult = {
-  message: string;
-  amendedJob: {
-    id: number;
-    jobId: string;
-  };
-};
-
 export interface JobsApi {
-  list(input: JobsListInput): Promise<JobsListData>;
+  list(input: JobsListInput): Promise<JobsListResponse>;
   create(input: CreateJobInput): Promise<CreateJobResult>;
-  get<TJob = unknown>(jobId: string | number): Promise<TJob>;
-  listTechnicians(): Promise<TechnicianListData>;
+  get(jobId: string | number): Promise<JobDetail>;
+  listTechnicians(): Promise<JobTechniciansResponse>;
   approve(
     jobId: string | number,
     input: {
@@ -197,10 +179,13 @@ export interface JobsApi {
       environmentalJustification?: string;
       scopeOverrideJustification?: string;
     },
-  ): Promise<unknown>;
-  reject(jobId: string | number, reason: string): Promise<unknown>;
-  cancel(jobId: string | number, reason: string): Promise<unknown>;
-  assign(jobId: string | number, technicianId: string): Promise<unknown>;
+  ): Promise<JobMutationResponse>;
+  reject(jobId: string | number, reason: string): Promise<JobMutationResponse>;
+  cancel(jobId: string | number, reason: string): Promise<JobMutationResponse>;
+  assign(
+    jobId: string | number,
+    technicianId: string,
+  ): Promise<JobMutationResponse>;
   listStandards<TStandard = unknown>(): Promise<
     ReferenceStandardsResponse<TStandard>
   >;
@@ -211,22 +196,22 @@ export interface JobsApi {
   saveExecution(
     jobId: string | number,
     input: JobExecutionPayload,
-  ): Promise<unknown>;
+  ): Promise<JobMutationResponse>;
   submitExecution(
     jobId: string | number,
     input: JobExecutionPayload,
-  ): Promise<unknown>;
+  ): Promise<JobMutationResponse>;
   getCertificateDownloadUrl(
     jobId: string | number,
-  ): Promise<JobDownloadUrlData>;
+  ): Promise<JobDownloadUrlResponse>;
   generateLabel(jobId: string | number): Promise<unknown>;
-  getLabelDownloadUrl(jobId: string | number): Promise<JobDownloadUrlData>;
+  getLabelDownloadUrl(jobId: string | number): Promise<JobDownloadUrlResponse>;
   /** Native printer commands (ZPL/TSPL) for direct thermal printing (text). */
   getLabelCommands(
     jobId: string | number,
     options?: { language?: "zpl" | "tspl"; dpi?: 203 | 300 },
   ): Promise<string>;
-  amend(jobId: string | number, reason: string): Promise<JobAmendResult>;
+  amend(jobId: string | number, reason: string): Promise<JobAmendResponse>;
   /**
    * §7.10 (#426): flags an approved job as out-of-tolerance (as found) —
    * opens a typed NC and, when notifyCustomer, generates the customer

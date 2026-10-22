@@ -1,13 +1,13 @@
-export type JobStatus =
-  | 'DRAFT'
-  | 'IN_PROGRESS'
-  | 'REVIEW'
-  | 'GENERATING_PDF'
-  | 'APPROVED'
-  | 'REJECTED'
-  | 'CANCELED'
-  | 'SUPERSEDED'
+import type {
+  JobListItem,
+  JobStatus,
+  JobTechniciansResponse,
+  JobsListResponse,
+} from '@calibra-facil/contracts'
 
+export type { JobStatus }
+
+/** Statuses the list can be filtered by in the UI (a superseded job is not offered). */
 export type JobsListStatus = Exclude<JobStatus, 'SUPERSEDED'>
 
 export const JOBS_LIST_STATUSES = [
@@ -20,44 +20,10 @@ export const JOBS_LIST_STATUSES = [
   'CANCELED',
 ] as const satisfies readonly JobsListStatus[]
 
-export interface Job {
-  id: number
-  jobId: string
-  status: JobStatus
-  dueDate: string | null
-  performedAt?: string | null
-  createdAt: string
-  updatedAt?: string
-  approvedAt?: string | null
-  customerId?: number
-  customerName: string | null
-  assetId?: number
-  assetName: string | null
-  assetTag?: string | null
-  serviceId?: number
-  serviceName: string | null
-  technicianId?: string | null
-  technicianName: string | null
-  methodName?: string | null
-  methodVersion?: number | null
-  isOverdue: boolean | null
-  daysUntilDue?: number | null
-  financialStatus?: 'UNBILLED' | 'DRAFT' | 'ISSUED' | 'PAID' | 'OVERDUE'
-  invoiceDocumentNumber?: string | null
-  invoiceEligibility?: boolean
-  overdueBalanceFlag?: boolean
-  syncState?: string | null
-}
+/** One row of the jobs list (the `@calibra-facil/contracts` response shape). */
+export type Job = JobListItem
 
-export type JobsListData = {
-  data: Job[]
-  pagination: {
-    page: number
-    limit: number
-    total: number
-    totalPages: number
-  }
-}
+export type JobsListData = JobsListResponse
 
 export type JobsListQueryInput = {
   organizationId: string
@@ -66,16 +32,9 @@ export type JobsListQueryInput = {
   statusFilter: JobsListStatus | ''
 }
 
-export type JobTechnician = {
-  id: string
-  name: string
-  email: string
-  role: string
-}
+export type JobTechniciansData = JobTechniciansResponse
 
-export type JobTechniciansData = {
-  data: Array<JobTechnician>
-}
+export type JobTechnician = JobTechniciansData['data'][number]
 
 export type NewJobCustomer = {
   id: number
