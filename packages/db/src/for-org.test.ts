@@ -406,7 +406,17 @@ describe("forOrg: transactions", () => {
         if (property === "transaction") {
           return async (run: (tx: typeof mock) => Promise<unknown>) => {
             calls.push("begin");
-            return run(target);
+            // P2-3: a transaction also names its organization for row-level
+            // security (set_config); the mock has no connection to run it on,
+            // so the tx hands that one statement a stub. Assertions unchanged.
+            return run(
+              new Proxy(target, {
+                get: (inner, member) =>
+                  member === "execute"
+                    ? async () => [{ previous: "" }]
+                    : Reflect.get(inner, member),
+              }),
+            );
           };
         }
         return Reflect.get(target, property);
