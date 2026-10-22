@@ -20,6 +20,7 @@ export {
   buildLocalStandardsSnapshot,
   judgeLocalStandards,
   localStandardsPerformedAt,
+  resolveLocalDraftStandards,
   createLocalJobDraft,
   getLocalJobDetail,
   saveLocalJobExecution,

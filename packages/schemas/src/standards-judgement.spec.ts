@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  judgeDraftExecutionStandards,
   judgeExecutionStandards,
   type JudgedStandardFacts,
 } from "./standards-judgement";
@@ -124,5 +125,152 @@ describe("judgeExecutionStandards: details", () => {
       [{ ...live, nextCalibrationDate: "2026-10-18" }],
     );
     expect(result).toMatchObject({ ok: false, code: "standard_expired" });
+  });
+});
+
+describe("judgeDraftExecutionStandards: a draft save keeps a standard already in the saved snapshot (REQ-P111-1, REQ-P111-2)", () => {
+  const base = {
+    performedAt: new Date("2026-10-20T15:00:00.000Z"),
+    today: JUDGEMENT_TODAY,
+    mode: "cloud" as const,
+  };
+  const live: JudgedStandardFacts = {
+    id: 1,
+    name: "Massa Padrao",
+    status: "ACTIVE",
+    deletedAt: null,
+    nextCalibrationDate: "2027-03-01",
+    inScope: true,
+  };
+  const expired: JudgedStandardFacts = {
+    ...live,
+    id: 2,
+    name: "Massa Vencida",
+    nextCalibrationDate: "2020-01-01",
+  };
+  const inactive: JudgedStandardFacts = {
+    ...live,
+    id: 3,
+    name: "Massa Inativa",
+    status: "INACTIVE",
+  };
+  const deleted: JudgedStandardFacts = {
+    ...live,
+    id: 4,
+    name: "Massa Excluida",
+    deletedAt: "2026-10-01",
+  };
+  const facts = [live, expired, inactive, deleted];
+
+  it("REQ-P111-1: a standard NOT in the saved snapshot that is expired, inactive or deleted is refused with the code the judgement always gave", () => {
+    for (const [fact, code] of [
+      [expired, "standard_expired"],
+      [inactive, "standard_inactive"],
+      [deleted, "standard_deleted"],
+    ] as const) {
+      const result = judgeDraftExecutionStandards(
+        { ...base, standardIds: [1, fact.id], savedStandardIds: [1] },
+        facts,
+      );
+      expect(result).toEqual({
+        ok: false,
+        code,
+        standardIds: [fact.id],
+        standardNames: [fact.name],
+      });
+    }
+  });
+
+  it("REQ-P111-1: with an empty saved snapshot the draft judgement refuses exactly as the strict one", () => {
+    const input = {
+      ...base,
+      standardIds: [2, 3],
+      requireBackdateReason: false,
+    };
+    const strict = judgeExecutionStandards(input, facts);
+    const draft = judgeDraftExecutionStandards(
+      { ...input, savedStandardIds: [] },
+      facts,
+    );
+    expect(draft).toEqual(strict);
+  });
+
+  it("REQ-P111-1: a standard that is not found stays refused even when the saved snapshot named it", () => {
+    const result = judgeDraftExecutionStandards(
+      { ...base, standardIds: [1, 9], savedStandardIds: [1, 9] },
+      facts,
+    );
+    expect(result).toEqual({
+      ok: false,
+      code: "standard_not_found",
+      standardIds: [9],
+      standardNames: [],
+    });
+  });
+
+  it("REQ-P111-1: a new invalid standard refuses the save even when a carried one also warns", () => {
+    const result = judgeDraftExecutionStandards(
+      { ...base, standardIds: [2, 3], savedStandardIds: [2] },
+      facts,
+    );
+    expect(result).toMatchObject({
+      ok: false,
+      code: "standard_inactive",
+      standardIds: [3],
+    });
+  });
+
+  it("REQ-P111-2: standards already in the saved snapshot that became expired, inactive or deleted are accepted with one structured warning per reason", () => {
+    const result = judgeDraftExecutionStandards(
+      { ...base, standardIds: [1, 2, 3, 4], savedStandardIds: [1, 2, 3, 4] },
+      facts,
+    );
+    expect(result).toMatchObject({ ok: true, standardIds: [1, 2, 3, 4] });
+    if (!result.ok) throw new Error("expected ok");
+    expect(result.warnings).toEqual([
+      {
+        code: "standard_no_longer_valid",
+        reason: "standard_deleted",
+        standardIds: [4],
+        standardNames: ["Massa Excluida"],
+      },
+      {
+        code: "standard_no_longer_valid",
+        reason: "standard_inactive",
+        standardIds: [3],
+        standardNames: ["Massa Inativa"],
+      },
+      {
+        code: "standard_no_longer_valid",
+        reason: "standard_expired",
+        standardIds: [2],
+        standardNames: ["Massa Vencida"],
+      },
+    ]);
+  });
+
+  it("REQ-P111-2: a draft whose standards are all valid carries no warning", () => {
+    const result = judgeDraftExecutionStandards(
+      { ...base, standardIds: [1], savedStandardIds: [1] },
+      facts,
+    );
+    expect(result).toMatchObject({ ok: true, warnings: [] });
+  });
+
+  it("REQ-P111-2: a carried standard that is valid only because the work is back-dated needs no reason on a draft and does not warn", () => {
+    const result = judgeDraftExecutionStandards(
+      {
+        ...base,
+        standardIds: [1],
+        savedStandardIds: [1],
+        performedAt: new Date("2026-09-01T15:00:00.000Z"),
+      },
+      [{ ...live, nextCalibrationDate: "2026-09-30" }],
+    );
+    expect(result).toMatchObject({
+      ok: true,
+      warnings: [],
+      reasonRequired: true,
+    });
   });
 });

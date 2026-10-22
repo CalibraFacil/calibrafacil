@@ -773,10 +773,28 @@ export const jobRowSchema = z.object({
 });
 export type JobRow = z.infer<typeof jobRowSchema>;
 
-/** POST /:id/execute, /:id/submit, /:id/approve, /:id/reject, DELETE /:id, POST /:id/assign */
+/**
+ * A draft save (POST /:id/execute) was accepted, but a reference standard the
+ * job already carries is no longer valid (deleted, inactive or expired). The
+ * save keeps the readings; the submit refuses until the standard is replaced.
+ * `standardNames` runs parallel to `standardIds`.
+ */
+export const jobExecutionWarningSchema = z.object({
+  code: z.literal("standard_no_longer_valid"),
+  reason: z.enum(["standard_deleted", "standard_inactive", "standard_expired"]),
+  standardIds: z.array(z.number()),
+  standardNames: z.array(z.string()),
+});
+export type JobExecutionWarning = z.infer<typeof jobExecutionWarningSchema>;
+
+/**
+ * POST /:id/execute, /:id/submit, /:id/approve, /:id/reject, DELETE /:id, POST /:id/assign.
+ * `warnings` is sent by a draft save only (always, possibly empty).
+ */
 export const jobMutationResponseSchema = z.object({
   message: z.string(),
   data: jobRowSchema,
+  warnings: z.array(jobExecutionWarningSchema).optional(),
 });
 export type JobMutationResponse = z.infer<typeof jobMutationResponseSchema>;
 

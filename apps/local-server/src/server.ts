@@ -26,6 +26,7 @@ import {
   getLocalServiceOrderDetail,
   getLocalStandardDetail,
   buildLocalStandardsSnapshot,
+  resolveLocalDraftStandards,
   localStandardsPerformedAt,
   listLocalAssetTypes,
   listLocalAssets,
@@ -871,14 +872,20 @@ export function createLocalServerRuntime(
       context.userId ?? "local",
     );
     try {
-      const standardsSnapshot = buildLocalStandardsSnapshot(
-        database,
-        input.selectedStandardIds,
-        input.data,
-        // Judged on the day the work is recorded as performed (a draft keeps
-        // the date already saved).
-        localStandardsPerformedAt(input.performedAt, current.performedAt),
-      );
+      // The cloud's draft rule: a standard of the saved snapshot that went
+      // stale is kept (and reported in `warnings`); one the save adds is judged.
+      const { snapshot: standardsSnapshot, warnings } =
+        resolveLocalDraftStandards(database, {
+          selectedStandardIds: input.selectedStandardIds,
+          data: input.data,
+          // Judged on the day the work is recorded as performed (a draft keeps
+          // the date already saved).
+          performedAt: localStandardsPerformedAt(
+            input.performedAt,
+            current.performedAt,
+          ),
+          savedStandardsSnapshot: current.standardsSnapshot,
+        });
       const jobMethodSnapshot = recordFromUnknown(current.methodSnapshot);
       const results = executeLocalCompiledMethod({
         methodSnapshot: jobMethodSnapshot,
@@ -911,7 +918,7 @@ export function createLocalServerRuntime(
         deviceId: config.deviceId,
       });
 
-      return c.json({ data: job });
+      return c.json({ data: job, warnings });
     } catch (error) {
       return c.json(
         {

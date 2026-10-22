@@ -1,3 +1,4 @@
+import type { JobExecutionWarning } from '@calibra-facil/contracts'
 import { useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo, useRef, useState } from 'react'
@@ -125,6 +126,7 @@ import {
   type ReferenceStandard,
 } from '@/features/jobs/execution'
 import { parseExecutionPerformedAt } from '@/features/jobs/forms'
+import { standardWarningItems } from '@/features/jobs/standard-warnings'
 import {
   clearExecutionDraft,
   hashExecutionValues,
@@ -414,6 +416,11 @@ function ExecuteJobForm({
             .filter((standardId) => Number.isFinite(standardId))
         : [],
   )
+  // What the last draft save answered about standards the job carries that are
+  // no longer valid (P1-11): the save went through, the submit will refuse.
+  const [standardWarnings, setStandardWarnings] = useState<
+    JobExecutionWarning[]
+  >([])
   const [environment, setEnvironment] = useState<{
     temperature: number | null
     humidity: number | null
@@ -910,8 +917,9 @@ function ExecuteJobForm({
         }),
       )
     },
-    onSuccess: (_data, saved) => {
+    onSuccess: (data, saved) => {
       setSavedValues(saved)
+      setStandardWarnings(data.warnings ?? [])
       queryClient.invalidateQueries({ queryKey: ['jobs', jobId] })
       toast.success('Dados salvos com sucesso!')
       if (shouldReturnToSyncConflicts(conflictReturn)) {
@@ -1169,6 +1177,11 @@ function ExecuteJobForm({
       </Field>
     )
   }
+
+  const staleStandardItems = standardWarningItems(
+    standardWarnings,
+    selectedStandardIds,
+  )
 
   // Toggle standard selection
   const toggleStandard = (standardId: number) => {
@@ -1475,6 +1488,40 @@ function ExecuteJobForm({
               </Field>
             </CardContent>
           </Card>
+
+          {/* A standard the job carries went stale: the save kept the readings */}
+          {staleStandardItems.length > 0 && (
+            <div
+              role="status"
+              className="space-y-2 rounded-xl bg-amber-50 p-3 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.25)] dark:bg-amber-950"
+            >
+              {staleStandardItems.map((item) => (
+                <div
+                  key={item.standardId}
+                  className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200"
+                >
+                  <HugeiconsIcon
+                    icon={Alert02Icon}
+                    className="h-4 w-4 shrink-0"
+                  />
+                  <span className="min-w-0 flex-1 text-pretty">
+                    {item.message}
+                  </span>
+                  {isEditable && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      aria-label={`Remover padrão ${item.name}`}
+                      onClick={() => toggleStandard(item.standardId)}
+                    >
+                      Remover
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Reference Standards */}
           <Card className="rounded-2xl border-0 py-0 bg-card text-card-foreground shadow-[0_1px_2px_rgba(15,23,42,0.05),0_16px_40px_rgba(15,23,42,0.05)] ring-1 ring-foreground/10">

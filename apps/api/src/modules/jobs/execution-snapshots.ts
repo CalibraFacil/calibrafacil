@@ -13,14 +13,20 @@ import {
   type MethodSnapshot,
   type StandardSnapshot,
 } from "@calibra-facil/db/schema";
-import { judgeExecutionStandards } from "@calibra-facil/schemas";
+import {
+  judgeDraftExecutionStandards,
+  type StandardsDraftWarning,
+} from "@calibra-facil/schemas";
 import { and, desc, eq, inArray, isNull, like, not, or } from "drizzle-orm";
 import { selectEffectiveEnvironmentalLimits } from "../../lib/unit-operational-settings";
 import {
   checkEnvironmentWithinLimits,
   findMissingRequiredAssetSpecs,
 } from "./helpers";
-import type { StandardsRefusal } from "./standards-judgement";
+import {
+  snapshotStandardIds,
+  type StandardsRefusal,
+} from "./standards-judgement";
 
 /**
  * The frozen records a calibration is recorded with (asset, reference
@@ -257,21 +263,35 @@ export function standardsPerformedAt(
   return saved ?? now;
 }
 
+/**
+ * The standards snapshot a save is recorded with, built from the standards the
+ * caller names. `savedSnapshot` is what the job already has FROZEN and is the
+ * one place a draft save is lenient: a standard of it that is named again and
+ * has since gone stale (deleted, inactive, expired) is kept as frozen and
+ * returned in `warnings`, instead of failing the save and losing the readings.
+ * Every other standard is judged strictly. A submit passes no saved snapshot,
+ * so for it nothing is lenient.
+ */
 export async function buildStandardsSnapshot(
   selectedStandardIds: number[] | undefined,
   organizationId: string,
   unitId: number,
   performedAt: Date,
+  savedSnapshot: StandardSnapshot[] | null = null,
 ): Promise<
-  | { ok: true; snapshot: StandardSnapshot[] | null | undefined }
+  | {
+      ok: true;
+      snapshot: StandardSnapshot[] | null | undefined;
+      warnings: StandardsDraftWarning[];
+    }
   | { ok: false; refusal: StandardsRefusal }
 > {
   if (selectedStandardIds === undefined) {
-    return { ok: true, snapshot: undefined };
+    return { ok: true, snapshot: undefined, warnings: [] };
   }
 
   if (selectedStandardIds.length === 0) {
-    return { ok: true, snapshot: null };
+    return { ok: true, snapshot: null, warnings: [] };
   }
 
   // A standard named twice is one standard: the snapshot lists it once, in the
@@ -290,13 +310,13 @@ export async function buildStandardsSnapshot(
 
   // The draft-time judgement is advisory (the submit re-judges the FINAL
   // snapshot and asks for the back-date reason), but it is the same judgement.
-  const judgement = judgeExecutionStandards(
+  const judgement = judgeDraftExecutionStandards(
     {
       standardIds,
+      savedStandardIds: snapshotStandardIds(savedSnapshot),
       performedAt,
       today: new Date(),
       mode: "cloud",
-      requireBackdateReason: false,
     },
     standards.map((standard) => ({
       id: standard.id,
@@ -311,58 +331,80 @@ export async function buildStandardsSnapshot(
     return { ok: false, refusal: judgement };
   }
 
-  const standardsById = new Map(
-    standards.map((standard) => [standard.id, standard]),
+  const staleIds = new Set(
+    judgement.warnings.flatMap((warning) => warning.standardIds),
   );
-  const orderedStandards = standardIds.map((id) => standardsById.get(id)!);
+  const savedById = new Map(
+    (savedSnapshot ?? []).map((standard) => [standard.id, standard]),
+  );
+  const freshStandards = standards.filter(
+    (standard) => !staleIds.has(standard.id),
+  );
 
-  const currentDocuments = await db
-    .select()
-    .from(referenceStandardCertificateDocument)
-    .where(
-      and(
-        eq(referenceStandardCertificateDocument.isCurrent, true),
-        finalizedStandardCertificateDocumentCondition(),
-        or(
-          ...orderedStandards.map((standard) =>
+  const currentDocuments =
+    freshStandards.length === 0
+      ? []
+      : await db
+          .select()
+          .from(referenceStandardCertificateDocument)
+          .where(
             and(
-              eq(referenceStandardCertificateDocument.standardId, standard.id),
-              eq(
-                referenceStandardCertificateDocument.certificateNumber,
-                standard.certificateNumber,
+              eq(referenceStandardCertificateDocument.isCurrent, true),
+              finalizedStandardCertificateDocumentCondition(),
+              or(
+                ...freshStandards.map((standard) =>
+                  and(
+                    eq(
+                      referenceStandardCertificateDocument.standardId,
+                      standard.id,
+                    ),
+                    eq(
+                      referenceStandardCertificateDocument.certificateNumber,
+                      standard.certificateNumber,
+                    ),
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-      ),
-    );
+          );
   const documentsByStandardId = new Map(
     currentDocuments.map((document) => [
       document.standardId,
       standardCertificateDocumentSnapshot(document),
     ]),
   );
+  const freshById = new Map(
+    freshStandards.map((s) => [
+      s.id,
+      {
+        id: s.id,
+        name: s.name,
+        type: s.type,
+        kind: s.kind,
+        certificateNumber: s.certificateNumber,
+        calibratedBy: s.calibratedBy,
+        calibrationDate: s.calibrationDate,
+        nextCalibrationDate: s.nextCalibrationDate,
+        uncertainty: s.uncertainty,
+        uncertaintyUnit: s.uncertaintyUnit,
+        coverageFactor: s.coverageFactor,
+        distribution: s.distribution,
+        drift: s.drift,
+        certifiedValues: s.certifiedValues,
+        metrologyData: s.metrologyData,
+        certificateDocument: documentsByStandardId.get(s.id) ?? null,
+      } satisfies StandardSnapshot,
+    ]),
+  );
 
   return {
     ok: true,
-    snapshot: orderedStandards.map((s) => ({
-      id: s.id,
-      name: s.name,
-      type: s.type,
-      kind: s.kind,
-      certificateNumber: s.certificateNumber,
-      calibratedBy: s.calibratedBy,
-      calibrationDate: s.calibrationDate,
-      nextCalibrationDate: s.nextCalibrationDate,
-      uncertainty: s.uncertainty,
-      uncertaintyUnit: s.uncertaintyUnit,
-      coverageFactor: s.coverageFactor,
-      distribution: s.distribution,
-      drift: s.drift,
-      certifiedValues: s.certifiedValues,
-      metrologyData: s.metrologyData,
-      certificateDocument: documentsByStandardId.get(s.id) ?? null,
-    })),
+    // A stale standard keeps the entry the technician picked, frozen as saved.
+    snapshot: standardIds.flatMap((id) => {
+      const entry = staleIds.has(id) ? savedById.get(id) : freshById.get(id);
+      return entry ? [entry] : [];
+    }),
+    warnings: judgement.warnings,
   };
 }
 
