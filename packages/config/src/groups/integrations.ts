@@ -1,4 +1,4 @@
-import { defineGroup, example, flag, text, url } from "../define";
+import { defineGroup, example, flag, integer, text, url } from "../define";
 
 export const integrationsGroup = defineGroup({
   name: "integrations",
@@ -82,6 +82,14 @@ export const signingGroup = defineGroup({
       description:
         "`true` only when the endpoint is a credentialed ICP-Brasil authority; otherwise signatures record icpBrasilConformant=false.",
       default: false,
+    }),
+    tsaTimeoutMs: integer({
+      env: "SIGNING_TSA_TIMEOUT_MS",
+      description:
+        "Time-stamp request timeout in milliseconds (1000 to 120000). Unset: 30000. A request that times out fails the certificate job (fail-closed).",
+      min: 1000,
+      max: 120_000,
+      example: example.commented("30000"),
     }),
   },
 });

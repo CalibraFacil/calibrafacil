@@ -12,6 +12,7 @@ import {
   loadWorkerConfig,
   readJobsConfig,
   setProcessEnvDefault,
+  workerSigningEnv,
 } from "@calibra-facil/config";
 import {
   GetObjectCommand,
@@ -126,7 +127,8 @@ export function createWorkerEnv(): WorkerEnv {
     ),
     GOTENBERG_URL: config.rendering.gotenbergUrl,
     GOTENBERG_TOKEN: config.rendering.gotenbergToken,
-    SIGNING_MASTER_KEY: config.signing.masterKey,
+    // The master key and every SIGNING_TSA_* variable, shared with the API.
+    ...workerSigningEnv(config.signing),
     INTEGRATIONS_MASTER_KEY: config.integrations.masterKey,
     RESEND_API_KEY: config.email.resendApiKey,
     RESEND_FROM_EMAIL: config.email.resendFromEmail,

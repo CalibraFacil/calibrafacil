@@ -119,6 +119,24 @@ export const DEPLOY_SECTIONS: readonly DeploySection[] = [
     ],
   },
   {
+    title: "Certificate time-stamping (optional)",
+    intro: [
+      "RFC 3161 carimbo do tempo on signed certificates. Leave SIGNING_TSA_URL",
+      "empty and certificates are signed without a time-stamp. When it is set,",
+      "every certificate is time-stamped and, if the authority cannot be",
+      "reached, the certificate is not issued (see DEPLOYMENT.md).",
+    ],
+    variables: [
+      { name: "SIGNING_TSA_URL", example: example.commented("") },
+      { name: "SIGNING_TSA_AUTH", example: example.commented("") },
+      {
+        name: "SIGNING_TSA_ICP_CONFORMANT",
+        example: example.commented("false"),
+      },
+      { name: "SIGNING_TSA_TIMEOUT_MS", example: example.commented("30000") },
+    ],
+  },
+  {
     title: "Optional",
     variables: [
       {

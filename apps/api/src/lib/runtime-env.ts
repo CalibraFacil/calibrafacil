@@ -7,12 +7,14 @@ import {
   loadWorkerConfig,
   rawEnv,
   readDatabaseConfig,
+  workerSigningEnv,
+  type WorkerSigningEnv,
 } from "@calibra-facil/config";
 import { resolveS3EndpointConfig } from "@calibra-facil/shared/storage-endpoint";
 
 export type ApiRuntimeEnv = Record<string, unknown>;
 
-export type WorkerRuntimeEnv = {
+export type WorkerRuntimeEnv = WorkerSigningEnv & {
   DATABASE_URL: string;
   CERTIFICATES_BUCKET: {
     get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
@@ -32,7 +34,6 @@ export type WorkerRuntimeEnv = {
   };
   GOTENBERG_URL?: string;
   GOTENBERG_TOKEN?: string;
-  SIGNING_MASTER_KEY?: string;
   INTEGRATIONS_MASTER_KEY?: string;
   // Conta Azul syncs run with this environment and may refresh a token with
   // the server-supplied application (laboratories' own come from the database).
@@ -142,7 +143,8 @@ export function createWorkerRuntimeEnv(): WorkerRuntimeEnv {
     // Gotenberg HTML/XLSX->PDF service (services/gotenberg on Cloudflare Containers).
     GOTENBERG_URL: config.rendering.gotenbergUrl,
     GOTENBERG_TOKEN: config.rendering.gotenbergToken,
-    SIGNING_MASTER_KEY: config.signing.masterKey,
+    // The master key and every SIGNING_TSA_* variable, shared with createWorkerEnv.
+    ...workerSigningEnv(config.signing),
     INTEGRATIONS_MASTER_KEY: config.integrations.masterKey,
     API_URL: config.origins.apiUrl,
     CONTA_AZUL_CLIENT_ID: config.integrations.contaAzulClientId,

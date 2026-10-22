@@ -205,6 +205,17 @@ docker compose run --rm --no-deps api bun ../../packages/config/scripts/check-co
 docker compose run --rm --no-deps worker bun ../../packages/config/scripts/check-config.ts --runtime worker
 ```
 
+**Certificate time-stamping now reaches the worker.** `SIGNING_TSA_URL`, `SIGNING_TSA_AUTH` and
+`SIGNING_TSA_ICP_CONFORMANT` were documented as settings of the signing path, but the environment
+the worker runs with never carried them, so no certificate was ever time-stamped, whatever you had
+configured. They now take effect on every worker path (and the new optional
+`SIGNING_TSA_TIMEOUT_MS` with them). **If `SIGNING_TSA_URL` is set in your environment, the
+certificates issued after this upgrade are time-stamped, and a certificate is not issued while the
+authority is unreachable** (the job stays `GENERATING_PDF` while the queue retries, then is
+`REJECTED`; see _Certificate time-stamping_). Check that the authority and its credentials work, or
+unset `SIGNING_TSA_URL`, **before** you deploy. With it unset nothing changes. Docker Compose now
+passes these variables from `deploy/.env` to the API and the worker (all optional).
+
 Generate a missing key or secret with `openssl rand -base64 32` (never reuse one key for two
 purposes, and never replace `SIGNING_MASTER_KEY`, `INTEGRATIONS_MASTER_KEY`,
 `PUBLIC_API_MASTER_KEY` or `EMAIL_DOMAIN_MASTER_KEY` once data is encrypted with it: add only the
@@ -277,6 +288,7 @@ below are a summary.
 | `R2_PUBLIC_ENDPOINT`                                                                                | Optional; the store's public address when `R2_ENDPOINT` is internal (download links)  |
 | `GOTENBERG_URL` (+ `GOTENBERG_TOKEN`)                                                               | PDF rendering                                                                         |
 | `SIGNING_MASTER_KEY`, `INTEGRATIONS_MASTER_KEY`, `PUBLIC_API_MASTER_KEY`, `EMAIL_DOMAIN_MASTER_KEY` | 32 random bytes each, base64 (`openssl rand -base64 32`); never reuse one key twice   |
+| `SIGNING_TSA_URL` (+ `SIGNING_TSA_AUTH`, `SIGNING_TSA_ICP_CONFORMANT`, `SIGNING_TSA_TIMEOUT_MS`)    | Optional RFC 3161 time-stamping of certificates: see _Certificate time-stamping_      |
 | `QUOTE_APPROVAL_CODE_PEPPER`, `CRON_SECRET`                                                         | Random strings                                                                        |
 | `PORTAL_SERVICE_USER_ID`                                                                            | Id of the account that owns client-portal organizations (`init` creates it)           |
 | `BACKGROUND_JOBS_MODE`                                                                              | `local` (inside the API process), `queue` (a separate worker) or `vercel`             |
@@ -294,6 +306,45 @@ Secret in **Configurações → Integrações**, which shows the redirect URL to
 (`API_URL` + `/api/integrations/conta-azul/oauth/callback`). To supply one application to every
 laboratory instead, set `CONTA_AZUL_CLIENT_ID` and `CONTA_AZUL_CLIENT_SECRET`
 (`CONTA_AZUL_OAUTH_REDIRECT_URI` overrides the redirect URL).
+
+#### Certificate time-stamping (RFC 3161)
+
+Set `SIGNING_TSA_URL` to the endpoint of a time-stamp authority and every signed certificate gets
+a carimbo do tempo (PAdES-T). The other variables are optional: `SIGNING_TSA_AUTH` is the full
+`Authorization` header value of a contracted authority (`Basic ...` or `Bearer ...`),
+`SIGNING_TSA_TIMEOUT_MS` the request timeout (1000 to 120000, default 30000), and
+`SIGNING_TSA_ICP_CONFORMANT=true` is to be set **only** for a credentialed ICP-Brasil authority:
+otherwise the signature records `icpBrasilConformant: false`, so a generic authority is never
+presented as legally conformant. The settings are validated at start-up (the address must be an
+`http://` or `https://` URL).
+
+They take effect on **every worker path**: the Vercel Queue consumer and cron handlers, the
+inline and local (`BACKGROUND_JOBS_MODE=local`) runner in the API process, the database-queue
+drain (`apps/worker` `serve`, including the document-worker container) and the always-on Bun
+worker (`bun src/bun.ts`, the `worker` service of the Docker setup). All of them build the
+signing part of the worker environment from one function, `workerSigningEnv` in
+`packages/config`. On Cloudflare, the document-worker container receives them from the Worker's
+own variables and secrets.
+
+With `SIGNING_TSA_URL` unset nothing changes: no time-stamp is requested and the signed PDF is
+byte-identical to what earlier releases produced.
+
+**With a TSA configured, time-stamping fails closed.** A certificate is never issued unstamped:
+
+- Each delivery asks the authority up to four times when it cannot be reached or answers with an
+  HTTP error (waiting 1, 2 and 4 seconds between tries); an unusable answer fails at once. When
+  no stamp is obtained the render fails before anything is uploaded: no PDF is stored, no
+  certificate snapshot is written and no "certificate ready" e-mail is sent.
+- While the queue still has deliveries left (Vercel: `BACKGROUND_JOBS_MAX_DELIVERIES`, default 3;
+  database queue: the row's `max_attempts`), the job stays `GENERATING_PDF` and the message is
+  redelivered, so a short outage of the authority heals itself.
+- On the final delivery the job is `REJECTED`, with the reason `Falha na assinatura digital do
+certificado: Falha ao obter carimbo do tempo RFC 3161 ...`, and can be sent for approval again
+  once the authority is back. Runners that never redeliver (the inline and local ones) treat the
+  first failure as final.
+
+Laboratories that sign certificates therefore depend on the authority being available: monitor
+it, or leave `SIGNING_TSA_URL` empty until you have a contracted one.
 
 ### Frontends
 
