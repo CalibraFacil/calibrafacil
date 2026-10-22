@@ -85,12 +85,19 @@ describe("transaction scope on real Postgres (D4)", () => {
   });
 
   it("D4: a fire-and-forget read started inside the scope and finished after it uses the pool, not the closed transaction", async () => {
+    let afterCommit: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      afterCommit = resolve;
+    });
     let late: Promise<string[]> = Promise.resolve([]);
 
     await runInTransactionScope(async () => {
       await insertMarker("committed");
-      late = sleep(30).then(markers);
+      // Created inside the scope, so it carries the scope's context; it only
+      // runs once the scope has committed and closed.
+      late = gate.then(markers);
     });
+    afterCommit();
 
     expect(await late).toEqual(["committed"]);
   });
