@@ -14,7 +14,7 @@ import {
 } from "@calibra-facil/label-rendering";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
 import { sendServiceOrdersToFinance } from "../lib/finance";
-import type { IntegrationsEnv } from "../lib/integrations";
+import type { IntegrationsEnv } from "../modules/integrations";
 import {
   calibrationJob,
   jobAuditLog,

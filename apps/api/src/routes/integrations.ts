@@ -78,7 +78,7 @@ import {
   validateGenericConnection,
   writeIntegrationEvent,
   writeOrganizationIntegrationEvent,
-} from "../lib/integrations";
+} from "../modules/integrations";
 import {
   buildContaAzulAuthorizationUrl,
   buildContaAzulRefreshFailurePolicy,

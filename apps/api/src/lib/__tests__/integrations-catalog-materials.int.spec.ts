@@ -7,7 +7,7 @@ import { seedOrg } from "../../../test/integration/seed";
 import {
   filterContaAzulCatalogPayloadsByEnabledKinds,
   loadCatalogItemPayloads,
-} from "../integrations";
+} from "../../modules/integrations";
 
 // Real-DB integration test for the catalog payload loader now that the
 // catalog covers BOTH halves of the Conta Azul split: services

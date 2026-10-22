@@ -22,7 +22,7 @@ vi.mock("../../lib/runtime-env", () => ({
   createWorkerRuntimeEnv: mocks.createWorkerRuntimeEnv,
 }));
 
-vi.mock("../../lib/integrations", () => ({
+vi.mock("../../modules/integrations", () => ({
   processScheduledContaAzulIntegrationSyncs:
     mocks.processScheduledContaAzulIntegrationSyncs,
   processScheduledContaAzulPolls: mocks.processScheduledContaAzulPolls,

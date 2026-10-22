@@ -4,7 +4,7 @@ import {
   processScheduledContaAzulIntegrationSyncs,
   processScheduledContaAzulPolls,
   runContaAzulScheduledPoll,
-} from "../integrations";
+} from "../../modules/integrations";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { integrationsRouter } from "./integrations";
-import { decryptIntegrationSecret } from "../lib/integrations";
+import { decryptIntegrationSecret } from "../modules/integrations";
 import { db } from "@calibra-facil/db";
 import {
   organizationIntegration,

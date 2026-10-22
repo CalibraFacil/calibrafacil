@@ -5,7 +5,7 @@ import {
   organizationIntegration,
 } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
-import { markContaAzulReconnectRequired } from "../integrations";
+import { markContaAzulReconnectRequired } from "../../modules/integrations";
 import { truncateAll } from "../../../test/integration/db";
 import { seedOrg } from "../../../test/integration/seed";
 

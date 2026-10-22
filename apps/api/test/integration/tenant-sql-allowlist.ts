@@ -349,12 +349,24 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "pk-after-scoped-read",
-    file: "apps/api/src/lib/integrations.ts",
-    tables: [
-      "integration_event_log",
-      "integration_object_link",
-      "integration_sync_run",
-    ],
+    file: "apps/api/src/modules/integrations/overview.ts",
+    tables: ["integration_event_log", "integration_sync_run"],
+    kinds: ["select"],
+    reason:
+      "Overview/coverage reads keyed by integration_id of the organization-scoped connection record passed in.",
+  },
+  {
+    category: "pk-after-scoped-read",
+    file: "apps/api/src/modules/integrations/payload-targets.ts",
+    tables: ["integration_object_link"],
+    kinds: ["select"],
+    reason:
+      "Overview/coverage reads keyed by integration_id of the organization-scoped connection record passed in.",
+  },
+  {
+    category: "pk-after-scoped-read",
+    file: "apps/api/src/modules/integrations/reference-links.ts",
+    tables: ["integration_object_link"],
     kinds: ["select"],
     reason:
       "Overview/coverage reads keyed by integration_id of the organization-scoped connection record passed in.",

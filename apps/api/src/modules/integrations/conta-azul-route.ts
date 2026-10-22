@@ -1,9 +1,6 @@
 import { HTTPException } from "hono/http-exception";
 import { type IntegrationSyncTarget } from "@calibra-facil/shared";
-import {
-  getIntegrationRecord,
-  type IntegrationsEnv,
-} from "../../lib/integrations";
+import { getIntegrationRecord, type IntegrationsEnv } from "./index";
 import { type ContaAzulOAuthEnv } from "../../lib/conta-azul-oauth";
 
 const GENERIC_HTTP_SYNC_TARGETS = new Set<IntegrationSyncTarget>([
