@@ -11,14 +11,15 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { catalogFor, variableNames } from "./catalog.ts";
-import { DEPLOY_SECTIONS } from "./deploy.ts";
-import { renderApiEnvExample, renderDeployEnvExample } from "./env-example.ts";
-import { loadApiConfig } from "./index.ts";
+import { catalogFor, variableNames } from "./catalog";
+import { DEPLOY_SECTIONS } from "./deploy";
+import { renderApiEnvExample, renderDeployEnvExample } from "./env-example";
+import { loadApiConfig } from "./index";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = join(packageRoot, "..", "..");
 const script = join(packageRoot, "scripts", "generate-env-example.ts");
+const tsx = join(packageRoot, "node_modules", ".bin", "tsx");
 
 function read(path: string): string {
   return readFileSync(join(repoRoot, path), "utf8");
@@ -189,7 +190,7 @@ describe("REQ-CFG-4 the generator script", () => {
   it("REQ-CFG-4: --check passes on the committed examples", () => {
     const root = scratchRoot();
     expect(() =>
-      execFileSync("node", [script, "--check", "--root", root], {
+      execFileSync(tsx, [script, "--check", "--root", root], {
         stdio: "pipe",
       }),
     ).not.toThrow();
@@ -206,16 +207,14 @@ describe("REQ-CFG-4 the generator script", () => {
       ),
     );
 
-    const drifted = spawnSync("node", [script, "--check", "--root", root], {
+    const drifted = spawnSync(tsx, [script, "--check", "--root", root], {
       encoding: "utf8",
     });
     expect(drifted.status).toBe(1);
     expect(drifted.stderr).toContain("apps/api/.env.example is out of date");
 
-    execFileSync("node", [script, "--root", root], { stdio: "pipe" });
+    execFileSync(tsx, [script, "--root", root], { stdio: "pipe" });
     expect(readFileSync(apiExample, "utf8")).toBe(renderApiEnvExample());
-    expect(spawnSync("node", [script, "--check", "--root", root]).status).toBe(
-      0,
-    );
+    expect(spawnSync(tsx, [script, "--check", "--root", root]).status).toBe(0);
   });
 });

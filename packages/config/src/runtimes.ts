@@ -1,15 +1,15 @@
-import { defineReader, defineRuntime, type ConfigIssue } from "./define.ts";
-import { authGroup } from "./groups/auth.ts";
-import { databaseGroup } from "./groups/database.ts";
-import { emailGroup } from "./groups/email.ts";
-import { portalGroup, webGroup } from "./groups/frontends.ts";
-import { integrationsGroup, signingGroup } from "./groups/integrations.ts";
-import { jobsGroup } from "./groups/jobs.ts";
-import { localServerGroup } from "./groups/local-server.ts";
-import { originsGroup } from "./groups/origins.ts";
-import { observabilityGroup, retentionGroup } from "./groups/retention.ts";
-import { runtimeGroup } from "./groups/runtime.ts";
-import { renderingGroup, storageGroup } from "./groups/storage.ts";
+import { defineReader, defineRuntime, type ConfigIssue } from "./define";
+import { authGroup } from "./groups/auth";
+import { databaseGroup } from "./groups/database";
+import { emailGroup } from "./groups/email";
+import { portalGroup, webGroup } from "./groups/frontends";
+import { integrationsGroup, signingGroup } from "./groups/integrations";
+import { jobsGroup } from "./groups/jobs";
+import { localServerGroup } from "./groups/local-server";
+import { originsGroup } from "./groups/origins";
+import { observabilityGroup, retentionGroup } from "./groups/retention";
+import { runtimeGroup } from "./groups/runtime";
+import { renderingGroup, storageGroup } from "./groups/storage";
 
 type StorageSettings = {
   readonly accountId: string | undefined;

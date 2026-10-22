@@ -1,4 +1,4 @@
-import { defineGroup, example, flag, integer, list, text } from "../define.ts";
+import { defineGroup, example, flag, integer, list, text } from "../define";
 
 export const authGroup = defineGroup({
   name: "auth",

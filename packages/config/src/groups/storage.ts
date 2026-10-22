@@ -1,4 +1,4 @@
-import { defineGroup, example, text, url } from "../define.ts";
+import { defineGroup, example, text, url } from "../define";
 
 export const storageGroup = defineGroup({
   name: "storage",

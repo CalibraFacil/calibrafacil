@@ -13,3 +13,13 @@ export function setProcessEnv(name: string, value: string | undefined): void {
     process.env[name] = value;
   }
 }
+
+/** Like {@link setProcessEnv}, but keeps a value that is already set (`??=`). */
+export function setProcessEnvDefault(name: string, value: string): void {
+  process.env[name] ??= value;
+}
+
+/** The whole process environment, for code that forwards it as a bag of bindings. */
+export function rawEnv(): Readonly<Record<string, string | undefined>> {
+  return process.env;
+}

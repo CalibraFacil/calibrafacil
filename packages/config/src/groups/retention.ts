@@ -1,5 +1,5 @@
-import { choice, defineGroup, example, flag, text } from "../define.ts";
-import { nodeEnvVar, vercelEnvVar } from "./runtime.ts";
+import { choice, defineGroup, example, flag, text } from "../define";
+import { nodeEnvVar, vercelEnvVar } from "./runtime";
 
 export const retentionGroup = defineGroup({
   name: "retention",

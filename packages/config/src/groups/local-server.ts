@@ -1,4 +1,4 @@
-import { defineGroup, flag, integer, text, url } from "../define.ts";
+import { defineGroup, flag, integer, text, url } from "../define";
 
 /**
  * The offline desktop server (apps/local-server). The Electron host normally

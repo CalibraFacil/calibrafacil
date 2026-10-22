@@ -1,11 +1,11 @@
-import { currentEnv, type EnvSource } from "./define.ts";
+import { currentEnv, type EnvSource } from "./define";
 import {
   apiRuntime,
   localServerRuntime,
   portalRuntime,
   webRuntime,
   workerRuntime,
-} from "./runtimes.ts";
+} from "./runtimes";
 
 /**
  * Validated configuration, one loader per runtime.
@@ -55,8 +55,8 @@ export {
   type EnvSource,
   type RuntimeName,
   type VarMeta,
-} from "./define.ts";
-export type { PlatformEmailTransport } from "./groups/email.ts";
+} from "./define";
+export type { PlatformEmailTransport } from "./groups/email";
 export {
   readAuthConfig,
   readDatabaseConfig,
@@ -71,5 +71,5 @@ export {
   readRuntimeConfig,
   readSigningConfig,
   readStorageConfig,
-} from "./runtimes.ts";
-export { setProcessEnv } from "./process-env.ts";
+} from "./runtimes";
+export { rawEnv, setProcessEnv, setProcessEnvDefault } from "./process-env";

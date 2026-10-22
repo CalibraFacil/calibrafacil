@@ -1,4 +1,4 @@
-import { defineGroup, example, integer, text } from "../define.ts";
+import { defineGroup, example, integer, text } from "../define";
 
 /** Set to `1` by Vercel on every deployment (preview and production). */
 export const vercelVar = text({

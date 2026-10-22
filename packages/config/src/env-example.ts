@@ -1,11 +1,11 @@
-import { catalogFor } from "./catalog.ts";
+import { catalogFor } from "./catalog";
 import {
   DEPLOY_SECTIONS,
   DEPLOY_VERSION_VARIABLE,
   deployDescription,
   type DeployVariable,
-} from "./deploy.ts";
-import { example, type ExampleSpec, type RuntimeName } from "./define.ts";
+} from "./deploy";
+import { example, type ExampleSpec, type RuntimeName } from "./define";
 
 /**
  * The `.env.example` files, generated from the schema.

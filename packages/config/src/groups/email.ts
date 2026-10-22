@@ -1,12 +1,4 @@
-import {
-  choice,
-  defineGroup,
-  example,
-  flag,
-  integer,
-  text,
-  url,
-} from "../define.ts";
+import { choice, defineGroup, example, flag, integer, text } from "../define";
 
 /** The transport platform e-mail leaves through, resolved from the settings. */
 export type PlatformEmailTransport =
@@ -87,7 +79,7 @@ export const emailGroup = defineGroup({
         'Sender of platform e-mail, e.g. "Laboratório <calibra@example.com>".',
       example: example.active('"Calibra Fácil <noreply@example.com>"'),
     }),
-    emailLogoUrl: url({
+    emailLogoUrl: text({
       env: "EMAIL_LOGO_URL",
       description:
         "Logo shown in e-mail headers (default: the app's own logo).",

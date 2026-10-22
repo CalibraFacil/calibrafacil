@@ -4,8 +4,8 @@ import {
   type GroupMeta,
   type RuntimeName,
   type VarMeta,
-} from "./define.ts";
-import { RUNTIME_SPECS } from "./runtimes.ts";
+} from "./define";
+import { RUNTIME_SPECS } from "./runtimes";
 
 /** One variable as the documentation lists it. */
 export interface CatalogEntry {

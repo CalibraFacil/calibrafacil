@@ -10,8 +10,8 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "env-example": "node scripts/generate-env-example.ts",
-    "env-example:check": "node scripts/generate-env-example.ts --check",
+    "env-example": "tsx scripts/generate-env-example.ts",
+    "env-example:check": "tsx scripts/generate-env-example.ts --check",
     "test": "vitest run --passWithNoTests",
     "test:run": "vitest run --passWithNoTests",
     "check-types": "node ../../scripts/typecheck.mjs --noEmit",
@@ -24,6 +24,7 @@
   "devDependencies": {
     "@repo/typescript-config": "workspace:^",
     "@types/node": "^24.13.0",
+    "tsx": "^4.22.4",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
   }

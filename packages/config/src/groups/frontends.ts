@@ -1,4 +1,4 @@
-import { defineGroup, example, text, url } from "../define.ts";
+import { defineGroup, example, text, url } from "../define";
 
 /**
  * The `VITE_*` settings of the lab app and the client portal. Vite bakes them

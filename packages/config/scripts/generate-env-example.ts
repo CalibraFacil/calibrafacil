@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import {
   renderApiEnvExample,
   renderDeployEnvExample,
-} from "../src/env-example.ts";
+} from "../src/env-example";
 
 const args = process.argv.slice(2);
 const check = args.includes("--check");

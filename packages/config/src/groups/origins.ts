@@ -1,4 +1,4 @@
-import { defineGroup, example, list, text, url } from "../define.ts";
+import { defineGroup, example, list, text, url } from "../define";
 
 export const originsGroup = defineGroup({
   name: "origins",

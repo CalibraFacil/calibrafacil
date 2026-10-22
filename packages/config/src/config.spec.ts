@@ -9,7 +9,7 @@ import {
   readDatabaseConfig,
   readJobsConfig,
   readRetentionConfig,
-} from "./index.ts";
+} from "./index";
 
 const SECRET_SENTINEL = "s3cr3t-sentinel-value-0123456789";
 

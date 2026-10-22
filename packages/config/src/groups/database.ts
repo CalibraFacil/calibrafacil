@@ -1,5 +1,5 @@
-import { defineGroup, example, integer, text } from "../define.ts";
-import { vercelVar } from "./runtime.ts";
+import { defineGroup, example, integer, text } from "../define";
+import { nodeEnvVar, vercelVar } from "./runtime";
 
 const DEFAULT_POOL_MAX = 5;
 
@@ -45,6 +45,7 @@ export const databaseGroup = defineGroup({
       secret: true,
       hidden: true,
     }),
+    nodeEnv: nodeEnvVar,
     vercel: vercelVar,
   },
   derive: (values) => ({

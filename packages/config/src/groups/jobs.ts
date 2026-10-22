@@ -6,8 +6,8 @@ import {
   list,
   text,
   url,
-} from "../define.ts";
-import { vercelVar } from "./runtime.ts";
+} from "../define";
+import { vercelVar } from "./runtime";
 
 export const jobsGroup = defineGroup({
   name: "jobs",

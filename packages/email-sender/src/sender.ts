@@ -11,6 +11,7 @@
  * same send (see send.ts), so the path self-heals without a cron reset.
  */
 
+import { readEmailConfig } from "@calibra-facil/config";
 import { db } from "@calibra-facil/db";
 import {
   organizationEmailDomain,
@@ -67,7 +68,8 @@ export async function resolveLabEmailSender(
     const row = await findUsableEmailDomainRow(organizationId);
     if (!row) return undefined;
     if (row.mode === "byok" && !getEmailDomainMasterKey()) return undefined;
-    if (row.mode === "managed" && !process.env.RESEND_API_KEY) return undefined;
+    if (row.mode === "managed" && !readEmailConfig().resendApiKey)
+      return undefined;
 
     return {
       organizationId,
@@ -99,7 +101,7 @@ export async function getLabEmailCredential(
     // held a key and there is nothing to decrypt. This is the path every new
     // configuration takes.
     if (row.mode === "managed") {
-      const platformKey = process.env.RESEND_API_KEY;
+      const platformKey = readEmailConfig().resendApiKey;
       if (!platformKey) return undefined;
       return {
         apiKey: platformKey,

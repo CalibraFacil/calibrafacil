@@ -1,5 +1,5 @@
-import { example, type ExampleSpec, type RuntimeName } from "./define.ts";
-import { catalogFor } from "./catalog.ts";
+import { example, type ExampleSpec, type RuntimeName } from "./define";
+import { catalogFor } from "./catalog";
 
 /**
  * The variables of the one-server Docker deployment (deploy/compose.yaml).

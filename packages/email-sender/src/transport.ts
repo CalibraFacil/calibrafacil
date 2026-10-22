@@ -23,75 +23,31 @@ import {
   type Transporter,
 } from "nodemailer";
 import { Resend, type CreateEmailOptions } from "resend";
+import {
+  readEmailConfig,
+  type PlatformEmailTransport,
+} from "@calibra-facil/config";
 import { classifyResendErrorName } from "./resend-domains";
 
 type Env = Record<string, string | undefined>;
 
-export type PlatformEmailTransport =
-  | { kind: "resend"; apiKey: string }
-  | {
-      kind: "smtp";
-      host: string;
-      port: number;
-      /** Implicit TLS (port 465). Otherwise STARTTLS when the server offers it. */
-      secure: boolean;
-      user?: string;
-      password?: string;
-    };
+export type { PlatformEmailTransport };
 
 export type EmailDeliveryResult =
   | { ok: true; emailId?: string }
   | { ok: false; retryable: boolean; error: string };
 
-function readEnv(env: Env, name: string): string | undefined {
-  const value = env[name]?.trim();
-  return value ? value : undefined;
-}
-
 /**
  * The configured platform transport, or null when e-mail is not configured.
  * Throws when EMAIL_TRANSPORT names an unknown transport or one whose settings
- * are missing, so a typo fails at boot instead of silently dropping mail.
+ * are missing, so a typo fails at boot instead of silently dropping mail. The
+ * settings come from the e-mail concern of `@calibra-facil/config`; `env`
+ * overrides the process environment (tests).
  */
 export function resolvePlatformEmailTransport(
-  env: Env = process.env,
+  env?: Env,
 ): PlatformEmailTransport | null {
-  const explicit = readEnv(env, "EMAIL_TRANSPORT")?.toLowerCase();
-  if (explicit && explicit !== "smtp" && explicit !== "resend") {
-    throw new Error(
-      `EMAIL_TRANSPORT must be "smtp" or "resend", got "${explicit}"`,
-    );
-  }
-
-  const host = readEnv(env, "SMTP_HOST");
-  const apiKey = readEnv(env, "RESEND_API_KEY");
-  const kind = explicit ?? (host ? "smtp" : apiKey ? "resend" : undefined);
-
-  if (kind === "smtp") {
-    if (!host) throw new Error("EMAIL_TRANSPORT=smtp requires SMTP_HOST");
-    const secure = readEnv(env, "SMTP_SECURE")?.toLowerCase() === "true";
-    const port = Number(readEnv(env, "SMTP_PORT") ?? (secure ? 465 : 587));
-    if (!Number.isInteger(port) || port <= 0 || port > 65_535) {
-      throw new Error(`SMTP_PORT must be a port number, got "${port}"`);
-    }
-    return {
-      kind,
-      host,
-      port,
-      secure,
-      user: readEnv(env, "SMTP_USER"),
-      password: readEnv(env, "SMTP_PASSWORD"),
-    };
-  }
-
-  if (kind === "resend") {
-    if (!apiKey) {
-      throw new Error("EMAIL_TRANSPORT=resend requires RESEND_API_KEY");
-    }
-    return { kind, apiKey };
-  }
-
-  return null;
+  return readEmailConfig(env).transport;
 }
 
 let loggedConfigError = false;
@@ -101,7 +57,7 @@ let loggedConfigError = false;
  * not configured (logged once) so callers degrade to in-app only; production
  * boot validates the transport with {@link resolvePlatformEmailTransport}.
  */
-export function isPlatformEmailConfigured(env: Env = process.env): boolean {
+export function isPlatformEmailConfigured(env?: Env): boolean {
   try {
     return resolvePlatformEmailTransport(env) !== null;
   } catch (error) {
@@ -113,11 +69,17 @@ export function isPlatformEmailConfigured(env: Env = process.env): boolean {
   }
 }
 
-/** From-header for platform e-mail: RESEND_FROM_EMAIL, then EMAIL_FROM. */
-export function getPlatformFromEmail(
-  env: Env = process.env,
-): string | undefined {
-  return readEnv(env, "RESEND_FROM_EMAIL") ?? readEnv(env, "EMAIL_FROM");
+/**
+ * From-header for platform e-mail: RESEND_FROM_EMAIL, then EMAIL_FROM. A
+ * misconfigured e-mail setup counts as not configured (see
+ * {@link isPlatformEmailConfigured}), so this never throws.
+ */
+export function getPlatformFromEmail(env?: Env): string | undefined {
+  try {
+    return readEmailConfig(env).fromEmail;
+  } catch {
+    return undefined;
+  }
 }
 
 async function sendViaResend(
