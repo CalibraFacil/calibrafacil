@@ -5,7 +5,7 @@ import { and, eq, ne } from "drizzle-orm";
 import { asRecord } from "./helpers";
 
 // The pre-phase of a legacy `create_local_customer` event (see
-// PreparedDesktopEventSideEffects in routes/sync.ts): the client organization it
+// PreparedDesktopEventSideEffects in modules/sync/desktop-event-support.ts): the client organization it
 // creates is found again by a deterministic slug, and adopted only when it
 // verifiably belongs to this laboratory and event.
 
