@@ -850,10 +850,10 @@
       "breakpoints": true
     },
     {
-      "idx": 121,
+      "idx": 122,
       "version": "7",
-      "when": 1792300000000,
-      "tag": "0121_sync_change_log",
+      "when": 1792400000000,
+      "tag": "0122_sync_change_log",
       "breakpoints": true
     }
   ]

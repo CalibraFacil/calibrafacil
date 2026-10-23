@@ -1,7 +1,7 @@
 /**
  * The tables the desktop mirrors, and the entity type each one is known by on the
  * sync wire (docs/architecture/sync-change-seq.md). One list for the three places
- * that must agree: the triggers that fill `sync_change_log` (migration 0121 and
+ * that must agree: the triggers that fill `sync_change_log` (migration 0122 and
  * sql/schema-extras.sql), the pull that reads it, and the bootstrap that walks the
  * same entities. `sync-change-log-sql.test.ts` fails when a trigger and this list
  * differ; the API's pull spec fails when its entity sources and this list differ.

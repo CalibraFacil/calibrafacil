@@ -467,7 +467,7 @@ CREATE TRIGGER certificate_input_immutable_guard
   BEFORE UPDATE OR DELETE ON public.certificate_input
   FOR EACH ROW EXECUTE FUNCTION calibra_certificate_input_guard();
 
--- Desktop sync change log (migration 0121, docs/architecture/sync-change-seq.md): the
+-- Desktop sync change log (migration 0122, docs/architecture/sync-change-seq.md): the
 -- append function, the trigger body and the triggers on every table the desktop
 -- mirrors. Repeated from the migration verbatim between the BEGIN/END markers;
 -- packages/db/src/sync-change-log-sql.test.ts fails when they differ.

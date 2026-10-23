@@ -572,7 +572,7 @@ const xid8 = customType<{ data: string; driverData: string }>({
   },
 });
 
-// The change log the desktop pull reads (protocol 3, migration 0121,
+// The change log the desktop pull reads (protocol 3, migration 0122,
 // docs/architecture/sync-change-seq.md). Triggers on the tables the desktop mirrors
 // (sql/schema-extras.sql, `calibra_sync_change_log`) append one row per change, in
 // the writer's own transaction. `xid` is that transaction's id: the pull serves only

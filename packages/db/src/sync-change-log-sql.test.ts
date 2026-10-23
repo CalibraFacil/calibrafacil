@@ -10,7 +10,7 @@ function read(path: string): string {
   return readFileSync(new URL(path, import.meta.url), "utf8");
 }
 
-const MIGRATION = read("../drizzle/0121_sync_change_log.sql");
+const MIGRATION = read("../drizzle/0122_sync_change_log.sql");
 const EXTRAS = read("../sql/schema-extras.sql");
 
 function block(text: string, name: string): string {
@@ -20,7 +20,7 @@ function block(text: string, name: string): string {
   return text.slice(begin, end + `-- END ${name}`.length);
 }
 
-describe("sync change log SQL: migration 0121 and schema-extras.sql", () => {
+describe("sync change log SQL: migration 0122 and schema-extras.sql", () => {
   it("REQ-CS-1: schema-extras.sql repeats the functions and the triggers of the migration verbatim", () => {
     for (const name of [
       "sync change log functions",

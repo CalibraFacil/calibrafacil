@@ -659,7 +659,7 @@ the exemption open.
 Protocol 3 replaces the `updatedAt` pull cursor and the one-shot bootstrap of protocols 1 and 2
 (design and correctness argument: `docs/architecture/sync-change-seq.md`).
 
-- **Migration `0121_sync_change_log`** creates `sync_change_log` (one row per change of a table the
+- **Migration `0122_sync_change_log`** creates `sync_change_log` (one row per change of a table the
   desktop mirrors, written by triggers in the writer's own transaction) and
   `sync_change_log_purge`. It backfills nothing: a desktop on protocol 3 starts from a bootstrap, whose
   cursor is the current position. Apply it before deploying the API that serves protocol 3 (a

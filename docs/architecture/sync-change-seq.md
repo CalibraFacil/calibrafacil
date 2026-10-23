@@ -2,7 +2,7 @@
 
 Roadmap P2-4b. Replaces the `updatedAt` pull cursor and the unpaginated bootstrap of sync protocols 1
 and 2. Code: `apps/api/src/modules/sync/{change-log,bootstrap-pages,entity-sources}.ts`,
-`packages/db/drizzle/0121_sync_change_log.sql`, `packages/contracts/src/sync-change-seq.ts`; on the
+`packages/db/drizzle/0122_sync_change_log.sql`, `packages/contracts/src/sync-change-seq.ts`; on the
 desktop `packages/local-db/src/{sync,skipped-rows}.ts` and `apps/local-server/src/sync.ts`.
 
 ## What was wrong
@@ -20,7 +20,7 @@ desktop `packages/local-db/src/{sync,skipped-rows}.ts` and `apps/local-server/sr
 
 `sync_change_log(seq bigserial, organization_id, entity_type, entity_id, op, unit_id, xid xid8, changed_at)`.
 
-Triggers (`calibra_sync_change_log`, `sql/schema-extras.sql`, migration 0121) append a row **in the
+Triggers (`calibra_sync_change_log`, `sql/schema-extras.sql`, migration 0122) append a row **in the
 writer's own transaction**, so a change and its entry commit or roll back together. The entry says
 _which row to look at again_ and in which unit; it carries no data. The pull reads the row as it is at
 pull time, so a row changed five times between two pulls is one event with its current state.
@@ -156,7 +156,7 @@ path is deleted once `SYNC_MIN_DESKTOP_VERSION` excludes the builds that need it
 - Every write to a mirrored table writes one more row (deduplicated per entity and unit inside a
   transaction; a no-op `UPDATE` writes none). An `asset_type` change writes one row per laboratory (the
   catalog changes rarely).
-- Entries written before migration 0121 do not exist: a desktop on protocol 3 always starts from a
+- Entries written before migration 0122 do not exist: a desktop on protocol 3 always starts from a
   bootstrap.
 - The entry order is by transaction start, so two changes that commit in the opposite order of their ids are
   delivered in id order; since every event is the row's state at pull time, the desktop converges either way.
