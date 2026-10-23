@@ -12,7 +12,7 @@ import {
   lte,
   sql,
 } from "drizzle-orm";
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import { conflict, domainErrorResponse, notFound } from "../lib/domain-errors";
 import {
   asset,
@@ -38,6 +38,8 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { buildUnitScopeCondition } from "../lib/units";
+import { orgDb } from "../lib/org-db";
+import { orgTransactionWithExecutor } from "../lib/org-transaction";
 import { isAssignableTechnician } from "../lib/tenant-refs";
 import {
   notifyVisitCancelled,
@@ -68,6 +70,9 @@ const technicianUser = alias(user, "calibrationVisitTechnician");
 
 const VISIT_TERMINAL = new Set(["COMPLETED", "CANCELLED"]);
 
+/** Thrown inside the job-creation transaction to roll it back with a pt-BR 400. */
+class VisitJobRefusal extends Error {}
+
 /**
  * The technician named in the body must be a member of the caller's
  * organization who can work in the visit's unit (same rule as
@@ -77,8 +82,13 @@ const VISIT_TERMINAL = new Set(["COMPLETED", "CANCELLED"]);
 const TECHNICIAN_REFUSED = "Tecnico nao encontrado ou sem permissao";
 
 /** Load one visit scoped to the org + unit, or null. */
-async function getScopedVisit(id: number, member: AuthVariables["member"]) {
-  const [visit] = await db
+async function getScopedVisit(
+  id: number,
+  member: AuthVariables["member"],
+  // The caller's org-bound transaction (row-level security).
+  o: Pick<OrgDb, "select">,
+) {
+  const [visit] = await o
     .select()
     .from(calibrationVisit)
     .where(
@@ -91,8 +101,6 @@ async function getScopedVisit(id: number, member: AuthVariables["member"]) {
     .limit(1);
   return visit ?? null;
 }
-
-type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
  * #739: reset of the customer's acknowledgement when the visit date moves —
@@ -110,7 +118,7 @@ const RESET_CUSTOMER_CONFIRMATION = {
  * pending request into a stale state.
  */
 async function supersedePendingRescheduleRequests(
-  tx: DbTransaction,
+  tx: Pick<OrgDb, "update">,
   visitId: number,
   actorUserId: string,
 ) {
@@ -152,115 +160,122 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
       } = c.req.valid("query");
       const offset = (page - 1) * limit;
 
-      const conditions = [
-        eq(calibrationVisit.organizationId, member.organizationId),
-        buildUnitScopeCondition(calibrationVisit.unitId, member),
-      ];
-      if (status) conditions.push(eq(calibrationVisit.status, status));
-      if (mine) {
-        conditions.push(eq(calibrationVisit.technicianId, session.user.id));
-      } else if (technicianId) {
-        conditions.push(eq(calibrationVisit.technicianId, technicianId));
-      }
-      if (dateFrom) {
-        conditions.push(gte(calibrationVisit.scheduledAt, new Date(dateFrom)));
-      }
-      if (dateTo) {
-        conditions.push(lte(calibrationVisit.scheduledAt, new Date(dateTo)));
-      }
-      if (rescheduleRequested) {
-        conditions.push(
-          exists(
-            db
-              .select({ one: sql`1` })
-              .from(visitRescheduleRequest)
-              .where(
-                and(
-                  eq(visitRescheduleRequest.visitId, calibrationVisit.id),
-                  eq(visitRescheduleRequest.status, "PENDING"),
+      return await orgDb(member.organizationId).transaction(async (o) => {
+        const conditions = [
+          eq(calibrationVisit.organizationId, member.organizationId),
+          buildUnitScopeCondition(calibrationVisit.unitId, member),
+        ];
+        if (status) conditions.push(eq(calibrationVisit.status, status));
+        if (mine) {
+          conditions.push(eq(calibrationVisit.technicianId, session.user.id));
+        } else if (technicianId) {
+          conditions.push(eq(calibrationVisit.technicianId, technicianId));
+        }
+        if (dateFrom) {
+          conditions.push(
+            gte(calibrationVisit.scheduledAt, new Date(dateFrom)),
+          );
+        }
+        if (dateTo) {
+          conditions.push(lte(calibrationVisit.scheduledAt, new Date(dateTo)));
+        }
+        if (rescheduleRequested) {
+          conditions.push(
+            exists(
+              o
+                .select({ one: sql`1` })
+                .from(visitRescheduleRequest)
+                .where(
+                  and(
+                    eq(visitRescheduleRequest.visitId, calibrationVisit.id),
+                    eq(visitRescheduleRequest.status, "PENDING"),
+                  ),
                 ),
-              ),
-          ),
+            ),
+          );
+        }
+        const where = and(...conditions);
+
+        const [countResult] = await o
+          .select({ total: count() })
+          .from(calibrationVisit)
+          .where(where);
+
+        const visits = await o
+          .select({
+            id: calibrationVisit.id,
+            status: calibrationVisit.status,
+            scheduledAt: calibrationVisit.scheduledAt,
+            address: calibrationVisit.address,
+            customerId: calibrationVisit.customerId,
+            customerName: customer.name,
+            technicianId: calibrationVisit.technicianId,
+            technicianName: technicianUser.name,
+            sourceRequestId: calibrationVisit.sourceRequestId,
+            createdAt: calibrationVisit.createdAt,
+            customerConfirmedAt: calibrationVisit.customerConfirmedAt,
+          })
+          .from(calibrationVisit)
+          .innerJoin(customer, eq(calibrationVisit.customerId, customer.id))
+          .leftJoin(
+            technicianUser,
+            eq(calibrationVisit.technicianId, technicianUser.id),
+          )
+          .where(where)
+          .orderBy(
+            desc(calibrationVisit.scheduledAt),
+            desc(calibrationVisit.id),
+          )
+          .limit(limit)
+          .offset(offset);
+
+        // Asset count per visit (one job per asset).
+        const visitIds = visits.map((visit) => visit.id);
+        const jobCounts =
+          visitIds.length > 0
+            ? await o
+                .select({
+                  visitId: calibrationJob.visitId,
+                  total: count(),
+                })
+                .from(calibrationJob)
+                .where(inArray(calibrationJob.visitId, visitIds))
+                .groupBy(calibrationJob.visitId)
+            : [];
+        const assetCountByVisit = new Map(
+          jobCounts.map((row) => [row.visitId, row.total] as const),
         );
-      }
-      const where = and(...conditions);
 
-      const [countResult] = await db
-        .select({ total: count() })
-        .from(calibrationVisit)
-        .where(where);
+        // #739: badge visits with a pending customer reschedule request.
+        const pendingReschedules =
+          visitIds.length > 0
+            ? await o
+                .select({ visitId: visitRescheduleRequest.visitId })
+                .from(visitRescheduleRequest)
+                .where(
+                  and(
+                    inArray(visitRescheduleRequest.visitId, visitIds),
+                    eq(visitRescheduleRequest.status, "PENDING"),
+                  ),
+                )
+            : [];
+        const pendingRescheduleVisitIds = new Set(
+          pendingReschedules.map((row) => row.visitId),
+        );
 
-      const visits = await db
-        .select({
-          id: calibrationVisit.id,
-          status: calibrationVisit.status,
-          scheduledAt: calibrationVisit.scheduledAt,
-          address: calibrationVisit.address,
-          customerId: calibrationVisit.customerId,
-          customerName: customer.name,
-          technicianId: calibrationVisit.technicianId,
-          technicianName: technicianUser.name,
-          sourceRequestId: calibrationVisit.sourceRequestId,
-          createdAt: calibrationVisit.createdAt,
-          customerConfirmedAt: calibrationVisit.customerConfirmedAt,
-        })
-        .from(calibrationVisit)
-        .innerJoin(customer, eq(calibrationVisit.customerId, customer.id))
-        .leftJoin(
-          technicianUser,
-          eq(calibrationVisit.technicianId, technicianUser.id),
-        )
-        .where(where)
-        .orderBy(desc(calibrationVisit.scheduledAt), desc(calibrationVisit.id))
-        .limit(limit)
-        .offset(offset);
-
-      // Asset count per visit (one job per asset).
-      const visitIds = visits.map((visit) => visit.id);
-      const jobCounts =
-        visitIds.length > 0
-          ? await db
-              .select({
-                visitId: calibrationJob.visitId,
-                total: count(),
-              })
-              .from(calibrationJob)
-              .where(inArray(calibrationJob.visitId, visitIds))
-              .groupBy(calibrationJob.visitId)
-          : [];
-      const assetCountByVisit = new Map(
-        jobCounts.map((row) => [row.visitId, row.total] as const),
-      );
-
-      // #739: badge visits with a pending customer reschedule request.
-      const pendingReschedules =
-        visitIds.length > 0
-          ? await db
-              .select({ visitId: visitRescheduleRequest.visitId })
-              .from(visitRescheduleRequest)
-              .where(
-                and(
-                  inArray(visitRescheduleRequest.visitId, visitIds),
-                  eq(visitRescheduleRequest.status, "PENDING"),
-                ),
-              )
-          : [];
-      const pendingRescheduleVisitIds = new Set(
-        pendingReschedules.map((row) => row.visitId),
-      );
-
-      return c.json({
-        data: visits.map((visit) => ({
-          ...visit,
-          assetCount: assetCountByVisit.get(visit.id) ?? 0,
-          rescheduleRequested: pendingRescheduleVisitIds.has(visit.id),
-        })),
-        pagination: {
-          page,
-          limit,
-          total: countResult?.total ?? 0,
-          totalPages: Math.ceil((countResult?.total ?? 0) / limit),
-        },
+        return c.json({
+          data: visits.map((visit) => ({
+            ...visit,
+            assetCount: assetCountByVisit.get(visit.id) ?? 0,
+            rescheduleRequested: pendingRescheduleVisitIds.has(visit.id),
+          })),
+          pagination: {
+            page,
+            limit,
+            total: countResult?.total ?? 0,
+            totalPages: Math.ceil((countResult?.total ?? 0) / limit),
+          },
+        });
       });
     },
   )
@@ -272,78 +287,80 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
     const id = parseInt(c.req.param("id"), 10);
     if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
 
-    const [visit] = await db
-      .select({
-        id: calibrationVisit.id,
-        status: calibrationVisit.status,
-        scheduledAt: calibrationVisit.scheduledAt,
-        scheduledEndAt: calibrationVisit.scheduledEndAt,
-        address: calibrationVisit.address,
-        notes: calibrationVisit.notes,
-        customerId: calibrationVisit.customerId,
-        customerName: customer.name,
-        technicianId: calibrationVisit.technicianId,
-        technicianName: technicianUser.name,
-        sourceRequestId: calibrationVisit.sourceRequestId,
-        createdAt: calibrationVisit.createdAt,
-        confirmedAt: calibrationVisit.confirmedAt,
-        cancelledAt: calibrationVisit.cancelledAt,
-        cancelReason: calibrationVisit.cancelReason,
-        customerConfirmedAt: calibrationVisit.customerConfirmedAt,
-      })
-      .from(calibrationVisit)
-      .innerJoin(customer, eq(calibrationVisit.customerId, customer.id))
-      .leftJoin(
-        technicianUser,
-        eq(calibrationVisit.technicianId, technicianUser.id),
-      )
-      .where(
-        and(
-          eq(calibrationVisit.id, id),
-          eq(calibrationVisit.organizationId, member.organizationId),
-          buildUnitScopeCondition(calibrationVisit.unitId, member),
-        ),
-      )
-      .limit(1);
+    return await orgDb(member.organizationId).transaction(async (o) => {
+      const [visit] = await o
+        .select({
+          id: calibrationVisit.id,
+          status: calibrationVisit.status,
+          scheduledAt: calibrationVisit.scheduledAt,
+          scheduledEndAt: calibrationVisit.scheduledEndAt,
+          address: calibrationVisit.address,
+          notes: calibrationVisit.notes,
+          customerId: calibrationVisit.customerId,
+          customerName: customer.name,
+          technicianId: calibrationVisit.technicianId,
+          technicianName: technicianUser.name,
+          sourceRequestId: calibrationVisit.sourceRequestId,
+          createdAt: calibrationVisit.createdAt,
+          confirmedAt: calibrationVisit.confirmedAt,
+          cancelledAt: calibrationVisit.cancelledAt,
+          cancelReason: calibrationVisit.cancelReason,
+          customerConfirmedAt: calibrationVisit.customerConfirmedAt,
+        })
+        .from(calibrationVisit)
+        .innerJoin(customer, eq(calibrationVisit.customerId, customer.id))
+        .leftJoin(
+          technicianUser,
+          eq(calibrationVisit.technicianId, technicianUser.id),
+        )
+        .where(
+          and(
+            eq(calibrationVisit.id, id),
+            eq(calibrationVisit.organizationId, member.organizationId),
+            buildUnitScopeCondition(calibrationVisit.unitId, member),
+          ),
+        )
+        .limit(1);
 
-    if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
+      if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
 
-    const jobs = await db
-      .select({
-        jobId: calibrationJob.id,
-        jobCode: calibrationJob.jobId,
-        status: calibrationJob.status,
-        assetName: asset.name,
-        assetTag: asset.tag,
-      })
-      .from(calibrationJob)
-      .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
-      .where(eq(calibrationJob.visitId, id))
-      .orderBy(calibrationJob.id);
+      const jobs = await o
+        .select({
+          jobId: calibrationJob.id,
+          jobCode: calibrationJob.jobId,
+          status: calibrationJob.status,
+          assetName: asset.name,
+          assetTag: asset.tag,
+        })
+        .from(calibrationJob)
+        .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+        .where(eq(calibrationJob.visitId, id))
+        .orderBy(calibrationJob.id);
 
-    // #739: pending customer reschedule request (feeds the detail banner).
-    const [pendingReschedule] = await db
-      .select({
-        id: visitRescheduleRequest.id,
-        reason: visitRescheduleRequest.reason,
-        preferredWindows: visitRescheduleRequest.preferredWindows,
-        createdAt: visitRescheduleRequest.createdAt,
-        requestedByName: user.name,
-      })
-      .from(visitRescheduleRequest)
-      .leftJoin(user, eq(visitRescheduleRequest.requestedBy, user.id))
-      .where(
-        and(
-          eq(visitRescheduleRequest.visitId, id),
-          eq(visitRescheduleRequest.status, "PENDING"),
-        ),
-      )
-      .limit(1);
+      // #739: pending customer reschedule request (feeds the detail banner).
+      const [pendingReschedule] = await o
+        .select({
+          id: visitRescheduleRequest.id,
+          reason: visitRescheduleRequest.reason,
+          preferredWindows: visitRescheduleRequest.preferredWindows,
+          createdAt: visitRescheduleRequest.createdAt,
+          requestedByName: user.name,
+        })
+        .from(visitRescheduleRequest)
+        .leftJoin(user, eq(visitRescheduleRequest.requestedBy, user.id))
+        .where(
+          and(
+            eq(visitRescheduleRequest.visitId, id),
+            eq(visitRescheduleRequest.status, "PENDING"),
+          ),
+        )
+        .limit(1);
 
-    return c.json({
-      ...visit,
-      jobs,
-      pendingRescheduleRequest: pendingReschedule ?? null,
+      return c.json({
+        ...visit,
+        jobs,
+        pendingRescheduleRequest: pendingReschedule ?? null,
+      });
     });
   })
   // ===========================================================================
@@ -360,27 +377,46 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
       if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
       const { technicianId } = c.req.valid("json");
 
-      const visit = await getScopedVisit(id, member);
-      if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
-      if (VISIT_TERMINAL.has(visit.status)) {
-        return c.json({ error: "Visita ja finalizada ou cancelada" }, 409);
-      }
-      if (
-        technicianId !== visit.technicianId &&
-        !(await isAssignableTechnician({
-          organizationId: member.organizationId,
-          userId: technicianId,
-          unitId: visit.unitId,
-        }))
-      ) {
-        return c.json({ error: TECHNICIAN_REFUSED }, 400);
-      }
+      const outcome = await orgDb(member.organizationId).transaction(
+        async (o) => {
+          const visit = await getScopedVisit(id, member, o);
+          if (!visit) {
+            return {
+              response: c.json({ error: "Visita nao encontrada" }, 404),
+            };
+          }
+          if (VISIT_TERMINAL.has(visit.status)) {
+            return {
+              response: c.json(
+                { error: "Visita ja finalizada ou cancelada" },
+                409,
+              ),
+            };
+          }
+          if (
+            technicianId !== visit.technicianId &&
+            !(await isAssignableTechnician(
+              {
+                organizationId: member.organizationId,
+                userId: technicianId,
+                unitId: visit.unitId,
+              },
+              o,
+            ))
+          ) {
+            return { response: c.json({ error: TECHNICIAN_REFUSED }, 400) };
+          }
 
-      const [updated] = await db
-        .update(calibrationVisit)
-        .set({ technicianId })
-        .where(eq(calibrationVisit.id, id))
-        .returning();
+          const [updated] = await o
+            .update(calibrationVisit)
+            .set({ technicianId })
+            .where(eq(calibrationVisit.id, id))
+            .returning();
+          return { visit, updated };
+        },
+      );
+      if ("response" in outcome) return outcome.response;
+      const { visit, updated } = outcome;
 
       if (technicianId !== visit.technicianId) {
         try {
@@ -407,55 +443,73 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
       if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
       const input = c.req.valid("json");
 
-      const visit = await getScopedVisit(id, member);
-      if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
-      if (VISIT_TERMINAL.has(visit.status)) {
-        return c.json({ error: "Visita ja finalizada ou cancelada" }, 409);
-      }
+      const outcome = await orgDb(member.organizationId).transaction(
+        async (o) => {
+          const visit = await getScopedVisit(id, member, o);
+          if (!visit) {
+            return {
+              response: c.json({ error: "Visita nao encontrada" }, 404),
+            };
+          }
+          if (VISIT_TERMINAL.has(visit.status)) {
+            return {
+              response: c.json(
+                { error: "Visita ja finalizada ou cancelada" },
+                409,
+              ),
+            };
+          }
 
-      const scheduledAt = input.scheduledAt
-        ? new Date(input.scheduledAt)
-        : visit.scheduledAt;
-      const technicianId = input.technicianId ?? visit.technicianId;
-      if (!scheduledAt || !technicianId) {
-        return c.json(
-          { error: "Defina a data e o técnico para confirmar a visita" },
-          400,
-        );
-      }
-      if (
-        technicianId !== visit.technicianId &&
-        !(await isAssignableTechnician({
-          organizationId: member.organizationId,
-          userId: technicianId,
-          unitId: visit.unitId,
-        }))
-      ) {
-        return c.json({ error: TECHNICIAN_REFUSED }, 400);
-      }
+          const scheduledAt = input.scheduledAt
+            ? new Date(input.scheduledAt)
+            : visit.scheduledAt;
+          const technicianId = input.technicianId ?? visit.technicianId;
+          if (!scheduledAt || !technicianId) {
+            return {
+              response: c.json(
+                { error: "Defina a data e o técnico para confirmar a visita" },
+                400,
+              ),
+            };
+          }
+          if (
+            technicianId !== visit.technicianId &&
+            !(await isAssignableTechnician(
+              {
+                organizationId: member.organizationId,
+                userId: technicianId,
+                unitId: visit.unitId,
+              },
+              o,
+            ))
+          ) {
+            return { response: c.json({ error: TECHNICIAN_REFUSED }, 400) };
+          }
 
-      const confirmDateChanged =
-        scheduledAt.getTime() !== visit.scheduledAt?.getTime();
+          const confirmDateChanged =
+            scheduledAt.getTime() !== visit.scheduledAt?.getTime();
 
-      const updated = await db.transaction(async (tx) => {
-        const [row] = await tx
-          .update(calibrationVisit)
-          .set({
-            status: "CONFIRMED",
-            scheduledAt,
-            technicianId,
-            confirmedBy: session.user.id,
-            confirmedAt: new Date(),
-            ...(confirmDateChanged ? RESET_CUSTOMER_CONFIRMATION : {}),
-          })
-          .where(eq(calibrationVisit.id, id))
-          .returning();
+          const [updated] = await o
+            .update(calibrationVisit)
+            .set({
+              status: "CONFIRMED",
+              scheduledAt,
+              technicianId,
+              confirmedBy: session.user.id,
+              confirmedAt: new Date(),
+              ...(confirmDateChanged ? RESET_CUSTOMER_CONFIRMATION : {}),
+            })
+            .where(eq(calibrationVisit.id, id))
+            .returning();
 
-        if (confirmDateChanged) {
-          await supersedePendingRescheduleRequests(tx, id, session.user.id);
-        }
-        return row;
-      });
+          if (confirmDateChanged) {
+            await supersedePendingRescheduleRequests(o, id, session.user.id);
+          }
+          return { visit, technicianId, updated };
+        },
+      );
+      if ("response" in outcome) return outcome.response;
+      const { visit, technicianId, updated } = outcome;
 
       try {
         await notifyVisitConfirmed(id, session.user.id);
@@ -483,38 +537,51 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
       if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
       const input = c.req.valid("json");
 
-      const visit = await getScopedVisit(id, member);
-      if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
-      if (VISIT_TERMINAL.has(visit.status)) {
-        return c.json({ error: "Visita ja finalizada ou cancelada" }, 409);
-      }
+      const outcome = await orgDb(member.organizationId).transaction(
+        async (o) => {
+          const visit = await getScopedVisit(id, member, o);
+          if (!visit) {
+            return {
+              response: c.json({ error: "Visita nao encontrada" }, 404),
+            };
+          }
+          if (VISIT_TERMINAL.has(visit.status)) {
+            return {
+              response: c.json(
+                { error: "Visita ja finalizada ou cancelada" },
+                409,
+              ),
+            };
+          }
 
-      const nextScheduledAt = input.scheduledAt
-        ? new Date(input.scheduledAt)
-        : visit.scheduledAt;
-      const dateChanged =
-        nextScheduledAt?.getTime() !== visit.scheduledAt?.getTime();
+          const nextScheduledAt = input.scheduledAt
+            ? new Date(input.scheduledAt)
+            : visit.scheduledAt;
+          const dateChanged =
+            nextScheduledAt?.getTime() !== visit.scheduledAt?.getTime();
 
-      const updated = await db.transaction(async (tx) => {
-        const [row] = await tx
-          .update(calibrationVisit)
-          .set({
-            scheduledAt: nextScheduledAt,
-            scheduledEndAt: input.scheduledEndAt
-              ? new Date(input.scheduledEndAt)
-              : visit.scheduledEndAt,
-            address: input.address ?? visit.address,
-            notes: input.notes ?? visit.notes,
-            ...(dateChanged ? RESET_CUSTOMER_CONFIRMATION : {}),
-          })
-          .where(eq(calibrationVisit.id, id))
-          .returning();
+          const [updated] = await o
+            .update(calibrationVisit)
+            .set({
+              scheduledAt: nextScheduledAt,
+              scheduledEndAt: input.scheduledEndAt
+                ? new Date(input.scheduledEndAt)
+                : visit.scheduledEndAt,
+              address: input.address ?? visit.address,
+              notes: input.notes ?? visit.notes,
+              ...(dateChanged ? RESET_CUSTOMER_CONFIRMATION : {}),
+            })
+            .where(eq(calibrationVisit.id, id))
+            .returning();
 
-        if (dateChanged) {
-          await supersedePendingRescheduleRequests(tx, id, session.user.id);
-        }
-        return row;
-      });
+          if (dateChanged) {
+            await supersedePendingRescheduleRequests(o, id, session.user.id);
+          }
+          return { dateChanged, updated };
+        },
+      );
+      if ("response" in outcome) return outcome.response;
+      const { dateChanged, updated } = outcome;
 
       if (dateChanged) {
         try {
@@ -541,22 +608,38 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
       if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
       const { reason } = c.req.valid("json");
 
-      const visit = await getScopedVisit(id, member);
-      if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
-      if (VISIT_TERMINAL.has(visit.status)) {
-        return c.json({ error: "Visita ja finalizada ou cancelada" }, 409);
-      }
+      const outcome = await orgDb(member.organizationId).transaction(
+        async (o) => {
+          const visit = await getScopedVisit(id, member, o);
+          if (!visit) {
+            return {
+              response: c.json({ error: "Visita nao encontrada" }, 404),
+            };
+          }
+          if (VISIT_TERMINAL.has(visit.status)) {
+            return {
+              response: c.json(
+                { error: "Visita ja finalizada ou cancelada" },
+                409,
+              ),
+            };
+          }
 
-      const [updated] = await db
-        .update(calibrationVisit)
-        .set({
-          status: "CANCELLED",
-          cancelledBy: session.user.id,
-          cancelledAt: new Date(),
-          cancelReason: reason ?? null,
-        })
-        .where(eq(calibrationVisit.id, id))
-        .returning();
+          const [updated] = await o
+            .update(calibrationVisit)
+            .set({
+              status: "CANCELLED",
+              cancelledBy: session.user.id,
+              cancelledAt: new Date(),
+              cancelReason: reason ?? null,
+            })
+            .where(eq(calibrationVisit.id, id))
+            .returning();
+          return { updated };
+        },
+      );
+      if ("response" in outcome) return outcome.response;
+      const { updated } = outcome;
 
       try {
         await notifyVisitCancelled(id, session.user.id, reason ?? undefined);
@@ -578,22 +661,27 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
       const id = parseInt(c.req.param("id"), 10);
       if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
 
-      const visit = await getScopedVisit(id, member);
-      if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
-      if (visit.status === "PROPOSED") {
-        return c.json({ error: "Confirme a visita antes de concluí-la" }, 409);
-      }
-      if (VISIT_TERMINAL.has(visit.status)) {
-        return c.json({ error: "Visita ja finalizada ou cancelada" }, 409);
-      }
+      return await orgDb(member.organizationId).transaction(async (o) => {
+        const visit = await getScopedVisit(id, member, o);
+        if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
+        if (visit.status === "PROPOSED") {
+          return c.json(
+            { error: "Confirme a visita antes de concluí-la" },
+            409,
+          );
+        }
+        if (VISIT_TERMINAL.has(visit.status)) {
+          return c.json({ error: "Visita ja finalizada ou cancelada" }, 409);
+        }
 
-      const [updated] = await db
-        .update(calibrationVisit)
-        .set({ status: "COMPLETED" })
-        .where(eq(calibrationVisit.id, id))
-        .returning();
+        const [updated] = await o
+          .update(calibrationVisit)
+          .set({ status: "COMPLETED" })
+          .where(eq(calibrationVisit.id, id))
+          .returning();
 
-      return c.json(updated);
+        return c.json(updated);
+      });
     },
   );
 
@@ -618,61 +706,81 @@ export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
       if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
       const { assetId, serviceId } = c.req.valid("json");
 
-      // REQ-VISITJOB-005: scope via getScopedVisit (org+unit scoped)
-      const visit = await getScopedVisit(id, member);
-      if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
-
-      // REQ-VISITJOB-003: visit must be PROPOSED
-      const statusGuard = canAddJobToVisit(visit);
-      if (!statusGuard.ok) {
-        return c.json({ error: statusGuard.body }, statusGuard.status);
-      }
-
-      // REQ-VISITJOB-004: asset must belong to visit's customer (scope via customer.labOrganizationId)
-      const [foundAsset] = await db
-        .select({ id: asset.id, customerId: asset.customerId })
-        .from(asset)
-        .innerJoin(customer, eq(asset.customerId, customer.id))
-        .where(
-          and(
-            eq(asset.id, assetId),
-            eq(customer.labOrganizationId, member.organizationId),
-          ),
-        )
-        .limit(1);
-
-      if (!foundAsset) {
-        return c.json({ error: "Ativo nao encontrado" }, 400);
-      }
-
-      const customerGuard = assertAssetBelongsToVisitCustomer(
-        foundAsset,
-        visit,
-      );
-      if (!customerGuard.ok) {
-        return c.json({ error: customerGuard.body }, customerGuard.status);
-      }
-
-      // REQ-VISITJOB-001,002: create job via createCalibrationJob with onsiteLocation
       try {
-        const newJob = await createCalibrationJob({
-          organizationId: member.organizationId,
-          unitId: visit.unitId,
-          createdBy: session.user.id,
-          assetId,
-          serviceId,
-          notifyOnAssignment: false,
-          onsiteLocation: {
-            addressText: formatOnsiteAddressText(visit.address),
+        // One organization-named transaction: the visit and asset guards, and
+        // the job it creates, commit together. Job creation still takes a
+        // Drizzle executor with `execute` (the numbering locks), hence `rawTx`.
+        return await orgTransactionWithExecutor(
+          member.organizationId,
+          async (o, rawTx) => {
+            // REQ-VISITJOB-005: scope via getScopedVisit (org+unit scoped)
+            const visit = await getScopedVisit(id, member, o);
+            if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
+
+            // REQ-VISITJOB-003: visit must be PROPOSED
+            const statusGuard = canAddJobToVisit(visit);
+            if (!statusGuard.ok) {
+              return c.json({ error: statusGuard.body }, statusGuard.status);
+            }
+
+            // REQ-VISITJOB-004: asset must belong to visit's customer (scope via customer.labOrganizationId)
+            const [foundAsset] = await o
+              .select({ id: asset.id, customerId: asset.customerId })
+              .from(asset)
+              .innerJoin(customer, eq(asset.customerId, customer.id))
+              .where(
+                and(
+                  eq(asset.id, assetId),
+                  eq(customer.labOrganizationId, member.organizationId),
+                ),
+              )
+              .limit(1);
+
+            if (!foundAsset) {
+              return c.json({ error: "Ativo nao encontrado" }, 400);
+            }
+
+            const customerGuard = assertAssetBelongsToVisitCustomer(
+              foundAsset,
+              visit,
+            );
+            if (!customerGuard.ok) {
+              return c.json(
+                { error: customerGuard.body },
+                customerGuard.status,
+              );
+            }
+
+            // REQ-VISITJOB-001,002: create job via createCalibrationJob with onsiteLocation
+            try {
+              const newJob = await createCalibrationJob({
+                organizationId: member.organizationId,
+                unitId: visit.unitId,
+                createdBy: session.user.id,
+                assetId,
+                serviceId,
+                notifyOnAssignment: false,
+                onsiteLocation: {
+                  addressText: formatOnsiteAddressText(visit.address),
+                },
+                visitId: id,
+                executor: rawTx,
+              });
+              return c.json(newJob, 201);
+            } catch (error) {
+              if (
+                error instanceof Error &&
+                jobCreationClientErrors.has(error.message)
+              ) {
+                // Roll the transaction back: nothing of the refused job stays.
+                throw new VisitJobRefusal(error.message);
+              }
+              throw error;
+            }
           },
-          visitId: id,
-        });
-        return c.json(newJob, 201);
+        );
       } catch (error) {
-        if (
-          error instanceof Error &&
-          jobCreationClientErrors.has(error.message)
-        ) {
+        if (error instanceof VisitJobRefusal) {
           return c.json({ error: error.message }, 400);
         }
         throw error;
@@ -694,39 +802,60 @@ export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "ID invalido" }, 400);
 
       // REQ-VISITJOB-005: scope via getScopedVisit
-      const visit = await getScopedVisit(id, member);
-      if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
+      const guarded = await orgDb(member.organizationId).transaction(
+        async (o) => {
+          const visit = await getScopedVisit(id, member, o);
+          if (!visit) {
+            return {
+              response: c.json({ error: "Visita nao encontrada" }, 404),
+            };
+          }
 
-      // Load the job scoped to org
-      const [foundJob] = await db
-        .select({
-          id: calibrationJob.id,
-          status: calibrationJob.status,
-          visitId: calibrationJob.visitId,
-        })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, jobId),
-            eq(calibrationJob.organizationId, member.organizationId),
-          ),
-        )
-        .limit(1);
+          // Load the job scoped to org
+          const [foundJob] = await o
+            .select({
+              id: calibrationJob.id,
+              status: calibrationJob.status,
+              visitId: calibrationJob.visitId,
+            })
+            .from(calibrationJob)
+            .where(
+              and(
+                eq(calibrationJob.id, jobId),
+                eq(calibrationJob.organizationId, member.organizationId),
+              ),
+            )
+            .limit(1);
 
-      // REQ-VISITJOB-006,007,008,009: run all guards
-      const removalGuard = resolveVisitJobRemoval({
-        visitStatus: visit.status,
-        job: foundJob ?? null,
-        visitId: id,
-      });
+          // REQ-VISITJOB-006,007,008,009: run all guards
+          const removalGuard = resolveVisitJobRemoval({
+            visitStatus: visit.status,
+            job: foundJob ?? null,
+            visitId: id,
+          });
 
-      if (!removalGuard.ok) {
-        return c.json({ error: removalGuard.body }, removalGuard.status);
-      }
-      // The guard already rejects a missing job with 404; narrow for TS.
-      if (!foundJob) {
-        return c.json({ error: "Job nao encontrado nesta visita" }, 404);
-      }
+          if (!removalGuard.ok) {
+            return {
+              response: c.json(
+                { error: removalGuard.body },
+                removalGuard.status,
+              ),
+            };
+          }
+          // The guard already rejects a missing job with 404; narrow for TS.
+          if (!foundJob) {
+            return {
+              response: c.json(
+                { error: "Job nao encontrado nesta visita" },
+                404,
+              ),
+            };
+          }
+          return { foundJob };
+        },
+      );
+      if ("response" in guarded) return guarded.response;
+      const { foundJob } = guarded;
 
       // REQ-VISITJOB-006: soft-cancel (CANCELED with single L per JobStatus
       // enum). The guards above allow DRAFT only; `cancelJob` keeps the
@@ -734,20 +863,32 @@ export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
       // validated (a job that moved meanwhile is a 409) and commits the audit
       // row (append-only ISO 17025 trail, parity with the main job-cancel
       // route) with the write.
-      const result = await cancelJob({
-        actor: {
-          kind: "user",
-          userId: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+      const result = await cancelJob(
+        {
+          actor: {
+            kind: "user",
+            userId: session.user.id,
+            ipAddress: c.req.header("x-forwarded-for") || null,
+          },
+          jobId,
+          organizationId: member.organizationId,
+          // The visit was scoped above (getScopedVisit) and the removal guard
+          // checked that the job belongs to it.
+          unitScope: null,
+          reason: `Instrumento removido da visita #${id}`,
+          expectedStatus: foundJob.status,
         },
-        jobId,
-        organizationId: member.organizationId,
-        // The visit was scoped above (getScopedVisit) and the removal guard
-        // checked that the job belongs to it.
-        unitScope: null,
-        reason: `Instrumento removido da visita #${id}`,
-        expectedStatus: foundJob.status,
-      });
+        {
+          // The read of the job and the transaction of the write each name the
+          // laboratory (row-level security); they stay two transactions so the
+          // compare-and-set keeps guarding the status between them.
+          read: (run) => orgDb(member.organizationId).transaction(run),
+          write: (run) =>
+            orgTransactionWithExecutor(member.organizationId, (_o, tx) =>
+              run(tx),
+            ),
+        },
+      );
       switch (result.status) {
         case "not_found":
           return domainErrorResponse(
@@ -763,7 +904,12 @@ export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
             ),
           );
         case "concurrent_update":
-          return domainErrorResponse(c, await jobStatusConflict(jobId));
+          return domainErrorResponse(
+            c,
+            await orgDb(member.organizationId).transaction((o) =>
+              jobStatusConflict(jobId, o),
+            ),
+          );
         case "ok":
           return c.json(result.job);
       }
@@ -774,8 +920,9 @@ export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
 async function getVisitRescheduleRequestById(
   requestId: number,
   visitId: number,
+  o: Pick<OrgDb, "select">,
 ) {
-  const [request] = await db
+  const [request] = await o
     .select()
     .from(visitRescheduleRequest)
     .where(
@@ -815,57 +962,76 @@ export const visitRescheduleRequestsRouter = new Hono<{
       }
       const input = c.req.valid("json");
 
-      const visit = await getScopedVisit(id, member);
-      if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
-      if (VISIT_TERMINAL.has(visit.status)) {
-        return c.json({ error: "Visita ja finalizada ou cancelada" }, 409);
-      }
+      const outcome = await orgDb(member.organizationId).transaction(
+        async (o) => {
+          const visit = await getScopedVisit(id, member, o);
+          if (!visit) {
+            return {
+              response: c.json({ error: "Visita nao encontrada" }, 404),
+            };
+          }
+          if (VISIT_TERMINAL.has(visit.status)) {
+            return {
+              response: c.json(
+                { error: "Visita ja finalizada ou cancelada" },
+                409,
+              ),
+            };
+          }
 
-      const request = await getVisitRescheduleRequestById(requestId, id);
-      if (!request) return c.json({ error: "Solicitacao nao encontrada" }, 404);
-      if (request.status !== "PENDING") {
-        return c.json({ error: "Solicitacao ja resolvida" }, 409);
-      }
+          const request = await getVisitRescheduleRequestById(requestId, id, o);
+          if (!request) {
+            return {
+              response: c.json({ error: "Solicitacao nao encontrada" }, 404),
+            };
+          }
+          if (request.status !== "PENDING") {
+            return {
+              response: c.json({ error: "Solicitacao ja resolvida" }, 409),
+            };
+          }
 
-      const nextScheduledAt = new Date(input.scheduledAt);
-      const updated = await db.transaction(async (tx) => {
-        const [row] = await tx
-          .update(calibrationVisit)
-          .set({
-            scheduledAt: nextScheduledAt,
-            scheduledEndAt: input.scheduledEndAt
-              ? new Date(input.scheduledEndAt)
-              : null,
-            ...RESET_CUSTOMER_CONFIRMATION,
-          })
-          .where(eq(calibrationVisit.id, id))
-          .returning();
+          const nextScheduledAt = new Date(input.scheduledAt);
+          const [row] = await o
+            .update(calibrationVisit)
+            .set({
+              scheduledAt: nextScheduledAt,
+              scheduledEndAt: input.scheduledEndAt
+                ? new Date(input.scheduledEndAt)
+                : null,
+              ...RESET_CUSTOMER_CONFIRMATION,
+            })
+            .where(eq(calibrationVisit.id, id))
+            .returning();
 
-        await tx
-          .update(visitRescheduleRequest)
-          .set({
-            status: "ACCEPTED",
-            resolvedBy: session.user.id,
-            resolvedAt: new Date(),
-            resolutionNote: input.resolutionNote ?? null,
-          })
-          .where(eq(visitRescheduleRequest.id, requestId));
+          await o
+            .update(visitRescheduleRequest)
+            .set({
+              status: "ACCEPTED",
+              resolvedBy: session.user.id,
+              resolvedAt: new Date(),
+              resolutionNote: input.resolutionNote ?? null,
+            })
+            .where(eq(visitRescheduleRequest.id, requestId));
 
-        await tx.insert(visitAuditLog).values({
-          organizationId: member.organizationId,
-          visitId: id,
-          action: "reschedule_request_accept",
-          changes: {
-            rescheduleRequestId: requestId,
-            scheduledAt: { old: visit.scheduledAt, new: nextScheduledAt },
-          },
-          performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
-          reason: input.resolutionNote ?? null,
-        });
+          await o.insert(visitAuditLog).values({
+            organizationId: member.organizationId,
+            visitId: id,
+            action: "reschedule_request_accept",
+            changes: {
+              rescheduleRequestId: requestId,
+              scheduledAt: { old: visit.scheduledAt, new: nextScheduledAt },
+            },
+            performedBy: session.user.id,
+            ipAddress: c.req.header("x-forwarded-for") || null,
+            reason: input.resolutionNote ?? null,
+          });
 
-        return row;
-      });
+          return { updated: row };
+        },
+      );
+      if ("response" in outcome) return outcome.response;
+      const { updated } = outcome;
 
       try {
         await notifyVisitRescheduled(id, session.user.id);
@@ -897,39 +1063,53 @@ export const visitRescheduleRequestsRouter = new Hono<{
       }
       const input = c.req.valid("json");
 
-      const visit = await getScopedVisit(id, member);
-      if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
+      const outcome = await orgDb(member.organizationId).transaction(
+        async (o) => {
+          const visit = await getScopedVisit(id, member, o);
+          if (!visit) {
+            return {
+              response: c.json({ error: "Visita nao encontrada" }, 404),
+            };
+          }
 
-      const request = await getVisitRescheduleRequestById(requestId, id);
-      if (!request) return c.json({ error: "Solicitacao nao encontrada" }, 404);
-      if (request.status !== "PENDING") {
-        return c.json({ error: "Solicitacao ja resolvida" }, 409);
-      }
+          const request = await getVisitRescheduleRequestById(requestId, id, o);
+          if (!request) {
+            return {
+              response: c.json({ error: "Solicitacao nao encontrada" }, 404),
+            };
+          }
+          if (request.status !== "PENDING") {
+            return {
+              response: c.json({ error: "Solicitacao ja resolvida" }, 409),
+            };
+          }
 
-      const [updated] = await db.transaction(async (tx) => {
-        const rows = await tx
-          .update(visitRescheduleRequest)
-          .set({
-            status: "DECLINED",
-            resolvedBy: session.user.id,
-            resolvedAt: new Date(),
-            resolutionNote: input.resolutionNote ?? null,
-          })
-          .where(eq(visitRescheduleRequest.id, requestId))
-          .returning();
+          const rows = await o
+            .update(visitRescheduleRequest)
+            .set({
+              status: "DECLINED",
+              resolvedBy: session.user.id,
+              resolvedAt: new Date(),
+              resolutionNote: input.resolutionNote ?? null,
+            })
+            .where(eq(visitRescheduleRequest.id, requestId))
+            .returning();
 
-        await tx.insert(visitAuditLog).values({
-          organizationId: member.organizationId,
-          visitId: id,
-          action: "reschedule_request_decline",
-          changes: { rescheduleRequestId: requestId },
-          performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
-          reason: input.resolutionNote ?? null,
-        });
+          await o.insert(visitAuditLog).values({
+            organizationId: member.organizationId,
+            visitId: id,
+            action: "reschedule_request_decline",
+            changes: { rescheduleRequestId: requestId },
+            performedBy: session.user.id,
+            ipAddress: c.req.header("x-forwarded-for") || null,
+            reason: input.resolutionNote ?? null,
+          });
 
-        return rows;
-      });
+          return { updated: rows };
+        },
+      );
+      if ("response" in outcome) return outcome.response;
+      const { updated } = outcome;
 
       try {
         await notifyVisitRescheduleDeclined(

@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { db } from "@calibra-facil/db";
 import { material } from "@calibra-facil/db/schema";
 import {
   AdjustMaterialStockSchema,
@@ -18,6 +17,7 @@ import {
 } from "../middleware/permission";
 import { eq, and, or, ilike, desc, count } from "drizzle-orm";
 import { buildUnitScopeCondition } from "../lib/units";
+import { orgDb } from "../lib/org-db";
 
 /**
  * Materials Router - Parts/Materials Catalog (Peças e materiais)
@@ -93,32 +93,38 @@ export const materialsRouter = new Hono<{
 
       const whereCondition = and(...conditions);
 
-      const [countResult] = await db
-        .select({ total: count() })
-        .from(material)
-        .where(whereCondition);
+      const { countResult, materials } = await orgDb(
+        member.organizationId,
+      ).transaction(async (o) => {
+        const [total] = await o
+          .select({ total: count() })
+          .from(material)
+          .where(whereCondition);
 
-      const materials = await db
-        .select({
-          id: material.id,
-          name: material.name,
-          description: material.description,
-          sku: material.sku,
-          unit: material.unit,
-          unitCostCents: material.unitCostCents,
-          unitPriceCents: material.unitPriceCents,
-          controlsStock: material.controlsStock,
-          stockQuantity: material.stockQuantity,
-          stockSyncedAt: material.stockSyncedAt,
-          isActive: material.isActive,
-          createdAt: material.createdAt,
-          updatedAt: material.updatedAt,
-        })
-        .from(material)
-        .where(whereCondition)
-        .orderBy(desc(material.createdAt))
-        .limit(limit)
-        .offset(offset);
+        const rows = await o
+          .select({
+            id: material.id,
+            name: material.name,
+            description: material.description,
+            sku: material.sku,
+            unit: material.unit,
+            unitCostCents: material.unitCostCents,
+            unitPriceCents: material.unitPriceCents,
+            controlsStock: material.controlsStock,
+            stockQuantity: material.stockQuantity,
+            stockSyncedAt: material.stockSyncedAt,
+            isActive: material.isActive,
+            createdAt: material.createdAt,
+            updatedAt: material.updatedAt,
+          })
+          .from(material)
+          .where(whereCondition)
+          .orderBy(desc(material.createdAt))
+          .limit(limit)
+          .offset(offset);
+
+        return { countResult: total, materials: rows };
+      });
 
       return c.json({
         data: materials,
@@ -143,17 +149,19 @@ export const materialsRouter = new Hono<{
       return c.json({ error: "ID inválido" }, 400);
     }
 
-    const [found] = await db
-      .select()
-      .from(material)
-      .where(
-        and(
-          eq(material.id, id),
-          eq(material.organizationId, member.organizationId),
-          buildUnitScopeCondition(material.unitId, member),
-        ),
-      )
-      .limit(1);
+    const [found] = await orgDb(member.organizationId).transaction((o) =>
+      o
+        .select()
+        .from(material)
+        .where(
+          and(
+            eq(material.id, id),
+            eq(material.organizationId, member.organizationId),
+            buildUnitScopeCondition(material.unitId, member),
+          ),
+        )
+        .limit(1),
+    );
 
     if (!found) {
       return c.json({ error: "Material não encontrado" }, 404);
@@ -181,21 +189,24 @@ export const materialsRouter = new Hono<{
       }
 
       try {
-        const [created] = await db
-          .insert(material)
-          .values({
-            unitId: member.activeUnitId,
-            organizationId: member.organizationId,
-            name: input.name,
-            description: input.description || null,
-            sku: input.sku || null,
-            unit: input.unit || "un",
-            unitCostCents: input.unitCostCents ?? null,
-            unitPriceCents: input.unitPriceCents ?? null,
-            controlsStock: input.controlsStock ?? false,
-            isActive: input.isActive ?? true,
-          })
-          .returning();
+        const { activeUnitId } = member;
+        const [created] = await orgDb(member.organizationId).transaction((o) =>
+          o
+            .insert(material)
+            .values({
+              unitId: activeUnitId,
+              organizationId: member.organizationId,
+              name: input.name,
+              description: input.description || null,
+              sku: input.sku || null,
+              unit: input.unit || "un",
+              unitCostCents: input.unitCostCents ?? null,
+              unitPriceCents: input.unitPriceCents ?? null,
+              controlsStock: input.controlsStock ?? false,
+              isActive: input.isActive ?? true,
+            })
+            .returning(),
+        );
 
         if (!created) {
           return c.json({ error: "Falha ao criar material" }, 500);
@@ -230,17 +241,19 @@ export const materialsRouter = new Hono<{
         return c.json({ error: "ID inválido" }, 400);
       }
 
-      const [existing] = await db
-        .select()
-        .from(material)
-        .where(
-          and(
-            eq(material.id, id),
-            eq(material.organizationId, member.organizationId),
-            buildUnitScopeCondition(material.unitId, member),
-          ),
-        )
-        .limit(1);
+      const [existing] = await orgDb(member.organizationId).transaction((o) =>
+        o
+          .select()
+          .from(material)
+          .where(
+            and(
+              eq(material.id, id),
+              eq(material.organizationId, member.organizationId),
+              buildUnitScopeCondition(material.unitId, member),
+            ),
+          )
+          .limit(1),
+      );
 
       if (!existing) {
         return c.json({ error: "Material não encontrado" }, 404);
@@ -269,11 +282,13 @@ export const materialsRouter = new Hono<{
       }
 
       try {
-        const [updated] = await db
-          .update(material)
-          .set(updateData)
-          .where(eq(material.id, id))
-          .returning();
+        const [updated] = await orgDb(member.organizationId).transaction((o) =>
+          o
+            .update(material)
+            .set(updateData)
+            .where(eq(material.id, id))
+            .returning(),
+        );
 
         return c.json(updated);
       } catch (error) {
@@ -304,17 +319,19 @@ export const materialsRouter = new Hono<{
         return c.json({ error: "ID inválido" }, 400);
       }
 
-      const [existing] = await db
-        .select({ id: material.id })
-        .from(material)
-        .where(
-          and(
-            eq(material.id, id),
-            eq(material.organizationId, member.organizationId),
-            buildUnitScopeCondition(material.unitId, member),
-          ),
-        )
-        .limit(1);
+      const [existing] = await orgDb(member.organizationId).transaction((o) =>
+        o
+          .select({ id: material.id })
+          .from(material)
+          .where(
+            and(
+              eq(material.id, id),
+              eq(material.organizationId, member.organizationId),
+              buildUnitScopeCondition(material.unitId, member),
+            ),
+          )
+          .limit(1),
+      );
 
       if (!existing) {
         return c.json({ error: "Material não encontrado" }, 404);
@@ -353,31 +370,33 @@ export const materialsRouter = new Hono<{
       return c.json({ error: "ID inválido" }, 400);
     }
 
-    const [existing] = await db
-      .select()
-      .from(material)
-      .where(
-        and(
-          eq(material.id, id),
-          eq(material.organizationId, member.organizationId),
-          buildUnitScopeCondition(material.unitId, member),
-        ),
-      )
-      .limit(1);
+    return orgDb(member.organizationId).transaction(async (o) => {
+      const [existing] = await o
+        .select()
+        .from(material)
+        .where(
+          and(
+            eq(material.id, id),
+            eq(material.organizationId, member.organizationId),
+            buildUnitScopeCondition(material.unitId, member),
+          ),
+        )
+        .limit(1);
 
-    if (!existing) {
-      return c.json({ error: "Material não encontrado" }, 404);
-    }
+      if (!existing) {
+        return c.json({ error: "Material não encontrado" }, 404);
+      }
 
-    // Soft delete - never hard delete commercial data
-    const [updated] = await db
-      .update(material)
-      .set({ isActive: false })
-      .where(eq(material.id, id))
-      .returning();
+      // Soft delete - never hard delete commercial data
+      const [updated] = await o
+        .update(material)
+        .set({ isActive: false })
+        .where(eq(material.id, id))
+        .returning();
 
-    return c.json({
-      message: "Material desativado com sucesso",
-      data: updated,
+      return c.json({
+        message: "Material desativado com sucesso",
+        data: updated,
+      });
     });
   });

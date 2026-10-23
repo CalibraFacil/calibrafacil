@@ -1,4 +1,5 @@
 import { db } from "@calibra-facil/db";
+import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import type { JobActorAuditFields } from "@calibra-facil/db/job-events";
 import { calibrationJob } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
@@ -67,12 +68,17 @@ export function jobActorAuditFields(actor: JobActor): JobActorAuditFields {
 }
 
 /** The job inside the caller's organization and unit scope; `null` scope is organization-wide. */
-export async function loadScopedJob(params: {
-  jobId: number;
-  organizationId: string;
-  unitScope: UnitScope | null;
-}): Promise<JobRow | undefined> {
-  const [job] = await db
+export async function loadScopedJob(
+  params: {
+    jobId: number;
+    organizationId: string;
+    unitScope: UnitScope | null;
+  },
+  // An org-bound transaction handle when the caller has one (row-level
+  // security); the default is the plain `db`, as before.
+  executor: Pick<OrgExecutor, "select"> = db,
+): Promise<JobRow | undefined> {
+  const [job] = await executor
     .select()
     .from(calibrationJob)
     .where(

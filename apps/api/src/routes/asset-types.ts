@@ -1,11 +1,9 @@
 import { Hono } from "hono";
 import type { AssetTypesResponse, ServerShape } from "@calibra-facil/contracts";
 import { zValidator } from "@hono/zod-validator";
-import { db } from "@calibra-facil/db";
-import { assetType } from "@calibra-facil/db/schema";
 import { ListAssetTypesQuerySchema } from "@calibra-facil/schemas";
-import { eq, ilike, or } from "drizzle-orm";
 import { withPermission, type AuthVariables } from "../middleware/permission";
+import { findAssetTypeById, listAssetTypes } from "../lib/asset-types";
 
 /**
  * READ-ONLY lab-facing view of the GLOBAL asset-type catalog (#637).
@@ -15,6 +13,9 @@ import { withPermission, type AuthVariables } from "../middleware/permission";
  * delete types used by every other tenant). Per Pedro's decision (2026-07-05)
  * the catalog is curated centrally: it is seeded by
  * `packages/db/src/seed-asset-types.ts` and is read-only through the API.
+ *
+ * The reads live in `lib/asset-types.ts`: the catalog has no tenant column and
+ * no row-level-security policy, so there is no laboratory to bind them to.
  */
 export const assetTypesRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
@@ -28,29 +29,7 @@ export const assetTypesRouter = new Hono<{ Variables: AuthVariables }>()
       const { query } = c.req.valid("query");
 
       try {
-        // Build conditions
-        let whereCondition;
-        if (query) {
-          whereCondition = or(
-            ilike(assetType.name, `%${query}%`),
-            ilike(assetType.slug, `%${query}%`),
-            ilike(assetType.description, `%${query}%`),
-          );
-        }
-
-        const types = await db
-          .select({
-            id: assetType.id,
-            name: assetType.name,
-            slug: assetType.slug,
-            description: assetType.description,
-            definition: assetType.definition,
-            createdAt: assetType.createdAt,
-            updatedAt: assetType.updatedAt,
-          })
-          .from(assetType)
-          .where(whereCondition)
-          .orderBy(assetType.name);
+        const types = await listAssetTypes(query);
 
         return c.json({
           data: types,
@@ -73,11 +52,7 @@ export const assetTypesRouter = new Hono<{ Variables: AuthVariables }>()
     }
 
     try {
-      const [foundType] = await db
-        .select()
-        .from(assetType)
-        .where(eq(assetType.id, id))
-        .limit(1);
+      const foundType = await findAssetTypeById(id);
 
       if (!foundType) {
         return c.json({ error: "Tipo de ativo não encontrado" }, 404);

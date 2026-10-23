@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { alias } from "drizzle-orm/pg-core";
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   asset,
   assetType,
@@ -49,6 +49,8 @@ import {
 import { buildUnitScopeCondition } from "../lib/units";
 import { formatOnsiteAddressText } from "../lib/onsite-address";
 import { isAssignableTechnician } from "../lib/tenant-refs";
+import { orgDb } from "../lib/org-db";
+import { orgTransactionWithExecutor } from "../lib/org-transaction";
 
 const submitterUser = alias(user, "calibrationRequestSubmitter");
 const reviewerUser = alias(user, "calibrationRequestReviewer");
@@ -120,10 +122,15 @@ class RequestTransitionError extends Error {
   }
 }
 
-async function getRequestItems(requestIds: number[], organizationId: string) {
+async function getRequestItems(
+  requestIds: number[],
+  organizationId: string,
+  // The caller's org-bound transaction (row-level security).
+  o: Pick<OrgDb, "select">,
+) {
   if (requestIds.length === 0) return [];
 
-  return db
+  return o
     .select({
       requestId: calibrationRequestItem.requestId,
       id: calibrationRequestItem.id,
@@ -161,8 +168,9 @@ async function getRequestDetail(
   requestId: number,
   organizationId: string,
   unitCondition: ReturnType<typeof and>,
+  o: Pick<OrgDb, "select">,
 ) {
-  const [request] = await db
+  const [request] = await o
     .select({
       id: calibrationRequest.id,
       status: calibrationRequest.status,
@@ -217,7 +225,7 @@ async function getRequestDetail(
     return null;
   }
 
-  const items = await getRequestItems([request.id], organizationId);
+  const items = await getRequestItems([request.id], organizationId, o);
 
   return {
     ...request,
@@ -276,61 +284,64 @@ export const calibrationRequestsRouter = new Hono<{
 
       const whereCondition = and(...conditions);
 
-      const [countResult] = await db
-        .select({ total: count() })
-        .from(calibrationRequest)
-        .where(whereCondition);
+      return await orgDb(member.organizationId).transaction(async (o) => {
+        const [countResult] = await o
+          .select({ total: count() })
+          .from(calibrationRequest)
+          .where(whereCondition);
 
-      const requests = await db
-        .select({
-          id: calibrationRequest.id,
-          status: calibrationRequest.status,
-          observations: calibrationRequest.observations,
-          requestedDueDate: calibrationRequest.requestedDueDate,
-          submittedAt: calibrationRequest.submittedAt,
-          reviewedAt: calibrationRequest.reviewedAt,
-          approvedAt: calibrationRequest.approvedAt,
-          rejectedAt: calibrationRequest.rejectedAt,
-          convertedAt: calibrationRequest.convertedAt,
-          customerId: calibrationRequest.customerId,
-          customerName: customer.name,
-          submittedByName: submitterUser.name,
-        })
-        .from(calibrationRequest)
-        .innerJoin(customer, eq(calibrationRequest.customerId, customer.id))
-        .leftJoin(
-          submitterUser,
-          eq(calibrationRequest.submittedBy, submitterUser.id),
-        )
-        .where(whereCondition)
-        .orderBy(desc(calibrationRequest.submittedAt))
-        .limit(limit)
-        .offset(offset);
+        const requests = await o
+          .select({
+            id: calibrationRequest.id,
+            status: calibrationRequest.status,
+            observations: calibrationRequest.observations,
+            requestedDueDate: calibrationRequest.requestedDueDate,
+            submittedAt: calibrationRequest.submittedAt,
+            reviewedAt: calibrationRequest.reviewedAt,
+            approvedAt: calibrationRequest.approvedAt,
+            rejectedAt: calibrationRequest.rejectedAt,
+            convertedAt: calibrationRequest.convertedAt,
+            customerId: calibrationRequest.customerId,
+            customerName: customer.name,
+            submittedByName: submitterUser.name,
+          })
+          .from(calibrationRequest)
+          .innerJoin(customer, eq(calibrationRequest.customerId, customer.id))
+          .leftJoin(
+            submitterUser,
+            eq(calibrationRequest.submittedBy, submitterUser.id),
+          )
+          .where(whereCondition)
+          .orderBy(desc(calibrationRequest.submittedAt))
+          .limit(limit)
+          .offset(offset);
 
-      const items = await getRequestItems(
-        requests.map((request) => request.id),
-        member.organizationId,
-      );
-      const itemCountByRequestId = new Map<number, number>();
-
-      for (const item of items) {
-        itemCountByRequestId.set(
-          item.requestId,
-          (itemCountByRequestId.get(item.requestId) ?? 0) + 1,
+        const items = await getRequestItems(
+          requests.map((request) => request.id),
+          member.organizationId,
+          o,
         );
-      }
+        const itemCountByRequestId = new Map<number, number>();
 
-      return c.json({
-        data: requests.map((request) => ({
-          ...request,
-          itemCount: itemCountByRequestId.get(request.id) ?? 0,
-        })),
-        pagination: {
-          page,
-          limit,
-          total: countResult?.total ?? 0,
-          totalPages: Math.ceil((countResult?.total ?? 0) / limit),
-        },
+        for (const item of items) {
+          itemCountByRequestId.set(
+            item.requestId,
+            (itemCountByRequestId.get(item.requestId) ?? 0) + 1,
+          );
+        }
+
+        return c.json({
+          data: requests.map((request) => ({
+            ...request,
+            itemCount: itemCountByRequestId.get(request.id) ?? 0,
+          })),
+          pagination: {
+            page,
+            limit,
+            total: countResult?.total ?? 0,
+            totalPages: Math.ceil((countResult?.total ?? 0) / limit),
+          },
+        });
       });
     },
   )
@@ -342,10 +353,13 @@ export const calibrationRequestsRouter = new Hono<{
       return c.json({ error: "ID invalido" }, 400);
     }
 
-    const request = await getRequestDetail(
-      id,
-      member.organizationId,
-      buildUnitScopeCondition(calibrationRequest.unitId, member),
+    const request = await orgDb(member.organizationId).transaction((o) =>
+      getRequestDetail(
+        id,
+        member.organizationId,
+        buildUnitScopeCondition(calibrationRequest.unitId, member),
+        o,
+      ),
     );
 
     if (!request) {
@@ -368,7 +382,9 @@ export const calibrationRequestsRouter = new Hono<{
         return c.json({ error: "ID invalido" }, 400);
       }
 
-      const result: ReviewRequestResult = await db.transaction(async (tx) => {
+      const result: ReviewRequestResult = await orgDb(
+        member.organizationId,
+      ).transaction(async (tx) => {
         const [existing] = await tx
           .select({
             id: calibrationRequest.id,
@@ -491,7 +507,9 @@ export const calibrationRequestsRouter = new Hono<{
         return c.json({ error: "ID invalido" }, 400);
       }
 
-      const result: ApprovalRequestResult = await db.transaction(async (tx) => {
+      const result: ApprovalRequestResult = await orgDb(
+        member.organizationId,
+      ).transaction(async (tx) => {
         const [existing] = await tx
           .select({
             id: calibrationRequest.id,
@@ -608,7 +626,9 @@ export const calibrationRequestsRouter = new Hono<{
         return c.json({ error: "ID invalido" }, 400);
       }
 
-      const result: RejectRequestResult = await db.transaction(async (tx) => {
+      const result: RejectRequestResult = await orgDb(
+        member.organizationId,
+      ).transaction(async (tx) => {
         const [existing] = await tx
           .select({
             id: calibrationRequest.id,
@@ -745,239 +765,244 @@ export const calibrationRequestsRouter = new Hono<{
 
       let result: ConvertRequestResult;
       try {
-        result = await db.transaction(async (tx) => {
-          const [request] = await tx
-            .select({
-              id: calibrationRequest.id,
-              status: calibrationRequest.status,
-              customerId: calibrationRequest.customerId,
-              unitId: calibrationRequest.unitId,
-              deliveryMethod: calibrationRequest.deliveryMethod,
-              onsiteAddress: calibrationRequest.onsiteAddress,
-            })
-            .from(calibrationRequest)
-            .where(
-              and(
-                eq(calibrationRequest.id, id),
-                eq(calibrationRequest.organizationId, member.organizationId),
-                buildUnitScopeCondition(calibrationRequest.unitId, member),
-              ),
-            )
-            .limit(1)
-            .for("update");
-
-          if (!request) {
-            return {
-              error: {
-                status: 404 as const,
-                body: "Solicitacao nao encontrada",
-              },
-            };
-          }
-
-          if (request.status !== "APPROVED") {
-            return {
-              error: {
-                status: 400 as const,
-                body: "Somente solicitacoes aprovadas podem ser convertidas",
-              },
-            };
-          }
-
-          const requestItems = await tx
-            .select({
-              id: calibrationRequestItem.id,
-              assetId: calibrationRequestItem.assetId,
-              convertedJobId: calibrationRequestItem.convertedJobId,
-            })
-            .from(calibrationRequestItem)
-            .where(
-              and(
-                eq(calibrationRequestItem.requestId, request.id),
-                eq(
-                  calibrationRequestItem.organizationId,
-                  member.organizationId,
+        result = await orgTransactionWithExecutor(
+          member.organizationId,
+          async (tx, rawTx) => {
+            const [request] = await tx
+              .select({
+                id: calibrationRequest.id,
+                status: calibrationRequest.status,
+                customerId: calibrationRequest.customerId,
+                unitId: calibrationRequest.unitId,
+                deliveryMethod: calibrationRequest.deliveryMethod,
+                onsiteAddress: calibrationRequest.onsiteAddress,
+              })
+              .from(calibrationRequest)
+              .where(
+                and(
+                  eq(calibrationRequest.id, id),
+                  eq(calibrationRequest.organizationId, member.organizationId),
+                  buildUnitScopeCondition(calibrationRequest.unitId, member),
                 ),
-              ),
-            )
-            .orderBy(calibrationRequestItem.id);
+              )
+              .limit(1)
+              .for("update");
 
-          if (requestItems.some((item) => item.convertedJobId)) {
-            return {
-              error: {
-                status: 400 as const,
-                body: "Esta solicitacao ja possui itens convertidos",
-              },
-            };
-          }
-
-          if (requestItems.length !== input.items.length) {
-            return {
-              error: {
-                status: 400 as const,
-                body: "Informe exatamente um mapeamento para cada item da solicitacao",
-              },
-            };
-          }
-
-          const requestItemIds = new Set(requestItems.map((item) => item.id));
-          if (!input.items.every((item) => requestItemIds.has(item.itemId))) {
-            return {
-              error: {
-                status: 400 as const,
-                body: "Um ou mais itens informados nao pertencem a esta solicitacao",
-              },
-            };
-          }
-
-          const requestItemById = new Map(
-            requestItems.map((item) => [item.id, item] as const),
-          );
-          const createdJobs: ConvertedRequestJob[] = [];
-
-          // On-site requests pre-freeze each job's calibration location to the
-          // customer's site so the technician doesn't re-enter it on execution.
-          const onsiteLocation =
-            request.deliveryMethod === "onsite"
-              ? { addressText: formatOnsiteAddressText(request.onsiteAddress) }
-              : null;
-
-          // On-site: create one visit for the whole conversion (the trip). The
-          // lab can schedule it now (date + technician → CONFIRMED) or leave it
-          // PROPOSED to schedule from the visits view later. Jobs link via visit_id.
-          let visitId: number | null = null;
-          let visitConfirmed = false;
-          if (request.deliveryMethod === "onsite") {
-            const scheduledAt = input.visit?.scheduledAt
-              ? new Date(input.visit.scheduledAt)
-              : null;
-            const visitTechnicianId = input.visit?.technicianId ?? null;
-            // The visit technician is a body-supplied user id: it must be a
-            // member of this organization, assignable in the request's unit.
-            if (
-              visitTechnicianId &&
-              !(await isAssignableTechnician(
-                {
-                  organizationId: member.organizationId,
-                  userId: visitTechnicianId,
-                  unitId: request.unitId,
-                },
-                tx,
-              ))
-            ) {
+            if (!request) {
               return {
                 error: {
-                  status: 400 as const,
-                  body: "Tecnico nao encontrado ou sem permissao",
+                  status: 404 as const,
+                  body: "Solicitacao nao encontrada",
                 },
               };
             }
-            const scheduled = Boolean(scheduledAt && visitTechnicianId);
-            const [visit] = await tx
-              .insert(calibrationVisit)
-              .values({
-                organizationId: member.organizationId,
-                unitId: request.unitId,
-                customerId: request.customerId,
-                sourceRequestId: request.id,
-                technicianId: visitTechnicianId,
-                status: scheduled ? "CONFIRMED" : "PROPOSED",
-                scheduledAt,
-                address: request.onsiteAddress ?? null,
-                createdBy: session.user.id,
-                confirmedBy: scheduled ? session.user.id : null,
-                confirmedAt: scheduled ? new Date() : null,
+
+            if (request.status !== "APPROVED") {
+              return {
+                error: {
+                  status: 400 as const,
+                  body: "Somente solicitacoes aprovadas podem ser convertidas",
+                },
+              };
+            }
+
+            const requestItems = await tx
+              .select({
+                id: calibrationRequestItem.id,
+                assetId: calibrationRequestItem.assetId,
+                convertedJobId: calibrationRequestItem.convertedJobId,
               })
-              .returning();
-            visitId = visit?.id ?? null;
-            visitConfirmed = scheduled;
-          }
-
-          for (const item of input.items) {
-            const requestItem = requestItemById.get(item.itemId);
-
-            if (!requestItem) {
-              throw new RequestTransitionError(
-                400,
-                "Item de solicitacao invalido",
-              );
-            }
-
-            let newJob;
-            try {
-              newJob = await createCalibrationJob({
-                organizationId: member.organizationId,
-                unitId: request.unitId,
-                createdBy: session.user.id,
-                assetId: requestItem.assetId,
-                serviceId: item.serviceId,
-                technicianId: item.technicianId,
-                dueDate: item.dueDate,
-                ipAddress,
-                sourceRequestId: request.id,
-                sourceRequestItemId: requestItem.id,
-                executor: tx,
-                notifyOnAssignment: false,
-                onsiteLocation,
-                visitId,
-              });
-            } catch (error) {
-              if (
-                error instanceof Error &&
-                jobCreationClientErrors.has(error.message)
-              ) {
-                throw new RequestTransitionError(400, error.message);
-              }
-
-              throw error;
-            }
-
-            createdJobs.push({
-              requestItemId: requestItem.id,
-              jobId: newJob.id,
-              jobCode: newJob.jobId,
-              status: newJob.status,
-              technicianId: newJob.technicianId,
-            });
-
-            await tx
-              .update(calibrationRequestItem)
-              .set({ convertedJobId: newJob.id })
+              .from(calibrationRequestItem)
               .where(
                 and(
-                  eq(calibrationRequestItem.id, requestItem.id),
+                  eq(calibrationRequestItem.requestId, request.id),
                   eq(
                     calibrationRequestItem.organizationId,
                     member.organizationId,
                   ),
                 ),
-              );
-          }
+              )
+              .orderBy(calibrationRequestItem.id);
 
-          await tx
-            .update(calibrationRequest)
-            .set({
-              status: "CONVERTED",
-              convertedBy: session.user.id,
-              convertedAt: new Date(),
-            })
-            .where(eq(calibrationRequest.id, request.id));
+            if (requestItems.some((item) => item.convertedJobId)) {
+              return {
+                error: {
+                  status: 400 as const,
+                  body: "Esta solicitacao ja possui itens convertidos",
+                },
+              };
+            }
 
-          await tx.insert(calibrationRequestAuditLog).values({
-            organizationId: member.organizationId,
-            requestId: request.id,
-            action: "convert",
-            changes: {
-              jobs: createdJobs.map(
-                ({ technicianId: _technicianId, ...job }) => job,
-              ),
-            },
-            performedBy: session.user.id,
-            ipAddress,
-          });
+            if (requestItems.length !== input.items.length) {
+              return {
+                error: {
+                  status: 400 as const,
+                  body: "Informe exatamente um mapeamento para cada item da solicitacao",
+                },
+              };
+            }
 
-          return { createdJobs, visitId, visitConfirmed };
-        });
+            const requestItemIds = new Set(requestItems.map((item) => item.id));
+            if (!input.items.every((item) => requestItemIds.has(item.itemId))) {
+              return {
+                error: {
+                  status: 400 as const,
+                  body: "Um ou mais itens informados nao pertencem a esta solicitacao",
+                },
+              };
+            }
+
+            const requestItemById = new Map(
+              requestItems.map((item) => [item.id, item] as const),
+            );
+            const createdJobs: ConvertedRequestJob[] = [];
+
+            // On-site requests pre-freeze each job's calibration location to the
+            // customer's site so the technician doesn't re-enter it on execution.
+            const onsiteLocation =
+              request.deliveryMethod === "onsite"
+                ? {
+                    addressText: formatOnsiteAddressText(request.onsiteAddress),
+                  }
+                : null;
+
+            // On-site: create one visit for the whole conversion (the trip). The
+            // lab can schedule it now (date + technician → CONFIRMED) or leave it
+            // PROPOSED to schedule from the visits view later. Jobs link via visit_id.
+            let visitId: number | null = null;
+            let visitConfirmed = false;
+            if (request.deliveryMethod === "onsite") {
+              const scheduledAt = input.visit?.scheduledAt
+                ? new Date(input.visit.scheduledAt)
+                : null;
+              const visitTechnicianId = input.visit?.technicianId ?? null;
+              // The visit technician is a body-supplied user id: it must be a
+              // member of this organization, assignable in the request's unit.
+              if (
+                visitTechnicianId &&
+                !(await isAssignableTechnician(
+                  {
+                    organizationId: member.organizationId,
+                    userId: visitTechnicianId,
+                    unitId: request.unitId,
+                  },
+                  tx,
+                ))
+              ) {
+                return {
+                  error: {
+                    status: 400 as const,
+                    body: "Tecnico nao encontrado ou sem permissao",
+                  },
+                };
+              }
+              const scheduled = Boolean(scheduledAt && visitTechnicianId);
+              const [visit] = await tx
+                .insert(calibrationVisit)
+                .values({
+                  organizationId: member.organizationId,
+                  unitId: request.unitId,
+                  customerId: request.customerId,
+                  sourceRequestId: request.id,
+                  technicianId: visitTechnicianId,
+                  status: scheduled ? "CONFIRMED" : "PROPOSED",
+                  scheduledAt,
+                  address: request.onsiteAddress ?? null,
+                  createdBy: session.user.id,
+                  confirmedBy: scheduled ? session.user.id : null,
+                  confirmedAt: scheduled ? new Date() : null,
+                })
+                .returning();
+              visitId = visit?.id ?? null;
+              visitConfirmed = scheduled;
+            }
+
+            for (const item of input.items) {
+              const requestItem = requestItemById.get(item.itemId);
+
+              if (!requestItem) {
+                throw new RequestTransitionError(
+                  400,
+                  "Item de solicitacao invalido",
+                );
+              }
+
+              let newJob;
+              try {
+                newJob = await createCalibrationJob({
+                  organizationId: member.organizationId,
+                  unitId: request.unitId,
+                  createdBy: session.user.id,
+                  assetId: requestItem.assetId,
+                  serviceId: item.serviceId,
+                  technicianId: item.technicianId,
+                  dueDate: item.dueDate,
+                  ipAddress,
+                  sourceRequestId: request.id,
+                  sourceRequestItemId: requestItem.id,
+                  executor: rawTx,
+                  notifyOnAssignment: false,
+                  onsiteLocation,
+                  visitId,
+                });
+              } catch (error) {
+                if (
+                  error instanceof Error &&
+                  jobCreationClientErrors.has(error.message)
+                ) {
+                  throw new RequestTransitionError(400, error.message);
+                }
+
+                throw error;
+              }
+
+              createdJobs.push({
+                requestItemId: requestItem.id,
+                jobId: newJob.id,
+                jobCode: newJob.jobId,
+                status: newJob.status,
+                technicianId: newJob.technicianId,
+              });
+
+              await tx
+                .update(calibrationRequestItem)
+                .set({ convertedJobId: newJob.id })
+                .where(
+                  and(
+                    eq(calibrationRequestItem.id, requestItem.id),
+                    eq(
+                      calibrationRequestItem.organizationId,
+                      member.organizationId,
+                    ),
+                  ),
+                );
+            }
+
+            await tx
+              .update(calibrationRequest)
+              .set({
+                status: "CONVERTED",
+                convertedBy: session.user.id,
+                convertedAt: new Date(),
+              })
+              .where(eq(calibrationRequest.id, request.id));
+
+            await tx.insert(calibrationRequestAuditLog).values({
+              organizationId: member.organizationId,
+              requestId: request.id,
+              action: "convert",
+              changes: {
+                jobs: createdJobs.map(
+                  ({ technicianId: _technicianId, ...job }) => job,
+                ),
+              },
+              performedBy: session.user.id,
+              ipAddress,
+            });
+
+            return { createdJobs, visitId, visitConfirmed };
+          },
+        );
       } catch (error) {
         if (error instanceof RequestTransitionError) {
           return c.json({ error: error.message }, error.status);

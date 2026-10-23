@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { zValidator } from "@hono/zod-validator";
-import { db } from "@calibra-facil/db";
 import { environmentalLimits, assetType } from "@calibra-facil/db/schema";
 import { eq, and, isNull, desc } from "drizzle-orm";
 import { EnvironmentalLimitsSchema } from "@calibra-facil/schemas";
@@ -22,6 +21,7 @@ import {
   resolveAccessibleUnitContext,
   selectEffectiveEnvironmentalLimits,
 } from "../lib/unit-operational-settings";
+import { orgDb } from "../lib/org-db";
 
 export const environmentalLimitsRouter = new Hono<{
   Variables: AuthVariables;
@@ -34,30 +34,32 @@ export const environmentalLimitsRouter = new Hono<{
     requireUnitOperationalSettingsManager(memberData);
     const unit = resolveAccessibleUnitContext(memberData);
 
-    const limits = await db
-      .select({
-        id: environmentalLimits.id,
-        unitId: environmentalLimits.unitId,
-        assetTypeId: environmentalLimits.assetTypeId,
-        assetTypeName: assetType.name,
-        temperatureMin: environmentalLimits.temperatureMin,
-        temperatureMax: environmentalLimits.temperatureMax,
-        humidityMin: environmentalLimits.humidityMin,
-        humidityMax: environmentalLimits.humidityMax,
-        pressureMin: environmentalLimits.pressureMin,
-        pressureMax: environmentalLimits.pressureMax,
-        createdAt: environmentalLimits.createdAt,
-        updatedAt: environmentalLimits.updatedAt,
-      })
-      .from(environmentalLimits)
-      .leftJoin(assetType, eq(environmentalLimits.assetTypeId, assetType.id))
-      .where(
-        and(
-          eq(environmentalLimits.organizationId, memberData.organizationId),
-          eq(environmentalLimits.unitId, unit.unitId),
-        ),
-      )
-      .orderBy(desc(environmentalLimits.assetTypeId));
+    const limits = await orgDb(memberData.organizationId).transaction((o) =>
+      o
+        .select({
+          id: environmentalLimits.id,
+          unitId: environmentalLimits.unitId,
+          assetTypeId: environmentalLimits.assetTypeId,
+          assetTypeName: assetType.name,
+          temperatureMin: environmentalLimits.temperatureMin,
+          temperatureMax: environmentalLimits.temperatureMax,
+          humidityMin: environmentalLimits.humidityMin,
+          humidityMax: environmentalLimits.humidityMax,
+          pressureMin: environmentalLimits.pressureMin,
+          pressureMax: environmentalLimits.pressureMax,
+          createdAt: environmentalLimits.createdAt,
+          updatedAt: environmentalLimits.updatedAt,
+        })
+        .from(environmentalLimits)
+        .leftJoin(assetType, eq(environmentalLimits.assetTypeId, assetType.id))
+        .where(
+          and(
+            eq(environmentalLimits.organizationId, memberData.organizationId),
+            eq(environmentalLimits.unitId, unit.unitId),
+          ),
+        )
+        .orderBy(desc(environmentalLimits.assetTypeId)),
+    );
 
     return c.json({
       limits,
@@ -87,29 +89,35 @@ export const environmentalLimitsRouter = new Hono<{
         queryUnitId ? Number.parseInt(queryUnitId, 10) : null,
       );
 
-      const candidateLimits = await db
-        .select()
-        .from(environmentalLimits)
-        .where(
-          and(
-            eq(environmentalLimits.organizationId, memberData.organizationId),
-            eq(environmentalLimits.unitId, unit.unitId),
-            isNull(environmentalLimits.assetTypeId),
-          ),
-        )
-        .limit(1);
+      const { candidateLimits, specificLimits } = await orgDb(
+        memberData.organizationId,
+      ).transaction(async (o) => {
+        const candidates = await o
+          .select()
+          .from(environmentalLimits)
+          .where(
+            and(
+              eq(environmentalLimits.organizationId, memberData.organizationId),
+              eq(environmentalLimits.unitId, unit.unitId),
+              isNull(environmentalLimits.assetTypeId),
+            ),
+          )
+          .limit(1);
 
-      const specificLimits = await db
-        .select()
-        .from(environmentalLimits)
-        .where(
-          and(
-            eq(environmentalLimits.organizationId, memberData.organizationId),
-            eq(environmentalLimits.unitId, unit.unitId),
-            eq(environmentalLimits.assetTypeId, assetTypeId),
-          ),
-        )
-        .limit(1);
+        const specifics = await o
+          .select()
+          .from(environmentalLimits)
+          .where(
+            and(
+              eq(environmentalLimits.organizationId, memberData.organizationId),
+              eq(environmentalLimits.unitId, unit.unitId),
+              eq(environmentalLimits.assetTypeId, assetTypeId),
+            ),
+          )
+          .limit(1);
+
+        return { candidateLimits: candidates, specificLimits: specifics };
+      });
 
       const { limits: resolvedLimits, source } =
         selectEffectiveEnvironmentalLimits([
@@ -141,27 +149,13 @@ export const environmentalLimitsRouter = new Hono<{
       requireUnitOperationalSettingsManager(memberData);
       const unit = resolveAccessibleUnitContext(memberData);
 
-      const [result] = await db
-        .insert(environmentalLimits)
-        .values({
-          organizationId: memberData.organizationId,
-          unitId: unit.unitId,
-          assetTypeId: input.assetTypeId,
-          temperatureMin: input.temperatureMin,
-          temperatureMax: input.temperatureMax,
-          humidityMin: input.humidityMin,
-          humidityMax: input.humidityMax,
-          pressureMin: input.pressureMin,
-          pressureMax: input.pressureMax,
-          updatedBy: session.user.id,
-        })
-        .onConflictDoUpdate({
-          target: [
-            environmentalLimits.organizationId,
-            environmentalLimits.unitId,
-            environmentalLimits.assetTypeId,
-          ],
-          set: {
+      const [result] = await orgDb(memberData.organizationId).transaction((o) =>
+        o
+          .insert(environmentalLimits)
+          .values({
+            organizationId: memberData.organizationId,
+            unitId: unit.unitId,
+            assetTypeId: input.assetTypeId,
             temperatureMin: input.temperatureMin,
             temperatureMax: input.temperatureMax,
             humidityMin: input.humidityMin,
@@ -169,9 +163,25 @@ export const environmentalLimitsRouter = new Hono<{
             pressureMin: input.pressureMin,
             pressureMax: input.pressureMax,
             updatedBy: session.user.id,
-          },
-        })
-        .returning();
+          })
+          .onConflictDoUpdate({
+            target: [
+              environmentalLimits.organizationId,
+              environmentalLimits.unitId,
+              environmentalLimits.assetTypeId,
+            ],
+            set: {
+              temperatureMin: input.temperatureMin,
+              temperatureMax: input.temperatureMax,
+              humidityMin: input.humidityMin,
+              humidityMax: input.humidityMax,
+              pressureMin: input.pressureMin,
+              pressureMax: input.pressureMax,
+              updatedBy: session.user.id,
+            },
+          })
+          .returning(),
+      );
 
       if (!result) {
         throw new HTTPException(500, {
@@ -200,16 +210,18 @@ export const environmentalLimitsRouter = new Hono<{
       return c.json({ error: "ID inválido" }, 400);
     }
 
-    const [deleted] = await db
-      .delete(environmentalLimits)
-      .where(
-        and(
-          eq(environmentalLimits.id, id),
-          eq(environmentalLimits.organizationId, memberData.organizationId),
-          eq(environmentalLimits.unitId, unit.unitId),
-        ),
-      )
-      .returning();
+    const [deleted] = await orgDb(memberData.organizationId).transaction((o) =>
+      o
+        .delete(environmentalLimits)
+        .where(
+          and(
+            eq(environmentalLimits.id, id),
+            eq(environmentalLimits.organizationId, memberData.organizationId),
+            eq(environmentalLimits.unitId, unit.unitId),
+          ),
+        )
+        .returning(),
+    );
 
     if (!deleted) {
       return c.json({ error: "Configuração não encontrada" }, 404);

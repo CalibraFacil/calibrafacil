@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { db } from "@calibra-facil/db";
 import {
   certificateNumberingAuditLog,
   certificateNumberingProfile,
@@ -23,6 +22,7 @@ import {
   renderCertificateTemplate,
   validateCertificateNumberingConfig,
 } from "../lib/certificate-numbering";
+import { orgDb } from "../lib/org-db";
 
 export const certificateNumberingRouter = new Hono<{
   Variables: AuthVariables;
@@ -30,22 +30,28 @@ export const certificateNumberingRouter = new Hono<{
   .get("/", ...requireLabProtected, requireOrgType("LAB"), async (c) => {
     const memberData = c.get("member");
 
-    const [profile] = await db
-      .select()
-      .from(certificateNumberingProfile)
-      .where(
-        eq(
-          certificateNumberingProfile.organizationId,
-          memberData.organizationId,
-        ),
-      )
-      .limit(1);
+    const { profile, org } = await orgDb(memberData.organizationId).transaction(
+      async (o) => {
+        const [foundProfile] = await o
+          .select()
+          .from(certificateNumberingProfile)
+          .where(
+            eq(
+              certificateNumberingProfile.organizationId,
+              memberData.organizationId,
+            ),
+          )
+          .limit(1);
 
-    const [org] = await db
-      .select({ name: organization.name })
-      .from(organization)
-      .where(eq(organization.id, memberData.organizationId))
-      .limit(1);
+        const [foundOrg] = await o
+          .select({ name: organization.name })
+          .from(organization)
+          .where(eq(organization.id, memberData.organizationId))
+          .limit(1);
+
+        return { profile: foundProfile, org: foundOrg };
+      },
+    );
 
     const effectiveConfig =
       profile?.config ?? DEFAULT_CERTIFICATE_NUMBERING_CONFIG;
@@ -117,66 +123,68 @@ export const certificateNumberingRouter = new Hono<{
         );
       }
 
-      const [existing] = await db
-        .select()
-        .from(certificateNumberingProfile)
-        .where(
-          eq(
-            certificateNumberingProfile.organizationId,
-            memberData.organizationId,
-          ),
-        )
-        .limit(1);
+      const profile = await orgDb(memberData.organizationId).transaction(
+        async (tx) => {
+          const [existing] = await tx
+            .select()
+            .from(certificateNumberingProfile)
+            .where(
+              eq(
+                certificateNumberingProfile.organizationId,
+                memberData.organizationId,
+              ),
+            )
+            .limit(1);
 
-      const profile = await db.transaction(async (tx) => {
-        const [saved] = await tx
-          .insert(certificateNumberingProfile)
-          .values({
-            organizationId: memberData.organizationId,
-            name: input.name,
-            config,
-            createdBy: session.user.id,
-            updatedBy: session.user.id,
-          })
-          .onConflictDoUpdate({
-            target: certificateNumberingProfile.organizationId,
-            set: {
+          const [saved] = await tx
+            .insert(certificateNumberingProfile)
+            .values({
+              organizationId: memberData.organizationId,
               name: input.name,
               config,
+              createdBy: session.user.id,
               updatedBy: session.user.id,
-              updatedAt: new Date(),
+            })
+            .onConflictDoUpdate({
+              target: certificateNumberingProfile.organizationId,
+              set: {
+                name: input.name,
+                config,
+                updatedBy: session.user.id,
+                updatedAt: new Date(),
+              },
+            })
+            .returning();
+
+          if (!saved) return null;
+
+          // Audit row commits atomically with the change (ISO 17025 §7.5/§8.4).
+          await tx.insert(certificateNumberingAuditLog).values({
+            organizationId: memberData.organizationId,
+            profileId: saved.id,
+            action: existing ? "update" : "create",
+            changes: {
+              old: existing
+                ? {
+                    name: existing.name,
+                    config: existing.config,
+                  }
+                : null,
+              new: {
+                name: saved.name,
+                config: saved.config,
+              },
             },
-          })
-          .returning();
+            performedBy: session.user.id,
+            ipAddress:
+              c.req.header("x-forwarded-for") ??
+              c.req.header("x-real-ip") ??
+              null,
+          });
 
-        if (!saved) return null;
-
-        // Audit row commits atomically with the change (ISO 17025 §7.5/§8.4).
-        await tx.insert(certificateNumberingAuditLog).values({
-          organizationId: memberData.organizationId,
-          profileId: saved.id,
-          action: existing ? "update" : "create",
-          changes: {
-            old: existing
-              ? {
-                  name: existing.name,
-                  config: existing.config,
-                }
-              : null,
-            new: {
-              name: saved.name,
-              config: saved.config,
-            },
-          },
-          performedBy: session.user.id,
-          ipAddress:
-            c.req.header("x-forwarded-for") ??
-            c.req.header("x-real-ip") ??
-            null,
-        });
-
-        return saved;
-      });
+          return saved;
+        },
+      );
 
       if (!profile) {
         return c.json({ error: "Falha ao salvar perfil" }, 500);
@@ -197,26 +205,28 @@ export const certificateNumberingRouter = new Hono<{
       const memberData = c.get("member");
       requireUnitOperationalSettingsManager(memberData);
 
-      const rows = await db
-        .select({
-          id: certificateNumberingAuditLog.id,
-          profileId: certificateNumberingAuditLog.profileId,
-          action: certificateNumberingAuditLog.action,
-          changes: certificateNumberingAuditLog.changes,
-          performedBy: certificateNumberingAuditLog.performedBy,
-          performedAt: certificateNumberingAuditLog.performedAt,
-        })
-        .from(certificateNumberingAuditLog)
-        .where(
-          and(
-            eq(
-              certificateNumberingAuditLog.organizationId,
-              memberData.organizationId,
+      const rows = await orgDb(memberData.organizationId).transaction((o) =>
+        o
+          .select({
+            id: certificateNumberingAuditLog.id,
+            profileId: certificateNumberingAuditLog.profileId,
+            action: certificateNumberingAuditLog.action,
+            changes: certificateNumberingAuditLog.changes,
+            performedBy: certificateNumberingAuditLog.performedBy,
+            performedAt: certificateNumberingAuditLog.performedAt,
+          })
+          .from(certificateNumberingAuditLog)
+          .where(
+            and(
+              eq(
+                certificateNumberingAuditLog.organizationId,
+                memberData.organizationId,
+              ),
             ),
-          ),
-        )
-        .orderBy(desc(certificateNumberingAuditLog.performedAt))
-        .limit(50);
+          )
+          .orderBy(desc(certificateNumberingAuditLog.performedAt))
+          .limit(50),
+      );
 
       return c.json({ data: rows });
     },

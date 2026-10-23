@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   service,
   serviceAuditLog,
@@ -19,6 +19,7 @@ import {
 } from "../middleware/permission";
 import { eq, and, or, ilike, desc, count } from "drizzle-orm";
 import { buildUnitScopeCondition } from "../lib/units";
+import { orgDb } from "../lib/org-db";
 import {
   buildServiceRouteIdentifier,
   parseLegacyNumericIdentifier,
@@ -41,6 +42,8 @@ import {
 async function resolveServiceRouteId(
   identifier: string,
   member: AuthVariables["member"],
+  // The caller's org-bound transaction (row-level security).
+  o: OrgDb,
 ): Promise<number | null> {
   const legacyId = parseLegacyNumericIdentifier(identifier);
   const directConditions = [eq(service.name, identifier)];
@@ -49,7 +52,7 @@ async function resolveServiceRouteId(
     directConditions.unshift(eq(service.id, legacyId));
   }
 
-  const [directMatch] = await db
+  const [directMatch] = await o
     .select({ id: service.id })
     .from(service)
     .where(
@@ -65,7 +68,7 @@ async function resolveServiceRouteId(
     return directMatch.id;
   }
 
-  const scopedServices = await db
+  const scopedServices = await o
     .select({ id: service.id, name: service.name })
     .from(service)
     .where(
@@ -122,14 +125,110 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
 
       const whereCondition = and(...conditions);
 
-      // Get total count
-      const [countResult] = await db
-        .select({ total: count() })
-        .from(service)
-        .where(whereCondition);
+      const { countResult, services } = await orgDb(
+        member.organizationId,
+      ).transaction(async (o) => {
+        // Get total count
+        const [total] = await o
+          .select({ total: count() })
+          .from(service)
+          .where(whereCondition);
 
-      // Get paginated data with joins
-      const services = await db
+        // Get paginated data with joins
+        const rows = await o
+          .select({
+            id: service.id,
+            name: service.name,
+            description: service.description,
+            methodId: service.methodId,
+            methodName: calibrationMethod.name,
+            methodVersion: calibrationMethod.version,
+            methodStatus: calibrationMethod.status,
+            assetTypeId: service.assetTypeId,
+            assetTypeName: assetType.name,
+            price: service.price,
+            currency: service.currency,
+            tat: service.tat,
+            isActive: service.isActive,
+            createdAt: service.createdAt,
+            updatedAt: service.updatedAt,
+          })
+          .from(service)
+          .leftJoin(
+            calibrationMethod,
+            eq(service.methodId, calibrationMethod.id),
+          )
+          .leftJoin(assetType, eq(service.assetTypeId, assetType.id))
+          .where(whereCondition)
+          .orderBy(desc(service.createdAt))
+          .limit(limit)
+          .offset(offset);
+
+        return { countResult: total, services: rows };
+      });
+
+      return c.json({
+        data: services,
+        pagination: {
+          page,
+          limit,
+          total: countResult?.total ?? 0,
+          totalPages: Math.ceil((countResult?.total ?? 0) / limit),
+        },
+      });
+    },
+  )
+
+  // =========================================================================
+  // GET /:id/label - Get service label by ID
+  // =========================================================================
+  .get("/:id/label", ...withLabPermission({ service: ["read"] }), async (c) => {
+    const member = c.get("member");
+
+    return orgDb(member.organizationId).transaction(async (o) => {
+      const id = await resolveServiceRouteId(c.req.param("id"), member, o);
+
+      if (id === null) {
+        return c.json({ error: "ID inválido" }, 400);
+      }
+
+      const [found] = await o
+        .select({
+          id: service.id,
+          label: service.name,
+        })
+        .from(service)
+        .where(
+          and(
+            eq(service.id, id),
+            eq(service.organizationId, member.organizationId),
+            buildUnitScopeCondition(service.unitId, member),
+          ),
+        )
+        .limit(1);
+
+      if (!found) {
+        return c.json({ error: "Serviço não encontrado" }, 404);
+      }
+
+      return c.json(found);
+    });
+  })
+
+  // =========================================================================
+  // GET /:id - Get single service by ID
+  // =========================================================================
+  .get("/:id", ...withLabPermission({ service: ["read"] }), async (c) => {
+    const member = c.get("member");
+
+    return orgDb(member.organizationId).transaction(async (o) => {
+      const id = await resolveServiceRouteId(c.req.param("id"), member, o);
+
+      if (id === null) {
+        return c.json({ error: "ID inválido" }, 400);
+      }
+
+      const [found] = await o
         .select({
           id: service.id,
           name: service.name,
@@ -150,102 +249,21 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
         .from(service)
         .leftJoin(calibrationMethod, eq(service.methodId, calibrationMethod.id))
         .leftJoin(assetType, eq(service.assetTypeId, assetType.id))
-        .where(whereCondition)
-        .orderBy(desc(service.createdAt))
-        .limit(limit)
-        .offset(offset);
+        .where(
+          and(
+            eq(service.id, id),
+            eq(service.organizationId, member.organizationId),
+            buildUnitScopeCondition(service.unitId, member),
+          ),
+        )
+        .limit(1);
 
-      return c.json({
-        data: services,
-        pagination: {
-          page,
-          limit,
-          total: countResult?.total ?? 0,
-          totalPages: Math.ceil((countResult?.total ?? 0) / limit),
-        },
-      });
-    },
-  )
+      if (!found) {
+        return c.json({ error: "Serviço não encontrado" }, 404);
+      }
 
-  // =========================================================================
-  // GET /:id/label - Get service label by ID
-  // =========================================================================
-  .get("/:id/label", ...withLabPermission({ service: ["read"] }), async (c) => {
-    const member = c.get("member");
-    const id = await resolveServiceRouteId(c.req.param("id"), member);
-
-    if (id === null) {
-      return c.json({ error: "ID inválido" }, 400);
-    }
-
-    const [found] = await db
-      .select({
-        id: service.id,
-        label: service.name,
-      })
-      .from(service)
-      .where(
-        and(
-          eq(service.id, id),
-          eq(service.organizationId, member.organizationId),
-          buildUnitScopeCondition(service.unitId, member),
-        ),
-      )
-      .limit(1);
-
-    if (!found) {
-      return c.json({ error: "Serviço não encontrado" }, 404);
-    }
-
-    return c.json(found);
-  })
-
-  // =========================================================================
-  // GET /:id - Get single service by ID
-  // =========================================================================
-  .get("/:id", ...withLabPermission({ service: ["read"] }), async (c) => {
-    const member = c.get("member");
-    const id = await resolveServiceRouteId(c.req.param("id"), member);
-
-    if (id === null) {
-      return c.json({ error: "ID inválido" }, 400);
-    }
-
-    const [found] = await db
-      .select({
-        id: service.id,
-        name: service.name,
-        description: service.description,
-        methodId: service.methodId,
-        methodName: calibrationMethod.name,
-        methodVersion: calibrationMethod.version,
-        methodStatus: calibrationMethod.status,
-        assetTypeId: service.assetTypeId,
-        assetTypeName: assetType.name,
-        price: service.price,
-        currency: service.currency,
-        tat: service.tat,
-        isActive: service.isActive,
-        createdAt: service.createdAt,
-        updatedAt: service.updatedAt,
-      })
-      .from(service)
-      .leftJoin(calibrationMethod, eq(service.methodId, calibrationMethod.id))
-      .leftJoin(assetType, eq(service.assetTypeId, assetType.id))
-      .where(
-        and(
-          eq(service.id, id),
-          eq(service.organizationId, member.organizationId),
-          buildUnitScopeCondition(service.unitId, member),
-        ),
-      )
-      .limit(1);
-
-    if (!found) {
-      return c.json({ error: "Serviço não encontrado" }, 404);
-    }
-
-    return c.json(found);
+      return c.json(found);
+    });
   })
 
   // =========================================================================
@@ -266,134 +284,15 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
           400,
         );
       }
+      const { activeUnitId } = member;
 
-      // If methodId is provided, validate it belongs to same organization
-      // and auto-fill assetTypeId from method
-      let finalAssetTypeId = input.assetTypeId;
+      return orgDb(member.organizationId).transaction(async (o) => {
+        // If methodId is provided, validate it belongs to same organization
+        // and auto-fill assetTypeId from method
+        let finalAssetTypeId = input.assetTypeId;
 
-      if (input.methodId) {
-        const [method] = await db
-          .select({
-            id: calibrationMethod.id,
-            assetTypeId: calibrationMethod.assetTypeId,
-            status: calibrationMethod.status,
-          })
-          .from(calibrationMethod)
-          .where(
-            and(
-              eq(calibrationMethod.id, input.methodId),
-              eq(calibrationMethod.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!method) {
-          return c.json({ error: "Método não encontrado" }, 400);
-        }
-
-        // Warn if method is not published (but allow it)
-        if (method.status !== "PUBLISHED") {
-          // We allow linking to draft methods but the service should be inactive
-          // until the method is published
-        }
-
-        // Auto-fill assetTypeId from method if not provided
-        // If method has assetTypeId, it MUST match (enforced at API level)
-        if (method.assetTypeId) {
-          if (input.assetTypeId && input.assetTypeId !== method.assetTypeId) {
-            return c.json(
-              {
-                error:
-                  "Tipo de instrumento deve corresponder ao método selecionado",
-              },
-              400,
-            );
-          }
-          finalAssetTypeId = method.assetTypeId;
-        }
-      }
-
-      // Create the service
-      const [newService] = await db
-        .insert(service)
-        .values({
-          unitId: member.activeUnitId,
-          organizationId: member.organizationId,
-          name: input.name,
-          description: input.description || null,
-          methodId: input.methodId || null,
-          assetTypeId: finalAssetTypeId || null,
-          price: input.price ?? null,
-          currency: input.currency || "BRL",
-          tat: input.tat ?? null,
-          isActive: input.isActive ?? true,
-        })
-        .returning();
-
-      if (!newService) {
-        return c.json({ error: "Falha ao criar serviço" }, 500);
-      }
-
-      // Audit log
-      await db.insert(serviceAuditLog).values({
-        organizationId: member.organizationId,
-        serviceId: newService.id,
-        action: "create",
-        changes: { initial: input },
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
-      });
-
-      return c.json(newService, 201);
-    },
-  )
-
-  // =========================================================================
-  // PUT /:id - Update existing service
-  // =========================================================================
-  .put(
-    "/:id",
-    ...withLabPermission({ service: ["update"] }),
-    zValidator("json", UpdateServiceSchema),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const input = c.req.valid("json");
-      const id = await resolveServiceRouteId(c.req.param("id"), member);
-
-      if (id === null) {
-        return c.json({ error: "ID inválido" }, 400);
-      }
-
-      // Get existing service
-      const [existing] = await db
-        .select()
-        .from(service)
-        .where(
-          and(
-            eq(service.id, id),
-            eq(service.organizationId, member.organizationId),
-            buildUnitScopeCondition(service.unitId, member),
-          ),
-        )
-        .limit(1);
-
-      if (!existing) {
-        return c.json({ error: "Serviço não encontrado" }, 404);
-      }
-
-      // If methodId is being changed, validate it
-      let finalAssetTypeId = input.assetTypeId;
-
-      if (input.methodId !== undefined) {
-        if (input.methodId === null) {
-          // Method is being removed, allow assetTypeId to be freely changed
-          if (input.assetTypeId !== undefined) {
-            finalAssetTypeId = input.assetTypeId;
-          }
-        } else {
-          // Method is being set or changed
-          const [method] = await db
+        if (input.methodId) {
+          const [method] = await o
             .select({
               id: calibrationMethod.id,
               assetTypeId: calibrationMethod.assetTypeId,
@@ -412,7 +311,14 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
             return c.json({ error: "Método não encontrado" }, 400);
           }
 
-          // Enforce method's assetTypeId constraint
+          // Warn if method is not published (but allow it)
+          if (method.status !== "PUBLISHED") {
+            // We allow linking to draft methods but the service should be inactive
+            // until the method is published
+          }
+
+          // Auto-fill assetTypeId from method if not provided
+          // If method has assetTypeId, it MUST match (enforced at API level)
           if (method.assetTypeId) {
             if (input.assetTypeId && input.assetTypeId !== method.assetTypeId) {
               return c.json(
@@ -426,90 +332,210 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
             finalAssetTypeId = method.assetTypeId;
           }
         }
-      }
 
-      // Build changes object for audit log
-      const changes: Record<string, { old: unknown; new: unknown }> = {};
-      const updateData: Record<string, unknown> = {};
+        // Create the service
+        const [newService] = await o
+          .insert(service)
+          .values({
+            unitId: activeUnitId,
+            organizationId: member.organizationId,
+            name: input.name,
+            description: input.description || null,
+            methodId: input.methodId || null,
+            assetTypeId: finalAssetTypeId || null,
+            price: input.price ?? null,
+            currency: input.currency || "BRL",
+            tat: input.tat ?? null,
+            isActive: input.isActive ?? true,
+          })
+          .returning();
 
-      // Check each field for changes
-      if (input.name !== undefined && input.name !== existing.name) {
-        changes.name = { old: existing.name, new: input.name };
-        updateData.name = input.name;
-      }
-      if (
-        input.description !== undefined &&
-        input.description !== existing.description
-      ) {
-        changes.description = {
-          old: existing.description,
-          new: input.description,
-        };
-        updateData.description = input.description;
-      }
-      if (
-        input.methodId !== undefined &&
-        input.methodId !== existing.methodId
-      ) {
-        changes.methodId = { old: existing.methodId, new: input.methodId };
-        updateData.methodId = input.methodId;
-      }
-      if (
-        finalAssetTypeId !== undefined &&
-        finalAssetTypeId !== existing.assetTypeId
-      ) {
-        changes.assetTypeId = {
-          old: existing.assetTypeId,
-          new: finalAssetTypeId,
-        };
-        updateData.assetTypeId = finalAssetTypeId;
-      }
-      if (input.price !== undefined && input.price !== existing.price) {
-        changes.price = { old: existing.price, new: input.price };
-        updateData.price = input.price;
-      }
-      if (
-        input.currency !== undefined &&
-        input.currency !== existing.currency
-      ) {
-        changes.currency = { old: existing.currency, new: input.currency };
-        updateData.currency = input.currency;
-      }
-      if (input.tat !== undefined && input.tat !== existing.tat) {
-        changes.tat = { old: existing.tat, new: input.tat };
-        updateData.tat = input.tat;
-      }
-      if (
-        input.isActive !== undefined &&
-        input.isActive !== existing.isActive
-      ) {
-        changes.isActive = { old: existing.isActive, new: input.isActive };
-        updateData.isActive = input.isActive;
-      }
+        if (!newService) {
+          return c.json({ error: "Falha ao criar serviço" }, 500);
+        }
 
-      // If no changes, return existing
-      if (Object.keys(updateData).length === 0) {
-        return c.json(existing);
-      }
+        // Audit log
+        await o.insert(serviceAuditLog).values({
+          organizationId: member.organizationId,
+          serviceId: newService.id,
+          action: "create",
+          changes: { initial: input },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        });
 
-      // Update the service
-      const [updated] = await db
-        .update(service)
-        .set(updateData)
-        .where(eq(service.id, id))
-        .returning();
-
-      // Audit log
-      await db.insert(serviceAuditLog).values({
-        organizationId: member.organizationId,
-        serviceId: id,
-        action: "update",
-        changes,
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
+        return c.json(newService, 201);
       });
+    },
+  )
 
-      return c.json(updated);
+  // =========================================================================
+  // PUT /:id - Update existing service
+  // =========================================================================
+  .put(
+    "/:id",
+    ...withLabPermission({ service: ["update"] }),
+    zValidator("json", UpdateServiceSchema),
+    async (c) => {
+      const member = c.get("member");
+      const session = c.get("session");
+      const input = c.req.valid("json");
+      return orgDb(member.organizationId).transaction(async (o) => {
+        const id = await resolveServiceRouteId(c.req.param("id"), member, o);
+
+        if (id === null) {
+          return c.json({ error: "ID inválido" }, 400);
+        }
+
+        // Get existing service
+        const [existing] = await o
+          .select()
+          .from(service)
+          .where(
+            and(
+              eq(service.id, id),
+              eq(service.organizationId, member.organizationId),
+              buildUnitScopeCondition(service.unitId, member),
+            ),
+          )
+          .limit(1);
+
+        if (!existing) {
+          return c.json({ error: "Serviço não encontrado" }, 404);
+        }
+
+        // If methodId is being changed, validate it
+        let finalAssetTypeId = input.assetTypeId;
+
+        if (input.methodId !== undefined) {
+          if (input.methodId === null) {
+            // Method is being removed, allow assetTypeId to be freely changed
+            if (input.assetTypeId !== undefined) {
+              finalAssetTypeId = input.assetTypeId;
+            }
+          } else {
+            // Method is being set or changed
+            const [method] = await o
+              .select({
+                id: calibrationMethod.id,
+                assetTypeId: calibrationMethod.assetTypeId,
+                status: calibrationMethod.status,
+              })
+              .from(calibrationMethod)
+              .where(
+                and(
+                  eq(calibrationMethod.id, input.methodId),
+                  eq(calibrationMethod.organizationId, member.organizationId),
+                ),
+              )
+              .limit(1);
+
+            if (!method) {
+              return c.json({ error: "Método não encontrado" }, 400);
+            }
+
+            // Enforce method's assetTypeId constraint
+            if (method.assetTypeId) {
+              if (
+                input.assetTypeId &&
+                input.assetTypeId !== method.assetTypeId
+              ) {
+                return c.json(
+                  {
+                    error:
+                      "Tipo de instrumento deve corresponder ao método selecionado",
+                  },
+                  400,
+                );
+              }
+              finalAssetTypeId = method.assetTypeId;
+            }
+          }
+        }
+
+        // Build changes object for audit log
+        const changes: Record<string, { old: unknown; new: unknown }> = {};
+        const updateData: Record<string, unknown> = {};
+
+        // Check each field for changes
+        if (input.name !== undefined && input.name !== existing.name) {
+          changes.name = { old: existing.name, new: input.name };
+          updateData.name = input.name;
+        }
+        if (
+          input.description !== undefined &&
+          input.description !== existing.description
+        ) {
+          changes.description = {
+            old: existing.description,
+            new: input.description,
+          };
+          updateData.description = input.description;
+        }
+        if (
+          input.methodId !== undefined &&
+          input.methodId !== existing.methodId
+        ) {
+          changes.methodId = { old: existing.methodId, new: input.methodId };
+          updateData.methodId = input.methodId;
+        }
+        if (
+          finalAssetTypeId !== undefined &&
+          finalAssetTypeId !== existing.assetTypeId
+        ) {
+          changes.assetTypeId = {
+            old: existing.assetTypeId,
+            new: finalAssetTypeId,
+          };
+          updateData.assetTypeId = finalAssetTypeId;
+        }
+        if (input.price !== undefined && input.price !== existing.price) {
+          changes.price = { old: existing.price, new: input.price };
+          updateData.price = input.price;
+        }
+        if (
+          input.currency !== undefined &&
+          input.currency !== existing.currency
+        ) {
+          changes.currency = { old: existing.currency, new: input.currency };
+          updateData.currency = input.currency;
+        }
+        if (input.tat !== undefined && input.tat !== existing.tat) {
+          changes.tat = { old: existing.tat, new: input.tat };
+          updateData.tat = input.tat;
+        }
+        if (
+          input.isActive !== undefined &&
+          input.isActive !== existing.isActive
+        ) {
+          changes.isActive = { old: existing.isActive, new: input.isActive };
+          updateData.isActive = input.isActive;
+        }
+
+        // If no changes, return existing
+        if (Object.keys(updateData).length === 0) {
+          return c.json(existing);
+        }
+
+        // Update the service
+        const [updated] = await o
+          .update(service)
+          .set(updateData)
+          .where(eq(service.id, id))
+          .returning();
+
+        // Audit log
+        await o.insert(serviceAuditLog).values({
+          organizationId: member.organizationId,
+          serviceId: id,
+          action: "update",
+          changes,
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        });
+
+        return c.json(updated);
+      });
     },
   )
 
@@ -519,69 +545,15 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
   .delete("/:id", ...withLabPermission({ service: ["delete"] }), async (c) => {
     const member = c.get("member");
     const session = c.get("session");
-    const id = await resolveServiceRouteId(c.req.param("id"), member);
-
-    if (id === null) {
-      return c.json({ error: "ID inválido" }, 400);
-    }
-
-    const [existing] = await db
-      .select()
-      .from(service)
-      .where(
-        and(
-          eq(service.id, id),
-          eq(service.organizationId, member.organizationId),
-          buildUnitScopeCondition(service.unitId, member),
-        ),
-      )
-      .limit(1);
-
-    if (!existing) {
-      return c.json({ error: "Serviço não encontrado" }, 404);
-    }
-
-    // Soft delete - just deactivate
-    // Never hard delete commercial data for financial audit trail
-    const [updated] = await db
-      .update(service)
-      .set({ isActive: false })
-      .where(eq(service.id, id))
-      .returning();
-
-    // Audit log
-    await db.insert(serviceAuditLog).values({
-      organizationId: member.organizationId,
-      serviceId: id,
-      action: "deactivate",
-      changes: { isActive: { old: true, new: false } },
-      performedBy: session.user.id,
-      ipAddress: c.req.header("x-forwarded-for") || null,
-    });
-
-    return c.json({
-      message: "Serviço desativado com sucesso",
-      data: updated,
-    });
-  })
-
-  // =========================================================================
-  // GET /:id/audit-log - Get audit log for a service (ISO 17025 Clause 8.4)
-  // =========================================================================
-  .get(
-    "/:id/audit-log",
-    ...withLabPermission({ service: ["read"] }),
-    async (c) => {
-      const member = c.get("member");
-      const id = await resolveServiceRouteId(c.req.param("id"), member);
+    return orgDb(member.organizationId).transaction(async (o) => {
+      const id = await resolveServiceRouteId(c.req.param("id"), member, o);
 
       if (id === null) {
         return c.json({ error: "ID inválido" }, 400);
       }
 
-      // Verify service exists and belongs to organization
-      const [existing] = await db
-        .select({ id: service.id })
+      const [existing] = await o
+        .select()
         .from(service)
         .where(
           and(
@@ -596,23 +568,81 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Serviço não encontrado" }, 404);
       }
 
-      // Get audit logs with performer details
-      const logs = await db
-        .select({
-          id: serviceAuditLog.id,
-          action: serviceAuditLog.action,
-          changes: serviceAuditLog.changes,
-          performedAt: serviceAuditLog.performedAt,
-          performedBy: serviceAuditLog.performedBy,
-          performerName: user.name,
-          ipAddress: serviceAuditLog.ipAddress,
-          reason: serviceAuditLog.reason,
-        })
-        .from(serviceAuditLog)
-        .leftJoin(user, eq(serviceAuditLog.performedBy, user.id))
-        .where(eq(serviceAuditLog.serviceId, id))
-        .orderBy(desc(serviceAuditLog.performedAt));
+      // Soft delete - just deactivate
+      // Never hard delete commercial data for financial audit trail
+      const [updated] = await o
+        .update(service)
+        .set({ isActive: false })
+        .where(eq(service.id, id))
+        .returning();
 
-      return c.json({ data: logs });
+      // Audit log
+      await o.insert(serviceAuditLog).values({
+        organizationId: member.organizationId,
+        serviceId: id,
+        action: "deactivate",
+        changes: { isActive: { old: true, new: false } },
+        performedBy: session.user.id,
+        ipAddress: c.req.header("x-forwarded-for") || null,
+      });
+
+      return c.json({
+        message: "Serviço desativado com sucesso",
+        data: updated,
+      });
+    });
+  })
+
+  // =========================================================================
+  // GET /:id/audit-log - Get audit log for a service (ISO 17025 Clause 8.4)
+  // =========================================================================
+  .get(
+    "/:id/audit-log",
+    ...withLabPermission({ service: ["read"] }),
+    async (c) => {
+      const member = c.get("member");
+      return orgDb(member.organizationId).transaction(async (o) => {
+        const id = await resolveServiceRouteId(c.req.param("id"), member, o);
+
+        if (id === null) {
+          return c.json({ error: "ID inválido" }, 400);
+        }
+
+        // Verify service exists and belongs to organization
+        const [existing] = await o
+          .select({ id: service.id })
+          .from(service)
+          .where(
+            and(
+              eq(service.id, id),
+              eq(service.organizationId, member.organizationId),
+              buildUnitScopeCondition(service.unitId, member),
+            ),
+          )
+          .limit(1);
+
+        if (!existing) {
+          return c.json({ error: "Serviço não encontrado" }, 404);
+        }
+
+        // Get audit logs with performer details
+        const logs = await o
+          .select({
+            id: serviceAuditLog.id,
+            action: serviceAuditLog.action,
+            changes: serviceAuditLog.changes,
+            performedAt: serviceAuditLog.performedAt,
+            performedBy: serviceAuditLog.performedBy,
+            performerName: user.name,
+            ipAddress: serviceAuditLog.ipAddress,
+            reason: serviceAuditLog.reason,
+          })
+          .from(serviceAuditLog)
+          .leftJoin(user, eq(serviceAuditLog.performedBy, user.id))
+          .where(eq(serviceAuditLog.serviceId, id))
+          .orderBy(desc(serviceAuditLog.performedAt));
+
+        return c.json({ data: logs });
+      });
     },
   );
