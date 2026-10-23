@@ -868,23 +868,38 @@ describe("service orders (lab routes) — success paths and cross-laboratory neg
         createdByUserId: a.userId,
       })
       .returning({ id: serviceOrderQuote.id });
-    // (The route `/:id/quotes/:quoteId.pdf` captures "1.pdf" as the id and answers
-    // 400 for every quote today, so the link function is exercised directly.)
+    const quoteId = quote?.id ?? 0;
+    const quotePdf = await call({
+      path: `/${opened.id}/quotes/${quoteId}.pdf`,
+    });
+    expect(quotePdf.status).toBe(200);
+    expect(quotePdf.body.url).toContain("docs/quote.pdf");
+    // A quote that is not on this order (or does not exist) has no link.
     expect(
-      await getQuoteDocumentDownloadUrl(
-        ENV,
-        opened.id,
-        quote?.id ?? 0,
-        a.orgId,
-      ),
-    ).toContain("docs/quote.pdf");
+      (await call({ path: `/${opened.id}/quotes/${quoteId + 1000}.pdf` }))
+        .status,
+    ).toBe(404);
+    const [quoteB] = await db
+      .insert(serviceOrderQuote)
+      .values({
+        organizationId: b.orgId,
+        serviceOrderId: orderB,
+        quoteNumber: "OS-B-1/ORC",
+        version: 1,
+        status: "sent",
+        pdfR2Key: "docs/quote-b.pdf",
+        createdByUserId: b.userId,
+      })
+      .returning({ id: serviceOrderQuote.id });
+    // Laboratory B's quote, by B's order id or through A's order id: 404.
+    for (const path of [
+      `/${orderB}/quotes/${quoteB?.id ?? 0}.pdf`,
+      `/${opened.id}/quotes/${quoteB?.id ?? 0}.pdf`,
+    ]) {
+      expect((await call({ path })).status).toBe(404);
+    }
     expect(
-      await getQuoteDocumentDownloadUrl(
-        ENV,
-        opened.id,
-        quote?.id ?? 0,
-        b.orgId,
-      ),
+      await getQuoteDocumentDownloadUrl(ENV, opened.id, quoteId, b.orgId),
     ).toBeNull();
 
     // Laboratory B: every document endpoint refuses, and issues nothing.
