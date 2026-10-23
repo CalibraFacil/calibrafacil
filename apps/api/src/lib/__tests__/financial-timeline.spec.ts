@@ -165,6 +165,7 @@ describe("financial timeline read model", () => {
 
     await expect(
       buildServiceOrderFinancialStatus({
+        executor: mocks.db,
         organizationId: "org-1",
         scope: unitScope,
         serviceOrderId: 42,
@@ -229,6 +230,7 @@ describe("financial timeline read model", () => {
     );
 
     const result = await buildServiceOrderFinancialStatus({
+      executor: mocks.db,
       organizationId: "org-1",
       scope: unitScope,
       serviceOrderId: 42,
@@ -317,6 +319,7 @@ describe("financial timeline read model", () => {
     );
 
     const result = await buildServiceOrderFinancialStatus({
+      executor: mocks.db,
       organizationId: "org-1",
       scope: unitScope,
       serviceOrderId: 42,
@@ -362,6 +365,7 @@ describe("financial timeline read model", () => {
     );
 
     await buildServiceOrderFinancialStatus({
+      executor: mocks.db,
       organizationId: "org-1",
       scope: unitScope,
       serviceOrderId: 42,
@@ -377,6 +381,7 @@ describe("financial timeline read model", () => {
         },
       ],
       "org-1",
+      mocks.db,
     );
   });
 
@@ -416,6 +421,7 @@ describe("financial timeline read model", () => {
     );
 
     const result = await buildCustomerFinancialTimeline({
+      executor: mocks.db,
       organizationId: "org-1",
       scope: unitScope,
       customerId: 10,
@@ -462,6 +468,7 @@ describe("financial timeline read model", () => {
     useDbResults([{ id: 10, name: "Cliente A" }], twentyDocuments, []);
 
     const exactLimit = await buildCustomerFinancialTimeline({
+      executor: mocks.db,
       organizationId: "org-1",
       scope: unitScope,
       customerId: 10,
@@ -499,6 +506,7 @@ describe("financial timeline read model", () => {
     );
 
     const overLimit = await buildCustomerFinancialTimeline({
+      executor: mocks.db,
       organizationId: "org-1",
       scope: unitScope,
       customerId: 10,
@@ -539,6 +547,7 @@ describe("financial timeline read model", () => {
     );
 
     const result = await buildCustomerFinancialTimeline({
+      executor: mocks.db,
       organizationId: "org-1",
       scope: unitScope,
       customerId: 10,
@@ -585,6 +594,7 @@ describe("financial timeline read model", () => {
     );
 
     const result = await buildCustomerFinancialTimeline({
+      executor: mocks.db,
       organizationId: "org-1",
       scope: unitScope,
       customerId: 10,
@@ -605,6 +615,7 @@ describe("financial timeline read model", () => {
     useDbResults([{ id: 10, name: "Cliente A" }], [], [], []);
 
     const result = await buildCustomerFinancialTimeline({
+      executor: mocks.db,
       organizationId: "org-1",
       scope: {
         ...unitScope,
@@ -666,6 +677,7 @@ describe("financial timeline read model", () => {
     );
 
     const result = await buildCustomerFinancialTimeline({
+      executor: mocks.db,
       organizationId: "org-1",
       scope: unitScope,
       customerId: 10,
@@ -728,6 +740,7 @@ describe("financial timeline read model", () => {
     );
 
     const result = await buildCustomerFinancialTimeline({
+      executor: mocks.db,
       organizationId: "org-1",
       scope: unitScope,
       customerId: 10,
@@ -770,6 +783,7 @@ describe("financial timeline read model", () => {
     );
 
     const result = await buildCustomerFinancialTimeline({
+      executor: mocks.db,
       organizationId: "org-1",
       scope: unitScope,
       customerId: 10,
@@ -812,6 +826,7 @@ describe("financial timeline read model", () => {
     );
 
     const result = await buildCustomerFinancialTimeline({
+      executor: mocks.db,
       organizationId: "org-1",
       scope: unitScope,
       customerId: 10,
@@ -887,6 +902,7 @@ describe("financial timeline read model", () => {
     );
 
     const result = await buildCustomerFinancialTimeline({
+      executor: mocks.db,
       organizationId: "org-1",
       scope: unitScope,
       customerId: 10,
@@ -953,6 +969,7 @@ describe("financial timeline read model", () => {
     );
 
     const result = await buildCustomerFinancialTimeline({
+      executor: mocks.db,
       organizationId: "org-1",
       scope: unitScope,
       customerId: 10,

@@ -85,7 +85,10 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
     // superseded certificate to an "invalid" page labelled as the current one.
     let supersededByInfo = null;
     if (job.supersededById) {
-      const replacement = await findPublicAmendmentLink(job.supersededById);
+      const replacement = await findPublicAmendmentLink(
+        job.organizationId,
+        job.supersededById,
+      );
 
       if (replacement) {
         supersededByInfo = {
@@ -102,7 +105,10 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
     // already-approved amendment's public verify page.
     let supersedesInfo = null;
     if (job.supersedesId) {
-      const original = await findPublicAmendmentLink(job.supersedesId);
+      const original = await findPublicAmendmentLink(
+        job.organizationId,
+        job.supersedesId,
+      );
 
       if (original) {
         supersedesInfo = {

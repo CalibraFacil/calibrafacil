@@ -463,12 +463,18 @@ export async function buildPortalServiceOrderFinancialSummary(params: {
   scope: PortalFinancialScope;
   documentHrefSigner?: PortalFinancialDocumentHrefSigner;
 }): Promise<PortalServiceOrderFinancialSummary | null> {
-  const financialStatus = await buildServiceOrderFinancialStatus({
-    organizationId: params.organizationId,
-    serviceOrderId: params.serviceOrderId,
-    scope: params.scope,
-    includeProviderEvidence: true,
-  });
+  // One organization-bound transaction for every read of the status (the order,
+  // its certificate links, the billing document, installments, receipts and
+  // the integration evidence); the document signing below runs after it.
+  const financialStatus = await orgDb(params.organizationId).transaction((o) =>
+    buildServiceOrderFinancialStatus({
+      executor: o,
+      organizationId: params.organizationId,
+      serviceOrderId: params.serviceOrderId,
+      scope: params.scope,
+      includeProviderEvidence: true,
+    }),
+  );
 
   if (!financialStatus) return null;
 

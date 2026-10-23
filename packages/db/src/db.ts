@@ -197,10 +197,12 @@ export function getDb(): Database {
  * transaction scope: it is another connection by design.
  */
 export function getSystemDb(): Database {
-  queryObserver?.onAccess?.();
   const config = readDatabaseConfig();
   const ownerUrl = config.ownerUrl;
+  // Unset: the application connection. `getDb()` reports the access itself, so
+  // the observer sees exactly one access per call on either branch.
   if (!ownerUrl) return getDb();
+  queryObserver?.onAccess?.();
   const isCloudflare = isCloudflareWorkersRuntime();
   return cacheSystemDatabase(`owner:${ownerUrl}:${config.poolMax}`, () => {
     if (isCloudflare) return createNeonServerlessDatabase(ownerUrl);

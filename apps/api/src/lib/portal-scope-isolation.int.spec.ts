@@ -2,22 +2,22 @@
  * portal-scope-isolation.int.spec.ts - P2-18a [HIGH RISK].
  *
  * Two laboratories, each with a portal customer. Proves, against the real
- * database, the three walls the client portal stands on after its cutover to
- * row-level security:
+ * database and at the LIBRARY level (it calls no HTTP handler):
  *
  *   1. the SYSTEM-path resolvers (portal customer scope, accessible customers,
  *      the organization switcher, the host-name lookup, `orgSetDb`) that have to
  *      run before a laboratory is named never hand a customer of lab A a row,
  *      id or laboratory of lab B;
- *   2. the org-bound transaction the handlers run in (`orgDb(lab).transaction`)
- *      reads lab A's rows as the application role (`calibra_app`, bound by the
- *      `tenant_isolation` policies) and NOTHING of lab B's, even by lab B's ids;
+ *   2. the org-bound transaction (`orgDb(lab).transaction`) reads lab A's rows as
+ *      the application role (`calibra_app`, bound by the `tenant_isolation`
+ *      policies) and NOTHING of lab B's, even by lab B's ids;
  *   3. a statement outside a transaction sees nothing as `calibra_app` (fail
- *      closed), so a handler that forgets the transaction is caught here.
+ *      closed).
  *
- * The HTTP-level counterpart (every portal endpoint, lab B's identifiers in lab
- * A's session, as `calibra_app`) is portal-cross-tenant.int.spec.ts under
- * `pnpm --filter @calibra-facil/api rls:shadow-report`.
+ * The handler-level proof (lab B's identifiers in lab A's session on every
+ * portal endpoint, as `calibra_app`) is portal-cross-tenant.int.spec.ts run by
+ * `pnpm --filter @calibra-facil/api rls:shadow-report`, together with the other
+ * portal specs.
  */
 import { beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";

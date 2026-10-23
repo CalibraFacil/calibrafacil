@@ -116,7 +116,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     ],
     kinds: ["select"],
     reason:
-      "Public certificate verification (routes/verify.ts, on the system path): looked up by verification_token, which names the laboratory, or by the supersedes/superseded-by link of a job already resolved from a token (terminal statuses only). Exposes only that certificate.",
+      "Public certificate verification (routes/verify.ts, on the system path): looked up by verification_token, which names the laboratory; the amendment links that follow are bound to it (orgDb). Exposes only that certificate.",
   },
   {
     category: "public-token",

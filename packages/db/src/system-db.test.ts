@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getDb, getSystemDb, systemDb } from "./db";
+import { getDb, getSystemDb, setQueryObserver, systemDb } from "./db";
 
 // The SYSTEM path (P2-18): the owner connection that the statements which are
 // cross-organization by design run on. postgres.js connects lazily, so these
@@ -17,6 +17,7 @@ function connectedUser(database: unknown): unknown {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  setQueryObserver(null);
 });
 
 describe("systemDb (P2-18: the named owner/system path)", () => {
@@ -59,5 +60,23 @@ describe("systemDb (P2-18: the named owner/system path)", () => {
     expect(Reflect.get(systemDb, "$client")).toBe(
       Reflect.get(getSystemDb(), "$client"),
     );
+  });
+
+  it("reports exactly one access to the query observer per call, with or without an owner URL", () => {
+    vi.stubEnv("DATABASE_URL", "postgres://app_user:pw@localhost:1/calibra");
+    const onAccess = vi.fn();
+    setQueryObserver({ onAccess, onQuery: () => {} });
+
+    vi.stubEnv("DATABASE_OWNER_URL", "");
+    getSystemDb();
+    expect(onAccess).toHaveBeenCalledTimes(1);
+
+    onAccess.mockClear();
+    vi.stubEnv(
+      "DATABASE_OWNER_URL",
+      "postgres://table_owner:pw@localhost:1/db",
+    );
+    getSystemDb();
+    expect(onAccess).toHaveBeenCalledTimes(1);
   });
 });

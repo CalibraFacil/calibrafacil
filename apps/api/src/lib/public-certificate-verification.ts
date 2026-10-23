@@ -9,13 +9,16 @@ import {
   service,
 } from "@calibra-facil/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
+import { orgDb } from "./org-db";
 
 /**
  * Lookups of the PUBLIC certificate verification routes (routes/verify.ts, no
  * session). The unguessable verification token IS the credential, and it yields
  * the laboratory that issued the certificate, so the lookup by token cannot be
  * bound to an organization yet: it runs on the SYSTEM path (`systemDb`, the
- * owner connection; P2-18a, tenant-sql-allowlist.ts "public-token").
+ * owner connection; P2-18a, tenant-sql-allowlist.ts "public-token"). The
+ * amendment links that follow are bound to that laboratory
+ * (`findPublicAmendmentLink`).
  */
 
 /** A certificate is publicly verifiable once it has been approved. */
@@ -26,6 +29,7 @@ export async function findCertificateByVerificationToken(token: string) {
   const [job] = await systemDb
     .select({
       id: calibrationJob.id,
+      organizationId: calibrationJob.organizationId,
       jobId: calibrationJob.jobId,
       certificateName: calibrationJob.certificateName,
       status: calibrationJob.status,
@@ -73,27 +77,31 @@ export async function findCertificateByVerificationToken(token: string) {
 /**
  * The replacement / the original of an amendment, but only while it is itself
  * publicly verifiable (a still-draft replacement must not be linked from a
- * valid superseded certificate). Read by the primary key the already-resolved
- * certificate points at, on the same system path as the token lookup: the link
- * is part of what the token exposes, and it is what the page has always done.
- * (Binding it to the laboratory of the certificate is a possible tightening:
- * an amendment is always issued by the same laboratory.)
+ * valid superseded certificate). Bound to the laboratory that issued the
+ * certificate the token resolved to (an amendment is always issued by the
+ * laboratory of its original), so a link can never point into another
+ * laboratory's certificate.
  */
-export async function findPublicAmendmentLink(jobId: number) {
-  const [linked] = await systemDb
-    .select({
-      id: calibrationJob.id,
-      jobId: calibrationJob.jobId,
-      verificationToken: calibrationJob.verificationToken,
-    })
-    .from(calibrationJob)
-    .where(
-      and(
-        eq(calibrationJob.id, jobId),
-        inArray(calibrationJob.status, [...PUBLICLY_VERIFIABLE]),
-      ),
-    )
-    .limit(1);
+export async function findPublicAmendmentLink(
+  organizationId: string,
+  jobId: number,
+) {
+  const [linked] = await orgDb(organizationId).transaction((o) =>
+    o
+      .select({
+        id: calibrationJob.id,
+        jobId: calibrationJob.jobId,
+        verificationToken: calibrationJob.verificationToken,
+      })
+      .from(calibrationJob)
+      .where(
+        and(
+          eq(calibrationJob.id, jobId),
+          inArray(calibrationJob.status, [...PUBLICLY_VERIFIABLE]),
+        ),
+      )
+      .limit(1),
+  );
   return linked ?? null;
 }
 

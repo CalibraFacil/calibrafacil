@@ -1,4 +1,5 @@
 import { db } from "@calibra-facil/db";
+import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import {
   calibrationJob,
   customer,
@@ -43,8 +44,10 @@ export {
  */
 export async function getFinancialIntegrationState(
   organizationId: string,
+  // An org-bound transaction handle when the caller has one (row-level security).
+  executor: Pick<OrgExecutor, "select"> = db,
 ): Promise<BillingIntegrationState> {
-  const rows = await db
+  const rows = await executor
     .select({ status: organizationIntegration.status })
     .from(organizationIntegration)
     .where(
