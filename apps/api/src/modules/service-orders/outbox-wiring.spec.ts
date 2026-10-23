@@ -166,6 +166,21 @@ vi.mock("@calibra-facil/db", () => {
   };
 });
 
+// The org-bound handle and the organization setting of row-level security run
+// on the same canned database: the setting is not a statement of the scenario.
+vi.mock("../../lib/org-db", async () => {
+  const { db } = await import("@calibra-facil/db");
+  return {
+    orgDb: () => ({
+      transaction: async (run: (tx: unknown) => unknown) => run(db),
+    }),
+  };
+});
+
+vi.mock("@calibra-facil/db/for-org", () => ({
+  setTransactionOrganization: async () => "",
+}));
+
 // Misc mocks for unrelated dependencies
 
 vi.mock("./service-order.queries", () => ({

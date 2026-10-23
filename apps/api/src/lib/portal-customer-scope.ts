@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import { systemDb } from "@calibra-facil/db";
 import {
   customer,
   customerGroup,
@@ -19,6 +19,16 @@ import { and, eq, inArray, or, sql } from "drizzle-orm";
  * portal read/write site uses instead of inlining the customer lookup — in
  * "single" mode it returns exactly one customer id, so existing single-tenant
  * behavior is byte-for-byte unchanged.
+ *
+ * SYSTEM PATH (P2-18a): every statement in this module runs on `systemDb`, the
+ * owner connection, on purpose. They start from the signed-in USER or from a
+ * CLIENT organization, both outside any laboratory, and their job is to LEARN
+ * which laboratory (or set of laboratories) the portal session belongs to; row-level
+ * security needs that laboratory named before a tenant read can run, so these
+ * lookups cannot be bound to one yet. Each produces ids that every other portal
+ * statement is then bound to (`orgDb(scope.labOrganizationId).transaction`,
+ * `orgSetDb`); they are the only statements of the portal that are
+ * cross-organization on purpose (see tenant-sql-allowlist.ts, portal-cross-org).
  */
 
 export type PortalScopeCustomer = {
@@ -57,7 +67,7 @@ export async function resolvePortalCustomerScope(params: {
   const { activeOrgId, labScope } = params;
 
   // 1) Active org is a branch customer's CLIENT org.
-  const [directCustomer] = await db
+  const [directCustomer] = await systemDb
     .select({
       id: customer.id,
       name: customer.name,
@@ -79,7 +89,7 @@ export async function resolvePortalCustomerScope(params: {
   }
 
   // 2) Active org is a customer group's CLIENT org → fan out to branches.
-  const [group] = await db
+  const [group] = await systemDb
     .select({
       id: customerGroup.id,
       labOrganizationId: customerGroup.labOrganizationId,
@@ -93,7 +103,7 @@ export async function resolvePortalCustomerScope(params: {
 
   // The lab-match predicate on branches is the cross-tenant guard: even a
   // mis-assigned branch cannot leak across labs.
-  const branches = await db
+  const branches = await systemDb
     .select({
       id: customer.id,
       name: customer.name,
@@ -156,7 +166,7 @@ export async function resolvePortalNotificationOrgIds(params: {
 }): Promise<string[]> {
   const { userId, labScope } = params;
 
-  const orgs = await db
+  const orgs = await systemDb
     .select({ orgId: member.organizationId })
     .from(member)
     .innerJoin(organization, eq(member.organizationId, organization.id))
@@ -174,7 +184,7 @@ export async function resolvePortalNotificationOrgIds(params: {
   const orgIds = new Set<string>();
 
   // Direct branch memberships.
-  const directCustomers = await db
+  const directCustomers = await systemDb
     .select({ authOrganizationId: customer.authOrganizationId })
     .from(customer)
     .where(
@@ -188,7 +198,7 @@ export async function resolvePortalNotificationOrgIds(params: {
   }
 
   // Group memberships → the group org itself plus all branch customer orgs.
-  const groups = await db
+  const groups = await systemDb
     .select({
       id: customerGroup.id,
       authOrganizationId: customerGroup.authOrganizationId,
@@ -205,7 +215,7 @@ export async function resolvePortalNotificationOrgIds(params: {
   }
   const groupIds = groups.map((row) => row.id);
   if (groupIds.length > 0) {
-    const branchOrgs = await db
+    const branchOrgs = await systemDb
       .select({ authOrganizationId: customer.authOrganizationId })
       .from(customer)
       .where(
@@ -239,7 +249,7 @@ export async function resolvePortalAccessibleCustomers(params: {
 }): Promise<PortalAccessibleCustomers> {
   const { userId, labScope } = params;
 
-  const orgs = await db
+  const orgs = await systemDb
     .select({ orgId: member.organizationId })
     .from(member)
     .innerJoin(organization, eq(member.organizationId, organization.id))
@@ -257,7 +267,7 @@ export async function resolvePortalAccessibleCustomers(params: {
   const labByCustomerId = new Map<number, string>();
 
   // Direct branch memberships.
-  const directCustomers = await db
+  const directCustomers = await systemDb
     .select({ id: customer.id, labOrganizationId: customer.labOrganizationId })
     .from(customer)
     .where(
@@ -271,7 +281,7 @@ export async function resolvePortalAccessibleCustomers(params: {
   }
 
   // Group memberships → expand to branch customers.
-  const groups = await db
+  const groups = await systemDb
     .select({ id: customerGroup.id })
     .from(customerGroup)
     .where(
@@ -282,7 +292,7 @@ export async function resolvePortalAccessibleCustomers(params: {
     );
   const groupIds = groups.map((row) => row.id);
   if (groupIds.length > 0) {
-    const groupCustomers = await db
+    const groupCustomers = await systemDb
       .select({
         id: customer.id,
         labOrganizationId: customer.labOrganizationId,
@@ -315,7 +325,7 @@ export async function resolvePortalLinkedCustomer(params: {
   authOrganizationId: string;
   labScope: string | null;
 }) {
-  const [linkedCustomer] = await db
+  const [linkedCustomer] = await systemDb
     .select({
       id: customer.id,
       name: customer.name,
@@ -346,7 +356,7 @@ export async function listPortalClientOrganizations(params: {
   userId: string;
   labScope: string | null;
 }) {
-  return db
+  return systemDb
     .select({
       id: organization.id,
       name: organization.name,

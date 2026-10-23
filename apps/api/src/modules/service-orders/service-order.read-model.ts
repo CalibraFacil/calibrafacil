@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   asset,
   calibrationJob,
@@ -21,14 +21,31 @@ import {
 } from "@calibra-facil/db/schema";
 import { SERVICE_ORDER_STATUS_LABELS } from "@calibra-facil/shared";
 import { and, desc, eq, inArray } from "drizzle-orm";
+import { orgDb } from "../../lib/org-db";
 import { buildUnitScopeCondition } from "../../lib/units";
 
+/**
+ * One service order with everything the detail screens show. Every statement
+ * runs in ONE organization-bound transaction (row-level security names the
+ * organization once for all of them).
+ */
 export async function getServiceOrderDetail(
   id: number,
   organizationId: string,
   unitCondition?: ReturnType<typeof buildUnitScopeCondition>,
 ) {
-  const [order] = await db
+  return orgDb(organizationId).transaction((o) =>
+    readServiceOrderDetail(o, id, organizationId, unitCondition),
+  );
+}
+
+async function readServiceOrderDetail(
+  o: OrgDb,
+  id: number,
+  organizationId: string,
+  unitCondition?: ReturnType<typeof buildUnitScopeCondition>,
+) {
+  const [order] = await o
     .select({
       id: serviceOrder.id,
       // Opaque id the dashboard routes by, so URLs never carry the enumerable
@@ -140,7 +157,7 @@ export async function getServiceOrderDetail(
     events,
     certificateLinks,
   ] = await Promise.all([
-    db
+    o
       .select()
       .from(serviceOrderAssetSnapshot)
       .where(
@@ -150,7 +167,7 @@ export async function getServiceOrderDetail(
         ),
       )
       .limit(1),
-    db
+    o
       .select()
       .from(serviceOrderIntakeDocument)
       .where(
@@ -160,7 +177,7 @@ export async function getServiceOrderDetail(
         ),
       )
       .orderBy(desc(serviceOrderIntakeDocument.version)),
-    db
+    o
       .select()
       .from(serviceOrderTag)
       .where(
@@ -170,7 +187,7 @@ export async function getServiceOrderDetail(
         ),
       )
       .orderBy(desc(serviceOrderTag.id)),
-    db
+    o
       .select()
       .from(serviceOrderDeliveryDocument)
       .where(
@@ -180,7 +197,7 @@ export async function getServiceOrderDetail(
         ),
       )
       .orderBy(desc(serviceOrderDeliveryDocument.version)),
-    db
+    o
       .select()
       .from(serviceOrderEvaluation)
       .where(
@@ -190,7 +207,7 @@ export async function getServiceOrderDetail(
         ),
       )
       .orderBy(desc(serviceOrderEvaluation.evaluatedAt)),
-    db
+    o
       .select()
       .from(serviceOrderQuote)
       .where(
@@ -200,7 +217,7 @@ export async function getServiceOrderDetail(
         ),
       )
       .orderBy(desc(serviceOrderQuote.version)),
-    db
+    o
       .select()
       .from(serviceOrderExecution)
       .where(
@@ -210,7 +227,7 @@ export async function getServiceOrderDetail(
         ),
       )
       .limit(1),
-    db
+    o
       .select({
         id: serviceOrderEventLog.id,
         organizationId: serviceOrderEventLog.organizationId,
@@ -237,7 +254,7 @@ export async function getServiceOrderDetail(
         ),
       )
       .orderBy(desc(serviceOrderEventLog.createdAt)),
-    db
+    o
       .select({
         id: serviceOrderCertificateLink.id,
         certificateJobId: serviceOrderCertificateLink.certificateJobId,
@@ -260,7 +277,7 @@ export async function getServiceOrderDetail(
   ]);
 
   const quoteItems = quotes.length
-    ? await db
+    ? await o
         .select()
         .from(serviceOrderQuoteItem)
         .where(
@@ -276,7 +293,7 @@ export async function getServiceOrderDetail(
     : [];
   const execution = executionRows[0] ?? null;
   const executionItems = execution
-    ? await db
+    ? await o
         .select()
         .from(serviceOrderExecutionItem)
         .where(

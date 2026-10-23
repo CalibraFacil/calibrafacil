@@ -24,6 +24,15 @@ export const databaseGroup = defineGroup({
       tolerant: true,
       example: example.commented("5"),
     }),
+    ownerUrl: text({
+      env: "DATABASE_OWNER_URL",
+      description:
+        "Connection string of the table OWNER, for the system path (`systemDb`): the few statements that are cross-organization by design (the portal scope resolver, the lookups that learn which laboratory a request belongs to, asset_type writes). Needed only once the API connects as `calibra_app` (DATABASE_RLS_MODE=enforced); unset, the system path shares DATABASE_URL, which is the owner while RLS is in shadow mode.",
+      secret: true,
+      example: example.commented(
+        "postgres://owner:owner@localhost:55432/calibra",
+      ),
+    }),
     rlsMode: choice({
       env: "DATABASE_RLS_MODE",
       description:

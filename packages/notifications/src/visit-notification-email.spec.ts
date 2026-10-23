@@ -97,7 +97,7 @@ const { dbMock } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@calibra-facil/db", () => ({ db: dbMock }));
+vi.mock("@calibra-facil/db", () => ({ db: dbMock, systemDb: dbMock }));
 // These specs exercise the PLATFORM sender path. `resolveLabEmailSender` now
 // reads the email-domain row before checking any key (it must, so a managed
 // row resolves with only RESEND_API_KEY), which would otherwise consume one

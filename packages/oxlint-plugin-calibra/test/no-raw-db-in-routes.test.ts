@@ -56,6 +56,17 @@ describe("calibra/no-raw-db-in-routes (real oxlint)", () => {
     });
   }, 60_000);
 
+  it("P2-18: the system (owner) path is raw too: systemDb and getSystemDb()", async () => {
+    await expectViolation(RULE, {
+      "apps/api/src/routes/system-db.ts":
+        'import { systemDb } from "@calibra-facil/db";\nexport const a = () => systemDb.select();\n',
+    });
+    await expectViolation(RULE, {
+      "apps/api/src/routes/get-system-db.ts":
+        'import { getSystemDb } from "@calibra-facil/db";\nexport const a = () => getSystemDb().select();\n',
+    });
+  }, 60_000);
+
   it("REQ-ORGDB-2: a namespace import reaches db and getDb too", async () => {
     await expectViolation(RULE, {
       "apps/api/src/routes/ns-db.ts":

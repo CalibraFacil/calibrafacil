@@ -233,17 +233,19 @@ export const portalNotificationsRouter = new Hono<{
 
         const updatedPerOrganization = await Promise.all(
           [...idsByOrganization].map(([organizationId, ids]) =>
-            orgDb(organizationId)
-              .update(notification)
-              .set({ status: "READ", readAt: new Date() })
-              .where(
-                and(
-                  inArray(notification.id, ids),
-                  ...portalNotificationConditions(session.user.id),
-                  eq(notification.status, "UNREAD"),
-                ),
-              )
-              .returning({ id: notification.id }),
+            orgDb(organizationId).transaction((o) =>
+              o
+                .update(notification)
+                .set({ status: "READ", readAt: new Date() })
+                .where(
+                  and(
+                    inArray(notification.id, ids),
+                    ...portalNotificationConditions(session.user.id),
+                    eq(notification.status, "UNREAD"),
+                  ),
+                )
+                .returning({ id: notification.id }),
+            ),
           ),
         );
 
@@ -280,16 +282,18 @@ export const portalNotificationsRouter = new Hono<{
       // set handle is read-only).
       const updatedPerOrganization = await Promise.all(
         orgIds.map((organizationId) =>
-          orgDb(organizationId)
-            .update(notification)
-            .set({ status: "READ", readAt: new Date() })
-            .where(
-              and(
-                ...portalNotificationConditions(session.user.id),
-                eq(notification.status, "UNREAD"),
-              ),
-            )
-            .returning({ id: notification.id }),
+          orgDb(organizationId).transaction((o) =>
+            o
+              .update(notification)
+              .set({ status: "READ", readAt: new Date() })
+              .where(
+                and(
+                  ...portalNotificationConditions(session.user.id),
+                  eq(notification.status, "UNREAD"),
+                ),
+              )
+              .returning({ id: notification.id }),
+          ),
         ),
       );
       const updated = updatedPerOrganization.flat();

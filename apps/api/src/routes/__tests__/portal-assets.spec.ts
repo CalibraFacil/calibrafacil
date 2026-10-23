@@ -36,7 +36,11 @@ vi.mock("@calibra-facil/db", () => {
       resolve,
       reject,
     );
-  return { db: builder };
+  // `orgDb(...).transaction(...)` runs its callback on the same canned builder
+  // (the organization setting is a statement that consumes no canned result).
+  builder.transaction = async (run: (tx: unknown) => unknown) => run(builder);
+  builder.execute = async () => [];
+  return { db: builder, systemDb: builder };
 });
 
 vi.mock("../../lib/portal-domains", () => ({

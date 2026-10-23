@@ -133,57 +133,58 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
 
       const whereCondition = and(...conditions);
 
-      const o = orgDb(scope.labOrganizationId);
-      const [countResult] = await o
-        .select({ total: count() })
-        .from(calibrationRequest)
-        .where(whereCondition);
+      return await orgDb(scope.labOrganizationId).transaction(async (o) => {
+        const [countResult] = await o
+          .select({ total: count() })
+          .from(calibrationRequest)
+          .where(whereCondition);
 
-      const requests = await o
-        .select({
-          id: calibrationRequest.id,
-          organizationId: calibrationRequest.organizationId,
-          status: calibrationRequest.status,
-          observations: calibrationRequest.observations,
-          requestedDueDate: calibrationRequest.requestedDueDate,
-          submittedAt: calibrationRequest.submittedAt,
-          reviewedAt: calibrationRequest.reviewedAt,
-          approvedAt: calibrationRequest.approvedAt,
-          convertedAt: calibrationRequest.convertedAt,
-          customerName: customer.name,
-        })
-        .from(calibrationRequest)
-        .innerJoin(customer, eq(calibrationRequest.customerId, customer.id))
-        .where(whereCondition)
-        .orderBy(desc(calibrationRequest.submittedAt))
-        .limit(limit)
-        .offset(offset);
+        const requests = await o
+          .select({
+            id: calibrationRequest.id,
+            organizationId: calibrationRequest.organizationId,
+            status: calibrationRequest.status,
+            observations: calibrationRequest.observations,
+            requestedDueDate: calibrationRequest.requestedDueDate,
+            submittedAt: calibrationRequest.submittedAt,
+            reviewedAt: calibrationRequest.reviewedAt,
+            approvedAt: calibrationRequest.approvedAt,
+            convertedAt: calibrationRequest.convertedAt,
+            customerName: customer.name,
+          })
+          .from(calibrationRequest)
+          .innerJoin(customer, eq(calibrationRequest.customerId, customer.id))
+          .where(whereCondition)
+          .orderBy(desc(calibrationRequest.submittedAt))
+          .limit(limit)
+          .offset(offset);
 
-      const items = await getRequestItems(
-        o,
-        requests.map((request) => request.id),
-      );
-      const itemCountByRequestId = new Map<number, number>();
-
-      for (const item of items) {
-        itemCountByRequestId.set(
-          item.requestId,
-          (itemCountByRequestId.get(item.requestId) ?? 0) + 1,
+        const items = await getRequestItems(
+          o,
+          requests.map((request) => request.id),
         );
-      }
+        const itemCountByRequestId = new Map<number, number>();
 
-      return c.json({
-        data: requests.map((request) => ({
-          ...request,
-          itemCount: itemCountByRequestId.get(request.id) ?? 0,
-        })),
-        pagination: {
-          page,
-          limit,
-          total: countResult?.total ?? 0,
-          totalPages: Math.ceil((countResult?.total ?? 0) / limit),
-        },
-      } satisfies ServerShape<PortalRequestsResponse>);
+        for (const item of items) {
+          itemCountByRequestId.set(
+            item.requestId,
+            (itemCountByRequestId.get(item.requestId) ?? 0) + 1,
+          );
+        }
+
+        return c.json({
+          data: requests.map((request) => ({
+            ...request,
+            itemCount: itemCountByRequestId.get(request.id) ?? 0,
+          })),
+          pagination: {
+            page,
+            limit,
+            total: countResult?.total ?? 0,
+            totalPages: Math.ceil((countResult?.total ?? 0) / limit),
+          },
+        } satisfies ServerShape<PortalRequestsResponse>);
+      });
     },
   )
   .get(
@@ -208,65 +209,66 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Solicitacao nao encontrada" }, 404);
       }
 
-      const o = orgDb(scope.labOrganizationId);
-      const [request] = await o
-        .select({
-          id: calibrationRequest.id,
-          organizationId: calibrationRequest.organizationId,
-          status: calibrationRequest.status,
-          observations: calibrationRequest.observations,
-          requestedDueDate: calibrationRequest.requestedDueDate,
-          deliveryMethod: calibrationRequest.deliveryMethod,
-          invoiceRemittanceNumber: calibrationRequest.invoiceRemittanceNumber,
-          invoiceRemittanceKey: calibrationRequest.invoiceRemittanceKey,
-          invoiceRemittanceIssuedAt:
-            calibrationRequest.invoiceRemittanceIssuedAt,
-          carrierName: calibrationRequest.carrierName,
-          onsiteAddress: calibrationRequest.onsiteAddress,
-          preferredVisitDate: calibrationRequest.preferredVisitDate,
-          submittedAt: calibrationRequest.submittedAt,
-          reviewedAt: calibrationRequest.reviewedAt,
-          approvedAt: calibrationRequest.approvedAt,
-          rejectedAt: calibrationRequest.rejectedAt,
-          rejectionReason: calibrationRequest.rejectionReason,
-          convertedAt: calibrationRequest.convertedAt,
-          customerId: calibrationRequest.customerId,
-          customerName: customer.name,
-        })
-        .from(calibrationRequest)
-        .innerJoin(customer, eq(calibrationRequest.customerId, customer.id))
-        .where(
-          and(
-            eq(calibrationRequest.id, id),
-            inArray(calibrationRequest.customerId, scope.customerIds),
-          ),
-        )
-        .limit(1);
+      return await orgDb(scope.labOrganizationId).transaction(async (o) => {
+        const [request] = await o
+          .select({
+            id: calibrationRequest.id,
+            organizationId: calibrationRequest.organizationId,
+            status: calibrationRequest.status,
+            observations: calibrationRequest.observations,
+            requestedDueDate: calibrationRequest.requestedDueDate,
+            deliveryMethod: calibrationRequest.deliveryMethod,
+            invoiceRemittanceNumber: calibrationRequest.invoiceRemittanceNumber,
+            invoiceRemittanceKey: calibrationRequest.invoiceRemittanceKey,
+            invoiceRemittanceIssuedAt:
+              calibrationRequest.invoiceRemittanceIssuedAt,
+            carrierName: calibrationRequest.carrierName,
+            onsiteAddress: calibrationRequest.onsiteAddress,
+            preferredVisitDate: calibrationRequest.preferredVisitDate,
+            submittedAt: calibrationRequest.submittedAt,
+            reviewedAt: calibrationRequest.reviewedAt,
+            approvedAt: calibrationRequest.approvedAt,
+            rejectedAt: calibrationRequest.rejectedAt,
+            rejectionReason: calibrationRequest.rejectionReason,
+            convertedAt: calibrationRequest.convertedAt,
+            customerId: calibrationRequest.customerId,
+            customerName: customer.name,
+          })
+          .from(calibrationRequest)
+          .innerJoin(customer, eq(calibrationRequest.customerId, customer.id))
+          .where(
+            and(
+              eq(calibrationRequest.id, id),
+              inArray(calibrationRequest.customerId, scope.customerIds),
+            ),
+          )
+          .limit(1);
 
-      if (!request) {
-        return c.json({ error: "Solicitacao nao encontrada" }, 404);
-      }
+        if (!request) {
+          return c.json({ error: "Solicitacao nao encontrada" }, 404);
+        }
 
-      const items = await getRequestItems(o, [request.id]);
+        const items = await getRequestItems(o, [request.id]);
 
-      // On-site: the visit scheduled when the lab converted this request (if any).
-      const [visit] = await o
-        .select({
-          status: calibrationVisit.status,
-          scheduledAt: calibrationVisit.scheduledAt,
-          technicianName: user.name,
-        })
-        .from(calibrationVisit)
-        .leftJoin(user, eq(calibrationVisit.technicianId, user.id))
-        .where(eq(calibrationVisit.sourceRequestId, request.id))
-        .orderBy(desc(calibrationVisit.id))
-        .limit(1);
+        // On-site: the visit scheduled when the lab converted this request (if any).
+        const [visit] = await o
+          .select({
+            status: calibrationVisit.status,
+            scheduledAt: calibrationVisit.scheduledAt,
+            technicianName: user.name,
+          })
+          .from(calibrationVisit)
+          .leftJoin(user, eq(calibrationVisit.technicianId, user.id))
+          .where(eq(calibrationVisit.sourceRequestId, request.id))
+          .orderBy(desc(calibrationVisit.id))
+          .limit(1);
 
-      return c.json({
-        ...request,
-        visit: visit ?? null,
-        items: items.map(({ requestId: _requestId, ...item }) => item),
-      } satisfies ServerShape<PortalRequestDetail>);
+        return c.json({
+          ...request,
+          visit: visit ?? null,
+          items: items.map(({ requestId: _requestId, ...item }) => item),
+        } satisfies ServerShape<PortalRequestDetail>);
+      });
     },
   )
   .post(
@@ -291,23 +293,25 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Cliente vinculado nao encontrado" }, 404);
       }
 
-      const o = orgDb(linkedCustomer.labOrganizationId);
-      const assets = await o
-        .select({
-          id: asset.id,
-          unitId: asset.unitId,
-        })
-        .from(asset)
-        .innerJoin(customer, eq(asset.customerId, customer.id))
-        .where(
-          and(
-            inArray(asset.id, input.assetIds),
-            eq(customer.id, linkedCustomer.id),
-            eq(customer.authOrganizationId, member.organizationId),
-            eq(asset.status, "ACTIVE"),
-            isNull(asset.deletedAt),
+      const lab = orgDb(linkedCustomer.labOrganizationId);
+      const assets = await lab.transaction((o) =>
+        o
+          .select({
+            id: asset.id,
+            unitId: asset.unitId,
+          })
+          .from(asset)
+          .innerJoin(customer, eq(asset.customerId, customer.id))
+          .where(
+            and(
+              inArray(asset.id, input.assetIds),
+              eq(customer.id, linkedCustomer.id),
+              eq(customer.authOrganizationId, member.organizationId),
+              eq(asset.status, "ACTIVE"),
+              isNull(asset.deletedAt),
+            ),
           ),
-        );
+      );
 
       if (assets.length !== input.assetIds.length) {
         return c.json(
@@ -350,7 +354,7 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
           ? new Date(input.preferredVisitDate)
           : null;
 
-      const request = await o.transaction(async (tx) => {
+      const request = await lab.transaction(async (tx) => {
         const lockAssetIds = [...input.assetIds].sort(
           (left, right) => left - right,
         );
@@ -493,25 +497,27 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Cliente vinculado nao encontrado" }, 404);
       }
 
-      const o = orgDb(scope.labOrganizationId);
-      const assets = await o
-        .select({
-          id: asset.id,
-          unitId: asset.unitId,
-          customerId: asset.customerId,
-          authOrganizationId: customer.authOrganizationId,
-          labOrganizationId: customer.labOrganizationId,
-        })
-        .from(asset)
-        .innerJoin(customer, eq(asset.customerId, customer.id))
-        .where(
-          and(
-            inArray(asset.id, input.assetIds),
-            inArray(asset.customerId, scope.customerIds),
-            eq(asset.status, "ACTIVE"),
-            isNull(asset.deletedAt),
+      const lab = orgDb(scope.labOrganizationId);
+      const assets = await lab.transaction((o) =>
+        o
+          .select({
+            id: asset.id,
+            unitId: asset.unitId,
+            customerId: asset.customerId,
+            authOrganizationId: customer.authOrganizationId,
+            labOrganizationId: customer.labOrganizationId,
+          })
+          .from(asset)
+          .innerJoin(customer, eq(asset.customerId, customer.id))
+          .where(
+            and(
+              inArray(asset.id, input.assetIds),
+              inArray(asset.customerId, scope.customerIds),
+              eq(asset.status, "ACTIVE"),
+              isNull(asset.deletedAt),
+            ),
           ),
-        );
+      );
 
       if (assets.length !== input.assetIds.length) {
         return c.json(
@@ -564,7 +570,7 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
           ? new Date(input.preferredVisitDate)
           : null;
 
-      const created = await o.transaction(async (tx) => {
+      const created = await lab.transaction(async (tx) => {
         // Lock every (customer, asset) pair, globally ordered for deadlock safety.
         const lockPairs = assets
           .map((item) => ({ customerId: item.customerId, assetId: item.id }))

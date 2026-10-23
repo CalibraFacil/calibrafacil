@@ -175,18 +175,20 @@ export async function resolvePortalFinancialDocumentHrefs(params: {
   // Candidate IDs are derived from the already-authorized service order's
   // billing document, fiscal access key, and receipts; the org-bound handle
   // keeps the signed artifact lookup inside the lab tenant.
-  const links = await orgDb(params.organizationId)
-    .select({
-      localEntityId: integrationObjectLink.localEntityId,
-      metadata: integrationObjectLink.metadata,
-    })
-    .from(integrationObjectLink)
-    .where(
-      and(
-        eq(integrationObjectLink.target, "remote_document"),
-        inArray(integrationObjectLink.localEntityId, candidateLocalEntityIds),
+  const links = await orgDb(params.organizationId).transaction((o) =>
+    o
+      .select({
+        localEntityId: integrationObjectLink.localEntityId,
+        metadata: integrationObjectLink.metadata,
+      })
+      .from(integrationObjectLink)
+      .where(
+        and(
+          eq(integrationObjectLink.target, "remote_document"),
+          inArray(integrationObjectLink.localEntityId, candidateLocalEntityIds),
+        ),
       ),
-    );
+  );
 
   const receipts: Record<number, string | null> = {};
   let invoice: string | null = null;

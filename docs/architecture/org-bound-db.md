@@ -53,12 +53,36 @@ await o.transaction(async (tx) => tx.select(/* ... */)); //              tx is b
   runtime; a write names the one organization it writes to (read the rows through the set handle,
   then `orgDb(row.organizationId)` to write). An empty set matches nothing.
 
-## What stays on the plain `db`
+## What stays off the org-bound handle: the system path
 
 Statements that are cross-organization by design: the lookup that LEARNS the laboratory of a
-session (the portal customer scope, the user's own memberships), public-token lookups, cron and
-queue sweeps. They live in lib modules, with a reason in
-`apps/api/test/integration/tenant-sql-allowlist.ts`, never in a route.
+session (the portal customer scope, the host name of a portal request, the user's own
+memberships), public-token lookups, reads over a SET of laboratories (`orgSetDb`), notification
+fan-out, cron and queue sweeps. They run on the named **system path**: `systemDb` /
+`getSystemDb()` of `@calibra-facil/db` (`packages/db/src/db.ts`), the connection of the table owner.
+
+- It connects with `DATABASE_OWNER_URL`; unset it IS the application connection (while
+  `DATABASE_RLS_MODE=shadow` the application is the owner, so there is nothing to split). The role split
+  sets it (DEPLOYMENT.md, "Row-level security").
+- It lives in lib modules, each with a comment saying why the statement cannot name an organization yet
+  and an entry in `apps/api/test/integration/tenant-sql-allowlist.ts`; `calibra/no-raw-db-in-routes`
+  forbids `systemDb` / `getSystemDb` in `apps/api/src/routes/**` exactly like `db`, so a route reaches it
+  only through a named lib function.
+- Keep it small: a statement that learns the laboratory runs on it, and everything after that runs on
+  `orgDb(thatLaboratory).transaction(...)`. The portal does exactly this: `resolvePortalCustomerScope`
+  (system) yields `scope.labOrganizationId`, every handler then runs its reads and writes in
+  `orgDb(scope.labOrganizationId).transaction(...)`.
+- `orgSetDb(ids)` runs on it too (one `calibra.organization_id` cannot name a set), keeping the
+  `organization_id IN (...)` predicate and staying read-only. The follow-up is a set-aware policy or a
+  per-laboratory fan-out, if the wall must hold for those reads as well.
+- **`asset_type` writes.** `asset_type` is a global catalog; the change-log trigger of migration 0122 copies
+  every write into the change log of EVERY laboratory, which a `calibra_app` session may not do (those rows
+  belong to other organizations). The only writer is the seed (`seedAssetTypes`, run by `init` and `seed-demo`;
+  `routes/asset-types.ts` is read-only), and it now writes through `systemDb`: the owner connection, named
+  and explicit. Chosen over a `SECURITY DEFINER` function because it needs no migration, no new privilege
+  and no second copy of the write logic, and the catalog is maintained by the platform operator, not by a
+  laboratory's session. Reads of the catalog stay on the application pool (no policy on a global table). If a
+  route ever has to write the catalog, it calls a named lib function on `systemDb`.
 
 ## The lint ratchet
 
@@ -92,10 +116,14 @@ added or removed without a migration.
   `set_config` and `COMMIT` round trips to every request in production for a role nobody connects as yet,
   and the shape the cutover wants is one transaction (and one `set_config`) per request, which is the
   transaction scope (P2-4a), not a wrapper per read. The shadow report lists which reads need it.
-- **A set of laboratories sets nothing.** `orgSetDb(ids)` (portal customer users that belong to several
-  laboratories) is read-only and its `transaction()` does not set an organization: a single setting cannot
-  name a set. Under `calibra_app` those reads match nothing until they run per organization or a set-aware
-  policy is designed (open point of the cutover).
+- **A set of laboratories runs on the system path.** `orgSetDb(ids)` (portal customer users that belong to several
+  laboratories) is read-only and its transaction cannot name an organization: a single setting cannot name a
+  set. It therefore reads through `systemDb` (see "the system path" above) with its `IN (...)` predicate.
+- **Portal (P2-18a).** Every portal handler (`/api/portal/*`, the portal service-order endpoints, the lab-side
+  `/api/portal-domains`) resolves the laboratory first (system path) and then runs its statements in
+  `orgDb(lab).transaction(...)`; side effects that read what the transaction wrote (notifications, queue
+  jobs) run after it commits. `pnpm --filter @calibra-facil/api rls:shadow-report` shows 0 unscoped
+  statements and 0 broken tests for the portal specs.
 - **Tests.** `apps/api/src/lib/rls-shadow.int.spec.ts` runs against a pool whose sessions are `calibra_app`
   (`test/integration/rls.ts`). `pnpm --filter @calibra-facil/api rls:shadow-report` replays the portal and
   jobs specs with each request's database access as `calibra_app` (strict, then audit) and prints what

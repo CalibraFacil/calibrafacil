@@ -41,8 +41,10 @@ function toRecord(value: unknown): UnknownRecord | null {
   return value && typeof value === "object" ? Object(value) : null;
 }
 
-// The raw handle is exported as `db` and, as a function, `getDb()`.
-const RAW_EXPORTS = new Set(["db", "getDb"]);
+// The raw handle is exported as `db` and, as a function, `getDb()`. The system
+// (owner) path is raw too: `systemDb` / `getSystemDb()`. A route reaches it only
+// through a named lib function that says why the statement is cross-organization.
+const RAW_EXPORTS = new Set(["db", "getDb", "systemDb", "getSystemDb"]);
 
 type Bindings = {
   /** Local names bound to `db` / `getDb` (from the package or from any module). */

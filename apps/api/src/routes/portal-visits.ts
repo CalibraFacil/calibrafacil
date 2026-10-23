@@ -65,16 +65,18 @@ async function getPortalScopedVisit(
   customerIds: number[],
   labOrganizationId: string,
 ) {
-  const [visit] = await orgDb(labOrganizationId)
-    .select()
-    .from(calibrationVisit)
-    .where(
-      and(
-        eq(calibrationVisit.id, id),
-        inArray(calibrationVisit.customerId, customerIds),
-      ),
-    )
-    .limit(1);
+  const [visit] = await orgDb(labOrganizationId).transaction((o) =>
+    o
+      .select()
+      .from(calibrationVisit)
+      .where(
+        and(
+          eq(calibrationVisit.id, id),
+          inArray(calibrationVisit.customerId, customerIds),
+        ),
+      )
+      .limit(1),
+  );
   return visit ?? null;
 }
 
@@ -102,91 +104,92 @@ export const portalVisitsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ data: [] });
       }
 
-      const o = orgDb(scope.labOrganizationId);
-      const visits = await o
-        .select({
-          id: calibrationVisit.id,
-          status: calibrationVisit.status,
-          scheduledAt: calibrationVisit.scheduledAt,
-          scheduledEndAt: calibrationVisit.scheduledEndAt,
-          address: calibrationVisit.address,
-          customerName: customer.name,
-          technicianName: user.name,
-          sourceRequestId: calibrationVisit.sourceRequestId,
-          cancelReason: calibrationVisit.cancelReason,
-          customerConfirmedAt: calibrationVisit.customerConfirmedAt,
-        })
-        .from(calibrationVisit)
-        .innerJoin(customer, eq(calibrationVisit.customerId, customer.id))
-        .leftJoin(user, eq(calibrationVisit.technicianId, user.id))
-        .where(
-          and(
-            inArray(calibrationVisit.customerId, scope.customerIds),
-            ne(calibrationVisit.status, "CANCELLED"),
-          ),
-        )
-        .orderBy(sql`${calibrationVisit.scheduledAt} desc nulls last`)
-        .limit(50);
+      return await orgDb(scope.labOrganizationId).transaction(async (o) => {
+        const visits = await o
+          .select({
+            id: calibrationVisit.id,
+            status: calibrationVisit.status,
+            scheduledAt: calibrationVisit.scheduledAt,
+            scheduledEndAt: calibrationVisit.scheduledEndAt,
+            address: calibrationVisit.address,
+            customerName: customer.name,
+            technicianName: user.name,
+            sourceRequestId: calibrationVisit.sourceRequestId,
+            cancelReason: calibrationVisit.cancelReason,
+            customerConfirmedAt: calibrationVisit.customerConfirmedAt,
+          })
+          .from(calibrationVisit)
+          .innerJoin(customer, eq(calibrationVisit.customerId, customer.id))
+          .leftJoin(user, eq(calibrationVisit.technicianId, user.id))
+          .where(
+            and(
+              inArray(calibrationVisit.customerId, scope.customerIds),
+              ne(calibrationVisit.status, "CANCELLED"),
+            ),
+          )
+          .orderBy(sql`${calibrationVisit.scheduledAt} desc nulls last`)
+          .limit(50);
 
-      if (visits.length === 0) {
-        return c.json({ data: [] });
-      }
-
-      const visitIds = visits.map((visit) => visit.id);
-      const counts = await o
-        .select({
-          visitId: calibrationJob.visitId,
-          total: count(),
-        })
-        .from(calibrationJob)
-        .where(inArray(calibrationJob.visitId, visitIds))
-        .groupBy(calibrationJob.visitId);
-
-      const assetCountByVisit = new Map<number, number>();
-      for (const row of counts) {
-        if (row.visitId !== null) {
-          assetCountByVisit.set(row.visitId, row.total);
+        if (visits.length === 0) {
+          return c.json({ data: [] });
         }
-      }
 
-      // Latest reschedule request per visit (any status): the panel shows a
-      // "reagendamento solicitado" chip while PENDING and the resolution
-      // (accepted date / decline note) afterwards.
-      const rescheduleRows = await o
-        .select({
-          id: visitRescheduleRequest.id,
-          visitId: visitRescheduleRequest.visitId,
-          status: visitRescheduleRequest.status,
-          reason: visitRescheduleRequest.reason,
-          preferredWindows: visitRescheduleRequest.preferredWindows,
-          resolutionNote: visitRescheduleRequest.resolutionNote,
-          createdAt: visitRescheduleRequest.createdAt,
-          resolvedAt: visitRescheduleRequest.resolvedAt,
-        })
-        .from(visitRescheduleRequest)
-        .where(inArray(visitRescheduleRequest.visitId, visitIds))
-        .orderBy(
-          desc(visitRescheduleRequest.createdAt),
-          desc(visitRescheduleRequest.id),
-        );
+        const visitIds = visits.map((visit) => visit.id);
+        const counts = await o
+          .select({
+            visitId: calibrationJob.visitId,
+            total: count(),
+          })
+          .from(calibrationJob)
+          .where(inArray(calibrationJob.visitId, visitIds))
+          .groupBy(calibrationJob.visitId);
 
-      const latestRescheduleByVisit = new Map<
-        number,
-        Omit<(typeof rescheduleRows)[number], "visitId">
-      >();
-      for (const { visitId, ...request } of rescheduleRows) {
-        if (!latestRescheduleByVisit.has(visitId)) {
-          latestRescheduleByVisit.set(visitId, request);
+        const assetCountByVisit = new Map<number, number>();
+        for (const row of counts) {
+          if (row.visitId !== null) {
+            assetCountByVisit.set(row.visitId, row.total);
+          }
         }
-      }
 
-      return c.json({
-        data: visits.map((visit) => ({
-          ...visit,
-          assetCount: assetCountByVisit.get(visit.id) ?? 0,
-          rescheduleRequest: latestRescheduleByVisit.get(visit.id) ?? null,
-        })),
-      } satisfies ServerShape<PortalVisitsResponse>);
+        // Latest reschedule request per visit (any status): the panel shows a
+        // "reagendamento solicitado" chip while PENDING and the resolution
+        // (accepted date / decline note) afterwards.
+        const rescheduleRows = await o
+          .select({
+            id: visitRescheduleRequest.id,
+            visitId: visitRescheduleRequest.visitId,
+            status: visitRescheduleRequest.status,
+            reason: visitRescheduleRequest.reason,
+            preferredWindows: visitRescheduleRequest.preferredWindows,
+            resolutionNote: visitRescheduleRequest.resolutionNote,
+            createdAt: visitRescheduleRequest.createdAt,
+            resolvedAt: visitRescheduleRequest.resolvedAt,
+          })
+          .from(visitRescheduleRequest)
+          .where(inArray(visitRescheduleRequest.visitId, visitIds))
+          .orderBy(
+            desc(visitRescheduleRequest.createdAt),
+            desc(visitRescheduleRequest.id),
+          );
+
+        const latestRescheduleByVisit = new Map<
+          number,
+          Omit<(typeof rescheduleRows)[number], "visitId">
+        >();
+        for (const { visitId, ...request } of rescheduleRows) {
+          if (!latestRescheduleByVisit.has(visitId)) {
+            latestRescheduleByVisit.set(visitId, request);
+          }
+        }
+
+        return c.json({
+          data: visits.map((visit) => ({
+            ...visit,
+            assetCount: assetCountByVisit.get(visit.id) ?? 0,
+            rescheduleRequest: latestRescheduleByVisit.get(visit.id) ?? null,
+          })),
+        } satisfies ServerShape<PortalVisitsResponse>);
+      });
     },
   )
   /**
@@ -318,16 +321,18 @@ export const portalVisitsRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      const [pending] = await orgDb(scope.labOrganizationId)
-        .select({ id: visitRescheduleRequest.id })
-        .from(visitRescheduleRequest)
-        .where(
-          and(
-            eq(visitRescheduleRequest.visitId, id),
-            eq(visitRescheduleRequest.status, "PENDING"),
-          ),
-        )
-        .limit(1);
+      const [pending] = await orgDb(scope.labOrganizationId).transaction((o) =>
+        o
+          .select({ id: visitRescheduleRequest.id })
+          .from(visitRescheduleRequest)
+          .where(
+            and(
+              eq(visitRescheduleRequest.visitId, id),
+              eq(visitRescheduleRequest.status, "PENDING"),
+            ),
+          )
+          .limit(1),
+      );
       if (pending) {
         return c.json(
           { error: "Ja existe uma solicitacao de reagendamento pendente" },

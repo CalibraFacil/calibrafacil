@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import { db, systemDb } from "@calibra-facil/db";
 import {
   forOrg,
   forOrgs,
@@ -22,8 +22,17 @@ export function orgDb(organizationId: string): OrgDb {
 /**
  * Handle bound to a bounded set of organizations, for the surfaces that read
  * across several by design (a portal customer user who belongs to customers of
- * more than one laboratory). Cannot insert.
+ * more than one laboratory). Read-only.
+ *
+ * It runs on the SYSTEM path (the owner connection, `systemDb`), not on the
+ * application pool: row-level security names ONE organization per transaction
+ * (`calibra.organization_id`), so a set of laboratories cannot be named and,
+ * as `calibra_app`, the read would match nothing. The handle still adds
+ * `organization_id IN (...)` to every tenant table it touches, the ids come
+ * from a membership the caller already verified, and it cannot write, so the
+ * second wall is the predicate here, not the policy. A single-laboratory read
+ * must use `orgDb(id).transaction(...)` instead.
  */
 export function orgSetDb(organizationIds: readonly string[]): OrgSetDb {
-  return forOrgs(db, organizationIds);
+  return forOrgs(systemDb, organizationIds);
 }

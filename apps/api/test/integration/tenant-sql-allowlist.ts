@@ -105,17 +105,18 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "public-token",
-    file: "apps/api/src/routes/verify.ts",
+    file: "apps/api/src/lib/public-certificate-verification.ts",
     tables: [
       "calibration_job",
       "asset",
       "calibration_method",
       "customer",
       "service",
+      "issued_certificate_snapshot",
     ],
     kinds: ["select"],
     reason:
-      "Public certificate verification: looked up by verification_token (or by the supersedes link of a job already resolved from a token); exposes only that certificate.",
+      "Public certificate verification (routes/verify.ts, on the system path): looked up by verification_token, which names the laboratory, or by the supersedes/superseded-by link of a job already resolved from a token (terminal statuses only). Exposes only that certificate.",
   },
   {
     category: "public-token",
@@ -194,6 +195,22 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     sql: /left join "customer_group" on/,
     reason:
       "GET /organizations (the portal's organization switcher): the signed-in user's own CLIENT memberships by member.user_id. A person belongs to organizations of several laboratories, so this is cross-organization by design; it is the only portal endpoint that lists across laboratories on purpose.",
+  },
+  {
+    category: "portal-cross-org",
+    file: "apps/api/src/lib/portal-domains.ts",
+    tables: ["organization_custom_domain"],
+    kinds: ["select"],
+    reason:
+      "System path: the host name of a portal request is what LEARNS the laboratory (white-label domain), and a hostname is unique across the platform, so both the host lookup and the 'does another laboratory hold this hostname' check are cross-organization by design.",
+  },
+  {
+    category: "portal-cross-org",
+    file: "apps/api/src/lib/portal-domains.ts",
+    tables: ["customer"],
+    kinds: ["select"],
+    reason:
+      "System path: maps a CLIENT organization (customer.auth_organization_id) to the laboratory it belongs to, to build the portal link of an invitation; it runs before a laboratory can be named.",
   },
   {
     category: "portal-cross-org",

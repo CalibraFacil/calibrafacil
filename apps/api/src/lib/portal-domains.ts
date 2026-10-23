@@ -1,6 +1,6 @@
 import { readOriginsConfig } from "@calibra-facil/config";
 import { randomBytes } from "node:crypto";
-import { db } from "@calibra-facil/db";
+import { systemDb } from "@calibra-facil/db";
 import { customer, organizationCustomDomain } from "@calibra-facil/db/schema";
 import {
   isLocalHostname,
@@ -9,6 +9,7 @@ import {
 } from "@calibra-facil/shared";
 import { and, eq, ne } from "drizzle-orm";
 import { portalBaseUrl } from "@calibra-facil/shared/public-urls";
+import { orgDb } from "./org-db";
 
 function derivePortalBaseUrlFromAppUrl(appUrl: string): string | null {
   try {
@@ -45,21 +46,28 @@ export function sanitizePortalHostname(input: string): string | null {
 }
 
 export async function getOrganizationCustomDomain(organizationId: string) {
-  return db.query.organizationCustomDomain.findFirst({
-    where: eq(organizationCustomDomain.organizationId, organizationId),
+  return orgDb(organizationId).transaction(async (o) => {
+    const [record] = await o
+      .select()
+      .from(organizationCustomDomain)
+      .where(eq(organizationCustomDomain.organizationId, organizationId))
+      .limit(1);
+    return record;
   });
 }
 
 /**
  * Whether ANOTHER laboratory already holds this hostname. A hostname is unique
  * across the platform (it is how a request finds its laboratory), so this check
- * is cross-organization by design and cannot run through an org-bound handle.
+ * is cross-organization by design and cannot run through an org-bound handle:
+ * it runs on the SYSTEM path (`systemDb`, the owner connection), because the
+ * policy would hide the other laboratory's row from the one asking.
  */
 export async function findPortalHostnameOwnedByOtherOrganization(
   hostname: string,
   organizationId: string,
 ) {
-  return db.query.organizationCustomDomain.findFirst({
+  return systemDb.query.organizationCustomDomain.findFirst({
     where: and(
       eq(organizationCustomDomain.hostname, hostname),
       ne(organizationCustomDomain.organizationId, organizationId),
@@ -70,11 +78,18 @@ export async function findPortalHostnameOwnedByOtherOrganization(
 export async function getActivePortalDomainForOrganization(
   organizationId: string,
 ) {
-  const record = await db.query.organizationCustomDomain.findFirst({
-    where: and(
-      eq(organizationCustomDomain.organizationId, organizationId),
-      eq(organizationCustomDomain.isActive, true),
-    ),
+  const record = await orgDb(organizationId).transaction(async (o) => {
+    const [row] = await o
+      .select()
+      .from(organizationCustomDomain)
+      .where(
+        and(
+          eq(organizationCustomDomain.organizationId, organizationId),
+          eq(organizationCustomDomain.isActive, true),
+        ),
+      )
+      .limit(1);
+    return row;
   });
 
   if (!record?.verifiedAt) return null;
@@ -107,7 +122,9 @@ export async function getPortalBaseUrlForLabOrganization(
 export async function getPortalBaseUrlForClientOrganization(
   authOrganizationId: string,
 ): Promise<string> {
-  const linkedCustomer = await db.query.customer.findFirst({
+  // SYSTEM PATH: maps a CLIENT organization to the laboratory it belongs to, so
+  // it runs before any laboratory can be named (see portal-customer-scope.ts).
+  const linkedCustomer = await systemDb.query.customer.findFirst({
     where: eq(customer.authOrganizationId, authOrganizationId),
   });
 
@@ -126,7 +143,9 @@ export async function resolveLabOrganizationIdByPortalHostname(
   const normalized = sanitizePortalHostname(hostname);
   if (!normalized) return null;
 
-  const match = await db.query.organizationCustomDomain.findFirst({
+  // SYSTEM PATH: the host name of the request is what LEARNS the laboratory
+  // (the portal white-label domain), so no laboratory is bound yet.
+  const match = await systemDb.query.organizationCustomDomain.findFirst({
     where: and(
       eq(organizationCustomDomain.hostname, normalized),
       eq(organizationCustomDomain.isActive, true),

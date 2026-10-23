@@ -1,4 +1,5 @@
 import { db } from "@calibra-facil/db";
+import { setTransactionOrganization } from "@calibra-facil/db/for-org";
 import {
   serviceOrder,
   serviceOrderQuote,
@@ -32,6 +33,7 @@ import {
   revokeActiveTokensForQuote,
   revokeSupersededServiceOrderTokens,
 } from "../../lib/service-order-workflow";
+import { orgDb } from "../../lib/org-db";
 import { buildUnitScopeCondition } from "../../lib/units";
 import { enqueueServiceOrderDocumentJob } from "./service-order.documents";
 import { getQuoteForAction } from "./service-order.queries";
@@ -737,16 +739,19 @@ export async function approveServiceOrderQuoteByPortalUser(input: {
     input.quoteId,
     linkedCustomer.labOrganizationId,
   );
-  const [order] = await db
-    .select()
-    .from(serviceOrder)
-    .where(
-      and(
-        eq(serviceOrder.id, input.serviceOrderId),
-        eq(serviceOrder.organizationId, linkedCustomer.labOrganizationId),
-      ),
-    )
-    .limit(1);
+  const [order] = await orgDb(linkedCustomer.labOrganizationId).transaction(
+    (o) =>
+      o
+        .select()
+        .from(serviceOrder)
+        .where(
+          and(
+            eq(serviceOrder.id, input.serviceOrderId),
+            eq(serviceOrder.organizationId, linkedCustomer.labOrganizationId),
+          ),
+        )
+        .limit(1),
+  );
 
   if (
     !linkedCustomer ||
@@ -761,6 +766,8 @@ export async function approveServiceOrderQuoteByPortalUser(input: {
   }
 
   await db.transaction(async (tx) => {
+    // Row-level security: the writes below belong to the customer's laboratory.
+    await setTransactionOrganization(tx, linkedCustomer.labOrganizationId);
     await tx
       .update(serviceOrderQuote)
       .set({
@@ -859,16 +866,19 @@ export async function rejectServiceOrderQuoteByPortalUser(input: {
     input.quoteId,
     linkedCustomer.labOrganizationId,
   );
-  const [order] = await db
-    .select()
-    .from(serviceOrder)
-    .where(
-      and(
-        eq(serviceOrder.id, input.serviceOrderId),
-        eq(serviceOrder.organizationId, linkedCustomer.labOrganizationId),
-      ),
-    )
-    .limit(1);
+  const [order] = await orgDb(linkedCustomer.labOrganizationId).transaction(
+    (o) =>
+      o
+        .select()
+        .from(serviceOrder)
+        .where(
+          and(
+            eq(serviceOrder.id, input.serviceOrderId),
+            eq(serviceOrder.organizationId, linkedCustomer.labOrganizationId),
+          ),
+        )
+        .limit(1),
+  );
 
   if (
     !linkedCustomer ||
@@ -887,6 +897,8 @@ export async function rejectServiceOrderQuoteByPortalUser(input: {
   }
 
   await db.transaction(async (tx) => {
+    // Row-level security: the writes below belong to the customer's laboratory.
+    await setTransactionOrganization(tx, linkedCustomer.labOrganizationId);
     await tx
       .update(serviceOrderQuote)
       .set({

@@ -12,15 +12,19 @@ const mocks = vi.hoisted(
   }),
 );
 
-vi.mock("@calibra-facil/db", () => ({
-  db: {
+vi.mock("@calibra-facil/db", () => {
+  const database = {
     select: vi.fn(() => ({
       from: vi.fn(() => ({
         where: vi.fn(async () => mocks.remoteDocumentLinks),
       })),
     })),
-  },
-}));
+    // `orgDb(...).transaction(...)` runs its callback on this same double.
+    transaction: async (run: (tx: unknown) => unknown) => run(database),
+    execute: async () => [],
+  };
+  return { db: database, systemDb: database };
+});
 
 import {
   resolvePortalFinancialDocumentHrefs,
