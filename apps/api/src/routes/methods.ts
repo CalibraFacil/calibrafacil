@@ -5,7 +5,8 @@ import type {
   ServerShape,
 } from "@calibra-facil/contracts";
 import { zValidator } from "@hono/zod-validator";
-import { db } from "@calibra-facil/db";
+import type { OrgExecutor } from "@calibra-facil/db/for-org";
+import { orgDb } from "../lib/org-db";
 import {
   calibrationMethod,
   methodAuditLog,
@@ -1151,11 +1152,12 @@ function resolvePublicationPreviewScenarios(
 async function resolveMethodRouteId(
   identifier: string,
   organizationId: string,
+  executor: Pick<OrgExecutor, "select">,
 ): Promise<number | null> {
   const numericRouteId = parseNumericRouteIdentifier(identifier);
 
   if (numericRouteId) {
-    const [method] = await db
+    const [method] = await executor
       .select({ id: calibrationMethod.id })
       .from(calibrationMethod)
       .where(
@@ -1169,7 +1171,7 @@ async function resolveMethodRouteId(
     if (method) return method.id;
   }
 
-  const methods = await db
+  const methods = await executor
     .select({
       id: calibrationMethod.id,
       name: calibrationMethod.name,
@@ -1226,53 +1228,58 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         const whereCondition = and(...conditions);
 
         // Get total count
-        const [countResult] = await db
-          .select({ total: count() })
-          .from(calibrationMethod)
-          .where(whereCondition);
+        return await orgDb(member.organizationId).transaction(async (tx) => {
+          const [countResult] = await tx
+            .select({ total: count() })
+            .from(calibrationMethod)
+            .where(whereCondition);
 
-        const total = countResult?.total ?? 0;
+          const total = countResult?.total ?? 0;
 
-        // Get methods with related data
-        const methods = await db
-          .select({
-            id: calibrationMethod.id,
-            name: calibrationMethod.name,
-            description: calibrationMethod.description,
-            version: calibrationMethod.version,
-            status: calibrationMethod.status,
-            assetTypeId: calibrationMethod.assetTypeId,
-            assetTypeName: assetType.name,
-            dataFields: calibrationMethod.dataFields,
-            variableBindings: calibrationMethod.variableBindings,
-            formulas: calibrationMethod.formulas,
-            measurementModels: calibrationMethod.measurementModels,
-            validations: calibrationMethod.validations,
-            certificateContent: calibrationMethod.certificateContent,
-            accreditedScope: calibrationMethod.accreditedScope,
-            methodFingerprint: calibrationMethod.methodFingerprint,
-            methodEngine: calibrationMethod.methodEngine,
-            methodCompiledAt: calibrationMethod.methodCompiledAt,
-            createdAt: calibrationMethod.createdAt,
-            publishedAt: calibrationMethod.publishedAt,
-            parentId: calibrationMethod.parentId,
-          })
-          .from(calibrationMethod)
-          .leftJoin(assetType, eq(calibrationMethod.assetTypeId, assetType.id))
-          .where(whereCondition)
-          .orderBy(desc(calibrationMethod.createdAt))
-          .limit(limit)
-          .offset(offset);
+          // Get methods with related data
+          const methods = await tx
+            .select({
+              id: calibrationMethod.id,
+              name: calibrationMethod.name,
+              description: calibrationMethod.description,
+              version: calibrationMethod.version,
+              status: calibrationMethod.status,
+              assetTypeId: calibrationMethod.assetTypeId,
+              assetTypeName: assetType.name,
+              dataFields: calibrationMethod.dataFields,
+              variableBindings: calibrationMethod.variableBindings,
+              formulas: calibrationMethod.formulas,
+              measurementModels: calibrationMethod.measurementModels,
+              validations: calibrationMethod.validations,
+              certificateContent: calibrationMethod.certificateContent,
+              accreditedScope: calibrationMethod.accreditedScope,
+              methodFingerprint: calibrationMethod.methodFingerprint,
+              methodEngine: calibrationMethod.methodEngine,
+              methodCompiledAt: calibrationMethod.methodCompiledAt,
+              createdAt: calibrationMethod.createdAt,
+              publishedAt: calibrationMethod.publishedAt,
+              parentId: calibrationMethod.parentId,
+            })
+            .from(calibrationMethod)
+            .leftJoin(
+              assetType,
+              eq(calibrationMethod.assetTypeId, assetType.id),
+            )
+            .where(whereCondition)
+            .orderBy(desc(calibrationMethod.createdAt))
+            .limit(limit)
+            .offset(offset);
 
-        return c.json({
-          data: methods.map(normalizeMethodRecord),
-          pagination: {
-            page,
-            limit,
-            total,
-            totalPages: Math.ceil(total / limit),
-          },
-        } satisfies ServerShape<MethodsListResponse>);
+          return c.json({
+            data: methods.map(normalizeMethodRecord),
+            pagination: {
+              page,
+              limit,
+              total,
+              totalPages: Math.ceil(total / limit),
+            },
+          } satisfies ServerShape<MethodsListResponse>);
+        });
       } catch (error) {
         console.error("Error listing methods:", error);
         return c.json({ error: "Erro ao listar métodos" }, 500);
@@ -1485,34 +1492,37 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ template: ["read"] }),
     async (c) => {
       const member = c.get("member");
-      const id = await resolveMethodRouteId(
-        c.req.param("id"),
-        member.organizationId,
-      );
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const id = await resolveMethodRouteId(
+          c.req.param("id"),
+          member.organizationId,
+          tx,
+        );
 
-      if (id === null) {
-        return c.json({ error: "Método nao encontrado" }, 404);
-      }
+        if (id === null) {
+          return c.json({ error: "Método nao encontrado" }, 404);
+        }
 
-      const [method] = await db
-        .select({
-          id: calibrationMethod.id,
-          label: calibrationMethod.name,
-        })
-        .from(calibrationMethod)
-        .where(
-          and(
-            eq(calibrationMethod.id, id),
-            eq(calibrationMethod.organizationId, member.organizationId),
-          ),
-        )
-        .limit(1);
+        const [method] = await tx
+          .select({
+            id: calibrationMethod.id,
+            label: calibrationMethod.name,
+          })
+          .from(calibrationMethod)
+          .where(
+            and(
+              eq(calibrationMethod.id, id),
+              eq(calibrationMethod.organizationId, member.organizationId),
+            ),
+          )
+          .limit(1);
 
-      if (!method) {
-        return c.json({ error: "Método nao encontrado" }, 404);
-      }
+        if (!method) {
+          return c.json({ error: "Método nao encontrado" }, 404);
+        }
 
-      return c.json(method);
+        return c.json(method);
+      });
     },
   )
 
@@ -1521,79 +1531,82 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get("/:id", ...withLabPermission({ template: ["read"] }), async (c) => {
     const member = c.get("member");
-    const id = await resolveMethodRouteId(
-      c.req.param("id"),
-      member.organizationId,
-    );
+    return await orgDb(member.organizationId).transaction(async (tx) => {
+      const id = await resolveMethodRouteId(
+        c.req.param("id"),
+        member.organizationId,
+        tx,
+      );
 
-    if (id === null) {
-      return c.json({ error: "Método nao encontrado" }, 404);
-    }
-
-    try {
-      const [method] = await db
-        .select({
-          id: calibrationMethod.id,
-          organizationId: calibrationMethod.organizationId,
-          name: calibrationMethod.name,
-          description: calibrationMethod.description,
-          version: calibrationMethod.version,
-          status: calibrationMethod.status,
-          assetTypeId: calibrationMethod.assetTypeId,
-          assetTypeName: assetType.name,
-          dataFields: calibrationMethod.dataFields,
-          variableBindings: calibrationMethod.variableBindings,
-          formulas: calibrationMethod.formulas,
-          measurementModels: calibrationMethod.measurementModels,
-          validations: calibrationMethod.validations,
-          uncertaintyParams: calibrationMethod.uncertaintyParams,
-          certificateContent: calibrationMethod.certificateContent,
-          accreditedScope: calibrationMethod.accreditedScope,
-          compiledMethod: calibrationMethod.compiledMethod,
-          methodFingerprint: calibrationMethod.methodFingerprint,
-          methodEngine: calibrationMethod.methodEngine,
-          methodCompiledAt: calibrationMethod.methodCompiledAt,
-          publicationEvidence: calibrationMethod.publicationEvidence,
-          parentId: calibrationMethod.parentId,
-          createdAt: calibrationMethod.createdAt,
-          createdByName: user.name,
-          technicalReviewedBy: calibrationMethod.technicalReviewedBy,
-          technicalReviewedByName: technicalReviewerUser.name,
-          publishedAt: calibrationMethod.publishedAt,
-          approvedBy: calibrationMethod.approvedBy,
-          approvedByName: approverUser.name,
-          archivedAt: calibrationMethod.archivedAt,
-        })
-        .from(calibrationMethod)
-        .leftJoin(assetType, eq(calibrationMethod.assetTypeId, assetType.id))
-        .leftJoin(user, eq(calibrationMethod.createdBy, user.id))
-        .leftJoin(
-          technicalReviewerUser,
-          eq(calibrationMethod.technicalReviewedBy, technicalReviewerUser.id),
-        )
-        .leftJoin(
-          approverUser,
-          eq(calibrationMethod.approvedBy, approverUser.id),
-        )
-        .where(
-          and(
-            eq(calibrationMethod.id, id),
-            eq(calibrationMethod.organizationId, member.organizationId),
-          ),
-        )
-        .limit(1);
-
-      if (!method) {
+      if (id === null) {
         return c.json({ error: "Método nao encontrado" }, 404);
       }
 
-      return c.json(
-        normalizeMethodRecord(method) satisfies ServerShape<MethodDetail>,
-      );
-    } catch (error) {
-      console.error("Error getting method:", error);
-      return c.json({ error: "Erro ao buscar método" }, 500);
-    }
+      try {
+        const [method] = await tx
+          .select({
+            id: calibrationMethod.id,
+            organizationId: calibrationMethod.organizationId,
+            name: calibrationMethod.name,
+            description: calibrationMethod.description,
+            version: calibrationMethod.version,
+            status: calibrationMethod.status,
+            assetTypeId: calibrationMethod.assetTypeId,
+            assetTypeName: assetType.name,
+            dataFields: calibrationMethod.dataFields,
+            variableBindings: calibrationMethod.variableBindings,
+            formulas: calibrationMethod.formulas,
+            measurementModels: calibrationMethod.measurementModels,
+            validations: calibrationMethod.validations,
+            uncertaintyParams: calibrationMethod.uncertaintyParams,
+            certificateContent: calibrationMethod.certificateContent,
+            accreditedScope: calibrationMethod.accreditedScope,
+            compiledMethod: calibrationMethod.compiledMethod,
+            methodFingerprint: calibrationMethod.methodFingerprint,
+            methodEngine: calibrationMethod.methodEngine,
+            methodCompiledAt: calibrationMethod.methodCompiledAt,
+            publicationEvidence: calibrationMethod.publicationEvidence,
+            parentId: calibrationMethod.parentId,
+            createdAt: calibrationMethod.createdAt,
+            createdByName: user.name,
+            technicalReviewedBy: calibrationMethod.technicalReviewedBy,
+            technicalReviewedByName: technicalReviewerUser.name,
+            publishedAt: calibrationMethod.publishedAt,
+            approvedBy: calibrationMethod.approvedBy,
+            approvedByName: approverUser.name,
+            archivedAt: calibrationMethod.archivedAt,
+          })
+          .from(calibrationMethod)
+          .leftJoin(assetType, eq(calibrationMethod.assetTypeId, assetType.id))
+          .leftJoin(user, eq(calibrationMethod.createdBy, user.id))
+          .leftJoin(
+            technicalReviewerUser,
+            eq(calibrationMethod.technicalReviewedBy, technicalReviewerUser.id),
+          )
+          .leftJoin(
+            approverUser,
+            eq(calibrationMethod.approvedBy, approverUser.id),
+          )
+          .where(
+            and(
+              eq(calibrationMethod.id, id),
+              eq(calibrationMethod.organizationId, member.organizationId),
+            ),
+          )
+          .limit(1);
+
+        if (!method) {
+          return c.json({ error: "Método nao encontrado" }, 404);
+        }
+
+        return c.json(
+          normalizeMethodRecord(method) satisfies ServerShape<MethodDetail>,
+        );
+      } catch (error) {
+        console.error("Error getting method:", error);
+        return c.json({ error: "Erro ao buscar método" }, 500);
+      }
+    });
   })
 
   // =========================================================================
@@ -1610,66 +1623,68 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
 
       try {
         // Check for duplicate name in same org (version 1)
-        const [existing] = await db
-          .select()
-          .from(calibrationMethod)
-          .where(
-            and(
-              eq(calibrationMethod.organizationId, member.organizationId),
-              eq(calibrationMethod.name, input.name),
-              eq(calibrationMethod.version, 1),
-            ),
-          )
-          .limit(1);
+        return await orgDb(member.organizationId).transaction(async (tx) => {
+          const [existing] = await tx
+            .select()
+            .from(calibrationMethod)
+            .where(
+              and(
+                eq(calibrationMethod.organizationId, member.organizationId),
+                eq(calibrationMethod.name, input.name),
+                eq(calibrationMethod.version, 1),
+              ),
+            )
+            .limit(1);
 
-        if (existing) {
-          return c.json({ error: "Ja existe um método com este nome" }, 400);
-        }
+          if (existing) {
+            return c.json({ error: "Ja existe um método com este nome" }, 400);
+          }
 
-        // DOM-10 dimensional gate: reject an incoherent field/formula set before
-        // it is ever persisted (no method row escapes the check when written).
-        const dimensionalError = dimensionalGateError(input);
-        if (dimensionalError) {
-          return c.json(dimensionalError, 422);
-        }
+          // DOM-10 dimensional gate: reject an incoherent field/formula set before
+          // it is ever persisted (no method row escapes the check when written).
+          const dimensionalError = dimensionalGateError(input);
+          if (dimensionalError) {
+            return c.json(dimensionalError, 422);
+          }
 
-        // Create method
-        const [newMethod] = await db
-          .insert(calibrationMethod)
-          .values({
+          // Create method
+          const [newMethod] = await tx
+            .insert(calibrationMethod)
+            .values({
+              organizationId: member.organizationId,
+              assetTypeId: input.assetTypeId || null,
+              name: input.name,
+              description: input.description || null,
+              version: 1,
+              status: "DRAFT",
+              dataFields: input.dataFields,
+              variableBindings: input.variableBindings,
+              formulas: input.formulas,
+              measurementModels: input.measurementModels,
+              validations: input.validations,
+              uncertaintyParams: input.uncertaintyParams,
+              certificateContent: input.certificateContent ?? null,
+              accreditedScope: input.accreditedScope ?? false,
+              createdBy: session.user.id,
+            })
+            .returning();
+
+          if (!newMethod) {
+            return c.json({ error: "Erro ao criar método" }, 500);
+          }
+
+          // Audit log
+          await tx.insert(methodAuditLog).values({
             organizationId: member.organizationId,
-            assetTypeId: input.assetTypeId || null,
-            name: input.name,
-            description: input.description || null,
-            version: 1,
-            status: "DRAFT",
-            dataFields: input.dataFields,
-            variableBindings: input.variableBindings,
-            formulas: input.formulas,
-            measurementModels: input.measurementModels,
-            validations: input.validations,
-            uncertaintyParams: input.uncertaintyParams,
-            certificateContent: input.certificateContent ?? null,
-            accreditedScope: input.accreditedScope ?? false,
-            createdBy: session.user.id,
-          })
-          .returning();
+            methodId: newMethod.id,
+            action: "create",
+            changes: { initial: input },
+            performedBy: session.user.id,
+            ipAddress: c.req.header("x-forwarded-for") || null,
+          });
 
-        if (!newMethod) {
-          return c.json({ error: "Erro ao criar método" }, 500);
-        }
-
-        // Audit log
-        await db.insert(methodAuditLog).values({
-          organizationId: member.organizationId,
-          methodId: newMethod.id,
-          action: "create",
-          changes: { initial: input },
-          performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          return c.json(newMethod, 201);
         });
-
-        return c.json(newMethod, 201);
       } catch (error) {
         console.error("Error creating method:", error);
         return c.json({ error: "Erro ao criar método" }, 500);
@@ -1728,91 +1743,93 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         // Resolve the asset type: explicit override wins, else the template's
         // slug -> asset_type.id, else null.
         let assetTypeId: number | null = input.assetTypeId ?? null;
-        if (assetTypeId === null && def.assetTypeSlug) {
-          const [matchedAssetType] = await db
-            .select({ id: assetType.id })
-            .from(assetType)
-            .where(eq(assetType.slug, def.assetTypeSlug))
+        return await orgDb(member.organizationId).transaction(async (tx) => {
+          if (assetTypeId === null && def.assetTypeSlug) {
+            const [matchedAssetType] = await tx
+              .select({ id: assetType.id })
+              .from(assetType)
+              .where(eq(assetType.slug, def.assetTypeSlug))
+              .limit(1);
+            assetTypeId = matchedAssetType?.id ?? null;
+          }
+
+          // Same uniqueness guard as POST /.
+          const [existing] = await tx
+            .select()
+            .from(calibrationMethod)
+            .where(
+              and(
+                eq(calibrationMethod.organizationId, member.organizationId),
+                eq(calibrationMethod.name, name),
+                eq(calibrationMethod.version, 1),
+              ),
+            )
             .limit(1);
-          assetTypeId = matchedAssetType?.id ?? null;
-        }
 
-        // Same uniqueness guard as POST /.
-        const [existing] = await db
-          .select()
-          .from(calibrationMethod)
-          .where(
-            and(
-              eq(calibrationMethod.organizationId, member.organizationId),
-              eq(calibrationMethod.name, name),
-              eq(calibrationMethod.version, 1),
-            ),
-          )
-          .limit(1);
+          if (existing) {
+            return c.json({ error: "Ja existe um método com este nome" }, 400);
+          }
 
-        if (existing) {
-          return c.json({ error: "Ja existe um método com este nome" }, 400);
-        }
+          // DOM-10 dimensional gate on template instantiation: a curated template
+          // must be dimensionally coherent before it becomes a DRAFT method.
+          const dimensionalError = dimensionalGateError(def);
+          if (dimensionalError) {
+            return c.json(dimensionalError, 422);
+          }
 
-        // DOM-10 dimensional gate on template instantiation: a curated template
-        // must be dimensionally coherent before it becomes a DRAFT method.
-        const dimensionalError = dimensionalGateError(def);
-        if (dimensionalError) {
-          return c.json(dimensionalError, 422);
-        }
+          const [newMethod] = await tx
+            .insert(calibrationMethod)
+            .values({
+              organizationId: member.organizationId,
+              assetTypeId,
+              name,
+              description: def.description ?? null,
+              version: 1,
+              status: "DRAFT",
+              dataFields: def.dataFields,
+              variableBindings: def.variableBindings,
+              formulas: def.formulas,
+              measurementModels: def.measurementModels,
+              validations: def.validations,
+              uncertaintyParams: def.uncertaintyParams,
+              certificateContent: def.certificateContent,
+              accreditedScope: def.accreditedScope,
+              templateKey: template.key,
+              templateVersion: template.templateVersion,
+              createdBy: session.user.id,
+            })
+            .returning();
 
-        const [newMethod] = await db
-          .insert(calibrationMethod)
-          .values({
+          if (!newMethod) {
+            return c.json({ error: "Erro ao criar método" }, 500);
+          }
+
+          await tx.insert(methodAuditLog).values({
             organizationId: member.organizationId,
-            assetTypeId,
-            name,
-            description: def.description ?? null,
-            version: 1,
-            status: "DRAFT",
-            dataFields: def.dataFields,
-            variableBindings: def.variableBindings,
-            formulas: def.formulas,
-            measurementModels: def.measurementModels,
-            validations: def.validations,
-            uncertaintyParams: def.uncertaintyParams,
-            certificateContent: def.certificateContent,
-            accreditedScope: def.accreditedScope,
-            templateKey: template.key,
-            templateVersion: template.templateVersion,
-            createdBy: session.user.id,
-          })
-          .returning();
+            methodId: newMethod.id,
+            action: "create",
+            // Freeze the adoption evidence (ISO/IEC 17025 §7.2.1.5): the
+            // acknowledgements + an immutable snapshot of the cited sources (with
+            // editions) and the verbatim [VERIFICAR]/omitted items at adoption
+            // time — demonstrable to an auditor and immune to later template edits.
+            changes: {
+              fromTemplate: template.key,
+              templateVersion: template.templateVersion,
+              acknowledgements,
+              governanceSnapshot: governance
+                ? {
+                    sources: governance.sources,
+                    verificarItems: governance.verificarItems,
+                    omittedComponents: governance.omittedComponents,
+                  }
+                : null,
+            },
+            performedBy: session.user.id,
+            ipAddress: c.req.header("x-forwarded-for") || null,
+          });
 
-        if (!newMethod) {
-          return c.json({ error: "Erro ao criar método" }, 500);
-        }
-
-        await db.insert(methodAuditLog).values({
-          organizationId: member.organizationId,
-          methodId: newMethod.id,
-          action: "create",
-          // Freeze the adoption evidence (ISO/IEC 17025 §7.2.1.5): the
-          // acknowledgements + an immutable snapshot of the cited sources (with
-          // editions) and the verbatim [VERIFICAR]/omitted items at adoption
-          // time — demonstrable to an auditor and immune to later template edits.
-          changes: {
-            fromTemplate: template.key,
-            templateVersion: template.templateVersion,
-            acknowledgements,
-            governanceSnapshot: governance
-              ? {
-                  sources: governance.sources,
-                  verificarItems: governance.verificarItems,
-                  omittedComponents: governance.omittedComponents,
-                }
-              : null,
-          },
-          performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          return c.json(newMethod, 201);
         });
-
-        return c.json(newMethod, 201);
       } catch (error) {
         console.error("Error creating method from template:", error);
         return c.json(
@@ -1833,186 +1850,193 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const id = await resolveMethodRouteId(
-        c.req.param("id"),
-        member.organizationId,
-      );
-      const input = c.req.valid("json");
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const id = await resolveMethodRouteId(
+          c.req.param("id"),
+          member.organizationId,
+          tx,
+        );
+        const input = c.req.valid("json");
 
-      if (id === null) {
-        return c.json({ error: "Método nao encontrado" }, 404);
-      }
-
-      try {
-        // Get existing method
-        const [existing] = await db
-          .select()
-          .from(calibrationMethod)
-          .where(
-            and(
-              eq(calibrationMethod.id, id),
-              eq(calibrationMethod.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!existing) {
+        if (id === null) {
           return c.json({ error: "Método nao encontrado" }, 404);
         }
 
-        // Only DRAFT can be updated
-        if (existing.status !== "DRAFT") {
-          return c.json(
-            { error: "Apenas métodos em rascunho podem ser editados" },
-            400,
-          );
-        }
-
-        // Check for name conflict if name is being changed
-        // Check against all versions to prevent naming conflicts
-        if (input.name && input.name !== existing.name) {
-          const [duplicate] = await db
+        try {
+          // Get existing method
+          const [existing] = await tx
             .select()
             .from(calibrationMethod)
             .where(
               and(
+                eq(calibrationMethod.id, id),
                 eq(calibrationMethod.organizationId, member.organizationId),
-                eq(calibrationMethod.name, input.name),
-                ne(calibrationMethod.id, id),
               ),
             )
             .limit(1);
 
-          if (duplicate) {
-            return c.json({ error: "Ja existe um método com este nome" }, 400);
+          if (!existing) {
+            return c.json({ error: "Método nao encontrado" }, 404);
           }
-        }
 
-        // Build update object
-        const updateData: Record<string, unknown> = {};
-        const changes: Record<string, { old: unknown; new: unknown }> = {};
+          // Only DRAFT can be updated
+          if (existing.status !== "DRAFT") {
+            return c.json(
+              { error: "Apenas métodos em rascunho podem ser editados" },
+              400,
+            );
+          }
 
-        if (input.name !== undefined && input.name !== existing.name) {
-          updateData.name = input.name;
-          changes.name = { old: existing.name, new: input.name };
-        }
-        if (input.description !== undefined) {
-          updateData.description = input.description || null;
-          changes.description = {
-            old: existing.description,
-            new: input.description,
-          };
-        }
-        if (input.assetTypeId !== undefined) {
-          updateData.assetTypeId = input.assetTypeId || null;
-          changes.assetTypeId = {
-            old: existing.assetTypeId,
-            new: input.assetTypeId,
-          };
-        }
-        if (input.dataFields !== undefined) {
-          updateData.dataFields = input.dataFields;
-          changes.dataFields = {
-            old: existing.dataFields,
-            new: input.dataFields,
-          };
-        }
-        if (input.variableBindings !== undefined) {
-          updateData.variableBindings = input.variableBindings;
-          changes.variableBindings = {
-            old: existing.variableBindings,
-            new: input.variableBindings,
-          };
-        }
-        if (input.formulas !== undefined) {
-          updateData.formulas = input.formulas;
-          changes.formulas = { old: existing.formulas, new: input.formulas };
-        }
-        if (input.measurementModels !== undefined) {
-          updateData.measurementModels = input.measurementModels;
-          changes.measurementModels = {
-            old: existing.measurementModels,
-            new: input.measurementModels,
-          };
-        }
-        if (input.validations !== undefined) {
-          updateData.validations = input.validations;
-          changes.validations = {
-            old: existing.validations,
-            new: input.validations,
-          };
-        }
-        if (input.uncertaintyParams !== undefined) {
-          updateData.uncertaintyParams = input.uncertaintyParams;
-          changes.uncertaintyParams = {
-            old: existing.uncertaintyParams,
-            new: input.uncertaintyParams,
-          };
-        }
-        if (input.certificateContent !== undefined) {
-          updateData.certificateContent = input.certificateContent;
-          changes.certificateContent = {
-            old: existing.certificateContent,
-            new: input.certificateContent,
-          };
-        }
-        if (
-          input.accreditedScope !== undefined &&
-          input.accreditedScope !== existing.accreditedScope
-        ) {
-          updateData.accreditedScope = input.accreditedScope;
-          changes.accreditedScope = {
-            old: existing.accreditedScope,
-            new: input.accreditedScope,
-          };
-        }
+          // Check for name conflict if name is being changed
+          // Check against all versions to prevent naming conflicts
+          if (input.name && input.name !== existing.name) {
+            const [duplicate] = await tx
+              .select()
+              .from(calibrationMethod)
+              .where(
+                and(
+                  eq(calibrationMethod.organizationId, member.organizationId),
+                  eq(calibrationMethod.name, input.name),
+                  ne(calibrationMethod.id, id),
+                ),
+              )
+              .limit(1);
 
-        if (Object.keys(updateData).length === 0) {
-          return c.json(existing);
+            if (duplicate) {
+              return c.json(
+                { error: "Ja existe um método com este nome" },
+                400,
+              );
+            }
+          }
+
+          // Build update object
+          const updateData: Record<string, unknown> = {};
+          const changes: Record<string, { old: unknown; new: unknown }> = {};
+
+          if (input.name !== undefined && input.name !== existing.name) {
+            updateData.name = input.name;
+            changes.name = { old: existing.name, new: input.name };
+          }
+          if (input.description !== undefined) {
+            updateData.description = input.description || null;
+            changes.description = {
+              old: existing.description,
+              new: input.description,
+            };
+          }
+          if (input.assetTypeId !== undefined) {
+            updateData.assetTypeId = input.assetTypeId || null;
+            changes.assetTypeId = {
+              old: existing.assetTypeId,
+              new: input.assetTypeId,
+            };
+          }
+          if (input.dataFields !== undefined) {
+            updateData.dataFields = input.dataFields;
+            changes.dataFields = {
+              old: existing.dataFields,
+              new: input.dataFields,
+            };
+          }
+          if (input.variableBindings !== undefined) {
+            updateData.variableBindings = input.variableBindings;
+            changes.variableBindings = {
+              old: existing.variableBindings,
+              new: input.variableBindings,
+            };
+          }
+          if (input.formulas !== undefined) {
+            updateData.formulas = input.formulas;
+            changes.formulas = { old: existing.formulas, new: input.formulas };
+          }
+          if (input.measurementModels !== undefined) {
+            updateData.measurementModels = input.measurementModels;
+            changes.measurementModels = {
+              old: existing.measurementModels,
+              new: input.measurementModels,
+            };
+          }
+          if (input.validations !== undefined) {
+            updateData.validations = input.validations;
+            changes.validations = {
+              old: existing.validations,
+              new: input.validations,
+            };
+          }
+          if (input.uncertaintyParams !== undefined) {
+            updateData.uncertaintyParams = input.uncertaintyParams;
+            changes.uncertaintyParams = {
+              old: existing.uncertaintyParams,
+              new: input.uncertaintyParams,
+            };
+          }
+          if (input.certificateContent !== undefined) {
+            updateData.certificateContent = input.certificateContent;
+            changes.certificateContent = {
+              old: existing.certificateContent,
+              new: input.certificateContent,
+            };
+          }
+          if (
+            input.accreditedScope !== undefined &&
+            input.accreditedScope !== existing.accreditedScope
+          ) {
+            updateData.accreditedScope = input.accreditedScope;
+            changes.accreditedScope = {
+              old: existing.accreditedScope,
+              new: input.accreditedScope,
+            };
+          }
+
+          if (Object.keys(updateData).length === 0) {
+            return c.json(existing);
+          }
+
+          // DOM-10 dimensional gate on the EFFECTIVE post-update field/formula set
+          // (incoming edits overlaid on the stored draft). Reject before persisting
+          // so the row stays unchanged on a dimensional incoherence.
+          const dimensionalError = dimensionalGateError({
+            dataFields: input.dataFields ?? existing.dataFields,
+            variableBindings:
+              input.variableBindings ?? existing.variableBindings,
+            formulas: input.formulas ?? existing.formulas,
+            measurementModels:
+              input.measurementModels ?? existing.measurementModels,
+          });
+          if (dimensionalError) {
+            return c.json(dimensionalError, 422);
+          }
+
+          updateData.compiledMethod = null;
+          updateData.methodFingerprint = null;
+          updateData.methodEngine = null;
+          updateData.methodCompiledAt = null;
+          updateData.publicationEvidence = null;
+
+          // Update method
+          const [updated] = await tx
+            .update(calibrationMethod)
+            .set(updateData)
+            .where(eq(calibrationMethod.id, id))
+            .returning();
+
+          // Audit log
+          await tx.insert(methodAuditLog).values({
+            organizationId: member.organizationId,
+            methodId: id,
+            action: "update",
+            changes,
+            performedBy: session.user.id,
+            ipAddress: c.req.header("x-forwarded-for") || null,
+          });
+
+          return c.json(updated);
+        } catch (error) {
+          console.error("Error updating method:", error);
+          return c.json({ error: "Erro ao atualizar método" }, 500);
         }
-
-        // DOM-10 dimensional gate on the EFFECTIVE post-update field/formula set
-        // (incoming edits overlaid on the stored draft). Reject before persisting
-        // so the row stays unchanged on a dimensional incoherence.
-        const dimensionalError = dimensionalGateError({
-          dataFields: input.dataFields ?? existing.dataFields,
-          variableBindings: input.variableBindings ?? existing.variableBindings,
-          formulas: input.formulas ?? existing.formulas,
-          measurementModels:
-            input.measurementModels ?? existing.measurementModels,
-        });
-        if (dimensionalError) {
-          return c.json(dimensionalError, 422);
-        }
-
-        updateData.compiledMethod = null;
-        updateData.methodFingerprint = null;
-        updateData.methodEngine = null;
-        updateData.methodCompiledAt = null;
-        updateData.publicationEvidence = null;
-
-        // Update method
-        const [updated] = await db
-          .update(calibrationMethod)
-          .set(updateData)
-          .where(eq(calibrationMethod.id, id))
-          .returning();
-
-        // Audit log
-        await db.insert(methodAuditLog).values({
-          organizationId: member.organizationId,
-          methodId: id,
-          action: "update",
-          changes,
-          performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
-        });
-
-        return c.json(updated);
-      } catch (error) {
-        console.error("Error updating method:", error);
-        return c.json({ error: "Erro ao atualizar método" }, 500);
-      }
+      });
     },
   )
 
@@ -2025,131 +2049,134 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const id = await resolveMethodRouteId(
-        c.req.param("id"),
-        member.organizationId,
-      );
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const id = await resolveMethodRouteId(
+          c.req.param("id"),
+          member.organizationId,
+          tx,
+        );
 
-      if (id === null) {
-        return c.json({ error: "Método nao encontrado" }, 404);
-      }
-
-      try {
-        const [existing] = await db
-          .select()
-          .from(calibrationMethod)
-          .where(
-            and(
-              eq(calibrationMethod.id, id),
-              eq(calibrationMethod.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!existing) {
+        if (id === null) {
           return c.json({ error: "Método nao encontrado" }, 404);
         }
 
-        if (existing.status !== "DRAFT") {
-          return c.json(
-            { error: "Apenas rascunhos podem ser enviados para aprovacao" },
-            400,
-          );
-        }
+        try {
+          const [existing] = await tx
+            .select()
+            .from(calibrationMethod)
+            .where(
+              and(
+                eq(calibrationMethod.id, id),
+                eq(calibrationMethod.organizationId, member.organizationId),
+              ),
+            )
+            .limit(1);
 
-        // Validate method has required fields
-        if (!existing.dataFields || existing.dataFields.length === 0) {
-          return c.json(
-            { error: "Método deve ter pelo menos um campo de entrada" },
-            400,
-          );
-        }
+          if (!existing) {
+            return c.json({ error: "Método nao encontrado" }, 404);
+          }
 
-        const body = recordFromUnknown(await c.req.json().catch(() => ({})));
-        const previewScenarios = buildAdhocPreviewScenarios(
-          objectRecord(body.sampleData) ?? undefined,
-        );
-        const compileResult = compileDraftWithEngine(
-          methodRecordToDraft(existing),
-          {
-            requirePublishable: true,
-            previewScenarios,
-            includePreviewScenariosInFingerprint: false,
-          },
-        );
-        if (!compileResult.ok) {
-          return c.json(
+          if (existing.status !== "DRAFT") {
+            return c.json(
+              { error: "Apenas rascunhos podem ser enviados para aprovacao" },
+              400,
+            );
+          }
+
+          // Validate method has required fields
+          if (!existing.dataFields || existing.dataFields.length === 0) {
+            return c.json(
+              { error: "Método deve ter pelo menos um campo de entrada" },
+              400,
+            );
+          }
+
+          const body = recordFromUnknown(await c.req.json().catch(() => ({})));
+          const previewScenarios = buildAdhocPreviewScenarios(
+            objectRecord(body.sampleData) ?? undefined,
+          );
+          const compileResult = compileDraftWithEngine(
+            methodRecordToDraft(existing),
             {
-              error: diagnosticsMessage(compileResult.diagnostics),
-              diagnostics: compileResult.diagnostics,
-            },
-            422,
-          );
-        }
-        const uncertaintyDiagnostics = unmodeledUncertaintyDiagnostics({
-          uncertaintyParams: existing.uncertaintyParams,
-          compiledMethod: compileResult.method,
-        });
-        if (uncertaintyDiagnostics.length > 0) {
-          return c.json(
-            {
-              error: diagnosticsMessage(uncertaintyDiagnostics),
-              diagnostics: uncertaintyDiagnostics,
-            },
-            422,
-          );
-        }
-        // DOM-10 dimensional gate on the publish-transition recompile (the engine
-        // is dimension-blind by design, so this is the check that catches an
-        // incoherent unit set on submit-for-approval).
-        const dimensionalError = dimensionalGateError(existing);
-        if (dimensionalError) {
-          return c.json(dimensionalError, 422);
-        }
-
-        const [updated] = await db
-          .update(calibrationMethod)
-          .set({
-            status: "PENDING_APPROVAL",
-            technicalReviewedBy: null,
-            approvedBy: null,
-            publishedAt: null,
-            publishedBy: null,
-            compiledMethod: compileResult.method,
-            methodFingerprint: compileResult.method.methodFingerprint,
-            methodEngine: compileResult.method.engine,
-            methodCompiledAt: new Date(),
-            publicationEvidence: buildReviewPreviewEvidence({
-              compiledMethod: compileResult.method,
+              requirePublishable: true,
               previewScenarios,
-              previewResults: compileResult.previewResults,
-              diagnostics: compileResult.diagnostics,
-              compiledBy: session.user.id,
-            }),
-          })
-          .where(eq(calibrationMethod.id, id))
-          .returning();
-
-        await db.insert(methodAuditLog).values({
-          organizationId: member.organizationId,
-          methodId: id,
-          action: "request_approval",
-          changes: {
-            status: { old: "DRAFT", new: "PENDING_APPROVAL" },
-            methodFingerprint: {
-              old: existing.methodFingerprint,
-              new: compileResult.method.methodFingerprint,
+              includePreviewScenariosInFingerprint: false,
             },
-          },
-          performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
-        });
+          );
+          if (!compileResult.ok) {
+            return c.json(
+              {
+                error: diagnosticsMessage(compileResult.diagnostics),
+                diagnostics: compileResult.diagnostics,
+              },
+              422,
+            );
+          }
+          const uncertaintyDiagnostics = unmodeledUncertaintyDiagnostics({
+            uncertaintyParams: existing.uncertaintyParams,
+            compiledMethod: compileResult.method,
+          });
+          if (uncertaintyDiagnostics.length > 0) {
+            return c.json(
+              {
+                error: diagnosticsMessage(uncertaintyDiagnostics),
+                diagnostics: uncertaintyDiagnostics,
+              },
+              422,
+            );
+          }
+          // DOM-10 dimensional gate on the publish-transition recompile (the engine
+          // is dimension-blind by design, so this is the check that catches an
+          // incoherent unit set on submit-for-approval).
+          const dimensionalError = dimensionalGateError(existing);
+          if (dimensionalError) {
+            return c.json(dimensionalError, 422);
+          }
 
-        return c.json(updated);
-      } catch (error) {
-        console.error("Error requesting method approval:", error);
-        return c.json({ error: "Erro ao solicitar aprovacao" }, 500);
-      }
+          const [updated] = await tx
+            .update(calibrationMethod)
+            .set({
+              status: "PENDING_APPROVAL",
+              technicalReviewedBy: null,
+              approvedBy: null,
+              publishedAt: null,
+              publishedBy: null,
+              compiledMethod: compileResult.method,
+              methodFingerprint: compileResult.method.methodFingerprint,
+              methodEngine: compileResult.method.engine,
+              methodCompiledAt: new Date(),
+              publicationEvidence: buildReviewPreviewEvidence({
+                compiledMethod: compileResult.method,
+                previewScenarios,
+                previewResults: compileResult.previewResults,
+                diagnostics: compileResult.diagnostics,
+                compiledBy: session.user.id,
+              }),
+            })
+            .where(eq(calibrationMethod.id, id))
+            .returning();
+
+          await tx.insert(methodAuditLog).values({
+            organizationId: member.organizationId,
+            methodId: id,
+            action: "request_approval",
+            changes: {
+              status: { old: "DRAFT", new: "PENDING_APPROVAL" },
+              methodFingerprint: {
+                old: existing.methodFingerprint,
+                new: compileResult.method.methodFingerprint,
+              },
+            },
+            performedBy: session.user.id,
+            ipAddress: c.req.header("x-forwarded-for") || null,
+          });
+
+          return c.json(updated);
+        } catch (error) {
+          console.error("Error requesting method approval:", error);
+          return c.json({ error: "Erro ao solicitar aprovacao" }, 500);
+        }
+      });
     },
   )
 
@@ -2163,64 +2190,67 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const id = await resolveMethodRouteId(
-        c.req.param("id"),
-        member.organizationId,
-      );
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const id = await resolveMethodRouteId(
+          c.req.param("id"),
+          member.organizationId,
+          tx,
+        );
 
-      if (id === null) {
-        return c.json({ error: "Método nao encontrado" }, 404);
-      }
-
-      try {
-        const [existing] = await db
-          .select()
-          .from(calibrationMethod)
-          .where(
-            and(
-              eq(calibrationMethod.id, id),
-              eq(calibrationMethod.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!existing) {
+        if (id === null) {
           return c.json({ error: "Método nao encontrado" }, 404);
         }
 
-        if (existing.status !== "PENDING_APPROVAL") {
-          return c.json(
-            { error: "Apenas métodos pendentes podem ser revisados" },
-            400,
-          );
+        try {
+          const [existing] = await tx
+            .select()
+            .from(calibrationMethod)
+            .where(
+              and(
+                eq(calibrationMethod.id, id),
+                eq(calibrationMethod.organizationId, member.organizationId),
+              ),
+            )
+            .limit(1);
+
+          if (!existing) {
+            return c.json({ error: "Método nao encontrado" }, 404);
+          }
+
+          if (existing.status !== "PENDING_APPROVAL") {
+            return c.json(
+              { error: "Apenas métodos pendentes podem ser revisados" },
+              400,
+            );
+          }
+
+          const [updated] = await tx
+            .update(calibrationMethod)
+            .set({
+              status: "TECHNICAL_REVIEWED",
+              technicalReviewedBy: session.user.id,
+            })
+            .where(eq(calibrationMethod.id, id))
+            .returning();
+
+          await tx.insert(methodAuditLog).values({
+            organizationId: member.organizationId,
+            methodId: id,
+            action: "technical_review",
+            changes: {
+              status: { old: "PENDING_APPROVAL", new: "TECHNICAL_REVIEWED" },
+              technicalReviewedBy: { old: null, new: session.user.id },
+            },
+            performedBy: session.user.id,
+            ipAddress: c.req.header("x-forwarded-for") || null,
+          });
+
+          return c.json(updated);
+        } catch (error) {
+          console.error("Error technical reviewing method:", error);
+          return c.json({ error: "Erro ao revisar tecnicamente" }, 500);
         }
-
-        const [updated] = await db
-          .update(calibrationMethod)
-          .set({
-            status: "TECHNICAL_REVIEWED",
-            technicalReviewedBy: session.user.id,
-          })
-          .where(eq(calibrationMethod.id, id))
-          .returning();
-
-        await db.insert(methodAuditLog).values({
-          organizationId: member.organizationId,
-          methodId: id,
-          action: "technical_review",
-          changes: {
-            status: { old: "PENDING_APPROVAL", new: "TECHNICAL_REVIEWED" },
-            technicalReviewedBy: { old: null, new: session.user.id },
-          },
-          performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
-        });
-
-        return c.json(updated);
-      } catch (error) {
-        console.error("Error technical reviewing method:", error);
-        return c.json({ error: "Erro ao revisar tecnicamente" }, 500);
-      }
+      });
     },
   )
 
@@ -2234,176 +2264,179 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const id = await resolveMethodRouteId(
-        c.req.param("id"),
-        member.organizationId,
-      );
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const id = await resolveMethodRouteId(
+          c.req.param("id"),
+          member.organizationId,
+          tx,
+        );
 
-      if (id === null) {
-        return c.json({ error: "Método nao encontrado" }, 404);
-      }
-
-      try {
-        const [existing] = await db
-          .select()
-          .from(calibrationMethod)
-          .where(
-            and(
-              eq(calibrationMethod.id, id),
-              eq(calibrationMethod.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!existing) {
+        if (id === null) {
           return c.json({ error: "Método nao encontrado" }, 404);
         }
 
-        if (existing.status !== "TECHNICAL_REVIEWED") {
-          return c.json(
-            { error: "Apenas métodos revisados podem ser aprovados" },
-            400,
-          );
-        }
+        try {
+          const [existing] = await tx
+            .select()
+            .from(calibrationMethod)
+            .where(
+              and(
+                eq(calibrationMethod.id, id),
+                eq(calibrationMethod.organizationId, member.organizationId),
+              ),
+            )
+            .limit(1);
 
-        if (!existing.technicalReviewedBy) {
-          return c.json(
-            { error: "Revisao tecnica obrigatoria antes da aprovacao" },
-            400,
-          );
-        }
+          if (!existing) {
+            return c.json({ error: "Método nao encontrado" }, 404);
+          }
 
-        if (existing.technicalReviewedBy === session.user.id) {
-          return c.json(
-            {
-              error:
-                "Revisao tecnica e aprovacao de qualidade devem ser feitas por usuarios diferentes",
-            },
-            400,
-          );
-        }
+          if (existing.status !== "TECHNICAL_REVIEWED") {
+            return c.json(
+              { error: "Apenas métodos revisados podem ser aprovados" },
+              400,
+            );
+          }
 
-        // Validate method has required fields
-        if (!existing.dataFields || existing.dataFields.length === 0) {
-          return c.json(
-            { error: "Método deve ter pelo menos um campo de entrada" },
-            400,
-          );
-        }
+          if (!existing.technicalReviewedBy) {
+            return c.json(
+              { error: "Revisao tecnica obrigatoria antes da aprovacao" },
+              400,
+            );
+          }
 
-        const body = recordFromUnknown(await c.req.json().catch(() => ({})));
-        const publishDraft = methodRecordToDraft({
-          ...existing,
-          status: "PUBLISHED",
-        });
-        const previewScenarios = resolvePublicationPreviewScenarios(
-          objectRecord(body.sampleData) ?? undefined,
-          existing.publicationEvidence,
-          existing.methodFingerprint,
-        );
-        const compileResult = compileDraftWithEngine(publishDraft, {
-          requirePublishable: true,
-          previewScenarios,
-          includePreviewScenariosInFingerprint: false,
-        });
-        if (!compileResult.ok) {
-          return c.json(
-            {
-              error: diagnosticsMessage(compileResult.diagnostics),
-              diagnostics: compileResult.diagnostics,
-            },
-            422,
-          );
-        }
-        const uncertaintyDiagnostics = unmodeledUncertaintyDiagnostics({
-          uncertaintyParams: existing.uncertaintyParams,
-          compiledMethod: compileResult.method,
-        });
-        if (uncertaintyDiagnostics.length > 0) {
-          return c.json(
-            {
-              error: diagnosticsMessage(uncertaintyDiagnostics),
-              diagnostics: uncertaintyDiagnostics,
-            },
-            422,
-          );
-        }
-        // DOM-10 dimensional gate on the publish recompile — no method row
-        // reaches PUBLISHED with a dimensional incoherence.
-        const dimensionalError = dimensionalGateError(existing);
-        if (dimensionalError) {
-          return c.json(dimensionalError, 422);
-        }
-        const publicationEvidence = buildPublicationEvidence({
-          methodId: existing.id,
-          version: existing.version,
-          compiledMethod: compileResult.method,
-          previewScenarios,
-          previewResults: compileResult.previewResults,
-          diagnostics: compileResult.diagnostics,
-          reviewedBy: existing.technicalReviewedBy,
-          publishedBy: session.user.id,
-          reasonForChange:
-            typeof body.reasonForChange === "string"
-              ? body.reasonForChange
-              : null,
-          certificateContent: existing.certificateContent,
-          uncertaintyParams: existing.uncertaintyParams,
-          measurementModels: existing.measurementModels,
-        });
+          if (existing.technicalReviewedBy === session.user.id) {
+            return c.json(
+              {
+                error:
+                  "Revisao tecnica e aprovacao de qualidade devem ser feitas por usuarios diferentes",
+              },
+              400,
+            );
+          }
 
-        // Archive any previously published version with same name
-        await db
-          .update(calibrationMethod)
-          .set({
-            status: "ARCHIVED",
-            archivedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(calibrationMethod.organizationId, member.organizationId),
-              eq(calibrationMethod.name, existing.name),
-              eq(calibrationMethod.status, "PUBLISHED"),
-              ne(calibrationMethod.id, id),
-            ),
-          );
+          // Validate method has required fields
+          if (!existing.dataFields || existing.dataFields.length === 0) {
+            return c.json(
+              { error: "Método deve ter pelo menos um campo de entrada" },
+              400,
+            );
+          }
 
-        const [published] = await db
-          .update(calibrationMethod)
-          .set({
+          const body = recordFromUnknown(await c.req.json().catch(() => ({})));
+          const publishDraft = methodRecordToDraft({
+            ...existing,
             status: "PUBLISHED",
-            publishedAt: new Date(),
-            publishedBy: session.user.id,
-            approvedBy: session.user.id,
+          });
+          const previewScenarios = resolvePublicationPreviewScenarios(
+            objectRecord(body.sampleData) ?? undefined,
+            existing.publicationEvidence,
+            existing.methodFingerprint,
+          );
+          const compileResult = compileDraftWithEngine(publishDraft, {
+            requirePublishable: true,
+            previewScenarios,
+            includePreviewScenariosInFingerprint: false,
+          });
+          if (!compileResult.ok) {
+            return c.json(
+              {
+                error: diagnosticsMessage(compileResult.diagnostics),
+                diagnostics: compileResult.diagnostics,
+              },
+              422,
+            );
+          }
+          const uncertaintyDiagnostics = unmodeledUncertaintyDiagnostics({
+            uncertaintyParams: existing.uncertaintyParams,
             compiledMethod: compileResult.method,
-            methodFingerprint: compileResult.method.methodFingerprint,
-            methodEngine: compileResult.method.engine,
-            methodCompiledAt: new Date(),
-            publicationEvidence,
-          })
-          .where(eq(calibrationMethod.id, id))
-          .returning();
+          });
+          if (uncertaintyDiagnostics.length > 0) {
+            return c.json(
+              {
+                error: diagnosticsMessage(uncertaintyDiagnostics),
+                diagnostics: uncertaintyDiagnostics,
+              },
+              422,
+            );
+          }
+          // DOM-10 dimensional gate on the publish recompile — no method row
+          // reaches PUBLISHED with a dimensional incoherence.
+          const dimensionalError = dimensionalGateError(existing);
+          if (dimensionalError) {
+            return c.json(dimensionalError, 422);
+          }
+          const publicationEvidence = buildPublicationEvidence({
+            methodId: existing.id,
+            version: existing.version,
+            compiledMethod: compileResult.method,
+            previewScenarios,
+            previewResults: compileResult.previewResults,
+            diagnostics: compileResult.diagnostics,
+            reviewedBy: existing.technicalReviewedBy,
+            publishedBy: session.user.id,
+            reasonForChange:
+              typeof body.reasonForChange === "string"
+                ? body.reasonForChange
+                : null,
+            certificateContent: existing.certificateContent,
+            uncertaintyParams: existing.uncertaintyParams,
+            measurementModels: existing.measurementModels,
+          });
 
-        await db.insert(methodAuditLog).values({
-          organizationId: member.organizationId,
-          methodId: id,
-          action: "quality_approve",
-          changes: {
-            status: { old: "TECHNICAL_REVIEWED", new: "PUBLISHED" },
-            methodFingerprint: {
-              old: existing.methodFingerprint,
-              new: compileResult.method.methodFingerprint,
+          // Archive any previously published version with same name
+          await tx
+            .update(calibrationMethod)
+            .set({
+              status: "ARCHIVED",
+              archivedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(calibrationMethod.organizationId, member.organizationId),
+                eq(calibrationMethod.name, existing.name),
+                eq(calibrationMethod.status, "PUBLISHED"),
+                ne(calibrationMethod.id, id),
+              ),
+            );
+
+          const [published] = await tx
+            .update(calibrationMethod)
+            .set({
+              status: "PUBLISHED",
+              publishedAt: new Date(),
+              publishedBy: session.user.id,
+              approvedBy: session.user.id,
+              compiledMethod: compileResult.method,
+              methodFingerprint: compileResult.method.methodFingerprint,
+              methodEngine: compileResult.method.engine,
+              methodCompiledAt: new Date(),
+              publicationEvidence,
+            })
+            .where(eq(calibrationMethod.id, id))
+            .returning();
+
+          await tx.insert(methodAuditLog).values({
+            organizationId: member.organizationId,
+            methodId: id,
+            action: "quality_approve",
+            changes: {
+              status: { old: "TECHNICAL_REVIEWED", new: "PUBLISHED" },
+              methodFingerprint: {
+                old: existing.methodFingerprint,
+                new: compileResult.method.methodFingerprint,
+              },
             },
-          },
-          performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
-        });
+            performedBy: session.user.id,
+            ipAddress: c.req.header("x-forwarded-for") || null,
+          });
 
-        return c.json(published);
-      } catch (error) {
-        console.error("Error quality approving method:", error);
-        return c.json({ error: "Erro ao aprovar qualidade" }, 500);
-      }
+          return c.json(published);
+        } catch (error) {
+          console.error("Error quality approving method:", error);
+          return c.json({ error: "Erro ao aprovar qualidade" }, 500);
+        }
+      });
     },
   )
 
@@ -2418,74 +2451,79 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const id = await resolveMethodRouteId(
-        c.req.param("id"),
-        member.organizationId,
-      );
-      const { reason } = c.req.valid("json");
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const id = await resolveMethodRouteId(
+          c.req.param("id"),
+          member.organizationId,
+          tx,
+        );
+        const { reason } = c.req.valid("json");
 
-      if (id === null) {
-        return c.json({ error: "Método nao encontrado" }, 404);
-      }
-
-      try {
-        const [existing] = await db
-          .select()
-          .from(calibrationMethod)
-          .where(
-            and(
-              eq(calibrationMethod.id, id),
-              eq(calibrationMethod.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!existing) {
+        if (id === null) {
           return c.json({ error: "Método nao encontrado" }, 404);
         }
 
-        if (
-          existing.status !== "PENDING_APPROVAL" &&
-          existing.status !== "TECHNICAL_REVIEWED"
-        ) {
-          return c.json(
-            { error: "Apenas métodos em aprovacao podem retornar ao rascunho" },
-            400,
-          );
+        try {
+          const [existing] = await tx
+            .select()
+            .from(calibrationMethod)
+            .where(
+              and(
+                eq(calibrationMethod.id, id),
+                eq(calibrationMethod.organizationId, member.organizationId),
+              ),
+            )
+            .limit(1);
+
+          if (!existing) {
+            return c.json({ error: "Método nao encontrado" }, 404);
+          }
+
+          if (
+            existing.status !== "PENDING_APPROVAL" &&
+            existing.status !== "TECHNICAL_REVIEWED"
+          ) {
+            return c.json(
+              {
+                error: "Apenas métodos em aprovacao podem retornar ao rascunho",
+              },
+              400,
+            );
+          }
+
+          const [updated] = await tx
+            .update(calibrationMethod)
+            .set({
+              status: "DRAFT",
+              technicalReviewedBy: null,
+              approvedBy: null,
+              publishedAt: null,
+              publishedBy: null,
+              compiledMethod: null,
+              methodFingerprint: null,
+              methodEngine: null,
+              methodCompiledAt: null,
+              publicationEvidence: null,
+            })
+            .where(eq(calibrationMethod.id, id))
+            .returning();
+
+          await tx.insert(methodAuditLog).values({
+            organizationId: member.organizationId,
+            methodId: id,
+            action: "return_to_draft",
+            changes: { status: { old: existing.status, new: "DRAFT" } },
+            performedBy: session.user.id,
+            ipAddress: c.req.header("x-forwarded-for") || null,
+            reason,
+          });
+
+          return c.json(updated);
+        } catch (error) {
+          console.error("Error returning method to draft:", error);
+          return c.json({ error: "Erro ao retornar para rascunho" }, 500);
         }
-
-        const [updated] = await db
-          .update(calibrationMethod)
-          .set({
-            status: "DRAFT",
-            technicalReviewedBy: null,
-            approvedBy: null,
-            publishedAt: null,
-            publishedBy: null,
-            compiledMethod: null,
-            methodFingerprint: null,
-            methodEngine: null,
-            methodCompiledAt: null,
-            publicationEvidence: null,
-          })
-          .where(eq(calibrationMethod.id, id))
-          .returning();
-
-        await db.insert(methodAuditLog).values({
-          organizationId: member.organizationId,
-          methodId: id,
-          action: "return_to_draft",
-          changes: { status: { old: existing.status, new: "DRAFT" } },
-          performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
-          reason,
-        });
-
-        return c.json(updated);
-      } catch (error) {
-        console.error("Error returning method to draft:", error);
-        return c.json({ error: "Erro ao retornar para rascunho" }, 500);
-      }
+      });
     },
   )
 
@@ -2499,178 +2537,181 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const id = await resolveMethodRouteId(
-        c.req.param("id"),
-        member.organizationId,
-      );
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const id = await resolveMethodRouteId(
+          c.req.param("id"),
+          member.organizationId,
+          tx,
+        );
 
-      if (id === null) {
-        return c.json({ error: "Método nao encontrado" }, 404);
-      }
-
-      try {
-        const [existing] = await db
-          .select()
-          .from(calibrationMethod)
-          .where(
-            and(
-              eq(calibrationMethod.id, id),
-              eq(calibrationMethod.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!existing) {
+        if (id === null) {
           return c.json({ error: "Método nao encontrado" }, 404);
         }
 
-        if (existing.status !== "TECHNICAL_REVIEWED") {
-          return c.json(
-            { error: "Apenas métodos revisados podem ser publicados" },
-            400,
-          );
-        }
+        try {
+          const [existing] = await tx
+            .select()
+            .from(calibrationMethod)
+            .where(
+              and(
+                eq(calibrationMethod.id, id),
+                eq(calibrationMethod.organizationId, member.organizationId),
+              ),
+            )
+            .limit(1);
 
-        if (!existing.technicalReviewedBy) {
-          return c.json(
-            { error: "Revisao tecnica obrigatoria antes da publicacao" },
-            400,
-          );
-        }
+          if (!existing) {
+            return c.json({ error: "Método nao encontrado" }, 404);
+          }
 
-        if (existing.technicalReviewedBy === session.user.id) {
-          return c.json(
-            {
-              error:
-                "Revisao tecnica e publicacao devem ser feitas por usuarios diferentes",
-            },
-            400,
-          );
-        }
+          if (existing.status !== "TECHNICAL_REVIEWED") {
+            return c.json(
+              { error: "Apenas métodos revisados podem ser publicados" },
+              400,
+            );
+          }
 
-        // Validate method has required fields
-        if (!existing.dataFields || existing.dataFields.length === 0) {
-          return c.json(
-            { error: "Método deve ter pelo menos um campo de entrada" },
-            400,
-          );
-        }
+          if (!existing.technicalReviewedBy) {
+            return c.json(
+              { error: "Revisao tecnica obrigatoria antes da publicacao" },
+              400,
+            );
+          }
 
-        const body = recordFromUnknown(await c.req.json().catch(() => ({})));
-        const publishDraft = methodRecordToDraft({
-          ...existing,
-          status: "PUBLISHED",
-        });
-        const previewScenarios = resolvePublicationPreviewScenarios(
-          objectRecord(body.sampleData) ?? undefined,
-          existing.publicationEvidence,
-          existing.methodFingerprint,
-        );
-        const compileResult = compileDraftWithEngine(publishDraft, {
-          requirePublishable: true,
-          previewScenarios,
-          includePreviewScenariosInFingerprint: false,
-        });
-        if (!compileResult.ok) {
-          return c.json(
-            {
-              error: diagnosticsMessage(compileResult.diagnostics),
-              diagnostics: compileResult.diagnostics,
-            },
-            422,
-          );
-        }
-        const uncertaintyDiagnostics = unmodeledUncertaintyDiagnostics({
-          uncertaintyParams: existing.uncertaintyParams,
-          compiledMethod: compileResult.method,
-        });
-        if (uncertaintyDiagnostics.length > 0) {
-          return c.json(
-            {
-              error: diagnosticsMessage(uncertaintyDiagnostics),
-              diagnostics: uncertaintyDiagnostics,
-            },
-            422,
-          );
-        }
-        // DOM-10 dimensional gate on the publish recompile — no method row
-        // reaches PUBLISHED with a dimensional incoherence.
-        const dimensionalError = dimensionalGateError(existing);
-        if (dimensionalError) {
-          return c.json(dimensionalError, 422);
-        }
-        const publicationEvidence = buildPublicationEvidence({
-          methodId: existing.id,
-          version: existing.version,
-          compiledMethod: compileResult.method,
-          previewScenarios,
-          previewResults: compileResult.previewResults,
-          diagnostics: compileResult.diagnostics,
-          reviewedBy: existing.technicalReviewedBy,
-          publishedBy: session.user.id,
-          reasonForChange:
-            typeof body.reasonForChange === "string"
-              ? body.reasonForChange
-              : null,
-          certificateContent: existing.certificateContent,
-          uncertaintyParams: existing.uncertaintyParams,
-          measurementModels: existing.measurementModels,
-        });
+          if (existing.technicalReviewedBy === session.user.id) {
+            return c.json(
+              {
+                error:
+                  "Revisao tecnica e publicacao devem ser feitas por usuarios diferentes",
+              },
+              400,
+            );
+          }
 
-        // Archive any previously published version with same name
-        await db
-          .update(calibrationMethod)
-          .set({
-            status: "ARCHIVED",
-            archivedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(calibrationMethod.organizationId, member.organizationId),
-              eq(calibrationMethod.name, existing.name),
-              eq(calibrationMethod.status, "PUBLISHED"),
-              ne(calibrationMethod.id, id),
-            ),
-          );
+          // Validate method has required fields
+          if (!existing.dataFields || existing.dataFields.length === 0) {
+            return c.json(
+              { error: "Método deve ter pelo menos um campo de entrada" },
+              400,
+            );
+          }
 
-        // Publish
-        const [published] = await db
-          .update(calibrationMethod)
-          .set({
+          const body = recordFromUnknown(await c.req.json().catch(() => ({})));
+          const publishDraft = methodRecordToDraft({
+            ...existing,
             status: "PUBLISHED",
-            publishedAt: new Date(),
-            publishedBy: session.user.id,
-            approvedBy: session.user.id,
+          });
+          const previewScenarios = resolvePublicationPreviewScenarios(
+            objectRecord(body.sampleData) ?? undefined,
+            existing.publicationEvidence,
+            existing.methodFingerprint,
+          );
+          const compileResult = compileDraftWithEngine(publishDraft, {
+            requirePublishable: true,
+            previewScenarios,
+            includePreviewScenariosInFingerprint: false,
+          });
+          if (!compileResult.ok) {
+            return c.json(
+              {
+                error: diagnosticsMessage(compileResult.diagnostics),
+                diagnostics: compileResult.diagnostics,
+              },
+              422,
+            );
+          }
+          const uncertaintyDiagnostics = unmodeledUncertaintyDiagnostics({
+            uncertaintyParams: existing.uncertaintyParams,
             compiledMethod: compileResult.method,
-            methodFingerprint: compileResult.method.methodFingerprint,
-            methodEngine: compileResult.method.engine,
-            methodCompiledAt: new Date(),
-            publicationEvidence,
-          })
-          .where(eq(calibrationMethod.id, id))
-          .returning();
+          });
+          if (uncertaintyDiagnostics.length > 0) {
+            return c.json(
+              {
+                error: diagnosticsMessage(uncertaintyDiagnostics),
+                diagnostics: uncertaintyDiagnostics,
+              },
+              422,
+            );
+          }
+          // DOM-10 dimensional gate on the publish recompile — no method row
+          // reaches PUBLISHED with a dimensional incoherence.
+          const dimensionalError = dimensionalGateError(existing);
+          if (dimensionalError) {
+            return c.json(dimensionalError, 422);
+          }
+          const publicationEvidence = buildPublicationEvidence({
+            methodId: existing.id,
+            version: existing.version,
+            compiledMethod: compileResult.method,
+            previewScenarios,
+            previewResults: compileResult.previewResults,
+            diagnostics: compileResult.diagnostics,
+            reviewedBy: existing.technicalReviewedBy,
+            publishedBy: session.user.id,
+            reasonForChange:
+              typeof body.reasonForChange === "string"
+                ? body.reasonForChange
+                : null,
+            certificateContent: existing.certificateContent,
+            uncertaintyParams: existing.uncertaintyParams,
+            measurementModels: existing.measurementModels,
+          });
 
-        // Audit log
-        await db.insert(methodAuditLog).values({
-          organizationId: member.organizationId,
-          methodId: id,
-          action: "publish",
-          changes: {
-            status: { old: existing.status, new: "PUBLISHED" },
-            methodFingerprint: {
-              old: existing.methodFingerprint,
-              new: compileResult.method.methodFingerprint,
+          // Archive any previously published version with same name
+          await tx
+            .update(calibrationMethod)
+            .set({
+              status: "ARCHIVED",
+              archivedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(calibrationMethod.organizationId, member.organizationId),
+                eq(calibrationMethod.name, existing.name),
+                eq(calibrationMethod.status, "PUBLISHED"),
+                ne(calibrationMethod.id, id),
+              ),
+            );
+
+          // Publish
+          const [published] = await tx
+            .update(calibrationMethod)
+            .set({
+              status: "PUBLISHED",
+              publishedAt: new Date(),
+              publishedBy: session.user.id,
+              approvedBy: session.user.id,
+              compiledMethod: compileResult.method,
+              methodFingerprint: compileResult.method.methodFingerprint,
+              methodEngine: compileResult.method.engine,
+              methodCompiledAt: new Date(),
+              publicationEvidence,
+            })
+            .where(eq(calibrationMethod.id, id))
+            .returning();
+
+          // Audit log
+          await tx.insert(methodAuditLog).values({
+            organizationId: member.organizationId,
+            methodId: id,
+            action: "publish",
+            changes: {
+              status: { old: existing.status, new: "PUBLISHED" },
+              methodFingerprint: {
+                old: existing.methodFingerprint,
+                new: compileResult.method.methodFingerprint,
+              },
             },
-          },
-          performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
-        });
+            performedBy: session.user.id,
+            ipAddress: c.req.header("x-forwarded-for") || null,
+          });
 
-        return c.json(published);
-      } catch (error) {
-        console.error("Error publishing method:", error);
-        return c.json({ error: "Erro ao publicar método" }, 500);
-      }
+          return c.json(published);
+        } catch (error) {
+          console.error("Error publishing method:", error);
+          return c.json({ error: "Erro ao publicar método" }, 500);
+        }
+      });
     },
   )
 
@@ -2683,62 +2724,65 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const id = await resolveMethodRouteId(
-        c.req.param("id"),
-        member.organizationId,
-      );
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const id = await resolveMethodRouteId(
+          c.req.param("id"),
+          member.organizationId,
+          tx,
+        );
 
-      if (id === null) {
-        return c.json({ error: "Método nao encontrado" }, 404);
-      }
-
-      try {
-        const [existing] = await db
-          .select()
-          .from(calibrationMethod)
-          .where(
-            and(
-              eq(calibrationMethod.id, id),
-              eq(calibrationMethod.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!existing) {
+        if (id === null) {
           return c.json({ error: "Método nao encontrado" }, 404);
         }
 
-        if (existing.status !== "PUBLISHED") {
-          return c.json(
-            { error: "Apenas métodos publicados podem ser arquivados" },
-            400,
-          );
+        try {
+          const [existing] = await tx
+            .select()
+            .from(calibrationMethod)
+            .where(
+              and(
+                eq(calibrationMethod.id, id),
+                eq(calibrationMethod.organizationId, member.organizationId),
+              ),
+            )
+            .limit(1);
+
+          if (!existing) {
+            return c.json({ error: "Método nao encontrado" }, 404);
+          }
+
+          if (existing.status !== "PUBLISHED") {
+            return c.json(
+              { error: "Apenas métodos publicados podem ser arquivados" },
+              400,
+            );
+          }
+
+          const [archived] = await tx
+            .update(calibrationMethod)
+            .set({
+              status: "ARCHIVED",
+              archivedAt: new Date(),
+            })
+            .where(eq(calibrationMethod.id, id))
+            .returning();
+
+          // Audit log
+          await tx.insert(methodAuditLog).values({
+            organizationId: member.organizationId,
+            methodId: id,
+            action: "archive",
+            changes: { status: { old: "PUBLISHED", new: "ARCHIVED" } },
+            performedBy: session.user.id,
+            ipAddress: c.req.header("x-forwarded-for") || null,
+          });
+
+          return c.json(archived);
+        } catch (error) {
+          console.error("Error archiving method:", error);
+          return c.json({ error: "Erro ao arquivar método" }, 500);
         }
-
-        const [archived] = await db
-          .update(calibrationMethod)
-          .set({
-            status: "ARCHIVED",
-            archivedAt: new Date(),
-          })
-          .where(eq(calibrationMethod.id, id))
-          .returning();
-
-        // Audit log
-        await db.insert(methodAuditLog).values({
-          organizationId: member.organizationId,
-          methodId: id,
-          action: "archive",
-          changes: { status: { old: "PUBLISHED", new: "ARCHIVED" } },
-          performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
-        });
-
-        return c.json(archived);
-      } catch (error) {
-        console.error("Error archiving method:", error);
-        return c.json({ error: "Erro ao arquivar método" }, 500);
-      }
+      });
     },
   )
 
@@ -2751,9 +2795,145 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const id = await resolveMethodRouteId(
+          c.req.param("id"),
+          member.organizationId,
+          tx,
+        );
+
+        if (id === null) {
+          return c.json({ error: "Método nao encontrado" }, 404);
+        }
+
+        try {
+          const [existing] = await tx
+            .select()
+            .from(calibrationMethod)
+            .where(
+              and(
+                eq(calibrationMethod.id, id),
+                eq(calibrationMethod.organizationId, member.organizationId),
+              ),
+            )
+            .limit(1);
+
+          if (!existing) {
+            return c.json({ error: "Método nao encontrado" }, 404);
+          }
+
+          if (existing.status !== "PUBLISHED") {
+            return c.json(
+              {
+                error:
+                  "Novas versoes so podem ser criadas a partir de métodos publicados",
+              },
+              400,
+            );
+          }
+
+          // Check if there's already a draft for this method
+          const [existingDraft] = await tx
+            .select()
+            .from(calibrationMethod)
+            .where(
+              and(
+                eq(calibrationMethod.organizationId, member.organizationId),
+                eq(calibrationMethod.name, existing.name),
+                eq(calibrationMethod.status, "DRAFT"),
+              ),
+            )
+            .limit(1);
+
+          if (existingDraft) {
+            return c.json(
+              {
+                error:
+                  "Ja existe um rascunho para este método. Edite o rascunho existente ou exclua-o antes de criar uma nova versão.",
+                existingDraftId: existingDraft.id,
+              },
+              400,
+            );
+          }
+
+          // Find the highest version number
+          const [maxVersion] = await tx
+            .select({ maxVersion: calibrationMethod.version })
+            .from(calibrationMethod)
+            .where(
+              and(
+                eq(calibrationMethod.organizationId, member.organizationId),
+                eq(calibrationMethod.name, existing.name),
+              ),
+            )
+            .orderBy(desc(calibrationMethod.version))
+            .limit(1);
+
+          const newVersion = (maxVersion?.maxVersion || existing.version) + 1;
+
+          // Clone the method
+          const [newMethod] = await tx
+            .insert(calibrationMethod)
+            .values({
+              organizationId: member.organizationId,
+              assetTypeId: existing.assetTypeId,
+              name: existing.name,
+              description: existing.description,
+              version: newVersion,
+              status: "DRAFT",
+              dataFields: existing.dataFields,
+              variableBindings: existing.variableBindings ?? [],
+              formulas: existing.formulas,
+              measurementModels: existing.measurementModels ?? [],
+              validations: normalizeMethodValidationsInput(
+                existing.validations,
+              ),
+              uncertaintyParams: existing.uncertaintyParams,
+              certificateContent: existing.certificateContent,
+              accreditedScope: existing.accreditedScope,
+              parentId: existing.id,
+              createdBy: session.user.id,
+            })
+            .returning();
+
+          if (!newMethod) {
+            return c.json({ error: "Erro ao criar nova versão" }, 500);
+          }
+
+          // Audit log
+          await tx.insert(methodAuditLog).values({
+            organizationId: member.organizationId,
+            methodId: newMethod.id,
+            action: "new_version",
+            changes: {
+              parentId: existing.id,
+              parentVersion: existing.version,
+              newVersion,
+            },
+            performedBy: session.user.id,
+            ipAddress: c.req.header("x-forwarded-for") || null,
+          });
+
+          return c.json(normalizeMethodRecord(newMethod), 201);
+        } catch (error) {
+          console.error("Error creating new version:", error);
+          return c.json({ error: "Erro ao criar nova versão" }, 500);
+        }
+      });
+    },
+  )
+
+  // =========================================================================
+  // DELETE /:id - Delete a DRAFT method only
+  // =========================================================================
+  .delete("/:id", ...withLabPermission({ template: ["delete"] }), async (c) => {
+    const session = c.get("session");
+    const member = c.get("member");
+    return await orgDb(member.organizationId).transaction(async (tx) => {
       const id = await resolveMethodRouteId(
         c.req.param("id"),
         member.organizationId,
+        tx,
       );
 
       if (id === null) {
@@ -2761,7 +2941,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       try {
-        const [existing] = await db
+        const [existing] = await tx
           .select()
           .from(calibrationMethod)
           .where(
@@ -2776,164 +2956,36 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: "Método nao encontrado" }, 404);
         }
 
-        if (existing.status !== "PUBLISHED") {
+        if (existing.status !== "DRAFT") {
           return c.json(
             {
               error:
-                "Novas versoes so podem ser criadas a partir de métodos publicados",
+                "Apenas rascunhos podem ser excluidos. métodos publicados devem ser arquivados.",
             },
             400,
           );
         }
 
-        // Check if there's already a draft for this method
-        const [existingDraft] = await db
-          .select()
-          .from(calibrationMethod)
-          .where(
-            and(
-              eq(calibrationMethod.organizationId, member.organizationId),
-              eq(calibrationMethod.name, existing.name),
-              eq(calibrationMethod.status, "DRAFT"),
-            ),
-          )
-          .limit(1);
-
-        if (existingDraft) {
-          return c.json(
-            {
-              error:
-                "Ja existe um rascunho para este método. Edite o rascunho existente ou exclua-o antes de criar uma nova versão.",
-              existingDraftId: existingDraft.id,
-            },
-            400,
-          );
-        }
-
-        // Find the highest version number
-        const [maxVersion] = await db
-          .select({ maxVersion: calibrationMethod.version })
-          .from(calibrationMethod)
-          .where(
-            and(
-              eq(calibrationMethod.organizationId, member.organizationId),
-              eq(calibrationMethod.name, existing.name),
-            ),
-          )
-          .orderBy(desc(calibrationMethod.version))
-          .limit(1);
-
-        const newVersion = (maxVersion?.maxVersion || existing.version) + 1;
-
-        // Clone the method
-        const [newMethod] = await db
-          .insert(calibrationMethod)
-          .values({
-            organizationId: member.organizationId,
-            assetTypeId: existing.assetTypeId,
-            name: existing.name,
-            description: existing.description,
-            version: newVersion,
-            status: "DRAFT",
-            dataFields: existing.dataFields,
-            variableBindings: existing.variableBindings ?? [],
-            formulas: existing.formulas,
-            measurementModels: existing.measurementModels ?? [],
-            validations: normalizeMethodValidationsInput(existing.validations),
-            uncertaintyParams: existing.uncertaintyParams,
-            certificateContent: existing.certificateContent,
-            accreditedScope: existing.accreditedScope,
-            parentId: existing.id,
-            createdBy: session.user.id,
-          })
-          .returning();
-
-        if (!newMethod) {
-          return c.json({ error: "Erro ao criar nova versão" }, 500);
-        }
-
-        // Audit log
-        await db.insert(methodAuditLog).values({
+        // CMP-06 (#649): record the deletion in the audit trail BEFORE deleting —
+        // mirrors customers.ts. The method_id FK no longer cascades (soft
+        // reference), so this row outlives the method it documents.
+        await tx.insert(methodAuditLog).values({
           organizationId: member.organizationId,
-          methodId: newMethod.id,
-          action: "new_version",
-          changes: {
-            parentId: existing.id,
-            parentVersion: existing.version,
-            newVersion,
-          },
+          methodId: id,
+          action: "delete",
+          changes: { method: { old: existing, new: null } },
           performedBy: session.user.id,
           ipAddress: c.req.header("x-forwarded-for") || null,
         });
 
-        return c.json(normalizeMethodRecord(newMethod), 201);
+        await tx.delete(calibrationMethod).where(eq(calibrationMethod.id, id));
+
+        return c.json({ success: true });
       } catch (error) {
-        console.error("Error creating new version:", error);
-        return c.json({ error: "Erro ao criar nova versão" }, 500);
+        console.error("Error deleting method:", error);
+        return c.json({ error: "Erro ao excluir método" }, 500);
       }
-    },
-  )
-
-  // =========================================================================
-  // DELETE /:id - Delete a DRAFT method only
-  // =========================================================================
-  .delete("/:id", ...withLabPermission({ template: ["delete"] }), async (c) => {
-    const session = c.get("session");
-    const member = c.get("member");
-    const id = await resolveMethodRouteId(
-      c.req.param("id"),
-      member.organizationId,
-    );
-
-    if (id === null) {
-      return c.json({ error: "Método nao encontrado" }, 404);
-    }
-
-    try {
-      const [existing] = await db
-        .select()
-        .from(calibrationMethod)
-        .where(
-          and(
-            eq(calibrationMethod.id, id),
-            eq(calibrationMethod.organizationId, member.organizationId),
-          ),
-        )
-        .limit(1);
-
-      if (!existing) {
-        return c.json({ error: "Método nao encontrado" }, 404);
-      }
-
-      if (existing.status !== "DRAFT") {
-        return c.json(
-          {
-            error:
-              "Apenas rascunhos podem ser excluidos. métodos publicados devem ser arquivados.",
-          },
-          400,
-        );
-      }
-
-      // CMP-06 (#649): record the deletion in the audit trail BEFORE deleting —
-      // mirrors customers.ts. The method_id FK no longer cascades (soft
-      // reference), so this row outlives the method it documents.
-      await db.insert(methodAuditLog).values({
-        organizationId: member.organizationId,
-        methodId: id,
-        action: "delete",
-        changes: { method: { old: existing, new: null } },
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
-      });
-
-      await db.delete(calibrationMethod).where(eq(calibrationMethod.id, id));
-
-      return c.json({ success: true });
-    } catch (error) {
-      console.error("Error deleting method:", error);
-      return c.json({ error: "Erro ao excluir método" }, 500);
-    }
+    });
   })
 
   // =========================================================================
@@ -2944,56 +2996,59 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ template: ["read"] }),
     async (c) => {
       const member = c.get("member");
-      const id = await resolveMethodRouteId(
-        c.req.param("id"),
-        member.organizationId,
-      );
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const id = await resolveMethodRouteId(
+          c.req.param("id"),
+          member.organizationId,
+          tx,
+        );
 
-      if (id === null) {
-        return c.json({ error: "Método nao encontrado" }, 404);
-      }
-
-      try {
-        // Get the method to find its name
-        const [method] = await db
-          .select({ name: calibrationMethod.name })
-          .from(calibrationMethod)
-          .where(
-            and(
-              eq(calibrationMethod.id, id),
-              eq(calibrationMethod.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!method) {
+        if (id === null) {
           return c.json({ error: "Método nao encontrado" }, 404);
         }
 
-        // Get all versions with this name
-        const versions = await db
-          .select({
-            id: calibrationMethod.id,
-            version: calibrationMethod.version,
-            status: calibrationMethod.status,
-            createdAt: calibrationMethod.createdAt,
-            publishedAt: calibrationMethod.publishedAt,
-            archivedAt: calibrationMethod.archivedAt,
-          })
-          .from(calibrationMethod)
-          .where(
-            and(
-              eq(calibrationMethod.organizationId, member.organizationId),
-              eq(calibrationMethod.name, method.name),
-            ),
-          )
-          .orderBy(desc(calibrationMethod.version));
+        try {
+          // Get the method to find its name
+          const [method] = await tx
+            .select({ name: calibrationMethod.name })
+            .from(calibrationMethod)
+            .where(
+              and(
+                eq(calibrationMethod.id, id),
+                eq(calibrationMethod.organizationId, member.organizationId),
+              ),
+            )
+            .limit(1);
 
-        return c.json({ data: versions });
-      } catch (error) {
-        console.error("Error getting versions:", error);
-        return c.json({ error: "Erro ao buscar versoes" }, 500);
-      }
+          if (!method) {
+            return c.json({ error: "Método nao encontrado" }, 404);
+          }
+
+          // Get all versions with this name
+          const versions = await tx
+            .select({
+              id: calibrationMethod.id,
+              version: calibrationMethod.version,
+              status: calibrationMethod.status,
+              createdAt: calibrationMethod.createdAt,
+              publishedAt: calibrationMethod.publishedAt,
+              archivedAt: calibrationMethod.archivedAt,
+            })
+            .from(calibrationMethod)
+            .where(
+              and(
+                eq(calibrationMethod.organizationId, member.organizationId),
+                eq(calibrationMethod.name, method.name),
+              ),
+            )
+            .orderBy(desc(calibrationMethod.version));
+
+          return c.json({ data: versions });
+        } catch (error) {
+          console.error("Error getting versions:", error);
+          return c.json({ error: "Erro ao buscar versoes" }, 500);
+        }
+      });
     },
   )
 
@@ -3005,50 +3060,53 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ template: ["read"] }),
     async (c) => {
       const member = c.get("member");
-      const id = await resolveMethodRouteId(
-        c.req.param("id"),
-        member.organizationId,
-      );
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const id = await resolveMethodRouteId(
+          c.req.param("id"),
+          member.organizationId,
+          tx,
+        );
 
-      if (id === null) {
-        return c.json({ error: "Método nao encontrado" }, 404);
-      }
-
-      try {
-        // Verify method belongs to org
-        const [method] = await db
-          .select({ id: calibrationMethod.id })
-          .from(calibrationMethod)
-          .where(
-            and(
-              eq(calibrationMethod.id, id),
-              eq(calibrationMethod.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-
-        if (!method) {
+        if (id === null) {
           return c.json({ error: "Método nao encontrado" }, 404);
         }
 
-        const logs = await db
-          .select({
-            id: methodAuditLog.id,
-            action: methodAuditLog.action,
-            changes: methodAuditLog.changes,
-            performedAt: methodAuditLog.performedAt,
-            performedByName: user.name,
-            reason: methodAuditLog.reason,
-          })
-          .from(methodAuditLog)
-          .leftJoin(user, eq(methodAuditLog.performedBy, user.id))
-          .where(eq(methodAuditLog.methodId, id))
-          .orderBy(desc(methodAuditLog.performedAt));
+        try {
+          // Verify method belongs to org
+          const [method] = await tx
+            .select({ id: calibrationMethod.id })
+            .from(calibrationMethod)
+            .where(
+              and(
+                eq(calibrationMethod.id, id),
+                eq(calibrationMethod.organizationId, member.organizationId),
+              ),
+            )
+            .limit(1);
 
-        return c.json({ data: logs });
-      } catch (error) {
-        console.error("Error getting audit log:", error);
-        return c.json({ error: "Erro ao buscar historico" }, 500);
-      }
+          if (!method) {
+            return c.json({ error: "Método nao encontrado" }, 404);
+          }
+
+          const logs = await tx
+            .select({
+              id: methodAuditLog.id,
+              action: methodAuditLog.action,
+              changes: methodAuditLog.changes,
+              performedAt: methodAuditLog.performedAt,
+              performedByName: user.name,
+              reason: methodAuditLog.reason,
+            })
+            .from(methodAuditLog)
+            .leftJoin(user, eq(methodAuditLog.performedBy, user.id))
+            .where(eq(methodAuditLog.methodId, id))
+            .orderBy(desc(methodAuditLog.performedAt));
+
+          return c.json({ data: logs });
+        } catch (error) {
+          console.error("Error getting audit log:", error);
+          return c.json({ error: "Erro ao buscar historico" }, 500);
+        }
+      });
     },
   );

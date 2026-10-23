@@ -47,6 +47,11 @@ vi.mock("@calibra-facil/db", async () => {
     reject: (reason: unknown) => unknown,
   ) => resolveNext().then(resolve, reject);
 
+  // `orgDb(...).transaction(...)` runs its callback on the same canned builder
+  // (the organization setting is a statement that consumes no canned result).
+  builder.transaction = async (run: (tx: unknown) => unknown) => run(builder);
+  builder.execute = async () => [];
+
   builder.insert = (table: unknown) => ({
     values: (values: unknown) => {
       inserts.push({ table, values });

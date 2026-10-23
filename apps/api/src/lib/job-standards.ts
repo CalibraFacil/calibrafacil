@@ -1,4 +1,5 @@
 import { db } from "@calibra-facil/db";
+import type { OrgDb, OrgExecutor } from "@calibra-facil/db/for-org";
 import {
   calibrationJob,
   customer,
@@ -23,48 +24,55 @@ import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
  *
  * `organizationId` is the job's laboratory; the composite (organization_id,
  * job_id) foreign key rejects a pair that is not the same tenant.
+ *
+ * `executor` is the org-bound handle of a caller that already runs under
+ * `orgDb(org).transaction` (row-level security); the rewrite is then a savepoint
+ * of it. Without it the rewrite is its own transaction on the plain `db`.
  */
 export async function syncJobStandardLinks(
   jobId: number,
   snapshot: StandardSnapshot[] | null | undefined,
   usedAt: Date | null | undefined,
   organizationId: string,
+  executor?: OrgDb,
 ): Promise<void> {
   // undefined = "snapshot untouched by this write" — keep existing links.
   if (snapshot === undefined) return;
 
-  try {
-    await db.transaction(async (tx) => {
-      await tx
-        .delete(jobStandard)
-        .where(
-          and(
-            eq(jobStandard.jobId, jobId),
-            eq(jobStandard.organizationId, organizationId),
-          ),
-        );
-
-      const standardIds = [
-        ...new Set(
-          (snapshot ?? [])
-            .map((entry) => entry.id)
-            .filter((id) => Number.isInteger(id) && id > 0),
+  const rewrite = async (tx: Pick<OrgExecutor, "insert" | "delete">) => {
+    await tx
+      .delete(jobStandard)
+      .where(
+        and(
+          eq(jobStandard.jobId, jobId),
+          eq(jobStandard.organizationId, organizationId),
         ),
-      ];
-      if (standardIds.length === 0) return;
+      );
 
-      await tx
-        .insert(jobStandard)
-        .values(
-          standardIds.map((standardId) => ({
-            organizationId,
-            jobId,
-            standardId,
-            usedAt: usedAt ?? new Date(),
-          })),
-        )
-        .onConflictDoNothing();
-    });
+    const standardIds = [
+      ...new Set(
+        (snapshot ?? [])
+          .map((entry) => entry.id)
+          .filter((id) => Number.isInteger(id) && id > 0),
+      ),
+    ];
+    if (standardIds.length === 0) return;
+
+    await tx
+      .insert(jobStandard)
+      .values(
+        standardIds.map((standardId) => ({
+          organizationId,
+          jobId,
+          standardId,
+          usedAt: usedAt ?? new Date(),
+        })),
+      )
+      .onConflictDoNothing();
+  };
+  try {
+    if (executor) await executor.transaction(rewrite);
+    else await db.transaction(rewrite);
   } catch (error) {
     console.error(
       `[JobStandards] Failed to sync standard links for job ${jobId}:`,
@@ -95,13 +103,17 @@ export type ImpactedCertificate = {
  * listed; a superseded original whose replacement did NOT use the standard
  * is kept, annotated with the replacement's identity.
  */
-export async function findImpactedCertificates(input: {
-  standardId: number;
-  organizationId: string;
-  from: Date;
-  to: Date;
-}): Promise<ImpactedCertificate[]> {
-  const rows = await db
+export async function findImpactedCertificates(
+  input: {
+    standardId: number;
+    organizationId: string;
+    from: Date;
+    to: Date;
+  },
+  /** The org-bound handle of the caller's transaction (row-level security). */
+  executor: Pick<OrgExecutor, "select"> = db,
+): Promise<ImpactedCertificate[]> {
+  const rows = await executor
     .select({
       jobId: calibrationJob.id,
       certificateNumber: calibrationJob.jobId,
@@ -146,7 +158,7 @@ export async function findImpactedCertificates(input: {
     ),
   ];
   const replacements = replacementIds.length
-    ? await db
+    ? await executor
         .select({ id: calibrationJob.id, jobId: calibrationJob.jobId })
         .from(calibrationJob)
         .where(inArray(calibrationJob.id, replacementIds))
@@ -158,7 +170,7 @@ export async function findImpactedCertificates(input: {
   // Already-notified flag: an existing notification for this certificate in
   // ANY recall of this standard.
   const collapsedJobIds = collapsed.map((row) => row.jobId);
-  const notifiedRows = await db
+  const notifiedRows = await executor
     .select({ jobId: ootNotification.jobId })
     .from(ootNotification)
     .innerJoin(standardRecall, eq(ootNotification.recallId, standardRecall.id))

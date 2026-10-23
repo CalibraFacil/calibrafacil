@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db } from "@calibra-facil/db";
+import { orgDb } from "../lib/org-db";
 import {
   authorizedSignatory,
   authorizedSignatoryAuditLog,
@@ -47,29 +47,31 @@ export const authorizedSignatoriesRouter = new Hono<{
   // =========================================================================
   .get("/", ...withLabPermission({ competence: ["read"] }), async (c) => {
     const memberData = c.get("member");
-    const rows = await db
-      .select({
-        id: authorizedSignatory.id,
-        userId: authorizedSignatory.userId,
-        userName: user.name,
-        assetTypeId: authorizedSignatory.assetTypeId,
-        assetTypeName: assetType.name,
-        scopeDescription: authorizedSignatory.scopeDescription,
-        status: authorizedSignatory.status,
-        authorizedAt: authorizedSignatory.authorizedAt,
-        expiresAt: authorizedSignatory.expiresAt,
-      })
-      .from(authorizedSignatory)
-      .leftJoin(user, eq(authorizedSignatory.userId, user.id))
-      .leftJoin(assetType, eq(authorizedSignatory.assetTypeId, assetType.id))
-      .where(
-        and(
-          eq(authorizedSignatory.organizationId, memberData.organizationId),
-          isNull(authorizedSignatory.deletedAt),
-        ),
-      )
-      .orderBy(desc(authorizedSignatory.authorizedAt));
-    return c.json({ signatories: rows });
+    return await orgDb(memberData.organizationId).transaction(async (tx) => {
+      const rows = await tx
+        .select({
+          id: authorizedSignatory.id,
+          userId: authorizedSignatory.userId,
+          userName: user.name,
+          assetTypeId: authorizedSignatory.assetTypeId,
+          assetTypeName: assetType.name,
+          scopeDescription: authorizedSignatory.scopeDescription,
+          status: authorizedSignatory.status,
+          authorizedAt: authorizedSignatory.authorizedAt,
+          expiresAt: authorizedSignatory.expiresAt,
+        })
+        .from(authorizedSignatory)
+        .leftJoin(user, eq(authorizedSignatory.userId, user.id))
+        .leftJoin(assetType, eq(authorizedSignatory.assetTypeId, assetType.id))
+        .where(
+          and(
+            eq(authorizedSignatory.organizationId, memberData.organizationId),
+            isNull(authorizedSignatory.deletedAt),
+          ),
+        )
+        .orderBy(desc(authorizedSignatory.authorizedAt));
+      return c.json({ signatories: rows });
+    });
   })
 
   // =========================================================================
@@ -88,47 +90,49 @@ export const authorizedSignatoriesRouter = new Hono<{
       // entry; the granted user MUST be an active member of the caller's
       // organization. Mirror the membership check in signatures.ts
       // (GET /member/:memberId) so a record can never point at a foreign user.
-      const [targetMember] = await db
-        .select({ id: member.id })
-        .from(member)
-        .where(
-          and(
-            eq(member.userId, input.userId),
-            eq(member.organizationId, memberData.organizationId),
-          ),
-        )
-        .limit(1);
+      return await orgDb(memberData.organizationId).transaction(async (tx) => {
+        const [targetMember] = await tx
+          .select({ id: member.id })
+          .from(member)
+          .where(
+            and(
+              eq(member.userId, input.userId),
+              eq(member.organizationId, memberData.organizationId),
+            ),
+          )
+          .limit(1);
 
-      if (!targetMember) {
-        return c.json({ error: "Usuário não é membro da organização" }, 400);
-      }
+        if (!targetMember) {
+          return c.json({ error: "Usuário não é membro da organização" }, 400);
+        }
 
-      const [created] = await db
-        .insert(authorizedSignatory)
-        .values({
-          organizationId: memberData.organizationId,
-          userId: input.userId,
-          assetTypeId: input.assetTypeId ?? null,
-          scopeDescription: input.scopeDescription ?? null,
-          status: "ACTIVE",
-          authorizedBy: session.user.id,
-          expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
-          notes: input.notes ?? null,
-        })
-        .returning();
+        const [created] = await tx
+          .insert(authorizedSignatory)
+          .values({
+            organizationId: memberData.organizationId,
+            userId: input.userId,
+            assetTypeId: input.assetTypeId ?? null,
+            scopeDescription: input.scopeDescription ?? null,
+            status: "ACTIVE",
+            authorizedBy: session.user.id,
+            expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+            notes: input.notes ?? null,
+          })
+          .returning();
 
-      if (created) {
-        await db.insert(authorizedSignatoryAuditLog).values({
-          organizationId: memberData.organizationId,
-          signatoryId: created.id,
-          action: "grant",
-          changes: { status: { old: null, new: "ACTIVE" } },
-          performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
-        });
-      }
+        if (created) {
+          await tx.insert(authorizedSignatoryAuditLog).values({
+            organizationId: memberData.organizationId,
+            signatoryId: created.id,
+            action: "grant",
+            changes: { status: { old: null, new: "ACTIVE" } },
+            performedBy: session.user.id,
+            ipAddress: c.req.header("x-forwarded-for") || null,
+          });
+        }
 
-      return c.json({ signatory: created }, 201);
+        return c.json({ signatory: created }, 201);
+      });
     },
   )
 
@@ -148,50 +152,52 @@ export const authorizedSignatoriesRouter = new Hono<{
       }
       const input = c.req.valid("json");
 
-      const [existing] = await db
-        .select()
-        .from(authorizedSignatory)
-        .where(
-          and(
-            eq(authorizedSignatory.id, id),
-            eq(authorizedSignatory.organizationId, memberData.organizationId),
-            isNull(authorizedSignatory.deletedAt),
-          ),
-        )
-        .limit(1);
+      return await orgDb(memberData.organizationId).transaction(async (tx) => {
+        const [existing] = await tx
+          .select()
+          .from(authorizedSignatory)
+          .where(
+            and(
+              eq(authorizedSignatory.id, id),
+              eq(authorizedSignatory.organizationId, memberData.organizationId),
+              isNull(authorizedSignatory.deletedAt),
+            ),
+          )
+          .limit(1);
 
-      if (!existing) {
-        return c.json({ error: "Signatário não encontrado" }, 404);
-      }
+        if (!existing) {
+          return c.json({ error: "Signatário não encontrado" }, 404);
+        }
 
-      const [updated] = await db
-        .update(authorizedSignatory)
-        .set({
-          status: "REVOKED",
-          revokedBy: session.user.id,
-          revokedAt: new Date(),
-        })
-        // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
-        // above so the UPDATE stays org-scoped even if the guarding read is
-        // refactored away. Reuses the in-scope memberData.organizationId.
-        .where(
-          and(
-            eq(authorizedSignatory.id, id),
-            eq(authorizedSignatory.organizationId, memberData.organizationId),
-          ),
-        )
-        .returning();
+        const [updated] = await tx
+          .update(authorizedSignatory)
+          .set({
+            status: "REVOKED",
+            revokedBy: session.user.id,
+            revokedAt: new Date(),
+          })
+          // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
+          // above so the UPDATE stays org-scoped even if the guarding read is
+          // refactored away. Reuses the in-scope memberData.organizationId.
+          .where(
+            and(
+              eq(authorizedSignatory.id, id),
+              eq(authorizedSignatory.organizationId, memberData.organizationId),
+            ),
+          )
+          .returning();
 
-      await db.insert(authorizedSignatoryAuditLog).values({
-        organizationId: memberData.organizationId,
-        signatoryId: id,
-        action: "revoke",
-        changes: { status: { old: existing.status, new: "REVOKED" } },
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
-        reason: input.reason || null,
+        await tx.insert(authorizedSignatoryAuditLog).values({
+          organizationId: memberData.organizationId,
+          signatoryId: id,
+          action: "revoke",
+          changes: { status: { old: existing.status, new: "REVOKED" } },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+          reason: input.reason || null,
+        });
+
+        return c.json({ signatory: updated });
       });
-
-      return c.json({ signatory: updated });
     },
   );

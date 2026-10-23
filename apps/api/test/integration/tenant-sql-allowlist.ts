@@ -163,6 +163,15 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "cron-queue",
+    file: "packages/jobs-core/src/spc-recompute.ts",
+    tables: ["control_chart"],
+    kinds: ["select"],
+    sql: /select distinct "organization_id" from "control_chart"/,
+    reason:
+      "SPC nightly sweep (system path): the cron has no request to name a laboratory, so one statement lists which laboratories own a control chart; every chart is then read, evaluated and written in forOrg(db, lab).transaction.",
+  },
+  {
+    category: "cron-queue",
     file: "packages/db/src/queue-render-recovery.ts",
     tables: ["calibration_job"],
     kinds: ["select"],

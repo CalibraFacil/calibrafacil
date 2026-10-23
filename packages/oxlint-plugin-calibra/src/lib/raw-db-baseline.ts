@@ -6,11 +6,8 @@ import type { Baseline } from "./rule-support.ts";
 // delete the entry in the change that migrates the handlers to forOrg.
 // The portal routes (portal*.ts) are migrated and have no entry.
 export const RAW_DB_BASELINE: Baseline = new Map<string, number>([
-  ["apps/api/src/routes/accredited-scope.ts", 11],
   ["apps/api/src/routes/api-keys.ts", 7],
-  ["apps/api/src/routes/authorized-signatories.ts", 7],
   ["apps/api/src/routes/capa.ts", 26],
-  ["apps/api/src/routes/competences.ts", 46],
   ["apps/api/src/routes/dashboard.ts", 24],
   ["apps/api/src/routes/email-domains.ts", 3],
   ["apps/api/src/routes/finance/automatic-send.ts", 5],
@@ -26,13 +23,11 @@ export const RAW_DB_BASELINE: Baseline = new Map<string, number>([
   ["apps/api/src/routes/lab-setup.ts", 3],
   ["apps/api/src/routes/legal-metrology-regulations.ts", 1],
   ["apps/api/src/routes/magic-link.ts", 3],
-  ["apps/api/src/routes/methods.ts", 49],
   ["apps/api/src/routes/non-conformances.ts", 42],
   ["apps/api/src/routes/notifications.ts", 10],
   ["apps/api/src/routes/oot-ack.ts", 2],
   ["apps/api/src/routes/organization-lifecycle.ts", 1],
   ["apps/api/src/routes/organization-media.ts", 4],
-  ["apps/api/src/routes/proficiency-tests.ts", 26],
   ["apps/api/src/routes/profile-media.ts", 1],
   ["apps/api/src/routes/public-api-v2/assets-create.ts", 5],
   ["apps/api/src/routes/public-api-v2/assets-read.ts", 3],
@@ -54,9 +49,6 @@ export const RAW_DB_BASELINE: Baseline = new Map<string, number>([
   ["apps/api/src/routes/sessions.ts", 2],
   ["apps/api/src/routes/signatures.ts", 9],
   ["apps/api/src/routes/signing.ts", 10],
-  ["apps/api/src/routes/spc.ts", 25],
   ["apps/api/src/routes/sso.ts", 5],
-  ["apps/api/src/routes/standards.ts", 42],
-  ["apps/api/src/routes/training-records.ts", 16],
   ["apps/api/src/routes/webhooks.ts", 1],
 ]);

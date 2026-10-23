@@ -1,5 +1,6 @@
 import { formatCalendarDate } from "@calibra-facil/shared/format";
 import { db } from "@calibra-facil/db";
+import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import {
   calibrationJob,
   customer,
@@ -10,6 +11,7 @@ import {
   type NonConformanceTriggerSource,
 } from "@calibra-facil/db/schema";
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
+import type { OrgScope } from "./after-commit";
 import { enqueueBackgroundJob } from "./background-jobs";
 import { createNonConformanceRecord } from "./non-conformances";
 
@@ -79,17 +81,25 @@ function buildDefaultDescription(job: JobRow): string {
  * job's customer at flag time. When the customer has no e-mail the outbox row
  * is skipped — the PDF is still generated for manual delivery and the UI
  * surfaces the missing address.
+ *
+ * `scope` joins the caller's org-bound transaction: the rows are written in it
+ * (their own insert is a savepoint of it) and the PDF job is handed to
+ * `scope.afterCommit`, so it only runs on a committed notification.
  */
-async function createNotificationForNc(input: {
-  nc: typeof nonConformance.$inferSelect;
-  job: JobRow;
-  organizationId: string;
-  actorUserId: string;
-  affectedScope?: string;
-  /** #426 Phase 1: set when the notification belongs to a recall batch. */
-  recallId?: number | null;
-}): Promise<typeof ootNotification.$inferSelect | null> {
-  const [customerRow] = await db
+async function createNotificationForNc(
+  input: {
+    nc: typeof nonConformance.$inferSelect;
+    job: JobRow;
+    organizationId: string;
+    actorUserId: string;
+    affectedScope?: string;
+    /** #426 Phase 1: set when the notification belongs to a recall batch. */
+    recallId?: number | null;
+  },
+  scope?: OrgScope,
+): Promise<typeof ootNotification.$inferSelect | null> {
+  const reader: Pick<OrgExecutor, "select"> = scope?.executor ?? db;
+  const [customerRow] = await reader
     .select({ name: customer.name, email: customer.email })
     .from(customer)
     .where(
@@ -102,7 +112,7 @@ async function createNotificationForNc(input: {
 
   const recipientEmail = customerRow?.email?.trim() || null;
 
-  const notification = await db.transaction(async (tx) => {
+  const insertRows = async (tx: Pick<OrgExecutor, "insert">) => {
     const [inserted] = await tx
       .insert(ootNotification)
       .values({
@@ -137,14 +147,20 @@ async function createNotificationForNc(input: {
     }
 
     return inserted;
-  });
+  };
+  const notification = scope
+    ? await scope.executor.transaction(insertRows)
+    : await db.transaction(insertRows);
 
   if (notification) {
-    await enqueueBackgroundJob({
-      type: "OOT_NOTIFICATION",
-      notificationId: notification.id,
-      userId: input.actorUserId,
-    });
+    const enqueue = () =>
+      enqueueBackgroundJob({
+        type: "OOT_NOTIFICATION",
+        notificationId: notification.id,
+        userId: input.actorUserId,
+      });
+    if (scope) scope.afterCommit(enqueue);
+    else await enqueue();
   }
 
   return notification;
@@ -352,14 +368,22 @@ export type RecallStandardIdentity = {
  * Idempotent — an existing DRAFT recall for the standard is returned as-is,
  * so re-flagging (or a retried request) never duplicates the campaign. A new
  * OOT event after a previous recall was SENT starts a fresh campaign.
+ *
+ * `scope` joins the caller's org-bound transaction (the NC, the recall and
+ * their audit entry are written in it; the NC notification waits for
+ * `scope.afterCommit`). Without it everything goes through the plain `db`.
  */
-export async function ensureStandardRecall(input: {
-  organizationId: string;
-  actorUserId: string;
-  standard: RecallStandardIdentity;
-  ipAddress?: string | null;
-}): Promise<{ recall: typeof standardRecall.$inferSelect; created: boolean }> {
-  const [existingDraft] = await db
+export async function ensureStandardRecall(
+  input: {
+    organizationId: string;
+    actorUserId: string;
+    standard: RecallStandardIdentity;
+    ipAddress?: string | null;
+  },
+  scope?: OrgScope,
+): Promise<{ recall: typeof standardRecall.$inferSelect; created: boolean }> {
+  const writer: Pick<OrgExecutor, "select" | "insert"> = scope?.executor ?? db;
+  const [existingDraft] = await writer
     .select()
     .from(standardRecall)
     .where(
@@ -373,29 +397,32 @@ export async function ensureStandardRecall(input: {
     .limit(1);
   if (existingDraft) return { recall: existingDraft, created: false };
 
-  const nc = await createNonConformanceRecord({
-    organizationId: input.organizationId,
-    actorUserId: input.actorUserId,
-    type: "out_of_tolerance",
-    description:
-      `Padrão de referência ${input.standard.name} (nº de série ${input.standard.serialNumber}, ` +
-      `certificado ${input.standard.certificateNumber}) encontrado fora de tolerância. ` +
-      `Recall §7.10: avaliar os certificados emitidos com este padrão desde ${formatCalendarDate(
-        input.standard.calibrationDate,
-      )} e notificar os clientes afetados.`,
-    detectedAt: new Date(),
-    triggerSource: "standard_recall",
-    ipAddress: input.ipAddress,
-    auditChanges: {
-      initial: {
-        type: "out_of_tolerance",
-        triggerSource: "standard_recall",
-        standardId: input.standard.id,
+  const nc = await createNonConformanceRecord(
+    {
+      organizationId: input.organizationId,
+      actorUserId: input.actorUserId,
+      type: "out_of_tolerance",
+      description:
+        `Padrão de referência ${input.standard.name} (nº de série ${input.standard.serialNumber}, ` +
+        `certificado ${input.standard.certificateNumber}) encontrado fora de tolerância. ` +
+        `Recall §7.10: avaliar os certificados emitidos com este padrão desde ${formatCalendarDate(
+          input.standard.calibrationDate,
+        )} e notificar os clientes afetados.`,
+      detectedAt: new Date(),
+      triggerSource: "standard_recall",
+      ipAddress: input.ipAddress,
+      auditChanges: {
+        initial: {
+          type: "out_of_tolerance",
+          triggerSource: "standard_recall",
+          standardId: input.standard.id,
+        },
       },
     },
-  });
+    scope,
+  );
 
-  const [recall] = await db
+  const [recall] = await writer
     .insert(standardRecall)
     .values({
       organizationId: input.organizationId,
@@ -425,16 +452,23 @@ export type StandardRecallSendResult = {
  * certificate for an approved recall. Jobs are re-validated org-scoped;
  * already-notified certificates (unique recall_id+job_id) are skipped, so the
  * send is safely retryable.
+ *
+ * `scope` joins the caller's org-bound transaction (every statement runs in it,
+ * the PDF jobs wait for `scope.afterCommit`); without it, through the plain `db`.
  */
-export async function createStandardRecallNotifications(input: {
-  recall: typeof standardRecall.$inferSelect;
-  jobIds: number[];
-  organizationId: string;
-  actorUserId: string;
-}): Promise<StandardRecallSendResult> {
+export async function createStandardRecallNotifications(
+  input: {
+    recall: typeof standardRecall.$inferSelect;
+    jobIds: number[];
+    organizationId: string;
+    actorUserId: string;
+  },
+  scope?: OrgScope,
+): Promise<StandardRecallSendResult> {
   if (input.jobIds.length === 0) return { created: 0, skipped: 0 };
 
-  const [nc] = await db
+  const reader: Pick<OrgExecutor, "select"> = scope?.executor ?? db;
+  const [nc] = await reader
     .select()
     .from(nonConformance)
     .where(eq(nonConformance.id, input.recall.ncId))
@@ -443,7 +477,7 @@ export async function createStandardRecallNotifications(input: {
     throw new Error("Não conformidade do recall não encontrada");
   }
 
-  const jobs = await db
+  const jobs = await reader
     .select({
       id: calibrationJob.id,
       jobId: calibrationJob.jobId,
@@ -459,7 +493,7 @@ export async function createStandardRecallNotifications(input: {
       ),
     );
 
-  const existingRows = await db
+  const existingRows = await reader
     .select({ jobId: ootNotification.jobId })
     .from(ootNotification)
     .where(
@@ -477,13 +511,16 @@ export async function createStandardRecallNotifications(input: {
       skipped++;
       continue;
     }
-    const notification = await createNotificationForNc({
-      nc,
-      job,
-      organizationId: input.organizationId,
-      actorUserId: input.actorUserId,
-      recallId: input.recall.id,
-    });
+    const notification = await createNotificationForNc(
+      {
+        nc,
+        job,
+        organizationId: input.organizationId,
+        actorUserId: input.actorUserId,
+        recallId: input.recall.id,
+      },
+      scope,
+    );
     if (notification) {
       created++;
     } else {

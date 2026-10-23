@@ -1,4 +1,5 @@
 import { db } from "@calibra-facil/db";
+import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import { authorizedSignatory, asset } from "@calibra-facil/db/schema";
 import { and, count, eq, isNull } from "drizzle-orm";
 
@@ -45,12 +46,16 @@ export interface SignatoryGateResult {
  * orgs that don't use the roster are unaffected — mirroring the personnel
  * competence gate.
  */
-export async function checkApproverIsAuthorizedSignatory(params: {
-  organizationId: string;
-  approverId: string;
-  assetId: number;
-}): Promise<SignatoryGateResult> {
-  const [orgCount] = await db
+export async function checkApproverIsAuthorizedSignatory(
+  params: {
+    organizationId: string;
+    approverId: string;
+    assetId: number;
+  },
+  /** The org-bound handle of the caller's transaction (row-level security). */
+  executor: Pick<OrgExecutor, "select"> = db,
+): Promise<SignatoryGateResult> {
+  const [orgCount] = await executor
     .select({ total: count() })
     .from(authorizedSignatory)
     .where(
@@ -65,7 +70,7 @@ export async function checkApproverIsAuthorizedSignatory(params: {
     return { ok: true, enforced: false };
   }
 
-  const [assetRow] = await db
+  const [assetRow] = await executor
     .select({ assetTypeId: asset.assetTypeId })
     .from(asset)
     .where(
@@ -76,7 +81,7 @@ export async function checkApproverIsAuthorizedSignatory(params: {
     )
     .limit(1);
 
-  const records = await db
+  const records = await executor
     .select({
       assetTypeId: authorizedSignatory.assetTypeId,
       expiresAt: authorizedSignatory.expiresAt,

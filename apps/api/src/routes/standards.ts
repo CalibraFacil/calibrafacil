@@ -2,7 +2,8 @@ import { Hono } from "hono";
 import { createHash, randomUUID } from "node:crypto";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db } from "@calibra-facil/db";
+import type { OrgExecutor } from "@calibra-facil/db/for-org";
+import { orgDb } from "../lib/org-db";
 import {
   calibrationJob,
   emailSuppression,
@@ -39,7 +40,9 @@ import type {
 import {
   ensureStandardRecall,
   createStandardRecallNotifications,
+  type RecallStandardIdentity,
 } from "../lib/oot-notifications";
+import { afterCommitQueue } from "../lib/after-commit";
 import { findImpactedCertificates } from "../lib/job-standards";
 import {
   withLabPermission,
@@ -132,6 +135,7 @@ function toCompositionProfileDto(
 async function resolveStandardRouteId(
   identifier: string,
   member: AuthVariables["member"],
+  executor: Pick<OrgExecutor, "select">,
 ): Promise<number | null> {
   const stableId =
     parseLegacyNumericIdentifier(identifier) ??
@@ -144,7 +148,7 @@ async function resolveStandardRouteId(
     isNull(referenceStandard.deletedAt),
   ];
 
-  const [directMatch] = await db
+  const [directMatch] = await executor
     .select({
       id: referenceStandard.id,
     })
@@ -174,7 +178,7 @@ async function resolveStandardRouteId(
 
   if (directMatch) return directMatch.id;
 
-  const standards = await db
+  const standards = await executor
     .select({
       id: referenceStandard.id,
       name: referenceStandard.name,
@@ -242,7 +246,10 @@ function standardCertificateDocumentResponse(
   };
 }
 
-async function currentCertificateDocumentsByStandardId(standardIds: number[]) {
+async function currentCertificateDocumentsByStandardId(
+  standardIds: number[],
+  executor: Pick<OrgExecutor, "select">,
+) {
   if (standardIds.length === 0) {
     return new Map<
       number,
@@ -250,7 +257,7 @@ async function currentCertificateDocumentsByStandardId(standardIds: number[]) {
     >();
   }
 
-  const documents = await db
+  const documents = await executor
     .select()
     .from(referenceStandardCertificateDocument)
     .where(
@@ -303,33 +310,35 @@ export const standardsRouter = new Hono<{
       const { query, limit } = c.req.valid("query");
 
       try {
-        const results = await db
-          .select({
-            id: referenceStandard.id,
-            name: referenceStandard.name,
-            serialNumber: referenceStandard.serialNumber,
-            manufacturer: referenceStandard.manufacturer,
-          })
-          .from(referenceStandard)
-          .where(
-            and(
-              eq(referenceStandard.organizationId, member.organizationId),
-              buildUnitScopeCondition(referenceStandard.unitId, member),
-              isNull(referenceStandard.deletedAt),
-              or(
-                ilike(referenceStandard.name, `%${query}%`),
-                ilike(referenceStandard.serialNumber, `%${query}%`),
-                ilike(referenceStandard.certificateNumber, `%${query}%`),
-                ilike(referenceStandard.manufacturer, `%${query}%`),
-                ilike(referenceStandard.model, `%${query}%`),
-                ilike(referenceStandard.type, `%${query}%`),
-              )!,
-            ),
-          )
-          .orderBy(referenceStandard.name)
-          .limit(limit);
+        return await orgDb(member.organizationId).transaction(async (tx) => {
+          const results = await tx
+            .select({
+              id: referenceStandard.id,
+              name: referenceStandard.name,
+              serialNumber: referenceStandard.serialNumber,
+              manufacturer: referenceStandard.manufacturer,
+            })
+            .from(referenceStandard)
+            .where(
+              and(
+                eq(referenceStandard.organizationId, member.organizationId),
+                buildUnitScopeCondition(referenceStandard.unitId, member),
+                isNull(referenceStandard.deletedAt),
+                or(
+                  ilike(referenceStandard.name, `%${query}%`),
+                  ilike(referenceStandard.serialNumber, `%${query}%`),
+                  ilike(referenceStandard.certificateNumber, `%${query}%`),
+                  ilike(referenceStandard.manufacturer, `%${query}%`),
+                  ilike(referenceStandard.model, `%${query}%`),
+                  ilike(referenceStandard.type, `%${query}%`),
+                )!,
+              ),
+            )
+            .orderBy(referenceStandard.name)
+            .limit(limit);
 
-        return c.json(results);
+          return c.json(results);
+        });
       } catch (error) {
         console.error("Error searching standards:", error);
         return c.json({ error: "Erro ao buscar padrões" }, 500);
@@ -388,65 +397,68 @@ export const standardsRouter = new Hono<{
       const whereCondition = and(...conditions);
 
       // Get total count
-      const [countResult] = await db
-        .select({ total: count() })
-        .from(referenceStandard)
-        .where(whereCondition);
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const [countResult] = await tx
+          .select({ total: count() })
+          .from(referenceStandard)
+          .where(whereCondition);
 
-      // Get paginated data
-      const standards = await db
-        .select({
-          id: referenceStandard.id,
-          name: referenceStandard.name,
-          kind: referenceStandard.kind,
-          type: referenceStandard.type,
-          serialNumber: referenceStandard.serialNumber,
-          manufacturer: referenceStandard.manufacturer,
-          model: referenceStandard.model,
-          certificateNumber: referenceStandard.certificateNumber,
-          calibratedBy: referenceStandard.calibratedBy,
-          calibrationDate: referenceStandard.calibrationDate,
-          nextCalibrationDate: referenceStandard.nextCalibrationDate,
-          referenceValue: referenceStandard.referenceValue,
-          uncertainty: referenceStandard.uncertainty,
-          uncertaintyUnit: referenceStandard.uncertaintyUnit,
-          coverageFactor: referenceStandard.coverageFactor,
-          distribution: referenceStandard.distribution,
-          drift: referenceStandard.drift,
-          certifiedValues: referenceStandard.certifiedValues,
-          metrologyData: referenceStandard.metrologyData,
-          status: referenceStandard.status,
-          createdAt: referenceStandard.createdAt,
-          updatedAt: referenceStandard.updatedAt,
-        })
-        .from(referenceStandard)
-        .where(whereCondition)
-        .orderBy(desc(referenceStandard.createdAt))
-        .limit(limit)
-        .offset(offset);
+        // Get paginated data
+        const standards = await tx
+          .select({
+            id: referenceStandard.id,
+            name: referenceStandard.name,
+            kind: referenceStandard.kind,
+            type: referenceStandard.type,
+            serialNumber: referenceStandard.serialNumber,
+            manufacturer: referenceStandard.manufacturer,
+            model: referenceStandard.model,
+            certificateNumber: referenceStandard.certificateNumber,
+            calibratedBy: referenceStandard.calibratedBy,
+            calibrationDate: referenceStandard.calibrationDate,
+            nextCalibrationDate: referenceStandard.nextCalibrationDate,
+            referenceValue: referenceStandard.referenceValue,
+            uncertainty: referenceStandard.uncertainty,
+            uncertaintyUnit: referenceStandard.uncertaintyUnit,
+            coverageFactor: referenceStandard.coverageFactor,
+            distribution: referenceStandard.distribution,
+            drift: referenceStandard.drift,
+            certifiedValues: referenceStandard.certifiedValues,
+            metrologyData: referenceStandard.metrologyData,
+            status: referenceStandard.status,
+            createdAt: referenceStandard.createdAt,
+            updatedAt: referenceStandard.updatedAt,
+          })
+          .from(referenceStandard)
+          .where(whereCondition)
+          .orderBy(desc(referenceStandard.createdAt))
+          .limit(limit)
+          .offset(offset);
 
-      // Add computed field: isExpired
-      const now = new Date();
-      const certificateDocuments =
-        await currentCertificateDocumentsByStandardId(
-          standards.map((standard) => standard.id),
-        );
-      const standardsWithExpiry = standards.map((s) => ({
-        ...s,
-        certificateDocument: certificateDocuments.get(s.id) ?? null,
-        isExpired: isCalendarDatePast(s.nextCalibrationDate, now),
-        daysUntilExpiry: labDaysUntil(s.nextCalibrationDate, now),
-      }));
+        // Add computed field: isExpired
+        const now = new Date();
+        const certificateDocuments =
+          await currentCertificateDocumentsByStandardId(
+            standards.map((standard) => standard.id),
+            tx,
+          );
+        const standardsWithExpiry = standards.map((s) => ({
+          ...s,
+          certificateDocument: certificateDocuments.get(s.id) ?? null,
+          isExpired: isCalendarDatePast(s.nextCalibrationDate, now),
+          daysUntilExpiry: labDaysUntil(s.nextCalibrationDate, now),
+        }));
 
-      return c.json({
-        data: standardsWithExpiry,
-        pagination: {
-          page,
-          limit,
-          total: countResult?.total ?? 0,
-          totalPages: Math.ceil((countResult?.total ?? 0) / limit),
-        },
-      } satisfies ServerShape<StandardsListResponse>);
+        return c.json({
+          data: standardsWithExpiry,
+          pagination: {
+            page,
+            limit,
+            total: countResult?.total ?? 0,
+            totalPages: Math.ceil((countResult?.total ?? 0) / limit),
+          },
+        } satisfies ServerShape<StandardsListResponse>);
+      });
     },
   )
 
@@ -462,24 +474,26 @@ export const standardsRouter = new Hono<{
     ...withLabPermission({ standard: ["read"] }),
     async (c) => {
       const member = c.get("member");
-      const profiles = await db
-        .select(compositionProfileDtoColumns)
-        .from(massCompositionProfile)
-        .where(
-          and(
-            eq(massCompositionProfile.organizationId, member.organizationId),
-            eq(massCompositionProfile.status, "ACTIVE"),
-            isNull(massCompositionProfile.deletedAt),
-          ),
-        )
-        .orderBy(
-          massCompositionProfile.profileClass,
-          massCompositionProfile.nominalG,
-        );
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const profiles = await tx
+          .select(compositionProfileDtoColumns)
+          .from(massCompositionProfile)
+          .where(
+            and(
+              eq(massCompositionProfile.organizationId, member.organizationId),
+              eq(massCompositionProfile.status, "ACTIVE"),
+              isNull(massCompositionProfile.deletedAt),
+            ),
+          )
+          .orderBy(
+            massCompositionProfile.profileClass,
+            massCompositionProfile.nominalG,
+          );
 
-      return c.json({
-        data: profiles,
-      } satisfies ServerShape<MassCompositionProfilesResponse>);
+        return c.json({
+          data: profiles,
+        } satisfies ServerShape<MassCompositionProfilesResponse>);
+      });
     },
   )
 
@@ -496,67 +510,69 @@ export const standardsRouter = new Hono<{
       const member = c.get("member");
       const input = c.req.valid("json");
 
-      const [existing] = await db
-        .select({
-          id: massCompositionProfile.id,
-          deletedAt: massCompositionProfile.deletedAt,
-        })
-        .from(massCompositionProfile)
-        .where(
-          and(
-            eq(massCompositionProfile.organizationId, member.organizationId),
-            eq(massCompositionProfile.profileClass, input.profileClass),
-            eq(massCompositionProfile.nominalG, input.nominalG),
-          ),
-        )
-        .limit(1);
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const [existing] = await tx
+          .select({
+            id: massCompositionProfile.id,
+            deletedAt: massCompositionProfile.deletedAt,
+          })
+          .from(massCompositionProfile)
+          .where(
+            and(
+              eq(massCompositionProfile.organizationId, member.organizationId),
+              eq(massCompositionProfile.profileClass, input.profileClass),
+              eq(massCompositionProfile.nominalG, input.nominalG),
+            ),
+          )
+          .limit(1);
 
-      if (existing && existing.deletedAt === null) {
-        return c.json(
-          { error: "Já existe um perfil para esta classe e nominal." },
-          409,
-        );
-      }
+        if (existing && existing.deletedAt === null) {
+          return c.json(
+            { error: "Já existe um perfil para esta classe e nominal." },
+            409,
+          );
+        }
 
-      const writableValues = {
-        profileKey: input.profileKey,
-        nominal: input.nominal,
-        value: input.value,
-        uncertainty: input.uncertainty,
-        unit: input.unit,
-        maxError: input.maxError ?? null,
-        drift: input.drift ?? null,
-        buoyancy: input.buoyancy ?? null,
-        coverageFactor: input.coverageFactor ?? null,
-        quantityAvailable: input.quantityAvailable ?? null,
-      };
+        const writableValues = {
+          profileKey: input.profileKey,
+          nominal: input.nominal,
+          value: input.value,
+          uncertainty: input.uncertainty,
+          unit: input.unit,
+          maxError: input.maxError ?? null,
+          drift: input.drift ?? null,
+          buoyancy: input.buoyancy ?? null,
+          coverageFactor: input.coverageFactor ?? null,
+          quantityAvailable: input.quantityAvailable ?? null,
+        };
 
-      const [row] = existing
-        ? await db
-            .update(massCompositionProfile)
-            .set({
-              ...writableValues,
-              status: "ACTIVE",
-              deletedAt: null,
-              updatedAt: new Date(),
-            })
-            .where(eq(massCompositionProfile.id, existing.id))
-            .returning()
-        : await db
-            .insert(massCompositionProfile)
-            .values({
-              organizationId: member.organizationId,
-              profileClass: input.profileClass,
-              nominalG: input.nominalG,
-              status: "ACTIVE",
-              ...writableValues,
-            })
-            .returning();
+        const [row] = existing
+          ? await tx
+              .update(massCompositionProfile)
+              .set({
+                ...writableValues,
+                status: "ACTIVE",
+                deletedAt: null,
+                updatedAt: new Date(),
+              })
+              .where(eq(massCompositionProfile.id, existing.id))
+              .returning()
+          : await tx
+              .insert(massCompositionProfile)
+              .values({
+                organizationId: member.organizationId,
+                profileClass: input.profileClass,
+                nominalG: input.nominalG,
+                status: "ACTIVE",
+                ...writableValues,
+              })
+              .returning();
 
-      if (!row) {
-        return c.json({ error: "Falha ao salvar perfil" }, 500);
-      }
-      return c.json(toCompositionProfileDto(row), 201);
+        if (!row) {
+          return c.json({ error: "Falha ao salvar perfil" }, 500);
+        }
+        return c.json(toCompositionProfileDto(row), 201);
+      });
     },
   )
 
@@ -596,17 +612,22 @@ export const standardsRouter = new Hono<{
 
       let rows;
       try {
-        rows = await db
-          .update(massCompositionProfile)
-          .set(updateData)
-          .where(
-            and(
-              eq(massCompositionProfile.id, id),
-              eq(massCompositionProfile.organizationId, member.organizationId),
-              isNull(massCompositionProfile.deletedAt),
-            ),
-          )
-          .returning();
+        rows = await orgDb(member.organizationId).transaction((tx) =>
+          tx
+            .update(massCompositionProfile)
+            .set(updateData)
+            .where(
+              and(
+                eq(massCompositionProfile.id, id),
+                eq(
+                  massCompositionProfile.organizationId,
+                  member.organizationId,
+                ),
+                isNull(massCompositionProfile.deletedAt),
+              ),
+            )
+            .returning(),
+        );
       } catch (error) {
         // 23505 = unique_violation: identity moved onto an existing (class, nominal_g).
         if (
@@ -645,26 +666,28 @@ export const standardsRouter = new Hono<{
         return c.json({ error: "Perfil não encontrado" }, 404);
       }
 
-      const [row] = await db
-        .update(massCompositionProfile)
-        .set({
-          status: "INACTIVE",
-          deletedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(massCompositionProfile.id, id),
-            eq(massCompositionProfile.organizationId, member.organizationId),
-            isNull(massCompositionProfile.deletedAt),
-          ),
-        )
-        .returning();
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const [row] = await tx
+          .update(massCompositionProfile)
+          .set({
+            status: "INACTIVE",
+            deletedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(massCompositionProfile.id, id),
+              eq(massCompositionProfile.organizationId, member.organizationId),
+              isNull(massCompositionProfile.deletedAt),
+            ),
+          )
+          .returning();
 
-      if (!row) {
-        return c.json({ error: "Perfil não encontrado" }, 404);
-      }
-      return c.json({ success: true, id: row.id });
+        if (!row) {
+          return c.json({ error: "Perfil não encontrado" }, 404);
+        }
+        return c.json({ success: true, id: row.id });
+      });
     },
   )
 
@@ -676,17 +699,52 @@ export const standardsRouter = new Hono<{
     ...withLabPermission({ standard: ["read"] }),
     async (c) => {
       const member = c.get("member");
-      const id = await resolveStandardRouteId(c.req.param("id"), member);
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const id = await resolveStandardRouteId(c.req.param("id"), member, tx);
+
+        if (id === null) {
+          return c.json({ error: "Padrão não encontrado" }, 404);
+        }
+
+        const [found] = await tx
+          .select({
+            id: referenceStandard.id,
+            label: referenceStandard.name,
+          })
+          .from(referenceStandard)
+          .where(
+            and(
+              eq(referenceStandard.id, id),
+              eq(referenceStandard.organizationId, member.organizationId),
+              buildUnitScopeCondition(referenceStandard.unitId, member),
+              isNull(referenceStandard.deletedAt),
+            ),
+          )
+          .limit(1);
+
+        if (!found) {
+          return c.json({ error: "Padrão não encontrado" }, 404);
+        }
+
+        return c.json(found);
+      });
+    },
+  )
+
+  // =========================================================================
+  // GET /:id - Get single reference standard by ID
+  // =========================================================================
+  .get("/:id", ...withLabPermission({ standard: ["read"] }), async (c) => {
+    const member = c.get("member");
+    return await orgDb(member.organizationId).transaction(async (tx) => {
+      const id = await resolveStandardRouteId(c.req.param("id"), member, tx);
 
       if (id === null) {
         return c.json({ error: "Padrão não encontrado" }, 404);
       }
 
-      const [found] = await db
-        .select({
-          id: referenceStandard.id,
-          label: referenceStandard.name,
-        })
+      const [found] = await tx
+        .select()
         .from(referenceStandard)
         .where(
           and(
@@ -702,51 +760,19 @@ export const standardsRouter = new Hono<{
         return c.json({ error: "Padrão não encontrado" }, 404);
       }
 
-      return c.json(found);
-    },
-  )
+      // Add computed fields
+      const now = new Date();
+      const certificateDocuments =
+        await currentCertificateDocumentsByStandardId([found.id], tx);
+      const result = {
+        ...found,
+        certificateDocument: certificateDocuments.get(found.id) ?? null,
+        isExpired: isCalendarDatePast(found.nextCalibrationDate, now),
+        daysUntilExpiry: labDaysUntil(found.nextCalibrationDate, now),
+      };
 
-  // =========================================================================
-  // GET /:id - Get single reference standard by ID
-  // =========================================================================
-  .get("/:id", ...withLabPermission({ standard: ["read"] }), async (c) => {
-    const member = c.get("member");
-    const id = await resolveStandardRouteId(c.req.param("id"), member);
-
-    if (id === null) {
-      return c.json({ error: "Padrão não encontrado" }, 404);
-    }
-
-    const [found] = await db
-      .select()
-      .from(referenceStandard)
-      .where(
-        and(
-          eq(referenceStandard.id, id),
-          eq(referenceStandard.organizationId, member.organizationId),
-          buildUnitScopeCondition(referenceStandard.unitId, member),
-          isNull(referenceStandard.deletedAt),
-        ),
-      )
-      .limit(1);
-
-    if (!found) {
-      return c.json({ error: "Padrão não encontrado" }, 404);
-    }
-
-    // Add computed fields
-    const now = new Date();
-    const certificateDocuments = await currentCertificateDocumentsByStandardId([
-      found.id,
-    ]);
-    const result = {
-      ...found,
-      certificateDocument: certificateDocuments.get(found.id) ?? null,
-      isExpired: isCalendarDatePast(found.nextCalibrationDate, now),
-      daysUntilExpiry: labDaysUntil(found.nextCalibrationDate, now),
-    };
-
-    return c.json(result satisfies ServerShape<Standard>);
+      return c.json(result satisfies ServerShape<Standard>);
+    });
   })
 
   // =========================================================================
@@ -759,25 +785,30 @@ export const standardsRouter = new Hono<{
       const member = c.get("member");
       const session = c.get("session");
       const env = c.env;
-      const id = await resolveStandardRouteId(c.req.param("id"), member);
+      const lab = orgDb(member.organizationId);
+      const id = await lab.transaction((tx) =>
+        resolveStandardRouteId(c.req.param("id"), member, tx),
+      );
 
       if (id === null) {
         return c.json({ error: "Padrão não encontrado" }, 404);
       }
 
       try {
-        const [standard] = await db
-          .select()
-          .from(referenceStandard)
-          .where(
-            and(
-              eq(referenceStandard.id, id),
-              eq(referenceStandard.organizationId, member.organizationId),
-              buildUnitScopeCondition(referenceStandard.unitId, member),
-              isNull(referenceStandard.deletedAt),
-            ),
-          )
-          .limit(1);
+        const [standard] = await lab.transaction((tx) =>
+          tx
+            .select()
+            .from(referenceStandard)
+            .where(
+              and(
+                eq(referenceStandard.id, id),
+                eq(referenceStandard.organizationId, member.organizationId),
+                buildUnitScopeCondition(referenceStandard.unitId, member),
+                isNull(referenceStandard.deletedAt),
+              ),
+            )
+            .limit(1),
+        );
 
         if (!standard) {
           return c.json({ error: "Padrão não encontrado" }, 404);
@@ -818,36 +849,44 @@ export const standardsRouter = new Hono<{
           .update(Buffer.from(buffer))
           .digest("hex");
 
-        const [created] = await db
-          .insert(referenceStandardCertificateDocument)
-          .values({
-            standardId: standard.id,
-            organizationId: standard.organizationId,
-            unitId: standard.unitId,
-            certificateNumber: standard.certificateNumber,
-            calibrationDate: standard.calibrationDate,
-            nextCalibrationDate: standard.nextCalibrationDate,
-            fileName: safeFileName,
-            contentType: STANDARD_CERTIFICATE_CONTENT_TYPE,
-            fileSize: file.size,
-            sha256,
-            r2Key: `pending/standards/${standard.id}/${randomUUID()}.pdf`,
-            isCurrent: false,
-            uploadedBy: session.user.id,
-          })
-          .returning();
+        // The pending row commits before the upload: a failed upload leaves a
+        // `pending/` row that is never current, as before.
+        const registered = await lab.transaction(async (tx) => {
+          const [created] = await tx
+            .insert(referenceStandardCertificateDocument)
+            .values({
+              standardId: standard.id,
+              organizationId: standard.organizationId,
+              unitId: standard.unitId,
+              certificateNumber: standard.certificateNumber,
+              calibrationDate: standard.calibrationDate,
+              nextCalibrationDate: standard.nextCalibrationDate,
+              fileName: safeFileName,
+              contentType: STANDARD_CERTIFICATE_CONTENT_TYPE,
+              fileSize: file.size,
+              sha256,
+              r2Key: `pending/standards/${standard.id}/${randomUUID()}.pdf`,
+              isCurrent: false,
+              uploadedBy: session.user.id,
+            })
+            .returning();
 
-        if (!created) {
+          if (!created) return null;
+
+          const [orgRow] = await tx
+            .select({ slug: organization.slug })
+            .from(organization)
+            .where(eq(organization.id, standard.organizationId))
+            .limit(1);
+          return { created, slug: orgRow?.slug ?? "" };
+        });
+
+        if (!registered) {
           return c.json({ error: "Falha ao registrar certificado" }, 500);
         }
-
-        const [orgRow] = await db
-          .select({ slug: organization.slug })
-          .from(organization)
-          .where(eq(organization.id, standard.organizationId))
-          .limit(1);
+        const { created, slug } = registered;
         const { bucket, key: r2Key } = standardCertificateKey({
-          org: { id: standard.organizationId, slug: orgRow?.slug ?? "" },
+          org: { id: standard.organizationId, slug },
           standardId: standard.id,
           documentId: created.id,
           fileName: safeFileName,
@@ -862,19 +901,22 @@ export const standardsRouter = new Hono<{
           STANDARD_CERTIFICATE_CONTENT_TYPE,
         );
 
-        const [previousDocument] = await db
-          .select()
-          .from(referenceStandardCertificateDocument)
-          .where(
-            and(
-              eq(referenceStandardCertificateDocument.standardId, standard.id),
-              eq(referenceStandardCertificateDocument.isCurrent, true),
-              isFinalizedCertificateDocumentCondition(),
-            ),
-          )
-          .limit(1);
+        const activated = await lab.transaction(async (tx) => {
+          const [previousDocument] = await tx
+            .select()
+            .from(referenceStandardCertificateDocument)
+            .where(
+              and(
+                eq(
+                  referenceStandardCertificateDocument.standardId,
+                  standard.id,
+                ),
+                eq(referenceStandardCertificateDocument.isCurrent, true),
+                isFinalizedCertificateDocumentCondition(),
+              ),
+            )
+            .limit(1);
 
-        const [updated] = await db.transaction(async (tx) => {
           await tx
             .update(referenceStandardCertificateDocument)
             .set({ isCurrent: false })
@@ -888,7 +930,7 @@ export const standardsRouter = new Hono<{
               ),
             );
 
-          return tx
+          const [updated] = await tx
             .update(referenceStandardCertificateDocument)
             .set({ r2Key, isCurrent: true })
             .where(
@@ -901,31 +943,34 @@ export const standardsRouter = new Hono<{
               ),
             )
             .returning();
+
+          if (!updated) return null;
+
+          await tx.insert(referenceStandardAuditLog).values({
+            organizationId: member.organizationId,
+            standardId: standard.id,
+            action: "certificate_document_upload",
+            changes: {
+              certificateDocument: {
+                old: previousDocument
+                  ? standardCertificateDocumentResponse(previousDocument)
+                  : null,
+                new: standardCertificateDocumentResponse(updated),
+              },
+            },
+            performedBy: session.user.id,
+            ipAddress: c.req.header("x-forwarded-for") || null,
+          });
+          return updated;
         });
 
-        if (!updated) {
+        if (!activated) {
           return c.json({ error: "Falha ao ativar certificado" }, 500);
         }
 
-        await db.insert(referenceStandardAuditLog).values({
-          organizationId: member.organizationId,
-          standardId: standard.id,
-          action: "certificate_document_upload",
-          changes: {
-            certificateDocument: {
-              old: previousDocument
-                ? standardCertificateDocumentResponse(previousDocument)
-                : null,
-              new: standardCertificateDocumentResponse(updated),
-            },
-          },
-          performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
-        });
-
         return c.json({
           message: "Certificado enviado com sucesso",
-          document: standardCertificateDocumentResponse(updated),
+          document: standardCertificateDocumentResponse(activated),
         } satisfies ServerShape<StandardCertificateDocumentUploadResponse>);
       } catch (error) {
         console.error("Error uploading standard certificate:", error);
@@ -943,37 +988,42 @@ export const standardsRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       const env = c.env;
-      const id = await resolveStandardRouteId(c.req.param("id"), member);
+      const lab = orgDb(member.organizationId);
+      const id = await lab.transaction((tx) =>
+        resolveStandardRouteId(c.req.param("id"), member, tx),
+      );
 
       if (id === null) {
         return c.json({ error: "Padrão não encontrado" }, 404);
       }
 
       try {
-        const [document] = await db
-          .select({
-            fileName: referenceStandardCertificateDocument.fileName,
-            r2Key: referenceStandardCertificateDocument.r2Key,
-          })
-          .from(referenceStandardCertificateDocument)
-          .innerJoin(
-            referenceStandard,
-            eq(
-              referenceStandardCertificateDocument.standardId,
-              referenceStandard.id,
-            ),
-          )
-          .where(
-            and(
-              eq(referenceStandard.id, id),
-              eq(referenceStandard.organizationId, member.organizationId),
-              buildUnitScopeCondition(referenceStandard.unitId, member),
-              isNull(referenceStandard.deletedAt),
-              eq(referenceStandardCertificateDocument.isCurrent, true),
-              isFinalizedCertificateDocumentCondition(),
-            ),
-          )
-          .limit(1);
+        const [document] = await lab.transaction((tx) =>
+          tx
+            .select({
+              fileName: referenceStandardCertificateDocument.fileName,
+              r2Key: referenceStandardCertificateDocument.r2Key,
+            })
+            .from(referenceStandardCertificateDocument)
+            .innerJoin(
+              referenceStandard,
+              eq(
+                referenceStandardCertificateDocument.standardId,
+                referenceStandard.id,
+              ),
+            )
+            .where(
+              and(
+                eq(referenceStandard.id, id),
+                eq(referenceStandard.organizationId, member.organizationId),
+                buildUnitScopeCondition(referenceStandard.unitId, member),
+                isNull(referenceStandard.deletedAt),
+                eq(referenceStandardCertificateDocument.isCurrent, true),
+                isFinalizedCertificateDocumentCondition(),
+              ),
+            )
+            .limit(1),
+        );
 
         if (!document) {
           return c.json({ error: "Certificado não encontrado" }, 404);
@@ -1018,57 +1068,60 @@ export const standardsRouter = new Hono<{
       }
 
       // Create the reference standard
-      const [newStandard] = await db
-        .insert(referenceStandard)
-        .values({
-          unitId: member.activeUnitId,
+      const activeUnitId = member.activeUnitId;
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const [newStandard] = await tx
+          .insert(referenceStandard)
+          .values({
+            unitId: activeUnitId,
+            organizationId: member.organizationId,
+            name: input.name,
+            kind: input.kind,
+            type: input.type || null,
+            serialNumber: input.serialNumber,
+            manufacturer: input.manufacturer || null,
+            model: input.model || null,
+            certificateNumber: input.certificateNumber,
+            calibratedBy: input.calibratedBy || null,
+            calibrationDate: new Date(input.calibrationDate),
+            nextCalibrationDate: new Date(input.nextCalibrationDate),
+            referenceValue: input.referenceValue ?? null,
+            uncertainty: input.uncertainty ?? null,
+            uncertaintyUnit: input.uncertaintyUnit ?? null,
+            coverageFactor: input.coverageFactor,
+            distribution: input.distribution,
+            drift: input.drift ?? null,
+            certifiedValues: input.certifiedValues ?? null,
+            metrologyData: input.metrologyData ?? null,
+            status: input.status,
+            createdBy: session.user.id,
+          })
+          .returning();
+
+        if (!newStandard) {
+          return c.json({ error: "Falha ao criar padrão" }, 500);
+        }
+
+        // Audit log
+        await tx.insert(referenceStandardAuditLog).values({
           organizationId: member.organizationId,
-          name: input.name,
-          kind: input.kind,
-          type: input.type || null,
-          serialNumber: input.serialNumber,
-          manufacturer: input.manufacturer || null,
-          model: input.model || null,
-          certificateNumber: input.certificateNumber,
-          calibratedBy: input.calibratedBy || null,
-          calibrationDate: new Date(input.calibrationDate),
-          nextCalibrationDate: new Date(input.nextCalibrationDate),
-          referenceValue: input.referenceValue ?? null,
-          uncertainty: input.uncertainty ?? null,
-          uncertaintyUnit: input.uncertaintyUnit ?? null,
-          coverageFactor: input.coverageFactor,
-          distribution: input.distribution,
-          drift: input.drift ?? null,
-          certifiedValues: input.certifiedValues ?? null,
-          metrologyData: input.metrologyData ?? null,
-          status: input.status,
-          createdBy: session.user.id,
-        })
-        .returning();
-
-      if (!newStandard) {
-        return c.json({ error: "Falha ao criar padrão" }, 500);
-      }
-
-      // Audit log
-      await db.insert(referenceStandardAuditLog).values({
-        organizationId: member.organizationId,
-        standardId: newStandard.id,
-        action: "create",
-        changes: {
-          initial: {
-            ...input,
-            id: newStandard.id,
-            unitId: newStandard.unitId,
-            organizationId: newStandard.organizationId,
-            createdBy: newStandard.createdBy,
+          standardId: newStandard.id,
+          action: "create",
+          changes: {
+            initial: {
+              ...input,
+              id: newStandard.id,
+              unitId: newStandard.unitId,
+              organizationId: newStandard.organizationId,
+              createdBy: newStandard.createdBy,
+            },
           },
-        },
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
-      });
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        });
 
-      return c.json(newStandard satisfies ServerShape<StandardRecord>, 201);
+        return c.json(newStandard satisfies ServerShape<StandardRecord>, 201);
+      });
     },
   )
 
@@ -1082,255 +1135,285 @@ export const standardsRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const id = await resolveStandardRouteId(c.req.param("id"), member);
-      const input = c.req.valid("json");
+      const recallTarget: { standard: RecallStandardIdentity | null } = {
+        standard: null,
+      };
+      const response = await orgDb(member.organizationId).transaction(
+        async (tx) => {
+          const id = await resolveStandardRouteId(
+            c.req.param("id"),
+            member,
+            tx,
+          );
+          const input = c.req.valid("json");
 
-      if (id === null) {
-        return c.json({ error: "Padrão não encontrado" }, 404);
-      }
+          if (id === null) {
+            return c.json({ error: "Padrão não encontrado" }, 404);
+          }
 
-      // Get existing standard
-      const [existing] = await db
-        .select()
-        .from(referenceStandard)
-        .where(
-          and(
-            eq(referenceStandard.id, id),
-            eq(referenceStandard.organizationId, member.organizationId),
-            buildUnitScopeCondition(referenceStandard.unitId, member),
-            isNull(referenceStandard.deletedAt),
-          ),
-        )
-        .limit(1);
+          // Get existing standard
+          const [existing] = await tx
+            .select()
+            .from(referenceStandard)
+            .where(
+              and(
+                eq(referenceStandard.id, id),
+                eq(referenceStandard.organizationId, member.organizationId),
+                buildUnitScopeCondition(referenceStandard.unitId, member),
+                isNull(referenceStandard.deletedAt),
+              ),
+            )
+            .limit(1);
 
-      if (!existing) {
-        return c.json({ error: "Padrão não encontrado" }, 404);
-      }
+          if (!existing) {
+            return c.json({ error: "Padrão não encontrado" }, 404);
+          }
 
-      // Build changes object for audit log
-      const changes: Record<string, { old: unknown; new: unknown }> = {};
-      const updateData: Record<string, unknown> = {};
+          // Build changes object for audit log
+          const changes: Record<string, { old: unknown; new: unknown }> = {};
+          const updateData: Record<string, unknown> = {};
 
-      // Check each field for changes
-      if (input.name !== undefined && input.name !== existing.name) {
-        changes.name = { old: existing.name, new: input.name };
-        updateData.name = input.name;
-      }
-      if (input.type !== undefined && input.type !== existing.type) {
-        changes.type = { old: existing.type, new: input.type };
-        updateData.type = input.type;
-      }
-      if (input.kind !== undefined && input.kind !== existing.kind) {
-        changes.kind = { old: existing.kind, new: input.kind };
-        updateData.kind = input.kind;
-      }
-      if (
-        input.serialNumber !== undefined &&
-        input.serialNumber !== existing.serialNumber
-      ) {
-        changes.serialNumber = {
-          old: existing.serialNumber,
-          new: input.serialNumber,
-        };
-        updateData.serialNumber = input.serialNumber;
-      }
-      if (
-        input.manufacturer !== undefined &&
-        input.manufacturer !== existing.manufacturer
-      ) {
-        changes.manufacturer = {
-          old: existing.manufacturer,
-          new: input.manufacturer,
-        };
-        updateData.manufacturer = input.manufacturer;
-      }
-      if (input.model !== undefined && input.model !== existing.model) {
-        changes.model = { old: existing.model, new: input.model };
-        updateData.model = input.model;
-      }
-      if (
-        input.certificateNumber !== undefined &&
-        input.certificateNumber !== existing.certificateNumber
-      ) {
-        changes.certificateNumber = {
-          old: existing.certificateNumber,
-          new: input.certificateNumber,
-        };
-        updateData.certificateNumber = input.certificateNumber;
-      }
-      if (
-        input.calibratedBy !== undefined &&
-        input.calibratedBy !== existing.calibratedBy
-      ) {
-        changes.calibratedBy = {
-          old: existing.calibratedBy,
-          new: input.calibratedBy,
-        };
-        updateData.calibratedBy = input.calibratedBy;
-      }
-      if (input.calibrationDate !== undefined) {
-        const newDate = new Date(input.calibrationDate);
-        if (
-          calendarDateKey(newDate) !== calendarDateKey(existing.calibrationDate)
-        ) {
-          changes.calibrationDate = {
-            old: existing.calibrationDate.toISOString(),
-            new: newDate.toISOString(),
-          };
-          updateData.calibrationDate = newDate;
-        }
-      }
-      if (input.nextCalibrationDate !== undefined) {
-        const newDate = new Date(input.nextCalibrationDate);
-        if (
-          calendarDateKey(newDate) !==
-          calendarDateKey(existing.nextCalibrationDate)
-        ) {
-          changes.nextCalibrationDate = {
-            old: existing.nextCalibrationDate.toISOString(),
-            new: newDate.toISOString(),
-          };
-          updateData.nextCalibrationDate = newDate;
-        }
-      }
-      if (
-        input.referenceValue !== undefined &&
-        input.referenceValue !== existing.referenceValue
-      ) {
-        changes.referenceValue = {
-          old: existing.referenceValue,
-          new: input.referenceValue,
-        };
-        updateData.referenceValue = input.referenceValue;
-      }
-      if (
-        input.uncertainty !== undefined &&
-        input.uncertainty !== existing.uncertainty
-      ) {
-        changes.uncertainty = {
-          old: existing.uncertainty,
-          new: input.uncertainty,
-        };
-        updateData.uncertainty = input.uncertainty;
-      }
-      if (
-        input.uncertaintyUnit !== undefined &&
-        input.uncertaintyUnit !== existing.uncertaintyUnit
-      ) {
-        changes.uncertaintyUnit = {
-          old: existing.uncertaintyUnit,
-          new: input.uncertaintyUnit,
-        };
-        updateData.uncertaintyUnit = input.uncertaintyUnit;
-      }
-      if (
-        input.coverageFactor !== undefined &&
-        input.coverageFactor !== existing.coverageFactor
-      ) {
-        changes.coverageFactor = {
-          old: existing.coverageFactor,
-          new: input.coverageFactor,
-        };
-        updateData.coverageFactor = input.coverageFactor;
-      }
-      if (
-        input.distribution !== undefined &&
-        input.distribution !== existing.distribution
-      ) {
-        changes.distribution = {
-          old: existing.distribution,
-          new: input.distribution,
-        };
-        updateData.distribution = input.distribution;
-      }
-      if (input.drift !== undefined && input.drift !== existing.drift) {
-        changes.drift = { old: existing.drift, new: input.drift };
-        updateData.drift = input.drift;
-      }
-      if (input.certifiedValues !== undefined) {
-        // Compare JSON stringified versions
-        const oldJson = JSON.stringify(existing.certifiedValues);
-        const newJson = JSON.stringify(input.certifiedValues);
-        if (oldJson !== newJson) {
-          changes.certifiedValues = {
-            old: existing.certifiedValues,
-            new: input.certifiedValues,
-          };
-          updateData.certifiedValues = input.certifiedValues;
-        }
-      }
-      if (input.metrologyData !== undefined) {
-        const oldJson = JSON.stringify(existing.metrologyData);
-        const newJson = JSON.stringify(input.metrologyData);
-        if (oldJson !== newJson) {
-          changes.metrologyData = {
-            old: existing.metrologyData,
-            new: input.metrologyData,
-          };
-          updateData.metrologyData = input.metrologyData;
-        }
-      }
-      if (input.status !== undefined && input.status !== existing.status) {
-        changes.status = { old: existing.status, new: input.status };
-        updateData.status = input.status;
-      }
+          // Check each field for changes
+          if (input.name !== undefined && input.name !== existing.name) {
+            changes.name = { old: existing.name, new: input.name };
+            updateData.name = input.name;
+          }
+          if (input.type !== undefined && input.type !== existing.type) {
+            changes.type = { old: existing.type, new: input.type };
+            updateData.type = input.type;
+          }
+          if (input.kind !== undefined && input.kind !== existing.kind) {
+            changes.kind = { old: existing.kind, new: input.kind };
+            updateData.kind = input.kind;
+          }
+          if (
+            input.serialNumber !== undefined &&
+            input.serialNumber !== existing.serialNumber
+          ) {
+            changes.serialNumber = {
+              old: existing.serialNumber,
+              new: input.serialNumber,
+            };
+            updateData.serialNumber = input.serialNumber;
+          }
+          if (
+            input.manufacturer !== undefined &&
+            input.manufacturer !== existing.manufacturer
+          ) {
+            changes.manufacturer = {
+              old: existing.manufacturer,
+              new: input.manufacturer,
+            };
+            updateData.manufacturer = input.manufacturer;
+          }
+          if (input.model !== undefined && input.model !== existing.model) {
+            changes.model = { old: existing.model, new: input.model };
+            updateData.model = input.model;
+          }
+          if (
+            input.certificateNumber !== undefined &&
+            input.certificateNumber !== existing.certificateNumber
+          ) {
+            changes.certificateNumber = {
+              old: existing.certificateNumber,
+              new: input.certificateNumber,
+            };
+            updateData.certificateNumber = input.certificateNumber;
+          }
+          if (
+            input.calibratedBy !== undefined &&
+            input.calibratedBy !== existing.calibratedBy
+          ) {
+            changes.calibratedBy = {
+              old: existing.calibratedBy,
+              new: input.calibratedBy,
+            };
+            updateData.calibratedBy = input.calibratedBy;
+          }
+          if (input.calibrationDate !== undefined) {
+            const newDate = new Date(input.calibrationDate);
+            if (
+              calendarDateKey(newDate) !==
+              calendarDateKey(existing.calibrationDate)
+            ) {
+              changes.calibrationDate = {
+                old: existing.calibrationDate.toISOString(),
+                new: newDate.toISOString(),
+              };
+              updateData.calibrationDate = newDate;
+            }
+          }
+          if (input.nextCalibrationDate !== undefined) {
+            const newDate = new Date(input.nextCalibrationDate);
+            if (
+              calendarDateKey(newDate) !==
+              calendarDateKey(existing.nextCalibrationDate)
+            ) {
+              changes.nextCalibrationDate = {
+                old: existing.nextCalibrationDate.toISOString(),
+                new: newDate.toISOString(),
+              };
+              updateData.nextCalibrationDate = newDate;
+            }
+          }
+          if (
+            input.referenceValue !== undefined &&
+            input.referenceValue !== existing.referenceValue
+          ) {
+            changes.referenceValue = {
+              old: existing.referenceValue,
+              new: input.referenceValue,
+            };
+            updateData.referenceValue = input.referenceValue;
+          }
+          if (
+            input.uncertainty !== undefined &&
+            input.uncertainty !== existing.uncertainty
+          ) {
+            changes.uncertainty = {
+              old: existing.uncertainty,
+              new: input.uncertainty,
+            };
+            updateData.uncertainty = input.uncertainty;
+          }
+          if (
+            input.uncertaintyUnit !== undefined &&
+            input.uncertaintyUnit !== existing.uncertaintyUnit
+          ) {
+            changes.uncertaintyUnit = {
+              old: existing.uncertaintyUnit,
+              new: input.uncertaintyUnit,
+            };
+            updateData.uncertaintyUnit = input.uncertaintyUnit;
+          }
+          if (
+            input.coverageFactor !== undefined &&
+            input.coverageFactor !== existing.coverageFactor
+          ) {
+            changes.coverageFactor = {
+              old: existing.coverageFactor,
+              new: input.coverageFactor,
+            };
+            updateData.coverageFactor = input.coverageFactor;
+          }
+          if (
+            input.distribution !== undefined &&
+            input.distribution !== existing.distribution
+          ) {
+            changes.distribution = {
+              old: existing.distribution,
+              new: input.distribution,
+            };
+            updateData.distribution = input.distribution;
+          }
+          if (input.drift !== undefined && input.drift !== existing.drift) {
+            changes.drift = { old: existing.drift, new: input.drift };
+            updateData.drift = input.drift;
+          }
+          if (input.certifiedValues !== undefined) {
+            // Compare JSON stringified versions
+            const oldJson = JSON.stringify(existing.certifiedValues);
+            const newJson = JSON.stringify(input.certifiedValues);
+            if (oldJson !== newJson) {
+              changes.certifiedValues = {
+                old: existing.certifiedValues,
+                new: input.certifiedValues,
+              };
+              updateData.certifiedValues = input.certifiedValues;
+            }
+          }
+          if (input.metrologyData !== undefined) {
+            const oldJson = JSON.stringify(existing.metrologyData);
+            const newJson = JSON.stringify(input.metrologyData);
+            if (oldJson !== newJson) {
+              changes.metrologyData = {
+                old: existing.metrologyData,
+                new: input.metrologyData,
+              };
+              updateData.metrologyData = input.metrologyData;
+            }
+          }
+          if (input.status !== undefined && input.status !== existing.status) {
+            changes.status = { old: existing.status, new: input.status };
+            updateData.status = input.status;
+          }
 
-      // If no changes, return existing
-      if (Object.keys(updateData).length === 0) {
-        return c.json(existing satisfies ServerShape<StandardRecord>);
-      }
+          // If no changes, return existing
+          if (Object.keys(updateData).length === 0) {
+            return c.json(existing satisfies ServerShape<StandardRecord>);
+          }
 
-      // Update the standard
-      const [updated] = await db
-        .update(referenceStandard)
-        .set(updateData)
-        .where(eq(referenceStandard.id, id))
-        .returning();
+          // Update the standard
+          const [updated] = await tx
+            .update(referenceStandard)
+            .set(updateData)
+            .where(eq(referenceStandard.id, id))
+            .returning();
 
-      // Deleted between the read above and this write.
-      if (!updated) {
-        throw notFound("standard_not_found", "Padrão não encontrado");
-      }
+          // Deleted between the read above and this write.
+          if (!updated) {
+            throw notFound("standard_not_found", "Padrão não encontrado");
+          }
 
-      // Audit log
-      await db.insert(referenceStandardAuditLog).values({
-        organizationId: member.organizationId,
-        standardId: id,
-        action: changes.status ? "status_change" : "update",
-        changes,
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
-      });
+          // Audit log
+          await tx.insert(referenceStandardAuditLog).values({
+            organizationId: member.organizationId,
+            standardId: id,
+            action: changes.status ? "status_change" : "update",
+            changes,
+            performedBy: session.user.id,
+            ipAddress: c.req.header("x-forwarded-for") || null,
+          });
 
-      // #426 Phase 1: flagging a standard OUT_OF_TOLERANCE auto-opens the
-      // §7.10 recall workflow (typed NC + DRAFT recall). Best-effort — the
-      // status change itself must not fail if the hook does; the wizard's
-      // send endpoint re-ensures the recall exists.
-      if (
-        changes.status &&
-        updated.status === "OUT_OF_TOLERANCE" &&
-        existing.status !== "OUT_OF_TOLERANCE"
-      ) {
-        await ensureStandardRecall({
-          organizationId: member.organizationId,
-          actorUserId: session.user.id,
-          standard: {
-            id: updated.id,
-            name: updated.name,
-            serialNumber: updated.serialNumber,
-            certificateNumber: updated.certificateNumber,
-            calibrationDate: updated.calibrationDate,
-          },
-          ipAddress: c.req.header("x-forwarded-for") || null,
-        }).catch((err) =>
+          // #426 Phase 1: flagging a standard OUT_OF_TOLERANCE auto-opens the
+          // §7.10 recall workflow (typed NC + DRAFT recall). Best-effort — the
+          // status change itself must not fail if the hook does; the wizard's
+          // send endpoint re-ensures the recall exists.
+          if (
+            changes.status &&
+            updated.status === "OUT_OF_TOLERANCE" &&
+            existing.status !== "OUT_OF_TOLERANCE"
+          ) {
+            recallTarget.standard = {
+              id: updated.id,
+              name: updated.name,
+              serialNumber: updated.serialNumber,
+              certificateNumber: updated.certificateNumber,
+              calibrationDate: updated.calibrationDate,
+            };
+          }
+
+          return c.json(updated satisfies ServerShape<StandardRecord>);
+        },
+      );
+
+      // Best-effort, in its own transaction once the status change has
+      // committed: a failing hook never undoes the change.
+      const standardToRecall = recallTarget.standard;
+      if (standardToRecall) {
+        const afterCommit = afterCommitQueue();
+        try {
+          await orgDb(member.organizationId).transaction((tx) =>
+            ensureStandardRecall(
+              {
+                organizationId: member.organizationId,
+                actorUserId: session.user.id,
+                standard: standardToRecall,
+                ipAddress: c.req.header("x-forwarded-for") || null,
+              },
+              { executor: tx, afterCommit: afterCommit.add },
+            ),
+          );
+          await afterCommit.run();
+        } catch (err) {
           console.error(
-            `[Standards] Failed to open recall for standard ${id}:`,
+            `[Standards] Failed to open recall for standard ${standardToRecall.id}:`,
             err,
-          ),
-        );
+          );
+        }
       }
 
-      return c.json(updated satisfies ServerShape<StandardRecord>);
+      return response;
     },
   )
 
@@ -1344,47 +1427,54 @@ export const standardsRouter = new Hono<{
     zValidator("query", ImpactedCertificatesQuerySchema),
     async (c) => {
       const member = c.get("member");
-      const id = await resolveStandardRouteId(c.req.param("id"), member);
-      const query = c.req.valid("query");
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const id = await resolveStandardRouteId(c.req.param("id"), member, tx);
+        const query = c.req.valid("query");
 
-      if (id === null) {
-        return c.json({ error: "Padrao nao encontrado" }, 404);
-      }
+        if (id === null) {
+          return c.json({ error: "Padrao nao encontrado" }, 404);
+        }
 
-      const [standard] = await db
-        .select({
-          id: referenceStandard.id,
-          calibrationDate: referenceStandard.calibrationDate,
-        })
-        .from(referenceStandard)
-        .where(
-          and(
-            eq(referenceStandard.id, id),
-            eq(referenceStandard.organizationId, member.organizationId),
-            isNull(referenceStandard.deletedAt),
-          ),
-        )
-        .limit(1);
+        const [standard] = await tx
+          .select({
+            id: referenceStandard.id,
+            calibrationDate: referenceStandard.calibrationDate,
+          })
+          .from(referenceStandard)
+          .where(
+            and(
+              eq(referenceStandard.id, id),
+              eq(referenceStandard.organizationId, member.organizationId),
+              isNull(referenceStandard.deletedAt),
+            ),
+          )
+          .limit(1);
 
-      if (!standard) {
-        return c.json({ error: "Padrao nao encontrado" }, 404);
-      }
+        if (!standard) {
+          return c.json({ error: "Padrao nao encontrado" }, 404);
+        }
 
-      // Default window: the standard's (now suspect) certificate validity
-      // start → now. Both bounds editable (over-notification mitigation).
-      const from = query.from ? new Date(query.from) : standard.calibrationDate;
-      const to = query.to ? new Date(query.to) : new Date();
+        // Default window: the standard's (now suspect) certificate validity
+        // start → now. Both bounds editable (over-notification mitigation).
+        const from = query.from
+          ? new Date(query.from)
+          : standard.calibrationDate;
+        const to = query.to ? new Date(query.to) : new Date();
 
-      const impacted = await findImpactedCertificates({
-        standardId: id,
-        organizationId: member.organizationId,
-        from,
-        to,
-      });
+        const impacted = await findImpactedCertificates(
+          {
+            standardId: id,
+            organizationId: member.organizationId,
+            from,
+            to,
+          },
+          tx,
+        );
 
-      return c.json({
-        data: impacted,
-        window: { from: from.toISOString(), to: to.toISOString() },
+        return c.json({
+          data: impacted,
+          window: { from: from.toISOString(), to: to.toISOString() },
+        });
       });
     },
   )
@@ -1398,102 +1488,110 @@ export const standardsRouter = new Hono<{
     ...withLabPermission({ standard: ["read"] }),
     async (c) => {
       const member = c.get("member");
-      const id = await resolveStandardRouteId(c.req.param("id"), member);
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const id = await resolveStandardRouteId(c.req.param("id"), member, tx);
 
-      if (id === null) {
-        return c.json({ error: "Padrao nao encontrado" }, 404);
-      }
+        if (id === null) {
+          return c.json({ error: "Padrao nao encontrado" }, 404);
+        }
 
-      const [recall] = await db
-        .select({
-          id: standardRecall.id,
-          standardId: standardRecall.standardId,
-          ncId: standardRecall.ncId,
-          ncNumber: nonConformance.ncNumber,
-          status: standardRecall.status,
-          fromDate: standardRecall.fromDate,
-          toDate: standardRecall.toDate,
-          approvedBy: standardRecall.approvedBy,
-          approvedAt: standardRecall.approvedAt,
-          createdAt: standardRecall.createdAt,
-        })
-        .from(standardRecall)
-        .innerJoin(nonConformance, eq(standardRecall.ncId, nonConformance.id))
-        .where(
-          and(
-            eq(standardRecall.standardId, id),
-            eq(standardRecall.organizationId, member.organizationId),
+        const [recall] = await tx
+          .select({
+            id: standardRecall.id,
+            standardId: standardRecall.standardId,
+            ncId: standardRecall.ncId,
+            ncNumber: nonConformance.ncNumber,
+            status: standardRecall.status,
+            fromDate: standardRecall.fromDate,
+            toDate: standardRecall.toDate,
+            approvedBy: standardRecall.approvedBy,
+            approvedAt: standardRecall.approvedAt,
+            createdAt: standardRecall.createdAt,
+          })
+          .from(standardRecall)
+          .innerJoin(nonConformance, eq(standardRecall.ncId, nonConformance.id))
+          .where(
+            and(
+              eq(standardRecall.standardId, id),
+              eq(standardRecall.organizationId, member.organizationId),
+            ),
+          )
+          .orderBy(desc(standardRecall.createdAt))
+          .limit(1);
+
+        if (!recall) {
+          return c.json({ data: null });
+        }
+
+        const notifications = await tx
+          .select({
+            id: ootNotification.id,
+            jobId: ootNotification.jobId,
+            certificateNumber: ootNotification.certificateNumber,
+            recipientName: ootNotification.recipientName,
+            recipientEmail: ootNotification.recipientEmail,
+            status: ootNotification.status,
+            sentAt: ootNotification.sentAt,
+            acknowledgedAt: ootNotification.acknowledgedAt,
+            acknowledgedVia: ootNotification.acknowledgedVia,
+          })
+          .from(ootNotification)
+          .where(
+            and(
+              eq(ootNotification.recallId, recall.id),
+              eq(ootNotification.organizationId, member.organizationId),
+            ),
+          )
+          .orderBy(desc(ootNotification.createdAt));
+
+        // Bounce/complaint signal from the Resend suppression webhook: an
+        // address on the "all" suppression list with a delivery-failure reason.
+        const recipientEmails = [
+          ...new Set(
+            notifications
+              .map((n) => n.recipientEmail?.trim().toLowerCase())
+              .filter((email): email is string => Boolean(email)),
           ),
-        )
-        .orderBy(desc(standardRecall.createdAt))
-        .limit(1);
+        ];
+        const suppressedRows = recipientEmails.length
+          ? await tx
+              .select({ email: emailSuppression.email })
+              .from(emailSuppression)
+              .where(
+                and(
+                  inArray(emailSuppression.email, recipientEmails),
+                  inArray(emailSuppression.reason, [
+                    "hard_bounce",
+                    "complaint",
+                  ]),
+                ),
+              )
+          : [];
+        const suppressedEmails = new Set(
+          suppressedRows.map((row) => row.email),
+        );
 
-      if (!recall) {
-        return c.json({ data: null });
-      }
+        const rows = notifications.map((n) => ({
+          ...n,
+          bounced: n.recipientEmail
+            ? suppressedEmails.has(n.recipientEmail.trim().toLowerCase())
+            : false,
+        }));
 
-      const notifications = await db
-        .select({
-          id: ootNotification.id,
-          jobId: ootNotification.jobId,
-          certificateNumber: ootNotification.certificateNumber,
-          recipientName: ootNotification.recipientName,
-          recipientEmail: ootNotification.recipientEmail,
-          status: ootNotification.status,
-          sentAt: ootNotification.sentAt,
-          acknowledgedAt: ootNotification.acknowledgedAt,
-          acknowledgedVia: ootNotification.acknowledgedVia,
-        })
-        .from(ootNotification)
-        .where(
-          and(
-            eq(ootNotification.recallId, recall.id),
-            eq(ootNotification.organizationId, member.organizationId),
-          ),
-        )
-        .orderBy(desc(ootNotification.createdAt));
-
-      // Bounce/complaint signal from the Resend suppression webhook: an
-      // address on the "all" suppression list with a delivery-failure reason.
-      const recipientEmails = [
-        ...new Set(
-          notifications
-            .map((n) => n.recipientEmail?.trim().toLowerCase())
-            .filter((email): email is string => Boolean(email)),
-        ),
-      ];
-      const suppressedRows = recipientEmails.length
-        ? await db
-            .select({ email: emailSuppression.email })
-            .from(emailSuppression)
-            .where(
-              and(
-                inArray(emailSuppression.email, recipientEmails),
-                inArray(emailSuppression.reason, ["hard_bounce", "complaint"]),
-              ),
-            )
-        : [];
-      const suppressedEmails = new Set(suppressedRows.map((row) => row.email));
-
-      const rows = notifications.map((n) => ({
-        ...n,
-        bounced: n.recipientEmail
-          ? suppressedEmails.has(n.recipientEmail.trim().toLowerCase())
-          : false,
-      }));
-
-      return c.json({
-        data: {
-          ...recall,
-          notifications: rows,
-          counts: {
-            total: rows.length,
-            sent: rows.filter((n) => n.sentAt !== null).length,
-            acknowledged: rows.filter((n) => n.acknowledgedAt !== null).length,
-            bounced: rows.filter((n) => n.bounced).length,
-            missingEmail: rows.filter((n) => !n.recipientEmail).length,
+        return c.json({
+          data: {
+            ...recall,
+            notifications: rows,
+            counts: {
+              total: rows.length,
+              sent: rows.filter((n) => n.sentAt !== null).length,
+              acknowledged: rows.filter((n) => n.acknowledgedAt !== null)
+                .length,
+              bounced: rows.filter((n) => n.bounced).length,
+              missingEmail: rows.filter((n) => !n.recipientEmail).length,
+            },
           },
-        },
+        });
       });
     },
   )
@@ -1510,139 +1608,170 @@ export const standardsRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const id = await resolveStandardRouteId(c.req.param("id"), member);
       const input = c.req.valid("json");
+      const lab = orgDb(member.organizationId);
+      const ensureQueue = afterCommitQueue();
+      const stamped: {
+        recall: typeof standardRecall.$inferSelect | null;
+      } = { recall: null };
+      // Phase 1: the standard, the (re-ensured) recall, the reviewed list and the
+      // approval stamp commit together.
+      const refused = await lab.transaction(async (tx) => {
+        const id = await resolveStandardRouteId(c.req.param("id"), member, tx);
 
-      if (id === null) {
-        return c.json({ error: "Padrao nao encontrado" }, 404);
-      }
+        if (id === null) {
+          return c.json({ error: "Padrao nao encontrado" }, 404);
+        }
 
-      // Elevated approval gate: same pattern as NC use_as_is/concession
-      // dispositions — org-level admin/owner only (a unit_admin elevation is
-      // not enough to approve a customer-facing batch recall).
-      if (member.role !== "admin" && member.role !== "owner") {
-        return c.json(
+        // Elevated approval gate: same pattern as NC use_as_is/concession
+        // dispositions — org-level admin/owner only (a unit_admin elevation is
+        // not enough to approve a customer-facing batch recall).
+        if (member.role !== "admin" && member.role !== "owner") {
+          return c.json(
+            {
+              error:
+                "O envio de recall em lote requer aprovacao de um administrador ou responsavel",
+            },
+            403,
+          );
+        }
+
+        const [standard] = await tx
+          .select()
+          .from(referenceStandard)
+          .where(
+            and(
+              eq(referenceStandard.id, id),
+              eq(referenceStandard.organizationId, member.organizationId),
+              isNull(referenceStandard.deletedAt),
+            ),
+          )
+          .limit(1);
+
+        if (!standard) {
+          return c.json({ error: "Padrao nao encontrado" }, 404);
+        }
+
+        if (standard.status !== "OUT_OF_TOLERANCE") {
+          return c.json(
+            {
+              error:
+                "Apenas padroes com status fora de tolerancia podem originar um recall",
+              code: "STANDARD_NOT_OUT_OF_TOLERANCE",
+            },
+            409,
+          );
+        }
+
+        // Re-ensure the recall exists (covers a failed status-change hook).
+        const { recall } = await ensureStandardRecall(
           {
-            error:
-              "O envio de recall em lote requer aprovacao de um administrador ou responsavel",
+            organizationId: member.organizationId,
+            actorUserId: session.user.id,
+            standard: {
+              id: standard.id,
+              name: standard.name,
+              serialNumber: standard.serialNumber,
+              certificateNumber: standard.certificateNumber,
+              calibrationDate: standard.calibrationDate,
+            },
+            ipAddress: c.req.header("x-forwarded-for") || null,
           },
-          403,
+          { executor: tx, afterCommit: ensureQueue.add },
         );
-      }
 
-      const [standard] = await db
-        .select()
-        .from(referenceStandard)
-        .where(
-          and(
-            eq(referenceStandard.id, id),
-            eq(referenceStandard.organizationId, member.organizationId),
-            isNull(referenceStandard.deletedAt),
-          ),
-        )
-        .limit(1);
+        // Every selected job must actually be linked to this standard — the
+        // reviewed list from the wizard is re-validated, never trusted.
+        const linkedRows = await tx
+          .select({ jobId: jobStandard.jobId })
+          .from(jobStandard)
+          .innerJoin(calibrationJob, eq(jobStandard.jobId, calibrationJob.id))
+          .where(
+            and(
+              eq(jobStandard.standardId, id),
+              inArray(jobStandard.jobId, input.jobIds),
+              eq(calibrationJob.organizationId, member.organizationId),
+            ),
+          );
+        const linkedJobIds = new Set(linkedRows.map((row) => row.jobId));
+        const invalidIds = input.jobIds.filter(
+          (jobId) => !linkedJobIds.has(jobId),
+        );
+        if (invalidIds.length > 0) {
+          return c.json(
+            {
+              error: `Certificados fora do escopo deste padrao: ${invalidIds.join(", ")}`,
+              code: "JOBS_NOT_LINKED_TO_STANDARD",
+            },
+            400,
+          );
+        }
 
-      if (!standard) {
-        return c.json({ error: "Padrao nao encontrado" }, 404);
-      }
+        // Stamp the approval + reviewed window before dispatching (§7.10.2
+        // evidence: who approved the batch and what window was reviewed).
+        const [approvedRecall] = await tx
+          .update(standardRecall)
+          .set({
+            status: "SENT",
+            fromDate: input.from ? new Date(input.from) : recall.fromDate,
+            toDate: input.to ? new Date(input.to) : new Date(),
+            approvedBy: session.user.id,
+            approvedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(standardRecall.id, recall.id),
+              eq(standardRecall.organizationId, member.organizationId),
+            ),
+          )
+          .returning();
 
-      if (standard.status !== "OUT_OF_TOLERANCE") {
-        return c.json(
-          {
-            error:
-              "Apenas padroes com status fora de tolerancia podem originar um recall",
-            code: "STANDARD_NOT_OUT_OF_TOLERANCE",
+        await tx.insert(referenceStandardAuditLog).values({
+          organizationId: member.organizationId,
+          standardId: id,
+          action: "recall_send",
+          changes: {
+            recallId: recall.id,
+            jobIds: input.jobIds,
+            from: input.from ?? recall.fromDate?.toISOString() ?? null,
+            to: input.to ?? null,
           },
-          409,
-        );
-      }
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+          reason: `Recall §7.10 aprovado: ${input.jobIds.length} certificado(s) notificado(s)`,
+        });
 
-      // Re-ensure the recall exists (covers a failed status-change hook).
-      const { recall } = await ensureStandardRecall({
-        organizationId: member.organizationId,
-        actorUserId: session.user.id,
-        standard: {
-          id: standard.id,
-          name: standard.name,
-          serialNumber: standard.serialNumber,
-          certificateNumber: standard.certificateNumber,
-          calibrationDate: standard.calibrationDate,
-        },
-        ipAddress: c.req.header("x-forwarded-for") || null,
+        stamped.recall = approvedRecall ?? recall;
+        return null;
       });
 
-      // Every selected job must actually be linked to this standard — the
-      // reviewed list from the wizard is re-validated, never trusted.
-      const linkedRows = await db
-        .select({ jobId: jobStandard.jobId })
-        .from(jobStandard)
-        .innerJoin(calibrationJob, eq(jobStandard.jobId, calibrationJob.id))
-        .where(
-          and(
-            eq(jobStandard.standardId, id),
-            inArray(jobStandard.jobId, input.jobIds),
-            eq(calibrationJob.organizationId, member.organizationId),
-          ),
-        );
-      const linkedJobIds = new Set(linkedRows.map((row) => row.jobId));
-      const invalidIds = input.jobIds.filter(
-        (jobId) => !linkedJobIds.has(jobId),
+      // The notification of a recall opened just now waits for its commit.
+      await ensureQueue.run();
+      if (refused) return refused;
+      const approvedRecall = stamped.recall;
+      if (!approvedRecall) {
+        throw new Error("recall/send: the approved recall is missing");
+      }
+
+      // Phase 2: one notification per certificate (the PDF jobs run after the commit).
+      const sendQueue = afterCommitQueue();
+      const result = await lab.transaction((tx) =>
+        createStandardRecallNotifications(
+          {
+            recall: approvedRecall,
+            jobIds: input.jobIds,
+            organizationId: member.organizationId,
+            actorUserId: session.user.id,
+          },
+          { executor: tx, afterCommit: sendQueue.add },
+        ),
       );
-      if (invalidIds.length > 0) {
-        return c.json(
-          {
-            error: `Certificados fora do escopo deste padrao: ${invalidIds.join(", ")}`,
-            code: "JOBS_NOT_LINKED_TO_STANDARD",
-          },
-          400,
-        );
-      }
-
-      // Stamp the approval + reviewed window before dispatching (§7.10.2
-      // evidence: who approved the batch and what window was reviewed).
-      const [approvedRecall] = await db
-        .update(standardRecall)
-        .set({
-          status: "SENT",
-          fromDate: input.from ? new Date(input.from) : recall.fromDate,
-          toDate: input.to ? new Date(input.to) : new Date(),
-          approvedBy: session.user.id,
-          approvedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(standardRecall.id, recall.id),
-            eq(standardRecall.organizationId, member.organizationId),
-          ),
-        )
-        .returning();
-
-      await db.insert(referenceStandardAuditLog).values({
-        organizationId: member.organizationId,
-        standardId: id,
-        action: "recall_send",
-        changes: {
-          recallId: recall.id,
-          jobIds: input.jobIds,
-          from: input.from ?? recall.fromDate?.toISOString() ?? null,
-          to: input.to ?? null,
-        },
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
-        reason: `Recall §7.10 aprovado: ${input.jobIds.length} certificado(s) notificado(s)`,
-      });
-
-      const result = await createStandardRecallNotifications({
-        recall: approvedRecall ?? recall,
-        jobIds: input.jobIds,
-        organizationId: member.organizationId,
-        actorUserId: session.user.id,
-      });
+      await sendQueue.run();
 
       return c.json({
         message: "Recall aprovado e notificacoes em envio",
         data: {
-          recallId: recall.id,
+          recallId: approvedRecall.id,
           created: result.created,
           skipped: result.skipped,
         },
@@ -1656,49 +1785,51 @@ export const standardsRouter = new Hono<{
   .delete("/:id", ...withLabPermission({ standard: ["delete"] }), async (c) => {
     const member = c.get("member");
     const session = c.get("session");
-    const id = await resolveStandardRouteId(c.req.param("id"), member);
+    return await orgDb(member.organizationId).transaction(async (tx) => {
+      const id = await resolveStandardRouteId(c.req.param("id"), member, tx);
 
-    if (id === null) {
-      return c.json({ error: "Padrão não encontrado" }, 404);
-    }
+      if (id === null) {
+        return c.json({ error: "Padrão não encontrado" }, 404);
+      }
 
-    const [existing] = await db
-      .select()
-      .from(referenceStandard)
-      .where(
-        and(
-          eq(referenceStandard.id, id),
-          eq(referenceStandard.organizationId, member.organizationId),
-          buildUnitScopeCondition(referenceStandard.unitId, member),
-          isNull(referenceStandard.deletedAt),
-        ),
-      )
-      .limit(1);
+      const [existing] = await tx
+        .select()
+        .from(referenceStandard)
+        .where(
+          and(
+            eq(referenceStandard.id, id),
+            eq(referenceStandard.organizationId, member.organizationId),
+            buildUnitScopeCondition(referenceStandard.unitId, member),
+            isNull(referenceStandard.deletedAt),
+          ),
+        )
+        .limit(1);
 
-    if (!existing) {
-      return c.json({ error: "Padrão não encontrado" }, 404);
-    }
+      if (!existing) {
+        return c.json({ error: "Padrão não encontrado" }, 404);
+      }
 
-    // Soft delete
-    const [updated] = await db
-      .update(referenceStandard)
-      .set({ deletedAt: new Date(), status: "INACTIVE" })
-      .where(eq(referenceStandard.id, id))
-      .returning();
+      // Soft delete
+      const [updated] = await tx
+        .update(referenceStandard)
+        .set({ deletedAt: new Date(), status: "INACTIVE" })
+        .where(eq(referenceStandard.id, id))
+        .returning();
 
-    // Audit log
-    await db.insert(referenceStandardAuditLog).values({
-      organizationId: member.organizationId,
-      standardId: id,
-      action: "delete",
-      changes: { deletedAt: { old: null, new: new Date().toISOString() } },
-      performedBy: session.user.id,
-      ipAddress: c.req.header("x-forwarded-for") || null,
-    });
+      // Audit log
+      await tx.insert(referenceStandardAuditLog).values({
+        organizationId: member.organizationId,
+        standardId: id,
+        action: "delete",
+        changes: { deletedAt: { old: null, new: new Date().toISOString() } },
+        performedBy: session.user.id,
+        ipAddress: c.req.header("x-forwarded-for") || null,
+      });
 
-    return c.json({
-      message: "Padrão removido com sucesso",
-      data: updated,
+      return c.json({
+        message: "Padrão removido com sucesso",
+        data: updated,
+      });
     });
   })
 
@@ -1713,138 +1844,140 @@ export const standardsRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      const id = await resolveStandardRouteId(c.req.param("id"), member);
-      const input = c.req.valid("json");
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const id = await resolveStandardRouteId(c.req.param("id"), member, tx);
+        const input = c.req.valid("json");
 
-      if (id === null) {
-        return c.json({ error: "Padrão não encontrado" }, 404);
-      }
+        if (id === null) {
+          return c.json({ error: "Padrão não encontrado" }, 404);
+        }
 
-      // Get existing standard
-      const [existing] = await db
-        .select()
-        .from(referenceStandard)
-        .where(
-          and(
-            eq(referenceStandard.id, id),
-            eq(referenceStandard.organizationId, member.organizationId),
-            buildUnitScopeCondition(referenceStandard.unitId, member),
-            isNull(referenceStandard.deletedAt),
-          ),
-        )
-        .limit(1);
+        // Get existing standard
+        const [existing] = await tx
+          .select()
+          .from(referenceStandard)
+          .where(
+            and(
+              eq(referenceStandard.id, id),
+              eq(referenceStandard.organizationId, member.organizationId),
+              buildUnitScopeCondition(referenceStandard.unitId, member),
+              isNull(referenceStandard.deletedAt),
+            ),
+          )
+          .limit(1);
 
-      if (!existing) {
-        return c.json({ error: "Padrão nao encontrado" }, 404);
-      }
+        if (!existing) {
+          return c.json({ error: "Padrão nao encontrado" }, 404);
+        }
 
-      // Build changes object
-      const changes: Record<string, { old: unknown; new: unknown }> = {};
-      const updateData: Record<string, unknown> = {};
+        // Build changes object
+        const changes: Record<string, { old: unknown; new: unknown }> = {};
+        const updateData: Record<string, unknown> = {};
 
-      // Certificate data (required for renewal)
-      changes.certificateNumber = {
-        old: existing.certificateNumber,
-        new: input.certificateNumber,
-      };
-      updateData.certificateNumber = input.certificateNumber;
-
-      if (input.calibratedBy !== undefined) {
-        changes.calibratedBy = {
-          old: existing.calibratedBy,
-          new: input.calibratedBy,
+        // Certificate data (required for renewal)
+        changes.certificateNumber = {
+          old: existing.certificateNumber,
+          new: input.certificateNumber,
         };
-        updateData.calibratedBy = input.calibratedBy;
-      }
+        updateData.certificateNumber = input.certificateNumber;
 
-      const newCalibrationDate = new Date(input.calibrationDate);
-      changes.calibrationDate = {
-        old: existing.calibrationDate.toISOString(),
-        new: newCalibrationDate.toISOString(),
-      };
-      updateData.calibrationDate = newCalibrationDate;
+        if (input.calibratedBy !== undefined) {
+          changes.calibratedBy = {
+            old: existing.calibratedBy,
+            new: input.calibratedBy,
+          };
+          updateData.calibratedBy = input.calibratedBy;
+        }
 
-      const newNextCalibrationDate = new Date(input.nextCalibrationDate);
-      changes.nextCalibrationDate = {
-        old: existing.nextCalibrationDate.toISOString(),
-        new: newNextCalibrationDate.toISOString(),
-      };
-      updateData.nextCalibrationDate = newNextCalibrationDate;
-
-      // Optional metrology updates
-      if (input.referenceValue !== undefined) {
-        changes.referenceValue = {
-          old: existing.referenceValue,
-          new: input.referenceValue,
+        const newCalibrationDate = new Date(input.calibrationDate);
+        changes.calibrationDate = {
+          old: existing.calibrationDate.toISOString(),
+          new: newCalibrationDate.toISOString(),
         };
-        updateData.referenceValue = input.referenceValue;
-      }
-      if (input.uncertainty !== undefined) {
-        changes.uncertainty = {
-          old: existing.uncertainty,
-          new: input.uncertainty,
-        };
-        updateData.uncertainty = input.uncertainty;
-      }
-      if (input.uncertaintyUnit !== undefined) {
-        changes.uncertaintyUnit = {
-          old: existing.uncertaintyUnit,
-          new: input.uncertaintyUnit,
-        };
-        updateData.uncertaintyUnit = input.uncertaintyUnit;
-      }
-      if (input.coverageFactor !== undefined) {
-        changes.coverageFactor = {
-          old: existing.coverageFactor,
-          new: input.coverageFactor,
-        };
-        updateData.coverageFactor = input.coverageFactor;
-      }
-      if (input.certifiedValues !== undefined) {
-        changes.certifiedValues = {
-          old: existing.certifiedValues,
-          new: input.certifiedValues,
-        };
-        updateData.certifiedValues = input.certifiedValues;
-      }
-      if (input.metrologyData !== undefined) {
-        changes.metrologyData = {
-          old: existing.metrologyData,
-          new: input.metrologyData,
-        };
-        updateData.metrologyData = input.metrologyData;
-      }
+        updateData.calibrationDate = newCalibrationDate;
 
-      // If standard was OUT_OF_TOLERANCE or SENT_FOR_CALIBRATION, set back to ACTIVE
-      if (
-        existing.status === "OUT_OF_TOLERANCE" ||
-        existing.status === "SENT_FOR_CALIBRATION"
-      ) {
-        changes.status = { old: existing.status, new: "ACTIVE" };
-        updateData.status = "ACTIVE";
-      }
+        const newNextCalibrationDate = new Date(input.nextCalibrationDate);
+        changes.nextCalibrationDate = {
+          old: existing.nextCalibrationDate.toISOString(),
+          new: newNextCalibrationDate.toISOString(),
+        };
+        updateData.nextCalibrationDate = newNextCalibrationDate;
 
-      // Update the standard
-      const [updated] = await db
-        .update(referenceStandard)
-        .set(updateData)
-        .where(eq(referenceStandard.id, id))
-        .returning();
+        // Optional metrology updates
+        if (input.referenceValue !== undefined) {
+          changes.referenceValue = {
+            old: existing.referenceValue,
+            new: input.referenceValue,
+          };
+          updateData.referenceValue = input.referenceValue;
+        }
+        if (input.uncertainty !== undefined) {
+          changes.uncertainty = {
+            old: existing.uncertainty,
+            new: input.uncertainty,
+          };
+          updateData.uncertainty = input.uncertainty;
+        }
+        if (input.uncertaintyUnit !== undefined) {
+          changes.uncertaintyUnit = {
+            old: existing.uncertaintyUnit,
+            new: input.uncertaintyUnit,
+          };
+          updateData.uncertaintyUnit = input.uncertaintyUnit;
+        }
+        if (input.coverageFactor !== undefined) {
+          changes.coverageFactor = {
+            old: existing.coverageFactor,
+            new: input.coverageFactor,
+          };
+          updateData.coverageFactor = input.coverageFactor;
+        }
+        if (input.certifiedValues !== undefined) {
+          changes.certifiedValues = {
+            old: existing.certifiedValues,
+            new: input.certifiedValues,
+          };
+          updateData.certifiedValues = input.certifiedValues;
+        }
+        if (input.metrologyData !== undefined) {
+          changes.metrologyData = {
+            old: existing.metrologyData,
+            new: input.metrologyData,
+          };
+          updateData.metrologyData = input.metrologyData;
+        }
 
-      // Audit log with reason (required for ISO 17025)
-      await db.insert(referenceStandardAuditLog).values({
-        organizationId: member.organizationId,
-        standardId: id,
-        action: "renew",
-        changes,
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
-        reason: input.reason,
-      });
+        // If standard was OUT_OF_TOLERANCE or SENT_FOR_CALIBRATION, set back to ACTIVE
+        if (
+          existing.status === "OUT_OF_TOLERANCE" ||
+          existing.status === "SENT_FOR_CALIBRATION"
+        ) {
+          changes.status = { old: existing.status, new: "ACTIVE" };
+          updateData.status = "ACTIVE";
+        }
 
-      return c.json({
-        message: "Certificado renovado com sucesso",
-        data: updated,
+        // Update the standard
+        const [updated] = await tx
+          .update(referenceStandard)
+          .set(updateData)
+          .where(eq(referenceStandard.id, id))
+          .returning();
+
+        // Audit log with reason (required for ISO 17025)
+        await tx.insert(referenceStandardAuditLog).values({
+          organizationId: member.organizationId,
+          standardId: id,
+          action: "renew",
+          changes,
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+          reason: input.reason,
+        });
+
+        return c.json({
+          message: "Certificado renovado com sucesso",
+          data: updated,
+        });
       });
     },
   )
@@ -1857,47 +1990,49 @@ export const standardsRouter = new Hono<{
     ...withLabPermission({ standard: ["read"] }),
     async (c) => {
       const member = c.get("member");
-      const id = await resolveStandardRouteId(c.req.param("id"), member);
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const id = await resolveStandardRouteId(c.req.param("id"), member, tx);
 
-      if (id === null) {
-        return c.json({ error: "Padrão não encontrado" }, 404);
-      }
+        if (id === null) {
+          return c.json({ error: "Padrão não encontrado" }, 404);
+        }
 
-      // Verify standard exists and belongs to organization
-      const [existing] = await db
-        .select({ id: referenceStandard.id })
-        .from(referenceStandard)
-        .where(
-          and(
-            eq(referenceStandard.id, id),
-            eq(referenceStandard.organizationId, member.organizationId),
-            buildUnitScopeCondition(referenceStandard.unitId, member),
-          ),
-        )
-        .limit(1);
+        // Verify standard exists and belongs to organization
+        const [existing] = await tx
+          .select({ id: referenceStandard.id })
+          .from(referenceStandard)
+          .where(
+            and(
+              eq(referenceStandard.id, id),
+              eq(referenceStandard.organizationId, member.organizationId),
+              buildUnitScopeCondition(referenceStandard.unitId, member),
+            ),
+          )
+          .limit(1);
 
-      if (!existing) {
-        return c.json({ error: "Padrão nao encontrado" }, 404);
-      }
+        if (!existing) {
+          return c.json({ error: "Padrão nao encontrado" }, 404);
+        }
 
-      // Get audit logs
-      const logs = await db
-        .select({
-          id: referenceStandardAuditLog.id,
-          standardId: referenceStandardAuditLog.standardId,
-          action: referenceStandardAuditLog.action,
-          changes: referenceStandardAuditLog.changes,
-          performedBy: referenceStandardAuditLog.performedBy,
-          performedByName: user.name,
-          performedAt: referenceStandardAuditLog.performedAt,
-          ipAddress: referenceStandardAuditLog.ipAddress,
-          reason: referenceStandardAuditLog.reason,
-        })
-        .from(referenceStandardAuditLog)
-        .leftJoin(user, eq(referenceStandardAuditLog.performedBy, user.id))
-        .where(eq(referenceStandardAuditLog.standardId, id))
-        .orderBy(desc(referenceStandardAuditLog.performedAt));
+        // Get audit logs
+        const logs = await tx
+          .select({
+            id: referenceStandardAuditLog.id,
+            standardId: referenceStandardAuditLog.standardId,
+            action: referenceStandardAuditLog.action,
+            changes: referenceStandardAuditLog.changes,
+            performedBy: referenceStandardAuditLog.performedBy,
+            performedByName: user.name,
+            performedAt: referenceStandardAuditLog.performedAt,
+            ipAddress: referenceStandardAuditLog.ipAddress,
+            reason: referenceStandardAuditLog.reason,
+          })
+          .from(referenceStandardAuditLog)
+          .leftJoin(user, eq(referenceStandardAuditLog.performedBy, user.id))
+          .where(eq(referenceStandardAuditLog.standardId, id))
+          .orderBy(desc(referenceStandardAuditLog.performedAt));
 
-      return c.json({ data: logs });
+        return c.json({ data: logs });
+      });
     },
   );

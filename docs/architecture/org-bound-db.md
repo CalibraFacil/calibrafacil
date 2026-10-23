@@ -141,6 +141,20 @@ added or removed without a migration.
     one that raised it.
   - Specs: `master-data-lab-scope.int.spec.ts` covers the success paths the per-router specs do not reach, each
     with a cross-laboratory negative.
+- **Quality records (P2-18d).** The standards (certificates, recall workflow), methods, accredited scope,
+  competences, training records, authorized signatories, proficiency tests and SPC routes resolve the
+  laboratory from the session (`requireOrganization` already did) and run every statement in
+  `orgDb(lab).transaction(...)`, so the audit entry of a regulated change commits with the change. The lib
+  functions they call took an optional org-bound handle instead of the global `db` (`executor`, or an
+  `OrgScope` = handle + `afterCommit` collector when the function also fires a side effect:
+  `createNonConformanceRecord`, `ensureStandardRecall`, `createStandardRecallNotifications`;
+  `lib/after-commit.ts`): the notification or queue job a transaction triggers waits for its commit
+  (`afterCommitQueue().run()`), and the retry loop over a sequential number (CAPA, NC) runs each attempt in a
+  savepoint of the caller's transaction. Without the handle every one of them still writes through `db`, so the
+  jobs, sync and desktop callers are unchanged until their own slice. The SPC nightly sweep
+  (`packages/jobs-core/src/spc-recompute.ts`) learns which laboratories own a chart on the system path (one
+  `select distinct organization_id`, allowlisted) and evaluates every chart in `forOrg(db, lab).transaction`,
+  one transaction per chart so a failing chart does not stop the sweep.
 - **Tests.** `apps/api/src/lib/rls-shadow.int.spec.ts` runs against a pool whose sessions are `calibra_app`
   (`test/integration/rls.ts`). `pnpm --filter @calibra-facil/api rls:shadow-report` replays every API
   integration spec (`--group routes/jobs` or `--files` narrow it) with each request's database access as
