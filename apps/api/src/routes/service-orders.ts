@@ -128,6 +128,14 @@ const QuoteParamSchema = z.object({
   id: z.coerce.number().int().positive(),
   quoteId: z.coerce.number().int().positive(),
 });
+const QuotePdfParamSchema = z.object({
+  id: z.coerce.number().int().positive(),
+  quoteFile: z
+    .string()
+    .regex(/^[0-9]+\.pdf$/)
+    .transform((value) => Number.parseInt(value, 10))
+    .pipe(z.number().int().positive()),
+});
 const TokenParamSchema = z.object({ token: z.string().trim().min(16) });
 // Portal routes service orders by the opaque publicId, not the serial id.
 const PortalIdParamSchema = z.object({ id: z.string().trim().min(1) });
@@ -735,12 +743,14 @@ export const serviceOrdersRouter = new Hono<{
     },
   )
   .get(
-    "/:id/quotes/:quoteId.pdf",
+    // Hono cannot put a literal ".pdf" after a regex param, so the param is the
+    // whole "<quoteId>.pdf" segment, restricted to digits + the suffix.
+    "/:id/quotes/:quoteFile{[0-9]+\\.pdf}",
     ...withLabPermission({ service_order: ["read"] }),
-    zValidator("param", QuoteParamSchema),
+    zValidator("param", QuotePdfParamSchema),
     async (c) => {
       const member = c.get("member");
-      const { id, quoteId } = c.req.valid("param");
+      const { id, quoteFile: quoteId } = c.req.valid("param");
       const order = await getScopedServiceOrder(id, member);
       if (!order) return c.json({ error: "OS nao encontrada" }, 404);
       const url = await getQuoteDocumentDownloadUrl(

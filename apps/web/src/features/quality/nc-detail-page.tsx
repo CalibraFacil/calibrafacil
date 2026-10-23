@@ -138,7 +138,16 @@ export function NCDetailPage({ id }: { id: string }) {
       toast.success('Confirmação de recebimento registrada')
       setOotAckDialogOpen(false)
     },
-    onError: (error) => toast.error(error.message),
+    // A 409 means the receipt was confirmed first (e.g. through the e-mailed
+    // link): show the server's message and reload the record so the page shows
+    // the first acknowledgement instead of the stale "pending" state.
+    onError: (error) => {
+      queryClient.invalidateQueries({
+        queryKey: ['non-conformance-oot-notification', id],
+      })
+      queryClient.invalidateQueries({ queryKey: ['non-conformance-audit', id] })
+      toast.error(error.message)
+    },
   })
 
   // Escalate to CAPA mutation

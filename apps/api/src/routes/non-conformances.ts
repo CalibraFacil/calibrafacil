@@ -18,7 +18,10 @@ import {
   RegisterOotAcknowledgementSchema,
   SaveOotImpactAssessmentSchema,
 } from "@calibra-facil/schemas";
-import { notifyNCEscalatedToCapa } from "@calibra-facil/notifications";
+import {
+  notifyNCEscalatedToCapa,
+  notifyOotAcknowledged,
+} from "@calibra-facil/notifications";
 import {
   withLabPermission,
   type AuthVariables,
@@ -28,7 +31,18 @@ import { createCorrectiveActionRecord } from "../lib/corrective-actions";
 import { userIsOrganizationMember } from "../lib/tenant-refs";
 import { afterCommitQueue } from "../lib/after-commit";
 import { orgDb } from "../lib/org-db";
-import { eq, and, or, ilike, desc, count, gte, lte, sql } from "drizzle-orm";
+import {
+  eq,
+  and,
+  or,
+  ilike,
+  desc,
+  count,
+  gte,
+  lte,
+  sql,
+  isNull,
+} from "drizzle-orm";
 
 /**
  * Non-Conformance Router - ISO 17025:2017 Clause 8.7 (Control of Nonconforming Work)
@@ -894,83 +908,130 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ non_conformance: ["update"] }),
     zValidator("json", RegisterOotAcknowledgementSchema),
     async (c) => {
-      return orgDb(c.get("member").organizationId).transaction(async (o) => {
-        const member = c.get("member");
-        const session = c.get("session");
-        const id = parseInt(c.req.param("id"), 10);
-        const input = c.req.valid("json");
+      const member = c.get("member");
+      const session = c.get("session");
+      const id = parseInt(c.req.param("id"), 10);
+      const input = c.req.valid("json");
 
-        if (isNaN(id)) {
-          return c.json({ error: "ID invalido" }, 400);
-        }
+      if (isNaN(id)) {
+        return c.json({ error: "ID invalido" }, 400);
+      }
 
-        const [existing] = await o
-          .select({ id: nonConformance.id })
-          .from(nonConformance)
-          .where(
-            and(
-              eq(nonConformance.id, id),
-              eq(nonConformance.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
+      const alreadyAcknowledged = () =>
+        c.json(
+          {
+            error:
+              "O recebimento desta notificação já foi confirmado. O primeiro registro foi mantido.",
+            code: "ALREADY_ACKNOWLEDGED",
+          },
+          409,
+        );
 
-        if (!existing) {
-          return c.json({ error: "Nao conformidade nao encontrada" }, 404);
-        }
+      const outcome = await orgDb(member.organizationId).transaction(
+        async (o) => {
+          const [existing] = await o
+            .select({
+              id: nonConformance.id,
+              ncNumber: nonConformance.ncNumber,
+            })
+            .from(nonConformance)
+            .where(
+              and(
+                eq(nonConformance.id, id),
+                eq(nonConformance.organizationId, member.organizationId),
+              ),
+            )
+            .limit(1);
 
-        const [notification] = await o
-          .select()
-          .from(ootNotification)
-          .where(eq(ootNotification.ncId, id))
-          .limit(1);
+          if (!existing) {
+            return {
+              response: c.json(
+                { error: "Nao conformidade nao encontrada" },
+                404,
+              ),
+              stamped: null,
+            };
+          }
 
-        if (!notification) {
-          return c.json(
-            { error: "Esta nao conformidade nao possui notificacao 7.10" },
-            404,
-          );
-        }
+          const [notification] = await o
+            .select()
+            .from(ootNotification)
+            .where(eq(ootNotification.ncId, id))
+            .limit(1);
 
-        if (notification.acknowledgedAt) {
-          return c.json(
-            {
-              error: "Recebimento ja confirmado",
-              code: "ALREADY_ACKNOWLEDGED",
+          if (!notification) {
+            return {
+              response: c.json(
+                { error: "Esta nao conformidade nao possui notificacao 7.10" },
+                404,
+              ),
+              stamped: null,
+            };
+          }
+
+          // First acknowledgement wins (decision Q34): the stamp is the
+          // regulated evidence of receipt, so the update is conditional on
+          // `acknowledged_at IS NULL` and a manual registration racing the
+          // e-mailed link (or another registration) can never overwrite it.
+          // Defense-in-depth (SEC-08): org predicate repeated in the WHERE.
+          const [updated] = await o
+            .update(ootNotification)
+            .set({
+              status: "ACKNOWLEDGED",
+              acknowledgedAt: new Date(),
+              acknowledgedVia: "manual",
+              acknowledgedNote: input.note,
+            })
+            .where(
+              and(
+                eq(ootNotification.id, notification.id),
+                eq(ootNotification.organizationId, member.organizationId),
+                isNull(ootNotification.acknowledgedAt),
+              ),
+            )
+            .returning();
+
+          if (!updated) {
+            return { response: alreadyAcknowledged(), stamped: null };
+          }
+
+          await o.insert(nonConformanceAuditLog).values({
+            organizationId: member.organizationId,
+            ncId: id,
+            action: "oot_acknowledged",
+            changes: { acknowledgedVia: "manual" },
+            performedBy: session.user.id,
+            ipAddress: c.req.header("x-forwarded-for") || null,
+            reason: input.note,
+          });
+
+          return {
+            response: c.json({
+              message: "Recebimento registrado",
+              data: updated,
+            }),
+            stamped: {
+              notificationId: updated.id,
+              ncNumber: existing.ncNumber,
             },
-            409,
-          );
-        }
+          };
+        },
+      );
 
-        // Defense-in-depth (SEC-08): org predicate repeated in the WHERE.
-        const [updated] = await o
-          .update(ootNotification)
-          .set({
-            status: "ACKNOWLEDGED",
-            acknowledgedAt: new Date(),
-            acknowledgedVia: "manual",
-            acknowledgedNote: input.note,
-          })
-          .where(
-            and(
-              eq(ootNotification.id, notification.id),
-              eq(ootNotification.organizationId, member.organizationId),
-            ),
-          )
-          .returning();
+      // Like the public link: only the call that stamped notifies, and only
+      // after the stamp is committed.
+      if (outcome.stamped) {
+        notifyOotAcknowledged(
+          outcome.stamped.notificationId,
+          id,
+          outcome.stamped.ncNumber,
+          member.organizationId,
+        ).catch((err) =>
+          console.error("[OOT] Failed to notify acknowledgement:", err),
+        );
+      }
 
-        await o.insert(nonConformanceAuditLog).values({
-          organizationId: member.organizationId,
-          ncId: id,
-          action: "oot_acknowledged",
-          changes: { acknowledgedVia: "manual" },
-          performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
-          reason: input.note,
-        });
-
-        return c.json({ message: "Recebimento registrado", data: updated });
-      });
+      return outcome.response;
     },
   )
 

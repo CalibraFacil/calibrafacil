@@ -8,7 +8,7 @@ import {
   receivableInstallment,
   serviceOrder,
 } from "@calibra-facil/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql, type SQL } from "drizzle-orm";
 import { summarizeRecurringRevenue } from "./recurring-revenue";
 import { buildUnitScopeCondition } from "./units";
 
@@ -169,7 +169,10 @@ export function summarizeCashForecast(input: {
 
 export interface BuildCashForecastInput {
   organizationId: string;
-  scope: Parameters<typeof buildUnitScopeCondition>[1];
+  scope: Parameters<typeof buildUnitScopeCondition>[1] & {
+    // Whether the viewer may see every unit of the laboratory.
+    canAccessAllUnits: boolean;
+  };
   now?: Date;
 }
 
@@ -181,6 +184,30 @@ export async function buildCashForecast(
   return inOrgTransaction(input.organizationId, executor, (o) =>
     readCashForecast(o, input),
   );
+}
+
+/**
+ * A viewer who sees the whole laboratory (every unit selected) counts every
+ * installment of the lab, including those of documents no service order points
+ * at (standalone invoices, contract installments). A unit-scoped viewer counts
+ * only the installments whose service order belongs to one of their units; a
+ * document without an order has no unit to match and stays out for them.
+ */
+function unitScopeOfDocument(input: BuildCashForecastInput): SQL | undefined {
+  if (
+    input.scope.canAccessAllUnits &&
+    input.scope.selectedUnitScope === "all"
+  ) {
+    return undefined;
+  }
+  return sql`exists (
+    select 1 from ${serviceOrder}
+    where ${and(
+      eq(serviceOrder.billingDocumentId, billingDocument.id),
+      eq(serviceOrder.organizationId, input.organizationId),
+      buildUnitScopeCondition(serviceOrder.unitId, input.scope),
+    )}
+  )`;
 }
 
 async function readCashForecast(
@@ -201,16 +228,10 @@ async function readCashForecast(
       billingDocument,
       eq(billingDocument.id, receivableInstallment.documentId),
     )
-    .leftJoin(
-      serviceOrder,
-      eq(serviceOrder.billingDocumentId, billingDocument.id),
-    )
     .where(
       and(
         eq(billingDocument.organizationId, input.organizationId),
-        // Unit scope via service order when present; otherwise tenant alone.
-        // For DRAFT documents without an SO link, the org filter is enough.
-        buildUnitScopeCondition(serviceOrder.unitId, input.scope),
+        unitScopeOfDocument(input),
       ),
     );
 

@@ -17,6 +17,7 @@
  *   REQ-FINLAB-RDY   billing readiness: GET queue, POST send (document + ERP export)
  *   REQ-FINLAB-ERP   ERP: GET exports, POST document export
  *   REQ-FINLAB-DASH  operations-to-cash, revenue leakage, cash forecast, margins
+ *   REQ-FINLAB-FCST  cash forecast by unit scope (standalone documents count lab-wide)
  *   REQ-FINLAB-POL   certificate-release policy PUT, automatic-send rule GET / PUT
  *   REQ-FINLAB-ENG   automatic-send engine (trigger + job lookup)
  */
@@ -36,6 +37,7 @@ import {
   integrationEventLog,
   integrationObjectLink,
   jobCommercialSnapshot,
+  organizationUnit,
   organizationIntegration,
   paymentReceipt,
   receivableInstallment,
@@ -63,7 +65,12 @@ const JSON_HEADERS = { "content-type": "application/json" };
 const MASTER_KEY = Buffer.alloc(32, 7).toString("base64");
 const ENV = { INTEGRATIONS_MASTER_KEY: MASTER_KEY };
 
-type Probe = { path: string; method?: string; body?: unknown };
+type Probe = {
+  path: string;
+  method?: string;
+  body?: unknown;
+  headers?: Record<string, string>;
+};
 
 type Requester = {
   request(
@@ -78,7 +85,7 @@ async function call(probe: Probe, app: Requester = financeRouter) {
     probe.path,
     {
       method: probe.method ?? "GET",
-      headers: JSON_HEADERS,
+      headers: { ...JSON_HEADERS, ...probe.headers },
       ...(probe.body === undefined ? {} : { body: JSON.stringify(probe.body) }),
     },
     ENV,
@@ -929,6 +936,56 @@ describe("finance routes — success paths and cross-laboratory negatives", () =
         ],
       ),
     ).toEqual([[a.customerId, 20_000]]);
+  });
+
+  it("REQ-FINLAB-FCST-001: the cash forecast counts a standalone document's installment for a lab-wide viewer only; a unit-scoped viewer sees just the installments of their unit's orders", async () => {
+    const { a } = await twoLabs();
+    const [other] = await db
+      .insert(organizationUnit)
+      .values({
+        organizationId: a.orgId,
+        name: "Filial",
+        slug: "filial",
+        status: "ACTIVE",
+      })
+      .returning({ id: organizationUnit.id });
+    if (!other) throw new Error("second unit insert failed");
+    const soon = new Date();
+    soon.setUTCDate(soon.getUTCDate() + 3);
+    soon.setUTCHours(0, 0, 0, 0);
+    const installmentDoc = (totalCents: number, documentNumber: string) =>
+      seedDocument(a, {
+        status: "ISSUED",
+        documentNumber,
+        totalCents,
+        dueDate: soon,
+        withInstallment: true,
+      });
+    // No service order points at this document.
+    await installmentDoc(5_000, "FIN-2026-0001");
+    const inFirstUnit = await installmentDoc(7_000, "FIN-2026-0002");
+    const inOtherUnit = await installmentDoc(11_000, "FIN-2026-0003");
+    await seedBillableOrder(a, {
+      number: "OS-A-1",
+      billingDocumentId: inFirstUnit.id,
+    });
+    await seedBillableOrder(
+      { ...a, unitId: other.id },
+      { number: "OS-A-2", billingDocumentId: inOtherUnit.id },
+    );
+
+    const confirmedFor = async (scope: string) => {
+      const res = await call({
+        path: "/cash-forecast",
+        headers: { "x-active-unit-id": scope },
+      });
+      expect(res.status).toBe(200);
+      return res.body.totals.confirmedCents;
+    };
+
+    expect(await confirmedFor("all")).toBe(5_000 + 7_000 + 11_000);
+    expect(await confirmedFor(String(a.unitId))).toBe(7_000);
+    expect(await confirmedFor(String(other.id))).toBe(11_000);
   });
 
   // ===========================================================================
