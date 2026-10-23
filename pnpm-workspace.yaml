@@ -69,10 +69,14 @@ overrides:
   "http-cache-semantics@<4.2.1": ^4.2.1
   # GHSA-5xrq-8626-4rwp: vitest <4.1.0 UI-server arbitrary file read, and
   # GHSA-82fw-gwwq-j7x9: vitest/@vitest/mocker <4.1.11 arbitrary file read through
-  # a redirected mock. Lift the 4.x line (also pulled transitively via
-  # better-auth) to 4.1.11 without crossing to 5.x.
-  "vitest@>=4.0.0 <4.1.11": ^4.1.11
-  "@vitest/coverage-v8@>=4.0.0 <4.1.11": ^4.1.11
+  # a redirected mock, and GHSA-qxg6-89mg-rqv8 / GHSA-xp26-3454-mjgp:
+  # @vitest/mocker <4.1.12 code injection through unauthenticated manual mock
+  # registration and a Windows backslash bypass of the redirect allowlist. Lift
+  # the 4.x line (also pulled transitively via better-auth) to 4.1.12 without
+  # crossing to 5.x.
+  "vitest@>=4.0.0 <4.1.12": ^4.1.12
+  "@vitest/coverage-v8@>=4.0.0 <4.1.12": ^4.1.12
+  "@vitest/mocker@>=2.1.0-beta.7 <4.1.12": ^4.1.12
   "path-to-regexp@>=8.0.0 <8.4.0": ^8.4.0
   diff: ^8.0.3
   basic-ftp: ^5.3.1
