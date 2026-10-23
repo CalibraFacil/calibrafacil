@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
-import { db } from "@calibra-facil/db";
+import { db, runInTransactionScope } from "@calibra-facil/db";
 import { forOrg, setTransactionOrganization } from "@calibra-facil/db/for-org";
 import { rlsTables } from "@calibra-facil/db/rls-sql";
 import {
@@ -421,5 +421,29 @@ describe("row-level security, shadow mode", () => {
     expect(trace.insideB.jobs).toEqual([tenants.b.jobId]);
     expect(trace.after).toBe(A);
     expect(trace.jobsAfter).toBe(1);
+  });
+
+  it("REQ-RLS-4: inside a transaction scope (P2-4a) the handle's transaction is a savepoint that sets the organization, and it is gone when the scope commits", async () => {
+    const read = async () =>
+      rowsOf(
+        await db.execute(
+          sql`select current_setting('calibra.organization_id', true) as org`,
+        ),
+      )[0]?.org;
+    const inScope = await runInTransactionScope(async () => {
+      const jobs = await forOrg(db, A).transaction(async (o) => {
+        const rows = await o
+          .select({ id: calibrationJob.id })
+          .from(calibrationJob);
+        return { org: await read(), ids: rows.map((row) => row.id) };
+      });
+      return jobs;
+    });
+    expect(inScope.org).toBe(A);
+    expect(inScope.ids).toEqual([tenants.a.jobId]);
+    // The scope has committed: the setting did not outlive it on any connection
+    // this process holds (the owner pool).
+    const after = await read();
+    expect(after === null || after === "").toBe(true);
   });
 });

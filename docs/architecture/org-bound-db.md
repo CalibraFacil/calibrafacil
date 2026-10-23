@@ -84,7 +84,8 @@ added or removed without a migration.
   `select set_config('calibra.organization_id', $org, true)` first (transaction-local: it ends with the
   transaction, so it never leaks to the next one on a pooled connection). Inside a bigger transaction (a
   transaction scope, a caller's `db.transaction`) the handle's transaction is a savepoint: it sets its own
-  organization and puts the outer one back when it succeeds.
+  organization and, when the outer transaction had named one, puts it back when it succeeds (an outer
+  transaction that named none keeps the savepoint's organization until it ends).
 - **Statements outside a transaction set nothing: fail closed.** `o.select(...)` straight on the handle
   carries the organization predicate but no setting, so as `calibra_app` it matches no row; as the owner it
   is unchanged. Wrapping every read in a short transaction was rejected for this step: it would add `BEGIN`,
