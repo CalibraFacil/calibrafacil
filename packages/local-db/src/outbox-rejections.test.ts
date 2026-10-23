@@ -11,15 +11,14 @@ import {
 const apiSource = (relative: string) =>
   fileURLToPath(new URL(`../../../apps/api/src/${relative}`, import.meta.url));
 
-/** Quoted SCREAMING_SNAKE literals in the API's sync route and sync modules. */
+/** Quoted SCREAMING_SNAKE literals in the API's sync routes and sync modules. */
 function emittedSyncCodes() {
-  const syncModuleDirectory = apiSource("modules/sync");
-  const files = [
-    apiSource("routes/sync.ts"),
-    ...readdirSync(syncModuleDirectory)
+  const files = ["routes/sync", "modules/sync"].flatMap((relative) => {
+    const directory = apiSource(relative);
+    return readdirSync(directory)
       .filter((name) => name.endsWith(".ts") && !name.includes(".spec."))
-      .map((name) => `${syncModuleDirectory}/${name}`),
-  ];
+      .map((name) => `${directory}/${name}`);
+  });
   const codes = new Set<string>();
   for (const file of files) {
     const source = readFileSync(file, "utf8");
