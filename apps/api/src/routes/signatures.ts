@@ -1,11 +1,11 @@
 import { Hono } from "hono";
-import { db } from "@calibra-facil/db";
 import {
   memberVisualSignature,
   member,
   organization,
 } from "@calibra-facil/db/schema";
 import { eq, and } from "drizzle-orm";
+import { orgDb } from "../lib/org-db";
 import {
   withLabPermission,
   type AuthVariables,
@@ -137,7 +137,7 @@ export const signaturesRouter = new Hono<{
         }
 
         // Generate R2 key (readable org-slug prefix; media bucket)
-        const [orgRow] = await db
+        const [orgRow] = await orgDb(memberData.organizationId)
           .select({ slug: organization.slug })
           .from(organization)
           .where(eq(organization.id, memberData.organizationId))
@@ -157,47 +157,50 @@ export const signaturesRouter = new Hono<{
           file.type,
         );
 
-        // Upsert database record
-        const existingSignature = await db
-          .select()
-          .from(memberVisualSignature)
-          .where(
-            and(
-              eq(memberVisualSignature.memberId, memberData.id),
-              eq(
-                memberVisualSignature.organizationId,
-                memberData.organizationId,
+        // Upsert database record (read + write in one organization-bound
+        // transaction)
+        await orgDb(memberData.organizationId).transaction(async (o) => {
+          const existingSignature = await o
+            .select()
+            .from(memberVisualSignature)
+            .where(
+              and(
+                eq(memberVisualSignature.memberId, memberData.id),
+                eq(
+                  memberVisualSignature.organizationId,
+                  memberData.organizationId,
+                ),
               ),
-            ),
-          )
-          .limit(1);
+            )
+            .limit(1);
 
-        const existing = existingSignature[0];
-        if (existing) {
-          // Update existing
-          await db
-            .update(memberVisualSignature)
-            .set({
+          const existing = existingSignature[0];
+          if (existing) {
+            // Update existing
+            await o
+              .update(memberVisualSignature)
+              .set({
+                r2Key,
+                contentType: file.type,
+                width: dimensions.width,
+                height: dimensions.height,
+                fileSize: file.size,
+                updatedAt: new Date(),
+              })
+              .where(eq(memberVisualSignature.id, existing.id));
+          } else {
+            // Insert new
+            await o.insert(memberVisualSignature).values({
+              memberId: memberData.id,
+              organizationId: memberData.organizationId,
               r2Key,
               contentType: file.type,
               width: dimensions.width,
               height: dimensions.height,
               fileSize: file.size,
-              updatedAt: new Date(),
-            })
-            .where(eq(memberVisualSignature.id, existing.id));
-        } else {
-          // Insert new
-          await db.insert(memberVisualSignature).values({
-            memberId: memberData.id,
-            organizationId: memberData.organizationId,
-            r2Key,
-            contentType: file.type,
-            width: dimensions.width,
-            height: dimensions.height,
-            fileSize: file.size,
-          });
-        }
+            });
+          }
+        });
 
         return c.json({
           message: "Assinatura enviada com sucesso",
@@ -221,19 +224,22 @@ export const signaturesRouter = new Hono<{
       const env = c.env;
 
       try {
-        const [signature] = await db
-          .select()
-          .from(memberVisualSignature)
-          .where(
-            and(
-              eq(memberVisualSignature.memberId, memberData.id),
-              eq(
-                memberVisualSignature.organizationId,
-                memberData.organizationId,
-              ),
-            ),
-          )
-          .limit(1);
+        const [signature] = await orgDb(memberData.organizationId).transaction(
+          (o) =>
+            o
+              .select()
+              .from(memberVisualSignature)
+              .where(
+                and(
+                  eq(memberVisualSignature.memberId, memberData.id),
+                  eq(
+                    memberVisualSignature.organizationId,
+                    memberData.organizationId,
+                  ),
+                ),
+              )
+              .limit(1),
+        );
 
         if (!signature) {
           return c.json({ hasSignature: false });
@@ -278,19 +284,22 @@ export const signaturesRouter = new Hono<{
       const env = c.env;
 
       try {
-        const [signature] = await db
-          .select()
-          .from(memberVisualSignature)
-          .where(
-            and(
-              eq(memberVisualSignature.memberId, memberData.id),
-              eq(
-                memberVisualSignature.organizationId,
-                memberData.organizationId,
-              ),
-            ),
-          )
-          .limit(1);
+        const [signature] = await orgDb(memberData.organizationId).transaction(
+          (o) =>
+            o
+              .select()
+              .from(memberVisualSignature)
+              .where(
+                and(
+                  eq(memberVisualSignature.memberId, memberData.id),
+                  eq(
+                    memberVisualSignature.organizationId,
+                    memberData.organizationId,
+                  ),
+                ),
+              )
+              .limit(1),
+        );
 
         if (!signature) {
           return c.json({ error: "Nenhuma assinatura encontrada" }, 404);
@@ -307,9 +316,11 @@ export const signaturesRouter = new Hono<{
         await deleteFromR2(r2Client, bucketName, signature.r2Key);
 
         // Delete from database
-        await db
-          .delete(memberVisualSignature)
-          .where(eq(memberVisualSignature.id, signature.id));
+        await orgDb(memberData.organizationId).transaction((o) =>
+          o
+            .delete(memberVisualSignature)
+            .where(eq(memberVisualSignature.id, signature.id)),
+        );
 
         return c.json({ message: "Assinatura removida com sucesso" });
       } catch (error) {
@@ -333,34 +344,43 @@ export const signaturesRouter = new Hono<{
 
       try {
         // Verify the requested member belongs to the same organization
-        const [targetMember] = await db
-          .select()
-          .from(member)
-          .where(
-            and(
-              eq(member.id, memberId),
-              eq(member.organizationId, memberData.organizationId),
-            ),
-          )
-          .limit(1);
+        const found = await orgDb(memberData.organizationId).transaction(
+          async (o) => {
+            const [targetMember] = await o
+              .select()
+              .from(member)
+              .where(
+                and(
+                  eq(member.id, memberId),
+                  eq(member.organizationId, memberData.organizationId),
+                ),
+              )
+              .limit(1);
 
-        if (!targetMember) {
+            if (!targetMember) return null;
+
+            const [row] = await o
+              .select()
+              .from(memberVisualSignature)
+              .where(
+                and(
+                  eq(memberVisualSignature.memberId, memberId),
+                  eq(
+                    memberVisualSignature.organizationId,
+                    memberData.organizationId,
+                  ),
+                ),
+              )
+              .limit(1);
+            return { signature: row };
+          },
+        );
+
+        if (!found) {
           return c.json({ error: "Membro não encontrado" }, 404);
         }
 
-        const [signature] = await db
-          .select()
-          .from(memberVisualSignature)
-          .where(
-            and(
-              eq(memberVisualSignature.memberId, memberId),
-              eq(
-                memberVisualSignature.organizationId,
-                memberData.organizationId,
-              ),
-            ),
-          )
-          .limit(1);
+        const { signature } = found;
 
         if (!signature) {
           return c.json({ hasSignature: false });

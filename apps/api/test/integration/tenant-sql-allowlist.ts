@@ -121,6 +121,14 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "public-token",
+    file: "apps/api/src/lib/oot-acknowledgement.ts",
+    tables: ["oot_notification", "non_conformance"],
+    kinds: ["select"],
+    reason:
+      "Public out-of-tolerance acknowledgement link (routes/oot-ack.ts, on the system path): looked up by the unguessable ack_token from the e-mailed link, which names the laboratory; the stamp that follows runs in orgDb(laboratory).transaction. Exposes only that notification's NC number and laboratory name.",
+  },
+  {
+    category: "public-token",
     file: "apps/api/src/routes/invitations.ts",
     tables: ["invitation"],
     kinds: ["select"],

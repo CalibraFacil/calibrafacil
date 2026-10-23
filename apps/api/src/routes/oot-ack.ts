@@ -1,12 +1,9 @@
 import { Hono } from "hono";
-import { db } from "@calibra-facil/db";
-import {
-  nonConformance,
-  ootNotification,
-  organization,
-} from "@calibra-facil/db/schema";
 import { notifyOotAcknowledged } from "@calibra-facil/notifications";
-import { and, eq } from "drizzle-orm";
+import {
+  findOotNotificationByAckToken,
+  stampOotAcknowledgementByLink,
+} from "../lib/oot-acknowledgement";
 
 /**
  * Public §7.10 acknowledgement router - NO AUTH REQUIRED (#426 Phase 0).
@@ -51,28 +48,6 @@ function page(title: string, body: string): string {
 </html>`;
 }
 
-async function loadNotificationByToken(token: string) {
-  const [row] = await db
-    .select({
-      id: ootNotification.id,
-      ncId: ootNotification.ncId,
-      organizationId: ootNotification.organizationId,
-      certificateNumber: ootNotification.certificateNumber,
-      acknowledgedAt: ootNotification.acknowledgedAt,
-      ncNumber: nonConformance.ncNumber,
-      labName: organization.name,
-    })
-    .from(ootNotification)
-    .innerJoin(nonConformance, eq(ootNotification.ncId, nonConformance.id))
-    .innerJoin(
-      organization,
-      eq(ootNotification.organizationId, organization.id),
-    )
-    .where(eq(ootNotification.ackToken, token))
-    .limit(1);
-  return row ?? null;
-}
-
 export const ootAckRouter = new Hono()
   // =========================================================================
   // GET /:token - Confirmation page (no state change)
@@ -89,7 +64,7 @@ export const ootAckRouter = new Hono()
       );
     }
 
-    const notification = await loadNotificationByToken(token);
+    const notification = await findOotNotificationByAckToken(token);
     if (!notification) {
       return c.html(
         page(
@@ -143,7 +118,7 @@ export const ootAckRouter = new Hono()
       );
     }
 
-    const notification = await loadNotificationByToken(token);
+    const notification = await findOotNotificationByAckToken(token);
     if (!notification) {
       return c.html(
         page(
@@ -155,23 +130,13 @@ export const ootAckRouter = new Hono()
     }
 
     if (!notification.acknowledgedAt) {
-      // Guard on acknowledgedAt in the WHERE so concurrent clicks stamp once.
-      const [updated] = await db
-        .update(ootNotification)
-        .set({
-          status: "ACKNOWLEDGED",
-          acknowledgedAt: new Date(),
-          acknowledgedVia: "email_link",
-        })
-        .where(
-          and(
-            eq(ootNotification.ackToken, token),
-            eq(ootNotification.id, notification.id),
-          ),
-        )
-        .returning();
+      const stamped = await stampOotAcknowledgementByLink({
+        id: notification.id,
+        organizationId: notification.organizationId,
+        token,
+      });
 
-      if (updated) {
+      if (stamped) {
         notifyOotAcknowledged(
           notification.id,
           notification.ncId,
