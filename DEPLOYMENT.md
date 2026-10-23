@@ -600,6 +600,108 @@ connection default. When the state machine itself changes, regenerate the functi
 `pnpm --filter @calibra-facil/db gen:job-transitions-sql` and ship it in a new migration; a unit test fails
 while the migration and `sql/schema-extras.sql` differ from the table.
 
+#### Row-level security (migration 0123, shadow mode) and the role split
+
+Migration `0123_rls_shadow_mode` prepares Postgres to enforce tenant isolation itself, as a second wall
+behind the `organization_id` predicate the application writes (decision Q15). **Applying it changes
+nothing in production.** It:
+
+- creates the role `calibra_app` (`NOLOGIN`: nothing can connect as it) with `CONNECT` on the database,
+  `USAGE` on schema `public`, `SELECT/INSERT/UPDATE/DELETE` on every table and `USAGE` on every sequence,
+  and the same default privileges for tables the migration owner creates later. `CREATE ROLE` needs the
+  `CREATEROLE` attribute, which the owner of a self-hosted Postgres, Neon, RDS and Supabase has; where it is
+  missing the migration stops with the fix and never skips the role (see "Before you apply it");
+- runs `ENABLE ROW LEVEL SECURITY` (not `FORCE`) on every tenant table (each table of
+  `packages/db/src/tenancy.ts` that carries `organization_id` / `lab_organization_id`) and adds the policy
+  `tenant_isolation FOR ALL TO calibra_app` with `USING` and `WITH CHECK`
+  `<org column> = NULLIF(current_setting('calibra.organization_id', true), '')::text`. Global tables
+  (identity, queues, global catalogs) get no RLS.
+
+**Before you apply it (pre-check, 1 minute).** The role the API connects as must be the owner of the tables
+(or a superuser / `BYPASSRLS` role), because only then does RLS not bind it. In the usual deployment one
+`DATABASE_URL` serves the migrations and the API, so check it once, through the API's URL:
+
+```sql
+select current_user, r.rolsuper, r.rolbypassrls from pg_roles r where r.rolname = current_user;
+select tableowner from pg_tables where schemaname = 'public' and tablename = 'calibration_job';
+```
+
+`current_user` must equal `tableowner` (or `rolsuper` / `rolbypassrls` is `true`). Three things enforce this,
+so a misconfiguration cannot silently turn the policies on:
+
+- the migration itself stops (`calibra: migration 0123 is run as <role>, which is neither the owner ...`)
+  before changing anything when run by a role RLS would bind;
+- `DATABASE_RLS_MODE=shadow` (the default, `packages/config`): the API and the worker run one catalog query at
+  start-up and **refuse to start** as a role RLS binds (the message begins `connected as "<role>", which is subject to row-level security`). Before migration 0123, when no table has RLS enabled yet, the check passes;
+- `DATABASE_RLS_MODE=enforced` is the post-role-split mode: start-up then accepts a role RLS binds (a member of
+  `calibra_app`). Set it on the API together with the new `DATABASE_URL` in the role split below, and only then.
+
+**Hosts without `CREATEROLE`.** If the migration owner cannot create roles, the migration stops with
+`the role calibra_app does not exist and <role> may not create it`. An administrator (a role with
+`CREATEROLE`, or a superuser) runs this once, and the migration is run again; it skips creation when the role
+exists:
+
+```sql
+CREATE ROLE calibra_app NOLOGIN;
+```
+
+**Locks and retry.** The migration starts with `SET LOCAL lock_timeout = '5s'` and `ALTER TABLE ... ENABLE ROW
+LEVEL SECURITY` takes a short exclusive lock on each tenant table. If a long query holds one, the migration
+fails fast with `canceling statement due to lock timeout` (SQLSTATE `55P03`) instead of queueing every request
+behind it. It runs in one transaction and is idempotent, so a failed attempt changes nothing: wait for the
+query to finish, or pick a quiet moment, and run `db:migrate` again.
+
+A table owner is exempt from RLS unless the table is `FORCE`d, and the API, the worker and the migrations all
+connect as the owner today, so **no statement behaves differently until you do the role split below.** The
+policies are addressed to `calibra_app` only. The application already names the laboratory of each
+org-bound transaction (`select set_config('calibra.organization_id', <org>, true)` at its start,
+`packages/db/src/for-org.ts`), which is a no-op for the owner.
+
+**Do not do the role split yet.** Many statements still run on the plain `db` or outside a transaction, so
+no organization is set and, as `calibra_app`, they would match no row (fail closed) or be refused. Run
+`pnpm --filter @calibra-facil/api rls:shadow-report` (it needs Docker, like the integration tier): it replays
+the portal and jobs integration specs with the requests' database access as `calibra_app` and lists, by
+spec file, what breaks and every statement that reached a tenant table with no organization set. The split
+is for when that list is empty (or each entry is a deliberate cross-laboratory statement that has its own
+privileged connection).
+
+**The role split (when the owner decides).** All as the owner / an admin role, once:
+
+```sql
+-- the application's login: a member of calibra_app, nothing more
+CREATE ROLE calibra_api LOGIN PASSWORD '<strong password>' IN ROLE calibra_app;
+ALTER ROLE calibra_api NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;   -- keep INHERIT (the default)
+
+-- a separate login for migrations and the worker's cross-laboratory work stays the existing owner
+-- (or create calibra_admin as the owner of the tables); it keeps bypassing RLS because it owns the tables
+```
+
+Then change the API's connection string and set its mode (`DATABASE_RLS_MODE=enforced` tells start-up that a role RLS binds is intended; without it the API refuses to start as `calibra_api`):
+
+| Component                                     | `DATABASE_URL` becomes                                                             |
+| --------------------------------------------- | ---------------------------------------------------------------------------------- |
+| API (`apps/api`)                              | `postgres://calibra_api:<password>@<host>/<db>`, plus `DATABASE_RLS_MODE=enforced` |
+| Migrations (`db:migrate`, `db:bootstrap`)     | unchanged: the owner                                                               |
+| Worker (`apps/worker`), cron and queue sweeps | unchanged: the owner, until their statements are org-bound                         |
+
+- **Pooler mode.** Transaction pooling (PgBouncer `pool_mode = transaction`, Neon's pooled endpoint,
+  Supavisor) is fine: `set_config(..., true)` is transaction-local, so the organization lives and dies with
+  the transaction and never reaches the next client on the same server connection. A statement outside
+  a transaction sets nothing and sees nothing as `calibra_app`; that is deliberate (fail closed).
+  Session pooling is fine too. Do not set `calibra.organization_id` with a plain `SET` or in a role or
+  connection default.
+- **Verify** as `calibra_api`: `select count(*) from calibration_job;` returns `0`; inside
+  `begin; select set_config('calibra.organization_id', '<org id>', true); select count(*) from calibration_job; commit;`
+  it returns that laboratory's jobs only.
+- **Rollback.** Point the API's `DATABASE_URL` back at the owner, remove `DATABASE_RLS_MODE=enforced` (or set it to `shadow`), and restart. Nothing else changes: the
+  policies stay in place and the owner bypasses them. To remove the role for good:
+  `REVOKE ALL ON ALL TABLES IN SCHEMA public FROM calibra_app; DROP OWNED BY calibra_api; DROP ROLE calibra_api;`
+  (the policies and `calibra_app` can stay).
+- **New tenant tables.** A migration that adds a table with an organization column must also carry the
+  regenerated block (`pnpm --filter @calibra-facil/db gen:rls-sql`) in a new migration and in
+  `sql/schema-extras.sql`; `packages/db/src/rls-sql.test.ts` fails until it does, so a table never reaches
+  `calibra_app` without its policy.
+
 #### Queue idempotency and lease fencing
 
 Queue delivery is at-least-once: Vercel Queue redelivers a message until it is acknowledged, and a

@@ -557,6 +557,39 @@ async function advisoryXactLock(
   await executor.execute(sql`select pg_advisory_xact_lock(${key1}, ${key2})`);
 }
 
+/**
+ * Names the organization of the running transaction for row-level security
+ * (migration 0123): `set_config('calibra.organization_id', $org, true)`. The
+ * third argument is `is_local`, so the value ends with the transaction (commit
+ * or rollback) and never reaches the next one on the same pooled connection, which
+ * also makes it safe behind a pooler in transaction mode. One round trip: it
+ * returns the value it replaced (a `MATERIALIZED` CTE reads it before the
+ * `set_config` of the outer select runs), '' when there was none.
+ *
+ * Only a transaction sets it. A statement on the handle outside one carries no
+ * setting, so under `calibra_app` it matches nothing (fail closed); under the
+ * owner, which RLS does not bind, it behaves as before.
+ */
+export async function setTransactionOrganization(
+  executor: Pick<OrgExecutor, "execute">,
+  organizationId: string,
+): Promise<string> {
+  const result: unknown = await executor.execute(
+    sql`with prior as materialized (select current_setting('calibra.organization_id', true) as previous) select prior.previous, set_config('calibra.organization_id', ${organizationId}, true) as applied from prior`,
+  );
+  const rows: unknown = Array.isArray(result)
+    ? result
+    : typeof result === "object" && result !== null
+      ? Reflect.get(result, "rows")
+      : undefined;
+  const first: unknown = Array.isArray(rows) ? rows[0] : undefined;
+  const previous: unknown =
+    typeof first === "object" && first !== null
+      ? Reflect.get(first, "previous")
+      : undefined;
+  return typeof previous === "string" ? previous : "";
+}
+
 function bindOne(executor: OrgExecutor, organizationId: string): OrgDb {
   const scope: Scope = { ids: [organizationId] };
   return {
@@ -581,7 +614,18 @@ function bindOne(executor: OrgExecutor, organizationId: string): OrgDb {
     },
     advisoryXactLock: (key1, key2) => advisoryXactLock(executor, key1, key2),
     transaction: (run, config) =>
-      executor.transaction((tx) => run(bindOne(tx, organizationId)), config),
+      executor.transaction(async (tx) => {
+        const previous = await setTransactionOrganization(tx, organizationId);
+        const result = await run(bindOne(tx, organizationId));
+        // A savepoint inside a bigger transaction (a transaction scope, or a
+        // caller's own `db.transaction`): the setting outlives the savepoint
+        // when it is released, so put the outer organization back. A rollback
+        // of the savepoint restores it by itself.
+        if (previous !== "" && previous !== organizationId) {
+          await setTransactionOrganization(tx, previous);
+        }
+        return result;
+      }, config),
   };
 }
 

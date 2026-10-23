@@ -74,5 +74,5 @@ export {
   readStorageConfig,
 } from "./runtimes";
 export { rawEnv, setProcessEnv, setProcessEnvDefault } from "./process-env";
-export { failFast } from "./startup";
+export { failFast, failFastAsync } from "./startup";
 export { workerSigningEnv, type WorkerSigningEnv } from "./worker-env";

@@ -162,7 +162,13 @@ export async function setup({ provide }: GlobalSetupContext) {
   // one-default-per-organization partial unique indexes (migrations 0029/0031)
   // included. Tests that assume those constraints are absent are bugs to fix.
   execSync(`psql -v ON_ERROR_STOP=1 -d ${TEMPLATE_DB}`, {
-    env: { ...pgEnv, PGDATABASE: TEMPLATE_DB },
+    // client_min_messages: the RLS block's DROP POLICY IF EXISTS prints one
+    // NOTICE per tenant table on a fresh template; keep real warnings only.
+    env: {
+      ...pgEnv,
+      PGDATABASE: TEMPLATE_DB,
+      PGOPTIONS: "-c client_min_messages=warning",
+    },
     input: schemaExtrasSql(),
     stdio: ["pipe", "ignore", "inherit"],
   });

@@ -21,6 +21,7 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "rls:shadow-report": "node scripts/rls-shadow-report.mjs",
     "lint": "oxlint",
     "check-types": "node ../../scripts/typecheck.mjs --project tsconfig.build.json --noEmit"
   },

@@ -2,6 +2,7 @@ import { execSync } from "node:child_process";
 import { beforeEach, inject, vi } from "vitest";
 import { assertEphemeralTestDb } from "./guard";
 import { installTenantSqlGuard } from "./tenant-sql-guard";
+import { installRlsShadowMode } from "./rls-shadow-mode";
 
 // Per-worker setup for the integration tier. Runs before any test file in this
 // worker process. Each worker gets its OWN copy of the schema (calibra_w<id>)
@@ -64,9 +65,27 @@ execSync(
 // Point the real db Proxy at this worker's database.
 process.env.DATABASE_URL = workerUrl;
 
+// RLS violation-report mode (CALIBRA_RLS_SHADOW=1, apps/api/scripts/rls-shadow-report.mjs):
+// a no-op in every normal run. See rls-shadow-mode.ts.
+await installRlsShadowMode();
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Step 5: mock better-auth sessions
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Shadow mode only: requests reach the database as calibra_app. Otherwise the
+// real module, untouched.
+vi.mock("@calibra-facil/db", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@calibra-facil/db")>();
+  const { shadowDatabase } = await import("./rls-shadow-mode");
+  return shadowDatabase(actual);
+});
+
+vi.mock("hono", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("hono")>();
+  const { shadowHono } = await import("./rls-shadow-mode");
+  return shadowHono(actual);
+});
 
 const { getSessionMock, portalGetSessionMock } = vi.hoisted(() => ({
   getSessionMock: vi.fn(),

@@ -855,6 +855,13 @@
       "when": 1792400000000,
       "tag": "0122_sync_change_log",
       "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1792500000000,
+      "tag": "0123_rls_shadow_mode",
+      "breakpoints": true
     }
   ]
 }

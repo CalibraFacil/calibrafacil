@@ -70,3 +70,37 @@ exact per-file counts in `packages/oxlint-plugin-calibra/src/lib/raw-db-baseline
 not go up, and a count above the file's real number of uses fails too, so the allowance shrinks in
 the same change that migrates a handler (delete the entry at zero). The portal routes
 (`portal*.ts`) have no entry.
+
+## Row-level security (shadow mode, P2-3)
+
+Migration 0123 enables RLS (not forced) on every tenant table with the policy `tenant_isolation` for the
+role `calibra_app`: `USING` / `WITH CHECK` `<org column> = NULLIF(current_setting('calibra.organization_id', true), '')::<type>`.
+The table owner is exempt, so nothing changes for the owner connection production uses today; see
+[DEPLOYMENT.md](../../DEPLOYMENT.md) for the role split the owner runs later. The SQL is generated from
+`tenancy.ts` (`pnpm --filter @calibra-facil/db gen:rls-sql`) and `rls-sql.test.ts` fails when a tenant table is
+added or removed without a migration.
+
+- **The handle names the organization.** `orgDb(id).transaction(...)` runs
+  `select set_config('calibra.organization_id', $org, true)` first (transaction-local: it ends with the
+  transaction, so it never leaks to the next one on a pooled connection). Inside a bigger transaction (a
+  transaction scope, a caller's `db.transaction`) the handle's transaction is a savepoint: it sets its own
+  organization and, when the outer transaction had named one, puts it back when it succeeds (an outer
+  transaction that named none keeps the savepoint's organization until it ends).
+- **Statements outside a transaction set nothing: fail closed.** `o.select(...)` straight on the handle
+  carries the organization predicate but no setting, so as `calibra_app` it matches no row; as the owner it
+  is unchanged. Wrapping every read in a short transaction was rejected for this step: it would add `BEGIN`,
+  `set_config` and `COMMIT` round trips to every request in production for a role nobody connects as yet,
+  and the shape the cutover wants is one transaction (and one `set_config`) per request, which is the
+  transaction scope (P2-4a), not a wrapper per read. The shadow report lists which reads need it.
+- **A set of laboratories sets nothing.** `orgSetDb(ids)` (portal customer users that belong to several
+  laboratories) is read-only and its `transaction()` does not set an organization: a single setting cannot
+  name a set. Under `calibra_app` those reads match nothing until they run per organization or a set-aware
+  policy is designed (open point of the cutover).
+- **Tests.** `apps/api/src/lib/rls-shadow.int.spec.ts` runs against a pool whose sessions are `calibra_app`
+  (`test/integration/rls.ts`). `pnpm --filter @calibra-facil/api rls:shadow-report` replays the portal and
+  jobs specs with each request's database access as `calibra_app` (strict, then audit) and prints what
+  breaks, by file, and every statement that reached a tenant table without an organization.
+- **Start-up check.** `DATABASE_RLS_MODE` (`shadow` by default) makes the API and the worker run one catalog
+  query at start-up (`packages/db/src/rls-startup.ts`) and refuse to start as a role the policies bind (not the
+  table owner, superuser or BYPASSRLS). The role split sets `enforced` for the API. Migration 0123 applies
+  the same test to the role that runs it.

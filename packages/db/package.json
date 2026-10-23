@@ -8,6 +8,9 @@
     "./certificate-input": "./src/certificate-input.ts",
     "./job-events": "./src/job-events.ts",
     "./queue": "./src/queue.ts",
+    "./role-connection": "./src/role-connection.ts",
+    "./rls-sql": "./src/rls-sql.ts",
+    "./rls-startup": "./src/rls-startup.ts",
     "./queue-receipts": "./src/queue-receipts.ts",
     "./queue-render-recovery": "./src/queue-render-recovery.ts",
     "./records-retention": "./src/records-retention.ts",
@@ -34,7 +37,8 @@
     "check-types": "node ../../scripts/typecheck.mjs --noEmit",
     "retention:inventory": "tsx ./scripts/records-retention-inventory.ts",
     "tenancy:doc": "tsx ./scripts/tenancy-doc.ts",
-    "gen:job-transitions-sql": "tsx ./scripts/gen-job-transitions-sql.ts"
+    "gen:job-transitions-sql": "tsx ./scripts/gen-job-transitions-sql.ts",
+    "gen:rls-sql": "tsx ./scripts/gen-rls-sql.ts"
   },
   "keywords": [],
   "author": "",

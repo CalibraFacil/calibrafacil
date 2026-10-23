@@ -1,9 +1,11 @@
 import {
   failFast,
+  failFastAsync,
   loadWorkerConfig,
   rawEnv,
   setProcessEnvDefault,
 } from "@calibra-facil/config";
+import { assertRlsStartup } from "@calibra-facil/db/rls-startup";
 import { processScheduledNotifications } from "@calibra-facil/jobs-core/scheduled";
 import { processScheduledIntegrationSyncs } from "@calibra-facil/jobs-core/integrations";
 import {
@@ -100,6 +102,9 @@ await loadLocalEnv();
 // Validate the configuration before doing anything else: a bad deploy exits
 // here with one message that lists every problem.
 failFast(() => loadWorkerConfig());
+// One query: a role that row-level security binds is refused in shadow mode
+// (migration 0123; DEPLOYMENT.md, "Row-level security").
+await failFastAsync(() => assertRlsStartup());
 
 const config = readQueueConfig();
 const env = createWorkerEnv();
