@@ -4,7 +4,7 @@ import {
   ootNotification,
   organization,
 } from "@calibra-facil/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { orgDb } from "./org-db";
 
 /**
@@ -42,8 +42,10 @@ export async function findOotNotificationByAckToken(token: string) {
 
 /**
  * Stamps the acknowledgement of the notification the token resolved to, in the
- * laboratory that sent it (the caller has checked it was not acknowledged yet).
- * Returns whether a row was stamped, so the caller notifies only then.
+ * laboratory that sent it. First click wins (decision Q34): the update is
+ * conditional on `acknowledged_at IS NULL`, so the first acknowledgement is never
+ * overwritten and, of two concurrent clicks, exactly one gets a row back. Returns
+ * whether THIS call stamped it; the caller notifies only then.
  */
 export async function stampOotAcknowledgementByLink(notification: {
   id: number;
@@ -62,6 +64,7 @@ export async function stampOotAcknowledgementByLink(notification: {
         and(
           eq(ootNotification.ackToken, notification.token),
           eq(ootNotification.id, notification.id),
+          isNull(ootNotification.acknowledgedAt),
         ),
       )
       .returning({ id: ootNotification.id });

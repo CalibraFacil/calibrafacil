@@ -758,11 +758,12 @@ describe("public out-of-tolerance acknowledgement link (P2-18e)", () => {
       "org-a",
     ]);
 
-    // A second click only renders the confirmation: nothing is stamped or sent again.
+    // A second click only renders the "already confirmed" page: nothing is stamped or sent again.
     const again = await ootAckRouter.request(`/${a.notification.ackToken}`, {
       method: "POST",
     });
     expect(again.status).toBe(200);
+    expect(await again.text()).toContain("Recebimento já confirmado");
     expect(notifications.notifyOotAcknowledged).toHaveBeenCalledTimes(1);
 
     const unknown = await ootAckRouter.request(
@@ -770,5 +771,40 @@ describe("public out-of-tolerance acknowledgement link (P2-18e)", () => {
       { method: "POST" },
     );
     expect(unknown.status).toBe(404);
+  });
+
+  it("REQ-18E-ACK-2 (Q34): two concurrent acknowledgements stamp once, notify once and keep the first timestamp", async () => {
+    const a = await seedLab("org-a");
+    const click = () =>
+      ootAckRouter.request(`/${a.notification.ackToken}`, { method: "POST" });
+
+    const responses = await Promise.all([click(), click(), click()]);
+    expect(responses.map((res) => res.status)).toEqual([200, 200, 200]);
+    const pages = await Promise.all(responses.map((res) => res.text()));
+    expect(
+      pages.filter((html) => html.includes("Recebimento confirmado")),
+    ).toHaveLength(1);
+    expect(
+      pages.filter((html) => html.includes("Recebimento já confirmado")),
+    ).toHaveLength(2);
+    expect(notifications.notifyOotAcknowledged).toHaveBeenCalledTimes(1);
+
+    const [stamped] = await db
+      .select()
+      .from(ootNotification)
+      .where(eq(ootNotification.id, a.notification.id));
+    expect(stamped?.status).toBe("ACKNOWLEDGED");
+    const firstStamp = stamped?.acknowledgedAt;
+    expect(firstStamp).toBeInstanceOf(Date);
+
+    // A later click leaves the first timestamp (and the notification count) alone.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect((await click()).status).toBe(200);
+    const [after] = await db
+      .select()
+      .from(ootNotification)
+      .where(eq(ootNotification.id, a.notification.id));
+    expect(after?.acknowledgedAt?.getTime()).toBe(firstStamp?.getTime());
+    expect(notifications.notifyOotAcknowledged).toHaveBeenCalledTimes(1);
   });
 });
