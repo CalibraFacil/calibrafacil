@@ -9,25 +9,24 @@
  * sweep can never disagree with the interactive one.
  */
 
-import { Client } from "pg";
+import { db, systemDb } from "@calibra-facil/db";
+import { forOrg, type OrgExecutor } from "@calibra-facil/db/for-org";
+import {
+  checkStandardReading,
+  controlChart,
+  type SpcEvaluation,
+} from "@calibra-facil/db/schema";
 import {
   evaluateChart,
   type SpcChartParams,
   type SpcChartType,
 } from "@calibra-facil/interval-analysis";
+import { and, asc, eq } from "drizzle-orm";
 
-interface SpcRecomputeEnv {
-  DATABASE_URL: string;
-}
-
-interface ControlChartRow {
-  id: number;
-  organization_id: string;
-  standard_id: number;
-  parameter: string;
-  chart_type: string;
-  params: unknown;
-}
+type ChartRow = Pick<
+  typeof controlChart.$inferSelect,
+  "id" | "updatedAt" | "standardId" | "parameter" | "chartType" | "params"
+>;
 
 const CHART_TYPES: readonly SpcChartType[] = [
   "i_mr",
@@ -71,64 +70,100 @@ function toChartParams(value: unknown): SpcChartParams {
 
 const BATCH_SIZE = 100;
 
-export async function processSpcRecompute(env: SpcRecomputeEnv): Promise<{
+/**
+ * The two connections the sweep uses. The defaults are the real ones; a test
+ * passes a `calibra_app` session as `application` to prove the sweep names the
+ * laboratory on every statement it runs there.
+ */
+export type SpcRecomputeConnections = {
+  /** Per-laboratory work: runs under `calibra.organization_id` (row-level security). */
+  application: OrgExecutor;
+  /** Only the lookup of which laboratories own a chart (cross-laboratory by design). */
+  system: Pick<OrgExecutor, "selectDistinct">;
+};
+
+export async function processSpcRecompute(
+  connections: SpcRecomputeConnections = { application: db, system: systemDb },
+): Promise<{
   chartsEvaluated: number;
   outOfControl: number;
   trending: number;
 }> {
-  const client = new Client({ connectionString: env.DATABASE_URL });
-  await client.connect();
-
   let chartsEvaluated = 0;
   let outOfControl = 0;
   let trending = 0;
 
-  try {
+  // The sweep is a cron job: no request names a laboratory. The laboratories
+  // that own a control chart are learnt here, on the system path (the owner
+  // connection), because row-level security names one laboratory per
+  // transaction and this is the one statement that has to look across all of
+  // them. Everything after it runs per laboratory in `forOrg(db, lab)`
+  // transactions, so each statement carries `calibra.organization_id`.
+  const labs = await connections.system
+    .selectDistinct({ organizationId: controlChart.organizationId })
+    .from(controlChart)
+    .orderBy(controlChart.organizationId);
+
+  for (const { organizationId } of labs) {
+    const lab = forOrg(connections.application, organizationId);
     let offset = 0;
-    let batch: ControlChartRow[];
+    let batch: ChartRow[];
     do {
-      const result = await client.query<ControlChartRow>(
-        `
-        SELECT id, organization_id, standard_id, parameter, chart_type, params
-        FROM control_chart
-        ORDER BY id ASC
-        LIMIT $1 OFFSET $2
-        `,
-        [BATCH_SIZE, offset],
+      batch = await lab.transaction((tx) =>
+        tx
+          .select({
+            id: controlChart.id,
+            updatedAt: controlChart.updatedAt,
+            standardId: controlChart.standardId,
+            parameter: controlChart.parameter,
+            chartType: controlChart.chartType,
+            params: controlChart.params,
+          })
+          .from(controlChart)
+          .orderBy(asc(controlChart.id))
+          .limit(BATCH_SIZE)
+          .offset(offset),
       );
-      batch = result.rows;
 
       for (const chart of batch) {
         try {
-          const readings = await client.query<{ value: number }>(
-            `
-            SELECT value
-            FROM check_standard_reading
-            WHERE organization_id = $1
-              AND standard_id = $2
-              AND parameter = $3
-            ORDER BY measured_at ASC, id ASC
-            `,
-            [chart.organization_id, chart.standard_id, chart.parameter],
-          );
+          const evaluation = await lab.transaction(async (tx) => {
+            const readings = await tx
+              .select({ value: checkStandardReading.value })
+              .from(checkStandardReading)
+              .where(
+                and(
+                  eq(checkStandardReading.standardId, chart.standardId),
+                  eq(checkStandardReading.parameter, chart.parameter),
+                ),
+              )
+              .orderBy(
+                asc(checkStandardReading.measuredAt),
+                asc(checkStandardReading.id),
+              );
 
-          const evaluation = {
-            ...evaluateChart(
-              readings.rows.map((r) => r.value),
-              toChartType(chart.chart_type),
-              toChartParams(chart.params),
-            ),
-            evaluatedAt: new Date().toISOString(),
-          };
+            const evaluated: SpcEvaluation = {
+              ...evaluateChart(
+                readings.map((r) => r.value),
+                toChartType(chart.chartType),
+                toChartParams(chart.params),
+              ),
+              evaluatedAt: new Date().toISOString(),
+            };
 
-          await client.query(
-            `
-            UPDATE control_chart
-            SET status = $2, last_evaluation = $3, last_evaluated_at = NOW()
-            WHERE id = $1
-            `,
-            [chart.id, evaluation.status, JSON.stringify(evaluation)],
-          );
+            await tx
+              .update(controlChart)
+              .set({
+                status: evaluated.status,
+                lastEvaluation: evaluated,
+                lastEvaluatedAt: new Date(),
+                // The sweep is not an edit of the chart: keep the list order
+                // the users see (it sorts by the last real change).
+                updatedAt: chart.updatedAt,
+              })
+              .where(eq(controlChart.id, chart.id));
+            return evaluated;
+          });
 
           chartsEvaluated += 1;
           if (evaluation.status === "out_of_control") outOfControl += 1;
@@ -140,8 +175,6 @@ export async function processSpcRecompute(env: SpcRecomputeEnv): Promise<{
 
       offset += batch.length;
     } while (batch.length === BATCH_SIZE);
-  } finally {
-    await client.end();
   }
 
   console.log(

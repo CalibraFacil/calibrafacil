@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { db } from "@calibra-facil/db";
+import { orgDb } from "../lib/org-db";
 import {
   proficiencyTest,
   proficiencyTestAuditLog,
@@ -139,48 +139,50 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
       }
       const whereCondition = and(...conditions);
 
-      const [countResult] = await db
-        .select({ total: count() })
-        .from(proficiencyTest)
-        .where(whereCondition);
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const [countResult] = await tx
+          .select({ total: count() })
+          .from(proficiencyTest)
+          .where(whereCondition);
 
-      const rounds = await db
-        .select({
-          id: proficiencyTest.id,
-          activityType: proficiencyTest.activityType,
-          provider: proficiencyTest.provider,
-          providerAccreditation: proficiencyTest.providerAccreditation,
-          ptRound: proficiencyTest.ptRound,
-          scopePart: proficiencyTest.scopePart,
-          metrologyKind: proficiencyTest.metrologyKind,
-          standardId: proficiencyTest.standardId,
-          standardName: referenceStandard.name,
-          registrationDate: proficiencyTest.registrationDate,
-          participationDate: proficiencyTest.participationDate,
-          resultReportedAt: proficiencyTest.resultReportedAt,
-          overallStatus: proficiencyTest.overallStatus,
-          capaId: proficiencyTest.capaId,
-          createdAt: proficiencyTest.createdAt,
-          updatedAt: proficiencyTest.updatedAt,
-        })
-        .from(proficiencyTest)
-        .leftJoin(
-          referenceStandard,
-          eq(proficiencyTest.standardId, referenceStandard.id),
-        )
-        .where(whereCondition)
-        .orderBy(desc(proficiencyTest.createdAt))
-        .limit(limit)
-        .offset(offset);
+        const rounds = await tx
+          .select({
+            id: proficiencyTest.id,
+            activityType: proficiencyTest.activityType,
+            provider: proficiencyTest.provider,
+            providerAccreditation: proficiencyTest.providerAccreditation,
+            ptRound: proficiencyTest.ptRound,
+            scopePart: proficiencyTest.scopePart,
+            metrologyKind: proficiencyTest.metrologyKind,
+            standardId: proficiencyTest.standardId,
+            standardName: referenceStandard.name,
+            registrationDate: proficiencyTest.registrationDate,
+            participationDate: proficiencyTest.participationDate,
+            resultReportedAt: proficiencyTest.resultReportedAt,
+            overallStatus: proficiencyTest.overallStatus,
+            capaId: proficiencyTest.capaId,
+            createdAt: proficiencyTest.createdAt,
+            updatedAt: proficiencyTest.updatedAt,
+          })
+          .from(proficiencyTest)
+          .leftJoin(
+            referenceStandard,
+            eq(proficiencyTest.standardId, referenceStandard.id),
+          )
+          .where(whereCondition)
+          .orderBy(desc(proficiencyTest.createdAt))
+          .limit(limit)
+          .offset(offset);
 
-      return c.json({
-        data: rounds,
-        pagination: {
-          page,
-          limit,
-          total: countResult?.total ?? 0,
-          totalPages: Math.ceil((countResult?.total ?? 0) / limit),
-        },
+        return c.json({
+          data: rounds,
+          pagination: {
+            page,
+            limit,
+            total: countResult?.total ?? 0,
+            totalPages: Math.ceil((countResult?.total ?? 0) / limit),
+          },
+        });
       });
     },
   )
@@ -198,47 +200,49 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
         member.organizationId,
       );
 
-      const [rows, planItems] = await Promise.all([
-        db
-          .select({
-            overallStatus: proficiencyTest.overallStatus,
-            total: count(),
-          })
-          .from(proficiencyTest)
-          .where(orgScope)
-          .groupBy(proficiencyTest.overallStatus),
-        db
-          .select({
-            id: ptPlanItem.id,
-            nextDueAt: ptPlanItem.nextDueAt,
-          })
-          .from(ptPlanItem)
-          .where(eq(ptPlanItem.organizationId, member.organizationId)),
-      ]);
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const [rows, planItems] = await Promise.all([
+          tx
+            .select({
+              overallStatus: proficiencyTest.overallStatus,
+              total: count(),
+            })
+            .from(proficiencyTest)
+            .where(orgScope)
+            .groupBy(proficiencyTest.overallStatus),
+          tx
+            .select({
+              id: ptPlanItem.id,
+              nextDueAt: ptPlanItem.nextDueAt,
+            })
+            .from(ptPlanItem)
+            .where(eq(ptPlanItem.organizationId, member.organizationId)),
+        ]);
 
-      const byStatus: Record<string, number> = {};
-      for (const row of rows) {
-        byStatus[row.overallStatus] = row.total;
-      }
-      const now = new Date();
-      const soon = addMonths(now, 3);
-      let planOverdue = 0;
-      let planDueSoon = 0;
-      for (const item of planItems) {
-        if (!item.nextDueAt) continue;
-        if (item.nextDueAt < now) planOverdue += 1;
-        else if (item.nextDueAt <= soon) planDueSoon += 1;
-      }
+        const byStatus: Record<string, number> = {};
+        for (const row of rows) {
+          byStatus[row.overallStatus] = row.total;
+        }
+        const now = new Date();
+        const soon = addMonths(now, 3);
+        let planOverdue = 0;
+        let planDueSoon = 0;
+        for (const item of planItems) {
+          if (!item.nextDueAt) continue;
+          if (item.nextDueAt < now) planOverdue += 1;
+          else if (item.nextDueAt <= soon) planDueSoon += 1;
+        }
 
-      return c.json({
-        total: rows.reduce((acc, row) => acc + row.total, 0),
-        pending: byStatus["pending"] ?? 0,
-        satisfactory: byStatus["satisfactory"] ?? 0,
-        questionable: byStatus["questionable"] ?? 0,
-        unsatisfactory: byStatus["unsatisfactory"] ?? 0,
-        planItems: planItems.length,
-        planOverdue,
-        planDueSoon,
+        return c.json({
+          total: rows.reduce((acc, row) => acc + row.total, 0),
+          pending: byStatus["pending"] ?? 0,
+          satisfactory: byStatus["satisfactory"] ?? 0,
+          questionable: byStatus["questionable"] ?? 0,
+          unsatisfactory: byStatus["unsatisfactory"] ?? 0,
+          planItems: planItems.length,
+          planOverdue,
+          planDueSoon,
+        });
       });
     },
   )
@@ -251,21 +255,23 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ proficiency_test: ["read"] }),
     async (c) => {
       const member = c.get("member");
-      const items = await db
-        .select({
-          id: ptPlanItem.id,
-          scopePart: ptPlanItem.scopePart,
-          riskJustification: ptPlanItem.riskJustification,
-          frequencyMonths: ptPlanItem.frequencyMonths,
-          lastSatisfactoryAt: ptPlanItem.lastSatisfactoryAt,
-          nextDueAt: ptPlanItem.nextDueAt,
-          createdAt: ptPlanItem.createdAt,
-          updatedAt: ptPlanItem.updatedAt,
-        })
-        .from(ptPlanItem)
-        .where(eq(ptPlanItem.organizationId, member.organizationId))
-        .orderBy(asc(ptPlanItem.nextDueAt), asc(ptPlanItem.scopePart));
-      return c.json({ data: items });
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const items = await tx
+          .select({
+            id: ptPlanItem.id,
+            scopePart: ptPlanItem.scopePart,
+            riskJustification: ptPlanItem.riskJustification,
+            frequencyMonths: ptPlanItem.frequencyMonths,
+            lastSatisfactoryAt: ptPlanItem.lastSatisfactoryAt,
+            nextDueAt: ptPlanItem.nextDueAt,
+            createdAt: ptPlanItem.createdAt,
+            updatedAt: ptPlanItem.updatedAt,
+          })
+          .from(ptPlanItem)
+          .where(eq(ptPlanItem.organizationId, member.organizationId))
+          .orderBy(asc(ptPlanItem.nextDueAt), asc(ptPlanItem.scopePart));
+        return c.json({ data: items });
+      });
     },
   )
 
@@ -290,23 +296,25 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
       const lastSatisfactoryAt = input.lastSatisfactoryAt
         ? new Date(input.lastSatisfactoryAt)
         : null;
-      const [created] = await db
-        .insert(ptPlanItem)
-        .values({
-          organizationId: member.organizationId,
-          unitId: planUnitId,
-          scopePart: input.scopePart,
-          riskJustification: input.riskJustification ?? null,
-          frequencyMonths: input.frequencyMonths,
-          lastSatisfactoryAt,
-          nextDueAt: lastSatisfactoryAt
-            ? addMonths(lastSatisfactoryAt, input.frequencyMonths)
-            : new Date(),
-          createdBy: session.user.id,
-        })
-        .returning();
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const [created] = await tx
+          .insert(ptPlanItem)
+          .values({
+            organizationId: member.organizationId,
+            unitId: planUnitId,
+            scopePart: input.scopePart,
+            riskJustification: input.riskJustification ?? null,
+            frequencyMonths: input.frequencyMonths,
+            lastSatisfactoryAt,
+            nextDueAt: lastSatisfactoryAt
+              ? addMonths(lastSatisfactoryAt, input.frequencyMonths)
+              : new Date(),
+            createdBy: session.user.id,
+          })
+          .returning();
 
-      return c.json(created, 201);
+        return c.json(created, 201);
+      });
     },
   )
 
@@ -325,51 +333,54 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "ID inválido" }, 400);
       }
 
-      const [existing] = await db
-        .select()
-        .from(ptPlanItem)
-        .where(
-          and(
-            eq(ptPlanItem.id, id),
-            eq(ptPlanItem.organizationId, member.organizationId),
-          ),
-        )
-        .limit(1);
-      if (!existing) {
-        return c.json({ error: "Item do plano não encontrado" }, 404);
-      }
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const [existing] = await tx
+          .select()
+          .from(ptPlanItem)
+          .where(
+            and(
+              eq(ptPlanItem.id, id),
+              eq(ptPlanItem.organizationId, member.organizationId),
+            ),
+          )
+          .limit(1);
+        if (!existing) {
+          return c.json({ error: "Item do plano não encontrado" }, 404);
+        }
 
-      const frequencyMonths = input.frequencyMonths ?? existing.frequencyMonths;
-      const lastSatisfactoryAt =
-        input.lastSatisfactoryAt === undefined
-          ? existing.lastSatisfactoryAt
-          : input.lastSatisfactoryAt === null
-            ? null
-            : new Date(input.lastSatisfactoryAt);
+        const frequencyMonths =
+          input.frequencyMonths ?? existing.frequencyMonths;
+        const lastSatisfactoryAt =
+          input.lastSatisfactoryAt === undefined
+            ? existing.lastSatisfactoryAt
+            : input.lastSatisfactoryAt === null
+              ? null
+              : new Date(input.lastSatisfactoryAt);
 
-      const [updated] = await db
-        .update(ptPlanItem)
-        .set({
-          scopePart: input.scopePart ?? existing.scopePart,
-          riskJustification:
-            input.riskJustification === undefined
-              ? existing.riskJustification
-              : input.riskJustification,
-          frequencyMonths,
-          lastSatisfactoryAt,
-          nextDueAt: lastSatisfactoryAt
-            ? addMonths(lastSatisfactoryAt, frequencyMonths)
-            : existing.nextDueAt,
-        })
-        .where(
-          and(
-            eq(ptPlanItem.id, id),
-            eq(ptPlanItem.organizationId, member.organizationId),
-          ),
-        )
-        .returning();
+        const [updated] = await tx
+          .update(ptPlanItem)
+          .set({
+            scopePart: input.scopePart ?? existing.scopePart,
+            riskJustification:
+              input.riskJustification === undefined
+                ? existing.riskJustification
+                : input.riskJustification,
+            frequencyMonths,
+            lastSatisfactoryAt,
+            nextDueAt: lastSatisfactoryAt
+              ? addMonths(lastSatisfactoryAt, frequencyMonths)
+              : existing.nextDueAt,
+          })
+          .where(
+            and(
+              eq(ptPlanItem.id, id),
+              eq(ptPlanItem.organizationId, member.organizationId),
+            ),
+          )
+          .returning();
 
-      return c.json(updated);
+        return c.json(updated);
+      });
     },
   )
 
@@ -385,19 +396,21 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
       if (isNaN(id)) {
         return c.json({ error: "ID inválido" }, 400);
       }
-      const deleted = await db
-        .delete(ptPlanItem)
-        .where(
-          and(
-            eq(ptPlanItem.id, id),
-            eq(ptPlanItem.organizationId, member.organizationId),
-          ),
-        )
-        .returning();
-      if (deleted.length === 0) {
-        return c.json({ error: "Item do plano não encontrado" }, 404);
-      }
-      return c.json({ message: "Item removido" });
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const deleted = await tx
+          .delete(ptPlanItem)
+          .where(
+            and(
+              eq(ptPlanItem.id, id),
+              eq(ptPlanItem.organizationId, member.organizationId),
+            ),
+          )
+          .returning();
+        if (deleted.length === 0) {
+          return c.json({ error: "Item do plano não encontrado" }, 404);
+        }
+        return c.json({ message: "Item removido" });
+      });
     },
   )
 
@@ -414,47 +427,52 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "ID inválido" }, 400);
       }
 
-      const [round] = await db
-        .select({
-          id: proficiencyTest.id,
-          activityType: proficiencyTest.activityType,
-          provider: proficiencyTest.provider,
-          providerAccreditation: proficiencyTest.providerAccreditation,
-          ptRound: proficiencyTest.ptRound,
-          scopePart: proficiencyTest.scopePart,
-          metrologyKind: proficiencyTest.metrologyKind,
-          standardId: proficiencyTest.standardId,
-          standardName: referenceStandard.name,
-          registrationDate: proficiencyTest.registrationDate,
-          participationDate: proficiencyTest.participationDate,
-          resultReportedAt: proficiencyTest.resultReportedAt,
-          results: proficiencyTest.results,
-          overallStatus: proficiencyTest.overallStatus,
-          capaId: proficiencyTest.capaId,
-          notes: proficiencyTest.notes,
-          createdBy: proficiencyTest.createdBy,
-          createdByName: user.name,
-          createdAt: proficiencyTest.createdAt,
-          updatedAt: proficiencyTest.updatedAt,
-        })
-        .from(proficiencyTest)
-        .leftJoin(
-          referenceStandard,
-          eq(proficiencyTest.standardId, referenceStandard.id),
-        )
-        .leftJoin(user, eq(proficiencyTest.createdBy, user.id))
-        .where(
-          and(
-            eq(proficiencyTest.id, id),
-            eq(proficiencyTest.organizationId, member.organizationId),
-          ),
-        )
-        .limit(1);
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const [round] = await tx
+          .select({
+            id: proficiencyTest.id,
+            activityType: proficiencyTest.activityType,
+            provider: proficiencyTest.provider,
+            providerAccreditation: proficiencyTest.providerAccreditation,
+            ptRound: proficiencyTest.ptRound,
+            scopePart: proficiencyTest.scopePart,
+            metrologyKind: proficiencyTest.metrologyKind,
+            standardId: proficiencyTest.standardId,
+            standardName: referenceStandard.name,
+            registrationDate: proficiencyTest.registrationDate,
+            participationDate: proficiencyTest.participationDate,
+            resultReportedAt: proficiencyTest.resultReportedAt,
+            results: proficiencyTest.results,
+            overallStatus: proficiencyTest.overallStatus,
+            capaId: proficiencyTest.capaId,
+            notes: proficiencyTest.notes,
+            createdBy: proficiencyTest.createdBy,
+            createdByName: user.name,
+            createdAt: proficiencyTest.createdAt,
+            updatedAt: proficiencyTest.updatedAt,
+          })
+          .from(proficiencyTest)
+          .leftJoin(
+            referenceStandard,
+            eq(proficiencyTest.standardId, referenceStandard.id),
+          )
+          .leftJoin(user, eq(proficiencyTest.createdBy, user.id))
+          .where(
+            and(
+              eq(proficiencyTest.id, id),
+              eq(proficiencyTest.organizationId, member.organizationId),
+            ),
+          )
+          .limit(1);
 
-      if (!round) {
-        return c.json({ error: "Ensaio de proficiência não encontrado" }, 404);
-      }
-      return c.json(round);
+        if (!round) {
+          return c.json(
+            { error: "Ensaio de proficiência não encontrado" },
+            404,
+          );
+        }
+        return c.json(round);
+      });
     },
   )
 
@@ -472,36 +490,41 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
       }
 
       // Tenant check before exposing the (FK-less) audit trail
-      const [round] = await db
-        .select({ id: proficiencyTest.id })
-        .from(proficiencyTest)
-        .where(
-          and(
-            eq(proficiencyTest.id, id),
-            eq(proficiencyTest.organizationId, member.organizationId),
-          ),
-        )
-        .limit(1);
-      if (!round) {
-        return c.json({ error: "Ensaio de proficiência não encontrado" }, 404);
-      }
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const [round] = await tx
+          .select({ id: proficiencyTest.id })
+          .from(proficiencyTest)
+          .where(
+            and(
+              eq(proficiencyTest.id, id),
+              eq(proficiencyTest.organizationId, member.organizationId),
+            ),
+          )
+          .limit(1);
+        if (!round) {
+          return c.json(
+            { error: "Ensaio de proficiência não encontrado" },
+            404,
+          );
+        }
 
-      const entries = await db
-        .select({
-          id: proficiencyTestAuditLog.id,
-          action: proficiencyTestAuditLog.action,
-          changes: proficiencyTestAuditLog.changes,
-          performedBy: proficiencyTestAuditLog.performedBy,
-          performedByName: user.name,
-          performedAt: proficiencyTestAuditLog.performedAt,
-          reason: proficiencyTestAuditLog.reason,
-        })
-        .from(proficiencyTestAuditLog)
-        .leftJoin(user, eq(proficiencyTestAuditLog.performedBy, user.id))
-        .where(eq(proficiencyTestAuditLog.proficiencyTestId, id))
-        .orderBy(desc(proficiencyTestAuditLog.performedAt));
+        const entries = await tx
+          .select({
+            id: proficiencyTestAuditLog.id,
+            action: proficiencyTestAuditLog.action,
+            changes: proficiencyTestAuditLog.changes,
+            performedBy: proficiencyTestAuditLog.performedBy,
+            performedByName: user.name,
+            performedAt: proficiencyTestAuditLog.performedAt,
+            reason: proficiencyTestAuditLog.reason,
+          })
+          .from(proficiencyTestAuditLog)
+          .leftJoin(user, eq(proficiencyTestAuditLog.performedBy, user.id))
+          .where(eq(proficiencyTestAuditLog.proficiencyTestId, id))
+          .orderBy(desc(proficiencyTestAuditLog.performedAt));
 
-      return c.json({ data: entries });
+        return c.json({ data: entries });
+      });
     },
   )
 
@@ -517,66 +540,71 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
       const session = c.get("session");
       const input = c.req.valid("json");
 
-      if (input.standardId) {
-        const [standard] = await db
-          .select({ id: referenceStandard.id })
-          .from(referenceStandard)
-          .where(
-            and(
-              eq(referenceStandard.id, input.standardId),
-              eq(referenceStandard.organizationId, member.organizationId),
-            ),
-          )
-          .limit(1);
-        if (!standard) {
-          return c.json({ error: "Padrão de referência não encontrado" }, 404);
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        if (input.standardId) {
+          const [standard] = await tx
+            .select({ id: referenceStandard.id })
+            .from(referenceStandard)
+            .where(
+              and(
+                eq(referenceStandard.id, input.standardId),
+                eq(referenceStandard.organizationId, member.organizationId),
+              ),
+            )
+            .limit(1);
+          if (!standard) {
+            return c.json(
+              { error: "Padrão de referência não encontrado" },
+              404,
+            );
+          }
         }
-      }
 
-      // A body-supplied unit must be one the caller can access (403 otherwise).
-      const testUnitId =
-        input.unitId == null
-          ? null
-          : resolveAccessibleUnitContext(member, input.unitId).unitId;
+        // A body-supplied unit must be one the caller can access (403 otherwise).
+        const testUnitId =
+          input.unitId == null
+            ? null
+            : resolveAccessibleUnitContext(member, input.unitId).unitId;
 
-      const [created] = await db
-        .insert(proficiencyTest)
-        .values({
+        const [created] = await tx
+          .insert(proficiencyTest)
+          .values({
+            organizationId: member.organizationId,
+            unitId: testUnitId,
+            activityType: input.activityType,
+            provider: input.provider,
+            providerAccreditation: input.providerAccreditation ?? null,
+            ptRound: input.ptRound,
+            scopePart: input.scopePart,
+            metrologyKind: input.metrologyKind ?? null,
+            standardId: input.standardId ?? null,
+            registrationDate: input.registrationDate
+              ? new Date(input.registrationDate)
+              : null,
+            participationDate: input.participationDate
+              ? new Date(input.participationDate)
+              : null,
+            overallStatus: "pending",
+            notes: input.notes ?? null,
+            createdBy: session.user.id,
+          })
+          .returning();
+
+        if (!created) {
+          return c.json({ error: "Falha ao registrar ensaio" }, 500);
+        }
+
+        await tx.insert(proficiencyTestAuditLog).values({
           organizationId: member.organizationId,
-          unitId: testUnitId,
-          activityType: input.activityType,
-          provider: input.provider,
-          providerAccreditation: input.providerAccreditation ?? null,
-          ptRound: input.ptRound,
-          scopePart: input.scopePart,
-          metrologyKind: input.metrologyKind ?? null,
-          standardId: input.standardId ?? null,
-          registrationDate: input.registrationDate
-            ? new Date(input.registrationDate)
-            : null,
-          participationDate: input.participationDate
-            ? new Date(input.participationDate)
-            : null,
-          overallStatus: "pending",
-          notes: input.notes ?? null,
-          createdBy: session.user.id,
-        })
-        .returning();
+          proficiencyTestId: created.id,
+          action: "create",
+          changes: { initial: input },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        });
 
-      if (!created) {
-        return c.json({ error: "Falha ao registrar ensaio" }, 500);
-      }
-
-      await db.insert(proficiencyTestAuditLog).values({
-        organizationId: member.organizationId,
-        proficiencyTestId: created.id,
-        action: "create",
-        changes: { initial: input },
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
+        return c.json(created, 201);
       });
-
-      return c.json(created, 201);
     },
   )
 
@@ -596,87 +624,95 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "ID inválido" }, 400);
       }
 
-      const [existing] = await db
-        .select()
-        .from(proficiencyTest)
-        .where(
-          and(
-            eq(proficiencyTest.id, id),
-            eq(proficiencyTest.organizationId, member.organizationId),
-          ),
-        )
-        .limit(1);
-      if (!existing) {
-        return c.json({ error: "Ensaio de proficiência não encontrado" }, 404);
-      }
-
-      if (input.standardId) {
-        const [standard] = await db
-          .select({ id: referenceStandard.id })
-          .from(referenceStandard)
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const [existing] = await tx
+          .select()
+          .from(proficiencyTest)
           .where(
             and(
-              eq(referenceStandard.id, input.standardId),
-              eq(referenceStandard.organizationId, member.organizationId),
+              eq(proficiencyTest.id, id),
+              eq(proficiencyTest.organizationId, member.organizationId),
             ),
           )
           .limit(1);
-        if (!standard) {
-          return c.json({ error: "Padrão de referência não encontrado" }, 404);
+        if (!existing) {
+          return c.json(
+            { error: "Ensaio de proficiência não encontrado" },
+            404,
+          );
         }
-      }
 
-      const [updated] = await db
-        .update(proficiencyTest)
-        .set({
-          activityType: input.activityType ?? existing.activityType,
-          provider: input.provider ?? existing.provider,
-          providerAccreditation:
-            input.providerAccreditation === undefined
-              ? existing.providerAccreditation
-              : input.providerAccreditation,
-          ptRound: input.ptRound ?? existing.ptRound,
-          scopePart: input.scopePart ?? existing.scopePart,
-          metrologyKind:
-            input.metrologyKind === undefined
-              ? existing.metrologyKind
-              : input.metrologyKind,
-          standardId:
-            input.standardId === undefined
-              ? existing.standardId
-              : input.standardId,
-          registrationDate:
-            input.registrationDate === undefined
-              ? existing.registrationDate
-              : input.registrationDate === null
-                ? null
-                : new Date(input.registrationDate),
-          participationDate:
-            input.participationDate === undefined
-              ? existing.participationDate
-              : input.participationDate === null
-                ? null
-                : new Date(input.participationDate),
-          notes: input.notes === undefined ? existing.notes : input.notes,
-        })
-        .where(
-          and(
-            eq(proficiencyTest.id, id),
-            eq(proficiencyTest.organizationId, member.organizationId),
-          ),
-        )
-        .returning();
+        if (input.standardId) {
+          const [standard] = await tx
+            .select({ id: referenceStandard.id })
+            .from(referenceStandard)
+            .where(
+              and(
+                eq(referenceStandard.id, input.standardId),
+                eq(referenceStandard.organizationId, member.organizationId),
+              ),
+            )
+            .limit(1);
+          if (!standard) {
+            return c.json(
+              { error: "Padrão de referência não encontrado" },
+              404,
+            );
+          }
+        }
 
-      await db.insert(proficiencyTestAuditLog).values({
-        organizationId: member.organizationId,
-        proficiencyTestId: id,
-        action: "update",
-        changes: { input },
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
+        const [updated] = await tx
+          .update(proficiencyTest)
+          .set({
+            activityType: input.activityType ?? existing.activityType,
+            provider: input.provider ?? existing.provider,
+            providerAccreditation:
+              input.providerAccreditation === undefined
+                ? existing.providerAccreditation
+                : input.providerAccreditation,
+            ptRound: input.ptRound ?? existing.ptRound,
+            scopePart: input.scopePart ?? existing.scopePart,
+            metrologyKind:
+              input.metrologyKind === undefined
+                ? existing.metrologyKind
+                : input.metrologyKind,
+            standardId:
+              input.standardId === undefined
+                ? existing.standardId
+                : input.standardId,
+            registrationDate:
+              input.registrationDate === undefined
+                ? existing.registrationDate
+                : input.registrationDate === null
+                  ? null
+                  : new Date(input.registrationDate),
+            participationDate:
+              input.participationDate === undefined
+                ? existing.participationDate
+                : input.participationDate === null
+                  ? null
+                  : new Date(input.participationDate),
+            notes: input.notes === undefined ? existing.notes : input.notes,
+          })
+          .where(
+            and(
+              eq(proficiencyTest.id, id),
+              eq(proficiencyTest.organizationId, member.organizationId),
+            ),
+          )
+          .returning();
+
+        await tx.insert(proficiencyTestAuditLog).values({
+          organizationId: member.organizationId,
+          proficiencyTestId: id,
+          action: "update",
+          changes: { input },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        });
+
+        return c.json(updated);
       });
-
-      return c.json(updated);
     },
   )
 
@@ -699,107 +735,118 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "ID inválido" }, 400);
       }
 
-      const [existing] = await db
-        .select()
-        .from(proficiencyTest)
-        .where(
-          and(
-            eq(proficiencyTest.id, id),
-            eq(proficiencyTest.organizationId, member.organizationId),
-          ),
-        )
-        .limit(1);
-      if (!existing) {
-        return c.json({ error: "Ensaio de proficiência não encontrado" }, 404);
-      }
-
-      const results = input.results.map(computeResultPoint);
-      const overallStatus = overallStatusFromResults(results);
-      const resultReportedAt = new Date(input.resultReportedAt);
-
-      // §7.7.3 auto-escalation — guarded against double-escalation like the
-      // NC escalate-to-capa flow.
-      let capaId = existing.capaId;
-      if (overallStatus === "unsatisfactory" && !existing.capaId) {
-        const failedPoints = results
-          .filter((r) => r.verdict === "unsatisfactory")
-          .map(
-            (r) =>
-              `${r.label}: ${r.scoreType} = ${r.score == null ? "n/d" : r.score.toFixed(2)}`,
-          )
-          .join("; ");
-        const newCapa = await createCorrectiveActionRecord({
-          organizationId: member.organizationId,
-          actorUserId: session.user.id,
-          source: "proficiency_test",
-          sourceReference: `${existing.ptRound} (${existing.provider})`,
-          title: `Resultado insatisfatório no EP ${existing.ptRound}`,
-          description: `Ensaio de proficiência "${existing.ptRound}" (${existing.provider}) com resultado insatisfatório no escopo "${existing.scopePart}". Pontos reprovados: ${failedPoints}.`,
-          detectionDate: resultReportedAt,
-          severity: "major",
-          category: "method",
-          ipAddress: c.req.header("x-forwarded-for") || null,
-        });
-        capaId = newCapa.id;
-      }
-
-      const [updated] = await db
-        .update(proficiencyTest)
-        .set({
-          results,
-          overallStatus,
-          resultReportedAt,
-          capaId,
-        })
-        .where(
-          and(
-            eq(proficiencyTest.id, id),
-            eq(proficiencyTest.organizationId, member.organizationId),
-          ),
-        )
-        .returning();
-
-      await db.insert(proficiencyTestAuditLog).values({
-        organizationId: member.organizationId,
-        proficiencyTestId: id,
-        action: capaId !== existing.capaId ? "escalate" : "record_results",
-        changes: {
-          overallStatus: { old: existing.overallStatus, new: overallStatus },
-          points: results.length,
-          ...(capaId !== existing.capaId ? { capaId } : {}),
-        },
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
-      });
-
-      // Advance the 4-year compliance clock for this scope part
-      if (overallStatus === "satisfactory") {
-        const [planItem] = await db
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const [existing] = await tx
           .select()
-          .from(ptPlanItem)
+          .from(proficiencyTest)
           .where(
             and(
-              eq(ptPlanItem.organizationId, member.organizationId),
-              eq(ptPlanItem.scopePart, existing.scopePart),
+              eq(proficiencyTest.id, id),
+              eq(proficiencyTest.organizationId, member.organizationId),
             ),
           )
           .limit(1);
-        if (
-          planItem &&
-          (!planItem.lastSatisfactoryAt ||
-            planItem.lastSatisfactoryAt < resultReportedAt)
-        ) {
-          await db
-            .update(ptPlanItem)
-            .set({
-              lastSatisfactoryAt: resultReportedAt,
-              nextDueAt: addMonths(resultReportedAt, planItem.frequencyMonths),
-            })
-            .where(eq(ptPlanItem.id, planItem.id));
+        if (!existing) {
+          return c.json(
+            { error: "Ensaio de proficiência não encontrado" },
+            404,
+          );
         }
-      }
 
-      return c.json(updated);
+        const results = input.results.map(computeResultPoint);
+        const overallStatus = overallStatusFromResults(results);
+        const resultReportedAt = new Date(input.resultReportedAt);
+
+        // §7.7.3 auto-escalation — guarded against double-escalation like the
+        // NC escalate-to-capa flow.
+        let capaId = existing.capaId;
+        if (overallStatus === "unsatisfactory" && !existing.capaId) {
+          const failedPoints = results
+            .filter((r) => r.verdict === "unsatisfactory")
+            .map(
+              (r) =>
+                `${r.label}: ${r.scoreType} = ${r.score == null ? "n/d" : r.score.toFixed(2)}`,
+            )
+            .join("; ");
+          const newCapa = await createCorrectiveActionRecord(
+            {
+              organizationId: member.organizationId,
+              actorUserId: session.user.id,
+              source: "proficiency_test",
+              sourceReference: `${existing.ptRound} (${existing.provider})`,
+              title: `Resultado insatisfatório no EP ${existing.ptRound}`,
+              description: `Ensaio de proficiência "${existing.ptRound}" (${existing.provider}) com resultado insatisfatório no escopo "${existing.scopePart}". Pontos reprovados: ${failedPoints}.`,
+              detectionDate: resultReportedAt,
+              severity: "major",
+              category: "method",
+              ipAddress: c.req.header("x-forwarded-for") || null,
+            },
+            tx,
+          );
+          capaId = newCapa.id;
+        }
+
+        const [updated] = await tx
+          .update(proficiencyTest)
+          .set({
+            results,
+            overallStatus,
+            resultReportedAt,
+            capaId,
+          })
+          .where(
+            and(
+              eq(proficiencyTest.id, id),
+              eq(proficiencyTest.organizationId, member.organizationId),
+            ),
+          )
+          .returning();
+
+        await tx.insert(proficiencyTestAuditLog).values({
+          organizationId: member.organizationId,
+          proficiencyTestId: id,
+          action: capaId !== existing.capaId ? "escalate" : "record_results",
+          changes: {
+            overallStatus: { old: existing.overallStatus, new: overallStatus },
+            points: results.length,
+            ...(capaId !== existing.capaId ? { capaId } : {}),
+          },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        });
+
+        // Advance the 4-year compliance clock for this scope part
+        if (overallStatus === "satisfactory") {
+          const [planItem] = await tx
+            .select()
+            .from(ptPlanItem)
+            .where(
+              and(
+                eq(ptPlanItem.organizationId, member.organizationId),
+                eq(ptPlanItem.scopePart, existing.scopePart),
+              ),
+            )
+            .limit(1);
+          if (
+            planItem &&
+            (!planItem.lastSatisfactoryAt ||
+              planItem.lastSatisfactoryAt < resultReportedAt)
+          ) {
+            await tx
+              .update(ptPlanItem)
+              .set({
+                lastSatisfactoryAt: resultReportedAt,
+                nextDueAt: addMonths(
+                  resultReportedAt,
+                  planItem.frequencyMonths,
+                ),
+              })
+              .where(eq(ptPlanItem.id, planItem.id));
+          }
+        }
+
+        return c.json(updated);
+      });
     },
   )
 
@@ -817,28 +864,33 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "ID inválido" }, 400);
       }
 
-      const deleted = await db
-        .delete(proficiencyTest)
-        .where(
-          and(
-            eq(proficiencyTest.id, id),
-            eq(proficiencyTest.organizationId, member.organizationId),
-          ),
-        )
-        .returning();
-      if (deleted.length === 0) {
-        return c.json({ error: "Ensaio de proficiência não encontrado" }, 404);
-      }
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const deleted = await tx
+          .delete(proficiencyTest)
+          .where(
+            and(
+              eq(proficiencyTest.id, id),
+              eq(proficiencyTest.organizationId, member.organizationId),
+            ),
+          )
+          .returning();
+        if (deleted.length === 0) {
+          return c.json(
+            { error: "Ensaio de proficiência não encontrado" },
+            404,
+          );
+        }
 
-      // Audit rows are FK-less on purpose — the trail survives the delete.
-      await db.insert(proficiencyTestAuditLog).values({
-        organizationId: member.organizationId,
-        proficiencyTestId: id,
-        action: "delete",
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
+        // Audit rows are FK-less on purpose — the trail survives the delete.
+        await tx.insert(proficiencyTestAuditLog).values({
+          organizationId: member.organizationId,
+          proficiencyTestId: id,
+          action: "delete",
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        });
+
+        return c.json({ message: "Ensaio removido" });
       });
-
-      return c.json({ message: "Ensaio removido" });
     },
   );

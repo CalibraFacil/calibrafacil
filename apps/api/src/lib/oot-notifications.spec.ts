@@ -371,6 +371,7 @@ describe("ensureStandardRecall", () => {
         triggerSource: "standard_recall",
         organizationId: "org-1",
       }),
+      undefined, // no org-bound scope: the plain `db`
     );
     const ncDescription = mockCreateNcRecord.mock.calls[0]?.[0]?.description;
     expect(ncDescription).toContain("Conjunto de Pesos E2");

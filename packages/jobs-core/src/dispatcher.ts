@@ -55,7 +55,7 @@ async function processBackgroundJobUnreported(
   }
 
   if (message.type === "SPC_RECOMPUTE") {
-    await processSpcRecompute(env);
+    await processSpcRecompute();
     return;
   }
 

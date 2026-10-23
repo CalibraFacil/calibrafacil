@@ -1,4 +1,5 @@
 import { afterTransactionCommit, db } from "@calibra-facil/db";
+import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import {
   nonConformance,
   nonConformanceAuditLog,
@@ -7,6 +8,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { notifyNCCreated } from "@calibra-facil/notifications";
 import { and, desc, eq, ilike } from "drizzle-orm";
+import type { OrgScope } from "./after-commit";
 
 /**
  * Shared non-conformance creator (ISO 17025 §8.7 / §7.10). Single code path
@@ -28,9 +30,10 @@ export function isUniqueViolation(err: unknown): boolean {
 
 export async function generateNcNumber(
   organizationId: string,
+  executor: Pick<OrgExecutor, "select"> = db,
 ): Promise<string> {
   const year = new Date().getFullYear();
-  const [lastNc] = await db
+  const [lastNc] = await executor
     .select({ ncNumber: nonConformance.ncNumber })
     .from(nonConformance)
     .where(
@@ -67,35 +70,47 @@ export type CreateNonConformanceRecordParams = {
  * Creates the NC (with the retry loop over the sequential-number unique
  * constraint), writes the audit-log entry and fires the admin/owner
  * notification. Throws when the insert cannot be completed.
+ *
+ * `scope` joins the caller's org-bound transaction
+ * (`orgDb(org).transaction((tx) => ...)`): the number, the NC and its audit
+ * entry are written in it, under the organization the caller named for
+ * row-level security, and the notification is handed to `scope.afterCommit`
+ * for the caller to run once the transaction has committed. Without it the NC
+ * is written through the plain `db` and the notification waits for the
+ * surrounding transaction scope, if any, as before.
  */
 export async function createNonConformanceRecord(
   params: CreateNonConformanceRecordParams,
+  scope?: OrgScope,
 ): Promise<typeof nonConformance.$inferSelect> {
   let newNc: typeof nonConformance.$inferSelect | null = null;
+  const writer: Pick<OrgExecutor, "select" | "insert"> = scope?.executor ?? db;
+  const insertNc = (target: Pick<OrgExecutor, "insert">, ncNumber: string) =>
+    target
+      .insert(nonConformance)
+      .values({
+        ncNumber,
+        organizationId: params.organizationId,
+        jobId: params.jobId ?? null,
+        type: params.type,
+        triggerSource: params.triggerSource ?? null,
+        description: params.description,
+        detectedBy: params.actorUserId,
+        detectedAt: params.detectedAt,
+        status: "open",
+        createdBy: params.actorUserId,
+      })
+      .returning();
   for (let attempt = 0; attempt < MAX_SEQ_RETRIES; attempt++) {
-    const ncNumber = await generateNcNumber(params.organizationId);
+    const ncNumber = await generateNcNumber(params.organizationId, writer);
     try {
       // Its own transaction (a savepoint when the caller already runs in one,
       // as the desktop sync apply does): a unique violation on the sequential
       // number aborts a Postgres transaction, and the retry below would fail
       // with it unless only this attempt is rolled back.
-      const [inserted] = await db.transaction((tx) =>
-        tx
-          .insert(nonConformance)
-          .values({
-            ncNumber,
-            organizationId: params.organizationId,
-            jobId: params.jobId ?? null,
-            type: params.type,
-            triggerSource: params.triggerSource ?? null,
-            description: params.description,
-            detectedBy: params.actorUserId,
-            detectedAt: params.detectedAt,
-            status: "open",
-            createdBy: params.actorUserId,
-          })
-          .returning(),
-      );
+      const [inserted] = scope
+        ? await scope.executor.transaction((tx) => insertNc(tx, ncNumber))
+        : await db.transaction((tx) => insertNc(tx, ncNumber));
       newNc = inserted ?? null;
       break;
     } catch (err) {
@@ -107,7 +122,7 @@ export async function createNonConformanceRecord(
     throw new Error("Falha ao criar nao conformidade");
   }
 
-  await db.insert(nonConformanceAuditLog).values({
+  await writer.insert(nonConformanceAuditLog).values({
     organizationId: params.organizationId,
     ncId: newNc.id,
     action: "create",
@@ -124,7 +139,7 @@ export async function createNonConformanceRecord(
 
   // After the surrounding transaction commits, when there is one: the
   // notification reads the NC back, and must not run on a rolled-back record.
-  afterTransactionCommit(() =>
+  const notify = () =>
     notifyNCCreated(
       newNc.id,
       newNc.ncNumber,
@@ -134,8 +149,9 @@ export async function createNonConformanceRecord(
       params.actorUserId,
     ).catch((err) =>
       console.error("[NC] Failed to send NC-created notification:", err),
-    ),
-  );
+    );
+  if (scope) scope.afterCommit(notify);
+  else afterTransactionCommit(notify);
 
   return newNc;
 }

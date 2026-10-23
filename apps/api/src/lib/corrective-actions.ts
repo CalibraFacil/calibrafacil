@@ -1,4 +1,5 @@
 import { db } from "@calibra-facil/db";
+import type { OrgDb, OrgExecutor } from "@calibra-facil/db/for-org";
 import {
   correctiveAction,
   correctiveActionAuditLog,
@@ -30,9 +31,10 @@ export function isUniqueViolation(err: unknown): boolean {
 
 export async function generateCapaNumber(
   organizationId: string,
+  executor: Pick<OrgExecutor, "select"> = db,
 ): Promise<string> {
   const year = new Date().getFullYear();
-  const [lastCapa] = await db
+  const [lastCapa] = await executor
     .select({ capaNumber: correctiveAction.capaNumber })
     .from(correctiveAction)
     .where(
@@ -79,37 +81,56 @@ export type CreateCorrectiveActionRecordParams = {
  * constraint) and writes the audit-log entry. Throws when the insert cannot
  * be completed. Notifications stay with the callers — the plain CAPA create
  * route intentionally dispatches none.
+ *
+ * `executor` is the org-bound transaction the record is written in
+ * (`orgDb(org).transaction((tx) => ...)`): the number, the CAPA and its audit
+ * entry then run under the organization the caller named for row-level
+ * security and commit with the caller's other writes. Each insert attempt is a
+ * savepoint of it, because a unique violation on the sequential number aborts a
+ * Postgres transaction and the retry would fail with it unless only that
+ * attempt is rolled back. Without it the record is written through the plain
+ * `db`, as before.
  */
 export async function createCorrectiveActionRecord(
   params: CreateCorrectiveActionRecordParams,
+  executor?: OrgDb,
 ): Promise<typeof correctiveAction.$inferSelect> {
+  const writer: Pick<OrgExecutor, "select" | "insert"> = executor ?? db;
+  const insertCapa = (
+    target: Pick<OrgExecutor, "insert">,
+    capaNumber: string,
+  ) =>
+    target
+      .insert(correctiveAction)
+      .values({
+        capaNumber,
+        organizationId: params.organizationId,
+        source: params.source,
+        sourceReference: params.sourceReference ?? null,
+        title: params.title,
+        description: params.description,
+        detectionDate: params.detectionDate ?? null,
+        type: params.type ?? "corrective",
+        severity: params.severity ?? "minor",
+        category: params.category ?? "procedure",
+        rootCauseAnalysis: params.rootCauseAnalysis ?? null,
+        rootCauseAnalysisMethod: params.rootCauseAnalysisMethod ?? null,
+        actionPlan: params.actionPlan ?? null,
+        preventiveMeasures: params.preventiveMeasures ?? null,
+        responsibleId: params.responsibleId ?? null,
+        dueDate: params.dueDate ?? null,
+        status: "OPEN",
+        createdBy: params.actorUserId,
+      })
+      .returning();
+
   let newCapa: typeof correctiveAction.$inferSelect | null = null;
   for (let attempt = 0; attempt < MAX_SEQ_RETRIES; attempt++) {
-    const capaNumber = await generateCapaNumber(params.organizationId);
+    const capaNumber = await generateCapaNumber(params.organizationId, writer);
     try {
-      const [inserted] = await db
-        .insert(correctiveAction)
-        .values({
-          capaNumber,
-          organizationId: params.organizationId,
-          source: params.source,
-          sourceReference: params.sourceReference ?? null,
-          title: params.title,
-          description: params.description,
-          detectionDate: params.detectionDate ?? null,
-          type: params.type ?? "corrective",
-          severity: params.severity ?? "minor",
-          category: params.category ?? "procedure",
-          rootCauseAnalysis: params.rootCauseAnalysis ?? null,
-          rootCauseAnalysisMethod: params.rootCauseAnalysisMethod ?? null,
-          actionPlan: params.actionPlan ?? null,
-          preventiveMeasures: params.preventiveMeasures ?? null,
-          responsibleId: params.responsibleId ?? null,
-          dueDate: params.dueDate ?? null,
-          status: "OPEN",
-          createdBy: params.actorUserId,
-        })
-        .returning();
+      const [inserted] = executor
+        ? await executor.transaction((tx) => insertCapa(tx, capaNumber))
+        : await insertCapa(db, capaNumber);
       newCapa = inserted ?? null;
       break;
     } catch (err) {
@@ -121,7 +142,7 @@ export async function createCorrectiveActionRecord(
     throw new Error("Falha ao criar CAPA");
   }
 
-  await db.insert(correctiveActionAuditLog).values({
+  await writer.insert(correctiveActionAuditLog).values({
     organizationId: params.organizationId,
     capaId: newCapa.id,
     action: "create",

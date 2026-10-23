@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { db } from "@calibra-facil/db";
+import type { OrgExecutor } from "@calibra-facil/db/for-org";
+import { orgDb } from "../lib/org-db";
 import {
   checkStandardReading,
   controlChart,
@@ -36,8 +37,12 @@ import { eq, and, asc, desc, count } from "drizzle-orm";
  * the interval-optimization drift work, #423). Signals escalate to CAPA.
  */
 
-async function loadChartScoped(id: number, organizationId: string) {
-  const [chart] = await db
+async function loadChartScoped(
+  id: number,
+  organizationId: string,
+  executor: Pick<OrgExecutor, "select">,
+) {
+  const [chart] = await executor
     .select()
     .from(controlChart)
     .where(
@@ -57,8 +62,9 @@ async function loadChartScoped(id: number, organizationId: string) {
  */
 export async function recomputeControlChart(
   chart: typeof controlChart.$inferSelect,
+  executor: Pick<OrgExecutor, "select" | "update">,
 ): Promise<SpcEvaluation> {
-  const readings = await db
+  const readings = await executor
     .select({
       value: checkStandardReading.value,
       measuredAt: checkStandardReading.measuredAt,
@@ -86,7 +92,7 @@ export async function recomputeControlChart(
     evaluatedAt: new Date().toISOString(),
   };
 
-  await db
+  await executor
     .update(controlChart)
     .set({
       status: evaluation.status,
@@ -122,45 +128,47 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
       }
       const whereCondition = and(...conditions);
 
-      const [countResult] = await db
-        .select({ total: count() })
-        .from(controlChart)
-        .where(whereCondition);
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const [countResult] = await tx
+          .select({ total: count() })
+          .from(controlChart)
+          .where(whereCondition);
 
-      const charts = await db
-        .select({
-          id: controlChart.id,
-          standardId: controlChart.standardId,
-          standardName: referenceStandard.name,
-          parameter: controlChart.parameter,
-          chartType: controlChart.chartType,
-          params: controlChart.params,
-          status: controlChart.status,
-          lastEvaluation: controlChart.lastEvaluation,
-          lastEvaluatedAt: controlChart.lastEvaluatedAt,
-          ncId: controlChart.ncId,
-          capaId: controlChart.capaId,
-          createdAt: controlChart.createdAt,
-          updatedAt: controlChart.updatedAt,
-        })
-        .from(controlChart)
-        .leftJoin(
-          referenceStandard,
-          eq(controlChart.standardId, referenceStandard.id),
-        )
-        .where(whereCondition)
-        .orderBy(desc(controlChart.updatedAt))
-        .limit(limit)
-        .offset(offset);
+        const charts = await tx
+          .select({
+            id: controlChart.id,
+            standardId: controlChart.standardId,
+            standardName: referenceStandard.name,
+            parameter: controlChart.parameter,
+            chartType: controlChart.chartType,
+            params: controlChart.params,
+            status: controlChart.status,
+            lastEvaluation: controlChart.lastEvaluation,
+            lastEvaluatedAt: controlChart.lastEvaluatedAt,
+            ncId: controlChart.ncId,
+            capaId: controlChart.capaId,
+            createdAt: controlChart.createdAt,
+            updatedAt: controlChart.updatedAt,
+          })
+          .from(controlChart)
+          .leftJoin(
+            referenceStandard,
+            eq(controlChart.standardId, referenceStandard.id),
+          )
+          .where(whereCondition)
+          .orderBy(desc(controlChart.updatedAt))
+          .limit(limit)
+          .offset(offset);
 
-      return c.json({
-        data: charts,
-        pagination: {
-          page,
-          limit,
-          total: countResult?.total ?? 0,
-          totalPages: Math.ceil((countResult?.total ?? 0) / limit),
-        },
+        return c.json({
+          data: charts,
+          pagination: {
+            page,
+            limit,
+            total: countResult?.total ?? 0,
+            totalPages: Math.ceil((countResult?.total ?? 0) / limit),
+          },
+        });
       });
     },
   )
@@ -174,44 +182,46 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
     if (isNaN(id)) {
       return c.json({ error: "ID inválido" }, 400);
     }
-    const chart = await loadChartScoped(id, member.organizationId);
-    if (!chart) {
-      return c.json({ error: "Carta de controle não encontrada" }, 404);
-    }
+    return await orgDb(member.organizationId).transaction(async (tx) => {
+      const chart = await loadChartScoped(id, member.organizationId, tx);
+      if (!chart) {
+        return c.json({ error: "Carta de controle não encontrada" }, 404);
+      }
 
-    const [readings, [standard]] = await Promise.all([
-      db
-        .select({
-          id: checkStandardReading.id,
-          value: checkStandardReading.value,
-          uncertainty: checkStandardReading.uncertainty,
-          measuredAt: checkStandardReading.measuredAt,
-          sourceJobId: checkStandardReading.sourceJobId,
-          createdBy: checkStandardReading.createdBy,
-        })
-        .from(checkStandardReading)
-        .where(
-          and(
-            eq(checkStandardReading.organizationId, member.organizationId),
-            eq(checkStandardReading.standardId, chart.standardId),
-            eq(checkStandardReading.parameter, chart.parameter),
+      const [readings, [standard]] = await Promise.all([
+        tx
+          .select({
+            id: checkStandardReading.id,
+            value: checkStandardReading.value,
+            uncertainty: checkStandardReading.uncertainty,
+            measuredAt: checkStandardReading.measuredAt,
+            sourceJobId: checkStandardReading.sourceJobId,
+            createdBy: checkStandardReading.createdBy,
+          })
+          .from(checkStandardReading)
+          .where(
+            and(
+              eq(checkStandardReading.organizationId, member.organizationId),
+              eq(checkStandardReading.standardId, chart.standardId),
+              eq(checkStandardReading.parameter, chart.parameter),
+            ),
+          )
+          .orderBy(
+            asc(checkStandardReading.measuredAt),
+            asc(checkStandardReading.id),
           ),
-        )
-        .orderBy(
-          asc(checkStandardReading.measuredAt),
-          asc(checkStandardReading.id),
-        ),
-      db
-        .select({ id: referenceStandard.id, name: referenceStandard.name })
-        .from(referenceStandard)
-        .where(eq(referenceStandard.id, chart.standardId))
-        .limit(1),
-    ]);
+        tx
+          .select({ id: referenceStandard.id, name: referenceStandard.name })
+          .from(referenceStandard)
+          .where(eq(referenceStandard.id, chart.standardId))
+          .limit(1),
+      ]);
 
-    return c.json({
-      ...chart,
-      standardName: standard?.name ?? null,
-      readings,
+      return c.json({
+        ...chart,
+        standardName: standard?.name ?? null,
+        readings,
+      });
     });
   })
 
@@ -227,76 +237,79 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
       const session = c.get("session");
       const input = c.req.valid("json");
 
-      const [standard] = await db
-        .select({ id: referenceStandard.id })
-        .from(referenceStandard)
-        .where(
-          and(
-            eq(referenceStandard.id, input.standardId),
-            eq(referenceStandard.organizationId, member.organizationId),
-          ),
-        )
-        .limit(1);
-      if (!standard) {
-        return c.json({ error: "Padrão de referência não encontrado" }, 404);
-      }
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const [standard] = await tx
+          .select({ id: referenceStandard.id })
+          .from(referenceStandard)
+          .where(
+            and(
+              eq(referenceStandard.id, input.standardId),
+              eq(referenceStandard.organizationId, member.organizationId),
+            ),
+          )
+          .limit(1);
+        if (!standard) {
+          return c.json({ error: "Padrão de referência não encontrado" }, 404);
+        }
 
-      // A body-supplied unit must be one the caller can access (throws 403
-      // otherwise — identical for another tenant's unit and an unknown one).
-      const chartUnitId =
-        input.unitId == null
-          ? null
-          : resolveAccessibleUnitContext(member, input.unitId).unitId;
+        // A body-supplied unit must be one the caller can access (throws 403
+        // otherwise — identical for another tenant's unit and an unknown one).
+        const chartUnitId =
+          input.unitId == null
+            ? null
+            : resolveAccessibleUnitContext(member, input.unitId).unitId;
 
-      const [existing] = await db
-        .select({ id: controlChart.id })
-        .from(controlChart)
-        .where(
-          and(
-            eq(controlChart.standardId, input.standardId),
-            eq(controlChart.parameter, input.parameter),
-          ),
-        )
-        .limit(1);
-      if (existing) {
-        return c.json(
-          { error: "Já existe uma carta para este padrão e parâmetro" },
-          400,
-        );
-      }
+        const [existing] = await tx
+          .select({ id: controlChart.id })
+          .from(controlChart)
+          .where(
+            and(
+              eq(controlChart.standardId, input.standardId),
+              eq(controlChart.parameter, input.parameter),
+            ),
+          )
+          .limit(1);
+        if (existing) {
+          return c.json(
+            { error: "Já existe uma carta para este padrão e parâmetro" },
+            400,
+          );
+        }
 
-      const [created] = await db
-        .insert(controlChart)
-        .values({
+        const [created] = await tx
+          .insert(controlChart)
+          .values({
+            organizationId: member.organizationId,
+            unitId: chartUnitId,
+            standardId: input.standardId,
+            parameter: input.parameter,
+            chartType: input.chartType,
+            params: input.params ?? null,
+            createdBy: session.user.id,
+          })
+          .returning();
+
+        if (!created) {
+          return c.json({ error: "Falha ao criar carta de controle" }, 500);
+        }
+
+        await tx.insert(controlChartAuditLog).values({
           organizationId: member.organizationId,
-          unitId: chartUnitId,
-          standardId: input.standardId,
-          parameter: input.parameter,
-          chartType: input.chartType,
-          params: input.params ?? null,
-          createdBy: session.user.id,
-        })
-        .returning();
+          controlChartId: created.id,
+          action: "create",
+          changes: { initial: input },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        });
 
-      if (!created) {
-        return c.json({ error: "Falha ao criar carta de controle" }, 500);
-      }
-
-      await db.insert(controlChartAuditLog).values({
-        organizationId: member.organizationId,
-        controlChartId: created.id,
-        action: "create",
-        changes: { initial: input },
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
+        await recomputeControlChart(created, tx);
+        const refreshed = await loadChartScoped(
+          created.id,
+          member.organizationId,
+          tx,
+        );
+        return c.json(refreshed ?? created, 201);
       });
-
-      await recomputeControlChart(created);
-      const refreshed = await loadChartScoped(
-        created.id,
-        member.organizationId,
-      );
-      return c.json(refreshed ?? created, 201);
     },
   )
 
@@ -315,39 +328,41 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
       if (isNaN(id)) {
         return c.json({ error: "ID inválido" }, 400);
       }
-      const chart = await loadChartScoped(id, member.organizationId);
-      if (!chart) {
-        return c.json({ error: "Carta de controle não encontrada" }, 404);
-      }
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const chart = await loadChartScoped(id, member.organizationId, tx);
+        if (!chart) {
+          return c.json({ error: "Carta de controle não encontrada" }, 404);
+        }
 
-      const [updated] = await db
-        .update(controlChart)
-        .set({
-          chartType: input.chartType ?? chart.chartType,
-          params: input.params === undefined ? chart.params : input.params,
-        })
-        .where(
-          and(
-            eq(controlChart.id, id),
-            eq(controlChart.organizationId, member.organizationId),
-          ),
-        )
-        .returning();
+        const [updated] = await tx
+          .update(controlChart)
+          .set({
+            chartType: input.chartType ?? chart.chartType,
+            params: input.params === undefined ? chart.params : input.params,
+          })
+          .where(
+            and(
+              eq(controlChart.id, id),
+              eq(controlChart.organizationId, member.organizationId),
+            ),
+          )
+          .returning();
 
-      await db.insert(controlChartAuditLog).values({
-        organizationId: member.organizationId,
-        controlChartId: id,
-        action: "update",
-        changes: { input },
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
+        await tx.insert(controlChartAuditLog).values({
+          organizationId: member.organizationId,
+          controlChartId: id,
+          action: "update",
+          changes: { input },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        });
+
+        if (updated) {
+          await recomputeControlChart(updated, tx);
+        }
+        const refreshed = await loadChartScoped(id, member.organizationId, tx);
+        return c.json(refreshed ?? updated);
       });
-
-      if (updated) {
-        await recomputeControlChart(updated);
-      }
-      const refreshed = await loadChartScoped(id, member.organizationId);
-      return c.json(refreshed ?? updated);
     },
   )
 
@@ -364,26 +379,28 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
       if (isNaN(id)) {
         return c.json({ error: "ID inválido" }, 400);
       }
-      const deleted = await db
-        .delete(controlChart)
-        .where(
-          and(
-            eq(controlChart.id, id),
-            eq(controlChart.organizationId, member.organizationId),
-          ),
-        )
-        .returning();
-      if (deleted.length === 0) {
-        return c.json({ error: "Carta de controle não encontrada" }, 404);
-      }
-      await db.insert(controlChartAuditLog).values({
-        organizationId: member.organizationId,
-        controlChartId: id,
-        action: "delete",
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const deleted = await tx
+          .delete(controlChart)
+          .where(
+            and(
+              eq(controlChart.id, id),
+              eq(controlChart.organizationId, member.organizationId),
+            ),
+          )
+          .returning();
+        if (deleted.length === 0) {
+          return c.json({ error: "Carta de controle não encontrada" }, 404);
+        }
+        await tx.insert(controlChartAuditLog).values({
+          organizationId: member.organizationId,
+          controlChartId: id,
+          action: "delete",
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        });
+        return c.json({ message: "Carta removida" });
       });
-      return c.json({ message: "Carta removida" });
     },
   )
 
@@ -400,27 +417,29 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
       if (isNaN(id)) {
         return c.json({ error: "ID inválido" }, 400);
       }
-      const chart = await loadChartScoped(id, member.organizationId);
-      if (!chart) {
-        return c.json({ error: "Carta de controle não encontrada" }, 404);
-      }
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const chart = await loadChartScoped(id, member.organizationId, tx);
+        if (!chart) {
+          return c.json({ error: "Carta de controle não encontrada" }, 404);
+        }
 
-      const evaluation = await recomputeControlChart(chart);
+        const evaluation = await recomputeControlChart(chart, tx);
 
-      await db.insert(controlChartAuditLog).values({
-        organizationId: member.organizationId,
-        controlChartId: id,
-        action: "recalculate",
-        changes: {
-          status: { old: chart.status, new: evaluation.status },
-          fingerprint: evaluation.fingerprint,
-        },
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
+        await tx.insert(controlChartAuditLog).values({
+          organizationId: member.organizationId,
+          controlChartId: id,
+          action: "recalculate",
+          changes: {
+            status: { old: chart.status, new: evaluation.status },
+            fingerprint: evaluation.fingerprint,
+          },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        });
+
+        const refreshed = await loadChartScoped(id, member.organizationId, tx);
+        return c.json(refreshed ?? chart);
       });
-
-      const refreshed = await loadChartScoped(id, member.organizationId);
-      return c.json(refreshed ?? chart);
     },
   )
 
@@ -439,77 +458,82 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
       if (isNaN(id)) {
         return c.json({ error: "ID inválido" }, 400);
       }
-      const chart = await loadChartScoped(id, member.organizationId);
-      if (!chart) {
-        return c.json({ error: "Carta de controle não encontrada" }, 404);
-      }
-      if (chart.capaId) {
-        return c.json({ error: "Carta já possui CAPA vinculada" }, 400);
-      }
-      if (
-        chart.status === "in_control" ||
-        chart.status === "insufficient_data"
-      ) {
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const chart = await loadChartScoped(id, member.organizationId, tx);
+        if (!chart) {
+          return c.json({ error: "Carta de controle não encontrada" }, 404);
+        }
+        if (chart.capaId) {
+          return c.json({ error: "Carta já possui CAPA vinculada" }, 400);
+        }
+        if (
+          chart.status === "in_control" ||
+          chart.status === "insufficient_data"
+        ) {
+          return c.json(
+            { error: "Carta sob controle estatístico — nada a escalar" },
+            400,
+          );
+        }
+
+        const [standard] = await tx
+          .select({ name: referenceStandard.name })
+          .from(referenceStandard)
+          .where(eq(referenceStandard.id, chart.standardId))
+          .limit(1);
+        const ruleSummary = (chart.lastEvaluation?.ruleHits ?? [])
+          .map((h) => h.description)
+          .join("; ");
+
+        const newCapa = await createCorrectiveActionRecord(
+          {
+            organizationId: member.organizationId,
+            actorUserId: session.user.id,
+            source: "spc_signal",
+            sourceReference: `${standard?.name ?? `Padrão #${chart.standardId}`} — ${chart.parameter}`,
+            title: `Sinal de controle estatístico: ${standard?.name ?? `padrão #${chart.standardId}`}`,
+            description:
+              input.description ??
+              `Carta de controle "${chart.parameter}" do padrão ${standard?.name ?? `#${chart.standardId}`} em estado "${chart.status}". Regras violadas: ${ruleSummary || "n/d"}.`,
+            detectionDate: chart.lastEvaluatedAt ?? new Date(),
+            severity: chart.status === "out_of_control" ? "major" : "minor",
+            category: "equipment",
+            ipAddress: c.req.header("x-forwarded-for") || null,
+          },
+          tx,
+        );
+
+        await tx
+          .update(controlChart)
+          .set({ capaId: newCapa.id })
+          .where(
+            and(
+              eq(controlChart.id, id),
+              eq(controlChart.organizationId, member.organizationId),
+            ),
+          );
+
+        await tx.insert(controlChartAuditLog).values({
+          organizationId: member.organizationId,
+          controlChartId: id,
+          action: "escalate",
+          changes: {
+            capaId: { old: null, new: newCapa.id },
+            capaNumber: newCapa.capaNumber,
+          },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        });
+
+        const refreshed = await loadChartScoped(id, member.organizationId, tx);
         return c.json(
-          { error: "Carta sob controle estatístico — nada a escalar" },
-          400,
+          {
+            message: "CAPA criada com sucesso",
+            data: { chart: refreshed, capa: newCapa },
+          },
+          201,
         );
-      }
-
-      const [standard] = await db
-        .select({ name: referenceStandard.name })
-        .from(referenceStandard)
-        .where(eq(referenceStandard.id, chart.standardId))
-        .limit(1);
-      const ruleSummary = (chart.lastEvaluation?.ruleHits ?? [])
-        .map((h) => h.description)
-        .join("; ");
-
-      const newCapa = await createCorrectiveActionRecord({
-        organizationId: member.organizationId,
-        actorUserId: session.user.id,
-        source: "spc_signal",
-        sourceReference: `${standard?.name ?? `Padrão #${chart.standardId}`} — ${chart.parameter}`,
-        title: `Sinal de controle estatístico: ${standard?.name ?? `padrão #${chart.standardId}`}`,
-        description:
-          input.description ??
-          `Carta de controle "${chart.parameter}" do padrão ${standard?.name ?? `#${chart.standardId}`} em estado "${chart.status}". Regras violadas: ${ruleSummary || "n/d"}.`,
-        detectionDate: chart.lastEvaluatedAt ?? new Date(),
-        severity: chart.status === "out_of_control" ? "major" : "minor",
-        category: "equipment",
-        ipAddress: c.req.header("x-forwarded-for") || null,
       });
-
-      await db
-        .update(controlChart)
-        .set({ capaId: newCapa.id })
-        .where(
-          and(
-            eq(controlChart.id, id),
-            eq(controlChart.organizationId, member.organizationId),
-          ),
-        );
-
-      await db.insert(controlChartAuditLog).values({
-        organizationId: member.organizationId,
-        controlChartId: id,
-        action: "escalate",
-        changes: {
-          capaId: { old: null, new: newCapa.id },
-          capaNumber: newCapa.capaNumber,
-        },
-        performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
-      });
-
-      const refreshed = await loadChartScoped(id, member.organizationId);
-      return c.json(
-        {
-          message: "CAPA criada com sucesso",
-          data: { chart: refreshed, capa: newCapa },
-        },
-        201,
-      );
     },
   )
 
@@ -532,29 +556,31 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
         conditions.push(eq(checkStandardReading.parameter, parameter));
       }
 
-      const readings = await db
-        .select({
-          id: checkStandardReading.id,
-          standardId: checkStandardReading.standardId,
-          parameter: checkStandardReading.parameter,
-          value: checkStandardReading.value,
-          uncertainty: checkStandardReading.uncertainty,
-          measuredAt: checkStandardReading.measuredAt,
-          sourceJobId: checkStandardReading.sourceJobId,
-          createdBy: checkStandardReading.createdBy,
-          createdByName: user.name,
-          createdAt: checkStandardReading.createdAt,
-        })
-        .from(checkStandardReading)
-        .leftJoin(user, eq(checkStandardReading.createdBy, user.id))
-        .where(and(...conditions))
-        .orderBy(
-          asc(checkStandardReading.measuredAt),
-          asc(checkStandardReading.id),
-        )
-        .limit(limit);
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const readings = await tx
+          .select({
+            id: checkStandardReading.id,
+            standardId: checkStandardReading.standardId,
+            parameter: checkStandardReading.parameter,
+            value: checkStandardReading.value,
+            uncertainty: checkStandardReading.uncertainty,
+            measuredAt: checkStandardReading.measuredAt,
+            sourceJobId: checkStandardReading.sourceJobId,
+            createdBy: checkStandardReading.createdBy,
+            createdByName: user.name,
+            createdAt: checkStandardReading.createdAt,
+          })
+          .from(checkStandardReading)
+          .leftJoin(user, eq(checkStandardReading.createdBy, user.id))
+          .where(and(...conditions))
+          .orderBy(
+            asc(checkStandardReading.measuredAt),
+            asc(checkStandardReading.id),
+          )
+          .limit(limit);
 
-      return c.json({ data: readings });
+        return c.json({ data: readings });
+      });
     },
   )
 
@@ -570,62 +596,65 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
       const session = c.get("session");
       const input = c.req.valid("json");
 
-      const [standard] = await db
-        .select({ id: referenceStandard.id })
-        .from(referenceStandard)
-        .where(
-          and(
-            eq(referenceStandard.id, input.standardId),
-            eq(referenceStandard.organizationId, member.organizationId),
-          ),
-        )
-        .limit(1);
-      if (!standard) {
-        return c.json({ error: "Padrão de referência não encontrado" }, 404);
-      }
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const [standard] = await tx
+          .select({ id: referenceStandard.id })
+          .from(referenceStandard)
+          .where(
+            and(
+              eq(referenceStandard.id, input.standardId),
+              eq(referenceStandard.organizationId, member.organizationId),
+            ),
+          )
+          .limit(1);
+        if (!standard) {
+          return c.json({ error: "Padrão de referência não encontrado" }, 404);
+        }
 
-      if (
-        input.sourceJobId != null &&
-        !(await calibrationJobBelongsToOrganization(
-          member.organizationId,
-          input.sourceJobId,
-        ))
-      ) {
-        return c.json({ error: "Calibração de origem não encontrada" }, 404);
-      }
+        if (
+          input.sourceJobId != null &&
+          !(await calibrationJobBelongsToOrganization(
+            member.organizationId,
+            input.sourceJobId,
+            tx,
+          ))
+        ) {
+          return c.json({ error: "Calibração de origem não encontrada" }, 404);
+        }
 
-      const [created] = await db
-        .insert(checkStandardReading)
-        .values({
-          organizationId: member.organizationId,
-          standardId: input.standardId,
-          parameter: input.parameter,
-          value: input.value,
-          uncertainty: input.uncertainty ?? null,
-          measuredAt: new Date(input.measuredAt),
-          sourceJobId: input.sourceJobId ?? null,
-          createdBy: session.user.id,
-        })
-        .returning();
+        const [created] = await tx
+          .insert(checkStandardReading)
+          .values({
+            organizationId: member.organizationId,
+            standardId: input.standardId,
+            parameter: input.parameter,
+            value: input.value,
+            uncertainty: input.uncertainty ?? null,
+            measuredAt: new Date(input.measuredAt),
+            sourceJobId: input.sourceJobId ?? null,
+            createdBy: session.user.id,
+          })
+          .returning();
 
-      // Keep the matching chart current so trends surface without waiting
-      // for the nightly sweep.
-      const [chart] = await db
-        .select()
-        .from(controlChart)
-        .where(
-          and(
-            eq(controlChart.organizationId, member.organizationId),
-            eq(controlChart.standardId, input.standardId),
-            eq(controlChart.parameter, input.parameter),
-          ),
-        )
-        .limit(1);
-      if (chart) {
-        await recomputeControlChart(chart);
-      }
+        // Keep the matching chart current so trends surface without waiting
+        // for the nightly sweep.
+        const [chart] = await tx
+          .select()
+          .from(controlChart)
+          .where(
+            and(
+              eq(controlChart.organizationId, member.organizationId),
+              eq(controlChart.standardId, input.standardId),
+              eq(controlChart.parameter, input.parameter),
+            ),
+          )
+          .limit(1);
+        if (chart) {
+          await recomputeControlChart(chart, tx);
+        }
 
-      return c.json(created, 201);
+        return c.json(created, 201);
+      });
     },
   )
 
@@ -641,35 +670,37 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
       if (isNaN(id)) {
         return c.json({ error: "ID inválido" }, 400);
       }
-      const deleted = await db
-        .delete(checkStandardReading)
-        .where(
-          and(
-            eq(checkStandardReading.id, id),
-            eq(checkStandardReading.organizationId, member.organizationId),
-          ),
-        )
-        .returning();
-      const removed = deleted[0];
-      if (!removed) {
-        return c.json({ error: "Leitura não encontrada" }, 404);
-      }
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const deleted = await tx
+          .delete(checkStandardReading)
+          .where(
+            and(
+              eq(checkStandardReading.id, id),
+              eq(checkStandardReading.organizationId, member.organizationId),
+            ),
+          )
+          .returning();
+        const removed = deleted[0];
+        if (!removed) {
+          return c.json({ error: "Leitura não encontrada" }, 404);
+        }
 
-      const [chart] = await db
-        .select()
-        .from(controlChart)
-        .where(
-          and(
-            eq(controlChart.organizationId, member.organizationId),
-            eq(controlChart.standardId, removed.standardId),
-            eq(controlChart.parameter, removed.parameter),
-          ),
-        )
-        .limit(1);
-      if (chart) {
-        await recomputeControlChart(chart);
-      }
+        const [chart] = await tx
+          .select()
+          .from(controlChart)
+          .where(
+            and(
+              eq(controlChart.organizationId, member.organizationId),
+              eq(controlChart.standardId, removed.standardId),
+              eq(controlChart.parameter, removed.parameter),
+            ),
+          )
+          .limit(1);
+        if (chart) {
+          await recomputeControlChart(chart, tx);
+        }
 
-      return c.json({ message: "Leitura removida" });
+        return c.json({ message: "Leitura removida" });
+      });
     },
   );

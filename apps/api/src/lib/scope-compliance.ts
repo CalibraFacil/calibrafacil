@@ -13,6 +13,7 @@
  */
 
 import { db } from "@calibra-facil/db";
+import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import {
   accreditedScopeLine,
   organization,
@@ -45,17 +46,21 @@ export function isAdverseScopeCompliance(
   );
 }
 
-export async function classifyJobScopeCompliance(input: {
-  organizationId: string;
-  unitId: number;
-  methodSnapshot: MethodSnapshot;
-  assetSnapshot: AssetSnapshot | null;
-  data: Record<string, unknown> | null;
-  results: Record<string, unknown> | null;
-  /** Evaluation instant — emission date at approval, now at submit. */
-  atDate: Date;
-}): Promise<JobScopeClassification> {
-  const [lab] = await db
+export async function classifyJobScopeCompliance(
+  input: {
+    organizationId: string;
+    unitId: number;
+    methodSnapshot: MethodSnapshot;
+    assetSnapshot: AssetSnapshot | null;
+    data: Record<string, unknown> | null;
+    results: Record<string, unknown> | null;
+    /** Evaluation instant — emission date at approval, now at submit. */
+    atDate: Date;
+  },
+  /** The org-bound handle of the caller's transaction (row-level security). */
+  executor: Pick<OrgExecutor, "select"> = db,
+): Promise<JobScopeClassification> {
+  const [lab] = await executor
     .select({
       accreditationActive: organization.accreditationActive,
       accreditationNumber: organization.accreditationNumber,
@@ -77,7 +82,7 @@ export async function classifyJobScopeCompliance(input: {
     });
   if (!sealWouldRender) return { compliance: null, enforcementMode };
 
-  const scopeLines = await db
+  const scopeLines = await executor
     .select()
     .from(accreditedScopeLine)
     .where(
