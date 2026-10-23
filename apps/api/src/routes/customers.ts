@@ -6,7 +6,7 @@ import type {
 } from "@calibra-facil/contracts";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   customer,
   customerGroup,
@@ -56,6 +56,7 @@ import {
   removePortalMemberAsService,
 } from "../lib/portal-service-account";
 import { resolveCustomerRouteId } from "../lib/customer-route-id";
+import { orgDb } from "../lib/org-db";
 
 const CommandPaletteCustomerSearchQuerySchema = z.object({
   query: z.string().trim().min(2),
@@ -101,8 +102,9 @@ function getStringProperty(value: unknown, key: string) {
 async function groupBelongsToLab(
   groupId: number,
   labOrganizationId: string,
+  o: Pick<OrgDb, "select">,
 ): Promise<boolean> {
-  const [group] = await db
+  const [group] = await o
     .select({ id: customerGroup.id })
     .from(customerGroup)
     .where(
@@ -161,9 +163,12 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         const memberData = c.get("member");
 
         // Fail fast on an invalid group before provisioning the CLIENT org.
+        const { groupId } = input;
         if (
-          input.groupId != null &&
-          !(await groupBelongsToLab(input.groupId, memberData.organizationId))
+          groupId != null &&
+          !(await orgDb(memberData.organizationId).transaction((o) =>
+            groupBelongsToLab(groupId, memberData.organizationId, o),
+          ))
         ) {
           return c.json({ error: "Grupo invalido" }, 400);
         }
@@ -186,20 +191,24 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         // Step 2: Insert customer record
         // - authOrganizationId: The CLIENT org (for portal access)
         // - labOrganizationId: The LAB org that manages this customer (current user's org)
-        const [newCustomer] = await db
-          .insert(customer)
-          .values({
-            name: input.name,
-            tradeName: input.tradeName || null,
-            taxId: input.taxId || null,
-            email: input.email || null,
-            phone: input.phone || null,
-            address: input.address || null,
-            authOrganizationId: orgResult.id,
-            labOrganizationId: memberData.organizationId,
-            groupId: input.groupId ?? null,
-          })
-          .returning();
+        const [newCustomer] = await orgDb(
+          memberData.organizationId,
+        ).transaction((o) =>
+          o
+            .insert(customer)
+            .values({
+              name: input.name,
+              tradeName: input.tradeName || null,
+              taxId: input.taxId || null,
+              email: input.email || null,
+              phone: input.phone || null,
+              address: input.address || null,
+              authOrganizationId: orgResult.id,
+              labOrganizationId: memberData.organizationId,
+              groupId: input.groupId ?? null,
+            })
+            .returning(),
+        );
 
         // Step 3: If email provided, create invitation for client portal access.
         let invitationId: string | null = null;
@@ -237,22 +246,25 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
       const { query, limit } = c.req.valid("query");
 
       try {
-        const results = await db
-          .select({
-            id: customer.id,
-            name: customer.name,
-            email: customer.email,
-            taxId: customer.taxId,
-          })
-          .from(customer)
-          .where(
-            and(
-              eq(customer.labOrganizationId, memberData.organizationId),
-              customerSearchCondition(query)!,
-            ),
-          )
-          .orderBy(customer.name)
-          .limit(limit);
+        const results = await orgDb(memberData.organizationId).transaction(
+          (o) =>
+            o
+              .select({
+                id: customer.id,
+                name: customer.name,
+                email: customer.email,
+                taxId: customer.taxId,
+              })
+              .from(customer)
+              .where(
+                and(
+                  eq(customer.labOrganizationId, memberData.organizationId),
+                  customerSearchCondition(query)!,
+                ),
+              )
+              .orderBy(customer.name)
+              .limit(limit),
+        );
 
         return c.json(results);
       } catch (error) {
@@ -322,64 +334,69 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           }
         }
 
-        // Get customers with pagination (filtered by organization)
-        const customers = await db
-          .select()
-          .from(customer)
-          .where(and(...conditions))
-          .orderBy(customer.name)
-          .limit(limit)
-          .offset(offset);
+        return await orgDb(memberData.organizationId).transaction(async (o) => {
+          // Get customers with pagination (filtered by organization)
+          const customers = await o
+            .select()
+            .from(customer)
+            .where(and(...conditions))
+            .orderBy(customer.name)
+            .limit(limit)
+            .offset(offset);
 
-        // Get total count for pagination (filtered by organization)
-        const countResult = await db
-          .select({ total: count() })
-          .from(customer)
-          .where(and(...conditions));
+          // Get total count for pagination (filtered by organization)
+          const countResult = await o
+            .select({ total: count() })
+            .from(customer)
+            .where(and(...conditions));
 
-        const total = countResult[0]?.total ?? 0;
+          const total = countResult[0]?.total ?? 0;
 
-        // Resolve group names for the rows on this page (batched single query).
-        const pageGroupIds = [
-          ...new Set(
-            customers
-              .map((row) => row.groupId)
-              .filter((groupId): groupId is number => groupId !== null),
-          ),
-        ];
-        const groupNameById = new Map<number, string>();
-        if (pageGroupIds.length > 0) {
-          const groups = await db
-            .select({ id: customerGroup.id, name: customerGroup.name })
-            .from(customerGroup)
-            .where(
-              and(
-                eq(customerGroup.labOrganizationId, memberData.organizationId),
-                inArray(customerGroup.id, pageGroupIds),
-              ),
-            );
-          for (const group of groups) {
-            groupNameById.set(group.id, group.name);
+          // Resolve group names for the rows on this page (batched single query).
+          const pageGroupIds = [
+            ...new Set(
+              customers
+                .map((row) => row.groupId)
+                .filter((groupId): groupId is number => groupId !== null),
+            ),
+          ];
+          const groupNameById = new Map<number, string>();
+          if (pageGroupIds.length > 0) {
+            const groups = await o
+              .select({ id: customerGroup.id, name: customerGroup.name })
+              .from(customerGroup)
+              .where(
+                and(
+                  eq(
+                    customerGroup.labOrganizationId,
+                    memberData.organizationId,
+                  ),
+                  inArray(customerGroup.id, pageGroupIds),
+                ),
+              );
+            for (const group of groups) {
+              groupNameById.set(group.id, group.name);
+            }
           }
-        }
 
-        const data = customers.map((row) => ({
-          ...row,
-          groupName:
-            row.groupId === null
-              ? null
-              : (groupNameById.get(row.groupId) ?? null),
-        }));
+          const data = customers.map((row) => ({
+            ...row,
+            groupName:
+              row.groupId === null
+                ? null
+                : (groupNameById.get(row.groupId) ?? null),
+          }));
 
-        return c.json({
-          data,
-          pagination: {
-            page,
-            limit,
-            total,
-            totalPages: Math.ceil(total / limit),
-          },
-        } satisfies ServerShape<CustomersListResponse>);
+          return c.json({
+            data,
+            pagination: {
+              page,
+              limit,
+              total,
+              totalPages: Math.ceil(total / limit),
+            },
+          } satisfies ServerShape<CustomersListResponse>);
+        });
       } catch (error) {
         console.error("Error listing customers:", error);
         return c.json({ error: "Erro ao listar clientes" }, 500);
@@ -401,25 +418,27 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
       return c.json({ error: "ID invalido" }, 400);
     }
 
-    const [foundCustomer] = await db
-      .select({
-        id: customer.id,
-        label: customer.name,
-      })
-      .from(customer)
-      .where(
-        and(
-          eq(customer.id, id),
-          eq(customer.labOrganizationId, memberData.organizationId),
-        ),
-      )
-      .limit(1);
+    return await orgDb(memberData.organizationId).transaction(async (o) => {
+      const [foundCustomer] = await o
+        .select({
+          id: customer.id,
+          label: customer.name,
+        })
+        .from(customer)
+        .where(
+          and(
+            eq(customer.id, id),
+            eq(customer.labOrganizationId, memberData.organizationId),
+          ),
+        )
+        .limit(1);
 
-    if (!foundCustomer) {
-      return c.json({ error: "Cliente nao encontrado" }, 404);
-    }
+      if (!foundCustomer) {
+        return c.json({ error: "Cliente nao encontrado" }, 404);
+      }
 
-    return c.json(foundCustomer);
+      return c.json(foundCustomer);
+    });
   })
 
   // =========================================================================
@@ -441,49 +460,51 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "ID invalido" }, 400);
       }
 
-      const [foundCustomer] = await db
-        .select({ id: customer.id })
-        .from(customer)
-        .where(
-          and(
-            eq(customer.id, id),
-            eq(customer.labOrganizationId, memberData.organizationId),
-          ),
-        )
-        .limit(1);
-      if (!foundCustomer) {
-        return c.json({ error: "Cliente nao encontrado" }, 404);
-      }
+      return await orgDb(memberData.organizationId).transaction(async (o) => {
+        const [foundCustomer] = await o
+          .select({ id: customer.id })
+          .from(customer)
+          .where(
+            and(
+              eq(customer.id, id),
+              eq(customer.labOrganizationId, memberData.organizationId),
+            ),
+          )
+          .limit(1);
+        if (!foundCustomer) {
+          return c.json({ error: "Cliente nao encontrado" }, 404);
+        }
 
-      const events = await db
-        .select({
-          id: assetOotEvent.id,
-          status: assetOotEvent.status,
-          detectedAt: assetOotEvent.detectedAt,
-          assetId: assetOotEvent.assetId,
-          assetTag: asset.tag,
-          assetName: asset.name,
-          jobId: assetOotEvent.jobId,
-          jobIdentifier: calibrationJob.jobId,
-          assessmentDecision: assetOotImpactAssessment.decision,
-          assessmentCreatedAt: assetOotImpactAssessment.createdAt,
-        })
-        .from(assetOotEvent)
-        .innerJoin(asset, eq(assetOotEvent.assetId, asset.id))
-        .innerJoin(calibrationJob, eq(assetOotEvent.jobId, calibrationJob.id))
-        .leftJoin(
-          assetOotImpactAssessment,
-          eq(assetOotImpactAssessment.eventId, assetOotEvent.id),
-        )
-        .where(
-          and(
-            eq(assetOotEvent.customerId, id),
-            eq(assetOotEvent.labOrganizationId, memberData.organizationId),
-          ),
-        )
-        .orderBy(desc(assetOotEvent.detectedAt));
+        const events = await o
+          .select({
+            id: assetOotEvent.id,
+            status: assetOotEvent.status,
+            detectedAt: assetOotEvent.detectedAt,
+            assetId: assetOotEvent.assetId,
+            assetTag: asset.tag,
+            assetName: asset.name,
+            jobId: assetOotEvent.jobId,
+            jobIdentifier: calibrationJob.jobId,
+            assessmentDecision: assetOotImpactAssessment.decision,
+            assessmentCreatedAt: assetOotImpactAssessment.createdAt,
+          })
+          .from(assetOotEvent)
+          .innerJoin(asset, eq(assetOotEvent.assetId, asset.id))
+          .innerJoin(calibrationJob, eq(assetOotEvent.jobId, calibrationJob.id))
+          .leftJoin(
+            assetOotImpactAssessment,
+            eq(assetOotImpactAssessment.eventId, assetOotEvent.id),
+          )
+          .where(
+            and(
+              eq(assetOotEvent.customerId, id),
+              eq(assetOotEvent.labOrganizationId, memberData.organizationId),
+            ),
+          )
+          .orderBy(desc(assetOotEvent.detectedAt));
 
-      return c.json({ data: events });
+        return c.json({ data: events });
+      });
     },
   )
 
@@ -549,55 +570,61 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: "Cliente nao encontrado" }, 404);
         }
 
-        // A group reassignment must target a group owned by the same lab.
-        if (
-          input.groupId != null &&
-          !(await groupBelongsToLab(input.groupId, memberData.organizationId))
-        ) {
-          return c.json({ error: "Grupo invalido" }, 400);
-        }
-
-        // Build changes object for audit log
-        const changes: Record<string, { old: unknown; new: unknown }> = {};
-        const existingCustomerRecord = toRecord(existingCustomer);
-        for (const [key, value] of Object.entries(input)) {
-          const oldValue = existingCustomerRecord[key];
-          if (JSON.stringify(oldValue) !== JSON.stringify(value)) {
-            changes[key] = { old: oldValue, new: value };
+        return await orgDb(memberData.organizationId).transaction(async (o) => {
+          // A group reassignment must target a group owned by the same lab.
+          if (
+            input.groupId != null &&
+            !(await groupBelongsToLab(
+              input.groupId,
+              memberData.organizationId,
+              o,
+            ))
+          ) {
+            return c.json({ error: "Grupo invalido" }, 400);
           }
-        }
 
-        // Update customer
-        const [updatedCustomer] = await db
-          .update(customer)
-          .set({
-            ...input,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(customer.id, id),
-              eq(customer.labOrganizationId, memberData.organizationId),
-            ),
-          )
-          .returning();
+          // Build changes object for audit log
+          const changes: Record<string, { old: unknown; new: unknown }> = {};
+          const existingCustomerRecord = toRecord(existingCustomer);
+          for (const [key, value] of Object.entries(input)) {
+            const oldValue = existingCustomerRecord[key];
+            if (JSON.stringify(oldValue) !== JSON.stringify(value)) {
+              changes[key] = { old: oldValue, new: value };
+            }
+          }
 
-        // Log audit entry if there were changes
-        if (Object.keys(changes).length > 0) {
-          await db.insert(customerAuditLog).values({
-            organizationId: memberData.organizationId,
-            customerId: id,
-            action: "update",
-            changes,
-            performedBy: session.user.id,
-            ipAddress:
-              c.req.header("x-forwarded-for") ??
-              c.req.header("x-real-ip") ??
-              null,
-          });
-        }
+          // Update customer
+          const [updatedCustomer] = await o
+            .update(customer)
+            .set({
+              ...input,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(customer.id, id),
+                eq(customer.labOrganizationId, memberData.organizationId),
+              ),
+            )
+            .returning();
 
-        return c.json(updatedCustomer);
+          // Log audit entry if there were changes
+          if (Object.keys(changes).length > 0) {
+            await o.insert(customerAuditLog).values({
+              organizationId: memberData.organizationId,
+              customerId: id,
+              action: "update",
+              changes,
+              performedBy: session.user.id,
+              ipAddress:
+                c.req.header("x-forwarded-for") ??
+                c.req.header("x-real-ip") ??
+                null,
+            });
+          }
+
+          return c.json(updatedCustomer);
+        });
       } catch (error) {
         console.error("Error updating customer:", error);
         return c.json({ error: "Erro ao atualizar cliente" }, 500);
@@ -642,7 +669,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
       // Postgres refuses the DELETE; the audit rows below are written in the same
       // transaction so a refused delete leaves no "delete" entry behind.
       try {
-        await db.transaction(async (tx) => {
+        await orgDb(memberData.organizationId).transaction(async (tx) => {
           // Log audit entry before deletion. CMP-06 (#649): the customer_id FK no
           // longer cascades (soft reference), so this row survives the delete below.
           await tx.insert(customerAuditLog).values({
@@ -740,24 +767,31 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         }
 
         // Get members of the CLIENT organization with user details
-        const members = await db
-          .select({
-            id: member.id,
-            userId: member.userId,
-            role: member.role,
-            createdAt: member.createdAt,
-            userName: user.name,
-            userEmail: user.email,
-            userImage: user.image,
-          })
-          .from(member)
-          .innerJoin(user, eq(member.userId, user.id))
-          .where(
-            and(
-              eq(member.organizationId, foundCustomer.authOrganizationId),
-              inArray(member.role, PORTAL_VISIBLE_MEMBER_ROLES),
+        // `member` rows of the CLIENT organization carry that organization as
+        // their tenant column: it is the one the transaction names (the lab
+        // already proved the customer is its own above).
+        const members = await orgDb(
+          foundCustomer.authOrganizationId,
+        ).transaction((o) =>
+          o
+            .select({
+              id: member.id,
+              userId: member.userId,
+              role: member.role,
+              createdAt: member.createdAt,
+              userName: user.name,
+              userEmail: user.email,
+              userImage: user.image,
+            })
+            .from(member)
+            .innerJoin(user, eq(member.userId, user.id))
+            .where(
+              and(
+                eq(member.organizationId, foundCustomer.authOrganizationId),
+                inArray(member.role, PORTAL_VISIBLE_MEMBER_ROLES),
+              ),
             ),
-          );
+        );
 
         return c.json(members);
       } catch (error) {
@@ -796,23 +830,28 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         }
 
         // Get invitations for the CLIENT organization
-        const invitations = await db
-          .select({
-            id: invitation.id,
-            email: invitation.email,
-            role: invitation.role,
-            status: invitation.status,
-            expiresAt: invitation.expiresAt,
-            createdAt: invitation.createdAt,
-            inviterName: user.name,
-            inviterEmail: user.email,
-          })
-          .from(invitation)
-          .innerJoin(user, eq(invitation.inviterId, user.id))
-          .where(
-            eq(invitation.organizationId, foundCustomer.authOrganizationId),
-          )
-          .orderBy(desc(invitation.createdAt));
+        // The CLIENT organization's own invitation rows (see the members read).
+        const invitations = await orgDb(
+          foundCustomer.authOrganizationId,
+        ).transaction((o) =>
+          o
+            .select({
+              id: invitation.id,
+              email: invitation.email,
+              role: invitation.role,
+              status: invitation.status,
+              expiresAt: invitation.expiresAt,
+              createdAt: invitation.createdAt,
+              inviterName: user.name,
+              inviterEmail: user.email,
+            })
+            .from(invitation)
+            .innerJoin(user, eq(invitation.inviterId, user.id))
+            .where(
+              eq(invitation.organizationId, foundCustomer.authOrganizationId),
+            )
+            .orderBy(desc(invitation.createdAt)),
+        );
 
         return c.json(invitations);
       } catch (error) {
@@ -869,21 +908,23 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         }
 
         // Log audit entry
-        await db.insert(customerAuditLog).values({
-          organizationId: memberData.organizationId,
-          customerId: id,
-          action: "user_invited",
-          changes: {
-            email,
-            role: portalRole,
-            invitationId: inviteResult.id,
-          },
-          performedBy: session.user.id,
-          ipAddress:
-            c.req.header("x-forwarded-for") ??
-            c.req.header("x-real-ip") ??
-            null,
-        });
+        await orgDb(memberData.organizationId).transaction((o) =>
+          o.insert(customerAuditLog).values({
+            organizationId: memberData.organizationId,
+            customerId: id,
+            action: "user_invited",
+            changes: {
+              email,
+              role: portalRole,
+              invitationId: inviteResult.id,
+            },
+            performedBy: session.user.id,
+            ipAddress:
+              c.req.header("x-forwarded-for") ??
+              c.req.header("x-real-ip") ??
+              null,
+          }),
+        );
 
         return c.json({ id: inviteResult.id, email, role: portalRole }, 201);
       } catch (error) {
@@ -933,16 +974,20 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         }
 
         // Get invitation to verify it belongs to this customer
-        const [foundInvitation] = await db
-          .select()
-          .from(invitation)
-          .where(
-            and(
-              eq(invitation.id, invId),
-              eq(invitation.organizationId, foundCustomer.authOrganizationId),
-            ),
-          )
-          .limit(1);
+        const [foundInvitation] = await orgDb(
+          foundCustomer.authOrganizationId,
+        ).transaction((o) =>
+          o
+            .select()
+            .from(invitation)
+            .where(
+              and(
+                eq(invitation.id, invId),
+                eq(invitation.organizationId, foundCustomer.authOrganizationId),
+              ),
+            )
+            .limit(1),
+        );
 
         if (!foundInvitation) {
           return c.json({ error: "Convite nao encontrado" }, 404);
@@ -1021,16 +1066,20 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         }
 
         // Get invitation to verify it belongs to this customer
-        const [foundInvitation] = await db
-          .select()
-          .from(invitation)
-          .where(
-            and(
-              eq(invitation.id, invId),
-              eq(invitation.organizationId, foundCustomer.authOrganizationId),
-            ),
-          )
-          .limit(1);
+        const [foundInvitation] = await orgDb(
+          foundCustomer.authOrganizationId,
+        ).transaction((o) =>
+          o
+            .select()
+            .from(invitation)
+            .where(
+              and(
+                eq(invitation.id, invId),
+                eq(invitation.organizationId, foundCustomer.authOrganizationId),
+              ),
+            )
+            .limit(1),
+        );
 
         if (!foundInvitation) {
           return c.json({ error: "Convite nao encontrado" }, 404);
@@ -1053,17 +1102,19 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         });
 
         // Log audit entry
-        await db.insert(customerAuditLog).values({
-          organizationId: memberData.organizationId,
-          customerId: id,
-          action: "invitation_canceled",
-          changes: { email: foundInvitation.email, invitationId: invId },
-          performedBy: session.user.id,
-          ipAddress:
-            c.req.header("x-forwarded-for") ??
-            c.req.header("x-real-ip") ??
-            null,
-        });
+        await orgDb(memberData.organizationId).transaction((o) =>
+          o.insert(customerAuditLog).values({
+            organizationId: memberData.organizationId,
+            customerId: id,
+            action: "invitation_canceled",
+            changes: { email: foundInvitation.email, invitationId: invId },
+            performedBy: session.user.id,
+            ipAddress:
+              c.req.header("x-forwarded-for") ??
+              c.req.header("x-real-ip") ??
+              null,
+          }),
+        );
 
         return c.json({ success: true });
       } catch (error) {
@@ -1113,23 +1164,27 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         }
 
         // Get member to verify it belongs to this customer's organization
-        const [foundMember] = await db
-          .select({
-            id: member.id,
-            userId: member.userId,
-            role: member.role,
-            userName: user.name,
-            userEmail: user.email,
-          })
-          .from(member)
-          .innerJoin(user, eq(member.userId, user.id))
-          .where(
-            and(
-              eq(member.id, memberId),
-              eq(member.organizationId, foundCustomer.authOrganizationId),
-            ),
-          )
-          .limit(1);
+        const [foundMember] = await orgDb(
+          foundCustomer.authOrganizationId,
+        ).transaction((o) =>
+          o
+            .select({
+              id: member.id,
+              userId: member.userId,
+              role: member.role,
+              userName: user.name,
+              userEmail: user.email,
+            })
+            .from(member)
+            .innerJoin(user, eq(member.userId, user.id))
+            .where(
+              and(
+                eq(member.id, memberId),
+                eq(member.organizationId, foundCustomer.authOrganizationId),
+              ),
+            )
+            .limit(1),
+        );
 
         if (!foundMember) {
           return c.json({ error: "Membro nao encontrado" }, 404);
@@ -1155,21 +1210,23 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
         });
 
         // Log audit entry
-        await db.insert(customerAuditLog).values({
-          organizationId: memberData.organizationId,
-          customerId: id,
-          action: "user_removed",
-          changes: {
-            email: foundMember.userEmail,
-            name: foundMember.userName,
-            memberId,
-          },
-          performedBy: session.user.id,
-          ipAddress:
-            c.req.header("x-forwarded-for") ??
-            c.req.header("x-real-ip") ??
-            null,
-        });
+        await orgDb(memberData.organizationId).transaction((o) =>
+          o.insert(customerAuditLog).values({
+            organizationId: memberData.organizationId,
+            customerId: id,
+            action: "user_removed",
+            changes: {
+              email: foundMember.userEmail,
+              name: foundMember.userName,
+              memberId,
+            },
+            performedBy: session.user.id,
+            ipAddress:
+              c.req.header("x-forwarded-for") ??
+              c.req.header("x-real-ip") ??
+              null,
+          }),
+        );
 
         return c.json({ success: true });
       } catch (error) {
@@ -1244,46 +1301,52 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
             : {}),
         };
 
-        const activeCommercialAgreement =
-          await loadCustomerActiveCommercialAgreement(
-            memberData.organizationId,
-            id,
+        return await orgDb(memberData.organizationId).transaction(async (o) => {
+          const activeCommercialAgreement =
+            await loadCustomerActiveCommercialAgreement(
+              memberData.organizationId,
+              id,
+              o,
+            );
+          const updatedCompliance = syncComplianceWithActiveAgreement(
+            mergedCompliance,
+            activeCommercialAgreement,
           );
-        const updatedCompliance = syncComplianceWithActiveAgreement(
-          mergedCompliance,
-          activeCommercialAgreement,
-        );
 
-        // Update customer
-        const [updatedCustomer] = await db
-          .update(customer)
-          .set({
-            compliance: updatedCompliance,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(customer.id, id),
-              eq(customer.labOrganizationId, memberData.organizationId),
-            ),
-          )
-          .returning();
+          // Update customer
+          const [updatedCustomer] = await o
+            .update(customer)
+            .set({
+              compliance: updatedCompliance,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(customer.id, id),
+                eq(customer.labOrganizationId, memberData.organizationId),
+              ),
+            )
+            .returning();
 
-        // Log audit entry with reason (required for compliance changes per ISO 17025)
-        await db.insert(customerAuditLog).values({
-          organizationId: memberData.organizationId,
-          customerId: id,
-          action: "compliance_change",
-          changes: { old: existingCustomer.compliance, new: updatedCompliance },
-          performedBy: session.user.id,
-          ipAddress:
-            c.req.header("x-forwarded-for") ??
-            c.req.header("x-real-ip") ??
-            null,
-          reason,
+          // Log audit entry with reason (required for compliance changes per ISO 17025)
+          await o.insert(customerAuditLog).values({
+            organizationId: memberData.organizationId,
+            customerId: id,
+            action: "compliance_change",
+            changes: {
+              old: existingCustomer.compliance,
+              new: updatedCompliance,
+            },
+            performedBy: session.user.id,
+            ipAddress:
+              c.req.header("x-forwarded-for") ??
+              c.req.header("x-real-ip") ??
+              null,
+            reason,
+          });
+
+          return c.json(updatedCustomer);
         });
-
-        return c.json(updatedCustomer);
       } catch (error) {
         console.error("Error updating compliance:", error);
         return c.json({ error: "Erro ao atualizar conformidade" }, 500);
@@ -1323,40 +1386,42 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
 
         const offset = (page - 1) * limit;
 
-        // Get audit log entries with user details
-        const entries = await db
-          .select({
-            id: customerAuditLog.id,
-            action: customerAuditLog.action,
-            changes: customerAuditLog.changes,
-            performedAt: customerAuditLog.performedAt,
-            reason: customerAuditLog.reason,
-            performedByName: user.name,
-            performedByEmail: user.email,
-          })
-          .from(customerAuditLog)
-          .innerJoin(user, eq(customerAuditLog.performedBy, user.id))
-          .where(eq(customerAuditLog.customerId, id))
-          .orderBy(desc(customerAuditLog.performedAt))
-          .limit(limit)
-          .offset(offset);
+        return await orgDb(memberData.organizationId).transaction(async (o) => {
+          // Get audit log entries with user details
+          const entries = await o
+            .select({
+              id: customerAuditLog.id,
+              action: customerAuditLog.action,
+              changes: customerAuditLog.changes,
+              performedAt: customerAuditLog.performedAt,
+              reason: customerAuditLog.reason,
+              performedByName: user.name,
+              performedByEmail: user.email,
+            })
+            .from(customerAuditLog)
+            .innerJoin(user, eq(customerAuditLog.performedBy, user.id))
+            .where(eq(customerAuditLog.customerId, id))
+            .orderBy(desc(customerAuditLog.performedAt))
+            .limit(limit)
+            .offset(offset);
 
-        // Get total count
-        const countResult = await db
-          .select({ total: count() })
-          .from(customerAuditLog)
-          .where(eq(customerAuditLog.customerId, id));
+          // Get total count
+          const countResult = await o
+            .select({ total: count() })
+            .from(customerAuditLog)
+            .where(eq(customerAuditLog.customerId, id));
 
-        const total = countResult[0]?.total ?? 0;
+          const total = countResult[0]?.total ?? 0;
 
-        return c.json({
-          data: entries,
-          pagination: {
-            page,
-            limit,
-            total,
-            totalPages: Math.ceil(total / limit),
-          },
+          return c.json({
+            data: entries,
+            pagination: {
+              page,
+              limit,
+              total,
+              totalPages: Math.ceil(total / limit),
+            },
+          });
         });
       } catch (error) {
         console.error("Error getting audit log:", error);

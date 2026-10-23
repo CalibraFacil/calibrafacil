@@ -1,53 +1,68 @@
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import { customer, customerGroup } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 import {
   loadCustomerActiveCommercialAgreement,
   loadCustomerFinancialSummary,
 } from "./finance";
+import { inOrgTransaction } from "./org-transaction";
 
+/**
+ * The laboratory's customer with its financial summary, active agreement and
+ * group. `executor` is the caller's org-bound transaction when it has one
+ * (row-level security); without it the reads run in a transaction of their own
+ * that names `labOrganizationId`.
+ */
 export async function getLabCustomerById(
   customerId: number,
   labOrganizationId: string,
+  executor?: OrgDb,
 ) {
-  const [foundCustomer] = await db
-    .select()
-    .from(customer)
-    .where(
-      and(
-        eq(customer.id, customerId),
-        eq(customer.labOrganizationId, labOrganizationId),
-      ),
-    )
-    .limit(1);
+  return inOrgTransaction(labOrganizationId, executor, async (o) => {
+    const [foundCustomer] = await o
+      .select()
+      .from(customer)
+      .where(
+        and(
+          eq(customer.id, customerId),
+          eq(customer.labOrganizationId, labOrganizationId),
+        ),
+      )
+      .limit(1);
 
-  if (!foundCustomer) {
-    return null;
-  }
+    if (!foundCustomer) {
+      return null;
+    }
 
-  const [financialSummary, activeCommercialAgreement, group] =
-    await Promise.all([
-      loadCustomerFinancialSummary(labOrganizationId, foundCustomer.id),
-      loadCustomerActiveCommercialAgreement(
+    // Sequential: the statements share one transaction (one connection).
+    const financialSummary = await loadCustomerFinancialSummary(
+      labOrganizationId,
+      foundCustomer.id,
+      o,
+    );
+    const activeCommercialAgreement =
+      await loadCustomerActiveCommercialAgreement(
         labOrganizationId,
         foundCustomer.id,
-      ),
-      // Secondary lookup (keeps the whole-row select() above intact) so the
-      // detail payload can show which group/rede the customer belongs to.
-      foundCustomer.groupId === null
-        ? Promise.resolve(null)
-        : db
-            .select({ id: customerGroup.id, name: customerGroup.name })
-            .from(customerGroup)
-            .where(eq(customerGroup.id, foundCustomer.groupId))
-            .limit(1)
-            .then((rows) => rows[0] ?? null),
-    ]);
+        o,
+      );
+    // Secondary lookup (keeps the whole-row select() above intact) so the
+    // detail payload can show which group/rede the customer belongs to.
+    let group: { id: number; name: string } | null = null;
+    if (foundCustomer.groupId !== null) {
+      const [groupRow] = await o
+        .select({ id: customerGroup.id, name: customerGroup.name })
+        .from(customerGroup)
+        .where(eq(customerGroup.id, foundCustomer.groupId))
+        .limit(1);
+      group = groupRow ?? null;
+    }
 
-  return {
-    ...foundCustomer,
-    financialSummary,
-    activeCommercialAgreement,
-    group,
-  };
+    return {
+      ...foundCustomer,
+      financialSummary,
+      activeCommercialAgreement,
+      group,
+    };
+  });
 }

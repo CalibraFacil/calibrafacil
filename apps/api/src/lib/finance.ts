@@ -510,7 +510,8 @@ async function resolveApplicableAgreement(
 export async function loadCustomerActiveCommercialAgreement(
   organizationId: string,
   customerId: number,
-  executor?: FinanceDbExecutor,
+  // Reads only: any executor with `select` (an org-bound transaction handle).
+  executor?: Pick<OrgExecutor, "select">,
 ): Promise<ActiveCommercialAgreementSummary | null> {
   const runner = executor ?? db;
   const now = new Date();
@@ -830,8 +831,10 @@ export async function loadJobFinancialContexts(
 export async function loadCustomerFinancialSummary(
   organizationId: string,
   customerId: number,
+  // An org-bound transaction handle when the caller has one (row-level security).
+  executor: Pick<OrgExecutor, "select"> = db,
 ): Promise<CustomerFinancialSummary> {
-  const rows = await db
+  const rows = await executor
     .select({
       documentStatus: billingDocument.status,
       totalCents: billingDocument.totalCents,

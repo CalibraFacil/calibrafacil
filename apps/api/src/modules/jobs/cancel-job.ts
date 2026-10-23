@@ -1,4 +1,5 @@
 import { db } from "@calibra-facil/db";
+import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import { appendJobEvent } from "@calibra-facil/db/job-events";
 import { calibrationJob, type JobStatus } from "@calibra-facil/db/schema";
 import { requireTargetOf } from "@calibra-facil/schemas/job-transitions";
@@ -68,16 +69,41 @@ function cancelRefusal(status: JobStatus): DomainError {
   );
 }
 
+type CancelJobTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * How a caller that runs under row-level security reaches the database: the
+ * read of the job and the transaction of the write each name the organization
+ * (`orgDb(org).transaction`, `orgTransactionWithExecutor`). Both default to the
+ * plain `db`, which is what the jobs routes and the public API still use. The
+ * read and the write stay two transactions on purpose: the compare-and-set
+ * below is what protects the status between them.
+ */
+export type CancelJobRunners = {
+  read?: <R>(
+    run: (reader: Pick<OrgExecutor, "select">) => Promise<R>,
+  ) => Promise<R>;
+  write?: <R>(run: (tx: CancelJobTransaction) => Promise<R>) => Promise<R>;
+};
+
 export async function cancelJob(
   command: CancelJobCommand,
+  runners: CancelJobRunners = {},
 ): Promise<CancelJobResult> {
   const { actor, organizationId } = command;
+  const read = runners.read ?? ((run) => run(db));
+  const write = runners.write ?? ((run) => db.transaction(run));
 
-  const existing = await loadScopedJob({
-    jobId: command.jobId,
-    organizationId,
-    unitScope: command.unitScope,
-  });
+  const existing = await read((reader) =>
+    loadScopedJob(
+      {
+        jobId: command.jobId,
+        organizationId,
+        unitScope: command.unitScope,
+      },
+      reader,
+    ),
+  );
   if (!existing) return { status: "not_found" };
 
   if (!isCancelableJobStatus(existing.status)) {
@@ -92,7 +118,7 @@ export async function cancelJob(
   }
 
   const canceledStatus = requireTargetOf(existing.status, "cancel");
-  const updated = await db.transaction(async (tx) => {
+  const updated = await write(async (tx) => {
     const [row] = await tx
       .update(calibrationJob)
       .set({ status: canceledStatus })

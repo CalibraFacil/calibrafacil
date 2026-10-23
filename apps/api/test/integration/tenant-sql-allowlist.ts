@@ -244,6 +244,14 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "ownership-checked-in-code",
+    file: "apps/api/src/lib/org-transaction.ts",
+    tables: ["asset", "customer", "job_commercial_snapshot"],
+    kinds: ["select"],
+    reason:
+      "orgTransactionWithExecutor hands its raw, organization-named transaction to persistCalibrationJob (request->job conversion, visit POST /:id/jobs): see the lib/jobs.ts entry. Every other statement of those handlers goes through the org-bound handle, which carries the predicate.",
+  },
+  {
+    category: "ownership-checked-in-code",
     file: "apps/api/src/routes/calibration-requests.ts",
     tables: [
       "asset",

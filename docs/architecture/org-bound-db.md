@@ -124,6 +124,23 @@ added or removed without a migration.
   `orgDb(lab).transaction(...)`; side effects that read what the transaction wrote (notifications, queue
   jobs) run after it commits. `pnpm --filter @calibra-facil/api rls:shadow-report` shows 0 unscoped
   statements and 0 broken tests for the portal specs.
+- **Master data (P2-18c).** Assets, customers, customer groups, services, units, visits (lab side),
+  calibration requests, materials, environmental limits and certificate numbering run every statement in
+  `orgDb(lab).transaction(...)`; their raw-`db` baseline entries are gone. Details worth knowing:
+  - The `member` and `invitation` rows of a customer's or group's CLIENT organization carry that organization
+    as their tenant column, so reading them is a transaction that names the CLIENT organization
+    (`orgDb(customer.authOrganizationId).transaction`), after the lab-scoped lookup proved the customer is its own.
+  - A lib function that reads for a handler takes an optional `executor` (the handler's `o`) or opens its own
+    transaction (`inOrgTransaction`, `lib/org-transaction.ts`); `asset_type` is a global catalog and is read
+    through `lib/asset-types.ts` on the plain handle.
+  - Job creation (`createCalibrationJob`) still takes a Drizzle executor with `execute` (advisory locks,
+    certificate numbering), which the org-bound handle does not offer. `orgTransactionWithExecutor` opens a
+    `db.transaction`, names the laboratory, and hands the handler both the handle and the raw transaction; the
+    raw one goes to that callee only. `cancelJob` takes optional `read`/`write` runners for the same reason.
+  - A retry on a unique violation (unit slugs) opens a new transaction per attempt: the violation aborts the
+    one that raised it.
+  - Specs: `master-data-lab-scope.int.spec.ts` covers the success paths the per-router specs do not reach, each
+    with a cross-laboratory negative.
 - **Tests.** `apps/api/src/lib/rls-shadow.int.spec.ts` runs against a pool whose sessions are `calibra_app`
   (`test/integration/rls.ts`). `pnpm --filter @calibra-facil/api rls:shadow-report` replays every API
   integration spec (`--group routes/jobs` or `--files` narrow it) with each request's database access as
