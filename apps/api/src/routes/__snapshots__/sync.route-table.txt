@@ -1,0 +1,16 @@
+POST /bootstrap withLabPermission({"calibration":["read"]})
+POST /bootstrap <anonymous> #c619d63fdb
+POST /push withLabPermission({"calibration":["create"]})
+POST /push <anonymous> #13359a68cd
+GET /pull withLabPermission({"calibration":["read"]})
+GET /pull <anonymous> #855c2d86f4
+POST /ack withLabPermission({"calibration":["read"]})
+POST /ack <anonymous> #09e67813da
+POST /conflicts/:id/resolve withLabPermission({"calibration":["create"]})
+POST /conflicts/:id/resolve <anonymous> #d6a9d02595
+POST /attachments/init-upload withLabPermission({"calibration":["create"]})
+POST /attachments/init-upload <anonymous> #8d81333f0a
+POST /attachments/complete-upload withLabPermission({"calibration":["create"]})
+POST /attachments/complete-upload <anonymous> #37ac08c104
+GET /attachments/:attachmentId/download withLabPermission({"calibration":["read"]})
+GET /attachments/:attachmentId/download <anonymous> #2ad6b03cae
