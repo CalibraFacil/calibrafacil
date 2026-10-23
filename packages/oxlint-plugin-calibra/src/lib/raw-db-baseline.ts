@@ -7,8 +7,6 @@ import type { Baseline } from "./rule-support.ts";
 // The portal routes (portal*.ts) are migrated and have no entry.
 export const RAW_DB_BASELINE: Baseline = new Map<string, number>([
   ["apps/api/src/routes/api-keys.ts", 7],
-  ["apps/api/src/routes/capa.ts", 26],
-  ["apps/api/src/routes/dashboard.ts", 24],
   ["apps/api/src/routes/email-domains.ts", 3],
   ["apps/api/src/routes/integrations.ts", 20],
   ["apps/api/src/routes/invitations.ts", 4],
@@ -16,9 +14,7 @@ export const RAW_DB_BASELINE: Baseline = new Map<string, number>([
   ["apps/api/src/routes/lab-setup.ts", 3],
   ["apps/api/src/routes/legal-metrology-regulations.ts", 1],
   ["apps/api/src/routes/magic-link.ts", 3],
-  ["apps/api/src/routes/non-conformances.ts", 42],
   ["apps/api/src/routes/notifications.ts", 10],
-  ["apps/api/src/routes/oot-ack.ts", 2],
   ["apps/api/src/routes/organization-lifecycle.ts", 1],
   ["apps/api/src/routes/organization-media.ts", 4],
   ["apps/api/src/routes/profile-media.ts", 1],
@@ -38,10 +34,7 @@ export const RAW_DB_BASELINE: Baseline = new Map<string, number>([
   ["apps/api/src/routes/public-api-v2/webhooks.ts", 8],
   ["apps/api/src/routes/public-api.ts", 6],
   ["apps/api/src/routes/public-signup.ts", 4],
-  ["apps/api/src/routes/reports.ts", 16],
   ["apps/api/src/routes/sessions.ts", 2],
-  ["apps/api/src/routes/signatures.ts", 9],
-  ["apps/api/src/routes/signing.ts", 10],
   ["apps/api/src/routes/sso.ts", 5],
   ["apps/api/src/routes/webhooks.ts", 1],
 ]);

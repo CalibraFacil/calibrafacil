@@ -1,12 +1,9 @@
 import { Hono } from "hono";
-import { db } from "@calibra-facil/db";
-import {
-  nonConformance,
-  ootNotification,
-  organization,
-} from "@calibra-facil/db/schema";
 import { notifyOotAcknowledged } from "@calibra-facil/notifications";
-import { and, eq } from "drizzle-orm";
+import {
+  findOotNotificationByAckToken,
+  stampOotAcknowledgementByLink,
+} from "../lib/oot-acknowledgement";
 
 /**
  * Public §7.10 acknowledgement router - NO AUTH REQUIRED (#426 Phase 0).
@@ -51,26 +48,26 @@ function page(title: string, body: string): string {
 </html>`;
 }
 
-async function loadNotificationByToken(token: string) {
-  const [row] = await db
-    .select({
-      id: ootNotification.id,
-      ncId: ootNotification.ncId,
-      organizationId: ootNotification.organizationId,
-      certificateNumber: ootNotification.certificateNumber,
-      acknowledgedAt: ootNotification.acknowledgedAt,
-      ncNumber: nonConformance.ncNumber,
-      labName: organization.name,
-    })
-    .from(ootNotification)
-    .innerJoin(nonConformance, eq(ootNotification.ncId, nonConformance.id))
-    .innerJoin(
-      organization,
-      eq(ootNotification.organizationId, organization.id),
-    )
-    .where(eq(ootNotification.ackToken, token))
-    .limit(1);
-  return row ?? null;
+type AckNotification = NonNullable<
+  Awaited<ReturnType<typeof findOotNotificationByAckToken>>
+>;
+
+function notificationContext(notification: AckNotification): string {
+  return `<p>Notificação de resultado fora de tolerância <strong>${esc(
+    notification.ncNumber,
+  )}</strong>${
+    notification.certificateNumber
+      ? ` — certificado <strong>${esc(notification.certificateNumber)}</strong>`
+      : ""
+  }, emitida por <strong>${esc(notification.labName)}</strong>.</p>`;
+}
+
+/** The page of a notification whose receipt is already on record (first click wins). */
+function alreadyConfirmedPage(notification: AckNotification): string {
+  return page(
+    "Recebimento já confirmado",
+    `<h1>Recebimento já confirmado</h1>${notificationContext(notification)}<p class="ok">O recebimento desta notificação já foi confirmado.</p>`,
+  );
 }
 
 export const ootAckRouter = new Hono()
@@ -89,7 +86,7 @@ export const ootAckRouter = new Hono()
       );
     }
 
-    const notification = await loadNotificationByToken(token);
+    const notification = await findOotNotificationByAckToken(token);
     if (!notification) {
       return c.html(
         page(
@@ -100,21 +97,10 @@ export const ootAckRouter = new Hono()
       );
     }
 
-    const context = `<p>Notificação de resultado fora de tolerância <strong>${esc(
-      notification.ncNumber,
-    )}</strong>${
-      notification.certificateNumber
-        ? ` — certificado <strong>${esc(notification.certificateNumber)}</strong>`
-        : ""
-    }, emitida por <strong>${esc(notification.labName)}</strong>.</p>`;
+    const context = notificationContext(notification);
 
     if (notification.acknowledgedAt) {
-      return c.html(
-        page(
-          "Recebimento já confirmado",
-          `<h1>Recebimento já confirmado</h1>${context}<p class="ok">O recebimento desta notificação já foi confirmado.</p>`,
-        ),
-      );
+      return c.html(alreadyConfirmedPage(notification));
     }
 
     return c.html(
@@ -143,7 +129,7 @@ export const ootAckRouter = new Hono()
       );
     }
 
-    const notification = await loadNotificationByToken(token);
+    const notification = await findOotNotificationByAckToken(token);
     if (!notification) {
       return c.html(
         page(
@@ -154,34 +140,30 @@ export const ootAckRouter = new Hono()
       );
     }
 
-    if (!notification.acknowledgedAt) {
-      // Guard on acknowledgedAt in the WHERE so concurrent clicks stamp once.
-      const [updated] = await db
-        .update(ootNotification)
-        .set({
-          status: "ACKNOWLEDGED",
-          acknowledgedAt: new Date(),
-          acknowledgedVia: "email_link",
-        })
-        .where(
-          and(
-            eq(ootNotification.ackToken, token),
-            eq(ootNotification.id, notification.id),
-          ),
-        )
-        .returning();
-
-      if (updated) {
-        notifyOotAcknowledged(
-          notification.id,
-          notification.ncId,
-          notification.ncNumber,
-          notification.organizationId,
-        ).catch((err) =>
-          console.error("[OOT] Failed to notify acknowledgement:", err),
-        );
-      }
+    if (notification.acknowledgedAt) {
+      return c.html(alreadyConfirmedPage(notification));
     }
+
+    // First click wins: the stamp is conditional on `acknowledged_at IS NULL`, so
+    // of two concurrent clicks only one gets a row back. The other renders the
+    // "already confirmed" page, notifies nobody and leaves the first timestamp.
+    const stamped = await stampOotAcknowledgementByLink({
+      id: notification.id,
+      organizationId: notification.organizationId,
+      token,
+    });
+    if (!stamped) {
+      return c.html(alreadyConfirmedPage(notification));
+    }
+
+    notifyOotAcknowledged(
+      notification.id,
+      notification.ncId,
+      notification.ncNumber,
+      notification.organizationId,
+    ).catch((err) =>
+      console.error("[OOT] Failed to notify acknowledgement:", err),
+    );
 
     return c.html(
       page(

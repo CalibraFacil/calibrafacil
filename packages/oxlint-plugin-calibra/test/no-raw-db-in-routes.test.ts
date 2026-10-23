@@ -157,18 +157,19 @@ describe("calibra/no-raw-db-in-routes (real oxlint)", () => {
   });
 
   it("REQ-ORGDB-2: grandfathers the exact legacy count, fails above it and fails when stale", async () => {
-    // apps/api/src/routes/dashboard.ts is baselined; use its real allowance.
-    const allowed = RAW_DB_BASELINE.get("apps/api/src/routes/dashboard.ts");
-    if (allowed === undefined)
-      throw new Error("dashboard.ts left the baseline");
+    // Any baselined file will do (the entries shrink as routes migrate): use
+    // the first one and its real allowance.
+    const [entry] = [...RAW_DB_BASELINE];
+    if (entry === undefined) throw new Error("the baseline is empty");
+    const [file, allowed] = entry;
     await expectClean(RULE, {
-      "apps/api/src/routes/dashboard.ts": uses(allowed),
+      [file]: uses(allowed),
     });
     await expectViolation(RULE, {
-      "apps/api/src/routes/dashboard.ts": uses(allowed + 1),
+      [file]: uses(allowed + 1),
     });
     const stale = await expectViolation(RULE, {
-      "apps/api/src/routes/dashboard.ts": uses(allowed - 1),
+      [file]: uses(allowed - 1),
     });
     expect(stale).toMatch(/baseline/i);
   }, 60_000);

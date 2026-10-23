@@ -176,6 +176,23 @@ added or removed without a migration.
   e-mail drain (`lib/service-order-email-drain.ts`, `service-order-email-once.ts`, a cron/worker sweep) and the
   Conta Azul callees (`requireContaAzulOAuthConfig`); inside a transaction an error is rethrown (never turned into
   a response in the callback), so a failure after the first write rolls the whole command back.
+- **NC / CAPA, dashboard, reports, signatures (P2-18e).** The non-conformance, CAPA, dashboard, consolidated
+  report, visual-signature and signing-certificate routes run every statement in `orgDb(lab).transaction(...)`;
+  their raw-`db` baseline entries are gone. Details worth knowing:
+  - A handler that creates an NC or escalates one to a CAPA runs its notification through
+    `afterCommitQueue` (after the commit, as in P2-18d); the escalation's CAPA, its audit entry, the NC link and
+    the NC audit entry are one transaction, so a failure on any of them leaves none.
+  - The two calendar-day trend queries (dashboard, consolidated trend) were raw `db.execute(sql...)`, which the
+    org-bound handle does not offer; they are now `o.select(...)` builders with `sql` expressions for the day
+    bucket and the `FILTER` counts, so the handle adds the organization predicate.
+  - The handlers that talk to object storage (visual signatures) keep the storage call outside the database
+    transaction: read, then store, then write, as before.
+  - The public out-of-tolerance acknowledgement link (`routes/oot-ack.ts`) learns the laboratory from the
+    unguessable ack token: that one lookup is `findOotNotificationByAckToken` in `lib/oot-acknowledgement.ts`
+    on the system path (allowlisted, "public-token"), and the stamp runs in `orgDb(laboratory).transaction`.
+  - Specs: `nc-capa-lab-scope.int.spec.ts` and `signatures-signing-lab-scope.int.spec.ts` cover the success
+    paths the per-router specs do not reach, each with a cross-laboratory negative, plus an escalation that
+    rolls back as a whole.
 - **Tests.** `apps/api/src/lib/rls-shadow.int.spec.ts` runs against a pool whose sessions are `calibra_app`
   (`test/integration/rls.ts`). `pnpm --filter @calibra-facil/api rls:shadow-report` replays every API
   integration spec (`--group routes/jobs` or `--files` narrow it) with each request's database access as

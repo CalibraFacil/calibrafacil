@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db } from "@calibra-facil/db";
 import {
   organizationSigningCertificate,
   organizationUnit,
@@ -13,6 +12,7 @@ import {
   requireOrgType,
   type AuthVariables,
 } from "../middleware/permission";
+import { orgDb } from "../lib/org-db";
 import {
   getCertificateInfo,
   encryptBinary,
@@ -59,71 +59,73 @@ export const signingRouter = new Hono<{
     ...requireLabProtected,
     requireOrgType("LAB"),
     async (c) => {
-      const memberData = c.get("member");
-      requireUnitOperationalSettingsManager(memberData);
-      const unit = resolveAccessibleUnitContext(memberData);
+      return orgDb(c.get("member").organizationId).transaction(async (o) => {
+        const memberData = c.get("member");
+        requireUnitOperationalSettingsManager(memberData);
+        const unit = resolveAccessibleUnitContext(memberData);
 
-      const certificates = await db
-        .select({
-          id: organizationSigningCertificate.id,
-          unitId: organizationSigningCertificate.unitId,
-          name: organizationSigningCertificate.name,
-          serialNumber: organizationSigningCertificate.serialNumber,
-          issuerCn: organizationSigningCertificate.issuerCn,
-          subjectCn: organizationSigningCertificate.subjectCn,
-          subjectCpfCnpj: organizationSigningCertificate.subjectCpfCnpj,
-          validFrom: organizationSigningCertificate.validFrom,
-          validUntil: organizationSigningCertificate.validUntil,
-          isActive: organizationSigningCertificate.isActive,
-          isDefault: organizationSigningCertificate.isDefault,
-          createdAt: organizationSigningCertificate.createdAt,
-          createdByName: user.name,
-          revokedAt: organizationSigningCertificate.revokedAt,
-          revokedReason: organizationSigningCertificate.revokedReason,
-        })
-        .from(organizationSigningCertificate)
-        .leftJoin(user, eq(organizationSigningCertificate.createdBy, user.id))
-        .where(
-          and(
-            eq(
-              organizationSigningCertificate.organizationId,
-              memberData.organizationId,
+        const certificates = await o
+          .select({
+            id: organizationSigningCertificate.id,
+            unitId: organizationSigningCertificate.unitId,
+            name: organizationSigningCertificate.name,
+            serialNumber: organizationSigningCertificate.serialNumber,
+            issuerCn: organizationSigningCertificate.issuerCn,
+            subjectCn: organizationSigningCertificate.subjectCn,
+            subjectCpfCnpj: organizationSigningCertificate.subjectCpfCnpj,
+            validFrom: organizationSigningCertificate.validFrom,
+            validUntil: organizationSigningCertificate.validUntil,
+            isActive: organizationSigningCertificate.isActive,
+            isDefault: organizationSigningCertificate.isDefault,
+            createdAt: organizationSigningCertificate.createdAt,
+            createdByName: user.name,
+            revokedAt: organizationSigningCertificate.revokedAt,
+            revokedReason: organizationSigningCertificate.revokedReason,
+          })
+          .from(organizationSigningCertificate)
+          .leftJoin(user, eq(organizationSigningCertificate.createdBy, user.id))
+          .where(
+            and(
+              eq(
+                organizationSigningCertificate.organizationId,
+                memberData.organizationId,
+              ),
+              eq(organizationSigningCertificate.unitId, unit.unitId),
             ),
-            eq(organizationSigningCertificate.unitId, unit.unitId),
-          ),
-        )
-        .orderBy(desc(organizationSigningCertificate.createdAt));
+          )
+          .orderBy(desc(organizationSigningCertificate.createdAt));
 
-      // Calculate status for each certificate
-      const now = new Date();
-      const certificatesWithStatus = certificates.map((cert) => ({
-        ...cert,
-        status: !cert.isActive
-          ? "revoked"
-          : cert.validUntil < now
-            ? "expired"
-            : cert.validFrom > now
-              ? "not_yet_valid"
-              : "valid",
-      }));
+        // Calculate status for each certificate
+        const now = new Date();
+        const certificatesWithStatus = certificates.map((cert) => ({
+          ...cert,
+          status: !cert.isActive
+            ? "revoked"
+            : cert.validUntil < now
+              ? "expired"
+              : cert.validFrom > now
+                ? "not_yet_valid"
+                : "valid",
+        }));
 
-      // #644: the unit's signing policy rides along so the settings page can
-      // render the "assinatura obrigatória" toggle without a second call.
-      const policyRow = await db
-        .select({ requireSignature: organizationUnit.requireSignature })
-        .from(organizationUnit)
-        .where(
-          and(
-            eq(organizationUnit.id, unit.unitId),
-            eq(organizationUnit.organizationId, memberData.organizationId),
-          ),
-        )
-        .limit(1);
+        // #644: the unit's signing policy rides along so the settings page can
+        // render the "assinatura obrigatória" toggle without a second call.
+        const policyRow = await o
+          .select({ requireSignature: organizationUnit.requireSignature })
+          .from(organizationUnit)
+          .where(
+            and(
+              eq(organizationUnit.id, unit.unitId),
+              eq(organizationUnit.organizationId, memberData.organizationId),
+            ),
+          )
+          .limit(1);
 
-      return c.json({
-        certificates: certificatesWithStatus,
-        unit,
-        requireSignature: policyRow[0]?.requireSignature ?? false,
+        return c.json({
+          certificates: certificatesWithStatus,
+          unit,
+          requireSignature: policyRow[0]?.requireSignature ?? false,
+        });
       });
     },
   )
@@ -137,27 +139,29 @@ export const signingRouter = new Hono<{
     requireOrgType("LAB"),
     zValidator("json", z.object({ requireSignature: z.boolean() })),
     async (c) => {
-      const memberData = c.get("member");
-      requireUnitOperationalSettingsManager(memberData);
-      const unit = resolveAccessibleUnitContext(memberData);
-      const { requireSignature } = c.req.valid("json");
+      return orgDb(c.get("member").organizationId).transaction(async (o) => {
+        const memberData = c.get("member");
+        requireUnitOperationalSettingsManager(memberData);
+        const unit = resolveAccessibleUnitContext(memberData);
+        const { requireSignature } = c.req.valid("json");
 
-      const updated = await db
-        .update(organizationUnit)
-        .set({ requireSignature })
-        .where(
-          and(
-            eq(organizationUnit.id, unit.unitId),
-            eq(organizationUnit.organizationId, memberData.organizationId),
-          ),
-        )
-        .returning();
+        const updated = await o
+          .update(organizationUnit)
+          .set({ requireSignature })
+          .where(
+            and(
+              eq(organizationUnit.id, unit.unitId),
+              eq(organizationUnit.organizationId, memberData.organizationId),
+            ),
+          )
+          .returning();
 
-      const row = updated[0];
-      if (!row) {
-        return c.json({ error: "Unidade não encontrada" }, 404);
-      }
-      return c.json({ requireSignature: row.requireSignature });
+        const row = updated[0];
+        if (!row) {
+          return c.json({ error: "Unidade não encontrada" }, 404);
+        }
+        return c.json({ requireSignature: row.requireSignature });
+      });
     },
   )
 
@@ -213,46 +217,14 @@ export const signingRouter = new Hono<{
           );
         }
 
-        // 3. Check for duplicate serial number
-        const [existing] = await db
-          .select({ id: organizationSigningCertificate.id })
-          .from(organizationSigningCertificate)
-          .where(
-            and(
-              eq(
-                organizationSigningCertificate.organizationId,
-                memberData.organizationId,
-              ),
-              eq(organizationSigningCertificate.unitId, unit.unitId),
-              eq(
-                organizationSigningCertificate.serialNumber,
-                certInfo.serialNumber,
-              ),
-            ),
-          )
-          .limit(1);
-
-        if (existing) {
-          return c.json(
-            { error: "Certificado com este número de série já existe" },
-            400,
-          );
-        }
-
-        // 4. Encrypt password
-        const { encryptedPassword, iv } = encryptPassword(
-          input.password,
-          env.SIGNING_MASTER_KEY,
-        );
-        const encryptedP12 = encryptBinary(p12Buffer, env.SIGNING_MASTER_KEY);
-
-        // 5. Insert certificate (with transaction to prevent race condition on default)
-        const newCert = await db.transaction(async (tx) => {
-          // Unset current default if setting this as default
-          if (input.setAsDefault) {
-            await tx
-              .update(organizationSigningCertificate)
-              .set({ isDefault: false })
+        // 3. + 5. Check for a duplicate serial number and insert the
+        // certificate in one organization-bound transaction (it also keeps the
+        // "default" flag race-free).
+        const saved = await orgDb(memberData.organizationId).transaction(
+          async (o) => {
+            const [existing] = await o
+              .select({ id: organizationSigningCertificate.id })
+              .from(organizationSigningCertificate)
               .where(
                 and(
                   eq(
@@ -260,34 +232,76 @@ export const signingRouter = new Hono<{
                     memberData.organizationId,
                   ),
                   eq(organizationSigningCertificate.unitId, unit.unitId),
-                  eq(organizationSigningCertificate.isDefault, true),
+                  eq(
+                    organizationSigningCertificate.serialNumber,
+                    certInfo.serialNumber,
+                  ),
                 ),
-              );
-          }
+              )
+              .limit(1);
 
-          const [inserted] = await tx
-            .insert(organizationSigningCertificate)
-            .values({
-              organizationId: memberData.organizationId,
-              unitId: unit.unitId,
-              name: input.name,
-              serialNumber: certInfo.serialNumber,
-              issuerCn: certInfo.issuerCn,
-              subjectCn: certInfo.subjectCn,
-              subjectCpfCnpj: certInfo.subjectCpfCnpj,
-              validFrom: certInfo.validFrom,
-              validUntil: certInfo.validUntil,
-              encryptedP12,
-              encryptedPassword,
-              passwordIv: iv,
-              isActive: true,
-              isDefault: input.setAsDefault,
-              createdBy: session.user.id,
-            })
-            .returning();
+            if (existing) return { duplicate: true as const };
 
-          return inserted;
-        });
+            // 4. Encrypt password
+            const { encryptedPassword, iv } = encryptPassword(
+              input.password,
+              env.SIGNING_MASTER_KEY,
+            );
+            const encryptedP12 = encryptBinary(
+              p12Buffer,
+              env.SIGNING_MASTER_KEY,
+            );
+
+            // Unset current default if setting this as default
+            if (input.setAsDefault) {
+              await o
+                .update(organizationSigningCertificate)
+                .set({ isDefault: false })
+                .where(
+                  and(
+                    eq(
+                      organizationSigningCertificate.organizationId,
+                      memberData.organizationId,
+                    ),
+                    eq(organizationSigningCertificate.unitId, unit.unitId),
+                    eq(organizationSigningCertificate.isDefault, true),
+                  ),
+                );
+            }
+
+            const [inserted] = await o
+              .insert(organizationSigningCertificate)
+              .values({
+                organizationId: memberData.organizationId,
+                unitId: unit.unitId,
+                name: input.name,
+                serialNumber: certInfo.serialNumber,
+                issuerCn: certInfo.issuerCn,
+                subjectCn: certInfo.subjectCn,
+                subjectCpfCnpj: certInfo.subjectCpfCnpj,
+                validFrom: certInfo.validFrom,
+                validUntil: certInfo.validUntil,
+                encryptedP12,
+                encryptedPassword,
+                passwordIv: iv,
+                isActive: true,
+                isDefault: input.setAsDefault,
+                createdBy: session.user.id,
+              })
+              .returning();
+
+            return { duplicate: false as const, inserted };
+          },
+        );
+
+        if (saved.duplicate) {
+          return c.json(
+            { error: "Certificado com este número de série já existe" },
+            400,
+          );
+        }
+
+        const newCert = saved.inserted;
         if (!newCert) {
           return c.json({ error: "Erro ao inserir certificado" }, 500);
         }
@@ -321,48 +335,49 @@ export const signingRouter = new Hono<{
     ...requireLabProtected,
     requireOrgType("LAB"),
     async (c) => {
-      const id = parseInt(c.req.param("id"));
-      const memberData = c.get("member");
-      requireUnitOperationalSettingsManager(memberData);
-      const unit = resolveAccessibleUnitContext(memberData);
+      return orgDb(c.get("member").organizationId).transaction(async (o) => {
+        const id = parseInt(c.req.param("id"));
+        const memberData = c.get("member");
+        requireUnitOperationalSettingsManager(memberData);
+        const unit = resolveAccessibleUnitContext(memberData);
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID inválido" }, 400);
-      }
+        if (isNaN(id)) {
+          return c.json({ error: "ID inválido" }, 400);
+        }
 
-      // Verify certificate belongs to organization
-      const [cert] = await db
-        .select({
-          id: organizationSigningCertificate.id,
-          isActive: organizationSigningCertificate.isActive,
-        })
-        .from(organizationSigningCertificate)
-        .where(
-          and(
-            eq(organizationSigningCertificate.id, id),
-            eq(
-              organizationSigningCertificate.organizationId,
-              memberData.organizationId,
+        // Verify certificate belongs to organization
+        const [cert] = await o
+          .select({
+            id: organizationSigningCertificate.id,
+            isActive: organizationSigningCertificate.isActive,
+          })
+          .from(organizationSigningCertificate)
+          .where(
+            and(
+              eq(organizationSigningCertificate.id, id),
+              eq(
+                organizationSigningCertificate.organizationId,
+                memberData.organizationId,
+              ),
+              eq(organizationSigningCertificate.unitId, unit.unitId),
             ),
-            eq(organizationSigningCertificate.unitId, unit.unitId),
-          ),
-        )
-        .limit(1);
+          )
+          .limit(1);
 
-      if (!cert) {
-        return c.json({ error: "Certificado não encontrado" }, 404);
-      }
+        if (!cert) {
+          return c.json({ error: "Certificado não encontrado" }, 404);
+        }
 
-      if (!cert.isActive) {
-        return c.json(
-          { error: "Certificado revogado não pode ser padrão" },
-          400,
-        );
-      }
+        if (!cert.isActive) {
+          return c.json(
+            { error: "Certificado revogado não pode ser padrão" },
+            400,
+          );
+        }
 
-      // Unset current default and set new default in transaction
-      await db.transaction(async (tx) => {
-        await tx
+        // Unset current default and set new default (one organization-bound
+        // transaction with the read above)
+        await o
           .update(organizationSigningCertificate)
           .set({ isDefault: false })
           .where(
@@ -376,7 +391,7 @@ export const signingRouter = new Hono<{
             ),
           );
 
-        await tx
+        await o
           .update(organizationSigningCertificate)
           .set({ isDefault: true })
           // Defense-in-depth (SEC-08): repeat the org + unit scope proven by the
@@ -392,9 +407,9 @@ export const signingRouter = new Hono<{
               eq(organizationSigningCertificate.unitId, unit.unitId),
             ),
           );
-      });
 
-      return c.json({ message: "Certificado definido como padrão" });
+        return c.json({ message: "Certificado definido como padrão" });
+      });
     },
   )
 
@@ -412,70 +427,72 @@ export const signingRouter = new Hono<{
       }),
     ),
     async (c) => {
-      const id = parseInt(c.req.param("id"));
-      const { reason } = c.req.valid("json");
-      const memberData = c.get("member");
-      const session = c.get("session");
-      requireUnitOperationalSettingsManager(memberData);
-      const unit = resolveAccessibleUnitContext(memberData);
+      return orgDb(c.get("member").organizationId).transaction(async (o) => {
+        const id = parseInt(c.req.param("id"));
+        const { reason } = c.req.valid("json");
+        const memberData = c.get("member");
+        const session = c.get("session");
+        requireUnitOperationalSettingsManager(memberData);
+        const unit = resolveAccessibleUnitContext(memberData);
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID inválido" }, 400);
-      }
+        if (isNaN(id)) {
+          return c.json({ error: "ID inválido" }, 400);
+        }
 
-      // Verify certificate belongs to organization
-      const [cert] = await db
-        .select({
-          id: organizationSigningCertificate.id,
-          isActive: organizationSigningCertificate.isActive,
-          isDefault: organizationSigningCertificate.isDefault,
-        })
-        .from(organizationSigningCertificate)
-        .where(
-          and(
-            eq(organizationSigningCertificate.id, id),
-            eq(
-              organizationSigningCertificate.organizationId,
-              memberData.organizationId,
+        // Verify certificate belongs to organization
+        const [cert] = await o
+          .select({
+            id: organizationSigningCertificate.id,
+            isActive: organizationSigningCertificate.isActive,
+            isDefault: organizationSigningCertificate.isDefault,
+          })
+          .from(organizationSigningCertificate)
+          .where(
+            and(
+              eq(organizationSigningCertificate.id, id),
+              eq(
+                organizationSigningCertificate.organizationId,
+                memberData.organizationId,
+              ),
+              eq(organizationSigningCertificate.unitId, unit.unitId),
             ),
-            eq(organizationSigningCertificate.unitId, unit.unitId),
-          ),
-        )
-        .limit(1);
+          )
+          .limit(1);
 
-      if (!cert) {
-        return c.json({ error: "Certificado não encontrado" }, 404);
-      }
+        if (!cert) {
+          return c.json({ error: "Certificado não encontrado" }, 404);
+        }
 
-      if (!cert.isActive) {
-        return c.json({ error: "Certificado já está revogado" }, 400);
-      }
+        if (!cert.isActive) {
+          return c.json({ error: "Certificado já está revogado" }, 400);
+        }
 
-      // Revoke certificate
-      await db
-        .update(organizationSigningCertificate)
-        .set({
-          isActive: false,
-          isDefault: false,
-          revokedAt: new Date(),
-          revokedBy: session.user.id,
-          revokedReason: reason,
-        })
-        // Defense-in-depth (SEC-08): repeat the org + unit scope proven by the
-        // SELECT above so this custody UPDATE stays tenant-scoped even if the
-        // guarding read is refactored away. Reuses the in-scope member values.
-        .where(
-          and(
-            eq(organizationSigningCertificate.id, id),
-            eq(
-              organizationSigningCertificate.organizationId,
-              memberData.organizationId,
+        // Revoke certificate
+        await o
+          .update(organizationSigningCertificate)
+          .set({
+            isActive: false,
+            isDefault: false,
+            revokedAt: new Date(),
+            revokedBy: session.user.id,
+            revokedReason: reason,
+          })
+          // Defense-in-depth (SEC-08): repeat the org + unit scope proven by the
+          // SELECT above so this custody UPDATE stays tenant-scoped even if the
+          // guarding read is refactored away. Reuses the in-scope member values.
+          .where(
+            and(
+              eq(organizationSigningCertificate.id, id),
+              eq(
+                organizationSigningCertificate.organizationId,
+                memberData.organizationId,
+              ),
+              eq(organizationSigningCertificate.unitId, unit.unitId),
             ),
-            eq(organizationSigningCertificate.unitId, unit.unitId),
-          ),
-        );
+          );
 
-      return c.json({ message: "Certificado revogado com sucesso" });
+        return c.json({ message: "Certificado revogado com sucesso" });
+      });
     },
   )
 
@@ -487,67 +504,69 @@ export const signingRouter = new Hono<{
     ...requireLabProtected,
     requireOrgType("LAB"),
     async (c) => {
-      const id = parseInt(c.req.param("id"));
-      const memberData = c.get("member");
-      requireUnitOperationalSettingsManager(memberData);
-      const unit = resolveAccessibleUnitContext(memberData);
+      return orgDb(c.get("member").organizationId).transaction(async (o) => {
+        const id = parseInt(c.req.param("id"));
+        const memberData = c.get("member");
+        requireUnitOperationalSettingsManager(memberData);
+        const unit = resolveAccessibleUnitContext(memberData);
 
-      if (isNaN(id)) {
-        return c.json({ error: "ID inválido" }, 400);
-      }
+        if (isNaN(id)) {
+          return c.json({ error: "ID inválido" }, 400);
+        }
 
-      const [cert] = await db
-        .select({
-          id: organizationSigningCertificate.id,
-          unitId: organizationSigningCertificate.unitId,
-          name: organizationSigningCertificate.name,
-          serialNumber: organizationSigningCertificate.serialNumber,
-          issuerCn: organizationSigningCertificate.issuerCn,
-          subjectCn: organizationSigningCertificate.subjectCn,
-          subjectCpfCnpj: organizationSigningCertificate.subjectCpfCnpj,
-          validFrom: organizationSigningCertificate.validFrom,
-          validUntil: organizationSigningCertificate.validUntil,
-          isActive: organizationSigningCertificate.isActive,
-          isDefault: organizationSigningCertificate.isDefault,
-          createdAt: organizationSigningCertificate.createdAt,
-          createdByName: user.name,
-          revokedAt: organizationSigningCertificate.revokedAt,
-          revokedReason: organizationSigningCertificate.revokedReason,
-        })
-        .from(organizationSigningCertificate)
-        .leftJoin(user, eq(organizationSigningCertificate.createdBy, user.id))
-        .where(
-          and(
-            eq(organizationSigningCertificate.id, id),
-            eq(
-              organizationSigningCertificate.organizationId,
-              memberData.organizationId,
+        const [cert] = await o
+          .select({
+            id: organizationSigningCertificate.id,
+            unitId: organizationSigningCertificate.unitId,
+            name: organizationSigningCertificate.name,
+            serialNumber: organizationSigningCertificate.serialNumber,
+            issuerCn: organizationSigningCertificate.issuerCn,
+            subjectCn: organizationSigningCertificate.subjectCn,
+            subjectCpfCnpj: organizationSigningCertificate.subjectCpfCnpj,
+            validFrom: organizationSigningCertificate.validFrom,
+            validUntil: organizationSigningCertificate.validUntil,
+            isActive: organizationSigningCertificate.isActive,
+            isDefault: organizationSigningCertificate.isDefault,
+            createdAt: organizationSigningCertificate.createdAt,
+            createdByName: user.name,
+            revokedAt: organizationSigningCertificate.revokedAt,
+            revokedReason: organizationSigningCertificate.revokedReason,
+          })
+          .from(organizationSigningCertificate)
+          .leftJoin(user, eq(organizationSigningCertificate.createdBy, user.id))
+          .where(
+            and(
+              eq(organizationSigningCertificate.id, id),
+              eq(
+                organizationSigningCertificate.organizationId,
+                memberData.organizationId,
+              ),
+              eq(organizationSigningCertificate.unitId, unit.unitId),
             ),
-            eq(organizationSigningCertificate.unitId, unit.unitId),
+          )
+          .limit(1);
+
+        if (!cert) {
+          return c.json({ error: "Certificado não encontrado" }, 404);
+        }
+
+        const now = new Date();
+        const status = !cert.isActive
+          ? "revoked"
+          : cert.validUntil < now
+            ? "expired"
+            : cert.validFrom > now
+              ? "not_yet_valid"
+              : "valid";
+
+        return c.json({
+          ...cert,
+          status,
+          unit,
+          daysUntilExpiry: Math.ceil(
+            (cert.validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
           ),
-        )
-        .limit(1);
-
-      if (!cert) {
-        return c.json({ error: "Certificado não encontrado" }, 404);
-      }
-
-      const now = new Date();
-      const status = !cert.isActive
-        ? "revoked"
-        : cert.validUntil < now
-          ? "expired"
-          : cert.validFrom > now
-            ? "not_yet_valid"
-            : "valid";
-
-      return c.json({
-        ...cert,
-        status,
-        unit,
-        daysUntilExpiry: Math.ceil(
-          (cert.validUntil.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
-        ),
+        });
       });
     },
   );
