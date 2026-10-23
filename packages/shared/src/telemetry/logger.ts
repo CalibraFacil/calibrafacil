@@ -1,8 +1,8 @@
 // Tiny structured logger. Wraps the `[Worker]`/`[JOB]`/`[Cron]`
-// tag-prefix convention in single-line JSON so the Vercel log drain (and any
-// future aggregator) can parse level/tag/fields instead of grepping free text.
+// tag-prefix convention in single-line JSON so a log shipper (and any
+// aggregator) can parse level/tag/fields instead of grepping free text.
 // No dependencies, no transports, no levels config — console is the sink on
-// every runtime we deploy to (Vercel functions, CF container, local Bun/Node).
+// every runtime we deploy to (Bun/Node servers, CF container).
 
 export type LogFields = Record<string, unknown>;
 

@@ -2,7 +2,7 @@
   "name": "calibrafacil-document-worker",
   "private": true,
   "type": "module",
-  "description": "Document-assembly queue worker on Cloudflare Containers (drains app_queue_job render jobs off Vercel). Not part of the pnpm workspace.",
+  "description": "Document-assembly queue worker on Cloudflare Containers (drains app_queue_job render jobs). Not part of the pnpm workspace.",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",

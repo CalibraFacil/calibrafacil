@@ -42,21 +42,16 @@
     },
     "apps/api": {
       "entry": [
-        // Vercel function shims and their esbuild sources.
-        "api/**/*.js",
-        "vercel-src/**/*.ts",
         "scripts/*.mjs",
         "src/cli/*.ts",
         // background-jobs.ts loads this through a variable specifier
-        // (`import(modulePath)`) so bundlers leave @calibra-facil/jobs-core out of
-        // the serverless bundle. Not dead: it is the in-process dev runner.
+        // (`import(modulePath)`), so it is not statically imported. Not dead: it
+        // is the in-process dev runner.
         "src/lib/worker-modules.ts",
         "test/**/*.ts"
       ],
       "project": [
         "src/**/*.{ts,tsx}",
-        "api/**/*.js",
-        "vercel-src/**/*.ts",
         "scripts/*.mjs",
         "test/**/*.ts"
       ]

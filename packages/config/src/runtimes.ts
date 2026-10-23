@@ -30,7 +30,7 @@ function storageIssues(storage: StorageSettings): ConfigIssue[] {
 }
 
 /**
- * The API (apps/api): the Bun server, the Vercel functions and the CLI.
+ * The API (apps/api): the Bun server and the CLI.
  * Production refuses to start without its database, storage, keys and e-mail.
  */
 export const apiRuntime = defineRuntime({
@@ -78,7 +78,7 @@ export const apiRuntime = defineRuntime({
 
 /**
  * The background worker (apps/worker): the queue poller, the document-worker
- * drain server and the Vercel Queue consumer. It cannot do any work without
+ * drain server and the always-on Bun worker. It cannot do any work without
  * its database, storage and keys, so those are required in development too.
  */
 export const workerRuntime = defineRuntime({

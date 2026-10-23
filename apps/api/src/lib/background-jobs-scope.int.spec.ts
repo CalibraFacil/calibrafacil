@@ -6,9 +6,8 @@
  *   - a row of the database queue (`queue` mode) is written IN the transaction,
  *     so it commits or rolls back with the change; the document-worker ping
  *     goes after the commit;
- *   - every dispatch that leaves the database (Vercel Queue, the in-process
- *     `local` / `inline` runners that read the committed rows) goes after the
- *     commit.
+ *   - every dispatch that leaves the database (the in-process `local` /
+ *     `inline` runners that read the committed rows) goes after the commit.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -18,12 +17,9 @@ import type { BackgroundJobMessage } from "@calibra-facil/schemas";
 import { truncateAll } from "../../test/integration/db";
 
 const mocks = vi.hoisted(() => ({
-  send: vi.fn(),
   processBackgroundJob: vi.fn(),
   fetch: vi.fn(),
 }));
-
-vi.mock("@vercel/queue", () => ({ send: mocks.send }));
 
 vi.mock("./worker-modules", () => ({
   importWorkerModule: async () => ({
@@ -62,47 +58,17 @@ async function enqueueInScopeThenRollBack() {
 
 beforeEach(async () => {
   await truncateAll();
-  mocks.send.mockReset().mockResolvedValue({ messageId: "vq-1" });
   mocks.processBackgroundJob.mockReset().mockResolvedValue(undefined);
   mocks.fetch
     .mockReset()
     .mockResolvedValue(new Response(null, { status: 202 }));
   vi.stubGlobal("fetch", mocks.fetch);
   vi.stubEnv("DOCUMENT_WORKER_URL", "");
-  vi.stubEnv("VERCEL", "");
 });
 
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
-});
-
-describe("Vercel Queue (D3)", () => {
-  beforeEach(() => {
-    vi.stubEnv("BACKGROUND_JOBS_MODE", "vercel");
-  });
-
-  it("D3: control: outside a scope the job is sent at once", async () => {
-    await enqueueBackgroundJob(message);
-
-    expect(mocks.send).toHaveBeenCalledTimes(1);
-  });
-
-  it("D3 [HIGH RISK]: inside a scope the job is sent once, after the commit", async () => {
-    await runInTransactionScope(async () => {
-      await enqueueBackgroundJob(message);
-      expect(mocks.send).not.toHaveBeenCalled();
-    });
-
-    expect(mocks.send).toHaveBeenCalledTimes(1);
-    expect(mocks.send.mock.calls[0]?.[1]).toEqual(message);
-  });
-
-  it("D3 [HIGH RISK]: inside a scope that rolls back, nothing is sent", async () => {
-    await enqueueInScopeThenRollBack();
-
-    expect(mocks.send).not.toHaveBeenCalled();
-  });
 });
 
 describe("in-process runners (D3)", () => {

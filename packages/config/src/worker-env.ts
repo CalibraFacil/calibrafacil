@@ -2,7 +2,7 @@
  * The signing part of the environment the worker runs with.
  *
  * Every way of running the worker builds its environment from the validated
- * worker configuration: the Vercel queue consumer, the cron handlers and the
+ * worker configuration: the cron handlers and the
  * inline/dev runner (`createWorkerRuntimeEnv` in the API), and the DB-queue
  * drain, the document-worker container and the always-on Bun worker
  * (`createWorkerEnv` in apps/worker). They all take the signing variables from

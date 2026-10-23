@@ -2,7 +2,7 @@
  * The bindings the Hono app receives with every request: the environment
  * variables the routes read through `c.env`, plus what the runtime injects.
  * Every name here is a variable of the API schema in `packages/config`, which
- * owns its type, default and description; Vercel and the Bun entry fill the
+ * owns its type, default and description; the Bun entry fills the
  * bag from the (validated) process environment.
  */
 export interface Env {
@@ -26,7 +26,7 @@ export interface Env {
   PORTAL_APP_URL?: string;
   PORTAL_INVITATION_EXPIRES_IN?: string;
   DATABASE_URL: string;
-  /** Injected by Cloudflare Hyperdrive / the Vercel entry: `{ connectionString }`. */
+  /** Injected by Cloudflare Hyperdrive: `{ connectionString }`. */
   HYPERDRIVE?: unknown;
   /** Wrangler's local Hyperdrive connection string (development only). */
   CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE?: string;

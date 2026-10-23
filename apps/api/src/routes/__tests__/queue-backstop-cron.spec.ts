@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { GET } from "../../../vercel-src/cron/dispatch";
+import { GET } from "../../cron/dispatch";
 
 // Unit tier for the REL-03 `queue-backstop` cron handler. Same fail-closed auth
-// contract as every other cron (503 without a CRON_SECRET on Vercel, 401 on a
+// contract as every other cron (503 without a CRON_SECRET in production, 401 on a
 // wrong secret), and on success it returns runStaleJobBackstop's summary verbatim
 // so a broken run surfaces in the cron heartbeat. The backstop itself is mocked
 // here (its DB + wake behavior is covered by the real-DB integration tier); this
@@ -64,7 +64,6 @@ function request(path: string, headers: HeadersInit = {}) {
 beforeEach(() => {
   process.env = { ...originalEnv };
   delete process.env.CRON_SECRET;
-  delete process.env.VERCEL;
   delete process.env.NODE_ENV;
   vi.clearAllMocks();
   mocks.runStaleJobBackstop.mockResolvedValue({
@@ -109,8 +108,8 @@ describe("queue-backstop cron (REQ-REL-PDF-001)", () => {
     expect(mocks.runStaleJobBackstop).not.toHaveBeenCalled();
   });
 
-  it("fails closed without a CRON_SECRET on Vercel", async () => {
-    process.env.VERCEL = "1";
+  it("fails closed without a CRON_SECRET in production", async () => {
+    process.env.NODE_ENV = "production";
 
     const response = await GET(request("/api/cron/queue-backstop"));
 

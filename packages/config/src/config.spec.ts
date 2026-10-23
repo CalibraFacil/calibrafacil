@@ -61,7 +61,6 @@ describe("REQ-CFG-1 defaults", () => {
     expect(config.runtime.host).toBe("0.0.0.0");
     expect(config.database.poolMax).toBe(5);
     expect(config.jobs.mode).toBe("local");
-    expect(config.jobs.maxDeliveries).toBe(3);
     expect(config.jobs.queueReceiptsMode).toBe("enforce");
     expect(config.jobs.documentWorkerWakeTimeoutMs).toBe(12_000);
     expect(config.retention.purgeEnabled).toBe(false);
@@ -83,11 +82,9 @@ describe("REQ-CFG-1 defaults", () => {
     expect(config.origins.appUrl).toBe("http://localhost:5173");
   });
 
-  it("REQ-CFG-1: the pool defaults to a single connection on Vercel", () => {
-    expect(readDatabaseConfig({ VERCEL: "1" }).poolMax).toBe(1);
-    expect(
-      readDatabaseConfig({ VERCEL: "1", DATABASE_POOL_MAX: "4" }).poolMax,
-    ).toBe(4);
+  it("REQ-CFG-1: DATABASE_POOL_MAX overrides the default pool size", () => {
+    expect(readDatabaseConfig({}).poolMax).toBe(5);
+    expect(readDatabaseConfig({ DATABASE_POOL_MAX: "4" }).poolMax).toBe(4);
   });
 
   it("REQ-RLS-2: DATABASE_RLS_MODE is `shadow` unless the role split switched it to `enforced`", () => {
@@ -103,11 +100,14 @@ describe("REQ-CFG-1 defaults", () => {
     );
   });
 
-  it("REQ-CFG-1: the jobs mode follows the platform unless set", () => {
-    expect(readJobsConfig({ VERCEL: "1" }).mode).toBe("vercel");
-    expect(
-      readJobsConfig({ VERCEL: "1", BACKGROUND_JOBS_MODE: "queue" }).mode,
-    ).toBe("queue");
+  it("REQ-CFG-1: the jobs mode is local unless set, and vercel is no longer a mode", () => {
+    expect(readJobsConfig({}).mode).toBe("local");
+    expect(readJobsConfig({ BACKGROUND_JOBS_MODE: "queue" }).mode).toBe(
+      "queue",
+    );
+    expect(() => readJobsConfig({ BACKGROUND_JOBS_MODE: "vercel" })).toThrow(
+      /BACKGROUND_JOBS_MODE/,
+    );
   });
 
   it("REQ-CFG-1: returns a deeply frozen object", () => {
@@ -137,7 +137,6 @@ describe("REQ-CFG-1 defaults", () => {
       QUEUE_RECEIPTS_MODE: "strict",
       RECORDS_PURGE_ENABLED: "yes",
       RECORDS_PURGE_MODE: "x",
-      BACKGROUND_JOBS_MAX_DELIVERIES: "abc",
       STUCK_RENDER_AFTER_MS: "soon",
       QUEUE_STALE_AFTER_MS: "0",
     });
@@ -146,7 +145,6 @@ describe("REQ-CFG-1 defaults", () => {
     expect(config.jobs.queueReceiptsMode).toBe("enforce");
     expect(config.retention.purgeEnabled).toBe(false);
     expect(config.retention.purgeMode).toBe("dry-run");
-    expect(config.jobs.maxDeliveries).toBe(3);
 
     expect(
       readJobsConfig({ QUEUE_RECEIPTS_MODE: " OFF " }).queueReceiptsMode,
@@ -175,11 +173,8 @@ describe("REQ-CFG-1 required in production", () => {
     expect(() => loadApiConfig({ NODE_ENV: "production" })).toThrow(
       ConfigError,
     );
-    // Vercel preview and production deployments are production too.
-    expect(() => loadApiConfig({ VERCEL: "1" })).toThrow(ConfigError);
-    expect(() => loadApiConfig({ VERCEL_ENV: "production" })).toThrow(
-      ConfigError,
-    );
+    // Platform variables no longer imply production.
+    expect(() => loadApiConfig({ VERCEL: "1" })).not.toThrow();
   });
 
   it("REQ-CFG-1: reports every missing variable in one aggregated error", () => {

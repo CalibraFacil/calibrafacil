@@ -11,7 +11,7 @@ export type ErrorHandlingDeps = {
 };
 
 // Uncaught request errors used to fall through to Hono's default handler —
-// a plain-text 500 visible only in Vercel logs. Now they are structured-logged
+// a plain-text 500 visible only in the process logs. Now they are structured-logged
 // and reported before returning a generic JSON 500. Intentional
 // HTTP errors (HTTPException 4xx/5xx thrown by routes) pass through untouched:
 // they are control flow, not defects.

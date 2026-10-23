@@ -8,15 +8,13 @@
   "scripts": {
     "dev": "bun --watch src/bun.ts",
     "dev:bun": "bun --watch src/bun.ts",
-    "build": "tsc --project tsconfig.build.json --noEmit && node scripts/build-vercel-functions.mjs",
-    "build:vercel-functions": "node scripts/build-vercel-functions.mjs",
+    "build": "tsc --project tsconfig.build.json --noEmit",
     "typecheck": "tsc --noEmit",
     "start": "bun src/bun.ts",
     "init": "bun src/cli/init.ts",
     "create-lab": "bun src/cli/create-lab.ts",
     "soft-delete-lab": "bun src/cli/soft-delete-lab.ts",
     "seed:demo": "bun src/cli/seed-demo.ts",
-    "deploy": "pnpm dlx vercel deploy --prod",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
@@ -48,7 +46,6 @@
     "@calibra-facil/signing": "workspace:^",
     "@hono/zod-validator": "^0.8.0",
     "@scalar/hono-api-reference": "^0.10.20",
-    "@vercel/queue": "^0.2.0",
     "croner": "^10.0.1",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.13.7",
@@ -60,7 +57,6 @@
     "@types/node": "^24.13.0",
     "@vitejs/plugin-react": "6.0.2",
     "@vitest/coverage-v8": "^4.1.11",
-    "esbuild": "^0.25.12",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
   }

@@ -1,5 +1,4 @@
 import { readJobsConfig } from "@calibra-facil/config";
-import { send } from "@vercel/queue";
 import {
   afterTransactionCommit,
   isInTransactionScope,
@@ -16,18 +15,9 @@ import {
   getBackgroundJobsMode,
   getDocumentWorkerUrl,
   isContaAzulSyncMessage,
-  isDocumentWorkerJobType,
   resolveQueueJobType,
   routesToDatabaseQueue,
 } from "./background-job-routing";
-
-export { resolveQueueJobType };
-
-export const BACKGROUND_JOBS_TOPIC = readJobsConfig().topic;
-
-type EnqueueBackgroundJobOptions = {
-  idempotencyKey?: string;
-};
 
 async function importLocalWorkerModule() {
   const modulePath = "./worker-modules";
@@ -77,12 +67,9 @@ function runLocalBackgroundJob(message: BackgroundJobMessage) {
 
 // --- document-worker dispatch (Cloudflare Container) -----------------------
 //
-// When configured, render jobs are durably enqueued into `app_queue_job` and
-// the `services/document-worker` container is pinged to drain them, instead of
-// going through Vercel Queue. This is an opt-in, per-job-type allowlist
-// (default empty = everything stays on Vercel Queue), so cutover and rollback
-// are a single env-var change with no redeploy. See
-// `services/document-worker/README.md`.
+// When DOCUMENT_WORKER_URL is set, every job enqueued into `app_queue_job` is
+// followed by a ping that wakes the `services/document-worker` container to
+// drain it. See `services/document-worker/README.md`.
 
 const DOCUMENT_WORKER_DRAIN_PATH = "/drain";
 
@@ -94,7 +81,7 @@ const DOCUMENT_WORKER_DRAIN_PATH = "/drain";
 // already PROCESSING) — so a job enqueued while the container was asleep sat
 // stranded in PENDING / `GENERATING_PDF` until the next enqueue or a manual
 // drain. We now use a longer per-attempt timeout plus a couple of retries so the
-// wake reliably lands. Tunable via env without a redeploy.
+// wake reliably lands. Tunable via env.
 // The defaults live with the other settings in packages/config (jobs).
 
 function readWakeConfig() {
@@ -173,8 +160,7 @@ async function enqueueViaDocumentWorker(
 ) {
   const jobId = await enqueueQueueJob(message);
 
-  // Fire-and-forget so the enqueueing request returns immediately; the wake runs
-  // after the HTTP response (within the function's maxDuration). The job is
+  // Fire-and-forget so the enqueueing request returns immediately. The job is
   // durably enqueued regardless, so a fully failed wake only delays the render
   // until the next enqueue's drain or a manual drain.
   void wakeDocumentWorker(baseUrl).catch((error) => {
@@ -187,13 +173,10 @@ async function enqueueViaDocumentWorker(
   return { messageId: `app-queue-${jobId}` };
 }
 
-export async function enqueueBackgroundJob(
-  input: BackgroundJobMessage,
-  options: EnqueueBackgroundJobOptions = {},
-) {
-  // Every dispatch path (Vercel Queue, the database queue, in-process) carries
-  // a message that matched its job schema; a producer that built one by hand
-  // and got it wrong fails here instead of in a consumer.
+export async function enqueueBackgroundJob(input: BackgroundJobMessage) {
+  // Every dispatch path (the database queue, in-process) carries a message that
+  // matched its job schema; a producer that built one by hand and got it wrong
+  // fails here instead of in a consumer.
   const parsed = parseBackgroundJobMessage(input);
   if (!parsed.ok) {
     throw new Error(
@@ -207,9 +190,8 @@ export async function enqueueBackgroundJob(
   // at all when the transaction rolls back:
   // - a row of the database queue is inserted in the transaction, so it commits
   //   or rolls back with the change (the wake-up ping goes after the commit);
-  // - every other dispatch (Vercel Queue, the document-worker ping, in-process
-  //   `local`/`inline` work that reads the committed rows) is sent after the
-  //   commit and never on a rollback.
+  // - every other dispatch (in-process `local`/`inline` work that reads the
+  //   committed rows) runs after the commit and never on a rollback.
   if (isInTransactionScope()) {
     if (routesToDatabaseQueue(message)) {
       const jobId = await enqueueQueueJob(message);
@@ -223,12 +205,12 @@ export async function enqueueBackgroundJob(
       return { messageId: `app-queue-${jobId}` };
     }
     afterTransactionCommit(async () => {
-      await dispatchBackgroundJob(message, options);
+      await dispatchBackgroundJob(message);
     });
     return { messageId: `deferred-${Date.now()}` };
   }
 
-  return dispatchBackgroundJob(message, options);
+  return dispatchBackgroundJob(message);
 }
 
 async function wakeAfterCommit(message: QueueMessage, baseUrl: string) {
@@ -242,10 +224,7 @@ async function wakeAfterCommit(message: QueueMessage, baseUrl: string) {
   }
 }
 
-async function dispatchBackgroundJob(
-  message: BackgroundJobMessage,
-  options: EnqueueBackgroundJobOptions,
-) {
+async function dispatchBackgroundJob(message: BackgroundJobMessage) {
   const mode = getBackgroundJobsMode();
 
   if (mode === "local") {
@@ -257,26 +236,13 @@ async function dispatchBackgroundJob(
     return enqueueToDatabaseQueue(message);
   }
 
-  if (mode === "inline") {
-    if (isContaAzulSyncMessage(message)) {
-      await processContaAzulSyncMessage(message);
-      return { messageId: `inline-${Date.now()}` };
-    }
-
-    const { processBackgroundJob } = await importLocalWorkerModule();
-    await processBackgroundJob(createWorkerRuntimeEnv(), message);
+  // inline
+  if (isContaAzulSyncMessage(message)) {
+    await processContaAzulSyncMessage(message);
     return { messageId: `inline-${Date.now()}` };
   }
 
-  const documentWorkerUrl = getDocumentWorkerUrl();
-  if (documentWorkerUrl && isDocumentWorkerJobType(message)) {
-    return enqueueViaDocumentWorker(message, documentWorkerUrl);
-  }
-
-  const result = await send(BACKGROUND_JOBS_TOPIC, message, {
-    region: readJobsConfig().vercelQueueRegion,
-    idempotencyKey: options.idempotencyKey,
-  });
-
-  return { messageId: result.messageId };
+  const { processBackgroundJob } = await importLocalWorkerModule();
+  await processBackgroundJob(createWorkerRuntimeEnv(), message);
+  return { messageId: `inline-${Date.now()}` };
 }

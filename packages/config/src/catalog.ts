@@ -21,7 +21,7 @@ export interface CatalogSection {
 
 /**
  * The sections of one runtime, in declaration order. A variable that several
- * groups share (NODE_ENV, VERCEL, ...) is listed once, in the first group that
+ * groups share (NODE_ENV, ...) is listed once, in the first group that
  * declares it.
  */
 export function catalogFor(runtime: RuntimeName): CatalogSection[] {

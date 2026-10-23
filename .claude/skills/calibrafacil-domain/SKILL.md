@@ -51,12 +51,12 @@ regulated boundaries.
 - **Auth / access:** `packages/auth` (`access.ts`, `lab-access.ts`, Better-Auth).
 - **API:** `apps/api` (Hono — `src/app.ts`, `src/routes/`, `src/modules/`,
   `src/middleware/`, `src/services/`, `src/lib/`); runs under Bun
-  (`src/bun.ts`) or as generated `apps/api/api/` Vercel functions.
+  (`src/bun.ts`), self-hosted.
 - **Frontends:** `apps/web` (lab dashboard; thin `src/routes/` adapters +
   `src/features/<domain>/`), `apps/portal` (cloud-only client portal),
   `apps/docs` (user docs), `apps/site` (project website).
-- **Jobs / offline:** `apps/worker` (in-process, Vercel Queue + Cron or the always-on
-  worker), `services/document-worker`, `services/gotenberg`; `apps/desktop` (Electron),
+- **Jobs / offline:** `apps/worker` (in-process, or the always-on worker draining
+  the database queue), `services/document-worker`, `services/gotenberg`; `apps/desktop` (Electron),
   `apps/local-server` + `packages/local-db` (SQLite, outbox, sync).
 - **Validation dossiers:** `validation/math-engine/v<version>/dossier.tex` (+ `manifest.json`).
 

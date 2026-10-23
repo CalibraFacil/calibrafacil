@@ -16,7 +16,7 @@ export type StagedBackgroundJob = { queueJobId: number };
 
 /**
  * Inserts the queue row on `executor` when this message routes to the database
- * queue; returns null when it does not (Vercel Queue / in-process), in which
+ * queue; returns null when it does not (in-process), in which
  * case the caller dispatches after commit with `enqueueBackgroundJob` and must
  * compensate if that fails.
  */

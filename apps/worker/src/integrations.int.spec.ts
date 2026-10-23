@@ -11,7 +11,7 @@ import {
 } from "../test/integration/seed";
 
 // Real-DB integration tier for the worker's processIntegrationSync handler.
-// processIntegrationSync(env, message) is a plain exported async fn (no CF/Vercel
+// processIntegrationSync(env, message) is a plain exported async fn (no CF
 // runtime); the "queue" is the app_queue_job / integration_sync_run Postgres
 // table. We seed via drizzle, mock ONLY global fetch (the handler's single
 // external boundary — callRemoteJson), and invoke the handler directly. The

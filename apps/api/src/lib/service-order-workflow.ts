@@ -150,7 +150,7 @@ export async function hashServiceOrderApprovalCode(
 export function resolveApprovalCodePepper(): string {
   const configured = readAuthConfig().quoteApprovalCodePepper;
   if (configured) return configured;
-  if (readRuntimeConfig().vercelEnv === "production") {
+  if (readRuntimeConfig().isProduction) {
     throw new Error("QUOTE_APPROVAL_CODE_PEPPER is required");
   }
   return "dev-approval-code-pepper";

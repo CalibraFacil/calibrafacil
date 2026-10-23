@@ -19,7 +19,6 @@ coverage
 **/.wrangler
 .vercel
 **/.vercel
-apps/api/vercel-functions
 **/*.tsbuildinfo
 playwright-report
 **/playwright-report

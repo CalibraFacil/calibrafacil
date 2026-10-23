@@ -7,7 +7,7 @@ import {
 } from "@calibra-facil/shared/telemetry";
 
 // Server-side error tracking for the API surfaces: request
-// handlers (app.onError), the cron dispatcher and the Vercel Queue consumer
+// handlers (app.onError), and the cron dispatcher
 // all report through this singleton, which writes one redacted JSON line to
 // stderr per error (see packages/shared/src/telemetry/error-reporter.ts).
 

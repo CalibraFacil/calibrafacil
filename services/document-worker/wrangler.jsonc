@@ -1,7 +1,7 @@
 {
   // Cloudflare Worker + Container that drains the `app_queue_job` table and
   // assembles documents (calibration certificates, service-order PDFs, PDF
-  // labels) off Vercel. Requires the Workers Paid plan. Deploy with
+  // labels) off the API process. Requires the Workers Paid plan. Deploy with
   // `wrangler deploy` — it builds Dockerfile.document-worker from the repo root
   // and pushes the image to Cloudflare's managed registry.
   //

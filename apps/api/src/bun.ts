@@ -6,8 +6,8 @@ import {
 } from "@calibra-facil/config";
 import { assertRlsStartup } from "@calibra-facil/db/rls-startup";
 import app from "./index";
-import { GET as dispatchCron } from "../vercel-src/cron/dispatch";
-import { readCronEntries, startCronScheduler } from "./lib/cron-scheduler";
+import { GET as dispatchCron } from "./cron/dispatch";
+import { CRON_ENTRIES, startCronScheduler } from "./lib/cron-scheduler";
 import { buildApiBootEnv } from "./server/startup";
 
 type BunServer = {
@@ -104,10 +104,9 @@ const server = Bun.serve({
   // @ts-expect-error Bun supports idleTimeout, but the bundled type in this workspace has not caught up.
   idleTimeout: 120,
   fetch(request) {
-    // On Vercel, /api/cron/* are separate functions triggered by vercel.json.
-    // Here (local dev, Docker, any VM) the same handlers are served by this
-    // process, so any scheduler can trigger them with the CRON_SECRET bearer
-    // token. See DEPLOYMENT.md for the schedule.
+    // The /api/cron/* handlers are served by this process, so the internal
+    // scheduler or any external one can trigger them with the CRON_SECRET
+    // bearer token. See DEPLOYMENT.md for the schedule.
     if (new URL(request.url).pathname.startsWith("/api/cron/")) {
       return dispatchCron(request);
     }
@@ -119,15 +118,11 @@ console.info(
   `Calibra Facil API listening on http://${server.hostname}:${server.port}`,
 );
 
-// CRON_SCHEDULER=internal runs the vercel.json schedule in this process, for
-// installs without an external scheduler (the Docker setup turns it on).
+// CRON_SCHEDULER=internal runs the cron schedule in this process, for installs
+// without an external scheduler (the Docker setup turns it on).
 if (config.jobs.cronScheduler === "internal") {
   const jobs = startCronScheduler({
-    entries: readCronEntries(
-      JSON.parse(
-        await Bun.file(new URL("../vercel.json", import.meta.url)).text(),
-      ),
-    ),
+    entries: CRON_ENTRIES,
     dispatch: dispatchCron,
     secret: config.jobs.cronSecret,
   });

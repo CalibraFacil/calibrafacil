@@ -7,7 +7,7 @@ export default defineConfig({
   // honors per-package, leaving that JSX untransformed (Vite 7's esbuild used to
   // transform it regardless). The React plugin transforms all .tsx regardless of
   // per-package tsconfig — same approach web/portal already use. Test-only:
-  // the deployed API runs on Bun/Vercel, not Vite.
+  // the deployed API runs on Bun, not Vite.
   plugins: [react()],
   test: {
     globals: true,

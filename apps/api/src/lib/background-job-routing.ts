@@ -26,14 +26,9 @@ export function getDocumentWorkerUrl(): string | null {
   return readJobsConfig().documentWorkerUrl ?? null;
 }
 
-export function getDocumentWorkerJobTypes(): ReadonlySet<string> {
-  return new Set(readJobsConfig().documentWorkerJobTypes);
-}
-
 // Mirror packages/db/src/queue.ts:getMessageType so a CERTIFICATE/LABEL job
 // dispatched with `type` omitted (the optional-type variant) still resolves to
-// its canonical app_queue_job type name for the allowlist check. Exported for
-// the Vercel Queue consumer's receipt ledger (vercel-src/queues/background.ts).
+// its canonical app_queue_job type name (used to label log lines).
 export function resolveQueueJobType(message: BackgroundJobMessage): string {
   switch (message.type) {
     case "LABEL":
@@ -52,23 +47,11 @@ export function resolveQueueJobType(message: BackgroundJobMessage): string {
   }
 }
 
-export function isDocumentWorkerJobType(
-  message: BackgroundJobMessage,
-): message is QueueMessage {
-  // SCHEDULED_NOTIFICATIONS and PORTAL_DIGEST are timer-only messages, not app_queue_job types, so they can never route to
-  // the container.
-  if (
-    message.type === "SCHEDULED_NOTIFICATIONS" ||
-    message.type === "PORTAL_DIGEST"
-  ) {
-    return false;
-  }
-  return getDocumentWorkerJobTypes().has(resolveQueueJobType(message));
-}
-
 /**
- * Whether `enqueueBackgroundJob` would write this message to `app_queue_job`
- * (the same Postgres), as opposed to Vercel Queue / in-process dispatch.
+ * Whether `enqueueBackgroundJob` writes this message to `app_queue_job` (the
+ * same Postgres), as opposed to running it in-process: every queue job in
+ * `queue` mode except the ones that need this process (Conta Azul syncs) and
+ * the cron-only messages, which are not queue jobs.
  */
 export function routesToDatabaseQueue(
   message: BackgroundJobMessage,
@@ -76,8 +59,5 @@ export function routesToDatabaseQueue(
   if (!isQueueMessage(message) || isContaAzulSyncMessage(message)) {
     return false;
   }
-  const mode = getBackgroundJobsMode();
-  if (mode === "queue") return true;
-  if (mode === "local" || mode === "inline") return false;
-  return getDocumentWorkerUrl() !== null && isDocumentWorkerJobType(message);
+  return getBackgroundJobsMode() === "queue";
 }

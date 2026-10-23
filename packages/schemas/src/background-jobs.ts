@@ -6,7 +6,7 @@ import type {
 } from "@calibra-facil/shared";
 
 // The one job contract for background work: every message that travels through
-// the Postgres queue (`app_queue_job`) or the Vercel Queue is a member of
+// the Postgres queue (`app_queue_job`) is a member of
 // `BackgroundJobMessageSchema`, discriminated by `type`. Producers are
 // type-checked against the inferred types, `enqueueQueueJob` validates before it
 // inserts, and every consumer parses with `parseBackgroundJobMessage` /
@@ -232,8 +232,7 @@ function failureReason(value: unknown, error: z.ZodError): string {
 }
 
 /**
- * The single parse step both delivery paths (the Postgres drain and the Vercel
- * Queue consumer) run on an untrusted message before a handler sees it.
+ * The single parse step the Postgres drain runs on an untrusted message before a handler sees it.
  * Never throws: a failure carries the human-readable reason a dead-letter
  * records.
  */

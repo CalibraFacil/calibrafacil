@@ -1,9 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
-import {
-  flushErrorReporter,
-  reportServerError,
-} from "../../src/lib/observability";
+import { flushErrorReporter, reportServerError } from "../lib/observability";
 
 // Wraps every cron handler so the whole cron system fails loudly and safely:
 //
@@ -12,7 +9,7 @@ import {
 //    unstructured stack.
 //  - Visibility: the run's outcome is written to the `cron_run` heartbeat table
 //    (last_success_at / last_status / consecutive_failures), and a failed run
-//    returns a non-2xx so Vercel marks the invocation failed. Both are how a
+//    returns a non-2xx so the trigger sees it failed. Both are how a
 //    silently-broken cron (the kind that 404'd unnoticed) becomes detectable.
 //  - Overlap protection: a short row-lease (`locked_until`) prevents a slow run
 //    from overlapping the next trigger. A row-lease — not pg_advisory_lock — is
@@ -79,7 +76,7 @@ export interface RunCronOptions {
   /**
    * Optional predicate: return true if `result` represents a failed run even
    * though the task did not throw (e.g. every sub-task failed). A failed run is
-   * recorded as an error and returned as a 500 so it surfaces in Vercel.
+   * recorded as an error and returned as a 500 so it surfaces to the scheduler.
    */
   failed?: (result: unknown) => boolean;
 }

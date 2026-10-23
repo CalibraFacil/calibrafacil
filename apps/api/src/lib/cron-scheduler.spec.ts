@@ -1,12 +1,8 @@
-import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Cron } from "croner";
 
-import { readCronEntries, startCronScheduler } from "./cron-scheduler";
-
-const vercelConfig: unknown = JSON.parse(
-  readFileSync(new URL("../../vercel.json", import.meta.url), "utf8"),
-);
+import { JOB_HANDLERS } from "../cron/dispatch";
+import { CRON_ENTRIES, startCronScheduler } from "./cron-scheduler";
 
 let jobs: Cron[] = [];
 
@@ -15,39 +11,55 @@ afterEach(() => {
   jobs = [];
 });
 
-describe("readCronEntries", () => {
-  it("reads every cron job vercel.json declares", () => {
-    const entries = readCronEntries(vercelConfig);
+function jobName(path: string): string {
+  return path.split("/").filter(Boolean).at(-1) ?? "";
+}
 
-    expect(entries.length).toBeGreaterThan(0);
-    expect(entries).toContainEqual({
-      path: "/api/cron/queue-backstop",
-      schedule: "*/30 * * * *",
-    });
+describe("CRON_ENTRIES", () => {
+  it("schedules exactly the jobs the cron dispatcher can run", () => {
+    // A scheduled path without a handler would 404 on every tick; a handler
+    // without a schedule would never run.
+    expect(CRON_ENTRIES.map((entry) => jobName(entry.path)).toSorted()).toEqual(
+      Object.keys(JOB_HANDLERS).toSorted(),
+    );
   });
 
-  it("ignores anything that is not a /api/cron/* job", () => {
-    expect(readCronEntries(null)).toEqual([]);
+  it("lists every path under /api/cron/ once", () => {
+    const paths = CRON_ENTRIES.map((entry) => entry.path);
+
+    expect(new Set(paths).size).toBe(paths.length);
+    for (const path of paths) expect(path).toMatch(/^\/api\/cron\/[a-z-]+$/);
+  });
+
+  it("keeps the cadence of every job", () => {
     expect(
-      readCronEntries({
-        crons: [
-          { path: "/api/other", schedule: "* * * * *" },
-          { path: "/api/cron/x" },
-          "nope",
-        ],
-      }),
-    ).toEqual([]);
+      Object.fromEntries(CRON_ENTRIES.map((e) => [e.path, e.schedule])),
+    ).toEqual({
+      "/api/cron/integrations": "*/30 * * * *",
+      "/api/cron/notifications": "0 8 * * *",
+      "/api/cron/portal-digest": "0 9 * * *",
+      "/api/cron/auth-maintenance": "30 4 * * 1",
+      "/api/cron/service-order-emails": "*/30 * * * *",
+      "/api/cron/oot-emails": "*/30 * * * *",
+      "/api/cron/queue-backstop": "*/30 * * * *",
+      "/api/cron/spc-recompute": "0 3 * * *",
+      "/api/cron/email-domain-health": "30 3 * * *",
+      "/api/cron/certificate-drift": "0 6 * * *",
+      "/api/cron/records-purge": "0 5 * * 0",
+      "/api/cron/sync-change-log-purge": "15 4 * * *",
+    });
   });
 });
 
 describe("startCronScheduler", () => {
-  it("schedules every vercel.json job with a valid pattern", () => {
+  it("schedules every job with a valid pattern", () => {
     jobs = startCronScheduler({
-      entries: readCronEntries(vercelConfig),
+      entries: CRON_ENTRIES,
       dispatch: vi.fn(),
       secret: "s",
     });
 
+    expect(jobs).toHaveLength(CRON_ENTRIES.length);
     for (const job of jobs) {
       expect(job.nextRun()).toBeInstanceOf(Date);
     }

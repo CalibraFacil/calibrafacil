@@ -2459,14 +2459,11 @@ export const portalRouter = new Hono<{
           return c.json({ error: "Erro ao solicitar o pacote" }, 500);
         }
 
-        await enqueueBackgroundJob(
-          {
-            type: "AUDIT_PACK",
-            exportId: exportRow.id,
-            userId: session.user.id,
-          },
-          { idempotencyKey: `audit-pack-${exportRow.id}` },
-        );
+        await enqueueBackgroundJob({
+          type: "AUDIT_PACK",
+          exportId: exportRow.id,
+          userId: session.user.id,
+        });
 
         return c.json(
           {

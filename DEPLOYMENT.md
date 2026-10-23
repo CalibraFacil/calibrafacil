@@ -128,7 +128,7 @@ a failed cron or queue run) is also reported as one JSON line on stderr:
 
 The message and stack are scrubbed of credentials, tokens and connection-string passwords; request
 bodies, headers, cookies and environment values are never included. `service` is `api` or `worker`.
-`environment` and `release` come from `VERCEL_ENV`/`NODE_ENV` and `VERCEL_GIT_COMMIT_SHA` when set.
+`environment` comes from `NODE_ENV` and `release` from `APP_RELEASE` (the commit or the image tag) when set.
 
 With Docker, read them with `docker compose logs`:
 
@@ -159,14 +159,14 @@ problem, when production is missing a required variable or one has the wrong sha
 most of these only failed at first use, deep inside a request, or never. Check your environment
 **before** you deploy.
 
-**Newly required in production** (`NODE_ENV=production`, or any Vercel deployment):
+**Newly required in production** (`NODE_ENV=production`):
 
-| Variable                     | Who is affected                                                                                                                                       |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CRON_SECRET`                | Bun and hand-built images. Without it the API used to start and every `/api/cron/*` job answered 503. (Docker Compose and Vercel already require it.) |
-| `QUOTE_APPROVAL_CODE_PEPPER` | Bun and hand-built images. Only Vercel enforced it; elsewhere a built-in development pepper was used silently. (Docker Compose already requires it.)  |
-| `API_URL` and `APP_URL`      | Everyone who left one out. The auth layer used to throw on first use.                                                                                 |
-| `R2_MEDIA_BUCKET_NAME`       | The worker, which used to fall back to a development bucket name.                                                                                     |
+| Variable                     | Who is affected                                                                                                                             |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CRON_SECRET`                | Bun and hand-built images. Without it the API used to start and every `/api/cron/*` job answered 503. (Docker Compose already requires it.) |
+| `QUOTE_APPROVAL_CODE_PEPPER` | Bun and hand-built images, where a built-in development pepper was used silently. (Docker Compose already requires it.)                     |
+| `API_URL` and `APP_URL`      | Everyone who left one out. The auth layer used to throw on first use.                                                                       |
+| `R2_MEDIA_BUCKET_NAME`       | The worker, which used to fall back to a development bucket name.                                                                           |
 
 **Newly shape-checked in production** (the variable was accepted before and only failed when
 first used):
@@ -180,8 +180,17 @@ Everywhere (not only in production) a variable that is set must now have the rig
 number must be a whole number (`SMTP_PORT`, `PORT`), an address must be an `http://` or `https://` URL, and `EMAIL_TRANSPORT` and
 `BACKGROUND_JOBS_MODE` must be one of their documented values. The switches
 that document a safe fallback (`QUEUE_RECEIPTS_MODE`, `RECORDS_PURGE_ENABLED`,
-`RECORDS_PURGE_MODE`, `CRON_SCHEDULER`, `BACKGROUND_JOBS_MAX_DELIVERIES`,
+`RECORDS_PURGE_MODE`, `CRON_SCHEDULER`,
 `STUCK_RENDER_AFTER_MS`, `QUEUE_STALE_AFTER_MS`, `DATABASE_POOL_MAX`) keep it: an unusable value still means the default.
+
+**Vercel is no longer a deployment target.** The `vercel.json` files, the generated Vercel
+functions (`apps/api/api/`) and the Vercel Queue consumer are gone; the API runs on Bun and the
+background jobs wait in the database queue (`app_queue_job`). `BACKGROUND_JOBS_MODE=vercel` is now
+refused (use `queue` with the worker); `BACKGROUND_JOBS_MAX_DELIVERIES`, `BACKGROUND_JOBS_TOPIC`,
+`VERCEL_QUEUE_REGION` and `DOCUMENT_WORKER_JOB_TYPES` are ignored (the database queue sends every
+queue job to the worker, and `app_queue_job.max_attempts` is its delivery ceiling); `VERCEL` and
+`VERCEL_ENV` no longer imply production, so set `NODE_ENV=production`; and `VERCEL_GIT_COMMIT_SHA`
+became `APP_RELEASE`.
 
 **Before deploying**, validate the environment you are about to run, without starting anything,
 from a checkout of this release:
@@ -227,7 +236,7 @@ ones you do not have yet).
 
 | Component      | Requirement                                                                  |
 | -------------- | ---------------------------------------------------------------------------- |
-| API + worker   | [Bun](https://bun.sh) 1.x (or Vercel Functions)                              |
+| API + worker   | [Bun](https://bun.sh) 1.x                                                    |
 | Web apps       | Static hosting for `apps/web` and `apps/portal` (SPA fallback to index.html) |
 | Database       | PostgreSQL 15+ with the `pg_trgm` and `unaccent` extensions available        |
 | Object storage | Any S3-compatible store (Cloudflare R2, AWS S3, MinIO, …) — two buckets      |
@@ -252,8 +261,8 @@ declared once, with its type, default, whether production requires it and a one-
 in [`packages/config`](./packages/config/src). **That schema is the source of truth**; the tables
 below are a summary.
 
-- Each process validates its configuration when it starts (the API's Bun entry and Vercel
-  functions, the worker, the local server). A bad deploy fails immediately with one error that
+- Each process validates its configuration when it starts (the API's Bun entry,
+  the worker, the local server). A bad deploy fails immediately with one error that
   lists every problem, by variable name and reason, never with a value:
 
   ```text
@@ -291,8 +300,7 @@ below are a summary.
 | `SIGNING_TSA_URL` (+ `SIGNING_TSA_AUTH`, `SIGNING_TSA_ICP_CONFORMANT`, `SIGNING_TSA_TIMEOUT_MS`)    | Optional RFC 3161 time-stamping of certificates: see _Certificate time-stamping_      |
 | `QUOTE_APPROVAL_CODE_PEPPER`, `CRON_SECRET`                                                         | Random strings                                                                        |
 | `PORTAL_SERVICE_USER_ID`                                                                            | Id of the account that owns client-portal organizations (`init` creates it)           |
-| `BACKGROUND_JOBS_MODE`                                                                              | `local` (inside the API process), `queue` (a separate worker) or `vercel`             |
-| `BACKGROUND_JOBS_MAX_DELIVERIES`                                                                    | Optional, default `3`: Vercel deliveries before a certificate is rejected             |
+| `BACKGROUND_JOBS_MODE`                                                                              | `local` (inside the API process, development) or `queue` (a separate worker)          |
 | `STUCK_RENDER_AFTER_MS`                                                                             | Optional, default `3600000` (60 min): see _Certificates stuck in generation_ below    |
 | `QUEUE_RECEIPTS_MODE`                                                                               | Optional, default `enforce`; `shadow`/`off` opt out: see _Queue idempotency_ below    |
 | `CRON_SCHEDULER=internal`                                                                           | Run the scheduled jobs inside the API (see below)                                     |
@@ -314,13 +322,13 @@ laboratory instead, set `CONTA_AZUL_CLIENT_ID` and `CONTA_AZUL_CLIENT_SECRET`
 Set `SIGNING_TSA_URL` to the endpoint of a time-stamp authority and every signed certificate gets
 a carimbo do tempo (PAdES-T). The other variables are optional: `SIGNING_TSA_AUTH` is the full
 `Authorization` header value of a contracted authority (`Basic ...` or `Bearer ...`),
-`SIGNING_TSA_TIMEOUT_MS` the request timeout (1000 to 60000, default 30000; capped at 60000 so the worst case, 4 × 60 s + 7 s = 247 s, stays under the 300 s queue function limit), and
+`SIGNING_TSA_TIMEOUT_MS` the request timeout (1000 to 60000, default 30000; capped at 60000 so the worst case, 4 × 60 s + 7 s = 247 s, stays under the 10-minute queue lease), and
 `SIGNING_TSA_ICP_CONFORMANT=true` is to be set **only** for a credentialed ICP-Brasil authority:
 otherwise the signature records `icpBrasilConformant: false`, so a generic authority is never
 presented as legally conformant. The settings are validated at start-up (the address must be an
 `http://` or `https://` URL).
 
-They take effect on **every worker path**: the Vercel Queue consumer and cron handlers, the
+They take effect on **every worker path**: the cron handlers, the
 inline and local (`BACKGROUND_JOBS_MODE=local`) runner in the API process, the database-queue
 drain (`apps/worker` `serve`, including the document-worker container) and the always-on Bun
 worker (`bun src/bun.ts`, the `worker` service of the Docker setup). All of them build the
@@ -341,14 +349,13 @@ byte-identical to what earlier releases produced.
   valid time-stamp response, a rejection status, or no token) is not retried: the delivery fails at
   once. When no stamp is obtained the render fails before anything is uploaded: no PDF is stored,
   no certificate snapshot is written and no "certificate ready" e-mail is sent.
-- Keep the worst case inside the function's time limit. An unreachable authority that hangs costs
+- Keep the worst case inside the queue lease. An unreachable authority that hangs costs
   up to `4 × SIGNING_TSA_TIMEOUT_MS + 7 seconds` per delivery (127 seconds at the default 30000),
-  on top of the render itself. The Vercel Queue function (`api/queues/background.js`) has a
-  `maxDuration` of 300 seconds; the timeout is therefore capped at 60000 (247 seconds worst case),
-  and the validation refuses anything larger.
-- While the queue still has deliveries left (Vercel: `BACKGROUND_JOBS_MAX_DELIVERIES`, default 3;
-  database queue: the row's `max_attempts`), the job stays `GENERATING_PDF` and the message is
-  redelivered, so a short outage of the authority heals itself.
+  on top of the render itself. A worker that holds a row for longer than `QUEUE_STALE_AFTER_MS`
+  (default 10 minutes) loses it to another worker; the timeout is therefore capped at 60000
+  (247 seconds worst case), and the validation refuses anything larger.
+- While the row still has attempts left (`max_attempts`, default 3), the job stays
+  `GENERATING_PDF` and the row is re-queued, so a short outage of the authority heals itself.
 - On the final delivery the job is `REJECTED`, with the reason `Falha na assinatura digital do
 certificado: Falha ao obter carimbo do tempo RFC 3161 ...`, and can be sent for approval again
   once the authority is back. Runners that never redeliver (the inline and local ones) treat the
@@ -387,10 +394,10 @@ are no plans or limits to configure.
 ### Scheduled jobs
 
 The API serves its scheduled jobs at `/api/cron/<job>`, protected by
-`Authorization: Bearer $CRON_SECRET`. On Vercel they are declared in `apps/api/vercel.json`.
-Anywhere else, the simplest option is `CRON_SCHEDULER=internal` on the API: it runs the same
-schedule in-process (the Docker setup turns it on), and a lease keeps two replicas from running
-a job twice. Or trigger them with your scheduler of choice:
+`Authorization: Bearer $CRON_SECRET`. The simplest option is `CRON_SCHEDULER=internal` on the API:
+it runs the schedule below in-process (the Docker setup turns it on; the list is `CRON_ENTRIES` in
+`apps/api/src/lib/cron-scheduler.ts`), and a lease keeps two replicas from running a job twice.
+Or trigger them with your scheduler of choice:
 
 | Job                     | Schedule (UTC) |
 | ----------------------- | -------------- |
@@ -423,7 +430,7 @@ real: `pnpm --dir apps/api soft-delete-lab --slug <slug> --reason "<why>"` soft-
 `docs/architecture/records-retention.md` is the inventory of what counts as evidence and of every
 foreign key into it.
 
-The `records-purge` cron (weekly, `apps/api/vercel.json`) is the only thing that can remove such a
+The `records-purge` cron (weekly) is the only thing that can remove such a
 laboratory, and it is **off by default**:
 
 - `RECORDS_PURGE_ENABLED` unset or anything but `true`: the cron answers immediately and touches nothing.
@@ -704,9 +711,8 @@ Then change the API's connection string and set its mode (`DATABASE_RLS_MODE=enf
 
 #### Queue idempotency and lease fencing
 
-Queue delivery is at-least-once: Vercel Queue redelivers a message until it is acknowledged, and a
-`PROCESSING` row whose lease expired (`QUEUE_STALE_AFTER_MS`) is handed to another worker. Two
-guards keep a duplicate or a slow worker from doing harm:
+Queue delivery is at-least-once: a `PROCESSING` row whose lease expired (`QUEUE_STALE_AFTER_MS`) is
+handed to another worker. Two guards keep a duplicate or a slow worker from doing harm:
 
 - **Lease fencing.** A worker may complete or fail a queue row only while it still holds the lease
   (`locked_by` is its `WORKER_ID` and the row is `PROCESSING`). A worker whose lease expired and
@@ -802,7 +808,7 @@ Protocol 3 replaces the `updatedAt` pull cursor and the one-shot bootstrap of pr
 
 A certificate is `GENERATING_PDF` from approval until the worker issues it. The worker rejects it
 itself when a render fails for good, but it cannot when the process dies mid-render (out of
-memory, a crash) or when a Vercel Queue message is dropped after its retries. The `queue-backstop`
+memory, a crash) or when its queue row is gone after the retries. The `queue-backstop`
 job covers both, so such a certificate ends up `REJECTED` (reason `Erro ao gerar certificado: ...`,
 plus a `job_audit_log` entry) and can be sent for approval again, instead of staying
 `GENERATING_PDF` forever:
@@ -813,9 +819,8 @@ plus a `job_audit_log` entry) and can be sent for approval again, instead of sta
   before. The certificate that row was rendering is rejected.
 - A certificate that has been `GENERATING_PDF` for longer than `STUCK_RENDER_AFTER_MS` (default
   `3600000`, 60 minutes, counted from its last update) and has no `PENDING` or `PROCESSING` queue
-  row is rejected the same way. Keep it well above the longest render plus the Vercel Queue retry
-  window: a Vercel delivery is not tracked by a queue row, so the threshold is the only thing
-  protecting a certificate that is still being retried.
+  row is rejected the same way. Keep it well above the longest render plus the retry
+  window, so a certificate that is still being retried is not rejected.
 
 Only a job still in `GENERATING_PDF` is rejected. An `APPROVED` or `SUPERSEDED` certificate, its
 issued snapshot and its number are never touched. Every automatic rejection is recorded in
@@ -824,9 +829,9 @@ issued snapshot and its number are never touched. Every automatic rejection is r
 released the certificate (there is no system user), so that marker is how an automatic rejection
 is told apart from the approver's own action.
 
-The backstop runs on the `queue-backstop` cron, every 30 minutes (`apps/api/vercel.json`), so
+The backstop runs on the `queue-backstop` cron, every 30 minutes, so
 recovery is not immediate: a crashed job is dead-lettered after its lease expires (default 10
-minutes) plus up to 30 minutes until the next run, and a dropped Vercel message is rejected at
+minutes) plus up to 30 minutes until the next run, and a certificate with no queue row is rejected at
 `STUCK_RENDER_AFTER_MS` plus up to 30 minutes. The drain on the always-on worker also
 dead-letters expired leases each time it wakes, so it can be faster there.
 
@@ -862,13 +867,6 @@ and pass the environment above with `--env-file`.
   the API's address; leave it out when a reverse proxy serves the API under `/api` on the same
   origin. The server sets cache headers only, so add the security headers from
   `apps/web/public/_headers` in the proxy.
-
-### Vercel
-
-`apps/api`, `apps/web` and `apps/portal` each ship a `vercel.json`. Create one Vercel project
-per app with the app directory as its root, set the environment variables above
-(`BACKGROUND_JOBS_MODE=vercel` for the API), and Vercel runs the crons and the background-job
-queue declared in `apps/api/vercel.json`.
 
 ### Updating
 

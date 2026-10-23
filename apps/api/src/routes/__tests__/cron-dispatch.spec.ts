@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { GET } from "../../../vercel-src/cron/dispatch";
+import { GET } from "../../cron/dispatch";
 
 const mocks = vi.hoisted(() => ({
   cleanupExpiredAuthRecords: vi.fn(),
@@ -47,7 +47,6 @@ function request(path: string, headers: HeadersInit = {}) {
 beforeEach(() => {
   process.env = { ...originalEnv };
   delete process.env.CRON_SECRET;
-  delete process.env.VERCEL;
   delete process.env.NODE_ENV;
   vi.clearAllMocks();
   mocks.cleanupExpiredAuthRecords.mockResolvedValue({
@@ -95,8 +94,8 @@ describe("cron dispatch", () => {
 });
 
 describe("integrations cron", () => {
-  it("requires CRON_SECRET when running on Vercel", async () => {
-    process.env.VERCEL = "1";
+  it("requires CRON_SECRET when running in production", async () => {
+    process.env.NODE_ENV = "production";
 
     const response = await GET(request("/api/cron/integrations"));
 
@@ -168,25 +167,19 @@ describe("integrations cron", () => {
 
     expect(mocks.enqueueBackgroundJob).toHaveBeenCalledWith(
       expect.objectContaining({ provider: "conta_azul", runId: "run-1" }),
-      { idempotencyKey: "conta-azul-sync-run-1" },
     );
   });
 });
 
 describe("notifications cron", () => {
-  it("enqueues the scheduled-notifications job with a day-scoped idempotency key", async () => {
+  it("enqueues the scheduled-notifications job", async () => {
     const response = await GET(request("/api/cron/notifications"));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ enqueued: true });
-    expect(mocks.enqueueBackgroundJob).toHaveBeenCalledWith(
-      { type: "SCHEDULED_NOTIFICATIONS" },
-      {
-        idempotencyKey: expect.stringMatching(
-          /^scheduled-notifications-\d{4}-\d{2}-\d{2}$/,
-        ),
-      },
-    );
+    expect(mocks.enqueueBackgroundJob).toHaveBeenCalledWith({
+      type: "SCHEDULED_NOTIFICATIONS",
+    });
   });
 
   it("rejects invalid cron credentials", async () => {
@@ -201,8 +194,8 @@ describe("notifications cron", () => {
     expect(mocks.enqueueBackgroundJob).not.toHaveBeenCalled();
   });
 
-  it("fails closed without a CRON_SECRET on Vercel", async () => {
-    process.env.VERCEL = "1";
+  it("fails closed without a CRON_SECRET in production", async () => {
+    process.env.NODE_ENV = "production";
 
     const response = await GET(request("/api/cron/notifications"));
 
@@ -248,8 +241,8 @@ describe("auth-maintenance cron", () => {
     expect(mocks.cleanupExpiredAuthRecords).not.toHaveBeenCalled();
   });
 
-  it("fails closed without a CRON_SECRET on Vercel", async () => {
-    process.env.VERCEL = "1";
+  it("fails closed without a CRON_SECRET in production", async () => {
+    process.env.NODE_ENV = "production";
 
     const response = await GET(request("/api/cron/auth-maintenance"));
 

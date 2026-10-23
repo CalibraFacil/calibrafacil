@@ -12,8 +12,7 @@
     "preview": "vite preview",
     "test": "vitest run --passWithNoTests",
     "lint": "oxlint",
-    "check-types": "node ../../scripts/typecheck.mjs --noEmit",
-    "deploy": "pnpm dlx vercel deploy --prod"
+    "check-types": "node ../../scripts/typecheck.mjs --noEmit"
   },
   "dependencies": {
     "@calibra-facil/auth": "workspace:^",

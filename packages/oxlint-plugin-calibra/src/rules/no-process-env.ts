@@ -28,7 +28,6 @@ const ALLOWED_PATTERN =
   /(^|\/)(packages\/config\/|(test|tests|e2e|e2e-stack)\/|vitest\.[^/]*$|playwright[^/]*$)/;
 
 const LEGACY_BASELINE: Baseline = new Map<string, number>([
-  ["apps/api/scripts/build-vercel-deployment.mjs", 1],
   ["apps/api/src/cli/create-lab.ts", 1],
   ["apps/api/src/cli/init.ts", 2],
   ["apps/api/src/cli/seed-demo/api.ts", 3],
@@ -68,7 +67,6 @@ const LEGACY_BASELINE: Baseline = new Map<string, number>([
   ["scripts/smoke-desktop-packaged-offline.mjs", 6],
   ["scripts/static-server.ts", 4],
   ["scripts/typecheck.mjs", 3],
-  ["scripts/vercel-ignore-build.mjs", 2],
 ]);
 
 const MESSAGE =

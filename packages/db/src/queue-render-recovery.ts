@@ -13,7 +13,7 @@ import type { DeadLetteredQueueJob } from "./queue.js";
 //
 // The worker REJECTS a certificate job itself (apps/worker/src/index.ts,
 // `setJobError`) when it is alive to do so. When it is not — the process was
-// killed on the last attempt, or a Vercel Queue message was dropped after its
+// killed on the last attempt, or the job ran out of its
 // retries — the calibration_job would sit in GENERATING_PDF forever. These
 // helpers apply the SAME transition (GENERATING_PDF -> REJECTED, compare-and-set
 // on status, with a job_audit_log row in the same transaction) from the queue
@@ -230,7 +230,7 @@ function toStuckRender(value: unknown): StuckRender | null {
 /**
  * Rejects every calibration_job that has been GENERATING_PDF for longer than
  * `stuckAfterMs` (measured from updated_at) and has no PENDING / PROCESSING
- * certificate-render queue row — the shape a Vercel Queue message dropped after
+ * certificate-render queue row — the shape a job that ran out of
  * its retries leaves behind. The sweep is cross-tenant by design (a platform
  * cron); each rejection is scoped by the job's own organization. The actor is
  * the user who released the certificate (approved_by), falling back to its

@@ -22,7 +22,7 @@ function stubWorkerEnvironment() {
   }
 }
 
-describe("REQ-TSA-1 the API-built worker environment (Vercel queue, cron, inline)", () => {
+describe("REQ-TSA-1 the API-built worker environment (cron, inline)", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
   });
