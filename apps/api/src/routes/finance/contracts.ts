@@ -472,10 +472,11 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
           // The agreement update and the customers' compliance follow-up are
           // separate writes, as before; they share this transaction now.
           if ((input.status ?? existing.status) === "ACTIVE") {
-            const customerIdsToSync = new Set([
-              existing.customerId,
-              input.customerId,
-            ]);
+            // Ascending, so two reassignments in opposite directions lock the
+            // customer rows in the same order and cannot deadlock.
+            const customerIdsToSync = [
+              ...new Set([existing.customerId, input.customerId]),
+            ].sort((a, b) => a - b);
             for (const customerId of customerIdsToSync) {
               await syncCustomerComplianceContract(
                 o,
