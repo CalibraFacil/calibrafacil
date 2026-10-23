@@ -22,7 +22,7 @@ const { dbMock } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("@calibra-facil/db", () => ({ db: dbMock }));
+vi.mock("@calibra-facil/db", () => ({ db: dbMock, systemDb: dbMock }));
 
 vi.mock("@calibra-facil/db/schema", () => ({
   emailSuppression: { id: "id", email: "email", scope: "scope" },

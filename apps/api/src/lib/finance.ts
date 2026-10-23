@@ -1,4 +1,5 @@
 import { db } from "@calibra-facil/db";
+import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import {
   type CustomerAddress,
   type CustomerCompliance,
@@ -215,6 +216,8 @@ export interface ResolvedBillingDocumentLink {
 export async function resolveServiceOrderBillingDocumentLinks(
   inputs: ServiceOrderBillingDocumentLinkInput[],
   organizationId: string,
+  // An org-bound transaction handle when the caller has one (row-level security).
+  executor: Pick<OrgExecutor, "select"> = db,
 ): Promise<Map<number, ResolvedBillingDocumentLink>> {
   const serviceOrderIds = inputs.map((input) => input.serviceOrderId);
   const linkedJobIds = inputs.flatMap((input) => input.certificateJobIds);
@@ -229,7 +232,7 @@ export async function resolveServiceOrderBillingDocumentLinks(
   ].filter(Boolean);
 
   const linkItems = itemMatchConditions.length
-    ? await db
+    ? await executor
         .select({
           documentId: billingDocumentItem.documentId,
           serviceOrderId: billingDocumentItem.serviceOrderId,
@@ -257,7 +260,7 @@ export async function resolveServiceOrderBillingDocumentLinks(
   for (const item of linkItems) candidateDocIds.add(item.documentId);
 
   const docs = candidateDocIds.size
-    ? await db
+    ? await executor
         .select({
           id: billingDocument.id,
           status: billingDocument.status,

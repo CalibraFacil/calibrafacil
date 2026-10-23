@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import { db, systemDb } from "@calibra-facil/db";
 import {
   asset,
   calibrationJob,
@@ -43,11 +43,18 @@ export type ServiceOrdersListQuery = {
   query?: string;
 };
 
+/**
+ * The portal service-order scope resolver: maps the session's CLIENT
+ * organization (`customer.auth_organization_id`) to its customer and therefore
+ * to the laboratory every following portal service-order statement is bound to.
+ * It is the lookup that LEARNS the laboratory, so it runs on the SYSTEM path
+ * (`systemDb`, the owner connection), like portal-customer-scope.ts.
+ */
 export async function getPortalCustomerForAuthOrganization(
   authOrganizationId: string,
   labOrganizationId?: string | null,
 ) {
-  const [linkedCustomer] = await db
+  const [linkedCustomer] = await systemDb
     .select()
     .from(customer)
     .where(
@@ -74,16 +81,18 @@ export async function resolvePortalServiceOrderIdByPublicId(
   customerId: number,
   labOrganizationId: string,
 ): Promise<number | null> {
-  const [row] = await orgDb(labOrganizationId)
-    .select({ id: serviceOrder.id })
-    .from(serviceOrder)
-    .where(
-      and(
-        eq(serviceOrder.publicId, publicId),
-        eq(serviceOrder.customerId, customerId),
-      ),
-    )
-    .limit(1);
+  const [row] = await orgDb(labOrganizationId).transaction((o) =>
+    o
+      .select({ id: serviceOrder.id })
+      .from(serviceOrder)
+      .where(
+        and(
+          eq(serviceOrder.publicId, publicId),
+          eq(serviceOrder.customerId, customerId),
+        ),
+      )
+      .limit(1),
+  );
 
   return row?.id ?? null;
 }
@@ -371,7 +380,6 @@ export async function listServiceOrdersForPortalCustomer(
   query: ServiceOrdersListQuery,
   labOrganizationId: string,
 ) {
-  const o = orgDb(labOrganizationId);
   const searchTerm = query.query?.trim();
   const whereCondition = and(
     eq(serviceOrder.customerId, customerId),
@@ -385,34 +393,40 @@ export async function listServiceOrdersForPortalCustomer(
       : undefined,
   );
 
-  const [countResult] = await o
-    .select({ total: count() })
-    .from(serviceOrder)
-    .innerJoin(asset, eq(serviceOrder.assetId, asset.id))
-    .where(whereCondition);
+  const { countRow, pageRows } = await orgDb(labOrganizationId).transaction(
+    async (o) => {
+      const [countResult] = await o
+        .select({ total: count() })
+        .from(serviceOrder)
+        .innerJoin(asset, eq(serviceOrder.assetId, asset.id))
+        .where(whereCondition);
 
-  const rows = await o
-    .select({
-      id: serviceOrder.id,
-      publicId: serviceOrder.publicId,
-      serviceOrderNumber: serviceOrder.serviceOrderNumber,
-      status: serviceOrder.status,
-      openedAt: serviceOrder.openedAt,
-      readyAt: serviceOrder.readyAt,
-      assetName: asset.name,
-      assetSerialNumber: asset.serialNumber,
-    })
-    .from(serviceOrder)
-    .innerJoin(asset, eq(serviceOrder.assetId, asset.id))
-    .where(whereCondition)
-    .orderBy(desc(serviceOrder.openedAt))
-    .limit(query.limit)
-    .offset((query.page - 1) * query.limit);
+      const rows = await o
+        .select({
+          id: serviceOrder.id,
+          publicId: serviceOrder.publicId,
+          serviceOrderNumber: serviceOrder.serviceOrderNumber,
+          status: serviceOrder.status,
+          openedAt: serviceOrder.openedAt,
+          readyAt: serviceOrder.readyAt,
+          assetName: asset.name,
+          assetSerialNumber: asset.serialNumber,
+        })
+        .from(serviceOrder)
+        .innerJoin(asset, eq(serviceOrder.assetId, asset.id))
+        .where(whereCondition)
+        .orderBy(desc(serviceOrder.openedAt))
+        .limit(query.limit)
+        .offset((query.page - 1) * query.limit);
 
-  const total = countResult?.total ?? 0;
+      return { countRow: countResult, pageRows: rows };
+    },
+  );
+
+  const total = countRow?.total ?? 0;
 
   return {
-    data: rows.map((row) => ({
+    data: pageRows.map((row) => ({
       ...row,
       statusLabel: SERVICE_ORDER_STATUS_LABELS[row.status],
     })),

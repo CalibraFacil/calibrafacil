@@ -1,7 +1,6 @@
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
 import { createLabAuth, createPortalAuth } from "@calibra-facil/auth";
-import { db } from "@calibra-facil/db";
 import {
   member as memberTable,
   organization as organizationTable,
@@ -25,6 +24,7 @@ import {
   getUnitGovernanceAccess as getGovernanceAccessFromScope,
   type UnitGovernanceAccess,
 } from "../lib/units";
+import { orgDb } from "../lib/org-db";
 
 // =============================================================================
 // CONTEXT TYPES
@@ -503,25 +503,30 @@ export const requireOrganization = createMiddleware<{
 
   // Query the database directly for member and organization info
   // This avoids issues with multiple auth cookies
-  const result = await db
-    .select({
-      memberId: memberTable.id,
-      memberRole: memberTable.role,
-      orgType: organizationTable.type,
-      orgStatus: organizationTable.status,
-    })
-    .from(memberTable)
-    .innerJoin(
-      organizationTable,
-      eq(memberTable.organizationId, organizationTable.id),
-    )
-    .where(
-      and(
-        eq(memberTable.userId, userId),
-        eq(memberTable.organizationId, activeOrgId),
-      ),
-    )
-    .limit(1);
+  // The membership row carries the active organization as its tenant column
+  // (a laboratory, or a CLIENT organization for the portal), so that
+  // organization is the one the transaction names for row-level security.
+  const result = await orgDb(activeOrgId).transaction((tx) =>
+    tx
+      .select({
+        memberId: memberTable.id,
+        memberRole: memberTable.role,
+        orgType: organizationTable.type,
+        orgStatus: organizationTable.status,
+      })
+      .from(memberTable)
+      .innerJoin(
+        organizationTable,
+        eq(memberTable.organizationId, organizationTable.id),
+      )
+      .where(
+        and(
+          eq(memberTable.userId, userId),
+          eq(memberTable.organizationId, activeOrgId),
+        ),
+      )
+      .limit(1),
+  );
 
   const memberInfo = result[0];
 

@@ -1,10 +1,10 @@
-import { db } from "@calibra-facil/db";
 import {
   memberUnitAssignment,
   organizationUnit,
   type MemberUnitRole,
 } from "@calibra-facil/db/schema";
 import type { RoleName } from "@calibra-facil/auth/access";
+import { orgDb } from "./org-db";
 import { and, asc, eq, inArray, sql, type AnyColumn } from "drizzle-orm";
 
 export type UnitScopeMode = "all" | "unit";
@@ -96,18 +96,20 @@ export async function ensureDefaultUnitForOrganization(
   organizationId: string,
   userId?: string | null,
 ) {
-  const [created] = await db
-    .insert(organizationUnit)
-    .values({
-      organizationId,
-      name: DEFAULT_UNIT_NAME,
-      slug: DEFAULT_UNIT_SLUG,
-      status: "ACTIVE",
-      isDefault: true,
-      createdBy: userId ?? null,
-    })
-    .onConflictDoNothing()
-    .returning();
+  const [created] = await orgDb(organizationId).transaction((o) =>
+    o
+      .insert(organizationUnit)
+      .values({
+        organizationId,
+        name: DEFAULT_UNIT_NAME,
+        slug: DEFAULT_UNIT_SLUG,
+        status: "ACTIVE",
+        isDefault: true,
+        createdBy: userId ?? null,
+      })
+      .onConflictDoNothing()
+      .returning(),
+  );
 
   if (created) {
     return {
@@ -119,23 +121,25 @@ export async function ensureDefaultUnitForOrganization(
     };
   }
 
-  const [existing] = await db
-    .select({
-      id: organizationUnit.id,
-      name: organizationUnit.name,
-      slug: organizationUnit.slug,
-      status: organizationUnit.status,
-      isDefault: organizationUnit.isDefault,
-    })
-    .from(organizationUnit)
-    .where(
-      and(
-        eq(organizationUnit.organizationId, organizationId),
-        eq(organizationUnit.slug, DEFAULT_UNIT_SLUG),
-      ),
-    )
-    .orderBy(asc(organizationUnit.id))
-    .limit(1);
+  const [existing] = await orgDb(organizationId).transaction((o) =>
+    o
+      .select({
+        id: organizationUnit.id,
+        name: organizationUnit.name,
+        slug: organizationUnit.slug,
+        status: organizationUnit.status,
+        isDefault: organizationUnit.isDefault,
+      })
+      .from(organizationUnit)
+      .where(
+        and(
+          eq(organizationUnit.organizationId, organizationId),
+          eq(organizationUnit.slug, DEFAULT_UNIT_SLUG),
+        ),
+      )
+      .orderBy(asc(organizationUnit.id))
+      .limit(1),
+  );
 
   if (!existing) {
     throw new Error("Failed to create default organization unit");
@@ -155,16 +159,18 @@ export async function ensureDefaultUnitAssignment(params: {
     params.userId,
   );
 
-  await db
-    .insert(memberUnitAssignment)
-    .values({
-      organizationId: params.organizationId,
-      memberId: params.memberId,
-      unitId: defaultUnit.id,
-      role: getDefaultUnitRole(params.memberRole),
-      createdBy: params.userId,
-    })
-    .onConflictDoNothing();
+  await orgDb(params.organizationId).transaction((o) =>
+    o
+      .insert(memberUnitAssignment)
+      .values({
+        organizationId: params.organizationId,
+        memberId: params.memberId,
+        unitId: defaultUnit.id,
+        role: getDefaultUnitRole(params.memberRole),
+        createdBy: params.userId,
+      })
+      .onConflictDoNothing(),
+  );
 }
 
 export async function resolveMemberUnitScope(params: {
@@ -184,20 +190,22 @@ export async function resolveMemberUnitScope(params: {
       params.userId,
     );
 
-    const units = await db
-      .select({
-        id: organizationUnit.id,
-        name: organizationUnit.name,
-        slug: organizationUnit.slug,
-      })
-      .from(organizationUnit)
-      .where(
-        and(
-          eq(organizationUnit.organizationId, params.organizationId),
-          eq(organizationUnit.status, "ACTIVE"),
-        ),
-      )
-      .orderBy(asc(organizationUnit.name));
+    const units = await orgDb(params.organizationId).transaction((o) =>
+      o
+        .select({
+          id: organizationUnit.id,
+          name: organizationUnit.name,
+          slug: organizationUnit.slug,
+        })
+        .from(organizationUnit)
+        .where(
+          and(
+            eq(organizationUnit.organizationId, params.organizationId),
+            eq(organizationUnit.status, "ACTIVE"),
+          ),
+        )
+        .orderBy(asc(organizationUnit.name)),
+    );
 
     const accessibleUnits = units.map((unit) => ({
       ...unit,
@@ -229,31 +237,8 @@ export async function resolveMemberUnitScope(params: {
     };
   }
 
-  let assignments = await db
-    .select({
-      id: organizationUnit.id,
-      name: organizationUnit.name,
-      slug: organizationUnit.slug,
-      role: memberUnitAssignment.role,
-    })
-    .from(memberUnitAssignment)
-    .innerJoin(
-      organizationUnit,
-      eq(memberUnitAssignment.unitId, organizationUnit.id),
-    )
-    .where(
-      and(
-        eq(memberUnitAssignment.organizationId, params.organizationId),
-        eq(memberUnitAssignment.memberId, params.memberId),
-        eq(organizationUnit.organizationId, params.organizationId),
-        eq(organizationUnit.status, "ACTIVE"),
-      ),
-    )
-    .orderBy(asc(organizationUnit.name));
-
-  if (assignments.length === 0) {
-    await ensureDefaultUnitAssignment(params);
-    assignments = await db
+  let assignments = await orgDb(params.organizationId).transaction((o) =>
+    o
       .select({
         id: organizationUnit.id,
         name: organizationUnit.name,
@@ -273,7 +258,34 @@ export async function resolveMemberUnitScope(params: {
           eq(organizationUnit.status, "ACTIVE"),
         ),
       )
-      .orderBy(asc(organizationUnit.name));
+      .orderBy(asc(organizationUnit.name)),
+  );
+
+  if (assignments.length === 0) {
+    await ensureDefaultUnitAssignment(params);
+    assignments = await orgDb(params.organizationId).transaction((o) =>
+      o
+        .select({
+          id: organizationUnit.id,
+          name: organizationUnit.name,
+          slug: organizationUnit.slug,
+          role: memberUnitAssignment.role,
+        })
+        .from(memberUnitAssignment)
+        .innerJoin(
+          organizationUnit,
+          eq(memberUnitAssignment.unitId, organizationUnit.id),
+        )
+        .where(
+          and(
+            eq(memberUnitAssignment.organizationId, params.organizationId),
+            eq(memberUnitAssignment.memberId, params.memberId),
+            eq(organizationUnit.organizationId, params.organizationId),
+            eq(organizationUnit.status, "ACTIVE"),
+          ),
+        )
+        .orderBy(asc(organizationUnit.name)),
+    );
   }
 
   const accessibleUnits = assignments.map((assignment) => ({

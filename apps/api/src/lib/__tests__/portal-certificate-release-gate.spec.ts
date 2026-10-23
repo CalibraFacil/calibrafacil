@@ -6,15 +6,17 @@ const mocks = vi.hoisted(
   }),
 );
 
-vi.mock("@calibra-facil/db", () => ({
-  db: {
+vi.mock("@calibra-facil/db", () => {
+  // `orgSetDb` reads on the system path (`systemDb`), `orgDb` on `db`.
+  const database = {
     select: () => ({
       from: () => ({
         where: async () => mocks.rows,
       }),
     }),
-  },
-}));
+  };
+  return { db: database, systemDb: database };
+});
 
 import {
   applyPortalCertificateReleaseGate,

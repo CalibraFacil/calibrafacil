@@ -2,6 +2,7 @@ import { db } from "@calibra-facil/db";
 import { serviceOrder, serviceOrderQuote } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 import type { AuthVariables } from "../../middleware/permission";
+import { orgDb } from "../../lib/org-db";
 import { buildUnitScopeCondition } from "../../lib/units";
 
 export async function getQuoteForAction(
@@ -9,17 +10,19 @@ export async function getQuoteForAction(
   quoteId: number,
   organizationId: string,
 ) {
-  const [quote] = await db
-    .select()
-    .from(serviceOrderQuote)
-    .where(
-      and(
-        eq(serviceOrderQuote.id, quoteId),
-        eq(serviceOrderQuote.serviceOrderId, serviceOrderId),
-        eq(serviceOrderQuote.organizationId, organizationId),
-      ),
-    )
-    .limit(1);
+  const [quote] = await orgDb(organizationId).transaction((o) =>
+    o
+      .select()
+      .from(serviceOrderQuote)
+      .where(
+        and(
+          eq(serviceOrderQuote.id, quoteId),
+          eq(serviceOrderQuote.serviceOrderId, serviceOrderId),
+          eq(serviceOrderQuote.organizationId, organizationId),
+        ),
+      )
+      .limit(1),
+  );
   return quote ?? null;
 }
 

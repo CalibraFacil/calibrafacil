@@ -641,6 +641,7 @@ export const portalRouter = new Hono<{
       } satisfies ServerShape<PortalBrandingResponse>);
     }
 
+    // `organization` is a global table (no policy): no transaction needed.
     const [labOrganization] = await orgDb(portalLabScope.labOrganizationId)
       .select({ name: organization.name, logo: organization.logo })
       .from(organization)
@@ -715,193 +716,196 @@ export const portalRouter = new Hono<{
         return c.json(emptyOverview());
       }
       const { customerIds } = scope;
-      const o = orgDb(scope.labOrganizationId);
+      return await orgDb(scope.labOrganizationId).transaction(async (o) => {
+        // next_calibration_date is a calendar day: compare it with the
+        // laboratory's today, derived from the DB clock in SQL (binding raw JS
+        // Date objects inside a sql`` template fails under postgres.js, and the
+        // UTC clock is already tomorrow from 21:00 in Sao Paulo).
+        const labToday = sql.raw(LAB_TODAY_SQL);
+        const labSoon = sql`(${labToday} + ${sql.raw(String(DUE_SOON_DAYS))})`;
 
-      // next_calibration_date is a calendar day: compare it with the
-      // laboratory's today, derived from the DB clock in SQL (binding raw JS
-      // Date objects inside a sql`` template fails under postgres.js, and the
-      // UTC clock is already tomorrow from 21:00 in Sao Paulo).
-      const labToday = sql.raw(LAB_TODAY_SQL);
-      const labSoon = sql`(${labToday} + ${sql.raw(String(DUE_SOON_DAYS))})`;
+        const equipmentWhere = and(
+          inArray(asset.customerId, customerIds),
+          eq(asset.status, "ACTIVE"),
+          isNull(asset.deletedAt),
+        );
+        // Group mode aggregates requests across branches whose authOrg differs
+        // from the active (group) org, so scope by customerId alone.
+        // The counts and the recent list share one predicate: the portal customer's
+        // requests, inside the laboratory the scope resolved to.
+        const requestWhere = inArray(
+          calibrationRequest.customerId,
+          customerIds,
+        );
+        const certificateWhere = and(
+          inArray(calibrationJob.customerId, customerIds),
+          eq(calibrationJob.status, "APPROVED"),
+        );
+        const serviceOrderWhere = inArray(serviceOrder.customerId, customerIds);
 
-      const equipmentWhere = and(
-        inArray(asset.customerId, customerIds),
-        eq(asset.status, "ACTIVE"),
-        isNull(asset.deletedAt),
-      );
-      // Group mode aggregates requests across branches whose authOrg differs
-      // from the active (group) org, so scope by customerId alone.
-      // The counts and the recent list share one predicate: the portal customer's
-      // requests, inside the laboratory the scope resolved to.
-      const requestWhere = inArray(calibrationRequest.customerId, customerIds);
-      const certificateWhere = and(
-        inArray(calibrationJob.customerId, customerIds),
-        eq(calibrationJob.status, "APPROVED"),
-      );
-      const serviceOrderWhere = inArray(serviceOrder.customerId, customerIds);
-
-      const [
-        equipmentCounts,
-        equipmentAttention,
-        certificateCounts,
-        recentCertificatesRaw,
-        requestCounts,
-        recentRequests,
-        serviceOrderCounts,
-        awaitingQuoteOrders,
-        recentServiceOrders,
-      ] = await Promise.all([
-        o
-          .select({
-            total: sql<number>`cast(count(*) as int)`,
-            overdue: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} < ${labToday}) as int)`,
-            dueSoon: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} >= ${labToday} and ${asset.nextCalibrationDate} <= ${labSoon}) as int)`,
-            scheduled: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} > ${labSoon}) as int)`,
-            unscheduled: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} is null) as int)`,
-            inLab: sql<number>`cast(count(*) filter (where ${assetInLabSql(o)}) as int)`,
-          })
-          .from(asset)
-          .where(equipmentWhere),
-        o
-          .select({
-            id: asset.id,
-            publicId: asset.publicId,
-            name: asset.name,
-            tag: asset.tag,
-            nextCalibrationDate: asset.nextCalibrationDate,
-            customerId: asset.customerId,
-            customerName: customer.name,
-          })
-          .from(asset)
-          .innerJoin(customer, eq(asset.customerId, customer.id))
-          .where(and(equipmentWhere, isNotNull(asset.nextCalibrationDate)))
-          .orderBy(asc(asset.nextCalibrationDate))
-          .limit(6),
-        o
-          .select({ available: sql<number>`cast(count(*) as int)` })
-          .from(calibrationJob)
-          .where(certificateWhere),
-        o
-          .select({
-            id: calibrationJob.id,
-            jobId: calibrationJob.jobId,
-            approvedAt: calibrationJob.approvedAt,
-            certificateUrl: calibrationJob.certificateUrl,
-            assetName: asset.name,
-            assetTag: asset.tag,
-          })
-          .from(calibrationJob)
-          .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
-          .where(certificateWhere)
-          .orderBy(desc(calibrationJob.approvedAt))
-          .limit(5),
-        o
-          .select({
-            total: sql<number>`cast(count(*) as int)`,
-            open: sql<number>`cast(count(*) filter (where ${calibrationRequest.status} in ('PENDING','UNDER_REVIEW')) as int)`,
-            rejected: sql<number>`cast(count(*) filter (where ${calibrationRequest.status} = 'REJECTED') as int)`,
-          })
-          .from(calibrationRequest)
-          .where(requestWhere),
-        o
-          .select({
-            id: calibrationRequest.id,
-            status: calibrationRequest.status,
-            submittedAt: calibrationRequest.submittedAt,
-            itemCount: sql<number>`cast((select count(*) from ${calibrationRequestItem} where ${calibrationRequestItem.requestId} = ${calibrationRequest.id}) as int)`,
-          })
-          .from(calibrationRequest)
-          .where(requestWhere)
-          .orderBy(desc(calibrationRequest.submittedAt))
-          .limit(5),
-        o
-          .select({
-            total: sql<number>`cast(count(*) as int)`,
-            inProgress: sql<number>`cast(count(*) filter (where ${serviceOrder.status} not in ('delivered','closed','canceled')) as int)`,
-            awaitingQuoteApproval: sql<number>`cast(count(*) filter (where ${serviceOrder.status} = 'awaiting_quote_approval') as int)`,
-            readyForPickup: sql<number>`cast(count(*) filter (where ${serviceOrder.status} = 'ready_for_pickup') as int)`,
-          })
-          .from(serviceOrder)
-          .where(serviceOrderWhere),
-        o
-          .select({
-            id: serviceOrder.id,
-            publicId: serviceOrder.publicId,
-            serviceOrderNumber: serviceOrder.serviceOrderNumber,
-            status: serviceOrder.status,
-            openedAt: serviceOrder.openedAt,
-            assetName: asset.name,
-          })
-          .from(serviceOrder)
-          .leftJoin(asset, eq(serviceOrder.assetId, asset.id))
-          .where(
-            and(
-              serviceOrderWhere,
-              eq(serviceOrder.status, "awaiting_quote_approval"),
-            ),
-          )
-          .orderBy(desc(serviceOrder.openedAt))
-          .limit(5),
-        o
-          .select({
-            id: serviceOrder.id,
-            publicId: serviceOrder.publicId,
-            serviceOrderNumber: serviceOrder.serviceOrderNumber,
-            status: serviceOrder.status,
-            openedAt: serviceOrder.openedAt,
-            assetName: asset.name,
-          })
-          .from(serviceOrder)
-          .leftJoin(asset, eq(serviceOrder.assetId, asset.id))
-          .where(serviceOrderWhere)
-          .orderBy(desc(serviceOrder.openedAt))
-          .limit(5),
-      ]);
-
-      const recentCertificates = (
-        await applyPortalCertificateReleaseGate(
+        const [
+          equipmentCounts,
+          equipmentAttention,
+          certificateCounts,
           recentCertificatesRaw,
-          scope.labOrganizationId,
-        )
-      ).map((cert) => ({
-        id: cert.id,
-        jobId: cert.jobId,
-        approvedAt: cert.approvedAt,
-        assetName: cert.assetName,
-        assetTag: cert.assetTag,
-        releaseStatus: cert.releaseStatus,
-        ready: cert.certificateUrl !== null,
-      }));
+          requestCounts,
+          recentRequests,
+          serviceOrderCounts,
+          awaitingQuoteOrders,
+          recentServiceOrders,
+        ] = await Promise.all([
+          o
+            .select({
+              total: sql<number>`cast(count(*) as int)`,
+              overdue: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} < ${labToday}) as int)`,
+              dueSoon: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} >= ${labToday} and ${asset.nextCalibrationDate} <= ${labSoon}) as int)`,
+              scheduled: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} > ${labSoon}) as int)`,
+              unscheduled: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} is null) as int)`,
+              inLab: sql<number>`cast(count(*) filter (where ${assetInLabSql(o)}) as int)`,
+            })
+            .from(asset)
+            .where(equipmentWhere),
+          o
+            .select({
+              id: asset.id,
+              publicId: asset.publicId,
+              name: asset.name,
+              tag: asset.tag,
+              nextCalibrationDate: asset.nextCalibrationDate,
+              customerId: asset.customerId,
+              customerName: customer.name,
+            })
+            .from(asset)
+            .innerJoin(customer, eq(asset.customerId, customer.id))
+            .where(and(equipmentWhere, isNotNull(asset.nextCalibrationDate)))
+            .orderBy(asc(asset.nextCalibrationDate))
+            .limit(6),
+          o
+            .select({ available: sql<number>`cast(count(*) as int)` })
+            .from(calibrationJob)
+            .where(certificateWhere),
+          o
+            .select({
+              id: calibrationJob.id,
+              jobId: calibrationJob.jobId,
+              approvedAt: calibrationJob.approvedAt,
+              certificateUrl: calibrationJob.certificateUrl,
+              assetName: asset.name,
+              assetTag: asset.tag,
+            })
+            .from(calibrationJob)
+            .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+            .where(certificateWhere)
+            .orderBy(desc(calibrationJob.approvedAt))
+            .limit(5),
+          o
+            .select({
+              total: sql<number>`cast(count(*) as int)`,
+              open: sql<number>`cast(count(*) filter (where ${calibrationRequest.status} in ('PENDING','UNDER_REVIEW')) as int)`,
+              rejected: sql<number>`cast(count(*) filter (where ${calibrationRequest.status} = 'REJECTED') as int)`,
+            })
+            .from(calibrationRequest)
+            .where(requestWhere),
+          o
+            .select({
+              id: calibrationRequest.id,
+              status: calibrationRequest.status,
+              submittedAt: calibrationRequest.submittedAt,
+              itemCount: sql<number>`cast((select count(*) from ${calibrationRequestItem} where ${calibrationRequestItem.requestId} = ${calibrationRequest.id}) as int)`,
+            })
+            .from(calibrationRequest)
+            .where(requestWhere)
+            .orderBy(desc(calibrationRequest.submittedAt))
+            .limit(5),
+          o
+            .select({
+              total: sql<number>`cast(count(*) as int)`,
+              inProgress: sql<number>`cast(count(*) filter (where ${serviceOrder.status} not in ('delivered','closed','canceled')) as int)`,
+              awaitingQuoteApproval: sql<number>`cast(count(*) filter (where ${serviceOrder.status} = 'awaiting_quote_approval') as int)`,
+              readyForPickup: sql<number>`cast(count(*) filter (where ${serviceOrder.status} = 'ready_for_pickup') as int)`,
+            })
+            .from(serviceOrder)
+            .where(serviceOrderWhere),
+          o
+            .select({
+              id: serviceOrder.id,
+              publicId: serviceOrder.publicId,
+              serviceOrderNumber: serviceOrder.serviceOrderNumber,
+              status: serviceOrder.status,
+              openedAt: serviceOrder.openedAt,
+              assetName: asset.name,
+            })
+            .from(serviceOrder)
+            .leftJoin(asset, eq(serviceOrder.assetId, asset.id))
+            .where(
+              and(
+                serviceOrderWhere,
+                eq(serviceOrder.status, "awaiting_quote_approval"),
+              ),
+            )
+            .orderBy(desc(serviceOrder.openedAt))
+            .limit(5),
+          o
+            .select({
+              id: serviceOrder.id,
+              publicId: serviceOrder.publicId,
+              serviceOrderNumber: serviceOrder.serviceOrderNumber,
+              status: serviceOrder.status,
+              openedAt: serviceOrder.openedAt,
+              assetName: asset.name,
+            })
+            .from(serviceOrder)
+            .leftJoin(asset, eq(serviceOrder.assetId, asset.id))
+            .where(serviceOrderWhere)
+            .orderBy(desc(serviceOrder.openedAt))
+            .limit(5),
+        ]);
 
-      const equipment = equipmentCounts[0] ?? {
-        total: 0,
-        overdue: 0,
-        dueSoon: 0,
-        scheduled: 0,
-        unscheduled: 0,
-        inLab: 0,
-      };
-      const requests = requestCounts[0] ?? { total: 0, open: 0, rejected: 0 };
-      const orders = serviceOrderCounts[0] ?? {
-        total: 0,
-        inProgress: 0,
-        awaitingQuoteApproval: 0,
-        readyForPickup: 0,
-      };
+        const recentCertificates = (
+          await applyPortalCertificateReleaseGate(
+            recentCertificatesRaw,
+            scope.labOrganizationId,
+          )
+        ).map((cert) => ({
+          id: cert.id,
+          jobId: cert.jobId,
+          approvedAt: cert.approvedAt,
+          assetName: cert.assetName,
+          assetTag: cert.assetTag,
+          releaseStatus: cert.releaseStatus,
+          ready: cert.certificateUrl !== null,
+        }));
 
-      return c.json({
-        equipment: { ...equipment, attention: equipmentAttention },
-        certificates: {
-          available: certificateCounts[0]?.available ?? 0,
-          recent: recentCertificates,
-        },
-        requests: { ...requests, recent: recentRequests },
-        serviceOrders: {
-          ...orders,
-          awaitingQuote: awaitingQuoteOrders,
-          recent: recentServiceOrders,
-        },
-      } satisfies ServerShape<PortalOverviewResponse>);
+        const equipment = equipmentCounts[0] ?? {
+          total: 0,
+          overdue: 0,
+          dueSoon: 0,
+          scheduled: 0,
+          unscheduled: 0,
+          inLab: 0,
+        };
+        const requests = requestCounts[0] ?? { total: 0, open: 0, rejected: 0 };
+        const orders = serviceOrderCounts[0] ?? {
+          total: 0,
+          inProgress: 0,
+          awaitingQuoteApproval: 0,
+          readyForPickup: 0,
+        };
+
+        return c.json({
+          equipment: { ...equipment, attention: equipmentAttention },
+          certificates: {
+            available: certificateCounts[0]?.available ?? 0,
+            recent: recentCertificates,
+          },
+          requests: { ...requests, recent: recentRequests },
+          serviceOrders: {
+            ...orders,
+            awaitingQuote: awaitingQuoteOrders,
+            recent: recentServiceOrders,
+          },
+        } satisfies ServerShape<PortalOverviewResponse>);
+      });
     } catch (error) {
       console.error("Error building portal overview:", error);
       return c.json({ error: "Erro ao carregar o painel" }, 500);
@@ -948,126 +952,128 @@ export const portalRouter = new Hono<{
           });
         }
 
-        const o = orgDb(scope.labOrganizationId);
-        const whereCondition = and(
-          inArray(asset.customerId, customerIds),
-          eq(asset.status, "ACTIVE"),
-          isNull(asset.deletedAt),
-          ids && ids.length > 0 ? inArray(asset.id, ids) : undefined,
-          query
-            ? or(
-                ilike(asset.name, `%${query}%`),
-                ilike(asset.tag, `%${query}%`),
-                ilike(asset.serialNumber, `%${query}%`),
-                ilike(asset.manufacturer, `%${query}%`),
-                ilike(asset.model, `%${query}%`),
-              )
-            : undefined,
-          buildDueStatusCondition(dueStatus, o),
-        );
+        return await orgDb(scope.labOrganizationId).transaction(async (o) => {
+          const whereCondition = and(
+            inArray(asset.customerId, customerIds),
+            eq(asset.status, "ACTIVE"),
+            isNull(asset.deletedAt),
+            ids && ids.length > 0 ? inArray(asset.id, ids) : undefined,
+            query
+              ? or(
+                  ilike(asset.name, `%${query}%`),
+                  ilike(asset.tag, `%${query}%`),
+                  ilike(asset.serialNumber, `%${query}%`),
+                  ilike(asset.manufacturer, `%${query}%`),
+                  ilike(asset.model, `%${query}%`),
+                )
+              : undefined,
+            buildDueStatusCondition(dueStatus, o),
+          );
 
-        const [countResult] = await o
-          .select({ total: count() })
-          .from(asset)
-          .where(whereCondition);
+          const [countResult] = await o
+            .select({ total: count() })
+            .from(asset)
+            .where(whereCondition);
 
-        const sortColumn = {
-          tag: asset.tag,
-          name: asset.name,
-          nextCalibrationDate: asset.nextCalibrationDate,
-          lastCalibrationDate: asset.lastCalibrationDate,
-        }[sortBy];
-        // "nulls last" so unscheduled instruments don't lead a desc date sort;
-        // tie-break on tag for a stable page order.
-        const primaryOrder =
-          sortDir === "desc"
-            ? sql`${sortColumn} desc nulls last`
-            : sql`${sortColumn} asc nulls last`;
-
-        const assets = await o
-          .select({
-            id: asset.id,
-            publicId: asset.publicId,
-            customerId: asset.customerId,
-            customerName: customer.name,
-            assetTypeId: asset.assetTypeId,
-            assetTypeName: sql<string>`coalesce(${assetType.name}, 'Sem tipo')`,
-            assetTypeSlug: sql<string>`coalesce(${assetType.slug}, 'sem-tipo')`,
-            assetTypeDefinition: assetType.definition,
-            name: asset.name,
-            manufacturer: asset.manufacturer,
-            model: asset.model,
-            serialNumber: asset.serialNumber,
+          const sortColumn = {
             tag: asset.tag,
-            status: asset.status,
-            baseMeasurementUnit: asset.baseMeasurementUnit,
-            specifications: asset.specifications,
-            lastCalibrationDate: asset.lastCalibrationDate,
+            name: asset.name,
             nextCalibrationDate: asset.nextCalibrationDate,
-            inLab: assetInLabSql(o),
-            comments: asset.comments,
-            createdAt: asset.createdAt,
-            updatedAt: asset.updatedAt,
-          })
-          .from(asset)
-          .innerJoin(customer, eq(asset.customerId, customer.id))
-          .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
-          .where(whereCondition)
-          .orderBy(primaryOrder, asc(asset.tag))
-          .limit(limit)
-          .offset(offset);
+            lastCalibrationDate: asset.lastCalibrationDate,
+          }[sortBy];
+          // "nulls last" so unscheduled instruments don't lead a desc date sort;
+          // tie-break on tag for a stable page order.
+          const primaryOrder =
+            sortDir === "desc"
+              ? sql`${sortColumn} desc nulls last`
+              : sql`${sortColumn} asc nulls last`;
 
-        // Latest approved certificate per instrument on this page, one query.
-        const assetIds = assets.map((assetItem) => assetItem.id);
-        const lastCertificateByAssetId = new Map<
-          number,
-          { id: number; jobId: string; approvedAt: string | Date | null }
-        >();
-        if (assetIds.length > 0) {
-          const lastCertificates = await o
-            .selectDistinctOn([calibrationJob.assetId], {
-              assetId: calibrationJob.assetId,
-              id: calibrationJob.id,
-              jobId: calibrationJob.jobId,
-              approvedAt: calibrationJob.approvedAt,
+          const assets = await o
+            .select({
+              id: asset.id,
+              publicId: asset.publicId,
+              customerId: asset.customerId,
+              customerName: customer.name,
+              assetTypeId: asset.assetTypeId,
+              assetTypeName: sql<string>`coalesce(${assetType.name}, 'Sem tipo')`,
+              assetTypeSlug: sql<string>`coalesce(${assetType.slug}, 'sem-tipo')`,
+              assetTypeDefinition: assetType.definition,
+              name: asset.name,
+              manufacturer: asset.manufacturer,
+              model: asset.model,
+              serialNumber: asset.serialNumber,
+              tag: asset.tag,
+              status: asset.status,
+              baseMeasurementUnit: asset.baseMeasurementUnit,
+              specifications: asset.specifications,
+              lastCalibrationDate: asset.lastCalibrationDate,
+              nextCalibrationDate: asset.nextCalibrationDate,
+              inLab: assetInLabSql(o),
+              comments: asset.comments,
+              createdAt: asset.createdAt,
+              updatedAt: asset.updatedAt,
             })
-            .from(calibrationJob)
-            .where(
-              and(
-                inArray(calibrationJob.assetId, assetIds),
-                inArray(calibrationJob.customerId, customerIds),
-                eq(calibrationJob.status, "APPROVED"),
-              ),
-            )
-            .orderBy(calibrationJob.assetId, desc(calibrationJob.approvedAt));
+            .from(asset)
+            .innerJoin(customer, eq(asset.customerId, customer.id))
+            .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
+            .where(whereCondition)
+            .orderBy(primaryOrder, asc(asset.tag))
+            .limit(limit)
+            .offset(offset);
 
-          for (const certificate of lastCertificates) {
-            lastCertificateByAssetId.set(certificate.assetId, {
-              id: certificate.id,
-              jobId: certificate.jobId,
-              approvedAt: certificate.approvedAt,
-            });
+          // Latest approved certificate per instrument on this page, one query.
+          const assetIds = assets.map((assetItem) => assetItem.id);
+          const lastCertificateByAssetId = new Map<
+            number,
+            { id: number; jobId: string; approvedAt: string | Date | null }
+          >();
+          if (assetIds.length > 0) {
+            const lastCertificates = await o
+              .selectDistinctOn([calibrationJob.assetId], {
+                assetId: calibrationJob.assetId,
+                id: calibrationJob.id,
+                jobId: calibrationJob.jobId,
+                approvedAt: calibrationJob.approvedAt,
+              })
+              .from(calibrationJob)
+              .where(
+                and(
+                  inArray(calibrationJob.assetId, assetIds),
+                  inArray(calibrationJob.customerId, customerIds),
+                  eq(calibrationJob.status, "APPROVED"),
+                ),
+              )
+              .orderBy(calibrationJob.assetId, desc(calibrationJob.approvedAt));
+
+            for (const certificate of lastCertificates) {
+              lastCertificateByAssetId.set(certificate.assetId, {
+                id: certificate.id,
+                jobId: certificate.jobId,
+                approvedAt: certificate.approvedAt,
+              });
+            }
           }
-        }
 
-        return c.json({
-          data: assets.map((assetItem) => ({
-            ...assetItem,
-            specifications:
-              denormalizeAssetSpecificationsForResponse({
-                specifications: assetItem.specifications,
-                definition: assetItem.assetTypeDefinition,
-                baseMeasurementUnit: assetItem.baseMeasurementUnit,
-              }) ?? null,
-            lastCertificate: lastCertificateByAssetId.get(assetItem.id) ?? null,
-          })),
-          pagination: {
-            page,
-            limit,
-            total: countResult?.total ?? 0,
-            totalPages: Math.ceil((countResult?.total ?? 0) / limit),
-          },
-        } satisfies ServerShape<PortalFleetAssetsResponse>);
+          return c.json({
+            data: assets.map((assetItem) => ({
+              ...assetItem,
+              specifications:
+                denormalizeAssetSpecificationsForResponse({
+                  specifications: assetItem.specifications,
+                  definition: assetItem.assetTypeDefinition,
+                  baseMeasurementUnit: assetItem.baseMeasurementUnit,
+                }) ?? null,
+              lastCertificate:
+                lastCertificateByAssetId.get(assetItem.id) ?? null,
+            })),
+            pagination: {
+              page,
+              limit,
+              total: countResult?.total ?? 0,
+              totalPages: Math.ceil((countResult?.total ?? 0) / limit),
+            },
+          } satisfies ServerShape<PortalFleetAssetsResponse>);
+        });
       } catch (error) {
         console.error("Error listing portal assets:", error);
         return c.json({ error: "Erro ao listar ativos" }, 500);
@@ -1097,116 +1103,117 @@ export const portalRouter = new Hono<{
         if (!scope || scope.customerIds.length === 0) {
           return c.json({ error: "Ativo nao encontrado" }, 404);
         }
-        const o = orgDb(scope.labOrganizationId);
-        const id = await resolvePortalAssetIdParam(o, c.req.param("id"));
-        if (id === null) {
-          return c.json({ error: "Ativo nao encontrado" }, 404);
-        }
-        const { customerIds } = scope;
+        return await orgDb(scope.labOrganizationId).transaction(async (o) => {
+          const id = await resolvePortalAssetIdParam(o, c.req.param("id"));
+          if (id === null) {
+            return c.json({ error: "Ativo nao encontrado" }, 404);
+          }
+          const { customerIds } = scope;
 
-        const [assetDetails] = await o
-          .select({
-            id: asset.id,
-            publicId: asset.publicId,
-            customerId: asset.customerId,
-            customerName: customer.name,
-            assetTypeId: asset.assetTypeId,
-            assetTypeName: sql<string>`coalesce(${assetType.name}, 'Sem tipo')`,
-            assetTypeSlug: sql<string>`coalesce(${assetType.slug}, 'sem-tipo')`,
-            assetTypeDefinition: assetType.definition,
-            name: asset.name,
-            manufacturer: asset.manufacturer,
-            model: asset.model,
-            serialNumber: asset.serialNumber,
-            tag: asset.tag,
-            status: asset.status,
-            baseMeasurementUnit: asset.baseMeasurementUnit,
-            specifications: asset.specifications,
-            lastCalibrationDate: asset.lastCalibrationDate,
-            nextCalibrationDate: asset.nextCalibrationDate,
-            // Track 1 — customer-owned calibration interval (§7.8.4.3 + ILAC-G24): the
-            // periodicity the customer sets/owns in the portal (for EVERY regime).
-            calibrationIntervalMonths: asset.calibrationIntervalMonths,
-            intervalSetBy: asset.intervalSetBy,
-            // Track 2 — legal-metrology regime + the regulation-fixed verification
-            // periodicity (independent of Track 1; lab-recorded, read-only for the customer).
-            metrologyRegime: asset.metrologyRegime,
-            regulatedInterval: asset.regulatedInterval,
-            nextLegalVerificationDate: asset.nextLegalVerificationDate,
-            inLab: assetInLabSql(o),
-            comments: asset.comments,
-            createdAt: asset.createdAt,
-            updatedAt: asset.updatedAt,
-          })
-          .from(asset)
-          .innerJoin(customer, eq(asset.customerId, customer.id))
-          .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
-          .where(
-            and(
-              eq(asset.id, id),
-              inArray(asset.customerId, customerIds),
-              isNull(asset.deletedAt),
-            ),
-          )
-          .limit(1);
+          const [assetDetails] = await o
+            .select({
+              id: asset.id,
+              publicId: asset.publicId,
+              customerId: asset.customerId,
+              customerName: customer.name,
+              assetTypeId: asset.assetTypeId,
+              assetTypeName: sql<string>`coalesce(${assetType.name}, 'Sem tipo')`,
+              assetTypeSlug: sql<string>`coalesce(${assetType.slug}, 'sem-tipo')`,
+              assetTypeDefinition: assetType.definition,
+              name: asset.name,
+              manufacturer: asset.manufacturer,
+              model: asset.model,
+              serialNumber: asset.serialNumber,
+              tag: asset.tag,
+              status: asset.status,
+              baseMeasurementUnit: asset.baseMeasurementUnit,
+              specifications: asset.specifications,
+              lastCalibrationDate: asset.lastCalibrationDate,
+              nextCalibrationDate: asset.nextCalibrationDate,
+              // Track 1 — customer-owned calibration interval (§7.8.4.3 + ILAC-G24): the
+              // periodicity the customer sets/owns in the portal (for EVERY regime).
+              calibrationIntervalMonths: asset.calibrationIntervalMonths,
+              intervalSetBy: asset.intervalSetBy,
+              // Track 2 — legal-metrology regime + the regulation-fixed verification
+              // periodicity (independent of Track 1; lab-recorded, read-only for the customer).
+              metrologyRegime: asset.metrologyRegime,
+              regulatedInterval: asset.regulatedInterval,
+              nextLegalVerificationDate: asset.nextLegalVerificationDate,
+              inLab: assetInLabSql(o),
+              comments: asset.comments,
+              createdAt: asset.createdAt,
+              updatedAt: asset.updatedAt,
+            })
+            .from(asset)
+            .innerJoin(customer, eq(asset.customerId, customer.id))
+            .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
+            .where(
+              and(
+                eq(asset.id, id),
+                inArray(asset.customerId, customerIds),
+                isNull(asset.deletedAt),
+              ),
+            )
+            .limit(1);
 
-        if (!assetDetails) {
-          return c.json({ error: "Ativo nao encontrado" }, 404);
-        }
+          if (!assetDetails) {
+            return c.json({ error: "Ativo nao encontrado" }, 404);
+          }
 
-        const assetCertificateWhere = and(
-          eq(calibrationJob.assetId, assetDetails.id),
-          inArray(calibrationJob.customerId, customerIds),
-          eq(calibrationJob.status, "APPROVED"),
-        );
+          const assetCertificateWhere = and(
+            eq(calibrationJob.assetId, assetDetails.id),
+            inArray(calibrationJob.customerId, customerIds),
+            eq(calibrationJob.status, "APPROVED"),
+          );
 
-        const [certificateCountResult] = await o
-          .select({ total: count() })
-          .from(calibrationJob)
-          .where(assetCertificateWhere);
+          const [certificateCountResult] = await o
+            .select({ total: count() })
+            .from(calibrationJob)
+            .where(assetCertificateWhere);
 
-        const certificatesRaw = await o
-          .select({
-            id: calibrationJob.id,
-            jobId: calibrationJob.jobId,
-            certificateName: calibrationJob.certificateName,
-            status: calibrationJob.status,
-            performedAt: calibrationJob.performedAt,
-            approvedAt: calibrationJob.approvedAt,
-            certificateUrl: calibrationJob.certificateUrl,
-            verificationToken: calibrationJob.verificationToken,
-            serviceName: service.name,
-            labName: organization.name,
-          })
-          .from(calibrationJob)
-          .innerJoin(service, eq(calibrationJob.serviceId, service.id))
-          .innerJoin(
-            organization,
-            eq(calibrationJob.organizationId, organization.id),
-          )
-          .where(assetCertificateWhere)
-          .orderBy(desc(calibrationJob.approvedAt))
-          .limit(5);
+          const certificatesRaw = await o
+            .select({
+              id: calibrationJob.id,
+              jobId: calibrationJob.jobId,
+              certificateName: calibrationJob.certificateName,
+              status: calibrationJob.status,
+              performedAt: calibrationJob.performedAt,
+              approvedAt: calibrationJob.approvedAt,
+              certificateUrl: calibrationJob.certificateUrl,
+              verificationToken: calibrationJob.verificationToken,
+              serviceName: service.name,
+              labName: organization.name,
+            })
+            .from(calibrationJob)
+            .innerJoin(service, eq(calibrationJob.serviceId, service.id))
+            .innerJoin(
+              organization,
+              eq(calibrationJob.organizationId, organization.id),
+            )
+            .where(assetCertificateWhere)
+            .orderBy(desc(calibrationJob.approvedAt))
+            .limit(5);
 
-        // Phase 2 slice 1: hide certificateUrl for held releases.
-        const certificates = await applyPortalCertificateReleaseGate(
-          certificatesRaw,
-          scope.labOrganizationId,
-        );
+          // Phase 2 slice 1: hide certificateUrl for held releases.
+          const certificates = await applyPortalCertificateReleaseGate(
+            certificatesRaw,
+            scope.labOrganizationId,
+          );
 
-        return c.json({
-          data: {
-            ...assetDetails,
-            specifications:
-              denormalizeAssetSpecificationsForResponse({
-                specifications: assetDetails.specifications,
-                definition: assetDetails.assetTypeDefinition,
-                baseMeasurementUnit: assetDetails.baseMeasurementUnit,
-              }) ?? null,
-            certificates,
-            certificateCount: certificateCountResult?.total ?? 0,
-          },
-        } satisfies ServerShape<PortalAssetDetailResponse>);
+          return c.json({
+            data: {
+              ...assetDetails,
+              specifications:
+                denormalizeAssetSpecificationsForResponse({
+                  specifications: assetDetails.specifications,
+                  definition: assetDetails.assetTypeDefinition,
+                  baseMeasurementUnit: assetDetails.baseMeasurementUnit,
+                }) ?? null,
+              certificates,
+              certificateCount: certificateCountResult?.total ?? 0,
+            },
+          } satisfies ServerShape<PortalAssetDetailResponse>);
+        });
       } catch (error) {
         console.error("Error fetching portal asset:", error);
         return c.json({ error: "Erro ao buscar ativo" }, 500);
@@ -1263,40 +1270,41 @@ export const portalRouter = new Hono<{
           return c.json({ data: [] });
         }
 
-        const o = orgDb(scope.labOrganizationId);
-        const dues = await o
-          .select({
-            id: asset.id,
-            publicId: asset.publicId,
-            name: asset.name,
-            tag: asset.tag,
-            assetTypeName: sql<string>`coalesce(${assetType.name}, 'Sem tipo')`,
-            nextCalibrationDate: asset.nextCalibrationDate,
-            inLab: assetInLabSql(o),
-            customerId: asset.customerId,
-            customerName: customer.name,
-          })
-          .from(asset)
-          .innerJoin(customer, eq(asset.customerId, customer.id))
-          .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
-          .where(
-            and(
-              inArray(asset.customerId, customerIds),
-              eq(asset.status, "ACTIVE"),
-              isNull(asset.deletedAt),
-              gte(asset.nextCalibrationDate, fromDate),
-              lt(asset.nextCalibrationDate, toExclusive),
-            ),
-          )
-          .orderBy(asc(asset.nextCalibrationDate), asc(asset.tag));
+        return await orgDb(scope.labOrganizationId).transaction(async (o) => {
+          const dues = await o
+            .select({
+              id: asset.id,
+              publicId: asset.publicId,
+              name: asset.name,
+              tag: asset.tag,
+              assetTypeName: sql<string>`coalesce(${assetType.name}, 'Sem tipo')`,
+              nextCalibrationDate: asset.nextCalibrationDate,
+              inLab: assetInLabSql(o),
+              customerId: asset.customerId,
+              customerName: customer.name,
+            })
+            .from(asset)
+            .innerJoin(customer, eq(asset.customerId, customer.id))
+            .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
+            .where(
+              and(
+                inArray(asset.customerId, customerIds),
+                eq(asset.status, "ACTIVE"),
+                isNull(asset.deletedAt),
+                gte(asset.nextCalibrationDate, fromDate),
+                lt(asset.nextCalibrationDate, toExclusive),
+              ),
+            )
+            .orderBy(asc(asset.nextCalibrationDate), asc(asset.tag));
 
-        // The window filter above keeps only dated assets; narrow the type with it.
-        const data = dues.flatMap((due) =>
-          due.nextCalibrationDate
-            ? [{ ...due, nextCalibrationDate: due.nextCalibrationDate }]
-            : [],
-        );
-        return c.json({ data } satisfies ServerShape<PortalCalendarResponse>);
+          // The window filter above keeps only dated assets; narrow the type with it.
+          const data = dues.flatMap((due) =>
+            due.nextCalibrationDate
+              ? [{ ...due, nextCalibrationDate: due.nextCalibrationDate }]
+              : [],
+          );
+          return c.json({ data } satisfies ServerShape<PortalCalendarResponse>);
+        });
       } catch (error) {
         console.error("Error building portal calendar:", error);
         return c.json({ error: "Erro ao carregar o calendário" }, 500);
@@ -1369,22 +1377,24 @@ export const portalRouter = new Hono<{
       const labToday = sql.raw(LAB_TODAY_SQL);
       const labSoon = sql`(${labToday} + ${sql.raw(String(DUE_SOON_DAYS))})`;
 
-      const rows = await orgDb(scope.labOrganizationId)
-        .select({
-          customerId: asset.customerId,
-          total: sql<number>`cast(count(*) as int)`,
-          overdue: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} < ${labToday}) as int)`,
-          dueSoon: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} >= ${labToday} and ${asset.nextCalibrationDate} <= ${labSoon}) as int)`,
-        })
-        .from(asset)
-        .where(
-          and(
-            inArray(asset.customerId, scope.customerIds),
-            eq(asset.status, "ACTIVE"),
-            isNull(asset.deletedAt),
-          ),
-        )
-        .groupBy(asset.customerId);
+      const rows = await orgDb(scope.labOrganizationId).transaction((o) =>
+        o
+          .select({
+            customerId: asset.customerId,
+            total: sql<number>`cast(count(*) as int)`,
+            overdue: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} < ${labToday}) as int)`,
+            dueSoon: sql<number>`cast(count(*) filter (where ${asset.nextCalibrationDate} >= ${labToday} and ${asset.nextCalibrationDate} <= ${labSoon}) as int)`,
+          })
+          .from(asset)
+          .where(
+            and(
+              inArray(asset.customerId, scope.customerIds),
+              eq(asset.status, "ACTIVE"),
+              isNull(asset.deletedAt),
+            ),
+          )
+          .groupBy(asset.customerId),
+      );
 
       const byId = new Map(rows.map((row) => [row.customerId, row]));
       const units = [...scope.customerById.values()]
@@ -1427,15 +1437,18 @@ export const portalRouter = new Hono<{
     }
 
     try {
-      const [prefs] = await orgDb(c.get("member").organizationId)
-        .select({
-          preferences: notificationPreference.preferences,
-          emailEnabled: notificationPreference.emailEnabled,
-          digestFrequency: notificationPreference.digestFrequency,
-        })
-        .from(notificationPreference)
-        .where(eq(notificationPreference.userId, session.user.id))
-        .limit(1);
+      const [prefs] = await orgDb(c.get("member").organizationId).transaction(
+        (o) =>
+          o
+            .select({
+              preferences: notificationPreference.preferences,
+              emailEnabled: notificationPreference.emailEnabled,
+              digestFrequency: notificationPreference.digestFrequency,
+            })
+            .from(notificationPreference)
+            .where(eq(notificationPreference.userId, session.user.id))
+            .limit(1),
+      );
 
       return c.json(
         portalPreferencesPayload(
@@ -1479,94 +1492,95 @@ export const portalRouter = new Hono<{
         if (!scope || scope.customerIds.length === 0) {
           return c.json({ error: "Ativo nao encontrado" }, 404);
         }
-        const o = orgDb(scope.labOrganizationId);
-        const id = await resolvePortalAssetIdParam(o, c.req.param("id"));
-        if (id === null) {
-          return c.json({ error: "Ativo nao encontrado" }, 404);
-        }
-        const { customerIds } = scope;
+        return await orgDb(scope.labOrganizationId).transaction(async (o) => {
+          const id = await resolvePortalAssetIdParam(o, c.req.param("id"));
+          if (id === null) {
+            return c.json({ error: "Ativo nao encontrado" }, 404);
+          }
+          const { customerIds } = scope;
 
-        const [existing] = await o
-          .select({
-            assetTypeId: asset.assetTypeId,
-            model: asset.model,
-            calibrationIntervalMonths: asset.calibrationIntervalMonths,
-          })
-          .from(asset)
-          .where(
-            and(
-              eq(asset.id, id),
-              inArray(asset.customerId, customerIds),
-              isNull(asset.deletedAt),
-            ),
-          )
-          .limit(1);
+          const [existing] = await o
+            .select({
+              assetTypeId: asset.assetTypeId,
+              model: asset.model,
+              calibrationIntervalMonths: asset.calibrationIntervalMonths,
+            })
+            .from(asset)
+            .where(
+              and(
+                eq(asset.id, id),
+                inArray(asset.customerId, customerIds),
+                isNull(asset.deletedAt),
+              ),
+            )
+            .limit(1);
 
-        if (!existing) {
-          return c.json({ error: "Ativo nao encontrado" }, 404);
-        }
+          if (!existing) {
+            return c.json({ error: "Ativo nao encontrado" }, 404);
+          }
 
-        const rows = await o
-          .select({
-            approvedAt: calibrationJob.approvedAt,
-            asFoundConformity: calibrationJob.asFoundConformity,
-            asFoundMargins: calibrationJob.asFoundMargins,
-          })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.assetId, id),
-              inArray(calibrationJob.customerId, customerIds),
-              eq(calibrationJob.status, "APPROVED"),
-            ),
-          )
-          .orderBy(asc(calibrationJob.approvedAt));
+          const rows = await o
+            .select({
+              approvedAt: calibrationJob.approvedAt,
+              asFoundConformity: calibrationJob.asFoundConformity,
+              asFoundMargins: calibrationJob.asFoundMargins,
+            })
+            .from(calibrationJob)
+            .where(
+              and(
+                eq(calibrationJob.assetId, id),
+                inArray(calibrationJob.customerId, customerIds),
+                eq(calibrationJob.status, "APPROVED"),
+              ),
+            )
+            .orderBy(asc(calibrationJob.approvedAt));
 
-        // Family borrow-strength (REQ-ENGINE-FAMILY-001): only when this unit's own
-        // history is thin and it has a model to pool by; same assetType+model,
-        // tenant-scoped, excluding legal-metrology siblings.
-        const singleKnown = rows.filter(
-          (r) =>
-            r.asFoundConformity === "CONFORMING" ||
-            r.asFoundConformity === "NON_CONFORMING",
-        ).length;
-        // Fetch the family whenever the unit itself would be INSUFFICIENT — matching the
-        // engine's gate (too few KNOWN cycles OR too little coverage). The family pool is
-        // tenant-scoped, same assetType+model, excludes legal-metrology + soft-deleted.
-        const singleCoverageLow =
-          rows.length > 0 &&
-          singleKnown / rows.length < DEFAULT_INTERVAL_CONFIG.minCoverage;
-        const familyModel = existing.model;
-        const familyRows =
-          (singleKnown < DEFAULT_INTERVAL_CONFIG.minKnownCycles ||
-            singleCoverageLow) &&
-          familyModel !== null
-            ? await o
-                .select({
-                  assetId: calibrationJob.assetId,
-                  approvedAt: calibrationJob.approvedAt,
-                  asFoundConformity: calibrationJob.asFoundConformity,
-                })
-                .from(calibrationJob)
-                .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
-                .where(
-                  and(
-                    eq(asset.assetTypeId, existing.assetTypeId),
-                    eq(asset.model, familyModel),
-                    ne(asset.metrologyRegime, "LEGAL"),
-                    isNull(asset.deletedAt),
-                    inArray(calibrationJob.customerId, customerIds),
-                    eq(calibrationJob.status, "APPROVED"),
-                  ),
-                )
-            : [];
+          // Family borrow-strength (REQ-ENGINE-FAMILY-001): only when this unit's own
+          // history is thin and it has a model to pool by; same assetType+model,
+          // tenant-scoped, excluding legal-metrology siblings.
+          const singleKnown = rows.filter(
+            (r) =>
+              r.asFoundConformity === "CONFORMING" ||
+              r.asFoundConformity === "NON_CONFORMING",
+          ).length;
+          // Fetch the family whenever the unit itself would be INSUFFICIENT — matching the
+          // engine's gate (too few KNOWN cycles OR too little coverage). The family pool is
+          // tenant-scoped, same assetType+model, excludes legal-metrology + soft-deleted.
+          const singleCoverageLow =
+            rows.length > 0 &&
+            singleKnown / rows.length < DEFAULT_INTERVAL_CONFIG.minCoverage;
+          const familyModel = existing.model;
+          const familyRows =
+            (singleKnown < DEFAULT_INTERVAL_CONFIG.minKnownCycles ||
+              singleCoverageLow) &&
+            familyModel !== null
+              ? await o
+                  .select({
+                    assetId: calibrationJob.assetId,
+                    approvedAt: calibrationJob.approvedAt,
+                    asFoundConformity: calibrationJob.asFoundConformity,
+                  })
+                  .from(calibrationJob)
+                  .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+                  .where(
+                    and(
+                      eq(asset.assetTypeId, existing.assetTypeId),
+                      eq(asset.model, familyModel),
+                      ne(asset.metrologyRegime, "LEGAL"),
+                      isNull(asset.deletedAt),
+                      inArray(calibrationJob.customerId, customerIds),
+                      eq(calibrationJob.status, "APPROVED"),
+                    ),
+                  )
+              : [];
 
-        const insight = buildIntervalInsight({
-          rows,
-          currentIntervalMonths: existing.calibrationIntervalMonths,
-          familyRows,
+          const insight = buildIntervalInsight({
+            rows,
+            currentIntervalMonths: existing.calibrationIntervalMonths,
+            familyRows,
+          });
+          return c.json(insight satisfies ServerShape<PortalIntervalInsight>);
         });
-        return c.json(insight satisfies ServerShape<PortalIntervalInsight>);
       } catch (error) {
         console.error("Error building interval insight:", error);
         return c.json(
@@ -1602,109 +1616,110 @@ export const portalRouter = new Hono<{
         if (!scope || scope.customerIds.length === 0) {
           return c.json({ error: "Ativo nao encontrado" }, 404);
         }
-        const o = orgDb(scope.labOrganizationId);
-        const id = await resolvePortalAssetIdParam(o, c.req.param("id"));
-        if (id === null) {
-          return c.json({ error: "Ativo nao encontrado" }, 404);
-        }
-        const { customerIds } = scope;
+        return await orgDb(scope.labOrganizationId).transaction(async (o) => {
+          const id = await resolvePortalAssetIdParam(o, c.req.param("id"));
+          if (id === null) {
+            return c.json({ error: "Ativo nao encontrado" }, 404);
+          }
+          const { customerIds } = scope;
 
-        const [existing] = await o
-          .select({
-            name: asset.name,
-            tag: asset.tag,
-            serialNumber: asset.serialNumber,
-            customerName: customer.name,
-            assetTypeId: asset.assetTypeId,
-            model: asset.model,
-            calibrationIntervalMonths: asset.calibrationIntervalMonths,
-          })
-          .from(asset)
-          .innerJoin(customer, eq(asset.customerId, customer.id))
-          .where(
-            and(
-              eq(asset.id, id),
-              inArray(asset.customerId, customerIds),
-              isNull(asset.deletedAt),
-            ),
-          )
-          .limit(1);
+          const [existing] = await o
+            .select({
+              name: asset.name,
+              tag: asset.tag,
+              serialNumber: asset.serialNumber,
+              customerName: customer.name,
+              assetTypeId: asset.assetTypeId,
+              model: asset.model,
+              calibrationIntervalMonths: asset.calibrationIntervalMonths,
+            })
+            .from(asset)
+            .innerJoin(customer, eq(asset.customerId, customer.id))
+            .where(
+              and(
+                eq(asset.id, id),
+                inArray(asset.customerId, customerIds),
+                isNull(asset.deletedAt),
+              ),
+            )
+            .limit(1);
 
-        if (!existing) {
-          return c.json({ error: "Ativo nao encontrado" }, 404);
-        }
+          if (!existing) {
+            return c.json({ error: "Ativo nao encontrado" }, 404);
+          }
 
-        const rows = await o
-          .select({
-            approvedAt: calibrationJob.approvedAt,
-            asFoundConformity: calibrationJob.asFoundConformity,
-            asFoundMargins: calibrationJob.asFoundMargins,
-          })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.assetId, id),
-              inArray(calibrationJob.customerId, customerIds),
-              eq(calibrationJob.status, "APPROVED"),
-            ),
-          )
-          .orderBy(asc(calibrationJob.approvedAt));
+          const rows = await o
+            .select({
+              approvedAt: calibrationJob.approvedAt,
+              asFoundConformity: calibrationJob.asFoundConformity,
+              asFoundMargins: calibrationJob.asFoundMargins,
+            })
+            .from(calibrationJob)
+            .where(
+              and(
+                eq(calibrationJob.assetId, id),
+                inArray(calibrationJob.customerId, customerIds),
+                eq(calibrationJob.status, "APPROVED"),
+              ),
+            )
+            .orderBy(asc(calibrationJob.approvedAt));
 
-        const singleKnown = rows.filter(
-          (r) =>
-            r.asFoundConformity === "CONFORMING" ||
-            r.asFoundConformity === "NON_CONFORMING",
-        ).length;
-        // Fetch the family whenever the unit itself would be INSUFFICIENT — matching the
-        // engine's gate (too few KNOWN cycles OR too little coverage). The family pool is
-        // tenant-scoped, same assetType+model, excludes legal-metrology + soft-deleted.
-        const singleCoverageLow =
-          rows.length > 0 &&
-          singleKnown / rows.length < DEFAULT_INTERVAL_CONFIG.minCoverage;
-        const familyModel = existing.model;
-        const familyRows =
-          (singleKnown < DEFAULT_INTERVAL_CONFIG.minKnownCycles ||
-            singleCoverageLow) &&
-          familyModel !== null
-            ? await o
-                .select({
-                  assetId: calibrationJob.assetId,
-                  approvedAt: calibrationJob.approvedAt,
-                  asFoundConformity: calibrationJob.asFoundConformity,
-                })
-                .from(calibrationJob)
-                .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
-                .where(
-                  and(
-                    eq(asset.assetTypeId, existing.assetTypeId),
-                    eq(asset.model, familyModel),
-                    ne(asset.metrologyRegime, "LEGAL"),
-                    isNull(asset.deletedAt),
-                    inArray(calibrationJob.customerId, customerIds),
-                    eq(calibrationJob.status, "APPROVED"),
-                  ),
-                )
-            : [];
+          const singleKnown = rows.filter(
+            (r) =>
+              r.asFoundConformity === "CONFORMING" ||
+              r.asFoundConformity === "NON_CONFORMING",
+          ).length;
+          // Fetch the family whenever the unit itself would be INSUFFICIENT — matching the
+          // engine's gate (too few KNOWN cycles OR too little coverage). The family pool is
+          // tenant-scoped, same assetType+model, excludes legal-metrology + soft-deleted.
+          const singleCoverageLow =
+            rows.length > 0 &&
+            singleKnown / rows.length < DEFAULT_INTERVAL_CONFIG.minCoverage;
+          const familyModel = existing.model;
+          const familyRows =
+            (singleKnown < DEFAULT_INTERVAL_CONFIG.minKnownCycles ||
+              singleCoverageLow) &&
+            familyModel !== null
+              ? await o
+                  .select({
+                    assetId: calibrationJob.assetId,
+                    approvedAt: calibrationJob.approvedAt,
+                    asFoundConformity: calibrationJob.asFoundConformity,
+                  })
+                  .from(calibrationJob)
+                  .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+                  .where(
+                    and(
+                      eq(asset.assetTypeId, existing.assetTypeId),
+                      eq(asset.model, familyModel),
+                      ne(asset.metrologyRegime, "LEGAL"),
+                      isNull(asset.deletedAt),
+                      inArray(calibrationJob.customerId, customerIds),
+                      eq(calibrationJob.status, "APPROVED"),
+                    ),
+                  )
+              : [];
 
-        const insight = buildIntervalInsight({
-          rows,
-          currentIntervalMonths: existing.calibrationIntervalMonths,
-          familyRows,
+          const insight = buildIntervalInsight({
+            rows,
+            currentIntervalMonths: existing.calibrationIntervalMonths,
+            familyRows,
+          });
+
+          const html = renderIntervalReportHtml({
+            assetName: existing.name,
+            assetTag: existing.tag,
+            serialNumber: existing.serialNumber,
+            customerName: existing.customerName,
+            classification: insight.classification,
+            reliability: insight.reliability,
+            coverage: insight.coverage,
+            currentIntervalMonths: existing.calibrationIntervalMonths,
+            recommendation: insight.recommendation,
+            generatedAtIso: new Date().toISOString(),
+          });
+          return c.html(html);
         });
-
-        const html = renderIntervalReportHtml({
-          assetName: existing.name,
-          assetTag: existing.tag,
-          serialNumber: existing.serialNumber,
-          customerName: existing.customerName,
-          classification: insight.classification,
-          reliability: insight.reliability,
-          coverage: insight.coverage,
-          currentIntervalMonths: existing.calibrationIntervalMonths,
-          recommendation: insight.recommendation,
-          generatedAtIso: new Date().toISOString(),
-        });
-        return c.html(html);
       } catch (error) {
         console.error("Error rendering interval report:", error);
         return c.json({ error: "Erro ao gerar o relatório" }, 500);
@@ -1755,99 +1770,103 @@ export const portalRouter = new Hono<{
           );
         }
         const scopedCustomerIds = scope.customerIds;
-        const o = orgDb(scope.labOrganizationId);
-        const id = await resolvePortalAssetIdParam(o, c.req.param("id"));
-        if (id === null) {
-          return c.json({ error: "Ativo nao encontrado" }, 404);
-        }
+        return await orgDb(scope.labOrganizationId).transaction(async (o) => {
+          const id = await resolvePortalAssetIdParam(o, c.req.param("id"));
+          if (id === null) {
+            return c.json({ error: "Ativo nao encontrado" }, 404);
+          }
 
-        const [existing] = await o
-          .select({
-            id: asset.id,
-            labOrganizationId: asset.labOrganizationId,
-            customerId: asset.customerId,
-            lastCalibrationDate: asset.lastCalibrationDate,
-            calibrationIntervalMonths: asset.calibrationIntervalMonths,
-            nextCalibrationDate: asset.nextCalibrationDate,
-          })
-          .from(asset)
-          .where(and(eq(asset.id, id), isNull(asset.deletedAt)))
-          .limit(1);
+          const [existing] = await o
+            .select({
+              id: asset.id,
+              labOrganizationId: asset.labOrganizationId,
+              customerId: asset.customerId,
+              lastCalibrationDate: asset.lastCalibrationDate,
+              calibrationIntervalMonths: asset.calibrationIntervalMonths,
+              nextCalibrationDate: asset.nextCalibrationDate,
+            })
+            .from(asset)
+            .where(and(eq(asset.id, id), isNull(asset.deletedAt)))
+            .limit(1);
 
-        const decision = decidePortalIntervalWrite({
-          asset: existing ?? null,
-          scopedCustomerIds,
-        });
+          const decision = decidePortalIntervalWrite({
+            asset: existing ?? null,
+            scopedCustomerIds,
+          });
 
-        // REQ-MLR-040/041: the only guard is tenant scope (404). The customer owns the
-        // calibration interval for every regime — a legal asset is NOT locked here.
-        if (!decision.allowed) {
-          return c.json({ error: "Ativo nao encontrado" }, decision.status);
-        }
+          // REQ-MLR-040/041: the only guard is tenant scope (404). The customer owns the
+          // calibration interval for every regime — a legal asset is NOT locked here.
+          if (!decision.allowed) {
+            return c.json({ error: "Ativo nao encontrado" }, decision.status);
+          }
 
-        // `decision.allowed` guarantees a row matched; narrow explicitly for TS.
-        if (!existing) {
-          return c.json({ error: "Ativo nao encontrado" }, 404);
-        }
+          // `decision.allowed` guarantees a row matched; narrow explicitly for TS.
+          if (!existing) {
+            return c.json({ error: "Ativo nao encontrado" }, 404);
+          }
 
-        // next = last + interval (REQ-INTERVAL-003). When the asset has no
-        // last-calibration date yet, the interval alone derives nothing — keep
-        // any pre-existing (grandfathered, pre-flip lab-set) next date instead
-        // of erasing it, so the asset does not silently drop out of the
-        // due-calibration reminders the moment the customer sets an interval.
-        const nextCalibrationDate =
-          deriveNextCalibrationDate(
-            existing.lastCalibrationDate,
-            intervalMonths,
-          ) ?? existing.nextCalibrationDate;
+          // next = last + interval (REQ-INTERVAL-003). When the asset has no
+          // last-calibration date yet, the interval alone derives nothing — keep
+          // any pre-existing (grandfathered, pre-flip lab-set) next date instead
+          // of erasing it, so the asset does not silently drop out of the
+          // due-calibration reminders the moment the customer sets an interval.
+          const nextCalibrationDate =
+            deriveNextCalibrationDate(
+              existing.lastCalibrationDate,
+              intervalMonths,
+            ) ?? existing.nextCalibrationDate;
 
-        await o
-          .update(asset)
-          .set({
+          await o
+            .update(asset)
+            .set({
+              calibrationIntervalMonths: intervalMonths,
+              intervalSetBy,
+              intervalSetByUserId: session.user.id,
+              intervalSetAt: new Date(),
+              intervalRationale: rationale,
+              nextCalibrationDate,
+            })
+            // Defense-in-depth (SEC-08): the portal tenant boundary is the customer
+            // (asset has no organizationId; org is derived via unit). Repeat the
+            // exact scope `decidePortalIntervalWrite` already proved — the asset's
+            // customer must be in the caller's in-scope set — so the UPDATE stays
+            // customer-scoped even if that guard is refactored away.
+            .where(
+              and(
+                eq(asset.id, id),
+                inArray(asset.customerId, scopedCustomerIds),
+              ),
+            );
+
+          await o.insert(assetAuditLog).values({
+            organizationId: existing.labOrganizationId,
+            assetId: id,
+            action: "interval_change",
+            changes: {
+              calibrationIntervalMonths: {
+                old: existing.calibrationIntervalMonths,
+                new: intervalMonths,
+              },
+              nextCalibrationDate: {
+                old: existing.nextCalibrationDate,
+                new: nextCalibrationDate,
+              },
+            },
+            performedBy: session.user.id,
+            ipAddress:
+              c.req.header("x-forwarded-for") ??
+              c.req.header("x-real-ip") ??
+              null,
+            reason: rationale,
+          });
+
+          return c.json({
+            id,
             calibrationIntervalMonths: intervalMonths,
-            intervalSetBy,
-            intervalSetByUserId: session.user.id,
-            intervalSetAt: new Date(),
-            intervalRationale: rationale,
             nextCalibrationDate,
-          })
-          // Defense-in-depth (SEC-08): the portal tenant boundary is the customer
-          // (asset has no organizationId; org is derived via unit). Repeat the
-          // exact scope `decidePortalIntervalWrite` already proved — the asset's
-          // customer must be in the caller's in-scope set — so the UPDATE stays
-          // customer-scoped even if that guard is refactored away.
-          .where(
-            and(eq(asset.id, id), inArray(asset.customerId, scopedCustomerIds)),
-          );
-
-        await o.insert(assetAuditLog).values({
-          organizationId: existing.labOrganizationId,
-          assetId: id,
-          action: "interval_change",
-          changes: {
-            calibrationIntervalMonths: {
-              old: existing.calibrationIntervalMonths,
-              new: intervalMonths,
-            },
-            nextCalibrationDate: {
-              old: existing.nextCalibrationDate,
-              new: nextCalibrationDate,
-            },
-          },
-          performedBy: session.user.id,
-          ipAddress:
-            c.req.header("x-forwarded-for") ??
-            c.req.header("x-real-ip") ??
-            null,
-          reason: rationale,
+            intervalSetBy,
+          } satisfies ServerShape<PortalIntervalUpdateResponse>);
         });
-
-        return c.json({
-          id,
-          calibrationIntervalMonths: intervalMonths,
-          nextCalibrationDate,
-          intervalSetBy,
-        } satisfies ServerShape<PortalIntervalUpdateResponse>);
       } catch (error) {
         console.error("Error setting calibration interval:", error);
         return c.json({ error: "Erro ao salvar periodicidade" }, 500);
@@ -1869,43 +1888,47 @@ export const portalRouter = new Hono<{
       const input = c.req.valid("json");
 
       try {
-        const o = orgDb(c.get("member").organizationId);
-        const [existing] = await o
-          .select({
-            preferences: notificationPreference.preferences,
-            emailEnabled: notificationPreference.emailEnabled,
-            digestFrequency: notificationPreference.digestFrequency,
-          })
-          .from(notificationPreference)
-          .where(eq(notificationPreference.userId, session.user.id))
-          .limit(1);
+        return await orgDb(c.get("member").organizationId).transaction(
+          async (o) => {
+            const [existing] = await o
+              .select({
+                preferences: notificationPreference.preferences,
+                emailEnabled: notificationPreference.emailEnabled,
+                digestFrequency: notificationPreference.digestFrequency,
+              })
+              .from(notificationPreference)
+              .where(eq(notificationPreference.userId, session.user.id))
+              .limit(1);
 
-        // Merge-write: the schema only lets whitelisted keys through, and the
-        // spread preserves every other stored key — a dual-role user's
-        // lab-side preferences survive portal edits untouched.
-        const mergedPreferences = {
-          ...(existing?.preferences ?? DEFAULT_PREFERENCES),
-          ...input.preferences,
-        };
-        const merged = {
-          preferences: mergedPreferences,
-          emailEnabled: input.emailEnabled ?? existing?.emailEnabled ?? true,
-          digestFrequency:
-            input.digestFrequency ?? existing?.digestFrequency ?? "NONE",
-        };
+            // Merge-write: the schema only lets whitelisted keys through, and the
+            // spread preserves every other stored key — a dual-role user's
+            // lab-side preferences survive portal edits untouched.
+            const mergedPreferences = {
+              ...(existing?.preferences ?? DEFAULT_PREFERENCES),
+              ...input.preferences,
+            };
+            const merged = {
+              preferences: mergedPreferences,
+              emailEnabled:
+                input.emailEnabled ?? existing?.emailEnabled ?? true,
+              digestFrequency:
+                input.digestFrequency ?? existing?.digestFrequency ?? "NONE",
+            };
 
-        await o
-          .insert(notificationPreference)
-          .values({ userId: session.user.id, ...merged })
-          .onConflictDoUpdate({
-            target: notificationPreference.userId,
-            set: merged,
-          });
+            await o
+              .insert(notificationPreference)
+              .values({ userId: session.user.id, ...merged })
+              .onConflictDoUpdate({
+                target: notificationPreference.userId,
+                set: merged,
+              });
 
-        return c.json(
-          portalPreferencesPayload(
-            merged,
-          ) satisfies ServerShape<PortalNotificationPreferencesResponse>,
+            return c.json(
+              portalPreferencesPayload(
+                merged,
+              ) satisfies ServerShape<PortalNotificationPreferencesResponse>,
+            );
+          },
         );
       } catch (error) {
         console.error("Error saving portal notification preferences:", error);
@@ -2389,26 +2412,28 @@ export const portalRouter = new Hono<{
           return c.json({ error: "Unidade inválida" }, 400);
         }
 
-        const o = orgDb(scope.labOrganizationId);
+        const lab = orgDb(scope.labOrganizationId);
 
         // Candidate set: latest (non-superseded) approved certificates whose
         // approval date falls in the requested window. Same timezone
         // semantics as the /certificates list.
         const approvedAtPortalDate = sql`(${calibrationJob.approvedAt} AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::date`;
-        const candidates = await o
-          .select({ id: calibrationJob.id })
-          .from(calibrationJob)
-          .where(
-            and(
-              inArray(calibrationJob.customerId, customerIds),
-              eq(calibrationJob.status, "APPROVED"),
-              isNull(calibrationJob.supersededById),
-              isNotNull(calibrationJob.certificateUrl),
-              sql`${approvedAtPortalDate} >= ${body.dateFrom}`,
-              sql`${approvedAtPortalDate} <= ${body.dateTo}`,
-            ),
-          )
-          .limit(AUDIT_PACK_MAX_CERTIFICATES + 1);
+        const candidates = await lab.transaction((o) =>
+          o
+            .select({ id: calibrationJob.id })
+            .from(calibrationJob)
+            .where(
+              and(
+                inArray(calibrationJob.customerId, customerIds),
+                eq(calibrationJob.status, "APPROVED"),
+                isNull(calibrationJob.supersededById),
+                isNotNull(calibrationJob.certificateUrl),
+                sql`${approvedAtPortalDate} >= ${body.dateFrom}`,
+                sql`${approvedAtPortalDate} <= ${body.dateTo}`,
+              ),
+            )
+            .limit(AUDIT_PACK_MAX_CERTIFICATES + 1),
+        );
 
         if (candidates.length > AUDIT_PACK_MAX_CERTIFICATES) {
           return c.json(
@@ -2436,29 +2461,32 @@ export const portalRouter = new Hono<{
           );
         }
 
-        const [exportRow] = await o
-          .insert(portalExportJob)
-          .values({
-            kind: "AUDIT_PACK",
-            labOrganizationId: scope.labOrganizationId,
-            authOrganizationId: portalMember.organizationId,
-            requestedByUserId: session.user.id,
-            params: {
-              dateFrom: body.dateFrom,
-              dateTo: body.dateTo,
-              unitId: body.unitId ?? null,
-              include: body.include,
-              customerIds,
-            },
-            status: "PENDING",
-          })
-          // typed `.returning({...})` collapses to the 0-arg overload (TS2554).
-          .returning();
+        const [exportRow] = await lab.transaction((o) =>
+          o
+            .insert(portalExportJob)
+            .values({
+              kind: "AUDIT_PACK",
+              labOrganizationId: scope.labOrganizationId,
+              authOrganizationId: portalMember.organizationId,
+              requestedByUserId: session.user.id,
+              params: {
+                dateFrom: body.dateFrom,
+                dateTo: body.dateTo,
+                unitId: body.unitId ?? null,
+                include: body.include,
+                customerIds,
+              },
+              status: "PENDING",
+            })
+            // typed `.returning({...})` collapses to the 0-arg overload (TS2554).
+            .returning(),
+        );
 
         if (!exportRow) {
           return c.json({ error: "Erro ao solicitar o pacote" }, 500);
         }
 
+        // After the commit above: the job reads the row it is queued for.
         await enqueueBackgroundJob({
           type: "AUDIT_PACK",
           exportId: exportRow.id,
@@ -2497,48 +2525,48 @@ export const portalRouter = new Hono<{
       if (!scope) {
         return c.json({ data: [] });
       }
-      const o = orgDb(scope.labOrganizationId);
+      return await orgDb(scope.labOrganizationId).transaction(async (o) => {
+        const rows = await o
+          .select({
+            id: portalExportJob.id,
+            status: portalExportJob.status,
+            params: portalExportJob.params,
+            certificateCount: portalExportJob.certificateCount,
+            fileSizeBytes: portalExportJob.fileSizeBytes,
+            expiresAt: portalExportJob.expiresAt,
+            completedAt: portalExportJob.completedAt,
+            createdAt: portalExportJob.createdAt,
+          })
+          .from(portalExportJob)
+          .where(
+            eq(portalExportJob.authOrganizationId, portalMember.organizationId),
+          )
+          .orderBy(desc(portalExportJob.createdAt))
+          .limit(20);
 
-      const rows = await o
-        .select({
-          id: portalExportJob.id,
-          status: portalExportJob.status,
-          params: portalExportJob.params,
-          certificateCount: portalExportJob.certificateCount,
-          fileSizeBytes: portalExportJob.fileSizeBytes,
-          expiresAt: portalExportJob.expiresAt,
-          completedAt: portalExportJob.completedAt,
-          createdAt: portalExportJob.createdAt,
-        })
-        .from(portalExportJob)
-        .where(
-          eq(portalExportJob.authOrganizationId, portalMember.organizationId),
-        )
-        .orderBy(desc(portalExportJob.createdAt))
-        .limit(20);
+        const now = Date.now();
+        const data = rows.map((row) => ({
+          id: row.id,
+          status: row.status,
+          dateFrom: row.params.dateFrom,
+          dateTo: row.params.dateTo,
+          unitId: row.params.unitId,
+          unitName: row.params.unitId
+            ? (scope.customerById.get(row.params.unitId)?.name ?? null)
+            : null,
+          include: row.params.include,
+          certificateCount: row.certificateCount,
+          fileSizeBytes: row.fileSizeBytes,
+          expiresAt: row.expiresAt,
+          expired: row.expiresAt !== null && row.expiresAt.getTime() < now,
+          completedAt: row.completedAt,
+          createdAt: row.createdAt,
+        }));
 
-      const now = Date.now();
-      const data = rows.map((row) => ({
-        id: row.id,
-        status: row.status,
-        dateFrom: row.params.dateFrom,
-        dateTo: row.params.dateTo,
-        unitId: row.params.unitId,
-        unitName: row.params.unitId
-          ? (scope.customerById.get(row.params.unitId)?.name ?? null)
-          : null,
-        include: row.params.include,
-        certificateCount: row.certificateCount,
-        fileSizeBytes: row.fileSizeBytes,
-        expiresAt: row.expiresAt,
-        expired: row.expiresAt !== null && row.expiresAt.getTime() < now,
-        completedAt: row.completedAt,
-        createdAt: row.createdAt,
-      }));
-
-      return c.json({
-        data,
-      } satisfies ServerShape<PortalAuditPacksResponse>);
+        return c.json({
+          data,
+        } satisfies ServerShape<PortalAuditPacksResponse>);
+      });
     } catch (error) {
       console.error("Error listing portal audit packs:", error);
       return c.json({ error: "Erro ao listar pacotes de auditoria" }, 500);
@@ -2571,24 +2599,29 @@ export const portalRouter = new Hono<{
         );
       }
 
-      const [row] = await orgDb(scope.labOrganizationId)
-        .select({
-          id: portalExportJob.id,
-          status: portalExportJob.status,
-          labOrganizationId: portalExportJob.labOrganizationId,
-          params: portalExportJob.params,
-          includedJobIds: portalExportJob.includedJobIds,
-          r2Key: portalExportJob.r2Key,
-          expiresAt: portalExportJob.expiresAt,
-        })
-        .from(portalExportJob)
-        .where(
-          and(
-            eq(portalExportJob.id, id),
-            eq(portalExportJob.authOrganizationId, portalMember.organizationId),
-          ),
-        )
-        .limit(1);
+      const [row] = await orgDb(scope.labOrganizationId).transaction((o) =>
+        o
+          .select({
+            id: portalExportJob.id,
+            status: portalExportJob.status,
+            labOrganizationId: portalExportJob.labOrganizationId,
+            params: portalExportJob.params,
+            includedJobIds: portalExportJob.includedJobIds,
+            r2Key: portalExportJob.r2Key,
+            expiresAt: portalExportJob.expiresAt,
+          })
+          .from(portalExportJob)
+          .where(
+            and(
+              eq(portalExportJob.id, id),
+              eq(
+                portalExportJob.authOrganizationId,
+                portalMember.organizationId,
+              ),
+            ),
+          )
+          .limit(1),
+      );
 
       if (!row) {
         return c.json({ error: "Pacote nao encontrado" }, 404);
@@ -2671,28 +2704,36 @@ export const portalRouter = new Hono<{
         return c.json({ data: [], counts: { total: 0, pending: 0 } });
       }
 
-      const rows = await orgDb(scope.labOrganizationId)
-        .select({
-          token: ootNotification.ackToken,
-          ncNumber: nonConformance.ncNumber,
-          certificateNumber: ootNotification.certificateNumber,
-          affectedScope: ootNotification.affectedScope,
-          status: ootNotification.status,
-          sentAt: ootNotification.sentAt,
-          acknowledgedAt: ootNotification.acknowledgedAt,
-          acknowledgedVia: ootNotification.acknowledgedVia,
-          createdAt: ootNotification.createdAt,
-          assetName: asset.name,
-          assetTag: asset.tag,
-          customerId: calibrationJob.customerId,
-        })
-        .from(ootNotification)
-        .innerJoin(calibrationJob, eq(ootNotification.jobId, calibrationJob.id))
-        .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
-        .innerJoin(nonConformance, eq(ootNotification.ncId, nonConformance.id))
-        .where(inArray(calibrationJob.customerId, scope.customerIds))
-        .orderBy(desc(ootNotification.createdAt))
-        .limit(100);
+      const rows = await orgDb(scope.labOrganizationId).transaction((o) =>
+        o
+          .select({
+            token: ootNotification.ackToken,
+            ncNumber: nonConformance.ncNumber,
+            certificateNumber: ootNotification.certificateNumber,
+            affectedScope: ootNotification.affectedScope,
+            status: ootNotification.status,
+            sentAt: ootNotification.sentAt,
+            acknowledgedAt: ootNotification.acknowledgedAt,
+            acknowledgedVia: ootNotification.acknowledgedVia,
+            createdAt: ootNotification.createdAt,
+            assetName: asset.name,
+            assetTag: asset.tag,
+            customerId: calibrationJob.customerId,
+          })
+          .from(ootNotification)
+          .innerJoin(
+            calibrationJob,
+            eq(ootNotification.jobId, calibrationJob.id),
+          )
+          .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+          .innerJoin(
+            nonConformance,
+            eq(ootNotification.ncId, nonConformance.id),
+          )
+          .where(inArray(calibrationJob.customerId, scope.customerIds))
+          .orderBy(desc(ootNotification.createdAt))
+          .limit(100),
+      );
 
       const data = rows.map((row) => ({
         id: row.token,
@@ -2747,70 +2788,83 @@ export const portalRouter = new Hono<{
           return c.json({ error: "Notificação não encontrada" }, 404);
         }
 
-        const o = orgDb(scope.labOrganizationId);
-        const [notification] = await o
-          .select({
-            id: ootNotification.id,
-            ncId: ootNotification.ncId,
-            organizationId: ootNotification.organizationId,
-            acknowledgedAt: ootNotification.acknowledgedAt,
-            ncNumber: nonConformance.ncNumber,
-          })
-          .from(ootNotification)
-          .innerJoin(
-            calibrationJob,
-            eq(ootNotification.jobId, calibrationJob.id),
-          )
-          .innerJoin(
-            nonConformance,
-            eq(ootNotification.ncId, nonConformance.id),
-          )
-          .where(
-            and(
-              eq(ootNotification.ackToken, token),
-              inArray(calibrationJob.customerId, scope.customerIds),
+        // Notified after the commit: the notification reads the row it is about.
+        const acknowledged: Array<{
+          id: number;
+          ncId: number;
+          ncNumber: string;
+          organizationId: string;
+        }> = [];
+        const response = await orgDb(scope.labOrganizationId).transaction(
+          async (o) => {
+            const [notification] = await o
+              .select({
+                id: ootNotification.id,
+                ncId: ootNotification.ncId,
+                organizationId: ootNotification.organizationId,
+                acknowledgedAt: ootNotification.acknowledgedAt,
+                ncNumber: nonConformance.ncNumber,
+              })
+              .from(ootNotification)
+              .innerJoin(
+                calibrationJob,
+                eq(ootNotification.jobId, calibrationJob.id),
+              )
+              .innerJoin(
+                nonConformance,
+                eq(ootNotification.ncId, nonConformance.id),
+              )
+              .where(
+                and(
+                  eq(ootNotification.ackToken, token),
+                  inArray(calibrationJob.customerId, scope.customerIds),
+                ),
+              )
+              .limit(1);
+
+            if (!notification) {
+              return c.json({ error: "Notificação não encontrada" }, 404);
+            }
+
+            if (!notification.acknowledgedAt) {
+              const [updated] = await o
+                .update(ootNotification)
+                .set({
+                  status: "ACKNOWLEDGED",
+                  acknowledgedAt: new Date(),
+                  acknowledgedVia: "portal_link",
+                })
+                .where(
+                  and(
+                    eq(ootNotification.id, notification.id),
+                    isNull(ootNotification.acknowledgedAt),
+                  ),
+                )
+                .returning();
+
+              if (updated) acknowledged.push(notification);
+            }
+
+            return c.json({
+              message: "Recebimento confirmado",
+            } satisfies ServerShape<PortalOotAcknowledgeResponse>);
+          },
+        );
+
+        for (const notification of acknowledged) {
+          notifyOotAcknowledged(
+            notification.id,
+            notification.ncId,
+            notification.ncNumber,
+            notification.organizationId,
+          ).catch((err) =>
+            console.error(
+              "[Portal] Failed to notify OOT acknowledgement:",
+              err,
             ),
-          )
-          .limit(1);
-
-        if (!notification) {
-          return c.json({ error: "Notificação não encontrada" }, 404);
+          );
         }
-
-        if (!notification.acknowledgedAt) {
-          const [updated] = await o
-            .update(ootNotification)
-            .set({
-              status: "ACKNOWLEDGED",
-              acknowledgedAt: new Date(),
-              acknowledgedVia: "portal_link",
-            })
-            .where(
-              and(
-                eq(ootNotification.id, notification.id),
-                isNull(ootNotification.acknowledgedAt),
-              ),
-            )
-            .returning();
-
-          if (updated) {
-            notifyOotAcknowledged(
-              notification.id,
-              notification.ncId,
-              notification.ncNumber,
-              notification.organizationId,
-            ).catch((err) =>
-              console.error(
-                "[Portal] Failed to notify OOT acknowledgement:",
-                err,
-              ),
-            );
-          }
-        }
-
-        return c.json({
-          message: "Recebimento confirmado",
-        } satisfies ServerShape<PortalOotAcknowledgeResponse>);
+        return response;
       } catch (error) {
         console.error("Error acknowledging portal OOT notification:", error);
         return c.json({ error: "Erro ao confirmar recebimento" }, 500);
@@ -2978,22 +3032,24 @@ export const portalRouter = new Hono<{
           conditions.push(eq(asset.assetTypeId, assetTypeId));
         }
 
-        const rows = await orgDb(scope.labOrganizationId)
-          .select({
-            approvedAt: calibrationJob.approvedAt,
-            asFoundConformity: calibrationJob.asFoundConformity,
-            assetId: calibrationJob.assetId,
-            assetPublicId: asset.publicId,
-            assetTag: asset.tag,
-            assetName: asset.name,
-            assetTypeId: asset.assetTypeId,
-            assetTypeName: sql<string>`coalesce(${assetType.name}, 'Sem tipo')`,
-            metrologyRegime: asset.metrologyRegime,
-          })
-          .from(calibrationJob)
-          .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
-          .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
-          .where(and(...conditions));
+        const rows = await orgDb(scope.labOrganizationId).transaction((o) =>
+          o
+            .select({
+              approvedAt: calibrationJob.approvedAt,
+              asFoundConformity: calibrationJob.asFoundConformity,
+              assetId: calibrationJob.assetId,
+              assetPublicId: asset.publicId,
+              assetTag: asset.tag,
+              assetName: asset.name,
+              assetTypeId: asset.assetTypeId,
+              assetTypeName: sql<string>`coalesce(${assetType.name}, 'Sem tipo')`,
+              metrologyRegime: asset.metrologyRegime,
+            })
+            .from(calibrationJob)
+            .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+            .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
+            .where(and(...conditions)),
+        );
 
         const summary = buildFleetReliabilitySummary(rows, { bucket });
 
@@ -3041,49 +3097,50 @@ export const portalRouter = new Hono<{
         if (!scope || scope.customerIds.length === 0) {
           return c.json({ error: "Ativo nao encontrado" }, 404);
         }
-        const o = orgDb(scope.labOrganizationId);
-        const id = await resolvePortalAssetIdParam(o, c.req.param("id"));
-        if (id === null) {
-          return c.json({ error: "Ativo nao encontrado" }, 404);
-        }
+        return await orgDb(scope.labOrganizationId).transaction(async (o) => {
+          const id = await resolvePortalAssetIdParam(o, c.req.param("id"));
+          if (id === null) {
+            return c.json({ error: "Ativo nao encontrado" }, 404);
+          }
 
-        const [existing] = await o
-          .select({ id: asset.id })
-          .from(asset)
-          .where(
-            and(
-              eq(asset.id, id),
-              inArray(asset.customerId, scope.customerIds),
-              isNull(asset.deletedAt),
-            ),
-          )
-          .limit(1);
-        if (!existing) {
-          return c.json({ error: "Ativo nao encontrado" }, 404);
-        }
+          const [existing] = await o
+            .select({ id: asset.id })
+            .from(asset)
+            .where(
+              and(
+                eq(asset.id, id),
+                inArray(asset.customerId, scope.customerIds),
+                isNull(asset.deletedAt),
+              ),
+            )
+            .limit(1);
+          if (!existing) {
+            return c.json({ error: "Ativo nao encontrado" }, 404);
+          }
 
-        const rows = await o
-          .select({
-            approvedAt: calibrationJob.approvedAt,
-            asFoundConformity: calibrationJob.asFoundConformity,
-            asFoundMargins: calibrationJob.asFoundMargins,
-          })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.assetId, id),
-              inArray(calibrationJob.customerId, scope.customerIds),
-              eq(calibrationJob.status, "APPROVED"),
-            ),
-          )
-          .orderBy(asc(calibrationJob.approvedAt));
+          const rows = await o
+            .select({
+              approvedAt: calibrationJob.approvedAt,
+              asFoundConformity: calibrationJob.asFoundConformity,
+              asFoundMargins: calibrationJob.asFoundMargins,
+            })
+            .from(calibrationJob)
+            .where(
+              and(
+                eq(calibrationJob.assetId, id),
+                inArray(calibrationJob.customerId, scope.customerIds),
+                eq(calibrationJob.status, "APPROVED"),
+              ),
+            )
+            .orderBy(asc(calibrationJob.approvedAt));
 
-        return c.json({
-          assetId: id,
-          ...buildAssetDriftSeries(rows),
-          attribution:
-            "Margens conforme os resultados “como recebido” do certificado; parecer de conformidade do laboratório, reproduzido sem reavaliação.",
-        } satisfies ServerShape<PortalDriftSeriesResponse>);
+          return c.json({
+            assetId: id,
+            ...buildAssetDriftSeries(rows),
+            attribution:
+              "Margens conforme os resultados “como recebido” do certificado; parecer de conformidade do laboratório, reproduzido sem reavaliação.",
+          } satisfies ServerShape<PortalDriftSeriesResponse>);
+        });
       } catch (error) {
         console.error("Error building drift series:", error);
         return c.json({ error: "Erro ao montar série de deriva" }, 500);
@@ -3131,48 +3188,54 @@ export const portalRouter = new Hono<{
           conditions.push(eq(assetOotEvent.status, status));
         }
 
-        const events = await orgDb(scope.labOrganizationId)
-          .select({
-            id: assetOotEvent.id,
-            status: assetOotEvent.status,
-            detectedAt: assetOotEvent.detectedAt,
-            customerId: assetOotEvent.customerId,
-            assetId: assetOotEvent.assetId,
-            assetPublicId: asset.publicId,
-            assetTag: asset.tag,
-            assetName: asset.name,
-            jobId: assetOotEvent.jobId,
-            jobIdentifier: calibrationJob.jobId,
-            // Suspect-window default (ISO 9001 §7.1.5.2 guidance): last
-            // known-good as-found calibration before the failing one.
-            suggestedPeriodStart: sql<string | null>`(
+        const events = await orgDb(scope.labOrganizationId).transaction((o) =>
+          o
+            .select({
+              id: assetOotEvent.id,
+              status: assetOotEvent.status,
+              detectedAt: assetOotEvent.detectedAt,
+              customerId: assetOotEvent.customerId,
+              assetId: assetOotEvent.assetId,
+              assetPublicId: asset.publicId,
+              assetTag: asset.tag,
+              assetName: asset.name,
+              jobId: assetOotEvent.jobId,
+              jobIdentifier: calibrationJob.jobId,
+              // Suspect-window default (ISO 9001 §7.1.5.2 guidance): last
+              // known-good as-found calibration before the failing one.
+              suggestedPeriodStart: sql<string | null>`(
               select max(cj2.approved_at) from calibration_job cj2
               where cj2.asset_id = ${assetOotEvent.assetId}
                 and cj2.approved_at < ${assetOotEvent.detectedAt}
                 and cj2.as_found_conformity = 'CONFORMING'
                 and cj2.status = 'APPROVED'
             )`,
-            assessmentDecision: assetOotImpactAssessment.decision,
-            assessmentRationale: assetOotImpactAssessment.rationale,
-            assessmentPeriodStart: assetOotImpactAssessment.affectedPeriodStart,
-            assessmentPeriodEnd: assetOotImpactAssessment.affectedPeriodEnd,
-            assessmentSuspectShipped:
-              assetOotImpactAssessment.suspectProductShipped,
-            assessmentCustomerNotified:
-              assetOotImpactAssessment.customerNotified,
-            assessmentCreatedAt: assetOotImpactAssessment.createdAt,
-            assessmentBy: user.name,
-          })
-          .from(assetOotEvent)
-          .innerJoin(asset, eq(assetOotEvent.assetId, asset.id))
-          .innerJoin(calibrationJob, eq(assetOotEvent.jobId, calibrationJob.id))
-          .leftJoin(
-            assetOotImpactAssessment,
-            eq(assetOotImpactAssessment.eventId, assetOotEvent.id),
-          )
-          .leftJoin(user, eq(assetOotImpactAssessment.portalUserId, user.id))
-          .where(and(...conditions))
-          .orderBy(desc(assetOotEvent.detectedAt));
+              assessmentDecision: assetOotImpactAssessment.decision,
+              assessmentRationale: assetOotImpactAssessment.rationale,
+              assessmentPeriodStart:
+                assetOotImpactAssessment.affectedPeriodStart,
+              assessmentPeriodEnd: assetOotImpactAssessment.affectedPeriodEnd,
+              assessmentSuspectShipped:
+                assetOotImpactAssessment.suspectProductShipped,
+              assessmentCustomerNotified:
+                assetOotImpactAssessment.customerNotified,
+              assessmentCreatedAt: assetOotImpactAssessment.createdAt,
+              assessmentBy: user.name,
+            })
+            .from(assetOotEvent)
+            .innerJoin(asset, eq(assetOotEvent.assetId, asset.id))
+            .innerJoin(
+              calibrationJob,
+              eq(assetOotEvent.jobId, calibrationJob.id),
+            )
+            .leftJoin(
+              assetOotImpactAssessment,
+              eq(assetOotImpactAssessment.eventId, assetOotEvent.id),
+            )
+            .leftJoin(user, eq(assetOotImpactAssessment.portalUserId, user.id))
+            .where(and(...conditions))
+            .orderBy(desc(assetOotEvent.detectedAt)),
+        );
 
         return c.json({
           data: events,
@@ -3217,94 +3280,97 @@ export const portalRouter = new Hono<{
           return c.json({ error: "Evento nao encontrado" }, 404);
         }
 
-        const o = orgDb(scope.labOrganizationId);
-        const [event] = await o
-          .select()
-          .from(assetOotEvent)
-          .where(
-            and(
-              eq(assetOotEvent.id, id),
-              inArray(assetOotEvent.customerId, scope.customerIds),
-            ),
-          )
-          .limit(1);
-        if (!event) {
-          return c.json({ error: "Evento nao encontrado" }, 404);
-        }
+        return await orgDb(scope.labOrganizationId).transaction(async (o) => {
+          const [event] = await o
+            .select()
+            .from(assetOotEvent)
+            .where(
+              and(
+                eq(assetOotEvent.id, id),
+                inArray(assetOotEvent.customerId, scope.customerIds),
+              ),
+            )
+            .limit(1);
+          if (!event) {
+            return c.json({ error: "Evento nao encontrado" }, 404);
+          }
 
-        const [existingAssessment] = await o
-          .select({ id: assetOotImpactAssessment.id })
-          .from(assetOotImpactAssessment)
-          .where(eq(assetOotImpactAssessment.eventId, id))
-          .limit(1);
-        if (existingAssessment) {
-          return c.json(
-            { error: "Avaliação de impacto já registrada para este evento" },
-            400,
-          );
-        }
+          const [existingAssessment] = await o
+            .select({ id: assetOotImpactAssessment.id })
+            .from(assetOotImpactAssessment)
+            .where(eq(assetOotImpactAssessment.eventId, id))
+            .limit(1);
+          if (existingAssessment) {
+            return c.json(
+              { error: "Avaliação de impacto já registrada para este evento" },
+              400,
+            );
+          }
 
-        const ipAddress =
-          c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null;
-        const userAgent = c.req.header("user-agent") ?? null;
+          const ipAddress =
+            c.req.header("x-forwarded-for") ??
+            c.req.header("x-real-ip") ??
+            null;
+          const userAgent = c.req.header("user-agent") ?? null;
 
-        const [assessment] = await o
-          .insert(assetOotImpactAssessment)
-          .values({
+          const [assessment] = await o
+            .insert(assetOotImpactAssessment)
+            .values({
+              organizationId: event.labOrganizationId,
+              eventId: id,
+              decision: input.decision,
+              rationale: input.rationale,
+              affectedPeriodStart: input.affectedPeriodStart
+                ? new Date(input.affectedPeriodStart)
+                : null,
+              affectedPeriodEnd: input.affectedPeriodEnd
+                ? new Date(input.affectedPeriodEnd)
+                : null,
+              suspectProductShipped: input.suspectProductShipped ?? null,
+              customerNotified: input.customerNotified ?? null,
+              portalUserId: session.user.id,
+              ipAddress,
+              userAgent,
+            })
+            .returning();
+          // The catch below answers 500; never report a success without the row.
+          if (!assessment)
+            throw new Error("OOT assessment insert returned no row");
+
+          await o
+            .update(assetOotEvent)
+            .set({ status: "ASSESSED" })
+            .where(
+              and(
+                eq(assetOotEvent.id, id),
+                inArray(assetOotEvent.customerId, scope.customerIds),
+              ),
+            );
+
+          await o.insert(assetOotAuditLog).values({
             organizationId: event.labOrganizationId,
             eventId: id,
-            decision: input.decision,
-            rationale: input.rationale,
-            affectedPeriodStart: input.affectedPeriodStart
-              ? new Date(input.affectedPeriodStart)
-              : null,
-            affectedPeriodEnd: input.affectedPeriodEnd
-              ? new Date(input.affectedPeriodEnd)
-              : null,
-            suspectProductShipped: input.suspectProductShipped ?? null,
-            customerNotified: input.customerNotified ?? null,
-            portalUserId: session.user.id,
+            action: "assess",
+            changes: {
+              decision: input.decision,
+              affectedPeriodStart: input.affectedPeriodStart ?? null,
+              affectedPeriodEnd: input.affectedPeriodEnd ?? null,
+              suspectProductShipped: input.suspectProductShipped ?? null,
+              customerNotified: input.customerNotified ?? null,
+            },
+            performedBy: session.user.id,
             ipAddress,
             userAgent,
-          })
-          .returning();
-        // The catch below answers 500; never report a success without the row.
-        if (!assessment)
-          throw new Error("OOT assessment insert returned no row");
+          });
 
-        await o
-          .update(assetOotEvent)
-          .set({ status: "ASSESSED" })
-          .where(
-            and(
-              eq(assetOotEvent.id, id),
-              inArray(assetOotEvent.customerId, scope.customerIds),
-            ),
+          return c.json(
+            {
+              message: "Avaliação registrada",
+              data: { event: { ...event, status: "ASSESSED" }, assessment },
+            } satisfies ServerShape<PortalOotAssessmentResponse>,
+            201,
           );
-
-        await o.insert(assetOotAuditLog).values({
-          organizationId: event.labOrganizationId,
-          eventId: id,
-          action: "assess",
-          changes: {
-            decision: input.decision,
-            affectedPeriodStart: input.affectedPeriodStart ?? null,
-            affectedPeriodEnd: input.affectedPeriodEnd ?? null,
-            suspectProductShipped: input.suspectProductShipped ?? null,
-            customerNotified: input.customerNotified ?? null,
-          },
-          performedBy: session.user.id,
-          ipAddress,
-          userAgent,
         });
-
-        return c.json(
-          {
-            message: "Avaliação registrada",
-            data: { event: { ...event, status: "ASSESSED" }, assessment },
-          } satisfies ServerShape<PortalOotAssessmentResponse>,
-          201,
-        );
       } catch (error) {
         console.error("Error recording OOT assessment:", error);
         return c.json({ error: "Erro ao registrar avaliação" }, 500);

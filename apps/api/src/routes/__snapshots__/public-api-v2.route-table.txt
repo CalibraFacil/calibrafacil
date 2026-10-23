@@ -104,12 +104,12 @@ v2 GET /webhooks/:id/deliveries <anonymous> #7385077f96
 v2 POST /webhooks/:id/deliveries/:deliveryId/replay requireApiScope(webhooks:manage)
 v2 POST /webhooks/:id/deliveries/:deliveryId/replay <anonymous> #ac94292225
 docs GET /openapi <anonymous> #7d65de59ff
-docs GET /openapi <anonymous> #9b022ae797
+docs GET /openapi <anonymous> #cadc35149d
 docs GET /openapi <anonymous> #480d6badd6
 docs GET /openapi <anonymous> #5f768892ca
 docs GET /openapi <anonymous> #15bf183bfe
 docs GET /reference <anonymous> #7d65de59ff
-docs GET /reference <anonymous> #9b022ae797
+docs GET /reference <anonymous> #cadc35149d
 docs GET /reference <anonymous> #480d6badd6
 docs GET /reference <anonymous> #5f768892ca
 docs GET /reference <anonymous> #392f8fa5d7

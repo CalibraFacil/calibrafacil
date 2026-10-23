@@ -17,6 +17,15 @@ vi.mock("../../lib/financial-timeline", () => ({
   buildServiceOrderFinancialStatus: mocks.buildServiceOrderFinancialStatus,
 }));
 
+// The builders run in an org-bound transaction; the double hands its callback a
+// marker handle so the tests can see what the route passed down.
+vi.mock("../../lib/org-db", () => ({
+  orgDb: (organizationId: string) => ({
+    transaction: async (run: (tx: unknown) => unknown) =>
+      run({ transactionOf: organizationId }),
+  }),
+}));
+
 vi.mock("../../lib/customer-route-id", () => ({
   resolveCustomerRouteId: mocks.resolveCustomerRouteId,
 }));
@@ -112,6 +121,7 @@ describe("finance timeline routes", () => {
     );
     expect(mocks.buildServiceOrderFinancialStatus).toHaveBeenCalledWith(
       expect.objectContaining({
+        executor: { transactionOf: "org-1" },
         organizationId: "org-1",
         serviceOrderId: 42,
         includeProviderEvidence: true,

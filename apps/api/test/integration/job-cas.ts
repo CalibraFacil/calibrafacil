@@ -2,6 +2,7 @@ import { vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { db, getDb } from "@calibra-facil/db";
 import {
+  isOrgBoundTransaction,
   isTransactionScopeCallback,
   outsideTransactionScope,
 } from "@calibra-facil/db/testing";
@@ -59,8 +60,15 @@ export function changeJobBeforeNextTransaction(
   // is not part of.
   const otherActorChangesJob = () =>
     outsideTransactionScope(() => applyChange(jobId, change));
-  vi.spyOn(instance, "transaction").mockImplementationOnce(
+  let fired = false;
+  vi.spyOn(instance, "transaction").mockImplementation(
     async (callback, config) => {
+      // A transaction that only names the organization for row-level security
+      // (an auth middleware, a lookup) is not the handler's write: let it by.
+      if (fired || isOrgBoundTransaction(callback)) {
+        return originalTransaction(callback, config);
+      }
+      fired = true;
       if (!isTransactionScopeCallback(callback)) {
         await otherActorChangesJob();
         return originalTransaction(callback, config);

@@ -1,16 +1,5 @@
 import { createHash } from "node:crypto";
 import { Hono } from "hono";
-import { db } from "@calibra-facil/db";
-import {
-  calibrationJob,
-  calibrationMethod,
-  customer,
-  asset,
-  service,
-  organization,
-  issuedCertificateSnapshot,
-} from "@calibra-facil/db/schema";
-import { and, eq, inArray } from "drizzle-orm";
 import {
   normalizeAccreditationNumber,
   shouldRenderAccreditationSeal,
@@ -28,6 +17,13 @@ import {
   downloadFromR2,
   type R2Env,
 } from "../lib/storage";
+import {
+  findCertificateByVerificationToken,
+  findCertificateDownloadByToken,
+  findCertificateIntegrityByToken,
+  findCertificateSignatureByToken,
+  findPublicAmendmentLink,
+} from "../lib/public-certificate-verification";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -69,53 +65,7 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
       return c.json({ error: "Token invalido" }, 400);
     }
 
-    const [job] = await db
-      .select({
-        id: calibrationJob.id,
-        jobId: calibrationJob.jobId,
-        certificateName: calibrationJob.certificateName,
-        status: calibrationJob.status,
-        certificateUrl: calibrationJob.certificateUrl,
-        performedAt: calibrationJob.performedAt,
-        approvedAt: calibrationJob.approvedAt,
-        // Digital signature metadata - ISO 17025 Clause 7.8.2.1(q)
-        signatureMetadata: calibrationJob.signatureMetadata,
-        // Amendment fields - ISO 17025 Clause 7.8.4.1
-        supersedesId: calibrationJob.supersedesId,
-        supersededById: calibrationJob.supersededById,
-        amendmentNumber: calibrationJob.amendmentNumber,
-        amendmentReason: calibrationJob.amendmentReason,
-        supersededAt: calibrationJob.supersededAt,
-        customerName: customer.name,
-        assetName: asset.name,
-        assetTag: asset.tag,
-        serviceName: service.name,
-        labName: organization.name,
-        // Accreditation seal - frozen method flag with current-method fallback
-        methodSnapshot: calibrationJob.methodSnapshot,
-        scopeOverrideJustification: calibrationJob.scopeOverrideJustification,
-        serviceMethodAccreditedScope: calibrationMethod.accreditedScope,
-        labAccreditationActive: organization.accreditationActive,
-        labAccreditationValidFrom: organization.accreditationValidFrom,
-        labAccreditationValidUntil: organization.accreditationValidUntil,
-        labAccreditationNumber: organization.accreditationNumber,
-      })
-      .from(calibrationJob)
-      .innerJoin(customer, eq(calibrationJob.customerId, customer.id))
-      .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
-      .innerJoin(service, eq(calibrationJob.serviceId, service.id))
-      .innerJoin(
-        organization,
-        eq(calibrationJob.organizationId, organization.id),
-      )
-      .leftJoin(calibrationMethod, eq(service.methodId, calibrationMethod.id))
-      .where(
-        and(
-          eq(calibrationJob.verificationToken, token),
-          inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
-        ),
-      )
-      .limit(1);
+    const job = await findCertificateByVerificationToken(token);
 
     if (!job) {
       return c.json(
@@ -135,20 +85,10 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
     // superseded certificate to an "invalid" page labelled as the current one.
     let supersededByInfo = null;
     if (job.supersededById) {
-      const [replacement] = await db
-        .select({
-          id: calibrationJob.id,
-          jobId: calibrationJob.jobId,
-          verificationToken: calibrationJob.verificationToken,
-        })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, job.supersededById),
-            inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
-          ),
-        )
-        .limit(1);
+      const replacement = await findPublicAmendmentLink(
+        job.organizationId,
+        job.supersededById,
+      );
 
       if (replacement) {
         supersededByInfo = {
@@ -165,20 +105,10 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
     // already-approved amendment's public verify page.
     let supersedesInfo = null;
     if (job.supersedesId) {
-      const [original] = await db
-        .select({
-          id: calibrationJob.id,
-          jobId: calibrationJob.jobId,
-          verificationToken: calibrationJob.verificationToken,
-        })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, job.supersedesId),
-            inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
-          ),
-        )
-        .limit(1);
+      const original = await findPublicAmendmentLink(
+        job.organizationId,
+        job.supersedesId,
+      );
 
       if (original) {
         supersedesInfo = {
@@ -265,20 +195,7 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
       return c.json({ error: "Token invalido" }, 400);
     }
 
-    const [job] = await db
-      .select({
-        signatureMetadata: calibrationJob.signatureMetadata,
-        signatureVerdict: calibrationJob.signatureVerdict,
-        certificateUrl: calibrationJob.certificateUrl,
-      })
-      .from(calibrationJob)
-      .where(
-        and(
-          eq(calibrationJob.verificationToken, token),
-          inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
-        ),
-      )
-      .limit(1);
+    const job = await findCertificateSignatureByToken(token);
 
     if (!job) {
       return c.json({ error: "Certificado nao encontrado" }, 404);
@@ -390,23 +307,7 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
       return c.json({ error: "Token invalido" }, 400);
     }
 
-    const [job] = await db
-      .select({
-        pdfSha256: issuedCertificateSnapshot.pdfSha256,
-        signatureMetadata: calibrationJob.signatureMetadata,
-      })
-      .from(calibrationJob)
-      .leftJoin(
-        issuedCertificateSnapshot,
-        eq(issuedCertificateSnapshot.jobId, calibrationJob.id),
-      )
-      .where(
-        and(
-          eq(calibrationJob.verificationToken, token),
-          inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
-        ),
-      )
-      .limit(1);
+    const job = await findCertificateIntegrityByToken(token);
 
     if (!job) {
       return c.json({ error: "Certificado nao encontrado" }, 404);
@@ -464,16 +365,7 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
       return c.json({ error: "Token invalido" }, 400);
     }
 
-    const [job] = await db
-      .select({ certificateUrl: calibrationJob.certificateUrl })
-      .from(calibrationJob)
-      .where(
-        and(
-          eq(calibrationJob.verificationToken, token),
-          inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
-        ),
-      )
-      .limit(1);
+    const job = await findCertificateDownloadByToken(token);
 
     if (!job) {
       return c.json({ error: "Certificado nao encontrado" }, 404);

@@ -60,43 +60,33 @@ type SeededCert = {
   assetTag: string;
   serviceName: string;
   labName: string;
+  lab: SeededLab;
 };
 
 const NOW = new Date("2026-01-01T00:00:00.000Z");
 
-/**
- * Seed a fully-joined, publicly-verifiable calibration job (status APPROVED)
- * together with the org/unit/customer/asset/service chain the GET /:token join
- * walks. Every distinguishing string is parameterised so cross-cert leakage is
- * observable.
- */
-async function seedVerifiableCert(params: {
+type SeededLab = {
   orgId: string;
-  token: string;
-  jobId: string;
-  status?: JobStatus;
-  accreditationActive?: boolean;
-  accreditationNumber?: string | null;
-  methodAccreditedScope?: boolean;
-  accreditationValidUntil?: Date;
-  approvedAt?: Date;
-  signatureMetadata?: typeof calibrationJob.$inferInsert.signatureMetadata;
-  signatureVerdict?: typeof calibrationJob.$inferInsert.signatureVerdict;
-  // Amendment linkage (ISO 17025 7.8.4.1) — set to wire this job as an
-  // amendment that supersedes / is superseded by another seeded job's row id.
-  supersedesId?: number;
-  supersededById?: number;
-}): Promise<SeededCert> {
-  const {
-    orgId,
-    token,
-    jobId,
-    status = "APPROVED",
-    accreditationActive = false,
-    accreditationNumber = null,
-    methodAccreditedScope = false,
-  } = params;
+  userId: string;
+  unitId: number;
+  customerId: number;
+  assetId: number;
+  serviceId: number;
+  labName: string;
+  customerName: string;
+  assetName: string;
+  assetTag: string;
+  serviceName: string;
+};
 
+/** One laboratory with the unit/customer/asset/service chain the join walks. */
+async function seedVerifiableLab(params: {
+  orgId: string;
+  accreditationActive: boolean;
+  accreditationNumber: string | null;
+  accreditationValidUntil?: Date;
+}): Promise<SeededLab> {
+  const { orgId, accreditationActive, accreditationNumber } = params;
   const userId = `user-${orgId}`;
   const labName = `Lab ${orgId}`;
   const customerName = `Cliente ${orgId}`;
@@ -195,13 +185,75 @@ async function seedVerifiableCert(params: {
     .returning({ id: service.id });
   if (!serviceRow) throw new Error("seedVerifiableCert: service insert failed");
 
-  const [jobRow] = await insertJobs({
-    jobId,
-    organizationId: orgId,
+  return {
+    orgId,
+    userId,
     unitId: unit.id,
     customerId: customerRow.id,
     assetId: assetRow.id,
     serviceId: serviceRow.id,
+    labName,
+    customerName,
+    assetName,
+    assetTag,
+    serviceName,
+  };
+}
+
+/**
+ * Seed a fully-joined, publicly-verifiable calibration job (status APPROVED)
+ * together with the org/unit/customer/asset/service chain the GET /:token join
+ * walks. Every distinguishing string is parameterised so cross-cert leakage is
+ * observable.
+ */
+async function seedVerifiableCert(params: {
+  orgId: string;
+  token: string;
+  jobId: string;
+  status?: JobStatus;
+  accreditationActive?: boolean;
+  accreditationNumber?: string | null;
+  methodAccreditedScope?: boolean;
+  accreditationValidUntil?: Date;
+  approvedAt?: Date;
+  signatureMetadata?: typeof calibrationJob.$inferInsert.signatureMetadata;
+  signatureVerdict?: typeof calibrationJob.$inferInsert.signatureVerdict;
+  // Amendment linkage (ISO 17025 7.8.4.1) — set to wire this job as an
+  // amendment that supersedes / is superseded by another seeded job's row id.
+  supersedesId?: number;
+  supersededById?: number;
+  sameLabAs?: SeededLab;
+}): Promise<SeededCert> {
+  const {
+    orgId,
+    token,
+    jobId,
+    status = "APPROVED",
+    accreditationActive = false,
+    accreditationNumber = null,
+    methodAccreditedScope = false,
+  } = params;
+
+  // `sameLabAs`: the certificate is issued by the laboratory of another seeded
+  // certificate (an amendment and its original always are).
+  const lab =
+    params.sameLabAs ??
+    (await seedVerifiableLab({
+      orgId,
+      accreditationActive,
+      accreditationNumber,
+      accreditationValidUntil: params.accreditationValidUntil,
+    }));
+  const { userId, labName, customerName, assetName, assetTag, serviceName } =
+    lab;
+
+  const [jobRow] = await insertJobs({
+    jobId,
+    organizationId: lab.orgId,
+    unitId: lab.unitId,
+    customerId: lab.customerId,
+    assetId: lab.assetId,
+    serviceId: lab.serviceId,
     methodSnapshot: { accreditedScope: methodAccreditedScope },
     status,
     verificationToken: token,
@@ -224,6 +276,7 @@ async function seedVerifiableCert(params: {
     assetTag,
     serviceName,
     labName,
+    lab,
   };
 }
 
@@ -495,6 +548,8 @@ describe("verifyRouter — real DB, public certificate verification", () => {
 
     const amendment = await seedVerifiableCert({
       orgId: "org-amend",
+      // An amendment is always issued by the laboratory of its original.
+      sameLabAs: original.lab,
       token: VALID_UUID_A,
       jobId: "CAL-A-AMENDMENT",
       status: "APPROVED",
@@ -533,6 +588,8 @@ describe("verifyRouter — real DB, public certificate verification", () => {
 
     const amendment = await seedVerifiableCert({
       orgId: "org-amend",
+      // An amendment is always issued by the laboratory of its original.
+      sameLabAs: original.lab,
       token: VALID_UUID_A,
       jobId: "CAL-A-AMENDMENT-2",
       status: "APPROVED",
@@ -550,6 +607,38 @@ describe("verifyRouter — real DB, public certificate verification", () => {
     if (!isRecord(body.supersedes)) throw new Error("unreachable");
     expect(body.supersedes.jobId).toBe(original.jobId);
     expect(body.supersedes.verificationToken).toBe(original.token);
+  });
+
+  // =========================================================================
+  // P2-18a: the amendment link is bound to the laboratory that issued the
+  // certificate the token resolved to. A (corrupt) supersedes link into ANOTHER
+  // laboratory's terminal certificate must not surface its jobId or token.
+  // =========================================================================
+  it("P2-18a: supersedes never links into another laboratory's certificate", async () => {
+    const foreign = await seedVerifiableCert({
+      orgId: "org-foreign",
+      token: VALID_UUID_B,
+      jobId: "CAL-FOREIGN-TERMINAL",
+      status: "SUPERSEDED",
+    });
+    const amendment = await seedVerifiableCert({
+      orgId: "org-amend",
+      token: VALID_UUID_A,
+      jobId: "CAL-A-AMENDMENT-CROSS",
+      status: "APPROVED",
+      supersedesId: foreign.jobRowId,
+    });
+
+    const res = await verifyRouter.request(`/${amendment.token}`);
+    expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+    expect(isRecord(body)).toBe(true);
+    if (!isRecord(body)) throw new Error("unreachable");
+    expect(body.isAmendment).toBe(true);
+    expect(body.supersedes).toBeNull();
+    const serialized = JSON.stringify(body);
+    expect(serialized).not.toContain(foreign.jobId);
+    expect(serialized).not.toContain(foreign.token);
   });
 
   // =========================================================================

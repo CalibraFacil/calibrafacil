@@ -8,6 +8,7 @@ import {
   type AuthVariables,
 } from "../../middleware/permission";
 import { resolveCustomerRouteId } from "../../lib/customer-route-id";
+import { orgDb } from "../../lib/org-db";
 import { parseLegacyNumericIdentifier } from "../../lib/route-identifiers";
 
 function parseStrictPositiveInt(value: string | undefined) {
@@ -32,12 +33,15 @@ export const financeTimelineRouter = new Hono<{
         return c.json({ error: "ID da ordem de serviço inválido" }, 400);
       }
 
-      const data = await buildServiceOrderFinancialStatus({
-        organizationId: member.organizationId,
-        scope: member,
-        serviceOrderId,
-        includeProviderEvidence: true,
-      });
+      const data = await orgDb(member.organizationId).transaction((o) =>
+        buildServiceOrderFinancialStatus({
+          executor: o,
+          organizationId: member.organizationId,
+          scope: member,
+          serviceOrderId,
+          includeProviderEvidence: true,
+        }),
+      );
 
       if (!data) {
         return c.json({ error: "Ordem de serviço não encontrada" }, 404);
@@ -64,13 +68,18 @@ export const financeTimelineRouter = new Hono<{
         return c.json({ error: "Limite inválido" }, 400);
       }
 
-      const timeline = await buildCustomerFinancialTimeline({
-        organizationId: member.organizationId,
-        scope: member,
-        customerId,
-        limit: limit ? Math.min(limit, CUSTOMER_TIMELINE_MAX_LIMIT) : undefined,
-        includeProviderEvidence: true,
-      });
+      const timeline = await orgDb(member.organizationId).transaction((o) =>
+        buildCustomerFinancialTimeline({
+          executor: o,
+          organizationId: member.organizationId,
+          scope: member,
+          customerId,
+          limit: limit
+            ? Math.min(limit, CUSTOMER_TIMELINE_MAX_LIMIT)
+            : undefined,
+          includeProviderEvidence: true,
+        }),
+      );
 
       if (!timeline) {
         return c.json({ error: "Cliente não encontrado" }, 404);

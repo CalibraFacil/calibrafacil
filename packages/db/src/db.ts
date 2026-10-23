@@ -62,7 +62,11 @@ const observingLogger = {
   },
 };
 
-let cachedDatabase: { key: string; database: Database } | null = null;
+type CachedDatabase = { key: string; database: Database };
+let cachedDatabase: CachedDatabase | null = null;
+// The system path's own pool (`DATABASE_OWNER_URL`): a second slot, so asking for
+// it never evicts the application pool and the other way round.
+let cachedSystemDatabase: CachedDatabase | null = null;
 
 function isCloudflareWorkersRuntime() {
   return (
@@ -82,6 +86,23 @@ function cacheDatabase(key: string, createDatabase: () => Database): Database {
 
   const database = createDatabase();
   cachedDatabase = { key, database };
+  return database;
+}
+
+function cacheSystemDatabase(
+  key: string,
+  createDatabase: () => Database,
+): Database {
+  if (isCloudflareWorkersRuntime()) {
+    return createDatabase();
+  }
+
+  if (cachedSystemDatabase?.key === key) {
+    return cachedSystemDatabase.database;
+  }
+
+  const database = createDatabase();
+  cachedSystemDatabase = { key, database };
   return database;
 }
 
@@ -155,6 +176,48 @@ export function getDb(): Database {
     "No database connection configured. Set HYPERDRIVE_URL or DATABASE_URL.",
   );
 }
+
+/**
+ * The SYSTEM path (P2-18): the connection of the table owner, for the statements
+ * that are cross-organization by design and so cannot run under a policy that
+ * names one organization per transaction (`calibra.organization_id`, migration
+ * 0123): the lookup that LEARNS the laboratory of a request (portal host name,
+ * the portal scope resolver, a session's memberships), reads over a bounded SET
+ * of laboratories, and writes to the global `asset_type` catalog (a trigger fans
+ * them out to every laboratory's change log, which `calibra_app` may not do).
+ *
+ * `DATABASE_OWNER_URL` names that connection. Unset, the system path IS the
+ * application connection: while `DATABASE_RLS_MODE=shadow` the application
+ * connects as the owner, so there is nothing to split yet. Set it together with
+ * the role split (DEPLOYMENT.md, "Row-level security").
+ *
+ * Every use is named (`systemDb`) and carries a comment saying why; routes may
+ * not import it (the `no-raw-db-in-routes` rule), only lib modules may, and each
+ * is a reviewed entry of tenant-sql-allowlist.ts. It deliberately ignores a
+ * transaction scope: it is another connection by design.
+ */
+export function getSystemDb(): Database {
+  const config = readDatabaseConfig();
+  const ownerUrl = config.ownerUrl;
+  // Unset: the application connection. `getDb()` reports the access itself, so
+  // the observer sees exactly one access per call on either branch.
+  if (!ownerUrl) return getDb();
+  queryObserver?.onAccess?.();
+  const isCloudflare = isCloudflareWorkersRuntime();
+  return cacheSystemDatabase(`owner:${ownerUrl}:${config.poolMax}`, () => {
+    if (isCloudflare) return createNeonServerlessDatabase(ownerUrl);
+    return createPostgresJsDatabase(ownerUrl, config.poolMax);
+  });
+}
+
+/** `getSystemDb()` as a stable import, like `db` for the application pool. */
+const systemProxyTarget: Database = Object.create(null);
+
+export const systemDb = new Proxy(systemProxyTarget, {
+  get(_, prop) {
+    return Reflect.get(getSystemDb(), prop);
+  },
+});
 
 /**
  * Runs `work` in ONE database transaction that every `db` access in its async

@@ -175,18 +175,20 @@ export async function resolvePortalFinancialDocumentHrefs(params: {
   // Candidate IDs are derived from the already-authorized service order's
   // billing document, fiscal access key, and receipts; the org-bound handle
   // keeps the signed artifact lookup inside the lab tenant.
-  const links = await orgDb(params.organizationId)
-    .select({
-      localEntityId: integrationObjectLink.localEntityId,
-      metadata: integrationObjectLink.metadata,
-    })
-    .from(integrationObjectLink)
-    .where(
-      and(
-        eq(integrationObjectLink.target, "remote_document"),
-        inArray(integrationObjectLink.localEntityId, candidateLocalEntityIds),
+  const links = await orgDb(params.organizationId).transaction((o) =>
+    o
+      .select({
+        localEntityId: integrationObjectLink.localEntityId,
+        metadata: integrationObjectLink.metadata,
+      })
+      .from(integrationObjectLink)
+      .where(
+        and(
+          eq(integrationObjectLink.target, "remote_document"),
+          inArray(integrationObjectLink.localEntityId, candidateLocalEntityIds),
+        ),
       ),
-    );
+  );
 
   const receipts: Record<number, string | null> = {};
   let invoice: string | null = null;
@@ -461,12 +463,18 @@ export async function buildPortalServiceOrderFinancialSummary(params: {
   scope: PortalFinancialScope;
   documentHrefSigner?: PortalFinancialDocumentHrefSigner;
 }): Promise<PortalServiceOrderFinancialSummary | null> {
-  const financialStatus = await buildServiceOrderFinancialStatus({
-    organizationId: params.organizationId,
-    serviceOrderId: params.serviceOrderId,
-    scope: params.scope,
-    includeProviderEvidence: true,
-  });
+  // One organization-bound transaction for every read of the status (the order,
+  // its certificate links, the billing document, installments, receipts and
+  // the integration evidence); the document signing below runs after it.
+  const financialStatus = await orgDb(params.organizationId).transaction((o) =>
+    buildServiceOrderFinancialStatus({
+      executor: o,
+      organizationId: params.organizationId,
+      serviceOrderId: params.serviceOrderId,
+      scope: params.scope,
+      includeProviderEvidence: true,
+    }),
+  );
 
   if (!financialStatus) return null;
 

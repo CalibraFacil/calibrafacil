@@ -231,67 +231,81 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
       const verificationToken = createPortalDomainVerificationToken();
 
       if (existing) {
-        const [updated] = await orgDb(member.organizationId)
-          .update(organizationCustomDomain)
-          .set({
-            hostname,
-            verificationToken,
-            verifiedAt: null,
-            lastVerifiedAt: null,
-            activatedAt: null,
-            isActive: false,
-            updatedAt: new Date(),
-          })
-          .where(eq(organizationCustomDomain.id, existing.id))
-          .returning();
+        const [updated] = await orgDb(member.organizationId).transaction((o) =>
+          o
+            .update(organizationCustomDomain)
+            .set({
+              hostname,
+              verificationToken,
+              verifiedAt: null,
+              lastVerifiedAt: null,
+              activatedAt: null,
+              isActive: false,
+              updatedAt: new Date(),
+            })
+            .where(eq(organizationCustomDomain.id, existing.id))
+            .returning(),
+        );
 
         if (updated) {
-          await writeOrganizationAuditEvent({
-            organizationId: member.organizationId,
-            actorUserId: session.user.id,
-            actorMemberId: member.id,
-            action: "portal_domain.updated",
-            entityType: "portal_domain",
-            entityId: updated.id,
-            details: {
-              hostname: updated.hostname,
-              verificationHost: buildPortalDomainVerificationHost(
-                updated.hostname,
-              ),
-              previousHostname: existing.hostname,
-            },
-          });
+          await orgDb(member.organizationId).transaction((o) =>
+            writeOrganizationAuditEvent(
+              {
+                organizationId: member.organizationId,
+                actorUserId: session.user.id,
+                actorMemberId: member.id,
+                action: "portal_domain.updated",
+                entityType: "portal_domain",
+                entityId: updated.id,
+                details: {
+                  hostname: updated.hostname,
+                  verificationHost: buildPortalDomainVerificationHost(
+                    updated.hostname,
+                  ),
+                  previousHostname: existing.hostname,
+                },
+              },
+              o,
+            ),
+          );
         }
 
         return c.json({ domain: serializeDomain(updated || null) });
       }
 
-      const [created] = await orgDb(member.organizationId)
-        .insert(organizationCustomDomain)
-        .values({
-          id: crypto.randomUUID(),
-          organizationId: member.organizationId,
-          hostname,
-          verificationToken,
-          createdBy: session.user.id,
-        })
-        .returning();
+      const [created] = await orgDb(member.organizationId).transaction((o) =>
+        o
+          .insert(organizationCustomDomain)
+          .values({
+            id: crypto.randomUUID(),
+            organizationId: member.organizationId,
+            hostname,
+            verificationToken,
+            createdBy: session.user.id,
+          })
+          .returning(),
+      );
 
       if (created) {
-        await writeOrganizationAuditEvent({
-          organizationId: member.organizationId,
-          actorUserId: session.user.id,
-          actorMemberId: member.id,
-          action: "portal_domain.created",
-          entityType: "portal_domain",
-          entityId: created.id,
-          details: {
-            hostname: created.hostname,
-            verificationHost: buildPortalDomainVerificationHost(
-              created.hostname,
-            ),
-          },
-        });
+        await orgDb(member.organizationId).transaction((o) =>
+          writeOrganizationAuditEvent(
+            {
+              organizationId: member.organizationId,
+              actorUserId: session.user.id,
+              actorMemberId: member.id,
+              action: "portal_domain.created",
+              entityType: "portal_domain",
+              entityId: created.id,
+              details: {
+                hostname: created.hostname,
+                verificationHost: buildPortalDomainVerificationHost(
+                  created.hostname,
+                ),
+              },
+            },
+            o,
+          ),
+        );
       }
 
       return c.json({ domain: serializeDomain(created || null) }, 201);
@@ -328,31 +342,38 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      const [updated] = await orgDb(member.organizationId)
-        .update(organizationCustomDomain)
-        .set({
-          verifiedAt: record.verifiedAt ?? new Date(),
-          lastVerifiedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(organizationCustomDomain.id, record.id))
-        .returning();
+      const [updated] = await orgDb(member.organizationId).transaction((o) =>
+        o
+          .update(organizationCustomDomain)
+          .set({
+            verifiedAt: record.verifiedAt ?? new Date(),
+            lastVerifiedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(organizationCustomDomain.id, record.id))
+          .returning(),
+      );
 
       if (updated) {
-        await writeOrganizationAuditEvent({
-          organizationId: member.organizationId,
-          actorUserId: session.user.id,
-          actorMemberId: member.id,
-          action: "portal_domain.verified",
-          entityType: "portal_domain",
-          entityId: updated.id,
-          details: {
-            hostname: updated.hostname,
-            verificationHost: buildPortalDomainVerificationHost(
-              updated.hostname,
-            ),
-          },
-        });
+        await orgDb(member.organizationId).transaction((o) =>
+          writeOrganizationAuditEvent(
+            {
+              organizationId: member.organizationId,
+              actorUserId: session.user.id,
+              actorMemberId: member.id,
+              action: "portal_domain.verified",
+              entityType: "portal_domain",
+              entityId: updated.id,
+              details: {
+                hostname: updated.hostname,
+                verificationHost: buildPortalDomainVerificationHost(
+                  updated.hostname,
+                ),
+              },
+            },
+            o,
+          ),
+        );
       }
 
       return c.json({ domain: serializeDomain(updated ?? null) });
@@ -375,28 +396,35 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "Verifique o domínio antes de ativá-lo" }, 400);
       }
 
-      const [updated] = await orgDb(member.organizationId)
-        .update(organizationCustomDomain)
-        .set({
-          isActive: true,
-          activatedAt: record.activatedAt ?? new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(organizationCustomDomain.id, record.id))
-        .returning();
+      const [updated] = await orgDb(member.organizationId).transaction((o) =>
+        o
+          .update(organizationCustomDomain)
+          .set({
+            isActive: true,
+            activatedAt: record.activatedAt ?? new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(organizationCustomDomain.id, record.id))
+          .returning(),
+      );
 
       if (updated) {
-        await writeOrganizationAuditEvent({
-          organizationId: member.organizationId,
-          actorUserId: session.user.id,
-          actorMemberId: member.id,
-          action: "portal_domain.activated",
-          entityType: "portal_domain",
-          entityId: updated.id,
-          details: {
-            hostname: updated.hostname,
-          },
-        });
+        await orgDb(member.organizationId).transaction((o) =>
+          writeOrganizationAuditEvent(
+            {
+              organizationId: member.organizationId,
+              actorUserId: session.user.id,
+              actorMemberId: member.id,
+              action: "portal_domain.activated",
+              entityType: "portal_domain",
+              entityId: updated.id,
+              details: {
+                hostname: updated.hostname,
+              },
+            },
+            o,
+          ),
+        );
       }
 
       return c.json({ domain: serializeDomain(updated ?? null) });
@@ -415,23 +443,30 @@ export const portalDomainsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ success: true });
       }
 
-      await orgDb(member.organizationId)
-        .delete(organizationCustomDomain)
-        .where(eq(organizationCustomDomain.id, record.id));
+      await orgDb(member.organizationId).transaction((o) =>
+        o
+          .delete(organizationCustomDomain)
+          .where(eq(organizationCustomDomain.id, record.id)),
+      );
 
-      await writeOrganizationAuditEvent({
-        organizationId: member.organizationId,
-        actorUserId: session.user.id,
-        actorMemberId: member.id,
-        action: "portal_domain.deleted",
-        entityType: "portal_domain",
-        entityId: record.id,
-        details: {
-          hostname: record.hostname,
-          wasVerified: Boolean(record.verifiedAt),
-          wasActive: record.isActive,
-        },
-      });
+      await orgDb(member.organizationId).transaction((o) =>
+        writeOrganizationAuditEvent(
+          {
+            organizationId: member.organizationId,
+            actorUserId: session.user.id,
+            actorMemberId: member.id,
+            action: "portal_domain.deleted",
+            entityType: "portal_domain",
+            entityId: record.id,
+            details: {
+              hostname: record.hostname,
+              wasVerified: Boolean(record.verifiedAt),
+              wasActive: record.isActive,
+            },
+          },
+          o,
+        ),
+      );
 
       return c.json({ success: true });
     },

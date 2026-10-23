@@ -685,12 +685,21 @@ ALTER ROLE calibra_api NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;   -- kee
 
 Then change the API's connection string and set its mode (`DATABASE_RLS_MODE=enforced` tells start-up that a role RLS binds is intended; without it the API refuses to start as `calibra_api`):
 
-| Component                                     | `DATABASE_URL` becomes                                                             |
-| --------------------------------------------- | ---------------------------------------------------------------------------------- |
-| API (`apps/api`)                              | `postgres://calibra_api:<password>@<host>/<db>`, plus `DATABASE_RLS_MODE=enforced` |
-| Migrations (`db:migrate`, `db:bootstrap`)     | unchanged: the owner                                                               |
-| Worker (`apps/worker`), cron and queue sweeps | unchanged: the owner, until their statements are org-bound                         |
+| Component                                     | `DATABASE_URL` becomes                                                                                                                                 |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| API (`apps/api`)                              | `postgres://calibra_api:<password>@<host>/<db>`, plus `DATABASE_RLS_MODE=enforced` and `DATABASE_OWNER_URL=<the owner's URL>` (the system path, below) |
+| Migrations (`db:migrate`, `db:bootstrap`)     | unchanged: the owner                                                                                                                                   |
+| Worker (`apps/worker`), cron and queue sweeps | unchanged: the owner, until their statements are org-bound                                                                                             |
 
+- **The system path (`DATABASE_OWNER_URL`).** A few statements are cross-laboratory on purpose and cannot name
+  one organization first: the lookup that learns which laboratory a request belongs to (the portal's host
+  name, the portal customer scope, a public certificate token), reads over a bounded set of laboratories
+  (a portal customer user of several), notification fan-out, and writes to the global `asset_type` catalog
+  (its change-log trigger writes to every laboratory's log, which `calibra_app` may not do; only the seed writes it). They use the named
+  `systemDb` of `@calibra-facil/db`, which connects with `DATABASE_OWNER_URL`; unset, it shares
+  `DATABASE_URL`, so while the API still connects as the owner there is nothing to configure. Set it in the
+  same change as the role split, or those requests see nothing as `calibra_api`. Every use is a reviewed entry
+  of `apps/api/test/integration/tenant-sql-allowlist.ts`, and routes may not import it.
 - **Pooler mode.** Transaction pooling (PgBouncer `pool_mode = transaction`, Neon's pooled endpoint,
   Supavisor) is fine: `set_config(..., true)` is transaction-local, so the organization lives and dies with
   the transaction and never reaches the next client on the same server connection. A statement outside

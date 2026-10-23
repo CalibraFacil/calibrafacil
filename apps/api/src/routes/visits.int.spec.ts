@@ -1,11 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { insertJobs } from "../../test/integration/job-fixtures";
+import { changeJobBeforeNextTransaction } from "../../test/integration/job-cas";
 import {
   visitJobsRouter,
   visitRescheduleRequestsRouter,
   visitsRouter,
 } from "./visits";
-import { db, getDb } from "@calibra-facil/db";
+import { db } from "@calibra-facil/db";
 import {
   asset,
   assetType,
@@ -586,6 +587,11 @@ describe("visitJobsRouter — remove instrument audit trail (ISO/IEC 17025)", ()
     logout();
   });
 
+  afterEach(() => {
+    // The lost compare-and-set tests spy on the transaction opener.
+    vi.restoreAllMocks();
+  });
+
   it("REQ-VISITJOB-006,013: DELETE soft-cancels the DRAFT job and writes a job_audit_log cancel entry", async () => {
     const fx = await seedVisitJobFixture({
       orgId: "org-vja",
@@ -687,17 +693,7 @@ describe("visitJobsRouter — remove instrument audit trail (ISO/IEC 17025)", ()
     // the job as DRAFT; right before it opens the transaction carrying its
     // write, another actor starts the calibration. (`db` is a Proxy over the
     // cached instance, so spy on the instance.)
-    const instance = getDb();
-    const originalTransaction = instance.transaction.bind(instance);
-    vi.spyOn(instance, "transaction").mockImplementationOnce(
-      async (callback, config) => {
-        await db
-          .update(calibrationJob)
-          .set({ status: "IN_PROGRESS" })
-          .where(eq(calibrationJob.id, jobDbId));
-        return originalTransaction(callback, config);
-      },
-    );
+    changeJobBeforeNextTransaction(jobDbId, { status: "IN_PROGRESS" });
 
     loginAs({ userId: fx.userId, organizationId: fx.orgId });
     const res = await visitJobsRouter.request(
@@ -742,17 +738,7 @@ describe("visitJobsRouter — remove instrument audit trail (ISO/IEC 17025)", ()
     // the job as DRAFT; right before it opens the transaction carrying its
     // write, another actor starts the calibration. (`db` is a Proxy over the
     // cached instance, so spy on the instance.)
-    const instance = getDb();
-    const originalTransaction = instance.transaction.bind(instance);
-    vi.spyOn(instance, "transaction").mockImplementationOnce(
-      async (callback, config) => {
-        await db
-          .update(calibrationJob)
-          .set({ status: "IN_PROGRESS" })
-          .where(eq(calibrationJob.id, jobDbId));
-        return originalTransaction(callback, config);
-      },
-    );
+    changeJobBeforeNextTransaction(jobDbId, { status: "IN_PROGRESS" });
 
     loginAs({ userId: fx.userId, organizationId: fx.orgId });
     const res = await visitJobsRouter.request(

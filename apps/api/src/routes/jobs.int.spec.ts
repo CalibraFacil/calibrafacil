@@ -19,7 +19,8 @@
  *   REQ-JOB-008  Unauthenticated approve → 401
  */
 
-import { insertJobs, setJobStatus } from "../../test/integration/job-fixtures";
+import { insertJobs } from "../../test/integration/job-fixtures";
+import { changeJobBeforeNextTransaction } from "../../test/integration/job-cas";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { jobsRouter } from "./jobs";
 import {
@@ -32,7 +33,7 @@ import {
   METHOD_ENGINE_OPTIONS,
   normalizeEngineOptions,
 } from "@calibra-facil/math-engine";
-import { db, getDb } from "@calibra-facil/db";
+import { db } from "@calibra-facil/db";
 import {
   accreditedScopeLine,
   calibrationJob,
@@ -1309,15 +1310,8 @@ async function auditActions(id: number) {
  * is flaky; this fixes the order instead.
  */
 function changeStatusBeforeNextTransaction(id: number, status: JobStatus) {
-  // `db` is a Proxy over the cached instance; spy on the instance itself.
-  const instance = getDb();
-  const originalTransaction = instance.transaction.bind(instance);
-  vi.spyOn(instance, "transaction").mockImplementationOnce(
-    async (callback, config) => {
-      await setJobStatus(id, status);
-      return originalTransaction(callback, config);
-    },
-  );
+  // Skips the transactions that only name the organization (auth middleware).
+  changeJobBeforeNextTransaction(id, { status });
 }
 
 describe("jobsRouter — status guards (cancel allow-list, compare-and-set)", () => {

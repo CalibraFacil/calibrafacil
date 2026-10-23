@@ -5,7 +5,11 @@
  * Usage: bun run src/seed-asset-types.ts (also run by apps/api's `init`)
  */
 
-import { db } from "./db";
+// `asset_type` is a global catalog whose change-log trigger writes an entry for EVERY
+// laboratory (migration 0122), which a `calibra_app` session may not do: the catalog is
+// written on the system path (the owner connection, `DATABASE_OWNER_URL`), by this seed
+// only; no route writes it.
+import { systemDb } from "./db";
 import { assetType, type AssetTypeFieldDefinition } from "./schema";
 import { seedLegalMetrologyRegulations } from "./seed-legal-metrology-regulations";
 
@@ -1143,7 +1147,7 @@ export async function seedAssetTypes(
 
   for (const type of ASSET_TYPE_SEED) {
     try {
-      await db
+      await systemDb
         .insert(assetType)
         .values(type)
         .onConflictDoNothing({ target: assetType.slug });
@@ -1156,7 +1160,7 @@ export async function seedAssetTypes(
   // Also seed the GLOBAL legal-metrology regulation catalog (deferred #3 of #423).
   // Idempotent + data-only (ON CONFLICT DO NOTHING on `category`; touches no asset row).
   log("Seeding legal-metrology regulations...");
-  await seedLegalMetrologyRegulations(db);
+  await seedLegalMetrologyRegulations(systemDb);
   log("  ✓ legal-metrology regulation catalog");
 }
 

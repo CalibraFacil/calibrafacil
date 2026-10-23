@@ -13,7 +13,7 @@ const { dbMock, sendMock } = vi.hoisted(() => ({
   sendMock: vi.fn().mockResolvedValue({ data: { id: "email_1" } }),
 }));
 
-vi.mock("@calibra-facil/db", () => ({ db: dbMock }));
+vi.mock("@calibra-facil/db", () => ({ db: dbMock, systemDb: dbMock }));
 vi.mock("@react-email/render", () => ({
   render: vi.fn().mockResolvedValue("<html>digest</html>"),
 }));

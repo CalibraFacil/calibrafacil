@@ -5,6 +5,9 @@ import {
   PORTAL_MANAGEABLE_MEMBER_ROLES,
   isPortalManageableMemberRole,
 } from "@calibra-facil/auth/access";
+// `db` below only touches the GLOBAL identity tables `user` and `organization`
+// (no organization column, no policy); every statement on a tenant table of a
+// CLIENT organization (`member`, `invitation`) goes through `orgDb(...).transaction`.
 import { db } from "@calibra-facil/db";
 import {
   invitation,
@@ -246,51 +249,54 @@ export async function enforceClientPortalMembershipBoundary(
     };
   }
 
-  const clientOrg = orgDb(organizationId);
-  const [existingServiceMembership] = await clientOrg
-    .select({ id: member.id, role: member.role })
-    .from(member)
-    .where(eq(member.userId, serviceUser.id))
-    .limit(1);
+  // `member` rows of a CLIENT organization carry that organization as their own
+  // tenant column, so the client organization is the one the transaction names.
+  return orgDb(organizationId).transaction(async (clientOrg) => {
+    const [existingServiceMembership] = await clientOrg
+      .select({ id: member.id, role: member.role })
+      .from(member)
+      .where(eq(member.userId, serviceUser.id))
+      .limit(1);
 
-  let serviceOwnerAdded = false;
-  let serviceOwnerPromoted = false;
+    let serviceOwnerAdded = false;
+    let serviceOwnerPromoted = false;
 
-  if (!existingServiceMembership) {
-    await clientOrg.insert(member).values({
-      id: crypto.randomUUID(),
-      organizationId,
-      userId: serviceUser.id,
-      role: "owner",
-      createdAt: new Date(),
-    });
-    serviceOwnerAdded = true;
-  } else if (existingServiceMembership.role !== "owner") {
-    await clientOrg
-      .update(member)
-      .set({ role: "owner" })
-      .where(eq(member.id, existingServiceMembership.id));
-    serviceOwnerPromoted = true;
-  }
+    if (!existingServiceMembership) {
+      await clientOrg.insert(member).values({
+        id: crypto.randomUUID(),
+        organizationId,
+        userId: serviceUser.id,
+        role: "owner",
+        createdAt: new Date(),
+      });
+      serviceOwnerAdded = true;
+    } else if (existingServiceMembership.role !== "owner") {
+      await clientOrg
+        .update(member)
+        .set({ role: "owner" })
+        .where(eq(member.id, existingServiceMembership.id));
+      serviceOwnerPromoted = true;
+    }
 
-  const removableInternalRoleConditions: Array<SQL<unknown>> =
-    INTERNAL_ROLES.map((role) => eq(member.role, role));
+    const removableInternalRoleConditions: Array<SQL<unknown>> =
+      INTERNAL_ROLES.map((role) => eq(member.role, role));
 
-  const removedMembers = await clientOrg
-    .delete(member)
-    .where(
-      and(
-        ne(member.userId, serviceUser.id),
-        or(...removableInternalRoleConditions),
-      ),
-    )
-    .returning();
+    const removedMembers = await clientOrg
+      .delete(member)
+      .where(
+        and(
+          ne(member.userId, serviceUser.id),
+          or(...removableInternalRoleConditions),
+        ),
+      )
+      .returning();
 
-  return {
-    serviceOwnerAdded,
-    serviceOwnerPromoted,
-    removedInternalMembers: removedMembers.length,
-  };
+    return {
+      serviceOwnerAdded,
+      serviceOwnerPromoted,
+      removedInternalMembers: removedMembers.length,
+    };
+  });
 }
 
 export async function createPortalInvitationAsService(params: {
@@ -328,68 +334,78 @@ export async function createPortalInvitationAsService(params: {
     );
   }
 
-  const clientOrg = orgDb(params.organizationId);
-  const [existingMember] = await clientOrg
-    .select({ id: member.id })
-    .from(member)
-    .innerJoin(user, eq(member.userId, user.id))
-    .where(eq(user.email, normalizedEmail))
-    .limit(1);
+  // The membership and invitation rows of a CLIENT organization carry that
+  // organization as their tenant column; the e-mail goes out after the commit.
+  const { invitationId, expiresAt } = await orgDb(
+    params.organizationId,
+  ).transaction(async (clientOrg) => {
+    const [existingMember] = await clientOrg
+      .select({ id: member.id })
+      .from(member)
+      .innerJoin(user, eq(member.userId, user.id))
+      .where(eq(user.email, normalizedEmail))
+      .limit(1);
 
-  if (existingMember) {
-    throw new PortalServiceAccountError(
-      "Usuario ja e membro do portal",
-      409,
-      "PORTAL_USER_ALREADY_MEMBER",
+    if (existingMember) {
+      throw new PortalServiceAccountError(
+        "Usuario ja e membro do portal",
+        409,
+        "PORTAL_USER_ALREADY_MEMBER",
+      );
+    }
+
+    // Normalize old pending invites that already expired
+    await clientOrg
+      .update(invitation)
+      .set({ status: "expired" })
+      .where(
+        and(
+          eq(invitation.email, normalizedEmail),
+          eq(invitation.status, "pending"),
+          lt(invitation.expiresAt, new Date()),
+        ),
+      );
+
+    const [pendingInvitation] = await clientOrg
+      .select({ id: invitation.id })
+      .from(invitation)
+      .where(
+        and(
+          eq(invitation.email, normalizedEmail),
+          eq(invitation.status, "pending"),
+        ),
+      )
+      .limit(1);
+
+    if (pendingInvitation) {
+      throw new PortalServiceAccountError(
+        "Ja existe um convite pendente para este email",
+        409,
+        "INVITATION_ALREADY_PENDING",
+      );
+    }
+
+    const createdInvitationId = crypto.randomUUID();
+    const createdAt = new Date();
+    const invitationExpiresAt = new Date(
+      createdAt.getTime() + getInvitationExpirationSeconds() * 1000,
     );
-  }
 
-  // Normalize old pending invites that already expired
-  await clientOrg
-    .update(invitation)
-    .set({ status: "expired" })
-    .where(
-      and(
-        eq(invitation.email, normalizedEmail),
-        eq(invitation.status, "pending"),
-        lt(invitation.expiresAt, new Date()),
-      ),
-    );
+    await clientOrg.insert(invitation).values({
+      id: createdInvitationId,
+      organizationId: params.organizationId,
+      email: normalizedEmail,
+      role,
+      status: "pending",
+      expiresAt: invitationExpiresAt,
+      createdAt,
+      inviterId: serviceUser.id,
+    });
 
-  const [pendingInvitation] = await clientOrg
-    .select({ id: invitation.id })
-    .from(invitation)
-    .where(
-      and(
-        eq(invitation.email, normalizedEmail),
-        eq(invitation.status, "pending"),
-      ),
-    )
-    .limit(1);
-
-  if (pendingInvitation) {
-    throw new PortalServiceAccountError(
-      "Ja existe um convite pendente para este email",
-      409,
-      "INVITATION_ALREADY_PENDING",
-    );
-  }
-
-  const invitationId = crypto.randomUUID();
-  const createdAt = new Date();
-  const expiresAt = new Date(
-    createdAt.getTime() + getInvitationExpirationSeconds() * 1000,
-  );
-
-  await clientOrg.insert(invitation).values({
-    id: invitationId,
-    organizationId: params.organizationId,
-    email: normalizedEmail,
-    role,
-    status: "pending",
-    expiresAt,
-    createdAt,
-    inviterId: serviceUser.id,
+    return {
+      invitationId: createdInvitationId,
+      expiresAt: invitationExpiresAt,
+    };
   });
 
   await sendPortalInvitationEmail({
@@ -414,16 +430,18 @@ export async function cancelPortalInvitationAsService(params: {
   invitationId: string;
   organizationId: string;
 }) {
-  const [updated] = await orgDb(params.organizationId)
-    .update(invitation)
-    .set({ status: "canceled" })
-    .where(
-      and(
-        eq(invitation.id, params.invitationId),
-        eq(invitation.status, "pending"),
-      ),
-    )
-    .returning();
+  const [updated] = await orgDb(params.organizationId).transaction((tx) =>
+    tx
+      .update(invitation)
+      .set({ status: "canceled" })
+      .where(
+        and(
+          eq(invitation.id, params.invitationId),
+          eq(invitation.status, "pending"),
+        ),
+      )
+      .returning(),
+  );
 
   if (!updated) {
     throw new PortalServiceAccountError(
@@ -440,41 +458,42 @@ export async function removePortalMemberAsService(params: {
   memberId: string;
   organizationId: string;
 }) {
-  const clientOrg = orgDb(params.organizationId);
-  const [target] = await clientOrg
-    .select({ id: member.id, role: member.role })
-    .from(member)
-    .where(eq(member.id, params.memberId))
-    .limit(1);
+  return orgDb(params.organizationId).transaction(async (clientOrg) => {
+    const [target] = await clientOrg
+      .select({ id: member.id, role: member.role })
+      .from(member)
+      .where(eq(member.id, params.memberId))
+      .limit(1);
 
-  if (!target) {
-    throw new PortalServiceAccountError(
-      "Membro nao encontrado",
-      404,
-      "MEMBER_NOT_FOUND",
-    );
-  }
+    if (!target) {
+      throw new PortalServiceAccountError(
+        "Membro nao encontrado",
+        404,
+        "MEMBER_NOT_FOUND",
+      );
+    }
 
-  if (!isPortalManageableMemberRole(target.role)) {
-    throw new PortalServiceAccountError(
-      "Apenas usuarios externos do portal podem ser removidos por esta operacao",
-      403,
-      "MEMBER_NOT_MANAGEABLE",
-    );
-  }
+    if (!isPortalManageableMemberRole(target.role)) {
+      throw new PortalServiceAccountError(
+        "Apenas usuarios externos do portal podem ser removidos por esta operacao",
+        403,
+        "MEMBER_NOT_MANAGEABLE",
+      );
+    }
 
-  const [deleted] = await clientOrg
-    .delete(member)
-    .where(eq(member.id, target.id))
-    .returning();
+    const [deleted] = await clientOrg
+      .delete(member)
+      .where(eq(member.id, target.id))
+      .returning();
 
-  if (!deleted) {
-    throw new PortalServiceAccountError(
-      "Membro nao encontrado",
-      404,
-      "MEMBER_NOT_FOUND",
-    );
-  }
+    if (!deleted) {
+      throw new PortalServiceAccountError(
+        "Membro nao encontrado",
+        404,
+        "MEMBER_NOT_FOUND",
+      );
+    }
 
-  return deleted;
+    return deleted;
+  });
 }

@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import {
   billingDocument,
   calibrationJob,
@@ -37,6 +37,13 @@ import {
 import { formatInstant } from "@calibra-facil/shared/format";
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { getFinancialIntegrationState } from "./billing-readiness";
+
+/**
+ * What the builders read through: an org-bound transaction handle
+ * (`orgDb(org).transaction((tx) => ...)`), so every statement runs under the
+ * organization the caller named for row-level security.
+ */
+type FinancialReader = Pick<OrgExecutor, "select">;
 import {
   evaluateOrderBlockers,
   resolveServiceOrderBillingDocumentLinks,
@@ -233,9 +240,11 @@ function mostRecentDate(dates: Array<Date | null | undefined>) {
 }
 
 async function getActiveFinancialProvider(params: {
+  executor: FinancialReader;
   organizationId: string;
   includeProviderEvidence: boolean;
 }) {
+  const { executor } = params;
   if (!params.includeProviderEvidence) {
     return {
       provider: null,
@@ -246,7 +255,7 @@ async function getActiveFinancialProvider(params: {
     };
   }
 
-  const integrations = await db
+  const integrations = await executor
     .select({
       id: organizationIntegration.id,
       provider: organizationIntegration.provider,
@@ -277,7 +286,7 @@ async function getActiveFinancialProvider(params: {
   const integrationIds = activeIntegrations.map(
     (integration) => integration.id,
   );
-  const cursors = await db
+  const cursors = await executor
     .select({
       integrationId: integrationSyncCursor.integrationId,
       lastSuccessfulPollAt: integrationSyncCursor.lastSuccessfulPollAt,
@@ -311,17 +320,19 @@ function normalizeCustomerTimelineLimit(limit?: number) {
 }
 
 async function getDocumentLinks(params: {
+  executor: FinancialReader;
   organizationId: string;
   integrationIds: string[];
   activeIntegrationId: string | null;
   documentIds: number[];
 }) {
+  const { executor } = params;
   if (!params.integrationIds.length || !params.documentIds.length) return [];
   const integrationIdCondition = params.activeIntegrationId
     ? eq(integrationObjectLink.integrationId, params.activeIntegrationId)
     : inArray(integrationObjectLink.integrationId, params.integrationIds);
 
-  const billingLinks = await db
+  const billingLinks = await executor
     .select({
       target: integrationObjectLink.target,
       localEntityId: integrationObjectLink.localEntityId,
@@ -355,7 +366,7 @@ async function getDocumentLinks(params: {
 
   const maxRemoteIds = Math.max(params.documentIds.length * 2, 1);
   const remoteIds = [...linkedRemoteIds].slice(0, maxRemoteIds);
-  const fiscalLinks = await db
+  const fiscalLinks = await executor
     .select({
       target: integrationObjectLink.target,
       localEntityId: integrationObjectLink.localEntityId,
@@ -437,12 +448,14 @@ function buildCustomerTimelineScopeLabel(scope: FinancialTimelineScope) {
 }
 
 export async function buildServiceOrderFinancialStatus(params: {
+  executor: FinancialReader;
   organizationId: string;
   scope: FinancialTimelineScope;
   serviceOrderId: number;
   includeProviderEvidence: boolean;
 }): Promise<ServiceOrderFinancialStatus | null> {
-  const [order] = await db
+  const { executor } = params;
+  const [order] = await executor
     .select({
       id: serviceOrder.id,
       number: serviceOrder.serviceOrderNumber,
@@ -469,7 +482,7 @@ export async function buildServiceOrderFinancialStatus(params: {
 
   if (!order) return null;
 
-  const certificateLinks = await db
+  const certificateLinks = await executor
     .select({
       jobId: calibrationJob.id,
       jobStatus: calibrationJob.status,
@@ -490,6 +503,7 @@ export async function buildServiceOrderFinancialStatus(params: {
       },
     ],
     params.organizationId,
+    executor,
   );
   // The billing-readiness resolver intentionally ignores VOID documents, so a
   // voided service-order document can return to the ready/blocker path here.
@@ -519,7 +533,7 @@ export async function buildServiceOrderFinancialStatus(params: {
       : "READY";
 
   const documentRows = resolved
-    ? await db
+    ? await executor
         .select()
         .from(billingDocument)
         .where(
@@ -532,14 +546,14 @@ export async function buildServiceOrderFinancialStatus(params: {
     : [];
   const document = documentRows[0] ?? null;
   const installments = document
-    ? await db
+    ? await executor
         .select()
         .from(receivableInstallment)
         .where(eq(receivableInstallment.documentId, document.id))
         .orderBy(receivableInstallment.installmentNumber)
     : [];
   const receipts = installments.length
-    ? await db
+    ? await executor
         .select()
         .from(paymentReceipt)
         .where(
@@ -552,11 +566,12 @@ export async function buildServiceOrderFinancialStatus(params: {
     : [];
 
   const integrationState = params.includeProviderEvidence
-    ? await getFinancialIntegrationState(params.organizationId)
+    ? await getFinancialIntegrationState(params.organizationId, executor)
     : "not_configured";
   const provider = await getActiveFinancialProvider(params);
   const links = document
     ? await getDocumentLinks({
+        executor,
         organizationId: params.organizationId,
         integrationIds: provider.integrationIds,
         activeIntegrationId: provider.activeIntegrationId,
@@ -652,16 +667,18 @@ export async function buildServiceOrderFinancialStatus(params: {
 }
 
 export async function buildCustomerFinancialTimeline(params: {
+  executor: FinancialReader;
   organizationId: string;
   scope: FinancialTimelineScope;
   customerId: number;
   includeProviderEvidence: boolean;
   limit?: number;
 }): Promise<CustomerFinancialTimeline | null> {
+  const { executor } = params;
   const limit = normalizeCustomerTimelineLimit(params.limit);
   const queryLimit = limit + 1;
 
-  const [customerRow] = await db
+  const [customerRow] = await executor
     .select({ id: customer.id, name: customer.name })
     .from(customer)
     .where(
@@ -673,7 +690,7 @@ export async function buildCustomerFinancialTimeline(params: {
     .limit(1);
   if (!customerRow) return null;
 
-  const documentRows = await db
+  const documentRows = await executor
     .select({
       id: billingDocument.id,
       documentNumber: billingDocument.documentNumber,
@@ -712,14 +729,14 @@ export async function buildCustomerFinancialTimeline(params: {
   const documentIds = documents.map((document) => document.id);
   const totalDocumentsFromPage = numberValue(documentRows[0]?.totalDocuments);
   const installments = documentIds.length
-    ? await db
+    ? await executor
         .select()
         .from(receivableInstallment)
         .where(inArray(receivableInstallment.documentId, documentIds))
         .orderBy(receivableInstallment.dueDate)
     : [];
   const receipts = installments.length
-    ? await db
+    ? await executor
         .select()
         .from(paymentReceipt)
         .where(
@@ -731,7 +748,7 @@ export async function buildCustomerFinancialTimeline(params: {
         .orderBy(desc(paymentReceipt.receivedAt))
     : [];
   const [summaryTotals] = isTruncated
-    ? await db
+    ? await executor
         .select({
           totalDocuments: sql<number>`count(distinct ${billingDocument.id})::int`,
           openCents: sql<number>`coalesce(sum(${receivableInstallment.amountCents}) filter (where ${receivableInstallment.status} = 'OPEN'), 0)::int`,
@@ -761,7 +778,7 @@ export async function buildCustomerFinancialTimeline(params: {
     : [];
 
   const integrationState = params.includeProviderEvidence
-    ? await getFinancialIntegrationState(params.organizationId)
+    ? await getFinancialIntegrationState(params.organizationId, executor)
     : "not_configured";
   const provider = await getActiveFinancialProvider(params);
   const hasProviderEvidence =
@@ -772,6 +789,7 @@ export async function buildCustomerFinancialTimeline(params: {
     staleAfterHours: FINANCIAL_FRESHNESS_STALE_AFTER_HOURS,
   });
   const links = await getDocumentLinks({
+    executor,
     organizationId: params.organizationId,
     integrationIds: provider.integrationIds,
     activeIntegrationId: provider.activeIntegrationId,
