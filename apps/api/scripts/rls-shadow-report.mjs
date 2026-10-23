@@ -1,10 +1,13 @@
-// RLS shadow report (roadmap P2-3): which application statements would break if
-// the API connected as `calibra_app` today.
+// RLS shadow report (roadmap P2-3, P2-18b): which application statements would break
+// if the API connected as `calibra_app` today.
 //
-//   pnpm --filter @calibra-facil/api rls:shadow-report [--files a.int.spec.ts,b.int.spec.ts] [--json out.json]
+//   pnpm --filter @calibra-facil/api rls:shadow-report \
+//     [--files src/routes/a.int.spec.ts,src/routes/b.int.spec.ts] \
+//     [--group src/routes/jobs,modules/sync] [--json out.json] [--markdown]
 //
-// It runs the portal and jobs integration specs three times against the ephemeral
-// Postgres of the integration tier (apps/api/vitest.integration.config.ts):
+// It runs every API integration spec (`apps/api/**/*.int.spec.ts`; the include of
+// apps/api/vitest.integration.config.ts is `src/**`, nothing lives elsewhere) three
+// times against the ephemeral Postgres of the integration tier:
 //   1. as the owner (CALIBRA_RLS_SHADOW unset): the baseline, what passes today;
 //   2. with CALIBRA_RLS_SHADOW=1 ("strict"): every HTTP request's database
 //      access runs as `calibra_app` under the `tenant_isolation` policies
@@ -17,7 +20,38 @@
 // (a read that matched nothing, a write refused by WITH CHECK), and every distinct
 // statement that reached a tenant table with no organization set in its
 // transaction (the raw-`db` and non-transaction paths the cutover has to move to
-// `orgDb(...).transaction`). It changes nothing: it only reads test output.
+// `orgDb(...).transaction`). The statements are also grouped by the application
+// module that issued them (the innermost source file that obtained the database
+// handle, outside drizzle, packages/db, lib/org-db.ts and the harness) and by layer
+// (`routes`, `lib`, `middleware`, `modules/jobs`). The request path is recorded too
+// (`--json-full`), but specs mount a router at `/`, so it is no usable group. It
+// changes nothing: it only reads test output.
+//
+// Narrowing: `--files` lists exact spec paths (relative to apps/api); `--group` keeps
+// the specs whose path starts with one of the comma-separated prefixes (`src/` is
+// optional: `routes/jobs`, `modules`, `lib/org-db`). Both given: `--files` wins.
+//
+// `--json <file>` writes the summary a later slice diffs against
+// docs/architecture/rls-shadow-baseline.json: counts per spec / module / layer
+// (distinct statements, runs, tests broken), no statement text. `--json-full <file>`
+// adds the per-spec rows and the full statement list; `--from-full <file>` re-slices
+// such a file (with --files/--group) without running vitest. `--markdown` also prints
+// the module and layer tables as markdown. The default set leaves out the self-tests
+// of the tenant SQL guard (they need the guard the shadow passes switch off).
+//
+// Runtime: three vitest runs with --maxWorkers=2 over ~115 specs, about 35 minutes
+// per pass on a 16-core machine (the figure of the last full run is in
+// docs/architecture/org-bound-db.md, "Baseline"); a spec group takes the time of its
+// slowest specs plus about 40 seconds of container and schema start-up per pass.
+// Use --group while migrating one slice.
+//
+// apps/worker integration tier: not included. It runs serially against one shared
+// database with no per-worker clone, handlers (queue/cron/scheduled) are invoked
+// directly rather than through `app.request(...)`, and the harness scopes the
+// calibra_app pool to the async context of an HTTP request, so the worker specs
+// would stay entirely on the owner connection and report nothing. Covering it needs
+// its own entry point in the worker's test setup (a follow-up, with the worker
+// cutover).
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -29,6 +63,15 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  buildSpecRows,
+  groupTable,
+  layerOf,
+  matchesGroup,
+  parseViolations,
+  sortedGroups,
+  summarizeGroups,
+} from "../test/integration/rls-shadow-report-lib.ts";
 
 const apiDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -37,22 +80,46 @@ function argument(name) {
   return index === -1 ? undefined : process.argv[index + 1];
 }
 
-function defaultFiles() {
-  const routes = path.join(apiDir, "src/routes");
-  return readdirSync(routes)
-    .filter(
-      (name) =>
-        name.endsWith(".int.spec.ts") &&
-        (name.startsWith("portal") || name.startsWith("jobs")),
-    )
-    .toSorted()
-    .map((name) => `src/routes/${name}`);
+function listSpecs(dir) {
+  const found = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === "node_modules") continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) found.push(...listSpecs(full));
+    else if (entry.name.endsWith(".int.spec.ts")) {
+      found.push(path.relative(apiDir, full));
+    }
+  }
+  return found;
 }
 
-const files = argument("files")?.split(",") ?? defaultFiles();
+// Self-tests of the owner-only tenant SQL guard: they need the guard on, which the
+// shadow passes switch off (it would fail every request first), so they only
+// produce noise here. `--files` can still name them.
+const HARNESS_SELF_TESTS = ["src/lib/__tests__/tenant-sql-guard.int.spec.ts"];
+
+function selectedFiles() {
+  const explicit = argument("files");
+  if (explicit) return explicit.split(",").filter(Boolean);
+  const prefixes = (argument("group") ?? "").split(",").filter(Boolean);
+  return listSpecs(path.join(apiDir, "src"))
+    .filter(
+      (file) =>
+        matchesGroup(file, prefixes) && !HARNESS_SELF_TESTS.includes(file),
+    )
+    .toSorted();
+}
+
+const files = selectedFiles();
+if (files.length === 0) {
+  throw new Error("[rls-shadow] no integration spec matches --files/--group");
+}
 const work = mkdtempSync(path.join(tmpdir(), "rls-shadow-"));
+const startedAt = Date.now();
+const reuseFull = argument("from-full");
 
 function runVitest(label, extraEnv, outputFile) {
+  const passStart = Date.now();
   console.error(`[rls-shadow] ${label}: ${files.length} spec files`);
   spawnSync(
     "pnpm",
@@ -78,6 +145,9 @@ function runVitest(label, extraEnv, outputFile) {
   if (!existsSync(outputFile)) {
     throw new Error(`[rls-shadow] ${label}: vitest wrote no result`);
   }
+  console.error(
+    `[rls-shadow] ${label}: done in ${Math.round((Date.now() - passStart) / 1000)}s`,
+  );
   return JSON.parse(readFileSync(outputFile, "utf8"));
 }
 
@@ -101,99 +171,68 @@ function indexResults(report) {
   return byFile;
 }
 
-const baseline = indexResults(
-  runVitest("baseline (owner)", {}, path.join(work, "owner.json")),
-);
-const shadow = indexResults(
-  runVitest(
-    "strict (calibra_app, fail closed)",
-    { CALIBRA_RLS_SHADOW: "1", TENANT_SQL_GUARD: "off" },
-    path.join(work, "strict.json"),
-  ),
-);
-// The strict run stops every request at its first unscoped statement; the audit
-// run lets such statements through (still warned about), so it sees all of them.
-const violationsFile = path.join(work, "violations.jsonl");
-writeFileSync(violationsFile, "");
-runVitest(
-  "audit (calibra_app, unscoped statements allowed and recorded)",
-  {
-    CALIBRA_RLS_SHADOW: "1",
-    CALIBRA_RLS_SHADOW_MODE: "audit",
-    CALIBRA_RLS_SHADOW_REPORT: violationsFile,
-    TENANT_SQL_GUARD: "off",
-  },
-  path.join(work, "audit.json"),
-);
-
-const statements = new Map();
-for (const line of readFileSync(violationsFile, "utf8").split("\n")) {
-  if (!line.trim()) continue;
-  const entry = JSON.parse(line);
-  if (entry.type !== "no-organization") continue;
-  const file = path.relative(apiDir, entry.file);
-  const statement = entry.statement.replace(/\s+/g, " ").trim();
-  const key = `${file}\u0000${statement}`;
-  const known = statements.get(key) ?? { file, statement, count: 0, tests: [] };
-  known.count += 1;
-  if (!known.tests.includes(entry.test)) known.tests.push(entry.test);
-  statements.set(key, known);
-}
-
-const rows = [];
-for (const file of files) {
-  const owner = baseline.get(file);
-  const app = shadow.get(file);
-  const ownerTests = owner?.tests ?? new Map();
-  const appTests = app?.tests ?? new Map();
-  let total = 0;
-  let ownerFailing = 0;
-  let appBroken = 0;
-  const broken = [];
-  for (const [name, result] of ownerTests) {
-    total += 1;
-    if (result.status !== "passed") {
-      ownerFailing += 1;
-      continue;
-    }
-    const seen = appTests.get(name);
-    if (seen && seen.status === "passed") continue;
-    appBroken += 1;
-    const message = (seen?.messages ?? []).join(" ");
-    const reason = /row-level security|42501/.test(message)
-      ? "write refused by WITH CHECK"
-      : /Failed query|PostgresError|DrizzleQueryError/.test(message)
-        ? "statement error"
-        : seen
-          ? "assertion failed (rows missing under RLS)"
-          : "test did not run";
-    broken.push({ name, reason });
-  }
-  const unscoped = [...statements.values()].filter(
-    (entry) => entry.file === file,
+function runPasses() {
+  const baseline = indexResults(
+    runVitest("baseline (owner)", {}, path.join(work, "owner.json")),
   );
-  rows.push({
-    file,
-    total,
-    ownerFailing,
-    appBroken,
-    broken,
-    unscopedStatements: unscoped.length,
-    unscopedExecutions: unscoped.reduce((sum, entry) => sum + entry.count, 0),
-  });
+  const shadow = indexResults(
+    runVitest(
+      "strict (calibra_app, fail closed)",
+      { CALIBRA_RLS_SHADOW: "1", TENANT_SQL_GUARD: "off" },
+      path.join(work, "strict.json"),
+    ),
+  );
+  // The strict run stops every request at its first unscoped statement; the audit
+  // run lets such statements through (still warned about), so it sees all of them.
+  const violationsFile = path.join(work, "violations.jsonl");
+  writeFileSync(violationsFile, "");
+  runVitest(
+    "audit (calibra_app, unscoped statements allowed and recorded)",
+    {
+      CALIBRA_RLS_SHADOW: "1",
+      CALIBRA_RLS_SHADOW_MODE: "audit",
+      CALIBRA_RLS_SHADOW_REPORT: violationsFile,
+      TENANT_SQL_GUARD: "off",
+    },
+    path.join(work, "audit.json"),
+  );
+  const parsed = parseViolations(readFileSync(violationsFile, "utf8"), (file) =>
+    path.relative(apiDir, file),
+  );
+  return { rows: buildSpecRows(files, baseline, shadow, parsed), parsed };
 }
+
+/** Re-slice a previous `--json-full` (to the selected specs) without running vitest. */
+function reuseResults(file) {
+  const previous = JSON.parse(readFileSync(file, "utf8"));
+  const wanted = new Set(files);
+  return {
+    rows: previous.rows.filter((row) => wanted.has(row.file)),
+    parsed: previous.statements.filter((entry) => wanted.has(entry.file)),
+  };
+}
+
+const { rows, parsed: statements } = reuseFull
+  ? reuseResults(reuseFull)
+  : runPasses();
+const elapsedSeconds = Math.round((Date.now() - startedAt) / 1000);
+const byModule = summarizeGroups(statements, rows, (entry) => entry.module);
+const byLayer = summarizeGroups(statements, rows, (entry) =>
+  layerOf(entry.module),
+);
+const bySpec = summarizeGroups(statements, rows, (entry) => entry.file);
 
 const pad = (value, width) => String(value).padEnd(width);
 console.log(
   "RLS shadow report: specs run as calibra_app (strict) vs as the owner\n",
 );
 console.log(
-  `${pad("spec file", 52)}${pad("tests", 7)}${pad("owner-fail", 12)}${pad("break under RLS", 17)}unscoped statements (audit, distinct/runs)`,
+  `${pad("spec file", 58)}${pad("tests", 7)}${pad("owner-fail", 12)}${pad("break under RLS", 17)}unscoped statements (audit, distinct/runs)`,
 );
 let totals = { total: 0, ownerFailing: 0, appBroken: 0, distinct: 0, runs: 0 };
 for (const row of rows) {
   console.log(
-    `${pad(row.file, 52)}${pad(row.total, 7)}${pad(row.ownerFailing, 12)}${pad(row.appBroken, 17)}${row.unscopedStatements}/${row.unscopedExecutions}`,
+    `${pad(row.file, 58)}${pad(row.total, 7)}${pad(row.ownerFailing, 12)}${pad(row.appBroken, 17)}${row.unscopedStatements}/${row.unscopedExecutions}${row.suiteFailure ? "  [suite failed to load]" : ""}`,
   );
   totals = {
     total: totals.total + row.total,
@@ -204,8 +243,23 @@ for (const row of rows) {
   };
 }
 console.log(
-  `${pad("TOTAL", 52)}${pad(totals.total, 7)}${pad(totals.ownerFailing, 12)}${pad(totals.appBroken, 17)}${totals.distinct}/${totals.runs}`,
+  `${pad("TOTAL", 58)}${pad(totals.total, 7)}${pad(totals.ownerFailing, 12)}${pad(totals.appBroken, 17)}${totals.distinct}/${totals.runs}`,
 );
+
+console.log(
+  "\nUnscoped statements by application module (distinct/runs/tests broken):",
+);
+for (const [group, counts] of sortedGroups(byModule)) {
+  console.log(
+    `  ${pad(group, 70)}${counts.distinctStatements}/${counts.runs}/${counts.testsBroken}`,
+  );
+}
+console.log("\nUnscoped statements by layer (distinct/runs/tests broken):");
+for (const [group, counts] of sortedGroups(byLayer)) {
+  console.log(
+    `  ${pad(group, 40)}${counts.distinctStatements}/${counts.runs}/${counts.testsBroken}`,
+  );
+}
 
 console.log("\nTests that pass as the owner and fail as calibra_app:");
 for (const row of rows) {
@@ -215,20 +269,51 @@ for (const row of rows) {
 }
 
 console.log(
-  "\nStatements that reached a tenant table with no organization set (distinct, by spec file):",
+  "\nStatements that reached a tenant table with no organization set (by spec file, module):",
 );
-for (const entry of [...statements.values()].toSorted(
+for (const entry of statements.toSorted(
   (a, b) => a.file.localeCompare(b.file) || b.count - a.count,
 )) {
   console.log(
-    `  ${entry.file} x${entry.count}: ${entry.statement.slice(0, 220)}`,
+    `  ${entry.file} [${entry.module}] x${entry.count}: ${entry.statement.slice(0, 220)}`,
   );
+}
+
+console.error(`[rls-shadow] total ${elapsedSeconds}s`);
+
+function summary() {
+  return {
+    generatedBy: "pnpm --filter @calibra-facil/api rls:shadow-report --json",
+    specFiles: files.length,
+    totals: {
+      tests: totals.total,
+      ownerFailing: totals.ownerFailing,
+      testsBroken: totals.appBroken,
+      distinctStatements: totals.distinct,
+      runs: totals.runs,
+    },
+    bySpec: Object.fromEntries(sortedGroups(bySpec)),
+    byModule: Object.fromEntries(sortedGroups(byModule)),
+    byLayer: Object.fromEntries(sortedGroups(byLayer)),
+    brokenTests: rows.flatMap((row) =>
+      row.broken.map((entry) => ({ file: row.file, ...entry })),
+    ),
+  };
 }
 
 const jsonPath = argument("json");
 if (jsonPath) {
+  writeFileSync(jsonPath, `${JSON.stringify(summary(), null, 2)}\n`);
+}
+const fullPath = argument("json-full");
+if (fullPath) {
   writeFileSync(
-    jsonPath,
-    JSON.stringify({ rows, statements: [...statements.values()] }, null, 2),
+    fullPath,
+    `${JSON.stringify({ ...summary(), rows, statements }, null, 2)}\n`,
   );
+}
+// Markdown tables for docs/architecture/org-bound-db.md.
+if (process.argv.includes("--markdown")) {
+  console.log(`\n${groupTable(byModule, "application module")}`);
+  console.log(`\n${groupTable(byLayer, "layer")}`);
 }

@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { appendFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { expect } from "vitest";
 import {
   createRoleDatabase,
@@ -7,6 +8,11 @@ import {
 } from "@calibra-facil/db/role-connection";
 import { POLICY_NAME, rlsTables } from "@calibra-facil/db/rls-sql";
 import { assertHarnessWorkerDb } from "./guard";
+import {
+  normalizeStatement,
+  requestPathOf,
+  sourceModuleFromStack,
+} from "./rls-shadow-report-lib";
 
 // RLS "violation report" mode of the integration tier (roadmap P2-3), switched on
 // by CALIBRA_RLS_SHADOW=1 (see apps/api/scripts/rls-shadow-report.mjs). It never
@@ -24,13 +30,45 @@ import { assertHarnessWorkerDb } from "./guard";
 // carrying `current_query()`, which this module records per spec and test. A write
 // refused by WITH CHECK is an error and shows as a failing test.
 //
+// Attribution: each request carries its path, and the application module that
+// obtained the database handle (innermost stack frame outside drizzle, packages/db,
+// lib/org-db.ts and the harness) is captured when the handle is accessed; the
+// statement text the pool logs is joined to the server's warning, so every
+// unscoped statement is reported with the module and request path that issued it.
+// Concurrent statements of one text in one process (a Promise.all race) may be
+// attributed to the latest issuer.
+//
 // Limits: a statement on an EMPTY table does not evaluate the policy, so it is not
 // reported; work started outside `request()` (a spec calling a lib function
 // directly, a cron/queue handler) stays on the owner connection.
 
 const MARKER = "calibra-rls: no organization set | ";
 
-type Store = { readonly app: true };
+type Store = {
+  readonly app: true;
+  /** Pathname of the HTTP request being handled. */
+  readonly path: string;
+  /** Application module that obtained the handle, once known. */
+  readonly source: string | null;
+};
+const REPO_ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
+
+/** Latest issuer of each statement text, to attribute the server's warning. */
+const origins = new Map<string, Store>();
+
+function tagAccess(): void {
+  const store = context.getStore();
+  if (!store) return;
+  const holder: { stack?: string } = {};
+  const limit = Error.stackTraceLimit;
+  Error.stackTraceLimit = 14;
+  Error.captureStackTrace(holder);
+  Error.stackTraceLimit = limit;
+  const source = sourceModuleFromStack(holder.stack ?? "", REPO_ROOT);
+  // drizzle re-enters the proxy from microtasks with no application frame: keep
+  // the tag the original call site set.
+  if (source) context.enterWith({ ...store, source });
+}
 const context = new AsyncLocalStorage<Store>();
 
 export function shadowModeEnabled(): boolean {
@@ -98,8 +136,9 @@ export function shadowHono<
       const original: unknown = Reflect.get(this, "request");
       if (typeof original !== "function") return;
       Reflect.set(this, "request", (...request: unknown[]) =>
-        context.run({ app: true }, () =>
-          Reflect.apply(original, this, request),
+        context.run(
+          { app: true, path: requestPathOf(request[0]), source: null },
+          () => Reflect.apply(original, this, request),
         ),
       );
     }
@@ -131,12 +170,20 @@ export function shadowDatabase<
       onNotice: (message) => {
         if (!message.startsWith(MARKER)) return;
         const state = expect.getState();
+        const statement = message.slice(MARKER.length);
+        const origin = origins.get(normalizeStatement(statement));
         record({
           type: "no-organization",
           file: state.testPath ?? "(unknown)",
           test: state.currentTestName ?? "(outside a test)",
-          statement: message.slice(MARKER.length),
+          statement,
+          path: origin?.path,
+          source: origin?.source ?? undefined,
         });
+      },
+      onQuery: (query) => {
+        const store = context.getStore();
+        if (store) origins.set(normalizeStatement(query), store);
       },
     });
     return appDatabase;
@@ -144,6 +191,7 @@ export function shadowDatabase<
 
   const db = new Proxy(actual.db, {
     get(_, property) {
+      tagAccess();
       const target = context.getStore() ? appPool().db : actual.db;
       return Reflect.get(target, property);
     },
@@ -151,7 +199,10 @@ export function shadowDatabase<
   return {
     ...actual,
     db,
-    getDb: () => (context.getStore() ? appPool().db : actual.getDb()),
+    getDb: () => {
+      tagAccess();
+      return context.getStore() ? appPool().db : actual.getDb();
+    },
   };
 }
 

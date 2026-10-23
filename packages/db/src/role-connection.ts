@@ -29,10 +29,13 @@ export function createRoleDatabase(
     max?: number;
     /** Receives the message of every NOTICE/WARNING the server sends. */
     onNotice?: (message: string) => void;
+    /** Receives every statement the pool executes (drizzle's logger hook). */
+    onQuery?: (query: string) => void;
   } = {},
 ): RoleDatabase {
   const role = options.role === undefined ? APP_ROLE : options.role;
   const onNotice = options.onNotice;
+  const onQuery = options.onQuery;
   const client = postgres(connectionString, {
     max: options.max ?? 1,
     fetch_types: false,
@@ -44,7 +47,18 @@ export function createRoleDatabase(
     ...(role === null ? {} : { connection: { options: `-c role=${role}` } }),
   });
   return {
-    db: drizzle(client, { schema }),
+    db: drizzle(client, {
+      schema,
+      ...(onQuery
+        ? {
+            logger: {
+              logQuery(query: string) {
+                onQuery(query);
+              },
+            },
+          }
+        : {}),
+    }),
     close: () => client.end({ timeout: 5 }),
   };
 }
