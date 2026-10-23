@@ -39,7 +39,7 @@ const config: QueueRuntimeConfig = failFast(() => {
   return readQueueConfig();
 });
 // One query: a role that row-level security binds is refused in shadow mode
-// (migration 0121; DEPLOYMENT.md, "Row-level security").
+// (migration 0123; DEPLOYMENT.md, "Row-level security").
 await failFastAsync(() => assertRlsStartup());
 const port = readRuntimeConfig().listenPort ?? 8080;
 

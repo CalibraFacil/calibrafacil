@@ -18,7 +18,7 @@ function read(path: string): string {
 }
 
 const MIGRATIONS_DIR = new URL("../drizzle/", import.meta.url);
-const MIGRATION = "0121_rls_shadow_mode.sql";
+const MIGRATION = "0123_rls_shadow_mode.sql";
 
 /** The block between the generated markers of `text`, markers included. */
 function blockOf(text: string): string | null {

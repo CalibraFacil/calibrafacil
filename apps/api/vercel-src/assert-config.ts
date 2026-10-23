@@ -8,5 +8,5 @@ import { assertRlsStartup } from "@calibra-facil/db/rls-startup";
 loadApiConfig();
 // The same start-up check as the Bun entry: with DATABASE_RLS_MODE=shadow (the
 // default) a cold start as a role that row-level security binds fails here, not
-// with empty results later (migration 0121; DEPLOYMENT.md, "Row-level security").
+// with empty results later (migration 0123; DEPLOYMENT.md, "Row-level security").
 await assertRlsStartup();

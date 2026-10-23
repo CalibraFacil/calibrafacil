@@ -57,7 +57,7 @@ describe("rlsStartupProblem", () => {
     expect(rlsStartupProblem(APP_MEMBER, "enforced")).toBeNull();
   });
 
-  it("REQ-RLS-2: before migration 0121 (no table has RLS enabled) the check passes in either mode", () => {
+  it("REQ-RLS-2: before migration 0123 (no table has RLS enabled) the check passes in either mode", () => {
     const before = { ...APP_MEMBER, rlsEnabled: false, subjectToRls: false };
     expect(rlsStartupProblem(before, "shadow")).toBeNull();
     expect(rlsStartupProblem(before, "enforced")).toBeNull();

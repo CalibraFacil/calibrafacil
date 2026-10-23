@@ -103,7 +103,7 @@ await loadLocalEnv();
 // here with one message that lists every problem.
 failFast(() => loadWorkerConfig());
 // One query: a role that row-level security binds is refused in shadow mode
-// (migration 0121; DEPLOYMENT.md, "Row-level security").
+// (migration 0123; DEPLOYMENT.md, "Row-level security").
 await failFastAsync(() => assertRlsStartup());
 
 const config = readQueueConfig();

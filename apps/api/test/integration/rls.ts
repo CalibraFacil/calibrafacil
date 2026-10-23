@@ -8,7 +8,7 @@ import { assertHarnessWorkerDb } from "./guard";
 // Shadow tier of row-level security (roadmap P2-3). The test Postgres user is a
 // superuser, which no policy binds; a connection that starts with
 // `role = calibra_app` is an ordinary role subject to the grants and the
-// `tenant_isolation` policies of migration 0121. Seed with the global `db` (the
+// `tenant_isolation` policies of migration 0123. Seed with the global `db` (the
 // owner: every row visible and writable), exercise with `openAppRoleDb()`.
 
 const open: RoleDatabase[] = [];

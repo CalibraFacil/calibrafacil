@@ -82,7 +82,7 @@ BEGIN
     WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r'
       AND NOT pg_has_role(current_user, c.relowner, 'USAGE');
   IF foreign_tables > 0 THEN
-    RAISE EXCEPTION 'calibra: migration 0121 is run as %, which is neither the owner of the tenant tables nor superuser/BYPASSRLS, so row-level security would bind it (and the API when it shares this DATABASE_URL). Run migrations as the owner of the tables; see DEPLOYMENT.md, "Row-level security".', current_user
+    RAISE EXCEPTION 'calibra: migration 0123 is run as %, which is neither the owner of the tenant tables nor superuser/BYPASSRLS, so row-level security would bind it (and the API when it shares this DATABASE_URL). Run migrations as the owner of the tables; see DEPLOYMENT.md, "Row-level security".', current_user
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 END
@@ -684,6 +684,16 @@ CREATE POLICY tenant_isolation ON public."supplier" AS PERMISSIVE FOR ALL TO cal
 ALTER TABLE public."sync_applied_event" ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON public."sync_applied_event";
 CREATE POLICY tenant_isolation ON public."sync_applied_event" AS PERMISSIVE FOR ALL TO calibra_app
+  USING ("organization_id" = NULLIF(current_setting('calibra.organization_id', true), '')::text)
+  WITH CHECK ("organization_id" = NULLIF(current_setting('calibra.organization_id', true), '')::text);
+ALTER TABLE public."sync_change_log" ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON public."sync_change_log";
+CREATE POLICY tenant_isolation ON public."sync_change_log" AS PERMISSIVE FOR ALL TO calibra_app
+  USING ("organization_id" = NULLIF(current_setting('calibra.organization_id', true), '')::text)
+  WITH CHECK ("organization_id" = NULLIF(current_setting('calibra.organization_id', true), '')::text);
+ALTER TABLE public."sync_change_log_purge" ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON public."sync_change_log_purge";
+CREATE POLICY tenant_isolation ON public."sync_change_log_purge" AS PERMISSIVE FOR ALL TO calibra_app
   USING ("organization_id" = NULLIF(current_setting('calibra.organization_id', true), '')::text)
   WITH CHECK ("organization_id" = NULLIF(current_setting('calibra.organization_id', true), '')::text);
 ALTER TABLE public."training_record" ENABLE ROW LEVEL SECURITY;

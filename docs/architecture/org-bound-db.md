@@ -73,7 +73,7 @@ the same change that migrates a handler (delete the entry at zero). The portal r
 
 ## Row-level security (shadow mode, P2-3)
 
-Migration 0121 enables RLS (not forced) on every tenant table with the policy `tenant_isolation` for the
+Migration 0123 enables RLS (not forced) on every tenant table with the policy `tenant_isolation` for the
 role `calibra_app`: `USING` / `WITH CHECK` `<org column> = NULLIF(current_setting('calibra.organization_id', true), '')::<type>`.
 The table owner is exempt, so nothing changes for the owner connection production uses today; see
 [DEPLOYMENT.md](../../DEPLOYMENT.md) for the role split the owner runs later. The SQL is generated from
@@ -102,5 +102,5 @@ added or removed without a migration.
   breaks, by file, and every statement that reached a tenant table without an organization.
 - **Start-up check.** `DATABASE_RLS_MODE` (`shadow` by default) makes the API and the worker run one catalog
   query at start-up (`packages/db/src/rls-startup.ts`) and refuse to start as a role the policies bind (not the
-  table owner, superuser or BYPASSRLS). The role split sets `enforced` for the API. Migration 0121 applies
+  table owner, superuser or BYPASSRLS). The role split sets `enforced` for the API. Migration 0123 applies
   the same test to the role that runs it.

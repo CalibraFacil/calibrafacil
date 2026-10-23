@@ -9,7 +9,8 @@ import {
   createRoleDatabase,
   type RoleDatabase,
 } from "@calibra-facil/db/role-connection";
-import { customer } from "@calibra-facil/db/schema";
+import { assetType, customer, organization } from "@calibra-facil/db/schema";
+import { setTransactionOrganization } from "@calibra-facil/db/for-org";
 import { truncateAll } from "../../test/integration/db";
 import { seedTenant } from "../../test/integration/tenancy-fixture";
 import { sqlStateOf } from "../../test/integration/rls";
@@ -28,7 +29,7 @@ const ROLES = [OWNER, BYPASS, MEMBER];
 
 const MIGRATION = readFileSync(
   new URL(
-    "../../../../packages/db/drizzle/0121_rls_shadow_mode.sql",
+    "../../../../packages/db/drizzle/0123_rls_shadow_mode.sql",
     import.meta.url,
   ),
   "utf8",
@@ -148,6 +149,87 @@ describe("row-level security: who the policies bind", () => {
     expect(updated).toHaveLength(2);
   });
 
+  describe("with the sync change log (migration 0122) next to the policies", () => {
+    async function newClient(id: string): Promise<void> {
+      await db.insert(organization).values({
+        id,
+        name: id,
+        slug: id,
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        type: "CLIENT",
+        status: "ACTIVE",
+      });
+    }
+
+    async function logged(lab: string): Promise<number> {
+      const rows = rowsOf(
+        await db.execute(
+          sql`select count(*)::int as count from sync_change_log where organization_id = ${lab} and entity_type = 'customer'`,
+        ),
+      );
+      return Number(rows[0]?.count);
+    }
+
+    it("REQ-RLS-1: sync_change_log is a tenant table with the tenant_isolation policy, and the drift list carries it", async () => {
+      expect(rlsTables().map((entry) => entry.table)).toContain(
+        "sync_change_log",
+      );
+      const policies = rowsOf(
+        await db.execute(
+          sql`select roles::text as roles from pg_policies where schemaname = 'public' and tablename = 'sync_change_log' and policyname = 'tenant_isolation'`,
+        ),
+      );
+      expect(policies).toEqual([{ roles: "{calibra_app}" }]);
+    });
+
+    it("REQ-RLS-2 [HIGH RISK]: as the non-superuser owner the change-log trigger still appends an entry for the written row", async () => {
+      await newClient("client-trg-owner");
+      const before = await logged("lab-a");
+      const owner = connectAs(OWNER);
+      await owner.db.insert(customer).values({
+        labOrganizationId: "lab-a",
+        authOrganizationId: "client-trg-owner",
+        name: "logged by the owner",
+      });
+      expect(await logged("lab-a")).toBe(before + 1);
+    });
+
+    it("REQ-RLS-3: as calibra_app with the organization set, the trigger appends the entry for the own laboratory", async () => {
+      await newClient("client-trg-app");
+      const before = await logged("lab-a");
+      const member = connectAs(MEMBER);
+      await member.db.transaction(async (tx) => {
+        await setTransactionOrganization(tx, "lab-a");
+        await tx.insert(customer).values({
+          labOrganizationId: "lab-a",
+          authOrganizationId: "client-trg-app",
+          name: "logged by the app role",
+        });
+      });
+      expect(await logged("lab-a")).toBe(before + 1);
+    });
+
+    it("REQ-RLS-3: a write of the GLOBAL asset_type catalog fans an entry out to every laboratory, which one laboratory's setting refuses (a cutover point: such writes keep the owner connection)", async () => {
+      const member = connectAs(MEMBER);
+      const write = member.db.transaction(async (tx) => {
+        await setTransactionOrganization(tx, "lab-a");
+        await tx.insert(assetType).values({
+          name: "Tipo novo",
+          slug: "tipo-novo",
+          definition: [],
+        });
+      });
+      expect(await sqlStateOf(write)).toBe("42501");
+      // The owner is not bound: the same write passes.
+      const owner = connectAs(OWNER);
+      await owner.db.insert(assetType).values({
+        name: "Tipo novo",
+        slug: "tipo-novo",
+        definition: [],
+      });
+    });
+  });
+
   it("REQ-RLS-2: a BYPASSRLS role sees both laboratories, a calibra_app member sees none", async () => {
     expect(await countCustomers(connectAs(BYPASS))).toBe(2);
     expect(await countCustomers(connectAs(MEMBER))).toBe(0);
@@ -210,7 +292,7 @@ describe("row-level security: who the policies bind", () => {
       }
     });
 
-    it("REQ-RLS-2: before migration 0121 (RLS not enabled on any table) a calibra_app member passes in shadow mode", async () => {
+    it("REQ-RLS-2: before migration 0123 (RLS not enabled on any table) a calibra_app member passes in shadow mode", async () => {
       const tables = rlsTables();
       for (const { table } of tables) {
         // oxlint-disable-next-line eslint/no-await-in-loop -- DDL, one at a time.
@@ -235,7 +317,7 @@ describe("row-level security: who the policies bind", () => {
     });
   });
 
-  describe("migration 0121 guards", () => {
+  describe("migration 0123 guards", () => {
     /** Runs the migration file in a transaction as `role` (SET LOCAL ROLE), rolled back after. */
     async function runMigrationAs(
       role: string,

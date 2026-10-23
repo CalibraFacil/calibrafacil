@@ -1,25 +1,34 @@
 import {
   SYNC_PROTOCOL_VERSION,
+  SYNC_PULL_PROTOCOL_PARAM,
   desktopUpdateRequiredMessage,
+  syncBootstrapPageResponseSchema,
   syncConflictResolutionResponseSchema,
+  syncResyncRequiredResponseSchema,
+  syncProtocolUnsupportedResponseSchema,
   syncUpdateRequiredResponseSchema,
   syncPullResponseSchema,
   syncBootstrapResponseSchema,
   syncPushResponseSchema,
   type SyncPushRequest,
+  type SyncResyncRequiredResponse,
   type SyncStatusSnapshot,
 } from "@calibra-facil/contracts";
 import {
   applySyncPullResponse,
   applySyncBootstrap,
+  applySyncBootstrapPage,
   applySyncPushResult,
   countDeadOutbox,
   countDeferredOutbox,
   countOpenSyncConflicts,
   countPendingOutbox,
   countPendingOutboxForOtherUsers,
+  discardBootstrapProgress,
+  getBootstrapPageToken,
   getSyncCursor,
   getSyncCursorUpdatedAt,
+  hasIncompleteBootstrap,
   listPendingOutboxEvents,
   releaseSettledSkippedRows,
   markOutboxEventsFailedForRetry,
@@ -154,28 +163,9 @@ export function createLocalSyncRuntime(
         includeDeferred: true,
       });
 
-      const bootstrapUrl = new URL("/api/sync/bootstrap", config.cloudApiUrl);
-      const headers = new Headers({
-        "Content-Type": "application/json",
-      });
-
-      applyCloudAuthHeaders(config, headers);
-
-      const response = await fetchImpl(bootstrapUrl, {
-        method: "POST",
-        headers,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Cloud bootstrap failed with HTTP ${response.status}`);
-      }
-
-      const bootstrap = syncBootstrapResponseSchema.parse(
-        await response.json(),
-      );
       const syncedAt = new Date().toISOString();
-      applySyncBootstrap(database, bootstrap, syncedAt);
-      await pullCloudChanges(config, database, fetchImpl);
+      await bootstrapFromCloud(config, database, fetchImpl, syncedAt);
+      await pullCloudChangesOrBootstrap(config, database, fetchImpl);
 
       status = {
         ...withLocalCounts(config, database, status),
@@ -214,7 +204,12 @@ export function createLocalSyncRuntime(
     // establish a usable cache. This happens for real — an authenticated
     // desktop whose local data was reset or newly partitioned while the cloud
     // session persisted. Fall back to the full bootstrap rather than looping.
-    if (config.syncEnabled && config.cloudApiUrl && !hasBootstrapSnapshot()) {
+    if (
+      config.syncEnabled &&
+      config.cloudApiUrl &&
+      (!hasBootstrapSnapshot() || hasIncompleteBootstrap(database))
+    ) {
+      // A bootstrap that was interrupted between two pages is resumed, not pulled over.
       return runInitialSyncOnce();
     }
 
@@ -254,7 +249,7 @@ export function createLocalSyncRuntime(
       await pushPendingOutbox(config, database, fetchImpl, {
         includeDeferred: pushOptions.includeDeferred === true,
       });
-      await pullCloudChanges(config, database, fetchImpl);
+      await pullCloudChangesOrBootstrap(config, database, fetchImpl);
       status = {
         ...withLocalCounts(config, database, status),
         state:
@@ -298,6 +293,25 @@ export function createLocalSyncRuntime(
 }
 
 const MAX_PULL_PAGES = 200;
+
+/** The push protocol an older cloud told this process it speaks, per cloud URL. */
+const cloudPushProtocol = new Map<string, number>();
+/** A bootstrap page is at most 1000 rows (SYNC_BOOTSTRAP_MAX_PAGE_SIZE): 100k pages is a loop, not a laboratory. */
+const MAX_BOOTSTRAP_PAGES = 100_000;
+
+/**
+ * The cloud cannot serve this desktop's pull cursor (SYNC_RESYNC_REQUIRED): there is
+ * none, it is of the `updatedAt` protocols, or it is older than the change log is kept.
+ */
+export class ResyncRequiredError extends Error {
+  readonly reason: SyncResyncRequiredResponse["reason"];
+
+  constructor(reason: SyncResyncRequiredResponse["reason"]) {
+    super(`Cloud asked for a new bootstrap (${reason})`);
+    this.name = "ResyncRequiredError";
+    this.reason = reason;
+  }
+}
 
 function createSyncRunId(kind: "initial" | "push") {
   return `${kind}-${randomUUID()}`;
@@ -356,6 +370,103 @@ export async function notifyCloudConflictResolution(
   }
 }
 
+/**
+ * The initial sync: the paged bootstrap of protocol 3, resuming at the page after the
+ * last one that was applied when a previous run was cut short (the token is stored with
+ * the page's rows, atomically). A cloud that predates protocol 3 ignores the request's
+ * `protocolVersion` and answers the whole bootstrap at once, which is applied as before.
+ */
+async function bootstrapFromCloud(
+  config: LocalServerConfig,
+  database: LocalDatabase,
+  fetchImpl: typeof fetch,
+  syncedAt: string,
+) {
+  if (!config.cloudApiUrl) {
+    throw new Error("Cloud API URL is not configured for local sync");
+  }
+  const bootstrapUrl = new URL("/api/sync/bootstrap", config.cloudApiUrl);
+
+  let token = getBootstrapPageToken(database);
+  let discardedStaleToken = false;
+  for (let page = 0; page < MAX_BOOTSTRAP_PAGES; page += 1) {
+    const headers = new Headers({ "Content-Type": "application/json" });
+    applyCloudAuthHeaders(config, headers);
+
+    const response = await fetchImpl(bootstrapUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        protocolVersion: SYNC_PROTOCOL_VERSION,
+        pageToken: token,
+      }),
+    });
+
+    if (response.status === 400 && token !== null && !discardedStaleToken) {
+      // The cloud no longer accepts the token (it was cut by another build): start over.
+      discardBootstrapProgress(database);
+      token = null;
+      discardedStaleToken = true;
+      continue;
+    }
+    if (!response.ok) {
+      throw new Error(`Cloud bootstrap failed with HTTP ${response.status}`);
+    }
+
+    const body: unknown = await response.json();
+    const paged = syncBootstrapPageResponseSchema.safeParse(body);
+    if (!paged.success) {
+      // Protocol 1/2 cloud: the whole thing in one response.
+      discardBootstrapProgress(database);
+      applySyncBootstrap(
+        database,
+        syncBootstrapResponseSchema.parse(body),
+        syncedAt,
+      );
+      return;
+    }
+
+    applySyncBootstrapPage(
+      database,
+      paged.data,
+      { first: token === null },
+      syncedAt,
+    );
+    token = paged.data.page.nextToken;
+    if (token === null) return;
+  }
+
+  throw new Error(
+    `Cloud bootstrap did not finish after ${MAX_BOOTSTRAP_PAGES} pages`,
+  );
+}
+
+/**
+ * Pull; when the cloud says the cursor cannot be served (a desktop that just upgraded
+ * from protocol 2, one offline longer than the change log is kept), bootstrap again and
+ * pull once more. Its queued local changes are untouched by a bootstrap.
+ */
+async function pullCloudChangesOrBootstrap(
+  config: LocalServerConfig,
+  database: LocalDatabase,
+  fetchImpl: typeof fetch,
+) {
+  try {
+    await pullCloudChanges(config, database, fetchImpl);
+  } catch (error) {
+    if (!(error instanceof ResyncRequiredError)) throw error;
+    console.log(`[sync] ${error.message}`);
+    discardBootstrapProgress(database);
+    await bootstrapFromCloud(
+      config,
+      database,
+      fetchImpl,
+      new Date().toISOString(),
+    );
+    await pullCloudChanges(config, database, fetchImpl);
+  }
+}
+
 async function pullCloudChanges(
   config: LocalServerConfig,
   database: LocalDatabase,
@@ -375,6 +486,12 @@ async function pullCloudChanges(
   // cap (or a network failure) resumes where it stopped instead of restarting.
   for (let page = 0; page < MAX_PULL_PAGES; page += 1) {
     const pullUrl = new URL("/api/sync/pull", config.cloudApiUrl);
+    // States the protocol this desktop pulls with: a cloud of protocol 3 or later serves
+    // the commit-ordered change log, an older one ignores it and serves `updatedAt`.
+    pullUrl.searchParams.set(
+      SYNC_PULL_PROTOCOL_PARAM,
+      String(SYNC_PROTOCOL_VERSION),
+    );
     const cursor = getSyncCursor(database);
     if (cursor) {
       pullUrl.searchParams.set("cursor", cursor);
@@ -387,6 +504,13 @@ async function pullCloudChanges(
       method: "GET",
       headers,
     });
+
+    if (response.status === 409) {
+      const answer = syncResyncRequiredResponseSchema.safeParse(
+        await response.json().catch(() => null),
+      );
+      if (answer.success) throw new ResyncRequiredError(answer.data.reason);
+    }
 
     if (!response.ok) {
       throw new Error(`Cloud pull failed with HTTP ${response.status}`);
@@ -453,37 +577,64 @@ async function pushOutboxEvents(
 
   applyCloudAuthHeaders(config, headers);
 
-  const request = {
-    deviceId: config.deviceId,
-    clientBatchId: `batch:${crypto.randomUUID()}`,
-    baseCursor: getSyncCursor(database),
-    // Which protocol and which build this push comes from: the cloud
-    // answers "update required" to a build below its minimum.
-    protocolVersion: SYNC_PROTOCOL_VERSION,
-    desktopVersion: config.appVersion,
-    events: pending.map((event) => ({
-      eventId: event.eventId,
-      entityType: event.entityType,
-      entityId: event.entityId,
-      operation: event.operation,
-      payload: event.payload,
-      occurredAt: event.occurredAt,
-      actorUserId: event.actorUserId ?? context.userId ?? "local",
-      organizationId: context.organizationId ?? "",
-      unitId: context.unitId,
-      idempotencyKey: event.idempotencyKey,
-      localVersion: event.localVersion,
-      baseUpdatedAt: event.baseUpdatedAt ?? null,
-    })),
-  } satisfies SyncPushRequest;
+  const buildRequest = (protocolVersion: number) =>
+    ({
+      deviceId: config.deviceId,
+      clientBatchId: `batch:${crypto.randomUUID()}`,
+      baseCursor: getSyncCursor(database),
+      // Which protocol and which build this push comes from: the cloud
+      // answers "update required" to a build below its minimum.
+      protocolVersion,
+      desktopVersion: config.appVersion,
+      events: pending.map((event) => ({
+        eventId: event.eventId,
+        entityType: event.entityType,
+        entityId: event.entityId,
+        operation: event.operation,
+        payload: event.payload,
+        occurredAt: event.occurredAt,
+        actorUserId: event.actorUserId ?? context.userId ?? "local",
+        organizationId: context.organizationId ?? "",
+        unitId: context.unitId,
+        idempotencyKey: event.idempotencyKey,
+        localVersion: event.localVersion,
+        baseUpdatedAt: event.baseUpdatedAt ?? null,
+      })),
+    }) satisfies SyncPushRequest;
 
+  // The push wire format did not change with protocol 3 (only the pull and the
+  // bootstrap did), so a cloud that predates it can read this push; it only refuses
+  // the number. Such a cloud names the newest protocol it speaks
+  // (SYNC_PROTOCOL_UNSUPPORTED): ask again with that one, once, and remember it.
+  let pushProtocol =
+    cloudPushProtocol.get(cloudApiUrl) ?? SYNC_PROTOCOL_VERSION;
   let response: Response;
   try {
     response = await fetchImpl(pushUrl, {
       method: "POST",
       headers,
-      body: JSON.stringify(request),
+      body: JSON.stringify(buildRequest(pushProtocol)),
     });
+    if (response.status === 400) {
+      const unsupported = syncProtocolUnsupportedResponseSchema.safeParse(
+        await response
+          .clone()
+          .json()
+          .catch(() => null),
+      );
+      if (
+        unsupported.success &&
+        unsupported.data.supportedProtocolVersion < pushProtocol
+      ) {
+        pushProtocol = unsupported.data.supportedProtocolVersion;
+        cloudPushProtocol.set(cloudApiUrl, pushProtocol);
+        response = await fetchImpl(pushUrl, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(buildRequest(pushProtocol)),
+        });
+      }
+    }
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Cloud push request failed";

@@ -15,6 +15,7 @@
     "./queue-render-recovery": "./src/queue-render-recovery.ts",
     "./records-retention": "./src/records-retention.ts",
     "./schema": "./src/schema.ts",
+    "./sync-change-log": "./src/sync-change-log.ts",
     "./tenancy": "./src/tenancy.ts",
     "./testing": "./src/testing.ts",
     "./seed-asset-types": "./src/seed-asset-types.ts",

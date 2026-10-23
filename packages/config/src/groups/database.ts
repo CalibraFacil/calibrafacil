@@ -27,7 +27,7 @@ export const databaseGroup = defineGroup({
     rlsMode: choice({
       env: "DATABASE_RLS_MODE",
       description:
-        "Row-level security (migration 0121). `shadow` (default): the application connects as the owner of the tables, which RLS does not bind, and start-up refuses a role that RLS would bind. `enforced`: set only after the role split (DEPLOYMENT.md), when the application connects as a member of calibra_app and the policies apply.",
+        "Row-level security (migration 0123). `shadow` (default): the application connects as the owner of the tables, which RLS does not bind, and start-up refuses a role that RLS would bind. `enforced`: set only after the role split (DEPLOYMENT.md), when the application connects as a member of calibra_app and the policies apply.",
       values: ["shadow", "enforced"],
       default: "shadow",
       example: example.commented("shadow"),

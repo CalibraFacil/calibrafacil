@@ -451,3 +451,27 @@ describe("REQ-SP-6 SYNC_MIN_DESKTOP_VERSION", () => {
     );
   });
 });
+
+describe("REQ-CS-5 SYNC_CHANGE_LOG_RETENTION_DAYS", () => {
+  it("REQ-CS-5: defaults to 90 days", () => {
+    expect(readSyncConfig({}).changeLogRetentionDays).toBe(90);
+    expect(loadApiConfig({}).sync.changeLogRetentionDays).toBe(90);
+  });
+
+  it("REQ-CS-5: reads the configured number of days", () => {
+    expect(
+      readSyncConfig({ SYNC_CHANGE_LOG_RETENTION_DAYS: "30" })
+        .changeLogRetentionDays,
+    ).toBe(30);
+  });
+
+  it("REQ-CS-5: an unusable or too small value means the default, never a window shorter than a week", () => {
+    for (const value of ["abc", "0", "3", "-5", ""]) {
+      expect(
+        readSyncConfig({ SYNC_CHANGE_LOG_RETENTION_DAYS: value })
+          .changeLogRetentionDays,
+        value,
+      ).toBe(90);
+    }
+  });
+});

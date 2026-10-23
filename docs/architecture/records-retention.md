@@ -90,7 +90,7 @@ under "Nulled".
 
 ## Evidence tables
 
-73 evidence tables out of 135; 394 foreign keys in schema.ts, 114 of them ON DELETE CASCADE.
+73 evidence tables out of 137; 396 foreign keys in schema.ts, 116 of them ON DELETE CASCADE.
 Each entry lists the foreign keys the table itself carries, which are the only way a parent's deletion reaches it.
 
 ### Technical records (calibration, SPC, OOT) (10)
@@ -454,7 +454,7 @@ For each root, the CASCADE closure is followed (what Postgres removes with the r
 
 ### Deleting a `organization` row
 
-Rows Postgres deletes along with it (45 tables by CASCADE): `accredited_scope_line`, `asset`, `automatic_send_rule`, `calibration_method`, `certificate_numbering_profile`, `certificate_release_policy`, `commercial_agreement_service_term`, `commercial_agreement_unit_scope`, `customer`, `customer_group`, `environmental_limits`, `integration_connection`, `integration_oauth_app`, `integration_object_link`, `integration_sync_cursor`, `integration_sync_item`, `integration_sync_run`, `invitation`, `lab_account_setup_token`, `mass_composition_profile`, `material`, `member`, `member_unit_assignment`, `member_visual_signature`, `notification`, `oot_email_outbox`, `organization_api_key`, `organization_custom_domain`, `organization_email_domain`, `organization_integration`, `organization_signing_certificate`, `organization_unit`, `portal_export_job`, `public_api_idempotency_key`, `public_api_resource_ref`, `public_api_webhook_delivery`, `public_api_webhook_subscription`, `scheduled_notification`, `service`, `service_order_email_outbox`, `service_order_public_access_token`, `service_order_settings`, `sso_provider`, `supplier`, `sync_applied_event`.
+Rows Postgres deletes along with it (47 tables by CASCADE): `accredited_scope_line`, `asset`, `automatic_send_rule`, `calibration_method`, `certificate_numbering_profile`, `certificate_release_policy`, `commercial_agreement_service_term`, `commercial_agreement_unit_scope`, `customer`, `customer_group`, `environmental_limits`, `integration_connection`, `integration_oauth_app`, `integration_object_link`, `integration_sync_cursor`, `integration_sync_item`, `integration_sync_run`, `invitation`, `lab_account_setup_token`, `mass_composition_profile`, `material`, `member`, `member_unit_assignment`, `member_visual_signature`, `notification`, `oot_email_outbox`, `organization_api_key`, `organization_custom_domain`, `organization_email_domain`, `organization_integration`, `organization_signing_certificate`, `organization_unit`, `portal_export_job`, `public_api_idempotency_key`, `public_api_resource_ref`, `public_api_webhook_delivery`, `public_api_webhook_subscription`, `scheduled_notification`, `service`, `service_order_email_outbox`, `service_order_public_access_token`, `service_order_settings`, `sso_provider`, `supplier`, `sync_applied_event`, `sync_change_log`, `sync_change_log_purge`.
 
 - Evidence deleted by CASCADE: **0**.
 - Evidence columns nulled by SET NULL: **9**.

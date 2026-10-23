@@ -122,7 +122,7 @@ BEGIN
     WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r'
       AND NOT pg_has_role(current_user, c.relowner, 'USAGE');
   IF foreign_tables > 0 THEN
-    RAISE EXCEPTION 'calibra: migration 0121 is run as %, which is neither the owner of the tenant tables nor superuser/BYPASSRLS, so row-level security would bind it (and the API when it shares this DATABASE_URL). Run migrations as the owner of the tables; see DEPLOYMENT.md, "Row-level security".', current_user
+    RAISE EXCEPTION 'calibra: migration 0123 is run as %, which is neither the owner of the tenant tables nor superuser/BYPASSRLS, so row-level security would bind it (and the API when it shares this DATABASE_URL). Run migrations as the owner of the tables; see DEPLOYMENT.md, "Row-level security".', current_user
       USING ERRCODE = 'insufficient_privilege';
   END IF;
 END

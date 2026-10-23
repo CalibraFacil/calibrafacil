@@ -299,6 +299,7 @@ below are a summary.
 | `RECORDS_PURGE_ENABLED`                                                                             | Optional, default `false`: enables the `records-purge` cron (see _Records retention_) |
 | `RECORDS_PURGE_MODE`                                                                                | Optional, default `dry-run`; only `execute` deletes (see _Records retention_)         |
 | `SYNC_MIN_DESKTOP_VERSION`                                                                          | Optional, default unset (no minimum): see _Minimum desktop version_                   |
+| `SYNC_CHANGE_LOG_RETENTION_DAYS`                                                                    | Optional, default `90` (at least `7`): see _Desktop change log (sync protocol 3)_     |
 
 Extra origins for CORS and auth can be listed in `CORS_ALLOWED_ORIGINS` and
 `AUTH_TRUSTED_ORIGINS`. The Conta Azul ERP integration needs no server setup: each laboratory
@@ -391,19 +392,20 @@ Anywhere else, the simplest option is `CRON_SCHEDULER=internal` on the API: it r
 schedule in-process (the Docker setup turns it on), and a lease keeps two replicas from running
 a job twice. Or trigger them with your scheduler of choice:
 
-| Job                    | Schedule (UTC) |
-| ---------------------- | -------------- |
-| `integrations`         | `*/30 * * * *` |
-| `service-order-emails` | `*/30 * * * *` |
-| `oot-emails`           | `*/30 * * * *` |
-| `queue-backstop`       | `*/30 * * * *` |
-| `spc-recompute`        | `0 3 * * *`    |
-| `email-domain-health`  | `30 3 * * *`   |
-| `certificate-drift`    | `0 6 * * *`    |
-| `notifications`        | `0 8 * * *`    |
-| `portal-digest`        | `0 9 * * *`    |
-| `auth-maintenance`     | `30 4 * * 1`   |
-| `records-purge`        | `0 5 * * 0`    |
+| Job                     | Schedule (UTC) |
+| ----------------------- | -------------- |
+| `integrations`          | `*/30 * * * *` |
+| `service-order-emails`  | `*/30 * * * *` |
+| `oot-emails`            | `*/30 * * * *` |
+| `queue-backstop`        | `*/30 * * * *` |
+| `spc-recompute`         | `0 3 * * *`    |
+| `email-domain-health`   | `30 3 * * *`   |
+| `certificate-drift`     | `0 6 * * *`    |
+| `notifications`         | `0 8 * * *`    |
+| `portal-digest`         | `0 9 * * *`    |
+| `auth-maintenance`      | `30 4 * * 1`   |
+| `records-purge`         | `0 5 * * 0`    |
+| `sync-change-log-purge` | `15 4 * * *`   |
 
 Example crontab line:
 
@@ -598,9 +600,9 @@ connection default. When the state machine itself changes, regenerate the functi
 `pnpm --filter @calibra-facil/db gen:job-transitions-sql` and ship it in a new migration; a unit test fails
 while the migration and `sql/schema-extras.sql` differ from the table.
 
-#### Row-level security (migration 0121, shadow mode) and the role split
+#### Row-level security (migration 0123, shadow mode) and the role split
 
-Migration `0121_rls_shadow_mode` prepares Postgres to enforce tenant isolation itself, as a second wall
+Migration `0123_rls_shadow_mode` prepares Postgres to enforce tenant isolation itself, as a second wall
 behind the `organization_id` predicate the application writes (decision Q15). **Applying it changes
 nothing in production.** It:
 
@@ -627,10 +629,10 @@ select tableowner from pg_tables where schemaname = 'public' and tablename = 'ca
 `current_user` must equal `tableowner` (or `rolsuper` / `rolbypassrls` is `true`). Three things enforce this,
 so a misconfiguration cannot silently turn the policies on:
 
-- the migration itself stops (`calibra: migration 0121 is run as <role>, which is neither the owner ...`)
+- the migration itself stops (`calibra: migration 0123 is run as <role>, which is neither the owner ...`)
   before changing anything when run by a role RLS would bind;
 - `DATABASE_RLS_MODE=shadow` (the default, `packages/config`): the API and the worker run one catalog query at
-  start-up and **refuse to start** as a role RLS binds (the message begins `connected as "<role>", which is subject to row-level security`). Before migration 0121, when no table has RLS enabled yet, the check passes;
+  start-up and **refuse to start** as a role RLS binds (the message begins `connected as "<role>", which is subject to row-level security`). Before migration 0123, when no table has RLS enabled yet, the check passes;
 - `DATABASE_RLS_MODE=enforced` is the post-role-split mode: start-up then accepts a role RLS binds (a member of
   `calibra_app`). Set it on the API together with the new `DATABASE_URL` in the role split below, and only then.
 
@@ -753,6 +755,48 @@ wait until the laboratories have updated and drained their queues (the audit row
 value is checked when the API starts: anything that is not a version stops it with a message
 naming `SYNC_MIN_DESKTOP_VERSION`, because a minimum that cannot be read would silently keep
 the exemption open.
+
+#### Desktop change log (sync protocol 3)
+
+Protocol 3 replaces the `updatedAt` pull cursor and the one-shot bootstrap of protocols 1 and 2
+(design and correctness argument: `docs/architecture/sync-change-seq.md`).
+
+- **Migration `0122_sync_change_log`** creates `sync_change_log` (one row per change of a table the
+  desktop mirrors, written by triggers in the writer's own transaction) and
+  `sync_change_log_purge`. It backfills nothing: a desktop on protocol 3 starts from a bootstrap, whose
+  cursor is the current position. Apply it before deploying the API that serves protocol 3 (a
+  desktop that asks for protocol 3 before the table exists gets a 500 on pull).
+- **What a desktop of protocol 3 does.** It states `protocolVersion: 3` on the bootstrap request and
+  as `?protocolVersion=3` on the pull. The cloud then bootstraps in pages (`page.nextToken`; the
+  desktop resumes an interrupted bootstrap from the last page it applied) and pulls the change log by
+  position. A desktop that upgrades from protocol 2 holds an `updatedAt` cursor the log cannot serve:
+  the cloud answers its first protocol 3 pull `409 { "code": "SYNC_RESYNC_REQUIRED" }` and the
+  desktop bootstraps again (its queued local changes are untouched: a bootstrap never overwrites a
+  row with queued changes).
+- **Desktops of protocol 1 and 2 keep working.** A bootstrap or pull that does not state protocol 3
+  gets the old behaviour, unchanged, with a `Deprecation: true` header. A desktop of protocol 3 against
+  a cloud that predates it gets the old answers too (the cloud ignores the field on the bootstrap and
+  the pull) and reads them as before. Its push states protocol 3, which the older cloud refuses with
+  `400 SYNC_PROTOCOL_UNSUPPORTED { supportedProtocolVersion }`; the push format did not change, so the
+  desktop sends the same push again, once, with the protocol the cloud names, and remembers it for
+  that cloud (queued events are neither failed nor delayed). The order of the rolling deploy
+  therefore does not matter. The legacy path is deleted once
+  `SYNC_MIN_DESKTOP_VERSION` is set to the first build that speaks protocol 3 (see _Minimum desktop
+  version_ above: those desktops are refused at push, so they only pull, and a pull without changes
+  to push is harmless): remove `loadCloudSyncEventsSince`, the legacy branch of `GET /api/sync/pull`
+  and of `POST /api/sync/bootstrap`, and `modules/sync/pull-cursor.ts`.
+- **Retention.** The `sync-change-log-purge` cron (daily, 04:15 UTC) deletes entries older than
+  `SYNC_CHANGE_LOG_RETENTION_DAYS` (default `90`, minimum `7`; an unusable value means the default)
+  and records, per laboratory, the newest position it removed. A desktop that was offline longer than
+  that finds its cursor below the recorded position and is told `SYNC_RESYNC_REQUIRED` with reason
+  `cursor_purged`: it bootstraps again, which also removes the mirror rows the cloud deleted in the
+  meantime. Nothing to configure on the desktop.
+- **Latency, never loss.** The pull serves only entries of transactions older than the oldest
+  transaction still in flight (`pg_snapshot_xmin`), which is what makes it impossible to skip a row. A
+  write transaction that stays open for a long time anywhere in the database cluster (another
+  database included) holds the horizon back: desktops keep pulling, they just see nothing new
+  until it ends. Keep write transactions short, and set `idle_in_transaction_session_timeout`
+  on the database so that a stuck client cannot hold the horizon forever.
 
 #### Certificates stuck in generation
 

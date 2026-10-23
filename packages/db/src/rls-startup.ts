@@ -1,6 +1,6 @@
 // Start-up check of row-level security (roadmap P2-3, decision Q15).
 //
-// Migration 0121 enables RLS on every tenant table. A role that owns the tables
+// Migration 0123 enables RLS on every tenant table. A role that owns the tables
 // (not FORCEd), a superuser and a BYPASSRLS role are exempt, so the application
 // behaves as before while it connects as one of them ("shadow" mode). Any other
 // role (a member of `calibra_app`) is bound by the policies, and an application
@@ -12,7 +12,7 @@
 //     binds, with the reason and the fix;
 //   - `enforced`: the owner has done the role split and says so; any role is accepted.
 //
-// Before migration 0121 no table has RLS enabled and the check passes.
+// Before migration 0123 no table has RLS enabled and the check passes.
 import { ConfigError, readDatabaseConfig } from "@calibra-facil/config";
 import { sql } from "drizzle-orm";
 import type { OrgExecutor } from "./for-org";
@@ -94,7 +94,7 @@ export function rlsStartupProblem(
 ): string | null {
   if (mode === "enforced") return null;
   if (!facts.rlsEnabled || !facts.subjectToRls) return null;
-  return `connected as "${facts.role}", which is subject to row-level security (migration 0121: it neither owns the tenant tables nor is superuser/BYPASSRLS), so statements without an organization would silently match no row. Connect as the owner of the tables; set DATABASE_RLS_MODE=enforced only after the role split, see DEPLOYMENT.md ("Row-level security").`;
+  return `connected as "${facts.role}", which is subject to row-level security (migration 0123: it neither owns the tenant tables nor is superuser/BYPASSRLS), so statements without an organization would silently match no row. Connect as the owner of the tables; set DATABASE_RLS_MODE=enforced only after the role split, see DEPLOYMENT.md ("Row-level security").`;
 }
 
 /**

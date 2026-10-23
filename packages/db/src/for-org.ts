@@ -559,7 +559,7 @@ async function advisoryXactLock(
 
 /**
  * Names the organization of the running transaction for row-level security
- * (migration 0121): `set_config('calibra.organization_id', $org, true)`. The
+ * (migration 0123): `set_config('calibra.organization_id', $org, true)`. The
  * third argument is `is_local`, so the value ends with the transaction (commit
  * or rollback) and never reaches the next one on the same pooled connection, which
  * also makes it safe behind a pooler in transaction mode. One round trip: it

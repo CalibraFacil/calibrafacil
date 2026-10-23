@@ -66,7 +66,7 @@ export const RAW_DB_BASELINE: Baseline = new Map<string, number>([
   ["apps/api/src/routes/spc.ts", 25],
   ["apps/api/src/routes/sso.ts", 5],
   ["apps/api/src/routes/standards.ts", 42],
-  ["apps/api/src/routes/sync.ts", 49],
+  ["apps/api/src/routes/sync.ts", 48],
   ["apps/api/src/routes/training-records.ts", 16],
   ["apps/api/src/routes/units.ts", 20],
   ["apps/api/src/routes/verify.ts", 6],

@@ -30,7 +30,13 @@
  * the old server (or from bootstrap): that parses as "everything strictly
  * after this instant", i.e. exactly the old semantics.
  *
- * KNOWN HAZARD (not solved here): ordering is by the row's own
+ * DEPRECATED (protocols 1 and 2). Desktops of protocol 3 pull a commit-ordered
+ * change log instead (change-log.ts, docs/architecture/sync-change-seq.md), which
+ * solves the hazard below. This module is kept, unchanged, for the desktops that
+ * still send the `updatedAt` cursor, and is deleted once SYNC_MIN_DESKTOP_VERSION
+ * excludes them (DEPLOYMENT.md).
+ *
+ * KNOWN HAZARD (solved by protocol 3, not here): ordering is by the row's own
  * `updatedAt`, which is assigned when the row is written, not when its
  * transaction commits. A transaction that stamped T1 but commits after a
  * reader already returned a row stamped T2 > T1 is invisible to every later
