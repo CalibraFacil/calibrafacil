@@ -25,6 +25,10 @@
  *   REQ-18E-ACK-1  Public ack link: the page names the NC and the laboratory; POST stamps the
  *                  notification of the laboratory the token belongs to (and only that one),
  *                  notifies once, an unknown token is a 404.
+ *   REQ-18E-ACK-2  Concurrent public-link clicks stamp once, notify once, keep the first stamp.
+ *   REQ-18E-ACK-3  A manual acknowledgement racing the public link (Q34): exactly one stamp, one
+ *                  notification, the loser is a 409 / "already confirmed" and writes nothing;
+ *                  a later manual acknowledgement is a 409 and leaves the first timestamp.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
@@ -361,6 +365,7 @@ describe("non-conformances router: read and write handlers (P2-18e)", () => {
     });
     expect(stamped?.acknowledgedAt).toBeInstanceOf(Date);
     expect(await ncAuditActions(ncA)).toEqual(["oot_acknowledged"]);
+    expect(notifications.notifyOotAcknowledged).toHaveBeenCalledTimes(1);
 
     const again = await ncRequest(`/${ncA}/oot-ack`, {
       method: "POST",
@@ -368,6 +373,7 @@ describe("non-conformances router: read and write handlers (P2-18e)", () => {
     });
     expect(again.status).toBe(409);
     expect((await again.json()).code).toBe("ALREADY_ACKNOWLEDGED");
+    expect(notifications.notifyOotAcknowledged).toHaveBeenCalledTimes(1);
 
     const refused = await ncRequest(`/${ncB}/oot-ack`, {
       method: "POST",
@@ -805,6 +811,61 @@ describe("public out-of-tolerance acknowledgement link (P2-18e)", () => {
       .from(ootNotification)
       .where(eq(ootNotification.id, a.notification.id));
     expect(after?.acknowledgedAt?.getTime()).toBe(firstStamp?.getTime());
+    expect(notifications.notifyOotAcknowledged).toHaveBeenCalledTimes(1);
+  });
+
+  it("REQ-18E-ACK-3 (Q34): a manual acknowledgement racing the public link stamps once and notifies once; a later manual one is a 409 and keeps the first timestamp", async () => {
+    const a = await seedLab("org-a");
+    loginAs({ userId: a.lab.userId, organizationId: a.lab.orgId });
+
+    const [manual, link] = await Promise.all([
+      ncRequest(`/${a.nc}/oot-ack`, {
+        method: "POST",
+        body: { note: "Confirmado por telefone" },
+      }),
+      ootAckRouter.request(`/${a.notification.ackToken}`, { method: "POST" }),
+    ]);
+
+    const [stamped] = await db
+      .select()
+      .from(ootNotification)
+      .where(eq(ootNotification.id, a.notification.id));
+    expect(stamped?.status).toBe("ACKNOWLEDGED");
+    const firstStamp = stamped?.acknowledgedAt;
+    expect(firstStamp).toBeInstanceOf(Date);
+    expect(notifications.notifyOotAcknowledged).toHaveBeenCalledTimes(1);
+
+    // The link answers 200 whoever won; the manual call is the loser's 409.
+    expect(link.status).toBe(200);
+    if (stamped?.acknowledgedVia === "manual") {
+      expect(manual.status).toBe(200);
+      expect(stamped.acknowledgedNote).toBe("Confirmado por telefone");
+      expect(await ncAuditActions(a.nc)).toEqual(["oot_acknowledged"]);
+    } else {
+      expect(stamped?.acknowledgedVia).toBe("email_link");
+      expect(manual.status).toBe(409);
+      expect((await manual.json()).code).toBe("ALREADY_ACKNOWLEDGED");
+      expect(stamped?.acknowledgedNote).toBeNull();
+      expect(await ncAuditActions(a.nc)).toEqual([]);
+    }
+
+    // A later manual acknowledgement is refused and changes nothing.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const later = await ncRequest(`/${a.nc}/oot-ack`, {
+      method: "POST",
+      body: { note: "Segunda confirmacao" },
+    });
+    expect(later.status).toBe(409);
+    const laterBody = await later.json();
+    expect(laterBody.code).toBe("ALREADY_ACKNOWLEDGED");
+    expect(laterBody.error).toContain("já foi confirmado");
+    const [after] = await db
+      .select()
+      .from(ootNotification)
+      .where(eq(ootNotification.id, a.notification.id));
+    expect(after?.acknowledgedAt?.getTime()).toBe(firstStamp?.getTime());
+    expect(after?.acknowledgedVia).toBe(stamped?.acknowledgedVia);
+    expect(after?.acknowledgedNote).toBe(stamped?.acknowledgedNote);
     expect(notifications.notifyOotAcknowledged).toHaveBeenCalledTimes(1);
   });
 });
