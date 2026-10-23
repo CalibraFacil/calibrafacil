@@ -9,7 +9,7 @@ import {
   processScheduledContaAzulIntegrationSyncs,
   processScheduledContaAzulPolls,
 } from "../../src/modules/integrations";
-import { processScheduledIntegrationSyncs } from "@calibra-facil/worker/integrations";
+import { processScheduledIntegrationSyncs } from "@calibra-facil/jobs-core/integrations";
 import { cleanupExpiredAuthRecords } from "../../src/lib/auth-maintenance";
 import { drainOotEmailOutbox } from "../../src/lib/oot-email-drain";
 import { drainServiceOrderEmailOutbox } from "../../src/lib/service-order-email-drain";

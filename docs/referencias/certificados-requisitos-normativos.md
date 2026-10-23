@@ -188,7 +188,7 @@ não de dígito.
 
 **Divergência aberta — marketing × código.** O material de marketing descreve a assinatura como
 PAdES com certificado A1, carimbo de tempo **e validação de cadeia** (≈AD-RC / B-LT). O código
-passa `enableLtv: false` explicitamente (`apps/worker/src/index.ts:891`), e `ltvEnabled` tem
+passa `enableLtv: false` explicitamente (`packages/jobs-core/src/index.ts:891`), e `ltvEnabled` tem
 default `false` em `packages/signing/src/signer.ts:266`. Carimbo de tempo: entregue. Validação de
 longo prazo: **não**. Reconciliar a cópia antes de tratá-la como especificação — é um produto
 regulado e a afirmação é verificável por qualquer auditor.

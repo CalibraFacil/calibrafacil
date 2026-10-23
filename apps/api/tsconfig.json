@@ -22,9 +22,13 @@
         "../../packages/notifications/src/index.ts"
       ],
       "@calibra-facil/notifications/*": ["../../packages/notifications/src/*"],
-      "@calibra-facil/worker": ["../worker/src/index.ts"],
-      "@calibra-facil/worker/integrations": ["../worker/src/integrations.ts"],
-      "@calibra-facil/worker/scheduled": ["../worker/src/scheduled.ts"],
+      "@calibra-facil/jobs-core": ["../../packages/jobs-core/src/index.ts"],
+      "@calibra-facil/jobs-core/integrations": [
+        "../../packages/jobs-core/src/integrations.ts"
+      ],
+      "@calibra-facil/jobs-core/scheduled": [
+        "../../packages/jobs-core/src/scheduled.ts"
+      ],
       "drizzle-orm": ["./node_modules/drizzle-orm"],
       "drizzle-orm/*": ["./node_modules/drizzle-orm/*"]
     }

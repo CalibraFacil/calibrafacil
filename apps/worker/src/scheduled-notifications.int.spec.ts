@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { accreditedScopeLine } from "@calibra-facil/db/schema";
-import { processScheduledNotifications } from "./scheduled";
+import { processScheduledNotifications } from "@calibra-facil/jobs-core/scheduled";
 import { db, truncateAll } from "../test/integration/db";
 import {
   daysFromNow,

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Run the GitHub CI gates locally — we're on the free plan and out of Actions
 // minutes, so PRs are validated here instead. Mirrors .github/workflows/ci.yml
-// (blocked-deps → frozen install → audit → lint → knip → import cycles → type-check → test) under
+// (blocked-deps → app boundaries → frozen install → audit → lint → knip → import cycles → type-check → test) under
 // Node 24 + TZ=UTC to match the runners.
 //
 // Usage:
@@ -30,6 +30,10 @@ const steps = [
   {
     name: "Blocked dependencies",
     run: () => shell("node", ["scripts/check-blocked-deps.mjs"]),
+  },
+  {
+    name: "App boundaries",
+    run: () => shell("node", ["scripts/check-app-boundaries.mjs"]),
   },
   {
     name: "Install (frozen lockfile)",

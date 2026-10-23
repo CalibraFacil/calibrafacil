@@ -6,7 +6,7 @@ import {
   service,
 } from "@calibra-facil/db/schema";
 import { addCalendarDays, labToday } from "@calibra-facil/shared";
-import { processScheduledNotifications } from "./scheduled";
+import { processScheduledNotifications } from "@calibra-facil/jobs-core/scheduled";
 import { db, truncateAll } from "../test/integration/db";
 import {
   seedReferenceStandard,

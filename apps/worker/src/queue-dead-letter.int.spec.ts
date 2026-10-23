@@ -17,7 +17,7 @@ import { seedIssuableJob } from "../test/integration/seed-certificate";
 
 const { workerQueue } = vi.hoisted(() => ({ workerQueue: vi.fn() }));
 
-vi.mock("./index.js", () => ({
+vi.mock("@calibra-facil/jobs-core", () => ({
   default: { queue: workerQueue },
 }));
 
