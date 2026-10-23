@@ -20,15 +20,20 @@ const mocks = vi.hoisted(
   }),
 );
 
-vi.mock("@calibra-facil/db", () => ({
-  db: {
+vi.mock("@calibra-facil/db", () => {
+  // `orgDb(...).transaction(...)` runs its callback on this same double (the
+  // organization setting is a statement that needs no canned result).
+  const database = {
     select: vi.fn(() => ({
       from: vi.fn(() => ({
         where: vi.fn(async () => mocks.policyRows),
       })),
     })),
-  },
-}));
+    execute: async () => [],
+    transaction: async (run: (tx: unknown) => unknown) => run(database),
+  };
+  return { db: database };
+});
 
 import {
   evaluateReleaseStatus,

@@ -84,35 +84,35 @@ export async function createServiceOrderQuote(input: {
   actorUserId: string;
   values: CreateQuoteInput;
 }) {
-  const [order] = await db
-    .select()
-    .from(serviceOrder)
-    .where(
-      and(
-        eq(serviceOrder.id, input.serviceOrderId),
-        eq(serviceOrder.organizationId, input.member.organizationId),
-        buildUnitScopeCondition(serviceOrder.unitId, input.member),
-      ),
-    )
-    .limit(1);
-  if (!order) return { status: "not_found" as const };
-  // Drafts mid-flow are harmless (a revision in progress), but a closed or
-  // canceled OS must not grow new quotes — sending one would rewind the whole
-  // order and email the customer about a job that is already finished.
-  if (isServiceOrderFinalStatus(order.status)) {
-    return { status: "invalid_transition" as const };
-  }
+  return orgDb(input.member.organizationId).transaction(async (o) => {
+    const [order] = await o
+      .select()
+      .from(serviceOrder)
+      .where(
+        and(
+          eq(serviceOrder.id, input.serviceOrderId),
+          eq(serviceOrder.organizationId, input.member.organizationId),
+          buildUnitScopeCondition(serviceOrder.unitId, input.member),
+        ),
+      )
+      .limit(1);
+    if (!order) return { status: "not_found" as const };
+    // Drafts mid-flow are harmless (a revision in progress), but a closed or
+    // canceled OS must not grow new quotes — sending one would rewind the whole
+    // order and email the customer about a job that is already finished.
+    if (isServiceOrderFinalStatus(order.status)) {
+      return { status: "invalid_transition" as const };
+    }
 
-  const [latest] = await db
-    .select({ version: serviceOrderQuote.version })
-    .from(serviceOrderQuote)
-    .where(eq(serviceOrderQuote.serviceOrderId, input.serviceOrderId))
-    .orderBy(desc(serviceOrderQuote.version))
-    .limit(1);
-  const version = (latest?.version ?? 0) + 1;
+    const [latest] = await o
+      .select({ version: serviceOrderQuote.version })
+      .from(serviceOrderQuote)
+      .where(eq(serviceOrderQuote.serviceOrderId, input.serviceOrderId))
+      .orderBy(desc(serviceOrderQuote.version))
+      .limit(1);
+    const version = (latest?.version ?? 0) + 1;
 
-  const calculated = await db.transaction(async (tx) => {
-    const [quote] = await tx
+    const [quote] = await o
       .insert(serviceOrderQuote)
       .values({
         organizationId: input.member.organizationId,
@@ -136,9 +136,9 @@ export async function createServiceOrderQuote(input: {
         quoteId: quote.id,
         items: quoteItemsWithDates(input.values.items),
       },
-      tx,
+      o,
     );
-    await tx
+    await o
       .update(serviceOrderQuote)
       .set({
         subtotalServicesCents: totals.subtotalServicesCents,
@@ -163,13 +163,11 @@ export async function createServiceOrderQuote(input: {
         eventType: "service_order.quote_created",
         metadata: { quoteId: quote.id, version },
       },
-      tx,
+      o,
     );
 
-    return { quote: { ...quote, ...totals }, totals };
+    return { status: "ok" as const, data: { ...quote, ...totals } };
   });
-
-  return { status: "ok" as const, data: calculated.quote };
 }
 
 export async function updateServiceOrderQuoteDraft(input: {
@@ -178,69 +176,75 @@ export async function updateServiceOrderQuoteDraft(input: {
   member: ServiceOrderMember;
   values: UpdateQuoteDraftInput;
 }) {
-  const [order] = await db
-    .select({
-      id: serviceOrder.id,
-      organizationId: serviceOrder.organizationId,
-    })
-    .from(serviceOrder)
-    .where(
-      and(
-        eq(serviceOrder.id, input.serviceOrderId),
-        eq(serviceOrder.organizationId, input.member.organizationId),
-        buildUnitScopeCondition(serviceOrder.unitId, input.member),
-      ),
-    )
-    .limit(1);
-  if (!order) return { status: "not_found" as const };
-
-  const quote = await getQuoteForAction(
-    input.serviceOrderId,
-    input.quoteId,
-    input.member.organizationId,
-  );
-  if (!quote) return { status: "not_found" as const };
-  if (!canEditServiceOrderQuote(quote.status)) {
-    return { status: "conflict" as const };
-  }
-
-  const totals = input.values.items
-    ? await replaceQuoteItems({
-        organizationId: order.organizationId,
-        quoteId: input.quoteId,
-        items: quoteItemsWithDates(input.values.items),
+  return orgDb(input.member.organizationId).transaction(async (o) => {
+    const [order] = await o
+      .select({
+        id: serviceOrder.id,
+        organizationId: serviceOrder.organizationId,
       })
-    : null;
+      .from(serviceOrder)
+      .where(
+        and(
+          eq(serviceOrder.id, input.serviceOrderId),
+          eq(serviceOrder.organizationId, input.member.organizationId),
+          buildUnitScopeCondition(serviceOrder.unitId, input.member),
+        ),
+      )
+      .limit(1);
+    if (!order) return { status: "not_found" as const };
 
-  const [updated] = await db
-    .update(serviceOrderQuote)
-    .set({
-      validUntil: parseDate(input.values.validUntil),
-      paymentTerms: input.values.paymentTerms,
-      deliveryEstimate: input.values.deliveryEstimate,
-      warrantyTerms: input.values.warrantyTerms,
-      clientMessage: input.values.clientMessage,
-      internalNotes: input.values.internalNotes,
-      ...(totals
-        ? {
-            subtotalServicesCents: totals.subtotalServicesCents,
-            subtotalPartsCents: totals.subtotalPartsCents,
-            discountCents: totals.discountCents,
-            freightCents: totals.freightCents,
-            totalCents: totals.totalCents,
-          }
-        : {}),
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(serviceOrderQuote.id, input.quoteId),
-        eq(serviceOrderQuote.organizationId, input.member.organizationId),
-      ),
-    )
-    .returning();
+    const quote = await getQuoteForAction(
+      input.serviceOrderId,
+      input.quoteId,
+      input.member.organizationId,
+      o,
+    );
+    if (!quote) return { status: "not_found" as const };
+    if (!canEditServiceOrderQuote(quote.status)) {
+      return { status: "conflict" as const };
+    }
 
-  return { status: "ok" as const, data: updated };
+    const totals = input.values.items
+      ? await replaceQuoteItems(
+          {
+            organizationId: order.organizationId,
+            quoteId: input.quoteId,
+            items: quoteItemsWithDates(input.values.items),
+          },
+          o,
+        )
+      : null;
+
+    const [updated] = await o
+      .update(serviceOrderQuote)
+      .set({
+        validUntil: parseDate(input.values.validUntil),
+        paymentTerms: input.values.paymentTerms,
+        deliveryEstimate: input.values.deliveryEstimate,
+        warrantyTerms: input.values.warrantyTerms,
+        clientMessage: input.values.clientMessage,
+        internalNotes: input.values.internalNotes,
+        ...(totals
+          ? {
+              subtotalServicesCents: totals.subtotalServicesCents,
+              subtotalPartsCents: totals.subtotalPartsCents,
+              discountCents: totals.discountCents,
+              freightCents: totals.freightCents,
+              totalCents: totals.totalCents,
+            }
+          : {}),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(serviceOrderQuote.id, input.quoteId),
+          eq(serviceOrderQuote.organizationId, input.member.organizationId),
+        ),
+      )
+      .returning();
+
+    return { status: "ok" as const, data: updated };
+  });
 }
 
 export async function sendServiceOrderQuote(input: {
@@ -250,105 +254,257 @@ export async function sendServiceOrderQuote(input: {
   actorUserId: string;
   values: SendQuoteInput;
 }) {
-  // Resolve the OS inside the caller's org/unit scope FIRST: a cross-tenant
-  // (OS, quote) pair then answers exactly like an unknown OS, instead of
-  // revealing through "quote not found" vs "OS not found" that the quote exists.
-  const detail = await getServiceOrderDetail(
-    input.serviceOrderId,
-    input.member.organizationId,
-    buildUnitScopeCondition(serviceOrder.unitId, input.member),
+  // One transaction for every statement (and the durable e-mail outbox row,
+  // REQ-SOEMAIL-071); the quote PDF job is queued after it commits because it
+  // renders the rows the transaction wrote.
+  const sent = await orgDb(input.member.organizationId).transaction(
+    async (o) => {
+      // Resolve the OS inside the caller's org/unit scope FIRST: a cross-tenant
+      // (OS, quote) pair then answers exactly like an unknown OS, instead of
+      // revealing through "quote not found" vs "OS not found" that the quote exists.
+      const detail = await getServiceOrderDetail(
+        input.serviceOrderId,
+        input.member.organizationId,
+        buildUnitScopeCondition(serviceOrder.unitId, input.member),
+        o,
+      );
+      if (!detail) return { status: "order_not_found" as const };
+
+      const quote = await getQuoteForAction(
+        input.serviceOrderId,
+        input.quoteId,
+        input.member.organizationId,
+        o,
+      );
+      if (!quote) return { status: "quote_not_found" as const };
+      if (!canEditServiceOrderQuote(quote.status)) {
+        return { status: "conflict" as const };
+      }
+      // Sending drives the OS to awaiting_quote_approval. Only the clearly-wrong
+      // case is blocked here: a closed or canceled OS must not be rewound and the
+      // customer must not be mailed a fresh approval link for finished work.
+      //
+      // Deliberately NOT a full canTransitionServiceOrderStatus check: the graph has
+      // no quote_rejected/quote_approved → awaiting_quote_approval edge, so that
+      // would also block re-sending a revised version during a renegotiation. Which
+      // revision edges are legal is an open product decision (stage-gating proposal),
+      // not something to settle inside a bug fix.
+      if (isServiceOrderFinalStatus(detail.status)) {
+        return { status: "invalid_transition" as const };
+      }
+
+      const sentAt = new Date();
+
+      // REQ-QPUB-004: a new quote version supersedes earlier quotes' live tokens.
+      // Revoke BEFORE minting so a crash between the two never leaves stale-live
+      // old-quote tokens alongside a new send.
+      await revokeSupersededServiceOrderTokens(o, {
+        organizationId: input.member.organizationId,
+        serviceOrderId: input.serviceOrderId,
+        currentQuoteId: input.quoteId,
+      });
+
+      const token = await createPublicServiceOrderAccessToken({
+        organizationId: input.member.organizationId,
+        serviceOrderId: input.serviceOrderId,
+        quoteId: input.quoteId,
+        // REQ-QPUB-010: the send-time grant also carries the emailed approval code.
+        withApprovalCode: true,
+        // REQ-QPUB-001: links never live forever — default to validUntil + grace,
+        // else sentAt + 30 days, when the lab didn't set an explicit expiry.
+        expiresAt:
+          parseDate(input.values.expiresAt) ??
+          computeDefaultPublicTokenExpiry({
+            validUntil: quote.validUntil,
+            sentAt,
+          }),
+        executor: o,
+      });
+
+      const [updated] = await o
+        .update(serviceOrderQuote)
+        .set({
+          status: "sent",
+          sentAt,
+          sentByUserId: input.actorUserId,
+          portalAccessTokenHash: token.tokenHash,
+          clientMessage: input.values.clientMessage ?? quote.clientMessage,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(serviceOrderQuote.id, input.quoteId),
+            eq(serviceOrderQuote.organizationId, input.member.organizationId),
+          ),
+        )
+        .returning();
+
+      // Mid-job re-quote: the instrument is on the bench, so the order keeps saying
+      // so and only the quote awaits a decision.
+      const keepStatusOnSend = isServiceOrderWorkInProgressStatus(
+        detail.status,
+      );
+      await o
+        .update(serviceOrder)
+        .set({
+          ...(keepStatusOnSend ? {} : { status: "awaiting_quote_approval" }),
+          quotedAt: new Date(),
+          totalQuotedCents: quote.totalCents,
+          updatedAt: new Date(),
+        })
+        .where(eq(serviceOrder.id, input.serviceOrderId));
+
+      await recordServiceOrderEvent(
+        {
+          organizationId: detail.organizationId,
+          unitId: detail.unitId,
+          serviceOrderId: input.serviceOrderId,
+          actorType: "lab_user",
+          actorId: input.actorUserId,
+          eventType: "service_order.quote_sent",
+          metadata: { quoteId: input.quoteId, publicAccessTokenIssued: true },
+        },
+        o,
+      );
+
+      // REQ-SOEMAIL-071: enqueue a durable outbox row for the "novo orçamento" email.
+      // Load all template data now (all queries scoped to the service order's org).
+      // Email delivery happens in the worker drain (not in this request path).
+      // The raw token is captured here (not reminted later) — REQ-SOEMAIL-023.
+      const [orderRow, quoteItemRows, snapshotRow, customerRow] =
+        await Promise.all([
+          o
+            .select({
+              publicId: serviceOrder.publicId,
+              clientContactSnapshot: serviceOrder.clientContactSnapshot,
+            })
+            .from(serviceOrder)
+            .where(
+              and(
+                eq(serviceOrder.id, input.serviceOrderId),
+                eq(serviceOrder.organizationId, input.member.organizationId),
+              ),
+            )
+            .limit(1)
+            .then((rows) => rows[0] ?? null),
+          o
+            .select()
+            .from(serviceOrderQuoteItem)
+            .where(
+              and(
+                eq(serviceOrderQuoteItem.quoteId, input.quoteId),
+                eq(
+                  serviceOrderQuoteItem.organizationId,
+                  input.member.organizationId,
+                ),
+              ),
+            )
+            .orderBy(serviceOrderQuoteItem.sortOrder, serviceOrderQuoteItem.id),
+          o
+            .select({
+              manufacturer: serviceOrderAssetSnapshot.manufacturer,
+              model: serviceOrderAssetSnapshot.model,
+              serialNumber: serviceOrderAssetSnapshot.serialNumber,
+              inventoryCode: serviceOrderAssetSnapshot.inventoryCode,
+              displaySpecs: serviceOrderAssetSnapshot.displaySpecs,
+            })
+            .from(serviceOrderAssetSnapshot)
+            .where(
+              eq(
+                serviceOrderAssetSnapshot.serviceOrderId,
+                input.serviceOrderId,
+              ),
+            )
+            .limit(1)
+            .then((rows) => rows[0] ?? null),
+          o
+            .select({
+              name: customer.name,
+              email: customer.email,
+              taxId: customer.taxId,
+            })
+            .from(customer)
+            .where(
+              and(
+                eq(customer.id, detail.customerId),
+                eq(customer.labOrganizationId, input.member.organizationId),
+              ),
+            )
+            .limit(1)
+            .then((rows) => rows[0] ?? null),
+        ]);
+
+      const portalAppUrl = portalBaseUrl();
+
+      if (orderRow) {
+        const openedAtIso =
+          detail.openedAt instanceof Date
+            ? detail.openedAt.toISOString()
+            : String(detail.openedAt);
+
+        const orcamentoPayload = {
+          serviceOrderId: input.serviceOrderId,
+          quoteId: input.quoteId,
+          serviceOrderNumber: detail.serviceOrderNumber,
+          organizationId: input.member.organizationId,
+          publicId: orderRow.publicId,
+          customerId: detail.customerId,
+          clientContactSnapshot: orderRow.clientContactSnapshot ?? null,
+          customerName: customerRow?.name ?? detail.customerName ?? "",
+          customerEmail: customerRow?.email ?? detail.customerEmail ?? null,
+          customerTaxId: customerRow?.taxId ?? detail.customerTaxId ?? null,
+          assetManufacturer: snapshotRow?.manufacturer ?? null,
+          assetModel: snapshotRow?.model ?? null,
+          assetInventoryCode: snapshotRow?.inventoryCode ?? null,
+          openedAt: openedAtIso,
+          assetSerialNumber: snapshotRow?.serialNumber ?? null,
+          // REQ-SOEMAIL-025: instrument-agnostic spec rows, no hardcoded fields
+          displaySpecs: snapshotRow?.displaySpecs ?? null,
+          claimedDefect: detail.claimedDefect,
+          items: quoteItemRows.map((item) => ({
+            id: item.id,
+            type: item.type,
+            description: item.description,
+            quantity: item.quantity,
+            unit: item.unit,
+            unitPriceCents: item.unitPriceCents,
+            totalPriceCents: item.totalPriceCents,
+          })),
+          // REQ-SOEMAIL-022 [HIGH RISK]: persisted totals, not recomputed
+          subtotalServicesCents: quote.subtotalServicesCents,
+          subtotalPartsCents: quote.subtotalPartsCents,
+          freightCents: quote.freightCents,
+          discountCents: quote.discountCents,
+          totalCents: quote.totalCents,
+          // REQ-SOEMAIL-023 [HIGH RISK]: token captured above, not reminted
+          publicAccessToken: token.token,
+          // REQ-QPUB-021 [HIGH RISK]: the emailed code is the one minted above.
+          ...(token.code ? { approvalCode: token.code } : {}),
+          portalAppUrl,
+        } satisfies OrcamentoSentOutboxPayload;
+
+        await enqueueServiceOrderEmail(
+          {
+            organizationId: input.member.organizationId,
+            unitId: detail.unitId,
+            serviceOrderId: input.serviceOrderId,
+            eventKey: `orcamento_sent:${input.quoteId}`,
+            targetStatus: "awaiting_quote_approval",
+            payload: orcamentoPayload,
+          },
+          o,
+        );
+      }
+
+      return {
+        status: "ok" as const,
+        data: updated,
+        publicToken: token.token,
+      };
+    },
   );
-  if (!detail) return { status: "order_not_found" as const };
+  if (sent.status !== "ok") return sent;
 
-  const quote = await getQuoteForAction(
-    input.serviceOrderId,
-    input.quoteId,
-    input.member.organizationId,
-  );
-  if (!quote) return { status: "quote_not_found" as const };
-  if (!canEditServiceOrderQuote(quote.status)) {
-    return { status: "conflict" as const };
-  }
-  // Sending drives the OS to awaiting_quote_approval. Only the clearly-wrong
-  // case is blocked here: a closed or canceled OS must not be rewound and the
-  // customer must not be mailed a fresh approval link for finished work.
-  //
-  // Deliberately NOT a full canTransitionServiceOrderStatus check: the graph has
-  // no quote_rejected/quote_approved → awaiting_quote_approval edge, so that
-  // would also block re-sending a revised version during a renegotiation. Which
-  // revision edges are legal is an open product decision (stage-gating proposal),
-  // not something to settle inside a bug fix.
-  if (isServiceOrderFinalStatus(detail.status)) {
-    return { status: "invalid_transition" as const };
-  }
-
-  const sentAt = new Date();
-
-  // REQ-QPUB-004: a new quote version supersedes earlier quotes' live tokens.
-  // Revoke BEFORE minting so a crash between the two never leaves stale-live
-  // old-quote tokens alongside a new send.
-  await revokeSupersededServiceOrderTokens(db, {
-    organizationId: input.member.organizationId,
-    serviceOrderId: input.serviceOrderId,
-    currentQuoteId: input.quoteId,
-  });
-
-  const token = await createPublicServiceOrderAccessToken({
-    organizationId: input.member.organizationId,
-    serviceOrderId: input.serviceOrderId,
-    quoteId: input.quoteId,
-    // REQ-QPUB-010: the send-time grant also carries the emailed approval code.
-    withApprovalCode: true,
-    // REQ-QPUB-001: links never live forever — default to validUntil + grace,
-    // else sentAt + 30 days, when the lab didn't set an explicit expiry.
-    expiresAt:
-      parseDate(input.values.expiresAt) ??
-      computeDefaultPublicTokenExpiry({
-        validUntil: quote.validUntil,
-        sentAt,
-      }),
-  });
-
-  const [updated] = await db
-    .update(serviceOrderQuote)
-    .set({
-      status: "sent",
-      sentAt,
-      sentByUserId: input.actorUserId,
-      portalAccessTokenHash: token.tokenHash,
-      clientMessage: input.values.clientMessage ?? quote.clientMessage,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(serviceOrderQuote.id, input.quoteId),
-        eq(serviceOrderQuote.organizationId, input.member.organizationId),
-      ),
-    )
-    .returning();
-
-  // Mid-job re-quote: the instrument is on the bench, so the order keeps saying
-  // so and only the quote awaits a decision.
-  const keepStatusOnSend = isServiceOrderWorkInProgressStatus(detail.status);
-  await db
-    .update(serviceOrder)
-    .set({
-      ...(keepStatusOnSend ? {} : { status: "awaiting_quote_approval" }),
-      quotedAt: new Date(),
-      totalQuotedCents: quote.totalCents,
-      updatedAt: new Date(),
-    })
-    .where(eq(serviceOrder.id, input.serviceOrderId));
-
-  await recordServiceOrderEvent({
-    organizationId: detail.organizationId,
-    unitId: detail.unitId,
-    serviceOrderId: input.serviceOrderId,
-    actorType: "lab_user",
-    actorId: input.actorUserId,
-    eventType: "service_order.quote_sent",
-    metadata: { quoteId: input.quoteId, publicAccessTokenIssued: true },
-  });
   await enqueueServiceOrderDocumentJob({
     type: "SERVICE_ORDER_QUOTE",
     serviceOrderId: input.serviceOrderId,
@@ -356,132 +512,7 @@ export async function sendServiceOrderQuote(input: {
     userId: input.actorUserId,
   });
 
-  // REQ-SOEMAIL-071: enqueue a durable outbox row for the "novo orçamento" email.
-  // Load all template data now (all queries scoped to the service order's org).
-  // Enqueue is awaited so the row is persisted before the handler returns.
-  // Email delivery happens in the worker drain (not in this request path).
-  // The raw token is captured here (not reminted later) — REQ-SOEMAIL-023.
-  const [orderRow, quoteItemRows, snapshotRow, customerRow] = await Promise.all(
-    [
-      db
-        .select({
-          publicId: serviceOrder.publicId,
-          clientContactSnapshot: serviceOrder.clientContactSnapshot,
-        })
-        .from(serviceOrder)
-        .where(
-          and(
-            eq(serviceOrder.id, input.serviceOrderId),
-            eq(serviceOrder.organizationId, input.member.organizationId),
-          ),
-        )
-        .limit(1)
-        .then((rows) => rows[0] ?? null),
-      db
-        .select()
-        .from(serviceOrderQuoteItem)
-        .where(
-          and(
-            eq(serviceOrderQuoteItem.quoteId, input.quoteId),
-            eq(
-              serviceOrderQuoteItem.organizationId,
-              input.member.organizationId,
-            ),
-          ),
-        )
-        .orderBy(serviceOrderQuoteItem.sortOrder, serviceOrderQuoteItem.id),
-      db
-        .select({
-          manufacturer: serviceOrderAssetSnapshot.manufacturer,
-          model: serviceOrderAssetSnapshot.model,
-          serialNumber: serviceOrderAssetSnapshot.serialNumber,
-          inventoryCode: serviceOrderAssetSnapshot.inventoryCode,
-          displaySpecs: serviceOrderAssetSnapshot.displaySpecs,
-        })
-        .from(serviceOrderAssetSnapshot)
-        .where(
-          eq(serviceOrderAssetSnapshot.serviceOrderId, input.serviceOrderId),
-        )
-        .limit(1)
-        .then((rows) => rows[0] ?? null),
-      db
-        .select({
-          name: customer.name,
-          email: customer.email,
-          taxId: customer.taxId,
-        })
-        .from(customer)
-        .where(
-          and(
-            eq(customer.id, detail.customerId),
-            eq(customer.labOrganizationId, input.member.organizationId),
-          ),
-        )
-        .limit(1)
-        .then((rows) => rows[0] ?? null),
-    ],
-  );
-
-  const portalAppUrl = portalBaseUrl();
-
-  if (orderRow) {
-    const openedAtIso =
-      detail.openedAt instanceof Date
-        ? detail.openedAt.toISOString()
-        : String(detail.openedAt);
-
-    const orcamentoPayload = {
-      serviceOrderId: input.serviceOrderId,
-      quoteId: input.quoteId,
-      serviceOrderNumber: detail.serviceOrderNumber,
-      organizationId: input.member.organizationId,
-      publicId: orderRow.publicId,
-      customerId: detail.customerId,
-      clientContactSnapshot: orderRow.clientContactSnapshot ?? null,
-      customerName: customerRow?.name ?? detail.customerName ?? "",
-      customerEmail: customerRow?.email ?? detail.customerEmail ?? null,
-      customerTaxId: customerRow?.taxId ?? detail.customerTaxId ?? null,
-      assetManufacturer: snapshotRow?.manufacturer ?? null,
-      assetModel: snapshotRow?.model ?? null,
-      assetInventoryCode: snapshotRow?.inventoryCode ?? null,
-      openedAt: openedAtIso,
-      assetSerialNumber: snapshotRow?.serialNumber ?? null,
-      // REQ-SOEMAIL-025: instrument-agnostic spec rows, no hardcoded fields
-      displaySpecs: snapshotRow?.displaySpecs ?? null,
-      claimedDefect: detail.claimedDefect,
-      items: quoteItemRows.map((item) => ({
-        id: item.id,
-        type: item.type,
-        description: item.description,
-        quantity: item.quantity,
-        unit: item.unit,
-        unitPriceCents: item.unitPriceCents,
-        totalPriceCents: item.totalPriceCents,
-      })),
-      // REQ-SOEMAIL-022 [HIGH RISK]: persisted totals, not recomputed
-      subtotalServicesCents: quote.subtotalServicesCents,
-      subtotalPartsCents: quote.subtotalPartsCents,
-      freightCents: quote.freightCents,
-      discountCents: quote.discountCents,
-      totalCents: quote.totalCents,
-      // REQ-SOEMAIL-023 [HIGH RISK]: token captured above, not reminted
-      publicAccessToken: token.token,
-      // REQ-QPUB-021 [HIGH RISK]: the emailed code is the one minted above.
-      ...(token.code ? { approvalCode: token.code } : {}),
-      portalAppUrl,
-    } satisfies OrcamentoSentOutboxPayload;
-
-    await enqueueServiceOrderEmail({
-      organizationId: input.member.organizationId,
-      unitId: detail.unitId,
-      serviceOrderId: input.serviceOrderId,
-      eventKey: `orcamento_sent:${input.quoteId}`,
-      targetStatus: "awaiting_quote_approval",
-      payload: orcamentoPayload,
-    });
-  }
-
-  return { status: "ok" as const, data: updated, publicToken: token.token };
+  return sent;
 }
 
 export async function approveServiceOrderQuoteManually(input: {
@@ -491,45 +522,46 @@ export async function approveServiceOrderQuoteManually(input: {
   actorUserId: string;
   values: ApproveQuoteManuallyInput;
 }) {
-  const quote = await getQuoteForAction(
-    input.serviceOrderId,
-    input.quoteId,
-    input.organizationId,
-  );
-  if (!quote || !canApproveServiceOrderQuote(quote.status)) {
-    return { status: "conflict" as const };
-  }
+  return orgDb(input.organizationId).transaction(async (o) => {
+    const quote = await getQuoteForAction(
+      input.serviceOrderId,
+      input.quoteId,
+      input.organizationId,
+      o,
+    );
+    if (!quote || !canApproveServiceOrderQuote(quote.status)) {
+      return { status: "conflict" as const };
+    }
 
-  // SEC-01: scope the OS to the caller's organization so a cross-tenant :id
-  // cannot be mutated (mirrors getScopedServiceOrder / the .pdf route). The
-  // route also resolves via getScopedServiceOrder before reaching this point;
-  // this is the module-level defense-in-depth.
-  const [order] = await db
-    .select()
-    .from(serviceOrder)
-    .where(
-      and(
-        eq(serviceOrder.id, input.serviceOrderId),
-        eq(serviceOrder.organizationId, input.organizationId),
-      ),
-    )
-    .limit(1);
-  if (!order) return { status: "order_not_found" as const };
+    // SEC-01: scope the OS to the caller's organization so a cross-tenant :id
+    // cannot be mutated (mirrors getScopedServiceOrder / the .pdf route). The
+    // route also resolves via getScopedServiceOrder before reaching this point;
+    // this is the module-level defense-in-depth.
+    const [order] = await o
+      .select()
+      .from(serviceOrder)
+      .where(
+        and(
+          eq(serviceOrder.id, input.serviceOrderId),
+          eq(serviceOrder.organizationId, input.organizationId),
+        ),
+      )
+      .limit(1);
+    if (!order) return { status: "order_not_found" as const };
 
-  // Look up customer for the email payload before the transaction
-  const [customerRow] = await db
-    .select({ name: customer.name, email: customer.email })
-    .from(customer)
-    .where(
-      and(
-        eq(customer.id, order.customerId),
-        eq(customer.labOrganizationId, order.organizationId),
-      ),
-    )
-    .limit(1);
+    // Look up customer for the email payload
+    const [customerRow] = await o
+      .select({ name: customer.name, email: customer.email })
+      .from(customer)
+      .where(
+        and(
+          eq(customer.id, order.customerId),
+          eq(customer.labOrganizationId, order.organizationId),
+        ),
+      )
+      .limit(1);
 
-  await db.transaction(async (tx) => {
-    await tx
+    await o
       .update(serviceOrderQuote)
       .set({
         status: "approved",
@@ -546,12 +578,12 @@ export async function approveServiceOrderQuoteManually(input: {
         ),
       );
     // REQ-QPUB-003 [HIGH RISK]: a decided quote's public links stop working.
-    await revokeActiveTokensForQuote(tx, {
+    await revokeActiveTokensForQuote(o, {
       organizationId: order.organizationId,
       quoteId: input.quoteId,
       reason: "decided",
     });
-    await tx
+    await o
       .update(serviceOrder)
       .set({
         ...(isServiceOrderDecidingQuoteStatus(order.status)
@@ -575,7 +607,7 @@ export async function approveServiceOrderQuoteManually(input: {
           evidenceType: input.values.manualApprovalEvidenceType,
         },
       },
-      tx,
+      o,
     );
     // REQ-SOEMAIL-071/072: enqueue inside the transaction for atomicity
     const approvedPayload = {
@@ -599,11 +631,11 @@ export async function approveServiceOrderQuoteManually(input: {
         targetStatus: "quote_approved",
         payload: approvedPayload,
       },
-      tx,
+      o,
     );
-  });
 
-  return { status: "ok" as const };
+    return { status: "ok" as const };
+  });
 }
 
 export async function rejectServiceOrderQuoteManually(input: {
@@ -613,45 +645,46 @@ export async function rejectServiceOrderQuoteManually(input: {
   actorUserId: string;
   values: RejectQuoteManuallyInput;
 }) {
-  const quote = await getQuoteForAction(
-    input.serviceOrderId,
-    input.quoteId,
-    input.organizationId,
-  );
-  if (!quote || !canApproveServiceOrderQuote(quote.status)) {
-    return { status: "conflict" as const };
-  }
+  return orgDb(input.organizationId).transaction(async (o) => {
+    const quote = await getQuoteForAction(
+      input.serviceOrderId,
+      input.quoteId,
+      input.organizationId,
+      o,
+    );
+    if (!quote || !canApproveServiceOrderQuote(quote.status)) {
+      return { status: "conflict" as const };
+    }
 
-  // SEC-01: scope the OS to the caller's organization so a cross-tenant :id
-  // cannot be mutated (mirrors getScopedServiceOrder / the .pdf route). The
-  // route also resolves via getScopedServiceOrder before reaching this point;
-  // this is the module-level defense-in-depth.
-  const [order] = await db
-    .select()
-    .from(serviceOrder)
-    .where(
-      and(
-        eq(serviceOrder.id, input.serviceOrderId),
-        eq(serviceOrder.organizationId, input.organizationId),
-      ),
-    )
-    .limit(1);
-  if (!order) return { status: "order_not_found" as const };
+    // SEC-01: scope the OS to the caller's organization so a cross-tenant :id
+    // cannot be mutated (mirrors getScopedServiceOrder / the .pdf route). The
+    // route also resolves via getScopedServiceOrder before reaching this point;
+    // this is the module-level defense-in-depth.
+    const [order] = await o
+      .select()
+      .from(serviceOrder)
+      .where(
+        and(
+          eq(serviceOrder.id, input.serviceOrderId),
+          eq(serviceOrder.organizationId, input.organizationId),
+        ),
+      )
+      .limit(1);
+    if (!order) return { status: "order_not_found" as const };
 
-  // Look up customer for the email payload before the transaction
-  const [customerRowReject] = await db
-    .select({ name: customer.name, email: customer.email })
-    .from(customer)
-    .where(
-      and(
-        eq(customer.id, order.customerId),
-        eq(customer.labOrganizationId, order.organizationId),
-      ),
-    )
-    .limit(1);
+    // Look up customer for the email payload
+    const [customerRowReject] = await o
+      .select({ name: customer.name, email: customer.email })
+      .from(customer)
+      .where(
+        and(
+          eq(customer.id, order.customerId),
+          eq(customer.labOrganizationId, order.organizationId),
+        ),
+      )
+      .limit(1);
 
-  await db.transaction(async (tx) => {
-    await tx
+    await o
       .update(serviceOrderQuote)
       .set({
         status: "rejected",
@@ -665,12 +698,12 @@ export async function rejectServiceOrderQuoteManually(input: {
         ),
       );
     // REQ-QPUB-003 [HIGH RISK]: a decided quote's public links stop working.
-    await revokeActiveTokensForQuote(tx, {
+    await revokeActiveTokensForQuote(o, {
       organizationId: order.organizationId,
       quoteId: input.quoteId,
       reason: "decided",
     });
-    await tx
+    await o
       .update(serviceOrder)
       .set({
         ...(isServiceOrderDecidingQuoteStatus(order.status)
@@ -692,7 +725,7 @@ export async function rejectServiceOrderQuoteManually(input: {
           reason: input.values.rejectionReason,
         },
       },
-      tx,
+      o,
     );
     // REQ-SOEMAIL-071/072: enqueue inside the transaction for atomicity
     const rejectedPayload = {
@@ -716,11 +749,11 @@ export async function rejectServiceOrderQuoteManually(input: {
         targetStatus: "quote_rejected",
         payload: rejectedPayload,
       },
-      tx,
+      o,
     );
-  });
 
-  return { status: "ok" as const };
+    return { status: "ok" as const };
+  });
 }
 
 export async function approveServiceOrderQuoteByPortalUser(input: {

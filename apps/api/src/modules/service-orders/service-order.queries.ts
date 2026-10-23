@@ -1,16 +1,19 @@
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import { serviceOrder, serviceOrderQuote } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 import type { AuthVariables } from "../../middleware/permission";
 import { orgDb } from "../../lib/org-db";
+import { inOrgTransaction } from "../../lib/org-transaction";
 import { buildUnitScopeCondition } from "../../lib/units";
 
 export async function getQuoteForAction(
   serviceOrderId: number,
   quoteId: number,
   organizationId: string,
+  // The caller's org-bound handle, when it is inside a transaction already.
+  executor?: OrgDb,
 ) {
-  const [quote] = await orgDb(organizationId).transaction((o) =>
+  const [quote] = await inOrgTransaction(organizationId, executor, (o) =>
     o
       .select()
       .from(serviceOrderQuote)
@@ -29,18 +32,22 @@ export async function getQuoteForAction(
 export async function getScopedServiceOrder(
   id: number,
   member: AuthVariables["member"],
+  // The caller's org-bound handle, when it is inside a transaction already.
+  executor?: OrgDb,
 ) {
-  const [order] = await db
-    .select()
-    .from(serviceOrder)
-    .where(
-      and(
-        eq(serviceOrder.id, id),
-        eq(serviceOrder.organizationId, member.organizationId),
-        buildUnitScopeCondition(serviceOrder.unitId, member),
-      ),
-    )
-    .limit(1);
+  const [order] = await inOrgTransaction(member.organizationId, executor, (o) =>
+    o
+      .select()
+      .from(serviceOrder)
+      .where(
+        and(
+          eq(serviceOrder.id, id),
+          eq(serviceOrder.organizationId, member.organizationId),
+          buildUnitScopeCondition(serviceOrder.unitId, member),
+        ),
+      )
+      .limit(1),
+  );
 
   return order ?? null;
 }
@@ -58,17 +65,19 @@ export async function resolveServiceOrderIdByPublicId(
   publicId: string,
   member: AuthVariables["member"],
 ): Promise<number | null> {
-  const [row] = await db
-    .select({ id: serviceOrder.id })
-    .from(serviceOrder)
-    .where(
-      and(
-        eq(serviceOrder.publicId, publicId),
-        eq(serviceOrder.organizationId, member.organizationId),
-        buildUnitScopeCondition(serviceOrder.unitId, member),
-      ),
-    )
-    .limit(1);
+  const [row] = await orgDb(member.organizationId).transaction((o) =>
+    o
+      .select({ id: serviceOrder.id })
+      .from(serviceOrder)
+      .where(
+        and(
+          eq(serviceOrder.publicId, publicId),
+          eq(serviceOrder.organizationId, member.organizationId),
+          buildUnitScopeCondition(serviceOrder.unitId, member),
+        ),
+      )
+      .limit(1),
+  );
 
   return row?.id ?? null;
 }

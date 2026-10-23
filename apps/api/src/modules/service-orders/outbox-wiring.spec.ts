@@ -42,6 +42,7 @@ const {
   // db transaction capture
   capturedTxExecutors,
   mockTxProxy,
+  mockOrgTx,
 } = vi.hoisted(() => {
   // We capture the executor passed to enqueueServiceOrderEmail
   const capturedTxExecutors: Array<unknown> = [];
@@ -88,6 +89,8 @@ const {
     mockDispatchRejectedOncePortal: vi.fn(),
     capturedTxExecutors,
     mockTxProxy: txProxy,
+    // The handle `orgDb(...).transaction(...)` passes to the lab decisions.
+    mockOrgTx: {},
   };
 });
 
@@ -168,11 +171,14 @@ vi.mock("@calibra-facil/db", () => {
 
 // The org-bound handle and the organization setting of row-level security run
 // on the same canned database: the setting is not a statement of the scenario.
+// The transaction handle is its own object (the canned database's builders), so
+// the atomicity tests can tell it from the module-level `db`.
 vi.mock("../../lib/org-db", async () => {
   const { db } = await import("@calibra-facil/db");
+  Object.assign(mockOrgTx, db);
   return {
     orgDb: () => ({
-      transaction: async (run: (tx: unknown) => unknown) => run(db),
+      transaction: async (run: (tx: unknown) => unknown) => run(mockOrgTx),
     }),
   };
 });
@@ -687,7 +693,7 @@ describe("REQ-SOEMAIL-071/072 (D): approveServiceOrderQuoteManually enqueues ins
     // capturedTxExecutors[0] is the second argument to enqueueServiceOrderEmail
     // It must be the tx proxy, NOT the module-level db
     expect(capturedTxExecutors).toHaveLength(1);
-    expect(capturedTxExecutors[0]).toBe(mockTxProxy);
+    expect(capturedTxExecutors[0]).toBe(mockOrgTx);
   });
 
   it("REQ-SOEMAIL-071/D-approve-manual: payload contains serviceOrderId, quoteId, organizationId", async () => {
@@ -775,7 +781,7 @@ describe("REQ-SOEMAIL-071/072 (D): rejectServiceOrderQuoteManually enqueues insi
     });
 
     expect(capturedTxExecutors).toHaveLength(1);
-    expect(capturedTxExecutors[0]).toBe(mockTxProxy);
+    expect(capturedTxExecutors[0]).toBe(mockOrgTx);
   });
 
   it("REQ-SOEMAIL-071/D-reject-manual: payload contains rejectionReason and organizationId", async () => {

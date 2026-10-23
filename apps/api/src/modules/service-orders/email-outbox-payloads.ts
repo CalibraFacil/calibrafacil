@@ -22,7 +22,8 @@
  */
 
 import { z } from "zod";
-import { db } from "@calibra-facil/db";
+import type { OrgExecutor } from "@calibra-facil/db/for-org";
+import { orgDb } from "../../lib/org-db";
 import { serviceOrderEmailOutbox } from "@calibra-facil/db/schema";
 
 // =============================================================================
@@ -320,7 +321,7 @@ export function parseOutboxPayloadByNamespace(
  * `ServiceOrderDbExecutor` used throughout service-order-workflow.ts so PART 2
  * can pass a transaction executor directly.
  */
-type DbExecutor = Pick<typeof db, "insert" | "select" | "update" | "delete">;
+type DbExecutor = Pick<OrgExecutor, "insert" | "select" | "update" | "delete">;
 
 /**
  * Parameters for enqueueServiceOrderEmail.
@@ -368,23 +369,30 @@ export interface EnqueueServiceOrderEmailParams {
  */
 export async function enqueueServiceOrderEmail(
   params: EnqueueServiceOrderEmailParams,
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<void> {
-  await executor
-    .insert(serviceOrderEmailOutbox)
-    .values({
-      organizationId: params.organizationId,
-      unitId: params.unitId ?? null,
-      serviceOrderId: params.serviceOrderId,
-      eventKey: params.eventKey,
-      targetStatus: params.targetStatus,
-      payload: params.payload,
-      attempts: 0,
-    })
-    .onConflictDoNothing({
-      target: [
-        serviceOrderEmailOutbox.serviceOrderId,
-        serviceOrderEmailOutbox.eventKey,
-      ],
-    });
+  // Without a caller transaction the single insert runs in one of its own that
+  // names the laboratory (row-level security).
+  const insert = async (tx: DbExecutor) => {
+    await tx
+      .insert(serviceOrderEmailOutbox)
+      .values({
+        organizationId: params.organizationId,
+        unitId: params.unitId ?? null,
+        serviceOrderId: params.serviceOrderId,
+        eventKey: params.eventKey,
+        targetStatus: params.targetStatus,
+        payload: params.payload,
+        attempts: 0,
+      })
+      .onConflictDoNothing({
+        target: [
+          serviceOrderEmailOutbox.serviceOrderId,
+          serviceOrderEmailOutbox.eventKey,
+        ],
+      });
+  };
+  await (executor
+    ? insert(executor)
+    : orgDb(params.organizationId).transaction(insert));
 }

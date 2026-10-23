@@ -1,4 +1,5 @@
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
+import { inOrgTransaction } from "./org-transaction";
 import {
   billingDocument,
   calibrationJob,
@@ -216,8 +217,19 @@ const MAX_ROWS = 500;
  */
 export async function buildOperationsToCash(
   input: BuildOperationsToCashInput,
+  // The caller's org-bound handle, when it is inside a transaction already.
+  executor?: OrgDb,
 ): Promise<OperationsToCashEnvelope> {
-  const orders = await db
+  return inOrgTransaction(input.organizationId, executor, (o) =>
+    readOperationsToCash(o, input),
+  );
+}
+
+async function readOperationsToCash(
+  o: OrgDb,
+  input: BuildOperationsToCashInput,
+): Promise<OperationsToCashEnvelope> {
+  const orders = await o
     .select({
       id: serviceOrder.id,
       number: serviceOrder.serviceOrderNumber,
@@ -255,7 +267,7 @@ export async function buildOperationsToCash(
 
   const orderIds = billable.map((row) => row.id);
 
-  const links = await db
+  const links = await o
     .select({
       serviceOrderId: serviceOrderCertificateLink.serviceOrderId,
       jobId: calibrationJob.id,
@@ -284,6 +296,7 @@ export async function buildOperationsToCash(
       ),
     })),
     input.organizationId,
+    o,
   );
 
   const billingDocumentIds = Array.from(
@@ -293,7 +306,7 @@ export async function buildOperationsToCash(
   );
 
   const installmentRows = billingDocumentIds.length
-    ? await db
+    ? await o
         .select({
           documentId: receivableInstallment.documentId,
           status: receivableInstallment.status,
@@ -317,7 +330,7 @@ export async function buildOperationsToCash(
     }
   >();
   if (billingDocumentIds.length) {
-    const docRows = await db
+    const docRows = await o
       .select({
         id: billingDocument.id,
         status: billingDocument.status,

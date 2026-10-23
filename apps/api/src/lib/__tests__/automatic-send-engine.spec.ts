@@ -16,15 +16,20 @@ const mocks = vi.hoisted(
   }),
 );
 
-vi.mock("@calibra-facil/db", () => ({
-  db: {
+vi.mock("@calibra-facil/db", () => {
+  // `orgDb(...).transaction(...)` runs its callback on this same double (the
+  // organization setting is a statement that needs no canned result).
+  const database = {
     select: () => ({
       from: () => ({
         where: async () => mocks.ruleRows,
       }),
     }),
-  },
-}));
+    execute: async () => [],
+    transaction: async (run: (tx: unknown) => unknown) => run(database),
+  };
+  return { db: database };
+});
 
 import { evaluateMilestone, resolveAutomaticSendRule } from "../automatic-send";
 

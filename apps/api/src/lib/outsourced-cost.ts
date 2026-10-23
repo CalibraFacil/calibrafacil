@@ -1,6 +1,7 @@
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import { serviceOrderOutsourcedCost } from "@calibra-facil/db/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
+import { inOrgTransaction } from "./org-transaction";
 
 export interface ServiceOrderMarginInput {
   revenueCents: number;
@@ -73,31 +74,37 @@ export function summarizeServiceOrderMargin(
   };
 }
 
-export async function listOutsourcedCostsForServiceOrder(params: {
-  organizationId: string;
-  serviceOrderId: number;
-}) {
-  return db
-    .select({
-      id: serviceOrderOutsourcedCost.id,
-      supplierName: serviceOrderOutsourcedCost.supplierName,
-      expectedCostCents: serviceOrderOutsourcedCost.expectedCostCents,
-      actualCostCents: serviceOrderOutsourcedCost.actualCostCents,
-      currency: serviceOrderOutsourcedCost.currency,
-      payableLinkId: serviceOrderOutsourcedCost.payableLinkId,
-      notes: serviceOrderOutsourcedCost.notes,
-      voidedAt: serviceOrderOutsourcedCost.voidedAt,
-      createdAt: serviceOrderOutsourcedCost.createdAt,
-      updatedAt: serviceOrderOutsourcedCost.updatedAt,
-    })
-    .from(serviceOrderOutsourcedCost)
-    .where(
-      and(
-        eq(serviceOrderOutsourcedCost.organizationId, params.organizationId),
-        eq(serviceOrderOutsourcedCost.serviceOrderId, params.serviceOrderId),
-      ),
-    )
-    .orderBy(serviceOrderOutsourcedCost.id);
+export async function listOutsourcedCostsForServiceOrder(
+  params: {
+    organizationId: string;
+    serviceOrderId: number;
+  },
+  // The caller's org-bound handle, when it is inside a transaction already.
+  executor?: OrgDb,
+) {
+  return inOrgTransaction(params.organizationId, executor, (o) =>
+    o
+      .select({
+        id: serviceOrderOutsourcedCost.id,
+        supplierName: serviceOrderOutsourcedCost.supplierName,
+        expectedCostCents: serviceOrderOutsourcedCost.expectedCostCents,
+        actualCostCents: serviceOrderOutsourcedCost.actualCostCents,
+        currency: serviceOrderOutsourcedCost.currency,
+        payableLinkId: serviceOrderOutsourcedCost.payableLinkId,
+        notes: serviceOrderOutsourcedCost.notes,
+        voidedAt: serviceOrderOutsourcedCost.voidedAt,
+        createdAt: serviceOrderOutsourcedCost.createdAt,
+        updatedAt: serviceOrderOutsourcedCost.updatedAt,
+      })
+      .from(serviceOrderOutsourcedCost)
+      .where(
+        and(
+          eq(serviceOrderOutsourcedCost.organizationId, params.organizationId),
+          eq(serviceOrderOutsourcedCost.serviceOrderId, params.serviceOrderId),
+        ),
+      )
+      .orderBy(serviceOrderOutsourcedCost.id),
+  );
 }
 
 /**
@@ -107,31 +114,37 @@ export async function listOutsourcedCostsForServiceOrder(params: {
  * Read-only with respect to local-only operational data; only writes
  * to `service_order_outsourced_cost`.
  */
-export async function reconcileOutsourcedCostWithPayable(params: {
-  organizationId: string;
-  payableLinkId: string;
-  supplierName: string;
-  amountCents: number;
-}): Promise<{ matchedCount: number }> {
+export async function reconcileOutsourcedCostWithPayable(
+  params: {
+    organizationId: string;
+    payableLinkId: string;
+    supplierName: string;
+    amountCents: number;
+  },
+  // The caller's org-bound handle, when it is inside a transaction already.
+  executor?: OrgDb,
+): Promise<{ matchedCount: number }> {
   const supplierNormalized = params.supplierName.trim().toLowerCase();
   if (!supplierNormalized) return { matchedCount: 0 };
 
-  const result = await db
-    .update(serviceOrderOutsourcedCost)
-    .set({
-      actualCostCents: params.amountCents,
-      payableLinkId: params.payableLinkId,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(serviceOrderOutsourcedCost.organizationId, params.organizationId),
-        isNull(serviceOrderOutsourcedCost.payableLinkId),
-        isNull(serviceOrderOutsourcedCost.voidedAt),
-        sql`lower(trim(${serviceOrderOutsourcedCost.supplierName})) = ${supplierNormalized}`,
-      ),
-    )
-    .returning();
+  const result = await inOrgTransaction(params.organizationId, executor, (o) =>
+    o
+      .update(serviceOrderOutsourcedCost)
+      .set({
+        actualCostCents: params.amountCents,
+        payableLinkId: params.payableLinkId,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(serviceOrderOutsourcedCost.organizationId, params.organizationId),
+          isNull(serviceOrderOutsourcedCost.payableLinkId),
+          isNull(serviceOrderOutsourcedCost.voidedAt),
+          sql`lower(trim(${serviceOrderOutsourcedCost.supplierName})) = ${supplierNormalized}`,
+        ),
+      )
+      .returning(),
+  );
 
   return { matchedCount: result.length };
 }

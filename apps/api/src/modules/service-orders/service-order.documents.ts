@@ -1,4 +1,3 @@
-import { db } from "@calibra-facil/db";
 import {
   serviceOrderDeliveryDocument,
   serviceOrderIntakeDocument,
@@ -10,6 +9,7 @@ import {
 import type { BackgroundJobMessage } from "@calibra-facil/schemas";
 import { and, desc, eq } from "drizzle-orm";
 import { enqueueBackgroundJob } from "../../lib/background-jobs";
+import { orgDb } from "../../lib/org-db";
 import { recordServiceOrderEvent } from "../../lib/service-order-workflow";
 import {
   createR2Client,
@@ -42,35 +42,46 @@ export async function issueIntakeDocument(input: {
   unitCondition?: ReturnType<typeof buildUnitScopeCondition>;
   actorUserId: string;
 }) {
-  const detail = await getServiceOrderDetail(
-    input.serviceOrderId,
-    input.organizationId,
-    input.unitCondition,
-  );
-  if (!detail) return null;
+  const issued = await orgDb(input.organizationId).transaction(async (o) => {
+    const detail = await getServiceOrderDetail(
+      input.serviceOrderId,
+      input.organizationId,
+      input.unitCondition,
+      o,
+    );
+    if (!detail) return null;
 
-  const [document] = await db
-    .insert(serviceOrderIntakeDocument)
-    .values({
-      organizationId: input.organizationId,
-      serviceOrderId: input.serviceOrderId,
-      documentNumber: `${detail.serviceOrderNumber}/REC`,
-      version: detail.intakeDocuments.length + 1,
-      issuedAt: new Date(),
-      issuedByUserId: input.actorUserId,
-      qrCodePayload: `${buildPortalBaseUrl(input.env)}/service-order-access`,
-    })
-    .returning();
+    const [document] = await o
+      .insert(serviceOrderIntakeDocument)
+      .values({
+        organizationId: input.organizationId,
+        serviceOrderId: input.serviceOrderId,
+        documentNumber: `${detail.serviceOrderNumber}/REC`,
+        version: detail.intakeDocuments.length + 1,
+        issuedAt: new Date(),
+        issuedByUserId: input.actorUserId,
+        qrCodePayload: `${buildPortalBaseUrl(input.env)}/service-order-access`,
+      })
+      .returning();
 
-  await recordServiceOrderEvent({
-    organizationId: detail.organizationId,
-    unitId: detail.unitId,
-    serviceOrderId: input.serviceOrderId,
-    actorType: "lab_user",
-    actorId: input.actorUserId,
-    eventType: "service_order.intake_document_issued",
-    metadata: { documentId: document?.id },
+    await recordServiceOrderEvent(
+      {
+        organizationId: detail.organizationId,
+        unitId: detail.unitId,
+        serviceOrderId: input.serviceOrderId,
+        actorType: "lab_user",
+        actorId: input.actorUserId,
+        eventType: "service_order.intake_document_issued",
+        metadata: { documentId: document?.id },
+      },
+      o,
+    );
+    return { document };
   });
+  if (!issued) return null;
+  const { document } = issued;
+
+  // After the commit: the job renders the row the transaction wrote.
   await enqueueServiceOrderDocumentJob({
     type: "SERVICE_ORDER_INTAKE_DOCUMENT",
     serviceOrderId: input.serviceOrderId,
@@ -87,33 +98,44 @@ export async function issueTag(input: {
   unitCondition?: ReturnType<typeof buildUnitScopeCondition>;
   actorUserId: string;
 }) {
-  const detail = await getServiceOrderDetail(
-    input.serviceOrderId,
-    input.organizationId,
-    input.unitCondition,
-  );
-  if (!detail) return null;
+  const issued = await orgDb(input.organizationId).transaction(async (o) => {
+    const detail = await getServiceOrderDetail(
+      input.serviceOrderId,
+      input.organizationId,
+      input.unitCondition,
+      o,
+    );
+    if (!detail) return null;
 
-  const [tag] = await db
-    .insert(serviceOrderTag)
-    .values({
-      organizationId: input.organizationId,
-      serviceOrderId: input.serviceOrderId,
-      tagNumber: `${detail.serviceOrderNumber}-TAG-${detail.tags.length + 1}`,
-      printedAt: new Date(),
-      printedByUserId: input.actorUserId,
-    })
-    .returning();
+    const [tag] = await o
+      .insert(serviceOrderTag)
+      .values({
+        organizationId: input.organizationId,
+        serviceOrderId: input.serviceOrderId,
+        tagNumber: `${detail.serviceOrderNumber}-TAG-${detail.tags.length + 1}`,
+        printedAt: new Date(),
+        printedByUserId: input.actorUserId,
+      })
+      .returning();
 
-  await recordServiceOrderEvent({
-    organizationId: detail.organizationId,
-    unitId: detail.unitId,
-    serviceOrderId: input.serviceOrderId,
-    actorType: "lab_user",
-    actorId: input.actorUserId,
-    eventType: "service_order.tag_printed",
-    metadata: { tagId: tag?.id },
+    await recordServiceOrderEvent(
+      {
+        organizationId: detail.organizationId,
+        unitId: detail.unitId,
+        serviceOrderId: input.serviceOrderId,
+        actorType: "lab_user",
+        actorId: input.actorUserId,
+        eventType: "service_order.tag_printed",
+        metadata: { tagId: tag?.id },
+      },
+      o,
+    );
+    return { tag };
   });
+  if (!issued) return null;
+  const { tag } = issued;
+
+  // After the commit: the job renders the row the transaction wrote.
   await enqueueServiceOrderDocumentJob({
     type: "SERVICE_ORDER_TAG",
     serviceOrderId: input.serviceOrderId,
@@ -134,54 +156,66 @@ export async function issueDeliveryDocument(input: {
     clientSignatureData?: ServiceOrderSignatureData | null;
   };
 }) {
-  const detail = await getServiceOrderDetail(
-    input.serviceOrderId,
-    input.organizationId,
-    input.unitCondition,
-  );
-  if (!detail) return null;
+  const issued = await orgDb(input.organizationId).transaction(async (o) => {
+    const detail = await getServiceOrderDetail(
+      input.serviceOrderId,
+      input.organizationId,
+      input.unitCondition,
+      o,
+    );
+    if (!detail) return null;
 
-  const nextVersion = detail.deliveryDocuments.length + 1;
-  const [document] = await db
-    .insert(serviceOrderDeliveryDocument)
-    .values({
-      organizationId: input.organizationId,
-      serviceOrderId: input.serviceOrderId,
-      documentNumber: `${detail.serviceOrderNumber}/ENT`,
-      version: nextVersion,
-      issuedAt: new Date(),
-      issuedByUserId: input.actorUserId,
-      technicianSignatureData: input.signatures.technicianSignatureData ?? null,
-      clientSignatureData: input.signatures.clientSignatureData ?? null,
-    })
-    .returning();
-
-  if (detail.execution) {
-    await db
-      .update(serviceOrderExecution)
-      .set({
+    const nextVersion = detail.deliveryDocuments.length + 1;
+    const [document] = await o
+      .insert(serviceOrderDeliveryDocument)
+      .values({
+        organizationId: input.organizationId,
+        serviceOrderId: input.serviceOrderId,
+        documentNumber: `${detail.serviceOrderNumber}/ENT`,
+        version: nextVersion,
+        issuedAt: new Date(),
+        issuedByUserId: input.actorUserId,
         technicianSignatureData:
-          input.signatures.technicianSignatureData ??
-          detail.execution.technicianSignatureData ??
-          null,
-        clientSignatureData:
-          input.signatures.clientSignatureData ??
-          detail.execution.clientSignatureData ??
-          null,
-        updatedAt: new Date(),
+          input.signatures.technicianSignatureData ?? null,
+        clientSignatureData: input.signatures.clientSignatureData ?? null,
       })
-      .where(eq(serviceOrderExecution.id, detail.execution.id));
-  }
+      .returning();
 
-  await recordServiceOrderEvent({
-    organizationId: detail.organizationId,
-    unitId: detail.unitId,
-    serviceOrderId: input.serviceOrderId,
-    actorType: "lab_user",
-    actorId: input.actorUserId,
-    eventType: "service_order.delivery_document_issued",
-    metadata: { documentId: document?.id, version: nextVersion },
+    if (detail.execution) {
+      await o
+        .update(serviceOrderExecution)
+        .set({
+          technicianSignatureData:
+            input.signatures.technicianSignatureData ??
+            detail.execution.technicianSignatureData ??
+            null,
+          clientSignatureData:
+            input.signatures.clientSignatureData ??
+            detail.execution.clientSignatureData ??
+            null,
+          updatedAt: new Date(),
+        })
+        .where(eq(serviceOrderExecution.id, detail.execution.id));
+    }
+
+    await recordServiceOrderEvent(
+      {
+        organizationId: detail.organizationId,
+        unitId: detail.unitId,
+        serviceOrderId: input.serviceOrderId,
+        actorType: "lab_user",
+        actorId: input.actorUserId,
+        eventType: "service_order.delivery_document_issued",
+        metadata: { documentId: document?.id, version: nextVersion },
+      },
+      o,
+    );
+    return { document };
   });
+  if (!issued) return null;
+  const { document } = issued;
+
+  // After the commit: the job renders the row the transaction wrote.
   await enqueueServiceOrderDocumentJob({
     type: "SERVICE_ORDER_DELIVERY_RECEIPT",
     serviceOrderId: input.serviceOrderId,
@@ -195,13 +229,16 @@ export async function issueDeliveryDocument(input: {
 export async function getLatestIntakeDocumentDownloadUrl(
   env: ServiceOrderDocumentEnv,
   serviceOrderId: number,
+  organizationId: string,
 ) {
-  const [document] = await db
-    .select()
-    .from(serviceOrderIntakeDocument)
-    .where(eq(serviceOrderIntakeDocument.serviceOrderId, serviceOrderId))
-    .orderBy(desc(serviceOrderIntakeDocument.version))
-    .limit(1);
+  const [document] = await orgDb(organizationId).transaction((o) =>
+    o
+      .select()
+      .from(serviceOrderIntakeDocument)
+      .where(eq(serviceOrderIntakeDocument.serviceOrderId, serviceOrderId))
+      .orderBy(desc(serviceOrderIntakeDocument.version))
+      .limit(1),
+  );
 
   return document?.pdfR2Key
     ? createDocumentDownloadUrl(env, document.pdfR2Key)
@@ -211,13 +248,16 @@ export async function getLatestIntakeDocumentDownloadUrl(
 export async function getLatestTagDownloadUrl(
   env: ServiceOrderDocumentEnv,
   serviceOrderId: number,
+  organizationId: string,
 ) {
-  const [tag] = await db
-    .select()
-    .from(serviceOrderTag)
-    .where(eq(serviceOrderTag.serviceOrderId, serviceOrderId))
-    .orderBy(desc(serviceOrderTag.id))
-    .limit(1);
+  const [tag] = await orgDb(organizationId).transaction((o) =>
+    o
+      .select()
+      .from(serviceOrderTag)
+      .where(eq(serviceOrderTag.serviceOrderId, serviceOrderId))
+      .orderBy(desc(serviceOrderTag.id))
+      .limit(1),
+  );
 
   return tag?.pdfR2Key ? createDocumentDownloadUrl(env, tag.pdfR2Key) : null;
 }
@@ -225,13 +265,16 @@ export async function getLatestTagDownloadUrl(
 export async function getLatestDeliveryDocumentDownloadUrl(
   env: ServiceOrderDocumentEnv,
   serviceOrderId: number,
+  organizationId: string,
 ) {
-  const [document] = await db
-    .select()
-    .from(serviceOrderDeliveryDocument)
-    .where(eq(serviceOrderDeliveryDocument.serviceOrderId, serviceOrderId))
-    .orderBy(desc(serviceOrderDeliveryDocument.version))
-    .limit(1);
+  const [document] = await orgDb(organizationId).transaction((o) =>
+    o
+      .select()
+      .from(serviceOrderDeliveryDocument)
+      .where(eq(serviceOrderDeliveryDocument.serviceOrderId, serviceOrderId))
+      .orderBy(desc(serviceOrderDeliveryDocument.version))
+      .limit(1),
+  );
 
   return document?.pdfR2Key
     ? createDocumentDownloadUrl(env, document.pdfR2Key)
@@ -242,17 +285,20 @@ export async function getQuoteDocumentDownloadUrl(
   env: ServiceOrderDocumentEnv,
   serviceOrderId: number,
   quoteId: number,
+  organizationId: string,
 ) {
-  const [quote] = await db
-    .select()
-    .from(serviceOrderQuote)
-    .where(
-      and(
-        eq(serviceOrderQuote.id, quoteId),
-        eq(serviceOrderQuote.serviceOrderId, serviceOrderId),
-      ),
-    )
-    .limit(1);
+  const [quote] = await orgDb(organizationId).transaction((o) =>
+    o
+      .select()
+      .from(serviceOrderQuote)
+      .where(
+        and(
+          eq(serviceOrderQuote.id, quoteId),
+          eq(serviceOrderQuote.serviceOrderId, serviceOrderId),
+        ),
+      )
+      .limit(1),
+  );
 
   return quote?.pdfR2Key
     ? createDocumentDownloadUrl(env, quote.pdfR2Key)

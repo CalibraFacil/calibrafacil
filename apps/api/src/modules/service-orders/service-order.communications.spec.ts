@@ -18,6 +18,7 @@
 import { describe, it, expect, vi } from "vitest";
 
 vi.mock("@calibra-facil/db", () => ({ db: {} }));
+vi.mock("../../lib/org-transaction", () => ({ inOrgTransaction: vi.fn() }));
 vi.mock("@calibra-facil/db/schema", () => ({
   customer: {},
   emailSuppression: {},

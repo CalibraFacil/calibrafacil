@@ -1,5 +1,4 @@
-import { db } from "@calibra-facil/db";
-import type { OrgExecutor } from "@calibra-facil/db/for-org";
+import type { OrgDb, OrgExecutor } from "@calibra-facil/db/for-org";
 import {
   type CustomerAddress,
   type CustomerCompliance,
@@ -62,11 +61,42 @@ import {
   serializeContaAzulTokenBundle,
 } from "./conta-azul-oauth";
 import { requireContaAzulOAuthConfig } from "./conta-azul-app";
+import { orgDb } from "./org-db";
+import { orgTransactionWithExecutor } from "./org-transaction";
 
-type FinanceDbExecutor = Pick<
-  typeof db,
+/**
+ * What the finance helpers read and write through: an org-bound handle or the
+ * raw transaction of a caller that named the laboratory already. Every statement
+ * carries the organization predicate by hand.
+ */
+type FinanceDbExecutor = Pick<OrgExecutor, "insert" | "select" | "update">;
+
+/** The raw transaction of `orgTransactionWithExecutor`: it can run raw SQL. */
+type FinanceRawExecutor = Pick<
+  OrgExecutor,
   "execute" | "insert" | "select" | "update"
 >;
+
+/**
+ * Runs `run` on the caller's executor, or in an organization-bound transaction of
+ * its own (naming the laboratory for row-level security) when it has none.
+ */
+function withFinanceExecutor<R>(
+  organizationId: string,
+  executor: FinanceDbExecutor | undefined,
+  run: (executor: FinanceDbExecutor) => Promise<R>,
+): Promise<R> {
+  return executor ? run(executor) : orgDb(organizationId).transaction(run);
+}
+
+/** Same, for the helpers that only read. */
+function withFinanceReader<R>(
+  organizationId: string,
+  executor: Pick<OrgExecutor, "select"> | undefined,
+  run: (reader: Pick<OrgExecutor, "select">) => Promise<R>,
+): Promise<R> {
+  return executor ? run(executor) : orgDb(organizationId).transaction(run);
+}
 
 export type JobFinancialContext = {
   documentId: number | null;
@@ -213,11 +243,21 @@ export interface ResolvedBillingDocumentLink {
   exportStatus: string;
 }
 
-export async function resolveServiceOrderBillingDocumentLinks(
+export function resolveServiceOrderBillingDocumentLinks(
   inputs: ServiceOrderBillingDocumentLinkInput[],
   organizationId: string,
   // An org-bound transaction handle when the caller has one (row-level security).
-  executor: Pick<OrgExecutor, "select"> = db,
+  executor?: Pick<OrgExecutor, "select">,
+): Promise<Map<number, ResolvedBillingDocumentLink>> {
+  return withFinanceReader(organizationId, executor, (reader) =>
+    resolveBillingDocumentLinksOn(reader, inputs, organizationId),
+  );
+}
+
+async function resolveBillingDocumentLinksOn(
+  executor: Pick<OrgExecutor, "select">,
+  inputs: ServiceOrderBillingDocumentLinkInput[],
+  organizationId: string,
 ): Promise<Map<number, ResolvedBillingDocumentLink>> {
   const serviceOrderIds = inputs.map((input) => input.serviceOrderId);
   const linkedJobIds = inputs.flatMap((input) => input.certificateJobIds);
@@ -356,14 +396,16 @@ async function writeFinanceIntegrationEvent(params: {
   message: string;
   organizationId: string;
 }) {
-  await db.insert(integrationEventLog).values({
-    integrationId: params.integrationId,
-    organizationId: params.organizationId,
-    level: params.level,
-    event: params.event,
-    message: params.message,
-    details: params.details ?? null,
-  });
+  await orgDb(params.organizationId).transaction((o) =>
+    o.insert(integrationEventLog).values({
+      integrationId: params.integrationId,
+      organizationId: params.organizationId,
+      level: params.level,
+      event: params.event,
+      message: params.message,
+      details: params.details ?? null,
+    }),
+  );
 }
 
 function toLowerBillingDocumentStatus(
@@ -507,56 +549,57 @@ async function resolveApplicableAgreement(
   return null;
 }
 
-export async function loadCustomerActiveCommercialAgreement(
+export function loadCustomerActiveCommercialAgreement(
   organizationId: string,
   customerId: number,
   // Reads only: any executor with `select` (an org-bound transaction handle).
   executor?: Pick<OrgExecutor, "select">,
 ): Promise<ActiveCommercialAgreementSummary | null> {
-  const runner = executor ?? db;
-  const now = new Date();
+  return withFinanceReader(organizationId, executor, async (runner) => {
+    const now = new Date();
 
-  const [agreement] = await runner
-    .select({
-      id: commercialAgreement.id,
-      agreementCode: commercialAgreement.agreementCode,
-      title: commercialAgreement.title,
-      effectiveFrom: commercialAgreement.effectiveFrom,
-      effectiveTo: commercialAgreement.effectiveTo,
-      currency: commercialAgreement.currency,
-      defaultPaymentTermDays: commercialAgreement.defaultPaymentTermDays,
-    })
-    .from(commercialAgreement)
-    .where(
-      and(
-        eq(commercialAgreement.organizationId, organizationId),
-        eq(commercialAgreement.customerId, customerId),
-        eq(
-          commercialAgreement.status,
-          "ACTIVE" satisfies CommercialAgreementStatus,
+    const [agreement] = await runner
+      .select({
+        id: commercialAgreement.id,
+        agreementCode: commercialAgreement.agreementCode,
+        title: commercialAgreement.title,
+        effectiveFrom: commercialAgreement.effectiveFrom,
+        effectiveTo: commercialAgreement.effectiveTo,
+        currency: commercialAgreement.currency,
+        defaultPaymentTermDays: commercialAgreement.defaultPaymentTermDays,
+      })
+      .from(commercialAgreement)
+      .where(
+        and(
+          eq(commercialAgreement.organizationId, organizationId),
+          eq(commercialAgreement.customerId, customerId),
+          eq(
+            commercialAgreement.status,
+            "ACTIVE" satisfies CommercialAgreementStatus,
+          ),
+          lte(commercialAgreement.effectiveFrom, now),
+          or(
+            isNull(commercialAgreement.effectiveTo),
+            gte(commercialAgreement.effectiveTo, now),
+          ),
         ),
-        lte(commercialAgreement.effectiveFrom, now),
-        or(
-          isNull(commercialAgreement.effectiveTo),
-          gte(commercialAgreement.effectiveTo, now),
-        ),
-      ),
-    )
-    .orderBy(
-      desc(commercialAgreement.effectiveFrom),
-      desc(commercialAgreement.id),
-    )
-    .limit(1);
+      )
+      .orderBy(
+        desc(commercialAgreement.effectiveFrom),
+        desc(commercialAgreement.id),
+      )
+      .limit(1);
 
-  if (!agreement) {
-    return null;
-  }
+    if (!agreement) {
+      return null;
+    }
 
-  return {
-    ...agreement,
-    effectiveFrom: agreement.effectiveFrom.toISOString(),
-    effectiveTo: agreement.effectiveTo?.toISOString() ?? null,
-  };
+    return {
+      ...agreement,
+      effectiveFrom: agreement.effectiveFrom.toISOString(),
+      effectiveTo: agreement.effectiveTo?.toISOString() ?? null,
+    };
+  });
 }
 
 export function syncComplianceWithActiveAgreement(
@@ -608,18 +651,28 @@ export function syncComplianceWithActiveAgreement(
   };
 }
 
-export async function ensureJobCommercialSnapshot(
-  params: {
-    actorUserId?: string | null;
-    customerId: number;
-    jobId: number;
-    organizationId: string;
-    serviceId: number;
-    unitId: number;
-  },
+type EnsureJobCommercialSnapshotParams = {
+  actorUserId?: string | null;
+  customerId: number;
+  jobId: number;
+  organizationId: string;
+  serviceId: number;
+  unitId: number;
+};
+
+export function ensureJobCommercialSnapshot(
+  params: EnsureJobCommercialSnapshotParams,
   executor?: FinanceDbExecutor,
 ) {
-  const runner = executor ?? db;
+  return withFinanceExecutor(params.organizationId, executor, (runner) =>
+    ensureSnapshotOn(runner, params),
+  );
+}
+
+async function ensureSnapshotOn(
+  runner: FinanceDbExecutor,
+  params: EnsureJobCommercialSnapshotParams,
+) {
   const [existing] = await runner
     .select()
     .from(jobCommercialSnapshot)
@@ -710,15 +763,25 @@ export async function ensureJobCommercialSnapshot(
   return snapshot;
 }
 
-export async function ensureJobCommercialSnapshotFromJob(
-  params: {
-    actorUserId?: string | null;
-    jobId: number;
-    organizationId: string;
-  },
+type EnsureJobCommercialSnapshotFromJobParams = {
+  actorUserId?: string | null;
+  jobId: number;
+  organizationId: string;
+};
+
+export function ensureJobCommercialSnapshotFromJob(
+  params: EnsureJobCommercialSnapshotFromJobParams,
   executor?: FinanceDbExecutor,
 ) {
-  const runner = executor ?? db;
+  return withFinanceExecutor(params.organizationId, executor, (runner) =>
+    ensureSnapshotFromJobOn(runner, params),
+  );
+}
+
+async function ensureSnapshotFromJobOn(
+  runner: FinanceDbExecutor,
+  params: EnsureJobCommercialSnapshotFromJobParams,
+) {
   const [job] = await runner
     .select({
       id: calibrationJob.id,
@@ -755,36 +818,40 @@ export async function ensureJobCommercialSnapshotFromJob(
 export async function loadJobFinancialContexts(
   organizationId: string,
   jobIds: number[],
+  // An org-bound transaction handle when the caller has one (row-level security).
+  executor?: Pick<OrgExecutor, "select">,
 ) {
   if (jobIds.length === 0) {
     return new Map<number, JobFinancialContext>();
   }
 
-  const rows = await db
-    .select({
-      jobId: billingDocumentItem.jobId,
-      documentId: billingDocument.id,
-      documentNumber: billingDocument.documentNumber,
-      documentStatus: billingDocument.status,
-      dueDate: billingDocument.dueDate,
-      installmentStatus: receivableInstallment.status,
-    })
-    .from(billingDocumentItem)
-    .innerJoin(
-      billingDocument,
-      eq(billingDocumentItem.documentId, billingDocument.id),
-    )
-    .leftJoin(
-      receivableInstallment,
-      eq(receivableInstallment.documentId, billingDocument.id),
-    )
-    .where(
-      and(
-        eq(billingDocument.organizationId, organizationId),
-        inArray(billingDocumentItem.jobId, jobIds),
-      ),
-    )
-    .orderBy(desc(billingDocument.createdAt));
+  const rows = await withFinanceReader(organizationId, executor, (reader) =>
+    reader
+      .select({
+        jobId: billingDocumentItem.jobId,
+        documentId: billingDocument.id,
+        documentNumber: billingDocument.documentNumber,
+        documentStatus: billingDocument.status,
+        dueDate: billingDocument.dueDate,
+        installmentStatus: receivableInstallment.status,
+      })
+      .from(billingDocumentItem)
+      .innerJoin(
+        billingDocument,
+        eq(billingDocumentItem.documentId, billingDocument.id),
+      )
+      .leftJoin(
+        receivableInstallment,
+        eq(receivableInstallment.documentId, billingDocument.id),
+      )
+      .where(
+        and(
+          eq(billingDocument.organizationId, organizationId),
+          inArray(billingDocumentItem.jobId, jobIds),
+        ),
+      )
+      .orderBy(desc(billingDocument.createdAt)),
+  );
 
   const now = new Date();
   const result = new Map<number, JobFinancialContext>();
@@ -832,22 +899,24 @@ export async function loadCustomerFinancialSummary(
   organizationId: string,
   customerId: number,
   // An org-bound transaction handle when the caller has one (row-level security).
-  executor: Pick<OrgExecutor, "select"> = db,
+  executor?: Pick<OrgExecutor, "select">,
 ): Promise<CustomerFinancialSummary> {
-  const rows = await executor
-    .select({
-      documentStatus: billingDocument.status,
-      totalCents: billingDocument.totalCents,
-      dueDate: billingDocument.dueDate,
-    })
-    .from(billingDocument)
-    .where(
-      and(
-        eq(billingDocument.organizationId, organizationId),
-        eq(billingDocument.customerId, customerId),
-        inArray(billingDocument.status, ["ISSUED", "OVERDUE", "PAID"]),
+  const rows = await withFinanceReader(organizationId, executor, (reader) =>
+    reader
+      .select({
+        documentStatus: billingDocument.status,
+        totalCents: billingDocument.totalCents,
+        dueDate: billingDocument.dueDate,
+      })
+      .from(billingDocument)
+      .where(
+        and(
+          eq(billingDocument.organizationId, organizationId),
+          eq(billingDocument.customerId, customerId),
+          inArray(billingDocument.status, ["ISSUED", "OVERDUE", "PAID"]),
+        ),
       ),
-    );
+  );
 
   const now = new Date();
   let openDocumentsCount = 0;
@@ -884,7 +953,7 @@ export async function loadCustomerFinancialSummary(
 async function getNextBillingDocumentSequence(
   organizationId: string,
   year: number,
-  executor: FinanceDbExecutor,
+  executor: FinanceRawExecutor,
 ) {
   const prefix = `FIN-${year}-`;
   const sequenceSql = sql<number>`coalesce(cast(substring(${billingDocument.documentNumber} from '[0-9]+$') as integer), 0)`;
@@ -909,25 +978,42 @@ async function getNextBillingDocumentSequence(
   return (result?.sequence ?? 0) + 1;
 }
 
+/**
+ * The advisory lock is raw SQL, so this takes the raw transaction of
+ * `orgTransactionWithExecutor` (it names the laboratory for row-level security);
+ * without one it opens such a transaction of its own.
+ */
 export async function generateBillingDocumentNumber(
   organizationId: string,
-  executor?: FinanceDbExecutor,
+  executor?: FinanceRawExecutor,
 ) {
   const year = new Date().getFullYear();
   const sequence = executor
     ? await getNextBillingDocumentSequence(organizationId, year, executor)
-    : await db.transaction((tx) =>
+    : await orgTransactionWithExecutor(organizationId, (_o, tx) =>
         getNextBillingDocumentSequence(organizationId, year, tx),
       );
 
   return `FIN-${year}-${sequence.toString().padStart(4, "0")}`;
 }
 
-export async function loadBillingDocumentExportPayload(
+export function loadBillingDocumentExportPayload(
+  organizationId: string,
+  documentId: number,
+  // An org-bound transaction handle when the caller has one (row-level security).
+  executor?: Pick<OrgExecutor, "select">,
+): Promise<IntegrationBillingDocumentPayload | null> {
+  return withFinanceReader(organizationId, executor, (reader) =>
+    readBillingDocumentExportPayload(reader, organizationId, documentId),
+  );
+}
+
+async function readBillingDocumentExportPayload(
+  reader: Pick<OrgExecutor, "select">,
   organizationId: string,
   documentId: number,
 ): Promise<IntegrationBillingDocumentPayload | null> {
-  const [document] = await db
+  const [document] = await reader
     .select({
       id: billingDocument.id,
       documentNumber: billingDocument.documentNumber,
@@ -960,7 +1046,7 @@ export async function loadBillingDocumentExportPayload(
     return null;
   }
 
-  const items = await db
+  const items = await reader
     .select({
       id: billingDocumentItem.id,
       description: billingDocumentItem.description,
@@ -1009,33 +1095,38 @@ export async function loadBillingDocumentExportPayload(
   };
 }
 
-export async function loadBillingDocumentPayloadsForIntegration(
+export function loadBillingDocumentPayloadsForIntegration(
   organizationId: string,
   limit: number,
+  // An org-bound transaction handle when the caller has one (row-level security).
+  executor?: Pick<OrgExecutor, "select">,
 ) {
-  const documents = await db
-    .select({
-      id: billingDocument.id,
-    })
-    .from(billingDocument)
-    .where(
-      and(
-        eq(billingDocument.organizationId, organizationId),
-        inArray(billingDocument.status, ["ISSUED", "PAID", "OVERDUE"]),
+  return withFinanceReader(organizationId, executor, async (reader) => {
+    const documents = await reader
+      .select({
+        id: billingDocument.id,
+      })
+      .from(billingDocument)
+      .where(
+        and(
+          eq(billingDocument.organizationId, organizationId),
+          inArray(billingDocument.status, ["ISSUED", "PAID", "OVERDUE"]),
+        ),
+      )
+      .orderBy(desc(billingDocument.issueDate), desc(billingDocument.createdAt))
+      .limit(limit);
+
+    const payloads = await Promise.all(
+      documents.map((document) =>
+        loadBillingDocumentExportPayload(organizationId, document.id, reader),
       ),
-    )
-    .orderBy(desc(billingDocument.issueDate), desc(billingDocument.createdAt))
-    .limit(limit);
+    );
 
-  const payloads = await Promise.all(
-    documents.map((document) =>
-      loadBillingDocumentExportPayload(organizationId, document.id),
-    ),
-  );
-
-  return payloads.filter(
-    (payload): payload is IntegrationBillingDocumentPayload => payload !== null,
-  );
+    return payloads.filter(
+      (payload): payload is IntegrationBillingDocumentPayload =>
+        payload !== null,
+    );
+  });
 }
 
 export async function exportBillingDocumentToPrimaryIntegration(params: {
@@ -1043,57 +1134,79 @@ export async function exportBillingDocumentToPrimaryIntegration(params: {
   env: IntegrationsEnv;
   organizationId: string;
 }) {
-  const [record] = await db
-    .select({
-      integrationId: organizationIntegration.id,
-      provider: organizationIntegration.provider,
-      connectionId: integrationConnection.id,
-      encryptedSecret: integrationConnection.encryptedSecret,
-      secretIv: integrationConnection.secretIv,
-      config: integrationConnection.config,
-    })
-    .from(organizationIntegration)
-    .innerJoin(
-      integrationConnection,
-      eq(integrationConnection.integrationId, organizationIntegration.id),
-    )
-    .where(
-      and(
-        eq(organizationIntegration.organizationId, params.organizationId),
-        eq(organizationIntegration.type, "financial_erp"),
-        eq(organizationIntegration.status, "ACTIVE"),
-      ),
-    )
-    .orderBy(desc(organizationIntegration.updatedAt))
-    .limit(1);
+  // The remote calls below can take seconds: no database transaction is held
+  // across them. Every statement runs in a short transaction of its own that
+  // names the laboratory (row-level security).
+  const inOrg = <R>(run: (o: OrgDb) => Promise<R>) =>
+    orgDb(params.organizationId).transaction(run);
+
+  const { record, payload, existingLink } = await inOrg(async (o) => {
+    const [integration] = await o
+      .select({
+        integrationId: organizationIntegration.id,
+        provider: organizationIntegration.provider,
+        connectionId: integrationConnection.id,
+        encryptedSecret: integrationConnection.encryptedSecret,
+        secretIv: integrationConnection.secretIv,
+        config: integrationConnection.config,
+      })
+      .from(organizationIntegration)
+      .innerJoin(
+        integrationConnection,
+        eq(integrationConnection.integrationId, organizationIntegration.id),
+      )
+      .where(
+        and(
+          eq(organizationIntegration.organizationId, params.organizationId),
+          eq(organizationIntegration.type, "financial_erp"),
+          eq(organizationIntegration.status, "ACTIVE"),
+        ),
+      )
+      .orderBy(desc(organizationIntegration.updatedAt))
+      .limit(1);
+
+    if (!integration)
+      return { record: null, payload: null, existingLink: null };
+
+    const exportPayload = await loadBillingDocumentExportPayload(
+      params.organizationId,
+      params.documentId,
+      o,
+    );
+
+    if (!exportPayload) {
+      return { record: integration, payload: null, existingLink: null };
+    }
+
+    const [link] = await o
+      .select({
+        id: integrationObjectLink.id,
+        remoteEntityId: integrationObjectLink.remoteEntityId,
+      })
+      .from(integrationObjectLink)
+      .where(
+        and(
+          eq(integrationObjectLink.integrationId, integration.integrationId),
+          eq(integrationObjectLink.target, "billing_document"),
+          eq(integrationObjectLink.localEntityId, exportPayload.externalId),
+        ),
+      )
+      .limit(1);
+
+    return {
+      record: integration,
+      payload: exportPayload,
+      existingLink: link ?? null,
+    };
+  });
 
   if (!record) {
     throw new Error("Nenhuma integração ERP ativa encontrada");
   }
 
-  const payload = await loadBillingDocumentExportPayload(
-    params.organizationId,
-    params.documentId,
-  );
-
   if (!payload) {
     throw new Error("Documento financeiro nao encontrado");
   }
-
-  const [existingLink] = await db
-    .select({
-      id: integrationObjectLink.id,
-      remoteEntityId: integrationObjectLink.remoteEntityId,
-    })
-    .from(integrationObjectLink)
-    .where(
-      and(
-        eq(integrationObjectLink.integrationId, record.integrationId),
-        eq(integrationObjectLink.target, "billing_document"),
-        eq(integrationObjectLink.localEntityId, payload.externalId),
-      ),
-    )
-    .limit(1);
 
   let remoteEntityId: string | null = null;
 
@@ -1121,13 +1234,15 @@ export async function exportBillingDocumentToPrimaryIntegration(params: {
     );
 
     if (!response.ok) {
-      await db
-        .update(billingDocument)
-        .set({
-          exportStatus: "FAILED",
-          updatedAt: new Date(),
-        })
-        .where(eq(billingDocument.id, params.documentId));
+      await inOrg((o) =>
+        o
+          .update(billingDocument)
+          .set({
+            exportStatus: "FAILED",
+            updatedAt: new Date(),
+          })
+          .where(eq(billingDocument.id, params.documentId)),
+      );
 
       await writeFinanceIntegrationEvent({
         integrationId: record.integrationId,
@@ -1168,19 +1283,21 @@ export async function exportBillingDocumentToPrimaryIntegration(params: {
       rateLimitKey: record.integrationId,
       links: {
         async getExistingRemoteId({ target, localEntityId }) {
-          const [link] = await db
-            .select({
-              remoteEntityId: integrationObjectLink.remoteEntityId,
-            })
-            .from(integrationObjectLink)
-            .where(
-              and(
-                eq(integrationObjectLink.integrationId, record.integrationId),
-                eq(integrationObjectLink.target, target),
-                eq(integrationObjectLink.localEntityId, localEntityId),
-              ),
-            )
-            .limit(1);
+          const [link] = await inOrg((o) =>
+            o
+              .select({
+                remoteEntityId: integrationObjectLink.remoteEntityId,
+              })
+              .from(integrationObjectLink)
+              .where(
+                and(
+                  eq(integrationObjectLink.integrationId, record.integrationId),
+                  eq(integrationObjectLink.target, target),
+                  eq(integrationObjectLink.localEntityId, localEntityId),
+                ),
+              )
+              .limit(1),
+          );
 
           return link?.remoteEntityId ?? null;
         },
@@ -1192,44 +1309,46 @@ export async function exportBillingDocumentToPrimaryIntegration(params: {
           remoteEntityType,
           metadata,
         }) {
-          const [link] = await db
-            .select({ id: integrationObjectLink.id })
-            .from(integrationObjectLink)
-            .where(
-              and(
-                eq(integrationObjectLink.integrationId, record.integrationId),
-                eq(integrationObjectLink.target, target),
-                eq(integrationObjectLink.localEntityId, localEntityId),
-              ),
-            )
-            .limit(1);
+          await inOrg(async (o) => {
+            const [link] = await o
+              .select({ id: integrationObjectLink.id })
+              .from(integrationObjectLink)
+              .where(
+                and(
+                  eq(integrationObjectLink.integrationId, record.integrationId),
+                  eq(integrationObjectLink.target, target),
+                  eq(integrationObjectLink.localEntityId, localEntityId),
+                ),
+              )
+              .limit(1);
 
-          if (link) {
-            await db
-              .update(integrationObjectLink)
-              .set({
-                remoteEntityId: linkRemoteEntityId,
-                remoteDisplayId: remoteDisplayId ?? linkRemoteEntityId,
-                remoteEntityType: remoteEntityType ?? null,
-                metadata: metadata ?? null,
-                lastSyncedAt: new Date(),
-                updatedAt: new Date(),
-              })
-              .where(eq(integrationObjectLink.id, link.id));
-            return;
-          }
+            if (link) {
+              await o
+                .update(integrationObjectLink)
+                .set({
+                  remoteEntityId: linkRemoteEntityId,
+                  remoteDisplayId: remoteDisplayId ?? linkRemoteEntityId,
+                  remoteEntityType: remoteEntityType ?? null,
+                  metadata: metadata ?? null,
+                  lastSyncedAt: new Date(),
+                  updatedAt: new Date(),
+                })
+                .where(eq(integrationObjectLink.id, link.id));
+              return;
+            }
 
-          await db.insert(integrationObjectLink).values({
-            id: crypto.randomUUID(),
-            integrationId: record.integrationId,
-            organizationId: params.organizationId,
-            target,
-            localEntityId,
-            remoteEntityId: linkRemoteEntityId,
-            remoteDisplayId: remoteDisplayId ?? linkRemoteEntityId,
-            remoteEntityType: remoteEntityType ?? null,
-            metadata: metadata ?? null,
-            lastSyncedAt: new Date(),
+            await o.insert(integrationObjectLink).values({
+              id: crypto.randomUUID(),
+              integrationId: record.integrationId,
+              organizationId: params.organizationId,
+              target,
+              localEntityId,
+              remoteEntityId: linkRemoteEntityId,
+              remoteDisplayId: remoteDisplayId ?? linkRemoteEntityId,
+              remoteEntityType: remoteEntityType ?? null,
+              metadata: metadata ?? null,
+              lastSyncedAt: new Date(),
+            });
           });
         },
       },
@@ -1254,29 +1373,33 @@ export async function exportBillingDocumentToPrimaryIntegration(params: {
             scopes: refreshed.scopes,
           });
 
-          await db
-            .update(integrationConnection)
-            .set({
-              credentialType: "oauth2",
-              config: refreshedConfig,
-              encryptedSecret: encrypted.encryptedSecret,
-              secretIv: encrypted.secretIv,
-              updatedAt: new Date(),
-            })
-            .where(eq(integrationConnection.id, record.connectionId));
+          await inOrg((o) =>
+            o
+              .update(integrationConnection)
+              .set({
+                credentialType: "oauth2",
+                config: refreshedConfig,
+                encryptedSecret: encrypted.encryptedSecret,
+                secretIv: encrypted.secretIv,
+                updatedAt: new Date(),
+              })
+              .where(eq(integrationConnection.id, record.connectionId)),
+          );
 
           return refreshed.accessToken;
         } catch (error) {
           const failure = buildContaAzulRefreshFailurePolicy(error);
 
-          await db
-            .update(organizationIntegration)
-            .set({
-              status: failure.status,
-              lastValidationError: failure.message,
-              updatedAt: new Date(),
-            })
-            .where(eq(organizationIntegration.id, record.integrationId));
+          await inOrg((o) =>
+            o
+              .update(organizationIntegration)
+              .set({
+                status: failure.status,
+                lastValidationError: failure.message,
+                updatedAt: new Date(),
+              })
+              .where(eq(organizationIntegration.id, record.integrationId)),
+          );
 
           throw new Error(failure.message, { cause: error });
         }
@@ -1287,13 +1410,15 @@ export async function exportBillingDocumentToPrimaryIntegration(params: {
       const exported = await adapter.exportBillingDocument(payload);
       remoteEntityId = exported.remoteEntityId;
     } catch (error) {
-      await db
-        .update(billingDocument)
-        .set({
-          exportStatus: "FAILED",
-          updatedAt: new Date(),
-        })
-        .where(eq(billingDocument.id, params.documentId));
+      await inOrg((o) =>
+        o
+          .update(billingDocument)
+          .set({
+            exportStatus: "FAILED",
+            updatedAt: new Date(),
+          })
+          .where(eq(billingDocument.id, params.documentId)),
+      );
 
       const message =
         error instanceof Error
@@ -1319,39 +1444,45 @@ export async function exportBillingDocumentToPrimaryIntegration(params: {
 
   if (record.provider === "generic_http") {
     if (existingLink) {
-      await db
-        .update(integrationObjectLink)
-        .set({
+      await inOrg((o) =>
+        o
+          .update(integrationObjectLink)
+          .set({
+            remoteEntityId,
+            remoteDisplayId: remoteEntityId,
+            remoteEntityType: "billing_document",
+            lastSyncedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(integrationObjectLink.id, existingLink.id)),
+      );
+    } else {
+      await inOrg((o) =>
+        o.insert(integrationObjectLink).values({
+          id: crypto.randomUUID(),
+          integrationId: record.integrationId,
+          organizationId: params.organizationId,
+          target: "billing_document",
+          localEntityId: payload.externalId,
           remoteEntityId,
           remoteDisplayId: remoteEntityId,
           remoteEntityType: "billing_document",
           lastSyncedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(integrationObjectLink.id, existingLink.id));
-    } else {
-      await db.insert(integrationObjectLink).values({
-        id: crypto.randomUUID(),
-        integrationId: record.integrationId,
-        organizationId: params.organizationId,
-        target: "billing_document",
-        localEntityId: payload.externalId,
-        remoteEntityId,
-        remoteDisplayId: remoteEntityId,
-        remoteEntityType: "billing_document",
-        lastSyncedAt: new Date(),
-      });
+        }),
+      );
     }
   }
 
-  await db
-    .update(billingDocument)
-    .set({
-      exportStatus: "EXPORTED",
-      exportedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(billingDocument.id, params.documentId));
+  await inOrg((o) =>
+    o
+      .update(billingDocument)
+      .set({
+        exportStatus: "EXPORTED",
+        exportedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(billingDocument.id, params.documentId)),
+  );
 
   await writeFinanceIntegrationEvent({
     integrationId: record.integrationId,
@@ -1399,134 +1530,140 @@ export async function sendServiceOrderToFinance(params: {
 }): Promise<SendServiceOrderResult> {
   const { organizationId, serviceOrderId, actorUserId, scope, env } = params;
   try {
-    const [order] = await db
-      .select({
-        id: serviceOrder.id,
-        number: serviceOrder.serviceOrderNumber,
-        status: serviceOrder.status,
-        closingReason: serviceOrder.closingReason,
-        customerId: serviceOrder.customerId,
-        unitId: serviceOrder.unitId,
-        amountApprovedCents: serviceOrder.totalApprovedCents,
-        amountQuotedCents: serviceOrder.totalQuotedCents,
-        billingDocumentId: serviceOrder.billingDocumentId,
-        taxId: customer.taxId,
-        email: customer.email,
-        address: customer.address,
-      })
-      .from(serviceOrder)
-      .innerJoin(customer, eq(serviceOrder.customerId, customer.id))
-      .where(
-        and(
-          eq(serviceOrder.organizationId, organizationId),
-          eq(serviceOrder.id, serviceOrderId),
-          buildUnitScopeCondition(serviceOrder.unitId, scope),
-        ),
-      )
-      .limit(1);
+    // Everything up to and including the billing document is ONE transaction
+    // that names the laboratory; the ERP export below makes remote calls, so it
+    // runs after the commit (and opens short transactions of its own).
+    // `o` is the org-bound handle; `tx` is the raw transaction the numbering
+    // helper needs for its advisory lock.
+    const documentId = await orgTransactionWithExecutor(
+      organizationId,
+      async (o, tx) => {
+        const [order] = await o
+          .select({
+            id: serviceOrder.id,
+            number: serviceOrder.serviceOrderNumber,
+            status: serviceOrder.status,
+            closingReason: serviceOrder.closingReason,
+            customerId: serviceOrder.customerId,
+            unitId: serviceOrder.unitId,
+            amountApprovedCents: serviceOrder.totalApprovedCents,
+            amountQuotedCents: serviceOrder.totalQuotedCents,
+            billingDocumentId: serviceOrder.billingDocumentId,
+            taxId: customer.taxId,
+            email: customer.email,
+            address: customer.address,
+          })
+          .from(serviceOrder)
+          .innerJoin(customer, eq(serviceOrder.customerId, customer.id))
+          .where(
+            and(
+              eq(serviceOrder.organizationId, organizationId),
+              eq(serviceOrder.id, serviceOrderId),
+              buildUnitScopeCondition(serviceOrder.unitId, scope),
+            ),
+          )
+          .limit(1);
 
-    if (!order) {
-      throw new Error("Ordem de serviço não encontrada");
-    }
-    if (!isServiceOrderBillable(order.status, order.closingReason)) {
-      throw new Error("Ordem de serviço não está pronta para faturamento");
-    }
+        if (!order) {
+          throw new Error("Ordem de serviço não encontrada");
+        }
+        if (!isServiceOrderBillable(order.status, order.closingReason)) {
+          throw new Error("Ordem de serviço não está pronta para faturamento");
+        }
 
-    // Reuse an existing (non-void) billing document if the order already has one.
-    let existingDoc: { id: number; status: BillingDocumentStatus } | null =
-      null;
-    if (order.billingDocumentId) {
-      const [doc] = await db
-        .select({ id: billingDocument.id, status: billingDocument.status })
-        .from(billingDocument)
-        .where(
-          and(
-            eq(billingDocument.id, order.billingDocumentId),
-            ne(billingDocument.status, "VOID"),
-          ),
-        )
-        .limit(1);
-      existingDoc = doc ?? null;
-    }
+        // Reuse an existing (non-void) billing document if the order already has one.
+        let existingDoc: { id: number; status: BillingDocumentStatus } | null =
+          null;
+        if (order.billingDocumentId) {
+          const [doc] = await o
+            .select({ id: billingDocument.id, status: billingDocument.status })
+            .from(billingDocument)
+            .where(
+              and(
+                eq(billingDocument.id, order.billingDocumentId),
+                ne(billingDocument.status, "VOID"),
+              ),
+            )
+            .limit(1);
+          existingDoc = doc ?? null;
+        }
 
-    let documentId: number;
+        if (existingDoc) {
+          if (existingDoc.status === "DRAFT") {
+            await issueDraftBillingDocument(o, tx, {
+              organizationId,
+              documentId: existingDoc.id,
+              actorUserId,
+            });
+          }
+          return existingDoc.id;
+        }
 
-    if (existingDoc) {
-      documentId = existingDoc.id;
-      if (existingDoc.status === "DRAFT") {
-        await issueDraftBillingDocument({
-          organizationId,
-          documentId,
-          actorUserId,
+        const jobs = await o
+          .select({
+            id: calibrationJob.id,
+            jobId: calibrationJob.jobId,
+            status: calibrationJob.status,
+          })
+          .from(serviceOrderCertificateLink)
+          .innerJoin(
+            calibrationJob,
+            eq(serviceOrderCertificateLink.certificateJobId, calibrationJob.id),
+          )
+          .where(eq(serviceOrderCertificateLink.serviceOrderId, order.id));
+
+        const amountCents =
+          order.amountApprovedCents > 0
+            ? order.amountApprovedCents
+            : order.amountQuotedCents;
+
+        const blockers = evaluateOrderBlockers({
+          customer: {
+            taxId: order.taxId,
+            email: order.email,
+            address: order.address,
+          },
+          certificateJobStatuses: jobs.map((job) => job.status),
+          amountCents,
         });
-      }
-    } else {
-      const jobs = await db
-        .select({
-          id: calibrationJob.id,
-          jobId: calibrationJob.jobId,
-          status: calibrationJob.status,
-        })
-        .from(serviceOrderCertificateLink)
-        .innerJoin(
-          calibrationJob,
-          eq(serviceOrderCertificateLink.certificateJobId, calibrationJob.id),
-        )
-        .where(eq(serviceOrderCertificateLink.serviceOrderId, order.id));
+        if (blockers.length > 0) {
+          throw new Error(blockers[0]!.label);
+        }
 
-      const amountCents =
-        order.amountApprovedCents > 0
-          ? order.amountApprovedCents
-          : order.amountQuotedCents;
-
-      const blockers = evaluateOrderBlockers({
-        customer: {
-          taxId: order.taxId,
-          email: order.email,
-          address: order.address,
-        },
-        certificateJobStatuses: jobs.map((job) => job.status),
-        amountCents,
-      });
-      if (blockers.length > 0) {
-        throw new Error(blockers[0]!.label);
-      }
-
-      const approvedJobs = jobs.filter(
-        (job) => job.status === "APPROVED" || job.status === "SUPERSEDED",
-      );
-
-      const snapshots: Awaited<
-        ReturnType<typeof ensureJobCommercialSnapshotFromJob>
-      >[] = [];
-      for (const job of approvedJobs) {
-        snapshots.push(
-          await ensureJobCommercialSnapshotFromJob(
-            { actorUserId, jobId: job.id, organizationId },
-            undefined,
-          ),
+        const approvedJobs = jobs.filter(
+          (job) => job.status === "APPROVED" || job.status === "SUPERSEDED",
         );
-      }
 
-      const jobSubtotalCents = snapshots.reduce(
-        (sum, snapshot) => sum + (snapshot.priceCents ?? 0),
-        0,
-      );
-      // Repair-only orders may have no certificate jobs; fall back to the
-      // service order's own pricing snapshot so they can still be billed.
-      const useServiceOrderLine =
-        approvedJobs.length === 0 || jobSubtotalCents <= 0;
-      const subtotalCents = useServiceOrderLine
-        ? amountCents
-        : jobSubtotalCents;
-      const currency = snapshots[0]?.currency ?? "BRL";
-      const paymentTermDays =
-        Math.max(
-          ...snapshots.map((snapshot) => snapshot.paymentTermDays),
-          DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
-        ) || DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS;
+        const snapshots: Awaited<
+          ReturnType<typeof ensureJobCommercialSnapshotFromJob>
+        >[] = [];
+        for (const job of approvedJobs) {
+          snapshots.push(
+            await ensureJobCommercialSnapshotFromJob(
+              { actorUserId, jobId: job.id, organizationId },
+              o,
+            ),
+          );
+        }
 
-      documentId = await db.transaction(async (tx) => {
+        const jobSubtotalCents = snapshots.reduce(
+          (sum, snapshot) => sum + (snapshot.priceCents ?? 0),
+          0,
+        );
+        // Repair-only orders may have no certificate jobs; fall back to the
+        // service order's own pricing snapshot so they can still be billed.
+        const useServiceOrderLine =
+          approvedJobs.length === 0 || jobSubtotalCents <= 0;
+        const subtotalCents = useServiceOrderLine
+          ? amountCents
+          : jobSubtotalCents;
+        const currency = snapshots[0]?.currency ?? "BRL";
+        const paymentTermDays =
+          Math.max(
+            ...snapshots.map((snapshot) => snapshot.paymentTermDays),
+            DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
+          ) || DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS;
+
         const issueDate = new Date();
         const documentNumber = await generateBillingDocumentNumber(
           organizationId,
@@ -1534,7 +1671,7 @@ export async function sendServiceOrderToFinance(params: {
         );
         const dueDate = calculateFinancialDueDate(issueDate, paymentTermDays);
 
-        const [document] = await tx
+        const [document] = await o
           .insert(billingDocument)
           .values({
             organizationId,
@@ -1562,7 +1699,7 @@ export async function sendServiceOrderToFinance(params: {
         }
 
         if (useServiceOrderLine) {
-          await tx.insert(billingDocumentItem).values({
+          await o.insert(billingDocumentItem).values({
             organizationId,
             documentId: document.id,
             jobId: null,
@@ -1574,7 +1711,7 @@ export async function sendServiceOrderToFinance(params: {
             sortOrder: 0,
           });
         } else {
-          await tx.insert(billingDocumentItem).values(
+          await o.insert(billingDocumentItem).values(
             approvedJobs.map((job, index) => ({
               organizationId,
               documentId: document.id,
@@ -1590,7 +1727,7 @@ export async function sendServiceOrderToFinance(params: {
           );
         }
 
-        await tx.insert(receivableInstallment).values({
+        await o.insert(receivableInstallment).values({
           organizationId,
           documentId: document.id,
           installmentNumber: 1,
@@ -1600,12 +1737,12 @@ export async function sendServiceOrderToFinance(params: {
           currency,
         });
 
-        await tx
+        await o
           .update(serviceOrder)
           .set({ billingDocumentId: document.id, updatedAt: issueDate })
           .where(eq(serviceOrder.id, order.id));
 
-        await tx.insert(financialAuditLog).values({
+        await o.insert(financialAuditLog).values({
           organizationId,
           entityType: "service_order",
           entityId: String(order.id),
@@ -1619,8 +1756,8 @@ export async function sendServiceOrderToFinance(params: {
         });
 
         return document.id;
-      });
-    }
+      },
+    );
 
     await exportBillingDocumentToPrimaryIntegration({
       organizationId,
@@ -1647,14 +1784,22 @@ export async function sendServiceOrderToFinance(params: {
   }
 }
 
-/** Issue an existing DRAFT billing document (number, status, installment). */
-async function issueDraftBillingDocument(params: {
-  organizationId: string;
-  documentId: number;
-  actorUserId: string;
-}) {
+/**
+ * Issue an existing DRAFT billing document (number, status, installment), inside
+ * the caller's transaction: `o` is its org-bound handle, `tx` the raw
+ * transaction the numbering helper needs.
+ */
+async function issueDraftBillingDocument(
+  o: OrgDb,
+  tx: FinanceRawExecutor,
+  params: {
+    organizationId: string;
+    documentId: number;
+    actorUserId: string;
+  },
+) {
   const { organizationId, documentId, actorUserId } = params;
-  const [existing] = await db
+  const [existing] = await o
     .select({
       dueDate: billingDocument.dueDate,
       totalCents: billingDocument.totalCents,
@@ -1667,49 +1812,47 @@ async function issueDraftBillingDocument(params: {
     throw new Error("Documento financeiro não encontrado");
   }
 
-  await db.transaction(async (tx) => {
-    const issueDate = new Date();
-    const documentNumber = await generateBillingDocumentNumber(
-      organizationId,
-      tx,
-    );
-    const effectiveDueDate = resolveIssuedDueDate(
-      existing.dueDate,
+  const issueDate = new Date();
+  const documentNumber = await generateBillingDocumentNumber(
+    organizationId,
+    tx,
+  );
+  const effectiveDueDate = resolveIssuedDueDate(
+    existing.dueDate,
+    issueDate,
+    DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
+  );
+
+  await o
+    .update(billingDocument)
+    .set({
+      documentNumber,
+      status: "ISSUED",
       issueDate,
-      DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
-    );
+      dueDate: effectiveDueDate,
+      issuedBy: actorUserId,
+      updatedBy: actorUserId,
+      updatedAt: issueDate,
+    })
+    .where(eq(billingDocument.id, documentId));
 
-    await tx
-      .update(billingDocument)
-      .set({
-        documentNumber,
-        status: "ISSUED",
-        issueDate,
-        dueDate: effectiveDueDate,
-        issuedBy: actorUserId,
-        updatedBy: actorUserId,
-        updatedAt: issueDate,
-      })
-      .where(eq(billingDocument.id, documentId));
+  const [existingInstallment] = await o
+    .select({ id: receivableInstallment.id })
+    .from(receivableInstallment)
+    .where(eq(receivableInstallment.documentId, documentId))
+    .limit(1);
 
-    const [existingInstallment] = await tx
-      .select({ id: receivableInstallment.id })
-      .from(receivableInstallment)
-      .where(eq(receivableInstallment.documentId, documentId))
-      .limit(1);
-
-    if (!existingInstallment) {
-      await tx.insert(receivableInstallment).values({
-        organizationId,
-        documentId,
-        installmentNumber: 1,
-        status: "OPEN",
-        dueDate: effectiveDueDate,
-        amountCents: existing.totalCents,
-        currency: existing.currency,
-      });
-    }
-  });
+  if (!existingInstallment) {
+    await o.insert(receivableInstallment).values({
+      organizationId,
+      documentId,
+      installmentNumber: 1,
+      status: "OPEN",
+      dueDate: effectiveDueDate,
+      amountCents: existing.totalCents,
+      currency: existing.currency,
+    });
+  }
 }
 
 export async function sendServiceOrdersToFinance(params: {

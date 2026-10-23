@@ -21,20 +21,22 @@ import {
 } from "@calibra-facil/db/schema";
 import { SERVICE_ORDER_STATUS_LABELS } from "@calibra-facil/shared";
 import { and, desc, eq, inArray } from "drizzle-orm";
-import { orgDb } from "../../lib/org-db";
+import { inOrgTransaction } from "../../lib/org-transaction";
 import { buildUnitScopeCondition } from "../../lib/units";
 
 /**
  * One service order with everything the detail screens show. Every statement
  * runs in ONE organization-bound transaction (row-level security names the
- * organization once for all of them).
+ * organization once for all of them). A caller that is inside an org-bound
+ * transaction already passes its handle as `executor` and the read joins it.
  */
 export async function getServiceOrderDetail(
   id: number,
   organizationId: string,
   unitCondition?: ReturnType<typeof buildUnitScopeCondition>,
+  executor?: OrgDb,
 ) {
-  return orgDb(organizationId).transaction((o) =>
+  return inOrgTransaction(organizationId, executor, (o) =>
     readServiceOrderDetail(o, id, organizationId, unitCondition),
   );
 }

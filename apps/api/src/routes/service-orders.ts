@@ -394,7 +394,11 @@ export const serviceOrdersRouter = new Hono<{
       const { id } = c.req.valid("param");
       const order = await getScopedServiceOrder(id, member);
       if (!order) return c.json({ error: "OS nao encontrada" }, 404);
-      const url = await getLatestIntakeDocumentDownloadUrl(c.env, id);
+      const url = await getLatestIntakeDocumentDownloadUrl(
+        c.env,
+        id,
+        member.organizationId,
+      );
       if (!url) return c.json({ error: "PDF indisponivel" }, 404);
       return c.json({ url });
     },
@@ -408,7 +412,11 @@ export const serviceOrdersRouter = new Hono<{
       const { id } = c.req.valid("param");
       const order = await getScopedServiceOrder(id, member);
       if (!order) return c.json({ error: "OS nao encontrada" }, 404);
-      const url = await getLatestTagDownloadUrl(c.env, id);
+      const url = await getLatestTagDownloadUrl(
+        c.env,
+        id,
+        member.organizationId,
+      );
       if (!url) return c.json({ error: "PDF indisponivel" }, 404);
       return c.json({ url });
     },
@@ -450,7 +458,11 @@ export const serviceOrdersRouter = new Hono<{
         buildUnitScopeCondition(serviceOrder.unitId, member),
       );
       if (!detail) return c.json({ error: "OS nao encontrada" }, 404);
-      const url = await getLatestDeliveryDocumentDownloadUrl(c.env, id);
+      const url = await getLatestDeliveryDocumentDownloadUrl(
+        c.env,
+        id,
+        member.organizationId,
+      );
       if (!url) return c.json({ error: "PDF indisponivel" }, 404);
       return c.json({ url });
     },
@@ -731,7 +743,12 @@ export const serviceOrdersRouter = new Hono<{
       const { id, quoteId } = c.req.valid("param");
       const order = await getScopedServiceOrder(id, member);
       if (!order) return c.json({ error: "OS nao encontrada" }, 404);
-      const url = await getQuoteDocumentDownloadUrl(c.env, id, quoteId);
+      const url = await getQuoteDocumentDownloadUrl(
+        c.env,
+        id,
+        quoteId,
+        member.organizationId,
+      );
       if (!url) return c.json({ error: "PDF indisponivel" }, 404);
       return c.json({ url });
     },

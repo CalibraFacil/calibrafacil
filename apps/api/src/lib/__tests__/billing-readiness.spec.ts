@@ -48,10 +48,16 @@ const mocks = vi.hoisted(() => {
     }
   }
 
+  // `orgDb(...).transaction(...)` runs its callback on this same double (the
+  // organization setting is a statement that consumes no canned result).
+  const database = {
+    select: vi.fn(() => new FakeQuery(state.results.shift() ?? [])),
+    execute: async () => [],
+    transaction: async (run: (tx: unknown) => unknown) => run(database),
+  };
+
   return {
-    db: {
-      select: vi.fn(() => new FakeQuery(state.results.shift() ?? [])),
-    },
+    db: database,
     state,
   };
 });

@@ -1,5 +1,5 @@
 import { readAuthConfig, readRuntimeConfig } from "@calibra-facil/config";
-import { db } from "@calibra-facil/db";
+import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import {
   asset,
   assetType,
@@ -35,11 +35,31 @@ import {
 } from "./service-order-numbering";
 import { calculateFinancialDueDate } from "@calibra-facil/shared";
 import { generateBillingDocumentNumber } from "./finance";
+import { orgDb } from "./org-db";
+import { orgTransactionWithExecutor } from "./org-transaction";
 
-type ServiceOrderDbExecutor = Pick<
-  typeof db,
+/**
+ * What the workflow helpers write through: an org-bound handle
+ * (`orgDb(org).transaction((o) => ...)`), or the raw transaction of a caller that
+ * already named the laboratory for row-level security (the portal quote
+ * decisions). Every statement here carries the organization predicate by hand.
+ */
+export type ServiceOrderDbExecutor = Pick<
+  OrgExecutor,
   "insert" | "select" | "update" | "delete"
 >;
+
+/**
+ * Runs `run` on the caller's executor, or in an organization-bound transaction of
+ * its own (naming the laboratory for row-level security) when it has none.
+ */
+function withServiceOrderExecutor<R>(
+  organizationId: string,
+  executor: ServiceOrderDbExecutor | undefined,
+  run: (executor: ServiceOrderDbExecutor) => Promise<R>,
+): Promise<R> {
+  return executor ? run(executor) : orgDb(organizationId).transaction(run);
+}
 
 export type ServiceOrderEventInput = {
   actorId?: string | null;
@@ -280,7 +300,18 @@ export function calculatePricedItems<
 
 export async function recordServiceOrderEvent(
   event: ServiceOrderEventInput,
-  executor: ServiceOrderDbExecutor = db,
+  executor?: ServiceOrderDbExecutor,
+) {
+  // The event row and its e-mail outbox row commit together: standalone they
+  // share one transaction of their own.
+  await withServiceOrderExecutor(event.organizationId, executor, (tx) =>
+    insertServiceOrderEvent(tx, event),
+  );
+}
+
+async function insertServiceOrderEvent(
+  executor: ServiceOrderDbExecutor,
+  event: ServiceOrderEventInput,
 ) {
   await executor.insert(serviceOrderEventLog).values({
     organizationId: event.organizationId,
@@ -349,7 +380,16 @@ export async function recordServiceOrderEvent(
 
 export async function getOrCreateServiceOrderSettings(
   organizationId: string,
-  executor: ServiceOrderDbExecutor = db,
+  executor?: ServiceOrderDbExecutor,
+) {
+  return withServiceOrderExecutor(organizationId, executor, (tx) =>
+    loadOrCreateServiceOrderSettings(tx, organizationId),
+  );
+}
+
+async function loadOrCreateServiceOrderSettings(
+  executor: ServiceOrderDbExecutor,
+  organizationId: string,
 ) {
   const [existing] = await executor
     .select()
@@ -387,7 +427,7 @@ export async function buildServiceOrderAssetSnapshot(
     observedIdentification?: string | null;
     photos?: string[];
   },
-  executor: ServiceOrderDbExecutor = db,
+  executor: ServiceOrderDbExecutor,
 ) {
   const [row] = await executor
     .select({
@@ -546,7 +586,7 @@ export async function createInitialServiceOrderRecords(
     return created;
   };
 
-  return executor ? run(executor) : db.transaction(run);
+  return withServiceOrderExecutor(params.organizationId, executor, run);
 }
 
 export async function createPublicServiceOrderAccessToken(params: {
@@ -560,6 +600,8 @@ export async function createPublicServiceOrderAccessToken(params: {
    * sibling tokens and service_order-scoped grants leave codeHash NULL.
    */
   withApprovalCode?: boolean;
+  /** The caller's org-bound executor; standalone it writes in its own transaction. */
+  executor?: ServiceOrderDbExecutor;
 }) {
   const token = createServiceOrderPublicToken();
   const tokenHash = await hashServiceOrderToken(token);
@@ -569,15 +611,17 @@ export async function createPublicServiceOrderAccessToken(params: {
   const codeHash = code
     ? await hashServiceOrderApprovalCode(code, resolveApprovalCodePepper())
     : null;
-  await db.insert(serviceOrderPublicAccessToken).values({
-    organizationId: params.organizationId,
-    serviceOrderId: params.serviceOrderId,
-    quoteId: params.quoteId ?? null,
-    tokenHash,
-    codeHash,
-    scope: params.quoteId ? "quote" : "service_order",
-    expiresAt: params.expiresAt ?? null,
-  });
+  await withServiceOrderExecutor(params.organizationId, params.executor, (tx) =>
+    tx.insert(serviceOrderPublicAccessToken).values({
+      organizationId: params.organizationId,
+      serviceOrderId: params.serviceOrderId,
+      quoteId: params.quoteId ?? null,
+      tokenHash,
+      codeHash,
+      scope: params.quoteId ? "quote" : "service_order",
+      expiresAt: params.expiresAt ?? null,
+    }),
+  );
   return { token, tokenHash, code };
 }
 
@@ -630,7 +674,7 @@ export async function replaceQuoteItems(
       warrantyUntil?: Date | null;
     }>;
   },
-  executor: ServiceOrderDbExecutor = db,
+  executor: ServiceOrderDbExecutor,
 ) {
   const calculated = calculatePricedItems(params.items);
   const validMaterialIds = await resolveValidMaterialIds(
@@ -690,7 +734,7 @@ export async function replaceExecutionItems(
       unitPriceCents: number;
     }>;
   },
-  executor: ServiceOrderDbExecutor = db,
+  executor: ServiceOrderDbExecutor,
 ) {
   const calculated = calculatePricedItems(params.items);
   const validMaterialIds = await resolveValidMaterialIds(
@@ -738,135 +782,140 @@ export async function createBillingDocumentFromServiceOrder(params: {
   organizationId: string;
   serviceOrderId: number;
 }) {
-  return db.transaction(async (tx) => {
-    const [order] = await tx
-      .select()
-      .from(serviceOrder)
-      .where(
-        and(
-          eq(serviceOrder.id, params.serviceOrderId),
-          eq(serviceOrder.organizationId, params.organizationId),
-        ),
-      )
-      .limit(1);
+  // One transaction that names the laboratory: `tx` is the org-bound handle, `rawTx`
+  // goes to the numbering helper, which takes an advisory lock with raw SQL.
+  return orgTransactionWithExecutor(
+    params.organizationId,
+    async (tx, rawTx) => {
+      const [order] = await tx
+        .select()
+        .from(serviceOrder)
+        .where(
+          and(
+            eq(serviceOrder.id, params.serviceOrderId),
+            eq(serviceOrder.organizationId, params.organizationId),
+          ),
+        )
+        .limit(1);
 
-    if (!order) throw new Error("OS nao encontrada");
-    if (order.billingDocumentId) return order.billingDocumentId;
+      if (!order) throw new Error("OS nao encontrada");
+      if (order.billingDocumentId) return order.billingDocumentId;
 
-    const [approvedQuote] = await tx
-      .select()
-      .from(serviceOrderQuote)
-      .where(
-        and(
-          eq(serviceOrderQuote.serviceOrderId, order.id),
-          eq(serviceOrderQuote.organizationId, order.organizationId),
-          eq(serviceOrderQuote.status, "approved"),
-        ),
-      )
-      .limit(1);
+      const [approvedQuote] = await tx
+        .select()
+        .from(serviceOrderQuote)
+        .where(
+          and(
+            eq(serviceOrderQuote.serviceOrderId, order.id),
+            eq(serviceOrderQuote.organizationId, order.organizationId),
+            eq(serviceOrderQuote.status, "approved"),
+          ),
+        )
+        .limit(1);
 
-    const quoteItems = approvedQuote
-      ? await tx
-          .select()
-          .from(serviceOrderQuoteItem)
-          .where(
-            and(
-              eq(serviceOrderQuoteItem.quoteId, approvedQuote.id),
-              eq(serviceOrderQuoteItem.organizationId, order.organizationId),
-            ),
-          )
-      : [];
+      const quoteItems = approvedQuote
+        ? await tx
+            .select()
+            .from(serviceOrderQuoteItem)
+            .where(
+              and(
+                eq(serviceOrderQuoteItem.quoteId, approvedQuote.id),
+                eq(serviceOrderQuoteItem.organizationId, order.organizationId),
+              ),
+            )
+        : [];
 
-    const subtotalCents =
-      approvedQuote?.totalCents ??
-      (order.evaluationFeeApplied ? order.evaluationFeeCents : 0);
-    const dueDate =
-      params.dueDate ??
-      calculateFinancialDueDate(
-        new Date(),
-        DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
+      const subtotalCents =
+        approvedQuote?.totalCents ??
+        (order.evaluationFeeApplied ? order.evaluationFeeCents : 0);
+      const dueDate =
+        params.dueDate ??
+        calculateFinancialDueDate(
+          new Date(),
+          DEFAULT_FINANCIAL_PAYMENT_TERM_DAYS,
+        );
+
+      const [document] = await tx
+        .insert(billingDocument)
+        .values({
+          organizationId: order.organizationId,
+          customerId: order.customerId,
+          unitId: order.unitId,
+          dueDate,
+          currency: "BRL",
+          subtotalCents,
+          discountCents: 0,
+          totalCents: subtotalCents,
+          notes: `Documento financeiro gerado a partir da OS ${order.serviceOrderNumber}`,
+          createdBy: params.actorUserId,
+          updatedBy: params.actorUserId,
+        })
+        .returning();
+
+      if (!document) throw new Error("Falha ao criar documento financeiro");
+
+      const documentNumber = await generateBillingDocumentNumber(
+        order.organizationId,
+        rawTx,
       );
 
-    const [document] = await tx
-      .insert(billingDocument)
-      .values({
-        organizationId: order.organizationId,
-        customerId: order.customerId,
-        unitId: order.unitId,
-        dueDate,
-        currency: "BRL",
-        subtotalCents,
-        discountCents: 0,
-        totalCents: subtotalCents,
-        notes: `Documento financeiro gerado a partir da OS ${order.serviceOrderNumber}`,
-        createdBy: params.actorUserId,
-        updatedBy: params.actorUserId,
-      })
-      .returning();
+      await tx
+        .update(billingDocument)
+        .set({ documentNumber })
+        .where(eq(billingDocument.id, document.id));
 
-    if (!document) throw new Error("Falha ao criar documento financeiro");
-
-    const documentNumber = await generateBillingDocumentNumber(
-      order.organizationId,
-      tx,
-    );
-
-    await tx
-      .update(billingDocument)
-      .set({ documentNumber })
-      .where(eq(billingDocument.id, document.id));
-
-    const billingItems =
-      quoteItems.length > 0
-        ? quoteItems.map((item, index) => ({
-            organizationId: order.organizationId,
-            documentId: document.id,
-            serviceOrderId: order.id,
-            materialId: item.materialId ?? null,
-            description: item.description,
-            quantity: Math.max(Math.round(item.quantity), 1),
-            unitPriceCents: item.unitPriceCents,
-            totalCents: item.totalPriceCents,
-            sortOrder: index,
-          }))
-        : [
-            {
+      const billingItems =
+        quoteItems.length > 0
+          ? quoteItems.map((item, index) => ({
               organizationId: order.organizationId,
               documentId: document.id,
               serviceOrderId: order.id,
-              description: `Taxa de avaliacao - ${order.serviceOrderNumber}`,
-              quantity: 1,
-              unitPriceCents: order.evaluationFeeCents,
-              totalCents: order.evaluationFeeCents,
-              sortOrder: 0,
-            },
-          ];
+              materialId: item.materialId ?? null,
+              description: item.description,
+              quantity: Math.max(Math.round(item.quantity), 1),
+              unitPriceCents: item.unitPriceCents,
+              totalCents: item.totalPriceCents,
+              sortOrder: index,
+            }))
+          : [
+              {
+                organizationId: order.organizationId,
+                documentId: document.id,
+                serviceOrderId: order.id,
+                description: `Taxa de avaliacao - ${order.serviceOrderNumber}`,
+                quantity: 1,
+                unitPriceCents: order.evaluationFeeCents,
+                totalCents: order.evaluationFeeCents,
+                sortOrder: 0,
+              },
+            ];
 
-    await tx.insert(billingDocumentItem).values(billingItems);
-    await tx.insert(receivableInstallment).values({
-      organizationId: order.organizationId,
-      documentId: document.id,
-      installmentNumber: 1,
-      dueDate,
-      amountCents: subtotalCents,
-      currency: "BRL",
-    });
-    await tx.insert(financialAuditLog).values({
-      organizationId: order.organizationId,
-      entityType: "document",
-      entityId: String(document.id),
-      action: "create_from_service_order",
-      changes: {
-        serviceOrderId: order.id,
-        serviceOrderNumber: order.serviceOrderNumber,
-      },
-      performedBy: params.actorUserId,
-    });
-    await tx
-      .update(serviceOrder)
-      .set({ billingDocumentId: document.id })
-      .where(eq(serviceOrder.id, order.id));
+      await tx.insert(billingDocumentItem).values(billingItems);
+      await tx.insert(receivableInstallment).values({
+        organizationId: order.organizationId,
+        documentId: document.id,
+        installmentNumber: 1,
+        dueDate,
+        amountCents: subtotalCents,
+        currency: "BRL",
+      });
+      await tx.insert(financialAuditLog).values({
+        organizationId: order.organizationId,
+        entityType: "document",
+        entityId: String(document.id),
+        action: "create_from_service_order",
+        changes: {
+          serviceOrderId: order.id,
+          serviceOrderNumber: order.serviceOrderNumber,
+        },
+        performedBy: params.actorUserId,
+      });
+      await tx
+        .update(serviceOrder)
+        .set({ billingDocumentId: document.id })
+        .where(eq(serviceOrder.id, order.id));
 
-    return document.id;
-  });
+      return document.id;
+    },
+  );
 }

@@ -155,6 +155,27 @@ added or removed without a migration.
   (`packages/jobs-core/src/spc-recompute.ts`) learns which laboratories own a chart on the system path (one
   `select distinct organization_id`, allowlisted) and evaluates every chart in `forOrg(db, lab).transaction`,
   one transaction per chart so a failing chart does not stop the sweep.
+- **Service orders and finance (P2-18g).** The lab service-order modules (`modules/service-orders/*`:
+  commands, quotes, execution, evaluations, certificates, documents, tokens, list queries) and the finance
+  routes (`routes/finance/*`) run every statement in `orgDb(lab).transaction(...)`; each command is ONE
+  transaction (reads, writes, the service-order event and the e-mail outbox row commit or roll back together,
+  `enqueueServiceOrderEmail(o)`), and the document / PDF queue jobs are enqueued after it commits
+  (`afterCommitQueue` where there are several). Where a step was a transaction of its own before, it stays one:
+  closing an order creates the billing document in its own transaction after the close commits (it takes the
+  numbering advisory lock and updates the same order row), and the ERP export (`exportBillingDocumentToPrimaryIntegration`,
+  remote HTTP calls) holds no transaction across a call: each of its statements is a short transaction naming the
+  laboratory. The billing numbering (`generateBillingDocumentNumber`) needs raw SQL for its advisory lock, so
+  the handlers that issue a document use `orgTransactionWithExecutor` (handle + raw transaction). The libs they call
+  (`lib/finance.ts`, `service-order-workflow.ts`, `tenant-refs.ts`, `certificate-release.ts`, `automatic-send.ts`,
+  `billing-readiness.ts`, the cash / margin / operations-to-cash / revenue-leakage readers, `supplier.ts`,
+  `outsourced-cost.ts`) take an optional org-bound handle and, without one, open an org-bound transaction of
+  their own, so the jobs, sync, integration and desktop callers need no change and are scoped as well. The one
+  system-path statement of the slice is the lookup of a public quote link by its token / approval-code hash
+  (`service-order.tokens.ts`, `service_order_public_access_token`, select only): the grant row names the
+  laboratory and everything after it runs on `orgDb(grant.organizationId)`. Not in this slice: the service-order
+  e-mail drain (`lib/service-order-email-drain.ts`, `service-order-email-once.ts`, a cron/worker sweep) and the
+  Conta Azul callees (`requireContaAzulOAuthConfig`); inside a transaction an error is rethrown (never turned into
+  a response in the callback), so a failure after the first write rolls the whole command back.
 - **Tests.** `apps/api/src/lib/rls-shadow.int.spec.ts` runs against a pool whose sessions are `calibra_app`
   (`test/integration/rls.ts`). `pnpm --filter @calibra-facil/api rls:shadow-report` replays every API
   integration spec (`--group routes/jobs` or `--files` narrow it) with each request's database access as

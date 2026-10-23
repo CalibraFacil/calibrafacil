@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   automaticSendAuditLog,
   automaticSendRule,
@@ -12,6 +12,8 @@ import type {
   AutomaticSendOutcome,
 } from "@calibra-facil/shared";
 import { and, eq, isNull } from "drizzle-orm";
+import { orgDb } from "./org-db";
+import { inOrgTransaction } from "./org-transaction";
 
 export interface ResolvedAutomaticSendRule {
   id: number | null;
@@ -42,8 +44,19 @@ function byPriorityThenId(
 
 export async function resolveAutomaticSendRule(
   input: AutomaticSendRuleResolutionInput,
+  // The caller's org-bound handle, when it is inside a transaction already.
+  executor?: OrgDb,
 ): Promise<ResolvedAutomaticSendRule> {
-  const rows = await db
+  return inOrgTransaction(input.organizationId, executor, (o) =>
+    resolveRuleOn(o, input),
+  );
+}
+
+async function resolveRuleOn(
+  o: OrgDb,
+  input: AutomaticSendRuleResolutionInput,
+): Promise<ResolvedAutomaticSendRule> {
+  const rows = await o
     .select({
       id: automaticSendRule.id,
       milestone: automaticSendRule.milestone,
@@ -210,7 +223,10 @@ export interface TriggerAutomaticSendResult {
 export async function triggerAutomaticSendForMilestone(
   input: TriggerAutomaticSendInput,
 ): Promise<TriggerAutomaticSendResult> {
-  const so = await loadServiceOrderForRuleMatch(input.event.serviceOrderId);
+  const so = await loadServiceOrderForRuleMatch(
+    input.event.organizationId,
+    input.event.serviceOrderId,
+  );
   if (!so) {
     return await persistAudit({
       organizationId: input.event.organizationId,
@@ -289,22 +305,25 @@ interface ServiceOrderRuleMatchRow {
 }
 
 async function loadServiceOrderForRuleMatch(
+  organizationId: string,
   serviceOrderId: number,
 ): Promise<ServiceOrderRuleMatchRow | null> {
-  const [row] = await db
-    .select({
-      customerId: serviceOrder.customerId,
-      commercialAgreementId: commercialAgreement.id,
-      billingDocumentId: serviceOrder.billingDocumentId,
-      status: serviceOrder.status,
-    })
-    .from(serviceOrder)
-    .leftJoin(
-      commercialAgreement,
-      eq(commercialAgreement.customerId, serviceOrder.customerId),
-    )
-    .where(eq(serviceOrder.id, serviceOrderId))
-    .limit(1);
+  const [row] = await orgDb(organizationId).transaction((o) =>
+    o
+      .select({
+        customerId: serviceOrder.customerId,
+        commercialAgreementId: commercialAgreement.id,
+        billingDocumentId: serviceOrder.billingDocumentId,
+        status: serviceOrder.status,
+      })
+      .from(serviceOrder)
+      .leftJoin(
+        commercialAgreement,
+        eq(commercialAgreement.customerId, serviceOrder.customerId),
+      )
+      .where(eq(serviceOrder.id, serviceOrderId))
+      .limit(1),
+  );
 
   if (!row) return null;
   return {
@@ -329,16 +348,18 @@ async function persistAudit(params: {
   reason: string | null;
   providerResponseSummary: Record<string, unknown> | null;
 }): Promise<TriggerAutomaticSendResult> {
-  await db.insert(automaticSendAuditLog).values({
-    organizationId: params.organizationId,
-    serviceOrderId: params.serviceOrderId,
-    appliedRuleId: params.ruleId,
-    milestone: params.milestone,
-    outcome: params.outcome,
-    actorUserId: params.actorUserId,
-    reason: params.reason,
-    providerResponseSummary: params.providerResponseSummary,
-  });
+  await orgDb(params.organizationId).transaction((o) =>
+    o.insert(automaticSendAuditLog).values({
+      organizationId: params.organizationId,
+      serviceOrderId: params.serviceOrderId,
+      appliedRuleId: params.ruleId,
+      milestone: params.milestone,
+      outcome: params.outcome,
+      actorUserId: params.actorUserId,
+      reason: params.reason,
+      providerResponseSummary: params.providerResponseSummary,
+    }),
+  );
   return {
     outcome: params.outcome,
     ruleId: params.ruleId,
@@ -354,24 +375,28 @@ async function persistAudit(params: {
 export async function findServiceOrdersForCalibrationJob(
   calibrationJobId: number,
   organizationId: string,
+  // The caller's org-bound handle, when it is inside a transaction already.
+  executor?: OrgDb,
 ): Promise<number[]> {
-  const rows = await db
-    .select({ serviceOrderId: serviceOrderCertificateLink.serviceOrderId })
-    .from(serviceOrderCertificateLink)
-    .innerJoin(
-      serviceOrder,
-      eq(serviceOrder.id, serviceOrderCertificateLink.serviceOrderId),
-    )
-    .innerJoin(
-      calibrationJob,
-      eq(calibrationJob.id, serviceOrderCertificateLink.certificateJobId),
-    )
-    .where(
-      and(
-        eq(serviceOrderCertificateLink.certificateJobId, calibrationJobId),
-        eq(serviceOrder.organizationId, organizationId),
-        eq(calibrationJob.organizationId, organizationId),
+  const rows = await inOrgTransaction(organizationId, executor, (o) =>
+    o
+      .select({ serviceOrderId: serviceOrderCertificateLink.serviceOrderId })
+      .from(serviceOrderCertificateLink)
+      .innerJoin(
+        serviceOrder,
+        eq(serviceOrder.id, serviceOrderCertificateLink.serviceOrderId),
+      )
+      .innerJoin(
+        calibrationJob,
+        eq(calibrationJob.id, serviceOrderCertificateLink.certificateJobId),
+      )
+      .where(
+        and(
+          eq(serviceOrderCertificateLink.certificateJobId, calibrationJobId),
+          eq(serviceOrder.organizationId, organizationId),
+          eq(calibrationJob.organizationId, organizationId),
+        ),
       ),
-    );
+  );
   return rows.map((row) => row.serviceOrderId);
 }

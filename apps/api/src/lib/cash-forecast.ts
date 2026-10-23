@@ -1,4 +1,5 @@
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
+import { inOrgTransaction } from "./org-transaction";
 import { labToday } from "@calibra-facil/shared";
 import {
   billingDocument,
@@ -174,12 +175,23 @@ export interface BuildCashForecastInput {
 
 export async function buildCashForecast(
   input: BuildCashForecastInput,
+  // The caller's org-bound handle, when it is inside a transaction already.
+  executor?: OrgDb,
+): Promise<CashForecastSummary> {
+  return inOrgTransaction(input.organizationId, executor, (o) =>
+    readCashForecast(o, input),
+  );
+}
+
+async function readCashForecast(
+  o: OrgDb,
+  input: BuildCashForecastInput,
 ): Promise<CashForecastSummary> {
   const now = input.now ?? new Date();
 
   // Firm receivables: non-VOID installments not yet PAID, on
   // non-VOID billing documents in the caller's org + unit scope.
-  const installments = await db
+  const installments = await o
     .select({
       amountCents: receivableInstallment.amountCents,
       dueDate: receivableInstallment.dueDate,
@@ -212,7 +224,7 @@ export async function buildCashForecast(
   // monthlyRecurringCents field. The current schema doesn't carry
   // this column yet, so the priced aggregate is the count × 0 until
   // a later slice surfaces per-agreement pricing. Honest fallback.
-  const agreements = await db
+  const agreements = await o
     .select({
       status: commercialAgreement.status,
       effectiveFrom: commercialAgreement.effectiveFrom,

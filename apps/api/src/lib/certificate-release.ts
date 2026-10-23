@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   certificateRelease,
   certificateReleaseAuditLog,
@@ -23,6 +23,7 @@ import type {
 } from "@calibra-facil/shared";
 import { deriveFinancialContinuityStatus } from "@calibra-facil/shared";
 import { and, eq, inArray, isNull } from "drizzle-orm";
+import { inOrgTransaction } from "./org-transaction";
 
 // ---------------------------------------------------------------------------
 // Pure evaluator. Decides target release status from policy mode + payment
@@ -113,8 +114,19 @@ const FALLBACK_POLICY: ResolvedCertificateReleasePolicy = {
 
 export async function resolveCertificateReleasePolicy(
   input: CertificateReleasePolicyResolutionInput,
+  // The caller's org-bound handle, when it is inside a transaction already.
+  executor?: OrgDb,
 ): Promise<ResolvedCertificateReleasePolicy> {
-  const rows = await db
+  return inOrgTransaction(input.organizationId, executor, (o) =>
+    resolvePolicyOn(o, input),
+  );
+}
+
+async function resolvePolicyOn(
+  o: OrgDb,
+  input: CertificateReleasePolicyResolutionInput,
+): Promise<ResolvedCertificateReleasePolicy> {
+  const rows = await o
     .select({
       id: certificateReleasePolicy.id,
       mode: certificateReleasePolicy.mode,
@@ -223,6 +235,8 @@ function byPriorityThenId(
 // ---------------------------------------------------------------------------
 
 export interface RecomputeCertificateReleaseInput {
+  /** The laboratory the job belongs to: every statement runs bound to it. */
+  organizationId: string;
   calibrationJobId: number;
   source: CertificateReleaseAuditSource;
   actorUserId?: string | null;
@@ -237,8 +251,19 @@ export interface RecomputedCertificateRelease {
 
 export async function recomputeCertificateRelease(
   input: RecomputeCertificateReleaseInput,
+  // The caller's org-bound handle, when it is inside a transaction already.
+  executor?: OrgDb,
 ): Promise<RecomputedCertificateRelease | null> {
-  const [job] = await db
+  return inOrgTransaction(input.organizationId, executor, (o) =>
+    recomputeOn(o, input),
+  );
+}
+
+async function recomputeOn(
+  o: OrgDb,
+  input: RecomputeCertificateReleaseInput,
+): Promise<RecomputedCertificateRelease | null> {
+  const [job] = await o
     .select({
       id: calibrationJob.id,
       organizationId: calibrationJob.organizationId,
@@ -247,7 +272,12 @@ export async function recomputeCertificateRelease(
       status: calibrationJob.status,
     })
     .from(calibrationJob)
-    .where(eq(calibrationJob.id, input.calibrationJobId))
+    .where(
+      and(
+        eq(calibrationJob.id, input.calibrationJobId),
+        eq(calibrationJob.organizationId, input.organizationId),
+      ),
+    )
     .limit(1);
 
   if (!job) return null;
@@ -258,7 +288,7 @@ export async function recomputeCertificateRelease(
     return null;
   }
 
-  const [snapshot] = await db
+  const [snapshot] = await o
     .select({
       agreementId: jobCommercialSnapshot.agreementId,
     })
@@ -266,25 +296,29 @@ export async function recomputeCertificateRelease(
     .where(eq(jobCommercialSnapshot.jobId, job.id))
     .limit(1);
 
-  const [serviceRow] = await db
+  const [serviceRow] = await o
     .select({ name: service.name })
     .from(service)
     .where(eq(service.id, job.serviceId))
     .limit(1);
 
-  const policy = await resolveCertificateReleasePolicy({
-    organizationId: job.organizationId,
-    customerId: job.customerId,
-    commercialAgreementId: snapshot?.agreementId ?? null,
-    serviceName: serviceRow?.name ?? null,
-  });
+  const policy = await resolveCertificateReleasePolicy(
+    {
+      organizationId: job.organizationId,
+      customerId: job.customerId,
+      commercialAgreementId: snapshot?.agreementId ?? null,
+      serviceName: serviceRow?.name ?? null,
+    },
+    o,
+  );
 
   const paymentState = await buildPaymentStateForJob(
+    o,
     job.id,
     job.organizationId,
   );
 
-  const [existing] = await db
+  const [existing] = await o
     .select({
       id: certificateRelease.id,
       status: certificateRelease.status,
@@ -309,7 +343,7 @@ export async function recomputeCertificateRelease(
 
   if (existing) {
     const changed = existing.status !== nextStatus;
-    await db
+    await o
       .update(certificateRelease)
       .set({
         status: nextStatus,
@@ -323,7 +357,7 @@ export async function recomputeCertificateRelease(
       .where(eq(certificateRelease.id, existing.id));
 
     if (changed) {
-      await db.insert(certificateReleaseAuditLog).values({
+      await o.insert(certificateReleaseAuditLog).values({
         organizationId: job.organizationId,
         certificateReleaseId: existing.id,
         actorUserId: input.actorUserId ?? null,
@@ -344,7 +378,7 @@ export async function recomputeCertificateRelease(
     };
   }
 
-  const [inserted] = await db
+  const [inserted] = await o
     .insert(certificateRelease)
     .values({
       organizationId: job.organizationId,
@@ -362,7 +396,7 @@ export async function recomputeCertificateRelease(
 
   if (!inserted) return null;
 
-  await db.insert(certificateReleaseAuditLog).values({
+  await o.insert(certificateReleaseAuditLog).values({
     organizationId: job.organizationId,
     certificateReleaseId: inserted.id,
     actorUserId: input.actorUserId ?? null,
@@ -387,6 +421,8 @@ export async function recomputeCertificateRelease(
 // ---------------------------------------------------------------------------
 
 export interface ReleaseByExceptionInput {
+  /** The laboratory the job belongs to: every statement runs bound to it. */
+  organizationId: string;
   calibrationJobId: number;
   actorUserId: string;
   reason: string;
@@ -398,18 +434,35 @@ export interface ExceptionReleaseError {
 
 export async function releaseByException(
   input: ReleaseByExceptionInput,
+  // The caller's org-bound handle, when it is inside a transaction already.
+  executor?: OrgDb,
 ): Promise<RecomputedCertificateRelease | ExceptionReleaseError> {
   const reason = input.reason?.trim?.() ?? "";
   if (!reason) return { code: "REASON_REQUIRED" };
 
-  const [job] = await db
+  return inOrgTransaction(input.organizationId, executor, (o) =>
+    releaseByExceptionOn(o, input, reason),
+  );
+}
+
+async function releaseByExceptionOn(
+  o: OrgDb,
+  input: ReleaseByExceptionInput,
+  reason: string,
+): Promise<RecomputedCertificateRelease | ExceptionReleaseError> {
+  const [job] = await o
     .select({
       id: calibrationJob.id,
       organizationId: calibrationJob.organizationId,
       status: calibrationJob.status,
     })
     .from(calibrationJob)
-    .where(eq(calibrationJob.id, input.calibrationJobId))
+    .where(
+      and(
+        eq(calibrationJob.id, input.calibrationJobId),
+        eq(calibrationJob.organizationId, input.organizationId),
+      ),
+    )
     .limit(1);
 
   if (!job) return { code: "JOB_NOT_FOUND" };
@@ -418,11 +471,12 @@ export async function releaseByException(
   }
 
   const paymentState = await buildPaymentStateForJob(
+    o,
     job.id,
     job.organizationId,
   );
 
-  const [existing] = await db
+  const [existing] = await o
     .select({
       id: certificateRelease.id,
       status: certificateRelease.status,
@@ -436,7 +490,7 @@ export async function releaseByException(
   const snapshotJson = paymentState.snapshot;
 
   if (existing) {
-    await db
+    await o
       .update(certificateRelease)
       .set({
         status: "RELEASED_BY_EXCEPTION",
@@ -448,7 +502,7 @@ export async function releaseByException(
       })
       .where(eq(certificateRelease.id, existing.id));
 
-    await db.insert(certificateReleaseAuditLog).values({
+    await o.insert(certificateReleaseAuditLog).values({
       organizationId: job.organizationId,
       certificateReleaseId: existing.id,
       actorUserId: input.actorUserId,
@@ -468,7 +522,7 @@ export async function releaseByException(
     };
   }
 
-  const [inserted] = await db
+  const [inserted] = await o
     .insert(certificateRelease)
     .values({
       organizationId: job.organizationId,
@@ -486,7 +540,7 @@ export async function releaseByException(
 
   if (!inserted) return { code: "JOB_NOT_FOUND" };
 
-  await db.insert(certificateReleaseAuditLog).values({
+  await o.insert(certificateReleaseAuditLog).values({
     organizationId: job.organizationId,
     certificateReleaseId: inserted.id,
     actorUserId: input.actorUserId,
@@ -513,13 +567,14 @@ export async function releaseByException(
 // ---------------------------------------------------------------------------
 
 async function buildPaymentStateForJob(
+  o: OrgDb,
   calibrationJobId: number,
   organizationId: string,
 ): Promise<{
   evaluatorInput: CertificateReleaseEvaluatorPaymentState;
   snapshot: CertificateReleasePaymentStateSnapshot;
 }> {
-  const orderLinks = await db
+  const orderLinks = await o
     .select({
       serviceOrderId: serviceOrderCertificateLink.serviceOrderId,
       directBillingDocumentId: serviceOrder.billingDocumentId,
@@ -548,7 +603,7 @@ async function buildPaymentStateForJob(
   } | null = null;
 
   if (billingDocumentIds.length > 0) {
-    const docs = await db
+    const docs = await o
       .select({
         id: billingDocument.id,
         status: billingDocument.status,
@@ -579,7 +634,7 @@ async function buildPaymentStateForJob(
   }
 
   const installments = billingDoc
-    ? await db
+    ? await o
         .select({
           id: receivableInstallment.id,
           status: receivableInstallment.status,
