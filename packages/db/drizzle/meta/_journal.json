@@ -862,6 +862,13 @@
       "when": 1792500000000,
       "tag": "0123_rls_shadow_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1792600000000,
+      "tag": "0124_nc_capa_number_per_org",
+      "breakpoints": true
     }
   ]
 }

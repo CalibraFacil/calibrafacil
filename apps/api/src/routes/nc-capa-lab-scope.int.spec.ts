@@ -69,10 +69,7 @@ async function seedNc(params: {
   const [row] = await db
     .insert(nonConformance)
     .values({
-      // nc_number is unique across laboratories while the numbering is per
-      // laboratory: only lab A's seeds use the current-year series the route
-      // generates, so the route never meets a number lab B already holds.
-      ncNumber: `NC-${params.orgId === "org-a" ? "2026" : "SEED"}-${String(ncSequence).padStart(4, "0")}`,
+      ncNumber: `NC-2026-${String(ncSequence).padStart(4, "0")}`,
       organizationId: params.orgId,
       type: params.type ?? "work",
       description: "Medicao fora de tolerancia no ensaio de balanca",
@@ -639,6 +636,62 @@ describe("capa router: read handlers and the update audit (P2-18e)", () => {
       .from(correctiveAction)
       .where(eq(correctiveAction.id, foreign.id));
     expect(untouched?.title).toBe("CAPA de teste");
+  });
+});
+
+describe("NC and CAPA numbers are per laboratory (Q33)", () => {
+  it("REQ-18E-NUM-1: two labs each create their first NC and first CAPA of the year; both get the same number", async () => {
+    const a = await seedOrg({ orgId: "org-a", role: "admin" });
+    const b = await seedOrg({ orgId: "org-b", role: "admin" });
+    const year = new Date().getFullYear();
+    const ncBody = {
+      type: "work",
+      description: "Procedimento aplicado fora da revisao vigente",
+      detectedAt: DETECTED_AT,
+    };
+    const capaBody = (responsibleId: string) => ({
+      title: "Falha no procedimento de calibração",
+      description: "Desvio identificado na verificação intermediária.",
+      source: "nc_detection",
+      sourceReference: null,
+      detectionDate: "2026-06-01",
+      type: "corrective",
+      severity: "minor",
+      category: "procedure",
+      actionPlan: "Revisar o procedimento e retreinar a equipe.",
+      responsibleId,
+      dueDate: "2026-09-01",
+      rootCauseAnalysis: null,
+      rootCauseAnalysisMethod: null,
+      preventiveMeasures: null,
+    });
+
+    const numbers: Record<string, { nc: string; capa: string }> = {};
+    for (const lab of [a, b]) {
+      loginAs({ userId: lab.userId, organizationId: lab.orgId });
+      const nc = await ncRequest("/", { method: "POST", body: ncBody });
+      expect(nc.status).toBe(201);
+      const capa = await capaRequest("/", {
+        method: "POST",
+        body: capaBody(lab.userId),
+      });
+      expect(capa.status).toBe(201);
+      numbers[lab.orgId] = {
+        nc: (await nc.json()).ncNumber,
+        capa: (await capa.json()).capaNumber,
+      };
+    }
+
+    expect(numbers["org-a"]).toEqual({
+      nc: `NC-${year}-0001`,
+      capa: `CAPA-${year}-0001`,
+    });
+    expect(numbers["org-b"]).toEqual(numbers["org-a"]);
+
+    // Within one laboratory the number stays unique: the next NC takes the next one.
+    loginAs({ userId: a.userId, organizationId: a.orgId });
+    const second = await ncRequest("/", { method: "POST", body: ncBody });
+    expect((await second.json()).ncNumber).toBe(`NC-${year}-0002`);
   });
 });
 

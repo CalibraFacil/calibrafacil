@@ -7388,7 +7388,7 @@ export const correctiveAction = pgTable(
   "corrective_action",
   {
     id: serial("id").primaryKey(),
-    capaNumber: text("capa_number").notNull().unique(),
+    capaNumber: text("capa_number").notNull(),
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "restrict" }),
@@ -7474,7 +7474,11 @@ export const correctiveAction = pgTable(
     index("capa_severity_idx").on(table.severity),
     index("capa_category_idx").on(table.category),
     index("capa_source_idx").on(table.source),
-    uniqueIndex("capa_number_uidx").on(table.capaNumber),
+    // Numbers are per laboratory (migration 0124, decision Q33).
+    uniqueIndex("capa_org_number_uidx").on(
+      table.organizationId,
+      table.capaNumber,
+    ),
   ],
 );
 
@@ -7570,7 +7574,7 @@ export const nonConformance = pgTable(
   "non_conformance",
   {
     id: serial("id").primaryKey(),
-    ncNumber: text("nc_number").notNull().unique(),
+    ncNumber: text("nc_number").notNull(),
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "restrict" }),
@@ -7621,7 +7625,8 @@ export const nonConformance = pgTable(
     index("nc_type_idx").on(table.type),
     index("nc_detected_at_idx").on(table.detectedAt),
     index("nc_capa_id_idx").on(table.capaId),
-    uniqueIndex("nc_number_uidx").on(table.ncNumber),
+    // Numbers are per laboratory (migration 0124, decision Q33).
+    uniqueIndex("nc_org_number_uidx").on(table.organizationId, table.ncNumber),
   ],
 );
 
