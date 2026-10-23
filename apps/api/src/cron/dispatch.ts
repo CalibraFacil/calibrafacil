@@ -4,37 +4,36 @@ import {
   readRuntimeConfig,
   readStorageConfig,
 } from "@calibra-facil/config";
-import { enqueueBackgroundJob } from "../../src/lib/background-jobs";
+import { enqueueBackgroundJob } from "../lib/background-jobs";
 import {
   processScheduledContaAzulIntegrationSyncs,
   processScheduledContaAzulPolls,
-} from "../../src/modules/integrations";
+} from "../modules/integrations";
 import { processScheduledIntegrationSyncs } from "@calibra-facil/jobs-core/integrations";
-import { cleanupExpiredAuthRecords } from "../../src/lib/auth-maintenance";
-import { drainOotEmailOutbox } from "../../src/lib/oot-email-drain";
-import { drainServiceOrderEmailOutbox } from "../../src/lib/service-order-email-drain";
-import { runStaleJobBackstop } from "../../src/lib/stale-job-backstop";
-import { createWorkerRuntimeEnv } from "../../src/lib/runtime-env";
+import { cleanupExpiredAuthRecords } from "../lib/auth-maintenance";
+import { drainOotEmailOutbox } from "../lib/oot-email-drain";
+import { drainServiceOrderEmailOutbox } from "../lib/service-order-email-drain";
+import { runStaleJobBackstop } from "../lib/stale-job-backstop";
+import { createWorkerRuntimeEnv } from "../lib/runtime-env";
 import { runCron } from "./cron-run";
-import { runCertificateDriftCheck } from "../../src/lib/certificate-drift";
-import { runRecordsPurge } from "../../src/lib/records-purge";
-import { purgeSyncChangeLog } from "../../src/lib/sync-change-log-purge";
+import { runCertificateDriftCheck } from "../lib/certificate-drift";
+import { runRecordsPurge } from "../lib/records-purge";
+import { purgeSyncChangeLog } from "../lib/sync-change-log-purge";
 import {
   createR2Client,
   downloadFromR2,
   resolveBucketName,
   type R2Env,
-} from "../../src/lib/storage";
+} from "../lib/storage";
 
-// One function serves all Vercel cron jobs so Vercel packages a single bundle
-// instead of one per job. The vercel.json crons hit the semantic paths
+// One dispatcher serves every cron job. The scheduler (the in-process one,
+// lib/cron-scheduler.ts, or an external one) hits the semantic paths
 // /api/cron/{integrations,notifications,portal-digest,auth-maintenance,
-// service-order-emails,…}; the dynamic shim api/cron/[job].js
-// routes them all here and we dispatch on the trailing path segment. (The
-// cron-routing-parity test asserts these paths <-> JOB_HANDLERS stay in sync
-// and that no vercel.json rewrite swallows them into the Hono app.)
+// service-order-emails,…} and we dispatch on the trailing path segment. (The
+// cron-scheduler spec asserts the scheduled paths <-> JOB_HANDLERS stay in
+// sync.)
 //
-// Auth is uniform and fail-closed: on prod/Vercel a CRON_SECRET is REQUIRED for
+// Auth is uniform and fail-closed: in production a CRON_SECRET is REQUIRED for
 // every job (503 when unset), secrets are compared in constant time, and the
 // check runs BEFORE any work. Each authorized handler then runs its task under
 // runCron(), which adds a lease (no overlapping runs), a heartbeat (cron_run
@@ -50,7 +49,7 @@ function getErrorMessage(error: unknown, fallback: string) {
 
 function isCronSecretRequired() {
   const runtime = readRuntimeConfig();
-  return runtime.nodeEnv === "production" || runtime.isVercel;
+  return runtime.nodeEnv === "production";
 }
 
 function secretsEqual(expected: string, received: string | null) {
@@ -119,9 +118,7 @@ async function handleIntegrations(request: Request) {
     const integrationSyncs = await runCronTask("generic_http_syncs", () =>
       processScheduledIntegrationSyncs(env, {
         dispatch: async (message) => {
-          await enqueueBackgroundJob(message, {
-            idempotencyKey: `integration-sync-${message.runId}`,
-          });
+          await enqueueBackgroundJob(message);
         },
       }),
     );
@@ -129,9 +126,7 @@ async function handleIntegrations(request: Request) {
       processScheduledContaAzulIntegrationSyncs({
         env,
         dispatch: async (message) => {
-          await enqueueBackgroundJob(message, {
-            idempotencyKey: `conta-azul-sync-${message.runId}`,
-          });
+          await enqueueBackgroundJob(message);
         },
       }),
     );
@@ -143,20 +138,13 @@ async function handleIntegrations(request: Request) {
   });
 }
 
-function todayKey() {
-  return new Date().toISOString().slice(0, 10);
-}
-
 async function handleNotifications(request: Request) {
   if (!isCronAuthorized(request)) {
     return cronAuthFailureResponse();
   }
 
   return runCron("notifications", { leaseSeconds: 120 }, () =>
-    enqueueBackgroundJob(
-      { type: "SCHEDULED_NOTIFICATIONS" },
-      { idempotencyKey: `scheduled-notifications-${todayKey()}` },
-    ),
+    enqueueBackgroundJob({ type: "SCHEDULED_NOTIFICATIONS" }),
   );
 }
 
@@ -166,10 +154,7 @@ async function handlePortalDigest(request: Request) {
   }
 
   return runCron("portal-digest", { leaseSeconds: 120 }, () =>
-    enqueueBackgroundJob(
-      { type: "PORTAL_DIGEST" },
-      { idempotencyKey: `portal-digest-${todayKey()}` },
-    ),
+    enqueueBackgroundJob({ type: "PORTAL_DIGEST" }),
   );
 }
 
@@ -229,10 +214,7 @@ async function handleSpcRecompute(request: Request) {
   }
 
   return runCron("spc-recompute", { leaseSeconds: 120 }, () =>
-    enqueueBackgroundJob(
-      { type: "SPC_RECOMPUTE" },
-      { idempotencyKey: `spc-recompute-${todayKey()}` },
-    ),
+    enqueueBackgroundJob({ type: "SPC_RECOMPUTE" }),
   );
 }
 
@@ -245,10 +227,7 @@ async function handleEmailDomainHealth(request: Request) {
   }
 
   return runCron("email-domain-health", { leaseSeconds: 120 }, () =>
-    enqueueBackgroundJob(
-      { type: "EMAIL_DOMAIN_HEALTH" },
-      { idempotencyKey: `email-domain-health-${todayKey()}` },
-    ),
+    enqueueBackgroundJob({ type: "EMAIL_DOMAIN_HEALTH" }),
   );
 }
 
@@ -383,7 +362,3 @@ export async function GET(request: Request) {
     return Response.json({ ok: false, error: message }, { status: 500 });
   }
 }
-
-export default {
-  fetch: GET,
-};

@@ -7,9 +7,8 @@ import {
 } from "@calibra-facil/shared/telemetry";
 
 // Server-side error tracking for the worker surfaces: every run
-// mode reports through this singleton — the local Bun poller, the Cloudflare
-// document-worker container, and the Vercel Queue consumer (which imports
-// processBackgroundJob from this package). Errors are written as one
+// mode reports through this singleton — the local Bun poller, and the Cloudflare
+// document-worker container. Errors are written as one
 // redacted JSON line on stderr (see packages/shared/src/telemetry/error-reporter.ts).
 
 let reporter: ErrorReporter | null = null;

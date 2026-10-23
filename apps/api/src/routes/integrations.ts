@@ -595,21 +595,16 @@ export async function dispatchSyncRun(params: {
 
   if (record?.integration.provider === "conta_azul") {
     try {
-      await enqueueBackgroundJob(
-        {
-          type: "INTEGRATION_SYNC",
-          provider: "conta_azul",
-          integrationId: params.integrationId,
-          organizationId: params.organizationId,
-          runId: params.runId,
-          target: params.target,
-          limit: params.limit,
-          trigger: params.trigger,
-        },
-        {
-          idempotencyKey: `conta-azul-sync-${params.runId}`,
-        },
-      );
+      await enqueueBackgroundJob({
+        type: "INTEGRATION_SYNC",
+        provider: "conta_azul",
+        integrationId: params.integrationId,
+        organizationId: params.organizationId,
+        runId: params.runId,
+        target: params.target,
+        limit: params.limit,
+        trigger: params.trigger,
+      });
     } catch (error) {
       const message =
         error instanceof Error

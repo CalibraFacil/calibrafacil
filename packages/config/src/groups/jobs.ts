@@ -1,13 +1,4 @@
-import {
-  choice,
-  defineGroup,
-  example,
-  integer,
-  list,
-  text,
-  url,
-} from "../define";
-import { vercelVar } from "./runtime";
+import { choice, defineGroup, example, integer, text, url } from "../define";
 
 export const jobsGroup = defineGroup({
   name: "jobs",
@@ -15,37 +6,15 @@ export const jobsGroup = defineGroup({
   intro: [
     "BACKGROUND_JOBS_MODE: local = the API runs PDF/integration jobs in-process",
     "(development); queue = jobs wait in the database for apps/worker (polling, or",
-    "woken through DOCUMENT_WORKER_URL); vercel = jobs are published to Vercel Queue",
-    "and consumed by apps/worker; inline = run inside the request (tests).",
+    "woken through DOCUMENT_WORKER_URL); inline = run inside the request (tests).",
   ],
   vars: {
-    modeSetting: choice({
+    mode: choice({
       env: "BACKGROUND_JOBS_MODE",
-      description:
-        "Where background jobs run: local, queue, vercel or inline (default: vercel on Vercel, local elsewhere).",
-      values: ["local", "queue", "vercel", "inline"],
+      description: "Where background jobs run: local, queue or inline.",
+      values: ["local", "queue", "inline"],
+      default: "local",
       example: example.active("local"),
-    }),
-    topic: text({
-      env: "BACKGROUND_JOBS_TOPIC",
-      description: "Vercel Queue topic the jobs are published to.",
-      default: "calibra-facil-background-jobs",
-      hidden: true,
-    }),
-    vercelQueueRegion: text({
-      env: "VERCEL_QUEUE_REGION",
-      description: "Vercel Queue region.",
-      default: "gru1",
-      hidden: true,
-    }),
-    maxDeliveries: integer({
-      env: "BACKGROUND_JOBS_MAX_DELIVERIES",
-      description:
-        "Vercel deliveries before a certificate is rejected. An unusable value means the default.",
-      min: 1,
-      default: 3,
-      tolerant: true,
-      example: example.commented("3"),
     }),
     documentWorkerUrl: url({
       env: "DOCUMENT_WORKER_URL",
@@ -57,12 +26,6 @@ export const jobsGroup = defineGroup({
       env: "DOCUMENT_WORKER_TOKEN",
       description: "Shared secret sent to the document worker's drain server.",
       secret: true,
-    }),
-    documentWorkerJobTypes: list({
-      env: "DOCUMENT_WORKER_JOB_TYPES",
-      description:
-        "Job types routed to the document worker (comma-separated); empty means every queue job type.",
-      hidden: true,
     }),
     documentWorkerWakeTimeoutMs: integer({
       env: "DOCUMENT_WORKER_WAKE_TIMEOUT_MS",
@@ -125,7 +88,7 @@ export const jobsGroup = defineGroup({
     cronScheduler: choice({
       env: "CRON_SCHEDULER",
       description:
-        "`internal` runs the vercel.json cron schedule inside the API process, for installs without an external scheduler (the Docker setup turns it on). Any other value leaves scheduling to an external trigger.",
+        "`internal` runs the cron schedule inside the API process, for installs without an external scheduler (the Docker setup turns it on). Any other value leaves scheduling to an external trigger.",
       values: ["internal", "external"],
       default: "external",
       tolerant: true,
@@ -159,11 +122,5 @@ export const jobsGroup = defineGroup({
       default: 2_000,
       hidden: true,
     }),
-    vercel: vercelVar,
   },
-  derive: (values) => ({
-    /** The effective mode: the setting, else vercel on Vercel, else local. */
-    mode:
-      values.modeSetting ?? (values.vercel !== undefined ? "vercel" : "local"),
-  }),
 });

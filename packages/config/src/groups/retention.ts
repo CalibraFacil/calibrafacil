@@ -1,5 +1,5 @@
 import { choice, defineGroup, example, flag, text } from "../define";
-import { nodeEnvVar, vercelEnvVar } from "./runtime";
+import { nodeEnvVar } from "./runtime";
 
 export const retentionGroup = defineGroup({
   name: "retention",
@@ -39,16 +39,15 @@ export const observabilityGroup = defineGroup({
   ],
   vars: {
     nodeEnv: nodeEnvVar,
-    vercelEnv: vercelEnvVar,
     release: text({
-      env: "VERCEL_GIT_COMMIT_SHA",
+      env: "APP_RELEASE",
       description:
-        "Release label of the error log lines (the commit on Vercel).",
+        "Release label of the error log lines (the commit or the image tag).",
       hidden: true,
     }),
   },
   derive: (values) => ({
-    /** `environment` label of the error log lines: VERCEL_ENV, else NODE_ENV. */
-    environment: values.vercelEnv ?? values.nodeEnv,
+    /** `environment` label of the error log lines: NODE_ENV. */
+    environment: values.nodeEnv,
   }),
 });

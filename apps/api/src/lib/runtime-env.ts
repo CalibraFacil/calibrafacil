@@ -5,14 +5,10 @@ import {
 } from "@aws-sdk/client-s3";
 import {
   loadWorkerConfig,
-  rawEnv,
-  readDatabaseConfig,
   workerSigningEnv,
   type WorkerSigningEnv,
 } from "@calibra-facil/config";
 import { resolveS3EndpointConfig } from "@calibra-facil/shared/storage-endpoint";
-
-export type ApiRuntimeEnv = Record<string, unknown>;
 
 export type WorkerRuntimeEnv = WorkerSigningEnv & {
   DATABASE_URL: string;
@@ -112,24 +108,8 @@ function createR2Bucket(storage: StorageSettings, bucketName: string) {
 }
 
 /**
- * The bindings handed to the Hono app on every request. The configuration is
- * validated once, when the function starts (`loadApiConfig()` in the Vercel
- * entry), so this only assembles the bag.
- */
-export function createApiRuntimeEnv(): ApiRuntimeEnv {
-  const env: ApiRuntimeEnv = { ...rawEnv() };
-
-  const databaseUrl = readDatabaseConfig().url;
-  if (databaseUrl) {
-    env.HYPERDRIVE = { connectionString: databaseUrl };
-  }
-
-  return env;
-}
-
-/**
- * The worker's environment (Vercel Queue consumer, cron handlers, the inline
- * dev runner). The worker cannot do any work without its database, storage and
+ * The worker's environment (cron handlers, the inline dev
+ * runner). The worker cannot do any work without its database, storage and
  * keys, so a missing one throws one aggregated error.
  */
 export function createWorkerRuntimeEnv(): WorkerRuntimeEnv {

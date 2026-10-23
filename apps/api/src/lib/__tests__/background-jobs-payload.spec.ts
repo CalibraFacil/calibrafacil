@@ -1,12 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  send: vi.fn(),
   enqueueQueueJob: vi.fn(),
   processBackgroundJob: vi.fn(),
 }));
-
-vi.mock("@vercel/queue", () => ({ send: mocks.send }));
 
 vi.mock("@calibra-facil/db/queue", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@calibra-facil/db/queue")>()),
@@ -31,7 +28,6 @@ describe("enqueueBackgroundJob validates its payload (REQ-Q-2)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.enqueueQueueJob.mockResolvedValue(42);
-    mocks.send.mockResolvedValue({ messageId: "vq-1" });
   });
 
   afterEach(() => {
@@ -39,7 +35,7 @@ describe("enqueueBackgroundJob validates its payload (REQ-Q-2)", () => {
     else process.env.BACKGROUND_JOBS_MODE = savedMode;
   });
 
-  it.each(["queue", "vercel"])(
+  it.each(["queue", "local", "inline"])(
     "REQ-Q-2 refuses a payload that fails its schema before any dispatch (mode %s)",
     async (mode) => {
       process.env.BACKGROUND_JOBS_MODE = mode;
@@ -50,7 +46,7 @@ describe("enqueueBackgroundJob validates its payload (REQ-Q-2)", () => {
       ).rejects.toThrow(/invalid background job.*jobId/i);
 
       expect(mocks.enqueueQueueJob).not.toHaveBeenCalled();
-      expect(mocks.send).not.toHaveBeenCalled();
+      expect(mocks.processBackgroundJob).not.toHaveBeenCalled();
     },
   );
 

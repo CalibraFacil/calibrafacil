@@ -3,8 +3,8 @@
  * endpoint (spec quote-approval-public-access, REQ-QPUB-014 [HIGH RISK]).
  *
  * Codes are low-entropy by design (8 chars over a 31-char alphabet ≈ 2^39.6),
- * so online guessing must be rate-limited. The API runs on serverless Vercel
- * functions — in-memory counters do not survive across invocations — so the
+ * so online guessing must be rate-limited. The API runs as several replicas, so
+ * an in-memory counter would not hold — the
  * counter is a Postgres row per (ip_hash, fixed 15-minute window):
  *
  *   - check: SELECT the current window's row; >= max failures → 429.

@@ -528,7 +528,7 @@ export async function approveJob(
     try {
       await enqueueBackgroundJob({ jobId, userId: approverId });
     } catch (error) {
-      // Not durable in our database (Vercel Queue / in-process): nothing
+      // Not durable in our database (in-process): nothing
       // would ever pick the job up. Compensate instead of leaving it in
       // GENERATING_PDF forever.
       await revertApprovalAfterDispatchFailure({

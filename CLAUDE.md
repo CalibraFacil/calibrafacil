@@ -102,10 +102,10 @@ keep these in parity:
   (`packages/email-sender/src/transport.ts`). Background work (PDF
   generation, compliance checks, syncs) is implemented in `packages/jobs-core` (the dispatcher and
   the per-type handlers) and driven by `apps/worker`, a thin runtime (queue drain loop, Bun entry,
-  HTTP drain server): in-process in development, via
-  Vercel Queue + Cron or the always-on worker in production. On Vercel the API entrypoints are
-  the generated functions in `apps/api/api/` (`[...route].js`, `cron/`, `queues/`); elsewhere
-  `apps/api/src/bun.ts` serves the same app plus the `/api/cron/*` handlers. The Hono app itself
+  HTTP drain server): in-process in development (`BACKGROUND_JOBS_MODE=local`), via the database
+  queue (`app_queue_job`) drained by the always-on worker in production (`BACKGROUND_JOBS_MODE=queue`).
+  The API is self-hosted only: `apps/api/src/bun.ts` serves the app plus the `/api/cron/*` handlers,
+  and `apps/api/src/lib/cron-scheduler.ts` schedules them in-process (`CRON_SCHEDULER=internal`). The Hono app itself
   is wired in `apps/api/src/app.ts` with route handlers in `apps/api/src/routes/`. Deployment
   URLs, CORS and auth origins all come from environment variables (see `DEPLOYMENT.md`).
 - **Desktop/offline:** `apps/desktop` (Electron) embeds the web UI and talks to `apps/local-server`,

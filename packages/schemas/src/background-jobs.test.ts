@@ -91,7 +91,7 @@ const PRODUCER_FIXTURES = {
   },
   // apps/api/src/routes/portal.ts
   "portal audit pack": { type: "AUDIT_PACK", exportId: 13, userId: "user_1" },
-  // apps/api/vercel-src/cron/dispatch.ts timers
+  // apps/api/src/cron/dispatch.ts timers
   "spc recompute timer": { type: "SPC_RECOMPUTE" },
   "email domain health timer": { type: "EMAIL_DOMAIN_HEALTH" },
   "scheduled notifications timer": { type: "SCHEDULED_NOTIFICATIONS" },

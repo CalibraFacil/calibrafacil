@@ -11,7 +11,6 @@
     "check:bundle": "node ./scripts/check-bundle-size.mjs",
     "render:og": "node ./scripts/render-og.mjs",
     "preview": "vite preview",
-    "deploy": "pnpm dlx vercel deploy --prod",
     "test": "vitest run --passWithNoTests",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",

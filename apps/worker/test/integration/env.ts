@@ -1,7 +1,7 @@
 import type { Env, R2BucketBinding } from "@calibra-facil/jobs-core";
 
 // Test-env factory for the worker integration tier. The worker handlers take
-// their entire outside world via an injected `env` object (no Vercel/CF runtime,
+// their entire outside world via an injected `env` object (no CF runtime,
 // no ambient globals beyond `fetch`), which is exactly what makes them directly
 // invocable from a test. This builds that env pointed at the ephemeral test
 // Postgres, with in-memory fakes for the R2 buckets and the external secrets

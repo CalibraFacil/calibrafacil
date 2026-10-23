@@ -6,7 +6,7 @@ vi.mock("@calibra-facil/db", () => ({
   db: { execute },
 }));
 
-const { runCron } = await import("../../../vercel-src/cron/cron-run");
+const { runCron } = await import("../../cron/cron-run");
 
 // A lease UPDATE that returns one row = lease acquired; zero rows = held by a
 // concurrent run.

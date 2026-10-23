@@ -2,14 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BackgroundJobMessage } from "@calibra-facil/schemas";
 
 const mocks = vi.hoisted(() => ({
-  send: vi.fn(),
   enqueueQueueJob: vi.fn(),
   processBackgroundJob: vi.fn(),
   runIntegrationSync: vi.fn(),
-}));
-
-vi.mock("@vercel/queue", () => ({
-  send: mocks.send,
 }));
 
 vi.mock("@calibra-facil/db/queue", async (importOriginal) => ({
@@ -36,9 +31,7 @@ import { enqueueBackgroundJob, wakeDocumentWorker } from "../background-jobs";
 
 const DOCUMENT_WORKER_ENV_KEYS = [
   "BACKGROUND_JOBS_MODE",
-  "VERCEL",
   "DOCUMENT_WORKER_URL",
-  "DOCUMENT_WORKER_JOB_TYPES",
   "DOCUMENT_WORKER_TOKEN",
   "DOCUMENT_WORKER_WAKE_TIMEOUT_MS",
   "DOCUMENT_WORKER_WAKE_ATTEMPTS",
@@ -68,21 +61,21 @@ const serviceOrderQuoteMessage: BackgroundJobMessage = {
   userId: "user-1",
 };
 
-describe("enqueueBackgroundJob — document-worker routing", () => {
+describe("enqueueBackgroundJob — document-worker wake", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     for (const key of DOCUMENT_WORKER_ENV_KEYS) {
       savedEnv[key] = process.env[key];
       delete process.env[key];
     }
-    // Force the production dispatch path (skip local/inline in-process modes).
-    process.env.BACKGROUND_JOBS_MODE = "vercel";
+    // The dispatch path of a self-hosted install (not the in-process modes).
+    process.env.BACKGROUND_JOBS_MODE = "queue";
     // Single wake attempt with no backoff by default, so the fire-and-forget
     // wake in enqueueBackgroundJob can't leak a retry into the next test. The
     // retry-specific tests opt back into multiple attempts and await the wake.
     process.env.DOCUMENT_WORKER_WAKE_ATTEMPTS = "1";
     process.env.DOCUMENT_WORKER_WAKE_RETRY_DELAY_MS = "0";
-    mocks.send.mockResolvedValue({ messageId: "vercel-message-1" });
+    mocks.processBackgroundJob.mockResolvedValue(undefined);
     mocks.enqueueQueueJob.mockResolvedValue(42);
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null)));
     vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -97,34 +90,20 @@ describe("enqueueBackgroundJob — document-worker routing", () => {
     vi.restoreAllMocks();
   });
 
-  it("uses Vercel Queue when DOCUMENT_WORKER_URL is not set", async () => {
-    process.env.DOCUMENT_WORKER_JOB_TYPES = "AUDIT_PACK";
-
+  it("writes the job to app_queue_job without a wake ping when DOCUMENT_WORKER_URL is not set", async () => {
     const result = await enqueueBackgroundJob(documentWorkerMessage);
 
-    expect(mocks.enqueueQueueJob).not.toHaveBeenCalled();
-    expect(mocks.send).toHaveBeenCalledTimes(1);
-    expect(result.messageId).toBe("vercel-message-1");
+    expect(mocks.enqueueQueueJob).toHaveBeenCalledWith(documentWorkerMessage);
+    expect(result.messageId).toBe("app-queue-42");
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
 
-  it("uses Vercel Queue when the allowlist is empty", async () => {
+  it("writes the job to app_queue_job and wakes the container", async () => {
     process.env.DOCUMENT_WORKER_URL = "https://dw.example.com";
-
-    const result = await enqueueBackgroundJob(documentWorkerMessage);
-
-    expect(mocks.enqueueQueueJob).not.toHaveBeenCalled();
-    expect(mocks.send).toHaveBeenCalledTimes(1);
-    expect(result.messageId).toBe("vercel-message-1");
-  });
-
-  it("routes an allowlisted job to app_queue_job and wakes the container", async () => {
-    process.env.DOCUMENT_WORKER_URL = "https://dw.example.com";
-    process.env.DOCUMENT_WORKER_JOB_TYPES = "AUDIT_PACK";
     process.env.DOCUMENT_WORKER_TOKEN = "secret-token";
 
     const result = await enqueueBackgroundJob(documentWorkerMessage);
 
-    expect(mocks.send).not.toHaveBeenCalled();
     expect(mocks.enqueueQueueJob).toHaveBeenCalledWith(documentWorkerMessage);
     expect(result.messageId).toBe("app-queue-42");
 
@@ -138,52 +117,36 @@ describe("enqueueBackgroundJob — document-worker routing", () => {
     );
   });
 
-  it("normalizes an omitted CERTIFICATE type when matching the allowlist", async () => {
+  it("normalizes an omitted CERTIFICATE type", async () => {
     process.env.DOCUMENT_WORKER_URL = "https://dw.example.com";
-    process.env.DOCUMENT_WORKER_JOB_TYPES = "CERTIFICATE";
 
     const result = await enqueueBackgroundJob(certificateMessage);
 
-    expect(mocks.send).not.toHaveBeenCalled();
     expect(mocks.enqueueQueueJob).toHaveBeenCalledWith(certificateMessage);
     expect(result.messageId).toBe("app-queue-42");
   });
 
-  it("keeps job types outside the allowlist on Vercel Queue", async () => {
-    process.env.DOCUMENT_WORKER_URL = "https://dw.example.com";
-    process.env.DOCUMENT_WORKER_JOB_TYPES = "CERTIFICATE";
-
-    const result = await enqueueBackgroundJob(serviceOrderQuoteMessage);
-
-    expect(mocks.enqueueQueueJob).not.toHaveBeenCalled();
-    expect(mocks.send).toHaveBeenCalledTimes(1);
-    expect(result.messageId).toBe("vercel-message-1");
-  });
-
   it("never routes SCHEDULED_NOTIFICATIONS to the container", async () => {
     process.env.DOCUMENT_WORKER_URL = "https://dw.example.com";
-    process.env.DOCUMENT_WORKER_JOB_TYPES =
-      "SCHEDULED_NOTIFICATIONS,CERTIFICATE";
+    mocks.processBackgroundJob.mockResolvedValue(undefined);
 
     const result = await enqueueBackgroundJob({
       type: "SCHEDULED_NOTIFICATIONS",
     });
 
     expect(mocks.enqueueQueueJob).not.toHaveBeenCalled();
-    expect(mocks.send).toHaveBeenCalledTimes(1);
-    expect(result.messageId).toBe("vercel-message-1");
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+    expect(result.messageId).toMatch(/^local-/);
   });
 
   it("still returns success when the wake ping fails (job is durable)", async () => {
     process.env.DOCUMENT_WORKER_URL = "https://dw.example.com";
-    process.env.DOCUMENT_WORKER_JOB_TYPES = "AUDIT_PACK";
     vi.mocked(fetch).mockRejectedValue(new Error("worker unreachable"));
 
     const result = await enqueueBackgroundJob(documentWorkerMessage);
 
     expect(mocks.enqueueQueueJob).toHaveBeenCalledWith(documentWorkerMessage);
     expect(result.messageId).toBe("app-queue-42");
-    expect(mocks.send).not.toHaveBeenCalled();
   });
 
   it("retries the drain wake when the first attempt fails (cold start)", async () => {
@@ -271,7 +234,7 @@ describe("enqueueBackgroundJob — database queue mode", () => {
     vi.restoreAllMocks();
   });
 
-  it("writes every queue job to app_queue_job, never to Vercel Queue", async () => {
+  it("writes every queue job to app_queue_job", async () => {
     for (const message of [
       documentWorkerMessage,
       certificateMessage,
@@ -282,7 +245,6 @@ describe("enqueueBackgroundJob — database queue mode", () => {
       expect(mocks.enqueueQueueJob).toHaveBeenLastCalledWith(message);
     }
 
-    expect(mocks.send).not.toHaveBeenCalled();
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
 
@@ -310,7 +272,6 @@ describe("enqueueBackgroundJob — database queue mode", () => {
 
     expect(result.messageId).toMatch(/^local-/);
     expect(mocks.enqueueQueueJob).not.toHaveBeenCalled();
-    expect(mocks.send).not.toHaveBeenCalled();
     await vi.waitFor(() =>
       expect(mocks.processBackgroundJob).toHaveBeenCalledWith(
         expect.anything(),

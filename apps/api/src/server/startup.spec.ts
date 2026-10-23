@@ -107,37 +107,6 @@ describe("API start-up configuration (REQ-CFG-2)", () => {
   });
 });
 
-describe("Vercel function entries validate at cold start (REQ-CFG-2)", () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.resetModules();
-  });
-
-  for (const entry of [
-    "../../vercel-src/index",
-    "../../vercel-src/queues/background",
-    "../../vercel-src/cron/main",
-  ]) {
-    it(`REQ-CFG-2: ${entry.replace("../../vercel-src/", "")} refuses to load a production environment that misses required variables`, async () => {
-      vi.stubEnv("VERCEL", "1");
-      vi.stubEnv("NODE_ENV", "production");
-      for (const name of [
-        "DATABASE_URL",
-        "BETTER_AUTH_SECRET",
-        "R2_BUCKET_NAME",
-        "SIGNING_MASTER_KEY",
-      ]) {
-        vi.stubEnv(name, "");
-      }
-      vi.resetModules();
-
-      await expect(import(/* @vite-ignore */ entry)).rejects.toThrow(
-        /Invalid api configuration[\s\S]*DATABASE_URL/,
-      );
-    });
-  }
-});
-
 const bun = spawnSync("bun", ["--version"], { encoding: "utf8" });
 
 describe.skipIf(bun.status !== 0)("the Bun entry (src/bun.ts)", () => {

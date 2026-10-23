@@ -8,7 +8,7 @@
  * not been rendered yet is DEFERRED (lease cleared, attempts NOT incremented)
  * — a slow render must never burn the row's retry budget.
  *
- * Invoked by the `oot-emails` cron handler in vercel-src/cron/dispatch.ts.
+ * Invoked by the `oot-emails` cron handler in src/cron/dispatch.ts.
  */
 
 import { readOriginsConfig } from "@calibra-facil/config";

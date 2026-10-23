@@ -2,15 +2,14 @@ import { readJobsConfig } from "@calibra-facil/config";
 import { sql } from "drizzle-orm";
 import { db } from "./db.js";
 
-// Idempotency ledger for queue consumers. Both delivery channels are at-least-once:
-//   - Vercel Queue redelivers a message until it is acknowledged;
+// Idempotency ledger for queue consumers. Delivery is at-least-once:
 //   - the app_queue_job stale-lease reclaim re-queues a PROCESSING row whose
 //     worker died (or is merely slower than the lease).
 // A consumer therefore claims a receipt for its DELIVERY UNIT before running.
 // If the unit already ran to COMPLETED, enforce mode skips the re-run; a live
 // RUNNING lease means another worker owns it right now.
 //
-// The key is the delivery unit — `app-queue-<rowId>` / `vq:<messageId>` —
+// The key is the delivery unit — `app-queue-<rowId>` —
 // never a business id: re-requesting the same certificate enqueues a NEW unit
 // and must run. What this ledger cannot give is transactional exactly-once for
 // non-DB side effects (R2 uploads, email): a crash between finishing the work
@@ -38,11 +37,6 @@ function readLeaseMs(): number {
 /** Receipt key for an app_queue_job row — stable across reclaims/retries. */
 export function appQueueJobReceiptKey(queueJobId: number): string {
   return `app-queue-${queueJobId}`;
-}
-
-/** Receipt key for a Vercel Queue message — stable across redeliveries. */
-export function vercelQueueReceiptKey(messageId: string): string {
-  return `vq:${messageId}`;
 }
 
 export type QueueReceiptClaim =
@@ -150,7 +144,7 @@ export async function releaseQueueReceipt(params: {
 
 /**
  * Drop receipts old enough that their delivery unit can no longer reappear
- * (Vercel Queue messages expire; app_queue_job rows go terminal). Called from
+ * (app_queue_job rows go terminal). Called from
  * the queue-backstop cron so the ledger stays bounded.
  */
 export async function pruneQueueReceipts(

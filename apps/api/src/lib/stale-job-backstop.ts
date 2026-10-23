@@ -28,7 +28,7 @@ import { wakeDocumentWorker } from "./background-jobs";
 //      must not be re-claimed forever),
 //   2. reject the GENERATING_PDF certificate of every row dead-lettered in (1),
 //   3. reject certificates stuck in GENERATING_PDF past STUCK_RENDER_AFTER_MS
-//      with no live queue row (a Vercel Queue message dropped after its retries),
+//      with no live queue row (a job that ran out of its retries),
 //   4. count what is now claimable (reclaimed + any stranded PENDING),
 //   5. if anything is claimable and the container is configured, wake it to drain.
 //
@@ -118,7 +118,7 @@ export async function runStaleJobBackstop(
     });
 
   // 3. Certificates stranded in GENERATING_PDF with no queue row left to move
-  //    them (e.g. a Vercel Queue message dropped after its retries).
+  //    them (e.g. a job that ran out of its retries).
   const stuckRendersRejected = await deps
     .rejectStuckRenders(deps.stuckRenderAfterMs)
     .catch((error) => {

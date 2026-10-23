@@ -7054,11 +7054,11 @@ export type QueueJobReceiptStatus = "RUNNING" | "COMPLETED";
 /**
  * Idempotency ledger for queue consumers.
  *
- * Both delivery channels are at-least-once (Vercel Queue redelivers messages;
- * the app_queue_job stale-lease reclaim re-runs rows), so a consumer can see
+ * Delivery is at-least-once (the app_queue_job stale-lease reclaim re-runs
+ * rows), so a consumer can see
  * the same DELIVERY UNIT twice. Each unit claims a receipt keyed by
  * (job_type, idempotency_key) before running: `app-queue-<rowId>` for DB-queue
- * rows, `vq:<messageId>` for Vercel Queue messages. A COMPLETED receipt means
+ * rows. A COMPLETED receipt means
  * the work already ran to success and the duplicate is skipped (enforce mode).
  *
  * Deliberately keyed by delivery unit and NOT by business ids (jobId /
@@ -8644,11 +8644,11 @@ export const trainingRecordAuditLogRelations = relations(
 );
 
 /**
- * Heartbeat + lease-lock for the Vercel cron dispatcher (one row per
+ * Heartbeat + lease-lock for the cron dispatcher (one row per
  * /api/cron/* job). The dispatcher records each run's outcome here so a
  * silently-failing or never-firing cron is detectable from the DB, and takes a
  * short `lockedUntil` row-lease to prevent overlapping runs. Treated as
- * best-effort / fail-open by the dispatcher (see vercel-src/cron/cron-run.ts).
+ * best-effort / fail-open by the dispatcher (see apps/api/src/cron/cron-run.ts).
  */
 export const cronRun = pgTable("cron_run", {
   job: text("job").primaryKey(),

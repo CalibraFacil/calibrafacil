@@ -200,10 +200,11 @@ describe("portalRouter /audit-packs — real DB + real portal middleware", () =>
     // The frozen scope carries exactly the session customer — nothing else.
     expect(row.params.customerIds).toEqual([ctx.customerId]);
 
-    expect(vi.mocked(enqueueBackgroundJob)).toHaveBeenCalledWith(
-      { type: "AUDIT_PACK", exportId: row.id, userId: ctx.portalUserId },
-      { idempotencyKey: `audit-pack-${row.id}` },
-    );
+    expect(vi.mocked(enqueueBackgroundJob)).toHaveBeenCalledWith({
+      type: "AUDIT_PACK",
+      exportId: row.id,
+      userId: ctx.portalUserId,
+    });
   });
 
   it("REQ-AP-002 [HIGH RISK] release gate at enqueue: a period with only payment-held certificates is rejected", async () => {

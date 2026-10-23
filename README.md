@@ -164,7 +164,7 @@ docker compose exec api bun src/cli/create-lab.ts --name "Meu Laboratório" --em
 
 Images for x86-64 and ARM64 are published with every [release](https://github.com/CalibraFacil/calibrafacil/releases).
 [`DEPLOYMENT.md`](./DEPLOYMENT.md) covers updates, backups, hosted databases and storage, plain
-Bun servers and Vercel.
+Bun servers.
 
 ## Contributing
 

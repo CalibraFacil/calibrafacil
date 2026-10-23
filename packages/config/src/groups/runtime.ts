@@ -1,18 +1,5 @@
 import { defineGroup, example, integer, text } from "../define";
 
-/** Set to `1` by Vercel on every deployment (preview and production). */
-export const vercelVar = text({
-  env: "VERCEL",
-  description: "Set to 1 by Vercel on every deployment.",
-  hidden: true,
-});
-
-export const vercelEnvVar = text({
-  env: "VERCEL_ENV",
-  description: "Vercel environment: production, preview or development.",
-  hidden: true,
-});
-
 export const nodeEnvVar = text({
   env: "NODE_ENV",
   description:
@@ -30,8 +17,6 @@ export const runtimeGroup = defineGroup({
   ],
   vars: {
     nodeEnv: nodeEnvVar,
-    vercel: vercelVar,
-    vercelEnv: vercelEnvVar,
     port: integer({
       env: "PORT",
       description:
@@ -56,13 +41,8 @@ export const runtimeGroup = defineGroup({
   derive: (values) => {
     const nodeEnv = values.nodeEnv.toLowerCase();
     return {
-      /** Production by NODE_ENV, or any Vercel deployment. */
-      isProduction:
-        nodeEnv === "production" ||
-        values.vercel === "1" ||
-        values.vercelEnv?.toLowerCase() === "production",
-      /** Running on Vercel (any non-empty VERCEL). */
-      isVercel: values.vercel !== undefined,
+      /** Production by NODE_ENV. */
+      isProduction: nodeEnv === "production",
       /** The port to listen on: PORT, then API_PORT. */
       listenPort: values.port ?? values.apiPort,
     };

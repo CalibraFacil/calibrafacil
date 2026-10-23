@@ -55,7 +55,7 @@ export interface ScheduledEvent {
 
 /**
  * Which delivery of a queue message this is. Runtimes that redeliver a failed
- * message (Vercel Queue, the DB queue) supply it; runtimes that never redeliver
+ * message (the DB queue) supply it; runtimes that never redeliver
  * (in-process local/inline dev) leave it out, which means "this is the only
  * attempt", so a failure is final.
  */

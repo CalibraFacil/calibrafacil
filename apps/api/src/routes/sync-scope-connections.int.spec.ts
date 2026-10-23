@@ -5,7 +5,7 @@
  * `create_local_customer` (a legacy event an older build may still hold) creates
  * a client organization through better-auth, whose adapter takes its own
  * connection. Inside the event's transaction that deadlocks when the pool is
- * small (Vercel's default is one connection), and what it wrote survived a
+ * small (a pool of one connection), and what it wrote survived a
  * rollback of the event. The organization is now created before the
  * transaction, idempotently on the event id, and the transaction only
  * references it.

@@ -8,7 +8,7 @@ Cloudflare Containers.
 
 This folder is **not** part of the pnpm workspace (the workspace globs only
 `apps/*` and `packages/*`); it has its own `package.json` and is deployed with
-Wrangler, independent of the Vercel build.
+Wrangler, independent of the app builds.
 
 ## Prerequisites
 
@@ -35,20 +35,11 @@ npx wrangler deploy
 `https://calibrafacil-gotenberg.<account>.workers.dev` (or attach a custom
 domain/route in `wrangler.jsonc`).
 
-## Wire it into the app (Vercel example)
+## Wire it into the app
 
-On Vercel, the worker runs as functions inside the API project.
-
-```bash
-# from repo root, with the api project linked (apps/api/.vercel)
-printf 'https://calibrafacil-gotenberg.<account>.workers.dev' \
-  | vercel env add GOTENBERG_URL production --cwd apps/api --scope <your-team>
-printf '<the same secret you set above>' \
-  | vercel env add GOTENBERG_TOKEN production --sensitive --cwd apps/api --scope <your-team>
-```
-
-Then redeploy the API (any `apps/api` change, since the ignore-step skips
-no-op redeploys). The converter picks up both: it sends `X-Gotenberg-Token`
+Set `GOTENBERG_URL` to the deployed Worker URL and `GOTENBERG_TOKEN` to the
+secret you set above, in the environment of the API and of the worker, then
+restart them. The converter picks up both: it sends `X-Gotenberg-Token`
 when `GOTENBERG_TOKEN` is set, and the Worker rejects anything else with 401.
 
 ## Verify
@@ -70,8 +61,3 @@ curl -s -o /tmp/out.pdf -w '%{http_code}\n' \
   `max_instances` or use `getRandom()` in `src/index.ts` for more parallelism.
 - **Pin the image** (`gotenberg/gotenberg:8.x.y`) in the `Dockerfile` once a
   version is validated.
-- **HTML->PDF (future):** the service-order/label PDFs still render via headless
-  Chromium inside the Vercel function (`@sparticuz/chromium-min`). Gotenberg can
-  also do HTML->PDF (`/forms/chromium/convert/html`); routing those through this
-  same service later would remove the in-function Chromium pack. That needs an
-  app-side code change and is out of scope here.

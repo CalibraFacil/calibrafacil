@@ -1,5 +1,5 @@
 import { choice, defineGroup, example, integer, text } from "../define";
-import { nodeEnvVar, vercelVar } from "./runtime";
+import { nodeEnvVar } from "./runtime";
 
 const DEFAULT_POOL_MAX = 5;
 
@@ -19,7 +19,7 @@ export const databaseGroup = defineGroup({
     }),
     configuredPoolMax: integer({
       env: "DATABASE_POOL_MAX",
-      description: `Connections per process (default ${DEFAULT_POOL_MAX}, 1 on Vercel). An unusable value means the default.`,
+      description: `Connections per process (default ${DEFAULT_POOL_MAX}). An unusable value means the default.`,
       min: 1,
       tolerant: true,
       example: example.commented("5"),
@@ -54,12 +54,9 @@ export const databaseGroup = defineGroup({
       hidden: true,
     }),
     nodeEnv: nodeEnvVar,
-    vercel: vercelVar,
   },
   derive: (values) => ({
-    /** The pool size: the setting, else 1 on Vercel (one connection per function), else 5. */
-    poolMax:
-      values.configuredPoolMax ??
-      (values.vercel !== undefined ? 1 : DEFAULT_POOL_MAX),
+    /** The pool size: the setting, else the default. */
+    poolMax: values.configuredPoolMax ?? DEFAULT_POOL_MAX,
   }),
 });

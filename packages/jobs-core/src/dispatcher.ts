@@ -11,8 +11,7 @@ import { type DeliveryAttempt, type Env } from "./runtime-types.js";
 import { processAuditPackJob } from "./audit-pack.js";
 import { processDocumentMessage } from "./document-messages.js";
 
-// one capture site covering every run mode (Vercel Queue
-// consumer, container drain, local poller, inline/local dev): a failing job is
+// one capture site covering every run mode (container drain, local poller, inline/local dev): a failing job is
 // reported with structural tags before the error continues into the caller's
 // retry path. Flush is bounded so a serverless caller doesn't freeze with the
 // event still in flight.

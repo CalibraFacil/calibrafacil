@@ -7,7 +7,7 @@
 // drains the queue to empty and goes idle again. The Cloudflare Container's
 // `sleepAfter` then scales the instance back to zero. Net effect: the database
 // is only touched when there is real work — which is the whole point of moving
-// this off Vercel without re-introducing the "wake Neon every 2s" problem.
+// this off the serverless platform without re-introducing the "wake Neon every 2s" problem.
 import {
   failFast,
   failFastAsync,

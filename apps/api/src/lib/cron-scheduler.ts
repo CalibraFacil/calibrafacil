@@ -2,35 +2,32 @@
  * In-process scheduler for the jobs under /api/cron/*, for installs without an
  * external scheduler: `CRON_SCHEDULER=internal` (the Docker setup's default).
  *
- * The schedules come from apps/api/vercel.json, the list Vercel itself runs,
- * so the two can never drift. Each run goes through the same dispatcher (and
- * CRON_SECRET check) as an HTTP trigger; runCron's lease keeps two API
- * replicas from running a job at the same time.
+ * CRON_ENTRIES is the one schedule of the platform (UTC); a test keeps it in
+ * step with the handlers of src/cron/dispatch.ts. Each run goes through the
+ * same dispatcher (and CRON_SECRET check) as an HTTP trigger; runCron's lease
+ * keeps two API replicas from running a job at the same time.
  */
 import { Cron } from "croner";
 
 export type CronEntry = { path: string; schedule: string };
 
-/** The `crons` list of a vercel.json document. */
-export function readCronEntries(config: unknown): CronEntry[] {
-  if (typeof config !== "object" || config === null) return [];
-  const crons: unknown = Reflect.get(config, "crons");
-  if (!Array.isArray(crons)) return [];
-
-  return crons.flatMap((entry: unknown) => {
-    if (typeof entry !== "object" || entry === null) return [];
-    const path: unknown = Reflect.get(entry, "path");
-    const schedule: unknown = Reflect.get(entry, "schedule");
-    return typeof path === "string" &&
-      path.startsWith("/api/cron/") &&
-      typeof schedule === "string"
-      ? [{ path, schedule }]
-      : [];
-  });
-}
+export const CRON_ENTRIES: readonly CronEntry[] = [
+  { path: "/api/cron/integrations", schedule: "*/30 * * * *" },
+  { path: "/api/cron/notifications", schedule: "0 8 * * *" },
+  { path: "/api/cron/portal-digest", schedule: "0 9 * * *" },
+  { path: "/api/cron/auth-maintenance", schedule: "30 4 * * 1" },
+  { path: "/api/cron/service-order-emails", schedule: "*/30 * * * *" },
+  { path: "/api/cron/oot-emails", schedule: "*/30 * * * *" },
+  { path: "/api/cron/queue-backstop", schedule: "*/30 * * * *" },
+  { path: "/api/cron/spc-recompute", schedule: "0 3 * * *" },
+  { path: "/api/cron/email-domain-health", schedule: "30 3 * * *" },
+  { path: "/api/cron/certificate-drift", schedule: "0 6 * * *" },
+  { path: "/api/cron/records-purge", schedule: "0 5 * * 0" },
+  { path: "/api/cron/sync-change-log-purge", schedule: "15 4 * * *" },
+];
 
 export function startCronScheduler(options: {
-  entries: CronEntry[];
+  entries: readonly CronEntry[];
   dispatch: (request: Request) => Promise<Response>;
   secret: string | undefined;
 }): Cron[] {
@@ -38,7 +35,7 @@ export function startCronScheduler(options: {
     (entry) =>
       new Cron(
         entry.schedule,
-        // Vercel cron schedules are in UTC; protect skips a tick while the
+        // The schedules are in UTC; protect skips a tick while the
         // previous run of the same job is still going.
         { name: entry.path, timezone: "Etc/UTC", protect: true },
         async () => {

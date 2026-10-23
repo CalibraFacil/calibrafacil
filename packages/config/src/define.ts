@@ -438,13 +438,9 @@ export class ConfigError extends Error {
   }
 }
 
-/** Whether the environment describes a production (or Vercel) deployment. */
+/** Whether the environment describes a production deployment (NODE_ENV). */
 export function isProductionEnv(env: EnvSource): boolean {
-  return (
-    env.NODE_ENV?.trim().toLowerCase() === "production" ||
-    env.VERCEL?.trim() === "1" ||
-    env.VERCEL_ENV?.trim().toLowerCase() === "production"
-  );
+  return env.NODE_ENV?.trim().toLowerCase() === "production";
 }
 
 function deepFreeze<T>(value: T): Readonly<T> {

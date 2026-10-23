@@ -324,21 +324,16 @@ describe("dispatchSyncRun", () => {
       status: "PENDING",
     });
 
-    expect(mocks.enqueueBackgroundJob).toHaveBeenCalledWith(
-      {
-        type: "INTEGRATION_SYNC",
-        provider: "conta_azul",
-        integrationId: "int-1",
-        organizationId: "org-1",
-        runId: "run-1",
-        target: "billing_document",
-        limit: 50,
-        trigger: "manual",
-      },
-      {
-        idempotencyKey: "conta-azul-sync-run-1",
-      },
-    );
+    expect(mocks.enqueueBackgroundJob).toHaveBeenCalledWith({
+      type: "INTEGRATION_SYNC",
+      provider: "conta_azul",
+      integrationId: "int-1",
+      organizationId: "org-1",
+      runId: "run-1",
+      target: "billing_document",
+      limit: 50,
+      trigger: "manual",
+    });
   });
 
   it.each(["catalog_item", "contract"] as const)(
@@ -368,21 +363,16 @@ describe("dispatchSyncRun", () => {
         status: "PENDING",
       });
 
-      expect(mocks.enqueueBackgroundJob).toHaveBeenCalledWith(
-        {
-          type: "INTEGRATION_SYNC",
-          provider: "conta_azul",
-          integrationId: "int-1",
-          organizationId: "org-1",
-          runId: `run-${target}`,
-          target,
-          limit: 20,
-          trigger: "manual",
-        },
-        {
-          idempotencyKey: `conta-azul-sync-run-${target}`,
-        },
-      );
+      expect(mocks.enqueueBackgroundJob).toHaveBeenCalledWith({
+        type: "INTEGRATION_SYNC",
+        provider: "conta_azul",
+        integrationId: "int-1",
+        organizationId: "org-1",
+        runId: `run-${target}`,
+        target,
+        limit: 20,
+        trigger: "manual",
+      });
     },
   );
 
