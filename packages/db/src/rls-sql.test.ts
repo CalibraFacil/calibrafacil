@@ -4,6 +4,8 @@ import { classifyTables, GLOBAL_TABLES } from "./tenancy";
 import {
   APP_ROLE,
   POLICY_NAME,
+  RLS_LOCK_TIMEOUT_SQL,
+  RLS_MIGRATION_GUARD_SQL,
   RLS_ROLE_SQL,
   RLS_SQL_BEGIN,
   RLS_SQL_END,
@@ -161,5 +163,48 @@ describe("row-level security SQL, generated from the tenancy classification", ()
     );
     expect(index, `${MIGRATION} is not journaled`).toBeGreaterThan(0);
     expect(whenOf(entries[index])).toBeGreaterThan(whenOf(entries[index - 1]));
+  });
+
+  it("REQ-RLS-2 [HIGH RISK]: the migration starts with the lock timeout, then refuses a role that RLS would bind, before it changes anything", () => {
+    const migration = read(`../drizzle/${MIGRATION}`);
+    const body = migration
+      .split("\n")
+      .filter((line) => !line.startsWith("--"))
+      .join("\n")
+      .trimStart();
+    expect(body.startsWith(RLS_LOCK_TIMEOUT_SQL)).toBe(true);
+    expect(RLS_LOCK_TIMEOUT_SQL).toBe("SET LOCAL lock_timeout = '5s';");
+    expect(migration.indexOf(RLS_MIGRATION_GUARD_SQL)).toBeGreaterThan(
+      migration.indexOf(RLS_LOCK_TIMEOUT_SQL),
+    );
+    expect(migration.indexOf(RLS_MIGRATION_GUARD_SQL)).toBeLessThan(
+      migration.indexOf(RLS_ROLE_SQL),
+    );
+    expect(migration.indexOf(RLS_MIGRATION_GUARD_SQL)).toBeLessThan(
+      migration.indexOf(RLS_SQL_BEGIN),
+    );
+    // Superuser, BYPASSRLS and the owner (through pg_has_role) pass.
+    expect(RLS_MIGRATION_GUARD_SQL).toContain("rolsuper");
+    expect(RLS_MIGRATION_GUARD_SQL).toContain("rolbypassrls");
+    expect(RLS_MIGRATION_GUARD_SQL).toContain("pg_has_role(current_user");
+    expect(RLS_MIGRATION_GUARD_SQL).toContain("DEPLOYMENT.md");
+    // The seed file for an empty database builds as its owner: no guard there.
+    expect(read("../sql/schema-extras.sql")).not.toContain(
+      RLS_MIGRATION_GUARD_SQL,
+    );
+  });
+
+  it("REQ-RLS-2: the header carries the manual pre-check queries; the role creation names the CREATEROLE fix and never skips silently", () => {
+    const migration = read(`../drizzle/${MIGRATION}`);
+    const header = migration.slice(0, migration.indexOf(RLS_LOCK_TIMEOUT_SQL));
+    expect(header).toContain("select current_user");
+    expect(header).toContain("rolsuper");
+    expect(header).toContain("rolbypassrls");
+    expect(header).toContain("tableowner");
+    expect(header).toContain("DATABASE_RLS_MODE");
+    expect(header).toMatch(/lock timeout/i);
+    expect(RLS_ROLE_SQL).toContain("WHEN insufficient_privilege THEN");
+    expect(RLS_ROLE_SQL).toContain("CREATE ROLE calibra_app NOLOGIN; once");
+    expect(RLS_ROLE_SQL).toContain("IF NOT EXISTS (SELECT 1 FROM pg_roles");
   });
 });

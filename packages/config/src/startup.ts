@@ -20,3 +20,22 @@ export function failFast<T>(
     throw error;
   }
 }
+
+/**
+ * `failFast` for a start-up check that has to await (it queries the database).
+ * A `ConfigError` prints its message and exits non-zero; anything else propagates.
+ */
+export async function failFastAsync<T>(
+  start: () => Promise<T>,
+  exit: (code: number) => never = (code) => process.exit(code),
+): Promise<T> {
+  try {
+    return await start();
+  } catch (error) {
+    if (error instanceof ConfigError) {
+      console.error(error.message);
+      return exit(1);
+    }
+    throw error;
+  }
+}

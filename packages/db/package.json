@@ -10,6 +10,7 @@
     "./queue": "./src/queue.ts",
     "./role-connection": "./src/role-connection.ts",
     "./rls-sql": "./src/rls-sql.ts",
+    "./rls-startup": "./src/rls-startup.ts",
     "./queue-receipts": "./src/queue-receipts.ts",
     "./queue-render-recovery": "./src/queue-render-recovery.ts",
     "./records-retention": "./src/records-retention.ts",

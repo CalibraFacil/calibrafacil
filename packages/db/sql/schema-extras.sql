@@ -477,7 +477,12 @@ CREATE TRIGGER certificate_input_immutable_guard
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'calibra_app') THEN
-    CREATE ROLE calibra_app NOLOGIN;
+    BEGIN
+      CREATE ROLE calibra_app NOLOGIN;
+    EXCEPTION WHEN insufficient_privilege THEN
+      RAISE EXCEPTION 'calibra: the role calibra_app does not exist and % may not create it (CREATEROLE is missing). An administrator runs CREATE ROLE calibra_app NOLOGIN; once, then this migration is run again. See DEPLOYMENT.md, "Row-level security".', current_user
+        USING ERRCODE = 'insufficient_privilege';
+    END;
   END IF;
 END
 $$;

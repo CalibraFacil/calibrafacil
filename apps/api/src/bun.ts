@@ -1,4 +1,10 @@
-import { failFast, rawEnv, setProcessEnv } from "@calibra-facil/config";
+import {
+  failFast,
+  failFastAsync,
+  rawEnv,
+  setProcessEnv,
+} from "@calibra-facil/config";
+import { assertRlsStartup } from "@calibra-facil/db/rls-startup";
 import app from "./index";
 import { GET as dispatchCron } from "../vercel-src/cron/dispatch";
 import { readCronEntries, startCronScheduler } from "./lib/cron-scheduler";
@@ -86,6 +92,9 @@ async function createEnv() {
 }
 
 const { env, config } = await createEnv();
+// One query: refuse to start as a role that row-level security binds while
+// DATABASE_RLS_MODE=shadow (migration 0121; DEPLOYMENT.md, "Row-level security").
+await failFastAsync(() => assertRlsStartup());
 const port = config.runtime.listenPort ?? 3000;
 const hostname = config.runtime.host;
 

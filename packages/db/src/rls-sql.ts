@@ -99,17 +99,53 @@ export function rlsSqlBlock(): string {
   return `${RLS_SQL_BEGIN}\n${statements}\n${RLS_SQL_END}`;
 }
 
+/** First statement of the migration: fail fast, retry, instead of queueing traffic behind a long query. */
+export const RLS_LOCK_TIMEOUT_SQL = "SET LOCAL lock_timeout = '5s';";
+
+/**
+ * Migration only (not in schema-extras.sql, which builds an empty database as
+ * its owner): refuse to run as a role that RLS will bind. One DATABASE_URL
+ * usually serves the migrations and the API; a role that is neither superuser,
+ * BYPASSRLS nor the owner of the tables would be bound by the policies this
+ * migration creates, the moment it also runs the application.
+ */
+export const RLS_MIGRATION_GUARD_SQL = `DO $$
+DECLARE
+  me record;
+  foreign_tables integer;
+BEGIN
+  SELECT rolsuper, rolbypassrls INTO me FROM pg_roles WHERE rolname = current_user;
+  IF me.rolsuper OR me.rolbypassrls THEN
+    RETURN;
+  END IF;
+  SELECT count(*) INTO foreign_tables FROM pg_class c
+    WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r'
+      AND NOT pg_has_role(current_user, c.relowner, 'USAGE');
+  IF foreign_tables > 0 THEN
+    RAISE EXCEPTION 'calibra: migration 0121 is run as %, which is neither the owner of the tenant tables nor superuser/BYPASSRLS, so row-level security would bind it (and the API when it shares this DATABASE_URL). Run migrations as the owner of the tables; see DEPLOYMENT.md, "Row-level security".', current_user
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+END
+$$;`;
+
 /**
  * The role and its grants; static, repeated beside the block. Idempotent. The
  * role is NOLOGIN: nothing can connect as it until the owner creates a LOGIN
  * user that is a member of it (DEPLOYMENT.md). It gets plain DML on every table
  * and sequence of the schema (the policies are what narrows the tenant ones) and
  * the same on tables created later by the role that runs the migrations.
+ * Creating the role needs CREATEROLE; without it the migration stops with the
+ * one-time admin step (it never skips the role: the policies are addressed to it).
  */
 export const RLS_ROLE_SQL = `DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${APP_ROLE}') THEN
-    CREATE ROLE ${APP_ROLE} NOLOGIN;
+    BEGIN
+      CREATE ROLE ${APP_ROLE} NOLOGIN;
+    EXCEPTION WHEN insufficient_privilege THEN
+      RAISE EXCEPTION 'calibra: the role ${APP_ROLE} does not exist and % may not create it (CREATEROLE is missing). An administrator runs CREATE ROLE ${APP_ROLE} NOLOGIN; once, then this migration is run again. See DEPLOYMENT.md, "Row-level security".', current_user
+        USING ERRCODE = 'insufficient_privilege';
+    END;
   END IF;
 END
 $$;

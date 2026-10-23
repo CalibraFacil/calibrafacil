@@ -90,6 +90,19 @@ describe("REQ-CFG-1 defaults", () => {
     ).toBe(4);
   });
 
+  it("REQ-RLS-2: DATABASE_RLS_MODE is `shadow` unless the role split switched it to `enforced`", () => {
+    expect(readDatabaseConfig({}).rlsMode).toBe("shadow");
+    expect(readDatabaseConfig({ DATABASE_RLS_MODE: "enforced" }).rlsMode).toBe(
+      "enforced",
+    );
+    expect(
+      readDatabaseConfig({ DATABASE_RLS_MODE: " Enforced " }).rlsMode,
+    ).toBe("enforced");
+    expect(() => readDatabaseConfig({ DATABASE_RLS_MODE: "on" })).toThrow(
+      /DATABASE_RLS_MODE/,
+    );
+  });
+
   it("REQ-CFG-1: the jobs mode follows the platform unless set", () => {
     expect(readJobsConfig({ VERCEL: "1" }).mode).toBe("vercel");
     expect(

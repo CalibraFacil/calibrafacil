@@ -10,9 +10,11 @@
 // this off Vercel without re-introducing the "wake Neon every 2s" problem.
 import {
   failFast,
+  failFastAsync,
   loadWorkerConfig,
   readRuntimeConfig,
 } from "@calibra-facil/config";
+import { assertRlsStartup } from "@calibra-facil/db/rls-startup";
 import {
   createWorkerEnv,
   drainQueue,
@@ -36,6 +38,9 @@ const config: QueueRuntimeConfig = failFast(() => {
   loadWorkerConfig();
   return readQueueConfig();
 });
+// One query: a role that row-level security binds is refused in shadow mode
+// (migration 0121; DEPLOYMENT.md, "Row-level security").
+await failFastAsync(() => assertRlsStartup());
 const port = readRuntimeConfig().listenPort ?? 8080;
 
 // Build the worker Env lazily (it opens the object-store clients) so the HTTP

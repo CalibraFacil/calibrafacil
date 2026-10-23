@@ -11,11 +11,34 @@
 -- a deliberate, documented deploy step the owner takes later (DEPLOYMENT.md, "Row-level
 -- security"); rolling it back is pointing DATABASE_URL at the owner again.
 --
---   1. The role `calibra_app` (NOLOGIN: nothing can connect as it yet; CREATE ROLE
---      needs CREATEROLE, which the owner has on a self-hosted Postgres, Neon, RDS
---      and Supabase) with CONNECT on the database, USAGE on the schema, DML on
---      every table and USAGE on every sequence of `public`, and the same default
---      privileges for tables the migration owner creates later. Idempotent.
+-- BEFORE YOU APPLY IT: the role that connects to the database through the API's
+-- DATABASE_URL must be the owner of the tables (or a superuser / BYPASSRLS role).
+-- In the usual deployment one DATABASE_URL serves the migrations and the API, so
+-- check it once, through that URL:
+--
+--     select current_user, r.rolsuper, r.rolbypassrls
+--       from pg_roles r where r.rolname = current_user;
+--     select tableowner from pg_tables
+--       where schemaname = 'public' and tablename = 'calibration_job';
+--
+-- `current_user` must equal `tableowner` (or `rolsuper` / `rolbypassrls` is true).
+-- The migration checks this itself and stops, before changing anything, when it is
+-- run by a role that RLS would bind; the API and the worker check it at start-up
+-- (DATABASE_RLS_MODE=shadow, the default) and refuse to start otherwise.
+--
+--   0. SET LOCAL lock_timeout = '5s': ALTER TABLE takes a short ACCESS EXCLUSIVE
+--      lock on every tenant table; with the timeout the migration fails fast
+--      ("canceling statement due to lock timeout") instead of stalling traffic
+--      queued behind a long query, and is simply run again. The migration is
+--      idempotent and runs in one transaction, so a failed attempt changes nothing.
+--   1. The role `calibra_app` (NOLOGIN: nothing can connect as it yet) with CONNECT
+--      on the database, USAGE on the schema, DML on every table and USAGE on every
+--      sequence of `public`, and the same default privileges for tables the
+--      migration owner creates later. Idempotent. Creating the role needs
+--      CREATEROLE (the owner has it on a self-hosted Postgres, Neon, RDS and
+--      Supabase); where it is missing the migration stops with the fix and never
+--      skips the role, because the policies are addressed to it: an administrator
+--      runs `CREATE ROLE calibra_app NOLOGIN;` once and the migration is run again.
 --   2. For every table of packages/db/src/tenancy.ts that carries
 --      `organization_id` / `lab_organization_id`: ENABLE ROW LEVEL SECURITY and one
 --      policy, `tenant_isolation`, FOR ALL TO calibra_app:
@@ -45,10 +68,34 @@
 -- Idempotent (role guarded, DROP POLICY IF EXISTS before CREATE POLICY, ENABLE is a
 -- no-op when enabled), because this project applies migration DDL by hand and the
 -- drizzle bookkeeping table lags behind it.
+SET LOCAL lock_timeout = '5s';
+DO $$
+DECLARE
+  me record;
+  foreign_tables integer;
+BEGIN
+  SELECT rolsuper, rolbypassrls INTO me FROM pg_roles WHERE rolname = current_user;
+  IF me.rolsuper OR me.rolbypassrls THEN
+    RETURN;
+  END IF;
+  SELECT count(*) INTO foreign_tables FROM pg_class c
+    WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'r'
+      AND NOT pg_has_role(current_user, c.relowner, 'USAGE');
+  IF foreign_tables > 0 THEN
+    RAISE EXCEPTION 'calibra: migration 0121 is run as %, which is neither the owner of the tenant tables nor superuser/BYPASSRLS, so row-level security would bind it (and the API when it shares this DATABASE_URL). Run migrations as the owner of the tables; see DEPLOYMENT.md, "Row-level security".', current_user
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+END
+$$;
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'calibra_app') THEN
-    CREATE ROLE calibra_app NOLOGIN;
+    BEGIN
+      CREATE ROLE calibra_app NOLOGIN;
+    EXCEPTION WHEN insufficient_privilege THEN
+      RAISE EXCEPTION 'calibra: the role calibra_app does not exist and % may not create it (CREATEROLE is missing). An administrator runs CREATE ROLE calibra_app NOLOGIN; once, then this migration is run again. See DEPLOYMENT.md, "Row-level security".', current_user
+        USING ERRCODE = 'insufficient_privilege';
+    END;
   END IF;
 END
 $$;

@@ -100,3 +100,7 @@ added or removed without a migration.
   (`test/integration/rls.ts`). `pnpm --filter @calibra-facil/api rls:shadow-report` replays the portal and
   jobs specs with each request's database access as `calibra_app` (strict, then audit) and prints what
   breaks, by file, and every statement that reached a tenant table without an organization.
+- **Start-up check.** `DATABASE_RLS_MODE` (`shadow` by default) makes the API and the worker run one catalog
+  query at start-up (`packages/db/src/rls-startup.ts`) and refuse to start as a role the policies bind (not the
+  table owner, superuser or BYPASSRLS). The role split sets `enforced` for the API. Migration 0121 applies
+  the same test to the role that runs it.
