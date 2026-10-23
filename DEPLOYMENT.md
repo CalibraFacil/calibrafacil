@@ -673,8 +673,12 @@ Protocol 3 replaces the `updatedAt` pull cursor and the one-shot bootstrap of pr
   row with queued changes).
 - **Desktops of protocol 1 and 2 keep working.** A bootstrap or pull that does not state protocol 3
   gets the old behaviour, unchanged, with a `Deprecation: true` header. A desktop of protocol 3 against
-  a cloud that predates it gets the old answers too (the cloud ignores the field) and reads them as
-  before, so the order of the rolling deploy does not matter. The legacy path is deleted once
+  a cloud that predates it gets the old answers too (the cloud ignores the field on the bootstrap and
+  the pull) and reads them as before. Its push states protocol 3, which the older cloud refuses with
+  `400 SYNC_PROTOCOL_UNSUPPORTED { supportedProtocolVersion }`; the push format did not change, so the
+  desktop sends the same push again, once, with the protocol the cloud names, and remembers it for
+  that cloud (queued events are neither failed nor delayed). The order of the rolling deploy
+  therefore does not matter. The legacy path is deleted once
   `SYNC_MIN_DESKTOP_VERSION` is set to the first build that speaks protocol 3 (see _Minimum desktop
   version_ above: those desktops are refused at push, so they only pull, and a pull without changes
   to push is harmless): remove `loadCloudSyncEventsSince`, the legacy branch of `GET /api/sync/pull`
