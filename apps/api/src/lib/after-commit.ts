@@ -32,7 +32,11 @@ export type OrgScope = {
 export type AfterCommitQueue = {
   /** Registers a task; it runs, in order, when `run()` is called. */
   add: (task: AfterCommitTask) => void;
-  /** Runs the registered tasks one after the other; the first failure propagates. */
+  /**
+   * Runs every registered task, one after the other. A failing task does not
+   * stop the ones after it (each is a committed record's side effect); the
+   * first failure is rethrown once all have run.
+   */
   run: () => Promise<void>;
 };
 
@@ -43,9 +47,15 @@ export function afterCommitQueue(): AfterCommitQueue {
       tasks.push(task);
     },
     async run() {
+      let failure: { error: unknown } | null = null;
       for (const task of tasks.splice(0)) {
-        await task();
+        try {
+          await task();
+        } catch (error) {
+          failure ??= { error };
+        }
       }
+      if (failure) throw failure.error;
     },
   };
 }

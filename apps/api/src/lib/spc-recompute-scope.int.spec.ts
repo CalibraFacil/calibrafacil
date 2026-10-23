@@ -117,4 +117,70 @@ describe("processSpcRecompute: per-laboratory sweep as calibra_app (P2-18d)", ()
       .from(controlChart);
     expect(unscoped).toEqual([]);
   });
+
+  it("REQ-18D-SPC-5: a laboratory whose sweep fails does not stop the laboratories after it", async () => {
+    const labA = await seedLabWithChart("a", STABLE);
+    const labB = await seedLabWithChart("b", [...STABLE, 14.5]);
+    const app = openAppRoleDb();
+
+    // The first transaction the sweep opens (lab A's chart list) fails.
+    let armed = true;
+    const flaky = new Proxy(app.db, {
+      get(target, property, receiver) {
+        if (property === "transaction" && armed) {
+          return () => {
+            armed = false;
+            return Promise.reject(new Error("lab A is unreachable"));
+          };
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+
+    const result = await processSpcRecompute({
+      application: flaky,
+      system: db,
+    });
+
+    expect(result.chartsEvaluated).toBe(1);
+    expect((await chartRow(labA.chartId)).lastEvaluatedAt).toBeNull();
+    expect((await chartRow(labB.chartId)).status).toBe("out_of_control");
+  });
+
+  it("REQ-18D-SPC-6: the sweep keeps updated_at as the row is now, not as the batch read it", async () => {
+    const labA = await seedLabWithChart("a", STABLE);
+    const later = new Date("2026-03-03T09:00:00.000Z");
+    const app = openAppRoleDb();
+
+    // A user edit lands after the batch read and before the sweep's write: the
+    // chart-list read is the first transaction, the chart's own is the second.
+    let opened = 0;
+    const racing = new Proxy(app.db, {
+      get(target, property, receiver) {
+        if (property === "transaction") {
+          return async (...args: unknown[]) => {
+            opened += 1;
+            if (opened === 2) {
+              await db
+                .update(controlChart)
+                .set({ updatedAt: later })
+                .where(eq(controlChart.id, labA.chartId));
+            }
+            return Reflect.apply(
+              Reflect.get(target, "transaction", receiver),
+              target,
+              args,
+            );
+          };
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+
+    await processSpcRecompute({ application: racing, system: db });
+
+    expect((await chartRow(labA.chartId)).updatedAt.toISOString()).toBe(
+      later.toISOString(),
+    );
+  });
 });

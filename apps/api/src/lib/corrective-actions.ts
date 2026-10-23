@@ -10,6 +10,7 @@ import {
   type RootCauseAnalysisMethod,
 } from "@calibra-facil/db/schema";
 import { and, desc, eq, ilike } from "drizzle-orm";
+import { isUniqueViolation } from "./db-errors";
 
 /**
  * Shared CAPA creator (ISO 17025 §8.7). Single code path for the cloud route
@@ -19,15 +20,6 @@ import { and, desc, eq, ilike } from "drizzle-orm";
  */
 
 const MAX_SEQ_RETRIES = 3;
-
-export function isUniqueViolation(err: unknown): boolean {
-  return (
-    err instanceof Error &&
-    (err.message.includes("unique") ||
-      err.message.includes("duplicate") ||
-      err.message.includes("23505"))
-  );
-}
 
 export async function generateCapaNumber(
   organizationId: string,

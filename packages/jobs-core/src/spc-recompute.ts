@@ -21,11 +21,11 @@ import {
   type SpcChartParams,
   type SpcChartType,
 } from "@calibra-facil/interval-analysis";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 
 type ChartRow = Pick<
   typeof controlChart.$inferSelect,
-  "id" | "updatedAt" | "standardId" | "parameter" | "chartType" | "params"
+  "id" | "standardId" | "parameter" | "chartType" | "params"
 >;
 
 const CHART_TYPES: readonly SpcChartType[] = [
@@ -105,76 +105,86 @@ export async function processSpcRecompute(
     .orderBy(controlChart.organizationId);
 
   for (const { organizationId } of labs) {
-    const lab = forOrg(connections.application, organizationId);
-    let offset = 0;
-    let batch: ChartRow[];
-    do {
-      batch = await lab.transaction((tx) =>
-        tx
-          .select({
-            id: controlChart.id,
-            updatedAt: controlChart.updatedAt,
-            standardId: controlChart.standardId,
-            parameter: controlChart.parameter,
-            chartType: controlChart.chartType,
-            params: controlChart.params,
-          })
-          .from(controlChart)
-          .orderBy(asc(controlChart.id))
-          .limit(BATCH_SIZE)
-          .offset(offset),
-      );
+    // One laboratory failing (its chart list cannot be read) must not stop the
+    // sweep of the laboratories after it.
+    try {
+      const lab = forOrg(connections.application, organizationId);
+      let offset = 0;
+      let batch: ChartRow[];
+      do {
+        batch = await lab.transaction((tx) =>
+          tx
+            .select({
+              id: controlChart.id,
+              standardId: controlChart.standardId,
+              parameter: controlChart.parameter,
+              chartType: controlChart.chartType,
+              params: controlChart.params,
+            })
+            .from(controlChart)
+            .orderBy(asc(controlChart.id))
+            .limit(BATCH_SIZE)
+            .offset(offset),
+        );
 
-      for (const chart of batch) {
-        try {
-          const evaluation = await lab.transaction(async (tx) => {
-            const readings = await tx
-              .select({ value: checkStandardReading.value })
-              .from(checkStandardReading)
-              .where(
-                and(
-                  eq(checkStandardReading.standardId, chart.standardId),
-                  eq(checkStandardReading.parameter, chart.parameter),
+        for (const chart of batch) {
+          try {
+            const evaluation = await lab.transaction(async (tx) => {
+              const readings = await tx
+                .select({ value: checkStandardReading.value })
+                .from(checkStandardReading)
+                .where(
+                  and(
+                    eq(checkStandardReading.standardId, chart.standardId),
+                    eq(checkStandardReading.parameter, chart.parameter),
+                  ),
+                )
+                .orderBy(
+                  asc(checkStandardReading.measuredAt),
+                  asc(checkStandardReading.id),
+                );
+
+              const evaluated: SpcEvaluation = {
+                ...evaluateChart(
+                  readings.map((r) => r.value),
+                  toChartType(chart.chartType),
+                  toChartParams(chart.params),
                 ),
-              )
-              .orderBy(
-                asc(checkStandardReading.measuredAt),
-                asc(checkStandardReading.id),
-              );
+                evaluatedAt: new Date().toISOString(),
+              };
 
-            const evaluated: SpcEvaluation = {
-              ...evaluateChart(
-                readings.map((r) => r.value),
-                toChartType(chart.chartType),
-                toChartParams(chart.params),
-              ),
-              evaluatedAt: new Date().toISOString(),
-            };
+              await tx
+                .update(controlChart)
+                .set({
+                  status: evaluated.status,
+                  lastEvaluation: evaluated,
+                  lastEvaluatedAt: new Date(),
+                  // The sweep is not an edit of the chart: keep the list order
+                  // the users see (it sorts by the last real change). Keeping the
+                  // column itself (not the value read with the batch) cannot undo
+                  // an edit made since.
+                  updatedAt: sql`${controlChart.updatedAt}`,
+                })
+                .where(eq(controlChart.id, chart.id));
+              return evaluated;
+            });
 
-            await tx
-              .update(controlChart)
-              .set({
-                status: evaluated.status,
-                lastEvaluation: evaluated,
-                lastEvaluatedAt: new Date(),
-                // The sweep is not an edit of the chart: keep the list order
-                // the users see (it sorts by the last real change).
-                updatedAt: chart.updatedAt,
-              })
-              .where(eq(controlChart.id, chart.id));
-            return evaluated;
-          });
-
-          chartsEvaluated += 1;
-          if (evaluation.status === "out_of_control") outOfControl += 1;
-          if (evaluation.status === "trending") trending += 1;
-        } catch (error) {
-          console.error(`[SPC] Error recomputing chart ${chart.id}:`, error);
+            chartsEvaluated += 1;
+            if (evaluation.status === "out_of_control") outOfControl += 1;
+            if (evaluation.status === "trending") trending += 1;
+          } catch (error) {
+            console.error(`[SPC] Error recomputing chart ${chart.id}:`, error);
+          }
         }
-      }
 
-      offset += batch.length;
-    } while (batch.length === BATCH_SIZE);
+        offset += batch.length;
+      } while (batch.length === BATCH_SIZE);
+    } catch (error) {
+      console.error(
+        `[SPC] Error sweeping laboratory ${organizationId}:`,
+        error,
+      );
+    }
   }
 
   console.log(

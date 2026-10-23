@@ -24,7 +24,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { db } from "@calibra-facil/db";
+import { db, systemDb } from "@calibra-facil/db";
 import {
   jobStandard,
   massCompositionProfile,
@@ -32,10 +32,12 @@ import {
   ootNotification,
   referenceStandard,
   referenceStandardAuditLog,
+  referenceStandardCertificateDocument,
   standardRecall,
 } from "@calibra-facil/db/schema";
 import { standardsRouter } from "./standards";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
+import { uploadToR2 } from "../lib/storage";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg, seedStandard } from "../../test/integration/seed";
@@ -45,6 +47,18 @@ import { seedJobForOrg } from "../../test/integration/tenant-refs";
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
 }));
+
+vi.mock("../lib/storage", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/storage")>();
+  return {
+    ...actual,
+    createR2Client: vi.fn(() => ({})),
+    uploadToR2: vi.fn().mockResolvedValue(undefined),
+    generatePresignedUrl: vi
+      .fn()
+      .mockResolvedValue("https://storage.example.test/signed.pdf"),
+  };
+});
 
 vi.mock("@calibra-facil/notifications", () => ({
   notifyNCCreated: vi.fn().mockResolvedValue(undefined),
@@ -131,7 +145,10 @@ describe("standards router: search, profiles, renew, audit and recall (P2-18d)",
   beforeEach(async () => {
     await truncateAll();
     logout();
-    vi.mocked(enqueueBackgroundJob).mockClear();
+    vi.mocked(enqueueBackgroundJob)
+      .mockReset()
+      .mockResolvedValue({ messageId: "test-noop" });
+    vi.mocked(uploadToR2).mockReset().mockResolvedValue(undefined);
   });
 
   it("REQ-18D-STD-1: search, label and audit-log answer for the lab's own standard only", async () => {
@@ -326,6 +343,22 @@ describe("standards router: search, profiles, renew, audit and recall (P2-18d)",
     expect(beforeBody.data.notifications).toEqual([]);
 
     expect(enqueueBackgroundJob).not.toHaveBeenCalled();
+    // The PDF job is enqueued after the commit: at call time the notification
+    // row is already visible to another connection (the owner `db`), which it
+    // would not be if the job were enqueued inside the transaction.
+    const visibleAtEnqueue: number[] = [];
+    vi.mocked(enqueueBackgroundJob).mockImplementation(async (message) => {
+      if (message.type === "OOT_NOTIFICATION") {
+        // The owner connection: a request's own `db` is the application role
+        // under the shadow report and would see nothing here.
+        const rows = await systemDb
+          .select({ id: ootNotification.id })
+          .from(ootNotification)
+          .where(eq(ootNotification.id, message.notificationId));
+        visibleAtEnqueue.push(rows.length);
+      }
+      return { messageId: "test-noop" };
+    });
     const sent = await request(`/${standardA}/recall/send`, "POST", {
       jobIds: [certificate],
     });
@@ -349,6 +382,7 @@ describe("standards router: search, profiles, renew, audit and recall (P2-18d)",
       { jobId: certificate, recallId: recall?.id },
     ]);
     expect(enqueueBackgroundJob).toHaveBeenCalledTimes(1);
+    expect(visibleAtEnqueue).toEqual([1]);
     expect(await auditActions(standardA)).toEqual(
       expect.arrayContaining(["status_change", "recall_send"]),
     );
@@ -403,5 +437,90 @@ describe("standards router: search, profiles, renew, audit and recall (P2-18d)",
         .where(eq(ootNotification.organizationId, b.orgId)),
     ).toEqual([]);
     expect(await standardStatus(standardB)).toBe("ACTIVE");
+  });
+
+  it("REQ-18D-STD-6: certificate document upload and download are scoped to the lab; a failed upload leaves a pending row and no activation audit", async () => {
+    const { a, b, standardA, standardB } = await twoLabs();
+    const env = { R2_BUCKET_NAME: "test-bucket" };
+    const pdfForm = () => {
+      const form = new FormData();
+      form.set(
+        "certificate",
+        new File(["%PDF-1.4 teste"], "certificado.pdf", {
+          type: "application/pdf",
+        }),
+      );
+      return form;
+    };
+    const upload = (standardId: number) =>
+      standardsRouter.request(
+        `/${standardId}/certificate-document`,
+        { method: "POST", body: pdfForm() },
+        env,
+      );
+    const documentsOf = (standardId: number) =>
+      db
+        .select()
+        .from(referenceStandardCertificateDocument)
+        .where(eq(referenceStandardCertificateDocument.standardId, standardId));
+
+    // The storage fails: the pending row (committed before the upload) stays,
+    // never current, and nothing is audited as an upload.
+    vi.mocked(uploadToR2).mockRejectedValueOnce(new Error("storage down"));
+    const failed = await upload(standardA);
+    expect(failed.status).toBe(500);
+    const pending = await documentsOf(standardA);
+    expect(pending).toHaveLength(1);
+    expect(pending[0]?.r2Key.startsWith("pending/")).toBe(true);
+    expect(pending[0]?.isCurrent).toBe(false);
+    expect(await auditActions(standardA)).not.toContain(
+      "certificate_document_upload",
+    );
+
+    // The storage works: the document becomes current and the upload is audited.
+    const ok = await upload(standardA);
+    expect(ok.status).toBe(200);
+    const current = (await documentsOf(standardA)).filter(
+      (row) => row.isCurrent,
+    );
+    expect(current).toHaveLength(1);
+    expect(current[0]?.r2Key.startsWith("pending/")).toBe(false);
+    expect(await auditActions(standardA)).toContain(
+      "certificate_document_upload",
+    );
+    const link = await standardsRouter.request(
+      `/${standardA}/certificate-document/download`,
+      {},
+      env,
+    );
+    expect(link.status).toBe(200);
+    expect((await link.json()).filename).toBe("certificado.pdf");
+
+    // Lab B's standard: no upload, no download, nothing written for it.
+    const crossUpload = await upload(standardB);
+    expect(crossUpload.status).toBe(404);
+    expect(await documentsOf(standardB)).toEqual([]);
+    await db.insert(referenceStandardCertificateDocument).values({
+      standardId: standardB,
+      organizationId: b.orgId,
+      unitId: b.unitId,
+      certificateNumber: "CERT-B",
+      calibrationDate: new Date("2026-01-01T00:00:00.000Z"),
+      nextCalibrationDate: new Date("2027-01-01T00:00:00.000Z"),
+      fileName: "b.pdf",
+      contentType: "application/pdf",
+      fileSize: 10,
+      sha256: "0".repeat(64),
+      r2Key: "standards/b/b.pdf",
+      isCurrent: true,
+      uploadedBy: b.userId,
+    });
+    const crossDownload = await standardsRouter.request(
+      `/${standardB}/certificate-document/download`,
+      {},
+      env,
+    );
+    expect(crossDownload.status).toBe(404);
+    expect(a.orgId).toBe("org-a");
   });
 });

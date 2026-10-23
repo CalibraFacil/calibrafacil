@@ -28,15 +28,30 @@ describe("afterCommitQueue", () => {
     expect(task).toHaveBeenCalledTimes(1);
   });
 
-  it("propagates the first failure and skips the rest", async () => {
+  it("runs every task even when one fails, then rethrows the first error", async () => {
     const queue = afterCommitQueue();
-    const later = vi.fn();
+    const first = vi.fn();
+    const third = vi.fn();
+    queue.add(first);
     queue.add(() => {
-      throw new Error("boom");
+      throw new Error("second failed");
     });
-    queue.add(later);
+    queue.add(third);
 
-    await expect(queue.run()).rejects.toThrow("boom");
-    expect(later).not.toHaveBeenCalled();
+    await expect(queue.run()).rejects.toThrow("second failed");
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(third).toHaveBeenCalledTimes(1);
+  });
+
+  it("rethrows the FIRST failure when several tasks fail", async () => {
+    const queue = afterCommitQueue();
+    queue.add(() => {
+      throw new Error("one");
+    });
+    queue.add(async () => {
+      throw new Error("two");
+    });
+
+    await expect(queue.run()).rejects.toThrow("one");
   });
 });

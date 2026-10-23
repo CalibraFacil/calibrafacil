@@ -9,6 +9,7 @@ import {
 import { notifyNCCreated } from "@calibra-facil/notifications";
 import { and, desc, eq, ilike } from "drizzle-orm";
 import type { OrgScope } from "./after-commit";
+import { isUniqueViolation } from "./db-errors";
 
 /**
  * Shared non-conformance creator (ISO 17025 §8.7 / §7.10). Single code path
@@ -18,15 +19,6 @@ import type { OrgScope } from "./after-commit";
  */
 
 const MAX_SEQ_RETRIES = 3;
-
-export function isUniqueViolation(err: unknown): boolean {
-  return (
-    err instanceof Error &&
-    (err.message.includes("unique") ||
-      err.message.includes("duplicate") ||
-      err.message.includes("23505"))
-  );
-}
 
 export async function generateNcNumber(
   organizationId: string,
