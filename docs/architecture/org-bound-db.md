@@ -139,7 +139,8 @@ added or removed without a migration.
 
 `docs/architecture/rls-shadow-baseline.json` is the output of
 `pnpm --filter @calibra-facil/api rls:shadow-report --json <file>` on `origin/main` at `c59be795`, before any
-of the cutover slices: the numbers each slice (master data, quality records, NC/CAPA, jobs, service orders and
+of the cutover slices (P2-18a, #110, merged after it and already clears the portal routes, `requireOrganization` in
+`middleware/permission.ts` and most of `lib/units.ts`, so those rows overstate what is left): the numbers each slice (master data, quality records, NC/CAPA, jobs, service orders and
 finance, integrations / public API / notifications, desktop sync, pre-org identity) is measured against. After a
 slice, re-run with `--group` for its specs (or the full report) and diff the `byModule` / `byLayer` / `bySpec`
 counts: a migrated module disappears from `byModule`, a slice is done when its modules are gone and `testsBroken`
