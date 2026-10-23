@@ -125,10 +125,89 @@ added or removed without a migration.
   jobs) run after it commits. `pnpm --filter @calibra-facil/api rls:shadow-report` shows 0 unscoped
   statements and 0 broken tests for the portal specs.
 - **Tests.** `apps/api/src/lib/rls-shadow.int.spec.ts` runs against a pool whose sessions are `calibra_app`
-  (`test/integration/rls.ts`). `pnpm --filter @calibra-facil/api rls:shadow-report` replays the portal and
-  jobs specs with each request's database access as `calibra_app` (strict, then audit) and prints what
-  breaks, by file, and every statement that reached a tenant table without an organization.
+  (`test/integration/rls.ts`). `pnpm --filter @calibra-facil/api rls:shadow-report` replays every API
+  integration spec (`--group routes/jobs` or `--files` narrow it) with each request's database access as
+  `calibra_app` (owner baseline, strict, audit) and prints what breaks, by spec file, and every statement that
+  reached a tenant table without an organization, grouped by the application module that issued it. See
+  "Baseline" below.
 - **Start-up check.** `DATABASE_RLS_MODE` (`shadow` by default) makes the API and the worker run one catalog
   query at start-up (`packages/db/src/rls-startup.ts`) and refuse to start as a role the policies bind (not the
   table owner, superuser or BYPASSRLS). The role split sets `enforced` for the API. Migration 0123 applies
   the same test to the role that runs it.
+
+### Baseline (P2-18b)
+
+`docs/architecture/rls-shadow-baseline.json` is the output of
+`pnpm --filter @calibra-facil/api rls:shadow-report --json <file>` on `origin/main` at `c59be795`, before any
+of the cutover slices (P2-18a, #110, merged after it and already clears the portal routes, `requireOrganization` in
+`middleware/permission.ts` and most of `lib/units.ts`, so those rows overstate what is left): the numbers each slice (master data, quality records, NC/CAPA, jobs, service orders and
+finance, integrations / public API / notifications, desktop sync, pre-org identity) is measured against. After a
+slice, re-run with `--group` for its specs (or the full report) and diff the `byModule` / `byLayer` / `bySpec`
+counts: a migrated module disappears from `byModule`, a slice is done when its modules are gone and `testsBroken`
+for its specs is 0. `--from-full` re-slices a `--json-full` output without running vitest.
+
+- **Scope.** 116 integration specs (`apps/api/src/**/*.int.spec.ts`, minus the tenant SQL guard's own
+  self-test), 1552 tests, 0 failing as the owner, **999 break as `calibra_app`** (strict). The audit pass found
+  2319 distinct (spec, statement) pairs reaching a tenant table with no organization set, 12428 executions.
+- **Run time.** About 125 minutes end to end with `--maxWorkers=2`: baseline 35 min, strict 40 min, audit 50 min
+  (measured while another job loaded the same 16-core machine; expect less on an idle one). A single spec costs
+  about 2 minutes, almost all of it per-pass container and schema start-up, so use `--group` while migrating.
+- **Attribution.** The harness records, per unscoped statement, the application module that obtained the
+  database handle (innermost stack frame outside drizzle, `packages/db`, `lib/org-db.ts` and the harness) and
+  the request path. The request path is not usable as a group: route specs mount a router at `/`. A module is
+  credited a broken test when that test ran one of its unscoped statements; a test that breaks otherwise (a
+  WITH CHECK refusal) shows only in its spec. Identical statement text issued concurrently in one process (a
+  `Promise.all` race) may be attributed to the latest issuer.
+- **Not covered.** `apps/worker`'s integration tier: it runs serially against one shared database with no
+  per-worker clone, its handlers (queue, cron, scheduled) are called directly instead of through
+  `app.request(...)`, and the harness only routes a request's async context to the `calibra_app` pool, so those
+  specs would stay on the owner connection and report nothing. It needs its own entry point in the worker's test
+  setup, with the worker cutover. Work started outside `request()` in an API spec has the same limit, and a
+  statement on an empty table does not evaluate the policy.
+
+By layer (distinct SQL texts per group, executions, tests broken):
+
+| layer                    | distinct statements | runs | tests broken |
+| ------------------------ | ------------------: | ---: | -----------: |
+| `routes`                 |                 394 | 2031 |          538 |
+| `lib`                    |                  99 | 4833 |          922 |
+| `modules/service-orders` |                  56 |  395 |           65 |
+| `modules/sync`           |                  51 |  702 |          151 |
+| `modules/jobs`           |                  45 | 2489 |          393 |
+| `packages/notifications` |                   7 |   37 |           16 |
+| `modules/integrations`   |                   5 |   26 |            7 |
+| `packages/auth`          |                   5 |   16 |            9 |
+| `middleware`             |                   3 | 1897 |          962 |
+| `(unattributed)`         |                   1 |    2 |            1 |
+
+The 25 modules with the most distinct statements (all 116 are in the JSON, `byModule`). `lib/units.ts` and
+`middleware/permission.ts` run on almost every request, so one fix there clears most of the `tests broken`
+column:
+
+| application module                                              | distinct statements | runs | tests broken |
+| --------------------------------------------------------------- | ------------------: | ---: | -----------: |
+| `apps/api/src/routes/portal.ts`                                 |                  52 |  271 |           45 |
+| `apps/api/src/routes/calibration-requests.ts`                   |                  26 |   87 |            6 |
+| `apps/api/src/routes/dashboard.ts`                              |                  25 |  114 |            8 |
+| `apps/api/src/routes/jobs.ts`                                   |                  24 |  362 |          206 |
+| `apps/api/src/routes/visits.ts`                                 |                  19 |   85 |           29 |
+| `apps/api/src/routes/methods.ts`                                |                  17 |   66 |           16 |
+| `apps/api/src/modules/jobs/approve-job.ts`                      |                  15 |  537 |           50 |
+| `apps/api/src/modules/service-orders/service-order.quotes.ts`   |                  15 |   87 |           11 |
+| `apps/api/src/routes/standards.ts`                              |                  15 |   47 |           10 |
+| `apps/api/src/routes/assets.ts`                                 |                  13 |  103 |           16 |
+| `apps/api/src/lib/certificate-release.ts`                       |                  13 |   61 |            3 |
+| `apps/api/src/routes/spc.ts`                                    |                  12 |  196 |            5 |
+| `apps/api/src/modules/service-orders/service-order.commands.ts` |                  12 |   47 |           16 |
+| `apps/api/src/routes/proficiency-tests.ts`                      |                  12 |   39 |            6 |
+| `apps/api/src/routes/reports.ts`                                |                  12 |   32 |            6 |
+| `apps/api/src/modules/sync/apply-service-order-documents.ts`    |                  12 |   30 |            6 |
+| `apps/api/src/routes/competences.ts`                            |                  12 |   22 |            7 |
+| `apps/api/src/lib/jobs.ts`                                      |                  12 |   14 |            1 |
+| `apps/api/src/lib/service-order-workflow.ts`                    |                  11 |  113 |           29 |
+| `apps/api/src/modules/service-orders/service-order.tokens.ts`   |                  11 |   74 |           14 |
+| `apps/api/src/routes/units.ts`                                  |                  11 |   25 |            9 |
+| `apps/api/src/lib/units.ts`                                     |                   9 | 3672 |          732 |
+| `apps/api/src/routes/customers.ts`                              |                   9 |   35 |            9 |
+| `apps/api/src/routes/capa.ts`                                   |                   9 |   32 |            6 |
+| `apps/api/src/routes/non-conformances.ts`                       |                   9 |   31 |            5 |
