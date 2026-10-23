@@ -11,6 +11,12 @@ import { describe, expect, it, vi } from "vitest";
 // its real name. Handler bodies are fingerprinted on their compiled source with
 // module-import indirection and whitespace normalised away, so moving a helper
 // between files does not change the fingerprint but editing the handler does.
+//
+// One deliberate change to a handler body after the snapshot was recorded: the
+// unpaginated (protocol 1/2) bootstrap queries of POST /bootstrap moved into
+// modules/sync/legacy-bootstrap.ts so the route no longer queries the global
+// db. Only that route's fingerprint changed; every other line is the pre-split
+// recording.
 const { named } = vi.hoisted(() => ({
   named: <T extends (...args: never[]) => unknown>(fn: T, name: string) =>
     Object.defineProperty(fn, "name", { value: name }),

@@ -1,6 +1,6 @@
 /**
  * Pure, side-effect-free leaf helpers extracted VERBATIM from
- * `apps/api/src/routes/sync.ts` (Phase-2 behavior-preserving extraction).
+ * `apps/api/src/routes/sync/` and `modules/sync/` (Phase-2 behavior-preserving extraction).
  *
  * Scope: attachment object-key building/encoding/validation, pull
  * cursor/limit parsing, timestamp/date coercion, and small record/form

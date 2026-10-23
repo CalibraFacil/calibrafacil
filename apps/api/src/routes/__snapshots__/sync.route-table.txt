@@ -1,5 +1,5 @@
 POST /bootstrap withLabPermission({"calibration":["read"]})
-POST /bootstrap <anonymous> #c619d63fdb
+POST /bootstrap <anonymous> #cb7b90b566
 POST /push withLabPermission({"calibration":["create"]})
 POST /push <anonymous> #13359a68cd
 GET /pull withLabPermission({"calibration":["read"]})

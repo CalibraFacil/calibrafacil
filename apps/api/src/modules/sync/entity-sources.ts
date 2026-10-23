@@ -8,7 +8,7 @@
  * predicate the legacy pull and bootstrap use). There is NO technician predicate: a job
  * reassigned to another technician stays in scope, a job moved to another unit leaves it.
  *
- * Payloads are the columns the legacy pull sends (`routes/sync.ts`, deprecated), plus
+ * Payloads are the columns the legacy pull sends (`routes/sync/pull.ts`, deprecated), plus
  * `deletedAt` on the two soft-deleted entities, so the desktop's upsert code is shared by
  * both protocols.
  */
