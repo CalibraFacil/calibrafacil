@@ -4,9 +4,13 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   SYNC_PROTOCOL_VERSION,
+  SYNC_PROTOCOL_UNSUPPORTED_CODE,
   buildSyncResyncRequiredResponse,
 } from "@calibra-facil/contracts";
 import {
+  applySyncBootstrap,
+  createLocalCustomer,
+  listPendingOutboxEvents,
   getBootstrapPageToken,
   getSyncCursor,
   hasIncompleteBootstrap,
@@ -407,6 +411,95 @@ describe("the pull on the desktop", () => {
     )) {
       expect(request.url.searchParams.get("protocolVersion")).toBe("3");
     }
+    database.close();
+  });
+});
+
+describe("a protocol 3 desktop against a cloud that predates protocol 3", () => {
+  it("REQ-CS-4: the push refused for its protocol number is sent again with the one the cloud speaks; queued events sync and the pull still runs", async () => {
+    const database = openLocalDatabase({ filePath: createTempDatabasePath() });
+    const cloudApiUrl = "https://older-cloud.example.test";
+    const pushedVersions: unknown[] = [];
+    let pulled = 0;
+    const runtime = createLocalSyncRuntime(
+      { ...createConfig(createTempDatabasePath()), cloudApiUrl },
+      database,
+      {
+        fetch: async (input, init) => {
+          const url = new URL(String(input));
+          if (url.pathname === "/api/sync/push") {
+            const body = JSON.parse(String(init?.body));
+            pushedVersions.push(body.protocolVersion);
+            // A cloud of protocol 2 refuses what it does not know.
+            if (body.protocolVersion > 2) {
+              return Response.json(
+                {
+                  code: SYNC_PROTOCOL_UNSUPPORTED_CODE,
+                  supportedProtocolVersion: 2,
+                  message: "newer than the cloud supports",
+                },
+                { status: 400 },
+              );
+            }
+            return Response.json({
+              accepted: body.events.map(
+                (event: { eventId: string; localVersion: number }) => ({
+                  eventId: event.eventId,
+                  remoteEntityId: 321,
+                  remoteVersion: event.localVersion + 1,
+                  cloudEventId: `cloud:${event.eventId}`,
+                }),
+              ),
+              rejected: [],
+              conflicts: [],
+            });
+          }
+          if (url.pathname === "/api/sync/pull") {
+            pulled += 1;
+            return Response.json({
+              cursor: "2026-01-15T10:00:00.000Z",
+              hasMore: false,
+              events: [],
+            });
+          }
+          throw new Error(`Unexpected URL ${url}`);
+        },
+      },
+    );
+    applySyncBootstrap(database, {
+      ...HEADER,
+      ...EMPTY,
+      syncCursor: "2026-01-01T00:00:00.000Z",
+    });
+    createLocalCustomer(database, {
+      organizationId: "org-1",
+      unitId: 1,
+      name: "Cliente Offline",
+      email: "offline@example.com",
+      actorUserId: "user-1",
+      deviceId: "device-test",
+    });
+    expect(listPendingOutboxEvents(database, 50).length).toBe(1);
+
+    await runtime.runPushSync();
+
+    expect(pushedVersions).toEqual([SYNC_PROTOCOL_VERSION, 2]);
+    expect(
+      listPendingOutboxEvents(database, 50, { includeDeferred: true }).length,
+    ).toBe(0);
+    expect(pulled).toBe(1);
+
+    // The cloud's protocol is remembered: the next push does not ask twice.
+    createLocalCustomer(database, {
+      organizationId: "org-1",
+      unitId: 1,
+      name: "Outro Cliente",
+      email: "other@example.com",
+      actorUserId: "user-1",
+      deviceId: "device-test",
+    });
+    await runtime.runPushSync();
+    expect(pushedVersions).toEqual([SYNC_PROTOCOL_VERSION, 2, 2]);
     database.close();
   });
 });

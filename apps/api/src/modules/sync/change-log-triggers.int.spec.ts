@@ -360,6 +360,65 @@ describe("sync change log triggers", () => {
     ]);
   });
 
+  it("REQ-CS-5: hard-deleting an organization that still has mirrored rows succeeds: the triggers of the rows it takes with it do not log for an organization that is going away", async () => {
+    const org = await seedOrg({ orgId: ORG });
+    const other = await seedOrg({ orgId: "org-trg-b", userId: "user-trg-b" });
+    await seedService({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      name: "Calibração",
+    });
+    await db.insert(massCompositionProfile).values({
+      organizationId: org.orgId,
+      profileKey: "1kg-M1",
+      profileClass: "M1",
+      nominalG: 1000,
+      nominal: "1 kg",
+      value: 1000,
+      uncertainty: 0.001,
+    });
+    await db
+      .insert(environmentalLimits)
+      .values({ organizationId: org.orgId, unitId: org.unitId, limits: {} });
+    await db
+      .update(organization)
+      .set({
+        status: "SUSPENDED",
+        deletedAt: new Date("2000-01-01T00:00:00.000Z"),
+      })
+      .where(eq(organization.id, org.orgId));
+    expect((await entries(org.orgId)).length).toBeGreaterThan(0);
+
+    await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select set_config('calibra.allow_org_purge', 'on', true)`,
+      );
+      await tx.execute(
+        sql`select set_config('calibra.allow_audit_rewrite', 'on', true)`,
+      );
+      // The cascade removes the services, limits and profiles through the foreign keys:
+      // each removal fires its trigger while the organization row is already gone.
+      await tx.execute(sql`DELETE FROM organization WHERE id = ${org.orgId}`);
+    });
+
+    expect(
+      await db
+        .select({ id: organization.id })
+        .from(organization)
+        .where(eq(organization.id, org.orgId)),
+    ).toEqual([]);
+    expect(await entries(org.orgId)).toEqual([]);
+    // Another laboratory's log is untouched by it.
+    expect(
+      (
+        await db
+          .select({ id: organization.id })
+          .from(organization)
+          .where(eq(organization.id, other.orgId))
+      ).length,
+    ).toBe(1);
+  });
+
   it("REQ-CS-1: a mass composition profile is logged", async () => {
     const org = await seedOrg({ orgId: ORG });
     await clearLog();

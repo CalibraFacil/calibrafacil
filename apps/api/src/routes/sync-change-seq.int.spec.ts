@@ -430,7 +430,9 @@ describe("sync change sequence (protocol 3)", () => {
     const body = await pullSettled(org, { cursor: start });
     expect(labels(body.events)).toEqual([`customer:${id}:upsert`]);
     expect(
-      z.object({ name: z.string() }).parse(body.events[0]?.payload).name,
+      z
+        .object({ name: z.string() })
+        .parse(only(body.events, "customer")[0]?.payload).name,
     ).toBe("Nome final");
   });
 
@@ -450,7 +452,9 @@ describe("sync change sequence (protocol 3)", () => {
 
     const body = await pullSettled(org, { cursor: start });
     expect(labels(body.events)).toEqual([`service:${serviceId}:delete`]);
-    expect(body.events[0]?.resumeCursor).toMatch(/^v3\|\d+\|\d+$/);
+    expect(only(body.events, "service")[0]?.resumeCursor).toMatch(
+      /^v3\|\d+\|\d+$/,
+    );
   });
 
   it("REQ-CS-2: a soft-deleted asset is a delete tombstone carrying its deletedAt", async () => {
@@ -471,8 +475,9 @@ describe("sync change sequence (protocol 3)", () => {
       `asset:${assetId}:delete`,
     ]);
     expect(
-      z.object({ deletedAt: z.string() }).parse(body.events[0]?.payload)
-        .deletedAt,
+      z
+        .object({ deletedAt: z.string() })
+        .parse(only(body.events, "asset")[0]?.payload).deletedAt,
     ).toBe(deletedAt.toISOString());
   });
 

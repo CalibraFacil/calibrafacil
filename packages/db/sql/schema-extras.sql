@@ -487,9 +487,13 @@ BEGIN
   END IF;
   -- One entry per (entity, op, unit) per transaction: a transaction that touches a
   -- row five times is one change to the desktop.
+  -- No entry for an organization that is going away: a hard delete of the organization
+  -- removes its mirrored rows through ON DELETE CASCADE after the organization row is
+  -- gone, and an entry for it would violate the foreign key (and be deleted anyway).
   INSERT INTO public.sync_change_log (organization_id, entity_type, entity_id, op, unit_id)
   SELECT p_organization_id, p_entity_type, p_entity_id, p_op, p_unit_id
-  WHERE NOT EXISTS (
+  WHERE EXISTS (SELECT 1 FROM public.organization o WHERE o.id = p_organization_id)
+    AND NOT EXISTS (
     SELECT 1 FROM public.sync_change_log existing
     WHERE existing.organization_id = p_organization_id
       AND existing.xid = pg_current_xact_id()

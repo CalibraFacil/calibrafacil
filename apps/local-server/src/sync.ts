@@ -5,6 +5,7 @@ import {
   syncBootstrapPageResponseSchema,
   syncConflictResolutionResponseSchema,
   syncResyncRequiredResponseSchema,
+  syncProtocolUnsupportedResponseSchema,
   syncUpdateRequiredResponseSchema,
   syncPullResponseSchema,
   syncBootstrapResponseSchema,
@@ -292,6 +293,9 @@ export function createLocalSyncRuntime(
 }
 
 const MAX_PULL_PAGES = 200;
+
+/** The push protocol an older cloud told this process it speaks, per cloud URL. */
+const cloudPushProtocol = new Map<string, number>();
 /** A bootstrap page is at most 1000 rows (SYNC_BOOTSTRAP_MAX_PAGE_SIZE): 100k pages is a loop, not a laboratory. */
 const MAX_BOOTSTRAP_PAGES = 100_000;
 
@@ -573,37 +577,64 @@ async function pushOutboxEvents(
 
   applyCloudAuthHeaders(config, headers);
 
-  const request = {
-    deviceId: config.deviceId,
-    clientBatchId: `batch:${crypto.randomUUID()}`,
-    baseCursor: getSyncCursor(database),
-    // Which protocol and which build this push comes from: the cloud
-    // answers "update required" to a build below its minimum.
-    protocolVersion: SYNC_PROTOCOL_VERSION,
-    desktopVersion: config.appVersion,
-    events: pending.map((event) => ({
-      eventId: event.eventId,
-      entityType: event.entityType,
-      entityId: event.entityId,
-      operation: event.operation,
-      payload: event.payload,
-      occurredAt: event.occurredAt,
-      actorUserId: event.actorUserId ?? context.userId ?? "local",
-      organizationId: context.organizationId ?? "",
-      unitId: context.unitId,
-      idempotencyKey: event.idempotencyKey,
-      localVersion: event.localVersion,
-      baseUpdatedAt: event.baseUpdatedAt ?? null,
-    })),
-  } satisfies SyncPushRequest;
+  const buildRequest = (protocolVersion: number) =>
+    ({
+      deviceId: config.deviceId,
+      clientBatchId: `batch:${crypto.randomUUID()}`,
+      baseCursor: getSyncCursor(database),
+      // Which protocol and which build this push comes from: the cloud
+      // answers "update required" to a build below its minimum.
+      protocolVersion,
+      desktopVersion: config.appVersion,
+      events: pending.map((event) => ({
+        eventId: event.eventId,
+        entityType: event.entityType,
+        entityId: event.entityId,
+        operation: event.operation,
+        payload: event.payload,
+        occurredAt: event.occurredAt,
+        actorUserId: event.actorUserId ?? context.userId ?? "local",
+        organizationId: context.organizationId ?? "",
+        unitId: context.unitId,
+        idempotencyKey: event.idempotencyKey,
+        localVersion: event.localVersion,
+        baseUpdatedAt: event.baseUpdatedAt ?? null,
+      })),
+    }) satisfies SyncPushRequest;
 
+  // The push wire format did not change with protocol 3 (only the pull and the
+  // bootstrap did), so a cloud that predates it can read this push; it only refuses
+  // the number. Such a cloud names the newest protocol it speaks
+  // (SYNC_PROTOCOL_UNSUPPORTED): ask again with that one, once, and remember it.
+  let pushProtocol =
+    cloudPushProtocol.get(cloudApiUrl) ?? SYNC_PROTOCOL_VERSION;
   let response: Response;
   try {
     response = await fetchImpl(pushUrl, {
       method: "POST",
       headers,
-      body: JSON.stringify(request),
+      body: JSON.stringify(buildRequest(pushProtocol)),
     });
+    if (response.status === 400) {
+      const unsupported = syncProtocolUnsupportedResponseSchema.safeParse(
+        await response
+          .clone()
+          .json()
+          .catch(() => null),
+      );
+      if (
+        unsupported.success &&
+        unsupported.data.supportedProtocolVersion < pushProtocol
+      ) {
+        pushProtocol = unsupported.data.supportedProtocolVersion;
+        cloudPushProtocol.set(cloudApiUrl, pushProtocol);
+        response = await fetchImpl(pushUrl, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(buildRequest(pushProtocol)),
+        });
+      }
+    }
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Cloud push request failed";
