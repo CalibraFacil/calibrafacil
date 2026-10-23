@@ -107,6 +107,7 @@ export const cloudSyncEntityTypeSchema = z.enum([
   "environmental_limit",
   "calibration_job",
   "service_order",
+  "mass_composition_profile",
 ]);
 
 export const cloudSyncEventSchema = z.object({
@@ -116,6 +117,11 @@ export const cloudSyncEventSchema = z.object({
   operation: z.enum(["upsert", "delete"]).default("upsert"),
   occurredAt: z.string(),
   payload: z.unknown(),
+  /**
+   * Protocol 3 only: the cursor that makes a pull return this event again. A
+   * desktop keeps it for a row it skipped because of queued local changes.
+   */
+  resumeCursor: z.string().optional(),
 });
 
 export const syncPullResponseSchema = z.object({

@@ -1,5 +1,9 @@
 import { Hono } from "hono";
 import {
+  SYNC_CHANGE_SEQ_PROTOCOL_VERSION,
+  SYNC_PULL_PROTOCOL_PARAM,
+  buildSyncResyncRequiredResponse,
+  syncBootstrapPageRequestSchema,
   syncBootstrapResponseSchema,
   syncAckRequestSchema,
   syncAckResponseSchema,
@@ -41,14 +45,12 @@ import {
   organizationEventLog,
   massCompositionProfile,
   referenceStandard,
-  referenceStandardCertificateDocument,
   service,
   serviceOrder,
   serviceOrderDeliveryDocument,
   serviceOrderExecution,
   serviceOrderQuote,
   type StandardSnapshot,
-  type ReferenceStandardCertificateDocumentSnapshot,
 } from "@calibra-facil/db/schema";
 import {
   buildDesktopSyncConflictId,
@@ -94,6 +96,13 @@ import {
   withLabPermission,
 } from "../middleware/permission";
 import { buildUnitScopeCondition } from "../lib/units";
+import { orgDb } from "../lib/org-db";
+import { attachReferenceStandardCertificateDocuments } from "../modules/sync/standard-documents";
+import {
+  buildBootstrapPageResponse,
+  wantsBootstrapPages,
+} from "../modules/sync/bootstrap-pages";
+import { pullChangeLog } from "../modules/sync/change-log";
 import {
   executeJob,
   submitJob,
@@ -239,6 +248,29 @@ export const syncRouter = new Hono<{
     async (c) => {
       const session = c.get("session");
       const memberData = getMemberData(c);
+
+      // Protocol 3 states itself in the body and gets the paged bootstrap
+      // (modules/sync/bootstrap-pages.ts). A request without it (protocols 1 and 2) gets
+      // the one unpaginated response below, exactly as before.
+      const requestBody: unknown = await c.req.json().catch(() => null);
+      if (wantsBootstrapPages(requestBody)) {
+        const request = syncBootstrapPageRequestSchema.safeParse(requestBody);
+        const page = request.success
+          ? await buildBootstrapPageResponse({
+              user: session.user,
+              member: memberData,
+              request: request.data,
+            })
+          : null;
+        if (!page) {
+          return domainErrorResponse(
+            c,
+            invalid("invalid_request", "Requisição de bootstrap inválida."),
+          );
+        }
+        return c.json(page);
+      }
+
       const [
         publishedMethods,
         assetTypes,
@@ -481,7 +513,7 @@ export const syncRouter = new Hono<{
       ]);
       const standardsWithDocuments =
         await attachReferenceStandardCertificateDocuments(
-          memberData.organizationId,
+          orgDb(memberData.organizationId),
           standards,
         );
 
@@ -517,6 +549,9 @@ export const syncRouter = new Hono<{
           massCompositionProfile.nominalG,
         );
 
+      // DEPRECATED (protocols 1 and 2): one unpaginated response. Protocol 3 desktops use
+      // POST /bootstrap/page. Delete with the legacy pull (see GET /pull).
+      c.header("Deprecation", "true");
       return c.json(
         syncBootstrapResponseSchema.parse({
           serverTime: new Date().toISOString(),
@@ -836,10 +871,39 @@ export const syncRouter = new Hono<{
     },
   )
   .get("/pull", ...withLabPermission({ calibration: ["read"] }), async (c) => {
-    const since = parseSyncPullPosition(c.req.query("cursor"));
     const limit = parseSyncPullLimit(c.req.query("limit"));
     const memberData = getMemberData(c);
+
+    // Protocol 3: the commit-ordered change log (modules/sync/change-log.ts).
+    const requestedProtocol = Number.parseInt(
+      c.req.query(SYNC_PULL_PROTOCOL_PARAM) ?? "",
+      10,
+    );
+    if (requestedProtocol >= SYNC_CHANGE_SEQ_PROTOCOL_VERSION) {
+      const pull = await pullChangeLog({
+        scope: memberData,
+        cursor: c.req.query("cursor"),
+        limit,
+      });
+      if (pull.kind === "resync") {
+        return c.json(buildSyncResyncRequiredResponse(pull.reason), 409);
+      }
+      return c.json(
+        syncPullResponseSchema.parse({
+          cursor: pull.cursor,
+          hasMore: pull.hasMore,
+          events: pull.events,
+        }),
+      );
+    }
+
+    // DEPRECATED (protocols 1 and 2): the `updatedAt` cursor. It cannot see a row whose
+    // transaction commits after a later-written row was pulled, and it never carries a
+    // hard delete. Kept so deployed desktops keep working until
+    // SYNC_MIN_DESKTOP_VERSION excludes them (DEPLOYMENT.md); delete it then.
+    const since = parseSyncPullPosition(c.req.query("cursor"));
     const pull = await loadCloudSyncEventsSince(memberData, since, limit);
+    c.header("Deprecation", "true");
 
     return c.json(
       syncPullResponseSchema.parse({
@@ -1479,7 +1543,7 @@ async function loadCloudSyncEventsSince(
 
   const changedStandardsWithDocuments =
     await attachReferenceStandardCertificateDocuments(
-      memberData.organizationId,
+      orgDb(memberData.organizationId),
       taken("reference_standard", changedStandards),
     );
 
@@ -1581,72 +1645,6 @@ function toCloudEvents(
       payload: row,
     };
   });
-}
-
-type ReferenceStandardSyncRow = {
-  id: number;
-  certificateNumber: string;
-};
-
-async function attachReferenceStandardCertificateDocuments<
-  TStandard extends ReferenceStandardSyncRow,
->(organizationId: string, standards: TStandard[]) {
-  if (standards.length === 0) {
-    return standards.map((standard) => ({
-      ...standard,
-      certificateDocument: null,
-    }));
-  }
-
-  const currentDocuments = await db
-    .select()
-    .from(referenceStandardCertificateDocument)
-    .where(
-      and(
-        eq(referenceStandardCertificateDocument.organizationId, organizationId),
-        inArray(
-          referenceStandardCertificateDocument.standardId,
-          standards.map((standard) => standard.id),
-        ),
-        eq(referenceStandardCertificateDocument.isCurrent, true),
-        not(like(referenceStandardCertificateDocument.r2Key, "pending/%")),
-      ),
-    );
-  const standardsById = new Map(
-    standards.map((standard) => [standard.id, standard]),
-  );
-  const documentsByStandardId = new Map(
-    currentDocuments
-      .filter((document) => {
-        const standard = standardsById.get(document.standardId);
-        return standard?.certificateNumber === document.certificateNumber;
-      })
-      .map((document) => [
-        document.standardId,
-        standardCertificateDocumentSnapshot(document),
-      ]),
-  );
-
-  return standards.map((standard) => ({
-    ...standard,
-    certificateDocument: documentsByStandardId.get(standard.id) ?? null,
-  }));
-}
-
-function standardCertificateDocumentSnapshot(
-  document: typeof referenceStandardCertificateDocument.$inferSelect,
-): ReferenceStandardCertificateDocumentSnapshot {
-  return {
-    documentId: document.id,
-    r2Key: document.r2Key,
-    fileName: document.fileName,
-    fileSize: document.fileSize,
-    sha256: document.sha256,
-    uploadedAt: document.uploadedAt,
-    certificateNumber: document.certificateNumber,
-    calibrationDate: document.calibrationDate,
-    nextCalibrationDate: document.nextCalibrationDate,
-  };
 }
 
 /**

@@ -85,6 +85,13 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     reason:
       "Records purge: after a laboratory is erased, its portal-login CLIENT organizations are removed unless another customer still points at them (a cross-tenant existence check on customer.auth_organization_id).",
   },
+  {
+    category: "cron-queue",
+    file: "apps/api/src/lib/sync-change-log-purge.ts",
+    tables: ["sync_change_log", "sync_change_log_purge"],
+    reason:
+      "Desktop change log retention: one statement deletes the entries older than the retention window of every laboratory and records the purge horizon per laboratory (a platform maintenance job).",
+  },
   // -------------------------------------------------------------------------
   // public-token: the unguessable token/secret is the credential; the
   // organization comes from the row the token resolves to.

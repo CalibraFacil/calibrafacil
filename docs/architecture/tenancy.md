@@ -96,7 +96,7 @@ columns, foreign keys, unique constraints and indexes are all expressed in
 
 ## Summary
 
-135 tables: 119 tenant (an organization column), 16 global (no organization column, with the reason below). Of the tenant tables, 103 have the column NOT NULL and 16 (the audit logs) have it nullable, guarded by a `CHECK (organization_id IS NOT NULL) NOT VALID` that refuses every new row without one. 37 tenant tables gained `organization_id` in migration 0118.
+137 tables: 121 tenant (an organization column), 16 global (no organization column, with the reason below). Of the tenant tables, 105 have the column NOT NULL and 16 (the audit logs) have it nullable, guarded by a `CHECK (organization_id IS NOT NULL) NOT VALID` that refuses every new row without one. 37 tenant tables gained `organization_id` in migration 0118.
 
 ## Global tables
 
@@ -247,6 +247,8 @@ The value was backfilled from the parent along the path shown (parents first).
 | `standard_recall`                         | `organization_id`     | RESTRICT           |
 | `supplier`                                | `organization_id`     | CASCADE            |
 | `sync_applied_event`                      | `organization_id`     | CASCADE            |
+| `sync_change_log`                         | `organization_id`     | CASCADE            |
+| `sync_change_log_purge`                   | `organization_id`     | CASCADE            |
 | `training_record`                         | `organization_id`     | RESTRICT           |
 | `visit_reschedule_request`                | `organization_id`     | RESTRICT           |
 

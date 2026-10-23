@@ -24,8 +24,12 @@ import { syncEventSchema } from "./sync";
  *   deliberate act with a test to change, never a silent narrowing.
  * - An operation outside the union is not a schema failure: it is an operation
  *   this server does not support (`UNSUPPORTED_SYNC_OPERATION`).
+ * - Protocol 3 adds the commit-ordered pull and the paged bootstrap
+ *   (sync-change-seq.ts, docs/architecture/sync-change-seq.md). The push wire format
+ *   is unchanged; protocols 1 and 2 keep the `updatedAt` pull until
+ *   `SYNC_MIN_DESKTOP_VERSION` excludes them (DEPLOYMENT.md).
  */
-export const SYNC_PROTOCOL_VERSION = 2;
+export const SYNC_PROTOCOL_VERSION = 3;
 
 /** The protocol of a request that states no `protocolVersion`. */
 export const LEGACY_SYNC_PROTOCOL_VERSION = 1;

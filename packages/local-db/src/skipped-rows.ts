@@ -1,3 +1,8 @@
+import {
+  compareSyncChangePositions,
+  formatSyncChangeCursor,
+  parseSyncChangeCursor,
+} from "@calibra-facil/contracts";
 import type { LocalDatabase } from "./database";
 
 /**
@@ -14,6 +19,13 @@ import type { LocalDatabase } from "./database";
  * version that was passed over; the next pull brings it back (every pull
  * endpoint already returns everything after a cursor, so no new endpoint is
  * needed, and rows that still have queued changes are skipped again).
+ *
+ * Protocol 3 pulls the change log by position, not by time: a skipped row then
+ * remembers the cursor that returns its change again (`resume_cursor`, which the
+ * pull event carries) and the cursor is rewound to the oldest of them. A row skipped
+ * by a bootstrap page has no log position (NULL): the rewind starts over, which the
+ * cloud answers with "bootstrap again". Always correct, never cheap, and rare (a
+ * conflict ignored in favour of the cloud, on a row a bootstrap met with queued edits).
  */
 
 export type SkippedRowKind =
@@ -37,18 +49,35 @@ export function recordSkippedRow(
     remoteId: number;
     /** The cloud version that was passed over. */
     cloudUpdatedAt: string | null;
+    /** Protocol 3: the pull cursor that returns the passed-over change again. */
+    resumeCursor?: string | null;
   },
   skippedAt = new Date().toISOString(),
 ) {
+  const existing = database
+    .prepare<
+      { entityType: string; localId: string },
+      { resume_cursor: string | null }
+    >("SELECT resume_cursor FROM sync_skipped_rows WHERE entity_type = @entityType AND local_id = @localId")
+    .get({ entityType: row.entityType, localId: row.localId });
+  // Keep the OLDEST position for the same reason as the oldest version below.
+  const resumeCursor =
+    existing === undefined
+      ? (row.resumeCursor ?? null)
+      : olderResumeCursor(existing.resume_cursor, row.resumeCursor ?? null);
+
   // Keep the OLDEST passed-over version: rewinding to it also re-fetches any
   // later one.
   database
     .prepare(
       `
 INSERT INTO sync_skipped_rows (
-  entity_type, local_id, remote_id, cloud_updated_at, skipped_at
-) VALUES (@entityType, @localId, @remoteId, @cloudUpdatedAt, @skippedAt)
+  entity_type, local_id, remote_id, cloud_updated_at, skipped_at, resume_cursor
+) VALUES (
+  @entityType, @localId, @remoteId, @cloudUpdatedAt, @skippedAt, @resumeCursor
+)
 ON CONFLICT(entity_type, local_id) DO UPDATE SET
+  resume_cursor = excluded.resume_cursor,
   cloud_updated_at = CASE
     WHEN sync_skipped_rows.cloud_updated_at IS NULL
       OR excluded.cloud_updated_at IS NULL THEN NULL
@@ -58,7 +87,26 @@ ON CONFLICT(entity_type, local_id) DO UPDATE SET
   END
 `,
     )
-    .run({ ...row, skippedAt });
+    .run({
+      entityType: row.entityType,
+      localId: row.localId,
+      remoteId: row.remoteId,
+      cloudUpdatedAt: row.cloudUpdatedAt,
+      skippedAt,
+      resumeCursor,
+    });
+}
+
+/**
+ * The earlier of two resume cursors. Unknown (NULL, or not a log position) on either
+ * side stays unknown: starting over covers anything.
+ */
+function olderResumeCursor(left: string | null, right: string | null) {
+  if (left === null || right === null) return null;
+  const a = parseSyncChangeCursor(left);
+  const b = parseSyncChangeCursor(right);
+  if (a.kind !== "position" || b.kind !== "position") return null;
+  return compareSyncChangePositions(a.position, b.position) <= 0 ? left : right;
 }
 
 export function countSkippedRows(database: LocalDatabase) {
@@ -77,6 +125,7 @@ type SkippedRow = {
   local_id: string;
   remote_id: number;
   cloud_updated_at: string | null;
+  resume_cursor: string | null;
 };
 
 /**
@@ -89,7 +138,7 @@ export function releaseSettledSkippedRows(database: LocalDatabase): number {
     .prepare<
       [],
       SkippedRow
-    >("SELECT entity_type, local_id, remote_id, cloud_updated_at FROM sync_skipped_rows")
+    >("SELECT entity_type, local_id, remote_id, cloud_updated_at, resume_cursor FROM sync_skipped_rows")
     .all();
   const settled = rows.filter((row) => !hasUnsettledChanges(database, row));
   if (settled.length === 0) return 0;
@@ -102,10 +151,7 @@ export function releaseSettledSkippedRows(database: LocalDatabase): number {
         )
         .run(row.entity_type, row.local_id);
     }
-    rewindPullCursor(
-      database,
-      settled.map((row) => row.cloud_updated_at),
-    );
+    rewindPullCursor(database, settled);
   })();
 
   return settled.length;
@@ -139,10 +185,7 @@ LIMIT 1
   return found !== undefined;
 }
 
-function rewindPullCursor(
-  database: LocalDatabase,
-  cloudUpdatedAts: Array<string | null>,
-) {
+function rewindPullCursor(database: LocalDatabase, settled: SkippedRow[]) {
   const current = database
     .prepare<
       [],
@@ -151,6 +194,14 @@ function rewindPullCursor(
     .get();
   // No cursor yet: the next pull starts from the beginning anyway.
   if (!current || current.cursor === null) return;
+
+  const position = parseSyncChangeCursor(current.cursor);
+  if (position.kind === "position") {
+    rewindChangeLogCursor(database, position.position, settled);
+    return;
+  }
+
+  const cloudUpdatedAts = settled.map((row) => row.cloud_updated_at);
 
   const times = cloudUpdatedAts.map((value) =>
     value === null ? Number.NaN : Date.parse(value),
@@ -165,6 +216,40 @@ function rewindPullCursor(
   if (target !== null) {
     const currentMs = cursorTimestampMs(current.cursor);
     if (currentMs !== null && currentMs <= Date.parse(target)) return;
+  }
+
+  database
+    .prepare("UPDATE sync_cursors SET cursor = @cursor WHERE scope = 'default'")
+    .run({ cursor: target });
+}
+
+/** Protocol 3: back to the oldest log position a settled row skipped; unknown means start over. */
+function rewindChangeLogCursor(
+  database: LocalDatabase,
+  current: { xid: bigint; seq: bigint },
+  settled: SkippedRow[],
+) {
+  const targets = settled.map((row) =>
+    row.resume_cursor === null
+      ? null
+      : parseSyncChangeCursor(row.resume_cursor),
+  );
+  let target: string | null = null;
+  const positions: Array<{ xid: bigint; seq: bigint }> = [];
+  for (const parsed of targets) {
+    if (parsed === null || parsed.kind !== "position") {
+      positions.length = 0;
+      break;
+    }
+    positions.push(parsed.position);
+  }
+  if (positions.length > 0) {
+    const oldest = positions.reduce((left, right) =>
+      compareSyncChangePositions(left, right) <= 0 ? left : right,
+    );
+    // Already at or before it: nothing to rewind.
+    if (compareSyncChangePositions(current, oldest) <= 0) return;
+    target = formatSyncChangeCursor(oldest);
   }
 
   database

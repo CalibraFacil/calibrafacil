@@ -132,8 +132,12 @@ export {
 export { countSkippedRows, releaseSettledSkippedRows } from "./skipped-rows";
 export {
   applySyncBootstrap,
+  applySyncBootstrapPage,
   applySyncPullResponse,
+  discardBootstrapProgress,
+  getBootstrapPageToken,
   getLocalSessionSnapshot,
+  hasIncompleteBootstrap,
 } from "./sync";
 export {
   getLocalDatabaseDiagnostics,
