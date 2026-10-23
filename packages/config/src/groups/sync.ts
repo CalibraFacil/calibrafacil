@@ -1,4 +1,4 @@
-import { defineGroup, example, text } from "../define";
+import { defineGroup, example, integer, text } from "../define";
 
 /**
  * The desktop sync protocol (apps/api `/api/sync/*`). See DEPLOYMENT.md.
@@ -16,6 +16,10 @@ export const syncGroup = defineGroup({
     "answered 'update required' (HTTP 426, its queued changes are kept), and an",
     "execution submit that does not carry the calibration record stamp is held to",
     "the calibration record rule like every other submit.",
+    "",
+    "SYNC_CHANGE_LOG_RETENTION_DAYS: how long the change log the desktop pull reads",
+    "(protocol 3) is kept. A desktop that stayed offline longer is told to bootstrap",
+    "again instead of pulling; the purge runs from the sync-change-log-purge cron.",
   ],
   vars: {
     minDesktopVersion: text({
@@ -23,6 +27,15 @@ export const syncGroup = defineGroup({
       description:
         "Oldest desktop version allowed to push (MAJOR.MINOR.PATCH). Unset means no minimum; setting it also ends the legacy calibration-record exemption.",
       example: example.commented("1.4.0"),
+    }),
+    changeLogRetentionDays: integer({
+      env: "SYNC_CHANGE_LOG_RETENTION_DAYS",
+      description:
+        "Days the desktop change log is kept (at least 7). A desktop offline for longer bootstraps again. An unusable value means the default.",
+      min: 7,
+      default: 90,
+      tolerant: true,
+      example: example.commented("90"),
     }),
   },
 });

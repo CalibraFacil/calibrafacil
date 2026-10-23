@@ -1,6 +1,7 @@
 import { syncBootstrapResponseSchema } from "@calibra-facil/contracts";
 import type {
   CloudSyncEvent,
+  SyncBootstrapPageResponse,
   SyncBootstrapResponse,
   SyncPullResponse,
 } from "@calibra-facil/contracts";
@@ -15,6 +16,19 @@ type JsonRecord = Record<string, unknown>;
 export type SkippedPulledRow = {
   entityType: "customer" | "asset" | "calibration_job" | "service_order";
   localId: string;
+};
+
+const EMPTY_ENTITY_ARRAYS = {
+  publishedMethods: [],
+  assetTypes: [],
+  customers: [],
+  assets: [],
+  services: [],
+  standards: [],
+  massCompositionProfiles: [],
+  environmentalLimits: [],
+  jobs: [],
+  serviceOrders: [],
 };
 
 export type ApplySyncSummary = {
@@ -40,17 +54,36 @@ export type ApplySyncSummary = {
  * have hidden the divergence from the server. Once the queued change is
  * accepted the row is clean again and the next pull applies normally.
  */
+export type ApplySyncOptions = {
+  /**
+   * Write the pull cursor the response carries (`syncCursor`). A page of the paged
+   * bootstrap does not: the cursor is only valid once the LAST page is applied, so the
+   * caller writes it then. Default true.
+   */
+  writeCursors?: boolean;
+  /**
+   * Protocol 3: `<entityType>:<remote id>` -> the pull cursor that returns that row's
+   * change again, recorded on a row that is skipped because of queued local changes.
+   */
+  resumeCursors?: ReadonlyMap<string, string>;
+  /** The snapshot keeps the session header only, not the (possibly huge) entity arrays. */
+  headerOnlySnapshot?: boolean;
+};
+
 export function applySyncBootstrap(
   database: LocalDatabase,
   bootstrap: SyncBootstrapResponse,
   pulledAt = new Date().toISOString(),
+  options: ApplySyncOptions = {},
 ): ApplySyncSummary {
   const organizationId = bootstrap.organization.id;
   const activeUnitId = bootstrap.permissions.activeUnitId;
   const skipped: SkippedPulledRow[] = [];
+  const writeCursors = options.writeCursors ?? true;
 
   database.transaction(() => {
     const pending = loadPendingLocalChanges(database);
+    pending.resumeCursors = options.resumeCursors ?? new Map();
 
     database
       .prepare(
@@ -83,7 +116,11 @@ ON CONFLICT(tenant_id) DO UPDATE SET
         organizationId,
         activeUnitId,
         userId: bootstrap.user.id,
-        snapshotJson: JSON.stringify(bootstrap),
+        snapshotJson: JSON.stringify(
+          options.headerOnlySnapshot
+            ? { ...bootstrap, ...EMPTY_ENTITY_ARRAYS }
+            : bootstrap,
+        ),
         pulledAt,
       });
 
@@ -120,28 +157,30 @@ ON CONFLICT(id) DO UPDATE SET
         pulledAt,
       });
 
-    database
-      .prepare(
-        `
+    if (writeCursors) {
+      database
+        .prepare(
+          `
 INSERT INTO sync_cursors (scope, cursor, updated_at)
 VALUES ('bootstrap', @cursor, @updatedAt)
 ON CONFLICT(scope) DO UPDATE SET
   cursor = excluded.cursor,
   updated_at = excluded.updated_at
 `,
-      )
-      .run({ cursor: bootstrap.syncCursor, updatedAt: pulledAt });
-    database
-      .prepare(
-        `
+        )
+        .run({ cursor: bootstrap.syncCursor, updatedAt: pulledAt });
+      database
+        .prepare(
+          `
 INSERT INTO sync_cursors (scope, cursor, updated_at)
 VALUES ('default', @cursor, @updatedAt)
 ON CONFLICT(scope) DO UPDATE SET
   cursor = excluded.cursor,
   updated_at = excluded.updated_at
 `,
-      )
-      .run({ cursor: bootstrap.syncCursor, updatedAt: pulledAt });
+        )
+        .run({ cursor: bootstrap.syncCursor, updatedAt: pulledAt });
+    }
 
     for (const item of bootstrap.assetTypes) {
       const row = asRecord(item);
@@ -241,6 +280,7 @@ INSERT INTO customers (
   'synced'
 )
 ON CONFLICT(id) DO UPDATE SET
+  deleted_at = NULL,
   name = excluded.name,
   tax_id = excluded.tax_id,
   email = excluded.email,
@@ -330,6 +370,7 @@ INSERT INTO assets (
   'synced'
 )
 ON CONFLICT(id) DO UPDATE SET
+  deleted_at = NULL,
   customer_id = excluded.customer_id,
   asset_type_id = excluded.asset_type_id,
   name = excluded.name,
@@ -738,6 +779,7 @@ INSERT INTO calibration_jobs (
   'synced'
 )
 ON CONFLICT(id) DO UPDATE SET
+  deleted_at = NULL,
   job_id = excluded.job_id,
   certificate_name = excluded.certificate_name,
   status = excluded.status,
@@ -1012,6 +1054,16 @@ export function applySyncPullResponse(
     throw new Error("Cannot apply sync pull before bootstrap snapshot exists");
   }
 
+  // Protocol 3 events say which log position returned them: a row skipped below
+  // because of queued local changes remembers it (skipped-rows.ts).
+  const resumeCursors = new Map(
+    response.events.flatMap((event) =>
+      event.resumeCursor === undefined
+        ? []
+        : [[`${event.entityType}:${event.entityId}`, event.resumeCursor]],
+    ),
+  );
+
   return database.transaction(() => {
     const summary = applySyncBootstrap(
       database,
@@ -1025,96 +1077,184 @@ export function applySyncPullResponse(
         assets: eventsFor(response.events, "asset"),
         services: eventsFor(response.events, "service"),
         standards: eventsFor(response.events, "reference_standard"),
+        massCompositionProfiles: eventsFor(
+          response.events,
+          "mass_composition_profile",
+        ),
         environmentalLimits: eventsFor(response.events, "environmental_limit"),
         jobs: eventsFor(response.events, "calibration_job"),
         serviceOrders: eventsFor(response.events, "service_order"),
       },
       pulledAt,
+      { resumeCursors },
     );
 
-    summary.skipped.push(...applyCloudDeletions(database, response.events));
+    summary.skipped.push(
+      ...applyCloudDeletions(database, response.events, resumeCursors),
+    );
     return summary;
   })();
 }
 
 /**
- * Soft-delete the local copy of assets and reference standards the cloud
- * deleted. Only these two are covered: they are the tables whose cloud rows are
- * soft-deleted and pulled; everything else the pull carries is upsert-only.
+ * Remove the local mirror of every row the cloud deleted, soft-deleted or moved out of
+ * this desktop's scope (a delete event: the cloud pull of protocol 3 sends one for each,
+ * the legacy pull only for soft-deleted assets and standards).
  *
- * An asset with queued local changes is left alone and reported as skipped,
- * for the same reason an upsert is: the queued edit must reach the cloud (which
- * rejects it for a deleted asset) instead of vanishing silently.
+ * How a row goes depends on what the local tables keep: assets, customers and jobs have
+ * `deleted_at` (every local query already filters it, and local history keeps pointing
+ * at them); reference standards carry the `deleted` state; the read-only mirrors with
+ * neither (asset types, services, methods, limits, mass profiles, service orders) are
+ * deleted.
+ *
+ * A customer, asset, job or service order with queued local changes is left alone and
+ * reported as skipped, for the same reason an upsert is: the queued edit must reach the
+ * cloud (which answers it with the conflict) instead of vanishing silently. It is
+ * remembered (skipped-rows.ts) and its delete is applied once the changes settle.
  */
 function applyCloudDeletions(
   database: LocalDatabase,
   events: CloudSyncEvent[],
+  resumeCursors: ReadonlyMap<string, string> = new Map(),
 ): SkippedPulledRow[] {
   const deletions = events.filter((event) => event.operation === "delete");
   if (deletions.length === 0) return [];
 
   const pending = loadPendingLocalChanges(database);
+  pending.resumeCursors = resumeCursors;
   const skipped: SkippedPulledRow[] = [];
 
   for (const event of deletions) {
     const remoteId = Number(event.entityId);
     if (!Number.isInteger(remoteId)) continue;
-
-    const deletedAt =
-      getDateString(asRecord(event.payload), "deletedAt") ?? event.occurredAt;
-
-    if (event.entityType === "asset") {
-      if (
-        skipPendingRow(
-          database,
-          pending,
-          skipped,
-          // The deletion's own version: what a re-fetch has to bring back.
-          {
-            updatedAt:
-              getDateString(asRecord(event.payload), "updatedAt") ??
-              event.occurredAt,
-          },
-          "asset",
-          "asset",
-          remoteId,
-        )
-      ) {
-        continue;
-      }
-
-      database
-        .prepare(
-          `
-UPDATE assets
-SET deleted_at = @deletedAt,
-  sync_state = 'synced'
-WHERE id = @id AND deleted_at IS NULL
-`,
-        )
-        .run({ id: remoteLocalId("asset", remoteId), deletedAt });
-    }
-
-    if (event.entityType === "reference_standard") {
-      // reference_standards has no deleted_at: 'deleted' is the state every
-      // local standards query already filters out.
-      database
-        .prepare(
-          `
-UPDATE reference_standards
-SET sync_state = 'deleted',
-  pulled_at = @deletedAt
-WHERE id = @id
-`,
-        )
-        .run({ id: remoteLocalId("standard", remoteId), deletedAt });
-    }
+    removeLocalMirror(database, pending, skipped, {
+      entityType: event.entityType,
+      remoteId,
+      // A soft-deleted row says when; a tombstone for a row that is gone or out of scope
+      // has no payload date, so the event's own time stands in.
+      deletedAt:
+        getDateString(asRecord(event.payload), "deletedAt") ?? event.occurredAt,
+      // The deletion's own version: what a re-fetch has to bring back.
+      version:
+        getDateString(asRecord(event.payload), "updatedAt") ?? event.occurredAt,
+    });
   }
 
   return skipped;
 }
 
+type MirrorRemoval = {
+  entityType: CloudSyncEvent["entityType"];
+  remoteId: number;
+  deletedAt: string;
+  version: string;
+};
+
+const SOFT_DELETED_AGGREGATES = {
+  customer: { table: "customers", prefix: "customer" },
+  asset: { table: "assets", prefix: "asset" },
+  calibration_job: { table: "calibration_jobs", prefix: "job" },
+} as const;
+
+const HARD_DELETED_MIRRORS = {
+  asset_type: { table: "asset_types", prefix: "asset-type" },
+  service: { table: "services", prefix: "service" },
+  published_method: { table: "published_methods", prefix: "method" },
+  environmental_limit: {
+    table: "environmental_limits",
+    prefix: "environmental-limit",
+  },
+  mass_composition_profile: {
+    table: "mass_composition_profiles",
+    prefix: "mass_composition_profile",
+  },
+} as const;
+
+function removeLocalMirror(
+  database: LocalDatabase,
+  pending: PendingLocalChanges,
+  skipped: SkippedPulledRow[],
+  removal: MirrorRemoval,
+) {
+  const { entityType, remoteId, deletedAt } = removal;
+
+  if (
+    entityType === "customer" ||
+    entityType === "asset" ||
+    entityType === "calibration_job"
+  ) {
+    const { table, prefix } = SOFT_DELETED_AGGREGATES[entityType];
+    if (
+      skipPendingRow(
+        database,
+        pending,
+        skipped,
+        { updatedAt: removal.version },
+        entityType,
+        prefix,
+        remoteId,
+      )
+    ) {
+      return;
+    }
+    database
+      .prepare(
+        `
+UPDATE ${table}
+SET deleted_at = @deletedAt,
+  sync_state = 'synced'
+WHERE id = @id AND deleted_at IS NULL
+`,
+      )
+      .run({ id: remoteLocalId(prefix, remoteId), deletedAt });
+    return;
+  }
+
+  if (entityType === "service_order") {
+    const localId = remoteLocalId("service-order", remoteId);
+    if (
+      skipPendingRow(
+        database,
+        pending,
+        skipped,
+        { updatedAt: removal.version },
+        "service_order",
+        "service-order",
+        remoteId,
+      ) ||
+      pending.serviceOrdersWithQueuedChildren.has(localId)
+    ) {
+      return;
+    }
+    database.prepare("DELETE FROM service_orders WHERE id = ?").run(localId);
+    return;
+  }
+
+  if (entityType === "reference_standard") {
+    // reference_standards has no deleted_at: 'deleted' is the state every
+    // local standards query already filters out.
+    database
+      .prepare(
+        `
+UPDATE reference_standards
+SET sync_state = 'deleted',
+  pulled_at = @deletedAt
+WHERE id = @id
+`,
+      )
+      .run({ id: remoteLocalId("standard", remoteId), deletedAt });
+    return;
+  }
+
+  const { table, prefix } = HARD_DELETED_MIRRORS[entityType];
+  database
+    .prepare(`DELETE FROM ${table} WHERE id = ?`)
+    .run(remoteLocalId(prefix, remoteId));
+}
+
 type PendingLocalChanges = {
+  /** Protocol 3: the cursor that returns a row's change again (see ApplySyncOptions). */
+  resumeCursors: ReadonlyMap<string, string>;
   /** `<kind>:<local id>` of every aggregate with an unsettled outbox event. */
   aggregates: Set<string>;
   /** Service orders whose own row is clean but a child event is still queued. */
@@ -1191,7 +1331,11 @@ WHERE o.status NOT IN ('synced', 'discarded')
     }
   }
 
-  return { aggregates, serviceOrdersWithQueuedChildren };
+  return {
+    aggregates,
+    serviceOrdersWithQueuedChildren,
+    resumeCursors: new Map(),
+  };
 }
 
 function skipPendingRow(
@@ -1214,6 +1358,8 @@ function skipPendingRow(
     localId,
     remoteId,
     cloudUpdatedAt: getDateString(row, "updatedAt"),
+    resumeCursor:
+      pending.resumeCursors.get(`${entityType}:${remoteId}`) ?? null,
   });
   return true;
 }
@@ -1322,4 +1468,195 @@ function parseJson(value: string) {
   } catch {
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// The paged bootstrap (protocol 3, docs/architecture/sync-change-seq.md)
+// ---------------------------------------------------------------------------
+
+/** `sync_cursors` scope holding the token of the next page of a bootstrap in progress. */
+const BOOTSTRAP_PAGE_SCOPE = "bootstrap-page";
+
+/**
+ * The token to resume the bootstrap in progress from (the page after the last one that
+ * was applied), or null when no bootstrap is in progress.
+ */
+export function getBootstrapPageToken(database: LocalDatabase): string | null {
+  return (
+    database
+      .prepare<
+        [string],
+        { cursor: string | null }
+      >("SELECT cursor FROM sync_cursors WHERE scope = ?")
+      .get(BOOTSTRAP_PAGE_SCOPE)?.cursor ?? null
+  );
+}
+
+/**
+ * A bootstrap that started and did not reach its last page: the local mirror is partial
+ * and there is no pull cursor yet, so the next sync resumes the bootstrap instead of pulling.
+ */
+export function hasIncompleteBootstrap(database: LocalDatabase): boolean {
+  return getBootstrapPageToken(database) !== null;
+}
+
+/** Forget the bootstrap in progress (a token the cloud no longer accepts): the next one starts over. */
+export function discardBootstrapProgress(database: LocalDatabase) {
+  database.transaction(() => {
+    database
+      .prepare("DELETE FROM sync_cursors WHERE scope = ?")
+      .run(BOOTSTRAP_PAGE_SCOPE);
+    database.prepare("DELETE FROM sync_bootstrap_seen").run();
+  })();
+}
+
+const BOOTSTRAP_PAGE_ARRAYS = [
+  ["asset_type", "assetTypes"],
+  ["customer", "customers"],
+  ["asset", "assets"],
+  ["service", "services"],
+  ["reference_standard", "standards"],
+  ["environmental_limit", "environmentalLimits"],
+  ["calibration_job", "jobs"],
+  ["service_order", "serviceOrders"],
+  ["published_method", "publishedMethods"],
+  ["mass_composition_profile", "massCompositionProfiles"],
+] as const satisfies ReadonlyArray<
+  readonly [CloudSyncEvent["entityType"], keyof SyncBootstrapPageResponse]
+>;
+
+/**
+ * The local mirror tables a completed bootstrap reconciles: which rows are mirrors of a
+ * cloud row (their id is the remote-addressed `<prefix>:<remote id>`, not a locally
+ * created id that was accepted later) and which of those are still live.
+ */
+const BOOTSTRAP_MIRRORS = {
+  asset_type: { table: "asset_types", prefix: "asset-type", live: "1 = 1" },
+  customer: {
+    table: "customers",
+    prefix: "customer",
+    live: "deleted_at IS NULL",
+  },
+  asset: { table: "assets", prefix: "asset", live: "deleted_at IS NULL" },
+  service: { table: "services", prefix: "service", live: "1 = 1" },
+  reference_standard: {
+    table: "reference_standards",
+    prefix: "standard",
+    live: "sync_state <> 'deleted'",
+  },
+  environmental_limit: {
+    table: "environmental_limits",
+    prefix: "environmental-limit",
+    live: "1 = 1",
+  },
+  calibration_job: {
+    table: "calibration_jobs",
+    prefix: "job",
+    live: "deleted_at IS NULL",
+  },
+  service_order: {
+    table: "service_orders",
+    prefix: "service-order",
+    live: "1 = 1",
+  },
+  published_method: {
+    table: "published_methods",
+    prefix: "method",
+    live: "1 = 1",
+  },
+  mass_composition_profile: {
+    table: "mass_composition_profiles",
+    prefix: "mass_composition_profile",
+    live: "1 = 1",
+  },
+} as const satisfies Record<
+  CloudSyncEvent["entityType"],
+  { table: string; prefix: string; live: string }
+>;
+
+/**
+ * Apply ONE page of the paged bootstrap, atomically with the bookkeeping that lets an
+ * interrupted bootstrap resume at the next page: the rows, the ids delivered so far, and
+ * the token of the page after this one all commit together or not at all.
+ *
+ * - The first page (`first`) starts a bootstrap: no pull cursor is valid until it
+ *   finishes, so the cursor is cleared and the delivered ids are forgotten.
+ * - Every page upserts like the unpaged bootstrap does (a row with queued local changes is
+ *   skipped) and records the ids it carried.
+ * - The last page (`nextToken` null) completes it: the pull cursor becomes `syncCursor`,
+ *   and a mirror row the cloud did NOT deliver in any page is gone from the cloud (deleted
+ *   or moved out of scope while this desktop could not hear it): it is removed the way a
+ *   delete event removes it (a row with queued changes is skipped, not lost).
+ */
+export function applySyncBootstrapPage(
+  database: LocalDatabase,
+  page: SyncBootstrapPageResponse,
+  options: { first: boolean },
+  pulledAt = new Date().toISOString(),
+): ApplySyncSummary {
+  return database.transaction(() => {
+    if (options.first) {
+      database.prepare("DELETE FROM sync_bootstrap_seen").run();
+      setSyncCursor(database, null);
+    }
+
+    const summary = applySyncBootstrap(database, page, pulledAt, {
+      writeCursors: false,
+      headerOnlySnapshot: true,
+    });
+
+    const remember = database.prepare(
+      "INSERT OR IGNORE INTO sync_bootstrap_seen (entity_type, remote_id) VALUES (?, ?)",
+    );
+    for (const [entityType, key] of BOOTSTRAP_PAGE_ARRAYS) {
+      for (const item of page[key] ?? []) {
+        const id = getNumber(asRecord(item), "id");
+        if (id !== null) remember.run(entityType, id);
+      }
+    }
+
+    if (page.page.nextToken !== null) {
+      setSyncCursor(database, page.page.nextToken, BOOTSTRAP_PAGE_SCOPE);
+      return summary;
+    }
+
+    summary.skipped.push(
+      ...removeRowsTheBootstrapDidNotDeliver(database, pulledAt),
+    );
+    setSyncCursor(database, page.syncCursor, "bootstrap");
+    setSyncCursor(database, page.syncCursor);
+    database
+      .prepare("DELETE FROM sync_cursors WHERE scope = ?")
+      .run(BOOTSTRAP_PAGE_SCOPE);
+    database.prepare("DELETE FROM sync_bootstrap_seen").run();
+    return summary;
+  })();
+}
+
+function removeRowsTheBootstrapDidNotDeliver(
+  database: LocalDatabase,
+  pulledAt: string,
+): SkippedPulledRow[] {
+  const pending = loadPendingLocalChanges(database);
+  const skipped: SkippedPulledRow[] = [];
+
+  for (const [entityType] of BOOTSTRAP_PAGE_ARRAYS) {
+    const { table, prefix, live } = BOOTSTRAP_MIRRORS[entityType];
+    const undelivered = database
+      .prepare<
+        [string],
+        { remote_id: number }
+      >(`SELECT remote_id FROM ${table} WHERE remote_id IS NOT NULL AND id = '${prefix}:' || remote_id AND ${live} AND remote_id NOT IN (SELECT remote_id FROM sync_bootstrap_seen WHERE entity_type = ?)`)
+      .all(entityType);
+    for (const row of undelivered) {
+      removeLocalMirror(database, pending, skipped, {
+        entityType,
+        remoteId: row.remote_id,
+        deletedAt: pulledAt,
+        version: pulledAt,
+      });
+    }
+  }
+
+  return skipped;
 }

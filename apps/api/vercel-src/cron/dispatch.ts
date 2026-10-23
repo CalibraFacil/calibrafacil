@@ -18,6 +18,7 @@ import { createWorkerRuntimeEnv } from "../../src/lib/runtime-env";
 import { runCron } from "./cron-run";
 import { runCertificateDriftCheck } from "../../src/lib/certificate-drift";
 import { runRecordsPurge } from "../../src/lib/records-purge";
+import { purgeSyncChangeLog } from "../../src/lib/sync-change-log-purge";
 import {
   createR2Client,
   downloadFromR2,
@@ -325,6 +326,18 @@ async function handleRecordsPurge(request: Request) {
   );
 }
 
+// Retention of the desktop change log (SYNC_CHANGE_LOG_RETENTION_DAYS, default 90): a
+// desktop whose cursor is older than what was purged is told to bootstrap again.
+async function handleSyncChangeLogPurge(request: Request) {
+  if (!isCronAuthorized(request)) {
+    return cronAuthFailureResponse();
+  }
+
+  return runCron("sync-change-log-purge", { leaseSeconds: 300 }, () =>
+    purgeSyncChangeLog(),
+  );
+}
+
 export const JOB_HANDLERS: Record<
   string,
   (request: Request) => Promise<Response>
@@ -340,6 +353,7 @@ export const JOB_HANDLERS: Record<
   "email-domain-health": handleEmailDomainHealth,
   "certificate-drift": handleCertificateDrift,
   "records-purge": handleRecordsPurge,
+  "sync-change-log-purge": handleSyncChangeLogPurge,
 };
 
 function resolveJob(request: Request) {
