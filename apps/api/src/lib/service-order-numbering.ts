@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import {
   organizationUnit,
   serviceOrder,
@@ -6,9 +6,10 @@ import {
   serviceOrderSettings,
 } from "@calibra-facil/db/schema";
 import { and, eq, sql } from "drizzle-orm";
+import { orgDb } from "./org-db";
 
 type ServiceOrderNumberingDbExecutor = Pick<
-  typeof db,
+  OrgExecutor,
   "insert" | "select" | "update"
 >;
 
@@ -181,7 +182,9 @@ export async function generateServiceOrderNumber(
     throw new Error("Nao foi possivel gerar um numero unico de OS");
   };
 
-  return executor ? run(executor) : db.transaction(run);
+  return executor
+    ? run(executor)
+    : orgDb(context.organizationId).transaction(run);
 }
 
 export async function resetServiceOrderNextNumber(params: {
@@ -191,20 +194,22 @@ export async function resetServiceOrderNextNumber(params: {
   nextNumber: number;
 }) {
   const currentValue = Math.max(params.nextNumber - 1, 0);
-  await db
-    .insert(serviceOrderNumberingSequence)
-    .values({
-      organizationId: params.organizationId,
-      unitId: params.unitId,
-      sequenceKey: params.sequenceKey,
-      currentValue,
-    })
-    .onConflictDoUpdate({
-      target: [
-        serviceOrderNumberingSequence.organizationId,
-        serviceOrderNumberingSequence.unitId,
-        serviceOrderNumberingSequence.sequenceKey,
-      ],
-      set: { currentValue, updatedAt: new Date() },
-    });
+  await orgDb(params.organizationId).transaction((o) =>
+    o
+      .insert(serviceOrderNumberingSequence)
+      .values({
+        organizationId: params.organizationId,
+        unitId: params.unitId,
+        sequenceKey: params.sequenceKey,
+        currentValue,
+      })
+      .onConflictDoUpdate({
+        target: [
+          serviceOrderNumberingSequence.organizationId,
+          serviceOrderNumberingSequence.unitId,
+          serviceOrderNumberingSequence.sequenceKey,
+        ],
+        set: { currentValue, updatedAt: new Date() },
+      }),
+  );
 }

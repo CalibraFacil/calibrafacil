@@ -1,5 +1,6 @@
-import { db } from "@calibra-facil/db";
-import type { OrgExecutor } from "@calibra-facil/db/for-org";
+import type { OrgDb, OrgExecutor } from "@calibra-facil/db/for-org";
+import { orgDb } from "./org-db";
+import { inOrgTransaction } from "./org-transaction";
 import {
   calibrationJob,
   customer,
@@ -45,17 +46,21 @@ export {
 export async function getFinancialIntegrationState(
   organizationId: string,
   // An org-bound transaction handle when the caller has one (row-level security).
-  executor: Pick<OrgExecutor, "select"> = db,
+  executor?: Pick<OrgExecutor, "select">,
 ): Promise<BillingIntegrationState> {
-  const rows = await executor
-    .select({ status: organizationIntegration.status })
-    .from(organizationIntegration)
-    .where(
-      and(
-        eq(organizationIntegration.organizationId, organizationId),
-        eq(organizationIntegration.type, "financial_erp"),
-      ),
-    );
+  const read = (reader: Pick<OrgExecutor, "select">) =>
+    reader
+      .select({ status: organizationIntegration.status })
+      .from(organizationIntegration)
+      .where(
+        and(
+          eq(organizationIntegration.organizationId, organizationId),
+          eq(organizationIntegration.type, "financial_erp"),
+        ),
+      );
+  const rows = await (executor
+    ? read(executor)
+    : orgDb(organizationId).transaction(read));
 
   if (rows.length === 0) {
     return "not_configured";
@@ -92,8 +97,8 @@ export interface BillingReadinessQueue {
  * an unlinked part would fail the whole export, so the queue should surface
  * it as a blocker up front.
  */
-async function isSaleExportModeActive(organizationId: string) {
-  const rows = await db
+async function isSaleExportModeActive(o: OrgDb, organizationId: string) {
+  const rows = await o
     .select({ config: integrationConnection.config })
     .from(organizationIntegration)
     .innerJoin(
@@ -118,14 +123,32 @@ async function isSaleExportModeActive(organizationId: string) {
   });
 }
 
-export async function computeBillingReadinessQueue(params: {
+type BillingReadinessParams = {
   organizationId: string;
   scope: UnitScope;
   filters?: { status?: BillingReadinessStatus; customerId?: number };
-}): Promise<BillingReadinessQueue> {
+};
+
+export async function computeBillingReadinessQueue(
+  params: BillingReadinessParams,
+  // The caller's org-bound handle, when it is inside a transaction already.
+  executor?: OrgDb,
+): Promise<BillingReadinessQueue> {
+  return inOrgTransaction(params.organizationId, executor, (o) =>
+    readBillingReadinessQueue(o, params),
+  );
+}
+
+async function readBillingReadinessQueue(
+  o: OrgDb,
+  params: BillingReadinessParams,
+): Promise<BillingReadinessQueue> {
   const { organizationId, scope, filters } = params;
 
-  const integrationState = await getFinancialIntegrationState(organizationId);
+  const integrationState = await getFinancialIntegrationState(
+    organizationId,
+    o,
+  );
 
   const orderConditions = [
     eq(serviceOrder.organizationId, organizationId),
@@ -136,7 +159,7 @@ export async function computeBillingReadinessQueue(params: {
     orderConditions.push(eq(serviceOrder.customerId, filters.customerId));
   }
 
-  const orders = await db
+  const orders = await o
     .select({
       id: serviceOrder.id,
       number: serviceOrder.serviceOrderNumber,
@@ -171,7 +194,7 @@ export async function computeBillingReadinessQueue(params: {
 
   // Linked certificate jobs per order (for certificate-status blockers + refs).
   const links = orderIds.length
-    ? await db
+    ? await o
         .select({
           serviceOrderId: serviceOrderCertificateLink.serviceOrderId,
           jobId: calibrationJob.id,
@@ -196,11 +219,11 @@ export async function computeBillingReadinessQueue(params: {
   // sale lines must resolve to a remote catalog item, so surface these
   // before the export fails wholesale.
   const saleModeActive = orderIds.length
-    ? await isSaleExportModeActive(organizationId)
+    ? await isSaleExportModeActive(o, organizationId)
     : false;
   const unmappedPartRows =
     saleModeActive && orderIds.length
-      ? await db
+      ? await o
           .select({
             serviceOrderId: serviceOrderQuote.serviceOrderId,
             total: count(),
@@ -233,6 +256,7 @@ export async function computeBillingReadinessQueue(params: {
       ),
     })),
     organizationId,
+    o,
   );
 
   const items: BillingReadinessItem[] = [];

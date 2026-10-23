@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { and, desc, eq, ilike, sql } from "drizzle-orm";
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   commercialAgreement,
   commercialAgreementServiceTerm,
@@ -22,6 +22,7 @@ import {
   servicesBelongToOrganization,
   unitsBelongToOrganization,
 } from "../../lib/tenant-refs";
+import { orgDb } from "../../lib/org-db";
 
 const COMMERCIAL_AGREEMENT_STATUSES = [
   "DRAFT",
@@ -64,10 +65,8 @@ const ListContractsQuerySchema = z.object({
   status: z.enum(COMMERCIAL_AGREEMENT_STATUSES).optional(),
 });
 
-type FinanceContractsDbExecutor = Pick<typeof db, "select">;
-
 async function customerBelongsToOrganization(
-  executor: FinanceContractsDbExecutor,
+  executor: OrgDb,
   organizationId: string,
   customerId: number,
 ) {
@@ -85,8 +84,12 @@ async function customerBelongsToOrganization(
   return ownedCustomer ?? null;
 }
 
-async function getAgreementById(organizationId: string, agreementId: number) {
-  const [agreement] = await db
+async function getAgreementById(
+  o: OrgDb,
+  organizationId: string,
+  agreementId: number,
+) {
+  const [agreement] = await o
     .select({
       id: commercialAgreement.id,
       organizationId: commercialAgreement.organizationId,
@@ -121,13 +124,13 @@ async function getAgreementById(organizationId: string, agreementId: number) {
   }
 
   const [unitScopes, serviceTerms] = await Promise.all([
-    db
+    o
       .select({
         unitId: commercialAgreementUnitScope.unitId,
       })
       .from(commercialAgreementUnitScope)
       .where(eq(commercialAgreementUnitScope.agreementId, agreement.id)),
-    db
+    o
       .select()
       .from(commercialAgreementServiceTerm)
       .where(eq(commercialAgreementServiceTerm.agreementId, agreement.id))
@@ -145,10 +148,11 @@ async function getAgreementById(organizationId: string, agreementId: number) {
 }
 
 async function syncCustomerComplianceContract(
+  o: OrgDb,
   organizationId: string,
   customerId: number,
 ) {
-  const [currentCustomer] = await db
+  const [currentCustomer] = await o
     .select({
       compliance: customer.compliance,
     })
@@ -168,13 +172,14 @@ async function syncCustomerComplianceContract(
   const activeCommercialAgreement = await loadCustomerActiveCommercialAgreement(
     organizationId,
     customerId,
+    o,
   );
   const nextCompliance = syncComplianceWithActiveAgreement(
     currentCustomer.compliance,
     activeCommercialAgreement,
   );
 
-  const [updatedCustomer] = await db
+  const [updatedCustomer] = await o
     .update(customer)
     .set({
       compliance: nextCompliance,
@@ -198,6 +203,7 @@ async function syncCustomerComplianceContract(
  * message, or null when all ids are in-org.
  */
 async function findForeignAgreementRef(
+  o: OrgDb,
   organizationId: string,
   input: z.infer<typeof CreateAgreementSchema>,
 ) {
@@ -207,11 +213,11 @@ async function findForeignAgreementRef(
       term.unitId == null ? [] : [term.unitId],
     ),
   ];
-  if (!(await unitsBelongToOrganization(organizationId, unitIds))) {
+  if (!(await unitsBelongToOrganization(organizationId, unitIds, o))) {
     return "Unidade invalida";
   }
   const serviceIds = input.serviceTerms.map((term) => term.serviceId);
-  if (!(await servicesBelongToOrganization(organizationId, serviceIds))) {
+  if (!(await servicesBelongToOrganization(organizationId, serviceIds, o))) {
     return "Servico invalido";
   }
   return null;
@@ -247,24 +253,26 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      const agreements = await db
-        .select({
-          id: commercialAgreement.id,
-          customerId: commercialAgreement.customerId,
-          customerName: customer.name,
-          status: commercialAgreement.status,
-          agreementCode: commercialAgreement.agreementCode,
-          title: commercialAgreement.title,
-          currency: commercialAgreement.currency,
-          effectiveFrom: commercialAgreement.effectiveFrom,
-          effectiveTo: commercialAgreement.effectiveTo,
-          defaultPaymentTermDays: commercialAgreement.defaultPaymentTermDays,
-          updatedAt: commercialAgreement.updatedAt,
-        })
-        .from(commercialAgreement)
-        .innerJoin(customer, eq(commercialAgreement.customerId, customer.id))
-        .where(and(...conditions))
-        .orderBy(desc(commercialAgreement.updatedAt));
+      const agreements = await orgDb(member.organizationId).transaction((o) =>
+        o
+          .select({
+            id: commercialAgreement.id,
+            customerId: commercialAgreement.customerId,
+            customerName: customer.name,
+            status: commercialAgreement.status,
+            agreementCode: commercialAgreement.agreementCode,
+            title: commercialAgreement.title,
+            currency: commercialAgreement.currency,
+            effectiveFrom: commercialAgreement.effectiveFrom,
+            effectiveTo: commercialAgreement.effectiveTo,
+            defaultPaymentTermDays: commercialAgreement.defaultPaymentTermDays,
+            updatedAt: commercialAgreement.updatedAt,
+          })
+          .from(commercialAgreement)
+          .innerJoin(customer, eq(commercialAgreement.customerId, customer.id))
+          .where(and(...conditions))
+          .orderBy(desc(commercialAgreement.updatedAt)),
+      );
 
       return c.json({ data: agreements });
     },
@@ -278,72 +286,81 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
       const session = c.get("session");
       const input = c.req.valid("json");
 
-      const ownedCustomer = await customerBelongsToOrganization(
-        db,
-        member.organizationId,
-        input.customerId,
-      );
-      if (!ownedCustomer) {
-        return c.json({ error: "Cliente nao encontrado" }, 404);
-      }
+      const outcome = await orgDb(member.organizationId).transaction(
+        async (o) => {
+          const ownedCustomer = await customerBelongsToOrganization(
+            o,
+            member.organizationId,
+            input.customerId,
+          );
+          if (!ownedCustomer) return { status: "customer_not_found" as const };
 
-      const foreignRef = await findForeignAgreementRef(
-        member.organizationId,
-        input,
-      );
-      if (foreignRef) return c.json({ error: foreignRef }, 400);
+          const foreignRef = await findForeignAgreementRef(
+            o,
+            member.organizationId,
+            input,
+          );
+          if (foreignRef) return { status: "foreign_ref" as const, foreignRef };
 
-      const [created] = await db.transaction(async (tx) => {
-        const [agreement] = await tx
-          .insert(commercialAgreement)
-          .values({
-            organizationId: member.organizationId,
-            customerId: input.customerId,
-            status: "DRAFT",
-            agreementCode: input.agreementCode?.trim() || null,
-            title: input.title,
-            externalReference: input.externalReference?.trim() || null,
-            currency: input.currency,
-            effectiveFrom: new Date(input.effectiveFrom),
-            effectiveTo: input.effectiveTo ? new Date(input.effectiveTo) : null,
-            defaultPaymentTermDays: input.defaultPaymentTermDays,
-            notes: input.notes?.trim() || null,
-            createdBy: session.user.id,
-            updatedBy: session.user.id,
-          })
-          .returning();
+          const [agreement] = await o
+            .insert(commercialAgreement)
+            .values({
+              organizationId: member.organizationId,
+              customerId: input.customerId,
+              status: "DRAFT",
+              agreementCode: input.agreementCode?.trim() || null,
+              title: input.title,
+              externalReference: input.externalReference?.trim() || null,
+              currency: input.currency,
+              effectiveFrom: new Date(input.effectiveFrom),
+              effectiveTo: input.effectiveTo
+                ? new Date(input.effectiveTo)
+                : null,
+              defaultPaymentTermDays: input.defaultPaymentTermDays,
+              notes: input.notes?.trim() || null,
+              createdBy: session.user.id,
+              updatedBy: session.user.id,
+            })
+            .returning();
 
-        if (!agreement) {
-          throw new Error("Falha ao criar contrato comercial");
-        }
+          if (!agreement) {
+            throw new Error("Falha ao criar contrato comercial");
+          }
 
-        if (input.unitIds.length > 0) {
-          await tx.insert(commercialAgreementUnitScope).values(
-            input.unitIds.map((unitId) => ({
+          if (input.unitIds.length > 0) {
+            await o.insert(commercialAgreementUnitScope).values(
+              input.unitIds.map((unitId) => ({
+                organizationId: member.organizationId,
+                agreementId: agreement.id,
+                unitId,
+              })),
+            );
+          }
+
+          await o.insert(commercialAgreementServiceTerm).values(
+            input.serviceTerms.map((term) => ({
               organizationId: member.organizationId,
               agreementId: agreement.id,
-              unitId,
+              serviceId: term.serviceId,
+              unitId: term.unitId ?? null,
+              priceCents: term.priceCents,
+              currency: term.currency,
+              tatDays: term.tatDays ?? null,
+              isActive: term.isActive,
             })),
           );
-        }
 
-        await tx.insert(commercialAgreementServiceTerm).values(
-          input.serviceTerms.map((term) => ({
-            organizationId: member.organizationId,
-            agreementId: agreement.id,
-            serviceId: term.serviceId,
-            unitId: term.unitId ?? null,
-            priceCents: term.priceCents,
-            currency: term.currency,
-            tatDays: term.tatDays ?? null,
-            isActive: term.isActive,
-          })),
-        );
+          return { status: "ok" as const, agreement };
+        },
+      );
+      if (outcome.status === "customer_not_found") {
+        return c.json({ error: "Cliente nao encontrado" }, 404);
+      }
+      if (outcome.status === "foreign_ref") {
+        return c.json({ error: outcome.foreignRef }, 400);
+      }
 
-        return [agreement];
-      });
-
-      return c.json({ data: created }, 201);
+      return c.json({ data: outcome.agreement }, 201);
     },
   )
   .get("/:id", ...withLabPermission({ financial: ["read"] }), async (c) => {
@@ -354,7 +371,9 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
       return c.json({ error: "ID invalido" }, 400);
     }
 
-    const agreement = await getAgreementById(member.organizationId, id);
+    const agreement = await orgDb(member.organizationId).transaction((o) =>
+      getAgreementById(o, member.organizationId, id),
+    );
     if (!agreement) {
       return c.json({ error: "Contrato nao encontrado" }, 404);
     }
@@ -375,98 +394,111 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "ID invalido" }, 400);
       }
 
-      const existing = await getAgreementById(member.organizationId, id);
-      if (!existing) {
-        return c.json({ error: "Contrato nao encontrado" }, 404);
-      }
+      const outcome = await orgDb(member.organizationId).transaction(
+        async (o) => {
+          const existing = await getAgreementById(o, member.organizationId, id);
+          if (!existing) return { status: "agreement_not_found" as const };
 
-      const ownedCustomer = await customerBelongsToOrganization(
-        db,
-        member.organizationId,
-        input.customerId,
-      );
-      if (!ownedCustomer) {
-        return c.json({ error: "Cliente nao encontrado" }, 404);
-      }
+          const ownedCustomer = await customerBelongsToOrganization(
+            o,
+            member.organizationId,
+            input.customerId,
+          );
+          if (!ownedCustomer) return { status: "customer_not_found" as const };
 
-      const foreignRef = await findForeignAgreementRef(
-        member.organizationId,
-        input,
-      );
-      if (foreignRef) return c.json({ error: foreignRef }, 400);
+          const foreignRef = await findForeignAgreementRef(
+            o,
+            member.organizationId,
+            input,
+          );
+          if (foreignRef) return { status: "foreign_ref" as const, foreignRef };
 
-      const [updated] = await db.transaction(async (tx) => {
-        const [agreement] = await tx
-          .update(commercialAgreement)
-          .set({
-            customerId: input.customerId,
-            status: input.status ?? existing.status,
-            agreementCode: input.agreementCode?.trim() || null,
-            title: input.title,
-            externalReference: input.externalReference?.trim() || null,
-            currency: input.currency,
-            effectiveFrom: new Date(input.effectiveFrom),
-            effectiveTo: input.effectiveTo ? new Date(input.effectiveTo) : null,
-            defaultPaymentTermDays: input.defaultPaymentTermDays,
-            notes: input.notes?.trim() || null,
-            updatedBy: session.user.id,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(commercialAgreement.id, id),
-              eq(commercialAgreement.organizationId, member.organizationId),
-            ),
-          )
-          .returning();
+          const [agreement] = await o
+            .update(commercialAgreement)
+            .set({
+              customerId: input.customerId,
+              status: input.status ?? existing.status,
+              agreementCode: input.agreementCode?.trim() || null,
+              title: input.title,
+              externalReference: input.externalReference?.trim() || null,
+              currency: input.currency,
+              effectiveFrom: new Date(input.effectiveFrom),
+              effectiveTo: input.effectiveTo
+                ? new Date(input.effectiveTo)
+                : null,
+              defaultPaymentTermDays: input.defaultPaymentTermDays,
+              notes: input.notes?.trim() || null,
+              updatedBy: session.user.id,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(commercialAgreement.id, id),
+                eq(commercialAgreement.organizationId, member.organizationId),
+              ),
+            )
+            .returning();
 
-        await tx
-          .delete(commercialAgreementUnitScope)
-          .where(eq(commercialAgreementUnitScope.agreementId, id));
-        await tx
-          .delete(commercialAgreementServiceTerm)
-          .where(eq(commercialAgreementServiceTerm.agreementId, id));
+          await o
+            .delete(commercialAgreementUnitScope)
+            .where(eq(commercialAgreementUnitScope.agreementId, id));
+          await o
+            .delete(commercialAgreementServiceTerm)
+            .where(eq(commercialAgreementServiceTerm.agreementId, id));
 
-        if (input.unitIds.length > 0) {
-          await tx.insert(commercialAgreementUnitScope).values(
-            input.unitIds.map((unitId) => ({
+          if (input.unitIds.length > 0) {
+            await o.insert(commercialAgreementUnitScope).values(
+              input.unitIds.map((unitId) => ({
+                organizationId: member.organizationId,
+                agreementId: id,
+                unitId,
+              })),
+            );
+          }
+
+          await o.insert(commercialAgreementServiceTerm).values(
+            input.serviceTerms.map((term) => ({
               organizationId: member.organizationId,
               agreementId: id,
-              unitId,
+              serviceId: term.serviceId,
+              unitId: term.unitId ?? null,
+              priceCents: term.priceCents,
+              currency: term.currency,
+              tatDays: term.tatDays ?? null,
+              isActive: term.isActive,
             })),
           );
-        }
 
-        await tx.insert(commercialAgreementServiceTerm).values(
-          input.serviceTerms.map((term) => ({
-            organizationId: member.organizationId,
-            agreementId: id,
-            serviceId: term.serviceId,
-            unitId: term.unitId ?? null,
-            priceCents: term.priceCents,
-            currency: term.currency,
-            tatDays: term.tatDays ?? null,
-            isActive: term.isActive,
-          })),
-        );
+          // The agreement update and the customers' compliance follow-up are
+          // separate writes, as before; they share this transaction now.
+          if ((input.status ?? existing.status) === "ACTIVE") {
+            const customerIdsToSync = new Set([
+              existing.customerId,
+              input.customerId,
+            ]);
+            for (const customerId of customerIdsToSync) {
+              await syncCustomerComplianceContract(
+                o,
+                member.organizationId,
+                customerId,
+              );
+            }
+          }
 
-        return [agreement];
-      });
-
-      if ((input.status ?? existing.status) === "ACTIVE") {
-        const customerIdsToSync = new Set([
-          existing.customerId,
-          input.customerId,
-        ]);
-        for (const customerId of customerIdsToSync) {
-          await syncCustomerComplianceContract(
-            member.organizationId,
-            customerId,
-          );
-        }
+          return { status: "ok" as const, agreement };
+        },
+      );
+      if (outcome.status === "agreement_not_found") {
+        return c.json({ error: "Contrato nao encontrado" }, 404);
+      }
+      if (outcome.status === "customer_not_found") {
+        return c.json({ error: "Cliente nao encontrado" }, 404);
+      }
+      if (outcome.status === "foreign_ref") {
+        return c.json({ error: outcome.foreignRef }, 400);
       }
 
-      return c.json({ data: updated });
+      return c.json({ data: outcome.agreement });
     },
   )
   .post(
@@ -481,39 +513,50 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "ID invalido" }, 400);
       }
 
-      const existing = await getAgreementById(member.organizationId, id);
-      if (!existing) {
+      const outcome = await orgDb(member.organizationId).transaction(
+        async (o) => {
+          const existing = await getAgreementById(o, member.organizationId, id);
+          if (!existing) return { status: "not_found" as const };
+
+          if (existing.serviceTerms.length === 0) {
+            return { status: "no_terms" as const };
+          }
+
+          const [updated] = await o
+            .update(commercialAgreement)
+            .set({
+              status: "ACTIVE",
+              updatedAt: new Date(),
+              updatedBy: session.user.id,
+            })
+            .where(
+              and(
+                eq(commercialAgreement.id, id),
+                eq(commercialAgreement.organizationId, member.organizationId),
+              ),
+            )
+            .returning();
+
+          await syncCustomerComplianceContract(
+            o,
+            member.organizationId,
+            existing.customerId,
+          );
+
+          return { status: "ok" as const, agreement: updated };
+        },
+      );
+      if (outcome.status === "not_found") {
         return c.json({ error: "Contrato nao encontrado" }, 404);
       }
-
-      if (existing.serviceTerms.length === 0) {
+      if (outcome.status === "no_terms") {
         return c.json(
           { error: "Contrato precisa ter pelo menos um termo de servico" },
           400,
         );
       }
 
-      const [updated] = await db
-        .update(commercialAgreement)
-        .set({
-          status: "ACTIVE",
-          updatedAt: new Date(),
-          updatedBy: session.user.id,
-        })
-        .where(
-          and(
-            eq(commercialAgreement.id, id),
-            eq(commercialAgreement.organizationId, member.organizationId),
-          ),
-        )
-        .returning();
-
-      await syncCustomerComplianceContract(
-        member.organizationId,
-        existing.customerId,
-      );
-
-      return c.json({ data: updated });
+      return c.json({ data: outcome.agreement });
     },
   )
   .post(
@@ -528,29 +571,38 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "ID invalido" }, 400);
       }
 
-      const [updated] = await db
-        .update(commercialAgreement)
-        .set({
-          status: "CANCELED",
-          updatedAt: new Date(),
-          updatedBy: session.user.id,
-        })
-        .where(
-          and(
-            eq(commercialAgreement.id, id),
-            eq(commercialAgreement.organizationId, member.organizationId),
-          ),
-        )
-        .returning();
+      const updated = await orgDb(member.organizationId).transaction(
+        async (o) => {
+          const [agreement] = await o
+            .update(commercialAgreement)
+            .set({
+              status: "CANCELED",
+              updatedAt: new Date(),
+              updatedBy: session.user.id,
+            })
+            .where(
+              and(
+                eq(commercialAgreement.id, id),
+                eq(commercialAgreement.organizationId, member.organizationId),
+              ),
+            )
+            .returning();
+
+          if (!agreement) return null;
+
+          await syncCustomerComplianceContract(
+            o,
+            member.organizationId,
+            agreement.customerId,
+          );
+
+          return agreement;
+        },
+      );
 
       if (!updated) {
         return c.json({ error: "Contrato nao encontrado" }, 404);
       }
-
-      await syncCustomerComplianceContract(
-        member.organizationId,
-        updated.customerId,
-      );
 
       return c.json({ data: updated });
     },

@@ -1,4 +1,4 @@
-import { db, systemDb } from "@calibra-facil/db";
+import { systemDb } from "@calibra-facil/db";
 import {
   asset,
   calibrationJob,
@@ -138,41 +138,50 @@ export async function listServiceOrdersForLab(
   }
 
   const whereCondition = and(...conditions);
-  const [total] = await db
-    .select({ total: count() })
-    .from(serviceOrder)
-    .innerJoin(customer, eq(serviceOrder.customerId, customer.id))
-    .innerJoin(asset, eq(serviceOrder.assetId, asset.id))
-    .where(whereCondition);
+  const { total, rows } = await orgDb(member.organizationId).transaction(
+    async (o) => {
+      const [totalRow] = await o
+        .select({ total: count() })
+        .from(serviceOrder)
+        .innerJoin(customer, eq(serviceOrder.customerId, customer.id))
+        .innerJoin(asset, eq(serviceOrder.assetId, asset.id))
+        .where(whereCondition);
 
-  const rows = await db
-    .select({
-      id: serviceOrder.id,
-      // The dashboard links by the opaque id, never the serial.
-      publicId: serviceOrder.publicId,
-      serviceOrderNumber: serviceOrder.serviceOrderNumber,
-      customerName: customer.name,
-      assetName: asset.name,
-      assetSerialNumber: asset.serialNumber,
-      status: serviceOrder.status,
-      priority: serviceOrder.priority,
-      responsibleTechnicianName: user.name,
-      openedAt: serviceOrder.openedAt,
-      quotedAt: serviceOrder.quotedAt,
-      approvedAt: serviceOrder.approvedAt,
-      totalApprovedCents: serviceOrder.totalApprovedCents,
-      totalQuotedCents: serviceOrder.totalQuotedCents,
-      unitName: organizationUnit.name,
-    })
-    .from(serviceOrder)
-    .innerJoin(customer, eq(serviceOrder.customerId, customer.id))
-    .innerJoin(asset, eq(serviceOrder.assetId, asset.id))
-    .innerJoin(organizationUnit, eq(serviceOrder.unitId, organizationUnit.id))
-    .leftJoin(user, eq(serviceOrder.responsibleTechnicianId, user.id))
-    .where(whereCondition)
-    .orderBy(desc(serviceOrder.openedAt))
-    .limit(limit)
-    .offset(offset);
+      const pageRows = await o
+        .select({
+          id: serviceOrder.id,
+          // The dashboard links by the opaque id, never the serial.
+          publicId: serviceOrder.publicId,
+          serviceOrderNumber: serviceOrder.serviceOrderNumber,
+          customerName: customer.name,
+          assetName: asset.name,
+          assetSerialNumber: asset.serialNumber,
+          status: serviceOrder.status,
+          priority: serviceOrder.priority,
+          responsibleTechnicianName: user.name,
+          openedAt: serviceOrder.openedAt,
+          quotedAt: serviceOrder.quotedAt,
+          approvedAt: serviceOrder.approvedAt,
+          totalApprovedCents: serviceOrder.totalApprovedCents,
+          totalQuotedCents: serviceOrder.totalQuotedCents,
+          unitName: organizationUnit.name,
+        })
+        .from(serviceOrder)
+        .innerJoin(customer, eq(serviceOrder.customerId, customer.id))
+        .innerJoin(asset, eq(serviceOrder.assetId, asset.id))
+        .innerJoin(
+          organizationUnit,
+          eq(serviceOrder.unitId, organizationUnit.id),
+        )
+        .leftJoin(user, eq(serviceOrder.responsibleTechnicianId, user.id))
+        .where(whereCondition)
+        .orderBy(desc(serviceOrder.openedAt))
+        .limit(limit)
+        .offset(offset);
+
+      return { total: totalRow, rows: pageRows };
+    },
+  );
 
   return {
     data: rows.map((row) => ({
@@ -203,41 +212,43 @@ export async function listServiceOrdersForLab(
 export async function listServiceOrdersPendingCalibrationAfterRepair(
   member: AuthVariables["member"],
 ) {
-  const rows = await db
-    .select({
-      id: serviceOrder.id,
-      publicId: serviceOrder.publicId,
-      serviceOrderNumber: serviceOrder.serviceOrderNumber,
-      status: serviceOrder.status,
-      customerId: serviceOrder.customerId,
-      customerName: customer.name,
-      assetId: serviceOrder.assetId,
-      assetName: asset.name,
-      assetSerialNumber: asset.serialNumber,
-      repairFinishedAt: serviceOrderExecution.finishedAt,
-      result: serviceOrderExecution.result,
-    })
-    .from(serviceOrder)
-    .innerJoin(
-      serviceOrderExecution,
-      eq(serviceOrderExecution.serviceOrderId, serviceOrder.id),
-    )
-    .innerJoin(customer, eq(serviceOrder.customerId, customer.id))
-    .innerJoin(asset, eq(serviceOrder.assetId, asset.id))
-    .leftJoin(
-      calibrationJob,
-      eq(calibrationJob.sourceServiceOrderId, serviceOrder.id),
-    )
-    .where(
-      and(
-        eq(serviceOrder.organizationId, member.organizationId),
-        buildUnitScopeCondition(serviceOrder.unitId, member),
-        eq(serviceOrderExecution.calibrationRequiredAfterRepair, true),
-        isNotNull(serviceOrderExecution.finishedAt),
-        isNull(calibrationJob.id),
-      ),
-    )
-    .orderBy(desc(serviceOrderExecution.finishedAt));
+  const rows = await orgDb(member.organizationId).transaction((o) =>
+    o
+      .select({
+        id: serviceOrder.id,
+        publicId: serviceOrder.publicId,
+        serviceOrderNumber: serviceOrder.serviceOrderNumber,
+        status: serviceOrder.status,
+        customerId: serviceOrder.customerId,
+        customerName: customer.name,
+        assetId: serviceOrder.assetId,
+        assetName: asset.name,
+        assetSerialNumber: asset.serialNumber,
+        repairFinishedAt: serviceOrderExecution.finishedAt,
+        result: serviceOrderExecution.result,
+      })
+      .from(serviceOrder)
+      .innerJoin(
+        serviceOrderExecution,
+        eq(serviceOrderExecution.serviceOrderId, serviceOrder.id),
+      )
+      .innerJoin(customer, eq(serviceOrder.customerId, customer.id))
+      .innerJoin(asset, eq(serviceOrder.assetId, asset.id))
+      .leftJoin(
+        calibrationJob,
+        eq(calibrationJob.sourceServiceOrderId, serviceOrder.id),
+      )
+      .where(
+        and(
+          eq(serviceOrder.organizationId, member.organizationId),
+          buildUnitScopeCondition(serviceOrder.unitId, member),
+          eq(serviceOrderExecution.calibrationRequiredAfterRepair, true),
+          isNotNull(serviceOrderExecution.finishedAt),
+          isNull(calibrationJob.id),
+        ),
+      )
+      .orderBy(desc(serviceOrderExecution.finishedAt)),
+  );
 
   return {
     data: rows.map((row) => ({
@@ -251,35 +262,37 @@ export async function listServiceOrdersPendingCalibrationAfterRepair(
 export async function getServiceOrderSummaryReport(
   member: AuthVariables["member"],
 ) {
-  const rows = await db
-    .select({
-      id: serviceOrder.id,
-      status: serviceOrder.status,
-      unitId: serviceOrder.unitId,
-      unitName: organizationUnit.name,
-      customerId: serviceOrder.customerId,
-      customerName: customer.name,
-      technicianId: serviceOrder.responsibleTechnicianId,
-      technicianName: user.name,
-      openedAt: serviceOrder.openedAt,
-      evaluatedAt: serviceOrder.evaluatedAt,
-      quotedAt: serviceOrder.quotedAt,
-      approvedAt: serviceOrder.approvedAt,
-      rejectedAt: serviceOrder.rejectedAt,
-      closedAt: serviceOrder.closedAt,
-      totalApprovedCents: serviceOrder.totalApprovedCents,
-      priority: serviceOrder.priority,
-    })
-    .from(serviceOrder)
-    .innerJoin(customer, eq(serviceOrder.customerId, customer.id))
-    .innerJoin(organizationUnit, eq(serviceOrder.unitId, organizationUnit.id))
-    .leftJoin(user, eq(serviceOrder.responsibleTechnicianId, user.id))
-    .where(
-      and(
-        eq(serviceOrder.organizationId, member.organizationId),
-        buildUnitScopeCondition(serviceOrder.unitId, member),
+  const rows = await orgDb(member.organizationId).transaction((o) =>
+    o
+      .select({
+        id: serviceOrder.id,
+        status: serviceOrder.status,
+        unitId: serviceOrder.unitId,
+        unitName: organizationUnit.name,
+        customerId: serviceOrder.customerId,
+        customerName: customer.name,
+        technicianId: serviceOrder.responsibleTechnicianId,
+        technicianName: user.name,
+        openedAt: serviceOrder.openedAt,
+        evaluatedAt: serviceOrder.evaluatedAt,
+        quotedAt: serviceOrder.quotedAt,
+        approvedAt: serviceOrder.approvedAt,
+        rejectedAt: serviceOrder.rejectedAt,
+        closedAt: serviceOrder.closedAt,
+        totalApprovedCents: serviceOrder.totalApprovedCents,
+        priority: serviceOrder.priority,
+      })
+      .from(serviceOrder)
+      .innerJoin(customer, eq(serviceOrder.customerId, customer.id))
+      .innerJoin(organizationUnit, eq(serviceOrder.unitId, organizationUnit.id))
+      .leftJoin(user, eq(serviceOrder.responsibleTechnicianId, user.id))
+      .where(
+        and(
+          eq(serviceOrder.organizationId, member.organizationId),
+          buildUnitScopeCondition(serviceOrder.unitId, member),
+        ),
       ),
-    );
+  );
 
   const byStatus = new Map<string, number>();
   const byUnit = new Map<

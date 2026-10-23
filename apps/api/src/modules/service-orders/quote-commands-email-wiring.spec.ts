@@ -36,7 +36,8 @@
  *     silently skipped on serverless; the new path is durably persisted.
  *
  * REQ-072 atomicity: the D commands pass tx to enqueueServiceOrderEmail.
- * Assertion: capturedTxExecutors[0] === mockTxProxy (not module db).
+ * Assertion: capturedTxExecutors[0] is the transaction handle (mockOrgTx for the
+ * lab decisions, mockTxProxy for the portal ones), not the module db.
  *
  * Deleting or neutralizing the enqueue call in any command turns at least
  * one test here RED.
@@ -50,47 +51,51 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const dbQueue: Array<unknown[]> = [];
 
-const { mockEnqueueServiceOrderEmail, capturedTxExecutors, mockTxProxy } =
-  vi.hoisted(() => {
-    const captured: Array<unknown> = [];
-    const txProxy = {
-      insert: vi.fn().mockReturnValue({
-        values: vi.fn().mockReturnValue({
-          onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
-        }),
+const {
+  mockEnqueueServiceOrderEmail,
+  capturedTxExecutors,
+  mockTxProxy,
+  mockOrgTx,
+} = vi.hoisted(() => {
+  const captured: Array<unknown> = [];
+  const txProxy = {
+    insert: vi.fn().mockReturnValue({
+      values: vi.fn().mockReturnValue({
+        onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
       }),
-      select: vi.fn(),
-      update: vi.fn().mockReturnValue({
-        set: vi.fn().mockReturnValue({
-          where: vi
-            .fn()
-            .mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }),
-        }),
+    }),
+    select: vi.fn(),
+    update: vi.fn().mockReturnValue({
+      set: vi.fn().mockReturnValue({
+        where: vi
+          .fn()
+          .mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }),
       }),
-      delete: vi.fn(),
-    };
+    }),
+    delete: vi.fn(),
+  };
 
-    interface EnqueueParams {
-      organizationId: string;
-      unitId?: number | null;
-      serviceOrderId: number;
-      eventKey: string;
-      targetStatus: string;
-      payload: Record<string, unknown>;
-    }
+  interface EnqueueParams {
+    organizationId: string;
+    unitId?: number | null;
+    serviceOrderId: number;
+    eventKey: string;
+    targetStatus: string;
+    payload: Record<string, unknown>;
+  }
 
-    const enqueue = vi.fn(
-      async (_params: EnqueueParams, executor?: unknown) => {
-        captured.push(executor);
-      },
-    );
-
-    return {
-      mockEnqueueServiceOrderEmail: enqueue,
-      capturedTxExecutors: captured,
-      mockTxProxy: txProxy,
-    };
+  const enqueue = vi.fn(async (_params: EnqueueParams, executor?: unknown) => {
+    captured.push(executor);
   });
+
+  return {
+    mockEnqueueServiceOrderEmail: enqueue,
+    capturedTxExecutors: captured,
+    mockTxProxy: txProxy,
+    // The handle `orgDb(...).transaction(...)` passes to the manual decisions.
+    mockOrgTx: {},
+  };
+});
 
 // ---------------------------------------------------------------------------
 // DB mock — FIFO queue + transaction
@@ -145,11 +150,14 @@ vi.mock("./email-outbox-payloads", () => ({
 
 // The org-bound handle and the organization setting of row-level security run
 // on the same canned database: the setting is not a statement of the scenario.
+// The transaction handle is its own object (the canned database's builders), so
+// the atomicity tests can tell it from the module-level `db`.
 vi.mock("../../lib/org-db", async () => {
   const { db } = await import("@calibra-facil/db");
+  Object.assign(mockOrgTx, db);
   return {
     orgDb: () => ({
-      transaction: async (run: (tx: unknown) => unknown) => run(db),
+      transaction: async (run: (tx: unknown) => unknown) => run(mockOrgTx),
     }),
   };
 });
@@ -367,7 +375,7 @@ describe("approveServiceOrderQuoteManually — email wiring (outbox)", () => {
     });
 
     expect(capturedTxExecutors).toHaveLength(1);
-    expect(capturedTxExecutors[0]).toBe(mockTxProxy);
+    expect(capturedTxExecutors[0]).toBe(mockOrgTx);
   });
 
   it("does NOT call old dispatch helpers or sendServiceOrderEmailOnce", async () => {
@@ -464,7 +472,7 @@ describe("rejectServiceOrderQuoteManually — email wiring (outbox)", () => {
     });
 
     expect(capturedTxExecutors).toHaveLength(1);
-    expect(capturedTxExecutors[0]).toBe(mockTxProxy);
+    expect(capturedTxExecutors[0]).toBe(mockOrgTx);
   });
 
   it("does NOT call enqueueServiceOrderEmail with approved eventKey on rejection", async () => {

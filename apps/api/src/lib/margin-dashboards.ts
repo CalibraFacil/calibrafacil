@@ -1,4 +1,5 @@
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
+import { inOrgTransaction } from "./org-transaction";
 import {
   customer,
   serviceOrder,
@@ -79,11 +80,27 @@ export interface MarginDashboardEnvelope {
  * `type = "part"`). Returns the per-entity margin breakdown for the
  * dashboard.
  */
-export async function buildMarginDashboards(input: {
-  organizationId: string;
-  scope: Parameters<typeof buildUnitScopeCondition>[1];
-}): Promise<MarginDashboardEnvelope> {
-  const orders = await db
+export async function buildMarginDashboards(
+  input: {
+    organizationId: string;
+    scope: Parameters<typeof buildUnitScopeCondition>[1];
+  },
+  // The caller's org-bound handle, when it is inside a transaction already.
+  executor?: OrgDb,
+): Promise<MarginDashboardEnvelope> {
+  return inOrgTransaction(input.organizationId, executor, (o) =>
+    readMarginDashboards(o, input),
+  );
+}
+
+async function readMarginDashboards(
+  o: OrgDb,
+  input: {
+    organizationId: string;
+    scope: Parameters<typeof buildUnitScopeCondition>[1];
+  },
+): Promise<MarginDashboardEnvelope> {
+  const orders = await o
     .select({
       id: serviceOrder.id,
       customerId: customer.id,
@@ -101,7 +118,7 @@ export async function buildMarginDashboards(input: {
       ),
     );
 
-  const outsourced = await db
+  const outsourced = await o
     .select({
       serviceOrderId: serviceOrderOutsourcedCost.serviceOrderId,
       expectedCostCents: serviceOrderOutsourcedCost.expectedCostCents,
@@ -111,7 +128,7 @@ export async function buildMarginDashboards(input: {
     .from(serviceOrderOutsourcedCost)
     .where(eq(serviceOrderOutsourcedCost.organizationId, input.organizationId));
 
-  const partItems = await db
+  const partItems = await o
     .select({
       serviceOrderId: serviceOrderExecution.serviceOrderId,
       quantity: serviceOrderExecutionItem.quantity,

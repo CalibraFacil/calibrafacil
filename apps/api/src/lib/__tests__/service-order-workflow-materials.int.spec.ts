@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { organizationOf } from "../../../test/integration/organization-of";
 import { db } from "@calibra-facil/db";
+import { orgDb } from "../org-db";
 import {
   asset,
   assetType,
@@ -211,16 +212,21 @@ describe("replaceQuoteItems / replaceExecutionItems — material tenant boundary
       name: "Material de outro laboratório",
     });
 
-    await replaceQuoteItems({
-      organizationId: ctxA.org.orgId,
-      quoteId: ctxA.quoteId,
-      items: [
-        partItem(ownMaterialId, "peça própria"),
-        partItem(foreignMaterialId, "peça de outro tenant"),
-        partItem(999_999, "peça inexistente"),
-        partItem(null, "peça livre"),
-      ],
-    });
+    await orgDb(ctxA.org.orgId).transaction((o) =>
+      replaceQuoteItems(
+        {
+          organizationId: ctxA.org.orgId,
+          quoteId: ctxA.quoteId,
+          items: [
+            partItem(ownMaterialId, "peça própria"),
+            partItem(foreignMaterialId, "peça de outro tenant"),
+            partItem(999_999, "peça inexistente"),
+            partItem(null, "peça livre"),
+          ],
+        },
+        o,
+      ),
+    );
 
     const rows = await db
       .select({
@@ -253,14 +259,25 @@ describe("replaceQuoteItems / replaceExecutionItems — material tenant boundary
       name: "Material alheio",
     });
 
-    await replaceExecutionItems({
-      organizationId: ctxA.org.orgId,
-      executionId: ctxA.executionId,
-      items: [
-        { ...partItem(ownMaterialId, "peça própria"), unitCostCents: 4_000 },
-        { ...partItem(foreignMaterialId, "peça alheia"), unitCostCents: 5_000 },
-      ],
-    });
+    await orgDb(ctxA.org.orgId).transaction((o) =>
+      replaceExecutionItems(
+        {
+          organizationId: ctxA.org.orgId,
+          executionId: ctxA.executionId,
+          items: [
+            {
+              ...partItem(ownMaterialId, "peça própria"),
+              unitCostCents: 4_000,
+            },
+            {
+              ...partItem(foreignMaterialId, "peça alheia"),
+              unitCostCents: 5_000,
+            },
+          ],
+        },
+        o,
+      ),
+    );
 
     const rows = await db
       .select({

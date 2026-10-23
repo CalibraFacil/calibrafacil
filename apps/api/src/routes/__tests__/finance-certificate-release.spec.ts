@@ -54,33 +54,36 @@ vi.mock("@calibra-facil/db", () => {
     return shape;
   };
 
-  return {
-    db: {
-      select: () => buildSelect(),
-      insert: () => ({
-        values: () => ({
-          returning: async () => [
-            {
-              id: 1,
-              mode: "release_after_invoice",
-              customerId: null,
-              commercialAgreementId: null,
-              serviceCategory: null,
-              priority: 0,
-              archivedAt: null,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            },
-          ],
-        }),
+  // `orgDb(...).transaction(...)` runs its callback on this same double (the
+  // organization setting is a statement that needs no canned result).
+  const database = {
+    select: () => buildSelect(),
+    insert: () => ({
+      values: () => ({
+        returning: async () => [
+          {
+            id: 1,
+            mode: "release_after_invoice",
+            customerId: null,
+            commercialAgreementId: null,
+            serviceCategory: null,
+            priority: 0,
+            archivedAt: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        ],
       }),
-      update: () => ({
-        set: () => ({
-          where: async () => undefined,
-        }),
+    }),
+    update: () => ({
+      set: () => ({
+        where: async () => undefined,
       }),
-    },
+    }),
+    execute: async () => [],
+    transaction: async (run: (tx: unknown) => unknown) => run(database),
   };
+  return { db: database };
 });
 
 vi.mock("../../middleware/permission", async () => {

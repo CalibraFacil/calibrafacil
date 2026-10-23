@@ -1,4 +1,5 @@
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
+import { inOrgTransaction } from "./org-transaction";
 import {
   billingDocument,
   calibrationJob,
@@ -197,10 +198,21 @@ const MAX_ROWS = 500;
 
 export async function buildRevenueLeakage(
   input: BuildRevenueLeakageInput,
+  // The caller's org-bound handle, when it is inside a transaction already.
+  executor?: OrgDb,
+): Promise<RevenueLeakageEnvelope> {
+  return inOrgTransaction(input.organizationId, executor, (o) =>
+    readRevenueLeakage(o, input),
+  );
+}
+
+async function readRevenueLeakage(
+  o: OrgDb,
+  input: BuildRevenueLeakageInput,
 ): Promise<RevenueLeakageEnvelope> {
   const now = input.now ?? new Date();
 
-  const orders = await db
+  const orders = await o
     .select({
       id: serviceOrder.id,
       publicId: serviceOrder.publicId,
@@ -242,7 +254,7 @@ export async function buildRevenueLeakage(
 
   const orderIds = billable.map((row) => row.id);
 
-  const links = await db
+  const links = await o
     .select({
       serviceOrderId: serviceOrderCertificateLink.serviceOrderId,
       jobId: calibrationJob.id,
@@ -271,6 +283,7 @@ export async function buildRevenueLeakage(
       ),
     })),
     input.organizationId,
+    o,
   );
 
   const billingDocumentIds = Array.from(
@@ -280,7 +293,7 @@ export async function buildRevenueLeakage(
   );
 
   const docRows = billingDocumentIds.length
-    ? await db
+    ? await o
         .select({
           id: billingDocument.id,
           status: billingDocument.status,
@@ -316,7 +329,7 @@ export async function buildRevenueLeakage(
   }
 
   const installmentRows = billingDocumentIds.length
-    ? await db
+    ? await o
         .select({
           documentId: receivableInstallment.documentId,
           status: receivableInstallment.status,

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { and, desc, eq, inArray } from "drizzle-orm";
-import { db } from "@calibra-facil/db";
+
 import { billingDocument, customer } from "@calibra-facil/db/schema";
 import {
   exportBillingDocumentToPrimaryIntegration,
@@ -11,6 +11,7 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../../middleware/permission";
+import { orgDb } from "../../lib/org-db";
 import { buildUnitScopeCondition } from "../../lib/units";
 
 export const financeErpRouter = new Hono<{
@@ -19,30 +20,32 @@ export const financeErpRouter = new Hono<{
 }>()
   .get("/exports", ...withLabPermission({ financial: ["read"] }), async (c) => {
     const member = c.get("member");
-    const documents = await db
-      .select({
-        id: billingDocument.id,
-        documentNumber: billingDocument.documentNumber,
-        customerName: customer.name,
-        status: billingDocument.status,
-        exportStatus: billingDocument.exportStatus,
-        exportedAt: billingDocument.exportedAt,
-        totalCents: billingDocument.totalCents,
-        currency: billingDocument.currency,
-        dueDate: billingDocument.dueDate,
-        issueDate: billingDocument.issueDate,
-      })
-      .from(billingDocument)
-      .innerJoin(customer, eq(billingDocument.customerId, customer.id))
-      .where(
-        and(
-          eq(billingDocument.organizationId, member.organizationId),
-          buildUnitScopeCondition(billingDocument.unitId, member),
-          inArray(billingDocument.status, ["ISSUED", "PAID", "OVERDUE"]),
-        ),
-      )
-      .orderBy(desc(billingDocument.updatedAt))
-      .limit(50);
+    const documents = await orgDb(member.organizationId).transaction((o) =>
+      o
+        .select({
+          id: billingDocument.id,
+          documentNumber: billingDocument.documentNumber,
+          customerName: customer.name,
+          status: billingDocument.status,
+          exportStatus: billingDocument.exportStatus,
+          exportedAt: billingDocument.exportedAt,
+          totalCents: billingDocument.totalCents,
+          currency: billingDocument.currency,
+          dueDate: billingDocument.dueDate,
+          issueDate: billingDocument.issueDate,
+        })
+        .from(billingDocument)
+        .innerJoin(customer, eq(billingDocument.customerId, customer.id))
+        .where(
+          and(
+            eq(billingDocument.organizationId, member.organizationId),
+            buildUnitScopeCondition(billingDocument.unitId, member),
+            inArray(billingDocument.status, ["ISSUED", "PAID", "OVERDUE"]),
+          ),
+        )
+        .orderBy(desc(billingDocument.updatedAt))
+        .limit(50),
+    );
 
     return c.json({ data: documents });
   })

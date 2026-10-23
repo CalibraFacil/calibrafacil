@@ -1,4 +1,3 @@
-import { db } from "@calibra-facil/db";
 import { serviceOrder, serviceOrderExecution } from "@calibra-facil/db/schema";
 import {
   canTransitionServiceOrderStatus,
@@ -6,6 +5,7 @@ import {
 } from "@calibra-facil/shared";
 import { and, eq } from "drizzle-orm";
 import type { AuthVariables } from "../../middleware/permission";
+import { orgDb } from "../../lib/org-db";
 import {
   recordServiceOrderEvent,
   replaceExecutionItems,
@@ -22,54 +22,63 @@ export async function startServiceOrderExecution(input: {
   actorUserId: string;
   values: { notes?: string | null };
 }) {
-  const order = await getScopedServiceOrder(input.serviceOrderId, input.member);
-  if (!order) return { status: "not_found" as const };
+  return orgDb(input.member.organizationId).transaction(async (o) => {
+    const order = await getScopedServiceOrder(
+      input.serviceOrderId,
+      input.member,
+      o,
+    );
+    if (!order) return { status: "not_found" as const };
 
-  // Consult the single source of truth (SERVICE_ORDER_ALLOWED_TRANSITIONS) before
-  // writing `status`, instead of forcing "repair_in_progress" unconditionally.
-  // Re-starting an order already in that status is a no-op (mirrors the generic
-  // updateServiceOrder guard), so idempotent re-invocation stays allowed.
-  if (
-    order.status !== "repair_in_progress" &&
-    !canTransitionServiceOrderStatus(order.status, "repair_in_progress")
-  ) {
-    return { status: "invalid_transition" as const };
-  }
+    // Consult the single source of truth (SERVICE_ORDER_ALLOWED_TRANSITIONS) before
+    // writing `status`, instead of forcing "repair_in_progress" unconditionally.
+    // Re-starting an order already in that status is a no-op (mirrors the generic
+    // updateServiceOrder guard), so idempotent re-invocation stays allowed.
+    if (
+      order.status !== "repair_in_progress" &&
+      !canTransitionServiceOrderStatus(order.status, "repair_in_progress")
+    ) {
+      return { status: "invalid_transition" as const };
+    }
 
-  const [execution] = await db
-    .insert(serviceOrderExecution)
-    .values({
-      organizationId: input.member.organizationId,
-      serviceOrderId: input.serviceOrderId,
-      startedByUserId: input.actorUserId,
-      technicalNotes: input.values.notes ?? null,
-    })
-    .onConflictDoNothing({ target: serviceOrderExecution.serviceOrderId })
-    .returning();
+    const [execution] = await o
+      .insert(serviceOrderExecution)
+      .values({
+        organizationId: input.member.organizationId,
+        serviceOrderId: input.serviceOrderId,
+        startedByUserId: input.actorUserId,
+        technicalNotes: input.values.notes ?? null,
+      })
+      .onConflictDoNothing({ target: serviceOrderExecution.serviceOrderId })
+      .returning();
 
-  await db
-    .update(serviceOrder)
-    .set({ status: "repair_in_progress", repairStartedAt: new Date() })
-    .where(
-      and(
-        eq(serviceOrder.id, input.serviceOrderId),
-        eq(serviceOrder.organizationId, input.member.organizationId),
-        buildUnitScopeCondition(serviceOrder.unitId, input.member),
-      ),
+    await o
+      .update(serviceOrder)
+      .set({ status: "repair_in_progress", repairStartedAt: new Date() })
+      .where(
+        and(
+          eq(serviceOrder.id, input.serviceOrderId),
+          eq(serviceOrder.organizationId, input.member.organizationId),
+          buildUnitScopeCondition(serviceOrder.unitId, input.member),
+        ),
+      );
+
+    await recordServiceOrderEvent(
+      {
+        organizationId: order.organizationId,
+        unitId: order.unitId,
+        serviceOrderId: input.serviceOrderId,
+        actorType: "lab_user",
+        actorId: input.actorUserId,
+        eventType: "service_order.repair_started",
+        oldValue: { status: order.status },
+        newValue: { status: "repair_in_progress" },
+      },
+      o,
     );
 
-  await recordServiceOrderEvent({
-    organizationId: order.organizationId,
-    unitId: order.unitId,
-    serviceOrderId: input.serviceOrderId,
-    actorType: "lab_user",
-    actorId: input.actorUserId,
-    eventType: "service_order.repair_started",
-    oldValue: { status: order.status },
-    newValue: { status: "repair_in_progress" },
+    return { status: "ok" as const, data: execution };
   });
-
-  return { status: "ok" as const, data: execution };
 }
 
 export async function updateServiceOrderExecution(input: {
@@ -84,63 +93,68 @@ export async function updateServiceOrderExecution(input: {
     result?: ServiceOrderExecutionRow["result"];
   };
 }) {
-  const [execution] = await db
-    .select({
-      id: serviceOrderExecution.id,
-      orderStatus: serviceOrder.status,
-    })
-    .from(serviceOrderExecution)
-    .innerJoin(
-      serviceOrder,
-      eq(serviceOrderExecution.serviceOrderId, serviceOrder.id),
-    )
-    .where(
-      and(
-        eq(serviceOrder.id, input.serviceOrderId),
-        eq(serviceOrder.organizationId, input.member.organizationId),
-        buildUnitScopeCondition(serviceOrder.unitId, input.member),
-      ),
-    )
-    .limit(1);
+  return orgDb(input.member.organizationId).transaction(async (o) => {
+    const [execution] = await o
+      .select({
+        id: serviceOrderExecution.id,
+        orderStatus: serviceOrder.status,
+      })
+      .from(serviceOrderExecution)
+      .innerJoin(
+        serviceOrder,
+        eq(serviceOrderExecution.serviceOrderId, serviceOrder.id),
+      )
+      .where(
+        and(
+          eq(serviceOrder.id, input.serviceOrderId),
+          eq(serviceOrder.organizationId, input.member.organizationId),
+          buildUnitScopeCondition(serviceOrder.unitId, input.member),
+        ),
+      )
+      .limit(1);
 
-  if (!execution) return { status: "not_started" as const };
-  // The work record of a closed or canceled OS is history, not a draft. Editing
-  // it after the fact would silently rewrite what the delivery document already
-  // reported to the customer.
-  if (isServiceOrderFinalStatus(execution.orderStatus)) {
-    return { status: "invalid_transition" as const };
-  }
+    if (!execution) return { status: "not_started" as const };
+    // The work record of a closed or canceled OS is history, not a draft. Editing
+    // it after the fact would silently rewrite what the delivery document already
+    // reported to the customer.
+    if (isServiceOrderFinalStatus(execution.orderStatus)) {
+      return { status: "invalid_transition" as const };
+    }
 
-  if (input.values.items) {
-    await replaceExecutionItems({
-      organizationId: input.member.organizationId,
-      executionId: execution.id,
-      items: input.values.items,
-    });
-  }
+    if (input.values.items) {
+      await replaceExecutionItems(
+        {
+          organizationId: input.member.organizationId,
+          executionId: execution.id,
+          items: input.values.items,
+        },
+        o,
+      );
+    }
 
-  const [updated] = await db
-    .update(serviceOrderExecution)
-    .set({
-      servicePerformed: input.values.servicePerformed,
-      partsUsedSummary: input.values.partsUsedSummary,
-      technicalNotes: input.values.technicalNotes,
-      calibrationRequiredAfterRepair:
-        input.values.calibrationRequiredAfterRepair,
-      result: input.values.result,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(serviceOrderExecution.id, execution.id),
-        eq(serviceOrderExecution.organizationId, input.member.organizationId),
-      ),
-    )
-    .returning();
+    const [updated] = await o
+      .update(serviceOrderExecution)
+      .set({
+        servicePerformed: input.values.servicePerformed,
+        partsUsedSummary: input.values.partsUsedSummary,
+        technicalNotes: input.values.technicalNotes,
+        calibrationRequiredAfterRepair:
+          input.values.calibrationRequiredAfterRepair,
+        result: input.values.result,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(serviceOrderExecution.id, execution.id),
+          eq(serviceOrderExecution.organizationId, input.member.organizationId),
+        ),
+      )
+      .returning();
 
-  if (!updated) return { status: "not_started" as const };
+    if (!updated) return { status: "not_started" as const };
 
-  return { status: "ok" as const, data: updated };
+    return { status: "ok" as const, data: updated };
+  });
 }
 
 export async function finishServiceOrderExecution(input: {
@@ -156,50 +170,57 @@ export async function finishServiceOrderExecution(input: {
     result: ServiceOrderExecutionRow["result"];
   };
 }) {
-  const [execution] = await db
-    .select({ id: serviceOrderExecution.id })
-    .from(serviceOrderExecution)
-    .innerJoin(
-      serviceOrder,
-      eq(serviceOrderExecution.serviceOrderId, serviceOrder.id),
-    )
-    .where(
-      and(
-        eq(serviceOrder.id, input.serviceOrderId),
-        eq(serviceOrder.organizationId, input.member.organizationId),
-        buildUnitScopeCondition(serviceOrder.unitId, input.member),
-      ),
-    )
-    .limit(1);
+  return orgDb(input.member.organizationId).transaction(async (o) => {
+    const [execution] = await o
+      .select({ id: serviceOrderExecution.id })
+      .from(serviceOrderExecution)
+      .innerJoin(
+        serviceOrder,
+        eq(serviceOrderExecution.serviceOrderId, serviceOrder.id),
+      )
+      .where(
+        and(
+          eq(serviceOrder.id, input.serviceOrderId),
+          eq(serviceOrder.organizationId, input.member.organizationId),
+          buildUnitScopeCondition(serviceOrder.unitId, input.member),
+        ),
+      )
+      .limit(1);
 
-  if (!execution) return { status: "not_started" as const };
+    if (!execution) return { status: "not_started" as const };
 
-  const nextStatus = input.values.calibrationRequiredAfterRepair
-    ? "awaiting_calibration"
-    : "awaiting_final_review";
-  const order = await getScopedServiceOrder(input.serviceOrderId, input.member);
-  if (!order) return { status: "not_found" as const };
+    const nextStatus = input.values.calibrationRequiredAfterRepair
+      ? "awaiting_calibration"
+      : "awaiting_final_review";
+    const order = await getScopedServiceOrder(
+      input.serviceOrderId,
+      input.member,
+      o,
+    );
+    if (!order) return { status: "not_found" as const };
 
-  // Validate the target transition against the graph BEFORE any write (including
-  // the item replacement below), so a forbidden finish leaves the order — and its
-  // execution items — untouched. Same-status finishes stay a no-op.
-  if (
-    order.status !== nextStatus &&
-    !canTransitionServiceOrderStatus(order.status, nextStatus)
-  ) {
-    return { status: "invalid_transition" as const };
-  }
+    // Validate the target transition against the graph BEFORE any write (including
+    // the item replacement below), so a forbidden finish leaves the order — and its
+    // execution items — untouched. Same-status finishes stay a no-op.
+    if (
+      order.status !== nextStatus &&
+      !canTransitionServiceOrderStatus(order.status, nextStatus)
+    ) {
+      return { status: "invalid_transition" as const };
+    }
 
-  if (input.values.items) {
-    await replaceExecutionItems({
-      organizationId: input.member.organizationId,
-      executionId: execution.id,
-      items: input.values.items,
-    });
-  }
+    if (input.values.items) {
+      await replaceExecutionItems(
+        {
+          organizationId: input.member.organizationId,
+          executionId: execution.id,
+          items: input.values.items,
+        },
+        o,
+      );
+    }
 
-  await db.transaction(async (tx) => {
-    await tx
+    await o
       .update(serviceOrderExecution)
       .set({
         servicePerformed: input.values.servicePerformed,
@@ -217,7 +238,7 @@ export async function finishServiceOrderExecution(input: {
           eq(serviceOrderExecution.organizationId, input.member.organizationId),
         ),
       );
-    await tx
+    await o
       .update(serviceOrder)
       .set({
         status: nextStatus,
@@ -238,9 +259,9 @@ export async function finishServiceOrderExecution(input: {
           result: input.values.result,
         },
       },
-      tx,
+      o,
     );
-  });
 
-  return { status: "ok" as const };
+    return { status: "ok" as const };
+  });
 }

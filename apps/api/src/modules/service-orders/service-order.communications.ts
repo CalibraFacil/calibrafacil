@@ -16,7 +16,7 @@
  * No new tables — this surfaces what the pipeline already records.
  */
 
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   customer,
   emailSuppression,
@@ -26,6 +26,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { resolveServiceOrderRecipient } from "@calibra-facil/notifications";
+import { inOrgTransaction } from "../../lib/org-transaction";
 import type { buildUnitScopeCondition } from "../../lib/units";
 
 export type ServiceOrderCommunicationStatus =
@@ -176,8 +177,20 @@ export async function listServiceOrderCommunications(
   id: number,
   organizationId: string,
   unitCondition?: ReturnType<typeof buildUnitScopeCondition>,
+  executor?: OrgDb,
 ): Promise<{ data: ServiceOrderCommunicationEntry[] } | undefined> {
-  const [order] = await db
+  return inOrgTransaction(organizationId, executor, (o) =>
+    readServiceOrderCommunications(o, id, organizationId, unitCondition),
+  );
+}
+
+async function readServiceOrderCommunications(
+  o: OrgDb,
+  id: number,
+  organizationId: string,
+  unitCondition?: ReturnType<typeof buildUnitScopeCondition>,
+): Promise<{ data: ServiceOrderCommunicationEntry[] } | undefined> {
+  const [order] = await o
     .select({
       id: serviceOrder.id,
       publicId: serviceOrder.publicId,
@@ -213,7 +226,7 @@ export async function listServiceOrderCommunications(
     ) ?? null;
 
   const [logRows, outboxRows] = await Promise.all([
-    db
+    o
       .select({
         eventKey: serviceOrderEmailLog.eventKey,
         recipientEmail: serviceOrderEmailLog.recipientEmail,
@@ -221,7 +234,7 @@ export async function listServiceOrderCommunications(
       })
       .from(serviceOrderEmailLog)
       .where(eq(serviceOrderEmailLog.serviceOrderId, id)),
-    db
+    o
       .select({
         eventKey: serviceOrderEmailOutbox.eventKey,
         createdAt: serviceOrderEmailOutbox.createdAt,
@@ -244,7 +257,7 @@ export async function listServiceOrderCommunications(
     ),
   ];
   const suppressedRows = involvedEmails.length
-    ? await db
+    ? await o
         .select({ email: emailSuppression.email })
         .from(emailSuppression)
         .where(

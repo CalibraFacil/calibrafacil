@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { db } from "@calibra-facil/db";
+
 import { isCalendarDatePast, labDaysUntil } from "@calibra-facil/shared";
 import {
   billingDocument,
@@ -13,6 +13,7 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../../middleware/permission";
+import { orgDb } from "../../lib/org-db";
 import { buildUnitScopeCondition } from "../../lib/units";
 
 function getAgingBucketLabel(daysOverdue: number) {
@@ -26,110 +27,130 @@ export const financeOverviewRouter = new Hono<{
   Variables: AuthVariables;
 }>().get("/", ...withLabPermission({ financial: ["read"] }), async (c) => {
   const member = c.get("member");
-  const [documentSummary] = await db
-    .select({
-      issuedCents:
-        sql<number>`coalesce(sum(case when ${billingDocument.status} in ('ISSUED', 'OVERDUE', 'PAID') then ${billingDocument.totalCents} else 0 end), 0)`.mapWith(
-          Number,
-        ),
-      draftDocuments:
-        sql<number>`count(*) filter (where ${billingDocument.status} = 'DRAFT')`.mapWith(
-          Number,
-        ),
-      issuedDocuments:
-        sql<number>`count(*) filter (where ${billingDocument.status} = 'ISSUED')`.mapWith(
-          Number,
-        ),
-      overdueDocuments:
-        sql<number>`count(*) filter (where ${billingDocument.status} = 'OVERDUE')`.mapWith(
-          Number,
-        ),
-      paidDocuments:
-        sql<number>`count(*) filter (where ${billingDocument.status} = 'PAID')`.mapWith(
-          Number,
-        ),
-      pendingExports:
-        sql<number>`count(*) filter (where ${billingDocument.exportStatus} = 'NOT_EXPORTED')`.mapWith(
-          Number,
-        ),
-    })
-    .from(billingDocument)
-    .where(
-      and(
-        eq(billingDocument.organizationId, member.organizationId),
-        buildUnitScopeCondition(billingDocument.unitId, member),
-        inArray(billingDocument.status, ["DRAFT", "ISSUED", "PAID", "OVERDUE"]),
-      ),
-    );
+  const { documentSummary, recentDocuments, openInstallments, receipts } =
+    await orgDb(member.organizationId).transaction(async (o) => {
+      const [summaryRow] = await o
+        .select({
+          issuedCents:
+            sql<number>`coalesce(sum(case when ${billingDocument.status} in ('ISSUED', 'OVERDUE', 'PAID') then ${billingDocument.totalCents} else 0 end), 0)`.mapWith(
+              Number,
+            ),
+          draftDocuments:
+            sql<number>`count(*) filter (where ${billingDocument.status} = 'DRAFT')`.mapWith(
+              Number,
+            ),
+          issuedDocuments:
+            sql<number>`count(*) filter (where ${billingDocument.status} = 'ISSUED')`.mapWith(
+              Number,
+            ),
+          overdueDocuments:
+            sql<number>`count(*) filter (where ${billingDocument.status} = 'OVERDUE')`.mapWith(
+              Number,
+            ),
+          paidDocuments:
+            sql<number>`count(*) filter (where ${billingDocument.status} = 'PAID')`.mapWith(
+              Number,
+            ),
+          pendingExports:
+            sql<number>`count(*) filter (where ${billingDocument.exportStatus} = 'NOT_EXPORTED')`.mapWith(
+              Number,
+            ),
+        })
+        .from(billingDocument)
+        .where(
+          and(
+            eq(billingDocument.organizationId, member.organizationId),
+            buildUnitScopeCondition(billingDocument.unitId, member),
+            inArray(billingDocument.status, [
+              "DRAFT",
+              "ISSUED",
+              "PAID",
+              "OVERDUE",
+            ]),
+          ),
+        );
 
-  const recentDocuments = await db
-    .select({
-      id: billingDocument.id,
-      publicId: billingDocument.publicId,
-      documentNumber: billingDocument.documentNumber,
-      status: billingDocument.status,
-      exportStatus: billingDocument.exportStatus,
-      totalCents: billingDocument.totalCents,
-      dueDate: billingDocument.dueDate,
-      issueDate: billingDocument.issueDate,
-      createdAt: billingDocument.createdAt,
-      customerName: customer.name,
-      unitName: organizationUnit.name,
-    })
-    .from(billingDocument)
-    .innerJoin(customer, eq(billingDocument.customerId, customer.id))
-    .innerJoin(
-      organizationUnit,
-      eq(billingDocument.unitId, organizationUnit.id),
-    )
-    .where(
-      and(
-        eq(billingDocument.organizationId, member.organizationId),
-        buildUnitScopeCondition(billingDocument.unitId, member),
-        inArray(billingDocument.status, ["DRAFT", "ISSUED", "PAID", "OVERDUE"]),
-      ),
-    )
-    .orderBy(desc(billingDocument.createdAt))
-    .limit(8);
+      const recentRows = await o
+        .select({
+          id: billingDocument.id,
+          publicId: billingDocument.publicId,
+          documentNumber: billingDocument.documentNumber,
+          status: billingDocument.status,
+          exportStatus: billingDocument.exportStatus,
+          totalCents: billingDocument.totalCents,
+          dueDate: billingDocument.dueDate,
+          issueDate: billingDocument.issueDate,
+          createdAt: billingDocument.createdAt,
+          customerName: customer.name,
+          unitName: organizationUnit.name,
+        })
+        .from(billingDocument)
+        .innerJoin(customer, eq(billingDocument.customerId, customer.id))
+        .innerJoin(
+          organizationUnit,
+          eq(billingDocument.unitId, organizationUnit.id),
+        )
+        .where(
+          and(
+            eq(billingDocument.organizationId, member.organizationId),
+            buildUnitScopeCondition(billingDocument.unitId, member),
+            inArray(billingDocument.status, [
+              "DRAFT",
+              "ISSUED",
+              "PAID",
+              "OVERDUE",
+            ]),
+          ),
+        )
+        .orderBy(desc(billingDocument.createdAt))
+        .limit(8);
 
-  const openInstallments = await db
-    .select({
-      amountCents: receivableInstallment.amountCents,
-      dueDate: receivableInstallment.dueDate,
-      status: receivableInstallment.status,
-    })
-    .from(receivableInstallment)
-    .innerJoin(
-      billingDocument,
-      eq(receivableInstallment.documentId, billingDocument.id),
-    )
-    .where(
-      and(
-        eq(billingDocument.organizationId, member.organizationId),
-        buildUnitScopeCondition(billingDocument.unitId, member),
-        inArray(receivableInstallment.status, ["OPEN", "OVERDUE"]),
-      ),
-    );
+      const openRows = await o
+        .select({
+          amountCents: receivableInstallment.amountCents,
+          dueDate: receivableInstallment.dueDate,
+          status: receivableInstallment.status,
+        })
+        .from(receivableInstallment)
+        .innerJoin(
+          billingDocument,
+          eq(receivableInstallment.documentId, billingDocument.id),
+        )
+        .where(
+          and(
+            eq(billingDocument.organizationId, member.organizationId),
+            buildUnitScopeCondition(billingDocument.unitId, member),
+            inArray(receivableInstallment.status, ["OPEN", "OVERDUE"]),
+          ),
+        );
 
-  const receipts = await db
-    .select({
-      amountCents: paymentReceipt.amountCents,
-    })
-    .from(paymentReceipt)
-    .innerJoin(
-      receivableInstallment,
-      eq(paymentReceipt.installmentId, receivableInstallment.id),
-    )
-    .innerJoin(
-      billingDocument,
-      eq(receivableInstallment.documentId, billingDocument.id),
-    )
-    .where(
-      and(
-        eq(billingDocument.organizationId, member.organizationId),
-        buildUnitScopeCondition(billingDocument.unitId, member),
-      ),
-    );
+      const receiptRows = await o
+        .select({
+          amountCents: paymentReceipt.amountCents,
+        })
+        .from(paymentReceipt)
+        .innerJoin(
+          receivableInstallment,
+          eq(paymentReceipt.installmentId, receivableInstallment.id),
+        )
+        .innerJoin(
+          billingDocument,
+          eq(receivableInstallment.documentId, billingDocument.id),
+        )
+        .where(
+          and(
+            eq(billingDocument.organizationId, member.organizationId),
+            buildUnitScopeCondition(billingDocument.unitId, member),
+          ),
+        );
+
+      return {
+        documentSummary: summaryRow,
+        recentDocuments: recentRows,
+        openInstallments: openRows,
+        receipts: receiptRows,
+      };
+    });
 
   const now = new Date();
   const aging = {

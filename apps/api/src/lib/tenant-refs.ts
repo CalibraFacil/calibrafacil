@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import {
   commercialAgreement,
   member,
@@ -9,6 +9,7 @@ import {
   calibrationJob,
 } from "@calibra-facil/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
+import { orgDb } from "./org-db";
 
 /**
  * Tenancy guards for request-supplied foreign ids.
@@ -23,35 +24,53 @@ import { and, eq, inArray } from "drizzle-orm";
  * Every helper answers a plain boolean so callers can return ONE generic
  * "not found / no permission" response for both "does not exist" and "exists in
  * another tenant" (no cross-tenant existence oracle).
+ *
+ * Each helper reads through the caller's org-bound handle when it passes one
+ * (inside the handler's `orgDb(org).transaction`); without one it reads in a
+ * short transaction of its own that names the organization, so it works under
+ * row-level security either way.
  */
 
-type TenantRefsExecutor = Pick<typeof db, "select">;
+type TenantRefsExecutor = Pick<OrgExecutor, "select">;
+
+function withReader<R>(
+  organizationId: string,
+  executor: TenantRefsExecutor | undefined,
+  run: (reader: TenantRefsExecutor) => Promise<R>,
+): Promise<R> {
+  return executor ? run(executor) : orgDb(organizationId).transaction(run);
+}
 
 function uniqueValues<T>(values: readonly T[]): T[] {
   return [...new Set(values)];
 }
 
 /** The caller's org membership row for `userId`, or null (also null cross-tenant). */
-export async function findOrganizationMember(
+export function findOrganizationMember(
   organizationId: string,
   userId: string,
-  executor: TenantRefsExecutor = db,
+  executor?: TenantRefsExecutor,
 ) {
-  const [row] = await executor
-    .select({ id: member.id, role: member.role })
-    .from(member)
-    .where(
-      and(eq(member.userId, userId), eq(member.organizationId, organizationId)),
-    )
-    .limit(1);
-  return row ?? null;
+  return withReader(organizationId, executor, async (reader) => {
+    const [row] = await reader
+      .select({ id: member.id, role: member.role })
+      .from(member)
+      .where(
+        and(
+          eq(member.userId, userId),
+          eq(member.organizationId, organizationId),
+        ),
+      )
+      .limit(1);
+    return row ?? null;
+  });
 }
 
 /** True when `userId` is a member of `organizationId`. */
 export async function userIsOrganizationMember(
   organizationId: string,
   userId: string,
-  executor: TenantRefsExecutor = db,
+  executor?: TenantRefsExecutor,
 ) {
   return (
     (await findOrganizationMember(organizationId, userId, executor)) !== null
@@ -64,124 +83,139 @@ export async function userIsOrganizationMember(
  * unit_admin assignment in that unit. Mirrors the rule in `POST /jobs/:id/assign`
  * and `createCalibrationJob`.
  */
-export async function isAssignableTechnician(
+export function isAssignableTechnician(
   params: { organizationId: string; userId: string; unitId: number | null },
-  executor: TenantRefsExecutor = db,
+  executor?: TenantRefsExecutor,
 ) {
-  const found = await findOrganizationMember(
-    params.organizationId,
-    params.userId,
-    executor,
-  );
-  if (!found) return false;
-  if (found.role === "admin" || found.role === "owner") return true;
-  if (params.unitId === null) return true;
+  return withReader(params.organizationId, executor, async (reader) => {
+    const found = await findOrganizationMember(
+      params.organizationId,
+      params.userId,
+      reader,
+    );
+    if (!found) return false;
+    if (found.role === "admin" || found.role === "owner") return true;
+    if (params.unitId === null) return true;
 
-  const [assignment] = await executor
-    .select({ id: memberUnitAssignment.id })
-    .from(memberUnitAssignment)
-    .where(
-      and(
-        eq(memberUnitAssignment.memberId, found.id),
-        eq(memberUnitAssignment.organizationId, params.organizationId),
-        eq(memberUnitAssignment.unitId, params.unitId),
-        inArray(memberUnitAssignment.role, ["technician", "unit_admin"]),
-      ),
-    )
-    .limit(1);
-  return Boolean(assignment);
+    const [assignment] = await reader
+      .select({ id: memberUnitAssignment.id })
+      .from(memberUnitAssignment)
+      .where(
+        and(
+          eq(memberUnitAssignment.memberId, found.id),
+          eq(memberUnitAssignment.organizationId, params.organizationId),
+          eq(memberUnitAssignment.unitId, params.unitId),
+          inArray(memberUnitAssignment.role, ["technician", "unit_admin"]),
+        ),
+      )
+      .limit(1);
+    return Boolean(assignment);
+  });
 }
 
 /** True when every unit id belongs to `organizationId` (empty list is true). */
 export async function unitsBelongToOrganization(
   organizationId: string,
   unitIds: readonly number[],
-  executor: TenantRefsExecutor = db,
+  executor?: TenantRefsExecutor,
 ) {
   const ids = uniqueValues(unitIds);
   if (ids.length === 0) return true;
-  const rows = await executor
-    .select({ id: organizationUnit.id })
-    .from(organizationUnit)
-    .where(
-      and(
-        eq(organizationUnit.organizationId, organizationId),
-        inArray(organizationUnit.id, ids),
-      ),
-    );
-  return rows.length === ids.length;
+  return withReader(organizationId, executor, async (reader) => {
+    const rows = await reader
+      .select({ id: organizationUnit.id })
+      .from(organizationUnit)
+      .where(
+        and(
+          eq(organizationUnit.organizationId, organizationId),
+          inArray(organizationUnit.id, ids),
+        ),
+      );
+    return rows.length === ids.length;
+  });
 }
 
 /** True when every service id belongs to `organizationId` (empty list is true). */
 export async function servicesBelongToOrganization(
   organizationId: string,
   serviceIds: readonly number[],
-  executor: TenantRefsExecutor = db,
+  executor?: TenantRefsExecutor,
 ) {
   const ids = uniqueValues(serviceIds);
   if (ids.length === 0) return true;
-  const rows = await executor
-    .select({ id: service.id })
-    .from(service)
-    .where(
-      and(eq(service.organizationId, organizationId), inArray(service.id, ids)),
-    );
-  return rows.length === ids.length;
+  return withReader(organizationId, executor, async (reader) => {
+    const rows = await reader
+      .select({ id: service.id })
+      .from(service)
+      .where(
+        and(
+          eq(service.organizationId, organizationId),
+          inArray(service.id, ids),
+        ),
+      );
+    return rows.length === ids.length;
+  });
 }
 
 /** True when the commercial agreement belongs to `organizationId`. */
-export async function agreementBelongsToOrganization(
+export function agreementBelongsToOrganization(
   organizationId: string,
   agreementId: number,
-  executor: TenantRefsExecutor = db,
+  executor?: TenantRefsExecutor,
 ) {
-  const [row] = await executor
-    .select({ id: commercialAgreement.id })
-    .from(commercialAgreement)
-    .where(
-      and(
-        eq(commercialAgreement.id, agreementId),
-        eq(commercialAgreement.organizationId, organizationId),
-      ),
-    )
-    .limit(1);
-  return Boolean(row);
+  return withReader(organizationId, executor, async (reader) => {
+    const [row] = await reader
+      .select({ id: commercialAgreement.id })
+      .from(commercialAgreement)
+      .where(
+        and(
+          eq(commercialAgreement.id, agreementId),
+          eq(commercialAgreement.organizationId, organizationId),
+        ),
+      )
+      .limit(1);
+    return Boolean(row);
+  });
 }
 
 /** True when the service order belongs to `organizationId`. */
-export async function serviceOrderBelongsToOrganization(
+export function serviceOrderBelongsToOrganization(
   organizationId: string,
   serviceOrderId: number,
-  executor: TenantRefsExecutor = db,
+  executor?: TenantRefsExecutor,
 ) {
-  const [row] = await executor
-    .select({ id: serviceOrder.id })
-    .from(serviceOrder)
-    .where(
-      and(
-        eq(serviceOrder.id, serviceOrderId),
-        eq(serviceOrder.organizationId, organizationId),
-      ),
-    )
-    .limit(1);
-  return Boolean(row);
+  return withReader(organizationId, executor, async (reader) => {
+    const [row] = await reader
+      .select({ id: serviceOrder.id })
+      .from(serviceOrder)
+      .where(
+        and(
+          eq(serviceOrder.id, serviceOrderId),
+          eq(serviceOrder.organizationId, organizationId),
+        ),
+      )
+      .limit(1);
+    return Boolean(row);
+  });
 }
 
 /** True when the calibration job belongs to `organizationId`. */
-export async function calibrationJobBelongsToOrganization(
+export function calibrationJobBelongsToOrganization(
   organizationId: string,
   jobId: number,
-  executor: TenantRefsExecutor = db,
+  executor?: TenantRefsExecutor,
 ) {
-  const [row] = await executor
-    .select({ id: calibrationJob.id })
-    .from(calibrationJob)
-    .where(
-      and(
-        eq(calibrationJob.id, jobId),
-        eq(calibrationJob.organizationId, organizationId),
-      ),
-    )
-    .limit(1);
-  return Boolean(row);
+  return withReader(organizationId, executor, async (reader) => {
+    const [row] = await reader
+      .select({ id: calibrationJob.id })
+      .from(calibrationJob)
+      .where(
+        and(
+          eq(calibrationJob.id, jobId),
+          eq(calibrationJob.organizationId, organizationId),
+        ),
+      )
+      .limit(1);
+    return Boolean(row);
+  });
 }

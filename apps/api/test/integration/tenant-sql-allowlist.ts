@@ -99,9 +99,10 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   {
     category: "public-token",
     file: "apps/api/src/modules/service-orders/service-order.tokens.ts",
-    tables: ["service_order", "service_order_public_access_token"],
+    tables: ["service_order_public_access_token"],
+    kinds: ["select"],
     reason:
-      "Public quote-access tokens/approval codes: lookup by token_hash/code_hash, then the order and token rows reached from that token by id.",
+      "System path (P2-18g): the grant of a public quote link is looked up by its unguessable token_hash / code_hash alone (systemDb) because the grant row is what names the laboratory. Every statement after it (order, quote, token writes, events) runs in orgDb(grant.organizationId).transaction.",
   },
   {
     category: "public-token",
@@ -273,29 +274,6 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     reason:
       "Request->job conversion runs persistCalibrationJob (see lib/jobs.ts entry); the item/asset listing is keyed by request ids a scoped read returned.",
   },
-  {
-    category: "ownership-checked-in-code",
-    file: "apps/api/src/modules/service-orders/service-order.commands.ts",
-    tables: ["asset", "customer"],
-    kinds: ["select"],
-    reason:
-      "createServiceOrder: asset read by id, then labOrganizationId !== member.organizationId -> invalid_asset.",
-  },
-  {
-    category: "ownership-checked-in-code",
-    file: "apps/api/src/modules/service-orders/service-order.certificates.ts",
-    tables: ["service_order"],
-    kinds: ["select"],
-    reason:
-      "unlinkServiceOrderCertificate: order read by id, then order.organizationId !== organizationId -> not_found, BEFORE the link DELETE (SEC-01).",
-  },
-  {
-    category: "ownership-checked-in-code",
-    file: "apps/api/src/modules/service-orders/service-order.quotes.ts",
-    tables: ["service_order"],
-    reason:
-      "Portal-user quote approval: order read by id, then order.customerId must equal the session's linked customer (else not_found); the UPDATEs address that same order id.",
-  },
   // -------------------------------------------------------------------------
   // unit-scoped
   // -------------------------------------------------------------------------
@@ -320,21 +298,6 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     tables: ["asset"],
     reason:
       "assetId comes from the job being approved/published, which the caller has already loaded and authorized.",
-  },
-  {
-    category: "pk-after-scoped-read",
-    file: "apps/api/src/lib/certificate-release.ts",
-    tables: ["certificate_release", "service"],
-    reason:
-      "recomputeCertificateRelease: serviceId / release id read from the job and release rows of the job the caller scoped (finance route scopes the job by organization + unit first).",
-  },
-  {
-    category: "pk-after-scoped-read",
-    file: "apps/api/src/routes/finance/certificate-release.ts",
-    tables: ["certificate_release_policy"],
-    kinds: ["select"],
-    reason:
-      "Applied policy fetched by the appliedPolicyId stored on the (scoped) release row.",
   },
   {
     category: "pk-after-scoped-read",
@@ -374,21 +337,6 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     kinds: ["select"],
     reason:
       "Overview/coverage reads keyed by integration_id of the organization-scoped connection record passed in.",
-  },
-  {
-    category: "pk-after-scoped-read",
-    file: "apps/api/src/lib/service-order-workflow.ts",
-    tables: ["organization_unit", "billing_document"],
-    reason:
-      "Unit read by the (scoped) order's unitId; billing document numbered by the id just inserted in the same transaction.",
-  },
-  {
-    category: "pk-after-scoped-read",
-    file: "apps/api/src/modules/service-orders/service-order.list-queries.ts",
-    tables: ["service_order_public_access_token"],
-    kinds: ["select"],
-    reason:
-      "Tokens of a quote id taken from the organization-scoped order list.",
   },
   {
     category: "pk-after-scoped-read",

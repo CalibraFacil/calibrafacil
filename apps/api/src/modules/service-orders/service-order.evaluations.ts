@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   serviceOrder,
   serviceOrderEvaluation,
@@ -6,6 +6,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { and, eq, ne } from "drizzle-orm";
 import type { AuthVariables } from "../../middleware/permission";
+import { orgDb } from "../../lib/org-db";
 import { recordServiceOrderEvent } from "../../lib/service-order-workflow";
 import { buildUnitScopeCondition } from "../../lib/units";
 import { userIsOrganizationMember } from "../../lib/tenant-refs";
@@ -31,48 +32,49 @@ export async function createServiceOrderEvaluation(input: {
     clientVisibleNotes?: string | null;
   };
 }) {
-  const [order] = await db
-    .select()
-    .from(serviceOrder)
-    .where(
-      and(
-        eq(serviceOrder.id, input.serviceOrderId),
-        eq(serviceOrder.organizationId, input.member.organizationId),
-        buildUnitScopeCondition(serviceOrder.unitId, input.member),
-      ),
-    )
-    .limit(1);
-  if (!order) return { status: "not_found" as const };
+  return orgDb(input.member.organizationId).transaction(async (o) => {
+    const [order] = await o
+      .select()
+      .from(serviceOrder)
+      .where(
+        and(
+          eq(serviceOrder.id, input.serviceOrderId),
+          eq(serviceOrder.organizationId, input.member.organizationId),
+          buildUnitScopeCondition(serviceOrder.unitId, input.member),
+        ),
+      )
+      .limit(1);
+    if (!order) return { status: "not_found" as const };
 
-  const [existingEvaluation] = await db
-    .select({ id: serviceOrderEvaluation.id })
-    .from(serviceOrderEvaluation)
-    .where(eq(serviceOrderEvaluation.serviceOrderId, input.serviceOrderId))
-    .limit(1);
-  if (existingEvaluation) return { status: "already_exists" as const };
+    const [existingEvaluation] = await o
+      .select({ id: serviceOrderEvaluation.id })
+      .from(serviceOrderEvaluation)
+      .where(eq(serviceOrderEvaluation.serviceOrderId, input.serviceOrderId))
+      .limit(1);
+    if (existingEvaluation) return { status: "already_exists" as const };
 
-  // The evaluating technician may be named in the body: it must be a member of
-  // this organization (the caller themself is, by construction).
-  if (
-    input.values.technicianId &&
-    input.values.technicianId !== input.actorUserId &&
-    !(await userIsOrganizationMember(
-      input.member.organizationId,
-      input.values.technicianId,
-    ))
-  ) {
-    return { status: "invalid_technician" as const };
-  }
+    // The evaluating technician may be named in the body: it must be a member of
+    // this organization (the caller themself is, by construction).
+    if (
+      input.values.technicianId &&
+      input.values.technicianId !== input.actorUserId &&
+      !(await userIsOrganizationMember(
+        input.member.organizationId,
+        input.values.technicianId,
+        o,
+      ))
+    ) {
+      return { status: "invalid_technician" as const };
+    }
 
-  const technicianId = input.values.technicianId ?? input.actorUserId;
-  const nextStatus = input.values.requiresQuote
-    ? "awaiting_quote_approval"
-    : input.values.calibrationRecommended
-      ? "awaiting_calibration"
-      : "ready_for_pickup";
+    const technicianId = input.values.technicianId ?? input.actorUserId;
+    const nextStatus = input.values.requiresQuote
+      ? "awaiting_quote_approval"
+      : input.values.calibrationRecommended
+        ? "awaiting_calibration"
+        : "ready_for_pickup";
 
-  const [evaluation] = await db.transaction(async (tx) => {
-    const [created] = await tx
+    const [created] = await o
       .insert(serviceOrderEvaluation)
       .values({
         organizationId: input.member.organizationId,
@@ -89,7 +91,7 @@ export async function createServiceOrderEvaluation(input: {
         clientVisibleNotes: input.values.clientVisibleNotes ?? null,
       })
       .returning();
-    await tx
+    await o
       .update(serviceOrder)
       .set({
         status: nextStatus,
@@ -109,12 +111,11 @@ export async function createServiceOrderEvaluation(input: {
         oldValue: { status: order.status },
         newValue: { status: nextStatus },
       },
-      tx,
+      o,
     );
-    return [created];
-  });
 
-  return { status: "ok" as const, data: evaluation };
+    return { status: "ok" as const, data: created };
+  });
 }
 
 /**
@@ -123,8 +124,8 @@ export async function createServiceOrderEvaluation(input: {
  * been shown a price derived from it. Mirrors the client-side rule in
  * apps/web detail-model `buildServiceOrderStageAffordances`.
  */
-async function hasQuoteLeftTheLab(serviceOrderId: number) {
-  const [sentQuote] = await db
+async function hasQuoteLeftTheLab(o: OrgDb, serviceOrderId: number) {
+  const [sentQuote] = await o
     .select({ id: serviceOrderQuote.id })
     .from(serviceOrderQuote)
     .where(
@@ -157,59 +158,60 @@ export async function updateServiceOrderEvaluation(input: {
   values: Partial<EvaluationRow>;
   revisionReason?: string | null;
 }) {
-  const [existingEvaluation] = await db
-    .select({
-      id: serviceOrderEvaluation.id,
-      diagnosis: serviceOrderEvaluation.diagnosis,
-      recommendedAction: serviceOrderEvaluation.recommendedAction,
-      organizationId: serviceOrder.organizationId,
-      unitId: serviceOrder.unitId,
-      orderStatus: serviceOrder.status,
-    })
-    .from(serviceOrderEvaluation)
-    .innerJoin(
-      serviceOrder,
-      eq(serviceOrderEvaluation.serviceOrderId, serviceOrder.id),
-    )
-    .where(
-      and(
-        eq(serviceOrder.id, input.serviceOrderId),
-        eq(serviceOrder.organizationId, input.member.organizationId),
-        buildUnitScopeCondition(serviceOrder.unitId, input.member),
-        eq(serviceOrderEvaluation.id, input.evaluationId),
-      ),
-    )
-    .limit(1);
-  if (!existingEvaluation) return { status: "not_found" as const };
+  return orgDb(input.member.organizationId).transaction(async (o) => {
+    const [existingEvaluation] = await o
+      .select({
+        id: serviceOrderEvaluation.id,
+        diagnosis: serviceOrderEvaluation.diagnosis,
+        recommendedAction: serviceOrderEvaluation.recommendedAction,
+        organizationId: serviceOrder.organizationId,
+        unitId: serviceOrder.unitId,
+        orderStatus: serviceOrder.status,
+      })
+      .from(serviceOrderEvaluation)
+      .innerJoin(
+        serviceOrder,
+        eq(serviceOrderEvaluation.serviceOrderId, serviceOrder.id),
+      )
+      .where(
+        and(
+          eq(serviceOrder.id, input.serviceOrderId),
+          eq(serviceOrder.organizationId, input.member.organizationId),
+          buildUnitScopeCondition(serviceOrder.unitId, input.member),
+          eq(serviceOrderEvaluation.id, input.evaluationId),
+        ),
+      )
+      .limit(1);
+    if (!existingEvaluation) return { status: "not_found" as const };
 
-  if (
-    input.values.technicianId &&
-    input.values.technicianId !== input.actorUserId &&
-    !(await userIsOrganizationMember(
-      input.member.organizationId,
-      input.values.technicianId,
-    ))
-  ) {
-    return { status: "invalid_technician" as const };
-  }
+    if (
+      input.values.technicianId &&
+      input.values.technicianId !== input.actorUserId &&
+      !(await userIsOrganizationMember(
+        input.member.organizationId,
+        input.values.technicianId,
+        o,
+      ))
+    ) {
+      return { status: "invalid_technician" as const };
+    }
 
-  const reason = input.revisionReason?.trim();
-  const locked = await hasQuoteLeftTheLab(input.serviceOrderId);
-  if (locked && !reason) {
-    return { status: "reason_required" as const };
-  }
+    const reason = input.revisionReason?.trim();
+    const locked = await hasQuoteLeftTheLab(o, input.serviceOrderId);
+    if (locked && !reason) {
+      return { status: "reason_required" as const };
+    }
 
-  // The row change and its audit event commit together, like the creation path.
-  // Split, a failed event write would leave a communicated diagnosis silently
-  // altered with no reason and no recoverable prior value.
-  const [updated] = await db.transaction(async (tx) => {
-    const [row] = await tx
+    // The row change and its audit event commit together, like the creation path.
+    // Split, a failed event write would leave a communicated diagnosis silently
+    // altered with no reason and no recoverable prior value.
+    const [row] = await o
       .update(serviceOrderEvaluation)
       .set({ ...input.values, updatedAt: new Date() })
       .where(eq(serviceOrderEvaluation.id, input.evaluationId))
       .returning();
 
-    if (!row) return [row];
+    if (!row) return { status: "not_found" as const };
 
     await recordServiceOrderEvent(
       {
@@ -236,13 +238,9 @@ export async function updateServiceOrderEvaluation(input: {
           ...(reason ? { revisionReason: reason } : {}),
         },
       },
-      tx,
+      o,
     );
 
-    return [row];
+    return { status: "ok" as const, data: row };
   });
-
-  if (!updated) return { status: "not_found" as const };
-
-  return { status: "ok" as const, data: updated };
 }

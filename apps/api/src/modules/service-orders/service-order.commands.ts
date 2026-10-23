@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   asset,
   customer,
@@ -20,6 +20,8 @@ import type {
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type { z } from "zod";
 import type { AuthVariables } from "../../middleware/permission";
+import { afterCommitQueue } from "../../lib/after-commit";
+import { orgDb } from "../../lib/org-db";
 import {
   createInitialServiceOrderRecords,
   createBillingDocumentFromServiceOrder,
@@ -56,19 +58,25 @@ function parseDate(value: DateLikeInput) {
  * organization. Cross-tenant ids are refused with the same status as unknown
  * ids so the answer is not an existence oracle.
  */
-async function validateServiceOrderRefs(params: {
-  organizationId: string;
-  unitId: number | null;
-  responsibleTechnicianId?: string | null;
-  sourceServiceOrderId?: number | null;
-}) {
+async function validateServiceOrderRefs(
+  o: OrgDb,
+  params: {
+    organizationId: string;
+    unitId: number | null;
+    responsibleTechnicianId?: string | null;
+    sourceServiceOrderId?: number | null;
+  },
+) {
   if (
     params.responsibleTechnicianId &&
-    !(await isAssignableTechnician({
-      organizationId: params.organizationId,
-      userId: params.responsibleTechnicianId,
-      unitId: params.unitId,
-    }))
+    !(await isAssignableTechnician(
+      {
+        organizationId: params.organizationId,
+        userId: params.responsibleTechnicianId,
+        unitId: params.unitId,
+      },
+      o,
+    ))
   ) {
     return { status: "invalid_technician" as const };
   }
@@ -77,6 +85,7 @@ async function validateServiceOrderRefs(params: {
     !(await serviceOrderBelongsToOrganization(
       params.organizationId,
       params.sourceServiceOrderId,
+      o,
     ))
   ) {
     return { status: "invalid_source_order" as const };
@@ -96,171 +105,203 @@ export async function createServiceOrder(input: {
   const unitId = input.member.activeUnitId ?? input.member.accessibleUnitIds[0];
   if (!unitId) return { status: "no_unit" as const };
 
-  const [assetRow] = await db
-    .select({
-      id: asset.id,
-      unitId: asset.unitId,
-      customerId: asset.customerId,
-      labOrganizationId: customer.labOrganizationId,
-    })
-    .from(asset)
-    .innerJoin(customer, eq(asset.customerId, customer.id))
-    .where(eq(asset.id, input.values.assetId))
-    .limit(1);
+  // One transaction (and one `calibra.organization_id` setting) for the whole
+  // intake: the lookups, the order with its asset snapshot and creation event,
+  // and the durable "nova OS" e-mail outbox row commit together (REQ-SOEMAIL-071).
+  const result = await orgDb(input.member.organizationId).transaction(
+    async (o) => {
+      const [assetRow] = await o
+        .select({
+          id: asset.id,
+          unitId: asset.unitId,
+          customerId: asset.customerId,
+          labOrganizationId: customer.labOrganizationId,
+        })
+        .from(asset)
+        .innerJoin(customer, eq(asset.customerId, customer.id))
+        .where(eq(asset.id, input.values.assetId))
+        .limit(1);
 
-  if (
-    !assetRow ||
-    assetRow.customerId !== input.values.customerId ||
-    assetRow.labOrganizationId !== input.member.organizationId ||
-    // Unit scope: the OS snapshots the asset's data, so a unit-scoped member
-    // must not open one for an asset that lives in a unit they cannot access.
-    !input.member.accessibleUnitIds.includes(assetRow.unitId)
-  ) {
-    return { status: "invalid_asset" as const };
-  }
+      if (
+        !assetRow ||
+        assetRow.customerId !== input.values.customerId ||
+        assetRow.labOrganizationId !== input.member.organizationId ||
+        // Unit scope: the OS snapshots the asset's data, so a unit-scoped member
+        // must not open one for an asset that lives in a unit they cannot access.
+        !input.member.accessibleUnitIds.includes(assetRow.unitId)
+      ) {
+        return { status: "invalid_asset" as const };
+      }
 
-  const refs = await validateServiceOrderRefs({
-    organizationId: input.member.organizationId,
-    unitId,
-    responsibleTechnicianId: input.values.responsibleTechnicianId,
-    sourceServiceOrderId: input.values.sourceServiceOrderId,
-  });
-  if (refs) return refs;
+      const refs = await validateServiceOrderRefs(o, {
+        organizationId: input.member.organizationId,
+        unitId,
+        responsibleTechnicianId: input.values.responsibleTechnicianId,
+        sourceServiceOrderId: input.values.sourceServiceOrderId,
+      });
+      if (refs) return refs;
 
-  const created = await createInitialServiceOrderRecords({
-    organizationId: input.member.organizationId,
-    unitId,
-    customerId: input.values.customerId,
-    assetId: input.values.assetId,
-    userId: input.actorUserId,
-    assetSnapshot: input.values.assetSnapshot,
-    signatureData: input.values.signatureData ?? null,
-    ipAddress: input.metadata.ipAddress ?? null,
-    userAgent: input.metadata.userAgent ?? null,
-    values: {
-      clientContactId: input.values.clientContactId ?? null,
-      clientContactSnapshot: input.values.clientContactSnapshot ?? null,
-      intakeType: input.values.intakeType,
-      isExternalService: input.values.isExternalService ?? false,
-      sourceServiceOrderId: input.values.sourceServiceOrderId ?? null,
-      priority: input.values.priority,
-      responsibleTechnicianId: input.values.responsibleTechnicianId ?? null,
-      claimedDefect: input.values.claimedDefect,
-      intakeCondition: input.values.intakeCondition,
-      accessories: input.values.accessories ?? null,
-      removedSealingMarkNumber: input.values.removedSealingMarkNumber ?? null,
-      affixedSealingMarkNumber: input.values.affixedSealingMarkNumber ?? null,
-      inmetroRepairMarkNumber: input.values.inmetroRepairMarkNumber ?? null,
-      invoiceRemittanceNumber: input.values.invoiceRemittanceNumber ?? null,
-      invoiceRemittanceKey: input.values.invoiceRemittanceKey ?? null,
-      invoiceRemittanceIssuedAt: parseDate(
-        input.values.invoiceRemittanceIssuedAt,
-      ),
-      carrierName: input.values.carrierName ?? null,
-      carrierDocument: input.values.carrierDocument ?? null,
-      thirdPartyName: input.values.thirdPartyName ?? null,
-      thirdPartyDocument: input.values.thirdPartyDocument ?? null,
-      thirdPartyPhone: input.values.thirdPartyPhone ?? null,
-      deliveryMethod: input.values.deliveryMethod,
-      internalNotes: input.values.internalNotes ?? null,
-      clientVisibleNotes: input.values.clientVisibleNotes ?? null,
-      evaluationFeeCents: input.values.evaluationFeeCents,
-      warrantyUntil: parseDate(input.values.warrantyUntil),
-      warrantyTerms: input.values.warrantyTerms ?? null,
-      serviceStartedAt: parseDate(input.values.serviceStartedAt),
+      const created = await createInitialServiceOrderRecords(
+        {
+          organizationId: input.member.organizationId,
+          unitId,
+          customerId: input.values.customerId,
+          assetId: input.values.assetId,
+          userId: input.actorUserId,
+          assetSnapshot: input.values.assetSnapshot,
+          signatureData: input.values.signatureData ?? null,
+          ipAddress: input.metadata.ipAddress ?? null,
+          userAgent: input.metadata.userAgent ?? null,
+          values: {
+            clientContactId: input.values.clientContactId ?? null,
+            clientContactSnapshot: input.values.clientContactSnapshot ?? null,
+            intakeType: input.values.intakeType,
+            isExternalService: input.values.isExternalService ?? false,
+            sourceServiceOrderId: input.values.sourceServiceOrderId ?? null,
+            priority: input.values.priority,
+            responsibleTechnicianId:
+              input.values.responsibleTechnicianId ?? null,
+            claimedDefect: input.values.claimedDefect,
+            intakeCondition: input.values.intakeCondition,
+            accessories: input.values.accessories ?? null,
+            removedSealingMarkNumber:
+              input.values.removedSealingMarkNumber ?? null,
+            affixedSealingMarkNumber:
+              input.values.affixedSealingMarkNumber ?? null,
+            inmetroRepairMarkNumber:
+              input.values.inmetroRepairMarkNumber ?? null,
+            invoiceRemittanceNumber:
+              input.values.invoiceRemittanceNumber ?? null,
+            invoiceRemittanceKey: input.values.invoiceRemittanceKey ?? null,
+            invoiceRemittanceIssuedAt: parseDate(
+              input.values.invoiceRemittanceIssuedAt,
+            ),
+            carrierName: input.values.carrierName ?? null,
+            carrierDocument: input.values.carrierDocument ?? null,
+            thirdPartyName: input.values.thirdPartyName ?? null,
+            thirdPartyDocument: input.values.thirdPartyDocument ?? null,
+            thirdPartyPhone: input.values.thirdPartyPhone ?? null,
+            deliveryMethod: input.values.deliveryMethod,
+            internalNotes: input.values.internalNotes ?? null,
+            clientVisibleNotes: input.values.clientVisibleNotes ?? null,
+            evaluationFeeCents: input.values.evaluationFeeCents,
+            warrantyUntil: parseDate(input.values.warrantyUntil),
+            warrantyTerms: input.values.warrantyTerms ?? null,
+            serviceStartedAt: parseDate(input.values.serviceStartedAt),
+          },
+        },
+        o,
+      );
+
+      // REQ-SOEMAIL-071: enqueue a durable outbox row for the "nova OS" email.
+      // Load customer + asset snapshot data first (both belong to the same org —
+      // tenant scope is preserved). Email delivery happens in the worker drain
+      // (not in this request path).
+      const [customerRow, snapshotRow] = await Promise.all([
+        o
+          .select({ name: customer.name, email: customer.email })
+          .from(customer)
+          .where(
+            and(
+              eq(customer.id, created.customerId),
+              eq(customer.labOrganizationId, created.organizationId),
+            ),
+          )
+          .limit(1)
+          .then((rows) => rows[0] ?? null),
+        o
+          .select({
+            manufacturer: serviceOrderAssetSnapshot.manufacturer,
+            model: serviceOrderAssetSnapshot.model,
+            serialNumber: serviceOrderAssetSnapshot.serialNumber,
+          })
+          .from(serviceOrderAssetSnapshot)
+          .where(
+            and(
+              eq(serviceOrderAssetSnapshot.serviceOrderId, created.id),
+              eq(
+                serviceOrderAssetSnapshot.organizationId,
+                created.organizationId,
+              ),
+            ),
+          )
+          .limit(1)
+          .then((rows) => rows[0] ?? null),
+      ]);
+
+      const novaOsPayload = {
+        serviceOrderId: created.id,
+        serviceOrderNumber: created.serviceOrderNumber,
+        organizationId: created.organizationId,
+        publicId: created.publicId,
+        customerId: created.customerId,
+        clientContactSnapshot: created.clientContactSnapshot,
+        customerName: customerRow?.name ?? "",
+        customerEmail: customerRow?.email ?? null,
+        assetManufacturer: snapshotRow?.manufacturer ?? null,
+        assetModel: snapshotRow?.model ?? null,
+        assetSerialNumber: snapshotRow?.serialNumber ?? null,
+        openedAt: created.openedAt.toISOString(),
+        claimedDefect: created.claimedDefect,
+      } satisfies NovaOsOutboxPayload;
+
+      await enqueueServiceOrderEmail(
+        {
+          organizationId: created.organizationId,
+          unitId: created.unitId,
+          serviceOrderId: created.id,
+          eventKey: "nova_os",
+          targetStatus: created.status ?? "",
+          payload: novaOsPayload,
+        },
+        o,
+      );
+
+      return { status: "ok" as const, data: created };
     },
-  });
+  );
+  if (result.status !== "ok") return result;
+  const created = result.data;
 
-  await Promise.all([
+  // After the commit: the jobs render the order the transaction wrote. Both run
+  // even if the first fails to enqueue; the first failure is rethrown.
+  const afterCommit = afterCommitQueue();
+  afterCommit.add(() =>
     enqueueServiceOrderDocumentJob({
       type: "SERVICE_ORDER_INTAKE_DOCUMENT",
       serviceOrderId: created.id,
       userId: input.actorUserId,
     }),
+  );
+  afterCommit.add(() =>
     enqueueServiceOrderDocumentJob({
       type: "SERVICE_ORDER_TAG",
       serviceOrderId: created.id,
       userId: input.actorUserId,
     }),
-  ]);
+  );
+  await afterCommit.run();
 
-  // REQ-SOEMAIL-071: enqueue a durable outbox row for the "nova OS" email.
-  // Load customer + asset snapshot data first (both belong to the same org —
-  // tenant scope is preserved). Enqueue is awaited so the row is persisted
-  // before the handler returns; no fire-and-forget.
-  // Email delivery happens in the worker drain (not in this request path).
-  const [customerRow, snapshotRow] = await Promise.all([
-    db
-      .select({ name: customer.name, email: customer.email })
-      .from(customer)
-      .where(
-        and(
-          eq(customer.id, created.customerId),
-          eq(customer.labOrganizationId, created.organizationId),
-        ),
-      )
-      .limit(1)
-      .then((rows) => rows[0] ?? null),
-    db
-      .select({
-        manufacturer: serviceOrderAssetSnapshot.manufacturer,
-        model: serviceOrderAssetSnapshot.model,
-        serialNumber: serviceOrderAssetSnapshot.serialNumber,
-      })
-      .from(serviceOrderAssetSnapshot)
-      .where(
-        and(
-          eq(serviceOrderAssetSnapshot.serviceOrderId, created.id),
-          eq(serviceOrderAssetSnapshot.organizationId, created.organizationId),
-        ),
-      )
-      .limit(1)
-      .then((rows) => rows[0] ?? null),
-  ]);
-
-  const novaOsPayload = {
-    serviceOrderId: created.id,
-    serviceOrderNumber: created.serviceOrderNumber,
-    organizationId: created.organizationId,
-    publicId: created.publicId,
-    customerId: created.customerId,
-    clientContactSnapshot: created.clientContactSnapshot,
-    customerName: customerRow?.name ?? "",
-    customerEmail: customerRow?.email ?? null,
-    assetManufacturer: snapshotRow?.manufacturer ?? null,
-    assetModel: snapshotRow?.model ?? null,
-    assetSerialNumber: snapshotRow?.serialNumber ?? null,
-    openedAt: created.openedAt.toISOString(),
-    claimedDefect: created.claimedDefect,
-  } satisfies NovaOsOutboxPayload;
-
-  await enqueueServiceOrderEmail({
-    organizationId: created.organizationId,
-    unitId: created.unitId,
-    serviceOrderId: created.id,
-    eventKey: "nova_os",
-    targetStatus: created.status ?? "",
-    payload: novaOsPayload,
-  });
-
-  return { status: "ok" as const, data: created };
+  return result;
 }
 
 export async function updateServiceOrderSettings(input: {
   organizationId: string;
   values: UpdateServiceOrderSettingsInput;
 }) {
-  await getOrCreateServiceOrderSettings(input.organizationId);
-  const [updated] = await db
-    .update(serviceOrderSettings)
-    .set({
-      ...input.values,
-      updatedAt: new Date(),
-    })
-    .where(eq(serviceOrderSettings.organizationId, input.organizationId))
-    .returning();
+  return orgDb(input.organizationId).transaction(async (o) => {
+    await getOrCreateServiceOrderSettings(input.organizationId, o);
+    const [updated] = await o
+      .update(serviceOrderSettings)
+      .set({
+        ...input.values,
+        updatedAt: new Date(),
+      })
+      .where(eq(serviceOrderSettings.organizationId, input.organizationId))
+      .returning();
 
-  return updated;
+    return updated;
+  });
 }
 
 export async function getServiceOrderSettings(organizationId: string) {
@@ -277,89 +318,95 @@ export async function updateServiceOrder(input: {
     userAgent?: string | null;
   };
 }) {
-  const [existing] = await db
-    .select()
-    .from(serviceOrder)
-    .where(
-      and(
-        eq(serviceOrder.id, input.serviceOrderId),
-        eq(serviceOrder.organizationId, input.member.organizationId),
-        buildUnitScopeCondition(serviceOrder.unitId, input.member),
-      ),
-    )
-    .limit(1);
-  if (!existing) return { status: "not_found" as const };
+  return orgDb(input.member.organizationId).transaction(async (o) => {
+    const [existing] = await o
+      .select()
+      .from(serviceOrder)
+      .where(
+        and(
+          eq(serviceOrder.id, input.serviceOrderId),
+          eq(serviceOrder.organizationId, input.member.organizationId),
+          buildUnitScopeCondition(serviceOrder.unitId, input.member),
+        ),
+      )
+      .limit(1);
+    if (!existing) return { status: "not_found" as const };
 
-  const refs = await validateServiceOrderRefs({
-    organizationId: input.member.organizationId,
-    unitId: existing.unitId,
-    responsibleTechnicianId:
-      input.values.responsibleTechnicianId === existing.responsibleTechnicianId
-        ? undefined
-        : input.values.responsibleTechnicianId,
-    sourceServiceOrderId:
-      input.values.sourceServiceOrderId === existing.sourceServiceOrderId
-        ? undefined
-        : input.values.sourceServiceOrderId,
-  });
-  if (refs) return refs;
-
-  if (
-    input.values.status &&
-    input.values.status !== existing.status &&
-    !canTransitionServiceOrderStatus(existing.status, input.values.status)
-  ) {
-    return { status: "invalid_transition" as const };
-  }
-
-  const [updated] = await db
-    .update(serviceOrder)
-    .set({
-      ...input.values,
-      // Date fields arrive as ISO strings; convert. Presence-guard so a partial
-      // PATCH (e.g. only serviceStartedAt) doesn't null the others.
-      invoiceRemittanceIssuedAt:
-        "invoiceRemittanceIssuedAt" in input.values
-          ? parseDate(input.values.invoiceRemittanceIssuedAt)
-          : existing.invoiceRemittanceIssuedAt,
-      warrantyUntil:
-        "warrantyUntil" in input.values
-          ? parseDate(input.values.warrantyUntil)
-          : existing.warrantyUntil,
-      serviceStartedAt:
-        "serviceStartedAt" in input.values
-          ? parseDate(input.values.serviceStartedAt)
-          : existing.serviceStartedAt,
-      updatedAt: new Date(),
-    })
-    // Defense-in-depth (SEC-08): repeat the tenant scope already proven by the
-    // SELECT above so the final UPDATE stays org/unit-scoped even if a future
-    // refactor drops the guarding read. Reuses the same in-scope member values.
-    .where(
-      and(
-        eq(serviceOrder.id, input.serviceOrderId),
-        eq(serviceOrder.organizationId, input.member.organizationId),
-        buildUnitScopeCondition(serviceOrder.unitId, input.member),
-      ),
-    )
-    .returning();
-
-  if (input.values.status && input.values.status !== existing.status) {
-    await recordServiceOrderEvent({
-      organizationId: existing.organizationId,
+    const refs = await validateServiceOrderRefs(o, {
+      organizationId: input.member.organizationId,
       unitId: existing.unitId,
-      serviceOrderId: existing.id,
-      actorType: "lab_user",
-      actorId: input.actorUserId,
-      eventType: "service_order.status_changed",
-      oldValue: { status: existing.status },
-      newValue: { status: input.values.status },
-      ipAddress: input.metadata.ipAddress ?? null,
-      userAgent: input.metadata.userAgent ?? null,
+      responsibleTechnicianId:
+        input.values.responsibleTechnicianId ===
+        existing.responsibleTechnicianId
+          ? undefined
+          : input.values.responsibleTechnicianId,
+      sourceServiceOrderId:
+        input.values.sourceServiceOrderId === existing.sourceServiceOrderId
+          ? undefined
+          : input.values.sourceServiceOrderId,
     });
-  }
+    if (refs) return refs;
 
-  return { status: "ok" as const, data: updated };
+    if (
+      input.values.status &&
+      input.values.status !== existing.status &&
+      !canTransitionServiceOrderStatus(existing.status, input.values.status)
+    ) {
+      return { status: "invalid_transition" as const };
+    }
+
+    const [updated] = await o
+      .update(serviceOrder)
+      .set({
+        ...input.values,
+        // Date fields arrive as ISO strings; convert. Presence-guard so a partial
+        // PATCH (e.g. only serviceStartedAt) doesn't null the others.
+        invoiceRemittanceIssuedAt:
+          "invoiceRemittanceIssuedAt" in input.values
+            ? parseDate(input.values.invoiceRemittanceIssuedAt)
+            : existing.invoiceRemittanceIssuedAt,
+        warrantyUntil:
+          "warrantyUntil" in input.values
+            ? parseDate(input.values.warrantyUntil)
+            : existing.warrantyUntil,
+        serviceStartedAt:
+          "serviceStartedAt" in input.values
+            ? parseDate(input.values.serviceStartedAt)
+            : existing.serviceStartedAt,
+        updatedAt: new Date(),
+      })
+      // Defense-in-depth (SEC-08): repeat the tenant scope already proven by the
+      // SELECT above so the final UPDATE stays org/unit-scoped even if a future
+      // refactor drops the guarding read. Reuses the same in-scope member values.
+      .where(
+        and(
+          eq(serviceOrder.id, input.serviceOrderId),
+          eq(serviceOrder.organizationId, input.member.organizationId),
+          buildUnitScopeCondition(serviceOrder.unitId, input.member),
+        ),
+      )
+      .returning();
+
+    if (input.values.status && input.values.status !== existing.status) {
+      await recordServiceOrderEvent(
+        {
+          organizationId: existing.organizationId,
+          unitId: existing.unitId,
+          serviceOrderId: existing.id,
+          actorType: "lab_user",
+          actorId: input.actorUserId,
+          eventType: "service_order.status_changed",
+          oldValue: { status: existing.status },
+          newValue: { status: input.values.status },
+          ipAddress: input.metadata.ipAddress ?? null,
+          userAgent: input.metadata.userAgent ?? null,
+        },
+        o,
+      );
+    }
+
+    return { status: "ok" as const, data: updated };
+  });
 }
 
 export async function updateServiceOrderRepairMark(input: {
@@ -373,46 +420,52 @@ export async function updateServiceOrderRepairMark(input: {
     inmetroRepairMarkNotes?: string | null;
   };
 }) {
-  const [updated] = await db
-    .update(serviceOrder)
-    .set({
-      inmetroRepairMarkNumber: input.values.inmetroRepairMarkNumber ?? null,
-      inmetroRepairMarkIssuedAt: parseDate(
-        input.values.inmetroRepairMarkIssuedAt,
-      ),
-      inmetroRepairMarkAppliedAt: parseDate(
-        input.values.inmetroRepairMarkAppliedAt,
-      ),
-      inmetroRepairMarkAppliedByUserId: input.values.inmetroRepairMarkAppliedAt
-        ? input.actorUserId
-        : null,
-      inmetroRepairMarkNotes: input.values.inmetroRepairMarkNotes ?? null,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(serviceOrder.id, input.serviceOrderId),
-        eq(serviceOrder.organizationId, input.member.organizationId),
-        buildUnitScopeCondition(serviceOrder.unitId, input.member),
-      ),
-    )
-    .returning();
+  return orgDb(input.member.organizationId).transaction(async (o) => {
+    const [updated] = await o
+      .update(serviceOrder)
+      .set({
+        inmetroRepairMarkNumber: input.values.inmetroRepairMarkNumber ?? null,
+        inmetroRepairMarkIssuedAt: parseDate(
+          input.values.inmetroRepairMarkIssuedAt,
+        ),
+        inmetroRepairMarkAppliedAt: parseDate(
+          input.values.inmetroRepairMarkAppliedAt,
+        ),
+        inmetroRepairMarkAppliedByUserId: input.values
+          .inmetroRepairMarkAppliedAt
+          ? input.actorUserId
+          : null,
+        inmetroRepairMarkNotes: input.values.inmetroRepairMarkNotes ?? null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(serviceOrder.id, input.serviceOrderId),
+          eq(serviceOrder.organizationId, input.member.organizationId),
+          buildUnitScopeCondition(serviceOrder.unitId, input.member),
+        ),
+      )
+      .returning();
 
-  if (!updated) return null;
+    if (!updated) return null;
 
-  await recordServiceOrderEvent({
-    organizationId: updated.organizationId,
-    unitId: updated.unitId,
-    serviceOrderId: input.serviceOrderId,
-    actorType: "lab_user",
-    actorId: input.actorUserId,
-    eventType: "service_order.repair_mark_updated",
-    metadata: {
-      inmetroRepairMarkNumber: input.values.inmetroRepairMarkNumber,
-    },
+    await recordServiceOrderEvent(
+      {
+        organizationId: updated.organizationId,
+        unitId: updated.unitId,
+        serviceOrderId: input.serviceOrderId,
+        actorType: "lab_user",
+        actorId: input.actorUserId,
+        eventType: "service_order.repair_mark_updated",
+        metadata: {
+          inmetroRepairMarkNumber: input.values.inmetroRepairMarkNumber,
+        },
+      },
+      o,
+    );
+
+    return updated;
   });
-
-  return updated;
 }
 
 export async function assignServiceOrderTechnician(input: {
@@ -421,47 +474,59 @@ export async function assignServiceOrderTechnician(input: {
   actorUserId: string;
   technicianId: string;
 }) {
-  const order = await getScopedServiceOrder(input.serviceOrderId, input.member);
-  if (!order) return { status: "not_found" as const };
+  return orgDb(input.member.organizationId).transaction(async (o) => {
+    const order = await getScopedServiceOrder(
+      input.serviceOrderId,
+      input.member,
+      o,
+    );
+    if (!order) return { status: "not_found" as const };
 
-  if (
-    !(await isAssignableTechnician({
-      organizationId: input.member.organizationId,
-      userId: input.technicianId,
-      unitId: order.unitId,
-    }))
-  ) {
-    return { status: "invalid_technician" as const };
-  }
+    if (
+      !(await isAssignableTechnician(
+        {
+          organizationId: input.member.organizationId,
+          userId: input.technicianId,
+          unitId: order.unitId,
+        },
+        o,
+      ))
+    ) {
+      return { status: "invalid_technician" as const };
+    }
 
-  const [updated] = await db
-    .update(serviceOrder)
-    .set({
-      responsibleTechnicianId: input.technicianId,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(serviceOrder.id, input.serviceOrderId),
-        eq(serviceOrder.organizationId, input.member.organizationId),
-        buildUnitScopeCondition(serviceOrder.unitId, input.member),
-      ),
-    )
-    .returning();
+    const [updated] = await o
+      .update(serviceOrder)
+      .set({
+        responsibleTechnicianId: input.technicianId,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(serviceOrder.id, input.serviceOrderId),
+          eq(serviceOrder.organizationId, input.member.organizationId),
+          buildUnitScopeCondition(serviceOrder.unitId, input.member),
+        ),
+      )
+      .returning();
 
-  if (!updated) return { status: "not_found" as const };
+    if (!updated) return { status: "not_found" as const };
 
-  await recordServiceOrderEvent({
-    organizationId: updated.organizationId,
-    unitId: updated.unitId,
-    serviceOrderId: input.serviceOrderId,
-    actorType: "lab_user",
-    actorId: input.actorUserId,
-    eventType: "service_order.technician_assigned",
-    newValue: { technicianId: input.technicianId },
+    await recordServiceOrderEvent(
+      {
+        organizationId: updated.organizationId,
+        unitId: updated.unitId,
+        serviceOrderId: input.serviceOrderId,
+        actorType: "lab_user",
+        actorId: input.actorUserId,
+        eventType: "service_order.technician_assigned",
+        newValue: { technicianId: input.technicianId },
+      },
+      o,
+    );
+
+    return { status: "ok" as const, data: updated };
   });
-
-  return { status: "ok" as const, data: updated };
 }
 
 export async function deliverServiceOrder(input: {
@@ -476,54 +541,63 @@ export async function deliverServiceOrder(input: {
     inmetroRepairMarkNumber?: string | null;
   };
 }) {
-  // SERVICE_ORDER_ALLOWED_TRANSITIONS is the declared truth for the lifecycle,
-  // but this path used to write `delivered` unconditionally — an OS still under
-  // evaluation could be marked delivered. Same guard as
-  // startServiceOrderExecution; re-delivering an already-delivered OS stays a
-  // no-op rather than an error.
-  const order = await getScopedServiceOrder(input.serviceOrderId, input.member);
-  if (!order) return { status: "not_found" as const };
-  if (
-    order.status !== "delivered" &&
-    !canTransitionServiceOrderStatus(order.status, "delivered")
-  ) {
-    return { status: "invalid_transition" as const };
-  }
+  return orgDb(input.member.organizationId).transaction(async (o) => {
+    // SERVICE_ORDER_ALLOWED_TRANSITIONS is the declared truth for the lifecycle,
+    // but this path used to write `delivered` unconditionally — an OS still under
+    // evaluation could be marked delivered. Same guard as
+    // startServiceOrderExecution; re-delivering an already-delivered OS stays a
+    // no-op rather than an error.
+    const order = await getScopedServiceOrder(
+      input.serviceOrderId,
+      input.member,
+      o,
+    );
+    if (!order) return { status: "not_found" as const };
+    if (
+      order.status !== "delivered" &&
+      !canTransitionServiceOrderStatus(order.status, "delivered")
+    ) {
+      return { status: "invalid_transition" as const };
+    }
 
-  const [updated] = await db
-    .update(serviceOrder)
-    .set({
-      status: "delivered",
-      deliveredAt: new Date(),
-      deliveryMethod: input.values.deliveryMethod,
-      deliveredToName: input.values.deliveredToName,
-      deliveredToDocument: input.values.deliveredToDocument ?? null,
-      deliveryNotes: input.values.deliveryNotes ?? null,
-      inmetroRepairMarkNumber:
-        input.values.inmetroRepairMarkNumber ?? undefined,
-    })
-    .where(
-      and(
-        eq(serviceOrder.id, input.serviceOrderId),
-        eq(serviceOrder.organizationId, input.member.organizationId),
-        buildUnitScopeCondition(serviceOrder.unitId, input.member),
-      ),
-    )
-    .returning();
+    const [updated] = await o
+      .update(serviceOrder)
+      .set({
+        status: "delivered",
+        deliveredAt: new Date(),
+        deliveryMethod: input.values.deliveryMethod,
+        deliveredToName: input.values.deliveredToName,
+        deliveredToDocument: input.values.deliveredToDocument ?? null,
+        deliveryNotes: input.values.deliveryNotes ?? null,
+        inmetroRepairMarkNumber:
+          input.values.inmetroRepairMarkNumber ?? undefined,
+      })
+      .where(
+        and(
+          eq(serviceOrder.id, input.serviceOrderId),
+          eq(serviceOrder.organizationId, input.member.organizationId),
+          buildUnitScopeCondition(serviceOrder.unitId, input.member),
+        ),
+      )
+      .returning();
 
-  if (!updated) return { status: "not_found" as const };
+    if (!updated) return { status: "not_found" as const };
 
-  await recordServiceOrderEvent({
-    organizationId: updated.organizationId,
-    unitId: updated.unitId,
-    serviceOrderId: input.serviceOrderId,
-    actorType: "lab_user",
-    actorId: input.actorUserId,
-    eventType: "service_order.delivered",
-    metadata: { deliveredToName: input.values.deliveredToName },
+    await recordServiceOrderEvent(
+      {
+        organizationId: updated.organizationId,
+        unitId: updated.unitId,
+        serviceOrderId: input.serviceOrderId,
+        actorType: "lab_user",
+        actorId: input.actorUserId,
+        eventType: "service_order.delivered",
+        metadata: { deliveredToName: input.values.deliveredToName },
+      },
+      o,
+    );
+
+    return { status: "ok" as const, data: updated };
   });
-
-  return { status: "ok" as const, data: updated };
 }
 
 export async function closeServiceOrder(input: {
@@ -537,39 +611,64 @@ export async function closeServiceOrder(input: {
     dueDate?: DateLikeInput;
   };
 }) {
-  const order = await getScopedServiceOrder(input.serviceOrderId, input.member);
-  if (!order) return { status: "not_found" as const };
-  // A repeat close (retry, double submit) is a no-op, NOT a second closure
-  // event. Writing one would record oldValue.status === "closed", and reopen
-  // reads the newest closure event — so the order would "reopen" to closed
-  // instead of the status it actually held before.
-  if (order.status === "closed") {
-    return { status: "ok" as const, data: order };
-  }
-  if (!canTransitionServiceOrderStatus(order.status, "closed")) {
-    return { status: "invalid_transition" as const };
-  }
+  // The close itself is one transaction. The billing document is created in a
+  // transaction of its own AFTER it commits, as before: it takes an advisory lock
+  // and writes this same order row (billing_document_id), so it must not wait on
+  // a transaction that still holds it. The closure event follows the billing
+  // document, again as before.
+  const closed = await orgDb(input.member.organizationId).transaction(
+    async (o) => {
+      const order = await getScopedServiceOrder(
+        input.serviceOrderId,
+        input.member,
+        o,
+      );
+      if (!order) return { status: "not_found" as const };
+      // A repeat close (retry, double submit) is a no-op, NOT a second closure
+      // event. Writing one would record oldValue.status === "closed", and reopen
+      // reads the newest closure event — so the order would "reopen" to closed
+      // instead of the status it actually held before.
+      if (order.status === "closed") {
+        return { status: "ok" as const, data: order };
+      }
+      if (!canTransitionServiceOrderStatus(order.status, "closed")) {
+        return { status: "invalid_transition" as const };
+      }
 
-  const [updated] = await db
-    .update(serviceOrder)
-    .set({
-      status: "closed",
-      closedAt: new Date(),
-      closingReason: input.values.closingReason,
-      internalNotes: input.values.notes ?? undefined,
-    })
-    .where(
-      and(
-        eq(serviceOrder.id, input.serviceOrderId),
-        eq(serviceOrder.organizationId, input.member.organizationId),
-        // Was missing here while deliver/cancel had it: without the unit scope
-        // a member scoped to one unit could close another unit's OS.
-        buildUnitScopeCondition(serviceOrder.unitId, input.member),
-      ),
-    )
-    .returning();
+      const [updated] = await o
+        .update(serviceOrder)
+        .set({
+          status: "closed",
+          closedAt: new Date(),
+          closingReason: input.values.closingReason,
+          internalNotes: input.values.notes ?? undefined,
+        })
+        .where(
+          and(
+            eq(serviceOrder.id, input.serviceOrderId),
+            eq(serviceOrder.organizationId, input.member.organizationId),
+            // Was missing here while deliver/cancel had it: without the unit scope
+            // a member scoped to one unit could close another unit's OS.
+            buildUnitScopeCondition(serviceOrder.unitId, input.member),
+          ),
+        )
+        .returning();
 
-  if (!updated) return { status: "not_found" as const };
+      if (!updated) return { status: "not_found" as const };
+
+      return {
+        status: "closed_now" as const,
+        previousStatus: order.status,
+        data: updated,
+      };
+    },
+  );
+  if (closed.status !== "closed_now") {
+    return closed.status === "ok"
+      ? { status: "ok" as const, data: closed.data }
+      : { status: closed.status };
+  }
+  const updated = closed.data;
 
   if (input.values.createBillingDocument) {
     await createBillingDocumentFromServiceOrder({
@@ -591,7 +690,7 @@ export async function closeServiceOrder(input: {
     // The status the order is leaving. "Reabrir OS" reads this back so a
     // mis-click can be undone to where the order actually was, instead of
     // restarting the whole funnel.
-    oldValue: { status: order.status },
+    oldValue: { status: closed.previousStatus },
     newValue: { status: "closed" },
   });
 
@@ -604,48 +703,57 @@ export async function cancelServiceOrder(input: {
   actorUserId: string;
   values: { reason: string };
 }) {
-  const order = await getScopedServiceOrder(input.serviceOrderId, input.member);
-  if (!order) return { status: "not_found" as const };
-  // Same as close: a repeated cancel must not overwrite the remembered
-  // pre-cancellation status with "canceled".
-  if (order.status === "canceled") {
-    return { status: "ok" as const, data: order };
-  }
-  if (!canTransitionServiceOrderStatus(order.status, "canceled")) {
-    return { status: "invalid_transition" as const };
-  }
+  return orgDb(input.member.organizationId).transaction(async (o) => {
+    const order = await getScopedServiceOrder(
+      input.serviceOrderId,
+      input.member,
+      o,
+    );
+    if (!order) return { status: "not_found" as const };
+    // Same as close: a repeated cancel must not overwrite the remembered
+    // pre-cancellation status with "canceled".
+    if (order.status === "canceled") {
+      return { status: "ok" as const, data: order };
+    }
+    if (!canTransitionServiceOrderStatus(order.status, "canceled")) {
+      return { status: "invalid_transition" as const };
+    }
 
-  const [updated] = await db
-    .update(serviceOrder)
-    .set({
-      status: "canceled",
-      canceledAt: new Date(),
-      cancelReason: input.values.reason,
-    })
-    .where(
-      and(
-        eq(serviceOrder.id, input.serviceOrderId),
-        eq(serviceOrder.organizationId, input.member.organizationId),
-        buildUnitScopeCondition(serviceOrder.unitId, input.member),
-      ),
-    )
-    .returning();
+    const [updated] = await o
+      .update(serviceOrder)
+      .set({
+        status: "canceled",
+        canceledAt: new Date(),
+        cancelReason: input.values.reason,
+      })
+      .where(
+        and(
+          eq(serviceOrder.id, input.serviceOrderId),
+          eq(serviceOrder.organizationId, input.member.organizationId),
+          buildUnitScopeCondition(serviceOrder.unitId, input.member),
+        ),
+      )
+      .returning();
 
-  if (!updated) return { status: "not_found" as const };
+    if (!updated) return { status: "not_found" as const };
 
-  await recordServiceOrderEvent({
-    organizationId: updated.organizationId,
-    unitId: updated.unitId,
-    serviceOrderId: input.serviceOrderId,
-    actorType: "lab_user",
-    actorId: input.actorUserId,
-    eventType: "service_order.canceled",
-    metadata: { reason: input.values.reason },
-    oldValue: { status: order.status },
-    newValue: { status: "canceled" },
+    await recordServiceOrderEvent(
+      {
+        organizationId: updated.organizationId,
+        unitId: updated.unitId,
+        serviceOrderId: input.serviceOrderId,
+        actorType: "lab_user",
+        actorId: input.actorUserId,
+        eventType: "service_order.canceled",
+        metadata: { reason: input.values.reason },
+        oldValue: { status: order.status },
+        newValue: { status: "canceled" },
+      },
+      o,
+    );
+
+    return { status: "ok" as const, data: updated };
   });
-
-  return { status: "ok" as const, data: updated };
 }
 
 /**
@@ -658,10 +766,11 @@ export async function cancelServiceOrder(input: {
  * remembered status is no longer one the app knows.
  */
 async function readStatusBeforeClose(
+  o: OrgDb,
   serviceOrderId: number,
   organizationId: string,
 ) {
-  const [lastClosure] = await db
+  const [lastClosure] = await o
     .select({ oldValue: serviceOrderEventLog.oldValue })
     .from(serviceOrderEventLog)
     .where(
@@ -690,50 +799,62 @@ export async function reopenServiceOrder(input: {
   actorUserId: string;
   values: { reason: string };
 }) {
-  const order = await getScopedServiceOrder(input.serviceOrderId, input.member);
-  if (!order) return { status: "not_found" as const };
-  // Reopening only makes sense for an order that is actually finished. Without
-  // this the endpoint reset ANY order — including one mid-repair — back to
-  // awaiting_tech_evaluation.
-  if (!isServiceOrderFinalStatus(order.status)) {
-    return { status: "invalid_transition" as const };
-  }
+  return orgDb(input.member.organizationId).transaction(async (o) => {
+    const order = await getScopedServiceOrder(
+      input.serviceOrderId,
+      input.member,
+      o,
+    );
+    if (!order) return { status: "not_found" as const };
+    // Reopening only makes sense for an order that is actually finished. Without
+    // this the endpoint reset ANY order — including one mid-repair — back to
+    // awaiting_tech_evaluation.
+    if (!isServiceOrderFinalStatus(order.status)) {
+      return { status: "invalid_transition" as const };
+    }
 
-  // Back to where it was; awaiting_tech_evaluation only when nothing was
-  // recorded (orders closed before this was tracked).
-  const restoredStatus =
-    (await readStatusBeforeClose(input.serviceOrderId, order.organizationId)) ??
-    "awaiting_tech_evaluation";
+    // Back to where it was; awaiting_tech_evaluation only when nothing was
+    // recorded (orders closed before this was tracked).
+    const restoredStatus =
+      (await readStatusBeforeClose(
+        o,
+        input.serviceOrderId,
+        order.organizationId,
+      )) ?? "awaiting_tech_evaluation";
 
-  const [updated] = await db
-    .update(serviceOrder)
-    .set({
-      status: restoredStatus,
-      canceledAt: null,
-      closedAt: null,
-    })
-    .where(
-      and(
-        eq(serviceOrder.id, input.serviceOrderId),
-        eq(serviceOrder.organizationId, input.member.organizationId),
-        buildUnitScopeCondition(serviceOrder.unitId, input.member),
-      ),
-    )
-    .returning();
+    const [updated] = await o
+      .update(serviceOrder)
+      .set({
+        status: restoredStatus,
+        canceledAt: null,
+        closedAt: null,
+      })
+      .where(
+        and(
+          eq(serviceOrder.id, input.serviceOrderId),
+          eq(serviceOrder.organizationId, input.member.organizationId),
+          buildUnitScopeCondition(serviceOrder.unitId, input.member),
+        ),
+      )
+      .returning();
 
-  if (!updated) return { status: "not_found" as const };
+    if (!updated) return { status: "not_found" as const };
 
-  await recordServiceOrderEvent({
-    organizationId: updated.organizationId,
-    unitId: updated.unitId,
-    serviceOrderId: input.serviceOrderId,
-    actorType: "lab_user",
-    actorId: input.actorUserId,
-    eventType: "service_order.reopened",
-    metadata: { reason: input.values.reason },
-    oldValue: { status: order.status },
-    newValue: { status: restoredStatus },
+    await recordServiceOrderEvent(
+      {
+        organizationId: updated.organizationId,
+        unitId: updated.unitId,
+        serviceOrderId: input.serviceOrderId,
+        actorType: "lab_user",
+        actorId: input.actorUserId,
+        eventType: "service_order.reopened",
+        metadata: { reason: input.values.reason },
+        oldValue: { status: order.status },
+        newValue: { status: restoredStatus },
+      },
+      o,
+    );
+
+    return { status: "ok" as const, data: updated };
   });
-
-  return { status: "ok" as const, data: updated };
 }

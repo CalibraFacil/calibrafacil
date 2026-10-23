@@ -1,4 +1,3 @@
-import { db } from "@calibra-facil/db";
 import {
   calibrationJob,
   serviceOrder,
@@ -6,6 +5,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 import { recomputeCertificateRelease } from "./certificate-release";
+import { orgDb } from "./org-db";
 
 /**
  * Read every calibration job linked (via service_order_certificate_link)
@@ -21,30 +21,33 @@ export async function recomputeCertificateReleasesForBillingDocument(params: {
   organizationId: string;
   billingDocumentId: number;
 }): Promise<{ recomputedJobIds: number[] }> {
-  const linkedJobs = await db
-    .select({
-      jobId: calibrationJob.id,
-    })
-    .from(serviceOrderCertificateLink)
-    .innerJoin(
-      serviceOrder,
-      eq(serviceOrder.id, serviceOrderCertificateLink.serviceOrderId),
-    )
-    .innerJoin(
-      calibrationJob,
-      eq(calibrationJob.id, serviceOrderCertificateLink.certificateJobId),
-    )
-    .where(
-      and(
-        eq(serviceOrder.organizationId, params.organizationId),
-        eq(serviceOrder.billingDocumentId, params.billingDocumentId),
-        inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
+  const linkedJobs = await orgDb(params.organizationId).transaction((o) =>
+    o
+      .select({
+        jobId: calibrationJob.id,
+      })
+      .from(serviceOrderCertificateLink)
+      .innerJoin(
+        serviceOrder,
+        eq(serviceOrder.id, serviceOrderCertificateLink.serviceOrderId),
+      )
+      .innerJoin(
+        calibrationJob,
+        eq(calibrationJob.id, serviceOrderCertificateLink.certificateJobId),
+      )
+      .where(
+        and(
+          eq(serviceOrder.organizationId, params.organizationId),
+          eq(serviceOrder.billingDocumentId, params.billingDocumentId),
+          inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
+        ),
       ),
-    );
+  );
 
   const recomputedJobIds: number[] = [];
   for (const link of linkedJobs) {
     const result = await recomputeCertificateRelease({
+      organizationId: params.organizationId,
       calibrationJobId: link.jobId,
       source: "system_reconciliation",
       actorUserId: null,
