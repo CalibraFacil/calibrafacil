@@ -5,7 +5,7 @@ import type { IntegrationSyncTarget } from "@calibra-facil/shared";
 import {
   processScheduledIntegrationSyncs,
   type IntegrationSyncQueueMessage,
-} from "./integrations";
+} from "@calibra-facil/jobs-core/integrations";
 import { db, truncateAll } from "../test/integration/db";
 import { makeTestEnv } from "../test/integration/env";
 import { seedOrg } from "../test/integration/seed";

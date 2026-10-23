@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sql } from "drizzle-orm";
 import { unzipSync, strFromU8 } from "fflate";
-import type { Env } from "@calibra-facil/worker";
+import type { Env } from "@calibra-facil/jobs-core";
 import { db, truncateAll } from "../test/integration/db";
 import { makeTestEnv } from "../test/integration/env";
 import { seedOrg } from "../test/integration/seed";
@@ -33,7 +33,7 @@ vi.mock("@calibra-facil/notifications", () => ({
   notifyAuditPackReady: vi.fn(async () => {}),
 }));
 
-import { processBackgroundJob } from "./index";
+import { processBackgroundJob } from "@calibra-facil/jobs-core";
 import { notifyAuditPackReady } from "@calibra-facil/notifications";
 
 // ---- row-reader helpers (no `as`; same pattern as the sibling specs) ----

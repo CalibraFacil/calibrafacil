@@ -8,7 +8,7 @@ import {
   encryptPassword,
   signPdf,
 } from "@calibra-facil/signing";
-import type { Env } from "@calibra-facil/worker";
+import type { Env } from "@calibra-facil/jobs-core";
 import { db, truncateAll } from "../test/integration/db";
 import { makeTestEnv } from "../test/integration/env";
 import {
@@ -38,7 +38,7 @@ vi.mock("@calibra-facil/notifications", () => ({
   notifyAuditPackReady: vi.fn(async () => undefined),
 }));
 
-import { processBackgroundJob } from "./index";
+import { processBackgroundJob } from "@calibra-facil/jobs-core";
 
 const GOTENBERG_URL = "http://gotenberg.test";
 const MASTER_KEY = Buffer.alloc(32, 11).toString("base64");

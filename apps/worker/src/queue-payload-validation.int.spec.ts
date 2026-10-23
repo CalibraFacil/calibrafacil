@@ -11,7 +11,7 @@ import { makeTestEnv } from "../test/integration/env";
 
 const { workerQueue } = vi.hoisted(() => ({ workerQueue: vi.fn() }));
 
-vi.mock("./index.js", () => ({
+vi.mock("@calibra-facil/jobs-core", () => ({
   default: { queue: workerQueue },
 }));
 

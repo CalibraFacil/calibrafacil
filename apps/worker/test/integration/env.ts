@@ -1,4 +1,4 @@
-import type { Env, R2BucketBinding } from "@calibra-facil/worker";
+import type { Env, R2BucketBinding } from "@calibra-facil/jobs-core";
 
 // Test-env factory for the worker integration tier. The worker handlers take
 // their entire outside world via an injected `env` object (no Vercel/CF runtime,

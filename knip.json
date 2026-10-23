@@ -48,7 +48,7 @@
         "scripts/*.mjs",
         "src/cli/*.ts",
         // background-jobs.ts loads this through a variable specifier
-        // (`import(modulePath)`) so bundlers leave @calibra-facil/worker out of
+        // (`import(modulePath)`) so bundlers leave @calibra-facil/jobs-core out of
         // the serverless bundle. Not dead: it is the in-process dev runner.
         "src/lib/worker-modules.ts",
         "test/**/*.ts"

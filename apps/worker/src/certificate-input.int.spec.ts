@@ -25,7 +25,7 @@ import {
   buildOrganizationLogoUrl,
   organizationLogoKey,
 } from "@calibra-facil/shared/storage-keys";
-import type { Env } from "@calibra-facil/worker";
+import type { Env } from "@calibra-facil/jobs-core";
 import { createHash } from "node:crypto";
 import { db, truncateAll } from "../test/integration/db";
 import { makeTestEnv } from "../test/integration/env";
@@ -33,8 +33,8 @@ import { seedOrg } from "../test/integration/seed";
 import { setJobStatus } from "../test/integration/job-fixtures";
 import { seedIssuableJob } from "../test/integration/seed-certificate";
 import { seedServiceOrder } from "../test/integration/seed-service-order";
-import { buildCertificateLayoutData } from "./certificate/layout-data";
-import { fetchCertificateJobData } from "./certificate/fetch-job-data";
+import { buildCertificateLayoutData } from "@calibra-facil/jobs-core/certificate/layout-data";
+import { fetchCertificateJobData } from "@calibra-facil/jobs-core/certificate/fetch-job-data";
 
 /**
  * Real-DB integration tier for the frozen certificate input (ISO/IEC 17025
@@ -57,7 +57,7 @@ vi.mock("@calibra-facil/notifications", () => ({
   notifyAuditPackReady: vi.fn(async () => undefined),
 }));
 
-import { processBackgroundJob } from "./index";
+import { processBackgroundJob } from "@calibra-facil/jobs-core";
 
 const GOTENBERG_URL = "http://gotenberg.test";
 const FAKE_PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]);

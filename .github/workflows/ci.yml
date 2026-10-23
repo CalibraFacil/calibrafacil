@@ -50,6 +50,11 @@ jobs:
       - name: Check blocked dependencies
         run: bun scripts/check-blocked-deps.mjs
 
+      # No app may depend on another app: code two apps share lives in a package
+      # (the background-job handlers are @calibra-facil/jobs-core).
+      - name: App boundaries
+        run: node scripts/check-app-boundaries.mjs
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -84,7 +89,7 @@ jobs:
       # Node-only tests for the repo scripts (dev runner, desktop release gate).
       # No workspace package owns them, so `turbo test` never runs them.
       - name: Script tests
-        run: pnpm test:dev-runner && pnpm test:desktop-release-gate
+        run: pnpm test:dev-runner && pnpm test:desktop-release-gate && pnpm test:app-boundaries
 
       # Build the real Vercel function bundles and assert their structural
       # shape (shim default-export form, cron dispatch table, every mounted
