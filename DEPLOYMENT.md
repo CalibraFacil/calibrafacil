@@ -702,7 +702,10 @@ Then change the API's connection string and set its mode (`DATABASE_RLS_MODE=enf
   The operator CLI (`apps/api/src/cli`) runs as the owner on the same path. They use the named
   `systemDb` of `@calibra-facil/db`, which connects with `DATABASE_OWNER_URL`; unset, it shares
   `DATABASE_URL`, so while the API still connects as the owner there is nothing to configure. Set it in the
-  same change as the role split, or those requests see nothing as `calibra_api`. Every use is a reviewed entry
+  same change as the role split, or those requests see nothing as `calibra_api`: the API and the worker
+  therefore REFUSE TO START when `DATABASE_RLS_MODE=enforced` and `DATABASE_OWNER_URL` is unset (the message names
+  both variables). Better Auth (sessions, the organization plugin) runs on this owner connection too, guarded by
+  its own membership and role checks (pinned by `identity-org-plugin-deny.int.spec.ts`), not by RLS. Every use is a reviewed entry
   of `apps/api/test/integration/tenant-sql-allowlist.ts`, and routes may not import it.
 - **The worker's certificate and label jobs.** A queue message names a job, not its laboratory. The worker
   learns the laboratory with one lookup on the system path (`DATABASE_OWNER_URL`, falling back to
