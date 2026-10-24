@@ -7,7 +7,12 @@
 //    migration is recorded as applied. Later migrations then apply normally.
 //  - Existing database: pending migrations are applied with `drizzle-kit migrate`.
 //
-// Reads DATABASE_URL (packages/db/.env is loaded by drizzle.config.ts and here).
+// It runs as the table OWNER: DATABASE_OWNER_URL when set, else DATABASE_URL
+// (packages/db/.env is loaded by drizzle.config.ts and here). When the
+// application's DATABASE_URL names the login `calibra_app` and differs from the
+// owner (the normal role split, DEPLOYMENT.md "Row-level security"), the script
+// finally makes sure that role can log in with the password of that URL
+// (CREATE/ALTER ROLE, idempotent), so one command prepares the whole database.
 // Runs under Node or Bun; drizzle-kit runs under whichever started this script,
 // so it also works in the Bun-only API image.
 import "dotenv/config";
@@ -23,10 +28,46 @@ const packageDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-const databaseUrl = process.env.DATABASE_URL;
+const { DATABASE_URL: applicationUrl, DATABASE_OWNER_URL: ownerUrl } =
+  process.env;
+const databaseUrl = ownerUrl || applicationUrl;
 if (!databaseUrl) {
   console.error("DATABASE_URL is not set (see packages/db/.env.example)");
   process.exit(1);
+}
+
+/** The login of the application, when it is calibra_app and not the owner's own URL. */
+function applicationLogin() {
+  if (!applicationUrl || applicationUrl === databaseUrl) return null;
+  const parsed = new URL(applicationUrl);
+  if (decodeURIComponent(parsed.username) !== "calibra_app") return null;
+  return { password: decodeURIComponent(parsed.password) };
+}
+
+const quoteLiteral = (value) => `'${value.replaceAll("'", "''")}'`;
+
+/** calibra_app exists since migration 0123 (NOLOGIN); the dev and compose stacks log in as it. */
+async function ensureApplicationLogin(sql) {
+  const login = applicationLogin();
+  if (!login) return;
+  if (!login.password) {
+    console.error(
+      "DATABASE_URL names calibra_app without a password; the role cannot be given a login.",
+    );
+    process.exit(1);
+  }
+  await sql.unsafe(`
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'calibra_app') THEN
+        CREATE ROLE calibra_app;
+      END IF;
+    END $$`);
+  await sql.unsafe(
+    `ALTER ROLE calibra_app LOGIN PASSWORD ${quoteLiteral(login.password)} NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE`,
+  );
+  console.log(
+    "Role calibra_app: login enabled with the password of DATABASE_URL.",
+  );
 }
 
 // drizzle-kit's CLI entry point (its package exports only the library).
@@ -55,6 +96,12 @@ try {
     console.log("Existing database: applying pending migrations.");
     await sql.end();
     drizzleKit(["migrate"]);
+    const after = postgres(databaseUrl, { max: 1, onnotice: () => {} });
+    try {
+      await ensureApplicationLogin(after);
+    } finally {
+      await after.end({ timeout: 5 }).catch(() => {});
+    }
     process.exit(0);
   }
 
@@ -89,6 +136,7 @@ try {
       values (${hash}, ${entry.when})
     `;
   }
+  await ensureApplicationLogin(sql);
   console.log(
     `Database ready (${journal.entries.length} migrations recorded).`,
   );

@@ -35,6 +35,7 @@ umask 077
 cp .env.example .env.tmp
 
 set_value POSTGRES_PASSWORD "$(token 24)"
+set_value CALIBRA_APP_PASSWORD "$(token 24)"
 set_value S3_SECRET_KEY "$(token 24)"
 set_value BETTER_AUTH_SECRET "$(token 48)"
 set_value CRON_SECRET "$(token 32)"

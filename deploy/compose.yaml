@@ -6,7 +6,7 @@
 #
 # Services:
 #   caddy     HTTPS for the three addresses in .env, routes /api to the API
-#   init      one-shot: schema, catalogs, buckets, portal service account
+#   init      one-shot: schema, calibra_app login, catalogs, buckets, portal service account
 #   api       Hono API on Bun; also runs the scheduled jobs (CRON_SCHEDULER)
 #   worker    renders certificates and documents, sends queued e-mails
 #   web       lab app          (APP_URL)
@@ -24,7 +24,12 @@ name: calibrafacil
 
 x-app-env: &app-env
   NODE_ENV: production
-  DATABASE_URL: postgres://calibra:${POSTGRES_PASSWORD:?run ./setup.sh first}@postgres:5432/calibra
+  # Row-level security: the API and worker log in as calibra_app (the tenant
+  # policies bind it); the owner is the system path and runs the migrations.
+  # `init` creates the login with CALIBRA_APP_PASSWORD on every start.
+  DATABASE_URL: postgres://calibra_app:${CALIBRA_APP_PASSWORD:?run ./setup.sh first (or add CALIBRA_APP_PASSWORD to .env, see DEPLOYMENT.md)}@postgres:5432/calibra
+  DATABASE_OWNER_URL: postgres://calibra:${POSTGRES_PASSWORD:?run ./setup.sh first}@postgres:5432/calibra
+  DATABASE_RLS_MODE: enforced
   API_URL: ${APP_URL:?set APP_URL in .env}
   APP_URL: ${APP_URL}
   PORTAL_APP_URL: ${PORTAL_URL:?set PORTAL_URL in .env}
