@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { db } from "@calibra-facil/db";
 import { calibrationJob } from "@calibra-facil/db/schema";
 import {
   ApproveJobSchema,
@@ -23,6 +22,7 @@ import { type PublicApiV2Env } from "./env";
 import { resolveExternalResourceId } from "./resolvers";
 import { withIdempotentMutation } from "./idempotency";
 import { jobStatusConflictBody, publicApiJobActor } from "./job-support";
+import { orgDb } from "../../lib/org-db";
 
 export const jobDecisionRoutes = new Hono<PublicApiV2Env>()
   .post(
@@ -49,16 +49,18 @@ export const jobDecisionRoutes = new Hono<PublicApiV2Env>()
       }
 
       return withIdempotentMutation(c, input, async () => {
-        const [job] = await db
-          .select({ unitId: calibrationJob.unitId })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.id, resolvedId),
-              eq(calibrationJob.organizationId, apiKey.organizationId),
-            ),
-          )
-          .limit(1);
+        const [job] = await orgDb(apiKey.organizationId).transaction((o) =>
+          o
+            .select({ unitId: calibrationJob.unitId })
+            .from(calibrationJob)
+            .where(
+              and(
+                eq(calibrationJob.id, resolvedId),
+                eq(calibrationJob.organizationId, apiKey.organizationId),
+              ),
+            )
+            .limit(1),
+        );
 
         if (!job) {
           return {

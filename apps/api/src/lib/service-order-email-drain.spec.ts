@@ -122,6 +122,9 @@ const {
 // Module mocks
 // =============================================================================
 
+// The list of owed rows runs on the system path; every other statement runs in
+// a transaction that names the row's laboratory (a handle / a raw executor that
+// run their callback on these doubles).
 vi.mock("@calibra-facil/db", () => ({
   db: {
     execute: mockExecute,
@@ -129,6 +132,26 @@ vi.mock("@calibra-facil/db", () => ({
     insert: mockLedgerInsertFn,
     delete: mockLedgerDeleteFn,
   },
+  systemDb: { select: mockDbSelectFn },
+}));
+
+vi.mock("../lib/org-db", () => ({
+  orgDb: () => {
+    const handle = {
+      select: mockDbSelectFn,
+      insert: mockLedgerInsertFn,
+      delete: mockLedgerDeleteFn,
+      transaction: async (run: (tx: unknown) => unknown) => run(handle),
+    };
+    return handle;
+  },
+}));
+
+vi.mock("../lib/org-transaction", () => ({
+  orgTransactionWithExecutor: async (
+    _organizationId: string,
+    run: (o: unknown, tx: unknown) => unknown,
+  ) => run({ select: mockDbSelectFn }, { execute: mockExecute }),
 }));
 
 vi.mock("@calibra-facil/db/schema", () => ({

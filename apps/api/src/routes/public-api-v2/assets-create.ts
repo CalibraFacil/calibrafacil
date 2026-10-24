@@ -1,12 +1,6 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { db } from "@calibra-facil/db";
-import {
-  asset,
-  assetAuditLog,
-  assetType,
-  customer,
-} from "@calibra-facil/db/schema";
+import { asset, assetAuditLog, customer } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 import {
   buildPublicApiError,
@@ -15,6 +9,8 @@ import {
   upsertResourceExternalId,
 } from "../../lib/public-api";
 import { isUniqueViolation } from "../../lib/db-errors";
+import { findAssetTypeById } from "../../lib/asset-types";
+import { orgDb } from "../../lib/org-db";
 import { requireApiScope } from "../../middleware/api-key-auth";
 import { resolveAssetRegimeWrite } from "../../lib/asset-regime";
 import { deriveRegulatedNextDate } from "../../lib/regulated-interval";
@@ -53,30 +49,36 @@ export const assetCreateRoutes = new Hono<PublicApiV2Env>().post(
         };
       }
 
-      const [foundCustomer, foundType, existingTag] = await Promise.all([
-        db.query.customer.findFirst({
-          where: and(
-            eq(customer.id, resolvedCustomerId),
-            eq(customer.labOrganizationId, apiKey.organizationId),
-          ),
+      const [{ foundCustomer, existingTag }, foundType] = await Promise.all([
+        orgDb(apiKey.organizationId).transaction(async (o) => {
+          const [foundCustomer] = await o
+            .select()
+            .from(customer)
+            .where(
+              and(
+                eq(customer.id, resolvedCustomerId),
+                eq(customer.labOrganizationId, apiKey.organizationId),
+              ),
+            )
+            .limit(1);
+          // SEC-03a: scope the tag-collision check to the caller's org (join
+          // asset → customer) so it cannot read another tenant's assets. The
+          // residual GLOBAL DB unique is caught at the insert below.
+          const existingTag = await o
+            .select({ id: asset.id })
+            .from(asset)
+            .innerJoin(customer, eq(asset.customerId, customer.id))
+            .where(
+              and(
+                eq(asset.tag, input.tag),
+                eq(customer.labOrganizationId, apiKey.organizationId),
+              ),
+            )
+            .limit(1);
+          return { foundCustomer, existingTag };
         }),
-        db.query.assetType.findFirst({
-          where: eq(assetType.id, input.assetTypeId),
-        }),
-        // SEC-03a: scope the tag-collision check to the caller's org (join
-        // asset → customer) so it cannot read another tenant's assets. The
-        // residual GLOBAL DB unique is caught at the insert below.
-        db
-          .select({ id: asset.id })
-          .from(asset)
-          .innerJoin(customer, eq(asset.customerId, customer.id))
-          .where(
-            and(
-              eq(asset.tag, input.tag),
-              eq(customer.labOrganizationId, apiKey.organizationId),
-            ),
-          )
-          .limit(1),
+        // Global catalog (no organization column).
+        findAssetTypeById(input.assetTypeId),
       ]);
 
       if (!foundCustomer) {
@@ -164,35 +166,70 @@ export const assetCreateRoutes = new Hono<PublicApiV2Env>().post(
       // 23505). A cross-org duplicate no longer raises (different
       // lab_organization_id). Return the SAME 409 asset_tag_conflict the app
       // check returns (never 500).
+      const externalId = input.externalId?.trim();
       let created: typeof asset.$inferSelect | undefined;
       try {
-        [created] = await db
-          .insert(asset)
-          .values({
-            unitId,
-            customerId: foundCustomer.id,
-            // SEC-03b (#638): denormalize the lab org from the (already
-            // org-scoped) customer so UNIQUE(lab_organization_id, tag) is
-            // per org. foundCustomer was fetched WHERE labOrganizationId =
-            // apiKey.organizationId, so this is the caller's own lab org.
-            labOrganizationId: foundCustomer.labOrganizationId,
-            assetTypeId: input.assetTypeId,
-            name: input.name,
-            manufacturer: input.manufacturer || null,
-            model: input.model || null,
-            serialNumber: input.serialNumber,
-            tag: input.tag,
-            status: input.status || "ACTIVE",
-            baseMeasurementUnit: baseMeasurementUnitResult.baseMeasurementUnit,
-            lastCalibrationDate,
-            installedAt,
-            comments: input.comments || null,
-            specifications: normalizedSpecifications.specifications || null,
-            metrologyRegime: regimeWrite.metrologyRegime,
-            regulatedInterval: regimeWrite.regulatedInterval,
-            nextLegalVerificationDate,
-          })
-          .returning();
+        // The asset, its audit entry and the caller's external id commit
+        // together; a tag collision rolls all of them back.
+        created = await orgDb(apiKey.organizationId).transaction(async (o) => {
+          const [row] = await o
+            .insert(asset)
+            .values({
+              unitId,
+              customerId: foundCustomer.id,
+              // SEC-03b (#638): denormalize the lab org from the (already
+              // org-scoped) customer so UNIQUE(lab_organization_id, tag) is
+              // per org. foundCustomer was fetched WHERE labOrganizationId =
+              // apiKey.organizationId, so this is the caller's own lab org.
+              labOrganizationId: foundCustomer.labOrganizationId,
+              assetTypeId: input.assetTypeId,
+              name: input.name,
+              manufacturer: input.manufacturer || null,
+              model: input.model || null,
+              serialNumber: input.serialNumber,
+              tag: input.tag,
+              status: input.status || "ACTIVE",
+              baseMeasurementUnit:
+                baseMeasurementUnitResult.baseMeasurementUnit,
+              lastCalibrationDate,
+              installedAt,
+              comments: input.comments || null,
+              specifications: normalizedSpecifications.specifications || null,
+              metrologyRegime: regimeWrite.metrologyRegime,
+              regulatedInterval: regimeWrite.regulatedInterval,
+              nextLegalVerificationDate,
+            })
+            .returning();
+
+          await o.insert(assetAuditLog).values({
+            organizationId: apiKey.organizationId,
+            assetId: row!.id,
+            action: "create",
+            changes: {
+              asset: { old: null, new: row },
+              unitConversions:
+                normalizedSpecifications.conversions.length > 0
+                  ? normalizedSpecifications.conversions
+                  : undefined,
+            },
+            performedBy: apiKey.createdBy,
+            ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+          });
+
+          if (externalId) {
+            await upsertResourceExternalId(
+              {
+                organizationId: apiKey.organizationId,
+                apiKeyId: apiKey.id,
+                resourceType: "asset",
+                resourceId: row!.id,
+                externalId,
+              },
+              o,
+            );
+          }
+          return row;
+        });
       } catch (error) {
         if (isUniqueViolation(error)) {
           return {
@@ -204,32 +241,6 @@ export const assetCreateRoutes = new Hono<PublicApiV2Env>().post(
           };
         }
         throw error;
-      }
-
-      await db.insert(assetAuditLog).values({
-        organizationId: apiKey.organizationId,
-        assetId: created!.id,
-        action: "create",
-        changes: {
-          asset: { old: null, new: created },
-          unitConversions:
-            normalizedSpecifications.conversions.length > 0
-              ? normalizedSpecifications.conversions
-              : undefined,
-        },
-        performedBy: apiKey.createdBy,
-        ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-      });
-
-      const externalId = input.externalId?.trim();
-      if (externalId) {
-        await upsertResourceExternalId({
-          organizationId: apiKey.organizationId,
-          apiKeyId: apiKey.id,
-          resourceType: "asset",
-          resourceId: created!.id,
-          externalId,
-        });
       }
 
       const body = {

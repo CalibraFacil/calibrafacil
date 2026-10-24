@@ -98,6 +98,18 @@ const { dbMock } = vi.hoisted(() => ({
 }));
 
 vi.mock("@calibra-facil/db", () => ({ db: dbMock, systemDb: dbMock }));
+// Entity reads and notification rows run in `inOrg(lab, ...)` and the laboratory
+// of a visit id is learned on the system path (lab-scope.ts): the double runs
+// the transaction on the db mock and names a fixed laboratory.
+vi.mock("./lab-scope", () => ({
+  inOrg: (_organizationId: string, run: (tx: unknown) => unknown) =>
+    run(dbMock),
+  findVisitLaboratory: async () => "org-1",
+  findJobLaboratory: async () => "org-1",
+  findCalibrationRequestLaboratory: async () => "org-1",
+  findAuditPackLaboratory: async () => "org-1",
+  listPortalDigestRecipients: vi.fn(),
+}));
 // These specs exercise the PLATFORM sender path. `resolveLabEmailSender` now
 // reads the email-domain row before checking any key (it must, so a managed
 // row resolves with only RESEND_API_KEY), which would otherwise consume one

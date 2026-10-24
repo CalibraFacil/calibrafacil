@@ -1,9 +1,4 @@
-import { db } from "@calibra-facil/db";
-import {
-  integrationConnection,
-  integrationSyncRun,
-  organizationIntegration,
-} from "@calibra-facil/db/schema";
+import { integrationSyncRun } from "@calibra-facil/db/schema";
 import {
   normalizeContaAzulConnectionConfig,
   type IntegrationSyncTarget,
@@ -11,6 +6,8 @@ import {
 } from "@calibra-facil/shared";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type { IntegrationsEnv } from "../../lib/integrations-env";
+import { inOrgTransaction } from "../../lib/org-transaction";
+import { listActiveContaAzulConnections } from "./active-connections";
 import {
   type ContaAzulPollDefinition,
   type ContaAzulScheduledPollKind,
@@ -44,15 +41,23 @@ async function hasActiveContaAzulPollRun(params: {
   kind: ContaAzulScheduledPollKind;
   target: IntegrationSyncTarget;
 }) {
-  const activeRuns = await db.query.integrationSyncRun.findMany({
-    where: and(
-      eq(integrationSyncRun.integrationId, params.integrationId),
-      eq(integrationSyncRun.organizationId, params.organizationId),
-      eq(integrationSyncRun.target, params.target),
-      inArray(integrationSyncRun.status, ["PENDING", "RUNNING"]),
-    ),
-    orderBy: [desc(integrationSyncRun.createdAt)],
-  });
+  const activeRuns = await inOrgTransaction(
+    params.organizationId,
+    undefined,
+    (o) =>
+      o
+        .select()
+        .from(integrationSyncRun)
+        .where(
+          and(
+            eq(integrationSyncRun.integrationId, params.integrationId),
+            eq(integrationSyncRun.organizationId, params.organizationId),
+            eq(integrationSyncRun.target, params.target),
+            inArray(integrationSyncRun.status, ["PENDING", "RUNNING"]),
+          ),
+        )
+        .orderBy(desc(integrationSyncRun.createdAt)),
+  );
 
   // TODO(canonicalize-poll-kind-lock): move pollKind out of summary JSONB so this can be filtered by SQL.
   return activeRuns.some((run) => getRunPollKind(run) === params.kind);
@@ -103,82 +108,101 @@ export async function runContaAzulScheduledPoll(params: {
   }
 
   const requestedLimit = params.limit ?? DEFAULT_INTEGRATION_SYNC_LIMIT;
-  const runId = await createSyncRun({
-    integrationId: params.integrationId,
-    organizationId: params.organizationId,
-    trigger: "scheduled",
-    target: definition.target,
-    requestedLimit,
-    pollKind: params.kind,
-    cursorType: definition.cursorType,
-  });
+  // The run row, its dispatch event and the RUNNING stamp commit together.
+  const runId = await inOrgTransaction(
+    params.organizationId,
+    undefined,
+    async (o) => {
+      const runId = await createSyncRun(
+        {
+          integrationId: params.integrationId,
+          organizationId: params.organizationId,
+          trigger: "scheduled",
+          target: definition.target,
+          requestedLimit,
+          pollKind: params.kind,
+          cursorType: definition.cursorType,
+        },
+        o,
+      );
 
-  await writeIntegrationEvent({
-    integrationId: params.integrationId,
-    organizationId: params.organizationId,
-    runId,
-    level: "info",
-    event: "sync.scheduled.dispatched",
-    message: "Polling Conta Azul agendado iniciado",
-    details: {
-      provider: "conta_azul",
-      pollKind: params.kind,
-      cursorType: definition.cursorType,
-      trigger: "scheduled",
+      await writeIntegrationEvent(
+        {
+          integrationId: params.integrationId,
+          organizationId: params.organizationId,
+          runId,
+          level: "info",
+          event: "sync.scheduled.dispatched",
+          message: "Polling Conta Azul agendado iniciado",
+          details: {
+            provider: "conta_azul",
+            pollKind: params.kind,
+            cursorType: definition.cursorType,
+            trigger: "scheduled",
+          },
+        },
+        o,
+      );
+
+      await o
+        .update(integrationSyncRun)
+        .set({
+          status: "RUNNING",
+          startedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(integrationSyncRun.id, runId));
+      return runId;
     },
-  });
-
-  await db
-    .update(integrationSyncRun)
-    .set({
-      status: "RUNNING",
-      startedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(integrationSyncRun.id, runId));
+  );
 
   try {
     const result = await runContaAzulPollByKind(params);
-    await db
-      .update(integrationSyncRun)
-      .set({
-        status: "COMPLETED",
-        processedCount: result.processedCount,
-        successCount: result.processedCount,
-        errorCount: 0,
-        errorSummary: null,
-        summary: buildRunSummary({
-          target: definition.target,
-          requestedLimit,
+    await inOrgTransaction(params.organizationId, undefined, async (o) => {
+      await o
+        .update(integrationSyncRun)
+        .set({
+          status: "COMPLETED",
           processedCount: result.processedCount,
           successCount: result.processedCount,
           errorCount: 0,
-          pollKind: params.kind,
-          cursorType: definition.cursorType,
-          updatedCount: result.updatedCount,
-          warnings: result.warnings,
-        }),
-        finishedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(integrationSyncRun.id, runId));
+          errorSummary: null,
+          summary: buildRunSummary({
+            target: definition.target,
+            requestedLimit,
+            processedCount: result.processedCount,
+            successCount: result.processedCount,
+            errorCount: 0,
+            pollKind: params.kind,
+            cursorType: definition.cursorType,
+            updatedCount: result.updatedCount,
+            warnings: result.warnings,
+          }),
+          finishedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(integrationSyncRun.id, runId));
 
-    await writeIntegrationEvent({
-      integrationId: params.integrationId,
-      organizationId: params.organizationId,
-      runId,
-      level: result.warnings.length > 0 ? "warning" : "info",
-      event: "sync.completed",
-      message: "Polling Conta Azul agendado concluído",
-      details: {
-        provider: "conta_azul",
-        pollKind: params.kind,
-        cursorType: definition.cursorType,
-        completedEvent: definition.completedEvent,
-        processedCount: result.processedCount,
-        updatedCount: result.updatedCount,
-        warnings: result.warnings,
-      },
+      await writeIntegrationEvent(
+        {
+          integrationId: params.integrationId,
+          organizationId: params.organizationId,
+          runId,
+          level: result.warnings.length > 0 ? "warning" : "info",
+          event: "sync.completed",
+          message: "Polling Conta Azul agendado concluído",
+          details: {
+            provider: "conta_azul",
+            pollKind: params.kind,
+            cursorType: definition.cursorType,
+            completedEvent: definition.completedEvent,
+            processedCount: result.processedCount,
+            updatedCount: result.updatedCount,
+            warnings: result.warnings,
+          },
+        },
+        o,
+      );
     });
 
     return result;
@@ -209,23 +233,7 @@ async function processScheduledContaAzulPollKind(params: {
   limit?: number;
   intervalMs?: number;
 }) {
-  const rows = await db
-    .select({
-      integrationId: organizationIntegration.id,
-      organizationId: organizationIntegration.organizationId,
-      config: integrationConnection.config,
-    })
-    .from(organizationIntegration)
-    .innerJoin(
-      integrationConnection,
-      eq(integrationConnection.integrationId, organizationIntegration.id),
-    )
-    .where(
-      and(
-        eq(organizationIntegration.status, "ACTIVE"),
-        eq(organizationIntegration.provider, "conta_azul"),
-      ),
-    );
+  const rows = await listActiveContaAzulConnections();
 
   let dueIntegrations = 0;
   let successfulPolls = 0;
@@ -255,6 +263,7 @@ async function processScheduledContaAzulPollKind(params: {
 
     const cursor = await getIntegrationCursor({
       integrationId: row.integrationId,
+      organizationId: row.organizationId,
       cursorType: params.definition.cursorType,
     });
 

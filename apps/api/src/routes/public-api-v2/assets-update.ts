@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db } from "@calibra-facil/db";
 import {
   asset,
   assetAuditLog,
@@ -21,6 +20,7 @@ import {
   upsertResourceExternalId,
 } from "../../lib/public-api";
 import { isUniqueViolation } from "../../lib/db-errors";
+import { orgDb } from "../../lib/org-db";
 import { requireApiScope } from "../../middleware/api-key-auth";
 import { deriveNextCalibrationDate } from "../../lib/portal-asset-interval";
 import { resolveAssetRegimeWrite } from "../../lib/asset-regime";
@@ -57,56 +57,52 @@ export const assetUpdateRoutes = new Hono<PublicApiV2Env>()
         );
       }
 
-      const [existing] = await db
-        .select({
-          id: asset.id,
-          deletedAt: asset.deletedAt,
-          customerId: asset.customerId,
-          assetTypeId: asset.assetTypeId,
-          baseMeasurementUnit: asset.baseMeasurementUnit,
-          name: asset.name,
-          manufacturer: asset.manufacturer,
-          model: asset.model,
-          serialNumber: asset.serialNumber,
-          tag: asset.tag,
-          status: asset.status,
-          lastCalibrationDate: asset.lastCalibrationDate,
-          nextCalibrationDate: asset.nextCalibrationDate,
-          calibrationIntervalMonths: asset.calibrationIntervalMonths,
-          installedAt: asset.installedAt,
-          metrologyRegime: asset.metrologyRegime,
-          regulatedInterval: asset.regulatedInterval,
-          comments: asset.comments,
-          specifications: asset.specifications,
-          assetTypeDefinition: assetType.definition,
-        })
-        .from(asset)
-        .innerJoin(customer, eq(asset.customerId, customer.id))
-        .innerJoin(assetType, eq(asset.assetTypeId, assetType.id))
-        .where(
-          and(
-            eq(asset.id, resolvedId),
-            eq(customer.labOrganizationId, apiKey.organizationId),
-            isNull(asset.deletedAt),
-          ),
-        )
-        .limit(1);
+      const { existing, tagConflict } = await orgDb(
+        apiKey.organizationId,
+      ).transaction(async (o) => {
+        const [row] = await o
+          .select({
+            id: asset.id,
+            deletedAt: asset.deletedAt,
+            customerId: asset.customerId,
+            assetTypeId: asset.assetTypeId,
+            baseMeasurementUnit: asset.baseMeasurementUnit,
+            name: asset.name,
+            manufacturer: asset.manufacturer,
+            model: asset.model,
+            serialNumber: asset.serialNumber,
+            tag: asset.tag,
+            status: asset.status,
+            lastCalibrationDate: asset.lastCalibrationDate,
+            nextCalibrationDate: asset.nextCalibrationDate,
+            calibrationIntervalMonths: asset.calibrationIntervalMonths,
+            installedAt: asset.installedAt,
+            metrologyRegime: asset.metrologyRegime,
+            regulatedInterval: asset.regulatedInterval,
+            comments: asset.comments,
+            specifications: asset.specifications,
+            assetTypeDefinition: assetType.definition,
+          })
+          .from(asset)
+          .innerJoin(customer, eq(asset.customerId, customer.id))
+          .innerJoin(assetType, eq(asset.assetTypeId, assetType.id))
+          .where(
+            and(
+              eq(asset.id, resolvedId),
+              eq(customer.labOrganizationId, apiKey.organizationId),
+              isNull(asset.deletedAt),
+            ),
+          )
+          .limit(1);
 
-      if (!existing) {
-        return c.json(
-          buildPublicApiError({
-            code: "asset_not_found",
-            message: "Ativo não encontrado",
-          }),
-          404,
-        );
-      }
+        if (!row || !input.tag || input.tag === row.tag) {
+          return { existing: row, tagConflict: undefined };
+        }
 
-      if (input.tag && input.tag !== existing.tag) {
         // SEC-03a: scope the tag-collision check to the caller's org (join
         // asset → customer) so it cannot read another tenant's assets. The
         // residual GLOBAL DB unique is caught at the update below.
-        const [tagConflict] = await db
+        const [conflict] = await o
           .select({ id: asset.id })
           .from(asset)
           .innerJoin(customer, eq(asset.customerId, customer.id))
@@ -118,15 +114,27 @@ export const assetUpdateRoutes = new Hono<PublicApiV2Env>()
             ),
           )
           .limit(1);
-        if (tagConflict) {
-          return c.json(
-            buildPublicApiError({
-              code: "asset_tag_conflict",
-              message: "Tag já está em uso",
-            }),
-            409,
-          );
-        }
+        return { existing: row, tagConflict: conflict };
+      });
+
+      if (!existing) {
+        return c.json(
+          buildPublicApiError({
+            code: "asset_not_found",
+            message: "Ativo não encontrado",
+          }),
+          404,
+        );
+      }
+
+      if (tagConflict) {
+        return c.json(
+          buildPublicApiError({
+            code: "asset_tag_conflict",
+            message: "Tag já está em uso",
+          }),
+          409,
+        );
       }
 
       const normalizedSpecifications =
@@ -214,31 +222,82 @@ export const assetUpdateRoutes = new Hono<PublicApiV2Env>()
       // 23505). A cross-org duplicate no longer raises (different
       // lab_organization_id). Return the SAME 409 asset_tag_conflict the app
       // check returns (never 500).
-      let updated: typeof asset.$inferSelect | undefined;
+      const externalId = input.externalId?.trim();
+      let written:
+        | {
+            updated: typeof asset.$inferSelect | undefined;
+            externalId: string | null;
+          }
+        | undefined;
       try {
-        [updated] = await db
-          .update(asset)
-          .set({
-            name: input.name ?? existing.name,
-            manufacturer: input.manufacturer ?? existing.manufacturer,
-            model: input.model ?? existing.model,
-            serialNumber: input.serialNumber ?? existing.serialNumber,
-            tag: input.tag ?? existing.tag,
-            status: input.status ?? existing.status,
-            lastCalibrationDate:
-              lastCalibrationDate === undefined
-                ? existing.lastCalibrationDate
-                : lastCalibrationDate,
-            nextCalibrationDate,
-            ...(installedAt !== undefined ? { installedAt } : {}),
-            comments: input.comments ?? existing.comments,
-            specifications:
-              normalizedSpecifications?.specifications ??
-              existing.specifications,
-            ...regimeUpdate,
-          })
-          .where(eq(asset.id, existing.id))
-          .returning();
+        // The update, its audit entry and the caller's external id commit
+        // together; a tag collision rolls all of them back.
+        written = await orgDb(apiKey.organizationId).transaction(async (o) => {
+          const [row] = await o
+            .update(asset)
+            .set({
+              name: input.name ?? existing.name,
+              manufacturer: input.manufacturer ?? existing.manufacturer,
+              model: input.model ?? existing.model,
+              serialNumber: input.serialNumber ?? existing.serialNumber,
+              tag: input.tag ?? existing.tag,
+              status: input.status ?? existing.status,
+              lastCalibrationDate:
+                lastCalibrationDate === undefined
+                  ? existing.lastCalibrationDate
+                  : lastCalibrationDate,
+              nextCalibrationDate,
+              ...(installedAt !== undefined ? { installedAt } : {}),
+              comments: input.comments ?? existing.comments,
+              specifications:
+                normalizedSpecifications?.specifications ??
+                existing.specifications,
+              ...regimeUpdate,
+            })
+            .where(eq(asset.id, existing.id))
+            .returning();
+
+          await o.insert(assetAuditLog).values({
+            organizationId: apiKey.organizationId,
+            assetId: existing.id,
+            action: "update",
+            changes: {
+              asset: { old: existing, new: row },
+              unitConversions: normalizedSpecifications?.conversions.length
+                ? normalizedSpecifications.conversions
+                : undefined,
+            },
+            performedBy: apiKey.createdBy,
+            ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+          });
+
+          if (externalId) {
+            await upsertResourceExternalId(
+              {
+                organizationId: apiKey.organizationId,
+                apiKeyId: apiKey.id,
+                resourceType: "asset",
+                resourceId: existing.id,
+                externalId,
+              },
+              o,
+            );
+          }
+
+          return {
+            updated: row,
+            externalId:
+              externalId ??
+              (await getResourceExternalId(
+                {
+                  organizationId: apiKey.organizationId,
+                  resourceType: "asset",
+                  resourceId: existing.id,
+                },
+                o,
+              )),
+          };
+        });
       } catch (error) {
         if (isUniqueViolation(error)) {
           return c.json(
@@ -252,41 +311,10 @@ export const assetUpdateRoutes = new Hono<PublicApiV2Env>()
         throw error;
       }
 
-      await db.insert(assetAuditLog).values({
-        organizationId: apiKey.organizationId,
-        assetId: existing.id,
-        action: "update",
-        changes: {
-          asset: { old: existing, new: updated },
-          unitConversions: normalizedSpecifications?.conversions.length
-            ? normalizedSpecifications.conversions
-            : undefined,
-        },
-        performedBy: apiKey.createdBy,
-        ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-      });
-
-      const externalId = input.externalId?.trim();
-      if (externalId) {
-        await upsertResourceExternalId({
-          organizationId: apiKey.organizationId,
-          apiKeyId: apiKey.id,
-          resourceType: "asset",
-          resourceId: existing.id,
-          externalId,
-        });
-      }
-
       const body = {
         data: {
-          ...updated,
-          externalId:
-            externalId ??
-            (await getResourceExternalId({
-              organizationId: apiKey.organizationId,
-              resourceType: "asset",
-              resourceId: existing.id,
-            })),
+          ...written?.updated,
+          externalId: written?.externalId ?? null,
         },
       };
 
@@ -319,26 +347,47 @@ export const assetUpdateRoutes = new Hono<PublicApiV2Env>()
     }
 
     return withIdempotentMutation(c, { assetId: resolvedId }, async () => {
-      const [existing] = await db
-        .select({
-          id: asset.id,
-          deletedAt: asset.deletedAt,
-          name: asset.name,
-          tag: asset.tag,
-          unitId: asset.unitId,
-          customerId: asset.customerId,
-          assetTypeId: asset.assetTypeId,
-        })
-        .from(asset)
-        .innerJoin(customer, eq(asset.customerId, customer.id))
-        .where(
-          and(
-            eq(asset.id, resolvedId),
-            eq(customer.labOrganizationId, apiKey.organizationId),
-            isNull(asset.deletedAt),
-          ),
-        )
-        .limit(1);
+      // Look-up, audit entry and soft delete are one transaction.
+      const existing = await orgDb(apiKey.organizationId).transaction(
+        async (o) => {
+          const [row] = await o
+            .select({
+              id: asset.id,
+              deletedAt: asset.deletedAt,
+              name: asset.name,
+              tag: asset.tag,
+              unitId: asset.unitId,
+              customerId: asset.customerId,
+              assetTypeId: asset.assetTypeId,
+            })
+            .from(asset)
+            .innerJoin(customer, eq(asset.customerId, customer.id))
+            .where(
+              and(
+                eq(asset.id, resolvedId),
+                eq(customer.labOrganizationId, apiKey.organizationId),
+                isNull(asset.deletedAt),
+              ),
+            )
+            .limit(1);
+          if (!row) return null;
+
+          await o.insert(assetAuditLog).values({
+            organizationId: apiKey.organizationId,
+            assetId: row.id,
+            action: "delete",
+            changes: { asset: { old: row, new: null } },
+            performedBy: apiKey.createdBy,
+            ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+          });
+
+          await o
+            .update(asset)
+            .set({ deletedAt: new Date() })
+            .where(eq(asset.id, row.id));
+          return row;
+        },
+      );
 
       if (!existing) {
         return {
@@ -349,20 +398,6 @@ export const assetUpdateRoutes = new Hono<PublicApiV2Env>()
           }),
         };
       }
-
-      await db.insert(assetAuditLog).values({
-        organizationId: apiKey.organizationId,
-        assetId: existing.id,
-        action: "delete",
-        changes: { asset: { old: existing, new: null } },
-        performedBy: apiKey.createdBy,
-        ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-      });
-
-      await db
-        .update(asset)
-        .set({ deletedAt: new Date() })
-        .where(eq(asset.id, existing.id));
 
       const body = { data: { id: existing.id, deleted: true } };
 

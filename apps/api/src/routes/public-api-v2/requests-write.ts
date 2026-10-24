@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { db } from "@calibra-facil/db";
 import {
   asset,
   calibrationRequest,
@@ -17,6 +16,7 @@ import {
   upsertResourceExternalId,
 } from "../../lib/public-api";
 import { requireApiScope } from "../../middleware/api-key-auth";
+import { orgDb } from "../../lib/org-db";
 import { type PublicApiV2Env } from "./env";
 import {
   CancelRequestPublicSchema,
@@ -82,11 +82,38 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
           };
         }
 
-        const foundCustomer = await db.query.customer.findFirst({
-          where: and(
-            eq(customer.id, resolvedCustomerId),
-            eq(customer.labOrganizationId, apiKey.organizationId),
-          ),
+        const { foundCustomer, assetsInScope } = await orgDb(
+          apiKey.organizationId,
+        ).transaction(async (o) => {
+          const [found] = await o
+            .select()
+            .from(customer)
+            .where(
+              and(
+                eq(customer.id, resolvedCustomerId),
+                eq(customer.labOrganizationId, apiKey.organizationId),
+              ),
+            )
+            .limit(1);
+          if (!found) {
+            return { foundCustomer: undefined, assetsInScope: [] };
+          }
+
+          const inScope = await o
+            .select({
+              id: asset.id,
+              unitId: asset.unitId,
+            })
+            .from(asset)
+            .where(
+              and(
+                inArray(asset.id, assetIds),
+                eq(asset.customerId, found.id),
+                isNull(asset.deletedAt),
+                eq(asset.status, "ACTIVE"),
+              ),
+            );
+          return { foundCustomer: found, assetsInScope: inScope };
         });
 
         if (!foundCustomer) {
@@ -98,21 +125,6 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
             }),
           };
         }
-
-        const assetsInScope = await db
-          .select({
-            id: asset.id,
-            unitId: asset.unitId,
-          })
-          .from(asset)
-          .where(
-            and(
-              inArray(asset.id, assetIds),
-              eq(asset.customerId, foundCustomer.id),
-              isNull(asset.deletedAt),
-              eq(asset.status, "ACTIVE"),
-            ),
-          );
 
         if (assetsInScope.length !== assetIds.length) {
           return {
@@ -150,56 +162,61 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
           ? new Date(input.requestedDueDate)
           : null;
 
-        const created = await db.transaction(async (tx) => {
-          const [request] = await tx
-            .insert(calibrationRequest)
-            .values({
-              organizationId: apiKey.organizationId,
-              unitId: input.unitId ?? unitIds[0]!,
-              customerId: foundCustomer.id,
-              authOrganizationId: foundCustomer.authOrganizationId,
-              observations: input.observations || null,
-              requestedDueDate,
-              submittedBy: apiKey.createdBy,
-            })
-            .returning();
+        const externalId = input.externalId?.trim();
+        const created = await orgDb(apiKey.organizationId).transaction(
+          async (tx) => {
+            const [request] = await tx
+              .insert(calibrationRequest)
+              .values({
+                organizationId: apiKey.organizationId,
+                unitId: input.unitId ?? unitIds[0]!,
+                customerId: foundCustomer.id,
+                authOrganizationId: foundCustomer.authOrganizationId,
+                observations: input.observations || null,
+                requestedDueDate,
+                submittedBy: apiKey.createdBy,
+              })
+              .returning();
 
-          await tx.insert(calibrationRequestItem).values(
-            assetIds.map((assetId) => ({
+            await tx.insert(calibrationRequestItem).values(
+              assetIds.map((assetId) => ({
+                organizationId: apiKey.organizationId,
+                requestId: request!.id,
+                assetId,
+              })),
+            );
+
+            await tx.insert(calibrationRequestAuditLog).values({
               organizationId: apiKey.organizationId,
               requestId: request!.id,
-              assetId,
-            })),
-          );
-
-          await tx.insert(calibrationRequestAuditLog).values({
-            organizationId: apiKey.organizationId,
-            requestId: request!.id,
-            action: "create",
-            changes: {
-              initial: {
-                assetIds,
-                observations: input.observations || null,
-                requestedDueDate: requestedDueDate?.toISOString() ?? null,
+              action: "create",
+              changes: {
+                initial: {
+                  assetIds,
+                  observations: input.observations || null,
+                  requestedDueDate: requestedDueDate?.toISOString() ?? null,
+                },
               },
-            },
-            performedBy: apiKey.createdBy,
-            ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-          });
+              performedBy: apiKey.createdBy,
+              ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+            });
 
-          return request!;
-        });
+            if (externalId) {
+              await upsertResourceExternalId(
+                {
+                  organizationId: apiKey.organizationId,
+                  apiKeyId: apiKey.id,
+                  resourceType: "request",
+                  resourceId: request!.id,
+                  externalId,
+                },
+                tx,
+              );
+            }
 
-        const externalId = input.externalId?.trim();
-        if (externalId) {
-          await upsertResourceExternalId({
-            organizationId: apiKey.organizationId,
-            apiKeyId: apiKey.id,
-            resourceType: "request",
-            resourceId: created.id,
-            externalId,
-          });
-        }
+            return request!;
+          },
+        );
 
         const body = {
           data: {
@@ -248,18 +265,66 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
         );
       }
 
-      const [existing] = await db
-        .select()
-        .from(calibrationRequest)
-        .where(
-          and(
-            eq(calibrationRequest.id, resolvedId),
-            eq(calibrationRequest.organizationId, apiKey.organizationId),
-          ),
-        )
-        .limit(1);
+      // Look-up, update and audit entry are one transaction.
+      const outcome = await orgDb(apiKey.organizationId).transaction(
+        async (o) => {
+          const [existing] = await o
+            .select()
+            .from(calibrationRequest)
+            .where(
+              and(
+                eq(calibrationRequest.id, resolvedId),
+                eq(calibrationRequest.organizationId, apiKey.organizationId),
+              ),
+            )
+            .limit(1);
 
-      if (!existing) {
+          if (!existing) return { kind: "missing" as const };
+
+          if (!["PENDING", "UNDER_REVIEW"].includes(existing.status)) {
+            return { kind: "not_editable" as const };
+          }
+
+          const [updated] = await o
+            .update(calibrationRequest)
+            .set({
+              observations: input.observations ?? existing.observations,
+              requestedDueDate:
+                input.requestedDueDate === undefined
+                  ? existing.requestedDueDate
+                  : input.requestedDueDate
+                    ? new Date(input.requestedDueDate)
+                    : null,
+            })
+            .where(eq(calibrationRequest.id, existing.id))
+            .returning();
+
+          await o.insert(calibrationRequestAuditLog).values({
+            organizationId: apiKey.organizationId,
+            requestId: existing.id,
+            action: "update",
+            changes: { request: { old: existing, new: updated } },
+            performedBy: apiKey.createdBy,
+            ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+          });
+
+          return {
+            kind: "updated" as const,
+            existing,
+            updated,
+            externalId: await getResourceExternalId(
+              {
+                organizationId: apiKey.organizationId,
+                resourceType: "request",
+                resourceId: existing.id,
+              },
+              o,
+            ),
+          };
+        },
+      );
+
+      if (outcome.kind === "missing") {
         return c.json(
           buildPublicApiError({
             code: "request_not_found",
@@ -269,7 +334,7 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
         );
       }
 
-      if (!["PENDING", "UNDER_REVIEW"].includes(existing.status)) {
+      if (outcome.kind === "not_editable") {
         return c.json(
           buildPublicApiError({
             code: "request_not_editable",
@@ -280,37 +345,12 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
         );
       }
 
-      const [updated] = await db
-        .update(calibrationRequest)
-        .set({
-          observations: input.observations ?? existing.observations,
-          requestedDueDate:
-            input.requestedDueDate === undefined
-              ? existing.requestedDueDate
-              : input.requestedDueDate
-                ? new Date(input.requestedDueDate)
-                : null,
-        })
-        .where(eq(calibrationRequest.id, existing.id))
-        .returning();
-
-      await db.insert(calibrationRequestAuditLog).values({
-        organizationId: apiKey.organizationId,
-        requestId: existing.id,
-        action: "update",
-        changes: { request: { old: existing, new: updated } },
-        performedBy: apiKey.createdBy,
-        ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-      });
+      const { updated } = outcome;
 
       const body = {
         data: {
           ...updated,
-          externalId: await getResourceExternalId({
-            organizationId: apiKey.organizationId,
-            resourceType: "request",
-            resourceId: existing.id,
-          }),
+          externalId: outcome.externalId,
         },
       };
 
@@ -348,18 +388,54 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
       }
 
       return withIdempotentMutation(c, input, async () => {
-        const [existing] = await db
-          .select()
-          .from(calibrationRequest)
-          .where(
-            and(
-              eq(calibrationRequest.id, resolvedId),
-              eq(calibrationRequest.organizationId, apiKey.organizationId),
-            ),
-          )
-          .limit(1);
+        // Look-up, rejection and audit entry are one transaction.
+        const outcome = await orgDb(apiKey.organizationId).transaction(
+          async (o) => {
+            const [existing] = await o
+              .select()
+              .from(calibrationRequest)
+              .where(
+                and(
+                  eq(calibrationRequest.id, resolvedId),
+                  eq(calibrationRequest.organizationId, apiKey.organizationId),
+                ),
+              )
+              .limit(1);
 
-        if (!existing) {
+            if (!existing) return { kind: "missing" as const };
+
+            if (
+              !["PENDING", "UNDER_REVIEW", "APPROVED"].includes(existing.status)
+            ) {
+              return { kind: "not_cancelable" as const };
+            }
+
+            const [row] = await o
+              .update(calibrationRequest)
+              .set({
+                status: "REJECTED",
+                rejectedBy: apiKey.createdBy,
+                rejectedAt: new Date(),
+                rejectionReason: input.reason,
+              })
+              .where(eq(calibrationRequest.id, existing.id))
+              .returning();
+
+            await o.insert(calibrationRequestAuditLog).values({
+              organizationId: apiKey.organizationId,
+              requestId: existing.id,
+              action: "reject",
+              changes: { status: { old: existing.status, new: "REJECTED" } },
+              performedBy: apiKey.createdBy,
+              ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+              reason: input.reason,
+            });
+
+            return { kind: "canceled" as const, updated: row };
+          },
+        );
+
+        if (outcome.kind === "missing") {
           return {
             status: 404,
             body: buildPublicApiError({
@@ -369,9 +445,7 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
           };
         }
 
-        if (
-          !["PENDING", "UNDER_REVIEW", "APPROVED"].includes(existing.status)
-        ) {
+        if (outcome.kind === "not_cancelable") {
           return {
             status: 409,
             body: buildPublicApiError({
@@ -381,26 +455,7 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
           };
         }
 
-        const [updated] = await db
-          .update(calibrationRequest)
-          .set({
-            status: "REJECTED",
-            rejectedBy: apiKey.createdBy,
-            rejectedAt: new Date(),
-            rejectionReason: input.reason,
-          })
-          .where(eq(calibrationRequest.id, existing.id))
-          .returning();
-
-        await db.insert(calibrationRequestAuditLog).values({
-          organizationId: apiKey.organizationId,
-          requestId: existing.id,
-          action: "reject",
-          changes: { status: { old: existing.status, new: "REJECTED" } },
-          performedBy: apiKey.createdBy,
-          ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-          reason: input.reason,
-        });
+        const { updated } = outcome;
 
         const body = { data: updated! };
 

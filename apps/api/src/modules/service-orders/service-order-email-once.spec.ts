@@ -36,6 +36,21 @@ vi.mock("@calibra-facil/db", () => ({
   },
 }));
 
+// The helper runs each ledger statement in `orgDb(lab).transaction(...)`: a
+// handle whose transaction runs the callback on the same insert/delete/update
+// doubles.
+vi.mock("../../lib/org-db", () => ({
+  orgDb: () => {
+    const handle = {
+      insert: mockInsert,
+      delete: mockDelete,
+      update: mockUpdate,
+      transaction: async (run: (tx: unknown) => unknown) => run(handle),
+    };
+    return handle;
+  },
+}));
+
 vi.mock("@calibra-facil/db/schema", () => ({
   serviceOrderEmailLog: {
     serviceOrderId: "serviceOrderId",

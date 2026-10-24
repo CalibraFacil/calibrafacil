@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db } from "@calibra-facil/db";
 import { asset, calibrationJob, customer } from "@calibra-facil/db/schema";
 import { and, count, desc, eq, ilike, inArray } from "drizzle-orm";
 import { buildListMeta, buildPublicApiError } from "../../lib/public-api";
@@ -13,6 +12,7 @@ import {
 import { requireApiScope } from "../../middleware/api-key-auth";
 import { type PublicApiV2Env } from "./env";
 import { ListQuerySchema } from "./schemas";
+import { orgDb } from "../../lib/org-db";
 
 export const certificateRoutes = new Hono<PublicApiV2Env>()
   .get(
@@ -33,32 +33,36 @@ export const certificateRoutes = new Hono<PublicApiV2Env>()
         query ? ilike(calibrationJob.jobId, `%${query}%`) : undefined,
       ];
 
-      const [countResult, rows] = await Promise.all([
-        db
-          .select({ total: count() })
-          .from(calibrationJob)
-          .where(and(...conditions)),
-        db
-          .select({
-            id: calibrationJob.id,
-            jobId: calibrationJob.jobId,
-            certificateName: calibrationJob.certificateName,
-            status: calibrationJob.status,
-            approvedAt: calibrationJob.approvedAt,
-            verificationToken: calibrationJob.verificationToken,
-            certificateUrl: calibrationJob.certificateUrl,
-            unitId: calibrationJob.unitId,
-            assetName: asset.name,
-            customerName: customer.name,
-          })
-          .from(calibrationJob)
-          .innerJoin(customer, eq(calibrationJob.customerId, customer.id))
-          .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
-          .where(and(...conditions))
-          .orderBy(desc(calibrationJob.approvedAt))
-          .limit(limit)
-          .offset(offset),
-      ]);
+      const [countResult, rows] = await orgDb(
+        apiKey.organizationId,
+      ).transaction((o) =>
+        Promise.all([
+          o
+            .select({ total: count() })
+            .from(calibrationJob)
+            .where(and(...conditions)),
+          o
+            .select({
+              id: calibrationJob.id,
+              jobId: calibrationJob.jobId,
+              certificateName: calibrationJob.certificateName,
+              status: calibrationJob.status,
+              approvedAt: calibrationJob.approvedAt,
+              verificationToken: calibrationJob.verificationToken,
+              certificateUrl: calibrationJob.certificateUrl,
+              unitId: calibrationJob.unitId,
+              assetName: asset.name,
+              customerName: customer.name,
+            })
+            .from(calibrationJob)
+            .innerJoin(customer, eq(calibrationJob.customerId, customer.id))
+            .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+            .where(and(...conditions))
+            .orderBy(desc(calibrationJob.approvedAt))
+            .limit(limit)
+            .offset(offset),
+        ]),
+      );
 
       return c.json({
         data: rows,
@@ -77,32 +81,34 @@ export const certificateRoutes = new Hono<PublicApiV2Env>()
     async (c) => {
       const apiKey = c.get("apiKey");
       const jobId = c.req.param("jobId");
-      const [job] = await db
-        .select({
-          id: calibrationJob.id,
-          jobId: calibrationJob.jobId,
-          certificateName: calibrationJob.certificateName,
-          status: calibrationJob.status,
-          approvedAt: calibrationJob.approvedAt,
-          verificationToken: calibrationJob.verificationToken,
-          certificateUrl: calibrationJob.certificateUrl,
-          unitId: calibrationJob.unitId,
-          assetId: calibrationJob.assetId,
-          assetName: asset.name,
-          customerId: calibrationJob.customerId,
-          customerName: customer.name,
-        })
-        .from(calibrationJob)
-        .innerJoin(customer, eq(calibrationJob.customerId, customer.id))
-        .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
-        .where(
-          and(
-            eq(calibrationJob.organizationId, apiKey.organizationId),
-            eq(calibrationJob.jobId, jobId),
-            inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
-          ),
-        )
-        .limit(1);
+      const [job] = await orgDb(apiKey.organizationId).transaction((o) =>
+        o
+          .select({
+            id: calibrationJob.id,
+            jobId: calibrationJob.jobId,
+            certificateName: calibrationJob.certificateName,
+            status: calibrationJob.status,
+            approvedAt: calibrationJob.approvedAt,
+            verificationToken: calibrationJob.verificationToken,
+            certificateUrl: calibrationJob.certificateUrl,
+            unitId: calibrationJob.unitId,
+            assetId: calibrationJob.assetId,
+            assetName: asset.name,
+            customerId: calibrationJob.customerId,
+            customerName: customer.name,
+          })
+          .from(calibrationJob)
+          .innerJoin(customer, eq(calibrationJob.customerId, customer.id))
+          .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+          .where(
+            and(
+              eq(calibrationJob.organizationId, apiKey.organizationId),
+              eq(calibrationJob.jobId, jobId),
+              inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
+            ),
+          )
+          .limit(1),
+      );
 
       if (!job) {
         return c.json(
@@ -123,19 +129,21 @@ export const certificateRoutes = new Hono<PublicApiV2Env>()
     async (c) => {
       const apiKey = c.get("apiKey");
       const jobId = c.req.param("jobId");
-      const [job] = await db
-        .select({
-          certificateUrl: calibrationJob.certificateUrl,
-        })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.organizationId, apiKey.organizationId),
-            eq(calibrationJob.jobId, jobId),
-            inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
-          ),
-        )
-        .limit(1);
+      const [job] = await orgDb(apiKey.organizationId).transaction((o) =>
+        o
+          .select({
+            certificateUrl: calibrationJob.certificateUrl,
+          })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.organizationId, apiKey.organizationId),
+              eq(calibrationJob.jobId, jobId),
+              inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
+            ),
+          )
+          .limit(1),
+      );
 
       if (!job?.certificateUrl) {
         return c.json(

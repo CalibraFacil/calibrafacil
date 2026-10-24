@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db } from "@calibra-facil/db";
 import {
   asset,
   calibrationRequest,
@@ -21,6 +20,7 @@ import { requireApiScope } from "../../middleware/api-key-auth";
 import { type PublicApiV2Env } from "./env";
 import { ListQuerySchema } from "./schemas";
 import { resolveCustomerId, resolveExternalResourceId } from "./resolvers";
+import { orgDb } from "../../lib/org-db";
 
 export const requestReadRoutes = new Hono<PublicApiV2Env>()
   .get(
@@ -68,34 +68,38 @@ export const requestReadRoutes = new Hono<PublicApiV2Env>()
           : undefined,
       ];
 
-      const [countResult, rows] = await Promise.all([
-        db
-          .select({ total: count() })
-          .from(calibrationRequest)
-          .where(and(...conditions)),
-        db
-          .select({
-            id: calibrationRequest.id,
-            status: calibrationRequest.status,
-            observations: calibrationRequest.observations,
-            requestedDueDate: calibrationRequest.requestedDueDate,
-            submittedAt: calibrationRequest.submittedAt,
-            customerId: calibrationRequest.customerId,
-            customerName: customer.name,
-            unitId: calibrationRequest.unitId,
-            unitName: organizationUnit.name,
-          })
-          .from(calibrationRequest)
-          .innerJoin(customer, eq(calibrationRequest.customerId, customer.id))
-          .leftJoin(
-            organizationUnit,
-            eq(calibrationRequest.unitId, organizationUnit.id),
-          )
-          .where(and(...conditions))
-          .orderBy(desc(calibrationRequest.submittedAt))
-          .limit(limit)
-          .offset(offset),
-      ]);
+      const [countResult, rows] = await orgDb(
+        apiKey.organizationId,
+      ).transaction((o) =>
+        Promise.all([
+          o
+            .select({ total: count() })
+            .from(calibrationRequest)
+            .where(and(...conditions)),
+          o
+            .select({
+              id: calibrationRequest.id,
+              status: calibrationRequest.status,
+              observations: calibrationRequest.observations,
+              requestedDueDate: calibrationRequest.requestedDueDate,
+              submittedAt: calibrationRequest.submittedAt,
+              customerId: calibrationRequest.customerId,
+              customerName: customer.name,
+              unitId: calibrationRequest.unitId,
+              unitName: organizationUnit.name,
+            })
+            .from(calibrationRequest)
+            .innerJoin(customer, eq(calibrationRequest.customerId, customer.id))
+            .leftJoin(
+              organizationUnit,
+              eq(calibrationRequest.unitId, organizationUnit.id),
+            )
+            .where(and(...conditions))
+            .orderBy(desc(calibrationRequest.submittedAt))
+            .limit(limit)
+            .offset(offset),
+        ]),
+      );
 
       const externalIds = await getResourceExternalIdMap({
         organizationId: apiKey.organizationId,
@@ -143,36 +147,38 @@ export const requestReadRoutes = new Hono<PublicApiV2Env>()
       );
     }
 
-    const [found] = await db
-      .select({
-        id: calibrationRequest.id,
-        status: calibrationRequest.status,
-        observations: calibrationRequest.observations,
-        requestedDueDate: calibrationRequest.requestedDueDate,
-        submittedAt: calibrationRequest.submittedAt,
-        reviewedAt: calibrationRequest.reviewedAt,
-        approvedAt: calibrationRequest.approvedAt,
-        rejectedAt: calibrationRequest.rejectedAt,
-        rejectionReason: calibrationRequest.rejectionReason,
-        convertedAt: calibrationRequest.convertedAt,
-        customerId: calibrationRequest.customerId,
-        customerName: customer.name,
-        unitId: calibrationRequest.unitId,
-        unitName: organizationUnit.name,
-      })
-      .from(calibrationRequest)
-      .innerJoin(customer, eq(calibrationRequest.customerId, customer.id))
-      .leftJoin(
-        organizationUnit,
-        eq(calibrationRequest.unitId, organizationUnit.id),
-      )
-      .where(
-        and(
-          eq(calibrationRequest.id, resolvedId),
-          eq(calibrationRequest.organizationId, apiKey.organizationId),
-        ),
-      )
-      .limit(1);
+    const [found] = await orgDb(apiKey.organizationId).transaction((o) =>
+      o
+        .select({
+          id: calibrationRequest.id,
+          status: calibrationRequest.status,
+          observations: calibrationRequest.observations,
+          requestedDueDate: calibrationRequest.requestedDueDate,
+          submittedAt: calibrationRequest.submittedAt,
+          reviewedAt: calibrationRequest.reviewedAt,
+          approvedAt: calibrationRequest.approvedAt,
+          rejectedAt: calibrationRequest.rejectedAt,
+          rejectionReason: calibrationRequest.rejectionReason,
+          convertedAt: calibrationRequest.convertedAt,
+          customerId: calibrationRequest.customerId,
+          customerName: customer.name,
+          unitId: calibrationRequest.unitId,
+          unitName: organizationUnit.name,
+        })
+        .from(calibrationRequest)
+        .innerJoin(customer, eq(calibrationRequest.customerId, customer.id))
+        .leftJoin(
+          organizationUnit,
+          eq(calibrationRequest.unitId, organizationUnit.id),
+        )
+        .where(
+          and(
+            eq(calibrationRequest.id, resolvedId),
+            eq(calibrationRequest.organizationId, apiKey.organizationId),
+          ),
+        )
+        .limit(1),
+    );
 
     if (!found) {
       return c.json(
@@ -184,17 +190,19 @@ export const requestReadRoutes = new Hono<PublicApiV2Env>()
       );
     }
 
-    const items = await db
-      .select({
-        id: calibrationRequestItem.id,
-        assetId: calibrationRequestItem.assetId,
-        convertedJobId: calibrationRequestItem.convertedJobId,
-        assetName: asset.name,
-        assetTag: asset.tag,
-      })
-      .from(calibrationRequestItem)
-      .innerJoin(asset, eq(calibrationRequestItem.assetId, asset.id))
-      .where(eq(calibrationRequestItem.requestId, found.id));
+    const items = await orgDb(apiKey.organizationId).transaction((o) =>
+      o
+        .select({
+          id: calibrationRequestItem.id,
+          assetId: calibrationRequestItem.assetId,
+          convertedJobId: calibrationRequestItem.convertedJobId,
+          assetName: asset.name,
+          assetTag: asset.tag,
+        })
+        .from(calibrationRequestItem)
+        .innerJoin(asset, eq(calibrationRequestItem.assetId, asset.id))
+        .where(eq(calibrationRequestItem.requestId, found.id)),
+    );
 
     return c.json({
       data: {

@@ -101,6 +101,22 @@ vi.mock("@calibra-facil/db", () => ({
   },
 }));
 
+// Without the caller's transaction the workflow opens one that names the
+// laboratory: the handle selects on the select queue, and its inner transaction
+// (the notification + outbox savepoint) is the recording one.
+vi.mock("./org-db", () => ({
+  orgDb: () => ({
+    select: mockDbSelectFn,
+    insert: mockTxInsertFn,
+    transaction: async (run: (tx: unknown) => unknown) =>
+      run({
+        select: mockDbSelectFn,
+        insert: mockTxInsertFn,
+        transaction: mockTransaction,
+      }),
+  }),
+}));
+
 vi.mock("@calibra-facil/db/schema", () => ({
   calibrationJob: {
     id: "j_id",
@@ -254,6 +270,8 @@ describe("flagJobOutOfTolerance", () => {
         jobId: 33,
         organizationId: "org-1",
       }),
+      // Joins the workflow's own org-bound transaction.
+      expect.objectContaining({ executor: expect.anything() }),
     );
 
     // Notification insert snapshots recipient + certificate context.

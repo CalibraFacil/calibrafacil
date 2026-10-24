@@ -1,6 +1,6 @@
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
-import { db } from "@calibra-facil/db";
+import { db, systemDb } from "@calibra-facil/db";
 import { organization, organizationApiKey } from "@calibra-facil/db/schema";
 import {
   type PublicApiScope,
@@ -9,6 +9,7 @@ import {
 } from "../lib/api-keys";
 import { and, eq, isNull } from "drizzle-orm";
 import { domainErrorBody, forbidden } from "../lib/domain-errors";
+import { orgDb } from "../lib/org-db";
 
 export interface ApiKeyAuthVariables {
   apiKey: {
@@ -60,12 +61,19 @@ export const requireApiKeyAuth = createMiddleware<{
   }
 
   const keyHash = hashApiKey(rawKey);
-  const keyRecord = await db.query.organizationApiKey.findFirst({
-    where: and(
-      eq(organizationApiKey.keyHash, keyHash),
-      isNull(organizationApiKey.revokedAt),
-    ),
-  });
+  // System path (tenant-sql-allowlist.ts "auth-session"): the key hash IS the
+  // lookup and it yields the laboratory, so this one statement cannot name an
+  // organization yet. Everything after it runs under the key's laboratory.
+  const [keyRecord] = await systemDb
+    .select()
+    .from(organizationApiKey)
+    .where(
+      and(
+        eq(organizationApiKey.keyHash, keyHash),
+        isNull(organizationApiKey.revokedAt),
+      ),
+    )
+    .limit(1);
 
   if (!keyRecord) {
     throw new HTTPException(401, { message: "API key inválida" });
@@ -106,13 +114,15 @@ export const requireApiKeyAuth = createMiddleware<{
     createdBy: keyRecord.createdBy,
   });
 
-  await db
-    .update(organizationApiKey)
-    .set({
-      lastUsedAt: new Date(),
-      lastUsedIp: getRequestIp(c.req.raw.headers),
-    })
-    .where(eq(organizationApiKey.id, keyRecord.id));
+  await orgDb(keyRecord.organizationId).transaction(async (o) => {
+    await o
+      .update(organizationApiKey)
+      .set({
+        lastUsedAt: new Date(),
+        lastUsedIp: getRequestIp(c.req.raw.headers),
+      })
+      .where(eq(organizationApiKey.id, keyRecord.id));
+  });
 
   await next();
 });

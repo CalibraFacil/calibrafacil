@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { db } from "@calibra-facil/db";
 import {
   publicApiWebhookDelivery,
   publicApiWebhookSubscription,
@@ -16,6 +15,7 @@ import { requireApiScope } from "../../middleware/api-key-auth";
 import { type PublicApiV2Env } from "./env";
 import { WebhookSubscriptionSchema } from "./schemas";
 import { withIdempotentMutation } from "./idempotency";
+import { orgDb } from "../../lib/org-db";
 
 function mapWebhookSubscription(
   record: typeof publicApiWebhookSubscription.$inferSelect,
@@ -38,13 +38,18 @@ function mapWebhookSubscription(
 export const webhookRoutes = new Hono<PublicApiV2Env>()
   .get("/webhooks", requireApiScope("webhooks:manage"), async (c) => {
     const apiKey = c.get("apiKey");
-    const subscriptions = await db
-      .select()
-      .from(publicApiWebhookSubscription)
-      .where(
-        eq(publicApiWebhookSubscription.organizationId, apiKey.organizationId),
-      )
-      .orderBy(desc(publicApiWebhookSubscription.createdAt));
+    const subscriptions = await orgDb(apiKey.organizationId).transaction((o) =>
+      o
+        .select()
+        .from(publicApiWebhookSubscription)
+        .where(
+          eq(
+            publicApiWebhookSubscription.organizationId,
+            apiKey.organizationId,
+          ),
+        )
+        .orderBy(desc(publicApiWebhookSubscription.createdAt)),
+    );
     return c.json({ data: subscriptions.map(mapWebhookSubscription) });
   })
   .post(
@@ -57,21 +62,23 @@ export const webhookRoutes = new Hono<PublicApiV2Env>()
 
       return withIdempotentMutation(c, input, async () => {
         const secret = createWebhookSecret(c.env);
-        const [created] = await db
-          .insert(publicApiWebhookSubscription)
-          .values({
-            id: crypto.randomUUID(),
-            organizationId: apiKey.organizationId,
-            name: input.name,
-            targetUrl: input.targetUrl,
-            events: input.events,
-            status: input.status ?? "ACTIVE",
-            secretPrefix: secret.prefix,
-            encryptedSecret: secret.encryptedSecret,
-            secretIv: secret.secretIv,
-            createdBy: apiKey.createdBy,
-          })
-          .returning();
+        const [created] = await orgDb(apiKey.organizationId).transaction((o) =>
+          o
+            .insert(publicApiWebhookSubscription)
+            .values({
+              id: crypto.randomUUID(),
+              organizationId: apiKey.organizationId,
+              name: input.name,
+              targetUrl: input.targetUrl,
+              events: input.events,
+              status: input.status ?? "ACTIVE",
+              secretPrefix: secret.prefix,
+              encryptedSecret: secret.encryptedSecret,
+              secretIv: secret.secretIv,
+              createdBy: apiKey.createdBy,
+            })
+            .returning(),
+        );
 
         return {
           status: 201,
@@ -90,19 +97,21 @@ export const webhookRoutes = new Hono<PublicApiV2Env>()
     async (c) => {
       const apiKey = c.get("apiKey");
       const input = c.req.valid("json");
-      const [existing] = await db
-        .select()
-        .from(publicApiWebhookSubscription)
-        .where(
-          and(
-            eq(publicApiWebhookSubscription.id, c.req.param("id")),
-            eq(
-              publicApiWebhookSubscription.organizationId,
-              apiKey.organizationId,
+      const [existing] = await orgDb(apiKey.organizationId).transaction((o) =>
+        o
+          .select()
+          .from(publicApiWebhookSubscription)
+          .where(
+            and(
+              eq(publicApiWebhookSubscription.id, c.req.param("id")),
+              eq(
+                publicApiWebhookSubscription.organizationId,
+                apiKey.organizationId,
+              ),
             ),
-          ),
-        )
-        .limit(1);
+          )
+          .limit(1),
+      );
 
       if (!existing) {
         return c.json(
@@ -114,17 +123,19 @@ export const webhookRoutes = new Hono<PublicApiV2Env>()
         );
       }
 
-      const [updated] = await db
-        .update(publicApiWebhookSubscription)
-        .set({
-          name: input.name ?? existing.name,
-          targetUrl: input.targetUrl ?? existing.targetUrl,
-          events: input.events ?? existing.events,
-          status: input.status ?? existing.status,
-          updatedBy: apiKey.createdBy,
-        })
-        .where(eq(publicApiWebhookSubscription.id, existing.id))
-        .returning();
+      const [updated] = await orgDb(apiKey.organizationId).transaction((o) =>
+        o
+          .update(publicApiWebhookSubscription)
+          .set({
+            name: input.name ?? existing.name,
+            targetUrl: input.targetUrl ?? existing.targetUrl,
+            events: input.events ?? existing.events,
+            status: input.status ?? existing.status,
+            updatedBy: apiKey.createdBy,
+          })
+          .where(eq(publicApiWebhookSubscription.id, existing.id))
+          .returning(),
+      );
 
       return c.json({ data: mapWebhookSubscription(updated!) });
     },
@@ -132,19 +143,21 @@ export const webhookRoutes = new Hono<PublicApiV2Env>()
   .delete("/webhooks/:id", requireApiScope("webhooks:manage"), async (c) => {
     const apiKey = c.get("apiKey");
     return withIdempotentMutation(c, { id: c.req.param("id") }, async () => {
-      const [existing] = await db
-        .select()
-        .from(publicApiWebhookSubscription)
-        .where(
-          and(
-            eq(publicApiWebhookSubscription.id, c.req.param("id")),
-            eq(
-              publicApiWebhookSubscription.organizationId,
-              apiKey.organizationId,
+      const [existing] = await orgDb(apiKey.organizationId).transaction((o) =>
+        o
+          .select()
+          .from(publicApiWebhookSubscription)
+          .where(
+            and(
+              eq(publicApiWebhookSubscription.id, c.req.param("id")),
+              eq(
+                publicApiWebhookSubscription.organizationId,
+                apiKey.organizationId,
+              ),
             ),
-          ),
-        )
-        .limit(1);
+          )
+          .limit(1),
+      );
 
       if (!existing) {
         return {
@@ -156,9 +169,11 @@ export const webhookRoutes = new Hono<PublicApiV2Env>()
         };
       }
 
-      await db
-        .delete(publicApiWebhookSubscription)
-        .where(eq(publicApiWebhookSubscription.id, existing.id));
+      await orgDb(apiKey.organizationId).transaction((o) =>
+        o
+          .delete(publicApiWebhookSubscription)
+          .where(eq(publicApiWebhookSubscription.id, existing.id)),
+      );
       return {
         status: 200,
         body: { data: { id: existing.id, deleted: true } },
@@ -167,19 +182,21 @@ export const webhookRoutes = new Hono<PublicApiV2Env>()
   })
   .post("/webhooks/:id/test", requireApiScope("webhooks:manage"), async (c) => {
     const apiKey = c.get("apiKey");
-    const [existing] = await db
-      .select()
-      .from(publicApiWebhookSubscription)
-      .where(
-        and(
-          eq(publicApiWebhookSubscription.id, c.req.param("id")),
-          eq(
-            publicApiWebhookSubscription.organizationId,
-            apiKey.organizationId,
+    const [existing] = await orgDb(apiKey.organizationId).transaction((o) =>
+      o
+        .select()
+        .from(publicApiWebhookSubscription)
+        .where(
+          and(
+            eq(publicApiWebhookSubscription.id, c.req.param("id")),
+            eq(
+              publicApiWebhookSubscription.organizationId,
+              apiKey.organizationId,
+            ),
           ),
-        ),
-      )
-      .limit(1);
+        )
+        .limit(1),
+    );
 
     if (!existing) {
       return c.json(
@@ -208,17 +225,22 @@ export const webhookRoutes = new Hono<PublicApiV2Env>()
     requireApiScope("webhooks:manage"),
     async (c) => {
       const apiKey = c.get("apiKey");
-      const deliveries = await db
-        .select()
-        .from(publicApiWebhookDelivery)
-        .where(
-          and(
-            eq(publicApiWebhookDelivery.subscriptionId, c.req.param("id")),
-            eq(publicApiWebhookDelivery.organizationId, apiKey.organizationId),
-          ),
-        )
-        .orderBy(desc(publicApiWebhookDelivery.createdAt))
-        .limit(50);
+      const deliveries = await orgDb(apiKey.organizationId).transaction((o) =>
+        o
+          .select()
+          .from(publicApiWebhookDelivery)
+          .where(
+            and(
+              eq(publicApiWebhookDelivery.subscriptionId, c.req.param("id")),
+              eq(
+                publicApiWebhookDelivery.organizationId,
+                apiKey.organizationId,
+              ),
+            ),
+          )
+          .orderBy(desc(publicApiWebhookDelivery.createdAt))
+          .limit(50),
+      );
       return c.json({ data: deliveries });
     },
   )

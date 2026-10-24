@@ -20,28 +20,35 @@ const mocks = vi.hoisted(
   }),
 );
 
-vi.mock("@calibra-facil/db", () => ({
-  db: {
-    select: () => ({
-      from: () => ({
-        innerJoin: () => ({
-          where: () => ({
-            orderBy: () => ({
-              limit: async () => mocks.rows,
-            }),
-          }),
-        }),
-      }),
-    }),
+vi.mock("@calibra-facil/db", () => {
+  // `orgDb(...).transaction(...)` runs its callback on this same double (the
+  // organization setting is a statement that needs no canned result).
+  const database = {
+    execute: async () => [],
+    transaction: async (run: (tx: unknown) => unknown) => run(database),
+    select: () => {
+      // The org-bound handle calls where() itself before the caller does.
+      const chain: Record<string, unknown> = {};
+      for (const method of ["from", "innerJoin", "where", "orderBy"]) {
+        chain[method] = () => chain;
+      }
+      chain.limit = async () => mocks.rows;
+      return chain;
+    },
     update: () => ({
-      set: (values: Record<string, unknown>) => ({
-        where: async () => {
-          mocks.updateCalls.push(values);
-        },
-      }),
+      set: (values: Record<string, unknown>) => {
+        mocks.updateCalls.push(values);
+        const chain: Record<string, unknown> = {};
+        chain.where = () => chain;
+        // oxlint-disable-next-line unicorn/no-thenable -- mocks drizzle's awaitable query builder
+        chain.then = (resolve: (value: undefined) => unknown) =>
+          resolve(undefined);
+        return chain;
+      },
     }),
-  },
-}));
+  };
+  return { db: database };
+});
 
 import {
   acknowledgeIntegrationDrift,

@@ -58,6 +58,18 @@ vi.mock("@calibra-facil/db", () => ({
   },
 }));
 
+// The customer lookup runs in `orgDb(lab).transaction(...)`: a handle whose
+// transaction runs the callback on the same select double.
+vi.mock("../../lib/org-db", () => ({
+  orgDb: () => {
+    const handle = {
+      select: mockDbSelect,
+      transaction: async (run: (tx: unknown) => unknown) => run(handle),
+    };
+    return handle;
+  },
+}));
+
 // Mock drizzle-orm operators (used in WHERE clauses)
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => ({ and: args }),

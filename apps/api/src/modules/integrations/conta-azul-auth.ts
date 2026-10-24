@@ -1,9 +1,9 @@
-import { db } from "@calibra-facil/db";
 import {
   integrationConnection,
   integrationObjectLink,
 } from "@calibra-facil/db/schema";
 import { requireContaAzulOAuthConfig } from "../../lib/conta-azul-app";
+import { inOrgTransaction } from "../../lib/org-transaction";
 import {
   normalizeContaAzulConnectionConfig,
   type ContaAzulReferenceDomain,
@@ -79,34 +79,45 @@ async function refreshContaAzulTokenForConnection(params: {
     scopes: refreshed.scopes,
   });
 
-  await db
-    .update(integrationConnection)
-    .set({
-      credentialType: "oauth2",
-      config,
-      encryptedSecret: encrypted.encryptedSecret,
-      secretIv: encrypted.secretIv,
-      updatedAt: new Date(),
-    })
-    .where(eq(integrationConnection.id, params.record.connection.id));
+  // The refreshed token and its event commit together (the HTTP refresh above
+  // ran before this transaction opened).
+  await inOrgTransaction(
+    params.record.integration.organizationId,
+    undefined,
+    async (o) => {
+      await o
+        .update(integrationConnection)
+        .set({
+          credentialType: "oauth2",
+          config,
+          encryptedSecret: encrypted.encryptedSecret,
+          secretIv: encrypted.secretIv,
+          updatedAt: new Date(),
+        })
+        .where(eq(integrationConnection.id, params.record.connection.id));
+
+      await writeIntegrationEvent(
+        {
+          integrationId: params.record.integration.id,
+          organizationId: params.record.integration.organizationId,
+          level: "info",
+          event: "integration.conta_azul.token_refreshed",
+          message: "Token OAuth da Conta Azul renovado",
+          details: {
+            provider: "conta_azul",
+            source: "automatic",
+            accessTokenExpiresAt: refreshed.expiresAt,
+          },
+        },
+        o,
+      );
+    },
+  );
 
   params.record.connection.credentialType = "oauth2";
   params.record.connection.config = config;
   params.record.connection.encryptedSecret = encrypted.encryptedSecret;
   params.record.connection.secretIv = encrypted.secretIv;
-
-  await writeIntegrationEvent({
-    integrationId: params.record.integration.id,
-    organizationId: params.record.integration.organizationId,
-    level: "info",
-    event: "integration.conta_azul.token_refreshed",
-    message: "Token OAuth da Conta Azul renovado",
-    details: {
-      provider: "conta_azul",
-      source: "automatic",
-      accessTokenExpiresAt: refreshed.expiresAt,
-    },
-  });
 
   return refreshed.accessToken;
 }
@@ -161,6 +172,7 @@ export async function createContaAzulAdapterForRecord(params: {
     links: {
       async getExistingRemoteId({ target, localEntityId }) {
         const existing = await getExistingLink(
+          params.record.integration.organizationId,
           params.record.integration.id,
           target,
           localEntityId,
@@ -168,29 +180,34 @@ export async function createContaAzulAdapterForRecord(params: {
         return existing?.remoteEntityId ?? null;
       },
       async listLinks({ targets, limit, offset }) {
-        return db
-          .select({
-            target: integrationObjectLink.target,
-            localEntityId: integrationObjectLink.localEntityId,
-            remoteEntityId: integrationObjectLink.remoteEntityId,
-            remoteDisplayId: integrationObjectLink.remoteDisplayId,
-            remoteEntityType: integrationObjectLink.remoteEntityType,
-            metadata: integrationObjectLink.metadata,
-          })
-          .from(integrationObjectLink)
-          .where(
-            and(
-              eq(
-                integrationObjectLink.integrationId,
-                params.record.integration.id,
-              ),
-              inArray(integrationObjectLink.target, targets),
-              isNotNull(integrationObjectLink.remoteEntityId),
-            ),
-          )
-          .orderBy(integrationObjectLink.createdAt)
-          .limit(limit)
-          .offset(offset);
+        return inOrgTransaction(
+          params.record.integration.organizationId,
+          undefined,
+          (o) =>
+            o
+              .select({
+                target: integrationObjectLink.target,
+                localEntityId: integrationObjectLink.localEntityId,
+                remoteEntityId: integrationObjectLink.remoteEntityId,
+                remoteDisplayId: integrationObjectLink.remoteDisplayId,
+                remoteEntityType: integrationObjectLink.remoteEntityType,
+                metadata: integrationObjectLink.metadata,
+              })
+              .from(integrationObjectLink)
+              .where(
+                and(
+                  eq(
+                    integrationObjectLink.integrationId,
+                    params.record.integration.id,
+                  ),
+                  inArray(integrationObjectLink.target, targets),
+                  isNotNull(integrationObjectLink.remoteEntityId),
+                ),
+              )
+              .orderBy(integrationObjectLink.createdAt)
+              .limit(limit)
+              .offset(offset),
+        );
       },
       async upsertLink({
         target,

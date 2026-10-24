@@ -12,7 +12,7 @@
  */
 
 import { readOriginsConfig } from "@calibra-facil/config";
-import { db } from "@calibra-facil/db";
+import { systemDb } from "@calibra-facil/db";
 import {
   asset,
   calibrationJob,
@@ -31,6 +31,8 @@ import {
 } from "@calibra-facil/notifications";
 import { and, asc, eq, isNull, lt, sql } from "drizzle-orm";
 import { isReleaseExhausting } from "./outbox-release";
+import { orgDb } from "./org-db";
+import { orgTransactionWithExecutor } from "./org-transaction";
 import {
   createR2Client,
   downloadFromR2,
@@ -52,60 +54,88 @@ export interface DrainOotEmailsResult {
   errors: number;
 }
 
-async function claimOutboxRow(rowId: number): Promise<boolean> {
-  const result = await db.execute(
-    sql`UPDATE oot_email_outbox
+// Every statement below runs in a short transaction that names the row's
+// laboratory (row-level security) and keeps its explicit organization
+// predicate; only the one statement that lists the owed rows of every
+// laboratory runs on the system path.
+async function claimOutboxRow(
+  organizationId: string,
+  rowId: number,
+): Promise<boolean> {
+  const result: unknown = await orgTransactionWithExecutor(
+    organizationId,
+    async (_o, tx) =>
+      tx.execute(
+        sql`UPDATE oot_email_outbox
         SET claimed_at = now()
         WHERE id = ${rowId}
+          AND organization_id = ${organizationId}
           AND processed_at IS NULL
           AND (claimed_at IS NULL OR claimed_at < now() - (${CLAIM_LEASE_SECONDS}::int * interval '1 second'))
         RETURNING id`,
+      ),
   );
-  const rows: unknown = Reflect.get(result, "rows") ?? result;
+  const rows: unknown =
+    typeof result === "object" && result !== null
+      ? (Reflect.get(result, "rows") ?? result)
+      : result;
   return Array.isArray(rows) && rows.length > 0;
 }
 
 async function releaseOutboxRow(
+  organizationId: string,
   rowId: number,
   errorMessage: string,
   deadLetter: boolean,
 ): Promise<void> {
-  if (deadLetter) {
-    await db.execute(
-      sql`UPDATE oot_email_outbox
+  await orgTransactionWithExecutor(organizationId, async (_o, tx) => {
+    if (deadLetter) {
+      await tx.execute(
+        sql`UPDATE oot_email_outbox
           SET claimed_at = NULL,
               attempts = attempts + 1,
               last_error = ${errorMessage},
               dead_letter_at = now()
-          WHERE id = ${rowId}`,
-    );
-    return;
-  }
-  await db.execute(
-    sql`UPDATE oot_email_outbox
+          WHERE id = ${rowId} AND organization_id = ${organizationId}`,
+      );
+      return;
+    }
+    await tx.execute(
+      sql`UPDATE oot_email_outbox
         SET claimed_at = NULL,
             attempts = attempts + 1,
             last_error = ${errorMessage}
-        WHERE id = ${rowId}`,
-  );
+        WHERE id = ${rowId} AND organization_id = ${organizationId}`,
+    );
+  });
 }
 
 /** Clear the lease without consuming an attempt (PDF not rendered yet). */
-async function deferOutboxRow(rowId: number): Promise<void> {
-  await db.execute(
-    sql`UPDATE oot_email_outbox
+async function deferOutboxRow(
+  organizationId: string,
+  rowId: number,
+): Promise<void> {
+  await orgTransactionWithExecutor(organizationId, async (_o, tx) => {
+    await tx.execute(
+      sql`UPDATE oot_email_outbox
         SET claimed_at = NULL,
             last_error = 'PDF nao gerado ainda — aguardando renderizacao'
-        WHERE id = ${rowId}`,
-  );
+        WHERE id = ${rowId} AND organization_id = ${organizationId}`,
+    );
+  });
 }
 
-async function markOutboxRowProcessed(rowId: number): Promise<void> {
-  await db.execute(
-    sql`UPDATE oot_email_outbox
+async function markOutboxRowProcessed(
+  organizationId: string,
+  rowId: number,
+): Promise<void> {
+  await orgTransactionWithExecutor(organizationId, async (_o, tx) => {
+    await tx.execute(
+      sql`UPDATE oot_email_outbox
         SET processed_at = now()
-        WHERE id = ${rowId}`,
-  );
+        WHERE id = ${rowId} AND organization_id = ${organizationId}`,
+    );
+  });
 }
 
 export async function drainOotEmailOutbox(options?: {
@@ -125,7 +155,11 @@ export async function drainOotEmailOutbox(options?: {
   };
 
   try {
-    const pendingRows = await db
+    // System path (tenant-sql-allowlist.ts "cron-queue"): the drain has no
+    // request, so the one statement that lists the owed rows of EVERY laboratory
+    // is cross-organization by design; each row is then claimed, read and
+    // finished in a transaction that names row.organizationId.
+    const pendingRows = await systemDb
       .select({
         id: ootEmailOutbox.id,
         organizationId: ootEmailOutbox.organizationId,
@@ -145,7 +179,7 @@ export async function drainOotEmailOutbox(options?: {
 
     for (const row of pendingRows) {
       try {
-        const claimed = await claimOutboxRow(row.id);
+        const claimed = await claimOutboxRow(row.organizationId, row.id);
         if (!claimed) {
           result.skipped++;
           continue;
@@ -154,81 +188,84 @@ export async function drainOotEmailOutbox(options?: {
         result.processed++;
 
         // Re-load the notification tenant-scoped (org predicate in the WHERE).
-        const [notification] = await db
-          .select({
-            id: ootNotification.id,
-            ncId: ootNotification.ncId,
-            status: ootNotification.status,
-            recipientName: ootNotification.recipientName,
-            recipientEmail: ootNotification.recipientEmail,
-            certificateNumber: ootNotification.certificateNumber,
-            pdfR2Key: ootNotification.pdfR2Key,
-            ackToken: ootNotification.ackToken,
-            acknowledgedAt: ootNotification.acknowledgedAt,
-            recallId: ootNotification.recallId,
-            ncNumber: nonConformance.ncNumber,
-            labName: organization.name,
-            assetName: asset.name,
-            standardName: referenceStandard.name,
-          })
-          .from(ootNotification)
-          .innerJoin(
-            nonConformance,
-            eq(ootNotification.ncId, nonConformance.id),
-          )
-          .innerJoin(
-            organization,
-            eq(ootNotification.organizationId, organization.id),
-          )
-          .innerJoin(
-            calibrationJob,
-            eq(ootNotification.jobId, calibrationJob.id),
-          )
-          .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
-          // #426 Phase 1: recall context (null for as-found notifications).
-          .leftJoin(
-            standardRecall,
-            eq(ootNotification.recallId, standardRecall.id),
-          )
-          .leftJoin(
-            referenceStandard,
-            eq(standardRecall.standardId, referenceStandard.id),
-          )
-          .where(
-            and(
-              eq(ootNotification.id, row.notificationId),
-              eq(ootNotification.organizationId, row.organizationId),
-            ),
-          )
-          .limit(1);
+        const [notification] = await orgDb(row.organizationId).transaction(
+          (o) =>
+            o
+              .select({
+                id: ootNotification.id,
+                ncId: ootNotification.ncId,
+                status: ootNotification.status,
+                recipientName: ootNotification.recipientName,
+                recipientEmail: ootNotification.recipientEmail,
+                certificateNumber: ootNotification.certificateNumber,
+                pdfR2Key: ootNotification.pdfR2Key,
+                ackToken: ootNotification.ackToken,
+                acknowledgedAt: ootNotification.acknowledgedAt,
+                recallId: ootNotification.recallId,
+                ncNumber: nonConformance.ncNumber,
+                labName: organization.name,
+                assetName: asset.name,
+                standardName: referenceStandard.name,
+              })
+              .from(ootNotification)
+              .innerJoin(
+                nonConformance,
+                eq(ootNotification.ncId, nonConformance.id),
+              )
+              .innerJoin(
+                organization,
+                eq(ootNotification.organizationId, organization.id),
+              )
+              .innerJoin(
+                calibrationJob,
+                eq(ootNotification.jobId, calibrationJob.id),
+              )
+              .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+              // #426 Phase 1: recall context (null for as-found notifications).
+              .leftJoin(
+                standardRecall,
+                eq(ootNotification.recallId, standardRecall.id),
+              )
+              .leftJoin(
+                referenceStandard,
+                eq(standardRecall.standardId, referenceStandard.id),
+              )
+              .where(
+                and(
+                  eq(ootNotification.id, row.notificationId),
+                  eq(ootNotification.organizationId, row.organizationId),
+                ),
+              )
+              .limit(1),
+        );
 
         // Graceful terminal skips — the email is no longer owed.
         if (!notification) {
-          await markOutboxRowProcessed(row.id);
+          await markOutboxRowProcessed(row.organizationId, row.id);
           result.skipped++;
           continue;
         }
         if (!notification.recipientEmail?.includes("@")) {
-          await markOutboxRowProcessed(row.id);
+          await markOutboxRowProcessed(row.organizationId, row.id);
           result.skipped++;
           continue;
         }
         if (notification.acknowledgedAt) {
           // Receipt already registered (e.g. manual ack) before the email
           // went out — sending now would only confuse the trail.
-          await markOutboxRowProcessed(row.id);
+          await markOutboxRowProcessed(row.organizationId, row.id);
           result.skipped++;
           continue;
         }
         if (await isEmailSuppressed(notification.recipientEmail, "all")) {
-          await markOutboxRowProcessed(row.id);
+          await markOutboxRowProcessed(row.organizationId, row.id);
           result.skipped++;
           continue;
         }
 
         // The PDF is the legal artifact — hold the email until it exists.
         if (!notification.pdfR2Key) {
-          await deferOutboxRow(row.id);
+          await deferOutboxRow(row.organizationId, row.id);
           result.deferred++;
           continue;
         }
@@ -275,28 +312,31 @@ export async function drainOotEmailOutbox(options?: {
         });
 
         if (sendResult.sent) {
-          await markOutboxRowProcessed(row.id);
+          await markOutboxRowProcessed(row.organizationId, row.id);
           // Advance the evidence record; never regress an ACKNOWLEDGED row.
-          await db
-            .update(ootNotification)
-            .set({
-              status: "SENT",
-              sentAt: new Date(),
-            })
-            .where(
-              and(
-                eq(ootNotification.id, notification.id),
-                isNull(ootNotification.acknowledgedAt),
-              ),
-            );
+          await orgDb(row.organizationId).transaction(async (o) => {
+            await o
+              .update(ootNotification)
+              .set({
+                status: "SENT",
+                sentAt: new Date(),
+              })
+              .where(
+                and(
+                  eq(ootNotification.id, notification.id),
+                  isNull(ootNotification.acknowledgedAt),
+                ),
+              );
+          });
           result.sent++;
         } else if (sendResult.skipped) {
           // Misconfigured transport etc. — leave owed for a later drain, but
           // don't burn an attempt on a config problem.
-          await deferOutboxRow(row.id);
+          await deferOutboxRow(row.organizationId, row.id);
           result.deferred++;
         } else {
           await releaseOutboxRow(
+            row.organizationId,
             row.id,
             sendResult.error ?? "unknown send error",
             isReleaseExhausting(row.attempts, maxAttempts),
@@ -313,6 +353,7 @@ export async function drainOotEmailOutbox(options?: {
         );
         try {
           await releaseOutboxRow(
+            row.organizationId,
             row.id,
             message,
             isReleaseExhausting(row.attempts, maxAttempts),

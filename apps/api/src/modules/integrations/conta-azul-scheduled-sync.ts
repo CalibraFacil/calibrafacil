@@ -1,15 +1,13 @@
-import { db } from "@calibra-facil/db";
-import {
-  integrationConnection,
-  organizationIntegration,
-} from "@calibra-facil/db/schema";
+import { integrationConnection } from "@calibra-facil/db/schema";
 import {
   normalizeContaAzulConnectionConfig,
   type IntegrationSyncTarget,
 } from "@calibra-facil/shared";
 import type { IntegrationSyncBackgroundJobMessage } from "@calibra-facil/schemas";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { IntegrationsEnv } from "../../lib/integrations-env";
+import { inOrgTransaction } from "../../lib/org-transaction";
+import { listActiveContaAzulConnections } from "./active-connections";
 import { isContaAzulTargetEnabled } from "./payload-guards";
 import { parseRemoteDate } from "./conta-azul-due";
 import {
@@ -57,23 +55,7 @@ export async function processScheduledContaAzulIntegrationSyncs(params: {
   failedRuns: number;
 }> {
   const now = params.now ?? new Date();
-  const rows = await db
-    .select({
-      integrationId: organizationIntegration.id,
-      organizationId: organizationIntegration.organizationId,
-      config: integrationConnection.config,
-    })
-    .from(organizationIntegration)
-    .innerJoin(
-      integrationConnection,
-      eq(integrationConnection.integrationId, organizationIntegration.id),
-    )
-    .where(
-      and(
-        eq(organizationIntegration.status, "ACTIVE"),
-        eq(organizationIntegration.provider, "conta_azul"),
-      ),
-    );
+  const rows = await listActiveContaAzulConnections();
 
   let dueRuns = 0;
   let queuedRuns = 0;
@@ -103,26 +85,40 @@ export async function processScheduledContaAzulIntegrationSyncs(params: {
 
       dueRuns += 1;
 
-      const runId = await createSyncRun({
-        integrationId: row.integrationId,
-        organizationId: row.organizationId,
-        trigger: "scheduled",
-        target,
-        requestedLimit: params.limit ?? DEFAULT_INTEGRATION_SYNC_LIMIT,
-      });
+      // The run row and the event that requests it commit together.
+      const runId = await inOrgTransaction(
+        row.organizationId,
+        undefined,
+        async (o) => {
+          const created = await createSyncRun(
+            {
+              integrationId: row.integrationId,
+              organizationId: row.organizationId,
+              trigger: "scheduled",
+              target,
+              requestedLimit: params.limit ?? DEFAULT_INTEGRATION_SYNC_LIMIT,
+            },
+            o,
+          );
 
-      await writeIntegrationEvent({
-        integrationId: row.integrationId,
-        organizationId: row.organizationId,
-        runId,
-        level: "info",
-        event: "sync.scheduled_requested",
-        message: "Sincronização Conta Azul agendada solicitada",
-        details: {
-          target,
-          trigger: "scheduled",
+          await writeIntegrationEvent(
+            {
+              integrationId: row.integrationId,
+              organizationId: row.organizationId,
+              runId: created,
+              level: "info",
+              event: "sync.scheduled_requested",
+              message: "Sincronização Conta Azul agendada solicitada",
+              details: {
+                target,
+                trigger: "scheduled",
+              },
+            },
+            o,
+          );
+          return created;
         },
-      });
+      );
 
       let syncStarted = false;
 
@@ -139,13 +135,15 @@ export async function processScheduledContaAzulIntegrationSyncs(params: {
           }),
         });
 
-        await db
-          .update(integrationConnection)
-          .set({
-            config: nextConfig,
-            updatedAt: new Date(),
-          })
-          .where(eq(integrationConnection.integrationId, row.integrationId));
+        await inOrgTransaction(row.organizationId, undefined, async (o) => {
+          await o
+            .update(integrationConnection)
+            .set({
+              config: nextConfig,
+              updatedAt: new Date(),
+            })
+            .where(eq(integrationConnection.integrationId, row.integrationId));
+        });
         currentConfig = normalizeContaAzulConnectionConfig(nextConfig);
 
         const message: IntegrationSyncBackgroundJobMessage = {

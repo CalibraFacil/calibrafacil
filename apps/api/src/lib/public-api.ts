@@ -1,8 +1,7 @@
 import type { ApiErrorCode } from "@calibra-facil/contracts";
 import { createHash, createHmac, randomBytes } from "node:crypto";
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
-  organizationApiKey,
   organizationUnit,
   publicApiIdempotencyKey,
   publicApiResourceRef,
@@ -16,6 +15,7 @@ import {
   type PublicApiWebhookEvent,
 } from "@calibra-facil/shared";
 import { decryptPassword, encryptPassword } from "@calibra-facil/signing";
+import { inOrgTransaction } from "./org-transaction";
 
 const DEFAULT_IDEMPOTENCY_TTL_DAYS = 7;
 
@@ -116,27 +116,42 @@ export function signWebhookPayload(secret: string, payload: string) {
   return createHmac("sha256", secret).update(payload).digest("hex");
 }
 
-export async function getResourceExternalId(params: {
-  organizationId: string;
-  resourceType: PublicApiResourceType;
-  resourceId: string | number;
-}) {
-  const ref = await db.query.publicApiResourceRef.findFirst({
-    where: and(
-      eq(publicApiResourceRef.organizationId, params.organizationId),
-      eq(publicApiResourceRef.resourceType, params.resourceType),
-      eq(publicApiResourceRef.resourceId, String(params.resourceId)),
-    ),
-  });
+// The reads and writes below run in the caller's org-bound transaction
+// (`executor`) or in one of their own that names the laboratory (row-level
+// security).
+export async function getResourceExternalId(
+  params: {
+    organizationId: string;
+    resourceType: PublicApiResourceType;
+    resourceId: string | number;
+  },
+  executor?: OrgDb,
+) {
+  const [ref] = await inOrgTransaction(params.organizationId, executor, (o) =>
+    o
+      .select()
+      .from(publicApiResourceRef)
+      .where(
+        and(
+          eq(publicApiResourceRef.organizationId, params.organizationId),
+          eq(publicApiResourceRef.resourceType, params.resourceType),
+          eq(publicApiResourceRef.resourceId, String(params.resourceId)),
+        ),
+      )
+      .limit(1),
+  );
 
   return ref?.externalId ?? null;
 }
 
-export async function getResourceExternalIdMap(params: {
-  organizationId: string;
-  resourceType: PublicApiResourceType;
-  resourceIds: Array<string | number>;
-}) {
+export async function getResourceExternalIdMap(
+  params: {
+    organizationId: string;
+    resourceType: PublicApiResourceType;
+    resourceIds: Array<string | number>;
+  },
+  executor?: OrgDb,
+) {
   const ids = Array.from(
     new Set(
       params.resourceIds
@@ -149,125 +164,158 @@ export async function getResourceExternalIdMap(params: {
     return new Map<string, string>();
   }
 
-  const refs = await db
-    .select({
-      resourceId: publicApiResourceRef.resourceId,
-      externalId: publicApiResourceRef.externalId,
-    })
-    .from(publicApiResourceRef)
-    .where(
-      and(
-        eq(publicApiResourceRef.organizationId, params.organizationId),
-        eq(publicApiResourceRef.resourceType, params.resourceType),
-        inArray(publicApiResourceRef.resourceId, ids),
+  const refs = await inOrgTransaction(params.organizationId, executor, (o) =>
+    o
+      .select({
+        resourceId: publicApiResourceRef.resourceId,
+        externalId: publicApiResourceRef.externalId,
+      })
+      .from(publicApiResourceRef)
+      .where(
+        and(
+          eq(publicApiResourceRef.organizationId, params.organizationId),
+          eq(publicApiResourceRef.resourceType, params.resourceType),
+          inArray(publicApiResourceRef.resourceId, ids),
+        ),
       ),
-    );
+  );
 
   return new Map(refs.map((ref) => [ref.resourceId, ref.externalId]));
 }
 
-export async function upsertResourceExternalId(params: {
-  organizationId: string;
-  apiKeyId?: string | null;
-  resourceType: PublicApiResourceType;
-  resourceId: string | number;
-  externalId: string;
-}) {
-  await db
-    .insert(publicApiResourceRef)
-    .values({
-      id: crypto.randomUUID(),
-      organizationId: params.organizationId,
-      resourceType: params.resourceType,
-      resourceId: String(params.resourceId),
-      externalId: params.externalId,
-      createdByApiKeyId: params.apiKeyId ?? null,
-    })
-    .onConflictDoUpdate({
-      target: [
-        publicApiResourceRef.organizationId,
-        publicApiResourceRef.resourceType,
-        publicApiResourceRef.resourceId,
-      ],
-      set: {
+export async function upsertResourceExternalId(
+  params: {
+    organizationId: string;
+    apiKeyId?: string | null;
+    resourceType: PublicApiResourceType;
+    resourceId: string | number;
+    externalId: string;
+  },
+  executor?: OrgDb,
+) {
+  await inOrgTransaction(params.organizationId, executor, async (o) => {
+    await o
+      .insert(publicApiResourceRef)
+      .values({
+        id: crypto.randomUUID(),
+        organizationId: params.organizationId,
+        resourceType: params.resourceType,
+        resourceId: String(params.resourceId),
         externalId: params.externalId,
-        updatedAt: new Date(),
-      },
-    });
-}
-
-export async function findIdempotencyRecord(params: {
-  organizationId: string;
-  apiKeyId: string;
-  requestMethod: string;
-  requestPath: string;
-  idempotencyKey: string;
-}) {
-  return db.query.publicApiIdempotencyKey.findFirst({
-    where: and(
-      eq(publicApiIdempotencyKey.organizationId, params.organizationId),
-      eq(publicApiIdempotencyKey.apiKeyId, params.apiKeyId),
-      eq(publicApiIdempotencyKey.requestMethod, params.requestMethod),
-      eq(publicApiIdempotencyKey.requestPath, params.requestPath),
-      eq(publicApiIdempotencyKey.idempotencyKey, params.idempotencyKey),
-    ),
+        createdByApiKeyId: params.apiKeyId ?? null,
+      })
+      .onConflictDoUpdate({
+        target: [
+          publicApiResourceRef.organizationId,
+          publicApiResourceRef.resourceType,
+          publicApiResourceRef.resourceId,
+        ],
+        set: {
+          externalId: params.externalId,
+          updatedAt: new Date(),
+        },
+      });
   });
 }
 
-export async function storeIdempotencyRecord(params: {
-  organizationId: string;
-  apiKeyId: string;
-  requestMethod: string;
-  requestPath: string;
-  idempotencyKey: string;
-  requestHash: string;
-  responseStatus: number;
-  responseBody: Record<string, unknown>;
-  resourceType?: PublicApiResourceType;
-  resourceId?: string | number | null;
-}) {
+export async function findIdempotencyRecord(
+  params: {
+    organizationId: string;
+    apiKeyId: string;
+    requestMethod: string;
+    requestPath: string;
+    idempotencyKey: string;
+  },
+  executor?: OrgDb,
+) {
+  const [record] = await inOrgTransaction(
+    params.organizationId,
+    executor,
+    (o) =>
+      o
+        .select()
+        .from(publicApiIdempotencyKey)
+        .where(
+          and(
+            eq(publicApiIdempotencyKey.organizationId, params.organizationId),
+            eq(publicApiIdempotencyKey.apiKeyId, params.apiKeyId),
+            eq(publicApiIdempotencyKey.requestMethod, params.requestMethod),
+            eq(publicApiIdempotencyKey.requestPath, params.requestPath),
+            eq(publicApiIdempotencyKey.idempotencyKey, params.idempotencyKey),
+          ),
+        )
+        .limit(1),
+  );
+  return record;
+}
+
+export async function storeIdempotencyRecord(
+  params: {
+    organizationId: string;
+    apiKeyId: string;
+    requestMethod: string;
+    requestPath: string;
+    idempotencyKey: string;
+    requestHash: string;
+    responseStatus: number;
+    responseBody: Record<string, unknown>;
+    resourceType?: PublicApiResourceType;
+    resourceId?: string | number | null;
+  },
+  executor?: OrgDb,
+) {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + DEFAULT_IDEMPOTENCY_TTL_DAYS);
 
-  await db.insert(publicApiIdempotencyKey).values({
-    id: crypto.randomUUID(),
-    organizationId: params.organizationId,
-    apiKeyId: params.apiKeyId,
-    requestMethod: params.requestMethod,
-    requestPath: params.requestPath,
-    idempotencyKey: params.idempotencyKey,
-    requestHash: params.requestHash,
-    responseStatus: params.responseStatus,
-    responseBody: params.responseBody,
-    resourceType: params.resourceType ?? null,
-    resourceId: params.resourceId ? String(params.resourceId) : null,
-    expiresAt,
+  await inOrgTransaction(params.organizationId, executor, async (o) => {
+    await o.insert(publicApiIdempotencyKey).values({
+      id: crypto.randomUUID(),
+      organizationId: params.organizationId,
+      apiKeyId: params.apiKeyId,
+      requestMethod: params.requestMethod,
+      requestPath: params.requestPath,
+      idempotencyKey: params.idempotencyKey,
+      requestHash: params.requestHash,
+      responseStatus: params.responseStatus,
+      responseBody: params.responseBody,
+      resourceType: params.resourceType ?? null,
+      resourceId: params.resourceId ? String(params.resourceId) : null,
+      expiresAt,
+    });
   });
 }
 
-export async function listAccessibleUnits(organizationId: string) {
-  return db
-    .select({
-      id: organizationUnit.id,
-      name: organizationUnit.name,
-      slug: organizationUnit.slug,
-      isDefault: organizationUnit.isDefault,
-    })
-    .from(organizationUnit)
-    .where(
-      and(
-        eq(organizationUnit.organizationId, organizationId),
-        eq(organizationUnit.status, "ACTIVE"),
-      ),
-    )
-    .orderBy(organizationUnit.name);
+export async function listAccessibleUnits(
+  organizationId: string,
+  executor?: OrgDb,
+) {
+  return inOrgTransaction(organizationId, executor, (o) =>
+    o
+      .select({
+        id: organizationUnit.id,
+        name: organizationUnit.name,
+        slug: organizationUnit.slug,
+        isDefault: organizationUnit.isDefault,
+      })
+      .from(organizationUnit)
+      .where(
+        and(
+          eq(organizationUnit.organizationId, organizationId),
+          eq(organizationUnit.status, "ACTIVE"),
+        ),
+      )
+      .orderBy(organizationUnit.name),
+  );
 }
 
-export async function resolvePublicApiUnitScope(params: {
-  organizationId: string;
-  requestedUnitId?: number | null;
-}) {
-  const units = await listAccessibleUnits(params.organizationId);
+export async function resolvePublicApiUnitScope(
+  params: {
+    organizationId: string;
+    requestedUnitId?: number | null;
+  },
+  executor?: OrgDb,
+) {
+  const units = await listAccessibleUnits(params.organizationId, executor);
 
   if (params.requestedUnitId == null) {
     return {
@@ -289,6 +337,14 @@ export async function resolvePublicApiUnitScope(params: {
   };
 }
 
+/**
+ * Delivers one event to every active subscription of the laboratory. The
+ * subscriptions and the delivery rows are read and written in short
+ * org-bound transactions of their own; the HTTP call to the subscriber's URL
+ * never runs inside one (an unresponsive subscriber must not hold a
+ * connection). Always scoped by `params.organizationId`, so a subscription of
+ * another laboratory never receives the event.
+ */
 export async function emitPublicApiWebhookEvent(params: {
   organizationId: string;
   eventType: PublicApiWebhookEvent;
@@ -299,16 +355,24 @@ export async function emitPublicApiWebhookEvent(params: {
     return;
   }
 
-  const subscriptions = await db
-    .select()
-    .from(publicApiWebhookSubscription)
-    .where(
-      and(
-        eq(publicApiWebhookSubscription.organizationId, params.organizationId),
-        eq(publicApiWebhookSubscription.status, "ACTIVE"),
-        sql`${publicApiWebhookSubscription.events} ? ${params.eventType}`,
-      ),
-    );
+  const subscriptions = await inOrgTransaction(
+    params.organizationId,
+    undefined,
+    (o) =>
+      o
+        .select()
+        .from(publicApiWebhookSubscription)
+        .where(
+          and(
+            eq(
+              publicApiWebhookSubscription.organizationId,
+              params.organizationId,
+            ),
+            eq(publicApiWebhookSubscription.status, "ACTIVE"),
+            sql`${publicApiWebhookSubscription.events} ? ${params.eventType}`,
+          ),
+        ),
+  );
 
   if (subscriptions.length === 0) {
     return;
@@ -332,18 +396,23 @@ export async function emitPublicApiWebhookEvent(params: {
         params.env,
       );
 
-      const [delivery] = await db
-        .insert(publicApiWebhookDelivery)
-        .values({
-          id: crypto.randomUUID(),
-          subscriptionId: subscription.id,
-          organizationId: subscription.organizationId,
-          eventId,
-          eventType: params.eventType,
-          requestUrl: subscription.targetUrl,
-          requestBody,
-        })
-        .returning();
+      const [delivery] = await inOrgTransaction(
+        params.organizationId,
+        undefined,
+        (o) =>
+          o
+            .insert(publicApiWebhookDelivery)
+            .values({
+              id: crypto.randomUUID(),
+              subscriptionId: subscription.id,
+              organizationId: subscription.organizationId,
+              eventId,
+              eventType: params.eventType,
+              requestUrl: subscription.targetUrl,
+              requestBody,
+            })
+            .returning(),
+      );
 
       try {
         const response = await fetch(subscription.targetUrl, {
@@ -360,52 +429,60 @@ export async function emitPublicApiWebhookEvent(params: {
         const responseBody = await response.text().catch(() => null);
         const isSuccess = response.ok;
 
-        await db
-          .update(publicApiWebhookDelivery)
-          .set({
-            attemptCount: 1,
-            responseStatus: response.status,
-            responseBody,
-            status: isSuccess ? "SUCCESS" : "FAILED",
-            deliveredAt: isSuccess ? new Date() : null,
-            failedAt: isSuccess ? null : new Date(),
-            lastError: isSuccess ? null : `HTTP ${response.status}`,
-            updatedAt: new Date(),
-          })
-          .where(eq(publicApiWebhookDelivery.id, delivery!.id));
+        await inOrgTransaction(params.organizationId, undefined, async (o) => {
+          await o
+            .update(publicApiWebhookDelivery)
+            .set({
+              attemptCount: 1,
+              responseStatus: response.status,
+              responseBody,
+              status: isSuccess ? "SUCCESS" : "FAILED",
+              deliveredAt: isSuccess ? new Date() : null,
+              failedAt: isSuccess ? null : new Date(),
+              lastError: isSuccess ? null : `HTTP ${response.status}`,
+              updatedAt: new Date(),
+            })
+            .where(eq(publicApiWebhookDelivery.id, delivery!.id));
 
-        await db
-          .update(publicApiWebhookSubscription)
-          .set({
-            consecutiveFailures: isSuccess
-              ? 0
-              : subscription.consecutiveFailures + 1,
-            lastSuccessAt: isSuccess ? new Date() : subscription.lastSuccessAt,
-            lastFailureAt: isSuccess ? subscription.lastFailureAt : new Date(),
-            updatedAt: new Date(),
-          })
-          .where(eq(publicApiWebhookSubscription.id, subscription.id));
+          await o
+            .update(publicApiWebhookSubscription)
+            .set({
+              consecutiveFailures: isSuccess
+                ? 0
+                : subscription.consecutiveFailures + 1,
+              lastSuccessAt: isSuccess
+                ? new Date()
+                : subscription.lastSuccessAt,
+              lastFailureAt: isSuccess
+                ? subscription.lastFailureAt
+                : new Date(),
+              updatedAt: new Date(),
+            })
+            .where(eq(publicApiWebhookSubscription.id, subscription.id));
+        });
       } catch (error) {
-        await db
-          .update(publicApiWebhookDelivery)
-          .set({
-            attemptCount: 1,
-            status: "FAILED",
-            failedAt: new Date(),
-            lastError:
-              error instanceof Error ? error.message : "Falha de entrega",
-            updatedAt: new Date(),
-          })
-          .where(eq(publicApiWebhookDelivery.id, delivery!.id));
+        await inOrgTransaction(params.organizationId, undefined, async (o) => {
+          await o
+            .update(publicApiWebhookDelivery)
+            .set({
+              attemptCount: 1,
+              status: "FAILED",
+              failedAt: new Date(),
+              lastError:
+                error instanceof Error ? error.message : "Falha de entrega",
+              updatedAt: new Date(),
+            })
+            .where(eq(publicApiWebhookDelivery.id, delivery!.id));
 
-        await db
-          .update(publicApiWebhookSubscription)
-          .set({
-            consecutiveFailures: subscription.consecutiveFailures + 1,
-            lastFailureAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(eq(publicApiWebhookSubscription.id, subscription.id));
+          await o
+            .update(publicApiWebhookSubscription)
+            .set({
+              consecutiveFailures: subscription.consecutiveFailures + 1,
+              lastFailureAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .where(eq(publicApiWebhookSubscription.id, subscription.id));
+        });
       }
     }),
   );
@@ -417,21 +494,37 @@ export async function replayPublicApiWebhookDelivery(params: {
   deliveryId: string;
   env: PublicApiEnv;
 }) {
-  const [subscription, delivery] = await Promise.all([
-    db.query.publicApiWebhookSubscription.findFirst({
-      where: and(
-        eq(publicApiWebhookSubscription.id, params.subscriptionId),
-        eq(publicApiWebhookSubscription.organizationId, params.organizationId),
-      ),
-    }),
-    db.query.publicApiWebhookDelivery.findFirst({
-      where: and(
-        eq(publicApiWebhookDelivery.id, params.deliveryId),
-        eq(publicApiWebhookDelivery.organizationId, params.organizationId),
-      ),
-      orderBy: [desc(publicApiWebhookDelivery.createdAt)],
-    }),
-  ]);
+  const [subscription, delivery] = await inOrgTransaction(
+    params.organizationId,
+    undefined,
+    async (o) => {
+      const [foundSubscription] = await o
+        .select()
+        .from(publicApiWebhookSubscription)
+        .where(
+          and(
+            eq(publicApiWebhookSubscription.id, params.subscriptionId),
+            eq(
+              publicApiWebhookSubscription.organizationId,
+              params.organizationId,
+            ),
+          ),
+        )
+        .limit(1);
+      const [foundDelivery] = await o
+        .select()
+        .from(publicApiWebhookDelivery)
+        .where(
+          and(
+            eq(publicApiWebhookDelivery.id, params.deliveryId),
+            eq(publicApiWebhookDelivery.organizationId, params.organizationId),
+          ),
+        )
+        .orderBy(desc(publicApiWebhookDelivery.createdAt))
+        .limit(1);
+      return [foundSubscription, foundDelivery] as const;
+    },
+  );
 
   if (!subscription || !delivery) {
     return null;
@@ -443,19 +536,21 @@ export async function replayPublicApiWebhookDelivery(params: {
     params.env,
   );
   const payload = JSON.stringify(delivery.requestBody);
-  const replay = await db
-    .insert(publicApiWebhookDelivery)
-    .values({
-      id: crypto.randomUUID(),
-      subscriptionId: subscription.id,
-      organizationId: params.organizationId,
-      eventId: delivery.eventId,
-      eventType: delivery.eventType,
-      requestUrl: subscription.targetUrl,
-      requestBody: delivery.requestBody,
-      replayOfDeliveryId: delivery.id,
-    })
-    .returning();
+  const replay = await inOrgTransaction(params.organizationId, undefined, (o) =>
+    o
+      .insert(publicApiWebhookDelivery)
+      .values({
+        id: crypto.randomUUID(),
+        subscriptionId: subscription.id,
+        organizationId: params.organizationId,
+        eventId: delivery.eventId,
+        eventType: delivery.eventType,
+        requestUrl: subscription.targetUrl,
+        requestBody: delivery.requestBody,
+        replayOfDeliveryId: delivery.id,
+      })
+      .returning(),
+  );
 
   try {
     const response = await fetch(subscription.targetUrl, {
@@ -472,37 +567,35 @@ export async function replayPublicApiWebhookDelivery(params: {
     const responseBody = await response.text().catch(() => null);
     const isSuccess = response.ok;
 
-    await db
-      .update(publicApiWebhookDelivery)
-      .set({
-        attemptCount: 1,
-        responseStatus: response.status,
-        responseBody,
-        status: isSuccess ? "SUCCESS" : "FAILED",
-        deliveredAt: isSuccess ? new Date() : null,
-        failedAt: isSuccess ? null : new Date(),
-        lastError: isSuccess ? null : `HTTP ${response.status}`,
-      })
-      .where(eq(publicApiWebhookDelivery.id, replay[0]!.id));
+    await inOrgTransaction(params.organizationId, undefined, async (o) => {
+      await o
+        .update(publicApiWebhookDelivery)
+        .set({
+          attemptCount: 1,
+          responseStatus: response.status,
+          responseBody,
+          status: isSuccess ? "SUCCESS" : "FAILED",
+          deliveredAt: isSuccess ? new Date() : null,
+          failedAt: isSuccess ? null : new Date(),
+          lastError: isSuccess ? null : `HTTP ${response.status}`,
+        })
+        .where(eq(publicApiWebhookDelivery.id, replay[0]!.id));
+    });
 
     return replay[0]!;
   } catch (error) {
-    await db
-      .update(publicApiWebhookDelivery)
-      .set({
-        attemptCount: 1,
-        status: "FAILED",
-        failedAt: new Date(),
-        lastError: error instanceof Error ? error.message : "Falha de replay",
-      })
-      .where(eq(publicApiWebhookDelivery.id, replay[0]!.id));
+    await inOrgTransaction(params.organizationId, undefined, async (o) => {
+      await o
+        .update(publicApiWebhookDelivery)
+        .set({
+          attemptCount: 1,
+          status: "FAILED",
+          failedAt: new Date(),
+          lastError: error instanceof Error ? error.message : "Falha de replay",
+        })
+        .where(eq(publicApiWebhookDelivery.id, replay[0]!.id));
+    });
 
     return replay[0]!;
   }
-}
-
-export async function getApiKeyById(apiKeyId: string) {
-  return db.query.organizationApiKey.findFirst({
-    where: eq(organizationApiKey.id, apiKeyId),
-  });
 }

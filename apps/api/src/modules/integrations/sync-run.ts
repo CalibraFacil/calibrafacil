@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   integrationSyncItem,
   integrationSyncRun,
@@ -14,6 +14,7 @@ import {
 } from "@calibra-facil/shared";
 import { and, count, eq, inArray } from "drizzle-orm";
 import type { IntegrationsEnv } from "../../lib/integrations-env";
+import { inOrgTransaction } from "../../lib/org-transaction";
 import {
   type ContaAzulScheduledPollKind,
   type IntegrationRunExecutionResult,
@@ -62,12 +63,15 @@ function getIntegrationErrorCode(error: unknown) {
   return "INTEGRATION_RECORD_ERROR";
 }
 
-async function getNextSyncItemAttempt(params: {
-  integrationId: string;
-  target: IntegrationSyncTarget;
-  localEntityId: string;
-}) {
-  const [row] = await db
+async function getNextSyncItemAttempt(
+  o: OrgDb,
+  params: {
+    integrationId: string;
+    target: IntegrationSyncTarget;
+    localEntityId: string;
+  },
+) {
+  const [row] = await o
     .select({ total: count() })
     .from(integrationSyncItem)
     .where(
@@ -89,51 +93,64 @@ async function createRunningSyncItem(params: {
   target: IntegrationSyncTarget;
   payload: IntegrationSyncPayload;
 }) {
-  const attemptCount = await getNextSyncItemAttempt({
-    integrationId: params.integrationId,
-    target: params.target,
-    localEntityId: params.payload.externalId,
-  });
   const id = crypto.randomUUID();
 
-  await db.insert(integrationSyncItem).values({
-    id,
-    runId: params.runId,
-    integrationId: params.integrationId,
-    organizationId: params.organizationId,
-    target: params.target,
-    localEntityId: params.payload.externalId,
-    operation: getSyncItemOperation(params.target),
-    status: "RUNNING",
-    attemptCount,
-    requestFingerprint: createIntegrationPayloadFingerprint(params.payload),
-    metadata: {
-      providerTarget: params.target,
-      payloadKind: "kind" in params.payload ? params.payload.kind : null,
-      createdFrom: "runIntegrationSync",
+  // The attempt number and the row that takes it commit together.
+  const attemptCount = await inOrgTransaction(
+    params.organizationId,
+    undefined,
+    async (o) => {
+      const attempt = await getNextSyncItemAttempt(o, {
+        integrationId: params.integrationId,
+        target: params.target,
+        localEntityId: params.payload.externalId,
+      });
+
+      await o.insert(integrationSyncItem).values({
+        id,
+        runId: params.runId,
+        integrationId: params.integrationId,
+        organizationId: params.organizationId,
+        target: params.target,
+        localEntityId: params.payload.externalId,
+        operation: getSyncItemOperation(params.target),
+        status: "RUNNING",
+        attemptCount: attempt,
+        requestFingerprint: createIntegrationPayloadFingerprint(params.payload),
+        metadata: {
+          providerTarget: params.target,
+          payloadKind: "kind" in params.payload ? params.payload.kind : null,
+          createdFrom: "runIntegrationSync",
+        },
+      });
+      return attempt;
     },
-  });
+  );
 
   return { id, attemptCount };
 }
 
 async function markSyncItemSucceeded(params: {
+  organizationId: string;
   itemId: string;
   remoteEntityId: string | null;
 }) {
-  await db
-    .update(integrationSyncItem)
-    .set({
-      remoteEntityId: params.remoteEntityId,
-      status: "SUCCEEDED",
-      lastErrorCode: null,
-      lastErrorMessage: null,
-      updatedAt: new Date(),
-    })
-    .where(eq(integrationSyncItem.id, params.itemId));
+  await inOrgTransaction(params.organizationId, undefined, async (o) => {
+    await o
+      .update(integrationSyncItem)
+      .set({
+        remoteEntityId: params.remoteEntityId,
+        status: "SUCCEEDED",
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(integrationSyncItem.id, params.itemId));
+  });
 }
 
 async function markSyncItemFailed(params: {
+  organizationId: string;
   itemId: string;
   attemptCount: number;
   error: unknown;
@@ -141,15 +158,17 @@ async function markSyncItemFailed(params: {
   const message =
     params.error instanceof Error ? params.error.message : "Falha desconhecida";
 
-  await db
-    .update(integrationSyncItem)
-    .set({
-      status: params.attemptCount >= 3 ? "DEAD_LETTER" : "FAILED",
-      lastErrorCode: getIntegrationErrorCode(params.error),
-      lastErrorMessage: message.slice(0, 1000),
-      updatedAt: new Date(),
-    })
-    .where(eq(integrationSyncItem.id, params.itemId));
+  await inOrgTransaction(params.organizationId, undefined, async (o) => {
+    await o
+      .update(integrationSyncItem)
+      .set({
+        status: params.attemptCount >= 3 ? "DEAD_LETTER" : "FAILED",
+        lastErrorCode: getIntegrationErrorCode(params.error),
+        lastErrorMessage: message.slice(0, 1000),
+        updatedAt: new Date(),
+      })
+      .where(eq(integrationSyncItem.id, params.itemId));
+  });
 }
 
 export async function runIntegrationSync(params: {
@@ -169,18 +188,20 @@ export async function runIntegrationSync(params: {
     throw new Error("Integração não encontrada");
   }
 
-  await db
-    .update(integrationSyncRun)
-    .set({
-      status: "RUNNING",
-      startedAt: new Date(),
-      summary: buildRunSummary({
-        target: params.target,
-        requestedLimit: params.limit,
-      }),
-      updatedAt: new Date(),
-    })
-    .where(eq(integrationSyncRun.id, params.runId));
+  await inOrgTransaction(params.organizationId, undefined, async (o) => {
+    await o
+      .update(integrationSyncRun)
+      .set({
+        status: "RUNNING",
+        startedAt: new Date(),
+        summary: buildRunSummary({
+          target: params.target,
+          requestedLimit: params.limit,
+        }),
+        updatedAt: new Date(),
+      })
+      .where(eq(integrationSyncRun.id, params.runId));
+  });
 
   try {
     if (record.integration.status !== "ACTIVE") {
@@ -252,12 +273,14 @@ export async function runIntegrationSync(params: {
         }
 
         await markSyncItemSucceeded({
+          organizationId: params.organizationId,
           itemId: syncItem.id,
           remoteEntityId: result?.remoteEntityId ?? null,
         });
         successCount += 1;
       } catch (error) {
         await markSyncItemFailed({
+          organizationId: params.organizationId,
           itemId: syncItem.id,
           attemptCount: syncItem.attemptCount,
           error,
@@ -294,42 +317,47 @@ export async function runIntegrationSync(params: {
           ? "FAILED"
           : "PARTIAL";
 
-    await db
-      .update(integrationSyncRun)
-      .set({
-        status,
-        processedCount,
-        successCount,
-        errorCount,
-        errorSummary,
-        summary: buildRunSummary({
-          target: params.target,
+    await inOrgTransaction(params.organizationId, undefined, async (o) => {
+      await o
+        .update(integrationSyncRun)
+        .set({
+          status,
           processedCount,
           successCount,
           errorCount,
-          requestedLimit: params.limit,
-        }),
-        finishedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(integrationSyncRun.id, params.runId));
+          errorSummary,
+          summary: buildRunSummary({
+            target: params.target,
+            processedCount,
+            successCount,
+            errorCount,
+            requestedLimit: params.limit,
+          }),
+          finishedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(integrationSyncRun.id, params.runId));
 
-    await writeIntegrationEvent({
-      integrationId: params.integrationId,
-      organizationId: params.organizationId,
-      runId: params.runId,
-      level: status === "COMPLETED" ? "info" : "warning",
-      event: "sync.completed",
-      message:
-        status === "COMPLETED"
-          ? "Sincronização concluída"
-          : "Sincronização concluída com ressalvas",
-      details: {
-        target: params.target,
-        processedCount,
-        successCount,
-        errorCount,
-      },
+      await writeIntegrationEvent(
+        {
+          integrationId: params.integrationId,
+          organizationId: params.organizationId,
+          runId: params.runId,
+          level: status === "COMPLETED" ? "info" : "warning",
+          event: "sync.completed",
+          message:
+            status === "COMPLETED"
+              ? "Sincronização concluída"
+              : "Sincronização concluída com ressalvas",
+          details: {
+            target: params.target,
+            processedCount,
+            successCount,
+            errorCount,
+          },
+        },
+        o,
+      );
     });
 
     return {
@@ -358,73 +386,86 @@ export async function runIntegrationSync(params: {
   }
 }
 
-export async function createSyncRun(params: {
-  integrationId: string;
-  organizationId: string;
-  trigger: IntegrationSyncTrigger;
-  target: IntegrationSyncTarget;
-  initiatedBy?: string | null;
-  requestedLimit?: number;
-  retryOfRunId?: string | null;
-  pollKind?: ContaAzulScheduledPollKind;
-  cursorType?: string;
-}) {
+export async function createSyncRun(
+  params: {
+    integrationId: string;
+    organizationId: string;
+    trigger: IntegrationSyncTrigger;
+    target: IntegrationSyncTarget;
+    initiatedBy?: string | null;
+    requestedLimit?: number;
+    retryOfRunId?: string | null;
+    pollKind?: ContaAzulScheduledPollKind;
+    cursorType?: string;
+  },
+  executor?: OrgDb,
+) {
   const id = crypto.randomUUID();
 
-  await db.insert(integrationSyncRun).values({
-    id,
-    integrationId: params.integrationId,
-    organizationId: params.organizationId,
-    trigger: params.trigger,
-    target: params.target,
-    status: "PENDING",
-    initiatedBy: params.initiatedBy ?? null,
-    summary: buildRunSummary({
+  await inOrgTransaction(params.organizationId, executor, async (o) => {
+    await o.insert(integrationSyncRun).values({
+      id,
+      integrationId: params.integrationId,
+      organizationId: params.organizationId,
+      trigger: params.trigger,
       target: params.target,
-      requestedLimit: params.requestedLimit,
-      retryOfRunId: params.retryOfRunId,
-      pollKind: params.pollKind,
-      cursorType: params.cursorType,
-    }),
+      status: "PENDING",
+      initiatedBy: params.initiatedBy ?? null,
+      summary: buildRunSummary({
+        target: params.target,
+        requestedLimit: params.requestedLimit,
+        retryOfRunId: params.retryOfRunId,
+        pollKind: params.pollKind,
+        cursorType: params.cursorType,
+      }),
+    });
   });
 
   return id;
 }
 
-export async function failSyncRunAsBlocked(params: {
-  integrationId: string;
-  organizationId: string;
-  runId: string;
-  target: IntegrationSyncTarget;
-  requestedLimit: number;
-  message: string;
-}) {
-  await db
-    .update(integrationSyncRun)
-    .set({
-      status: "FAILED",
-      errorSummary: params.message,
-      finishedAt: new Date(),
-      summary: buildRunSummary({
-        target: params.target,
-        requestedLimit: params.requestedLimit,
-        blocked: true,
-      }),
-      updatedAt: new Date(),
-    })
-    .where(eq(integrationSyncRun.id, params.runId));
+export async function failSyncRunAsBlocked(
+  params: {
+    integrationId: string;
+    organizationId: string;
+    runId: string;
+    target: IntegrationSyncTarget;
+    requestedLimit: number;
+    message: string;
+  },
+  executor?: OrgDb,
+) {
+  await inOrgTransaction(params.organizationId, executor, async (o) => {
+    await o
+      .update(integrationSyncRun)
+      .set({
+        status: "FAILED",
+        errorSummary: params.message,
+        finishedAt: new Date(),
+        summary: buildRunSummary({
+          target: params.target,
+          requestedLimit: params.requestedLimit,
+          blocked: true,
+        }),
+        updatedAt: new Date(),
+      })
+      .where(eq(integrationSyncRun.id, params.runId));
 
-  await writeIntegrationEvent({
-    integrationId: params.integrationId,
-    organizationId: params.organizationId,
-    runId: params.runId,
-    level: "warning",
-    event: "sync.blocked",
-    message: params.message,
-    details: {
-      target: params.target,
-      blocked: true,
-    },
+    await writeIntegrationEvent(
+      {
+        integrationId: params.integrationId,
+        organizationId: params.organizationId,
+        runId: params.runId,
+        level: "warning",
+        event: "sync.blocked",
+        message: params.message,
+        details: {
+          target: params.target,
+          blocked: true,
+        },
+      },
+      o,
+    );
   });
 }
 

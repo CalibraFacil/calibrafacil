@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   billingDocument,
   integrationConnection,
@@ -7,6 +7,7 @@ import {
   receivableInstallment,
 } from "@calibra-facil/db/schema";
 import { recomputeCertificateReleasesForBillingDocument } from "../../lib/certificate-release-reconciliation";
+import { inOrgTransaction } from "../../lib/org-transaction";
 import {
   normalizeContaAzulConnectionConfig,
   type IntegrationSyncCursor,
@@ -35,8 +36,11 @@ import { formatContaAzulDateTime, parseRemoteDate } from "./conta-azul-due";
 import { createContaAzulClientForRecord } from "./conta-azul-auth";
 import { getExistingLink, upsertLink } from "./sync-state";
 
-async function getDocumentStatusAfterInstallmentUpdate(documentId: number) {
-  const installments = await db
+async function getDocumentStatusAfterInstallmentUpdate(
+  o: OrgDb,
+  documentId: number,
+) {
+  const installments = await o
     .select({ status: receivableInstallment.status })
     .from(receivableInstallment)
     .where(eq(receivableInstallment.documentId, documentId));
@@ -60,17 +64,22 @@ async function getDocumentStatusAfterInstallmentUpdate(documentId: number) {
   return "ISSUED" as const;
 }
 
-async function upsertContaAzulPaymentReceipt(params: {
-  organizationId: string;
-  recordedBy: string;
-  installmentId: number;
-  remoteInstallmentId: string;
-  receivedAt: Date;
-  amountCents: number;
-  paymentMethod: NonNullable<typeof paymentReceipt.$inferInsert.paymentMethod>;
-  reference: string;
-}) {
-  const [existing] = await db
+async function upsertContaAzulPaymentReceipt(
+  o: OrgDb,
+  params: {
+    organizationId: string;
+    recordedBy: string;
+    installmentId: number;
+    remoteInstallmentId: string;
+    receivedAt: Date;
+    amountCents: number;
+    paymentMethod: NonNullable<
+      typeof paymentReceipt.$inferInsert.paymentMethod
+    >;
+    reference: string;
+  },
+) {
+  const [existing] = await o
     .select({ id: paymentReceipt.id })
     .from(paymentReceipt)
     .where(
@@ -82,7 +91,7 @@ async function upsertContaAzulPaymentReceipt(params: {
     .limit(1);
 
   if (existing) {
-    await db
+    await o
       .update(paymentReceipt)
       .set({
         receivedAt: params.receivedAt,
@@ -95,7 +104,7 @@ async function upsertContaAzulPaymentReceipt(params: {
     return existing.id;
   }
 
-  const [created] = await db
+  const [created] = await o
     .insert(paymentReceipt)
     .values({
       organizationId: params.organizationId,
@@ -109,7 +118,7 @@ async function upsertContaAzulPaymentReceipt(params: {
     })
     .returning();
 
-  await db.insert(financialAuditLog).values({
+  await o.insert(financialAuditLog).values({
     organizationId: params.organizationId,
     entityType: "receipt",
     entityId: String(created?.id ?? params.installmentId),
@@ -152,6 +161,7 @@ export async function pollContaAzulBillingStatus(params: {
   const now = params.now ?? new Date();
   const storedCursor = await getIntegrationCursor({
     integrationId: params.integrationId,
+    organizationId: params.organizationId,
     cursorType: CONTA_AZUL_RECEIVABLES_CURSOR_TYPE,
   });
   const lastRemoteUpdatedAt =
@@ -226,94 +236,111 @@ export async function pollContaAzulBillingStatus(params: {
       continue;
     }
 
-    const [localInstallment] = await db
-      .select({
-        id: receivableInstallment.id,
-        documentId: receivableInstallment.documentId,
-        amountCents: receivableInstallment.amountCents,
-        documentStatus: billingDocument.status,
-      })
-      .from(receivableInstallment)
-      .innerJoin(
-        billingDocument,
-        eq(receivableInstallment.documentId, billingDocument.id),
-      )
-      .where(
-        and(
-          eq(billingDocument.id, matched.documentId),
-          eq(billingDocument.organizationId, params.organizationId),
-          eq(
-            receivableInstallment.installmentNumber,
-            matched.installmentNumber,
-          ),
-        ),
-      )
-      .limit(1);
+    // The installment, its receipt and the document status are one unit of
+    // work (no remote call inside): one transaction per item.
+    const reconciled = await inOrgTransaction(
+      params.organizationId,
+      undefined,
+      async (o) => {
+        const [localInstallment] = await o
+          .select({
+            id: receivableInstallment.id,
+            documentId: receivableInstallment.documentId,
+            amountCents: receivableInstallment.amountCents,
+            documentStatus: billingDocument.status,
+          })
+          .from(receivableInstallment)
+          .innerJoin(
+            billingDocument,
+            eq(receivableInstallment.documentId, billingDocument.id),
+          )
+          .where(
+            and(
+              eq(billingDocument.id, matched.documentId),
+              eq(billingDocument.organizationId, params.organizationId),
+              eq(
+                receivableInstallment.installmentNumber,
+                matched.installmentNumber,
+              ),
+            ),
+          )
+          .limit(1);
 
-    if (!localInstallment) {
+        if (!localInstallment) {
+          return null;
+        }
+
+        const mapped = mapContaAzulInstallmentStatus(item);
+        const dueDate = parseRemoteDate(item.data_vencimento);
+        const paidAt =
+          mapped.installmentStatus === "PAID"
+            ? (parseRemoteDate(item.data_pagamento) ??
+              parseRemoteDate(item.data_alteracao) ??
+              now)
+            : null;
+        const receiptSummary = buildContaAzulPaymentReceiptSummary({
+          installment: item,
+          localAmountCents: localInstallment.amountCents,
+        });
+
+        await o
+          .update(receivableInstallment)
+          .set({
+            status: mapped.installmentStatus,
+            ...(dueDate ? { dueDate } : {}),
+            paidAt,
+            paymentMethod: receiptSummary?.paymentMethod ?? null,
+            paymentReference: item.nsu ?? item.id,
+            updatedAt: new Date(),
+          })
+          .where(eq(receivableInstallment.id, localInstallment.id));
+
+        if (receiptSummary) {
+          await upsertContaAzulPaymentReceipt(o, {
+            organizationId: params.organizationId,
+            recordedBy: record.integration.createdBy,
+            installmentId: localInstallment.id,
+            remoteInstallmentId: item.id,
+            receivedAt:
+              parseRemoteDate(item.data_pagamento) ??
+              parseRemoteDate(item.data_alteracao) ??
+              now,
+            amountCents: receiptSummary.amountCents,
+            paymentMethod: receiptSummary.paymentMethod,
+            reference: receiptSummary.reference,
+          });
+        }
+
+        const documentStatus = await getDocumentStatusAfterInstallmentUpdate(
+          o,
+          localInstallment.documentId,
+        );
+
+        if (localInstallment.documentStatus !== "VOID") {
+          await o
+            .update(billingDocument)
+            .set({
+              status: documentStatus,
+              updatedAt: new Date(),
+            })
+            .where(eq(billingDocument.id, localInstallment.documentId));
+        }
+
+        return { localInstallment, mapped, receiptSummary };
+      },
+    );
+
+    if (!reconciled) {
       warnings.push(`Parcela local não encontrada para ${matched.externalId}`);
       continue;
     }
-
-    const mapped = mapContaAzulInstallmentStatus(item);
-    const dueDate = parseRemoteDate(item.data_vencimento);
-    const paidAt =
-      mapped.installmentStatus === "PAID"
-        ? (parseRemoteDate(item.data_pagamento) ??
-          parseRemoteDate(item.data_alteracao) ??
-          now)
-        : null;
-    const receiptSummary = buildContaAzulPaymentReceiptSummary({
-      installment: item,
-      localAmountCents: localInstallment.amountCents,
-    });
-
-    await db
-      .update(receivableInstallment)
-      .set({
-        status: mapped.installmentStatus,
-        ...(dueDate ? { dueDate } : {}),
-        paidAt,
-        paymentMethod: receiptSummary?.paymentMethod ?? null,
-        paymentReference: item.nsu ?? item.id,
-        updatedAt: new Date(),
-      })
-      .where(eq(receivableInstallment.id, localInstallment.id));
-
-    if (receiptSummary) {
-      await upsertContaAzulPaymentReceipt({
-        organizationId: params.organizationId,
-        recordedBy: record.integration.createdBy,
-        installmentId: localInstallment.id,
-        remoteInstallmentId: item.id,
-        receivedAt:
-          parseRemoteDate(item.data_pagamento) ??
-          parseRemoteDate(item.data_alteracao) ??
-          now,
-        amountCents: receiptSummary.amountCents,
-        paymentMethod: receiptSummary.paymentMethod,
-        reference: receiptSummary.reference,
-      });
-    }
-
-    const documentStatus = await getDocumentStatusAfterInstallmentUpdate(
-      localInstallment.documentId,
-    );
-
-    if (localInstallment.documentStatus !== "VOID") {
-      await db
-        .update(billingDocument)
-        .set({
-          status: documentStatus,
-          updatedAt: new Date(),
-        })
-        .where(eq(billingDocument.id, localInstallment.documentId));
-    }
+    const { localInstallment, mapped, receiptSummary } = reconciled;
 
     // Phase 2 slice 1: recompute certificate release state for any
     // calibration jobs linked (via service_order_certificate_link) to a
     // service order pointing at this billing document. Read-only with
     // respect to calibration_job.status / issued_certificate_snapshot.status.
+    // It runs after the reconciliation above has committed (it reads it back).
     await recomputeCertificateReleasesForBillingDocument({
       organizationId: params.organizationId,
       billingDocumentId: localInstallment.documentId,
@@ -321,6 +348,7 @@ export async function pollContaAzulBillingStatus(params: {
 
     if (item.evento?.id) {
       const billingDocumentLink = await getExistingLink(
+        params.organizationId,
         params.integrationId,
         "billing_document",
         matched.externalId,
@@ -385,14 +413,6 @@ export async function pollContaAzulBillingStatus(params: {
     },
   });
 
-  await db
-    .update(integrationConnection)
-    .set({
-      config: nextConfig,
-      updatedAt: new Date(),
-    })
-    .where(eq(integrationConnection.id, record.connection.id));
-
   const cursor: IntegrationSyncCursor = {
     cursorType: CONTA_AZUL_RECEIVABLES_CURSOR_TYPE,
     lastRemoteUpdatedAt: nextLastRemoteUpdatedAt,
@@ -408,23 +428,40 @@ export async function pollContaAzulBillingStatus(params: {
     },
   };
 
-  await upsertIntegrationCursor({
-    integrationId: params.integrationId,
-    organizationId: params.organizationId,
-    cursor,
-  });
+  // The poll's bookkeeping (config watermark, cursor, event) commits together.
+  await inOrgTransaction(params.organizationId, undefined, async (o) => {
+    await o
+      .update(integrationConnection)
+      .set({
+        config: nextConfig,
+        updatedAt: new Date(),
+      })
+      .where(eq(integrationConnection.id, record.connection.id));
 
-  await writeIntegrationEvent({
-    integrationId: params.integrationId,
-    organizationId: params.organizationId,
-    level: warnings.length > 0 ? "warning" : "info",
-    event: "integration.conta_azul.payment_poll.completed",
-    message: "Polling de pagamentos da Conta Azul concluído",
-    details: {
-      processedCount: items.length,
-      updatedCount,
-      warnings,
-    },
+    await upsertIntegrationCursor(
+      {
+        integrationId: params.integrationId,
+        organizationId: params.organizationId,
+        cursor,
+      },
+      o,
+    );
+
+    await writeIntegrationEvent(
+      {
+        integrationId: params.integrationId,
+        organizationId: params.organizationId,
+        level: warnings.length > 0 ? "warning" : "info",
+        event: "integration.conta_azul.payment_poll.completed",
+        message: "Polling de pagamentos da Conta Azul concluído",
+        details: {
+          processedCount: items.length,
+          updatedCount,
+          warnings,
+        },
+      },
+      o,
+    );
   });
 
   return {

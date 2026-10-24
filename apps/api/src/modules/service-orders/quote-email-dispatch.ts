@@ -13,12 +13,12 @@
  * REQ-SOEMAIL-032 — reject paths  → dispatchRejectedQuoteEmailOnce
  */
 
-import { db } from "@calibra-facil/db";
 import { customer } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 import { sendServiceOrderEmailOnce } from "./service-order-email-once";
 import { dispatchOrcamentoAprovadoEmail } from "./orcamento-aprovado-email-dispatch";
 import { dispatchOrcamentoRecusadoEmail } from "./orcamento-recusado-email-dispatch";
+import { orgDb } from "../../lib/org-db";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -101,16 +101,19 @@ export function dispatchApprovedQuoteEmailOnce(
 ): void {
   void (async () => {
     try {
-      const [customerRow] = await db
-        .select({ name: customer.name, email: customer.email })
-        .from(customer)
-        .where(
-          and(
-            eq(customer.id, input.order.customerId),
-            eq(customer.labOrganizationId, input.order.organizationId),
-          ),
-        )
-        .limit(1);
+      const [customerRow] = await orgDb(input.order.organizationId).transaction(
+        (o) =>
+          o
+            .select({ name: customer.name, email: customer.email })
+            .from(customer)
+            .where(
+              and(
+                eq(customer.id, input.order.customerId),
+                eq(customer.labOrganizationId, input.order.organizationId),
+              ),
+            )
+            .limit(1),
+      );
 
       await sendServiceOrderEmailOnce({
         organizationId: input.order.organizationId,
@@ -192,16 +195,19 @@ export function dispatchRejectedQuoteEmailOnce(
 ): void {
   void (async () => {
     try {
-      const [customerRow] = await db
-        .select({ name: customer.name, email: customer.email })
-        .from(customer)
-        .where(
-          and(
-            eq(customer.id, input.order.customerId),
-            eq(customer.labOrganizationId, input.order.organizationId),
-          ),
-        )
-        .limit(1);
+      const [customerRow] = await orgDb(input.order.organizationId).transaction(
+        (o) =>
+          o
+            .select({ name: customer.name, email: customer.email })
+            .from(customer)
+            .where(
+              and(
+                eq(customer.id, input.order.customerId),
+                eq(customer.labOrganizationId, input.order.organizationId),
+              ),
+            )
+            .limit(1),
+      );
 
       await sendServiceOrderEmailOnce({
         organizationId: input.order.organizationId,

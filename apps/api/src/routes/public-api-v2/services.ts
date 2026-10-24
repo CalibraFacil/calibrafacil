@@ -1,13 +1,13 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db } from "@calibra-facil/db";
 import { service } from "@calibra-facil/db/schema";
 import { and, count, eq, ilike, or } from "drizzle-orm";
 import { buildListMeta, buildPublicApiError } from "../../lib/public-api";
 import { requireApiScope } from "../../middleware/api-key-auth";
 import { type PublicApiV2Env } from "./env";
 import { ListQuerySchema } from "./schemas";
+import { orgDb } from "../../lib/org-db";
 
 export const serviceRoutes = new Hono<PublicApiV2Env>()
   .get(
@@ -34,19 +34,23 @@ export const serviceRoutes = new Hono<PublicApiV2Env>()
           : undefined,
       ];
 
-      const [countResult, rows] = await Promise.all([
-        db
-          .select({ total: count() })
-          .from(service)
-          .where(and(...conditions)),
-        db
-          .select()
-          .from(service)
-          .where(and(...conditions))
-          .orderBy(service.name)
-          .limit(limit)
-          .offset(offset),
-      ]);
+      const [countResult, rows] = await orgDb(
+        apiKey.organizationId,
+      ).transaction((o) =>
+        Promise.all([
+          o
+            .select({ total: count() })
+            .from(service)
+            .where(and(...conditions)),
+          o
+            .select()
+            .from(service)
+            .where(and(...conditions))
+            .orderBy(service.name)
+            .limit(limit)
+            .offset(offset),
+        ]),
+      );
 
       return c.json({
         data: rows,
@@ -75,16 +79,18 @@ export const serviceRoutes = new Hono<PublicApiV2Env>()
         404,
       );
     }
-    const [found] = await db
-      .select()
-      .from(service)
-      .where(
-        and(
-          eq(service.id, id),
-          eq(service.organizationId, apiKey.organizationId),
-        ),
-      )
-      .limit(1);
+    const [found] = await orgDb(apiKey.organizationId).transaction((o) =>
+      o
+        .select()
+        .from(service)
+        .where(
+          and(
+            eq(service.id, id),
+            eq(service.organizationId, apiKey.organizationId),
+          ),
+        )
+        .limit(1),
+    );
     if (!found) {
       return c.json(
         buildPublicApiError({

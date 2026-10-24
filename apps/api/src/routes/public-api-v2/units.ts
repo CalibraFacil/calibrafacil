@@ -1,30 +1,32 @@
 import { Hono } from "hono";
-import { db } from "@calibra-facil/db";
 import { organizationUnit } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 import { buildPublicApiError } from "../../lib/public-api";
 import { requireApiScope } from "../../middleware/api-key-auth";
 import { type PublicApiV2Env } from "./env";
+import { orgDb } from "../../lib/org-db";
 
 export const unitRoutes = new Hono<PublicApiV2Env>()
   .get("/units", requireApiScope("units:read"), async (c) => {
     const apiKey = c.get("apiKey");
-    const units = await db
-      .select({
-        id: organizationUnit.id,
-        name: organizationUnit.name,
-        slug: organizationUnit.slug,
-        status: organizationUnit.status,
-        isDefault: organizationUnit.isDefault,
-      })
-      .from(organizationUnit)
-      .where(
-        and(
-          eq(organizationUnit.organizationId, apiKey.organizationId),
-          eq(organizationUnit.status, "ACTIVE"),
-        ),
-      )
-      .orderBy(organizationUnit.name);
+    const units = await orgDb(apiKey.organizationId).transaction((o) =>
+      o
+        .select({
+          id: organizationUnit.id,
+          name: organizationUnit.name,
+          slug: organizationUnit.slug,
+          status: organizationUnit.status,
+          isDefault: organizationUnit.isDefault,
+        })
+        .from(organizationUnit)
+        .where(
+          and(
+            eq(organizationUnit.organizationId, apiKey.organizationId),
+            eq(organizationUnit.status, "ACTIVE"),
+          ),
+        )
+        .orderBy(organizationUnit.name),
+    );
     return c.json({ data: units });
   })
   .get("/units/:id", requireApiScope("units:read"), async (c) => {
@@ -39,16 +41,18 @@ export const unitRoutes = new Hono<PublicApiV2Env>()
         404,
       );
     }
-    const [found] = await db
-      .select()
-      .from(organizationUnit)
-      .where(
-        and(
-          eq(organizationUnit.id, id),
-          eq(organizationUnit.organizationId, apiKey.organizationId),
-        ),
-      )
-      .limit(1);
+    const [found] = await orgDb(apiKey.organizationId).transaction((o) =>
+      o
+        .select()
+        .from(organizationUnit)
+        .where(
+          and(
+            eq(organizationUnit.id, id),
+            eq(organizationUnit.organizationId, apiKey.organizationId),
+          ),
+        )
+        .limit(1),
+    );
     if (!found) {
       return c.json(
         buildPublicApiError({

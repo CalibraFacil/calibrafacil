@@ -42,19 +42,56 @@ const mocks = vi.hoisted(() => {
     },
   ];
 
+  // A select() chain that resolves, once awaited, to the rows `rowsFor` yields
+  // for the queried table (the org-bound handle calls where() itself before the
+  // caller does, so every method just returns the chain).
   // oxlint-disable-next-line unicorn/consistent-function-scoping -- helper must stay inside vi.hoisted with the mock state it builds.
-  function createSelectQuery(selectRows: unknown[]) {
-    let query: Promise<unknown[]> & {
-      from: ReturnType<typeof vi.fn>;
-      innerJoin: ReturnType<typeof vi.fn>;
-      where: ReturnType<typeof vi.fn>;
-    };
-    query = Object.assign(Promise.resolve(selectRows), {
-      from: vi.fn(() => query),
-      innerJoin: vi.fn(() => query),
-      where: vi.fn(() => query),
+  function createSelectQuery(
+    rowsFor: (table: string | undefined) => unknown[],
+  ) {
+    let table: string | undefined;
+    const query: Record<string, unknown> = {};
+    query.from = vi.fn((queried: object) => {
+      const name: unknown = Reflect.get(queried, Symbol.for("drizzle:Name"));
+      table = typeof name === "string" ? name : undefined;
+      return query;
     });
+    for (const method of [
+      "innerJoin",
+      "leftJoin",
+      "where",
+      "orderBy",
+      "limit",
+      "offset",
+    ]) {
+      query[method] = vi.fn(() => query);
+    }
+    // oxlint-disable-next-line unicorn/no-thenable -- mocks drizzle's awaitable query builder
+    query.then = (
+      resolve: (value: unknown[]) => unknown,
+      reject: (error: unknown) => unknown,
+    ) => Promise.resolve(rowsFor(table)).then(resolve, reject);
     return query;
+  }
+
+  // The write double records the values at set()/values() and resolves (or, for
+  // the first schedule update, rejects) once awaited.
+  // oxlint-disable-next-line unicorn/consistent-function-scoping -- helper must stay inside vi.hoisted with the mock state it builds.
+  function thenable(failure?: Error) {
+    const chain: Record<string, unknown> = {};
+    for (const method of ["where", "returning", "onConflictDoNothing"]) {
+      chain[method] = () => chain;
+    }
+    // oxlint-disable-next-line unicorn/no-thenable -- mocks drizzle's awaitable query builder
+    chain.then = (
+      resolve: (value: unknown[]) => unknown,
+      reject: (error: unknown) => unknown,
+    ) =>
+      (failure ? Promise.reject(failure) : Promise.resolve([])).then(
+        resolve,
+        reject,
+      );
+    return chain;
   }
 
   return {
@@ -119,51 +156,64 @@ const mocks = vi.hoisted(() => {
     setRows(nextRows: unknown[]) {
       rows = nextRows;
     },
-    db: {
-      insert: vi.fn(() => ({
-        values: vi.fn((value: Record<string, unknown>) => {
-          operations.push({ kind: "insert", value });
-          return Promise.resolve();
-        }),
-      })),
-      query: {
-        integrationEventLog: {
-          findMany: vi.fn((args?: { limit?: number }) =>
-            Promise.resolve(errorEvents.slice(0, args?.limit)),
-          ),
-        },
-        integrationSyncCursor: {
-          findFirst: vi.fn(() => Promise.resolve(cursor)),
-        },
-        integrationSyncRun: {
-          findFirst: vi.fn(() => Promise.resolve(null)),
-          findMany: vi.fn((args?: { limit?: number }) =>
-            Promise.resolve(activePollRuns.slice(0, args?.limit)),
-          ),
-        },
-        organizationIntegration: {
-          findFirst: vi.fn(() => Promise.resolve(integrationRecord)),
-        },
-      },
-      select: vi.fn(() => createSelectQuery(rows)),
-      update: vi.fn(() => ({
-        set: vi.fn((value: Record<string, unknown>) => ({
-          where: vi.fn(() => {
-            operations.push({ kind: "update", value });
-            updateCallCount += 1;
-            if (failFirstScheduleUpdate && updateCallCount === 1) {
-              return Promise.reject(new Error("schedule update failed"));
-            }
-            return Promise.resolve();
+    // The sweeps list the active connections on the system path ...
+    systemDb: {
+      select: vi.fn(() => createSelectQuery(() => rows)),
+    },
+    // ... and everything else runs in `orgDb(lab).transaction(...)` on this
+    // double (the organization setting is a statement that needs no result).
+    db: (() => {
+      const database = {
+        execute: vi.fn(() => Promise.resolve([])),
+        transaction: vi.fn((run: (tx: unknown) => unknown) => run(database)),
+        insert: vi.fn(() => ({
+          values: vi.fn((value: Record<string, unknown>) => {
+            operations.push({ kind: "insert", value });
+            return thenable();
           }),
         })),
-      })),
-    },
+        select: vi.fn(() =>
+          createSelectQuery((table) => {
+            switch (table) {
+              case "integration_sync_run":
+                return activePollRuns;
+              case "integration_event_log":
+                return errorEvents;
+              case "integration_sync_cursor":
+                return cursor ? [cursor] : [];
+              case "organization_integration": {
+                if (!integrationRecord || typeof integrationRecord !== "object")
+                  return [];
+                const { connection, ...integration } = Object.fromEntries(
+                  Object.entries(integrationRecord),
+                );
+                return [{ integration, connection }];
+              }
+              default:
+                return [];
+            }
+          }),
+        ),
+        update: vi.fn(() => ({
+          set: vi.fn((value: Record<string, unknown>) => {
+            operations.push({ kind: "update", value });
+            updateCallCount += 1;
+            return thenable(
+              failFirstScheduleUpdate && updateCallCount === 1
+                ? new Error("schedule update failed")
+                : undefined,
+            );
+          }),
+        })),
+      };
+      return database;
+    })(),
   };
 });
 
 vi.mock("@calibra-facil/db", () => ({
   db: mocks.db,
+  systemDb: mocks.systemDb,
 }));
 
 vi.mock("@calibra-facil/signing", () => ({

@@ -8,10 +8,21 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-const { dbMock, sendMock } = vi.hoisted(() => ({
-  dbMock: { selectDistinct: vi.fn(), select: vi.fn(), insert: vi.fn() },
-  sendMock: vi.fn().mockResolvedValue({ data: { id: "email_1" } }),
-}));
+// `inOrg(...)` (lab-scope.ts) runs its callback in `db.transaction(...)`: the
+// double runs it on itself (the organization setting needs no canned result).
+const { dbMock, sendMock } = vi.hoisted(() => {
+  const dbMock = {
+    selectDistinct: vi.fn(),
+    select: vi.fn(),
+    insert: vi.fn(),
+    execute: vi.fn(async () => []),
+    transaction: vi.fn(async (run: (tx: unknown) => unknown) => run(dbMock)),
+  };
+  return {
+    dbMock,
+    sendMock: vi.fn().mockResolvedValue({ data: { id: "email_1" } }),
+  };
+});
 
 vi.mock("@calibra-facil/db", () => ({ db: dbMock, systemDb: dbMock }));
 vi.mock("@react-email/render", () => ({

@@ -53,6 +53,28 @@ vi.mock("@calibra-facil/db", () => ({
   },
 }));
 
+// The sender statements run in `forOrg(db, lab).transaction(...)`: a handle that
+// forwards select/update/insert to the db double and runs its transaction on
+// itself (the real handle needs real table objects; the schema is mocked here).
+vi.mock("@calibra-facil/db/for-org", () => ({
+  forOrg: (executor: {
+    select: (...args: unknown[]) => unknown;
+    update: (...args: unknown[]) => unknown;
+    insert: (...args: unknown[]) => unknown;
+  }) => {
+    const handle = {
+      select: (...args: unknown[]) =>
+        Reflect.apply(executor.select, executor, args),
+      update: (...args: unknown[]) =>
+        Reflect.apply(executor.update, executor, args),
+      insert: (...args: unknown[]) =>
+        Reflect.apply(executor.insert, executor, args),
+      transaction: async (run: (tx: unknown) => unknown) => run(handle),
+    };
+    return handle;
+  },
+}));
+
 vi.mock("@calibra-facil/db/schema", () => ({
   organizationEmailDomain: {
     organizationId: "organization_id",

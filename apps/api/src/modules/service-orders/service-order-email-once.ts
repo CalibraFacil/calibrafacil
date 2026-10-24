@@ -17,10 +17,10 @@
  * (DB insert, dispatch, DB delete) are caught and logged.
  */
 
-import { db } from "@calibra-facil/db";
 import { serviceOrderEmailLog } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 import type { ServiceOrderCustomerEmailResult } from "@calibra-facil/notifications";
+import { orgDb } from "../../lib/org-db";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -98,11 +98,16 @@ export async function sendServiceOrderEmailOnce(
 
   try {
     // Step 1: try to claim the key.
-    const rows = await db
-      .insert(serviceOrderEmailLog)
-      .values({ organizationId, serviceOrderId, eventKey })
-      .onConflictDoNothing()
-      .returning();
+    // Each ledger statement is its own short transaction naming the
+    // laboratory: the claim must be committed BEFORE the send (at-most-once)
+    // and no transaction is held across the e-mail.
+    const rows = await orgDb(organizationId).transaction((o) =>
+      o
+        .insert(serviceOrderEmailLog)
+        .values({ organizationId, serviceOrderId, eventKey })
+        .onConflictDoNothing()
+        .returning(),
+    );
 
     // Step 2: conflict → skip (REQ-SOEMAIL-008).
     if (rows.length === 0) {
@@ -136,9 +141,11 @@ export async function sendServiceOrderEmailOnce(
   const sent = result?.sent === true;
   if (!sent && claimedId !== undefined) {
     try {
-      await db
-        .delete(serviceOrderEmailLog)
-        .where(eq(serviceOrderEmailLog.id, claimedId));
+      await orgDb(organizationId).transaction(async (o) => {
+        await o
+          .delete(serviceOrderEmailLog)
+          .where(eq(serviceOrderEmailLog.id, claimedId));
+      });
     } catch (deleteError) {
       // Best-effort — log the failure but don't propagate.
       console.error(
@@ -155,10 +162,12 @@ export async function sendServiceOrderEmailOnce(
     result?.sent === true ? result.recipientEmail : undefined;
   if (recipientEmail && claimedId !== undefined) {
     try {
-      await db
-        .update(serviceOrderEmailLog)
-        .set({ recipientEmail })
-        .where(eq(serviceOrderEmailLog.id, claimedId));
+      await orgDb(organizationId).transaction(async (o) => {
+        await o
+          .update(serviceOrderEmailLog)
+          .set({ recipientEmail })
+          .where(eq(serviceOrderEmailLog.id, claimedId));
+      });
     } catch (updateError) {
       console.error(
         `[sendServiceOrderEmailOnce] recipient stamp failed for SO ${serviceOrderId} / key "${eventKey}" / log id ${claimedId}:`,
