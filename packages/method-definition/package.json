@@ -20,7 +20,7 @@
   "dependencies": {
     "@calibra-facil/math-engine": "workspace:^",
     "@calibra-facil/shared": "workspace:^",
-    "zod": "^4.4.3"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@calibra-facil/schemas": "workspace:^",
