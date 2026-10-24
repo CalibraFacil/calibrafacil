@@ -1,5 +1,8 @@
 export interface ScheduledEnv {
   DATABASE_URL: string;
+  /** The table owner: the system path that lists the laboratories (see `Env`). */
+  DATABASE_OWNER_URL?: string;
+  DATABASE_RLS_MODE?: "shadow" | "enforced";
   RESEND_API_KEY?: string;
   RESEND_FROM_EMAIL?: string;
   EMAIL_FROM?: string;

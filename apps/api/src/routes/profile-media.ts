@@ -1,7 +1,5 @@
 import { Hono } from "hono";
-import { db } from "@calibra-facil/db";
-import { user } from "@calibra-facil/db/schema";
-import { eq } from "drizzle-orm";
+import { findUserImage } from "../lib/identity";
 import {
   createR2Client,
   deleteFromR2,
@@ -78,13 +76,9 @@ export const profileMediaRouter = new Hono<{
     const session = c.get("session");
     const env = c.env;
 
-    const [currentUser] = await db
-      .select({ image: user.image })
-      .from(user)
-      .where(eq(user.id, session.user.id))
-      .limit(1);
+    const image = await findUserImage(session.user.id);
 
-    if (!currentUser?.image) {
+    if (!image) {
       return c.json({ error: "Avatar não configurado" }, 404);
     }
 

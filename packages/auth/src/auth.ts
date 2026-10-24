@@ -2,7 +2,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError } from "better-auth/api";
 import { randomBytes } from "node:crypto";
-import { getDb } from "@calibra-facil/db";
+import { getDb, getSystemDb } from "@calibra-facil/db";
 import * as schema from "@calibra-facil/db/schema";
 import { and, asc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
 import { admin as adminPlugin, organization } from "better-auth/plugins";
@@ -466,15 +466,21 @@ function isPrivateDevWebOrigin(origin: string): boolean {
 async function isActivePortalCustomOrigin(origin: string): Promise<boolean> {
   try {
     const url = new URL(origin);
-    const record = await getDb().query.organizationCustomDomain.findFirst({
-      where: and(
-        eq(
-          schema.organizationCustomDomain.hostname,
-          url.hostname.toLowerCase(),
+    // System path (P2-18j): the Origin of a request is checked BEFORE any session
+    // or organization exists, and a hostname is unique across the platform, so
+    // "is this hostname an active, verified portal domain of ANY laboratory" is
+    // cross-organization by design (one row, only its existence is used).
+    const record = await getSystemDb().query.organizationCustomDomain.findFirst(
+      {
+        where: and(
+          eq(
+            schema.organizationCustomDomain.hostname,
+            url.hostname.toLowerCase(),
+          ),
+          eq(schema.organizationCustomDomain.isActive, true),
         ),
-        eq(schema.organizationCustomDomain.isActive, true),
-      ),
-    });
+      },
+    );
 
     return Boolean(record?.organizationId && record.verifiedAt);
   } catch {
@@ -579,7 +585,10 @@ async function findPendingPortalInvitation(
     conditions.push(eq(schema.invitation.id, invitationId));
   }
 
-  const [pendingInvitation] = await getDb()
+  // System path (P2-18j): the portal magic link is requested by an e-mail that
+  // has no session yet; the invitation (by e-mail, or by its id, which is the
+  // bearer secret of the invite link) is what names the CLIENT organization.
+  const [pendingInvitation] = await getSystemDb()
     .select({
       id: schema.invitation.id,
       email: schema.invitation.email,
@@ -662,7 +671,10 @@ function createLabEmailBrand(lab: {
 async function findLabBrandForClientOrganization(
   clientOrganizationId: string,
 ): Promise<EmailBrand | undefined> {
-  const [customerData] = await getDb()
+  // System path (P2-18j): maps a CLIENT organization to the laboratory whose
+  // customer it is (customer.auth_organization_id), to brand the invitation
+  // e-mail. It is the lookup that LEARNS the laboratory, so it cannot name one.
+  const [customerData] = await getSystemDb()
     .select({ labOrganizationId: schema.customer.labOrganizationId })
     .from(schema.customer)
     .where(eq(schema.customer.authOrganizationId, clientOrganizationId))
@@ -719,7 +731,10 @@ function stripBrandSender(
 }
 
 async function hasExistingPortalAccess(email: string): Promise<boolean> {
-  const [existingPortalMember] = await getDb()
+  // System path (P2-18j): a portal sign-in link is requested before a session
+  // exists. "Is this e-mail a member of ANY client organization" is a lookup of
+  // the person's own memberships by e-mail across organizations, by design.
+  const [existingPortalMember] = await getSystemDb()
     .select({ id: schema.member.id })
     .from(schema.member)
     .innerJoin(schema.user, eq(schema.member.userId, schema.user.id))
@@ -1332,7 +1347,14 @@ function createSharedConfig(surface: AuthSurface) {
 
   return {
     secret: authSecret,
-    database: drizzleAdapter(getDb(), {
+    // System path (P2-18j): Better Auth is the identity layer and runs BEFORE an
+    // organization is chosen (sign-in, sessions, accounts) and across the
+    // person's memberships (organization plugin: create / list / set active /
+    // invitations / SSO providers). Its statements cannot name one organization
+    // per transaction, and it authorizes by role itself before it touches a row,
+    // so its adapter is the owner connection. Everything in this package and in
+    // the API that is NOT Better Auth's own statement names the laboratory.
+    database: drizzleAdapter(getSystemDb(), {
       provider: "pg" as const,
       schema,
     }),
@@ -1529,7 +1551,13 @@ export type DeletedUserIdentity = {
 export async function preserveRegulatedRecordsOnUserDeletion(
   deletedUser: DeletedUserIdentity,
 ): Promise<void> {
-  const db = getDb();
+  // System path (P2-18j): deleting a person preserves their regulated records in
+  // EVERY laboratory they belonged to, in one transaction (the preservation and
+  // its audit rows land together or not at all). The rows are found by user_id
+  // across laboratories, so no single organization can be named; the one
+  // transaction runs on the owner connection, and every statement is bound to
+  // this user's id.
+  const db = getSystemDb();
   const now = new Date();
   const reason = "Usuário excluído";
   const identity = {
@@ -1662,7 +1690,10 @@ export async function findDefaultActiveOrganizationId(
   userId: string,
   organizationType: "CLIENT" | "LAB",
 ): Promise<string | null> {
-  const [membership] = await getDb()
+  // System path (P2-18j): picks the person's default organization when a
+  // session is created, i.e. before any organization is active: their own
+  // memberships by user_id across laboratories, by design.
+  const [membership] = await getSystemDb()
     .select({
       organizationId: schema.member.organizationId,
     })

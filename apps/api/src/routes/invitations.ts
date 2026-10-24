@@ -5,21 +5,15 @@ import {
   buildLabClaimUrl,
   createLabAccountSetupToken,
 } from "@calibra-facil/auth/lab-access";
-import { db } from "@calibra-facil/db";
-import {
-  invitation,
-  organization,
-  platformEventLog,
-  user,
-} from "@calibra-facil/db/schema";
-import { and, eq, gt, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
 import { userCreateErrorWasDuplicate } from "../lib/auth-user-errors";
 import { withDbWakeRetry } from "../lib/db-retry";
+import {
+  findLabInvitationForSetupLink,
+  findPublicInvitation,
+  findUserByEmail,
+  recordPlatformEvent,
+} from "../lib/identity";
 import { appBaseUrl } from "@calibra-facil/shared/public-urls";
-
-// Aliased user table for joining the inviter onto an invitation row.
-const inviter = alias(user, "inviter");
 
 function recordFromUnknown(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -59,18 +53,7 @@ function displayNameFromEmail(email: string) {
 }
 
 async function findInvitationUser(email: string) {
-  const normalizedEmail = normalizeEmail(email);
-  const existing = await db.query.user.findFirst({
-    where: eq(sql<string>`lower(${user.email})`, normalizedEmail),
-  });
-
-  if (!existing) return null;
-
-  return {
-    id: existing.id,
-    name: existing.name,
-    email: existing.email,
-  };
+  return findUserByEmail(normalizeEmail(email));
 }
 
 function invitationUserFromAuthResponse(value: unknown) {
@@ -158,36 +141,7 @@ export const invitationsRouter = new Hono()
       // public so a not-yet-signed-up invitee can render the accept page; keep
       // the projection limited to what that page needs. Wrap the first DB touch
       // in withDbWakeRetry so a Neon cold start is a brief delay, not a 500.
-      const result = await withDbWakeRetry(() =>
-        db
-          .select({
-            id: invitation.id,
-            email: invitation.email,
-            role: invitation.role,
-            status: invitation.status,
-            expiresAt: invitation.expiresAt,
-            organizationId: invitation.organizationId,
-            organizationName: organization.name,
-            organizationSlug: organization.slug,
-            inviterEmail: inviter.email,
-          })
-          .from(invitation)
-          .innerJoin(
-            organization,
-            eq(invitation.organizationId, organization.id),
-          )
-          .leftJoin(inviter, eq(invitation.inviterId, inviter.id))
-          .where(
-            and(
-              eq(invitation.id, id),
-              eq(invitation.status, "pending"),
-              gt(invitation.expiresAt, new Date()),
-            ),
-          )
-          .limit(1),
-      );
-
-      const inv = result[0];
+      const inv = await withDbWakeRetry(() => findPublicInvitation(id));
       if (!inv) {
         return c.json({ error: "Convite não encontrado" }, 404);
       }
@@ -218,35 +172,9 @@ export const invitationsRouter = new Hono()
     try {
       // First DB touch — retry through a Neon cold start so the invitee's
       // "Enviar link" click doesn't 500 on a freshly-woken compute.
-      const result = await withDbWakeRetry(() =>
-        db
-          .select({
-            id: invitation.id,
-            email: invitation.email,
-            role: invitation.role,
-            status: invitation.status,
-            expiresAt: invitation.expiresAt,
-            organizationId: invitation.organizationId,
-            organizationName: organization.name,
-            organizationType: organization.type,
-          })
-          .from(invitation)
-          .innerJoin(
-            organization,
-            eq(invitation.organizationId, organization.id),
-          )
-          .where(
-            and(
-              eq(invitation.id, id),
-              eq(invitation.status, "pending"),
-              gt(invitation.expiresAt, new Date()),
-              eq(organization.type, "LAB"),
-            ),
-          )
-          .limit(1),
+      const inv = await withDbWakeRetry(() =>
+        findLabInvitationForSetupLink(id),
       );
-
-      const inv = result[0];
       if (!inv) {
         return c.json({ error: "Convite não encontrado" }, 404);
       }
@@ -271,7 +199,7 @@ export const invitationsRouter = new Hono()
         claimUrl: buildLabClaimUrl(appUrl, setupToken.token),
       });
 
-      await db.insert(platformEventLog).values({
+      await recordPlatformEvent({
         actorUserId: null,
         targetUserId: invitedUser.user.id,
         action: "invitation.setup_link_requested",

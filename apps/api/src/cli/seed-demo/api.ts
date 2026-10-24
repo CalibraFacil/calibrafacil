@@ -8,7 +8,7 @@
  * Auth signs its cookie) and removed again when the seed finishes.
  */
 import { createHmac, randomBytes } from "node:crypto";
-import { db } from "@calibra-facil/db";
+import { systemDb as ownerDb } from "@calibra-facil/db";
 import { session } from "@calibra-facil/db/schema";
 import { inArray } from "drizzle-orm";
 
@@ -111,7 +111,7 @@ export async function createSeedApi(): Promise<SeedApi> {
   for (const [actor, { userId, cookiePrefix }] of Object.entries(DEMO_ACTORS)) {
     const token = randomBytes(24).toString("base64url");
     const now = new Date();
-    await db.insert(session).values({
+    await ownerDb.insert(session).values({
       id: randomBytes(12).toString("hex"),
       token,
       userId,
@@ -133,7 +133,7 @@ export async function createSeedApi(): Promise<SeedApi> {
     if (known) return known;
     const token = randomBytes(24).toString("base64url");
     const now = new Date();
-    await db.insert(session).values({
+    await ownerDb.insert(session).values({
       id: randomBytes(12).toString("hex"),
       token,
       userId,
@@ -206,7 +206,7 @@ export async function createSeedApi(): Promise<SeedApi> {
     },
     async close() {
       if (tokens.length > 0) {
-        await db.delete(session).where(inArray(session.token, tokens));
+        await ownerDb.delete(session).where(inArray(session.token, tokens));
       }
     },
   };

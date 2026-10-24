@@ -1,5 +1,5 @@
 import { and, eq, gt, gte, isNull } from "drizzle-orm";
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   calibrationJob,
   calibrationMethod,
@@ -8,6 +8,7 @@ import {
   organizationSigningCertificate,
   referenceStandard,
 } from "@calibra-facil/db/schema";
+import { orgDb } from "../lib/org-db";
 
 /**
  * What a laboratory still has to do before it can issue its first certificate.
@@ -62,7 +63,20 @@ function organizationProfileIsComplete(row: {
   );
 }
 
-export async function getActivationChecklist(
+/**
+ * Every read runs in ONE transaction that names the laboratory (row-level
+ * security): the checklist is a snapshot of one laboratory's state.
+ */
+export function getActivationChecklist(
+  organizationId: string,
+): Promise<ActivationChecklist> {
+  return orgDb(organizationId).transaction((lab) =>
+    buildActivationChecklist(lab, organizationId),
+  );
+}
+
+async function buildActivationChecklist(
+  db: OrgDb,
   organizationId: string,
 ): Promise<ActivationChecklist> {
   const [org] = await db

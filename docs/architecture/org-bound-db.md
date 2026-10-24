@@ -92,8 +92,9 @@ them (`import * as x`, `x.db`), a dynamic `import("@calibra-facil/db")`, and imp
 `getDb` by name from ANY module (so a lib that re-exports the raw handle is no way around it). The routes that still use it are grandfathered as
 exact per-file counts in `packages/oxlint-plugin-calibra/src/lib/raw-db-baseline.ts`: a count may
 not go up, and a count above the file's real number of uses fails too, so the allowance shrinks in
-the same change that migrates a handler (delete the entry at zero). The portal routes
-(`portal*.ts`) have no entry.
+the same change that migrates a handler (delete the entry at zero). The baseline is EMPTY since P2-18j:
+every route is migrated, so a route that needs a statement outside an organization calls a named lib
+function (`lib/identity.ts`, `lib/public-signup-store.ts`, ...), never the raw handle.
 
 ## Row-level security (shadow mode, P2-3)
 
@@ -224,9 +225,9 @@ added or removed without a migration.
     `organization_id` predicate, run through `orgTransactionWithExecutor`.
   - `flagJobOutOfTolerance` / `ensureOotNotificationForNc` without a caller's scope now run the whole workflow in one
     organization-bound transaction (PDF job after the commit) instead of the plain `db`.
-  - Not in this slice: the raw-`pg` compliance sweep of `packages/jobs-core/src/scheduled/*` (it builds its own
-    `Client` from `DATABASE_URL`, not the application handle: worker cutover), the e-mail-domain settings routes
-    (`routes/email-domains.ts`, `lib/email-domain*.ts`) and the job modules the v2 job endpoints call (P2-18f).
+  - Not in this slice (done in P2-18j, below): the raw-`pg` compliance sweep of `packages/jobs-core/src/scheduled/*`
+    and the e-mail-domain settings routes (`routes/email-domains.ts`, `lib/email-domain*.ts`); the job modules the v2
+    job endpoints call were P2-18f.
   - Specs: `public-api-lab-scope`, `integrations-lab-scope` and `notifications-sweeps-lab-scope` (the sweeps and
     senders run as `calibra_app`) cover the success paths the per-router specs do not reach, each with a
     cross-laboratory negative.
@@ -343,6 +344,86 @@ added or removed without a migration.
     attachment id; the ledger is per laboratory; the bootstrap pages never contain laboratory B's rows; the
     change-log triggers under a `calibra_app` connection; an event that fails mid-apply leaves no claim, write,
     audit row or change-log entry).
+- **Pre-org identity, platform sweeps, worker handlers, CLI (P2-18j).** The slice that breaks login if the role
+  split is wrong: identity runs before an organization is chosen and across a person's memberships. The rule was
+  applied per statement: a GLOBAL table (`user`, `session`, `account`, `verification`, `organization`,
+  `platform_event_log`, `legal_metrology_regulation`: no policy, `packages/db/src/tenancy.ts`) stays on the plain
+  handle (in a lib, never in a route); a TENANT table whose laboratory is known runs in a transaction that names
+  it; a tenant table read BEFORE the laboratory is known is one narrow system-path statement with a why-comment
+  and an allowlist entry. The raw-`db` baseline of the routes is now EMPTY (11 files, 31 references -> 0).
+  - **Better Auth runs on the system path.** `packages/auth` builds the adapter on `getSystemDb()` (the owner
+    connection): Better Auth is the identity layer (sign-in, sessions, accounts, and the organization plugin's
+    create / list / set-active / invitations / SSO providers), its statements cannot name one organization per
+    transaction, and it authorizes by role itself before it touches a row. Everything in `packages/auth` and the
+    API that is NOT Better Auth's own statement names the laboratory: `createLabAccountSetupToken` writes in
+    `forOrg(laboratory)`, `validateLabAccountSetupToken` looks the token up by its own id on the system path (the
+    row names the laboratory) and then reads the membership and the pending invitation in that laboratory (so a
+    token of laboratory A that points at laboratory B's invitation finds none: `invitation_invalid`).
+    System-path statements of the package, each one row and commented: the sign-in gate by e-mail
+    (`hasActiveLabMembership`, `hasPendingLabInvitation`), the session's default laboratory
+    (`findDefaultActiveOrganizationId`), the portal magic-link sender (pending invitation, existing client
+    membership, the laboratory behind a client organization), the CORS check of a portal custom domain, and
+    `deleteUser`, which preserves the regulated records of a person in EVERY laboratory in one transaction (so one
+    system-path transaction, bound to that user id, keeps it atomic).
+  - **Routes.** `lib/identity.ts` holds what the pre-organization routes need: global-table reads
+    (`findUserByEmail`, `findUserImage`, the magic-link verification row, own-session revocation, platform events)
+    and two system-path lookups, the public invitation by its id (the bearer secret; its row names the
+    laboratory) and the user's own primary organization for the magic-link preview. `lab-setup` runs the whole
+    claim (membership, invitation, token, platform event, session's active laboratory) in ONE
+    `orgDb(token.organizationId).transaction`; `sso` reads the provider in a short transaction naming the
+    laboratory and writes its audit entry in one (the Better Auth calls in between run on their own connection,
+    never inside a transaction); `organization-media` commits the new logo and its audit entry together and
+    removes the previous object from storage after the commit; `email-domains` verify / activate commit the
+    change with its audit entry. `organization-lifecycle` and `lib/records-retention.ts` soft-delete in one
+    organization-naming transaction (stamp, key revocations, audit rows), and `removeLabOrganization` hands its
+    raw transaction to the evidence probe. `services/lab-provisioning.ts` creates the first membership in the new
+    laboratory's transaction; `services/activation-checklist.ts` reads one laboratory in one transaction.
+    Public self-serve sign-up keeps its slot ledger in the global `platform_event_log`
+    (`lib/public-signup-store.ts`); its one tenant read ("is this person already in a laboratory") is a system-path
+    statement.
+  - **E-mail domain.** `lib/email-domain-lifecycle.ts` stays ONE transaction that names the laboratory and holds the
+    tenant lock across the provider call: that is deliberate (it serialises a concurrent create for the same
+    organization and lets a rejected database write be compensated before the lock is released; the specs pin
+    both), so it is the one place a transaction spans I/O. The one cross-organization question, "does ANOTHER
+    laboratory hold this hostname" (`org_email_domain_hostname_uidx` is platform-wide), is a system-path lookup.
+  - **Sweeps.** `purgeSyncChangeLog` lists the laboratories holding entries past the window on the system path (ids
+    only) and purges each in its own `orgTransactionWithExecutor` (delete + horizon, explicit `organization_id`
+    predicate), one failing laboratory does not stop the others and the run reports it at the end.
+    `runCertificateDriftCheck` lists the newest snapshots of every laboratory on the system path and writes each
+    finding's audit event in `orgDb(snapshot.organizationId)`. `runRecordsPurge` / `evaluatePurgeCandidates`
+    run WHOLE on the system path: erasing a laboratory deletes the organization root and its portal-login CLIENT
+    organizations (rows that belong to other organizations, and "does another laboratory's customer still use this
+    client organization" looks across laboratories), which no single `calibra.organization_id` can name; the
+    erasure of one laboratory stays one transaction. `cleanupExpiredAuthRecords` only touches the global
+    `session` / `verification` tables and needs nothing.
+  - **Worker (`packages/jobs-core`).** Every raw-`pg` handler that was left on the owner now names the laboratory:
+    the compliance sweep (`scheduled/*`: the laboratories are listed once on the system path, then every step runs
+    per laboratory, each statement in its own short transaction that names it, with an explicit
+    `organization_id` predicate on every `check*` query; the competence auto-expire and its audit row are one
+    transaction; no transaction is held across a notification), the audit pack, the service-order documents and
+    intake documents, the out-of-tolerance letter (one owner lookup of the laboratory per message, via
+    `findOrganizationOnSystemPath`, with the same loud error as the job lookup when `DATABASE_RLS_MODE=enforced`
+    has no `DATABASE_OWNER_URL`), the e-mail-domain health cron (list on the system path, then the row update and
+    its audit events in one transaction after the Resend call; an audit failure now rolls the update back and the
+    next sweep retries it) and the generic-HTTP integration sync (the remote call never runs inside a
+    transaction). The worker integration tier now has `calibra_app` specs (`*-lab-scope.int.spec.ts`).
+  - **CLI (`apps/api/src/cli`).** Operator tools: they run as the table OWNER by design, now explicit:
+    `systemDb` imported as `ownerDb` (the owner URL, or `DATABASE_URL` when the roles are not split). Nothing was
+    migrated to `orgDb`.
+  - **Specs.** `lib/identity-lab-scope.int.spec.ts` runs the REAL Better Auth lab instance and the real routes with
+    `DATABASE_URL` as `calibra_app` and `DATABASE_OWNER_URL` as the owner (`test/integration/application-role.ts`):
+    magic-link sign-in, default laboratory, lab switching, the sign-in gate, claiming an invited account, the
+    cross-laboratory token negative, provisioning of a laboratory and its first member, `deleteUser`, the
+    change-log sweep, auth maintenance, the sign-up store and the checklist. Pointing the adapter back at
+    `getDb()` fails lab switching and provisioning. The records-purge and certificate-drift specs gained
+    `calibra_app` cases.
+  - **Shadow report, 15 identity / lifecycle specs** (the routes above, `records-retention`, `certificate-drift`,
+    `user-cascade-soft-delete`, plus `sync-change-seq` and `db-immutability` for the sync work of P2-18i):
+    before, 194 tests, 44 broken as `calibra_app`, 53 distinct (162 runs) unscoped statements; after, 196 tests,
+    17 broken and 14 distinct (63 runs) unscoped, ALL of them `modules/sync` (`sync-change-seq`, P2-18i). The identity
+    specs are at 0 unscoped / 0 broken.
+  - **Not covered by the shadow report.** The Better Auth adapter statements run on the system path in every
+    harness, so the report cannot show them; the specs above are the evidence.
 - **Tests.** `apps/api/src/lib/rls-shadow.int.spec.ts` runs against a pool whose sessions are `calibra_app`
   (`test/integration/rls.ts`). `pnpm --filter @calibra-facil/api rls:shadow-report` replays every API
   integration spec (`--group routes/jobs` or `--files` narrow it) with each request's database access as

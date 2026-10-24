@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import { systemDb as ownerDb } from "@calibra-facil/db";
 import { personnelCompetence } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 
@@ -81,7 +81,7 @@ export async function seedCompetences(
       const assetTypeId = refs.assetTypeIds.get(spec.assetTypeSlug);
       if (!assetTypeId)
         throw new Error(`Unknown asset type ${spec.assetTypeSlug}`);
-      const [existing] = await db
+      const [existing] = await ownerDb
         .select({ id: personnelCompetence.id })
         .from(personnelCompetence)
         .where(

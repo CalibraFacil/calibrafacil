@@ -1,4 +1,4 @@
-import { Client } from "pg";
+import { type OrgSession } from "../pdf-render.js";
 import { LAB_TODAY_SQL } from "@calibra-facil/shared";
 import {
   type AssetDueRow,
@@ -17,11 +17,11 @@ import {
  * The asset should be recalibrated or the alert will fire again next week.
  */
 export async function checkAssetsDueForRecalibration(
-  client: Client,
+  lab: OrgSession,
   offset = 0,
   batchSize = 100,
 ): Promise<AssetDueRow[]> {
-  const result = await client.query<AssetDueRow>(
+  const result = await lab.query<AssetDueRow>(
     `
     SELECT
       a.id,
@@ -47,10 +47,11 @@ export async function checkAssetsDueForRecalibration(
           AND sn.sent_at IS NOT NULL
           AND sn.sent_at > CURRENT_DATE - INTERVAL '7 days'
       )
+      AND ou.organization_id = $3
     ORDER BY a.next_calibration_date ASC
     LIMIT $1 OFFSET $2
     `,
-    [batchSize, offset],
+    [batchSize, offset, lab.organizationId],
   );
 
   return result.rows;
@@ -70,11 +71,11 @@ export async function checkAssetsDueForRecalibration(
  * guard). With a 30-day lead time, up to ~4 weekly reminders before the date.
  */
 export async function checkAssetsDueForLegalVerification(
-  client: Client,
+  lab: OrgSession,
   offset = 0,
   batchSize = 100,
 ): Promise<AssetLegalVerificationDueRow[]> {
-  const result = await client.query<AssetLegalVerificationDueRow>(
+  const result = await lab.query<AssetLegalVerificationDueRow>(
     `
     SELECT
       a.id,
@@ -101,10 +102,11 @@ export async function checkAssetsDueForLegalVerification(
           AND sn.sent_at IS NOT NULL
           AND sn.sent_at > CURRENT_DATE - INTERVAL '7 days'
       )
+      AND ou.organization_id = $3
     ORDER BY a.next_legal_verification_date ASC
     LIMIT $1 OFFSET $2
     `,
-    [batchSize, offset],
+    [batchSize, offset, lab.organizationId],
   );
 
   return result.rows;
@@ -117,11 +119,11 @@ export async function checkAssetsDueForLegalVerification(
  * With 30-day lead time, this means up to ~4 weekly reminders before expiry.
  */
 export async function checkStandardsExpiring(
-  client: Client,
+  lab: OrgSession,
   offset = 0,
   batchSize = 100,
 ): Promise<StandardExpiringRow[]> {
-  const result = await client.query<StandardExpiringRow>(
+  const result = await lab.query<StandardExpiringRow>(
     `
     SELECT
       rs.id,
@@ -143,10 +145,11 @@ export async function checkStandardsExpiring(
           AND sn.sent_at IS NOT NULL
           AND sn.sent_at > CURRENT_DATE - INTERVAL '7 days'
       )
+      AND rs.organization_id = $3
     ORDER BY rs.next_calibration_date ASC
     LIMIT $1 OFFSET $2
     `,
-    [batchSize, offset],
+    [batchSize, offset, lab.organizationId],
   );
 
   return result.rows;
@@ -160,11 +163,11 @@ export async function checkStandardsExpiring(
  * the cycle is measured in years, so a monthly reminder is enough.
  */
 export async function checkPtPlanDue(
-  client: Client,
+  lab: OrgSession,
   offset = 0,
   batchSize = 100,
 ): Promise<PtPlanDueRow[]> {
-  const result = await client.query<PtPlanDueRow>(
+  const result = await lab.query<PtPlanDueRow>(
     `
     SELECT
       pp.id,
@@ -183,10 +186,11 @@ export async function checkPtPlanDue(
           AND sn.sent_at IS NOT NULL
           AND sn.sent_at > CURRENT_DATE - INTERVAL '30 days'
       )
+      AND pp.organization_id = $3
     ORDER BY pp.next_due_at ASC
     LIMIT $1 OFFSET $2
     `,
-    [batchSize, offset],
+    [batchSize, offset, lab.organizationId],
   );
 
   return result.rows;
@@ -199,11 +203,11 @@ export async function checkPtPlanDue(
  * Duplicate prevention: Expired standards are notified weekly until renewed.
  */
 export async function checkStandardsExpired(
-  client: Client,
+  lab: OrgSession,
   offset = 0,
   batchSize = 100,
 ): Promise<StandardExpiredRow[]> {
-  const result = await client.query<StandardExpiredRow>(
+  const result = await lab.query<StandardExpiredRow>(
     `
     SELECT
       rs.id,
@@ -224,10 +228,11 @@ export async function checkStandardsExpired(
           AND sn.sent_at IS NOT NULL
           AND sn.sent_at > CURRENT_DATE - INTERVAL '7 days'
       )
+      AND rs.organization_id = $3
     ORDER BY rs.next_calibration_date ASC
     LIMIT $1 OFFSET $2
     `,
-    [batchSize, offset],
+    [batchSize, offset, lab.organizationId],
   );
 
   return result.rows;
@@ -240,11 +245,11 @@ export async function checkStandardsExpired(
  * This ensures visibility for time-sensitive compliance issues.
  */
 export async function checkOverdueJobs(
-  client: Client,
+  lab: OrgSession,
   offset = 0,
   batchSize = 100,
 ): Promise<OverdueJobRow[]> {
-  const result = await client.query<OverdueJobRow>(
+  const result = await lab.query<OverdueJobRow>(
     `
     SELECT
       cj.id,
@@ -267,10 +272,11 @@ export async function checkOverdueJobs(
           AND sn.sent_at IS NOT NULL
           AND sn.sent_at > CURRENT_DATE - INTERVAL '1 day'
       )
+      AND cj.organization_id = $3
     ORDER BY cj.due_date ASC
     LIMIT $1 OFFSET $2
     `,
-    [batchSize, offset],
+    [batchSize, offset, lab.organizationId],
   );
 
   return result.rows;

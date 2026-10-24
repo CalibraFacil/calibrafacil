@@ -16,9 +16,19 @@ import { readRetentionConfig } from "@calibra-facil/config";
  *
  * Cross-tenant by design (a platform maintenance job, like certificate-drift),
  * so it appears in test/integration/tenant-sql-allowlist.ts.
+ *
+ * It runs on the SYSTEM path (`systemDb`, the owner connection, P2-18j), whole:
+ * erasing a laboratory deletes the organization root and the portal-login CLIENT
+ * organizations of its customers (their `member` / `invitation` rows belong to
+ * THOSE organizations, and "is another laboratory's customer still using this
+ * client organization" looks across laboratories), which no single
+ * `calibra.organization_id` can name. The erasure of one laboratory stays ONE
+ * transaction (the client-organization cleanup commits with it). Every purge
+ * statement already carries the organization it erases in its own predicate
+ * (`organizationScopeSql`), and the job is off unless RECORDS_PURGE_ENABLED.
  */
 import { sql } from "drizzle-orm";
-import { db } from "@calibra-facil/db";
+import { systemDb } from "@calibra-facil/db";
 import { platformEventLog } from "@calibra-facil/db/schema";
 import {
   PLATFORM_EVIDENCE_TABLES,
@@ -53,7 +63,7 @@ export type PurgeDecision = {
 };
 
 type Executor = Pick<
-  Parameters<Parameters<typeof db.transaction>[0]>[0],
+  Parameters<Parameters<typeof systemDb.transaction>[0]>[0],
   "execute"
 >;
 
@@ -113,7 +123,7 @@ async function newestEvidenceAt(
  */
 export async function evaluatePurgeCandidates(
   now: Date = new Date(),
-  executor: Executor = db,
+  executor: Executor = systemDb,
   onlyOrganizationId: string | null = null,
 ): Promise<PurgeDecision[]> {
   const organizations = getExecuteRows<{
@@ -198,7 +208,7 @@ async function writePlatformEvent(
   organizationId: string,
   details: Record<string, unknown>,
 ) {
-  await db.insert(platformEventLog).values({
+  await systemDb.insert(platformEventLog).values({
     actorUserId: null,
     targetUserId: null,
     action,
@@ -234,7 +244,7 @@ async function executePurge(
   });
 
   try {
-    const deletedRows = await db.transaction(async (tx) => {
+    const deletedRows = await systemDb.transaction(async (tx) => {
       // The two settings are transaction-local (set_config(..., true)): the
       // purge-only DELETE guard of organization, and the immutability triggers
       // of the evidence tables (calibra_history_rewrite_allowed, migration 0115).

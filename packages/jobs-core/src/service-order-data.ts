@@ -1,4 +1,4 @@
-import { Client } from "pg";
+import { Client, type QueryResultRow } from "pg";
 import { renderToString } from "react-dom/server";
 import {
   ServiceOrderIntakeDocumentHtml,
@@ -16,9 +16,14 @@ import { type Env } from "./runtime-types.js";
 import { portalBaseUrl } from "./audit-pack-support.js";
 import {
   bucketBinding,
+  fetchOrgRefById,
   resolveOrganizationLogoDataUrl,
 } from "./storage-helpers.js";
-import { generatePdfFromHtml, withDbClient } from "./pdf-render.js";
+import {
+  findOrganizationOnSystemPath,
+  generatePdfFromHtml,
+  withOrgDbClient,
+} from "./pdf-render.js";
 
 function formatAddress(parts: Record<string, unknown> | null | undefined) {
   if (!parts || typeof parts !== "object") return null;
@@ -49,11 +54,34 @@ function composePermissionariaAuthorization(
   return uf ? `${number}/${uf}` : number;
 }
 
-export async function fetchServiceOrderDocumentData(
+/**
+ * The laboratory a service order belongs to, or null when there is no such order.
+ * A queue message names a service order, not its laboratory: this is the one
+ * lookup per message that cannot name an organization yet (system path, one
+ * column of one row by primary key). Everything after it runs in
+ * `withOrgDbClient`; see `findOrganizationOnSystemPath`.
+ */
+export function findServiceOrderOrganization(
   env: Env,
+  serviceOrderId: number,
+): Promise<string | null> {
+  return findOrganizationOnSystemPath(
+    env,
+    `service order ${serviceOrderId}`,
+    "select organization_id from service_order where id = $1 limit 1",
+    [serviceOrderId],
+  );
+}
+
+/**
+ * The service order row of a document, joined with everything the documents
+ * print. Database only: the QR code and the logo (storage I/O) are built
+ * afterwards by `buildServiceOrderDocumentData`, outside any transaction.
+ */
+async function readServiceOrderDocumentRow(
   client: Client,
   serviceOrderId: number,
-): Promise<ServiceOrderDocumentData | null> {
+): Promise<QueryResultRow | null> {
   const result = await client.query(
     `
     SELECT
@@ -120,9 +148,14 @@ export async function fetchServiceOrderDocumentData(
     [serviceOrderId],
   );
 
-  const row = result.rows[0];
-  if (!row) return null;
+  return result.rows[0] ?? null;
+}
 
+async function buildServiceOrderDocumentData(
+  env: Env,
+  row: QueryResultRow,
+  serviceOrderId: number,
+): Promise<ServiceOrderDocumentData> {
   const qrSvg = await QRCode.toString(
     `${portalBaseUrl()}/service-orders/${row.id}`,
     {
@@ -213,6 +246,28 @@ export async function fetchServiceOrderDocumentData(
   };
 }
 
+/**
+ * The document data and the organization reference of a service order of the
+ * laboratory: one short transaction for the rows, then the QR code and the logo
+ * (storage I/O) after it ended. Null when the order does not exist.
+ */
+export async function loadServiceOrderDocumentBase(
+  env: Env,
+  organizationId: string,
+  serviceOrderId: number,
+): Promise<{ data: ServiceOrderDocumentData; org: OrgRef } | null> {
+  const read = await withOrgDbClient(env, organizationId, async (client) => {
+    const row = await readServiceOrderDocumentRow(client, serviceOrderId);
+    if (!row) return null;
+    return { row, org: await fetchOrgRefById(client, organizationId) };
+  });
+  if (!read) return null;
+  return {
+    data: await buildServiceOrderDocumentData(env, read.row, serviceOrderId),
+    org: read.org,
+  };
+}
+
 export async function processServiceOrderIntakeDocument(
   env: Env,
   serviceOrderId: number,
@@ -220,18 +275,22 @@ export async function processServiceOrderIntakeDocument(
   userId: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const data = await withDbClient(env, (client) =>
-      fetchServiceOrderDocumentData(env, client, serviceOrderId),
+    const organizationId = await findServiceOrderOrganization(
+      env,
+      serviceOrderId,
     );
-    if (!data) return { success: false, error: "Service order not found" };
+    const base = organizationId
+      ? await loadServiceOrderDocumentBase(env, organizationId, serviceOrderId)
+      : null;
+    if (!organizationId || !base) {
+      return { success: false, error: "Service order not found" };
+    }
+    const { data, org } = base;
     const html = renderToString(
       React.createElement(ServiceOrderIntakeDocumentHtml, { data }),
     );
     const pdfBuffer = await generatePdfFromHtml(env, html);
     const { year, month } = getYearMonth(data.openedAt, "openedAt");
-    const org = await withDbClient(env, (client) =>
-      fetchServiceOrderOrg(client, serviceOrderId),
-    );
     const { bucket, key } = serviceOrderDocKey({
       org,
       serviceOrderNumber: data.serviceOrderNumber,
@@ -243,7 +302,7 @@ export async function processServiceOrderIntakeDocument(
     await bucketBinding(env, bucket).put(key, pdfBuffer, {
       httpMetadata: { contentType: "application/pdf" },
     });
-    await withDbClient(env, async (client) => {
+    await withOrgDbClient(env, organizationId, async (client) => {
       if (documentId) {
         await client.query(
           `UPDATE service_order_intake_document SET pdf_r2_key = $2, issued_at = COALESCE(issued_at, now()), issued_by_user_id = COALESCE(issued_by_user_id, $3) WHERE id = $1`,
@@ -266,22 +325,4 @@ export async function processServiceOrderIntakeDocument(
       error: error instanceof Error ? error.message : String(error),
     };
   }
-}
-
-export async function fetchServiceOrderOrg(
-  client: Client,
-  serviceOrderId: number,
-): Promise<OrgRef> {
-  const result = await client.query<{ id: string; slug: string | null }>(
-    `SELECT o.id, o.slug
-     FROM service_order so
-     INNER JOIN organization o ON o.id = so.organization_id
-     WHERE so.id = $1`,
-    [serviceOrderId],
-  );
-  const row = result.rows[0];
-  if (!row) {
-    throw new Error("Service order organization not found");
-  }
-  return { id: row.id, slug: row.slug ?? "" };
 }

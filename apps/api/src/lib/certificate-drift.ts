@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
 import { desc, isNotNull } from "drizzle-orm";
-import { db } from "@calibra-facil/db";
+import { systemDb } from "@calibra-facil/db";
 import { issuedCertificateSnapshot } from "@calibra-facil/db/schema";
 
 import { writeOrganizationAuditEvent } from "./audit";
+import { orgDb } from "./org-db";
 
 /**
  * Certificate drift detection: re-hash the STORED PDF of recent
@@ -43,7 +44,11 @@ export async function runCertificateDriftCheck(
   options: { sampleSize?: number } = {},
 ): Promise<DriftCheckResult> {
   const sampleSize = options.sampleSize ?? 25;
-  const rows = await db
+  // System path (P2-18j): the sweep re-hashes the newest snapshots of EVERY
+  // laboratory (a platform integrity job, no request names one), so this one
+  // statement lists them across laboratories; the audit event of each finding
+  // is written in a transaction that names that snapshot's laboratory.
+  const rows = await systemDb
     .select({
       id: issuedCertificateSnapshot.id,
       organizationId: issuedCertificateSnapshot.organizationId,
@@ -87,13 +92,19 @@ export async function runCertificateDriftCheck(
         artifact,
         kind,
       });
-      await writeOrganizationAuditEvent({
-        organizationId: row.organizationId,
-        action: "certificate.drift_detected",
-        entityType: "issued_certificate_snapshot",
-        entityId: String(row.id),
-        details: { artifact, kind, r2Key: key, expectedSha256: expected },
-      });
+      // The storage read above ended before this transaction opens.
+      await orgDb(row.organizationId).transaction((tx) =>
+        writeOrganizationAuditEvent(
+          {
+            organizationId: row.organizationId,
+            action: "certificate.drift_detected",
+            entityType: "issued_certificate_snapshot",
+            entityId: String(row.id),
+            details: { artifact, kind, r2Key: key, expectedSha256: expected },
+          },
+          tx,
+        ),
+      );
     }
   }
 

@@ -2,7 +2,7 @@ import {
   listTemplates,
   type TemplateModule,
 } from "@calibra-facil/method-templates";
-import { db } from "@calibra-facil/db";
+import { systemDb as ownerDb } from "@calibra-facil/db";
 import { calibrationMethod, type MethodStatus } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 
@@ -65,7 +65,7 @@ async function setProcedureCode(
 ): Promise<void> {
   // The update schema re-applies defaults to absent fields, so a partial body
   // would blank the formulas: send the whole draft back, as the editor does.
-  const [row] = await db
+  const [row] = await ownerDb
     .select()
     .from(calibrationMethod)
     .where(eq(calibrationMethod.id, methodId))
@@ -109,7 +109,7 @@ export async function seedMethods(
     if (!assetTypeId)
       throw new Error(`Unknown asset type ${entry.assetTypeSlug}`);
 
-    const [existing] = await db
+    const [existing] = await ownerDb
       .select({ id: calibrationMethod.id, status: calibrationMethod.status })
       .from(calibrationMethod)
       .where(

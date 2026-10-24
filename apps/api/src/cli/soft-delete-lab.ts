@@ -9,9 +9,13 @@
  * the records purge job (RECORDS_PURGE_ENABLED, see DEPLOYMENT.md) only removes
  * it once its newest record is older than its retention period and no legal
  * hold applies. Reads the same environment as the API (DATABASE_URL).
+ *
+ * An operator tool: it runs as the table owner (`systemDb`, P2-18j) to find the
+ * laboratory by slug, and the soft delete itself names the laboratory like the
+ * route does (`softDeleteLabOrganization`).
  */
 import { parseArgs } from "node:util";
-import { db } from "@calibra-facil/db";
+import { systemDb as ownerDb } from "@calibra-facil/db";
 import { organization } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 
@@ -42,7 +46,7 @@ async function main() {
   const reason = values.reason?.trim();
   if (!reason) fail("--reason is required.");
 
-  const [lab] = await db
+  const [lab] = await ownerDb
     .select({ id: organization.id, name: organization.name })
     .from(organization)
     .where(eq(organization.slug, slug))

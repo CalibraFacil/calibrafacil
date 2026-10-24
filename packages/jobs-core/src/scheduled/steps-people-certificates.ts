@@ -1,4 +1,4 @@
-import { Client } from "pg";
+import { type OrgSession } from "../pdf-render.js";
 import { labToday } from "@calibra-facil/shared";
 import {
   decideSigningCertificateExpiryAlert,
@@ -31,7 +31,7 @@ import { BATCH_SIZE, recordScheduledNotification } from "./shared.js";
 import { checkPtPlanDue } from "./queries-assets-standards.js";
 
 export async function processCompetencesExpiring(
-  client: Client,
+  lab: OrgSession,
 ): Promise<number> {
   let competencesExpiringProcessed = 0;
 
@@ -41,7 +41,7 @@ export async function processCompetencesExpiring(
 
   do {
     compExpiringBatch = await checkCompetencesExpiring(
-      client,
+      lab,
       compExpiringOffset,
       BATCH_SIZE,
     );
@@ -56,7 +56,7 @@ export async function processCompetencesExpiring(
       try {
         await notifyCompetenceExpiring(comp.id, comp.organization_id);
 
-        await recordScheduledNotification(client, {
+        await recordScheduledNotification(lab, {
           organizationId: comp.organization_id,
           type: "COMPETENCE_EXPIRING",
           entityType: "competence",
@@ -86,7 +86,7 @@ export async function processCompetencesExpiring(
 }
 
 export async function processCompetencesExpired(
-  client: Client,
+  lab: OrgSession,
 ): Promise<number> {
   let competencesExpiredProcessed = 0;
 
@@ -96,7 +96,7 @@ export async function processCompetencesExpired(
 
   do {
     compExpiredBatch = await checkCompetencesExpired(
-      client,
+      lab,
       compExpiredOffset,
       BATCH_SIZE,
     );
@@ -109,29 +109,30 @@ export async function processCompetencesExpired(
     let batchFailures = 0;
     for (const comp of compExpiredBatch) {
       try {
-        // Auto-expire: update status to EXPIRED
-        await client.query(
-          `UPDATE personnel_competence SET status = 'EXPIRED' WHERE id = $1 AND status = 'ACTIVE'`,
-          [comp.id],
-        );
-
-        // Log the auto-expiration in audit log
-        await client.query(
-          `INSERT INTO personnel_competence_audit_log (organization_id, competence_id, action, changes, performed_by)
+        // Auto-expire: update status to EXPIRED, and log the auto-expiration in
+        // the audit log: one transaction, so the audit row commits with its change.
+        await lab.transaction(async (client) => {
+          await client.query(
+            `UPDATE personnel_competence SET status = 'EXPIRED' WHERE id = $1 AND status = 'ACTIVE'`,
+            [comp.id],
+          );
+          await client.query(
+            `INSERT INTO personnel_competence_audit_log (organization_id, competence_id, action, changes, performed_by)
              VALUES ($1, $2, 'expire', $3, 'system')`,
-          [
-            comp.organization_id,
-            comp.id,
-            JSON.stringify({
-              status: { old: "ACTIVE", new: "EXPIRED" },
-              autoExpired: true,
-            }),
-          ],
-        );
+            [
+              comp.organization_id,
+              comp.id,
+              JSON.stringify({
+                status: { old: "ACTIVE", new: "EXPIRED" },
+                autoExpired: true,
+              }),
+            ],
+          );
+        });
 
         await notifyCompetenceExpired(comp.id, comp.organization_id);
 
-        await recordScheduledNotification(client, {
+        await recordScheduledNotification(lab, {
           organizationId: comp.organization_id,
           type: "COMPETENCE_EXPIRED",
           entityType: "competence",
@@ -160,7 +161,7 @@ export async function processCompetencesExpired(
   return competencesExpiredProcessed;
 }
 
-export async function processVisitReminders(client: Client): Promise<number> {
+export async function processVisitReminders(lab: OrgSession): Promise<number> {
   let visitsProcessed = 0;
 
   // 7. Remind técnico + customer of upcoming on-site visits (with pagination)
@@ -168,7 +169,7 @@ export async function processVisitReminders(client: Client): Promise<number> {
   let visitBatch: VisitDueRow[];
 
   do {
-    visitBatch = await checkVisitsDueSoon(client, visitOffset, BATCH_SIZE);
+    visitBatch = await checkVisitsDueSoon(lab, visitOffset, BATCH_SIZE);
     if (visitBatch.length > 0) {
       console.log(
         `[Scheduled] Processing ${visitBatch.length} upcoming visits (offset ${visitOffset})`,
@@ -180,7 +181,7 @@ export async function processVisitReminders(client: Client): Promise<number> {
       try {
         await notifyVisitReminder(visit.id);
 
-        await recordScheduledNotification(client, {
+        await recordScheduledNotification(lab, {
           organizationId: visit.organization_id,
           type: "VISIT_REMINDER",
           entityType: "visit",
@@ -207,7 +208,7 @@ export async function processVisitReminders(client: Client): Promise<number> {
 }
 
 export async function processSigningCertificatesExpiring(
-  client: Client,
+  lab: OrgSession,
 ): Promise<number> {
   let signingCertsProcessed = 0;
 
@@ -221,7 +222,7 @@ export async function processSigningCertificatesExpiring(
 
   do {
     signingCertBatch = await checkSigningCertificatesExpiring(
-      client,
+      lab,
       signingCertOffset,
       BATCH_SIZE,
     );
@@ -248,7 +249,7 @@ export async function processSigningCertificatesExpiring(
           daysRemaining: decision.daysUntilExpiry,
         });
 
-        await recordScheduledNotification(client, {
+        await recordScheduledNotification(lab, {
           organizationId: cert.organization_id,
           type: "SIGNING_CERTIFICATE_EXPIRING",
           entityType: "signing_certificate",
@@ -276,7 +277,7 @@ export async function processSigningCertificatesExpiring(
 }
 
 export async function processAccreditationsExpiring(
-  client: Client,
+  lab: OrgSession,
 ): Promise<number> {
   let accreditationsProcessed = 0;
 
@@ -289,7 +290,7 @@ export async function processAccreditationsExpiring(
 
   do {
     accreditationBatch = await checkAccreditationsExpiring(
-      client,
+      lab,
       accreditationOffset,
       BATCH_SIZE,
     );
@@ -318,7 +319,7 @@ export async function processAccreditationsExpiring(
           validUntil: row.valid_until,
         });
 
-        await recordScheduledNotification(client, {
+        await recordScheduledNotification(lab, {
           organizationId: row.organization_id,
           type: "ACCREDITATION_EXPIRING",
           entityType: "organization_accreditation",
@@ -343,7 +344,7 @@ export async function processAccreditationsExpiring(
 }
 
 export async function processAccreditedScopeLinesExpiring(
-  client: Client,
+  lab: OrgSession,
 ): Promise<number> {
   let scopeLinesProcessed = 0;
 
@@ -356,7 +357,7 @@ export async function processAccreditedScopeLinesExpiring(
 
   do {
     scopeLineBatch = await checkAccreditedScopeLinesExpiring(
-      client,
+      lab,
       scopeLineOffset,
       BATCH_SIZE,
     );
@@ -383,7 +384,7 @@ export async function processAccreditedScopeLinesExpiring(
           daysRemaining: decision.daysUntilExpiry,
         });
 
-        await recordScheduledNotification(client, {
+        await recordScheduledNotification(lab, {
           organizationId: row.organization_id,
           type: "ACCREDITED_SCOPE_LINE_EXPIRING",
           entityType: "accredited_scope_line",
@@ -409,7 +410,7 @@ export async function processAccreditedScopeLinesExpiring(
   return scopeLinesProcessed;
 }
 
-export async function processPtPlanDue(client: Client): Promise<number> {
+export async function processPtPlanDue(lab: OrgSession): Promise<number> {
   let ptPlanItemsProcessed = 0;
 
   // 11. Process proficiency-test participation-plan due dates (issue #60)
@@ -417,7 +418,7 @@ export async function processPtPlanDue(client: Client): Promise<number> {
   let ptPlanBatch: PtPlanDueRow[];
 
   do {
-    ptPlanBatch = await checkPtPlanDue(client, ptPlanOffset, BATCH_SIZE);
+    ptPlanBatch = await checkPtPlanDue(lab, ptPlanOffset, BATCH_SIZE);
     if (ptPlanBatch.length > 0) {
       console.log(
         `[Scheduled] Processing ${ptPlanBatch.length} PT plan items (offset ${ptPlanOffset})`,
@@ -429,7 +430,7 @@ export async function processPtPlanDue(client: Client): Promise<number> {
       try {
         await notifyPtPlanDue(planItem.id, planItem.organization_id);
 
-        await recordScheduledNotification(client, {
+        await recordScheduledNotification(lab, {
           organizationId: planItem.organization_id,
           type: "PT_PLAN_DUE",
           entityType: "pt_plan_item",

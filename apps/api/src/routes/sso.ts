@@ -1,8 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db } from "@calibra-facil/db";
-import { organization, ssoProvider } from "@calibra-facil/db/schema";
+import { ssoProvider } from "@calibra-facil/db/schema";
 import { createLabAuth } from "@calibra-facil/auth";
 import { and, eq } from "drizzle-orm";
 import {
@@ -11,6 +10,8 @@ import {
   withLabPermission,
 } from "../middleware/permission";
 import { writeOrganizationAuditEvent } from "../lib/audit";
+import { findLabOrganizationBySlug } from "../lib/identity";
+import { orgDb } from "../lib/org-db";
 import { appBaseUrl } from "@calibra-facil/shared/public-urls";
 
 const createProviderSchema = z.object({
@@ -218,10 +219,46 @@ async function forwardBetterAuthError(
   return c.json({ error: text || fallbackMessage }, response.status);
 }
 
+/**
+ * The laboratory's SSO provider row (`sso_provider` is a tenant table), read in
+ * a short transaction that names the laboratory. The calls to Better Auth that
+ * create / verify / delete the provider run on its own connection, never inside
+ * this transaction.
+ */
 async function getOrganizationProvider(organizationId: string) {
-  return db.query.ssoProvider.findFirst({
-    where: eq(ssoProvider.organizationId, organizationId),
-  });
+  const [provider] = await orgDb(organizationId).transaction((tx) =>
+    tx
+      .select()
+      .from(ssoProvider)
+      .where(eq(ssoProvider.organizationId, organizationId))
+      .limit(1),
+  );
+  return provider;
+}
+
+async function getProviderById(organizationId: string, providerId: string) {
+  const [provider] = await orgDb(organizationId).transaction((tx) =>
+    tx
+      .select()
+      .from(ssoProvider)
+      .where(
+        and(
+          eq(ssoProvider.organizationId, organizationId),
+          eq(ssoProvider.providerId, providerId),
+        ),
+      )
+      .limit(1),
+  );
+  return provider;
+}
+
+/** The audit entry of a provider change, in a transaction that names the laboratory. */
+function writeSsoAuditEvent(
+  params: Parameters<typeof writeOrganizationAuditEvent>[0],
+) {
+  return orgDb(params.organizationId).transaction((tx) =>
+    writeOrganizationAuditEvent(params, tx),
+  );
 }
 
 export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
@@ -312,7 +349,7 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      await writeOrganizationAuditEvent({
+      await writeSsoAuditEvent({
         organizationId: member.organizationId,
         actorUserId: session.user.id,
         actorMemberId: member.id,
@@ -347,12 +384,7 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
       const member = c.get("member");
       const session = c.get("session");
       const { providerId } = c.req.valid("param");
-      const provider = await db.query.ssoProvider.findFirst({
-        where: and(
-          eq(ssoProvider.organizationId, member.organizationId),
-          eq(ssoProvider.providerId, providerId),
-        ),
-      });
+      const provider = await getProviderById(member.organizationId, providerId);
 
       if (!provider) {
         return c.json({ error: "Provedor SSO nao encontrado" }, 404);
@@ -377,7 +409,7 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
         await response.json(),
       );
 
-      await writeOrganizationAuditEvent({
+      await writeSsoAuditEvent({
         organizationId: member.organizationId,
         actorUserId: session.user.id,
         actorMemberId: member.id,
@@ -409,12 +441,7 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
       const member = c.get("member");
       const session = c.get("session");
       const { providerId } = c.req.valid("param");
-      const provider = await db.query.ssoProvider.findFirst({
-        where: and(
-          eq(ssoProvider.organizationId, member.organizationId),
-          eq(ssoProvider.providerId, providerId),
-        ),
-      });
+      const provider = await getProviderById(member.organizationId, providerId);
 
       if (!provider) {
         return c.json({ error: "Provedor SSO nao encontrado" }, 404);
@@ -449,7 +476,7 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      await writeOrganizationAuditEvent({
+      await writeSsoAuditEvent({
         organizationId: member.organizationId,
         actorUserId: session.user.id,
         actorMemberId: member.id,
@@ -477,12 +504,7 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
       const { providerId } = c.req.valid("param");
       // Intentionally allow deletion after downgrade so organizations can
       // clean up stale SSO configuration even when SSO sign-in is blocked.
-      const provider = await db.query.ssoProvider.findFirst({
-        where: and(
-          eq(ssoProvider.organizationId, member.organizationId),
-          eq(ssoProvider.providerId, providerId),
-        ),
-      });
+      const provider = await getProviderById(member.organizationId, providerId);
 
       if (!provider) {
         return c.json({ error: "Provedor SSO nao encontrado" }, 404);
@@ -503,7 +525,7 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      await writeOrganizationAuditEvent({
+      await writeSsoAuditEvent({
         organizationId: member.organizationId,
         actorUserId: session.user.id,
         actorMemberId: member.id,
@@ -525,12 +547,7 @@ export const ssoRouter = new Hono<{ Variables: AuthVariables }>()
     const input = c.req.valid("json");
     const redirectPath = normalizeDashboardRedirectPath(input.redirectPath);
 
-    const org = await db.query.organization.findFirst({
-      where: and(
-        eq(organization.slug, input.organizationSlug),
-        eq(organization.type, "LAB"),
-      ),
-    });
+    const org = await findLabOrganizationBySlug(input.organizationSlug);
 
     if (!org) {
       return c.json({ error: "Laboratorio nao encontrado" }, 404);

@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import { systemDb as ownerDb } from "@calibra-facil/db";
 import { calibrationJob, notification } from "@calibra-facil/db/schema";
 import { forceCompleteQueueJob } from "@calibra-facil/db/queue";
 import { processBackgroundJob } from "@calibra-facil/jobs-core";
@@ -84,7 +84,7 @@ function customerAddress(entry: DemoCustomer): string {
 }
 
 async function findJobForAsset(assetId: number) {
-  const [row] = await db
+  const [row] = await ownerDb
     .select({ id: calibrationJob.id, status: calibrationJob.status })
     .from(calibrationJob)
     .where(
@@ -269,7 +269,7 @@ export async function seedJobs(
     ) {
       if (!planned.performedAt)
         throw new Error(`Job slot ${planned.slot} has no calibration date`);
-      const [saved] = await db
+      const [saved] = await ownerDb
         .select({ data: calibrationJob.data })
         .from(calibrationJob)
         .where(eq(calibrationJob.id, jobId))
@@ -371,7 +371,7 @@ export async function seedJobs(
 }
 
 async function customerIdOfAsset(assetId: number): Promise<number> {
-  const [row] = await db
+  const [row] = await ownerDb
     .select({ customerId: calibrationJob.customerId })
     .from(calibrationJob)
     .where(eq(calibrationJob.assetId, assetId))
@@ -382,7 +382,7 @@ async function customerIdOfAsset(assetId: number): Promise<number> {
 
 /** Closes the approval of a job whose certificate file is not rendered (see `renderSlots`). */
 async function markIssuedWithoutRender(jobId: number): Promise<void> {
-  await db
+  await ownerDb
     .update(calibrationJob)
     .set({ status: "APPROVED" })
     .where(
@@ -395,7 +395,7 @@ async function markIssuedWithoutRender(jobId: number): Promise<void> {
 }
 
 async function completeQueuedCertificate(jobId: number): Promise<void> {
-  const queued = await db.execute(sql`
+  const queued = await ownerDb.execute(sql`
     select id from app_queue_job
     where type = 'CERTIFICATE' and status <> 'COMPLETED' and (payload->>'jobId')::int = ${jobId}
   `);
@@ -414,7 +414,7 @@ async function renderCertificate(
   jobId: number,
   userId: string,
 ): Promise<void> {
-  const [job] = await db
+  const [job] = await ownerDb
     .select({ status: calibrationJob.status })
     .from(calibrationJob)
     .where(eq(calibrationJob.id, jobId))
@@ -424,7 +424,7 @@ async function renderCertificate(
   // The row the approval queued is now served: close it so a worker run later
   // does not render the same certificate again.
   await completeQueuedCertificate(jobId);
-  const [after] = await db
+  const [after] = await ownerDb
     .select({ status: calibrationJob.status })
     .from(calibrationJob)
     .where(eq(calibrationJob.id, jobId))
@@ -451,7 +451,7 @@ export async function tidyNotifications(
       )
       .map((job) => job.jobId),
   );
-  const all = await db
+  const all = await ownerDb
     .select({ id: notification.id, related: notification.relatedEntity })
     .from(notification)
     .where(eq(notification.organizationId, LAB_ID));
@@ -467,6 +467,6 @@ export async function tidyNotifications(
   }
   const drop = all.filter((row) => !keep.has(row.id)).map((row) => row.id);
   if (drop.length > 0) {
-    await db.delete(notification).where(inArray(notification.id, drop));
+    await ownerDb.delete(notification).where(inArray(notification.id, drop));
   }
 }

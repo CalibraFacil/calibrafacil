@@ -17,6 +17,7 @@
     "./integrations": "./src/integrations.ts",
     "./scheduled": "./src/scheduled.ts",
     "./spc-recompute": "./src/spc-recompute.ts",
+    "./email-domain-health": "./src/email-domain-health.ts",
     "./certificate/layout-data": "./src/certificate/layout-data.ts",
     "./certificate/fetch-job-data": "./src/certificate/fetch-job-data.ts"
   },

@@ -3,7 +3,6 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db } from "@calibra-facil/db";
 import { organizationEmailDomain } from "@calibra-facil/db/schema";
 import {
   decryptResendApiKey,
@@ -21,6 +20,7 @@ import {
   serializeEmailDomain,
 } from "../lib/email-domains";
 import { writeOrganizationAuditEvent } from "../lib/audit";
+import { orgDb } from "../lib/org-db";
 import {
   type AuthVariables,
   requireLabProtected,
@@ -192,14 +192,16 @@ export const emailDomainsRouter = new Hono<{ Variables: AuthVariables }>()
 
       if (!details.ok) {
         if (details.failureClass === "invalid_key") {
-          await db
-            .update(organizationEmailDomain)
-            .set({
-              keyStatus: "invalid",
-              keyLastError: `${details.errorName}: ${details.message}`,
-              updatedAt: new Date(),
-            })
-            .where(eq(organizationEmailDomain.id, record.id));
+          await orgDb(member.organizationId).transaction((tx) =>
+            tx
+              .update(organizationEmailDomain)
+              .set({
+                keyStatus: "invalid",
+                keyLastError: `${details.errorName}: ${details.message}`,
+                updatedAt: new Date(),
+              })
+              .where(eq(organizationEmailDomain.id, record.id)),
+          );
         }
         return c.json(
           { error: resendFailureMessage(details.failureClass) },
@@ -210,32 +212,42 @@ export const emailDomainsRouter = new Hono<{ Variables: AuthVariables }>()
       const isVerified = details.data.status === "verified";
       const becameVerified = isVerified && !record.verifiedAt;
       const now = new Date();
-      const [updated] = await db
-        .update(organizationEmailDomain)
-        .set({
-          status: details.data.status,
-          dnsRecords: details.data.records,
-          verifiedAt: isVerified ? (record.verifiedAt ?? now) : null,
-          lastVerifiedAt: isVerified ? now : record.lastVerifiedAt,
-          // A successful round-trip proves the key is healthy again.
-          keyStatus: "ok",
-          keyLastError: null,
-          updatedAt: now,
-        })
-        .where(eq(organizationEmailDomain.id, record.id))
-        .returning();
+      // The verdict and its audit entry commit together; the provider calls
+      // above ran outside any transaction.
+      const updated = await orgDb(member.organizationId).transaction(
+        async (tx) => {
+          const [row] = await tx
+            .update(organizationEmailDomain)
+            .set({
+              status: details.data.status,
+              dnsRecords: details.data.records,
+              verifiedAt: isVerified ? (record.verifiedAt ?? now) : null,
+              lastVerifiedAt: isVerified ? now : record.lastVerifiedAt,
+              // A successful round-trip proves the key is healthy again.
+              keyStatus: "ok",
+              keyLastError: null,
+              updatedAt: now,
+            })
+            .where(eq(organizationEmailDomain.id, record.id))
+            .returning();
 
-      if (updated && becameVerified) {
-        await writeOrganizationAuditEvent({
-          organizationId: member.organizationId,
-          actorUserId: session.user.id,
-          actorMemberId: member.id,
-          action: "email_sender_domain.verified",
-          entityType: "email_sender_domain",
-          entityId: updated.id,
-          details: { hostname: updated.hostname },
-        });
-      }
+          if (row && becameVerified) {
+            await writeOrganizationAuditEvent(
+              {
+                organizationId: member.organizationId,
+                actorUserId: session.user.id,
+                actorMemberId: member.id,
+                action: "email_sender_domain.verified",
+                entityType: "email_sender_domain",
+                entityId: row.id,
+                details: { hostname: row.hostname },
+              },
+              tx,
+            );
+          }
+          return row;
+        },
+      );
 
       return c.json({
         domain: serializeEmailDomain(updated ?? null),
@@ -266,30 +278,38 @@ export const emailDomainsRouter = new Hono<{ Variables: AuthVariables }>()
         );
       }
 
-      const [updated] = await db
-        .update(organizationEmailDomain)
-        .set({
-          isActive: true,
-          activatedAt: record.activatedAt ?? new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(organizationEmailDomain.id, record.id))
-        .returning();
+      const updated = await orgDb(member.organizationId).transaction(
+        async (tx) => {
+          const [row] = await tx
+            .update(organizationEmailDomain)
+            .set({
+              isActive: true,
+              activatedAt: record.activatedAt ?? new Date(),
+              updatedAt: new Date(),
+            })
+            .where(eq(organizationEmailDomain.id, record.id))
+            .returning();
 
-      if (updated) {
-        await writeOrganizationAuditEvent({
-          organizationId: member.organizationId,
-          actorUserId: session.user.id,
-          actorMemberId: member.id,
-          action: "email_sender_domain.activated",
-          entityType: "email_sender_domain",
-          entityId: updated.id,
-          details: {
-            hostname: updated.hostname,
-            fromAddress: updated.fromAddress,
-          },
-        });
-      }
+          if (row) {
+            await writeOrganizationAuditEvent(
+              {
+                organizationId: member.organizationId,
+                actorUserId: session.user.id,
+                actorMemberId: member.id,
+                action: "email_sender_domain.activated",
+                entityType: "email_sender_domain",
+                entityId: row.id,
+                details: {
+                  hostname: row.hostname,
+                  fromAddress: row.fromAddress,
+                },
+              },
+              tx,
+            );
+          }
+          return row;
+        },
+      );
 
       return c.json({
         domain: serializeEmailDomain(updated ?? null),

@@ -160,7 +160,14 @@ describe("calibra/no-raw-db-in-routes (real oxlint)", () => {
     // Any baselined file will do (the entries shrink as routes migrate): use
     // the first one and its real allowance.
     const [entry] = [...RAW_DB_BASELINE];
-    if (entry === undefined) throw new Error("the baseline is empty");
+    if (entry === undefined) {
+      // The baseline is empty (every route is migrated, P2-18j): nothing is
+      // grandfathered, so a single use in any route file fails.
+      await expectViolation(RULE, {
+        "apps/api/src/routes/anything.ts": uses(1),
+      });
+      return;
+    }
     const [file, allowed] = entry;
     await expectClean(RULE, {
       [file]: uses(allowed),
@@ -176,6 +183,8 @@ describe("calibra/no-raw-db-in-routes (real oxlint)", () => {
 
   it("REQ-ORGDB-2: every baselined file passes at its exact count, fails at +1 and fails stale at -1", async () => {
     const entries = [...RAW_DB_BASELINE];
+    // Nothing to ratchet while the baseline is empty (see the test above).
+    if (entries.length === 0) return;
     const tree = (delta: number) =>
       Object.fromEntries(
         entries.map(([file, count]) => [file, uses(count + delta)]),

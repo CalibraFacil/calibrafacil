@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import { systemDb as ownerDb } from "@calibra-facil/db";
 import { referenceStandard } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 
@@ -374,7 +374,7 @@ export type StandardIds = Map<StandardKey, number>;
 export async function seedStandards(ctx: SeedContext): Promise<StandardIds> {
   const ids: StandardIds = new Map();
   for (const spec of SPECS) {
-    const [existing] = await db
+    const [existing] = await ownerDb
       .select({ id: referenceStandard.id })
       .from(referenceStandard)
       .where(

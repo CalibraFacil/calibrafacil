@@ -1,10 +1,19 @@
-import { Client } from "pg";
+import { Client, type QueryResult, type QueryResultRow } from "pg";
 import { inOrganizationTransaction } from "./job-events.js";
 import { type Env } from "./runtime-types.js";
 
+/** What opening a connection needs; every handler's env satisfies it. */
+export type DatabaseEnv = Pick<Env, "DATABASE_URL">;
+
+/** What the system path needs on top: the owner connection and the RLS mode. */
+export type SystemDatabaseEnv = Pick<
+  Env,
+  "DATABASE_URL" | "DATABASE_OWNER_URL" | "DATABASE_RLS_MODE"
+>;
+
 // Helper to run a database operation with a fresh connection
 export async function withDbClient<T>(
-  env: Env,
+  env: DatabaseEnv,
   operation: (client: Client) => Promise<T>,
 ): Promise<T> {
   const client = new Client({
@@ -19,14 +28,16 @@ export async function withDbClient<T>(
 }
 
 /**
- * The system path: a connection of the table owner, for the one statement per
- * message that is cross-organization by design (which laboratory owns this job).
+ * The system path: a connection of the table owner, for the statements that are
+ * cross-organization by design (which laboratory owns this job; which
+ * laboratories exist; which rows of every laboratory are owed). Each use is ONE
+ * lookup or listing with a comment saying why, never per-laboratory work.
  * `DATABASE_OWNER_URL` is the owner once the application connects as
  * `calibra_app`; unset, the system path shares `DATABASE_URL` (the owner while
  * row-level security is in shadow mode).
  */
-async function withSystemDbClient<T>(
-  env: Env,
+export async function withSystemDbClient<T>(
+  env: Pick<Env, "DATABASE_URL" | "DATABASE_OWNER_URL">,
   operation: (client: Client) => Promise<T>,
 ): Promise<T> {
   return withDbClient(
@@ -36,27 +47,30 @@ async function withSystemDbClient<T>(
 }
 
 /**
- * The laboratory a calibration job belongs to, or null when there is no such
- * job. A queue message names a job, not its laboratory, so this is the one
- * lookup that cannot name an organization yet: it runs on the system path and
- * reads one column of one row by primary key. Everything after it runs in
- * `withOrgDbClient`.
+ * The laboratory a queue message's subject belongs to, or null when there is no
+ * such row. A queue message names a job, an order, an export, not its
+ * laboratory, so this is the one lookup per message that cannot name an
+ * organization yet: it runs on the system path (`select <organization column>
+ * ... where id = $1`, one column of one row by primary key). Everything after
+ * it runs in `withOrgDbClient`.
  *
- * Null means the job does not exist, EXCEPT when the worker runs under
+ * Null means the row does not exist, EXCEPT when the worker runs under
  * `DATABASE_RLS_MODE=enforced` without `DATABASE_OWNER_URL`: then the lookup runs
- * as the application role, which sees no job at all, and "not found" would be a
- * lie that marks the render permanently failed (or leaves the job stuck in
- * GENERATING_PDF with the sweep blind to it). That case throws a plain error, so
- * the queue retries the message and the misconfiguration is loud.
+ * as the application role, which sees no row at all, and "not found" would be a
+ * lie that marks the work permanently failed (or leaves it stuck with the sweep
+ * blind to it). That case throws a plain error, so the queue retries the
+ * message and the misconfiguration is loud.
  */
-export async function findJobOrganization(
-  env: Env,
-  jobId: number,
+export async function findOrganizationOnSystemPath(
+  env: SystemDatabaseEnv,
+  subject: string,
+  lookupSql: string,
+  values: unknown[],
 ): Promise<string | null> {
   return withSystemDbClient(env, async (client) => {
     const result = await client.query<{ organization_id: string }>(
-      "select organization_id from calibration_job where id = $1 limit 1",
-      [jobId],
+      lookupSql,
+      values,
     );
     const organizationId = result.rows[0]?.organization_id ?? null;
     if (
@@ -65,11 +79,24 @@ export async function findJobOrganization(
       !env.DATABASE_OWNER_URL
     ) {
       throw new Error(
-        `Cannot tell which laboratory job ${jobId} belongs to: DATABASE_RLS_MODE=enforced but DATABASE_OWNER_URL is not set, so the lookup ran as the application role. Set DATABASE_OWNER_URL on the worker.`,
+        `Cannot tell which laboratory ${subject} belongs to: DATABASE_RLS_MODE=enforced but DATABASE_OWNER_URL is not set, so the lookup ran as the application role. Set DATABASE_OWNER_URL on the worker.`,
       );
     }
     return organizationId;
   });
+}
+
+/** The laboratory a calibration job belongs to (see `findOrganizationOnSystemPath`). */
+export async function findJobOrganization(
+  env: Env,
+  jobId: number,
+): Promise<string | null> {
+  return findOrganizationOnSystemPath(
+    env,
+    `job ${jobId}`,
+    "select organization_id from calibration_job where id = $1 limit 1",
+    [jobId],
+  );
 }
 
 /**
@@ -78,13 +105,55 @@ export async function findJobOrganization(
  * back together. Never call out to storage or HTTP inside `operation`.
  */
 export function withOrgDbClient<T>(
-  env: Env,
+  env: DatabaseEnv,
   organizationId: string,
   operation: (client: Client) => Promise<T>,
 ): Promise<T> {
   return withDbClient(env, (client) =>
     inOrganizationTransaction(client, organizationId, () => operation(client)),
   );
+}
+
+/**
+ * One laboratory's work on ONE connection, for a handler that interleaves
+ * database statements with I/O (an e-mail, a remote HTTP call) and so must
+ * never hold a transaction open across the I/O. Every `query` and every
+ * `transaction` is its own short transaction that names the laboratory
+ * (`calibra.organization_id`, row-level security); between them the connection
+ * sits idle and no transaction is open.
+ */
+export interface OrgSession {
+  readonly organizationId: string;
+  /** One statement in a transaction of its own (BEGIN, set_config, the statement, COMMIT). */
+  query<R extends QueryResultRow = QueryResultRow>(
+    text: string,
+    values?: unknown[],
+  ): Promise<QueryResult<R>>;
+  /**
+   * Several statements that commit or roll back together (an update and its
+   * audit row). Never call out to I/O inside `operation`.
+   */
+  transaction<T>(operation: (client: Client) => Promise<T>): Promise<T>;
+}
+
+/** A fresh connection serving the `OrgSession` of one laboratory until `operation` ends. */
+export function withOrgSession<T>(
+  env: DatabaseEnv,
+  organizationId: string,
+  operation: (session: OrgSession) => Promise<T>,
+): Promise<T> {
+  return withDbClient(env, (client) => {
+    const transaction = <R>(run: (client: Client) => Promise<R>) =>
+      inOrganizationTransaction(client, organizationId, () => run(client));
+    return operation({
+      organizationId,
+      transaction,
+      query: <R extends QueryResultRow = QueryResultRow>(
+        text: string,
+        values?: unknown[],
+      ) => transaction((tx) => tx.query<R>(text, values)),
+    });
+  });
 }
 
 export function getErrorMessage(error: unknown): string {

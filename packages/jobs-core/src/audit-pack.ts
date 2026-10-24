@@ -11,9 +11,10 @@ import { portalAuditPackKey } from "@calibra-facil/shared/storage-keys";
 import { notifyAuditPackReady } from "@calibra-facil/notifications";
 import { type Env } from "./runtime-types.js";
 import {
+  findOrganizationOnSystemPath,
   generatePdfFromHtml,
   getErrorMessage,
-  withDbClient,
+  withOrgDbClient,
 } from "./pdf-render.js";
 import {
   AUDIT_PACK_EXPIRY_DAYS,
@@ -36,8 +37,28 @@ export async function processAuditPackJob(
   const exportId = message.exportId;
   console.log(`[AUDIT PACK ${exportId}] Starting`);
 
+  // The laboratory of the export, once learnt: every statement below runs in a
+  // transaction that names it (row-level security) and no transaction spans the
+  // R2 downloads, Gotenberg or the zip. Still null in the failure path when the
+  // lookup itself failed or the export does not exist.
+  let labOrganizationId: string | null = null;
+
   try {
-    const exportRow = await withDbClient(env, async (client) => {
+    // The one lookup that cannot name a laboratory: the message names an export,
+    // not its laboratory, so this reads one column of one row by primary key on
+    // the system path (the owner connection). Everything after it is scoped.
+    labOrganizationId = await findOrganizationOnSystemPath(
+      env,
+      `audit pack export ${exportId}`,
+      "select lab_organization_id as organization_id from portal_export_job where id = $1 limit 1",
+      [exportId],
+    );
+    if (labOrganizationId === null) {
+      throw new Error("Audit pack export not found");
+    }
+    const labId = labOrganizationId;
+
+    const exportRow = await withOrgDbClient(env, labId, async (client) => {
       const result = await client.query<{
         id: number;
         lab_organization_id: string;
@@ -84,7 +105,7 @@ export async function processAuditPackJob(
       params.include.certificates || params.include.verificationIndex;
 
     const certificates = wantsCertificateRows
-      ? await withDbClient(env, async (client) => {
+      ? await withOrgDbClient(env, labId, async (client) => {
           // Same window semantics as the portal /certificates list: approval
           // date in America/Sao_Paulo, latest (non-superseded) version only.
           const candidates = await client.query<AuditPackCertificateRow>(
@@ -197,7 +218,7 @@ export async function processAuditPackJob(
     }
 
     if (params.include.fleetReport) {
-      const assets = await withDbClient(env, async (client) => {
+      const assets = await withOrgDbClient(env, labId, async (client) => {
         const result = await client.query<{
           tag: string;
           name: string;
@@ -350,7 +371,7 @@ export async function processAuditPackJob(
       httpMetadata: { contentType: "application/zip" },
     });
 
-    await withDbClient(env, (client) =>
+    await withOrgDbClient(env, labId, (client) =>
       client.query(
         `
           update portal_export_job
@@ -392,21 +413,25 @@ export async function processAuditPackJob(
     );
   } catch (error) {
     const errorMessage = getErrorMessage(error);
-    await withDbClient(env, (client) =>
-      client.query(
-        `
+    // Without the laboratory (the lookup failed, or there is no such export) the
+    // row cannot be written as the application role: nothing to record.
+    if (labOrganizationId !== null) {
+      await withOrgDbClient(env, labOrganizationId, (client) =>
+        client.query(
+          `
           update portal_export_job
           set status = 'FAILED', failure_reason = $1, updated_at = now()
           where id = $2
         `,
-        [errorMessage, exportId],
-      ),
-    ).catch((dbError) => {
-      console.error(
-        `[AUDIT PACK ${exportId}] Failed to record error:`,
-        dbError,
-      );
-    });
+          [errorMessage, exportId],
+        ),
+      ).catch((dbError) => {
+        console.error(
+          `[AUDIT PACK ${exportId}] Failed to record error:`,
+          dbError,
+        );
+      });
+    }
     throw error;
   }
 }

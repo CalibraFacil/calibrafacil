@@ -1,5 +1,4 @@
 import { readEmailConfig } from "@calibra-facil/config";
-import { db } from "@calibra-facil/db";
 import {
   organization,
   organizationEmailDomain,
@@ -10,9 +9,13 @@ import {
   deleteResendDomain,
   type ResendFailureClass,
 } from "@calibra-facil/email-sender";
-import { and, eq, ne } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
-import { buildFromAddress } from "./email-domains";
+import {
+  buildFromAddress,
+  findOtherOrganizationHoldingHostname,
+} from "./email-domains";
+import { orgTransactionWithExecutor } from "./org-transaction";
 
 type Actor = { organizationId: string; userId: string; memberId: string };
 
@@ -65,15 +68,22 @@ export async function saveManagedEmailDomain(
   input: { hostname: string; fromLocalPart: string },
 ) {
   const apiKey = platformKey();
-  return db.transaction(async (tx) => {
+  // ONE transaction that names the laboratory: it takes the tenant lock, and it
+  // is held across the provider call ON PURPOSE (it is what serialises a
+  // concurrent create for the same organization and lets a rejected database
+  // write be compensated before the lock is released, see below); only the
+  // system-path hostname check and the provider call leave it.
+  return orgTransactionWithExecutor(actor.organizationId, async (lab, tx) => {
     await tx
       .select({ id: organization.id })
       .from(organization)
       .where(eq(organization.id, actor.organizationId))
       .for("update");
-    const existing = await tx.query.organizationEmailDomain.findFirst({
-      where: eq(organizationEmailDomain.organizationId, actor.organizationId),
-    });
+    const [existing] = await lab
+      .select()
+      .from(organizationEmailDomain)
+      .where(eq(organizationEmailDomain.organizationId, actor.organizationId))
+      .limit(1);
     if (existing) {
       if (existing.mode !== "managed" || existing.hostname !== input.hostname) {
         return emailDomainError(
@@ -86,7 +96,7 @@ export async function saveManagedEmailDomain(
       const fromAddress = buildFromAddress(input.fromLocalPart, input.hostname);
       if (existing.fromAddress === fromAddress)
         return { domain: existing, created: false };
-      const [updated] = await tx
+      const [updated] = await lab
         .update(organizationEmailDomain)
         .set({
           fromAddress,
@@ -96,7 +106,7 @@ export async function saveManagedEmailDomain(
         })
         .where(eq(organizationEmailDomain.id, existing.id))
         .returning();
-      await tx.insert(organizationEventLog).values({
+      await lab.insert(organizationEventLog).values({
         organizationId: actor.organizationId,
         actorUserId: actor.userId,
         actorMemberId: actor.memberId,
@@ -107,12 +117,10 @@ export async function saveManagedEmailDomain(
       });
       return { domain: updated!, created: false };
     }
-    const collision = await tx.query.organizationEmailDomain.findFirst({
-      where: and(
-        eq(organizationEmailDomain.hostname, input.hostname),
-        ne(organizationEmailDomain.organizationId, actor.organizationId),
-      ),
-    });
+    const collision = await findOtherOrganizationHoldingHostname(
+      input.hostname,
+      actor.organizationId,
+    );
     if (collision)
       return emailDomainError(
         "Este domínio já está em uso por outra organização",
@@ -123,7 +131,7 @@ export async function saveManagedEmailDomain(
     if (!details.ok) return emailProviderError(details.failureClass);
     try {
       const now = new Date();
-      const [created] = await tx
+      const [created] = await lab
         .insert(organizationEmailDomain)
         .values({
           id: crypto.randomUUID(),
@@ -144,7 +152,7 @@ export async function saveManagedEmailDomain(
           keyLastError: null,
         })
         .returning();
-      await tx.insert(organizationEventLog).values({
+      await lab.insert(organizationEventLog).values({
         organizationId: actor.organizationId,
         actorUserId: actor.userId,
         actorMemberId: actor.memberId,
@@ -175,15 +183,17 @@ export async function saveManagedEmailDomain(
 }
 
 export async function removeEmailDomain(actor: Actor) {
-  await db.transaction(async (tx) => {
+  await orgTransactionWithExecutor(actor.organizationId, async (lab, tx) => {
     await tx
       .select({ id: organization.id })
       .from(organization)
       .where(eq(organization.id, actor.organizationId))
       .for("update");
-    const record = await tx.query.organizationEmailDomain.findFirst({
-      where: eq(organizationEmailDomain.organizationId, actor.organizationId),
-    });
+    const [record] = await lab
+      .select()
+      .from(organizationEmailDomain)
+      .where(eq(organizationEmailDomain.organizationId, actor.organizationId))
+      .limit(1);
     if (!record) return;
     if (record.mode === "managed") {
       const result = await deleteResendDomain(
@@ -194,10 +204,10 @@ export async function removeEmailDomain(actor: Actor) {
       if (!result.ok) return emailProviderError(result.failureClass);
     }
     // Legacy domains belong to the laboratory's account; unlink them only.
-    await tx
+    await lab
       .delete(organizationEmailDomain)
       .where(eq(organizationEmailDomain.id, record.id));
-    await tx.insert(organizationEventLog).values({
+    await lab.insert(organizationEventLog).values({
       organizationId: actor.organizationId,
       actorUserId: actor.userId,
       actorMemberId: actor.memberId,

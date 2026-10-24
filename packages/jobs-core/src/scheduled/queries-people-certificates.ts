@@ -1,4 +1,4 @@
-import { Client } from "pg";
+import { type OrgSession } from "../pdf-render.js";
 import { LAB_TODAY_SQL } from "@calibra-facil/shared";
 import {
   type AccreditationExpiringRow,
@@ -16,11 +16,11 @@ import {
  * Duplicate prevention: Competences are notified once per 7-day window.
  */
 export async function checkCompetencesExpiring(
-  client: Client,
+  lab: OrgSession,
   offset = 0,
   batchSize = 100,
 ): Promise<CompetenceExpiringRow[]> {
-  const result = await client.query<CompetenceExpiringRow>(
+  const result = await lab.query<CompetenceExpiringRow>(
     `
     SELECT
       pc.id,
@@ -45,10 +45,11 @@ export async function checkCompetencesExpiring(
           AND sn.sent_at IS NOT NULL
           AND sn.sent_at > CURRENT_DATE - INTERVAL '7 days'
       )
+      AND pc.organization_id = $3
     ORDER BY pc.expires_at ASC
     LIMIT $1 OFFSET $2
     `,
-    [batchSize, offset],
+    [batchSize, offset, lab.organizationId],
   );
 
   return result.rows;
@@ -61,11 +62,11 @@ export async function checkCompetencesExpiring(
  * Duplicate prevention: Expired competences are notified weekly until renewed.
  */
 export async function checkCompetencesExpired(
-  client: Client,
+  lab: OrgSession,
   offset = 0,
   batchSize = 100,
 ): Promise<CompetenceExpiredRow[]> {
-  const result = await client.query<CompetenceExpiredRow>(
+  const result = await lab.query<CompetenceExpiredRow>(
     `
     SELECT
       pc.id,
@@ -89,10 +90,11 @@ export async function checkCompetencesExpired(
           AND sn.sent_at IS NOT NULL
           AND sn.sent_at > CURRENT_DATE - INTERVAL '7 days'
       )
+      AND pc.organization_id = $3
     ORDER BY pc.expires_at ASC
     LIMIT $1 OFFSET $2
     `,
-    [batchSize, offset],
+    [batchSize, offset, lab.organizationId],
   );
 
   return result.rows;
@@ -105,11 +107,11 @@ export async function checkCompetencesExpired(
  * visit confirmed far ahead still gets exactly one heads-up as it approaches.
  */
 export async function checkVisitsDueSoon(
-  client: Client,
+  lab: OrgSession,
   offset = 0,
   batchSize = 100,
 ): Promise<VisitDueRow[]> {
-  const result = await client.query<VisitDueRow>(
+  const result = await lab.query<VisitDueRow>(
     `
     SELECT
       v.id,
@@ -129,10 +131,11 @@ export async function checkVisitsDueSoon(
           AND sn.sent_at IS NOT NULL
           AND sn.sent_at > CURRENT_DATE - INTERVAL '3 days'
       )
+      AND v.organization_id = $3
     ORDER BY v.scheduled_at ASC
     LIMIT $1 OFFSET $2
     `,
-    [batchSize, offset],
+    [batchSize, offset, lab.organizationId],
   );
 
   return result.rows;
@@ -155,11 +158,11 @@ export async function checkVisitsDueSoon(
  * single run and pagination advances by the full page.
  */
 export async function checkSigningCertificatesExpiring(
-  client: Client,
+  lab: OrgSession,
   offset = 0,
   batchSize = 100,
 ): Promise<SigningCertificateExpiringRow[]> {
-  const result = await client.query<SigningCertificateExpiringRow>(
+  const result = await lab.query<SigningCertificateExpiringRow>(
     `
     SELECT
       c.id,
@@ -183,10 +186,11 @@ export async function checkSigningCertificatesExpiring(
       AND c.revoked_at IS NULL
       AND c.valid_until > NOW()
       AND c.valid_until <= NOW() + INTERVAL '30 days'
+      AND c.organization_id = $3
     ORDER BY c.valid_until ASC, c.id ASC
     LIMIT $1 OFFSET $2
     `,
-    [batchSize, offset],
+    [batchSize, offset, lab.organizationId],
   );
 
   return result.rows;
@@ -199,11 +203,11 @@ export async function checkSigningCertificatesExpiring(
  * Only active accreditations with a filled validUntil are candidates.
  */
 export async function checkAccreditationsExpiring(
-  client: Client,
+  lab: OrgSession,
   offset = 0,
   batchSize = 100,
 ): Promise<AccreditationExpiringRow[]> {
-  const result = await client.query<AccreditationExpiringRow>(
+  const result = await lab.query<AccreditationExpiringRow>(
     `
     SELECT
       o.id as organization_id,
@@ -238,10 +242,11 @@ export async function checkAccreditationsExpiring(
       -- Valid through its last day, inclusive (a calendar date).
       AND o.accreditation_valid_until >= ${LAB_TODAY_SQL}
       AND o.accreditation_valid_until <= ${LAB_TODAY_SQL} + 30
+      AND o.id = $3
     ORDER BY o.accreditation_valid_until ASC, o.id ASC
     LIMIT $1 OFFSET $2
     `,
-    [batchSize, offset],
+    [batchSize, offset, lab.organizationId],
   );
 
   return result.rows;
@@ -255,11 +260,11 @@ export async function checkAccreditationsExpiring(
  * enforce mode). Lines without a validUntil never expire and are skipped.
  */
 export async function checkAccreditedScopeLinesExpiring(
-  client: Client,
+  lab: OrgSession,
   offset = 0,
   batchSize = 100,
 ): Promise<AccreditedScopeLineExpiringRow[]> {
-  const result = await client.query<AccreditedScopeLineExpiringRow>(
+  const result = await lab.query<AccreditedScopeLineExpiringRow>(
     `
     SELECT
       l.id,
@@ -285,10 +290,11 @@ export async function checkAccreditedScopeLinesExpiring(
     WHERE l.valid_until IS NOT NULL
       AND l.valid_until > NOW()
       AND l.valid_until <= NOW() + INTERVAL '30 days'
+      AND l.organization_id = $3
     ORDER BY l.valid_until ASC, l.id ASC
     LIMIT $1 OFFSET $2
     `,
-    [batchSize, offset],
+    [batchSize, offset, lab.organizationId],
   );
 
   return result.rows;

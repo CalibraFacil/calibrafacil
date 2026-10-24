@@ -1,27 +1,10 @@
-import { Client } from "pg";
-import { type ScheduledEnv } from "./types.js";
-
-// Helper to run a database operation with a fresh connection
-export async function withDbClient<T>(
-  env: ScheduledEnv,
-  operation: (client: Client) => Promise<T>,
-): Promise<T> {
-  const client = new Client({
-    connectionString: env.DATABASE_URL,
-  });
-  await client.connect();
-  try {
-    return await operation(client);
-  } finally {
-    await client.end();
-  }
-}
+import { type OrgSession } from "../pdf-render.js";
 
 /**
  * Record that a scheduled notification was sent
  */
 export async function recordScheduledNotification(
-  client: Client,
+  lab: OrgSession,
   params: {
     organizationId: string;
     type: string;
@@ -31,7 +14,7 @@ export async function recordScheduledNotification(
     leadTimeDays: number;
   },
 ): Promise<void> {
-  await client.query(
+  await lab.query(
     `
     INSERT INTO scheduled_notification (
       organization_id,

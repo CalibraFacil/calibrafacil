@@ -5,7 +5,7 @@
  * given creation dates that precede the calibration history, and the instruments
  * nobody calibrated in this quarter get a calibration history of their own.
  */
-import { db } from "@calibra-facil/db";
+import { systemDb as ownerDb } from "@calibra-facil/db";
 import { asset } from "@calibra-facil/db/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
@@ -39,7 +39,7 @@ export async function seedAssetCalibrationDates(
   for (const planned of assets) {
     // One generator per instrument: the draw never depends on the others.
     const own = rng.fork(planned.tag);
-    const [row] = await db
+    const [row] = await ownerDb
       .select({ last: asset.lastCalibrationDate })
       .from(asset)
       .where(and(eq(asset.id, planned.id), isNull(asset.lastCalibrationDate)))
@@ -59,7 +59,7 @@ export async function seedAssetCalibrationDates(
       next = new Date(ctx.now.getTime() - own.int(3, 110) * DAY_MS);
     }
     const last = monthsBefore(next, interval);
-    await db
+    await ownerDb
       .update(asset)
       .set({
         lastCalibrationDate: last,

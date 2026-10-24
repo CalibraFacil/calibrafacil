@@ -4,22 +4,7 @@ import type {
   GenericFinancialErpConnectionConfig,
   IntegrationSyncStatus,
 } from "@calibra-facil/shared";
-import { type IntegrationWorkerEnv, toIso } from "./helpers.js";
-
-export async function withDbClient<T>(
-  env: IntegrationWorkerEnv,
-  operation: (client: Client) => Promise<T>,
-): Promise<T> {
-  const client = new Client({
-    connectionString: env.DATABASE_URL,
-  });
-  await client.connect();
-  try {
-    return await operation(client);
-  } finally {
-    await client.end();
-  }
-}
+import { toIso } from "./helpers.js";
 
 export async function insertEvent(
   client: Client,
