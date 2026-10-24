@@ -1,6 +1,7 @@
 import { assetOotEvent, assetOotAuditLog } from "@calibra-facil/db/schema";
 import { notifyAssetFoundOutOfTolerance } from "@calibra-facil/notifications";
 import { orgDb } from "./org-db";
+import { retryFollowUp } from "./retry-follow-up";
 
 /**
  * Asset OOT event creation (#740 Track B). Called fire-and-forget from the
@@ -19,35 +20,46 @@ export async function createAssetOotEventForApprovedJob(params: {
   const lab = orgDb(params.labOrganizationId);
 
   // The event and its first audit entry commit together (one transaction that
-  // names the laboratory, row-level security). The customer notification reads
-  // the committed event, so it runs after, and its audit entry is its own.
-  const inserted = await lab.transaction(async (o) => {
-    const [row] = await o
-      .insert(assetOotEvent)
-      .values({
-        jobId: params.jobId,
-        assetId: params.assetId,
-        customerId: params.customerId,
-        labOrganizationId: params.labOrganizationId,
-        status: "OPEN",
-        detectedAt: params.detectedAt,
-      })
-      .onConflictDoNothing({ target: assetOotEvent.jobId })
-      .returning();
-    if (!row) return null;
+  // names the laboratory, row-level security): no event without its audit
+  // trail. A transient failure retries the whole transaction (3 attempts); a
+  // persistent one is logged with the job and the asset and rethrown. The
+  // customer notification reads the committed event, so it runs after, and its
+  // audit entry is its own.
+  const inserted = await retryFollowUp(() =>
+    lab.transaction(async (o) => {
+      const [row] = await o
+        .insert(assetOotEvent)
+        .values({
+          jobId: params.jobId,
+          assetId: params.assetId,
+          customerId: params.customerId,
+          labOrganizationId: params.labOrganizationId,
+          status: "OPEN",
+          detectedAt: params.detectedAt,
+        })
+        .onConflictDoNothing({ target: assetOotEvent.jobId })
+        .returning();
+      if (!row) return null;
 
-    await o.insert(assetOotAuditLog).values({
-      organizationId: params.labOrganizationId,
-      eventId: row.id,
-      action: "create",
-      changes: {
-        jobId: params.jobId,
-        assetId: params.assetId,
-        detectedAt: params.detectedAt.toISOString(),
-      },
-      performedBy: params.actorUserId,
-    });
-    return row;
+      await o.insert(assetOotAuditLog).values({
+        organizationId: params.labOrganizationId,
+        eventId: row.id,
+        action: "create",
+        changes: {
+          jobId: params.jobId,
+          assetId: params.assetId,
+          detectedAt: params.detectedAt.toISOString(),
+        },
+        performedBy: params.actorUserId,
+      });
+      return row;
+    }),
+  ).catch((error: unknown) => {
+    console.error(
+      `[AssetOOT] Failed to record the out-of-tolerance event of asset ${params.assetId} for job ${params.jobId} (3 attempts):`,
+      error,
+    );
+    throw error;
   });
 
   // Double-approval (re-approval after rejection cycles) must not duplicate

@@ -606,6 +606,7 @@ export async function approveJob(
   // an instrument that was just calibrated.
   await advanceAssetCalibrationDatesOnApproval({
     organizationId: memberData.organizationId,
+    jobId,
     assetId: existing.assetId,
     calibrationDate: existing.performedAt ?? updated.approvedAt ?? null,
     performedBy: approverId,
