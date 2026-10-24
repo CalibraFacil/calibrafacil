@@ -38,14 +38,16 @@ import {
   notification,
   notificationPreference,
   organizationIntegration,
+  serviceOrderEmailLog,
   serviceOrderEmailOutbox,
   user,
 } from "@calibra-facil/db/schema";
 import { DEFAULT_PREFERENCES } from "./notification-defaults";
 
-const appRole = vi.hoisted(() => ({
-  current: null as { db: object } | null,
-}));
+const appRole = vi.hoisted(() => {
+  const state: { current: { db: object } | null } = { current: null };
+  return state;
+});
 
 // `db` resolves to a `calibra_app` session while `asApp` runs; the specs' own
 // seeding and assertions (outside it) keep the owner connection.
@@ -60,10 +62,18 @@ vi.mock("@calibra-facil/db", async (importOriginal) => {
 });
 
 const sendMock = vi.hoisted(() => vi.fn());
-// The digest leaves through the platform transport: capture what it sends.
+// Every e-mail leaves through one of two seams of the sender package (the
+// platform transport for the digest, the lab-sender layer for the service-order
+// mails): capture what each would send.
 vi.mock("@calibra-facil/email-sender", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@calibra-facil/email-sender")>()),
   sendPlatformEmail: sendMock,
+  sendEmailWithLabSender: async (params: {
+    buildPayload: (sender: undefined) => Promise<unknown>;
+  }) => {
+    sendMock(await params.buildPayload(undefined));
+    return { sent: true, emailId: "email_1" };
+  },
 }));
 
 import { db } from "@calibra-facil/db";
@@ -251,7 +261,9 @@ describe("notifications, digests, drains and sweeps as calibra_app (P2-18h)", ()
     expect(String(toB?.html)).not.toContain("TAG-lab-a");
   });
 
-  it("REQ-18H-DRAIN-1: the service-order e-mail drain finishes every lab's rows in their own lab and sends nothing across labs", async () => {
+  it("REQ-18H-DRAIN-1: the service-order e-mail drain mails each lab's own order and loads nothing across labs", async () => {
+    vi.stubEnv("RESEND_API_KEY", "re_test_key");
+    vi.stubEnv("RESEND_FROM_EMAIL", "noreply@calibrafacil.com");
     const a = await seedBillingLab("lab-a");
     const b = await seedBillingLab("lab-b");
     const orderA = await seedBillableOrder(a, { number: "OS-A-1" });
@@ -265,34 +277,65 @@ describe("notifications, digests, drains and sweeps as calibra_app (P2-18h)", ()
       targetStatus: status,
       payload: {},
     });
-    // A and B: a status with no template (handled, nothing to send). A third
-    // row of lab A points at lab B's service order: lab A's load finds nothing.
+    // A's own order, B's own order, and a row of lab A that points at lab B's
+    // service order (a corrupt or forged reference): lab A's load must not see it.
     await db
       .insert(serviceOrderEmailOutbox)
       .values([
-        row(a, orderA, "no_such_status"),
-        row(b, orderB, "no_such_status"),
-        row(a, orderB, "other_unknown_status"),
+        row(a, orderA, "closed"),
+        row(b, orderB, "closed"),
+        row(a, orderB, "delivered"),
       ]);
 
     const result = await asApp(() => drainServiceOrderEmailOutbox());
 
     expect(result.errors).toBe(0);
     expect(result.processed).toBe(3);
-    expect(sendMock).not.toHaveBeenCalled();
+    // One mail per own-lab row; the cross row sends nothing.
+    expect(sendMock).toHaveBeenCalledTimes(2);
+    const mails = sendMock.mock.calls.map((call) => Object(call[0]));
+    const toA = mails.filter((mail) => mail.to === "financeiro@lab-a.test");
+    const toB = mails.filter((mail) => mail.to === "financeiro@lab-b.test");
+    expect(toA).toHaveLength(1);
+    expect(toB).toHaveLength(1);
+    const text = (mail: { subject?: unknown; html?: unknown }) =>
+      `${String(mail.subject)} ${String(mail.html)}`;
+    // Non-vacuous: the own order's number and customer are in the mail ...
+    expect(text(toA[0])).toContain("OS-A-1");
+    expect(text(toA[0])).toContain("Customer lab-a");
+    expect(text(toB[0])).toContain("OS-B-1");
+    // ... and nothing of the other laboratory is.
+    for (const mail of toA) {
+      expect(text(mail)).not.toContain("OS-B-1");
+      expect(text(mail)).not.toContain("Customer lab-b");
+    }
+    for (const mail of toB) {
+      expect(text(mail)).not.toContain("OS-A-1");
+      expect(text(mail)).not.toContain("Customer lab-a");
+    }
+    // The ledger holds only the two sends, each under its own laboratory.
+    const ledger = await db
+      .select({
+        organizationId: serviceOrderEmailLog.organizationId,
+        serviceOrderId: serviceOrderEmailLog.serviceOrderId,
+      })
+      .from(serviceOrderEmailLog);
+    expect(
+      ledger
+        .map((entry) => `${entry.organizationId}:${entry.serviceOrderId}`)
+        .toSorted(),
+    ).toEqual([`${a.orgId}:${orderA}`, `${b.orgId}:${orderB}`].toSorted());
     const rows = await db
       .select({
-        organizationId: serviceOrderEmailOutbox.organizationId,
         processedAt: serviceOrderEmailOutbox.processedAt,
-        claimedAt: serviceOrderEmailOutbox.claimedAt,
+        deadLetterAt: serviceOrderEmailOutbox.deadLetterAt,
       })
       .from(serviceOrderEmailOutbox);
     expect(rows).toHaveLength(3);
     for (const outbox of rows) {
       expect(outbox.processedAt).toBeInstanceOf(Date);
+      expect(outbox.deadLetterAt).toBeNull();
     }
-    expect(rows.filter((r) => r.organizationId === a.orgId)).toHaveLength(2);
-    expect(rows.filter((r) => r.organizationId === b.orgId)).toHaveLength(1);
   });
 
   it("REQ-18H-CONTA-1: the Conta Azul scheduled sync reaches every lab's connection and writes under that lab", async () => {

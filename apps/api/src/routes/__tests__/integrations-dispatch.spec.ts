@@ -15,7 +15,6 @@ import {
 } from "../../lib/conta-azul-oauth";
 import { requireContaAzulOAuthConfig } from "../../lib/conta-azul-app";
 import {
-  integrationEventLog,
   integrationSyncItem,
   integrationSyncRun,
 } from "@calibra-facil/db/schema";
@@ -24,7 +23,7 @@ const mocks = vi.hoisted(() => ({
   // Rows the org-bound handle's select() resolves to, by table object.
   tableRows: new Map<unknown, unknown[]>(),
   // The limit() each select was given.
-  limits: [] as number[],
+  limits: new Array<number>(),
   buildIntegrationOverview: vi.fn(),
   enqueueBackgroundJob: vi.fn(),
   failIntegrationSyncRun: vi.fn(),
