@@ -21,7 +21,7 @@
   "dependencies": {
     "@calibra-facil/schemas": "workspace:^",
     "hono": "^4.13.7",
-    "zod": "^4.4.3"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:^",
