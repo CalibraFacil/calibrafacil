@@ -59,18 +59,15 @@ export async function getIntegrationRecord(
   integrationId: string,
   executor?: OrgDb,
 ): Promise<GenericConnectionRecord | null> {
-  const [integration] = await inOrgTransaction(
-    organizationId,
-    executor,
-    (o) =>
-      selectIntegrationsWithConnection(
-        o,
-        and(
-          eq(organizationIntegration.id, integrationId),
-          eq(organizationIntegration.organizationId, organizationId),
-        ),
-        1,
+  const [integration] = await inOrgTransaction(organizationId, executor, (o) =>
+    selectIntegrationsWithConnection(
+      o,
+      and(
+        eq(organizationIntegration.id, integrationId),
+        eq(organizationIntegration.organizationId, organizationId),
       ),
+      1,
+    ),
   );
 
   if (!integration?.connection) {
