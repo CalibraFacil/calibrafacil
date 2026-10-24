@@ -22,11 +22,12 @@
  * path (assets route / sync push).
  */
 
-import { db } from "@calibra-facil/db";
 import { asset, assetAuditLog } from "@calibra-facil/db/schema";
 import { RegulatedIntervalSchema } from "@calibra-facil/schemas";
 import { calendarDateKey } from "@calibra-facil/shared";
 import { and, eq, isNull } from "drizzle-orm";
+import { orgDb } from "./org-db";
+import { retryFollowUp } from "./retry-follow-up";
 import { deriveNextCalibrationDate } from "./portal-asset-interval";
 import { deriveRegulatedNextDate } from "./regulated-interval";
 
@@ -99,6 +100,10 @@ export function decideAssetCalibrationAdvance(
  * is derived bookkeeping the next sweep/pull picks up).
  */
 export async function advanceAssetCalibrationDatesOnApproval(input: {
+  /** The laboratory the job belongs to: every statement runs bound to it. */
+  organizationId: string;
+  /** The approved job, named in the error log if the advance cannot be made. */
+  jobId?: number;
   assetId: number | null;
   calibrationDate: Date | null;
   performedBy: string;
@@ -106,60 +111,70 @@ export async function advanceAssetCalibrationDatesOnApproval(input: {
 }): Promise<void> {
   try {
     if (input.assetId === null) return;
+    const assetId = input.assetId;
 
-    const [existing] = await db
-      .select({
-        id: asset.id,
-        labOrganizationId: asset.labOrganizationId,
-        lastCalibrationDate: asset.lastCalibrationDate,
-        nextCalibrationDate: asset.nextCalibrationDate,
-        nextLegalVerificationDate: asset.nextLegalVerificationDate,
-        calibrationIntervalMonths: asset.calibrationIntervalMonths,
-        regulatedInterval: asset.regulatedInterval,
-        installedAt: asset.installedAt,
-      })
-      .from(asset)
-      .where(and(eq(asset.id, input.assetId), isNull(asset.deletedAt)))
-      .limit(1);
-    if (!existing) return;
+    // One transaction that names the laboratory (row-level security): the read,
+    // the forward-only update and its audit row commit together (no date change
+    // without its audit trail). A transient failure retries the whole
+    // transaction (3 attempts); only a persistent one gives up, with an error
+    // that names the job and the asset.
+    await retryFollowUp(() =>
+      orgDb(input.organizationId).transaction(async (o) => {
+        const [existing] = await o
+          .select({
+            id: asset.id,
+            labOrganizationId: asset.labOrganizationId,
+            lastCalibrationDate: asset.lastCalibrationDate,
+            nextCalibrationDate: asset.nextCalibrationDate,
+            nextLegalVerificationDate: asset.nextLegalVerificationDate,
+            calibrationIntervalMonths: asset.calibrationIntervalMonths,
+            regulatedInterval: asset.regulatedInterval,
+            installedAt: asset.installedAt,
+          })
+          .from(asset)
+          .where(and(eq(asset.id, assetId), isNull(asset.deletedAt)))
+          .limit(1);
+        if (!existing) return;
 
-    const advance = decideAssetCalibrationAdvance({
-      calibrationDate: input.calibrationDate,
-      asset: existing,
-    });
-    if (!advance) return;
+        const advance = decideAssetCalibrationAdvance({
+          calibrationDate: input.calibrationDate,
+          asset: existing,
+        });
+        if (!advance) return;
 
-    await db
-      .update(asset)
-      .set({ ...advance, updatedAt: new Date() })
-      .where(eq(asset.id, existing.id));
+        await o
+          .update(asset)
+          .set({ ...advance, updatedAt: new Date() })
+          .where(eq(asset.id, existing.id));
 
-    const changes: Record<string, { old: unknown; new: unknown }> = {
-      lastCalibrationDate: {
-        old: existing.lastCalibrationDate,
-        new: advance.lastCalibrationDate,
-      },
-      nextCalibrationDate: {
-        old: existing.nextCalibrationDate,
-        new: advance.nextCalibrationDate,
-      },
-    };
-    if (advance.nextLegalVerificationDate !== undefined) {
-      changes.nextLegalVerificationDate = {
-        old: existing.nextLegalVerificationDate,
-        new: advance.nextLegalVerificationDate,
-      };
-    }
-    await db.insert(assetAuditLog).values({
-      organizationId: existing.labOrganizationId,
-      assetId: existing.id,
-      action: "update",
-      changes: { source: input.source, ...changes },
-      performedBy: input.performedBy,
-    });
+        const changes: Record<string, { old: unknown; new: unknown }> = {
+          lastCalibrationDate: {
+            old: existing.lastCalibrationDate,
+            new: advance.lastCalibrationDate,
+          },
+          nextCalibrationDate: {
+            old: existing.nextCalibrationDate,
+            new: advance.nextCalibrationDate,
+          },
+        };
+        if (advance.nextLegalVerificationDate !== undefined) {
+          changes.nextLegalVerificationDate = {
+            old: existing.nextLegalVerificationDate,
+            new: advance.nextLegalVerificationDate,
+          };
+        }
+        await o.insert(assetAuditLog).values({
+          organizationId: existing.labOrganizationId,
+          assetId: existing.id,
+          action: "update",
+          changes: { source: input.source, ...changes },
+          performedBy: input.performedBy,
+        });
+      }),
+    );
   } catch (error) {
     console.error(
-      `[asset-calibration-advance] Failed to advance asset ${input.assetId} dates:`,
+      `[asset-calibration-advance] Failed to advance asset ${input.assetId} dates after approval of job ${input.jobId ?? "(unknown)"} (3 attempts):`,
       error,
     );
   }

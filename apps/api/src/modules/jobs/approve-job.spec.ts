@@ -20,6 +20,7 @@ const {
   mockFreezeInput,
   mockDiscardInput,
   mockPrefetchImages,
+  mockFindImageKeys,
   ImagesChangedError,
 } = vi.hoisted(() => {
   const state: {
@@ -60,7 +61,12 @@ const {
       input: {},
     })),
     mockDiscardInput: vi.fn(async () => undefined),
-    // The images are read from object storage BEFORE the transaction.
+    // The keys are read in the read transaction; the images themselves are read
+    // from object storage after it ends and BEFORE the write transaction.
+    mockFindImageKeys: vi.fn(async () => ({
+      logoKey: "logo/key.png",
+      signatureKey: null,
+    })),
     mockPrefetchImages: vi.fn(async () => ({ logo: null, signature: null })),
     ImagesChangedError: class ImagesChangedError extends Error {},
     // Issuance is disabled in production while the certificate layout is
@@ -108,6 +114,27 @@ vi.mock("@calibra-facil/db", () => {
   return { db: mockDb };
 });
 
+// The org-bound handle and the organization-naming transaction run the
+// command's callbacks against the same recording db (row-level security is
+// proven against a real Postgres in approval-entry-points.int.spec.ts).
+vi.mock("../../lib/org-db", async () => {
+  const { db } = await import("@calibra-facil/db");
+  return {
+    orgDb: () => ({
+      transaction: async <T>(run: (tx: unknown) => Promise<T>) => run(db),
+    }),
+  };
+});
+vi.mock("../../lib/org-transaction", async () => {
+  const { db } = await import("@calibra-facil/db");
+  return {
+    orgTransactionWithExecutor: async <T>(
+      _organizationId: string,
+      run: (o: unknown, tx: unknown) => Promise<T>,
+    ) => run(db, db),
+  };
+});
+
 vi.mock("../../lib/signatory", () => ({
   checkApproverIsAuthorizedSignatory: mockCheckSignatory,
 }));
@@ -137,7 +164,8 @@ vi.mock("@calibra-facil/db/certificate-input", () => ({
   lockJobForApproval: mockLockJob,
   freezeCertificateInput: mockFreezeInput,
   discardUnreleasedCertificateInput: mockDiscardInput,
-  prefetchCertificateImages: mockPrefetchImages,
+  findCertificateImageKeys: mockFindImageKeys,
+  readCertificateImages: mockPrefetchImages,
   CertificateImagesChangedError: ImagesChangedError,
 }));
 vi.mock("../../lib/certificate-input-images", () => ({
@@ -208,6 +236,10 @@ beforeEach(() => {
   mockLockJob.mockResolvedValue(true);
   mockFreezeInput.mockResolvedValue({ sha256: "f".repeat(64), input: {} });
   mockPrefetchImages.mockResolvedValue({ logo: null, signature: null });
+  mockFindImageKeys.mockResolvedValue({
+    logoKey: "logo/key.png",
+    signatureKey: null,
+  });
 });
 
 describe("approveJob gates", () => {
@@ -518,10 +550,15 @@ describe("approveJob freezes the certificate input (REQ-CIN-1)", () => {
 
     await callApprove();
 
-    expect(mockPrefetchImages).toHaveBeenCalledTimes(1);
-    expect(mockPrefetchImages.mock.calls[0]?.[1]).toEqual({
+    expect(mockFindImageKeys).toHaveBeenCalledTimes(1);
+    expect(mockFindImageKeys.mock.calls[0]?.[1]).toEqual({
       organizationId: "org-1",
       approverId: "approver-1",
+    });
+    expect(mockPrefetchImages).toHaveBeenCalledTimes(1);
+    expect(mockPrefetchImages.mock.calls[0]?.[0]).toEqual({
+      logoKey: "logo/key.png",
+      signatureKey: null,
     });
     expect(mockPrefetchImages.mock.invocationCallOrder[0]).toBeLessThan(
       mockLockJob.mock.invocationCallOrder[0] ?? 0,

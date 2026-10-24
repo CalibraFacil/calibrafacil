@@ -689,7 +689,7 @@ Then change the API's connection string and set its mode (`DATABASE_RLS_MODE=enf
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | API (`apps/api`)                              | `postgres://calibra_api:<password>@<host>/<db>`, plus `DATABASE_RLS_MODE=enforced` and `DATABASE_OWNER_URL=<the owner's URL>` (the system path, below) |
 | Migrations (`db:migrate`, `db:bootstrap`)     | unchanged: the owner                                                                                                                                   |
-| Worker (`apps/worker`), cron and queue sweeps | unchanged: the owner, until their statements are org-bound                                                                                             |
+| Worker (`apps/worker`), cron and queue sweeps | unchanged: the owner, until all their statements are org-bound (the certificate and label jobs already are; see below)                                 |
 
 - **The system path (`DATABASE_OWNER_URL`).** A few statements are cross-laboratory on purpose and cannot name
   one organization first: the lookup that learns which laboratory a request belongs to (the portal's host
@@ -700,6 +700,14 @@ Then change the API's connection string and set its mode (`DATABASE_RLS_MODE=enf
   `DATABASE_URL`, so while the API still connects as the owner there is nothing to configure. Set it in the
   same change as the role split, or those requests see nothing as `calibra_api`. Every use is a reviewed entry
   of `apps/api/test/integration/tenant-sql-allowlist.ts`, and routes may not import it.
+- **The worker's certificate and label jobs.** A queue message names a job, not its laboratory. The worker
+  learns the laboratory with one lookup on the system path (`DATABASE_OWNER_URL`, falling back to
+  `DATABASE_URL`), and every other statement of the job (the frozen input or the legacy live read, the signing
+  certificate, the issuance transaction, the audit rows, the failure rejection) runs in a transaction that
+  names it (`set_config(..., true)`), so those jobs are ready for a worker connected as `calibra_app`. The
+  other worker handlers (scheduled notifications, integrations, audit packs, service-order documents) are not
+  yet; keep the worker on the owner until they are. The queue claim, the stale-lease recovery and the
+  stuck-render sweep list across laboratories and stay on the owner (`systemDb`).
 - **Pooler mode.** Transaction pooling (PgBouncer `pool_mode = transaction`, Neon's pooled endpoint,
   Supavisor) is fine: `set_config(..., true)` is transaction-local, so the organization lives and dies with
   the transaction and never reaches the next client on the same server connection. A statement outside

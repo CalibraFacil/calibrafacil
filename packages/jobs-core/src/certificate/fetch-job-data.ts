@@ -32,7 +32,7 @@ import {
   assembleCertificateJobData,
   type CertificateJobData,
 } from "@calibra-facil/certificate-data";
-import type { Client } from "pg";
+import type { Client, QueryResultRow } from "pg";
 
 /**
  * Only what this module needs from the worker's env, so the query can be
@@ -148,24 +148,57 @@ const SIGNATURE_QUERY = `
   WHERE m.user_id = $1 AND mvs.organization_id = $2
 `;
 
-export async function fetchCertificateJobData(
+/**
+ * What the two queries return, before any object is read from storage. Split
+ * from the resolution so a caller that runs under row-level security reads the
+ * rows in a transaction that names the laboratory and reads the images after it
+ * has ended (no transaction is held across storage I/O).
+ */
+export type CertificateJobRows = {
+  row: QueryResultRow;
+  signatureRow: QueryResultRow | undefined;
+};
+
+/** The database half of `fetchCertificateJobData`. */
+export async function readCertificateJobRows(
   client: Client,
   jobId: number,
-  deps: FetchJobDataDeps,
-): Promise<CertificateJobData | null> {
+): Promise<CertificateJobRows | null> {
   const result = await client.query(JOB_QUERY, [jobId]);
   const row = result.rows[0];
   if (!row) return null;
 
-  const labLogoUrl = await deps.resolveLogoDataUrl(row.lab_logo ?? null);
-
-  let approverSignatureUrl: string | null = null;
+  let signatureRow: QueryResultRow | undefined;
   if (row.approved_by && row.organization_id) {
     const signatureResult = await client.query(SIGNATURE_QUERY, [
       row.approved_by,
       row.organization_id,
     ]);
-    const signatureRow = signatureResult.rows[0];
+    signatureRow = signatureResult.rows[0];
+  }
+  return { row, signatureRow };
+}
+
+export async function fetchCertificateJobData(
+  client: Client,
+  jobId: number,
+  deps: FetchJobDataDeps,
+): Promise<CertificateJobData | null> {
+  const rows = await readCertificateJobRows(client, jobId);
+  if (!rows) return null;
+  return resolveCertificateJobData(rows, jobId, deps);
+}
+
+/** The storage half of `fetchCertificateJobData`: the images, then the pure assembly. */
+export async function resolveCertificateJobData(
+  { row, signatureRow }: CertificateJobRows,
+  jobId: number,
+  deps: FetchJobDataDeps,
+): Promise<CertificateJobData> {
+  const labLogoUrl = await deps.resolveLogoDataUrl(row.lab_logo ?? null);
+
+  let approverSignatureUrl: string | null = null;
+  if (row.approved_by && row.organization_id) {
     if (signatureRow) {
       // A missing or unreadable signature image must not fail the issuance:
       // the certificate is authorised by the signatory's NAME plus the PAdES

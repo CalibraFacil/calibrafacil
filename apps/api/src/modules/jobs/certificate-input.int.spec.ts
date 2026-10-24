@@ -38,6 +38,7 @@ import { createHash } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { loginPerRequestHeader } from "../../../test/integration/setup";
 import { truncateAll } from "../../../test/integration/db";
+import { outsideApplication } from "../../../test/integration/rls-shadow-mode";
 import {
   insertJob,
   setJobStatus,
@@ -441,9 +442,13 @@ describe("REQ-CIN-1: approval freezes the certificate input", () => {
       // The approval's own transaction holds FOR UPDATE on the job: FOR SHARE NOWAIT
       // fails (55P03) if a storage read were made while it is open.
       try {
-        await db.transaction((tx) =>
-          tx.execute(
-            sql`select id from calibration_job where id = ${jobId} for share nowait`,
+        // The probe is the spec's own connection, not the application under
+        // test (under the RLS shadow report a request runs as `calibra_app`).
+        await outsideApplication(() =>
+          db.transaction((tx) =>
+            tx.execute(
+              sql`select id from calibration_job where id = ${jobId} for share nowait`,
+            ),
           ),
         );
         lockedDuringRead.push(false);

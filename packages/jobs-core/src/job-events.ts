@@ -10,7 +10,7 @@ import {
 } from "@calibra-facil/schemas/job-transitions";
 
 /** Runs `operation` in one transaction on `client`; rolls back on any throw. */
-export async function inTransaction<T>(
+async function inTransaction<T>(
   client: Client,
   operation: () => Promise<T>,
 ): Promise<T> {
@@ -25,6 +25,30 @@ export async function inTransaction<T>(
     });
     throw error;
   }
+}
+
+/**
+ * `inTransaction` that names the laboratory first, for row-level security
+ * (migration 0123): `set_config('calibra.organization_id', $org, true)`. The
+ * third argument is `is_local`, so the setting ends with the transaction and
+ * never reaches the next one on a pooled connection. Under the table owner the
+ * setting is inert; as `calibra_app` it is what lets the statements of the
+ * transaction see the laboratory's rows. Every per-job statement of the worker
+ * runs in one of these; only the lookup that LEARNS the laboratory of a job
+ * (`findJobOrganization`) does not.
+ */
+export function inOrganizationTransaction<T>(
+  client: Client,
+  organizationId: string,
+  operation: () => Promise<T>,
+): Promise<T> {
+  return inTransaction(client, async () => {
+    await client.query(
+      "select set_config('calibra.organization_id', $1, true)",
+      [organizationId],
+    );
+    return operation();
+  });
 }
 
 /**
@@ -68,6 +92,7 @@ export function jobOrganizationOf(
  */
 export async function setJobError(
   client: Client,
+  organizationId: string,
   jobId: number,
   error: string,
   userId: string,
@@ -76,7 +101,7 @@ export async function setJobError(
   const renderingStatus = "GENERATING_PDF";
   const failedStatus = requireTargetOf(renderingStatus, "fail_render");
 
-  await inTransaction(client, async () => {
+  await inOrganizationTransaction(client, organizationId, async () => {
     const updated = await client.query<{ id: number; organization_id: string }>(
       `
       UPDATE calibration_job

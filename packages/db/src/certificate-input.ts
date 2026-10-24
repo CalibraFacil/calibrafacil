@@ -137,6 +137,27 @@ export async function prefetchCertificateImages(
   params: { organizationId: string; approverId: string },
   readImage: CertificateImageReader,
 ): Promise<PrefetchedImages> {
+  const keys = await findCertificateImageKeys(executor, params);
+  return readCertificateImages(keys, readImage);
+}
+
+/** The storage keys of the images a certificate embeds. */
+export type CertificateImageKeys = {
+  logoKey: string | null;
+  signatureKey: string | null;
+};
+
+/**
+ * The database half of `prefetchCertificateImages`: the keys of the lab's logo
+ * and of the approver's drawn signature. Split from the storage reads so a
+ * caller that runs under row-level security reads the keys in a short
+ * transaction that names the laboratory and reads the objects after it has
+ * ended (no transaction is held across storage I/O).
+ */
+export async function findCertificateImageKeys(
+  executor: Pick<typeof db, "select">,
+  params: { organizationId: string; approverId: string },
+): Promise<CertificateImageKeys> {
   const [lab] = await executor
     .select({ logo: organization.logo })
     .from(organization)
@@ -155,8 +176,18 @@ export async function prefetchCertificateImages(
     )
     .limit(1);
 
-  const logoKey = getLogoKeyFromUrl(lab?.logo ?? null);
-  const signatureKey = signature?.r2Key ?? null;
+  return {
+    logoKey: getLogoKeyFromUrl(lab?.logo ?? null),
+    signatureKey: signature?.r2Key ?? null,
+  };
+}
+
+/** The storage half of `prefetchCertificateImages`: reads the objects named by `keys`. */
+export async function readCertificateImages(
+  keys: CertificateImageKeys,
+  readImage: CertificateImageReader,
+): Promise<PrefetchedImages> {
+  const { logoKey, signatureKey } = keys;
   const [logoBytes, signatureBytes] = await Promise.all([
     logoKey ? readImage(logoKey) : null,
     signatureKey ? readImage(signatureKey) : null,

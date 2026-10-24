@@ -15,7 +15,12 @@ import {
   workerJobActor,
 } from "./job-events.js";
 import { type Env } from "./runtime-types.js";
-import { gotenbergHtmlToPdf, withDbClient } from "./pdf-render.js";
+import {
+  findJobOrganization,
+  gotenbergHtmlToPdf,
+  withDbClient,
+  withOrgDbClient,
+} from "./pdf-render.js";
 import { bucketBinding, fetchOrgRefById } from "./storage-helpers.js";
 
 // =============================================================================
@@ -125,9 +130,14 @@ export async function processLabelJob(
   try {
     // 1. Fetch label data
     const dbFetchStart = performance.now();
-    const data = await withDbClient(env, (client) =>
-      fetchLabelData(client, jobId),
-    );
+    // The message names a job, not its laboratory: learn the laboratory on the
+    // system path, then read and write per job in transactions that name it.
+    const jobOrganizationId = await findJobOrganization(env, jobId);
+    const data = jobOrganizationId
+      ? await withOrgDbClient(env, jobOrganizationId, (client) =>
+          fetchLabelData(client, jobId),
+        )
+      : null;
     console.log(
       `[LABEL ${jobId}] fetchLabelData: ${Math.round(performance.now() - dbFetchStart)}ms`,
     );
@@ -202,7 +212,9 @@ export async function processLabelJob(
 
     // 7. Update DB
     const dbUpdateStart = performance.now();
-    await withDbClient(env, (client) =>
+    // The job update and its audit row commit together, in a transaction that
+    // names the laboratory.
+    await withOrgDbClient(env, orgId, (client) =>
       updateJobWithLabel(client, jobId, labelUrl, userId),
     );
     console.log(

@@ -1,4 +1,3 @@
-import { db } from "@calibra-facil/db";
 import { appendJobEvent } from "@calibra-facil/db/job-events";
 import { calibrationJob, type JobStatus } from "@calibra-facil/db/schema";
 import {
@@ -9,6 +8,7 @@ import {
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { generateCertificateIdentity } from "../../lib/certificate-numbering";
 import { invalid, type DomainError } from "../../lib/domain-errors";
+import { orgTransactionWithExecutor } from "../../lib/org-transaction";
 import { buildUnitScopeCondition } from "../../lib/units";
 import {
   jobActorAuditFields,
@@ -70,8 +70,12 @@ export async function amendJob(
 ): Promise<AmendJobResult> {
   const { actor, organizationId } = command;
 
-  return db
-    .transaction(async (tx): Promise<AmendJobResult> => {
+  // The transaction names the laboratory (row-level security). It hands the
+  // raw executor on purpose: the certificate numbering runs raw SQL (advisory
+  // lock). Every statement below carries the organization predicate itself.
+  return orgTransactionWithExecutor(
+    organizationId,
+    async (_o, tx): Promise<AmendJobResult> => {
       const [originalJob] = await tx
         .select()
         .from(calibrationJob)
@@ -218,11 +222,11 @@ export async function amendJob(
       });
 
       return { status: "ok", originalJob, amendedJob, amendmentNumber };
-    })
-    .catch((error: unknown) => {
-      if (error instanceof JobStatusConflictError) {
-        return { status: "concurrent_update" } satisfies AmendJobResult;
-      }
-      throw error;
-    });
+    },
+  ).catch((error: unknown) => {
+    if (error instanceof JobStatusConflictError) {
+      return { status: "concurrent_update" } satisfies AmendJobResult;
+    }
+    throw error;
+  });
 }

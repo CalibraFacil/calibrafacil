@@ -155,6 +155,21 @@ describe("jobsRouter — PUT /:id and POST /:id/assign are compare-and-set, org-
       expect(await auditActions(jobId)).toEqual([]);
     });
 
+    it("REQ-CAS-1 [HIGH RISK]: the 409 of a job that left the caller's organization reveals nothing of the other organization: currentStatus is null", async () => {
+      const { orgA, orgB, jobId } = await seedWorld(site.from);
+      // The job now lives in another organization, whatever its status there.
+      changeJobBeforeNextTransaction(jobId, { organizationId: orgB.orgId });
+
+      const res = await site.send(jobId, orgA.userId);
+
+      expect(res.status).toBe(409);
+      expect(await res.json()).toMatchObject({
+        code: "JOB_STATUS_CONFLICT",
+        currentStatus: null,
+        details: { currentStatus: null },
+      });
+    });
+
     it("REQ-CAS-1 [HIGH RISK]: another organization's admin on this job id → 404; nothing changes; no audit row", async () => {
       const { orgB, jobId } = await seedWorld(site.from);
       const before = await jobRow(jobId);

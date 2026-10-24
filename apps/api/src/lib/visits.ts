@@ -1,4 +1,5 @@
 import { db } from "@calibra-facil/db";
+import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import {
   calibrationJob,
   calibrationVisit,
@@ -19,10 +20,13 @@ const SETTLED_JOB_STATES = new Set(["APPROVED", "SUPERSEDED", "CANCELED"]);
  */
 export async function syncVisitStatusFromJobs(
   visitId: number | null | undefined,
+  // The org-bound handle of a caller that runs under row-level security; the
+  // default is the plain `db`, as before.
+  executor: Pick<OrgExecutor, "select" | "update"> = db,
 ): Promise<void> {
   if (!visitId) return;
 
-  const [visit] = await db
+  const [visit] = await executor
     .select({ status: calibrationVisit.status })
     .from(calibrationVisit)
     .where(eq(calibrationVisit.id, visitId))
@@ -31,7 +35,7 @@ export async function syncVisitStatusFromJobs(
   if (!visit) return;
   if (visit.status === "CANCELLED" || visit.status === "COMPLETED") return;
 
-  const jobs = await db
+  const jobs = await executor
     .select({ status: calibrationJob.status })
     .from(calibrationJob)
     .where(eq(calibrationJob.visitId, visitId));
@@ -55,7 +59,7 @@ export async function syncVisitStatusFromJobs(
   }
 
   if (nextStatus !== visit.status) {
-    await db
+    await executor
       .update(calibrationVisit)
       .set({ status: nextStatus })
       .where(eq(calibrationVisit.id, visitId));

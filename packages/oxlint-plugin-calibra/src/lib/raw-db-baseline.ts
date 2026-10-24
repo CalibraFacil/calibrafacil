@@ -8,7 +8,6 @@ import type { Baseline } from "./rule-support.ts";
 export const RAW_DB_BASELINE: Baseline = new Map<string, number>([
   ["apps/api/src/routes/email-domains.ts", 3],
   ["apps/api/src/routes/invitations.ts", 4],
-  ["apps/api/src/routes/jobs.ts", 19],
   ["apps/api/src/routes/lab-setup.ts", 3],
   ["apps/api/src/routes/legal-metrology-regulations.ts", 1],
   ["apps/api/src/routes/magic-link.ts", 3],

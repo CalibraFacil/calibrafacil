@@ -54,6 +54,8 @@ const mocks = vi.hoisted(() => {
     select: vi.fn(() => createQuery()),
     insert: vi.fn(() => createQuery()),
     update: vi.fn(() => createQuery()),
+    // `orgDb(...).transaction` names the laboratory first (set_config).
+    execute: vi.fn(async () => []),
   };
   // A transaction runs its callback against the same queue-backed mock, so a
   // write inside it consumes the queue in the same order as one outside it.

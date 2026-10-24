@@ -1,8 +1,8 @@
-import { db } from "@calibra-facil/db";
 import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import type { JobActorAuditFields } from "@calibra-facil/db/job-events";
 import { calibrationJob } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
+import { orgDb } from "../../lib/org-db";
 import {
   buildUnitScopeCondition,
   type ResolvedUnitScope,
@@ -67,29 +67,37 @@ export function jobActorAuditFields(actor: JobActor): JobActorAuditFields {
   }
 }
 
-/** The job inside the caller's organization and unit scope; `null` scope is organization-wide. */
-export async function loadScopedJob(
+/**
+ * The job inside the caller's organization and unit scope; `null` scope is
+ * organization-wide. Reads through the org-bound handle of the caller's
+ * transaction when it passes one (row-level security); without one it reads in a
+ * short transaction of its own that names the laboratory.
+ */
+export function loadScopedJob(
   params: {
     jobId: number;
     organizationId: string;
     unitScope: UnitScope | null;
   },
-  // An org-bound transaction handle when the caller has one (row-level
-  // security); the default is the plain `db`, as before.
-  executor: Pick<OrgExecutor, "select"> = db,
+  executor?: Pick<OrgExecutor, "select">,
 ): Promise<JobRow | undefined> {
-  const [job] = await executor
-    .select()
-    .from(calibrationJob)
-    .where(
-      and(
-        eq(calibrationJob.id, params.jobId),
-        eq(calibrationJob.organizationId, params.organizationId),
-        params.unitScope
-          ? buildUnitScopeCondition(calibrationJob.unitId, params.unitScope)
-          : undefined,
-      ),
-    )
-    .limit(1);
-  return job;
+  const read = async (reader: Pick<OrgExecutor, "select">) => {
+    const [job] = await reader
+      .select()
+      .from(calibrationJob)
+      .where(
+        and(
+          eq(calibrationJob.id, params.jobId),
+          eq(calibrationJob.organizationId, params.organizationId),
+          params.unitScope
+            ? buildUnitScopeCondition(calibrationJob.unitId, params.unitScope)
+            : undefined,
+        ),
+      )
+      .limit(1);
+    return job;
+  };
+  return executor
+    ? read(executor)
+    : orgDb(params.organizationId).transaction(read);
 }

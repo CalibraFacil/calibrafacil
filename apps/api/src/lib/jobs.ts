@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import type { db } from "@calibra-facil/db";
 import { appendJobEvent } from "@calibra-facil/db/job-events";
 import {
   asset,
@@ -22,6 +22,7 @@ import { addLabBusinessDays } from "@calibra-facil/shared";
 import { and, count, desc, eq, ilike, inArray, isNull, sql } from "drizzle-orm";
 import { ensureJobCommercialSnapshot } from "./finance";
 import { generateCertificateIdentity } from "./certificate-numbering";
+import { orgTransactionWithExecutor } from "./org-transaction";
 
 type JobDbExecutor = Pick<
   typeof db,
@@ -558,7 +559,7 @@ export async function generateJobId(
   const prefix = `CAL-${year}-`;
   const sequence = executor
     ? await getNextJobSequence(organizationId, year, executor)
-    : await db.transaction((tx) =>
+    : await orgTransactionWithExecutor(organizationId, (_o, tx) =>
         getNextJobSequence(organizationId, year, tx),
       );
 
@@ -566,9 +567,14 @@ export async function generateJobId(
 }
 
 export async function createCalibrationJob(params: CreateCalibrationJobParams) {
+  // Without the caller's transaction the job is created in one of its own that
+  // names the laboratory (row-level security) and hands the raw executor to the
+  // advisory lock and the certificate numbering, which run raw SQL.
   const newJob = params.executor
     ? await persistCalibrationJob(params, params.executor)
-    : await db.transaction((tx) => persistCalibrationJob(params, tx));
+    : await orgTransactionWithExecutor(params.organizationId, (_o, tx) =>
+        persistCalibrationJob(params, tx),
+      );
 
   if (params.technicianId && params.notifyOnAssignment !== false) {
     try {

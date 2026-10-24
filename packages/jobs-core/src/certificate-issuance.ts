@@ -23,7 +23,7 @@ import {
   workerJobActor,
 } from "./job-events.js";
 import { type Env } from "./runtime-types.js";
-import { withDbClient } from "./pdf-render.js";
+import { withOrgDbClient } from "./pdf-render.js";
 
 /** At-issue signature-integrity verdict persisted to calibration_job.signature_verdict. */
 type StoredSignatureVerdict = VerifyPdfResult & { computedAt: string };
@@ -340,14 +340,14 @@ export async function signPdfWithUnitCertificate(
   // keeps the pre-#644 permissive behavior.
   const requireSignature =
     organizationId && unitId
-      ? await withDbClient(env, (client) =>
+      ? await withOrgDbClient(env, organizationId, (client) =>
           fetchUnitRequireSignature(client, organizationId, unitId),
         )
       : false;
 
   const signingCert =
     env.SIGNING_MASTER_KEY && organizationId && unitId
-      ? await withDbClient(env, (client) =>
+      ? await withOrgDbClient(env, organizationId, (client) =>
           fetchSigningCertificate(client, organizationId, unitId),
         )
       : null;

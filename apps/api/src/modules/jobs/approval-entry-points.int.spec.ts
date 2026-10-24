@@ -31,6 +31,8 @@ import {
   appQueueJob,
   asset,
   assetAuditLog,
+  assetOotAuditLog,
+  assetOotEvent,
   assetType,
   authorizedSignatory,
   calibrationJob,
@@ -47,12 +49,14 @@ import {
 import { and, eq, sql } from "drizzle-orm";
 import { loginPerRequestHeader } from "../../../test/integration/setup";
 import { truncateAll } from "../../../test/integration/db";
+import { outsideApplication } from "../../../test/integration/rls-shadow-mode";
 import { seedOrg } from "../../../test/integration/seed";
 import { createApiKeySecret } from "../../lib/api-keys";
 import { jobsRouter } from "../../routes/jobs";
 import { syncRouter } from "../../routes/sync";
 import { publicApiV2Router } from "../../routes/public-api-v2";
 import { approveJob } from "./approve-job";
+import { createAssetOotEventForApprovedJob } from "../../lib/asset-oot-events";
 
 const mocks = vi.hoisted(() => {
   const scope: {
@@ -77,6 +81,7 @@ vi.mock("@calibra-facil/notifications", () => ({
   notifyJobRejected: vi.fn().mockResolvedValue(undefined),
   notifyJobAssigned: vi.fn().mockResolvedValue(undefined),
   notifyCertificateAmended: vi.fn().mockResolvedValue(undefined),
+  notifyAssetFoundOutOfTolerance: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../../lib/storage", async (importOriginal) => {
@@ -111,6 +116,20 @@ vi.mock("../../lib/scope-compliance", async (importOriginal) => {
 });
 
 const JSON_HEADERS = { "content-type": "application/json" };
+
+/**
+ * The concurrent reviewer of a lost compare-and-set: another actor, on its own
+ * connection and outside the application under test (under the RLS shadow
+ * report a request runs as `calibra_app`; the other actor must not).
+ */
+function concurrentReviewerRejects(jobId: number): Promise<void> {
+  return outsideApplication(async () => {
+    await db
+      .update(calibrationJob)
+      .set({ status: "REJECTED" })
+      .where(eq(calibrationJob.id, jobId));
+  });
+}
 const R2_ENV = {
   R2_ACCOUNT_ID: "account-1",
   R2_ACCESS_KEY_ID: "access-key-1",
@@ -571,12 +590,7 @@ describe("approval policy — one policy across every entry point", () => {
 
     // The hook runs after the policy read and before the transition: it plays
     // the part of a concurrent reviewer who rejects the job in that window.
-    mocks.scope.hook = async () => {
-      await db
-        .update(calibrationJob)
-        .set({ status: "REJECTED" })
-        .where(eq(calibrationJob.id, jobId));
-    };
+    mocks.scope.hook = () => concurrentReviewerRejects(jobId);
 
     const result = await approveJob({
       jobId,
@@ -617,12 +631,7 @@ describe("approval policy — one policy across every entry point", () => {
   it("REQ-APPROVAL-006: the cloud route maps a lost compare-and-set to 409 APPROVAL_CONFLICT", async () => {
     const jobId = await seedReviewJob(fixture);
     // A concurrent reviewer rejects the job between the policy read and the write.
-    mocks.scope.hook = async () => {
-      await db
-        .update(calibrationJob)
-        .set({ status: "REJECTED" })
-        .where(eq(calibrationJob.id, jobId));
-    };
+    mocks.scope.hook = () => concurrentReviewerRejects(jobId);
 
     loginPerRequestHeader(ORG);
     const res = await jobsRouter.request(`/${jobId}/approve`, {
@@ -645,12 +654,7 @@ describe("approval policy — one policy across every entry point", () => {
   it("REQ-APPROVAL-006: the public API maps a lost compare-and-set to 409 approval_conflict", async () => {
     const jobId = await seedReviewJob(fixture);
     const key = await seedKeyFor(CHECKER);
-    mocks.scope.hook = async () => {
-      await db
-        .update(calibrationJob)
-        .set({ status: "REJECTED" })
-        .where(eq(calibrationJob.id, jobId));
-    };
+    mocks.scope.hook = () => concurrentReviewerRejects(jobId);
 
     const res = await publicRequest(
       key.rawKey,
@@ -1158,5 +1162,180 @@ describe("approval policy — public API (key creator is the approver)", () => {
       .from(calibrationJob)
       .where(eq(calibrationJob.id, jobId));
     expect(row).toEqual({ technicianId: CHECKER, status: "IN_PROGRESS" });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Q39: the follow-ups of a committed approval (the asset calibration-date
+// advance, the asset out-of-tolerance event) stay atomic with their audit row
+// and survive a transient audit failure: the transaction is retried (3
+// attempts). A persistent failure drops them, logs an error naming the job and
+// the asset, and never touches the approval.
+// ---------------------------------------------------------------------------
+
+/**
+ * Makes every insert into `table` fail for its first `failures` attempts (a
+ * trigger on a SEQUENCE: nextval is not rolled back with the failed
+ * transaction, so "fail once" really is once). Returns the cleanup.
+ */
+async function failInsertsInto(
+  table: string,
+  failures: number,
+): Promise<() => Promise<void>> {
+  await db.execute(sql.raw(`CREATE SEQUENCE followup_fail_seq`));
+  await db.execute(
+    sql.raw(`
+    CREATE OR REPLACE FUNCTION followup_fail() RETURNS trigger AS $$
+    BEGIN
+      IF nextval('followup_fail_seq') <= ${failures} THEN
+        RAISE EXCEPTION 'followup_test: ${table} insert forced to fail';
+      END IF;
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql`),
+  );
+  await db.execute(
+    sql.raw(`CREATE TRIGGER followup_fail BEFORE INSERT ON ${table}
+      FOR EACH ROW EXECUTE FUNCTION followup_fail()`),
+  );
+  return async () => {
+    await db.execute(
+      sql.raw(`DROP TRIGGER IF EXISTS followup_fail ON ${table}`),
+    );
+    await db.execute(sql.raw(`DROP FUNCTION IF EXISTS followup_fail()`));
+    await db.execute(sql.raw(`DROP SEQUENCE IF EXISTS followup_fail_seq`));
+  };
+}
+
+async function assetDates(assetId: number) {
+  const [row] = await db
+    .select({ last: asset.lastCalibrationDate })
+    .from(asset)
+    .where(eq(asset.id, assetId));
+  const audits = await db
+    .select({ action: assetAuditLog.action, changes: assetAuditLog.changes })
+    .from(assetAuditLog)
+    .where(eq(assetAuditLog.assetId, assetId));
+  return {
+    last: row?.last ?? null,
+    advanceAudits: audits.filter(
+      (entry) =>
+        typeof entry.changes === "object" &&
+        entry.changes !== null &&
+        Reflect.get(entry.changes, "source") === "job_approval",
+    ),
+  };
+}
+
+describe("approval follow-ups survive a transient audit failure (Q39)", () => {
+  let fixture: Fixture;
+
+  beforeEach(async () => {
+    await truncateAll();
+    mocks.enqueue.mockReset();
+    mocks.enqueue.mockResolvedValue({ messageId: "test-noop" });
+    mocks.scope.adverse = false;
+    mocks.scope.hook = null;
+    fixture = await seedFixture();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("Q39 [HIGH RISK]: the date advance fails once on its audit row, is retried: the approval stands, the date and its audit row both exist", async () => {
+    const jobId = await seedReviewJob(fixture);
+    const restore = await failInsertsInto("asset_audit_log", 1);
+    let outcome: Outcome;
+    try {
+      outcome = await cloud.approve(jobId, CHECKER);
+    } finally {
+      await restore();
+    }
+
+    expect(outcome).toEqual({ approved: true });
+    expect((await readJob(jobId)).status).toBe("GENERATING_PDF");
+    const dates = await assetDates(fixture.assetId);
+    expect(dates.last).not.toBeNull();
+    expect(dates.advanceAudits).toHaveLength(1);
+  });
+
+  it("Q39 [HIGH RISK]: the date advance fails on every attempt: neither the date nor its audit row exist, the error names the job and the asset, the approval stands", async () => {
+    const jobId = await seedReviewJob(fixture);
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const restore = await failInsertsInto("asset_audit_log", 1_000_000);
+    let outcome: Outcome;
+    try {
+      outcome = await cloud.approve(jobId, CHECKER);
+    } finally {
+      await restore();
+    }
+
+    expect(outcome).toEqual({ approved: true });
+    expect((await readJob(jobId)).status).toBe("GENERATING_PDF");
+    expect(await releaseAuditRows(jobId)).toHaveLength(1);
+    const dates = await assetDates(fixture.assetId);
+    expect(dates.last).toBeNull();
+    expect(dates.advanceAudits).toEqual([]);
+    const logged = errors.mock.calls
+      .map((call) => String(call[0]))
+      .find((line) => line.includes("asset-calibration-advance"));
+    expect(logged).toContain(`asset ${fixture.assetId}`);
+    expect(logged).toContain(`job ${jobId}`);
+  });
+
+  async function ootEvent(jobId: number) {
+    return createAssetOotEventForApprovedJob({
+      jobId,
+      assetId: fixture.assetId,
+      customerId: fixture.customerId,
+      labOrganizationId: ORG,
+      detectedAt: new Date("2026-03-01T00:00:00.000Z"),
+      actorUserId: CHECKER,
+    });
+  }
+
+  async function ootRows(jobId: number) {
+    const events = await db
+      .select({ id: assetOotEvent.id })
+      .from(assetOotEvent)
+      .where(eq(assetOotEvent.jobId, jobId));
+    const audits = await db
+      .select({ action: assetOotAuditLog.action })
+      .from(assetOotAuditLog);
+    return { events, audits: audits.map((entry) => entry.action) };
+  }
+
+  it("Q39 [HIGH RISK]: the OOT event fails once on its audit row, is retried: the event and its audit row both exist", async () => {
+    const jobId = await seedReviewJob(fixture);
+    const restore = await failInsertsInto("asset_oot_audit_log", 1);
+    try {
+      const result = await ootEvent(jobId);
+      expect(result.created).toBe(true);
+    } finally {
+      await restore();
+    }
+
+    const rows = await ootRows(jobId);
+    expect(rows.events).toHaveLength(1);
+    expect(rows.audits).toContain("create");
+  });
+
+  it("Q39 [HIGH RISK]: the OOT event fails on every attempt: neither the event nor its audit row exist, and the error names the job and the asset", async () => {
+    const jobId = await seedReviewJob(fixture);
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const restore = await failInsertsInto("asset_oot_audit_log", 1_000_000);
+    try {
+      await expect(ootEvent(jobId)).rejects.toThrow();
+    } finally {
+      await restore();
+    }
+
+    expect(await ootRows(jobId)).toEqual({ events: [], audits: [] });
+    const logged = errors.mock.calls
+      .map((call) => String(call[0]))
+      .find((line) => line.includes("[AssetOOT]"));
+    expect(logged).toContain(`asset ${fixture.assetId}`);
+    expect(logged).toContain(`job ${jobId}`);
   });
 });

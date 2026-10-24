@@ -1,9 +1,10 @@
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import { appendJobEvent } from "@calibra-facil/db/job-events";
 import { calibrationJob, type JobStatus } from "@calibra-facil/db/schema";
 import { targetOf } from "@calibra-facil/schemas/job-transitions";
 import { and, eq } from "drizzle-orm";
 import { invalid, type DomainError } from "../../lib/domain-errors";
+import { orgDb } from "../../lib/org-db";
 import {
   jobActorAuditFields,
   loadScopedJob,
@@ -61,16 +62,28 @@ export type AssignJobResult =
   /** The job left the status (or organization) it was judged in; nothing written. */
   | { status: "concurrent_update" };
 
-export async function assignJob(
+export function assignJob(command: AssignJobCommand): Promise<AssignJobResult> {
+  // One transaction that names the laboratory (row-level security): the read,
+  // the gates, the compare-and-set write and its audit row. See `editJob`.
+  return orgDb(command.organizationId).transaction((o) =>
+    assignJobIn(o, command),
+  );
+}
+
+async function assignJobIn(
+  o: OrgDb,
   command: AssignJobCommand,
 ): Promise<AssignJobResult> {
   const { actor, organizationId } = command;
 
-  const existing = await loadScopedJob({
-    jobId: command.jobId,
-    organizationId,
-    unitScope: command.unitScope,
-  });
+  const existing = await loadScopedJob(
+    {
+      jobId: command.jobId,
+      organizationId,
+      unitScope: command.unitScope,
+    },
+    o,
+  );
   if (!existing) return { status: "not_found" };
 
   if (targetOf(existing.status, "assign") === null) {
@@ -84,21 +97,27 @@ export async function assignJob(
     };
   }
 
-  const technician = await findAssignableTechnician({
-    organizationId,
-    userId: command.technicianId,
-    unitId: existing.unitId,
-  });
+  const technician = await findAssignableTechnician(
+    {
+      organizationId,
+      userId: command.technicianId,
+      unitId: existing.unitId,
+    },
+    o,
+  );
   if (!technician) {
     return { status: "technician_not_found", error: technicianNotFound() };
   }
 
   if (
-    !(await technicianCompetentForJobService({
-      organizationId,
-      technicianId: technician.userId,
-      serviceId: existing.serviceId,
-    }))
+    !(await technicianCompetentForJobService(
+      {
+        organizationId,
+        technicianId: technician.userId,
+        serviceId: existing.serviceId,
+      },
+      o,
+    ))
   ) {
     return {
       status: "competence_missing",
@@ -106,21 +125,19 @@ export async function assignJob(
     };
   }
 
-  const updated = await db.transaction(async (tx) => {
-    const [row] = await tx
-      .update(calibrationJob)
-      .set({ technicianId: technician.userId })
-      .where(
-        and(
-          eq(calibrationJob.id, existing.id),
-          eq(calibrationJob.organizationId, organizationId),
-          eq(calibrationJob.status, existing.status),
-        ),
-      )
-      .returning();
-    if (!row) return null;
-
-    await appendJobEvent(tx, {
+  const [updated] = await o
+    .update(calibrationJob)
+    .set({ technicianId: technician.userId })
+    .where(
+      and(
+        eq(calibrationJob.id, existing.id),
+        eq(calibrationJob.organizationId, organizationId),
+        eq(calibrationJob.status, existing.status),
+      ),
+    )
+    .returning();
+  if (updated) {
+    await appendJobEvent(o, {
       action: "assign",
       organizationId,
       jobId: existing.id,
@@ -135,8 +152,7 @@ export async function assignJob(
       },
       ipAddress: actor.ipAddress ?? null,
     });
-    return row;
-  });
+  }
   if (!updated) return { status: "concurrent_update" };
 
   return {

@@ -955,13 +955,16 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
     const { rawKey, jobId } = await seedCancelableJob("REVIEW");
 
     // Forces the lost compare-and-set deterministically: the handler has read
-    // the job as REVIEW; right before it opens the transaction carrying its
-    // write, another actor moves it to GENERATING_PDF. The transactions that
-    // only name the organization (the key's last-use touch, the id lookups) are
-    // let by.
+    // the job as REVIEW; right before the statement that carries its write,
+    // another actor moves it to GENERATING_PDF.
     changeJobBeforeNextTransaction(jobId, { status: "GENERATING_PDF" });
 
-    const res = await cancelJob(rawKey, jobId, "cancel-race");
+    let res: Response;
+    try {
+      res = await cancelJob(rawKey, jobId, "cancel-race");
+    } finally {
+      vi.restoreAllMocks();
+    }
 
     expect(res.status).toBe(409);
     expect(await res.json()).toMatchObject({

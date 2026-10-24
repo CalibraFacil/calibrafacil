@@ -3,6 +3,7 @@ import {
   forOrg,
   setTransactionOrganization,
   type OrgDb,
+  type OrgExecutor,
 } from "@calibra-facil/db/for-org";
 import { orgDb } from "./org-db";
 
@@ -21,6 +22,19 @@ export function inOrgTransaction<R>(
   organizationId: string,
   executor: OrgDb | undefined,
   run: (o: OrgDb) => Promise<R>,
+): Promise<R> {
+  return executor ? run(executor) : orgDb(organizationId).transaction(run);
+}
+
+/**
+ * Same, for a reader: runs `run` on the caller's org-bound handle (or any
+ * executor with `select`), else in a short transaction of its own that names the
+ * laboratory. For lib functions that only read.
+ */
+export function withOrgReader<R>(
+  organizationId: string,
+  executor: Pick<OrgExecutor, "select"> | undefined,
+  run: (reader: Pick<OrgExecutor, "select">) => Promise<R>,
 ): Promise<R> {
   return executor ? run(executor) : orgDb(organizationId).transaction(run);
 }

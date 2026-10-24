@@ -16,7 +16,11 @@ import {
   type CertificateJobData,
 } from "@calibra-facil/certificate-data";
 import { buildCertificateLayoutData } from "./certificate/layout-data.js";
-import { fetchCertificateJobData } from "./certificate/fetch-job-data.js";
+import {
+  readCertificateJobRows,
+  resolveCertificateJobData,
+  type FetchJobDataDeps,
+} from "./certificate/fetch-job-data.js";
 import { loadCertificateRenderSource } from "./certificate/frozen-input.js";
 import { formatAccreditationNumber } from "@calibra-facil/shared";
 import {
@@ -29,11 +33,13 @@ import {
 } from "@calibra-facil/shared/public-urls";
 import { type Env } from "./runtime-types.js";
 import {
+  findJobOrganization,
   generatePdfFromHtml,
   getErrorMessage,
   withDbClient,
+  withOrgDbClient,
 } from "./pdf-render.js";
-import { inTransaction } from "./job-events.js";
+import { inOrganizationTransaction } from "./job-events.js";
 import {
   CertificateIssuanceSkipped,
   lockJobStatus,
@@ -89,25 +95,30 @@ export async function processJob(
   // enqueued: an APPROVED job is already issued (redelivery is a no-op, no
   // second audit entry or notification), and a cancelled/rejected one must never
   // be brought back to life by a late message.
-  const existing = await withDbClient(env, async (client) => {
-    const result = await client.query<{
-      status: string;
-      organization_id: string;
-      certificate_url: string | null;
-      pdf_r2_key: string | null;
-      signature_metadata: unknown;
-    }>(
-      `
+  // The message names a job, not its laboratory: learn the laboratory on the
+  // system path, then run everything per job in transactions that name it.
+  const organizationId = await findJobOrganization(env, jobId);
+  const existing = organizationId
+    ? await withOrgDbClient(env, organizationId, async (client) => {
+        const result = await client.query<{
+          status: string;
+          organization_id: string;
+          certificate_url: string | null;
+          pdf_r2_key: string | null;
+          signature_metadata: unknown;
+        }>(
+          `
         select cj.status, cj.organization_id, cj.certificate_url, ics.pdf_r2_key, cj.signature_metadata
         from calibration_job cj
         left join issued_certificate_snapshot ics on ics.job_id = cj.id
         where cj.id = $1
         limit 1
       `,
-      [jobId],
-    );
-    return result.rows[0] ?? null;
-  });
+          [jobId],
+        );
+        return result.rows[0] ?? null;
+      })
+    : null;
 
   if (existing && existing.status === "APPROVED") {
     console.log(`[JOB ${jobId}] Already APPROVED; redelivery is a no-op`);
@@ -136,21 +147,25 @@ export async function processJob(
     const certificateUrl = storedObjectUrl(snapshotKey);
     try {
       const transition = await withDbClient(env, (client) =>
-        inTransaction(client, async () => {
-          const result = await updateJobWithCertificate(
-            client,
-            jobId,
-            certificateUrl,
-            userId,
-            parseSignatureMetadata(existing.signature_metadata),
-            undefined,
-            { preserveSignatureMetadata: true },
-          );
-          if (result.outcome === "skipped") {
-            throw new CertificateIssuanceSkipped(result.currentStatus);
-          }
-          return result;
-        }),
+        inOrganizationTransaction(
+          client,
+          existing.organization_id,
+          async () => {
+            const result = await updateJobWithCertificate(
+              client,
+              jobId,
+              certificateUrl,
+              userId,
+              parseSignatureMetadata(existing.signature_metadata),
+              undefined,
+              { preserveSignatureMetadata: true },
+            );
+            if (result.outcome === "skipped") {
+              throw new CertificateIssuanceSkipped(result.currentStatus);
+            }
+            return result;
+          },
+        ),
       );
       if (transition.outcome === "issued") {
         await notifyCertificateIssued(jobId);
@@ -173,23 +188,38 @@ export async function processJob(
     // what is printed; the lab, signatory, customer, asset and standards rows
     // are not read again. Jobs approved before it existed render through the
     // legacy live-read path, flagged as such in the log and on the snapshot.
-    const source = await withDbClient(env, (client) =>
-      loadCertificateRenderSource(
-        client,
-        { jobId, organizationId: existing?.organization_id ?? null },
-        () =>
-          fetchCertificateJobData(client, jobId, {
-            resolveLogoDataUrl: (logo) =>
-              resolveOrganizationLogoDataUrl(env, logo, jobId),
-            resolveSignatureDataUrl: async (r2Key, contentType) => {
-              const object = await getStoredObject(env, "media", r2Key);
-              if (!object) return null;
-              const base64 = arrayBufferToBase64(await object.arrayBuffer());
-              return `data:${contentType};base64,${base64}`;
-            },
-          }),
-      ),
-    );
+    // The frozen input (or, for a job approved before it existed, the rows of
+    // the legacy live read) is read in ONE transaction that names the
+    // laboratory. The images the legacy path embeds are read from storage after
+    // it has ended: no transaction is held across storage I/O.
+    const legacyDeps: FetchJobDataDeps = {
+      resolveLogoDataUrl: (logo) =>
+        resolveOrganizationLogoDataUrl(env, logo, jobId),
+      resolveSignatureDataUrl: async (r2Key, contentType) => {
+        const object = await getStoredObject(env, "media", r2Key);
+        if (!object) return null;
+        const base64 = arrayBufferToBase64(await object.arrayBuffer());
+        return `data:${contentType};base64,${base64}`;
+      },
+    };
+    const loaded = organizationId
+      ? await withOrgDbClient(env, organizationId, (client) =>
+          loadCertificateRenderSource(
+            client,
+            { jobId, organizationId: existing?.organization_id ?? null },
+            () => readCertificateJobRows(client, jobId),
+          ),
+        )
+      : ({ status: "legacy", job: null } as const);
+    const source =
+      loaded.status === "legacy"
+        ? ({
+            status: "legacy",
+            job: loaded.job
+              ? await resolveCertificateJobData(loaded.job, jobId, legacyDeps)
+              : null,
+          } as const)
+        : loaded;
     if (source.status === "corrupt") {
       console.error(
         `[JOB ${jobId}] The frozen certificate input cannot be trusted: ${source.reason}`,
@@ -328,8 +358,9 @@ export async function processJob(
     // under a lock on the job row. If the job left GENERATING_PDF while the PDF
     // rendered (cancelled, rejected...), nothing is persisted: no snapshot row
     // that would make the job look issued, and no APPROVED status.
+    const issuingOrganizationId = job.organizationId;
     const issued = await withDbClient(env, (client) =>
-      inTransaction(client, async () => {
+      inOrganizationTransaction(client, issuingOrganizationId, async () => {
         const lockedStatus = await lockJobStatus(client, jobId);
         if (!canTransition(lockedStatus, "complete_render")) {
           throw new CertificateIssuanceSkipped(lockedStatus);

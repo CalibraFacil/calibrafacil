@@ -169,7 +169,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     kinds: ["select"],
     sql: /from calibration_job cj where cj\.status = ''.* and not exists \( select 1 from app_queue_job q where /,
     reason:
-      "queue-backstop stuck-render sweep: finds GENERATING_PDF certificates older than STUCK_RENDER_AFTER_MS with no live queue row across every tenant; each rejection then runs scoped by the candidate's own organization_id.",
+      "queue-backstop stuck-render sweep (system path, systemDb): finds GENERATING_PDF certificates older than STUCK_RENDER_AFTER_MS with no live queue row across every tenant; each rejection then runs in forOrg(db, candidate.organization_id).transaction.",
   },
   {
     category: "cron-queue",
@@ -187,7 +187,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     kinds: ["select"],
     sql: /from "calibration_job" where "calibration_job"\."id" = \$\d+ limit/,
     reason:
-      "queue-backstop dead-letter handling: the app_queue_job payload carries only the job id, so the owning organization is read from the job itself and every following write is scoped by it.",
+      "queue-backstop dead-letter handling (system path, systemDb): the app_queue_job payload carries only the job id, so the owning organization is read from the job itself; the rejection then runs in forOrg(db, that organization).transaction.",
   },
   {
     category: "cron-queue",
@@ -300,14 +300,6 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     kinds: ["select"],
     reason:
       "persistCalibrationJob: asset read by id, then customer.lab_organization_id !== organizationId -> 'Ativo nao encontrado' (REQ-TENANT-JOB-001); the commercial snapshot is read for the job id just created.",
-  },
-  {
-    category: "ownership-checked-in-code",
-    file: "apps/api/src/routes/jobs.ts",
-    tables: ["asset", "customer"],
-    kinds: ["select"],
-    reason:
-      "POST / opens the transaction that runs persistCalibrationJob (see lib/jobs.ts entry).",
   },
   {
     category: "ownership-checked-in-code",

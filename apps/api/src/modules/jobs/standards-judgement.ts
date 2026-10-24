@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import {
   referenceStandard,
   type StandardSnapshot,
@@ -15,6 +15,7 @@ import {
 import { and, eq, inArray, type SQL } from "drizzle-orm";
 import type { ApiErrorCode } from "@calibra-facil/contracts";
 import { invalid } from "../../lib/domain-errors";
+import { withOrgReader } from "../../lib/org-transaction";
 
 /**
  * The cloud's runtime of the one standards judgement (Q12). This file is only a
@@ -38,29 +39,34 @@ export function snapshotStandardIds(
  * Tenant-scoped in SQL: only rows of the organization (and, when given, the
  * caller's unit scope) are read, so anything else is simply "not found".
  */
-async function loadStandardFacts(input: {
-  standardIds: readonly number[];
-  organizationId: string;
-  /** The caller's unit scope, as `buildUnitScopeCondition` builds it. */
-  unitScope?: SQL;
-}): Promise<JudgedStandardFacts[]> {
+async function loadStandardFacts(
+  input: {
+    standardIds: readonly number[];
+    organizationId: string;
+    /** The caller's unit scope, as `buildUnitScopeCondition` builds it. */
+    unitScope?: SQL;
+  },
+  executor?: Pick<OrgExecutor, "select">,
+): Promise<JudgedStandardFacts[]> {
   if (input.standardIds.length === 0) return [];
-  const rows = await db
-    .select({
-      id: referenceStandard.id,
-      name: referenceStandard.name,
-      status: referenceStandard.status,
-      deletedAt: referenceStandard.deletedAt,
-      nextCalibrationDate: referenceStandard.nextCalibrationDate,
-    })
-    .from(referenceStandard)
-    .where(
-      and(
-        inArray(referenceStandard.id, [...input.standardIds]),
-        eq(referenceStandard.organizationId, input.organizationId),
-        input.unitScope,
+  const rows = await withOrgReader(input.organizationId, executor, (reader) =>
+    reader
+      .select({
+        id: referenceStandard.id,
+        name: referenceStandard.name,
+        status: referenceStandard.status,
+        deletedAt: referenceStandard.deletedAt,
+        nextCalibrationDate: referenceStandard.nextCalibrationDate,
+      })
+      .from(referenceStandard)
+      .where(
+        and(
+          inArray(referenceStandard.id, [...input.standardIds]),
+          eq(referenceStandard.organizationId, input.organizationId),
+          input.unitScope,
+        ),
       ),
-    );
+  );
   return rows.map((row) => ({ ...row, inScope: true }));
 }
 
@@ -68,17 +74,22 @@ async function loadStandardFacts(input: {
  * Judge the standards of a job at the cloud: load them from the standards
  * table (organization-scoped) and call the one judgement.
  */
-export async function judgeSnapshotStandards(input: {
-  standardIds: readonly number[];
-  organizationId: string;
-  unitScope?: SQL;
-  performedAt: Date | null;
-  now: Date;
-  backdateReason?: string | null;
-  mode: StandardsJudgementMode;
-  requireBackdateReason?: boolean;
-}): Promise<StandardsJudgement> {
-  const facts = await loadStandardFacts(input);
+export async function judgeSnapshotStandards(
+  input: {
+    standardIds: readonly number[];
+    organizationId: string;
+    unitScope?: SQL;
+    performedAt: Date | null;
+    now: Date;
+    backdateReason?: string | null;
+    mode: StandardsJudgementMode;
+    requireBackdateReason?: boolean;
+  },
+  // The caller's org-bound handle (row-level security); absent, a short
+  // transaction of its own that names the laboratory.
+  executor?: Pick<OrgExecutor, "select">,
+): Promise<StandardsJudgement> {
+  const facts = await loadStandardFacts(input, executor);
   return judgeExecutionStandards(
     {
       standardIds: input.standardIds,
@@ -97,16 +108,19 @@ export async function judgeSnapshotStandards(input: {
  * (`savedStandardIds`) that has since gone stale is accepted and comes back as
  * a warning; every other standard is judged strictly.
  */
-export async function judgeDraftSnapshotStandards(input: {
-  standardIds: readonly number[];
-  savedStandardIds: readonly number[];
-  organizationId: string;
-  unitScope?: SQL;
-  performedAt: Date | null;
-  now: Date;
-  mode: StandardsJudgementMode;
-}): Promise<DraftStandardsJudgement> {
-  const facts = await loadStandardFacts(input);
+export async function judgeDraftSnapshotStandards(
+  input: {
+    standardIds: readonly number[];
+    savedStandardIds: readonly number[];
+    organizationId: string;
+    unitScope?: SQL;
+    performedAt: Date | null;
+    now: Date;
+    mode: StandardsJudgementMode;
+  },
+  executor?: Pick<OrgExecutor, "select">,
+): Promise<DraftStandardsJudgement> {
+  const facts = await loadStandardFacts(input, executor);
   return judgeDraftExecutionStandards(
     {
       standardIds: input.standardIds,

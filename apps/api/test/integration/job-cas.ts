@@ -1,11 +1,11 @@
 import { vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { db, getDb } from "@calibra-facil/db";
+import { outsideTransactionScope } from "@calibra-facil/db/testing";
 import {
-  isOrgBoundTransaction,
-  isTransactionScopeCallback,
-  outsideTransactionScope,
-} from "@calibra-facil/db/testing";
+  outsideApplication,
+  shadowApplicationDatabase,
+} from "./rls-shadow-mode";
 import { calibrationJob, jobAuditLog } from "@calibra-facil/db/schema";
 import { setJobStatus } from "./job-fixtures";
 
@@ -42,52 +42,94 @@ async function applyChange(
 }
 
 /**
+ * The statements that take the row lock of a calibration job: its UPDATE, and a
+ * SELECT ... FOR UPDATE (the amendment and approval serialise on one). Drizzle
+ * writes them as `update "calibration_job" set ...` and
+ * `select ... from "calibration_job" ... for update`.
+ */
+const JOB_LOCKING_STATEMENT =
+  /^\s*(update\s+"calibration_job"\s|select\b[\s\S]*\bfrom\s+"calibration_job"\b[\s\S]*\bfor\s+update\b)/i;
+
+/**
+ * Makes `before` run once, right before the first statement of this transaction
+ * (or of a savepoint opened inside it) that takes the job's row lock. The
+ * handler's own transaction is the one that carries its reads and its write
+ * (`orgDb(org).transaction` names the laboratory first, then reads, then
+ * writes), so "between the read and the write" is a moment INSIDE it: the other
+ * actor commits on its own connection, and the write's WHERE is re-evaluated
+ * against the changed row, exactly as in a live race. Nothing of this
+ * transaction holds the job row yet at that moment, so the other actor's write
+ * never waits on it.
+ */
+function armTransaction<T extends Pick<typeof db, "session" | "transaction">>(
+  tx: T,
+  before: () => Promise<void>,
+): T {
+  const session = tx.session;
+  const prepareQuery = session.prepareQuery.bind(session);
+  vi.spyOn(session, "prepareQuery").mockImplementation((query, ...rest) => {
+    const prepared = prepareQuery(query, ...rest);
+    if (!JOB_LOCKING_STATEMENT.test(query.sql)) return prepared;
+    const execute = prepared.execute.bind(prepared);
+    return Object.assign(prepared, {
+      execute: async (...args: Parameters<typeof execute>) => {
+        await before();
+        return execute(...args);
+      },
+    });
+  });
+  // A savepoint opens a session of its own: arm it too.
+  const savepoint = tx.transaction.bind(tx);
+  vi.spyOn(tx, "transaction").mockImplementation((callback, config) =>
+    savepoint((inner) => callback(armTransaction(inner, before)), config),
+  );
+  return tx;
+}
+
+/**
  * Forces the interleaving of a lost compare-and-set, deterministically: the
- * handler has already read the job, and right before it opens the transaction
- * that carries its write, another actor changes the job (`change`). A live race
- * can legitimately serialise either way, so asserting on one is flaky; this
- * fixes the order instead. Callers must `vi.restoreAllMocks()` afterwards.
+ * handler has already read the job, and right before the statement that takes
+ * its row lock (the write, or the `FOR UPDATE` an approval or amendment
+ * serialises on), another actor changes the job (`change`). A live race can
+ * legitimately serialise either way, so asserting on one is flaky; this fixes
+ * the order instead. Callers must `vi.restoreAllMocks()` afterwards.
+ *
+ * It works for every way a handler reaches its transaction: the plain
+ * `db.transaction`, `orgDb(org).transaction` (which names the laboratory for
+ * row-level security, so the same interleaving holds when the request runs as
+ * `calibra_app`) and the savepoint inside a transaction scope (the desktop sync
+ * apply).
  */
 export function changeJobBeforeNextTransaction(
   jobId: number,
   change: JobChange,
 ): void {
-  // `db` is a Proxy over the cached instance; spy on the instance itself.
-  const instance = getDb();
-  const originalTransaction = instance.transaction.bind(instance);
+  let fired = false;
   // Another actor's committed write, on its own connection: inside a
   // transaction scope `db` is the request's transaction, which the other actor
-  // is not part of.
-  const otherActorChangesJob = () =>
-    outsideTransactionScope(() => applyChange(jobId, change));
-  let fired = false;
-  vi.spyOn(instance, "transaction").mockImplementation(
-    async (callback, config) => {
-      // A transaction that only names the organization for row-level security
-      // (an auth middleware, a lookup) is not the handler's write: let it by.
-      if (fired || isOrgBoundTransaction(callback)) {
-        return originalTransaction(callback, config);
-      }
-      fired = true;
-      if (!isTransactionScopeCallback(callback)) {
-        await otherActorChangesJob();
-        return originalTransaction(callback, config);
-      }
-      // A request that runs in a transaction scope (the desktop sync apply):
-      // the write's own transaction is the savepoint it opens inside the scope,
-      // so that is the moment right before which the other actor writes.
-      return originalTransaction(async (tx) => {
-        const savepoint = tx.transaction.bind(tx);
-        vi.spyOn(tx, "transaction").mockImplementationOnce(
-          async (inner, innerConfig) => {
-            await otherActorChangesJob();
-            return savepoint(inner, innerConfig);
-          },
-        );
-        return callback(tx);
-      }, config);
-    },
-  );
+  // is not part of, and under the RLS shadow report (requests run as
+  // `calibra_app`) it is the owner, not the application under test.
+  const otherActorChangesJob = async () => {
+    if (fired) return;
+    fired = true;
+    await outsideApplication(() =>
+      outsideTransactionScope(() => applyChange(jobId, change)),
+    );
+  };
+  // `db` is a Proxy over the cached instance; spy on the instances themselves:
+  // the owner's, and under the RLS shadow report the calibra_app pool a request
+  // actually runs on.
+  const instances = [getDb(), shadowApplicationDatabase()];
+  for (const instance of instances) {
+    if (!instance) continue;
+    const originalTransaction = instance.transaction.bind(instance);
+    vi.spyOn(instance, "transaction").mockImplementation((callback, config) =>
+      originalTransaction(
+        (tx) => callback(armTransaction(tx, otherActorChangesJob)),
+        config,
+      ),
+    );
+  }
 }
 
 /** Every column of the job row except the ones a status change may touch. */

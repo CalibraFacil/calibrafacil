@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   appendJobEvent,
   type JobUpdatedChanges,
@@ -8,6 +8,7 @@ import { targetOf } from "@calibra-facil/schemas/job-transitions";
 import { calendarDateKey } from "@calibra-facil/shared";
 import { and, eq } from "drizzle-orm";
 import { invalid, type DomainError } from "../../lib/domain-errors";
+import { orgDb } from "../../lib/org-db";
 import {
   jobActorAuditFields,
   loadScopedJob,
@@ -72,14 +73,30 @@ export type EditJobResult =
   /** The job left the status (or organization) it was judged in; nothing written. */
   | { status: "concurrent_update" };
 
-export async function editJob(command: EditJobCommand): Promise<EditJobResult> {
+export function editJob(command: EditJobCommand): Promise<EditJobResult> {
+  // The read, the checks, the compare-and-set write and its audit row run in
+  // ONE transaction that names the laboratory (row-level security). The write
+  // still matches on the status it read, so a job that moved before it is
+  // `concurrent_update`, and a failing audit insert rolls the write back.
+  return orgDb(command.organizationId).transaction((o) =>
+    editJobIn(o, command),
+  );
+}
+
+async function editJobIn(
+  o: OrgDb,
+  command: EditJobCommand,
+): Promise<EditJobResult> {
   const { actor, organizationId } = command;
 
-  const existing = await loadScopedJob({
-    jobId: command.jobId,
-    organizationId,
-    unitScope: command.unitScope,
-  });
+  const existing = await loadScopedJob(
+    {
+      jobId: command.jobId,
+      organizationId,
+      unitScope: command.unitScope,
+    },
+    o,
+  );
   if (!existing) return { status: "not_found" };
 
   if (targetOf(existing.status, "edit") === null) {
@@ -103,20 +120,26 @@ export async function editJob(command: EditJobCommand): Promise<EditJobResult> {
     if (command.technicianId) {
       // Q25: the one technician rule; Q26: the one competence gate, as in
       // `assignJob`.
-      const technician = await findAssignableTechnician({
-        organizationId,
-        userId: command.technicianId,
-        unitId: existing.unitId,
-      });
+      const technician = await findAssignableTechnician(
+        {
+          organizationId,
+          userId: command.technicianId,
+          unitId: existing.unitId,
+        },
+        o,
+      );
       if (!technician) {
         return { status: "technician_not_found", error: technicianNotFound() };
       }
       if (
-        !(await technicianCompetentForJobService({
-          organizationId,
-          technicianId: technician.userId,
-          serviceId: existing.serviceId,
-        }))
+        !(await technicianCompetentForJobService(
+          {
+            organizationId,
+            technicianId: technician.userId,
+            serviceId: existing.serviceId,
+          },
+          o,
+        ))
       ) {
         return {
           status: "competence_missing",
@@ -157,21 +180,19 @@ export async function editJob(command: EditJobCommand): Promise<EditJobResult> {
     };
   }
 
-  const updated = await db.transaction(async (tx) => {
-    const [row] = await tx
-      .update(calibrationJob)
-      .set(set)
-      .where(
-        and(
-          eq(calibrationJob.id, existing.id),
-          eq(calibrationJob.organizationId, organizationId),
-          eq(calibrationJob.status, existing.status),
-        ),
-      )
-      .returning();
-    if (!row) return null;
-
-    await appendJobEvent(tx, {
+  const [updated] = await o
+    .update(calibrationJob)
+    .set(set)
+    .where(
+      and(
+        eq(calibrationJob.id, existing.id),
+        eq(calibrationJob.organizationId, organizationId),
+        eq(calibrationJob.status, existing.status),
+      ),
+    )
+    .returning();
+  if (updated) {
+    await appendJobEvent(o, {
       action: "update",
       organizationId,
       jobId: existing.id,
@@ -179,8 +200,7 @@ export async function editJob(command: EditJobCommand): Promise<EditJobResult> {
       changes: { ...jobActorAuditFields(actor), ...changes },
       ipAddress: actor.ipAddress ?? null,
     });
-    return row;
-  });
+  }
   if (!updated) return { status: "concurrent_update" };
 
   return {
