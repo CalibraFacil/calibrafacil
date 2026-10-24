@@ -23,6 +23,12 @@ export interface Env {
    * which is the owner while row-level security is in shadow mode.
    */
   DATABASE_OWNER_URL?: string;
+  /**
+   * `enforced` once the application connects as `calibra_app` (DATABASE_RLS_MODE):
+   * with it set and no `DATABASE_OWNER_URL`, a job that cannot be found on the
+   * system path is a misconfiguration to retry, not a job that does not exist.
+   */
+  DATABASE_RLS_MODE?: "shadow" | "enforced";
   // HTML/XLSX -> PDF conversion runs on the hosted Gotenberg service
   // (services/gotenberg on Cloudflare Containers); no in-function Chromium.
   GOTENBERG_URL?: string;

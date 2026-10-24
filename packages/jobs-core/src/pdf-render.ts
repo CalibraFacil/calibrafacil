@@ -41,6 +41,13 @@ async function withSystemDbClient<T>(
  * lookup that cannot name an organization yet: it runs on the system path and
  * reads one column of one row by primary key. Everything after it runs in
  * `withOrgDbClient`.
+ *
+ * Null means the job does not exist, EXCEPT when the worker runs under
+ * `DATABASE_RLS_MODE=enforced` without `DATABASE_OWNER_URL`: then the lookup runs
+ * as the application role, which sees no job at all, and "not found" would be a
+ * lie that marks the render permanently failed (or leaves the job stuck in
+ * GENERATING_PDF with the sweep blind to it). That case throws a plain error, so
+ * the queue retries the message and the misconfiguration is loud.
  */
 export async function findJobOrganization(
   env: Env,
@@ -51,7 +58,17 @@ export async function findJobOrganization(
       "select organization_id from calibration_job where id = $1 limit 1",
       [jobId],
     );
-    return result.rows[0]?.organization_id ?? null;
+    const organizationId = result.rows[0]?.organization_id ?? null;
+    if (
+      organizationId === null &&
+      env.DATABASE_RLS_MODE === "enforced" &&
+      !env.DATABASE_OWNER_URL
+    ) {
+      throw new Error(
+        `Cannot tell which laboratory job ${jobId} belongs to: DATABASE_RLS_MODE=enforced but DATABASE_OWNER_URL is not set, so the lookup ran as the application role. Set DATABASE_OWNER_URL on the worker.`,
+      );
+    }
+    return organizationId;
   });
 }
 

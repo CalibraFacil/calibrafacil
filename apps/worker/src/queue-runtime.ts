@@ -121,6 +121,7 @@ export function createWorkerEnv(): WorkerEnv {
   return {
     DATABASE_URL: config.database.url ?? "",
     DATABASE_OWNER_URL: config.database.ownerUrl,
+    DATABASE_RLS_MODE: config.database.rlsMode,
     CERTIFICATES_BUCKET: createR2Bucket(storage, storage.bucketName ?? ""),
     MEDIA_BUCKET: createR2Bucket(
       storage,

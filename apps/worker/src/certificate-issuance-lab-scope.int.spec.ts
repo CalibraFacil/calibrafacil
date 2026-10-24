@@ -19,8 +19,9 @@ import { seedIssuableJob } from "../test/integration/seed-certificate";
  *   REQ-WRLS-2  the final failed delivery rejects the job as calibra_app (setJobError)
  *   REQ-WRLS-3  a label is generated for an approved job as calibra_app, its audit row with it
  *   REQ-WRLS-4  another laboratory's job is untouched
- *   REQ-WRLS-5  the job's laboratory is learnt on the owner connection only: without one the
- *               application role finds no job and nothing is written
+ *   REQ-WRLS-5  the job's laboratory is learnt on the owner connection only: without one, under
+ *               DATABASE_RLS_MODE=enforced, the lookup fails loudly (a retryable error, not a
+ *               permanent "job not found"), the job stays GENERATING_PDF and nothing is written
  *
  * Gotenberg is the only stub (see certificate-issuance.int.spec.ts).
  */
@@ -103,6 +104,7 @@ function envAsApplicationRole(options: { withOwnerUrl: boolean }): Env {
   return {
     ...makeTestEnv({ GOTENBERG_URL }),
     DATABASE_URL: applicationRoleUrl(ownerUrl),
+    DATABASE_RLS_MODE: "enforced",
     ...(options.withOwnerUrl ? { DATABASE_OWNER_URL: ownerUrl } : {}),
   };
 }
@@ -212,19 +214,36 @@ describe("certificate worker as calibra_app (P2-18f)", () => {
     expect(await auditActions(otherJob.jobId)).toEqual([]);
   });
 
-  it("REQ-WRLS-5 without the owner connection the application role cannot learn the job's laboratory: nothing is written", async () => {
+  it("REQ-WRLS-5 [HIGH RISK] without the owner connection under enforced RLS the lookup fails loudly and retryably: nothing is written, the job stays GENERATING_PDF", async () => {
     stubGotenberg();
     const { org, job } = await seedTwoLabs();
+    const env = envAsApplicationRole({ withOwnerUrl: false });
 
     await expect(
-      processBackgroundJob(envAsApplicationRole({ withOwnerUrl: false }), {
-        type: "CERTIFICATE",
-        jobId: job.jobId,
-        userId: org.userId,
-      }),
-    ).rejects.toThrow();
+      processBackgroundJob(
+        env,
+        { type: "CERTIFICATE", jobId: job.jobId, userId: org.userId },
+        // A delivery that is NOT the last: a permanent "job not found" would
+        // reject the job here; the loud error leaves it for the redelivery.
+        { attempt: 1, maxAttempts: 3 },
+      ),
+    ).rejects.toThrow(/DATABASE_OWNER_URL/);
 
-    expect((await jobColumns(job.jobId)).status).toBe("GENERATING_PDF");
+    const after = await jobColumns(job.jobId);
+    expect(after.status).toBe("GENERATING_PDF");
+    expect(after.rejectionReason).toBeNull();
     expect(await snapshotCount(job.jobId)).toBe(0);
+    expect(await auditActions(job.jobId)).toEqual([]);
+
+    // The same on the last delivery: the failure path cannot learn the
+    // laboratory either, so it does not reject the job on a lie.
+    await expect(
+      processBackgroundJob(
+        env,
+        { type: "CERTIFICATE", jobId: job.jobId, userId: org.userId },
+        { attempt: 3, maxAttempts: 3 },
+      ),
+    ).rejects.toThrow(/DATABASE_OWNER_URL/);
+    expect((await jobColumns(job.jobId)).status).toBe("GENERATING_PDF");
   });
 });
