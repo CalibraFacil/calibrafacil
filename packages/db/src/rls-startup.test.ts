@@ -5,6 +5,7 @@ import {
   readRlsRoleFacts,
   rlsOwnerUrlProblem,
   rlsStartupProblem,
+  rlsSystemRoleProblem,
   type RlsRoleFacts,
 } from "./rls-startup";
 
@@ -54,14 +55,42 @@ describe("rlsStartupProblem", () => {
     expect(problem).toContain("DEPLOYMENT.md");
   });
 
-  it("REQ-RLS-2: enforced mode (after the role split) accepts that role", () => {
+  it("REQ-RLS-2: enforced mode (the default) accepts that role", () => {
     expect(rlsStartupProblem(APP_MEMBER, "enforced")).toBeNull();
+  });
+
+  it("REQ-RLS-2 [HIGH RISK]: enforced mode refuses an application connection RLS does not bind (owner, superuser, BYPASSRLS), naming DATABASE_URL, shadow mode and DEPLOYMENT.md", () => {
+    for (const facts of [OWNER, SUPERUSER, BYPASS]) {
+      const problem = rlsStartupProblem(facts, "enforced");
+      expect(problem).toContain(`"${facts.role}"`);
+      expect(problem).toContain("DATABASE_URL");
+      expect(problem).toContain("DATABASE_RLS_MODE=shadow");
+      expect(problem).toContain("DEPLOYMENT.md");
+    }
   });
 
   it("REQ-RLS-2: before migration 0123 (no table has RLS enabled) the check passes in either mode", () => {
     const before = { ...APP_MEMBER, rlsEnabled: false, subjectToRls: false };
     expect(rlsStartupProblem(before, "shadow")).toBeNull();
     expect(rlsStartupProblem(before, "enforced")).toBeNull();
+  });
+});
+
+describe("rlsSystemRoleProblem", () => {
+  it("REQ-RLS-2 [HIGH RISK]: enforced mode refuses an owner URL whose role RLS binds", () => {
+    const problem = rlsSystemRoleProblem("enforced", APP_MEMBER);
+    expect(problem).toContain('"calibra_api"');
+    expect(problem).toContain("system path");
+  });
+
+  it("REQ-RLS-2: enforced mode accepts an owner, a superuser and a BYPASSRLS role on the system path", () => {
+    for (const facts of [OWNER, SUPERUSER, BYPASS]) {
+      expect(rlsSystemRoleProblem("enforced", facts)).toBeNull();
+    }
+  });
+
+  it("REQ-RLS-2: shadow mode has no system-path requirement (it is the application connection)", () => {
+    expect(rlsSystemRoleProblem("shadow", APP_MEMBER)).toBeNull();
   });
 });
 
@@ -88,8 +117,9 @@ describe("assertRlsStartup", () => {
     expect(queries).toBe(1);
   });
 
-  it("REQ-RLS-2 [HIGH RISK]: throws a ConfigError on DATABASE_RLS_MODE for a calibra_app member in shadow mode, resolves in enforced mode", async () => {
+  it("REQ-RLS-2 [HIGH RISK]: throws a ConfigError on DATABASE_RLS_MODE for a calibra_app member in shadow mode, resolves in enforced mode with the owner on the system path", async () => {
     const executor = executorReturning(row(APP_MEMBER));
+    const systemExecutor = executorReturning(row(OWNER));
     const refused = await assertRlsStartup({ executor, mode: "shadow" }).then(
       () => null,
       (error: unknown) => error,
@@ -102,13 +132,14 @@ describe("assertRlsStartup", () => {
     await expect(
       assertRlsStartup({
         executor,
+        systemExecutor,
         mode: "enforced",
         ownerUrl: "postgres://owner@localhost/db",
       }),
     ).resolves.toEqual(APP_MEMBER);
   });
 
-  it("Q40 [HIGH RISK]: enforced mode without DATABASE_OWNER_URL refuses to start, naming both variables, before any query", async () => {
+  it("Q40 [HIGH RISK]: enforced mode without DATABASE_OWNER_URL refuses to start, naming the variable, before any query", async () => {
     let queries = 0;
     const executor = {
       execute: async () => {
@@ -132,7 +163,6 @@ describe("assertRlsStartup", () => {
         "DATABASE_OWNER_URL",
       ]);
       expect(refused.message).toContain("DATABASE_RLS_MODE=enforced");
-      expect(refused.message).toContain("DATABASE_OWNER_URL");
     }
     expect(queries).toBe(0);
   });
@@ -143,6 +173,39 @@ describe("assertRlsStartup", () => {
     expect(rlsOwnerUrlProblem("enforced", undefined)).toContain(
       "DATABASE_OWNER_URL",
     );
+  });
+
+  it("REQ-RLS-2 [HIGH RISK]: enforced mode throws a ConfigError on DATABASE_URL when the application connects as the owner, and on DATABASE_OWNER_URL when that role is one RLS binds", async () => {
+    const ownerUrl = "postgres://owner@localhost/db";
+    const asOwner = await assertRlsStartup({
+      executor: executorReturning(row(OWNER)),
+      systemExecutor: executorReturning(row(OWNER)),
+      mode: "enforced",
+      ownerUrl,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(asOwner).toBeInstanceOf(ConfigError);
+    if (!(asOwner instanceof ConfigError)) throw new Error("not refused");
+    expect(asOwner.issues.map((issue) => issue.variable)).toEqual([
+      "DATABASE_URL",
+    ]);
+
+    const boundSystem = await assertRlsStartup({
+      executor: executorReturning(row(APP_MEMBER)),
+      systemExecutor: executorReturning(row(APP_MEMBER)),
+      mode: "enforced",
+      ownerUrl,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(boundSystem).toBeInstanceOf(ConfigError);
+    if (!(boundSystem instanceof ConfigError)) throw new Error("not refused");
+    expect(boundSystem.issues.map((issue) => issue.variable)).toEqual([
+      "DATABASE_OWNER_URL",
+    ]);
   });
 
   it("REQ-RLS-2: reads a driver that answers { rows } as well as a bare array", async () => {

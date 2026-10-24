@@ -87,8 +87,11 @@ describe("REQ-CFG-1 defaults", () => {
     expect(readDatabaseConfig({ DATABASE_POOL_MAX: "4" }).poolMax).toBe(4);
   });
 
-  it("REQ-RLS-2: DATABASE_RLS_MODE is `shadow` unless the role split switched it to `enforced`", () => {
-    expect(readDatabaseConfig({}).rlsMode).toBe("shadow");
+  it("REQ-RLS-2: DATABASE_RLS_MODE is `enforced` unless set to `shadow` for diagnosis", () => {
+    expect(readDatabaseConfig({}).rlsMode).toBe("enforced");
+    expect(readDatabaseConfig({ DATABASE_RLS_MODE: "shadow" }).rlsMode).toBe(
+      "shadow",
+    );
     expect(readDatabaseConfig({ DATABASE_RLS_MODE: "enforced" }).rlsMode).toBe(
       "enforced",
     );

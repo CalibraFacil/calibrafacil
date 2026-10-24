@@ -1,23 +1,24 @@
-// Start-up check of row-level security (roadmap P2-3, decision Q15).
+// Start-up check of row-level security (roadmap P2-3, P2-18k; decisions Q15, Q31, Q40).
 //
-// Migration 0123 enables RLS on every tenant table. A role that owns the tables
-// (not FORCEd), a superuser and a BYPASSRLS role are exempt, so the application
-// behaves as before while it connects as one of them ("shadow" mode). Any other
-// role (a member of `calibra_app`) is bound by the policies, and an application
-// that was not made to name its organization on every statement would silently
-// see nothing. The role split is a deliberate deploy step (DEPLOYMENT.md), not
-// something a connection string typo can do by accident, so:
+// Migration 0123 enables RLS on every tenant table (not FORCEd). A role that owns
+// the tables, a superuser and a BYPASSRLS role are exempt; any other role (a
+// member of `calibra_app`) is bound by the `tenant_isolation` policies, and an
+// application that did not name its organization on every statement would
+// silently see nothing. The application now does, so the normal setup is the
+// role split: DATABASE_URL is `calibra_app`, DATABASE_OWNER_URL is the owner (the
+// system path: Better Auth, cross-laboratory lookups; the migrations too). The
+// check makes a typo in either URL a start-up error instead of a silent hole:
 //
-//   - `shadow` (DATABASE_RLS_MODE, the default): start-up REFUSES a role that RLS
-//     binds, with the reason and the fix;
-//   - `enforced`: the owner has done the role split and says so; any role is accepted,
-//     but `DATABASE_OWNER_URL` (the system path: the connection of the table
-//     owner, `systemDb`) MUST be set too (Q40). Without it every system-path
-//     statement (identity, the cross-laboratory listings of the sweeps, the
-//     lookup of a message's laboratory) would run as the role RLS binds and
-//     silently see nothing, so the process refuses to start instead.
+//   - `enforced` (DATABASE_RLS_MODE, the default): DATABASE_URL must be a role
+//     the policies bind (an application that connected as the owner would run
+//     with no second wall and nobody would know); DATABASE_OWNER_URL must be set
+//     (Q40: otherwise the system path would run as the application role and
+//     silently match nothing) and must NOT be a role the policies bind;
+//   - `shadow`, kept for diagnosis: the application connects as the owner and
+//     start-up REFUSES a role that RLS binds, so shadow mode can never silently
+//     hide data.
 //
-// Before migration 0123 no table has RLS enabled and the check passes.
+// Before migration 0123 no table has RLS enabled and the role checks pass.
 import { ConfigError, readDatabaseConfig } from "@calibra-facil/config";
 import { sql } from "drizzle-orm";
 import type { OrgExecutor } from "./for-org";
@@ -92,37 +93,58 @@ export async function readRlsRoleFacts(
   };
 }
 
-/** The refusal message, or null when the role may start in `mode`. */
+/** The refusal message for the application connection, or null when it may start in `mode`. */
 export function rlsStartupProblem(
   facts: RlsRoleFacts,
   mode: RlsMode,
 ): string | null {
-  if (mode === "enforced") return null;
-  if (!facts.rlsEnabled || !facts.subjectToRls) return null;
-  return `connected as "${facts.role}", which is subject to row-level security (migration 0123: it neither owns the tenant tables nor is superuser/BYPASSRLS), so statements without an organization would silently match no row. Connect as the owner of the tables; set DATABASE_RLS_MODE=enforced only after the role split, see DEPLOYMENT.md ("Row-level security").`;
+  if (!facts.rlsEnabled) return null;
+  if (mode === "enforced") {
+    if (facts.subjectToRls) return null;
+    return `DATABASE_RLS_MODE=enforced (the default), but DATABASE_URL connects as "${facts.role}", which owns the tenant tables or is superuser/BYPASSRLS, so row-level security would not apply to the application. Connect the application as the role calibra_app (or a member of it) and put the owner's connection in DATABASE_OWNER_URL; to run as the owner on purpose (diagnosis), set DATABASE_RLS_MODE=shadow. See DEPLOYMENT.md ("Row-level security").`;
+  }
+  if (!facts.subjectToRls) return null;
+  return `DATABASE_RLS_MODE=shadow, but DATABASE_URL connects as "${facts.role}", which is subject to row-level security (migration 0123: it neither owns the tenant tables nor is superuser/BYPASSRLS), so statements without an organization would silently match no row. Connect as the owner of the tables, or use DATABASE_RLS_MODE=enforced (the default) with DATABASE_OWNER_URL set, see DEPLOYMENT.md ("Row-level security").`;
 }
 
 /**
  * The refusal message when `enforced` mode has no owner connection for the
- * system path, or null. Pure, so it needs no database.
+ * system path, or null (Q40). Pure, so it needs no database.
  */
 export function rlsOwnerUrlProblem(
   mode: RlsMode,
   ownerUrl: string | undefined,
 ): string | null {
   if (mode !== "enforced" || ownerUrl) return null;
-  return 'DATABASE_RLS_MODE=enforced needs DATABASE_OWNER_URL, the connection of the table owner used by the system path (identity, cross-laboratory sweeps, the lookup of a message\'s laboratory): without it those statements would run as the restricted role and silently see nothing. Set DATABASE_OWNER_URL, see DEPLOYMENT.md ("Row-level security").';
+  return 'DATABASE_RLS_MODE=enforced (the default) needs DATABASE_OWNER_URL, the connection of the table owner used by the system path (identity, cross-laboratory sweeps, the lookup of a message\'s laboratory): without it those statements would run as the restricted role and silently see nothing. Set DATABASE_OWNER_URL, see DEPLOYMENT.md ("Row-level security").';
+}
+
+/**
+ * The refusal message when the system path's role is one the policies bind
+ * (`enforced` only), or null. Such a role would match no row on every
+ * cross-laboratory lookup (Better Auth, the portal scope) instead of failing.
+ */
+export function rlsSystemRoleProblem(
+  mode: RlsMode,
+  systemFacts: RlsRoleFacts,
+): string | null {
+  if (mode !== "enforced") return null;
+  if (!systemFacts.rlsEnabled || !systemFacts.subjectToRls) return null;
+  return `DATABASE_OWNER_URL connects as "${systemFacts.role}", which is subject to row-level security, so the system path would match no row. It must be the owner of the tables (or superuser/BYPASSRLS). See DEPLOYMENT.md ("Row-level security").`;
 }
 
 /**
  * Runs the check on `executor` (default: the application's database) in `mode`
- * (default: DATABASE_RLS_MODE). Throws a `ConfigError` naming DATABASE_RLS_MODE
- * when the role must not start (or `enforced` has no `DATABASE_OWNER_URL`), so
- * `failFast` / `failFastAsync` print it and exit.
+ * (default: DATABASE_RLS_MODE). In `enforced` mode it also needs
+ * DATABASE_OWNER_URL (checked before any query) and checks the system path's own
+ * connection (`systemExecutor`, default: `getSystemDb()`). Throws a `ConfigError`
+ * naming the variable at fault when the process must not start, so `failFast` /
+ * `failFastAsync` print it and exit.
  */
 export async function assertRlsStartup(
   options: {
     executor?: Pick<OrgExecutor, "execute">;
+    systemExecutor?: Pick<OrgExecutor, "execute">;
     mode?: RlsMode;
     /** Default: DATABASE_OWNER_URL. */
     ownerUrl?: string | undefined;
@@ -142,8 +164,24 @@ export async function assertRlsStartup(
   const problem = rlsStartupProblem(facts, mode);
   if (problem !== null) {
     throw new ConfigError("database", [
-      { variable: "DATABASE_RLS_MODE", message: problem },
+      {
+        variable: mode === "enforced" ? "DATABASE_URL" : "DATABASE_RLS_MODE",
+        message: problem,
+      },
     ]);
+  }
+  if (mode === "enforced") {
+    const systemExecutor =
+      options.systemExecutor ?? (await import("./db.js")).getSystemDb();
+    const systemProblem = rlsSystemRoleProblem(
+      mode,
+      await readRlsRoleFacts(systemExecutor),
+    );
+    if (systemProblem !== null) {
+      throw new ConfigError("database", [
+        { variable: "DATABASE_OWNER_URL", message: systemProblem },
+      ]);
+    }
   }
   return facts;
 }

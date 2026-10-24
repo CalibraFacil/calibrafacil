@@ -10,11 +10,12 @@ export const databaseGroup = defineGroup({
   vars: {
     url: text({
       env: "DATABASE_URL",
-      description: "PostgreSQL connection string.",
+      description:
+        "PostgreSQL connection string of the APPLICATION role, `calibra_app` (a login that row-level security binds, see DEPLOYMENT.md).",
       secret: true,
       requiredInProduction: ["api", "worker"],
       example: example.active(
-        "postgres://calibra:calibra@localhost:55432/calibra",
+        "postgres://calibra_app:calibra_app@localhost:55432/calibra",
       ),
     }),
     configuredPoolMax: integer({
@@ -27,19 +28,19 @@ export const databaseGroup = defineGroup({
     ownerUrl: text({
       env: "DATABASE_OWNER_URL",
       description:
-        "Connection string of the table OWNER, for the system path (`systemDb`): the few statements that are cross-organization by design (the portal scope resolver, the lookups that learn which laboratory a request belongs to, asset_type writes). Needed only once the API connects as `calibra_app` (DATABASE_RLS_MODE=enforced); unset, the system path shares DATABASE_URL, which is the owner while RLS is in shadow mode.",
+        "Connection string of the table OWNER, for the system path (`systemDb`): the few statements that are cross-organization by design (the portal scope resolver, the lookups that learn which laboratory a request belongs to, Better Auth, asset_type writes). Required while DATABASE_RLS_MODE=enforced (the default): start-up refuses to run without it, because the application role would silently see nothing on those paths. Migrations (`db:migrate`, `db:bootstrap`) run as the owner too.",
       secret: true,
-      example: example.commented(
-        "postgres://owner:owner@localhost:55432/calibra",
+      example: example.active(
+        "postgres://calibra:calibra@localhost:55432/calibra",
       ),
     }),
     rlsMode: choice({
       env: "DATABASE_RLS_MODE",
       description:
-        "Row-level security (migration 0123). `shadow` (default): the application connects as the owner of the tables, which RLS does not bind, and start-up refuses a role that RLS would bind. `enforced`: set only after the role split (DEPLOYMENT.md), when the application connects as a member of calibra_app and the policies apply.",
+        "Row-level security (migration 0123). `enforced` (default): the application connects as `calibra_app`, which the tenant policies bind, and start-up refuses a DATABASE_URL that is the owner of the tables (a connection that RLS would not bind) or a missing DATABASE_OWNER_URL. `shadow`: for diagnosis, the application connects as the owner, which RLS does not bind, and start-up refuses a role that RLS would bind.",
       values: ["shadow", "enforced"],
-      default: "shadow",
-      example: example.commented("shadow"),
+      default: "enforced",
+      example: example.commented("enforced"),
     }),
     hyperdriveUrl: text({
       env: "HYPERDRIVE_URL",
