@@ -424,6 +424,18 @@ added or removed without a migration.
     specs are at 0 unscoped / 0 broken.
   - **Not covered by the shadow report.** The Better Auth adapter statements run on the system path in every
     harness, so the report cannot show them; the specs above are the evidence.
+  - **No RLS backstop for Better Auth (Q40).** Accepted: its guard is its own membership and role check plus the
+    app's permission middleware. `identity-org-plugin-deny.int.spec.ts` pins it: an owner of laboratory A, with a
+    real session, calls list-members, get-full-organization, list / create / get / accept / cancel invitation,
+    update-member-role, remove-member and update-organization against laboratory B (also the paths that find a
+    member by its id alone, `findMemberById` having no organization filter, with a second owner in A so the
+    organization check and not the only-owner rule refuses) and every call is refused with B unchanged.
+    **Start-up guard:** `assertRlsStartup` (API and worker) refuses to start with `DATABASE_RLS_MODE=enforced` and no
+    `DATABASE_OWNER_URL`, naming both variables, so no system-path listing silently returns nothing.
+  - **One laboratory failing does not hide another's work.** The certificate-drift sweep keeps writing the other
+    findings when one audit write fails and then throws `DriftAuditWriteError` (carrying the result); the scheduled
+    integration sync does the same (`ScheduledIntegrationSyncError`); the compliance and change-log sweeps already
+    continued and report at the end.
 - **Tests.** `apps/api/src/lib/rls-shadow.int.spec.ts` runs against a pool whose sessions are `calibra_app`
   (`test/integration/rls.ts`). `pnpm --filter @calibra-facil/api rls:shadow-report` replays every API
   integration spec (`--group routes/jobs` or `--files` narrow it) with each request's database access as
