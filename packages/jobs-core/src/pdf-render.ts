@@ -1,4 +1,5 @@
 import { Client } from "pg";
+import { inOrganizationTransaction } from "./job-events.js";
 import { type Env } from "./runtime-types.js";
 
 // Helper to run a database operation with a fresh connection
@@ -15,6 +16,58 @@ export async function withDbClient<T>(
   } finally {
     await client.end();
   }
+}
+
+/**
+ * The system path: a connection of the table owner, for the one statement per
+ * message that is cross-organization by design (which laboratory owns this job).
+ * `DATABASE_OWNER_URL` is the owner once the application connects as
+ * `calibra_app`; unset, the system path shares `DATABASE_URL` (the owner while
+ * row-level security is in shadow mode).
+ */
+async function withSystemDbClient<T>(
+  env: Env,
+  operation: (client: Client) => Promise<T>,
+): Promise<T> {
+  return withDbClient(
+    { ...env, DATABASE_URL: env.DATABASE_OWNER_URL || env.DATABASE_URL },
+    operation,
+  );
+}
+
+/**
+ * The laboratory a calibration job belongs to, or null when there is no such
+ * job. A queue message names a job, not its laboratory, so this is the one
+ * lookup that cannot name an organization yet: it runs on the system path and
+ * reads one column of one row by primary key. Everything after it runs in
+ * `withOrgDbClient`.
+ */
+export async function findJobOrganization(
+  env: Env,
+  jobId: number,
+): Promise<string | null> {
+  return withSystemDbClient(env, async (client) => {
+    const result = await client.query<{ organization_id: string }>(
+      "select organization_id from calibration_job where id = $1 limit 1",
+      [jobId],
+    );
+    return result.rows[0]?.organization_id ?? null;
+  });
+}
+
+/**
+ * A fresh connection and ONE transaction that names the laboratory (row-level
+ * security): `operation` and everything it queries on `client` commit or roll
+ * back together. Never call out to storage or HTTP inside `operation`.
+ */
+export function withOrgDbClient<T>(
+  env: Env,
+  organizationId: string,
+  operation: (client: Client) => Promise<T>,
+): Promise<T> {
+  return withDbClient(env, (client) =>
+    inOrganizationTransaction(client, organizationId, () => operation(client)),
+  );
 }
 
 export function getErrorMessage(error: unknown): string {

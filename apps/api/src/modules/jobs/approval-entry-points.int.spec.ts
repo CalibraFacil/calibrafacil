@@ -47,6 +47,7 @@ import {
 import { and, eq, sql } from "drizzle-orm";
 import { loginPerRequestHeader } from "../../../test/integration/setup";
 import { truncateAll } from "../../../test/integration/db";
+import { outsideApplication } from "../../../test/integration/rls-shadow-mode";
 import { seedOrg } from "../../../test/integration/seed";
 import { createApiKeySecret } from "../../lib/api-keys";
 import { jobsRouter } from "../../routes/jobs";
@@ -111,6 +112,20 @@ vi.mock("../../lib/scope-compliance", async (importOriginal) => {
 });
 
 const JSON_HEADERS = { "content-type": "application/json" };
+
+/**
+ * The concurrent reviewer of a lost compare-and-set: another actor, on its own
+ * connection and outside the application under test (under the RLS shadow
+ * report a request runs as `calibra_app`; the other actor must not).
+ */
+function concurrentReviewerRejects(jobId: number): Promise<void> {
+  return outsideApplication(async () => {
+    await db
+      .update(calibrationJob)
+      .set({ status: "REJECTED" })
+      .where(eq(calibrationJob.id, jobId));
+  });
+}
 const R2_ENV = {
   R2_ACCOUNT_ID: "account-1",
   R2_ACCESS_KEY_ID: "access-key-1",
@@ -571,12 +586,7 @@ describe("approval policy — one policy across every entry point", () => {
 
     // The hook runs after the policy read and before the transition: it plays
     // the part of a concurrent reviewer who rejects the job in that window.
-    mocks.scope.hook = async () => {
-      await db
-        .update(calibrationJob)
-        .set({ status: "REJECTED" })
-        .where(eq(calibrationJob.id, jobId));
-    };
+    mocks.scope.hook = () => concurrentReviewerRejects(jobId);
 
     const result = await approveJob({
       jobId,
@@ -617,12 +627,7 @@ describe("approval policy — one policy across every entry point", () => {
   it("REQ-APPROVAL-006: the cloud route maps a lost compare-and-set to 409 APPROVAL_CONFLICT", async () => {
     const jobId = await seedReviewJob(fixture);
     // A concurrent reviewer rejects the job between the policy read and the write.
-    mocks.scope.hook = async () => {
-      await db
-        .update(calibrationJob)
-        .set({ status: "REJECTED" })
-        .where(eq(calibrationJob.id, jobId));
-    };
+    mocks.scope.hook = () => concurrentReviewerRejects(jobId);
 
     loginPerRequestHeader(ORG);
     const res = await jobsRouter.request(`/${jobId}/approve`, {
@@ -645,12 +650,7 @@ describe("approval policy — one policy across every entry point", () => {
   it("REQ-APPROVAL-006: the public API maps a lost compare-and-set to 409 approval_conflict", async () => {
     const jobId = await seedReviewJob(fixture);
     const key = await seedKeyFor(CHECKER);
-    mocks.scope.hook = async () => {
-      await db
-        .update(calibrationJob)
-        .set({ status: "REJECTED" })
-        .where(eq(calibrationJob.id, jobId));
-    };
+    mocks.scope.hook = () => concurrentReviewerRejects(jobId);
 
     const res = await publicRequest(
       key.rawKey,

@@ -1,10 +1,14 @@
-import { db } from "@calibra-facil/db";
 import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import { appendJobEvent } from "@calibra-facil/db/job-events";
 import { calibrationJob, type JobStatus } from "@calibra-facil/db/schema";
 import { requireTargetOf } from "@calibra-facil/schemas/job-transitions";
 import { and, eq } from "drizzle-orm";
 import { invalid, type DomainError } from "../../lib/domain-errors";
+import { orgDb } from "../../lib/org-db";
+import {
+  orgTransactionWithExecutor,
+  type OrgRawTransaction,
+} from "../../lib/org-transaction";
 import {
   jobActorAuditFields,
   loadScopedJob,
@@ -69,15 +73,15 @@ function cancelRefusal(status: JobStatus): DomainError {
   );
 }
 
-type CancelJobTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type CancelJobTransaction = OrgRawTransaction;
 
 /**
- * How a caller that runs under row-level security reaches the database: the
- * read of the job and the transaction of the write each name the organization
- * (`orgDb(org).transaction`, `orgTransactionWithExecutor`). Both default to the
- * plain `db`, which is what the jobs routes and the public API still use. The
- * read and the write stay two transactions on purpose: the compare-and-set
- * below is what protects the status between them.
+ * How the command reaches the database under row-level security: the read of
+ * the job and the transaction of the write each name the organization
+ * (`orgDb(org).transaction`, `orgTransactionWithExecutor`). That is the
+ * default; a caller may pass its own runners. The read and the write stay two
+ * transactions on purpose: the compare-and-set below is what protects the
+ * status between them.
  */
 export type CancelJobRunners = {
   read?: <R>(
@@ -91,8 +95,11 @@ export async function cancelJob(
   runners: CancelJobRunners = {},
 ): Promise<CancelJobResult> {
   const { actor, organizationId } = command;
-  const read = runners.read ?? ((run) => run(db));
-  const write = runners.write ?? ((run) => db.transaction(run));
+  const read =
+    runners.read ?? ((run) => orgDb(organizationId).transaction(run));
+  const write =
+    runners.write ??
+    ((run) => orgTransactionWithExecutor(organizationId, (_o, tx) => run(tx)));
 
   const existing = await read((reader) =>
     loadScopedJob(

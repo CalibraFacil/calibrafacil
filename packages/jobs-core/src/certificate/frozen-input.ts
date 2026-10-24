@@ -103,22 +103,29 @@ async function fetchFrozenCertificateInput(
   return { status: "ok", input: document, sha256 };
 }
 
-/** What a certificate is rendered from, and which path produced it. */
-export type CertificateRenderSource =
+/**
+ * What a certificate is rendered from, and which path produced it. `L` is what
+ * the legacy loader returns: the assembled job by default, or the rows read in a
+ * transaction when the caller resolves the images after it (see
+ * `readCertificateJobRows`).
+ */
+export type CertificateRenderSource<L = CertificateJobData | null> =
   | { status: "ok"; input: CertificateInput; sha256: string }
   | { status: "corrupt"; reason: string }
   /** No frozen input: the LEGACY live read. `job` is null when the job is gone. */
-  | { status: "legacy"; job: CertificateJobData | null };
+  | { status: "legacy"; job: L };
 
 /**
  * The frozen input when there is one; otherwise, and only then, `loadLegacy`
  * (the live read of the lab, signatory, customer and standards).
  */
-export async function loadCertificateRenderSource(
+export async function loadCertificateRenderSource<
+  L = CertificateJobData | null,
+>(
   client: RowQuery,
   params: { jobId: number; organizationId: string | null },
-  loadLegacy: () => Promise<CertificateJobData | null>,
-): Promise<CertificateRenderSource> {
+  loadLegacy: () => Promise<L>,
+): Promise<CertificateRenderSource<L>> {
   if (params.organizationId) {
     const frozen = await fetchFrozenCertificateInput(client, {
       jobId: params.jobId,

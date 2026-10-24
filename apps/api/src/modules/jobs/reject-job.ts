@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import { appendJobEvent } from "@calibra-facil/db/job-events";
 import { calibrationJob, type JobStatus } from "@calibra-facil/db/schema";
 import {
@@ -7,6 +7,7 @@ import {
 } from "@calibra-facil/schemas/job-transitions";
 import { and, eq } from "drizzle-orm";
 import { invalid, type DomainError } from "../../lib/domain-errors";
+import { orgDb } from "../../lib/org-db";
 import {
   jobActorAuditFields,
   loadScopedJob,
@@ -50,16 +51,28 @@ export type RejectJobResult =
   /** The job left the status (or organization) it was judged in; nothing written. */
   | { status: "concurrent_update" };
 
-export async function rejectJob(
+export function rejectJob(command: RejectJobCommand): Promise<RejectJobResult> {
+  // One transaction that names the laboratory (row-level security): the read,
+  // the compare-and-set write and its audit row. See `editJob`.
+  return orgDb(command.organizationId).transaction((o) =>
+    rejectJobIn(o, command),
+  );
+}
+
+async function rejectJobIn(
+  o: OrgDb,
   command: RejectJobCommand,
 ): Promise<RejectJobResult> {
   const { actor, organizationId } = command;
 
-  const existing = await loadScopedJob({
-    jobId: command.jobId,
-    organizationId,
-    unitScope: command.unitScope,
-  });
+  const existing = await loadScopedJob(
+    {
+      jobId: command.jobId,
+      organizationId,
+      unitScope: command.unitScope,
+    },
+    o,
+  );
   if (!existing) return { status: "not_found" };
 
   if (targetOf(existing.status, "reject") === null) {
@@ -74,26 +87,24 @@ export async function rejectJob(
   }
 
   const rejectedStatus = requireTargetOf(existing.status, "reject");
-  const updated = await db.transaction(async (tx) => {
-    const [row] = await tx
-      .update(calibrationJob)
-      .set({
-        status: rejectedStatus,
-        rejectedBy: actor.userId,
-        rejectedAt: new Date(),
-        rejectionReason: command.reason,
-      })
-      .where(
-        and(
-          eq(calibrationJob.id, existing.id),
-          eq(calibrationJob.organizationId, organizationId),
-          eq(calibrationJob.status, existing.status),
-        ),
-      )
-      .returning();
-    if (!row) return null;
-
-    await appendJobEvent(tx, {
+  const [updated] = await o
+    .update(calibrationJob)
+    .set({
+      status: rejectedStatus,
+      rejectedBy: actor.userId,
+      rejectedAt: new Date(),
+      rejectionReason: command.reason,
+    })
+    .where(
+      and(
+        eq(calibrationJob.id, existing.id),
+        eq(calibrationJob.organizationId, organizationId),
+        eq(calibrationJob.status, existing.status),
+      ),
+    )
+    .returning();
+  if (updated) {
+    await appendJobEvent(o, {
       action: "reject",
       organizationId,
       jobId: existing.id,
@@ -105,8 +116,7 @@ export async function rejectJob(
       ipAddress: actor.ipAddress ?? null,
       reason: command.reason,
     });
-    return row;
-  });
+  }
   if (!updated) return { status: "concurrent_update" };
 
   return { status: "ok", job: updated, previousStatus: existing.status };

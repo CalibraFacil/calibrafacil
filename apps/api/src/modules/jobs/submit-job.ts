@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   appendJobEvent,
   type JobExecutionChanges,
@@ -32,7 +32,9 @@ import {
   type DomainError,
   unprocessable,
 } from "../../lib/domain-errors";
+import { afterCommitQueue, type AfterCommitTask } from "../../lib/after-commit";
 import { syncJobStandardLinks } from "../../lib/job-standards";
+import { orgDb } from "../../lib/org-db";
 import { reconcileMethodSnapshotEngine } from "../../lib/method-snapshot-engine";
 import { classifyJobScopeCompliance } from "../../lib/scope-compliance";
 import { buildUnitScopeCondition } from "../../lib/units";
@@ -329,16 +331,38 @@ function resolvePerformedAt(
 async function runJobExecution(
   command: RunCommand,
 ): Promise<JobExecutionResult> {
+  // One transaction that names the laboratory (row-level security): every read
+  // the gates make, the compare-and-set write and its audit row. The write
+  // still matches on the status it read, so a job that moved before it is
+  // `concurrent_update`, and a failing audit insert rolls the write back. The
+  // derived bookkeeping (the job_standard projection, the visit roll-forward)
+  // reads what the write committed, so it waits for the commit.
+  const queue = afterCommitQueue();
+  const result = await orgDb(command.organizationId).transaction((o) =>
+    runJobExecutionIn(o, command, queue.add),
+  );
+  await queue.run();
+  return result;
+}
+
+async function runJobExecutionIn(
+  o: OrgDb,
+  command: RunCommand,
+  afterCommit: (task: AfterCommitTask) => void,
+): Promise<JobExecutionResult> {
   const { actor, organizationId } = command;
   const isSubmit = command.command === "submit";
   const isDesktop = actor.kind === "desktop_session";
 
   // 1. Facts: the job, inside the caller's organization and unit scope.
-  const existing = await loadScopedJob({
-    jobId: command.jobId,
-    organizationId,
-    unitScope: command.unitScope,
-  });
+  const existing = await loadScopedJob(
+    {
+      jobId: command.jobId,
+      organizationId,
+      unitScope: command.unitScope,
+    },
+    o,
+  );
   if (!existing) return { status: "not_found" };
 
   // 2. The transition table.
@@ -412,6 +436,7 @@ async function runJobExecution(
       ),
       // Only a draft save is lenient about a standard it already carries.
       isSubmit ? null : existing.standardsSnapshot,
+      o,
     );
     if (!built.ok) {
       return {
@@ -456,37 +481,46 @@ async function runJobExecution(
     };
     let judged: StandardsJudgement;
     if (isSubmit) {
-      judged = await judgeSnapshotStandards({
-        ...judgeInput,
-        backdateReason,
-        // A submission must justify a standard that is valid only because the
-        // work is back-dated.
-        requireBackdateReason: true,
-      });
+      judged = await judgeSnapshotStandards(
+        {
+          ...judgeInput,
+          backdateReason,
+          // A submission must justify a standard that is valid only because the
+          // work is back-dated.
+          requireBackdateReason: true,
+        },
+        o,
+      );
     } else {
       // A desktop draft carries every standard of its own snapshot: the
       // desktop judged each one strictly when the technician added it, and a
       // standard that went stale before the first sync must not strand the
       // readings. Anything else is judged as the cloud's saved snapshot says.
-      const draft = await judgeDraftSnapshotStandards({
-        ...judgeInput,
-        savedStandardIds: [
-          ...snapshotStandardIds(existing.standardsSnapshot),
-          ...snapshotStandardIds(command.frozen?.standards?.value),
-        ],
-      });
+      const draft = await judgeDraftSnapshotStandards(
+        {
+          ...judgeInput,
+          savedStandardIds: [
+            ...snapshotStandardIds(existing.standardsSnapshot),
+            ...snapshotStandardIds(command.frozen?.standards?.value),
+          ],
+        },
+        o,
+      );
       if (draft.ok) {
         standardsWarnings = draft.warnings;
         if (command.frozen?.standards && nextStandardsSnapshot) {
           // Never store the desktop's copy of a stale standard's entry.
-          nextStandardsSnapshot = await replaceStaleFrozenStandards({
-            frozen: nextStandardsSnapshot,
-            staleIds: new Set(
-              draft.warnings.flatMap((warning) => warning.standardIds),
-            ),
-            savedSnapshot: existing.standardsSnapshot,
-            organizationId,
-          });
+          nextStandardsSnapshot = await replaceStaleFrozenStandards(
+            {
+              frozen: nextStandardsSnapshot,
+              staleIds: new Set(
+                draft.warnings.flatMap((warning) => warning.standardIds),
+              ),
+              savedSnapshot: existing.standardsSnapshot,
+              organizationId,
+            },
+            o,
+          );
         }
       }
       judged = draft;
@@ -503,12 +537,15 @@ async function runJobExecution(
 
   // 5. The asset snapshot. Built from the asset when the job has none yet; it
   //    is persisted by the command's own write, so a refusal leaves no trace.
-  const assetResult = await resolveAssetSnapshot({
-    organizationId,
-    assetId: existing.assetId,
-    assetSnapshot: existing.assetSnapshot,
-    methodSnapshot: existing.methodSnapshot,
-  });
+  const assetResult = await resolveAssetSnapshot(
+    {
+      organizationId,
+      assetId: existing.assetId,
+      assetSnapshot: existing.assetSnapshot,
+      methodSnapshot: existing.methodSnapshot,
+    },
+    o,
+  );
   if (!assetResult.ok) {
     return {
       status: "asset_unavailable",
@@ -530,6 +567,7 @@ async function runJobExecution(
       existing,
       organizationId,
       actor.userId,
+      o,
     );
   }
   const environmentalTouched = environmentalSnapshot !== undefined;
@@ -595,6 +633,7 @@ async function runJobExecution(
     methodSnapshot: existing.methodSnapshot,
     organizationId,
     engine: createMethodExecutionEngine(),
+    executor: o,
   });
   const nextMethodSnapshot = reconciledMethod.methodSnapshot;
   const officialExecution = executeOfficialCompiledSnapshot({
@@ -627,12 +666,15 @@ async function runJobExecution(
     ReturnType<typeof classifyJobScopeCompliance>
   >["compliance"] = null;
   if (isSubmit) {
-    const competent = await technicianHasCompetence({
-      organizationId,
-      technicianId: existing.technicianId,
-      assetTypeId: nextAssetSnapshot.assetTypeId,
-      performedAt: performedAt ?? now,
-    });
+    const competent = await technicianHasCompetence(
+      {
+        organizationId,
+        technicianId: existing.technicianId,
+        assetTypeId: nextAssetSnapshot.assetTypeId,
+        performedAt: performedAt ?? now,
+      },
+      o,
+    );
     if (!competent) {
       return {
         status: "competence_missing",
@@ -648,15 +690,18 @@ async function runJobExecution(
     // re-classifies at the emission date and is authoritative. Warn-only:
     // never blocks the submit. `now`, not performedAt: it predicts the seal
     // decision approval will make at the emission date.
-    const classified = await classifyJobScopeCompliance({
-      organizationId,
-      unitId: existing.unitId,
-      methodSnapshot: existing.methodSnapshot,
-      assetSnapshot: nextAssetSnapshot,
-      data: nextData ?? null,
-      results: nextResults,
-      atDate: now,
-    });
+    const classified = await classifyJobScopeCompliance(
+      {
+        organizationId,
+        unitId: existing.unitId,
+        methodSnapshot: existing.methodSnapshot,
+        assetSnapshot: nextAssetSnapshot,
+        data: nextData ?? null,
+        results: nextResults,
+        atDate: now,
+      },
+      o,
+    );
     scopeCompliance = classified.compliance;
   }
 
@@ -672,7 +717,7 @@ async function runJobExecution(
   const backdated =
     performed.backdateDays > 7 || (standardsJudgement?.reasonRequired ?? false);
 
-  const updated = await db.transaction(async (tx) => {
+  const updated = await (async (tx: OrgDb) => {
     const [row] = await tx
       .update(calibrationJob)
       .set({
@@ -861,25 +906,34 @@ async function runJobExecution(
       });
     }
     return row;
-  });
+  })(o);
   if (!updated) return { status: "concurrent_update" };
 
   // Reverse traceability (#426 Phase 1): mirror the frozen snapshot into the
-  // indexed job_standard projection.
-  await syncJobStandardLinks(
-    existing.id,
-    nextStandardsSnapshot,
-    updated.performedAt ?? existing.performedAt,
-    organizationId,
+  // indexed job_standard projection. After the commit, as before: a hiccup of
+  // this derived index never fails a calibration save.
+  afterCommit(() =>
+    syncJobStandardLinks(
+      existing.id,
+      nextStandardsSnapshot,
+      updated.performedAt ?? existing.performedAt,
+      organizationId,
+      orgDb(organizationId),
+    ),
   );
 
   // On-site visits roll forward to IN_PROGRESS once any of their jobs starts.
-  if (existing.status === "DRAFT" && updated.visitId) {
-    try {
-      await syncVisitStatusFromJobs(updated.visitId);
-    } catch (error) {
-      console.error("[Jobs] Failed to sync visit status:", error);
-    }
+  const visitId = updated.visitId;
+  if (existing.status === "DRAFT" && visitId) {
+    afterCommit(async () => {
+      try {
+        await orgDb(organizationId).transaction((tx) =>
+          syncVisitStatusFromJobs(visitId, tx),
+        );
+      } catch (error) {
+        console.error("[Jobs] Failed to sync visit status:", error);
+      }
+    });
   }
 
   return {

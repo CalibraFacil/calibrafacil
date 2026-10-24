@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import {
   asset,
   assetType,
@@ -18,6 +18,7 @@ import {
   type StandardsDraftWarning,
 } from "@calibra-facil/schemas";
 import { and, desc, eq, inArray, isNull, like, not, or } from "drizzle-orm";
+import { withOrgReader } from "../../lib/org-transaction";
 import { selectEffectiveEnvironmentalLimits } from "../../lib/unit-operational-settings";
 import {
   checkEnvironmentWithinLimits,
@@ -126,13 +127,17 @@ function finalizedStandardCertificateDocumentCondition() {
   return not(like(referenceStandardCertificateDocument.r2Key, "pending/%"));
 }
 
+/** What these builders read through: the caller's org-bound handle or its own transaction. */
+type Reader = Pick<OrgExecutor, "select">;
+
 async function buildAssetSnapshot(
   assetId: number,
   organizationId: string,
+  reader: Reader,
 ): Promise<
   { ok: true; snapshot: AssetSnapshot } | { ok: false; error: string }
 > {
-  const [row] = await db
+  const [row] = await reader
     .select({
       id: asset.id,
       assetTypeId: asset.assetTypeId,
@@ -182,12 +187,15 @@ async function buildAssetSnapshot(
  * persists a freshly built snapshot in its own compare-and-set write, so a
  * refusal later on leaves the job untouched.
  */
-export async function resolveAssetSnapshot(job: {
-  organizationId: string;
-  assetId: number;
-  assetSnapshot: AssetSnapshot | null;
-  methodSnapshot: MethodSnapshot;
-}): Promise<
+export async function resolveAssetSnapshot(
+  job: {
+    organizationId: string;
+    assetId: number;
+    assetSnapshot: AssetSnapshot | null;
+    methodSnapshot: MethodSnapshot;
+  },
+  executor?: Reader,
+): Promise<
   | { ok: true; snapshot: AssetSnapshot; built: boolean }
   | {
       ok: false;
@@ -198,7 +206,9 @@ export async function resolveAssetSnapshot(job: {
   const frozen = job.assetSnapshot;
   const resolved = frozen
     ? { ok: true as const, snapshot: frozen }
-    : await buildAssetSnapshot(job.assetId, job.organizationId);
+    : await withOrgReader(job.organizationId, executor, (reader) =>
+        buildAssetSnapshot(job.assetId, job.organizationId, reader),
+      );
   if (!resolved.ok) {
     return { ok: false, kind: "asset_not_found", error: resolved.error };
   }
@@ -247,10 +257,11 @@ type ReferenceStandardRow = typeof referenceStandard.$inferSelect;
  */
 async function standardSnapshotEntries(
   standards: readonly ReferenceStandardRow[],
+  reader: Reader,
 ): Promise<Map<number, StandardSnapshot>> {
   if (standards.length === 0) return new Map();
 
-  const currentDocuments = await db
+  const currentDocuments = await reader
     .select()
     .from(referenceStandardCertificateDocument)
     .where(
@@ -308,31 +319,40 @@ async function standardSnapshotEntries(
  * built from the cloud's own standards record. Entries of valid standards are
  * returned as the desktop froze them.
  */
-export async function replaceStaleFrozenStandards(input: {
-  frozen: StandardSnapshot[];
-  staleIds: ReadonlySet<number>;
-  savedSnapshot: StandardSnapshot[] | null;
-  organizationId: string;
-}): Promise<StandardSnapshot[]> {
+export async function replaceStaleFrozenStandards(
+  input: {
+    frozen: StandardSnapshot[];
+    staleIds: ReadonlySet<number>;
+    savedSnapshot: StandardSnapshot[] | null;
+    organizationId: string;
+  },
+  executor?: Reader,
+): Promise<StandardSnapshot[]> {
   if (input.staleIds.size === 0) return input.frozen;
 
   const saved = new Map(
     (input.savedSnapshot ?? []).map((standard) => [standard.id, standard]),
   );
   const unsaved = [...input.staleIds].filter((id) => !saved.has(id));
-  const rows =
-    unsaved.length === 0
-      ? []
-      : await db
-          .select()
-          .from(referenceStandard)
-          .where(
-            and(
-              inArray(referenceStandard.id, unsaved),
-              eq(referenceStandard.organizationId, input.organizationId),
-            ),
-          );
-  const built = await standardSnapshotEntries(rows);
+  const built = await withOrgReader(
+    input.organizationId,
+    executor,
+    async (reader) => {
+      const rows =
+        unsaved.length === 0
+          ? []
+          : await reader
+              .select()
+              .from(referenceStandard)
+              .where(
+                and(
+                  inArray(referenceStandard.id, unsaved),
+                  eq(referenceStandard.organizationId, input.organizationId),
+                ),
+              );
+      return standardSnapshotEntries(rows, reader);
+    },
+  );
 
   return input.frozen.flatMap((entry) => {
     if (!input.staleIds.has(entry.id)) return [entry];
@@ -356,6 +376,7 @@ export async function buildStandardsSnapshot(
   unitId: number,
   performedAt: Date,
   savedSnapshot: StandardSnapshot[] | null = null,
+  executor?: Reader,
 ): Promise<
   | {
       ok: true;
@@ -376,7 +397,37 @@ export async function buildStandardsSnapshot(
   // order it was first named.
   const standardIds = [...new Set(selectedStandardIds)];
 
-  const standards = await db
+  return withOrgReader(organizationId, executor, (reader) =>
+    buildStandardsSnapshotOn(reader, {
+      standardIds,
+      organizationId,
+      unitId,
+      performedAt,
+      savedSnapshot,
+    }),
+  );
+}
+
+async function buildStandardsSnapshotOn(
+  reader: Reader,
+  input: {
+    standardIds: number[];
+    organizationId: string;
+    unitId: number;
+    performedAt: Date;
+    savedSnapshot: StandardSnapshot[] | null;
+  },
+): Promise<
+  | {
+      ok: true;
+      snapshot: StandardSnapshot[] | null | undefined;
+      warnings: StandardsDraftWarning[];
+    }
+  | { ok: false; refusal: StandardsRefusal }
+> {
+  const { standardIds, organizationId, unitId, performedAt, savedSnapshot } =
+    input;
+  const standards = await reader
     .select()
     .from(referenceStandard)
     .where(
@@ -417,6 +468,7 @@ export async function buildStandardsSnapshot(
   );
   const freshById = await standardSnapshotEntries(
     standards.filter((standard) => !staleIds.has(standard.id)),
+    reader,
   );
 
   return {
@@ -441,10 +493,35 @@ export async function buildEnvironmentalSnapshot(
   existing: { assetId: number; unitId: number },
   organizationId: string,
   userId: string,
+  executor?: Reader,
 ): Promise<EnvironmentalSnapshot | undefined> {
   if (!environment) return undefined;
 
-  const [jobAsset] = await db
+  return withOrgReader(organizationId, executor, (reader) =>
+    buildEnvironmentalSnapshotOn(reader, {
+      environment,
+      existing,
+      organizationId,
+      userId,
+    }),
+  );
+}
+
+async function buildEnvironmentalSnapshotOn(
+  reader: Reader,
+  input: {
+    environment: {
+      temperature: number | null;
+      humidity: number | null;
+      pressure: number | null;
+    };
+    existing: { assetId: number; unitId: number };
+    organizationId: string;
+    userId: string;
+  },
+): Promise<EnvironmentalSnapshot> {
+  const { environment, existing, organizationId, userId } = input;
+  const [jobAsset] = await reader
     .select({ assetTypeId: asset.assetTypeId })
     .from(asset)
     .where(
@@ -457,7 +534,7 @@ export async function buildEnvironmentalSnapshot(
 
   let frozenLimits: EnvironmentalLimitsSnapshot | null = null;
   if (jobAsset && existing.unitId) {
-    const limits = await db
+    const limits = await reader
       .select()
       .from(environmentalLimits)
       .where(

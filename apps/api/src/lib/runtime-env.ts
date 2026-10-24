@@ -12,6 +12,7 @@ import { resolveS3EndpointConfig } from "@calibra-facil/shared/storage-endpoint"
 
 export type WorkerRuntimeEnv = WorkerSigningEnv & {
   DATABASE_URL: string;
+  DATABASE_OWNER_URL?: string;
   CERTIFICATES_BUCKET: {
     get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null>;
     put(
@@ -118,6 +119,7 @@ export function createWorkerRuntimeEnv(): WorkerRuntimeEnv {
 
   return {
     DATABASE_URL: config.database.url ?? "",
+    DATABASE_OWNER_URL: config.database.ownerUrl,
     CERTIFICATES_BUCKET: createR2Bucket(storage, storage.bucketName ?? ""),
     MEDIA_BUCKET: createR2Bucket(storage, storage.mediaBucketName ?? ""),
     // Gotenberg HTML/XLSX->PDF service (services/gotenberg on Cloudflare Containers).

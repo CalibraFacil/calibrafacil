@@ -3,7 +3,8 @@ import {
   allowedFrom,
   requireTargetOf,
 } from "@calibra-facil/schemas/job-transitions";
-import { db } from "./db.js";
+import { db, systemDb } from "./db.js";
+import { forOrg } from "./for-org.js";
 import { appendJobEvent, type RenderRejectionTrigger } from "./job-events.js";
 import { appQueueJob, calibrationJob } from "./schema.js";
 import type { DeadLetteredQueueJob } from "./queue.js";
@@ -83,7 +84,9 @@ export async function rejectCertificateRender(params: {
   const renderingStatus = RENDERING_STATUS;
   const failedStatus = requireTargetOf(renderingStatus, "fail_render");
 
-  return db.transaction(async (tx) => {
+  // The rejection runs in a transaction that names the job's laboratory
+  // (row-level security): the status write and its audit row, scoped to it.
+  return forOrg(db, params.organizationId).transaction(async (tx) => {
     const updated = await tx
       .update(calibrationJob)
       .set({
@@ -163,9 +166,11 @@ export async function rejectDeadLetteredCertificateRenders(
 
     try {
       // The queue payload does not carry the tenant: resolve it from the job
-      // itself, then scope every write by it.
+      // itself, then scope every write by it. This lookup is what LEARNS the
+      // laboratory, so it runs on the system path (the owner connection); the
+      // rejection itself runs in the laboratory's own transaction.
       // oxlint-disable-next-line eslint/no-await-in-loop -- one short transaction per job, kept sequential so a failure stays isolated and logged.
-      const [job] = await db
+      const [job] = await systemDb
         .select({ organizationId: calibrationJob.organizationId })
         .from(calibrationJob)
         .where(eq(calibrationJob.id, payload.jobId))
@@ -241,7 +246,10 @@ export async function rejectStuckCertificateRenders(
 ): Promise<number> {
   const stuckBefore = new Date(Date.now() - stuckAfterMs);
 
-  const candidates = await db.execute(sql`
+  // Cross-tenant by design (a platform cron): the candidates of every laboratory
+  // are listed on the system path; each rejection then runs in its own
+  // laboratory's transaction.
+  const candidates = await systemDb.execute(sql`
     select
       cj.id as id,
       cj.organization_id as organization_id,

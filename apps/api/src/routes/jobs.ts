@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db } from "@calibra-facil/db";
+import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import {
   domainErrorBody,
   domainErrorResponse,
@@ -12,7 +12,13 @@ import {
   renderLabel,
   defaultRenderOptions,
 } from "@calibra-facil/label-rendering";
+import { afterCommitQueue } from "../lib/after-commit";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
+import { orgDb } from "../lib/org-db";
+import {
+  orgTransactionWithExecutor,
+  withOrgReader,
+} from "../lib/org-transaction";
 import { sendServiceOrdersToFinance } from "../lib/finance";
 import type { IntegrationsEnv } from "../modules/integrations";
 import {
@@ -126,31 +132,48 @@ const CommandPaletteJobSearchQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(10).default(5),
 });
 
-async function resolveJobRouteId(
+/**
+ * The job a route identifier names (a numeric id or the certificate number), in
+ * the caller's organization and unit scope. Reads through the caller's org-bound
+ * handle when it passes one, else in a short transaction of its own that names
+ * the laboratory (row-level security).
+ */
+function resolveJobRouteId(
   identifier: string,
   memberData: AuthVariables["member"],
+  executor?: Pick<OrgExecutor, "select">,
 ): Promise<number | null> {
   const routeIdentifier = decodeRouteIdentifier(identifier);
   const legacyId = parseLegacyNumericIdentifier(routeIdentifier);
 
-  const [job] = await db
-    .select({ id: calibrationJob.id })
-    .from(calibrationJob)
-    .where(
-      and(
-        legacyId
-          ? or(
-              eq(calibrationJob.id, legacyId),
-              eq(calibrationJob.jobId, routeIdentifier),
-            )
-          : eq(calibrationJob.jobId, routeIdentifier),
-        eq(calibrationJob.organizationId, memberData.organizationId),
-        buildUnitScopeCondition(calibrationJob.unitId, memberData),
-      ),
-    )
-    .limit(1);
+  return withOrgReader(memberData.organizationId, executor, async (reader) => {
+    const [job] = await reader
+      .select({ id: calibrationJob.id })
+      .from(calibrationJob)
+      .where(
+        and(
+          legacyId
+            ? or(
+                eq(calibrationJob.id, legacyId),
+                eq(calibrationJob.jobId, routeIdentifier),
+              )
+            : eq(calibrationJob.jobId, routeIdentifier),
+          eq(calibrationJob.organizationId, memberData.organizationId),
+          buildUnitScopeCondition(calibrationJob.unitId, memberData),
+        ),
+      )
+      .limit(1);
 
-  return job?.id ?? null;
+    return job?.id ?? null;
+  });
+}
+
+/**
+ * The 409 body of a lost compare-and-set: the status the job holds now, read in
+ * a short transaction that names the laboratory.
+ */
+function statusConflictFor(jobId: number, organizationId: string) {
+  return orgDb(organizationId).transaction((o) => jobStatusConflict(jobId, o));
 }
 
 function jobNotFound() {
@@ -165,13 +188,17 @@ function jobNotFound() {
 async function jobExecutionRefusalResponse(
   c: Context,
   jobId: number,
+  organizationId: string,
   result: Exclude<JobExecutionResult, { status: "ok" }>,
 ) {
   switch (result.status) {
     case "not_found":
       return domainErrorResponse(c, jobNotFound());
     case "concurrent_update":
-      return domainErrorResponse(c, await jobStatusConflict(jobId));
+      return domainErrorResponse(
+        c,
+        await statusConflictFor(jobId, organizationId),
+      );
     case "official_execution_failed":
       // The 422 carries the method diagnostics next to the stable code.
       return c.newResponse(
@@ -234,25 +261,28 @@ export const jobsRouter = new Hono<{
       const { query, limit } = c.req.valid("query");
 
       try {
-        const results = await db
-          .select({
-            id: calibrationJob.id,
-            jobId: calibrationJob.jobId,
-            status: calibrationJob.status,
-          })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              buildUnitScopeCondition(calibrationJob.unitId, memberData),
-              or(
-                ilike(calibrationJob.jobId, `%${query}%`),
-                ilike(calibrationJob.certificateName, `%${query}%`),
-              )!,
-            ),
-          )
-          .orderBy(desc(calibrationJob.createdAt))
-          .limit(limit);
+        const results = await orgDb(memberData.organizationId).transaction(
+          (o) =>
+            o
+              .select({
+                id: calibrationJob.id,
+                jobId: calibrationJob.jobId,
+                status: calibrationJob.status,
+              })
+              .from(calibrationJob)
+              .where(
+                and(
+                  eq(calibrationJob.organizationId, memberData.organizationId),
+                  buildUnitScopeCondition(calibrationJob.unitId, memberData),
+                  or(
+                    ilike(calibrationJob.jobId, `%${query}%`),
+                    ilike(calibrationJob.certificateName, `%${query}%`),
+                  )!,
+                ),
+              )
+              .orderBy(desc(calibrationJob.createdAt))
+              .limit(limit),
+        );
 
         return c.json(results);
       } catch (error) {
@@ -349,53 +379,62 @@ export const jobsRouter = new Hono<{
 
       const whereCondition = and(...conditions);
 
-      // Get total count
-      const [countResult] = await db
-        .select({ total: count() })
-        .from(calibrationJob)
-        .where(whereCondition);
+      // The count, the page and the financial contexts read ONE consistent
+      // view, in a transaction that names the laboratory (row-level security).
+      const { countResult, jobs, financialContexts } = await orgDb(
+        memberData.organizationId,
+      ).transaction(async (o) => {
+        // Get total count
+        const [countResult] = await o
+          .select({ total: count() })
+          .from(calibrationJob)
+          .where(whereCondition);
 
-      // Get paginated data with joins
-      const jobs = await db
-        .select({
-          id: calibrationJob.id,
-          jobId: calibrationJob.jobId,
-          certificateName: calibrationJob.certificateName,
-          status: calibrationJob.status,
-          dueDate: calibrationJob.dueDate,
-          performedAt: calibrationJob.performedAt,
-          createdAt: calibrationJob.createdAt,
-          updatedAt: calibrationJob.updatedAt,
-          approvedAt: calibrationJob.approvedAt,
-          // Related entities
-          customerId: calibrationJob.customerId,
-          customerName: customer.name,
-          assetId: calibrationJob.assetId,
-          assetName: asset.name,
-          assetTag: asset.tag,
-          serviceId: calibrationJob.serviceId,
-          serviceName: service.name,
-          technicianId: calibrationJob.technicianId,
-          technicianName: user.name,
-          // Method snapshot summary
-          methodSnapshot: calibrationJob.methodSnapshot,
-        })
-        .from(calibrationJob)
-        .leftJoin(customer, eq(calibrationJob.customerId, customer.id))
-        .leftJoin(asset, eq(calibrationJob.assetId, asset.id))
-        .leftJoin(service, eq(calibrationJob.serviceId, service.id))
-        .leftJoin(user, eq(calibrationJob.technicianId, user.id))
-        .where(whereCondition)
-        .orderBy(desc(calibrationJob.createdAt))
-        .limit(limit)
-        .offset(offset);
+        // Get paginated data with joins
+        const jobs = await o
+          .select({
+            id: calibrationJob.id,
+            jobId: calibrationJob.jobId,
+            certificateName: calibrationJob.certificateName,
+            status: calibrationJob.status,
+            dueDate: calibrationJob.dueDate,
+            performedAt: calibrationJob.performedAt,
+            createdAt: calibrationJob.createdAt,
+            updatedAt: calibrationJob.updatedAt,
+            approvedAt: calibrationJob.approvedAt,
+            // Related entities
+            customerId: calibrationJob.customerId,
+            customerName: customer.name,
+            assetId: calibrationJob.assetId,
+            assetName: asset.name,
+            assetTag: asset.tag,
+            serviceId: calibrationJob.serviceId,
+            serviceName: service.name,
+            technicianId: calibrationJob.technicianId,
+            technicianName: user.name,
+            // Method snapshot summary
+            methodSnapshot: calibrationJob.methodSnapshot,
+          })
+          .from(calibrationJob)
+          .leftJoin(customer, eq(calibrationJob.customerId, customer.id))
+          .leftJoin(asset, eq(calibrationJob.assetId, asset.id))
+          .leftJoin(service, eq(calibrationJob.serviceId, service.id))
+          .leftJoin(user, eq(calibrationJob.technicianId, user.id))
+          .where(whereCondition)
+          .orderBy(desc(calibrationJob.createdAt))
+          .limit(limit)
+          .offset(offset);
+
+        const financialContexts = await loadJobFinancialContexts(
+          memberData.organizationId,
+          jobs.map((job) => job.id),
+          o,
+        );
+        return { countResult, jobs, financialContexts };
+      });
 
       // Add computed fields
       const now = new Date();
-      const financialContexts = await loadJobFinancialContexts(
-        memberData.organizationId,
-        jobs.map((job) => job.id),
-      );
       const jobsWithComputedFields = jobs.map((job) => ({
         ...job,
         isOverdue: job.dueDate
@@ -429,39 +468,44 @@ export const jobsRouter = new Hono<{
     ...withLabPermission({ calibration: ["read"] }),
     async (c) => {
       const memberData = c.get("member");
-      const id = await resolveJobRouteId(c.req.param("id"), memberData);
 
-      if (id === null) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
+      const found = await orgDb(memberData.organizationId).transaction(
+        async (o) => {
+          const id = await resolveJobRouteId(c.req.param("id"), memberData, o);
+          if (id === null) return null;
 
-      const [job] = await db
-        .select({
-          id: calibrationJob.id,
-          label: calibrationJob.jobId,
-        })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, id),
-            eq(calibrationJob.organizationId, memberData.organizationId),
-            buildUnitScopeCondition(calibrationJob.unitId, memberData),
-          ),
-        )
-        .limit(1);
+          const [job] = await o
+            .select({
+              id: calibrationJob.id,
+              label: calibrationJob.jobId,
+            })
+            .from(calibrationJob)
+            .where(
+              and(
+                eq(calibrationJob.id, id),
+                eq(calibrationJob.organizationId, memberData.organizationId),
+                buildUnitScopeCondition(calibrationJob.unitId, memberData),
+              ),
+            )
+            .limit(1);
+          if (!job) return null;
 
-      if (!job) {
-        return c.json({ error: "Job nao encontrado" }, 404);
-      }
-
-      const financialContextMap = await loadJobFinancialContexts(
-        memberData.organizationId,
-        [job.id],
+          const financialContextMap = await loadJobFinancialContexts(
+            memberData.organizationId,
+            [job.id],
+            o,
+          );
+          return { job, financialContext: financialContextMap.get(job.id) };
+        },
       );
 
+      if (!found) {
+        return c.json({ error: "Job nao encontrado" }, 404);
+      }
+
       return c.json({
-        ...job,
-        ...financialContextMap.get(job.id),
+        ...found.job,
+        ...found.financialContext,
       });
     },
   )
@@ -471,119 +515,138 @@ export const jobsRouter = new Hono<{
   // =========================================================================
   .get("/:id", ...withLabPermission({ calibration: ["read"] }), async (c) => {
     const memberData = c.get("member");
-    const id = await resolveJobRouteId(c.req.param("id"), memberData);
 
-    if (id === null) {
-      return c.json({ error: "Job nao encontrado" }, 404);
-    }
+    const loaded = await orgDb(memberData.organizationId).transaction(
+      async (o) => {
+        const id = await resolveJobRouteId(c.req.param("id"), memberData, o);
 
-    const [job] = await db
-      .select({
-        id: calibrationJob.id,
-        jobId: calibrationJob.jobId,
-        certificateName: calibrationJob.certificateName,
-        certificateNumberingSnapshot:
-          calibrationJob.certificateNumberingSnapshot,
-        organizationId: calibrationJob.organizationId,
-        unitId: calibrationJob.unitId,
-        status: calibrationJob.status,
-        dueDate: calibrationJob.dueDate,
-        performedAt: calibrationJob.performedAt,
-        asFoundConformity: calibrationJob.asFoundConformity,
-        asFoundMargins: calibrationJob.asFoundMargins,
-        data: calibrationJob.data,
-        results: calibrationJob.results,
-        standardsSnapshot: calibrationJob.standardsSnapshot,
-        environmentalSnapshot: calibrationJob.environmentalSnapshot,
-        calibrationLocationSnapshot: calibrationJob.calibrationLocationSnapshot,
-        calibrationPhaseSnapshot: calibrationJob.calibrationPhaseSnapshot,
-        scopeComplianceStatus: calibrationJob.scopeComplianceStatus,
-        scopeComplianceFindings: calibrationJob.scopeComplianceFindings,
-        scopeOverrideJustification: calibrationJob.scopeOverrideJustification,
-        // §7.8.2.1(n) — the worksheet prefills from this, so it must be in the
-        // detail projection or a saved deviation looks like it never persisted.
-        methodDeviations: calibrationJob.methodDeviations,
-        assetSnapshot: calibrationJob.assetSnapshot,
-        certificateUrl: calibrationJob.certificateUrl,
-        labelUrl: calibrationJob.labelUrl,
-        methodSnapshot: calibrationJob.methodSnapshot,
-        createdAt: calibrationJob.createdAt,
-        createdBy: calibrationJob.createdBy,
-        updatedAt: calibrationJob.updatedAt,
-        approvedBy: calibrationJob.approvedBy,
-        approvedAt: calibrationJob.approvedAt,
-        rejectedBy: calibrationJob.rejectedBy,
-        rejectedAt: calibrationJob.rejectedAt,
-        rejectionReason: calibrationJob.rejectionReason,
-        // Amendment fields - ISO 17025 Clause 7.8.4.1
-        supersedesId: calibrationJob.supersedesId,
-        supersededById: calibrationJob.supersededById,
-        amendmentNumber: calibrationJob.amendmentNumber,
-        amendmentReason: calibrationJob.amendmentReason,
-        supersededAt: calibrationJob.supersededAt,
-        // Related entities
-        customerId: calibrationJob.customerId,
-        customerName: customer.name,
-        customerTaxId: customer.taxId,
-        customerAddress: customer.address,
-        labName: organization.name,
-        labStreet: organization.street,
-        labNumber: organization.number,
-        labComplement: organization.complement,
-        labNeighbourhood: organization.neighbourhood,
-        labCity: organization.city,
-        labState: organization.state,
-        labCep: organization.cep,
-        assetId: calibrationJob.assetId,
-        assetName: asset.name,
-        assetTag: asset.tag,
-        assetTypeId: asset.assetTypeId,
-        assetSerialNumber: asset.serialNumber,
-        assetManufacturer: asset.manufacturer,
-        assetModel: asset.model,
-        assetBaseMeasurementUnit: asset.baseMeasurementUnit,
-        assetSpecifications: asset.specifications,
-        assetTypeName: assetType.name,
-        assetTypeSlug: assetType.slug,
-        assetTypeDefinition: assetType.definition,
-        serviceId: calibrationJob.serviceId,
-        serviceName: service.name,
-        servicePrice: service.price,
-        serviceTat: service.tat,
-        technicianId: calibrationJob.technicianId,
-        technicianName: user.name,
-        approverName: approverUser.name,
-        rejectorName: rejectorUser.name,
-      })
-      .from(calibrationJob)
-      .leftJoin(customer, eq(calibrationJob.customerId, customer.id))
-      .leftJoin(
-        organization,
-        eq(calibrationJob.organizationId, organization.id),
-      )
-      .leftJoin(asset, eq(calibrationJob.assetId, asset.id))
-      .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
-      .leftJoin(service, eq(calibrationJob.serviceId, service.id))
-      .leftJoin(user, eq(calibrationJob.technicianId, user.id))
-      .leftJoin(approverUser, eq(calibrationJob.approvedBy, approverUser.id))
-      .leftJoin(rejectorUser, eq(calibrationJob.rejectedBy, rejectorUser.id))
-      .where(
-        and(
-          eq(calibrationJob.id, id),
-          eq(calibrationJob.organizationId, memberData.organizationId),
-          buildUnitScopeCondition(calibrationJob.unitId, memberData),
-        ),
-      )
-      .limit(1);
+        if (id === null) {
+          return null;
+        }
 
-    if (!job) {
-      return c.json({ error: "Job nao encontrado" }, 404);
-    }
+        const [job] = await o
+          .select({
+            id: calibrationJob.id,
+            jobId: calibrationJob.jobId,
+            certificateName: calibrationJob.certificateName,
+            certificateNumberingSnapshot:
+              calibrationJob.certificateNumberingSnapshot,
+            organizationId: calibrationJob.organizationId,
+            unitId: calibrationJob.unitId,
+            status: calibrationJob.status,
+            dueDate: calibrationJob.dueDate,
+            performedAt: calibrationJob.performedAt,
+            asFoundConformity: calibrationJob.asFoundConformity,
+            asFoundMargins: calibrationJob.asFoundMargins,
+            data: calibrationJob.data,
+            results: calibrationJob.results,
+            standardsSnapshot: calibrationJob.standardsSnapshot,
+            environmentalSnapshot: calibrationJob.environmentalSnapshot,
+            calibrationLocationSnapshot:
+              calibrationJob.calibrationLocationSnapshot,
+            calibrationPhaseSnapshot: calibrationJob.calibrationPhaseSnapshot,
+            scopeComplianceStatus: calibrationJob.scopeComplianceStatus,
+            scopeComplianceFindings: calibrationJob.scopeComplianceFindings,
+            scopeOverrideJustification:
+              calibrationJob.scopeOverrideJustification,
+            // §7.8.2.1(n) — the worksheet prefills from this, so it must be in the
+            // detail projection or a saved deviation looks like it never persisted.
+            methodDeviations: calibrationJob.methodDeviations,
+            assetSnapshot: calibrationJob.assetSnapshot,
+            certificateUrl: calibrationJob.certificateUrl,
+            labelUrl: calibrationJob.labelUrl,
+            methodSnapshot: calibrationJob.methodSnapshot,
+            createdAt: calibrationJob.createdAt,
+            createdBy: calibrationJob.createdBy,
+            updatedAt: calibrationJob.updatedAt,
+            approvedBy: calibrationJob.approvedBy,
+            approvedAt: calibrationJob.approvedAt,
+            rejectedBy: calibrationJob.rejectedBy,
+            rejectedAt: calibrationJob.rejectedAt,
+            rejectionReason: calibrationJob.rejectionReason,
+            // Amendment fields - ISO 17025 Clause 7.8.4.1
+            supersedesId: calibrationJob.supersedesId,
+            supersededById: calibrationJob.supersededById,
+            amendmentNumber: calibrationJob.amendmentNumber,
+            amendmentReason: calibrationJob.amendmentReason,
+            supersededAt: calibrationJob.supersededAt,
+            // Related entities
+            customerId: calibrationJob.customerId,
+            customerName: customer.name,
+            customerTaxId: customer.taxId,
+            customerAddress: customer.address,
+            labName: organization.name,
+            labStreet: organization.street,
+            labNumber: organization.number,
+            labComplement: organization.complement,
+            labNeighbourhood: organization.neighbourhood,
+            labCity: organization.city,
+            labState: organization.state,
+            labCep: organization.cep,
+            assetId: calibrationJob.assetId,
+            assetName: asset.name,
+            assetTag: asset.tag,
+            assetTypeId: asset.assetTypeId,
+            assetSerialNumber: asset.serialNumber,
+            assetManufacturer: asset.manufacturer,
+            assetModel: asset.model,
+            assetBaseMeasurementUnit: asset.baseMeasurementUnit,
+            assetSpecifications: asset.specifications,
+            assetTypeName: assetType.name,
+            assetTypeSlug: assetType.slug,
+            assetTypeDefinition: assetType.definition,
+            serviceId: calibrationJob.serviceId,
+            serviceName: service.name,
+            servicePrice: service.price,
+            serviceTat: service.tat,
+            technicianId: calibrationJob.technicianId,
+            technicianName: user.name,
+            approverName: approverUser.name,
+            rejectorName: rejectorUser.name,
+          })
+          .from(calibrationJob)
+          .leftJoin(customer, eq(calibrationJob.customerId, customer.id))
+          .leftJoin(
+            organization,
+            eq(calibrationJob.organizationId, organization.id),
+          )
+          .leftJoin(asset, eq(calibrationJob.assetId, asset.id))
+          .leftJoin(assetType, eq(asset.assetTypeId, assetType.id))
+          .leftJoin(service, eq(calibrationJob.serviceId, service.id))
+          .leftJoin(user, eq(calibrationJob.technicianId, user.id))
+          .leftJoin(
+            approverUser,
+            eq(calibrationJob.approvedBy, approverUser.id),
+          )
+          .leftJoin(
+            rejectorUser,
+            eq(calibrationJob.rejectedBy, rejectorUser.id),
+          )
+          .where(
+            and(
+              eq(calibrationJob.id, id),
+              eq(calibrationJob.organizationId, memberData.organizationId),
+              buildUnitScopeCondition(calibrationJob.unitId, memberData),
+            ),
+          )
+          .limit(1);
 
-    const financialContextMap = await loadJobFinancialContexts(
-      memberData.organizationId,
-      [job.id],
+        if (!job) {
+          return null;
+        }
+
+        const financialContextMap = await loadJobFinancialContexts(
+          memberData.organizationId,
+          [job.id],
+          o,
+        );
+        return { job, financialContextMap };
+      },
     );
+    if (!loaded) {
+      return c.json({ error: "Job nao encontrado" }, 404);
+    }
+    const { job, financialContextMap } = loaded;
     const derivedAssetSnapshot =
       job.assetSnapshot ??
       (["DRAFT", "IN_PROGRESS", "REVIEW", "REJECTED"].includes(job.status)
@@ -640,28 +703,34 @@ export const jobsRouter = new Hono<{
       }
 
       try {
-        const newJob = await db.transaction(async (tx) => {
-          return createCalibrationJob({
-            organizationId: memberData.organizationId,
-            unitId: activeUnitId,
-            createdBy: session.user.id,
-            assetId: input.assetId,
-            serviceId: input.serviceId,
-            technicianId: input.technicianId,
-            dueDate: input.dueDate,
-            // DOM-02 (#655): back-link to the repair OS this calibration came
-            // from, when opened from the pending-after-repair flow. Org-scoped
-            // in createCalibrationJob.
-            sourceServiceOrderId: input.sourceServiceOrderId ?? null,
-            ipAddress: c.req.header("x-forwarded-for") || null,
-            executor: tx,
-            // Defer the assignment notification until after commit (below) —
-            // sending it from inside an open transaction that might still
-            // roll back would notify a technician about a job that never
-            // existed.
-            notifyOnAssignment: false,
-          });
-        });
+        // One transaction that names the laboratory (row-level security); the
+        // raw executor goes to the creator, whose advisory lock and certificate
+        // numbering run raw SQL.
+        const newJob = await orgTransactionWithExecutor(
+          memberData.organizationId,
+          (_o, tx) => {
+            return createCalibrationJob({
+              organizationId: memberData.organizationId,
+              unitId: activeUnitId,
+              createdBy: session.user.id,
+              assetId: input.assetId,
+              serviceId: input.serviceId,
+              technicianId: input.technicianId,
+              dueDate: input.dueDate,
+              // DOM-02 (#655): back-link to the repair OS this calibration came
+              // from, when opened from the pending-after-repair flow. Org-scoped
+              // in createCalibrationJob.
+              sourceServiceOrderId: input.sourceServiceOrderId ?? null,
+              ipAddress: c.req.header("x-forwarded-for") || null,
+              executor: tx,
+              // Defer the assignment notification until after commit (below) —
+              // sending it from inside an open transaction that might still
+              // roll back would notify a technician about a job that never
+              // existed.
+              notifyOnAssignment: false,
+            });
+          },
+        );
 
         if (newJob.technicianId) {
           try {
@@ -734,7 +803,10 @@ export const jobsRouter = new Hono<{
         case "competence_missing":
           return domainErrorResponse(c, result.error);
         case "concurrent_update":
-          return domainErrorResponse(c, await jobStatusConflict(id));
+          return domainErrorResponse(
+            c,
+            await statusConflictFor(id, memberData.organizationId),
+          );
         case "ok":
           // Notify the technician if it changed.
           if (result.changed.technician && input.technicianId) {
@@ -788,7 +860,10 @@ export const jobsRouter = new Hono<{
         case "competence_missing":
           return domainErrorResponse(c, result.error);
         case "concurrent_update":
-          return domainErrorResponse(c, await jobStatusConflict(id));
+          return domainErrorResponse(
+            c,
+            await statusConflictFor(id, memberData.organizationId),
+          );
         case "ok":
           // Send notification to assigned technician
           try {
@@ -845,7 +920,12 @@ export const jobsRouter = new Hono<{
         calibrationPhases: input.calibrationPhases,
       });
       if (result.status !== "ok") {
-        return jobExecutionRefusalResponse(c, id, result);
+        return jobExecutionRefusalResponse(
+          c,
+          id,
+          memberData.organizationId,
+          result,
+        );
       }
 
       // Send notifications to admins/owners (fire and forget)
@@ -897,7 +977,12 @@ export const jobsRouter = new Hono<{
         methodDeviations: input.methodDeviations,
       });
       if (result.status !== "ok") {
-        return jobExecutionRefusalResponse(c, id, result);
+        return jobExecutionRefusalResponse(
+          c,
+          id,
+          memberData.organizationId,
+          result,
+        );
       }
 
       return c.json({
@@ -1069,7 +1154,10 @@ export const jobsRouter = new Hono<{
         case "illegal_transition":
           return domainErrorResponse(c, result.error);
         case "concurrent_update":
-          return domainErrorResponse(c, await jobStatusConflict(id));
+          return domainErrorResponse(
+            c,
+            await statusConflictFor(id, memberData.organizationId),
+          );
         case "ok":
           // Send notification to technician (fire and forget)
           notifyJobRejected(id, session.user.id, input.reason).catch((err) => {
@@ -1103,40 +1191,56 @@ export const jobsRouter = new Hono<{
         return c.json({ error: "Job nao encontrado" }, 404);
       }
 
-      // Unit scope check here — the shared creator (also used by the desktop
-      // sync ingest) only scopes by organization.
-      const [scoped] = await db
-        .select({
-          id: calibrationJob.id,
-          asFoundConformity: calibrationJob.asFoundConformity,
-        })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, id),
-            eq(calibrationJob.organizationId, memberData.organizationId),
-            buildUnitScopeCondition(calibrationJob.unitId, memberData),
-          ),
-        )
-        .limit(1);
+      // The unit-scope check, the NC and the customer notification are written
+      // in ONE transaction that names the laboratory (row-level security); the
+      // notification PDF job and the NC notification read what it wrote, so
+      // they run once it has committed.
+      const afterCommit = afterCommitQueue();
+      const flagged = await orgDb(memberData.organizationId).transaction(
+        async (o) => {
+          // Unit scope check here — the shared creator (also used by the
+          // desktop sync ingest) only scopes by organization.
+          const [scoped] = await o
+            .select({
+              id: calibrationJob.id,
+              asFoundConformity: calibrationJob.asFoundConformity,
+            })
+            .from(calibrationJob)
+            .where(
+              and(
+                eq(calibrationJob.id, id),
+                eq(calibrationJob.organizationId, memberData.organizationId),
+                buildUnitScopeCondition(calibrationJob.unitId, memberData),
+              ),
+            )
+            .limit(1);
 
-      if (!scoped) {
+          if (!scoped) return null;
+
+          return flagJobOutOfTolerance(
+            {
+              organizationId: memberData.organizationId,
+              actorUserId: session.user.id,
+              jobId: id,
+              description: input.description,
+              affectedScope: input.affectedScope,
+              notifyCustomer: input.notifyCustomer,
+              triggerSource:
+                scoped.asFoundConformity === "NON_CONFORMING"
+                  ? "as_found_verdict"
+                  : "manual",
+              ipAddress: c.req.header("x-forwarded-for") || null,
+            },
+            { executor: o, afterCommit: afterCommit.add },
+          );
+        },
+      );
+      await afterCommit.run();
+
+      if (!flagged) {
         return c.json({ error: "Job nao encontrado" }, 404);
       }
-
-      const result = await flagJobOutOfTolerance({
-        organizationId: memberData.organizationId,
-        actorUserId: session.user.id,
-        jobId: id,
-        description: input.description,
-        affectedScope: input.affectedScope,
-        notifyCustomer: input.notifyCustomer,
-        triggerSource:
-          scoped.asFoundConformity === "NON_CONFORMING"
-            ? "as_found_verdict"
-            : "manual",
-        ipAddress: c.req.header("x-forwarded-for") || null,
-      });
+      const result = flagged;
 
       if (!result.ok) {
         return c.json(
@@ -1189,7 +1293,10 @@ export const jobsRouter = new Hono<{
         case "illegal_transition":
           return domainErrorResponse(c, result.error);
         case "concurrent_update":
-          return domainErrorResponse(c, await jobStatusConflict(id));
+          return domainErrorResponse(
+            c,
+            await statusConflictFor(id, memberData.organizationId),
+          );
         case "ok":
           return c.json({
             message: "Job cancelado",
@@ -1235,7 +1342,10 @@ export const jobsRouter = new Hono<{
         case "already_amended":
           return domainErrorResponse(c, outcome.error);
         case "concurrent_update":
-          return domainErrorResponse(c, await jobStatusConflict(id));
+          return domainErrorResponse(
+            c,
+            await statusConflictFor(id, memberData.organizationId),
+          );
         case "ok":
           break;
       }
@@ -1249,6 +1359,7 @@ export const jobsRouter = new Hono<{
         originalJob.standardsSnapshot,
         originalJob.performedAt,
         memberData.organizationId,
+        orgDb(memberData.organizationId),
       );
 
       await enqueueBackgroundJob({
@@ -1302,28 +1413,35 @@ export const jobsRouter = new Hono<{
           return c.json({ error: "Job nao encontrado" }, 404);
         }
 
-        // Verify job exists and belongs to organization
-        const [job] = await db
-          .select({ id: calibrationJob.id })
-          .from(calibrationJob)
-          .where(
-            and(
-              eq(calibrationJob.id, id),
-              eq(calibrationJob.organizationId, memberData.organizationId),
-              buildUnitScopeCondition(calibrationJob.unitId, memberData),
-            ),
-          )
-          .limit(1);
-
-        if (!job) {
-          return c.json({ error: "Job nao encontrado" }, 404);
-        }
-
         // Safety limit to prevent infinite loops from corrupted data
         const MAX_CHAIN_LENGTH = 100;
 
         const dbStartedAt = performance.now();
-        const chainResult = await db.execute(sql`
+        // The job check and the recursive chain read run in one transaction
+        // that names the laboratory (row-level security). The chain is raw SQL
+        // (a recursive CTE the handle cannot express): it takes the raw
+        // executor, and every table in it carries the organization predicate.
+        const chain = await orgTransactionWithExecutor(
+          memberData.organizationId,
+          async (o, tx) => {
+            // Verify job exists and belongs to organization
+            const [job] = await o
+              .select({ id: calibrationJob.id })
+              .from(calibrationJob)
+              .where(
+                and(
+                  eq(calibrationJob.id, id),
+                  eq(calibrationJob.organizationId, memberData.organizationId),
+                  buildUnitScopeCondition(calibrationJob.unitId, memberData),
+                ),
+              )
+              .limit(1);
+
+            if (!job) {
+              return null;
+            }
+
+            const chainResult = await tx.execute(sql`
         WITH RECURSIVE ancestors AS (
           SELECT
             id,
@@ -1400,29 +1518,37 @@ export const jobsRouter = new Hono<{
         FROM chain
         ORDER BY depth ASC;
       `);
+            const chainRows = getExecuteRows<{
+              id: number;
+              job_id: string;
+              status: string;
+              amendment_number: number | null;
+              amendment_reason: string | null;
+              approved_at: Date | string | null;
+              superseded_at: Date | string | null;
+            }>(chainResult);
+
+            return chainRows.map((row) => ({
+              id: Number(row.id),
+              jobId: row.job_id,
+              status: row.status,
+              amendmentNumber:
+                row.amendment_number === null
+                  ? null
+                  : Number(row.amendment_number),
+              amendmentReason: row.amendment_reason,
+              approvedAt: row.approved_at ? new Date(row.approved_at) : null,
+              supersededAt: row.superseded_at
+                ? new Date(row.superseded_at)
+                : null,
+              isCurrent: Number(row.id) === job.id,
+            }));
+          },
+        );
         addServerTiming(c, "amendment_chain_db", dbStartedAt);
-
-        const chainRows = getExecuteRows<{
-          id: number;
-          job_id: string;
-          status: string;
-          amendment_number: number | null;
-          amendment_reason: string | null;
-          approved_at: Date | string | null;
-          superseded_at: Date | string | null;
-        }>(chainResult);
-
-        const chain = chainRows.map((row) => ({
-          id: Number(row.id),
-          jobId: row.job_id,
-          status: row.status,
-          amendmentNumber:
-            row.amendment_number === null ? null : Number(row.amendment_number),
-          amendmentReason: row.amendment_reason,
-          approvedAt: row.approved_at ? new Date(row.approved_at) : null,
-          supersededAt: row.superseded_at ? new Date(row.superseded_at) : null,
-          isCurrent: Number(row.id) === job.id,
-        }));
+        if (chain === null) {
+          return c.json({ error: "Job nao encontrado" }, 404);
+        }
 
         return c.json({
           data: chain,
@@ -1450,39 +1576,45 @@ export const jobsRouter = new Hono<{
         return c.json({ error: "Job nao encontrado" }, 404);
       }
 
-      // Verify job exists and belongs to organization
-      const [existing] = await db
-        .select({ id: calibrationJob.id })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, id),
-            eq(calibrationJob.organizationId, memberData.organizationId),
-            buildUnitScopeCondition(calibrationJob.unitId, memberData),
-          ),
-        )
-        .limit(1);
+      const logs = await orgDb(memberData.organizationId).transaction(
+        async (o) => {
+          // Verify job exists and belongs to organization
+          const [existing] = await o
+            .select({ id: calibrationJob.id })
+            .from(calibrationJob)
+            .where(
+              and(
+                eq(calibrationJob.id, id),
+                eq(calibrationJob.organizationId, memberData.organizationId),
+                buildUnitScopeCondition(calibrationJob.unitId, memberData),
+              ),
+            )
+            .limit(1);
 
-      if (!existing) {
+          if (!existing) return null;
+
+          // Get audit logs with performer details
+          return o
+            .select({
+              id: jobAuditLog.id,
+              action: jobAuditLog.action,
+              changes: jobAuditLog.changes,
+              performedBy: jobAuditLog.performedBy,
+              performedAt: jobAuditLog.performedAt,
+              ipAddress: jobAuditLog.ipAddress,
+              reason: jobAuditLog.reason,
+              performerName: user.name,
+            })
+            .from(jobAuditLog)
+            .leftJoin(user, eq(jobAuditLog.performedBy, user.id))
+            .where(eq(jobAuditLog.jobId, id))
+            .orderBy(desc(jobAuditLog.performedAt));
+        },
+      );
+
+      if (!logs) {
         return c.json({ error: "Job nao encontrado" }, 404);
       }
-
-      // Get audit logs with performer details
-      const logs = await db
-        .select({
-          id: jobAuditLog.id,
-          action: jobAuditLog.action,
-          changes: jobAuditLog.changes,
-          performedBy: jobAuditLog.performedBy,
-          performedAt: jobAuditLog.performedAt,
-          ipAddress: jobAuditLog.ipAddress,
-          reason: jobAuditLog.reason,
-          performerName: user.name,
-        })
-        .from(jobAuditLog)
-        .leftJoin(user, eq(jobAuditLog.performedBy, user.id))
-        .where(eq(jobAuditLog.jobId, id))
-        .orderBy(desc(jobAuditLog.performedAt));
 
       return c.json({ data: logs });
     },
@@ -1497,47 +1629,54 @@ export const jobsRouter = new Hono<{
     async (c) => {
       const memberData = c.get("member");
 
-      const baseQuery = db
-        .select({
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: member.role,
-        })
-        .from(member)
-        .innerJoin(user, eq(member.userId, user.id));
+      const technicians = await orgDb(memberData.organizationId).transaction(
+        async (o) => {
+          const baseQuery = o
+            .select({
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              role: member.role,
+            })
+            .from(member)
+            .innerJoin(user, eq(member.userId, user.id));
 
-      const technicians = memberData.activeUnitId
-        ? await baseQuery
-            .leftJoin(
-              memberUnitAssignment,
-              eq(memberUnitAssignment.memberId, member.id),
-            )
-            .where(
-              and(
-                eq(member.organizationId, memberData.organizationId),
-                inArray(member.role, ["technician", "admin", "owner"]),
-                or(
-                  inArray(member.role, ["admin", "owner"]),
+          return memberData.activeUnitId
+            ? baseQuery
+                .leftJoin(
+                  memberUnitAssignment,
+                  eq(memberUnitAssignment.memberId, member.id),
+                )
+                .where(
                   and(
-                    eq(memberUnitAssignment.unitId, memberData.activeUnitId),
-                    inArray(memberUnitAssignment.role, [
-                      "technician",
-                      "unit_admin",
-                    ]),
+                    eq(member.organizationId, memberData.organizationId),
+                    inArray(member.role, ["technician", "admin", "owner"]),
+                    or(
+                      inArray(member.role, ["admin", "owner"]),
+                      and(
+                        eq(
+                          memberUnitAssignment.unitId,
+                          memberData.activeUnitId,
+                        ),
+                        inArray(memberUnitAssignment.role, [
+                          "technician",
+                          "unit_admin",
+                        ]),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-            )
-            .orderBy(user.name)
-        : await baseQuery
-            .where(
-              and(
-                eq(member.organizationId, memberData.organizationId),
-                inArray(member.role, ["technician", "admin", "owner"]),
-              ),
-            )
-            .orderBy(user.name);
+                )
+                .orderBy(user.name)
+            : baseQuery
+                .where(
+                  and(
+                    eq(member.organizationId, memberData.organizationId),
+                    inArray(member.role, ["technician", "admin", "owner"]),
+                  ),
+                )
+                .orderBy(user.name);
+        },
+      );
 
       return c.json({
         data: technicians,
@@ -1559,17 +1698,19 @@ export const jobsRouter = new Hono<{
         return c.json({ error: "Job nao encontrado" }, 404);
       }
 
-      const [job] = await db
-        .select({ certificateUrl: calibrationJob.certificateUrl })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, id),
-            eq(calibrationJob.organizationId, memberData.organizationId),
-            buildUnitScopeCondition(calibrationJob.unitId, memberData),
-          ),
-        )
-        .limit(1);
+      const [job] = await orgDb(memberData.organizationId).transaction((o) =>
+        o
+          .select({ certificateUrl: calibrationJob.certificateUrl })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.id, id),
+              eq(calibrationJob.organizationId, memberData.organizationId),
+              buildUnitScopeCondition(calibrationJob.unitId, memberData),
+            ),
+          )
+          .limit(1),
+      );
 
       if (!job) {
         return c.json({ error: "Job nao encontrado" }, 404);
@@ -1621,17 +1762,19 @@ export const jobsRouter = new Hono<{
         return c.json({ error: "Job nao encontrado" }, 404);
       }
 
-      const [job] = await db
-        .select({ certificateUrl: calibrationJob.certificateUrl })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, id),
-            eq(calibrationJob.organizationId, memberData.organizationId),
-            buildUnitScopeCondition(calibrationJob.unitId, memberData),
-          ),
-        )
-        .limit(1);
+      const [job] = await orgDb(memberData.organizationId).transaction((o) =>
+        o
+          .select({ certificateUrl: calibrationJob.certificateUrl })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.id, id),
+              eq(calibrationJob.organizationId, memberData.organizationId),
+              buildUnitScopeCondition(calibrationJob.unitId, memberData),
+            ),
+          )
+          .limit(1),
+      );
 
       if (!job?.certificateUrl) {
         return c.json({ error: "Certificado ainda nao foi gerado" }, 400);
@@ -1668,21 +1811,23 @@ export const jobsRouter = new Hono<{
         return c.json({ error: "Job nao encontrado" }, 404);
       }
 
-      const [job] = await db
-        .select({
-          id: calibrationJob.id,
-          status: calibrationJob.status,
-          labelUrl: calibrationJob.labelUrl,
-        })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, id),
-            eq(calibrationJob.organizationId, memberData.organizationId),
-            buildUnitScopeCondition(calibrationJob.unitId, memberData),
-          ),
-        )
-        .limit(1);
+      const [job] = await orgDb(memberData.organizationId).transaction((o) =>
+        o
+          .select({
+            id: calibrationJob.id,
+            status: calibrationJob.status,
+            labelUrl: calibrationJob.labelUrl,
+          })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.id, id),
+              eq(calibrationJob.organizationId, memberData.organizationId),
+              buildUnitScopeCondition(calibrationJob.unitId, memberData),
+            ),
+          )
+          .limit(1),
+      );
 
       if (!job) {
         return c.json({ error: "Job nao encontrado" }, 404);
@@ -1723,17 +1868,19 @@ export const jobsRouter = new Hono<{
         return c.json({ error: "Job nao encontrado" }, 404);
       }
 
-      const [job] = await db
-        .select({ labelUrl: calibrationJob.labelUrl })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, id),
-            eq(calibrationJob.organizationId, memberData.organizationId),
-            buildUnitScopeCondition(calibrationJob.unitId, memberData),
-          ),
-        )
-        .limit(1);
+      const [job] = await orgDb(memberData.organizationId).transaction((o) =>
+        o
+          .select({ labelUrl: calibrationJob.labelUrl })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.id, id),
+              eq(calibrationJob.organizationId, memberData.organizationId),
+              buildUnitScopeCondition(calibrationJob.unitId, memberData),
+            ),
+          )
+          .limit(1),
+      );
 
       if (!job) {
         return c.json({ error: "Job nao encontrado" }, 404);
@@ -1781,28 +1928,30 @@ export const jobsRouter = new Hono<{
         return c.json({ error: "Job nao encontrado" }, 404);
       }
 
-      const [job] = await db
-        .select({
-          jobId: calibrationJob.jobId,
-          performedAt: calibrationJob.performedAt,
-          verificationToken: calibrationJob.verificationToken,
-          labName: organization.name,
-          assetTag: asset.tag,
-        })
-        .from(calibrationJob)
-        .leftJoin(asset, eq(calibrationJob.assetId, asset.id))
-        .leftJoin(
-          organization,
-          eq(calibrationJob.organizationId, organization.id),
-        )
-        .where(
-          and(
-            eq(calibrationJob.id, id),
-            eq(calibrationJob.organizationId, memberData.organizationId),
-            buildUnitScopeCondition(calibrationJob.unitId, memberData),
-          ),
-        )
-        .limit(1);
+      const [job] = await orgDb(memberData.organizationId).transaction((o) =>
+        o
+          .select({
+            jobId: calibrationJob.jobId,
+            performedAt: calibrationJob.performedAt,
+            verificationToken: calibrationJob.verificationToken,
+            labName: organization.name,
+            assetTag: asset.tag,
+          })
+          .from(calibrationJob)
+          .leftJoin(asset, eq(calibrationJob.assetId, asset.id))
+          .leftJoin(
+            organization,
+            eq(calibrationJob.organizationId, organization.id),
+          )
+          .where(
+            and(
+              eq(calibrationJob.id, id),
+              eq(calibrationJob.organizationId, memberData.organizationId),
+              buildUnitScopeCondition(calibrationJob.unitId, memberData),
+            ),
+          )
+          .limit(1),
+      );
 
       if (!job) {
         return c.json({ error: "Job nao encontrado" }, 404);
@@ -1848,17 +1997,19 @@ export const jobsRouter = new Hono<{
         return c.json({ error: "Job nao encontrado" }, 404);
       }
 
-      const [job] = await db
-        .select({ labelUrl: calibrationJob.labelUrl })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.id, id),
-            eq(calibrationJob.organizationId, memberData.organizationId),
-            buildUnitScopeCondition(calibrationJob.unitId, memberData),
-          ),
-        )
-        .limit(1);
+      const [job] = await orgDb(memberData.organizationId).transaction((o) =>
+        o
+          .select({ labelUrl: calibrationJob.labelUrl })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.id, id),
+              eq(calibrationJob.organizationId, memberData.organizationId),
+              buildUnitScopeCondition(calibrationJob.unitId, memberData),
+            ),
+          )
+          .limit(1),
+      );
 
       if (!job?.labelUrl) {
         return c.json({ error: "Etiqueta ainda nao foi gerada" }, 400);

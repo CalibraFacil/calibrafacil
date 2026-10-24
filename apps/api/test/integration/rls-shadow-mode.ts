@@ -146,6 +146,58 @@ export function shadowHono<
   return { ...actual, Hono: ShadowHono };
 }
 
+let appDatabase: RoleDatabase | null = null;
+
+/** The calibra_app pool the requests of a spec run on (created on first use). */
+function applicationPool(): RoleDatabase {
+  if (appDatabase) return appDatabase;
+  const url = process.env.DATABASE_URL;
+  assertHarnessWorkerDb(url);
+  if (!url) throw new Error("rls-shadow: DATABASE_URL is not set");
+  appDatabase = createRoleDatabase(url, {
+    role: "calibra_app",
+    max: 10,
+    onNotice: (message) => {
+      if (!message.startsWith(MARKER)) return;
+      const state = expect.getState();
+      const statement = message.slice(MARKER.length);
+      const origin = origins.get(normalizeStatement(statement));
+      record({
+        type: "no-organization",
+        file: state.testPath ?? "(unknown)",
+        test: state.currentTestName ?? "(outside a test)",
+        statement,
+        path: origin?.path,
+        source: origin?.source ?? undefined,
+      });
+    },
+    onQuery: (query) => {
+      const store = context.getStore();
+      if (store) origins.set(normalizeStatement(query), store);
+    },
+  });
+  return appDatabase;
+}
+
+/**
+ * The database instance requests run on in shadow mode (the calibra_app pool),
+ * or null when the harness is off. For the harness that forces an interleaving
+ * inside a request's transaction (job-cas.ts): it must spy on the instance the
+ * request actually uses.
+ */
+export function shadowApplicationDatabase(): RoleDatabase["db"] | null {
+  return shadowModeEnabled() ? applicationPool().db : null;
+}
+
+/**
+ * Runs `work` outside the "application" context: its database access is the
+ * owner's, like the spec's own seeding. For the other actor of an interleaving
+ * (it is not the application under test and must not be bound by the policies).
+ */
+export function outsideApplication<T>(work: () => T): T {
+  return context.exit(work);
+}
+
 /**
  * The `@calibra-facil/db` module as the specs see it. Normally the real one; in
  * shadow mode `db` / `getDb()` resolve to the calibra_app pool inside a request.
@@ -158,36 +210,7 @@ export function shadowDatabase<
 >(actual: M): M {
   if (!shadowModeEnabled()) return actual;
 
-  let appDatabase: RoleDatabase | null = null;
-  const appPool = (): RoleDatabase => {
-    if (appDatabase) return appDatabase;
-    const url = process.env.DATABASE_URL;
-    assertHarnessWorkerDb(url);
-    if (!url) throw new Error("rls-shadow: DATABASE_URL is not set");
-    appDatabase = createRoleDatabase(url, {
-      role: "calibra_app",
-      max: 10,
-      onNotice: (message) => {
-        if (!message.startsWith(MARKER)) return;
-        const state = expect.getState();
-        const statement = message.slice(MARKER.length);
-        const origin = origins.get(normalizeStatement(statement));
-        record({
-          type: "no-organization",
-          file: state.testPath ?? "(unknown)",
-          test: state.currentTestName ?? "(outside a test)",
-          statement,
-          path: origin?.path,
-          source: origin?.source ?? undefined,
-        });
-      },
-      onQuery: (query) => {
-        const store = context.getStore();
-        if (store) origins.set(normalizeStatement(query), store);
-      },
-    });
-    return appDatabase;
-  };
+  const appPool = applicationPool;
 
   const db = new Proxy(actual.db, {
     get(_, property) {

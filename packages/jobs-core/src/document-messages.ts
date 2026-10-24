@@ -13,7 +13,7 @@ import {
 import { processOotNotification } from "./oot-notifications.js";
 import { processLabelJob } from "./labels.js";
 import { processJob } from "./certificate-render.js";
-import { withDbClient } from "./pdf-render.js";
+import { findJobOrganization, withDbClient } from "./pdf-render.js";
 import { setJobError } from "./job-events.js";
 
 function isServiceOrderDocumentMessage(
@@ -101,14 +101,19 @@ export async function processDocumentMessage(
       ("permanent" in result && result.permanent) ||
       isFinalDelivery(delivery)
     ) {
-      await withDbClient(env, (client) =>
-        setJobError(
-          client,
-          body.jobId,
-          result.error || "Unknown error",
-          body.userId,
-        ),
-      ).catch((dbError) => {
+      await (async () => {
+        const organizationId = await findJobOrganization(env, body.jobId);
+        if (!organizationId) return;
+        await withDbClient(env, (client) =>
+          setJobError(
+            client,
+            organizationId,
+            body.jobId,
+            result.error || "Unknown error",
+            body.userId,
+          ),
+        );
+      })().catch((dbError) => {
         console.error(`[JOB ${body.jobId}] Failed to record error:`, dbError);
       });
     } else {

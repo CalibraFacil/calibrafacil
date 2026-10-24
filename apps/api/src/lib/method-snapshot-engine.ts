@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { db } from "@calibra-facil/db";
+import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import {
   calibrationMethod,
   type MethodSnapshot,
@@ -10,6 +10,7 @@ import {
 } from "@calibra-facil/method-definition";
 
 import { isCompiledMethod } from "../modules/jobs/helpers";
+import { withOrgReader } from "./org-transaction";
 
 /**
  * Re-point a job's frozen method snapshot at the method's current compilation
@@ -31,6 +32,8 @@ export async function reconcileMethodSnapshotEngine(params: {
   methodSnapshot: MethodSnapshot;
   organizationId: string;
   engine: CalculationEngineLike;
+  /** The caller's org-bound handle (row-level security); absent, a short transaction of its own. */
+  executor?: Pick<OrgExecutor, "select">;
 }): Promise<{ methodSnapshot: MethodSnapshot; adopted: boolean }> {
   const { methodSnapshot, organizationId, engine } = params;
   const snapshotCompiled = methodSnapshot.compiledMethod;
@@ -38,24 +41,29 @@ export async function reconcileMethodSnapshotEngine(params: {
     return { methodSnapshot, adopted: false };
   }
 
-  const [current] = await db
-    .select({
-      compiledMethod: calibrationMethod.compiledMethod,
-      methodFingerprint: calibrationMethod.methodFingerprint,
-      methodEngine: calibrationMethod.methodEngine,
-      publicationEvidence: calibrationMethod.publicationEvidence,
-    })
-    .from(calibrationMethod)
-    .where(
-      and(
-        eq(calibrationMethod.id, methodSnapshot.methodId),
-        eq(calibrationMethod.organizationId, organizationId),
-        // The very version the job pinned: a newer version is a different
-        // method for the purposes of an open job.
-        eq(calibrationMethod.version, methodSnapshot.methodVersion),
-      ),
-    )
-    .limit(1);
+  const [current] = await withOrgReader(
+    organizationId,
+    params.executor,
+    (reader) =>
+      reader
+        .select({
+          compiledMethod: calibrationMethod.compiledMethod,
+          methodFingerprint: calibrationMethod.methodFingerprint,
+          methodEngine: calibrationMethod.methodEngine,
+          publicationEvidence: calibrationMethod.publicationEvidence,
+        })
+        .from(calibrationMethod)
+        .where(
+          and(
+            eq(calibrationMethod.id, methodSnapshot.methodId),
+            eq(calibrationMethod.organizationId, organizationId),
+            // The very version the job pinned: a newer version is a different
+            // method for the purposes of an open job.
+            eq(calibrationMethod.version, methodSnapshot.methodVersion),
+          ),
+        )
+        .limit(1),
+  );
 
   const currentCompiled = current?.compiledMethod;
   const reconciled = reconcileCompiledMethodEngine({

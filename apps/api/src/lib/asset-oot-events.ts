@@ -1,6 +1,6 @@
-import { db } from "@calibra-facil/db";
 import { assetOotEvent, assetOotAuditLog } from "@calibra-facil/db/schema";
 import { notifyAssetFoundOutOfTolerance } from "@calibra-facil/notifications";
+import { orgDb } from "./org-db";
 
 /**
  * Asset OOT event creation (#740 Track B). Called fire-and-forget from the
@@ -16,18 +16,39 @@ export async function createAssetOotEventForApprovedJob(params: {
   detectedAt: Date;
   actorUserId: string;
 }): Promise<{ eventId: number | null; created: boolean }> {
-  const [inserted] = await db
-    .insert(assetOotEvent)
-    .values({
-      jobId: params.jobId,
-      assetId: params.assetId,
-      customerId: params.customerId,
-      labOrganizationId: params.labOrganizationId,
-      status: "OPEN",
-      detectedAt: params.detectedAt,
-    })
-    .onConflictDoNothing({ target: assetOotEvent.jobId })
-    .returning();
+  const lab = orgDb(params.labOrganizationId);
+
+  // The event and its first audit entry commit together (one transaction that
+  // names the laboratory, row-level security). The customer notification reads
+  // the committed event, so it runs after, and its audit entry is its own.
+  const inserted = await lab.transaction(async (o) => {
+    const [row] = await o
+      .insert(assetOotEvent)
+      .values({
+        jobId: params.jobId,
+        assetId: params.assetId,
+        customerId: params.customerId,
+        labOrganizationId: params.labOrganizationId,
+        status: "OPEN",
+        detectedAt: params.detectedAt,
+      })
+      .onConflictDoNothing({ target: assetOotEvent.jobId })
+      .returning();
+    if (!row) return null;
+
+    await o.insert(assetOotAuditLog).values({
+      organizationId: params.labOrganizationId,
+      eventId: row.id,
+      action: "create",
+      changes: {
+        jobId: params.jobId,
+        assetId: params.assetId,
+        detectedAt: params.detectedAt.toISOString(),
+      },
+      performedBy: params.actorUserId,
+    });
+    return row;
+  });
 
   // Double-approval (re-approval after rejection cycles) must not duplicate
   // the event or re-notify the customer.
@@ -35,28 +56,18 @@ export async function createAssetOotEventForApprovedJob(params: {
     return { eventId: null, created: false };
   }
 
-  await db.insert(assetOotAuditLog).values({
-    organizationId: params.labOrganizationId,
-    eventId: inserted.id,
-    action: "create",
-    changes: {
-      jobId: params.jobId,
-      assetId: params.assetId,
-      detectedAt: params.detectedAt.toISOString(),
-    },
-    performedBy: params.actorUserId,
-  });
-
   // Customer notification (in-app row + lab-branded email); failure to send
   // must not undo the event.
   try {
     await notifyAssetFoundOutOfTolerance(params.jobId);
-    await db.insert(assetOotAuditLog).values({
-      organizationId: params.labOrganizationId,
-      eventId: inserted.id,
-      action: "notify",
-      performedBy: params.actorUserId,
-    });
+    await lab.transaction((o) =>
+      o.insert(assetOotAuditLog).values({
+        organizationId: params.labOrganizationId,
+        eventId: inserted.id,
+        action: "notify",
+        performedBy: params.actorUserId,
+      }),
+    );
   } catch (error) {
     console.error(
       `[AssetOOT] Failed to notify customer for event ${inserted.id}:`,

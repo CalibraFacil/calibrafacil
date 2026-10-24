@@ -592,19 +592,6 @@ export async function setTransactionOrganization(
 
 type TransactionCallback = Parameters<OrgExecutor["transaction"]>[0];
 
-/**
- * The callbacks `OrgDb.transaction` hands to the driver's `transaction`. A WeakSet,
- * not a name (a minifier renames functions): the integration harness that forces
- * the interleaving of a lost compare-and-set must tell the transaction that only
- * NAMES the organization (an auth middleware, a lookup) from the one that carries
- * the handler's write (db/testing.ts).
- */
-const orgBoundCallbacks = new WeakSet<object>();
-
-export function isOrgBoundTransactionCallback(callback: object): boolean {
-  return orgBoundCallbacks.has(callback);
-}
-
 function bindOne(executor: OrgExecutor, organizationId: string): OrgDb {
   const scope: Scope = { ids: [organizationId] };
   return {
@@ -641,7 +628,6 @@ function bindOne(executor: OrgExecutor, organizationId: string): OrgDb {
         }
         return result;
       };
-      orgBoundCallbacks.add(orgBound);
       return executor.transaction(orgBound, config);
     },
   };

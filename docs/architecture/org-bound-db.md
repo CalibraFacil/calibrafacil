@@ -230,6 +230,57 @@ added or removed without a migration.
   - Specs: `public-api-lab-scope`, `integrations-lab-scope` and `notifications-sweeps-lab-scope` (the sweeps and
     senders run as `calibra_app`) cover the success paths the per-router specs do not reach, each with a
     cross-laboratory negative.
+- **Calibration jobs (P2-18f).** `routes/jobs.ts` (no raw-`db` entry left), the job commands of
+  `modules/jobs/*` and the job libraries run every statement in a transaction that names the laboratory. Only
+  where the statements run changed: the status machine, the compare-and-set predicates, `appendJobEvent`, the
+  frozen certificate input, the approval, signing and the numbering formats are untouched. Details worth
+  knowing:
+  - **The commands name the laboratory themselves.** `editJob`, `assignJob`, `rejectJob`, `submitJob` /
+    `executeJob` open `orgDb(command.organizationId).transaction(...)` and run the read, the gates, the
+    compare-and-set write and its audit row in it (one transaction; the write still matches on the status it
+    read, a failing audit insert still rolls the write back). `amendJob` and `cancelJob` use
+    `orgTransactionWithExecutor` (the numbering and the cancel runners take a raw executor). Because the
+    command knows the laboratory, every entry point (cloud route, public API, desktop sync apply, visit
+    remove-job) is scoped without changing its caller. `createCalibrationJob` without a caller transaction opens
+    one that names the laboratory.
+  - **Approval keeps storage I/O out of every transaction.** `approveJob` reads the gates and the release
+    evaluation in one short transaction (`PreparedApproval`), reads the logo and signature objects after it ended
+    (`prefetchCertificateImages` was split into `findCertificateImageKeys` + `readCertificateImages`; the
+    function itself is unchanged), then writes the status, the frozen input, the audit row and the outbox queue
+    row in one `orgTransactionWithExecutor`. The post-commit steps (asset-date advance, OOT event) open their own
+    org transactions.
+  - **Lib functions take an optional reader.** `loadScopedJob`, the technician and competence gates, the
+    standards judgement, the execution snapshots and `reconcileMethodSnapshotEngine` take an optional org-bound
+    handle and, absent, read in a short transaction of their own (`withOrgReader`, `lib/org-transaction.ts`).
+    The job_standard projection and the visit roll-forward run after the commit (`afterCommitQueue`), as
+    before; `flagJobOutOfTolerance` takes an `OrgScope` like the NC creator and the route now opens the NC and
+    the notification in one transaction.
+  - **Behaviour that is stricter than before.** The label update and its audit row of the worker, the asset-date
+    advance and its audit row, and the asset OOT event and its first audit entry are now one transaction each
+    (they were separate autocommit statements); `POST /:id/flag-oot` no longer leaves an NC behind when the
+    notification insert fails.
+  - **The worker.** `packages/jobs-core` learns the laboratory of a certificate or label message with one lookup
+    on the system path (`findJobOrganization`, `DATABASE_OWNER_URL`, falling back to `DATABASE_URL`) and runs
+    everything else of the job in a transaction that names it (`withOrgDbClient`, `inOrganizationTransaction`:
+    `set_config(..., true)` after `BEGIN`). The legacy live read of a pre-0120 job reads its rows in the
+    transaction and the images after it. `setJobError` takes the laboratory. The queue backstop of
+    `packages/db/src/queue-render-recovery.ts` lists candidates on `systemDb` and rejects each render in
+    `forOrg(db, lab).transaction`. The queue claim (`FOR UPDATE SKIP LOCKED`), the stale-lease recovery and
+    the other worker handlers are unchanged.
+  - **The compare-and-set harness works under both pools.** `changeJobBeforeNextTransaction`
+    (`test/integration/job-cas.ts`) no longer waits for "the next transaction that is not an org-bound one": it
+    fires the other actor right before the first statement of a transaction that takes the job's row lock (its
+    `UPDATE`, or the `FOR UPDATE` an approval and an amendment serialise on), for the plain `db.transaction`, for
+    `orgDb(...).transaction`, for a savepoint of a transaction scope, and, under the shadow report, on the
+    `calibra_app` pool the request runs on (the other actor runs on the owner: `outsideApplication`). The
+    assertions of the specs are unchanged.
+  - **Not done here (other slices).** The jobs specs that go through the public API or the desktop sync apply
+    still break as `calibra_app` on `middleware/api-key-auth.ts`, `lib/api-key-approver.ts`,
+    `lib/public-api.ts` (idempotency), `lib/audit.ts`, `routes/public-api-v2/jobs-decisions.ts` and
+    `modules/sync/*`: the integrations / public API and desktop sync slices.
+  - Specs: `jobs-lab-scope.int.spec.ts` (success paths the other job specs do not reach, each with a
+    cross-laboratory negative, plus the flag-oot atomicity) and `apps/worker`
+    `certificate-issuance-lab-scope.int.spec.ts` (the certificate and label worker connected as `calibra_app`).
 - **Tests.** `apps/api/src/lib/rls-shadow.int.spec.ts` runs against a pool whose sessions are `calibra_app`
   (`test/integration/rls.ts`). `pnpm --filter @calibra-facil/api rls:shadow-report` replays every API
   integration spec (`--group routes/jobs` or `--files` narrow it) with each request's database access as
