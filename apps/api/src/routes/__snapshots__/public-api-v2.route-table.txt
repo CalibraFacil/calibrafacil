@@ -36,10 +36,10 @@ v2 GET /units/:id requireApiScope(units:read)
 v2 GET /units/:id <anonymous> #17bbbfb383
 v2 GET /reports/consolidated/executive-overview requireApiScope(reports:read)
 v2 GET /reports/consolidated/executive-overview zValidator(query:period|unitIds)
-v2 GET /reports/consolidated/executive-overview <anonymous> #519144223a
+v2 GET /reports/consolidated/executive-overview <anonymous> #aa30c8a06a
 v2 GET /reports/consolidated/comparison requireApiScope(reports:read)
 v2 GET /reports/consolidated/comparison zValidator(query:period|unitIds)
-v2 GET /reports/consolidated/comparison <anonymous> #49d35468b3
+v2 GET /reports/consolidated/comparison <anonymous> #d5c4d6e4af
 v2 GET /certificates requireApiScope(certificates:read)
 v2 GET /certificates zValidator(query:page|limit|query|unitId)
 v2 GET /certificates <anonymous> #a674a52dfd

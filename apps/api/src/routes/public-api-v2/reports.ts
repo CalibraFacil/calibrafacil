@@ -5,7 +5,7 @@ import {
   organizationUnit,
   referenceStandard,
 } from "@calibra-facil/db/schema";
-import { and, count, eq, inArray, lt, lte, sql } from "drizzle-orm";
+import { and, count, eq, gte, inArray, lt, lte, sql } from "drizzle-orm";
 import { addCalendarDays, labToday } from "@calibra-facil/shared";
 import { requireApiScope } from "../../middleware/api-key-auth";
 import { type PublicApiV2Env } from "./env";
@@ -124,7 +124,7 @@ export const reportRoutes = new Hono<PublicApiV2Env>()
                 eq(calibrationJob.organizationId, apiKey.organizationId),
                 inArray(calibrationJob.unitId, selectedUnitIds),
                 eq(calibrationJob.status, "APPROVED"),
-                sql`${calibrationJob.approvedAt} >= ${range.startDate}`,
+                gte(calibrationJob.approvedAt, range.startDate),
               ),
             ),
           o
@@ -135,7 +135,7 @@ export const reportRoutes = new Hono<PublicApiV2Env>()
                 eq(calibrationJob.organizationId, apiKey.organizationId),
                 inArray(calibrationJob.unitId, selectedUnitIds),
                 eq(calibrationJob.status, "REJECTED"),
-                sql`${calibrationJob.rejectedAt} >= ${range.startDate}`,
+                gte(calibrationJob.rejectedAt, range.startDate),
               ),
             ),
           o
@@ -176,7 +176,7 @@ export const reportRoutes = new Hono<PublicApiV2Env>()
               and(
                 eq(calibrationJob.organizationId, apiKey.organizationId),
                 inArray(calibrationJob.unitId, selectedUnitIds),
-                sql`${calibrationJob.createdAt} >= ${range.startDate}`,
+                gte(calibrationJob.createdAt, range.startDate),
               ),
             )
             .groupBy(calibrationJob.unitId),
@@ -191,7 +191,7 @@ export const reportRoutes = new Hono<PublicApiV2Env>()
                 eq(calibrationJob.organizationId, apiKey.organizationId),
                 inArray(calibrationJob.unitId, selectedUnitIds),
                 eq(calibrationJob.status, "APPROVED"),
-                sql`${calibrationJob.approvedAt} >= ${range.startDate}`,
+                gte(calibrationJob.approvedAt, range.startDate),
               ),
             )
             .groupBy(calibrationJob.unitId),
@@ -206,7 +206,7 @@ export const reportRoutes = new Hono<PublicApiV2Env>()
                 eq(calibrationJob.organizationId, apiKey.organizationId),
                 inArray(calibrationJob.unitId, selectedUnitIds),
                 eq(calibrationJob.status, "REJECTED"),
-                sql`${calibrationJob.rejectedAt} >= ${range.startDate}`,
+                gte(calibrationJob.rejectedAt, range.startDate),
               ),
             )
             .groupBy(calibrationJob.unitId),
@@ -414,7 +414,7 @@ export const reportRoutes = new Hono<PublicApiV2Env>()
               and(
                 eq(calibrationJob.organizationId, apiKey.organizationId),
                 inArray(calibrationJob.unitId, selectedUnitIds),
-                sql`${calibrationJob.createdAt} >= ${range.startDate}`,
+                gte(calibrationJob.createdAt, range.startDate),
               ),
             )
             .groupBy(calibrationJob.unitId),
@@ -429,7 +429,7 @@ export const reportRoutes = new Hono<PublicApiV2Env>()
                 eq(calibrationJob.organizationId, apiKey.organizationId),
                 inArray(calibrationJob.unitId, selectedUnitIds),
                 eq(calibrationJob.status, "APPROVED"),
-                sql`${calibrationJob.approvedAt} >= ${range.startDate}`,
+                gte(calibrationJob.approvedAt, range.startDate),
               ),
             )
             .groupBy(calibrationJob.unitId),
@@ -444,7 +444,7 @@ export const reportRoutes = new Hono<PublicApiV2Env>()
                 eq(calibrationJob.organizationId, apiKey.organizationId),
                 inArray(calibrationJob.unitId, selectedUnitIds),
                 eq(calibrationJob.status, "REJECTED"),
-                sql`${calibrationJob.rejectedAt} >= ${range.startDate}`,
+                gte(calibrationJob.rejectedAt, range.startDate),
               ),
             )
             .groupBy(calibrationJob.unitId),
