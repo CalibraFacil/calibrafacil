@@ -1,4 +1,3 @@
-import { db } from "@calibra-facil/db";
 import { asset, calibrationJob, customer } from "@calibra-facil/db/schema";
 import {
   CreateNonConformanceSchema,
@@ -34,6 +33,7 @@ export async function applyCreateLocalServiceOrderIntake(
   const existingRemoteEntityId = await findDesktopSyncRemoteEntityId(
     input.memberData.organizationId,
     input.event.entityId,
+    input.o,
   );
   if (existingRemoteEntityId !== null) {
     return { ok: true, remoteEntityId: existingRemoteEntityId };
@@ -67,7 +67,7 @@ export async function applyCreateLocalServiceOrderIntake(
     };
   }
 
-  const [assetRow] = await db
+  const [assetRow] = await input.o
     .select({
       id: asset.id,
       unitId: asset.unitId,
@@ -102,11 +102,14 @@ export async function applyCreateLocalServiceOrderIntake(
   // `POST /service-orders`).
   if (
     values.responsibleTechnicianId &&
-    !(await isAssignableTechnician({
-      organizationId: input.memberData.organizationId,
-      userId: values.responsibleTechnicianId,
-      unitId,
-    }))
+    !(await isAssignableTechnician(
+      {
+        organizationId: input.memberData.organizationId,
+        userId: values.responsibleTechnicianId,
+        unitId,
+      },
+      input.o,
+    ))
   ) {
     return {
       ok: false,
@@ -119,6 +122,7 @@ export async function applyCreateLocalServiceOrderIntake(
     !(await serviceOrderBelongsToOrganization(
       input.memberData.organizationId,
       values.sourceServiceOrderId,
+      input.o,
     ))
   ) {
     return {
@@ -200,6 +204,7 @@ export async function applyCreateLocalNonConformance(
   const existingRemoteEntityId = await findDesktopSyncRemoteEntityId(
     input.memberData.organizationId,
     input.event.entityId,
+    input.o,
   );
   if (existingRemoteEntityId !== null) {
     return { ok: true, remoteEntityId: existingRemoteEntityId };
@@ -230,7 +235,7 @@ export async function applyCreateLocalNonConformance(
   }
 
   if (values.jobId) {
-    const [job] = await db
+    const [job] = await input.o
       .select({ id: calibrationJob.id })
       .from(calibrationJob)
       .where(

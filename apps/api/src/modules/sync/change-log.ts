@@ -38,6 +38,7 @@ import {
   parseSyncChangeCursor,
   syncChangeCursorBefore,
 } from "@calibra-facil/contracts";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import { orgDb } from "../../lib/org-db";
 import { buildUnitScopeCondition } from "../../lib/units";
 import { type SyncScope, syncEntitySource } from "./entity-sources";
@@ -75,8 +76,23 @@ export async function pullChangeLog(input: {
     return { kind: "resync", reason: "cursor_format" };
   }
   const since = parsed.position;
-  const o = orgDb(input.scope.organizationId);
+  // One transaction that names the laboratory (row-level security), READ
+  // COMMITTED as before: every statement still takes its own snapshot, and the
+  // in-flight horizon below is read in the same statement as the entries it
+  // filters, so the cursor argument of docs/architecture/sync-change-seq.md is
+  // unchanged. A read-only transaction has no transaction id, so it is never
+  // the "oldest in flight" the horizon names.
+  return orgDb(input.scope.organizationId).transaction((o) =>
+    pullChangeLogIn(o, input.scope, since, input.limit),
+  );
+}
 
+async function pullChangeLogIn(
+  o: OrgDb,
+  scope: SyncScope,
+  since: SyncChangePosition,
+  limit: number,
+): Promise<ChangeLogPull> {
   // A cursor below what the retention purge removed may have missed entries.
   const [purged] = await o
     .select({
@@ -115,13 +131,13 @@ export async function pullChangeLog(input: {
         sql`${syncChangeLog.xid} < pg_snapshot_xmin(pg_current_snapshot())`,
         or(
           isNull(syncChangeLog.unitId),
-          buildUnitScopeCondition(syncChangeLog.unitId, input.scope),
+          buildUnitScopeCondition(syncChangeLog.unitId, scope),
         ),
       ),
     )
-    .where(eq(organization.id, input.scope.organizationId))
+    .where(eq(organization.id, scope.organizationId))
     .orderBy(asc(syncChangeLog.xid), asc(syncChangeLog.seq))
-    .limit(input.limit + 1);
+    .limit(limit + 1);
 
   const horizonText = rows[0]?.horizon;
   if (horizonText === undefined) {
@@ -152,10 +168,10 @@ export async function pullChangeLog(input: {
           },
         ],
   );
-  const hasMore = entries.length > input.limit;
-  const page = entries.slice(0, input.limit);
+  const hasMore = entries.length > limit;
+  const page = entries.slice(0, limit);
 
-  const events = await resolveEvents(o, input.scope, page);
+  const events = await resolveEvents(o, scope, page);
 
   const last = page.at(-1);
   let next: SyncChangePosition;
@@ -178,7 +194,7 @@ export async function pullChangeLog(input: {
  * as it is now, or a delete (gone, soft-deleted, out of scope).
  */
 async function resolveEvents(
-  o: ReturnType<typeof orgDb>,
+  o: OrgDb,
   scope: SyncScope,
   page: readonly LogEntry[],
 ): Promise<CloudSyncEvent[]> {

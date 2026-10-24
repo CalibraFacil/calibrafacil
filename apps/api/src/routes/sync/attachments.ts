@@ -15,6 +15,7 @@ import { withLabPermission } from "../../middleware/permission";
 import {
   buildSyncAttachmentObjectKey,
   encodeSyncAttachmentId,
+  syncAttachmentObjectKeyBelongsToOrganization,
   tryDecodeSyncAttachmentId,
 } from "../../modules/sync/helpers";
 import { type SyncRouterEnv, getMemberData } from "./env";
@@ -56,11 +57,18 @@ export const attachmentRoutes = new Hono<SyncRouterEnv>()
     "/attachments/complete-upload",
     ...withLabPermission({ calibration: ["create"] }),
     async (c) => {
+      const memberData = getMemberData(c);
       const body = syncAttachmentCompleteUploadRequestSchema.parse(
         await c.req.json(),
       );
       const objectKey = tryDecodeSyncAttachmentId(body.attachmentId);
-      if (!objectKey) {
+      if (
+        !objectKey ||
+        !syncAttachmentObjectKeyBelongsToOrganization(
+          objectKey,
+          memberData.organizationId,
+        )
+      ) {
         return c.json({ error: "Invalid attachment id." }, 400);
       }
 
@@ -85,9 +93,18 @@ export const attachmentRoutes = new Hono<SyncRouterEnv>()
     "/attachments/:attachmentId/download",
     ...withLabPermission({ calibration: ["read"] }),
     async (c) => {
+      const memberData = getMemberData(c);
       const attachmentId = c.req.param("attachmentId");
       const objectKey = tryDecodeSyncAttachmentId(attachmentId);
-      if (!objectKey) {
+      // The id is the object key in base64 and carries no authority: only the
+      // laboratory's own partition of the bucket is served.
+      if (
+        !objectKey ||
+        !syncAttachmentObjectKeyBelongsToOrganization(
+          objectKey,
+          memberData.organizationId,
+        )
+      ) {
         return c.json({ error: "Invalid attachment id." }, 400);
       }
 

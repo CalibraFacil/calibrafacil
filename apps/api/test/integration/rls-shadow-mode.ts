@@ -7,6 +7,10 @@ import {
   type RoleDatabase,
 } from "@calibra-facil/db/role-connection";
 import { POLICY_NAME, rlsTables } from "@calibra-facil/db/rls-sql";
+import {
+  createTransactionScopeRunner,
+  currentTransactionScope,
+} from "@calibra-facil/db/testing";
 import { assertHarnessWorkerDb } from "./guard";
 import {
   normalizeStatement,
@@ -205,7 +209,8 @@ export function outsideApplication<T>(work: () => T): T {
 export function shadowDatabase<
   M extends {
     db: object;
-    getDb: () => object;
+    getDb: () => { transaction: (callback: never) => unknown };
+    runInTransactionScope: unknown;
   },
 >(actual: M): M {
   if (!shadowModeEnabled()) return actual;
@@ -215,13 +220,25 @@ export function shadowDatabase<
   const db = new Proxy(actual.db, {
     get(_, property) {
       tagAccess();
-      const target = context.getStore() ? appPool().db : actual.db;
+      // Inside a transaction scope `db` IS the scope's transaction (the real
+      // proxy resolves it); outside one a request's statements take the
+      // calibra_app pool.
+      const target =
+        context.getStore() && !currentTransactionScope()
+          ? appPool().db
+          : actual.db;
       return Reflect.get(target, property);
     },
   });
+  // A request's transaction scope (the desktop sync event) opens on the
+  // calibra_app pool too, not on the owner connection the real module would use.
+  const runInTransactionScope = createTransactionScopeRunner((callback) =>
+    (context.getStore() ? appPool().db : actual.getDb()).transaction(callback),
+  );
   return {
     ...actual,
     db,
+    runInTransactionScope,
     getDb: () => {
       tagAccess();
       return context.getStore() ? appPool().db : actual.getDb();

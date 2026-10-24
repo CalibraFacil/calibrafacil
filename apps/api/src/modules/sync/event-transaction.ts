@@ -1,4 +1,9 @@
-import { runInTransactionScope } from "@calibra-facil/db";
+import { db, runInTransactionScope } from "@calibra-facil/db";
+import {
+  setTransactionOrganization,
+  type OrgDb,
+} from "@calibra-facil/db/for-org";
+import { orgDb } from "../../lib/org-db";
 import {
   claimDesktopSyncEvent,
   completeDesktopSyncClaim,
@@ -65,18 +70,29 @@ export async function applyDesktopEventAtomically(params: {
   organizationId: string;
   event: { eventId: string; entityType: string; entityId: string };
   /** Applied before `sync_applied_event` existed: only the audit log knows. */
-  findLegacyApplied: () => Promise<LegacyAppliedEvent | null>;
-  apply: () => Promise<AppliedEventResult | RefusedEventResult>;
+  findLegacyApplied: (o: OrgDb) => Promise<LegacyAppliedEvent | null>;
+  /** Runs on `o`, the handle of the event's transaction (bound to the laboratory). */
+  apply: (o: OrgDb) => Promise<AppliedEventResult | RefusedEventResult>;
 }): Promise<DesktopEventOutcome> {
   const captured: { refusal: RefusedEventResult | null } = { refusal: null };
 
   try {
     return await runInTransactionScope(
       async (): Promise<DesktopEventOutcome> => {
+        // Row-level security: the event's transaction names the laboratory of
+        // the pushing device before its first statement, as
+        // `orgDb(lab).transaction` does. `db` is this very transaction in the
+        // scope, so the claim, the change, every audit row and every helper
+        // that reaches for `db` (or opens a savepoint) run as that laboratory
+        // and see only its rows. `o` is the same transaction behind the
+        // handle that also adds the organization predicate to each statement.
+        await setTransactionOrganization(db, params.organizationId);
+        const o = orgDb(params.organizationId);
         const claim = await claimDesktopSyncEvent(
+          o,
           params.organizationId,
           params.event,
-          params.findLegacyApplied,
+          () => params.findLegacyApplied(o),
         );
         if (claim.state === "applied") {
           return {
@@ -87,12 +103,13 @@ export async function applyDesktopEventAtomically(params: {
         }
         if (claim.state === "in_progress") return { state: "in_progress" };
 
-        const result = await params.apply();
+        const result = await params.apply(o);
         if (!result.ok) {
           captured.refusal = result;
           throw new EventRefusedError();
         }
         await completeDesktopSyncClaim(
+          o,
           params.organizationId,
           claim.claimId,
           result,

@@ -1,4 +1,3 @@
-import { db } from "@calibra-facil/db";
 import {
   asset,
   assetAuditLog,
@@ -33,6 +32,7 @@ export async function applyUpdateLocalAsset(
   const mappedRemoteEntityId = await findDesktopSyncRemoteEntityId(
     input.memberData.organizationId,
     input.event.entityId,
+    input.o,
   );
   const remoteEntityId =
     typeof mappedRemoteEntityId === "number"
@@ -59,7 +59,7 @@ export async function applyUpdateLocalAsset(
   }
 
   const values = parseResult.data;
-  const [existingAsset] = await db
+  const [existingAsset] = await input.o
     .select({
       id: asset.id,
       customerId: asset.customerId,
@@ -142,7 +142,7 @@ export async function applyUpdateLocalAsset(
     // so no additional isUniqueViolation mapping is added here. This mirrors
     // applyCreateLocalAsset, which relies on the same generic catch for its own
     // DB-level race and was not given an explicit 23505 mapping either.
-    const [duplicateTag] = await db
+    const [duplicateTag] = await input.o
       .select({ id: asset.id })
       .from(asset)
       .innerJoin(customer, eq(asset.customerId, customer.id))
@@ -262,7 +262,7 @@ export async function applyUpdateLocalAsset(
     }
   }
 
-  const [updatedAsset] = await db
+  const [updatedAsset] = await input.o
     .update(asset)
     .set(updateData)
     .where(and(eq(asset.id, remoteEntityId), isNull(asset.deletedAt)))
@@ -271,7 +271,7 @@ export async function applyUpdateLocalAsset(
   if (!updatedAsset) throw new Error("Erro ao atualizar ativo");
 
   if (Object.keys(changes).length > 0) {
-    await db.insert(assetAuditLog).values({
+    await input.o.insert(assetAuditLog).values({
       organizationId: updatedAsset.labOrganizationId,
       assetId: remoteEntityId,
       action: "status" in changes ? "status_change" : "update",

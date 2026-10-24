@@ -4,6 +4,7 @@ import {
   syncConflictResolutionResponseSchema,
 } from "@calibra-facil/contracts";
 import { writeOrganizationAuditEvent } from "../../lib/audit";
+import { orgDb } from "../../lib/org-db";
 import { withLabPermission } from "../../middleware/permission";
 import { type SyncRouterEnv, getMemberData } from "./env";
 
@@ -17,20 +18,25 @@ export const conflictRoutes = new Hono<SyncRouterEnv>().post(
     const body = syncConflictResolutionRequestSchema.parse(await c.req.json());
     const resolvedAt = new Date().toISOString();
 
-    await writeOrganizationAuditEvent({
-      organizationId: memberData.organizationId,
-      unitId: memberData.activeUnitId,
-      actorUserId: session.user.id,
-      actorMemberId: memberData.id,
-      action: "sync.conflict_resolved",
-      entityType: "sync_conflict",
-      entityId: conflictId,
-      details: {
-        conflictId,
-        status: body.status,
-        resolvedAt,
-      },
-    });
+    await orgDb(memberData.organizationId).transaction((o) =>
+      writeOrganizationAuditEvent(
+        {
+          organizationId: memberData.organizationId,
+          unitId: memberData.activeUnitId,
+          actorUserId: session.user.id,
+          actorMemberId: memberData.id,
+          action: "sync.conflict_resolved",
+          entityType: "sync_conflict",
+          entityId: conflictId,
+          details: {
+            conflictId,
+            status: body.status,
+            resolvedAt,
+          },
+        },
+        o,
+      ),
+    );
 
     return c.json(
       syncConflictResolutionResponseSchema.parse({

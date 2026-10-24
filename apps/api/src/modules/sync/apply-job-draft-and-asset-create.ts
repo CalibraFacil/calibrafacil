@@ -1,4 +1,3 @@
-import { db } from "@calibra-facil/db";
 import {
   asset,
   assetAuditLog,
@@ -32,6 +31,7 @@ export async function applyCreateLocalJobDraft(
   const existingRemoteEntityId = await findDesktopSyncRemoteEntityId(
     input.memberData.organizationId,
     input.event.entityId,
+    input.o,
   );
   if (existingRemoteEntityId !== null) {
     return { ok: true, remoteEntityId: existingRemoteEntityId };
@@ -88,6 +88,7 @@ export async function applyCreateLocalAsset(
   const existingRemoteEntityId = await findDesktopSyncRemoteEntityId(
     input.memberData.organizationId,
     input.event.entityId,
+    input.o,
   );
   if (existingRemoteEntityId !== null) {
     return { ok: true, remoteEntityId: existingRemoteEntityId };
@@ -115,7 +116,7 @@ export async function applyCreateLocalAsset(
     };
   }
 
-  const [foundCustomer] = await db
+  const [foundCustomer] = await input.o
     .select()
     .from(customer)
     .where(
@@ -134,7 +135,7 @@ export async function applyCreateLocalAsset(
     };
   }
 
-  const [foundAssetType] = await db
+  const [foundAssetType] = await input.o
     .select()
     .from(assetType)
     .where(eq(assetType.id, values.assetTypeId))
@@ -183,7 +184,7 @@ export async function applyCreateLocalAsset(
   // the caller's org (join asset → customer) so a desktop-created asset whose tag
   // is used only by ANOTHER lab is not falsely rejected (and cannot read/probe
   // another tenant's tags). The DB now enforces UNIQUE(lab_organization_id, tag).
-  const [existingAsset] = await db
+  const [existingAsset] = await input.o
     .select({ id: asset.id })
     .from(asset)
     .innerJoin(customer, eq(asset.customerId, customer.id))
@@ -229,53 +230,51 @@ export async function applyCreateLocalAsset(
     baseMeasurementUnit: baseMeasurementUnitResult.baseMeasurementUnit,
   });
 
-  const newAsset = await db.transaction(async (tx) => {
-    const [created] = await tx
-      .insert(asset)
-      .values({
-        unitId,
-        customerId: values.customerId,
-        // SEC-03b (#638): denormalize the lab org from the (already org-scoped)
-        // customer so the desktop-synced asset satisfies UNIQUE(lab_org, tag).
-        // foundCustomer was fetched WHERE labOrganizationId =
-        // memberData.organizationId, so this is the device's own lab org.
-        labOrganizationId: foundCustomer.labOrganizationId,
-        assetTypeId: values.assetTypeId,
-        name: values.name,
-        manufacturer: values.manufacturer || null,
-        model: values.model || null,
-        serialNumber: values.serialNumber,
-        tag: values.tag,
-        status: values.status || "ACTIVE",
-        baseMeasurementUnit: baseMeasurementUnitResult.baseMeasurementUnit,
-        lastCalibrationDate,
-        installedAt,
-        comments: values.comments || null,
-        specifications: normalizedSpecifications.specifications || null,
-        metrologyRegime: regimeWrite.metrologyRegime,
-        regulatedInterval: regimeWrite.regulatedInterval,
-        nextLegalVerificationDate,
-      })
-      .returning();
+  // Written on the event's transaction (`input.o`): the asset and its audit row
+  // are one atomic unit with the claim and the audit of the event.
+  const [newAsset] = await input.o
+    .insert(asset)
+    .values({
+      unitId,
+      customerId: values.customerId,
+      // SEC-03b (#638): denormalize the lab org from the (already org-scoped)
+      // customer so the desktop-synced asset satisfies UNIQUE(lab_org, tag).
+      // foundCustomer was fetched WHERE labOrganizationId =
+      // memberData.organizationId, so this is the device's own lab org.
+      labOrganizationId: foundCustomer.labOrganizationId,
+      assetTypeId: values.assetTypeId,
+      name: values.name,
+      manufacturer: values.manufacturer || null,
+      model: values.model || null,
+      serialNumber: values.serialNumber,
+      tag: values.tag,
+      status: values.status || "ACTIVE",
+      baseMeasurementUnit: baseMeasurementUnitResult.baseMeasurementUnit,
+      lastCalibrationDate,
+      installedAt,
+      comments: values.comments || null,
+      specifications: normalizedSpecifications.specifications || null,
+      metrologyRegime: regimeWrite.metrologyRegime,
+      regulatedInterval: regimeWrite.regulatedInterval,
+      nextLegalVerificationDate,
+    })
+    .returning();
 
-    if (!created) throw new Error("Erro ao criar ativo");
+  if (!newAsset) throw new Error("Erro ao criar ativo");
 
-    await tx.insert(assetAuditLog).values({
-      organizationId: created.labOrganizationId,
-      assetId: created.id,
-      action: "create",
-      changes: {
-        source: "desktop_sync",
-        asset: { old: null, new: created },
-        unitConversions:
-          normalizedSpecifications.conversions.length > 0
-            ? normalizedSpecifications.conversions
-            : undefined,
-      },
-      performedBy: actorUserId,
-    });
-
-    return created;
+  await input.o.insert(assetAuditLog).values({
+    organizationId: newAsset.labOrganizationId,
+    assetId: newAsset.id,
+    action: "create",
+    changes: {
+      source: "desktop_sync",
+      asset: { old: null, new: newAsset },
+      unitConversions:
+        normalizedSpecifications.conversions.length > 0
+          ? normalizedSpecifications.conversions
+          : undefined,
+    },
+    performedBy: actorUserId,
   });
 
   await writeDesktopSyncAudit(input, actorUserId, {

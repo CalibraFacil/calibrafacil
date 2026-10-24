@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   asset,
   assetType,
@@ -27,7 +27,23 @@ import {
   type SyncPullWindow,
 } from "./pull-cursor";
 
-export async function loadCloudSyncEventsSince(
+/**
+ * DEPRECATED (protocols 1 and 2): the `updatedAt` cursor pull. One transaction
+ * that names the laboratory (row-level security); the reads share it as they
+ * shared the pool before (READ COMMITTED, one statement each).
+ */
+export function loadCloudSyncEventsSince(
+  memberData: MemberData,
+  since: SyncPullPosition,
+  limit: number,
+) {
+  return orgDb(memberData.organizationId).transaction((o) =>
+    loadCloudSyncEventsSinceIn(o, memberData, since, limit),
+  );
+}
+
+async function loadCloudSyncEventsSinceIn(
+  o: OrgDb,
   memberData: MemberData,
   since: SyncPullPosition,
   limit: number,
@@ -43,7 +59,7 @@ export async function loadCloudSyncEventsSince(
     changedServiceOrders,
     changedMethods,
   ] = await Promise.all([
-    db
+    o
       .select()
       .from(assetType)
       .where(
@@ -55,7 +71,7 @@ export async function loadCloudSyncEventsSince(
       )
       .orderBy(syncPullTimestamp(assetType.updatedAt), assetType.id)
       .limit(limit + 1),
-    db
+    o
       .select({
         id: customer.id,
         name: customer.name,
@@ -79,7 +95,7 @@ export async function loadCloudSyncEventsSince(
       )
       .orderBy(syncPullTimestamp(customer.updatedAt), customer.id)
       .limit(limit + 1),
-    db
+    o
       .select({
         id: asset.id,
         organizationId: customer.labOrganizationId,
@@ -122,7 +138,7 @@ export async function loadCloudSyncEventsSince(
       )
       .orderBy(syncPullTimestamp(asset.updatedAt), asset.id)
       .limit(limit + 1),
-    db
+    o
       .select({
         id: service.id,
         organizationId: service.organizationId,
@@ -148,7 +164,7 @@ export async function loadCloudSyncEventsSince(
       )
       .orderBy(syncPullTimestamp(service.updatedAt), service.id)
       .limit(limit + 1),
-    db
+    o
       .select({
         id: referenceStandard.id,
         organizationId: referenceStandard.organizationId,
@@ -196,7 +212,7 @@ export async function loadCloudSyncEventsSince(
         referenceStandard.id,
       )
       .limit(limit + 1),
-    db
+    o
       .select()
       .from(environmentalLimits)
       .where(
@@ -218,7 +234,7 @@ export async function loadCloudSyncEventsSince(
         environmentalLimits.id,
       )
       .limit(limit + 1),
-    db
+    o
       .select({
         id: calibrationJob.id,
         jobId: calibrationJob.jobId,
@@ -259,7 +275,7 @@ export async function loadCloudSyncEventsSince(
       )
       .orderBy(syncPullTimestamp(calibrationJob.updatedAt), calibrationJob.id)
       .limit(limit + 1),
-    db
+    o
       .select({
         id: serviceOrder.id,
         organizationId: serviceOrder.organizationId,
@@ -311,7 +327,7 @@ export async function loadCloudSyncEventsSince(
       )
       .orderBy(syncPullTimestamp(serviceOrder.updatedAt), serviceOrder.id)
       .limit(limit + 1),
-    db
+    o
       .select({
         id: calibrationMethod.id,
         organizationId: calibrationMethod.organizationId,
@@ -373,7 +389,7 @@ export async function loadCloudSyncEventsSince(
 
   const changedStandardsWithDocuments =
     await attachReferenceStandardCertificateDocuments(
-      orgDb(memberData.organizationId),
+      o,
       taken("reference_standard", changedStandards),
     );
 

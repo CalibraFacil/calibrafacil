@@ -27,6 +27,7 @@ import {
   formatSyncChangeCursor,
   syncBootstrapPageResponseSchema,
 } from "@calibra-facil/contracts";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import { orgDb } from "../../lib/org-db";
 import type { MemberData } from "../../middleware/permission";
 import {
@@ -135,8 +136,24 @@ export async function loadBootstrapPage(input: {
   pageToken: string | null | undefined;
   limit: number;
 }): Promise<BootstrapPage> {
-  const o = orgDb(input.scope.organizationId);
+  // One transaction that names the laboratory (row-level security), READ
+  // COMMITTED as before: each statement takes its own snapshot, the walk's xmin
+  // is read in one statement, and a page is a walk over ids, so the argument in
+  // the header of this file is unchanged. The transaction has no transaction id
+  // of its own, so it is never the "oldest in flight" the xmin names.
+  return orgDb(input.scope.organizationId).transaction((o) =>
+    loadBootstrapPageIn(o, input),
+  );
+}
 
+async function loadBootstrapPageIn(
+  o: OrgDb,
+  input: {
+    scope: SyncScope;
+    pageToken: string | null | undefined;
+    limit: number;
+  },
+): Promise<BootstrapPage> {
   let walk: Walk;
   if (input.pageToken === null || input.pageToken === undefined) {
     const [snapshot] = await o

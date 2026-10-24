@@ -16,7 +16,12 @@ import { describe, expect, it, vi } from "vitest";
 // unpaginated (protocol 1/2) bootstrap queries of POST /bootstrap moved into
 // modules/sync/legacy-bootstrap.ts so the route no longer queries the global
 // db. Only that route's fingerprint changed; every other line is the pre-split
-// recording.
+// recording. P2-18i changed four more handler bodies, deliberately: POST /push
+// (the event's transaction handle `o` is handed to the apply), POST
+// /conflicts/:id/resolve (its audit row is written in `orgDb(lab).transaction`)
+// and the attachment complete-upload / download routes (an attachment id of
+// another laboratory's partition is refused). No route, method, middleware or
+// order changed.
 const { named } = vi.hoisted(() => ({
   named: <T extends (...args: never[]) => unknown>(fn: T, name: string) =>
     Object.defineProperty(fn, "name", { value: name }),

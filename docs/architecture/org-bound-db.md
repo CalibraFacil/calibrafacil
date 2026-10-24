@@ -281,6 +281,68 @@ added or removed without a migration.
   - Specs: `jobs-lab-scope.int.spec.ts` (success paths the other job specs do not reach, each with a
     cross-laboratory negative, plus the flag-oot atomicity) and `apps/worker`
     `certificate-issuance-lab-scope.int.spec.ts` (the certificate and label worker connected as `calibra_app`).
+- **Desktop sync (P2-18i).** `routes/sync/*` and `modules/sync/*` run every statement in a transaction that
+  names the laboratory of the pushing or pulling device (the session's active organization, the same value
+  `requireOrganization` already put in `memberData`). The protocol, the cursor semantics (xid8 below
+  `pg_snapshot_xmin`), the tombstones, the idempotency ledger, the conflict answers and the order of apply are
+  untouched: only where the statements run changed. Details worth knowing:
+  - **One transaction per pushed event, now named.** `applyDesktopEventAtomically` still opens
+    `runInTransactionScope` (the claim, the change, every audit row and the "applied" record commit or roll
+    back together; a refused or conflicting event rolls back whole), and its first statement is
+    `setTransactionOrganization(db, lab)`. `db` is that very transaction inside the scope, so every helper that
+    reaches for it, and every `orgDb(lab).transaction` of a lib or a job command (a savepoint of the event's
+    transaction that names the same laboratory), runs as the laboratory. The apply functions receive the
+    handle `o` of that transaction (`ApplyDesktopSyncEventInput.o`) and read and write through it, so the
+    organization predicate is added to each statement; the small `db.transaction` blocks inside the apply
+    (customer, asset, quote, execution) were savepoints of the same transaction and are now plain statements of
+    it, with the same all-or-nothing outcome. `claimDesktopSyncEvent` / `completeDesktopSyncClaim` and the audit
+    writer take `o`; the job commands (`submitJob`, `executeJob`) and the service-order, NC and finance libs
+    join the event's transaction (they open their own `orgDb(lab).transaction`, which is a savepoint there), so
+    they are scoped without a second transaction and cannot break the atomicity of the event.
+  - **Before the event's transaction.** The pre-phase (`prepareDesktopEventSideEffects`) and the actor check
+    (`validateSyncActorScope`) read the audit log and `member` in a short `orgDb(lab).transaction`
+    (`withOrgReader`). The client organization of a `create_local_customer` is still created by better-auth
+    before the event (its own connection; see "Not done here").
+  - **Pull and bootstrap.** The protocol 3 pull page and each bootstrap page, and the deprecated protocol 1 and
+    2 pull and bootstrap, run in one `orgDb(lab).transaction` (READ COMMITTED: each statement still takes its
+    own snapshot, so the horizon of the pull and the `xmin` of the bootstrap are computed exactly as before; the
+    read-only transaction has no id and is never the "oldest in flight"). A cursor is a position in the shared
+    transaction order, not a key to a laboratory's rows: a laboratory's device presenting another laboratory's
+    cursor gets only its own entries after that position.
+  - **Triggers under `calibra_app`.** The change-log triggers run as the writer: a laboratory's write appends
+    an entry of its own organization, which the `sync_change_log` policy accepts, so no migration was needed. A
+    write that fans out to every laboratory (the global `asset_type` catalog, the seed) is refused for
+    `calibra_app` and stays on `systemDb` (above).
+  - **System path.** One statement: the "is another laboratory's customer attached to this client organization"
+    check of the `create_local_customer` pre-phase (`findOrganizationCreatedForEvent`, `modules/sync/desktop-customer-org.ts`,
+    `customer`, one column, read only; the allowlist entry says why). The `organization` slug lookup beside it
+    is a global table.
+  - **One behaviour change (a closed hole).** An attachment id is the object key in base64 and carried no
+    authority: any device could be handed a download URL for any `org/.../sync-attachments/...` key it could
+    name. `GET /attachments/:id/download` and `POST /attachments/complete-upload` now answer 400 (as for an
+    invalid id) unless the key is under the device's own laboratory partition
+    (`syncAttachmentObjectKeyBelongsToOrganization`).
+  - **Not done here.** `createClientOrganizationAsServiceOwner` (better-auth's own adapter creates the CLIENT
+    organization and its owner `member` row without a laboratory named; the online customer, customer-group and
+    public-API customer routes call it the same way): the pre-org identity slice. The job commands defer their
+    derived bookkeeping (`job_standard` projection, visit roll-forward, `afterCommitQueue`) to "after the
+    commit" of their own transaction, which inside a sync event is a savepoint of the event: it still runs
+    before the event commits, exactly as it did before this slice.
+  - **The shadow harness now follows the transaction scope.** In shadow mode `db` used to resolve to the
+    `calibra_app` pool even inside `runInTransactionScope`, and the scope itself opened on the owner connection,
+    so the statements of a pushed event ran outside its transaction and with no organization set (that is what
+    the sync rows of the baseline mostly measured). `shadowDatabase` (`test/integration/rls-shadow-mode.ts`) now
+    opens a request's scope on the `calibra_app` pool and keeps `db` on the scope's transaction inside it
+    (`createTransactionScopeRunner` / `currentTransactionScope` from `@calibra-facil/db/testing`).
+  - **Measured** (`rls:shadow-report` over the 11 sync specs plus the four job entry-point specs, with the
+    corrected harness): before, 147 of 424 tests broke as `calibra_app` and 125 distinct statements (655 runs)
+    reached a tenant table with no organization; after, 0 of 435 break and the one remaining statement is
+    better-auth creating the CLIENT organization (`packages/auth/src/auth.ts`, the pre-org identity slice).
+  - Specs: `sync-lab-scope.int.spec.ts` (a device of laboratory A cannot push into, execute on or read from
+    laboratory B by ids in payloads, by event organization or unit, by local-id mapping, by cursor or by
+    attachment id; the ledger is per laboratory; the bootstrap pages never contain laboratory B's rows; the
+    change-log triggers under a `calibra_app` connection; an event that fails mid-apply leaves no claim, write,
+    audit row or change-log entry).
 - **Tests.** `apps/api/src/lib/rls-shadow.int.spec.ts` runs against a pool whose sessions are `calibra_app`
   (`test/integration/rls.ts`). `pnpm --filter @calibra-facil/api rls:shadow-report` replays every API
   integration spec (`--group routes/jobs` or `--files` narrow it) with each request's database access as

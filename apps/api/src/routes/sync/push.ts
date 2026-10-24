@@ -198,12 +198,13 @@ export const pushRoutes = new Hono<SyncRouterEnv>().post(
       const outcome = await applyDesktopEventAtomically({
         organizationId: memberData.organizationId,
         event,
-        findLegacyApplied: () =>
-          findAppliedDesktopSyncEvent(memberData.organizationId, event),
-        apply: () =>
+        findLegacyApplied: (o) =>
+          findAppliedDesktopSyncEvent(memberData.organizationId, event, o),
+        apply: (o) =>
           applyDesktopSyncEvent({
             event: command,
             memberData,
+            o,
             sessionUserId: session.user.id,
             deviceId: body.deviceId,
             clientBatchId: body.clientBatchId,

@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import { syncAppliedEvent } from "@calibra-facil/db/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { asRecord } from "./helpers";
@@ -41,12 +41,13 @@ export type DesktopSyncClaim =
  * after the lease that op is taken over instead of stuck forever.
  */
 export async function claimDesktopSyncEvent(
+  o: OrgDb,
   organizationId: string,
   event: { eventId: string; entityType: string; entityId: string },
   findLegacyApplied: () => Promise<LegacyAppliedEvent | null>,
 ): Promise<DesktopSyncClaim> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const [existing] = await db
+    const [existing] = await o
       .select({
         id: syncAppliedEvent.id,
         appliedAt: syncAppliedEvent.appliedAt,
@@ -80,7 +81,7 @@ export async function claimDesktopSyncEvent(
       const legacy = await findLegacyApplied();
       if (legacy) return { state: "applied", ...legacy };
 
-      const [claimed] = await db
+      const [claimed] = await o
         .insert(syncAppliedEvent)
         .values({
           organizationId,
@@ -96,7 +97,7 @@ export async function claimDesktopSyncEvent(
     }
 
     // Claimed but not applied: in flight, or abandoned by a dead process.
-    const [takenOver] = await db
+    const [takenOver] = await o
       .update(syncAppliedEvent)
       .set({ claimedAt: sql`now()` })
       .where(
@@ -114,7 +115,7 @@ export async function claimDesktopSyncEvent(
       // over blindly would apply the op a second time.
       const legacy = await findLegacyApplied();
       if (legacy) {
-        await completeDesktopSyncClaim(organizationId, takenOver.id, legacy);
+        await completeDesktopSyncClaim(o, organizationId, takenOver.id, legacy);
         return { state: "applied", ...legacy };
       }
       return { state: "claimed", claimId: takenOver.id };
@@ -127,11 +128,12 @@ export async function claimDesktopSyncEvent(
 }
 
 export async function completeDesktopSyncClaim(
+  o: OrgDb,
   organizationId: string,
   claimId: number,
   result: { remoteEntityId?: number | string; remoteEntity?: unknown },
 ) {
-  await db
+  await o
     .update(syncAppliedEvent)
     .set({
       appliedAt: sql`now()`,
