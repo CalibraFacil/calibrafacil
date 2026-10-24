@@ -6,7 +6,6 @@ import {
   normalizeLabAccessEmail,
   validateLabAccountSetupToken,
 } from "@calibra-facil/auth/lab-access";
-import { db } from "@calibra-facil/db";
 import {
   invitation,
   labAccountSetupToken,
@@ -17,6 +16,8 @@ import {
 } from "@calibra-facil/db/schema";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { appBaseUrl } from "@calibra-facil/shared/public-urls";
+import { recordPlatformEvent } from "../lib/identity";
+import { orgDb } from "../lib/org-db";
 
 function recordFromUnknown(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -60,7 +61,7 @@ async function logClaimEvent(input: {
   tokenId?: string | null;
   details?: Record<string, unknown> | null;
 }) {
-  await db.insert(platformEventLog).values({
+  await recordPlatformEvent({
     actorUserId: null,
     targetUserId: input.targetUserId ?? null,
     action: input.action,
@@ -225,7 +226,12 @@ export const labSetupRouter = new Hono()
     }
 
     try {
-      await db.transaction(async (tx) => {
+      // The token names the laboratory (validated above): the membership, the
+      // invitation and the token are tenant rows of THAT laboratory, so the claim
+      // is one transaction that names it. A claim of a token from another
+      // laboratory's invitation cannot see or touch this laboratory's rows.
+      const laboratory = orgDb(validation.token.organizationId);
+      await laboratory.transaction(async (tx) => {
         if (!validation.token.hasMembership) {
           if (
             validation.token.purpose !== "member_invite_claim" ||
@@ -320,7 +326,7 @@ export const labSetupRouter = new Hono()
           .where(eq(authSession.id, session.session.id));
       });
 
-      const [org] = await db
+      const [org] = await laboratory
         .select({
           cnpj: organization.cnpj,
           email: organization.email,

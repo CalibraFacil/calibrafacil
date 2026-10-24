@@ -156,37 +156,49 @@ describe("calibra/no-raw-db-in-routes (real oxlint)", () => {
     });
   });
 
-  it("REQ-ORGDB-2: grandfathers the exact legacy count, fails above it and fails when stale", async () => {
-    // Any baselined file will do (the entries shrink as routes migrate): use
-    // the first one and its real allowance.
-    const [entry] = [...RAW_DB_BASELINE];
-    if (entry === undefined) throw new Error("the baseline is empty");
-    const [file, allowed] = entry;
-    await expectClean(RULE, {
-      [file]: uses(allowed),
-    });
+  // The committed baseline is empty since P2-18j, so the ratchet is exercised with
+  // a baseline INJECTED through the rule options (the repo config never sets it).
+  const INJECTED = {
+    baseline: {
+      "apps/api/src/routes/legacy-a.ts": 2,
+      "apps/api/src/routes/legacy-b.ts": 1,
+    },
+  };
+
+  it("REQ-ORGDB-2: an empty committed baseline grandfathers nothing: a single use fails", async () => {
+    expect([...RAW_DB_BASELINE]).toEqual([]);
     await expectViolation(RULE, {
-      [file]: uses(allowed + 1),
+      "apps/api/src/routes/anything.ts": uses(1),
     });
-    const stale = await expectViolation(RULE, {
-      [file]: uses(allowed - 1),
-    });
+  });
+
+  it("REQ-ORGDB-2: grandfathers the exact legacy count, fails above it and fails when stale", async () => {
+    const file = "apps/api/src/routes/legacy-a.ts";
+    await expectClean(RULE, { [file]: uses(2) }, INJECTED);
+    await expectViolation(RULE, { [file]: uses(3) }, INJECTED);
+    const stale = await expectViolation(RULE, { [file]: uses(1) }, INJECTED);
     expect(stale).toMatch(/baseline/i);
+    // An unlisted file is still not allowed any.
+    await expectViolation(
+      RULE,
+      { "apps/api/src/routes/new.ts": uses(1) },
+      INJECTED,
+    );
   }, 60_000);
 
   it("REQ-ORGDB-2: every baselined file passes at its exact count, fails at +1 and fails stale at -1", async () => {
-    const entries = [...RAW_DB_BASELINE];
+    const entries = Object.entries(INJECTED.baseline);
     const tree = (delta: number) =>
       Object.fromEntries(
         entries.map(([file, count]) => [file, uses(count + delta)]),
       );
 
-    const exact = await lintFixtures(RULE, tree(0));
+    const exact = await lintFixtures(RULE, tree(0), INJECTED);
     expect(exact.output).not.toContain(`calibra(${RULE})`);
     expect(exact.exitCode).toBe(0);
 
-    const above = await lintFixtures(RULE, tree(1));
-    const below = await lintFixtures(RULE, tree(-1));
+    const above = await lintFixtures(RULE, tree(1), INJECTED);
+    const below = await lintFixtures(RULE, tree(-1), INJECTED);
     for (const [file] of entries) {
       expect(above.output, file).toContain(file);
       expect(below.output, file).toContain(file);

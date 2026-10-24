@@ -6,7 +6,11 @@ import {
 import React from "react";
 import { ootNotificationKey } from "@calibra-facil/shared/storage-keys";
 import { type Env } from "./runtime-types.js";
-import { generatePdfFromHtml, withDbClient } from "./pdf-render.js";
+import {
+  findOrganizationOnSystemPath,
+  generatePdfFromHtml,
+  withOrgDbClient,
+} from "./pdf-render.js";
 import {
   bucketBinding,
   resolveOrganizationLogoDataUrl,
@@ -67,9 +71,26 @@ export async function processOotNotification(
   notificationId: number,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const row = await withDbClient(env, async (client) => {
-      const result = await client.query<OotNotificationRow>(
-        `
+    // The message names a notification, not its laboratory: one lookup on the
+    // system path (one column of one row by primary key), then every statement
+    // runs in a transaction that names it. No transaction spans the logo read,
+    // Gotenberg or storage.
+    const organizationId = await findOrganizationOnSystemPath(
+      env,
+      `OOT notification ${notificationId}`,
+      "select organization_id from oot_notification where id = $1 limit 1",
+      [notificationId],
+    );
+    if (!organizationId) {
+      return { success: false, error: "OOT notification not found" };
+    }
+
+    const loaded = await withOrgDbClient(
+      env,
+      organizationId,
+      async (client) => {
+        const result = await client.query<OotNotificationRow>(
+          `
         SELECT
           n.id,
           n.organization_id,
@@ -110,18 +131,17 @@ export async function processOotNotification(
         LEFT JOIN reference_standard rs ON rs.id = sr.standard_id
         WHERE n.id = $1
         `,
-        [notificationId],
-      );
-      return result.rows[0] ?? null;
-    });
+          [notificationId],
+        );
+        const found = result.rows[0];
+        if (!found) return null;
 
-    if (!row) return { success: false, error: "OOT notification not found" };
-
-    // Start of the potentially affected period: the previous approved
-    // calibration of the same asset (the last known-good state).
-    const previousCalibration = await withDbClient(env, async (client) => {
-      const result = await client.query<{ performed_at: Date | string | null }>(
-        `
+        // Start of the potentially affected period: the previous approved
+        // calibration of the same asset (the last known-good state).
+        const previous = await client.query<{
+          performed_at: Date | string | null;
+        }>(
+          `
         SELECT j2.performed_at
         FROM calibration_job j2
         WHERE j2.asset_id = $1
@@ -131,10 +151,17 @@ export async function processOotNotification(
         ORDER BY j2.approved_at DESC
         LIMIT 1
         `,
-        [row.asset_id, row.job_id, toDateOrNull(row.approved_at)],
-      );
-      return toDateOrNull(result.rows[0]?.performed_at);
-    });
+          [found.asset_id, found.job_id, toDateOrNull(found.approved_at)],
+        );
+        return {
+          row: found,
+          previousCalibration: toDateOrNull(previous.rows[0]?.performed_at),
+        };
+      },
+    );
+
+    if (!loaded) return { success: false, error: "OOT notification not found" };
+    const { row, previousCalibration } = loaded;
 
     const labLogoUrl = await resolveOrganizationLogoDataUrl(
       env,
@@ -202,7 +229,7 @@ export async function processOotNotification(
 
     // Record the artifact. Only PENDING advances to GENERATED — a re-render
     // must never regress a notification already SENT/ACKNOWLEDGED.
-    await withDbClient(env, (client) =>
+    await withOrgDbClient(env, organizationId, (client) =>
       client.query(
         `
         UPDATE oot_notification

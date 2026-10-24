@@ -59,6 +59,7 @@ import { publicApiV2Router } from "../routes/public-api-v2";
 import { verifyRouter } from "../routes/verify";
 import { customersRouter } from "../routes/customers";
 import { loginAs } from "../../test/integration/setup";
+import { asApplicationRole } from "../../test/integration/application-role";
 import { truncateAll } from "../../test/integration/db";
 import {
   seedApiKey,
@@ -1154,6 +1155,46 @@ describe(
       expect(await snapshotCounts([...ELIGIBLE, ...UNTOUCHED])).toEqual(before);
       expect(await count("organization")).toBe(organizations);
       expect(await count("platform_event_log")).toBe(0);
+    });
+
+    it("REQ-18J-PURGE-1 [HIGH RISK]: as calibra_app the purge runs on the system path: same verdicts (it reads each laboratory's evidence), same erasure", async () => {
+      const labs = await seedPurgeScenario();
+      const untouchedBefore = await snapshotCounts(UNTOUCHED);
+
+      // The evidence probe reads every evidence table of each laboratory. Run on
+      // the application role it would see none (no organization named) and
+      // report no newest evidence: the verdict below proves it is the owner.
+      const decisions = await asApplicationRole(() =>
+        evaluatePurgeCandidates(NOW),
+      );
+      expect(
+        decisions
+          .find((d) => d.organizationId === "org-eligible")
+          ?.newestEvidenceAt?.toISOString(),
+      ).toBe("2010-06-01T00:00:00.000Z");
+      expect(
+        decisions.find((d) => d.organizationId === "org-recent")?.verdict,
+      ).toBe("in_retention");
+
+      const result = await asApplicationRole(() =>
+        runRecordsPurge({
+          config: { enabled: true, mode: "execute" },
+          now: NOW,
+        }),
+      );
+      expect(result.outcomes.map((o) => o.status)).toEqual([
+        "purged",
+        "purged",
+        "purged",
+      ]);
+      for (const orgId of ELIGIBLE) {
+        expect(await organizationExists(orgId), orgId).toBe(false);
+      }
+      // The portal login organization of a purged laboratory goes with it, in the
+      // same transaction, and nobody else lost a row.
+      expect(await organizationExists(labs.eligible.clientId)).toBe(false);
+      expect(await snapshotCounts(UNTOUCHED)).toEqual(untouchedBefore);
+      expect(await organizationExists(labs.hold.clientId)).toBe(true);
     });
 
     it("REQ-RET-5 [HIGH RISK]: execute mode purges exactly the eligible organizations, audit event first, and nobody else", async () => {

@@ -3,6 +3,7 @@ import { ConfigError } from "@calibra-facil/config";
 import {
   assertRlsStartup,
   readRlsRoleFacts,
+  rlsOwnerUrlProblem,
   rlsStartupProblem,
   type RlsRoleFacts,
 } from "./rls-startup";
@@ -99,8 +100,49 @@ describe("assertRlsStartup", () => {
       "DATABASE_RLS_MODE",
     ]);
     await expect(
-      assertRlsStartup({ executor, mode: "enforced" }),
+      assertRlsStartup({
+        executor,
+        mode: "enforced",
+        ownerUrl: "postgres://owner@localhost/db",
+      }),
     ).resolves.toEqual(APP_MEMBER);
+  });
+
+  it("Q40 [HIGH RISK]: enforced mode without DATABASE_OWNER_URL refuses to start, naming both variables, before any query", async () => {
+    let queries = 0;
+    const executor = {
+      execute: async () => {
+        queries += 1;
+        return [row(APP_MEMBER)];
+      },
+    };
+    for (const ownerUrl of [undefined, ""]) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- two cases.
+      const refused = await assertRlsStartup({
+        executor,
+        mode: "enforced",
+        ownerUrl,
+      }).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(refused).toBeInstanceOf(ConfigError);
+      if (!(refused instanceof ConfigError)) throw new Error("not refused");
+      expect(refused.issues.map((issue) => issue.variable)).toEqual([
+        "DATABASE_OWNER_URL",
+      ]);
+      expect(refused.message).toContain("DATABASE_RLS_MODE=enforced");
+      expect(refused.message).toContain("DATABASE_OWNER_URL");
+    }
+    expect(queries).toBe(0);
+  });
+
+  it("Q40: shadow mode does not need DATABASE_OWNER_URL, and an owner URL satisfies enforced mode", () => {
+    expect(rlsOwnerUrlProblem("shadow", undefined)).toBeNull();
+    expect(rlsOwnerUrlProblem("enforced", "postgres://owner@h/db")).toBeNull();
+    expect(rlsOwnerUrlProblem("enforced", undefined)).toContain(
+      "DATABASE_OWNER_URL",
+    );
   });
 
   it("REQ-RLS-2: reads a driver that answers { rows } as well as a bare array", async () => {

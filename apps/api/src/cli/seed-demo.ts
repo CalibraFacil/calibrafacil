@@ -19,8 +19,15 @@
  * for the 40 newest approvals (each is a Chromium render); `--all-certificates`
  * renders them all. Refuses to run against anything but a local database (pass
  * --allow-remote to override).
+ *
+ * Row-level security (P2-18j): every CLI command is an operator tool and runs as
+ * the table OWNER by design, on the system connection (`systemDb`: the owner
+ * URL `DATABASE_OWNER_URL`, or `DATABASE_URL` when the roles are not split). The
+ * seed writes across the whole demo laboratory (and back-dates audit rows the
+ * application may not rewrite), so it is imported as `ownerDb` everywhere in
+ * `src/cli`: the owner is named, never inherited from the application pool.
  */
-import { db } from "@calibra-facil/db";
+import { systemDb as ownerDb } from "@calibra-facil/db";
 import { assetType, organization } from "@calibra-facil/db/schema";
 import { seedAssetTypes } from "@calibra-facil/db/seed-asset-types";
 import { eq } from "drizzle-orm";
@@ -108,7 +115,7 @@ async function main() {
   const startedAt = Date.now();
   assertLocalDatabase();
 
-  const [lab] = await db
+  const [lab] = await ownerDb
     .select({ id: organization.id, metadata: organization.metadata })
     .from(organization)
     .where(eq(organization.id, LAB_ID))
@@ -145,7 +152,7 @@ async function main() {
   try {
     console.log(`Seeding the demo laboratory${quick ? " (quick)" : ""}`);
     await seedAssetTypes();
-    const types = await db
+    const types = await ownerDb
       .select({ id: assetType.id, slug: assetType.slug })
       .from(assetType);
     const refs: SeedRefs = {
@@ -190,7 +197,7 @@ async function main() {
     await seedAssetCalibrationDates(ctx, assets);
     await ageFoundations(ctx);
 
-    await db
+    await ownerDb
       .update(organization)
       .set({
         metadata: JSON.stringify({

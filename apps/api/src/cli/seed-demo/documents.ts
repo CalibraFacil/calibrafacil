@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import { systemDb as ownerDb } from "@calibra-facil/db";
 import { forceCompleteQueueJob } from "@calibra-facil/db/queue";
 import {
   appQueueJob,
@@ -33,13 +33,13 @@ export async function renderServiceOrderDocuments(
 ): Promise<void> {
   const orders = new Set(
     (
-      await db
+      await ownerDb
         .select({ id: serviceOrder.id })
         .from(serviceOrder)
         .where(eq(serviceOrder.organizationId, LAB_ID))
     ).map((row) => row.id),
   );
-  const queued = await db
+  const queued = await ownerDb
     .select({ id: appQueueJob.id, payload: appQueueJob.payload })
     .from(appQueueJob)
     .where(

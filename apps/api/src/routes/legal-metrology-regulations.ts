@@ -1,6 +1,5 @@
 import { Hono } from "hono";
-import { db } from "@calibra-facil/db";
-import { legalMetrologyRegulation } from "@calibra-facil/db/schema";
+import { listLegalMetrologyRegulations } from "../lib/legal-metrology-regulations";
 import { withPermission, type AuthVariables } from "../middleware/permission";
 
 /**
@@ -14,22 +13,7 @@ export const legalMetrologyRegulationsRouter = new Hono<{
   Variables: AuthVariables;
 }>().get("/", ...withPermission({ equipment: ["read"] }), async (c) => {
   try {
-    const rows = await db
-      .select({
-        id: legalMetrologyRegulation.id,
-        category: legalMetrologyRegulation.category,
-        kind: legalMetrologyRegulation.kind,
-        valueMonths: legalMetrologyRegulation.valueMonths,
-        byTechnology: legalMetrologyRegulation.byTechnology,
-        anchor: legalMetrologyRegulation.anchor,
-        operationalizedByDelegate:
-          legalMetrologyRegulation.operationalizedByDelegate,
-        regulationReference: legalMetrologyRegulation.regulationReference,
-        provenance: legalMetrologyRegulation.provenance,
-        note: legalMetrologyRegulation.note,
-      })
-      .from(legalMetrologyRegulation)
-      .orderBy(legalMetrologyRegulation.category);
+    const rows = await listLegalMetrologyRegulations();
 
     return c.json({ data: rows });
   } catch (error) {

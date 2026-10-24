@@ -13,6 +13,7 @@ import {
   authErrorSignals,
   userCreateErrorWasDuplicate,
 } from "../lib/auth-user-errors";
+import { orgDb } from "../lib/org-db";
 import { removeLabOrganization } from "../lib/records-retention";
 
 /**
@@ -230,33 +231,43 @@ export async function ensureOwnerMembership(input: {
   organizationId: string;
   userId: string;
 }) {
-  const existing = await db.query.member.findFirst({
-    where: and(
-      eq(member.organizationId, input.organizationId),
-      eq(member.userId, input.userId),
-    ),
+  // The laboratory was just created and is known: its first membership is read
+  // and written in ONE transaction that names it (`member` is a tenant table),
+  // so the owner of a new laboratory is created under the role split exactly as
+  // before.
+  return orgDb(input.organizationId).transaction(async (lab) => {
+    const [existing] = await lab
+      .select()
+      .from(member)
+      .where(
+        and(
+          eq(member.organizationId, input.organizationId),
+          eq(member.userId, input.userId),
+        ),
+      )
+      .limit(1);
+
+    if (!existing) {
+      await lab.insert(member).values({
+        id: randomBytes(16).toString("hex"),
+        organizationId: input.organizationId,
+        userId: input.userId,
+        role: "owner",
+        createdAt: new Date(),
+      });
+      return "created" as const;
+    }
+
+    if (existing.role !== "owner") {
+      await lab
+        .update(member)
+        .set({ role: "owner" })
+        .where(eq(member.id, existing.id));
+      return "promoted" as const;
+    }
+
+    return "existing" as const;
   });
-
-  if (!existing) {
-    await db.insert(member).values({
-      id: randomBytes(16).toString("hex"),
-      organizationId: input.organizationId,
-      userId: input.userId,
-      role: "owner",
-      createdAt: new Date(),
-    });
-    return "created";
-  }
-
-  if (existing.role !== "owner") {
-    await db
-      .update(member)
-      .set({ role: "owner" })
-      .where(eq(member.id, existing.id));
-    return "promoted";
-  }
-
-  return "existing";
 }
 
 export async function cleanupFailedLabProvisioning(params: {

@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import { systemDb as ownerDb } from "@calibra-facil/db";
 import {
   calibrationJob,
   calibrationRequest,
@@ -99,7 +99,7 @@ export async function seedRequests(
   customerIds: CustomerIds,
   serviceIds: ServiceIds,
 ): Promise<void> {
-  const [existing] = await db
+  const [existing] = await ownerDb
     .select({ id: calibrationRequest.id })
     .from(calibrationRequest)
     .where(eq(calibrationRequest.organizationId, LAB_ID))
@@ -110,11 +110,11 @@ export async function seedRequests(
   }
 
   const busy = new Set<number>();
-  for (const row of await db
+  for (const row of await ownerDb
     .select({ id: calibrationJob.assetId })
     .from(calibrationJob))
     busy.add(row.id);
-  for (const row of await db
+  for (const row of await ownerDb
     .select({ id: serviceOrder.assetId })
     .from(serviceOrder))
     busy.add(row.id);
@@ -144,7 +144,7 @@ export async function seedRequests(
     const customerId = customerIds.get(code);
     if (!entry || !customerId) throw new Error(`Unknown customer ${code}`);
 
-    const [customerRow] = await db
+    const [customerRow] = await ownerDb
       .select({ authOrganizationId: customer.authOrganizationId })
       .from(customer)
       .where(eq(customer.id, customerId))
@@ -243,7 +243,7 @@ export async function seedRequests(
     }
 
     const filedAt = new Date(ctx.now.getTime() - spec.createdDaysAgo * DAY_MS);
-    await db
+    await ownerDb
       .update(calibrationRequest)
       .set({ createdAt: filedAt, updatedAt: filedAt })
       .where(and(eq(calibrationRequest.id, requestId)));

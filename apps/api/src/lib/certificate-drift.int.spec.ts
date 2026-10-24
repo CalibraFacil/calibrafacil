@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { db, truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { asApplicationRole } from "../../test/integration/application-role";
+import { sql } from "drizzle-orm";
 import {
   asset,
   assetType,
@@ -13,7 +15,10 @@ import {
   service,
 } from "@calibra-facil/db/schema";
 
-import { runCertificateDriftCheck } from "./certificate-drift";
+import {
+  DriftAuditWriteError,
+  runCertificateDriftCheck,
+} from "./certificate-drift";
 
 // Real-DB integration for the drift-detection cron (roadmap item 6, epic
 // backlog #1): seed a full issued-snapshot graph, then run the check with an
@@ -39,7 +44,7 @@ async function seedSnapshot(orgId: string, userId: string, unitId: number) {
     .insert(assetType)
     .values({
       name: "Balança Drift",
-      slug: "balanca-drift",
+      slug: `balanca-drift-${orgId}`,
       definition: [],
       createdAt: EPOCH,
     })
@@ -67,8 +72,8 @@ async function seedSnapshot(orgId: string, userId: string, unitId: number) {
     })
     .returning();
   const [jobRow] = await insertJobs({
-    jobId: "CAL-DRIFT-0001",
-    certificateName: "CAL-DRIFT-0001",
+    jobId: `CAL-DRIFT-${orgId}`,
+    certificateName: `CAL-DRIFT-${orgId}`,
     organizationId: orgId,
     unitId,
     customerId: customerRow!.id,
@@ -167,5 +172,82 @@ describe("runCertificateDriftCheck (real-DB integration)", () => {
     });
     expect(row?.pdfSha256).toBe(PDF_SHA);
     expect(row?.status).toBe("ISSUED");
+  });
+
+  it("REQ-18J-SWEEP-3 [HIGH RISK]: as calibra_app the sweep lists every laboratory's snapshots on the system path and writes each finding in its own laboratory", async () => {
+    const labA = await seedOrg({
+      orgId: "org-drift-a",
+      userId: "user-drift-a",
+    });
+    const labB = await seedOrg({
+      orgId: "org-drift-b",
+      userId: "user-drift-b",
+    });
+    const snapshotA = await seedSnapshot(labA.orgId, labA.userId, labA.unitId);
+    const snapshotB = await seedSnapshot(labB.orgId, labB.userId, labB.unitId);
+
+    const result = await asApplicationRole(() =>
+      runCertificateDriftCheck(async () => new Uint8Array([9, 9, 9])),
+    );
+
+    expect(result.checked).toBe(2);
+    expect(result.drifted).toBe(2);
+    // One audit event per laboratory, about that laboratory's own snapshot.
+    expect((await auditRows(labA.orgId)).map((row) => row.entityId)).toEqual([
+      String(snapshotA.id),
+    ]);
+    expect((await auditRows(labB.orgId)).map((row) => row.entityId)).toEqual([
+      String(snapshotB.id),
+    ]);
+  });
+
+  it("REQ-18J-SWEEP-4 [HIGH RISK]: a laboratory whose audit write fails does not hide another laboratory's drift: the sweep records the rest, then reports", async () => {
+    const labA = await seedOrg({
+      orgId: "org-drift-a",
+      userId: "user-drift-a",
+    });
+    const labB = await seedOrg({
+      orgId: "org-drift-b",
+      userId: "user-drift-b",
+    });
+    const snapshotA = await seedSnapshot(labA.orgId, labA.userId, labA.unitId);
+    const snapshotB = await seedSnapshot(labB.orgId, labB.userId, labB.unitId);
+    // The database refuses laboratory B's audit event (a trigger of this test). B
+    // holds the NEWEST snapshot, which the sweep meets first, so the refused write
+    // comes BEFORE the one that must still be recorded.
+    await db.execute(sql`
+      CREATE FUNCTION test_refuse_drift_audit() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RAISE EXCEPTION 'test: audit refused'; END $$`);
+    await db.execute(sql`
+      CREATE TRIGGER test_refuse_drift_audit BEFORE INSERT ON organization_event_log
+      FOR EACH ROW WHEN (NEW.organization_id = 'org-drift-b') EXECUTE FUNCTION test_refuse_drift_audit()`);
+    try {
+      const failure = await asApplicationRole(() =>
+        runCertificateDriftCheck(async () => new Uint8Array([9, 9, 9])),
+      ).then(
+        () => null,
+        (error: unknown) => error,
+      );
+
+      expect(failure).toBeInstanceOf(DriftAuditWriteError);
+      if (!(failure instanceof DriftAuditWriteError))
+        throw new Error("no report");
+      // The sweep still found both, and names the one it could not record.
+      expect(failure.result.drifted).toBe(2);
+      expect(failure.failures.map((entry) => entry.snapshotId)).toEqual([
+        snapshotB.id,
+      ]);
+    } finally {
+      await db.execute(
+        sql`DROP TRIGGER test_refuse_drift_audit ON organization_event_log`,
+      );
+      await db.execute(sql`DROP FUNCTION test_refuse_drift_audit()`);
+    }
+    // B's snapshot is the newest, so it was met FIRST and failed: A's finding after
+    // it is still recorded.
+    expect((await auditRows(labA.orgId)).map((row) => row.entityId)).toEqual([
+      String(snapshotA.id),
+    ]);
+    expect(await auditRows(labB.orgId)).toEqual([]);
   });
 });

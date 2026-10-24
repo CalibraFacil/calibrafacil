@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import { systemDb as ownerDb } from "@calibra-facil/db";
 import { nonConformance, referenceStandard } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 
@@ -23,7 +23,7 @@ export async function seedQuality(
 ): Promise<void> {
   const rng = ctx.rng.fork("quality");
   // Re-run guard: quality records have no natural key, so one count decides.
-  const [existing] = await db
+  const [existing] = await ownerDb
     .select({ id: nonConformance.id })
     .from(nonConformance)
     .where(eq(nonConformance.organizationId, LAB_ID))
@@ -206,7 +206,7 @@ export async function seedQuality(
   });
 
   // Control chart of a check standard, ending in a signal.
-  const [weights] = await db
+  const [weights] = await ownerDb
     .select({ id: referenceStandard.id })
     .from(referenceStandard)
     .where(

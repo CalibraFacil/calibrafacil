@@ -15,10 +15,10 @@ import {
 } from "@calibra-facil/shared/storage-keys";
 import { appBaseUrl } from "@calibra-facil/shared/public-urls";
 import { type Env } from "./runtime-types.js";
-import { generatePdfFromHtml, withDbClient } from "./pdf-render.js";
+import { generatePdfFromHtml, withOrgDbClient } from "./pdf-render.js";
 import {
-  fetchServiceOrderDocumentData,
-  fetchServiceOrderOrg,
+  findServiceOrderOrganization,
+  loadServiceOrderDocumentBase,
 } from "./service-order-data.js";
 import { bucketBinding, fetchOrgRefById } from "./storage-helpers.js";
 
@@ -29,7 +29,17 @@ export async function processServiceOrderTag(
   userId: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const data = await withDbClient(env, async (client) => {
+    // The message names a service order, not its laboratory: one lookup on the
+    // system path, then every statement runs in a transaction that names it, and
+    // none spans the QR code, Gotenberg or storage.
+    const organizationId = await findServiceOrderOrganization(
+      env,
+      serviceOrderId,
+    );
+    if (!organizationId) {
+      return { success: false, error: "Service order not found" };
+    }
+    const read = await withOrgDbClient(env, organizationId, async (client) => {
       const result = await client.query(
         `
         SELECT so.organization_id, so.service_order_number, so.opened_at,
@@ -45,9 +55,12 @@ export async function processServiceOrderTag(
         `,
         [serviceOrderId],
       );
-      return result.rows[0];
+      const row = result.rows[0];
+      if (!row) return null;
+      return { row, org: await fetchOrgRefById(client, organizationId) };
     });
-    if (!data) return { success: false, error: "Service order not found" };
+    if (!read) return { success: false, error: "Service order not found" };
+    const { row: data, org } = read;
     const qrSvg = await QRCode.toString(
       `${appBaseUrl()}/dashboard/service-orders/${serviceOrderId}`,
       { type: "svg", width: 200, margin: 1, errorCorrectionLevel: "M" },
@@ -68,9 +81,6 @@ export async function processServiceOrderTag(
     const { year, month } = getYearMonth(data.opened_at, "openedAt");
     const tagNumber =
       data.tag_number ?? `${data.service_order_number}-TAG-${serviceOrderId}`;
-    const org = await withDbClient(env, (client) =>
-      fetchServiceOrderOrg(client, serviceOrderId),
-    );
     const { bucket, key } = serviceOrderDocKey({
       org,
       serviceOrderNumber: data.service_order_number,
@@ -82,7 +92,7 @@ export async function processServiceOrderTag(
     await bucketBinding(env, bucket).put(key, pdfBuffer, {
       httpMetadata: { contentType: "application/pdf" },
     });
-    await withDbClient(env, async (client) => {
+    await withOrgDbClient(env, organizationId, async (client) => {
       if (tagId ?? data.tag_id) {
         await client.query(
           `UPDATE service_order_tag SET pdf_r2_key = $2, printed_at = COALESCE(printed_at, now()), printed_by_user_id = COALESCE(printed_by_user_id, $3) WHERE id = $1`,
@@ -113,11 +123,18 @@ export async function processServiceOrderQuote(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     if (!quoteId) return { success: false, error: "Missing quoteId" };
-    const base = await withDbClient(env, (client) =>
-      fetchServiceOrderDocumentData(env, client, serviceOrderId),
+    const organizationId = await findServiceOrderOrganization(
+      env,
+      serviceOrderId,
     );
-    if (!base) return { success: false, error: "Service order not found" };
-    const quote = await withDbClient(env, async (client) => {
+    const loaded = organizationId
+      ? await loadServiceOrderDocumentBase(env, organizationId, serviceOrderId)
+      : null;
+    if (!organizationId || !loaded) {
+      return { success: false, error: "Service order not found" };
+    }
+    const { data: base, org } = loaded;
+    const quote = await withOrgDbClient(env, organizationId, async (client) => {
       const quoteResult = await client.query(
         `SELECT * FROM service_order_quote WHERE id = $1`,
         [quoteId],
@@ -160,9 +177,6 @@ export async function processServiceOrderQuote(
     );
     const pdfBuffer = await generatePdfFromHtml(env, html);
     const { year, month } = getYearMonth(base.openedAt, "openedAt");
-    const org = await withDbClient(env, (client) =>
-      fetchServiceOrderOrg(client, serviceOrderId),
-    );
     const { bucket, key } = serviceOrderDocKey({
       org,
       serviceOrderNumber: base.serviceOrderNumber,
@@ -175,7 +189,7 @@ export async function processServiceOrderQuote(
     await bucketBinding(env, bucket).put(key, pdfBuffer, {
       httpMetadata: { contentType: "application/pdf" },
     });
-    await withDbClient(env, (client) =>
+    await withOrgDbClient(env, organizationId, (client) =>
       client.query(
         `UPDATE service_order_quote SET pdf_r2_key = $2 WHERE id = $1`,
         [quoteId, key],
@@ -197,14 +211,24 @@ export async function processServiceOrderDeliveryReceipt(
   userId: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const base = await withDbClient(env, (client) =>
-      fetchServiceOrderDocumentData(env, client, serviceOrderId),
+    const organizationId = await findServiceOrderOrganization(
+      env,
+      serviceOrderId,
     );
-    if (!base) return { success: false, error: "Service order not found" };
+    const loaded = organizationId
+      ? await loadServiceOrderDocumentBase(env, organizationId, serviceOrderId)
+      : null;
+    if (!organizationId || !loaded) {
+      return { success: false, error: "Service order not found" };
+    }
+    const { data: base } = loaded;
 
-    const payload = await withDbClient(env, async (client) => {
-      const documentResult = await client.query(
-        `
+    const payload = await withOrgDbClient(
+      env,
+      organizationId,
+      async (client) => {
+        const documentResult = await client.query(
+          `
         SELECT *
         FROM service_order_delivery_document
         WHERE service_order_id = $1
@@ -212,46 +236,47 @@ export async function processServiceOrderDeliveryReceipt(
         ORDER BY version DESC
         LIMIT 1
         `,
-        [serviceOrderId, documentId ?? null],
-      );
-      const orderResult = await client.query(
-        `
+          [serviceOrderId, documentId ?? null],
+        );
+        const orderResult = await client.query(
+          `
         SELECT organization_id, service_order_number, opened_at, delivered_at,
           delivered_to_name, delivered_to_document, delivery_method, delivery_notes,
           inmetro_repair_mark_number, inmetro_repair_mark_issued_at
         FROM service_order
         WHERE id = $1
         `,
-        [serviceOrderId],
-      );
-      const executionResult = await client.query(
-        `
+          [serviceOrderId],
+        );
+        const executionResult = await client.query(
+          `
         SELECT *
         FROM service_order_execution
         WHERE service_order_id = $1
         LIMIT 1
         `,
-        [serviceOrderId],
-      );
-      const execution = executionResult.rows[0];
-      const itemsResult = execution
-        ? await client.query(
-            `
+          [serviceOrderId],
+        );
+        const execution = executionResult.rows[0];
+        const itemsResult = execution
+          ? await client.query(
+              `
             SELECT description, quantity, unit, unit_price_cents, total_price_cents, type
             FROM service_order_execution_item
             WHERE execution_id = $1
             ORDER BY sort_order, id
             `,
-            [execution.id],
-          )
-        : { rows: [] };
-      return {
-        document: documentResult.rows[0],
-        order: orderResult.rows[0],
-        execution,
-        items: itemsResult.rows,
-      };
-    });
+              [execution.id],
+            )
+          : { rows: [] };
+        return {
+          document: documentResult.rows[0],
+          order: orderResult.rows[0],
+          execution,
+          items: itemsResult.rows,
+        };
+      },
+    );
 
     if (!payload.document) {
       return { success: false, error: "Delivery document not found" };
@@ -312,9 +337,7 @@ export async function processServiceOrderDeliveryReceipt(
     );
     const pdfBuffer = await generatePdfFromHtml(env, html);
     const { year, month } = getYearMonth(base.openedAt, "openedAt");
-    const org = await withDbClient(env, (client) =>
-      fetchOrgRefById(client, payload.order.organization_id),
-    );
+    const { org } = loaded;
     const { bucket, key } = serviceOrderDocKey({
       org,
       serviceOrderNumber: base.serviceOrderNumber,
@@ -326,7 +349,7 @@ export async function processServiceOrderDeliveryReceipt(
     await bucketBinding(env, bucket).put(key, pdfBuffer, {
       httpMetadata: { contentType: "application/pdf" },
     });
-    await withDbClient(env, (client) =>
+    await withOrgDbClient(env, organizationId, (client) =>
       client.query(
         `UPDATE service_order_delivery_document
          SET pdf_r2_key = $2, issued_at = COALESCE(issued_at, now()), issued_by_user_id = COALESCE(issued_by_user_id, $3)

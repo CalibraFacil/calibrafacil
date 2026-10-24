@@ -1,4 +1,5 @@
 import {
+  type Baseline,
   baselineFor,
   importSourceOf,
   isTestFile,
@@ -212,6 +213,23 @@ function collectReferences(
   return found;
 }
 
+/**
+ * The baseline in force: the committed one, or `{ baseline: { "<path suffix>":
+ * <count> } }` from the rule options. The option exists for the rule's own tests
+ * (they inject entries so the exact-count / +1 / stale branches stay covered while
+ * the committed baseline is empty); the repo config never sets it.
+ */
+function baselineInForce(context: RuleContext): Baseline {
+  const options = toRecord(context.options?.[0]);
+  const injected = toRecord(options?.baseline);
+  if (!injected) return RAW_DB_BASELINE;
+  const entries: Array<[string, number]> = [];
+  for (const [file, count] of Object.entries(injected)) {
+    if (typeof count === "number") entries.push([file, count]);
+  }
+  return new Map(entries);
+}
+
 const USE_MESSAGE =
   "Routes do not query through the global db: take an org-bound handle with orgDb(organizationId) from apps/api/src/lib/org-db.ts (forOrg from @calibra-facil/db/for-org), which adds the organization predicate to every statement. Cross-organization lookups belong in a lib module with a reason in tenant-sql-allowlist.ts.";
 
@@ -222,12 +240,24 @@ const rule: RuleModule = {
       description:
         "Ratchet: apps/api routes may not use the raw global db; use the org-bound handle (forOrg).",
     },
+    schema: [
+      {
+        type: "object",
+        properties: {
+          baseline: {
+            type: "object",
+            additionalProperties: { type: "number" },
+          },
+        },
+        additionalProperties: false,
+      },
+    ],
   },
   create(context: RuleContext) {
     const filename = normalizedFilename(context);
     if (!ROUTES_PATTERN.test(filename) || isTestFile(filename)) return {};
 
-    const allowed = baselineFor(RAW_DB_BASELINE, filename);
+    const allowed = baselineFor(baselineInForce(context), filename);
     return {
       Program(program: unknown) {
         const root = toRecord(program);

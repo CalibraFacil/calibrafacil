@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import { systemDb as ownerDb } from "@calibra-facil/db";
 import { organization } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 
@@ -10,7 +10,7 @@ import { LAB_ID } from "./api";
  * organization row without a profile.
  */
 export async function seedLabProfile(): Promise<void> {
-  await db
+  await ownerDb
     .update(organization)
     .set({
       street: "Rua das Calibrações",

@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import { systemDb as ownerDb } from "@calibra-facil/db";
 import { service } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 
@@ -77,7 +77,7 @@ export async function seedServices(
 ): Promise<ServiceIds> {
   const ids: ServiceIds = new Map();
   for (const spec of DEMO_SERVICES) {
-    const [existing] = await db
+    const [existing] = await ownerDb
       .select({ id: service.id })
       .from(service)
       .where(

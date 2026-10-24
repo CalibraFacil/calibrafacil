@@ -11,7 +11,7 @@
  * an organization that was created a moment ago and holds no record at all.
  */
 import { and, eq, isNull, or, sql } from "drizzle-orm";
-import { db } from "@calibra-facil/db";
+import { systemDb } from "@calibra-facil/db";
 import {
   organization,
   organizationApiKey,
@@ -24,11 +24,13 @@ import {
   organizationScopeSql,
 } from "@calibra-facil/db/records-retention";
 import { getExecuteRows } from "./db";
+import { orgDb } from "./org-db";
+import { orgTransactionWithExecutor } from "./org-transaction";
 
 export const SOFT_DELETE_SUSPENSION_REASON =
   "Organização excluída: registros regulados retidos";
 
-type Executor = Pick<typeof db, "execute">;
+type Executor = Pick<typeof systemDb, "execute">;
 
 const IDENTIFIER = /^[a-z][a-z0-9_]*$/;
 
@@ -40,7 +42,10 @@ const IDENTIFIER = /^[a-z][a-z0-9_]*$/;
  */
 export async function evidenceTablesHoldingRecords(
   organizationId: string,
-  executor: Executor = db,
+  // Default: the system path. The probe is one EXISTS per evidence table, each
+  // already bound to the organization by `organizationScopeSql`; a caller that
+  // holds an organization-naming transaction (removeLabOrganization) passes it.
+  executor: Executor = systemDb,
 ): Promise<string[]> {
   const probes = listEvidenceTables()
     .filter((table) => !PLATFORM_EVIDENCE_TABLES.includes(table))
@@ -77,7 +82,10 @@ export async function softDeleteLabOrganization(input: {
   /** The member who asked for it, when a person did (kept on the event log). */
   actorMemberId?: string | null;
 }): Promise<SoftDeleteOutcome> {
-  return db.transaction(async (tx) => {
+  // ONE transaction that names the laboratory: the stamp, the key revocations
+  // and their audit rows commit together (row-level security binds the tenant
+  // tables, `organization` is global).
+  return orgDb(input.organizationId).transaction(async (tx) => {
     const now = new Date();
     const [updated] = await tx
       .update(organization)
@@ -170,33 +178,38 @@ export async function removeLabOrganization(input: {
   deletedBy: string | null;
   reason: string;
 }): Promise<RemoveLabOrganizationOutcome> {
-  const hardDeleted = await db.transaction(async (tx) => {
-    const [locked] = await tx
-      .select({ type: organization.type })
-      .from(organization)
-      .where(eq(organization.id, input.organizationId))
-      .for("update");
-    if (!locked) return { status: "not_found" } as const;
-    if (locked.type !== null && locked.type !== "LAB") {
-      return { status: "not_lab" } as const;
-    }
+  // The organization-naming transaction hands the raw one to the callees that
+  // run raw SQL (`execute`): the evidence probe and the purge-only setting.
+  const hardDeleted = await orgTransactionWithExecutor(
+    input.organizationId,
+    async (_labDb, tx) => {
+      const [locked] = await tx
+        .select({ type: organization.type })
+        .from(organization)
+        .where(eq(organization.id, input.organizationId))
+        .for("update");
+      if (!locked) return { status: "not_found" } as const;
+      if (locked.type !== null && locked.type !== "LAB") {
+        return { status: "not_lab" } as const;
+      }
 
-    const recordTables = await evidenceTablesHoldingRecords(
-      input.organizationId,
-      tx,
-    );
-    if (recordTables.length > 0) {
-      return { status: "has_records", recordTables } as const;
-    }
+      const recordTables = await evidenceTablesHoldingRecords(
+        input.organizationId,
+        tx,
+      );
+      if (recordTables.length > 0) {
+        return { status: "has_records", recordTables } as const;
+      }
 
-    await tx.execute(
-      sql`select set_config('calibra.allow_org_purge', 'on', true)`,
-    );
-    await tx
-      .delete(organization)
-      .where(eq(organization.id, input.organizationId));
-    return { status: "hard_deleted" } as const;
-  });
+      await tx.execute(
+        sql`select set_config('calibra.allow_org_purge', 'on', true)`,
+      );
+      await tx
+        .delete(organization)
+        .where(eq(organization.id, input.organizationId));
+      return { status: "hard_deleted" } as const;
+    },
+  );
 
   if (hardDeleted.status !== "has_records") return hardDeleted;
 

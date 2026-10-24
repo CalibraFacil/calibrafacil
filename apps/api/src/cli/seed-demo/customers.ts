@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import { systemDb as ownerDb } from "@calibra-facil/db";
 import { customer, member, user } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 
@@ -157,7 +157,7 @@ async function ensurePortalUser(
   entry: DemoCustomer,
   customerId: number,
 ): Promise<void> {
-  const [row] = await db
+  const [row] = await ownerDb
     .select({ authOrganizationId: customer.authOrganizationId })
     .from(customer)
     .where(eq(customer.id, customerId))
@@ -166,7 +166,7 @@ async function ensurePortalUser(
     throw new Error(`Customer ${customerId} has no portal organization`);
   }
   const userId = portalUserId(entry);
-  await db
+  await ownerDb
     .insert(user)
     .values({
       id: userId,
@@ -175,7 +175,7 @@ async function ensurePortalUser(
       emailVerified: true,
     })
     .onConflictDoNothing();
-  await db
+  await ownerDb
     .insert(member)
     .values({
       id: `member-${row.authOrganizationId}-${userId}`,
@@ -200,7 +200,7 @@ export async function seedCustomers(ctx: SeedContext): Promise<CustomerIds> {
   const ids: CustomerIds = new Map();
   for (const entry of DEMO_CUSTOMERS) {
     const taxId = customerCnpj(entry);
-    const [existing] = await db
+    const [existing] = await ownerDb
       .select({ id: customer.id })
       .from(customer)
       .where(
@@ -220,7 +220,7 @@ export async function seedCustomers(ctx: SeedContext): Promise<CustomerIds> {
       address: entry.address,
     });
     const id = numberField(created, "id");
-    await db
+    await ownerDb
       .update(customer)
       .set({ email: entry.email })
       .where(eq(customer.id, id));

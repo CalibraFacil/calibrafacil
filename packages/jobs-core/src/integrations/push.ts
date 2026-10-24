@@ -1,4 +1,5 @@
-import { Client } from "pg";
+import type { Client } from "pg";
+import { type OrgSession } from "../pdf-render.js";
 import type {
   GenericFinancialErpConnectionConfig,
   IntegrationSyncTarget,
@@ -113,8 +114,13 @@ function extractRemoteId(data: unknown): string | null {
   return null;
 }
 
+/**
+ * Pushes one record to the remote ERP. The remote HTTP call NEVER runs inside a
+ * transaction: the existing link is read in a short transaction of its own, the
+ * call is made with none open, and the link is written in another.
+ */
 export async function pushRecord(
-  client: Client,
+  lab: OrgSession,
   params: {
     integrationId: string;
     organizationId: string;
@@ -136,11 +142,13 @@ export async function pushRecord(
     );
   }
 
-  const existingRemoteId = await getExistingRemoteId(
-    client,
-    params.integrationId,
-    params.target,
-    params.payload.externalId,
+  const existingRemoteId = await lab.transaction((client) =>
+    getExistingRemoteId(
+      client,
+      params.integrationId,
+      params.target,
+      params.payload.externalId,
+    ),
   );
   const targetPath = getTargetPath(params.config, params.target);
   const method = existingRemoteId ? "PUT" : "POST";
@@ -160,11 +168,13 @@ export async function pushRecord(
 
   const remoteId = extractRemoteId(result.data) ?? existingRemoteId;
 
-  await upsertLink(client, {
-    integrationId: params.integrationId,
-    organizationId: params.organizationId,
-    target: params.target,
-    localEntityId: params.payload.externalId,
-    remoteEntityId: remoteId,
-  });
+  await lab.transaction((client) =>
+    upsertLink(client, {
+      integrationId: params.integrationId,
+      organizationId: params.organizationId,
+      target: params.target,
+      localEntityId: params.payload.externalId,
+      remoteEntityId: remoteId,
+    }),
+  );
 }

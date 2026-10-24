@@ -1,13 +1,10 @@
 import { Hono } from "hono";
 import { createHash } from "node:crypto";
-import { db } from "@calibra-facil/db";
 import {
-  member,
-  organization,
-  user,
-  verification,
-} from "@calibra-facil/db/schema";
-import { and, asc, eq, gt, isNull } from "drizzle-orm";
+  findLiveVerificationValue,
+  findUserByExactEmail,
+  findUserPrimaryOrganization,
+} from "../lib/identity";
 
 /**
  * Magic-link preview — NO AUTH (gated by possession of a valid magic-link token).
@@ -36,56 +33,24 @@ export const magicLinkRouter = new Hono().get("/preview", async (c) => {
   // better-auth `defaultKeyHasher`. Hash the same way to look the row up.
   const hashedToken = createHash("sha256").update(token).digest("base64url");
 
-  const [record] = await db
-    .select({ value: verification.value })
-    .from(verification)
-    .where(
-      and(
-        eq(verification.identifier, hashedToken),
-        gt(verification.expiresAt, new Date()),
-      ),
-    )
-    .limit(1);
-
-  if (!record) {
+  const value = await findLiveVerificationValue(hashedToken);
+  if (value === null) {
     return c.json({ found: false });
   }
 
-  const email = parseTokenEmail(record.value);
+  const email = parseTokenEmail(value);
   if (!email) {
     return c.json({ found: false });
   }
 
-  const [account] = await db
-    .select({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      image: user.image,
-    })
-    .from(user)
-    .where(eq(user.email, email))
-    .limit(1);
-
+  const account = await findUserByExactEmail(email);
   if (!account) {
     return c.json({ found: false });
   }
 
   // The user's primary organization for this surface (oldest membership),
   // matching the active-org default applied at session creation.
-  const [org] = await db
-    .select({ name: organization.name, logo: organization.logo })
-    .from(member)
-    .innerJoin(organization, eq(member.organizationId, organization.id))
-    .where(
-      and(
-        eq(member.userId, account.id),
-        eq(organization.type, organizationType),
-        isNull(organization.deletedAt),
-      ),
-    )
-    .orderBy(asc(member.createdAt))
-    .limit(1);
+  const org = await findUserPrimaryOrganization(account.id, organizationType);
 
   return c.json({
     found: true,

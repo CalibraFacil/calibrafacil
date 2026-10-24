@@ -18,9 +18,11 @@ export interface Env {
   DATABASE_URL: string;
   /**
    * Connection string of the table OWNER: the system path, used only by the
-   * lookup that learns which laboratory a queue message belongs to (the message
-   * names a job, not its laboratory). Unset, the lookup shares DATABASE_URL,
-   * which is the owner while row-level security is in shadow mode.
+   * lookups that learn which laboratory a queue message belongs to (the message
+   * names a job, an order or an export, not its laboratory) and by the sweeps
+   * that list the laboratories before working on each. Unset, the system path
+   * shares DATABASE_URL, which is the owner while row-level security is in
+   * shadow mode.
    */
   DATABASE_OWNER_URL?: string;
   /**

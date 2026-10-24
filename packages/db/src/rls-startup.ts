@@ -10,7 +10,12 @@
 //
 //   - `shadow` (DATABASE_RLS_MODE, the default): start-up REFUSES a role that RLS
 //     binds, with the reason and the fix;
-//   - `enforced`: the owner has done the role split and says so; any role is accepted.
+//   - `enforced`: the owner has done the role split and says so; any role is accepted,
+//     but `DATABASE_OWNER_URL` (the system path: the connection of the table
+//     owner, `systemDb`) MUST be set too (Q40). Without it every system-path
+//     statement (identity, the cross-laboratory listings of the sweeps, the
+//     lookup of a message's laboratory) would run as the role RLS binds and
+//     silently see nothing, so the process refuses to start instead.
 //
 // Before migration 0123 no table has RLS enabled and the check passes.
 import { ConfigError, readDatabaseConfig } from "@calibra-facil/config";
@@ -98,14 +103,40 @@ export function rlsStartupProblem(
 }
 
 /**
+ * The refusal message when `enforced` mode has no owner connection for the
+ * system path, or null. Pure, so it needs no database.
+ */
+export function rlsOwnerUrlProblem(
+  mode: RlsMode,
+  ownerUrl: string | undefined,
+): string | null {
+  if (mode !== "enforced" || ownerUrl) return null;
+  return 'DATABASE_RLS_MODE=enforced needs DATABASE_OWNER_URL, the connection of the table owner used by the system path (identity, cross-laboratory sweeps, the lookup of a message\'s laboratory): without it those statements would run as the restricted role and silently see nothing. Set DATABASE_OWNER_URL, see DEPLOYMENT.md ("Row-level security").';
+}
+
+/**
  * Runs the check on `executor` (default: the application's database) in `mode`
  * (default: DATABASE_RLS_MODE). Throws a `ConfigError` naming DATABASE_RLS_MODE
- * when the role must not start, so `failFast` / `failFastAsync` print it and exit.
+ * when the role must not start (or `enforced` has no `DATABASE_OWNER_URL`), so
+ * `failFast` / `failFastAsync` print it and exit.
  */
 export async function assertRlsStartup(
-  options: { executor?: Pick<OrgExecutor, "execute">; mode?: RlsMode } = {},
+  options: {
+    executor?: Pick<OrgExecutor, "execute">;
+    mode?: RlsMode;
+    /** Default: DATABASE_OWNER_URL. */
+    ownerUrl?: string | undefined;
+  } = {},
 ): Promise<RlsRoleFacts> {
-  const mode = options.mode ?? readDatabaseConfig().rlsMode;
+  const config = readDatabaseConfig();
+  const mode = options.mode ?? config.rlsMode;
+  const ownerUrl = "ownerUrl" in options ? options.ownerUrl : config.ownerUrl;
+  const missingOwner = rlsOwnerUrlProblem(mode, ownerUrl);
+  if (missingOwner !== null) {
+    throw new ConfigError("database", [
+      { variable: "DATABASE_OWNER_URL", message: missingOwner },
+    ]);
+  }
   const executor = options.executor ?? (await import("./db.js")).getDb();
   const facts = await readRlsRoleFacts(executor);
   const problem = rlsStartupProblem(facts, mode);

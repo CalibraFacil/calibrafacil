@@ -5,13 +5,14 @@
  * than a self-issued TXT token.
  */
 
-import { db } from "@calibra-facil/db";
+import { db, systemDb } from "@calibra-facil/db";
 import {
   organization,
   organizationEmailDomain,
 } from "@calibra-facil/db/schema";
 import { isLocalHostname, normalizeHostname } from "@calibra-facil/shared";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
+import { withOrgReader } from "./org-transaction";
 
 export function sanitizeEmailHostname(input: string): string | null {
   const hostname = normalizeHostname(input);
@@ -34,10 +35,50 @@ export function buildFromAddress(localPart: string, hostname: string): string {
   return `${localPart}@${hostname}`;
 }
 
-export async function getOrganizationEmailDomain(organizationId: string) {
-  return db.query.organizationEmailDomain.findFirst({
-    where: eq(organizationEmailDomain.organizationId, organizationId),
-  });
+/**
+ * The laboratory's sending-domain row (`organization_email_domain` is a tenant
+ * table): read in a short transaction that names the laboratory, or on the
+ * caller's own organization-bound handle.
+ */
+export async function getOrganizationEmailDomain(
+  organizationId: string,
+  executor?: Parameters<typeof withOrgReader>[1],
+) {
+  const [record] = await withOrgReader(organizationId, executor, (reader) =>
+    reader
+      .select()
+      .from(organizationEmailDomain)
+      .where(eq(organizationEmailDomain.organizationId, organizationId))
+      .limit(1),
+  );
+  return record;
+}
+
+/**
+ * Whether a laboratory other than `organizationId` already holds a sending
+ * hostname.
+ *
+ * System path (P2-18j): a hostname is unique across the platform
+ * (`org_email_domain_hostname_uidx`), so "does ANOTHER laboratory hold it" is
+ * cross-organization by design and cannot be asked under one laboratory's
+ * `calibra.organization_id` (it would always answer "nobody"). One row, only its
+ * existence is used.
+ */
+export async function otherOrganizationHoldsHostname(
+  hostname: string,
+  organizationId: string,
+) {
+  const [holder] = await systemDb
+    .select({ id: organizationEmailDomain.id })
+    .from(organizationEmailDomain)
+    .where(
+      and(
+        eq(organizationEmailDomain.hostname, hostname),
+        ne(organizationEmailDomain.organizationId, organizationId),
+      ),
+    )
+    .limit(1);
+  return holder !== undefined;
 }
 
 /**

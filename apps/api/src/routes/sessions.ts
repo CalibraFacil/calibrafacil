@@ -1,8 +1,6 @@
 import { Hono } from "hono";
-import { eq } from "drizzle-orm";
-import { db } from "@calibra-facil/db";
-import { session as sessionTable } from "@calibra-facil/db/schema";
 
+import { revokeOwnSession } from "../lib/identity";
 import { requireLabAuth, type AuthVariables } from "../middleware/permission";
 
 export const sessionsRouter = new Hono<{ Variables: AuthVariables }>().post(
@@ -32,21 +30,9 @@ export const sessionsRouter = new Hono<{ Variables: AuthVariables }>().post(
     const currentSession = c.get("session");
     const userId = currentSession.user.id;
 
-    const [targetSession] = await db
-      .select({
-        id: sessionTable.id,
-        token: sessionTable.token,
-        userId: sessionTable.userId,
-      })
-      .from(sessionTable)
-      .where(eq(sessionTable.id, sessionId))
-      .limit(1);
-
-    if (!targetSession || targetSession.userId !== userId) {
+    if (!(await revokeOwnSession(userId, sessionId))) {
       return c.json({ error: "Session not found" }, 404);
     }
-
-    await db.delete(sessionTable).where(eq(sessionTable.id, targetSession.id));
 
     return c.json({ status: true });
   },

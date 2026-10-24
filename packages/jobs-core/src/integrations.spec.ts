@@ -7,7 +7,10 @@ import * as integrations from "./integrations";
 // (IntegrationSyncQueueMessage) is held by `check-types` on its importers.
 describe("jobs-core/integrations entry point", () => {
   it("REQ-SPLIT-2 exports exactly the original runtime surface", () => {
+    // P2-18j: plus the error a scheduled sweep throws at its end when some
+    // laboratories failed (it carries what the sweep did).
     expect(Object.keys(integrations).sort()).toEqual([
+      "ScheduledIntegrationSyncError",
       "processIntegrationSync",
       "processScheduledIntegrationSyncs",
     ]);

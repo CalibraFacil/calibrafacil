@@ -28,6 +28,8 @@ export type LintOutcome = {
 export async function lintFixtures(
   ruleName: string,
   files: Record<string, string>,
+  /** Options of the rule under test (`["error", options]`). */
+  ruleOptions?: unknown,
 ): Promise<LintOutcome> {
   const fixtureDir = await mkdtemp(join(tmpdir(), "calibra-oxlint-"));
   try {
@@ -38,7 +40,10 @@ export async function lintFixtures(
         // Only the rule under test — default categories stay off so the
         // outcome reflects exactly this rule.
         categories: { correctness: "off" },
-        rules: { [`calibra/${ruleName}`]: "error" },
+        rules: {
+          [`calibra/${ruleName}`]:
+            ruleOptions === undefined ? "error" : ["error", ruleOptions],
+        },
       }),
     );
 
@@ -128,8 +133,9 @@ export async function lintRepoPaths(
 export async function expectClean(
   ruleName: string,
   files: Record<string, string>,
+  ruleOptions?: unknown,
 ): Promise<void> {
-  const { exitCode, output } = await lintFixtures(ruleName, files);
+  const { exitCode, output } = await lintFixtures(ruleName, files, ruleOptions);
   if (exitCode !== 0 || output.includes(`calibra(${ruleName})`)) {
     throw new Error(
       `expected calibra/${ruleName} to pass but oxlint reported:\n${output}`,
@@ -141,8 +147,9 @@ export async function expectClean(
 export async function expectViolation(
   ruleName: string,
   files: Record<string, string>,
+  ruleOptions?: unknown,
 ): Promise<string> {
-  const { exitCode, output } = await lintFixtures(ruleName, files);
+  const { exitCode, output } = await lintFixtures(ruleName, files, ruleOptions);
   if (exitCode === 0 || !output.includes(`calibra(${ruleName})`)) {
     throw new Error(
       `expected calibra/${ruleName} to report a violation but oxlint passed:\n${output}`,

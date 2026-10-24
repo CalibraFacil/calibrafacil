@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import { systemDb as ownerDb } from "@calibra-facil/db";
 import { calibrationJob, serviceOrder } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 
@@ -140,7 +140,7 @@ export async function seedServiceOrders(
 ): Promise<void> {
   const calibrated = new Set(
     (
-      await db
+      await ownerDb
         .select({ assetId: calibrationJob.assetId })
         .from(calibrationJob)
         .where(eq(calibrationJob.organizationId, LAB_ID))
@@ -148,7 +148,7 @@ export async function seedServiceOrders(
   );
   const taken = new Set(
     (
-      await db
+      await ownerDb
         .select({ assetId: serviceOrder.assetId })
         .from(serviceOrder)
         .where(eq(serviceOrder.organizationId, LAB_ID))
@@ -157,7 +157,7 @@ export async function seedServiceOrders(
 
   for (const spec of ORDERS) {
     // An order is recognised by its claimed defect, so a re-run resumes it.
-    const [existing] = await db
+    const [existing] = await ownerDb
       .select({ id: serviceOrder.id })
       .from(serviceOrder)
       .where(
@@ -319,7 +319,7 @@ export async function seedServiceOrders(
     const opened = new Date(
       ctx.now.getTime() - spec.openedDaysAgo * DAY_MS - 3 * 3_600_000,
     );
-    await db
+    await ownerDb
       .update(serviceOrder)
       .set({
         createdAt: opened,

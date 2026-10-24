@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { eq } from "drizzle-orm";
-import { db } from "@calibra-facil/db";
+import { orgDb } from "../lib/org-db";
 import { organization } from "@calibra-facil/db/schema";
 import {
   SoftDeleteOrganizationSchema,
@@ -44,7 +44,7 @@ export const organizationLifecycleRouter = new Hono<{
     const session = c.get("session");
     const input = c.req.valid("json");
 
-    const [lab] = await db
+    const [lab] = await orgDb(member.organizationId)
       .select({ name: organization.name })
       .from(organization)
       .where(eq(organization.id, member.organizationId))

@@ -25,6 +25,9 @@ export type ScheduledIntegrationSyncOptions = {
 
 export interface IntegrationWorkerEnv {
   DATABASE_URL: string;
+  /** The table owner: the system path that lists every laboratory's integrations (see `Env`). */
+  DATABASE_OWNER_URL?: string;
+  DATABASE_RLS_MODE?: "shadow" | "enforced";
   INTEGRATIONS_MASTER_KEY?: string;
 }
 

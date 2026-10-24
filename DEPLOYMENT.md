@@ -689,25 +689,34 @@ Then change the API's connection string and set its mode (`DATABASE_RLS_MODE=enf
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | API (`apps/api`)                              | `postgres://calibra_api:<password>@<host>/<db>`, plus `DATABASE_RLS_MODE=enforced` and `DATABASE_OWNER_URL=<the owner's URL>` (the system path, below) |
 | Migrations (`db:migrate`, `db:bootstrap`)     | unchanged: the owner                                                                                                                                   |
-| Worker (`apps/worker`), cron and queue sweeps | unchanged: the owner, until all their statements are org-bound (the certificate and label jobs already are; see below)                                 |
+| Worker (`apps/worker`), cron and queue sweeps | `calibra_api` too, with `DATABASE_RLS_MODE=enforced` and `DATABASE_OWNER_URL` (every handler names its laboratory, P2-18j; see below)                  |
 
 - **The system path (`DATABASE_OWNER_URL`).** A few statements are cross-laboratory on purpose and cannot name
   one organization first: the lookup that learns which laboratory a request belongs to (the portal's host
   name, the portal customer scope, a public certificate token), reads over a bounded set of laboratories
-  (a portal customer user of several), notification fan-out, and writes to the global `asset_type` catalog
-  (its change-log trigger writes to every laboratory's log, which `calibra_app` may not do; only the seed writes it). They use the named
+  (a portal customer user of several), notification fan-out, the identity layer (Better Auth's own statements, the
+  sign-in gate by e-mail, a person's memberships at sign-in, an invitation by its id, a setup token by its id:
+  all before an organization is chosen), the cross-laboratory sweeps (records purge, change-log and
+  certificate-drift lists) and writes to the global `asset_type` catalog
+  (its change-log trigger writes to every laboratory's log, which `calibra_app` may not do; only the seed writes it).
+  The operator CLI (`apps/api/src/cli`) runs as the owner on the same path. They use the named
   `systemDb` of `@calibra-facil/db`, which connects with `DATABASE_OWNER_URL`; unset, it shares
   `DATABASE_URL`, so while the API still connects as the owner there is nothing to configure. Set it in the
-  same change as the role split, or those requests see nothing as `calibra_api`. Every use is a reviewed entry
+  same change as the role split, or those requests see nothing as `calibra_api`: the API and the worker
+  therefore REFUSE TO START when `DATABASE_RLS_MODE=enforced` and `DATABASE_OWNER_URL` is unset (the message names
+  both variables). Better Auth (sessions, the organization plugin) runs on this owner connection too, guarded by
+  its own membership and role checks (pinned by `identity-org-plugin-deny.int.spec.ts`), not by RLS. Every use is a reviewed entry
   of `apps/api/test/integration/tenant-sql-allowlist.ts`, and routes may not import it.
 - **The worker's certificate and label jobs.** A queue message names a job, not its laboratory. The worker
   learns the laboratory with one lookup on the system path (`DATABASE_OWNER_URL`, falling back to
   `DATABASE_URL`), and every other statement of the job (the frozen input or the legacy live read, the signing
   certificate, the issuance transaction, the audit rows, the failure rejection) runs in a transaction that
   names it (`set_config(..., true)`), so those jobs are ready for a worker connected as `calibra_app`. The
-  other worker handlers (scheduled notifications, integrations, audit packs, service-order documents) are not
-  yet; keep the worker on the owner until they are. The queue claim, the stale-lease recovery and the
-  stuck-render sweep list across laboratories and stay on the owner (`systemDb`).
+  other handlers do the same since P2-18j: the scheduled compliance sweep, the audit packs, the service-order
+  and out-of-tolerance documents, the sender-domain health cron and the generic-HTTP integration sync list or
+  look up the laboratory on the system path and then work per laboratory. Without `DATABASE_OWNER_URL` the
+  handlers that look a laboratory up by a message's id fail loudly (a retryable error) instead of finding nothing. The queue claim, the
+  stale-lease recovery and the stuck-render sweep list across laboratories and stay on the owner (`systemDb`).
 - **Pooler mode.** Transaction pooling (PgBouncer `pool_mode = transaction`, Neon's pooled endpoint,
   Supavisor) is fine: `set_config(..., true)` is transaction-local, so the organization lives and dies with
   the transaction and never reaches the next client on the same server connection. A statement outside

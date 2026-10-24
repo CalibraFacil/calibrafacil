@@ -1,5 +1,6 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { getDb } from "@calibra-facil/db";
+import { getDb, getSystemDb } from "@calibra-facil/db";
+import { forOrg } from "@calibra-facil/db/for-org";
 import {
   invitation,
   labAccountSetupToken,
@@ -105,9 +106,10 @@ export async function createLabAccountSetupToken(
   );
   const email = normalizeLabAccessEmail(input.email);
 
-  await getDb()
-    .insert(labAccountSetupToken)
-    .values({
+  // The laboratory is known (the token is minted FOR it), so the row is written
+  // in a transaction that names it: `lab_account_setup_token` is a tenant table.
+  await forOrg(getDb(), input.organizationId).transaction((tx) =>
+    tx.insert(labAccountSetupToken).values({
       id,
       secretHash: hashSetupTokenSecret(secret),
       userId: input.userId,
@@ -118,7 +120,8 @@ export async function createLabAccountSetupToken(
       expiresAt,
       createdByUserId: input.createdByUserId ?? null,
       source: input.source,
-    });
+    }),
+  );
 
   return {
     id,
@@ -135,7 +138,12 @@ export async function validateLabAccountSetupToken(
     return { ok: false, status: "invalid" };
   }
 
-  const [record] = await getDb()
+  // System path (P2-18j): the token id from the link is a bearer credential and
+  // its row is what NAMES the laboratory (this lookup runs before any
+  // organization is known, on the owner connection). Only the one row of that
+  // id is read; the membership and invitation checks below run in the
+  // laboratory it names.
+  const [record] = await getSystemDb()
     .select({
       id: labAccountSetupToken.id,
       secretHash: labAccountSetupToken.secretHash,
@@ -194,16 +202,21 @@ export async function validateLabAccountSetupToken(
     return { ok: false, status: "organization_invalid" };
   }
 
-  const [membership] = await getDb()
-    .select({ id: member.id })
-    .from(member)
-    .where(
-      and(
-        eq(member.organizationId, record.organizationId),
-        eq(member.userId, record.userId),
-      ),
-    )
-    .limit(1);
+  // The laboratory is now named by the token: the membership and the pending
+  // invitation are read in a transaction that names it.
+  const laboratory = forOrg(getDb(), record.organizationId);
+  const [membership] = await laboratory.transaction((tx) =>
+    tx
+      .select({ id: member.id })
+      .from(member)
+      .where(
+        and(
+          eq(member.organizationId, record.organizationId),
+          eq(member.userId, record.userId),
+        ),
+      )
+      .limit(1),
+  );
 
   if (!membership && record.purpose === "owner_claim") {
     return { ok: false, status: "membership_missing" };
@@ -213,20 +226,23 @@ export async function validateLabAccountSetupToken(
     if (!record.invitationId) {
       return { ok: false, status: "invitation_invalid" };
     }
+    const invitationId = record.invitationId;
 
-    const [pendingInvitation] = await getDb()
-      .select({ id: invitation.id })
-      .from(invitation)
-      .where(
-        and(
-          eq(invitation.id, record.invitationId),
-          eq(invitation.organizationId, record.organizationId),
-          eq(sql<string>`lower(${invitation.email})`, record.email),
-          eq(invitation.status, "pending"),
-          gt(invitation.expiresAt, new Date()),
-        ),
-      )
-      .limit(1);
+    const [pendingInvitation] = await laboratory.transaction((tx) =>
+      tx
+        .select({ id: invitation.id })
+        .from(invitation)
+        .where(
+          and(
+            eq(invitation.id, invitationId),
+            eq(invitation.organizationId, record.organizationId),
+            eq(sql<string>`lower(${invitation.email})`, record.email),
+            eq(invitation.status, "pending"),
+            gt(invitation.expiresAt, new Date()),
+          ),
+        )
+        .limit(1),
+    );
 
     if (!pendingInvitation) {
       return { ok: false, status: "invitation_invalid" };
@@ -253,7 +269,11 @@ export async function validateLabAccountSetupToken(
 
 export async function hasActiveLabMembership(email: string) {
   const normalizedEmail = normalizeLabAccessEmail(email);
-  const [record] = await getDb()
+  // System path (P2-18j): the sign-in gate asks "does this e-mail belong to ANY
+  // laboratory?" before a session, so before an organization, exists. It reads
+  // the person's own memberships by e-mail across laboratories on purpose, and
+  // returns only whether one exists.
+  const [record] = await getSystemDb()
     .select({ memberId: member.id })
     .from(member)
     .innerJoin(user, eq(member.userId, user.id))
@@ -272,7 +292,10 @@ export async function hasActiveLabMembership(email: string) {
 
 export async function hasPendingLabInvitation(email: string) {
   const normalizedEmail = normalizeLabAccessEmail(email);
-  const [record] = await getDb()
+  // System path (P2-18j): same gate as above, for an e-mail that holds a pending
+  // invitation to a laboratory but is not a member yet (no organization is
+  // active before the first sign-in).
+  const [record] = await getSystemDb()
     .select({ invitationId: invitation.id })
     .from(invitation)
     .innerJoin(organization, eq(invitation.organizationId, organization.id))
@@ -306,7 +329,9 @@ export async function hasValidLabSetupTokenForEmail(
 }
 
 export async function consumeLabAccountSetupToken(id: string) {
-  const [updated] = await getDb()
+  // System path (P2-18j): single-use consumption by the token's own id, after its
+  // secret was verified by the caller; the id is what names the laboratory.
+  const [updated] = await getSystemDb()
     .update(labAccountSetupToken)
     .set({ consumedAt: new Date() })
     .where(

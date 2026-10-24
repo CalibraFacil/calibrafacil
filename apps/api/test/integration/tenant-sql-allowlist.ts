@@ -48,18 +48,26 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "auth-session",
-    file: "apps/api/src/routes/magic-link.ts",
+    file: "apps/api/src/lib/identity.ts",
     tables: ["member"],
     kinds: ["select"],
     reason:
-      "Magic-link preview resolves the signing-in user's own lab memberships by user_id, before an active organization exists.",
+      "System path (P2-18j, systemDb): the magic-link preview (findUserPrimaryOrganization) resolves the signing-in user's own lab memberships by user_id, before an active organization exists; it returns only the organization's public name and logo.",
+  },
+  {
+    category: "auth-session",
+    file: "apps/api/src/lib/public-signup-store.ts",
+    tables: ["member"],
+    kinds: ["select"],
+    reason:
+      "System path (P2-18j, systemDb): public self-serve sign-up (hasLabMembership) asks whether the e-mail's user already belongs to ANY laboratory before one is provisioned; an unauthenticated visitor has no organization. One row, only its existence is used.",
   },
   {
     category: "auth-session",
     file: "packages/auth/src/auth.ts",
     tables: ["personnel_competence", "training_record", "authorized_signatory"],
     reason:
-      "Better Auth deleteUser: preserves the regulated records of the user being deleted across every organization they belonged to (by user_id, then by the rows' own ids).",
+      "System path (P2-18j, getSystemDb): Better Auth deleteUser preserves the regulated records of the user being deleted across every organization they belonged to (by user_id, then by the rows' own ids), in ONE transaction so the preservation and its audit rows land together; no single organization can be named.",
   },
   {
     category: "auth-session",
@@ -67,7 +75,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     tables: ["member", "invitation"],
     kinds: ["select"],
     reason:
-      "Sign-in gate: does this e-mail belong to a laboratory (not soft-deleted) or hold a pending invitation to one? Resolved by e-mail before any organization is active.",
+      "System path (P2-18j, getSystemDb): sign-in gate: does this e-mail belong to a laboratory (not soft-deleted) or hold a pending invitation to one? Resolved by e-mail before any organization is active.",
   },
   {
     category: "auth-session",
@@ -75,7 +83,15 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     tables: ["member"],
     kinds: ["select"],
     reason:
-      "Session creation picks the user's default active organization (oldest non-deleted membership of the surface) by user_id, before one is active.",
+      "System path (P2-18j, getSystemDb): session creation picks the user's default active organization (oldest non-deleted membership of the surface) by user_id, and the portal sign-in link checks the e-mail's own client memberships, both before an organization is active.",
+  },
+  {
+    category: "auth-session",
+    file: "packages/auth/src/auth.ts",
+    tables: ["invitation", "customer", "organization_custom_domain"],
+    kinds: ["select"],
+    reason:
+      "System path (P2-18j, getSystemDb): the portal magic-link sender finds the pending invitation of an e-mail (or by the invite id, the bearer secret) and the laboratory whose customer a CLIENT organization is (customer.auth_organization_id, for the e-mail brand); the CORS origin check asks whether a hostname is an active verified portal domain of ANY laboratory. All before an organization is known, one row each.",
   },
   {
     category: "cron-queue",
@@ -84,14 +100,16 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     kinds: ["delete"],
     sql: /delete from organization o where o\.id = \$1 and o\.type = '[^']*' and not exists \( select 1 from customer c where c\.auth_organization_id = o\.id\)/,
     reason:
-      "Records purge: after a laboratory is erased, its portal-login CLIENT organizations are removed unless another customer still points at them (a cross-tenant existence check on customer.auth_organization_id).",
+      "Records purge (system path, systemDb, P2-18j): after a laboratory is erased, its portal-login CLIENT organizations are removed in the same transaction unless another customer still points at them (a cross-tenant existence check on customer.auth_organization_id, which no single laboratory can answer).",
   },
   {
     category: "cron-queue",
     file: "apps/api/src/lib/sync-change-log-purge.ts",
-    tables: ["sync_change_log", "sync_change_log_purge"],
+    tables: ["sync_change_log"],
+    kinds: ["select"],
+    sql: /select distinct organization_id from sync_change_log/i,
     reason:
-      "Desktop change log retention: one statement deletes the entries older than the retention window of every laboratory and records the purge horizon per laboratory (a platform maintenance job).",
+      "System path (P2-18j, systemDb): the change-log retention cron lists which laboratories hold entries older than the window (organization ids only); the delete and the purge horizon of each laboratory then run in orgTransactionWithExecutor(laboratory) with an explicit organization_id predicate.",
   },
   // -------------------------------------------------------------------------
   // public-token: the unguessable token/secret is the credential; the
@@ -130,37 +148,56 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "public-token",
-    file: "apps/api/src/routes/invitations.ts",
+    file: "apps/api/src/lib/identity.ts",
     tables: ["invitation"],
     kinds: ["select"],
     reason:
-      "Public invite preview/setup: the invitation id is the bearer secret and its own row names the organization.",
-  },
-  {
-    category: "public-token",
-    file: "apps/api/src/routes/lab-setup.ts",
-    tables: ["lab_account_setup_token"],
-    kinds: ["update"],
-    reason:
-      "Setup-token consumption by the token's own id after the secret hash matched (single-use guard in the WHERE).",
+      "System path (P2-18j, systemDb): public invite preview / setup-link request (findPublicInvitation, findLabInvitationForSetupLink): the invitation id is the bearer secret and its own row names the organization.",
   },
   {
     category: "public-token",
     file: "packages/auth/src/lab-access.ts",
     tables: ["lab_account_setup_token"],
-    kinds: ["select"],
-    reason: "Setup-token lookup by id after the token secret was verified.",
+    kinds: ["select", "update"],
+    reason:
+      "System path (P2-18j, getSystemDb): setup-token lookup by id (and the single-use consume by id) while the token's own row is what names the laboratory; the membership and invitation checks that follow run in forOrg(laboratory).transaction.",
   },
   // -------------------------------------------------------------------------
   // cron-queue: runs across all tenants by design.
   // -------------------------------------------------------------------------
   {
     category: "cron-queue",
+    file: "packages/jobs-core/src/email-domain-health.ts",
+    tables: ["organization_email_domain"],
+    kinds: ["select"],
+    reason:
+      "System path (P2-18j, systemDb): the sender-domain health cron has no request, so one statement lists every laboratory's sending domain; each row's update and its audit events are written after the Resend call in forOrg(application, row.organizationId).transaction.",
+  },
+  {
+    category: "cron-queue",
+    file: "apps/api/src/lib/org-transaction.ts",
+    tables: ["sync_change_log", "sync_change_log_purge"],
+    kinds: ["insert"],
+    sql: /insert into sync_change_log_purge/,
+    reason:
+      "Change-log retention (P2-18j): the per-laboratory purge runs in orgTransactionWithExecutor(laboratory); one statement deletes that laboratory's old entries (organization_id = $1) and records its purge horizon from the deleted rows' own organization_id, which a statement-level analysis cannot see through the CTE.",
+  },
+  {
+    category: "cron-queue",
+    file: "apps/api/src/services/lab-provisioning.ts",
+    tables: ["member"],
+    kinds: ["select"],
+    sql: /from "member" where "member"\."user_id" = \$1 limit/,
+    reason:
+      "System path (P2-18j): provisioning calls Better Auth's createOrganization, whose organization plugin reads the creator's memberships by user_id (organization limit check) on the identity adapter (getSystemDb). Only reached with the real Better Auth (the identity-lab-scope spec); the other specs fake it.",
+  },
+  {
+    category: "cron-queue",
     file: "apps/api/src/lib/certificate-drift.ts",
     tables: ["issued_certificate_snapshot"],
     kinds: ["select"],
     reason:
-      "Certificate drift sweep re-hashes stored PDFs for every tenant (platform integrity job, not request-scoped).",
+      "System path (P2-18j, systemDb): the certificate drift sweep lists the newest snapshots of every tenant to re-hash their stored PDFs (platform integrity job, not request-scoped); the audit event of a finding is written in orgDb(snapshot.organizationId).transaction.",
   },
   {
     category: "cron-queue",
@@ -358,19 +395,12 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
       "assetId comes from the job being approved/published, which the caller has already loaded and authorized.",
   },
   {
-    category: "pk-after-scoped-read",
-    file: "apps/api/src/lib/email-domain-lifecycle.ts",
+    category: "other",
+    file: "apps/api/src/lib/email-domains.ts",
     tables: ["organization_email_domain"],
+    kinds: ["select"],
     reason:
-      "Row loaded by organization_id under the tenant lock in the same transaction, then updated/deleted by its own id.",
-  },
-  {
-    category: "pk-after-scoped-read",
-    file: "apps/api/src/routes/email-domains.ts",
-    tables: ["organization_email_domain"],
-    kinds: ["update"],
-    reason:
-      "Record loaded via getOrganizationEmailDomain(member.organizationId), then updated by record.id.",
+      "System path (P2-18j, systemDb): a sending hostname is unique across the platform, so 'does ANOTHER laboratory hold it' (otherOrganizationHoldsHostname, run before a domain is created) is cross-organization by design. One row, only its existence is used.",
   },
   {
     category: "pk-after-scoped-read",

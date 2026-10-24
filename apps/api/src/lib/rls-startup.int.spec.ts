@@ -271,6 +271,7 @@ describe("row-level security: who the policies bind", () => {
       const facts = await assertRlsStartup({
         executor: connectAs(MEMBER).db,
         mode: "enforced",
+        ownerUrl: "postgres://owner@localhost/db",
       });
       expect(facts.subjectToRls).toBe(true);
       expect(facts.role).toBe(MEMBER);

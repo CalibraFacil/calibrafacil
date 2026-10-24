@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import { systemDb as ownerDb } from "@calibra-facil/db";
 import { asset } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 
@@ -39,7 +39,7 @@ export async function seedAssets(
       throw new Error(`Unresolved customer/type for ${planned.tag}`);
     }
 
-    const [existing] = await db
+    const [existing] = await ownerDb
       .select({ id: asset.id })
       .from(asset)
       .where(
@@ -64,7 +64,7 @@ export async function seedAssets(
       specifications: planned.specifications,
     });
     const id = numberField(body, "id");
-    await db
+    await ownerDb
       .update(asset)
       .set({
         calibrationIntervalMonths: planned.intervalMonths,

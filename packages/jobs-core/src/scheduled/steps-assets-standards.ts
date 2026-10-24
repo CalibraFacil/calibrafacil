@@ -1,4 +1,4 @@
-import { Client } from "pg";
+import { type OrgSession } from "../pdf-render.js";
 import {
   notifyAssetDueForLegalVerification,
   notifyAssetDueForRecalibration,
@@ -23,7 +23,7 @@ import {
 import { BATCH_SIZE, recordScheduledNotification } from "./shared.js";
 
 export async function processAssetsDueForRecalibration(
-  client: Client,
+  lab: OrgSession,
 ): Promise<number> {
   let assetsProcessed = 0;
 
@@ -33,7 +33,7 @@ export async function processAssetsDueForRecalibration(
 
   do {
     assetBatch = await checkAssetsDueForRecalibration(
-      client,
+      lab,
       assetOffset,
       BATCH_SIZE,
     );
@@ -48,7 +48,7 @@ export async function processAssetsDueForRecalibration(
       try {
         await notifyAssetDueForRecalibration(asset.id, asset.organization_id);
 
-        await recordScheduledNotification(client, {
+        await recordScheduledNotification(lab, {
           organizationId: asset.organization_id,
           type: "ASSET_DUE_FOR_RECALIBRATION",
           entityType: "asset",
@@ -75,7 +75,7 @@ export async function processAssetsDueForRecalibration(
 }
 
 export async function processAssetsDueForLegalVerification(
-  client: Client,
+  lab: OrgSession,
 ): Promise<number> {
   let legalVerificationsProcessed = 0;
 
@@ -86,7 +86,7 @@ export async function processAssetsDueForLegalVerification(
 
   do {
     legalBatch = await checkAssetsDueForLegalVerification(
-      client,
+      lab,
       legalOffset,
       BATCH_SIZE,
     );
@@ -104,7 +104,7 @@ export async function processAssetsDueForLegalVerification(
           legalAsset.organization_id,
         );
 
-        await recordScheduledNotification(client, {
+        await recordScheduledNotification(lab, {
           organizationId: legalAsset.organization_id,
           type: "ASSET_DUE_FOR_LEGAL_VERIFICATION",
           entityType: "asset",
@@ -134,7 +134,7 @@ export async function processAssetsDueForLegalVerification(
 }
 
 export async function processStandardsExpiring(
-  client: Client,
+  lab: OrgSession,
 ): Promise<number> {
   let standardsProcessed = 0;
 
@@ -144,7 +144,7 @@ export async function processStandardsExpiring(
 
   do {
     standardBatch = await checkStandardsExpiring(
-      client,
+      lab,
       standardOffset,
       BATCH_SIZE,
     );
@@ -159,7 +159,7 @@ export async function processStandardsExpiring(
       try {
         await notifyStandardExpiring(standard.id, standard.organization_id);
 
-        await recordScheduledNotification(client, {
+        await recordScheduledNotification(lab, {
           organizationId: standard.organization_id,
           type: "STANDARD_EXPIRING",
           entityType: "standard",
@@ -188,7 +188,9 @@ export async function processStandardsExpiring(
   return standardsProcessed;
 }
 
-export async function processStandardsExpired(client: Client): Promise<number> {
+export async function processStandardsExpired(
+  lab: OrgSession,
+): Promise<number> {
   let standardsExpiredProcessed = 0;
 
   // 3. Process EXPIRED reference standards - ISO 17025 Clause 6.4.6 (with pagination)
@@ -196,11 +198,7 @@ export async function processStandardsExpired(client: Client): Promise<number> {
   let expiredBatch: StandardExpiredRow[];
 
   do {
-    expiredBatch = await checkStandardsExpired(
-      client,
-      expiredOffset,
-      BATCH_SIZE,
-    );
+    expiredBatch = await checkStandardsExpired(lab, expiredOffset, BATCH_SIZE);
     if (expiredBatch.length > 0) {
       console.log(
         `[Scheduled] Processing ${expiredBatch.length} expired standards (offset ${expiredOffset})`,
@@ -212,7 +210,7 @@ export async function processStandardsExpired(client: Client): Promise<number> {
       try {
         await notifyStandardExpired(standard.id, standard.organization_id);
 
-        await recordScheduledNotification(client, {
+        await recordScheduledNotification(lab, {
           organizationId: standard.organization_id,
           type: "STANDARD_EXPIRED",
           entityType: "standard",
@@ -241,7 +239,7 @@ export async function processStandardsExpired(client: Client): Promise<number> {
   return standardsExpiredProcessed;
 }
 
-export async function processOverdueJobs(client: Client): Promise<number> {
+export async function processOverdueJobs(lab: OrgSession): Promise<number> {
   let jobsProcessed = 0;
 
   // 4. Process overdue jobs (with pagination)
@@ -249,7 +247,7 @@ export async function processOverdueJobs(client: Client): Promise<number> {
   let jobBatch: OverdueJobRow[];
 
   do {
-    jobBatch = await checkOverdueJobs(client, jobOffset, BATCH_SIZE);
+    jobBatch = await checkOverdueJobs(lab, jobOffset, BATCH_SIZE);
     if (jobBatch.length > 0) {
       console.log(
         `[Scheduled] Processing ${jobBatch.length} overdue jobs (offset ${jobOffset})`,
@@ -261,7 +259,7 @@ export async function processOverdueJobs(client: Client): Promise<number> {
       try {
         await notifyJobOverdue(job.id);
 
-        await recordScheduledNotification(client, {
+        await recordScheduledNotification(lab, {
           organizationId: job.organization_id,
           type: "JOB_OVERDUE",
           entityType: "job",

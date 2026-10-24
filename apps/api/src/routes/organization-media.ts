@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
-import { db } from "@calibra-facil/db";
 import { organization } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 import {
@@ -19,6 +18,7 @@ import {
   organizationLogoKey,
 } from "@calibra-facil/shared/storage-keys";
 import { writeOrganizationAuditEvent } from "../lib/audit";
+import { orgDb } from "../lib/org-db";
 import {
   type AuthVariables,
   requireRole,
@@ -70,7 +70,8 @@ export const organizationMediaRouter = new Hono<{
           );
         }
 
-        const [currentOrg] = await db
+        const lab = orgDb(member.organizationId);
+        const [currentOrg] = await lab
           .select({ logo: organization.logo, slug: organization.slug })
           .from(organization)
           .where(eq(organization.id, member.organizationId))
@@ -99,10 +100,30 @@ export const organizationMediaRouter = new Hono<{
           key,
           new URL(c.req.url).origin,
         );
-        await db
-          .update(organization)
-          .set({ logo: logoUrl })
-          .where(eq(organization.id, member.organizationId));
+        // The new logo and its audit entry commit together; the previous object
+        // is removed from storage only once that has committed.
+        await lab.transaction(async (tx) => {
+          await tx
+            .update(organization)
+            .set({ logo: logoUrl })
+            .where(eq(organization.id, member.organizationId));
+          await writeOrganizationAuditEvent(
+            {
+              organizationId: member.organizationId,
+              actorUserId: session.user.id,
+              actorMemberId: member.id,
+              action: "organization.logo.uploaded",
+              entityType: "organization",
+              entityId: member.organizationId,
+              details: {
+                key,
+                contentType: file.type,
+                size: file.size,
+              },
+            },
+            tx,
+          );
+        });
 
         const previousKey = getLogoKeyFromUrl(currentOrg.logo);
         if (previousKey && previousKey !== key) {
@@ -116,20 +137,6 @@ export const organizationMediaRouter = new Hono<{
             () => undefined,
           );
         }
-
-        await writeOrganizationAuditEvent({
-          organizationId: member.organizationId,
-          actorUserId: session.user.id,
-          actorMemberId: member.id,
-          action: "organization.logo.uploaded",
-          entityType: "organization",
-          entityId: member.organizationId,
-          details: {
-            key,
-            contentType: file.type,
-            size: file.size,
-          },
-        });
 
         return c.json({ logoUrl });
       } catch (error) {
@@ -148,7 +155,8 @@ export const organizationMediaRouter = new Hono<{
       const env = c.env;
 
       try {
-        const [currentOrg] = await db
+        const lab = orgDb(member.organizationId);
+        const [currentOrg] = await lab
           .select({ logo: organization.logo })
           .from(organization)
           .where(eq(organization.id, member.organizationId))
@@ -158,12 +166,29 @@ export const organizationMediaRouter = new Hono<{
           return c.json({ error: "Organização não encontrada" }, 404);
         }
 
-        await db
-          .update(organization)
-          .set({ logo: null })
-          .where(eq(organization.id, member.organizationId));
-
         const previousKey = getLogoKeyFromUrl(currentOrg.logo);
+
+        // The cleared logo and its audit entry commit together; the object is
+        // removed from storage only once that has committed.
+        await lab.transaction(async (tx) => {
+          await tx
+            .update(organization)
+            .set({ logo: null })
+            .where(eq(organization.id, member.organizationId));
+          await writeOrganizationAuditEvent(
+            {
+              organizationId: member.organizationId,
+              actorUserId: session.user.id,
+              actorMemberId: member.id,
+              action: "organization.logo.deleted",
+              entityType: "organization",
+              entityId: member.organizationId,
+              details: previousKey ? { key: previousKey } : null,
+            },
+            tx,
+          );
+        });
+
         if (previousKey) {
           const r2Client = createR2Client(env);
           const previousBucket = await resolveReadBucketName(
@@ -176,16 +201,6 @@ export const organizationMediaRouter = new Hono<{
             () => undefined,
           );
         }
-
-        await writeOrganizationAuditEvent({
-          organizationId: member.organizationId,
-          actorUserId: session.user.id,
-          actorMemberId: member.id,
-          action: "organization.logo.deleted",
-          entityType: "organization",
-          entityId: member.organizationId,
-          details: previousKey ? { key: previousKey } : null,
-        });
 
         return c.json({ logoUrl: null });
       } catch (error) {
