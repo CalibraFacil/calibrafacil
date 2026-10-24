@@ -30,7 +30,7 @@ export function createRoleDatabase(
     /** Receives the message of every NOTICE/WARNING the server sends. */
     onNotice?: (message: string) => void;
     /** Receives every statement the pool executes (drizzle's logger hook). */
-    onQuery?: (query: string) => void;
+    onQuery?: (query: string, params: unknown[]) => void;
   } = {},
 ): RoleDatabase {
   const role = options.role === undefined ? APP_ROLE : options.role;
@@ -52,8 +52,8 @@ export function createRoleDatabase(
       ...(onQuery
         ? {
             logger: {
-              logQuery(query: string) {
-                onQuery(query);
+              logQuery(query: string, params: unknown[]) {
+                onQuery(query, params);
               },
             },
           }

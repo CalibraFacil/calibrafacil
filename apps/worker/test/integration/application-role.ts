@@ -1,18 +1,15 @@
 import type { Env } from "@calibra-facil/jobs-core";
-import { makeTestEnv } from "./env";
+import { applicationRoleUrl, makeTestEnv } from "./env";
 
 // Shared by the `*-lab-scope.int.spec.ts` specs: the worker connected as the
 // application role `calibra_app`, which the `tenant_isolation` policies bind
 // (migration 0123). Every connection a handler opens is a session of that role;
 // only the lookups that LEARN which laboratory a message or a sweep belongs to
-// use the owner connection (`DATABASE_OWNER_URL`).
+// use the owner connection (`DATABASE_OWNER_URL`). Since P2-18k `makeTestEnv`
+// builds that env by default; this helper stays for the specs that drop the
+// owner URL on purpose.
 
-/** The same database, as a session of the application role. */
-export function applicationRoleUrl(ownerUrl: string): string {
-  const url = new URL(ownerUrl);
-  url.searchParams.set("options", "-c role=calibra_app");
-  return url.toString();
-}
+export { applicationRoleUrl };
 
 export function ownerDatabaseUrl(): string {
   const ownerUrl = process.env.DATABASE_URL;
@@ -30,7 +27,7 @@ export function envAsApplicationRole(
     ...makeTestEnv(overrides),
     DATABASE_URL: applicationRoleUrl(ownerUrl),
     DATABASE_RLS_MODE: "enforced",
-    ...(withOwnerUrl ? { DATABASE_OWNER_URL: ownerUrl } : {}),
+    DATABASE_OWNER_URL: withOwnerUrl ? ownerUrl : undefined,
   };
 }
 

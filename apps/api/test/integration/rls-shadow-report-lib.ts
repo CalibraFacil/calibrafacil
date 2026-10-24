@@ -1,5 +1,5 @@
 // Pure helpers of the RLS shadow report (roadmap P2-3 / P2-18b): the harness
-// (rls-shadow-mode.ts) uses the request-path and call-site attribution, the report
+// (app-role-mode.ts) uses the request-path and call-site attribution, the report
 // script (scripts/rls-shadow-report.mjs, run with Node's type stripping) uses
 // everything else. No imports and only erasable TypeScript syntax, so both can load
 // this file as is; rls-shadow-report-lib.spec.ts covers it.

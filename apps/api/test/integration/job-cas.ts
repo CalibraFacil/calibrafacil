@@ -2,10 +2,7 @@ import { vi } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { db, getDb } from "@calibra-facil/db";
 import { outsideTransactionScope } from "@calibra-facil/db/testing";
-import {
-  outsideApplication,
-  shadowApplicationDatabase,
-} from "./rls-shadow-mode";
+import { outsideApplication, appRoleDatabaseInstance } from "./app-role-mode";
 import { calibrationJob, jobAuditLog } from "@calibra-facil/db/schema";
 import { setJobStatus } from "./job-fixtures";
 
@@ -107,8 +104,8 @@ export function changeJobBeforeNextTransaction(
   let fired = false;
   // Another actor's committed write, on its own connection: inside a
   // transaction scope `db` is the request's transaction, which the other actor
-  // is not part of, and under the RLS shadow report (requests run as
-  // `calibra_app`) it is the owner, not the application under test.
+  // is not part of, and (requests run as `calibra_app`) it is the owner, not the
+  // application under test.
   const otherActorChangesJob = async () => {
     if (fired) return;
     fired = true;
@@ -117,9 +114,8 @@ export function changeJobBeforeNextTransaction(
     );
   };
   // `db` is a Proxy over the cached instance; spy on the instances themselves:
-  // the owner's, and under the RLS shadow report the calibra_app pool a request
-  // actually runs on.
-  const instances = [getDb(), shadowApplicationDatabase()];
+  // the owner's, and the calibra_app pool a request actually runs on.
+  const instances = [getDb(), appRoleDatabaseInstance()];
   for (const instance of instances) {
     if (!instance) continue;
     const originalTransaction = instance.transaction.bind(instance);

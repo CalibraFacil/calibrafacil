@@ -16,7 +16,7 @@ import { seedTenant } from "../../test/integration/tenancy-fixture";
 import { sqlStateOf } from "../../test/integration/rls";
 
 // The proof that the application's role is NOT bound by row-level security while
-// DATABASE_RLS_MODE=shadow (REQ-RLS-2), against a role that is a real table OWNER
+// DATABASE_RLS_MODE=shadow, the diagnosis mode (REQ-RLS-2), against a role that is a real table OWNER
 // but not a superuser (the test Postgres user is a superuser, which proves
 // nothing: it bypasses everything), plus the start-up check and the migration
 // guard in every case: owner, BYPASSRLS, a calibra_app member, enforced mode.
@@ -267,14 +267,64 @@ describe("row-level security: who the policies bind", () => {
       expect(refused.message).toContain("DEPLOYMENT.md");
     });
 
-    it("REQ-RLS-2: enforced mode (after the role split) accepts the calibra_app member", async () => {
+    it("REQ-RLS-2: enforced mode (the default) accepts the calibra_app member with the owner on the system path", async () => {
       const facts = await assertRlsStartup({
         executor: connectAs(MEMBER).db,
+        systemExecutor: connectAs(OWNER).db,
         mode: "enforced",
         ownerUrl: "postgres://owner@localhost/db",
       });
       expect(facts.subjectToRls).toBe(true);
       expect(facts.role).toBe(MEMBER);
+    });
+
+    it("REQ-RLS-2 [HIGH RISK]: enforced mode refuses an application connection that is the owner, a BYPASSRLS role or the superuser (no second wall), naming DATABASE_URL", async () => {
+      for (const who of [
+        connectAs(OWNER),
+        connectAs(BYPASS),
+        connectAs(null),
+      ]) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- one connection each.
+        const refused = await assertRlsStartup({
+          executor: who.db,
+          systemExecutor: connectAs(OWNER).db,
+          ownerUrl: "postgres://owner@localhost/db",
+          mode: "enforced",
+        }).then(
+          () => null,
+          (error: unknown) => error,
+        );
+        expect(refused).toBeInstanceOf(ConfigError);
+        if (!(refused instanceof ConfigError)) throw new Error("not refused");
+        expect(refused.issues.map((issue) => issue.variable)).toEqual([
+          "DATABASE_URL",
+        ]);
+      }
+    });
+
+    it("REQ-RLS-2 [HIGH RISK]: enforced mode refuses a system path that is missing or that RLS binds (Q40), naming DATABASE_OWNER_URL", async () => {
+      for (const options of [
+        { ownerUrl: undefined, systemExecutor: undefined },
+        {
+          ownerUrl: "postgres://owner@localhost/db",
+          systemExecutor: connectAs(MEMBER).db,
+        },
+      ]) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- one connection each.
+        const refused = await assertRlsStartup({
+          executor: connectAs(MEMBER).db,
+          mode: "enforced",
+          ...options,
+        }).then(
+          () => null,
+          (error: unknown) => error,
+        );
+        expect(refused).toBeInstanceOf(ConfigError);
+        if (!(refused instanceof ConfigError)) throw new Error("not refused");
+        expect(refused.issues.map((issue) => issue.variable)).toEqual([
+          "DATABASE_OWNER_URL",
+        ]);
+      }
     });
 
     it("REQ-RLS-2: a FORCEd table binds even its owner, so shadow mode refuses the owner then", async () => {

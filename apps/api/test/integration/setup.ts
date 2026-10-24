@@ -2,7 +2,7 @@ import { execSync } from "node:child_process";
 import { beforeEach, inject, vi } from "vitest";
 import { assertEphemeralTestDb } from "./guard";
 import { installTenantSqlGuard } from "./tenant-sql-guard";
-import { installRlsShadowMode } from "./rls-shadow-mode";
+import { installReportProbes } from "./app-role-mode";
 
 // Per-worker setup for the integration tier. Runs before any test file in this
 // worker process. Each worker gets its OWN copy of the schema (calibra_w<id>)
@@ -64,27 +64,32 @@ execSync(
 
 // Point the real db Proxy at this worker's database.
 process.env.DATABASE_URL = workerUrl;
+// The owner connection of the system path (`systemDb`: Better Auth's adapter, the
+// lookups that learn a laboratory): here the test superuser, on the same database.
+// DATABASE_RLS_MODE is left at its default, `enforced`, like a deployment; the
+// requests themselves run as calibra_app (app-role-mode.ts).
+process.env.DATABASE_OWNER_URL = workerUrl;
 
-// RLS violation-report mode (CALIBRA_RLS_SHADOW=1, apps/api/scripts/rls-shadow-report.mjs):
-// a no-op in every normal run. See rls-shadow-mode.ts.
-await installRlsShadowMode();
+// RLS report mode (CALIBRA_RLS_REPORT=1, apps/api/scripts/rls-shadow-report.mjs):
+// a no-op in every other run. See app-role-mode.ts.
+await installReportProbes();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Step 5: mock better-auth sessions
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Shadow mode only: requests reach the database as calibra_app. Otherwise the
-// real module, untouched.
+// Requests reach the database as calibra_app (CALIBRA_API_DB_ROLE=owner: the real
+// module, untouched). See app-role-mode.ts.
 vi.mock("@calibra-facil/db", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@calibra-facil/db")>();
-  const { shadowDatabase } = await import("./rls-shadow-mode");
-  return shadowDatabase(actual);
+  const { appRoleDatabase } = await import("./app-role-mode");
+  return appRoleDatabase(actual);
 });
 
 vi.mock("hono", async (importOriginal) => {
   const actual = await importOriginal<typeof import("hono")>();
-  const { shadowHono } = await import("./rls-shadow-mode");
-  return shadowHono(actual);
+  const { appRoleHono } = await import("./app-role-mode");
+  return appRoleHono(actual);
 });
 
 const { getSessionMock, portalGetSessionMock } = vi.hoisted(() => ({

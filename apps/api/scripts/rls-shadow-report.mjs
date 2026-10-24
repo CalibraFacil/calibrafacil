@@ -8,12 +8,14 @@
 // It runs every API integration spec (`apps/api/**/*.int.spec.ts`; the include of
 // apps/api/vitest.integration.config.ts is `src/**`, nothing lives elsewhere) three
 // times against the ephemeral Postgres of the integration tier:
-//   1. as the owner (CALIBRA_RLS_SHADOW unset): the baseline, what passes today;
-//   2. with CALIBRA_RLS_SHADOW=1 ("strict"): every HTTP request's database
-//      access runs as `calibra_app` under the `tenant_isolation` policies
-//      (test/integration/rls-shadow-mode.ts), the specs' seeding and assertions
-//      stay on the owner;
-//   3. the same with CALIBRA_RLS_SHADOW_MODE=audit: a statement with no
+//   1. with the requests as the owner (CALIBRA_API_DB_ROLE=owner): the baseline,
+//      what passes without row-level security;
+//   2. with CALIBRA_RLS_REPORT=1 ("strict"): every HTTP request's database
+//      access runs as `calibra_app` under the `tenant_isolation` policies (the
+//      default of the integration tier since P2-18k, test/integration/
+//      app-role-mode.ts, plus the probing policies of report mode), the specs'
+//      seeding and assertions stay on the owner;
+//   3. the same with CALIBRA_RLS_REPORT_MODE=audit: a statement with no
 //      organization set is let through and recorded, so the run reaches every
 //      such statement instead of stopping at the first one of each request.
 // and prints, by spec file: tests that pass as the owner but fail as calibra_app
@@ -173,12 +175,16 @@ function indexResults(report) {
 
 function runPasses() {
   const baseline = indexResults(
-    runVitest("baseline (owner)", {}, path.join(work, "owner.json")),
+    runVitest(
+      "baseline (owner)",
+      { CALIBRA_API_DB_ROLE: "owner" },
+      path.join(work, "owner.json"),
+    ),
   );
   const shadow = indexResults(
     runVitest(
       "strict (calibra_app, fail closed)",
-      { CALIBRA_RLS_SHADOW: "1", TENANT_SQL_GUARD: "off" },
+      { CALIBRA_RLS_REPORT: "1", TENANT_SQL_GUARD: "off" },
       path.join(work, "strict.json"),
     ),
   );
@@ -189,9 +195,9 @@ function runPasses() {
   runVitest(
     "audit (calibra_app, unscoped statements allowed and recorded)",
     {
-      CALIBRA_RLS_SHADOW: "1",
-      CALIBRA_RLS_SHADOW_MODE: "audit",
-      CALIBRA_RLS_SHADOW_REPORT: violationsFile,
+      CALIBRA_RLS_REPORT: "1",
+      CALIBRA_RLS_REPORT_MODE: "audit",
+      CALIBRA_RLS_REPORT_FILE: violationsFile,
       TENANT_SQL_GUARD: "off",
     },
     path.join(work, "audit.json"),

@@ -38,7 +38,7 @@ import { createHash } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { loginPerRequestHeader } from "../../../test/integration/setup";
 import { truncateAll } from "../../../test/integration/db";
-import { outsideApplication } from "../../../test/integration/rls-shadow-mode";
+import { outsideApplication } from "../../../test/integration/app-role-mode";
 import {
   insertJob,
   setJobStatus,

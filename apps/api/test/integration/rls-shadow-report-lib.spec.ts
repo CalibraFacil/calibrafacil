@@ -44,7 +44,7 @@ describe("sourceModuleFromStack", () => {
   it("skips drizzle, packages/db, the org-bound wrapper and the harness", () => {
     const stack = [
       "Error",
-      frame("apps/api/test/integration/rls-shadow-mode.ts"),
+      frame("apps/api/test/integration/app-role-mode.ts"),
       frame(
         "node_modules/.pnpm/drizzle-orm@1/node_modules/drizzle-orm/pg-core/db.js",
       ),

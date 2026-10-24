@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sql } from "drizzle-orm";
 import type { Env } from "@calibra-facil/jobs-core";
 import { db, truncateAll } from "../test/integration/db";
-import { makeTestEnv } from "../test/integration/env";
+import { applicationRoleUrl, makeTestEnv } from "../test/integration/env";
 import { seedOrg } from "../test/integration/seed";
 import { seedIssuableJob } from "../test/integration/seed-certificate";
 
@@ -91,21 +91,17 @@ async function snapshotCount(jobId: number): Promise<number> {
   ).length;
 }
 
-/** The same database, as a session of the application role. */
-function applicationRoleUrl(ownerUrl: string): string {
-  const url = new URL(ownerUrl);
-  url.searchParams.set("options", "-c role=calibra_app");
-  return url.toString();
-}
-
+/** The default test env is already the application role; `withOwnerUrl: false` drops the system path. */
 function envAsApplicationRole(options: { withOwnerUrl: boolean }): Env {
   const ownerUrl = process.env.DATABASE_URL;
   if (!ownerUrl) throw new Error("DATABASE_URL is not set");
   return {
-    ...makeTestEnv({ GOTENBERG_URL }),
-    DATABASE_URL: applicationRoleUrl(ownerUrl),
-    DATABASE_RLS_MODE: "enforced",
-    ...(options.withOwnerUrl ? { DATABASE_OWNER_URL: ownerUrl } : {}),
+    ...makeTestEnv({
+      GOTENBERG_URL,
+      DATABASE_URL: applicationRoleUrl(ownerUrl),
+      DATABASE_RLS_MODE: "enforced",
+    }),
+    DATABASE_OWNER_URL: options.withOwnerUrl ? ownerUrl : undefined,
   };
 }
 

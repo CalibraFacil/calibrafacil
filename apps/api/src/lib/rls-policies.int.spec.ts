@@ -20,9 +20,9 @@ import {
 } from "../../test/integration/tenancy-fixture";
 import { openAppRoleDb, sqlStateOf } from "../../test/integration/rls";
 
-// Real-database proof of row-level security in shadow mode (migration 0123,
+// Real-database proof of the row-level-security policies (migration 0123,
 // roadmap P2-3). The global `db` is the test superuser, which no policy binds
-// (it stands for the owner production connects as today); `openAppRoleDb()`
+// (it stands for the owner: the system path, migrations); `openAppRoleDb()`
 // connects as `calibra_app`, which is bound by the `tenant_isolation` policies.
 
 const A = "lab-a";

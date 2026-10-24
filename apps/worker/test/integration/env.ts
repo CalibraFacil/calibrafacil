@@ -52,22 +52,40 @@ export function createFakeBucket(): R2BucketBinding {
   };
 }
 
+/** The same database, as a session of the application role (`calibra_app`). */
+export function applicationRoleUrl(ownerUrl: string): string {
+  const url = new URL(ownerUrl);
+  url.searchParams.set("options", "-c role=calibra_app");
+  return url.toString();
+}
+
 /**
  * Build the `Env` the worker handlers consume, pointed at the test Postgres.
  * `INTEGRATIONS_MASTER_KEY` is set (required by processIntegrationSync to decrypt
  * the connection secret); signing/email secrets are omitted so those no-op.
+ *
+ * Like a deployment (P2-18k) the handlers connect as `calibra_app`, which the
+ * tenant policies bind, with the owner as the system path
+ * (`DATABASE_OWNER_URL`) and `DATABASE_RLS_MODE=enforced`: a handler statement
+ * that forgets its organization fails its spec. The specs' own seeding and
+ * assertions (`process.env.DATABASE_URL`, the `db` of setup.ts) stay on the owner.
+ * CALIBRA_WORKER_DB_ROLE=owner runs the handlers as the owner too, to tell an RLS
+ * refusal from a bug.
  */
 export function makeTestEnv(overrides: Partial<Env> = {}): Env {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
+  const ownerUrl = process.env.DATABASE_URL;
+  if (!ownerUrl) {
     throw new Error(
       "[worker-int] makeTestEnv called before setup.ts set DATABASE_URL",
     );
   }
+  const asOwner = process.env.CALIBRA_WORKER_DB_ROLE === "owner";
   return {
     CERTIFICATES_BUCKET: createFakeBucket(),
     MEDIA_BUCKET: createFakeBucket(),
-    DATABASE_URL: databaseUrl,
+    DATABASE_URL: asOwner ? ownerUrl : applicationRoleUrl(ownerUrl),
+    DATABASE_OWNER_URL: ownerUrl,
+    DATABASE_RLS_MODE: asOwner ? "shadow" : "enforced",
     INTEGRATIONS_MASTER_KEY: TEST_INTEGRATIONS_MASTER_KEY,
     // SIGNING_MASTER_KEY, RESEND_API_KEY intentionally omitted -> no-op.
     ...overrides,
