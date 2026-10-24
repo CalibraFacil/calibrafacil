@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import {
   processIntegrationSync,
   processScheduledIntegrationSyncs,
+  ScheduledIntegrationSyncError,
   type IntegrationSyncQueueMessage,
 } from "@calibra-facil/jobs-core/integrations";
 import { db, truncateAll } from "../test/integration/db";
@@ -39,6 +40,8 @@ import {
  *   REQ-WRLS-INT-3  no transaction is open while the remote ERP is being called
  *   REQ-WRLS-INT-4  a failing sync records FAILED + its event in its own laboratory
  *   REQ-WRLS-INT-5  the scheduler creates each due run in its own laboratory and skips a target with an active run
+ *   REQ-WRLS-INT-6  one laboratory failing to schedule does not stop the others: its transaction rolls back, the
+ *                   others are scheduled, and the sweep reports the failure at the end with what it did
  */
 
 const INTEGRATION_A = "int-A";
@@ -333,5 +336,87 @@ describe("generic_http integration sync as calibra_app (P2-18j)", () => {
         status: "PENDING",
       },
     ]);
+  });
+
+  it("REQ-WRLS-INT-6 [HIGH RISK] a laboratory whose run cannot be created does not stop the others, and the sweep reports it", async () => {
+    const orgA = await seedOrg({ orgId: "org-A", userId: "user-A" });
+    const orgB = await seedOrg({ orgId: "org-B", userId: "user-B" });
+    for (const [integrationId, org] of [
+      [INTEGRATION_A, orgA],
+      [INTEGRATION_B, orgB],
+    ] as const) {
+      await seedScheduledIntegration({
+        integrationId,
+        organizationId: org.orgId,
+        createdBy: org.userId,
+        schedules: [
+          {
+            target: "customer",
+            mode: "scheduled",
+            nextScheduledRunAt: pastIso(),
+          },
+        ],
+      });
+    }
+    // Laboratory A's run row is refused by the database (a trigger of this test).
+    await db.execute(sql`
+      CREATE FUNCTION test_refuse_org_a_run() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RAISE EXCEPTION 'test: laboratory A cannot create a run'; END $$`);
+    await db.execute(sql`
+      CREATE TRIGGER test_refuse_org_a_run BEFORE INSERT ON integration_sync_run
+      FOR EACH ROW WHEN (NEW.organization_id = 'org-A') EXECUTE FUNCTION test_refuse_org_a_run()`);
+    const configOf = async (integrationId: string) =>
+      JSON.stringify(
+        field(
+          toRows(
+            await db.execute(
+              sql`SELECT config FROM integration_connection WHERE integration_id = ${integrationId}`,
+            ),
+          )[0],
+          "config",
+        ),
+      );
+    const configBefore = await configOf(INTEGRATION_A);
+    const dispatched: IntegrationSyncQueueMessage[] = [];
+    try {
+      const failure = await processScheduledIntegrationSyncs(
+        envAsApplicationRole(),
+        {
+          dispatch: async (message) => {
+            dispatched.push(message);
+          },
+        },
+      ).then(
+        () => null,
+        (error: unknown) => error,
+      );
+
+      expect(failure).toBeInstanceOf(ScheduledIntegrationSyncError);
+      if (!(failure instanceof ScheduledIntegrationSyncError)) {
+        throw new Error("the sweep did not report the failure");
+      }
+      expect(failure.failures.map((entry) => entry.organizationId)).toEqual([
+        "org-A",
+      ]);
+      expect(failure.result.scheduledRuns).toBe(2);
+    } finally {
+      await db.execute(
+        sql`DROP TRIGGER test_refuse_org_a_run ON integration_sync_run`,
+      );
+      await db.execute(sql`DROP FUNCTION test_refuse_org_a_run()`);
+    }
+
+    // Laboratory B was scheduled and dispatched; laboratory A has no run.
+    expect(dispatched.map((message) => message.organizationId)).toEqual([
+      "org-B",
+    ]);
+    const runs = toRows(
+      await db.execute(
+        sql`SELECT organization_id FROM integration_sync_run ORDER BY organization_id`,
+      ),
+    ).map((row) => asString(field(row, "organization_id")));
+    expect(runs).toEqual(["org-B"]);
+    // A's schedule advance rolled back with its failed run: its config is as seeded.
+    expect(await configOf(INTEGRATION_A)).toBe(configBefore);
   });
 });

@@ -35,6 +35,24 @@ export type DriftCheckResult = {
   }>;
 };
 
+/**
+ * Thrown at the END of a sweep in which some audit writes failed: every other
+ * finding was still recorded, and `result` is what the sweep found, so the cron
+ * reports the failure without losing the findings (a failing laboratory never
+ * hides another laboratory's drift).
+ */
+export class DriftAuditWriteError extends Error {
+  constructor(
+    readonly result: DriftCheckResult,
+    readonly failures: ReadonlyArray<{ snapshotId: number; error: unknown }>,
+  ) {
+    super(
+      `certificate drift: ${failures.length} audit event(s) could not be written (snapshots ${failures.map((failure) => failure.snapshotId).join(", ")})`,
+    );
+    this.name = "DriftAuditWriteError";
+  }
+}
+
 function sha256Hex(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
@@ -60,6 +78,7 @@ export async function runCertificateDriftCheck(
     .orderBy(desc(issuedCertificateSnapshot.id))
     .limit(sampleSize);
 
+  const failures: Array<{ snapshotId: number; error: unknown }> = [];
   const result: DriftCheckResult = {
     checked: 0,
     drifted: 0,
@@ -92,24 +111,34 @@ export async function runCertificateDriftCheck(
         artifact,
         kind,
       });
-      // The storage read above ended before this transaction opens.
-      await orgDb(row.organizationId).transaction((tx) =>
-        writeOrganizationAuditEvent(
-          {
-            organizationId: row.organizationId,
-            action: "certificate.drift_detected",
-            entityType: "issued_certificate_snapshot",
-            entityId: String(row.id),
-            details: { artifact, kind, r2Key: key, expectedSha256: expected },
-          },
-          tx,
-        ),
-      );
+      // The storage read above ended before this transaction opens. One failing
+      // write (that laboratory's) must not drop the findings of the others.
+      try {
+        await orgDb(row.organizationId).transaction((tx) =>
+          writeOrganizationAuditEvent(
+            {
+              organizationId: row.organizationId,
+              action: "certificate.drift_detected",
+              entityType: "issued_certificate_snapshot",
+              entityId: String(row.id),
+              details: { artifact, kind, r2Key: key, expectedSha256: expected },
+            },
+            tx,
+          ),
+        );
+      } catch (error) {
+        failures.push({ snapshotId: row.id, error });
+        console.error(
+          `[drift-check] audit event for snapshot ${row.id} (laboratory ${row.organizationId}) failed`,
+          error,
+        );
+      }
     }
   }
 
   console.log(
     `[drift-check] checked=${result.checked} drifted=${result.drifted} missing=${result.missing}`,
   );
+  if (failures.length > 0) throw new DriftAuditWriteError(result, failures);
   return result;
 }
