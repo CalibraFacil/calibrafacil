@@ -288,6 +288,15 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     reason:
       "getPortalCustomerForAuthOrganization: the portal service-order scope resolver. It maps the session's CLIENT organization (customer.auth_organization_id) to its customer and therefore to the laboratory every following portal service-order statement is bound to (forOrg), like portal-customer-scope.ts for the other portal routes.",
   },
+  {
+    category: "other",
+    file: "apps/api/src/modules/sync/desktop-customer-org.ts",
+    tables: ["customer"],
+    kinds: ["select"],
+    sql: /from "customer" where .*"auth_organization_id" = \$\d+ and .*"lab_organization_id" <> \$\d+/,
+    reason:
+      "System path (P2-18i): the desktop-sync create_local_customer pre-phase asks whether any OTHER laboratory's customer is attached to the CLIENT organization it found by slug before adopting it (one id column, read only). A session bound to one laboratory can never see another laboratory's row, so the question is cross-laboratory by design and runs on systemDb; everything else of the push runs in the event's transaction naming the pushing device's laboratory.",
+  },
   // -------------------------------------------------------------------------
   // ownership-checked-in-code: the row is read by id and its organization is
   // compared in application code before anything is used or written; another

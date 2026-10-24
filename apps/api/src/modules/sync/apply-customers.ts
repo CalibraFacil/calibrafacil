@@ -1,4 +1,3 @@
-import { db } from "@calibra-facil/db";
 import { customer, customerAuditLog } from "@calibra-facil/db/schema";
 import {
   CreateCustomerSchema,
@@ -29,6 +28,7 @@ export async function applyCreateLocalCustomer(
   const existingRemoteEntityId = await findDesktopSyncRemoteEntityId(
     input.memberData.organizationId,
     input.event.entityId,
+    input.o,
   );
   if (existingRemoteEntityId !== null) {
     return { ok: true, remoteEntityId: existingRemoteEntityId };
@@ -57,34 +57,32 @@ export async function applyCreateLocalCustomer(
     };
   }
 
-  const newCustomer = await db.transaction(async (tx) => {
-    const [created] = await tx
-      .insert(customer)
-      .values({
-        name: values.name,
-        taxId: values.taxId || null,
-        email: values.email || null,
-        phone: values.phone || null,
-        address: values.address || null,
-        authOrganizationId: clientOrganizationId,
-        labOrganizationId: input.memberData.organizationId,
-      })
-      .returning();
+  // The customer and its audit row are written on the event's transaction
+  // (`input.o`): one atomic unit with the claim and the audit of the event.
+  const [newCustomer] = await input.o
+    .insert(customer)
+    .values({
+      name: values.name,
+      taxId: values.taxId || null,
+      email: values.email || null,
+      phone: values.phone || null,
+      address: values.address || null,
+      authOrganizationId: clientOrganizationId,
+      labOrganizationId: input.memberData.organizationId,
+    })
+    .returning();
 
-    if (!created) throw new Error("Erro ao criar cliente");
+  if (!newCustomer) throw new Error("Erro ao criar cliente");
 
-    await tx.insert(customerAuditLog).values({
-      organizationId: created.labOrganizationId,
-      customerId: created.id,
-      action: "create",
-      changes: {
-        source: "desktop_sync",
-        customer: { old: null, new: created },
-      },
-      performedBy: actorUserId,
-    });
-
-    return created;
+  await input.o.insert(customerAuditLog).values({
+    organizationId: newCustomer.labOrganizationId,
+    customerId: newCustomer.id,
+    action: "create",
+    changes: {
+      source: "desktop_sync",
+      customer: { old: null, new: newCustomer },
+    },
+    performedBy: actorUserId,
   });
 
   await writeDesktopSyncAudit(input, actorUserId, {
@@ -114,6 +112,7 @@ export async function applyUpdateLocalCustomer(
   const mappedRemoteEntityId = await findDesktopSyncRemoteEntityId(
     input.memberData.organizationId,
     input.event.entityId,
+    input.o,
   );
   const remoteEntityId =
     typeof mappedRemoteEntityId === "number"
@@ -140,7 +139,7 @@ export async function applyUpdateLocalCustomer(
   }
 
   const values = parseResult.data;
-  const [existing] = await db
+  const [existing] = await input.o
     .select()
     .from(customer)
     .where(
@@ -190,38 +189,34 @@ export async function applyUpdateLocalCustomer(
     }
   }
 
-  const updatedCustomer = await db.transaction(async (tx) => {
-    const [updated] = await tx
-      .update(customer)
-      .set({
-        ...values,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(customer.id, remoteEntityId),
-          eq(customer.labOrganizationId, input.memberData.organizationId),
-        ),
-      )
-      .returning();
+  const [updatedCustomer] = await input.o
+    .update(customer)
+    .set({
+      ...values,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(customer.id, remoteEntityId),
+        eq(customer.labOrganizationId, input.memberData.organizationId),
+      ),
+    )
+    .returning();
 
-    if (!updated) throw new Error("Erro ao atualizar cliente");
+  if (!updatedCustomer) throw new Error("Erro ao atualizar cliente");
 
-    if (Object.keys(changes).length > 0) {
-      await tx.insert(customerAuditLog).values({
-        organizationId: input.memberData.organizationId,
-        customerId: remoteEntityId,
-        action: "update",
-        changes: {
-          source: "desktop_sync",
-          fields: changes,
-        },
-        performedBy: actorUserId,
-      });
-    }
-
-    return updated;
-  });
+  if (Object.keys(changes).length > 0) {
+    await input.o.insert(customerAuditLog).values({
+      organizationId: input.memberData.organizationId,
+      customerId: remoteEntityId,
+      action: "update",
+      changes: {
+        source: "desktop_sync",
+        fields: changes,
+      },
+      performedBy: actorUserId,
+    });
+  }
 
   await writeDesktopSyncAudit(input, actorUserId, {
     remoteEntityId: updatedCustomer.id,
@@ -253,6 +248,7 @@ export async function applyUpdateLocalCustomerCompliance(
   const mappedRemoteEntityId = await findDesktopSyncRemoteEntityId(
     input.memberData.organizationId,
     input.event.entityId,
+    input.o,
   );
   const remoteEntityId =
     typeof mappedRemoteEntityId === "number"
@@ -279,7 +275,7 @@ export async function applyUpdateLocalCustomerCompliance(
   }
 
   const { compliance, reason } = parseResult.data;
-  const [existing] = await db
+  const [existing] = await input.o
     .select()
     .from(customer)
     .where(
@@ -321,13 +317,14 @@ export async function applyUpdateLocalCustomerCompliance(
   const activeCommercialAgreement = await loadCustomerActiveCommercialAgreement(
     input.memberData.organizationId,
     remoteEntityId,
+    input.o,
   );
   const updatedCompliance = syncComplianceWithActiveAgreement(
     mergedCompliance,
     activeCommercialAgreement,
   );
 
-  const [updatedCustomer] = await db
+  const [updatedCustomer] = await input.o
     .update(customer)
     .set({
       compliance: updatedCompliance,
@@ -343,7 +340,7 @@ export async function applyUpdateLocalCustomerCompliance(
 
   if (!updatedCustomer) throw new Error("Erro ao atualizar conformidade");
 
-  await db.insert(customerAuditLog).values({
+  await input.o.insert(customerAuditLog).values({
     organizationId: input.memberData.organizationId,
     customerId: remoteEntityId,
     action: "compliance_change",

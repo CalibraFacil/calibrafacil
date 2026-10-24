@@ -17,6 +17,7 @@ import {
   parseSyncPullCursor,
   parseSyncPullLimit,
   safeAttachmentExtension,
+  syncAttachmentObjectKeyBelongsToOrganization,
   toSyncTimestamp,
   tryDecodeSyncAttachmentId,
 } from "./helpers";
@@ -198,6 +199,47 @@ describe("sync helpers — attachment id encode/decode round-trip", () => {
       "org/1/sync-attachments/../escape.pdf",
     );
     expect(tryDecodeSyncAttachmentId(encoded)).toBeNull();
+  });
+});
+
+describe("sync helpers — attachment keys belong to one laboratory", () => {
+  it("accepts a key under the laboratory's own partition", () => {
+    expect(
+      syncAttachmentObjectKeyBelongsToOrganization(
+        "org/lab-a/sync-attachments/asset/7/hash-evt.pdf",
+        "lab-a",
+      ),
+    ).toBe(true);
+  });
+
+  it("refuses another laboratory's key, a prefix-sharing id and a key outside the attachment folder", () => {
+    for (const key of [
+      "org/lab-b/sync-attachments/asset/7/hash-evt.pdf",
+      "org/lab-ab/sync-attachments/asset/7/hash-evt.pdf",
+      "org/lab-a-x/sync-attachments/asset/7/hash-evt.pdf",
+      "org/lab-a/certificates/asset/7/hash-evt.pdf",
+    ]) {
+      expect(
+        syncAttachmentObjectKeyBelongsToOrganization(key, "lab-a"),
+        key,
+      ).toBe(false);
+    }
+  });
+
+  it("agrees with the key builder", () => {
+    const key = buildSyncAttachmentObjectKey(memberFor("lab-a"), {
+      eventId: "evt-1",
+      entityType: "asset",
+      entityId: "local-1",
+      fileName: "x.jpg",
+      contentHash: "a".repeat(64),
+    });
+    expect(syncAttachmentObjectKeyBelongsToOrganization(key, "lab-a")).toBe(
+      true,
+    );
+    expect(syncAttachmentObjectKeyBelongsToOrganization(key, "lab-b")).toBe(
+      false,
+    );
   });
 });
 

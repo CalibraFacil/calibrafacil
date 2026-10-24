@@ -1,5 +1,5 @@
 import { syncBootstrapResponseSchema } from "@calibra-facil/contracts";
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   asset,
   assetType,
@@ -24,13 +24,26 @@ import { attachReferenceStandardCertificateDocuments } from "./standard-document
  * adds the `Deprecation` header; the queries live here, off the route, so the
  * organization scoping stays in modules/.
  */
-export async function buildLegacyBootstrapResponse({
-  user,
-  member: memberData,
-}: {
+export function buildLegacyBootstrapResponse(input: {
   user: AuthVariables["session"]["user"];
   member: MemberData;
 }) {
+  // One transaction that names the laboratory (row-level security).
+  return orgDb(input.member.organizationId).transaction((o) =>
+    buildLegacyBootstrapResponseIn(o, input),
+  );
+}
+
+async function buildLegacyBootstrapResponseIn(
+  o: OrgDb,
+  {
+    user,
+    member: memberData,
+  }: {
+    user: AuthVariables["session"]["user"];
+    member: MemberData;
+  },
+) {
   const [
     publishedMethods,
     assetTypes,
@@ -42,7 +55,7 @@ export async function buildLegacyBootstrapResponse({
     jobs,
     serviceOrders,
   ] = await Promise.all([
-    db
+    o
       .select({
         id: calibrationMethod.id,
         organizationId: calibrationMethod.organizationId,
@@ -70,8 +83,8 @@ export async function buildLegacyBootstrapResponse({
           eq(calibrationMethod.status, "PUBLISHED"),
         ),
       ),
-    db.select().from(assetType),
-    db
+    o.select().from(assetType),
+    o
       .select({
         id: customer.id,
         name: customer.name,
@@ -84,7 +97,7 @@ export async function buildLegacyBootstrapResponse({
       })
       .from(customer)
       .where(eq(customer.labOrganizationId, memberData.organizationId)),
-    db
+    o
       .select({
         id: asset.id,
         organizationId: customer.labOrganizationId,
@@ -120,7 +133,7 @@ export async function buildLegacyBootstrapResponse({
           isNull(asset.deletedAt),
         ),
       ),
-    db
+    o
       .select({
         id: service.id,
         organizationId: service.organizationId,
@@ -140,7 +153,7 @@ export async function buildLegacyBootstrapResponse({
           eq(service.isActive, true),
         ),
       ),
-    db
+    o
       .select({
         id: referenceStandard.id,
         organizationId: referenceStandard.organizationId,
@@ -175,7 +188,7 @@ export async function buildLegacyBootstrapResponse({
           isNull(referenceStandard.deletedAt),
         ),
       ),
-    db
+    o
       .select()
       .from(environmentalLimits)
       .where(
@@ -184,7 +197,7 @@ export async function buildLegacyBootstrapResponse({
           buildUnitScopeCondition(environmentalLimits.unitId, memberData),
         ),
       ),
-    db
+    o
       .select({
         id: calibrationJob.id,
         jobId: calibrationJob.jobId,
@@ -220,7 +233,7 @@ export async function buildLegacyBootstrapResponse({
           buildUnitScopeCondition(calibrationJob.unitId, memberData),
         ),
       ),
-    db
+    o
       .select({
         id: serviceOrder.id,
         // Mirrored into local-db so a synced OS keeps one URL across the
@@ -270,12 +283,9 @@ export async function buildLegacyBootstrapResponse({
       ),
   ]);
   const standardsWithDocuments =
-    await attachReferenceStandardCertificateDocuments(
-      orgDb(memberData.organizationId),
-      standards,
-    );
+    await attachReferenceStandardCertificateDocuments(o, standards);
 
-  const massCompositionProfileRows = await db
+  const massCompositionProfileRows = await o
     .select({
       id: massCompositionProfile.id,
       profileKey: massCompositionProfile.profileKey,

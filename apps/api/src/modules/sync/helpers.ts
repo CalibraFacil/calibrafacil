@@ -80,6 +80,32 @@ export function tryDecodeSyncAttachmentId(attachmentId: string) {
   return objectKey;
 }
 
+/**
+ * Whether an attachment object lives in this laboratory's partition of the
+ * bucket (`org/<id>/sync-attachments/...`). The attachment id is only the
+ * object key in base64: it carries no authority, so a device may be handed a
+ * download URL only for a key under its own laboratory's prefix. The prefix is
+ * built by the same function that builds the keys, never by string-matching an
+ * id taken from the request.
+ */
+export function syncAttachmentObjectKeyBelongsToOrganization(
+  objectKey: string,
+  organizationId: string,
+) {
+  const probe = syncAttachmentKey({
+    org: { id: organizationId, slug: "" },
+    entityType: "probe",
+    entityId: "probe",
+    fileIdentity: "probe",
+    extension: "",
+  }).key;
+  const prefix = probe.slice(
+    0,
+    probe.indexOf("/sync-attachments/") + "/sync-attachments/".length,
+  );
+  return objectKey.startsWith(prefix);
+}
+
 export function isValidSyncAttachmentObjectKey(objectKey: string) {
   return (
     objectKey.startsWith("org/") &&

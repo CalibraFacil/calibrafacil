@@ -1,4 +1,3 @@
-import { db } from "@calibra-facil/db";
 import {
   serviceOrder,
   serviceOrderDeliveryDocument,
@@ -38,6 +37,7 @@ export async function applyCreateLocalServiceOrderQuoteDraft(
   const existingRemoteEntityId = await findDesktopSyncRemoteEntityId(
     input.memberData.organizationId,
     input.event.entityId,
+    input.o,
   );
   if (existingRemoteEntityId !== null) {
     return { ok: true, remoteEntityId: existingRemoteEntityId };
@@ -67,7 +67,7 @@ export async function applyCreateLocalServiceOrderQuoteDraft(
     };
   }
 
-  const [order] = await db
+  const [order] = await input.o
     .select()
     .from(serviceOrder)
     .where(
@@ -87,77 +87,77 @@ export async function applyCreateLocalServiceOrderQuoteDraft(
   }
 
   const values = parseResult.data;
-  const [latest] = await db
+  const [latest] = await input.o
     .select({ version: serviceOrderQuote.version })
     .from(serviceOrderQuote)
     .where(eq(serviceOrderQuote.serviceOrderId, order.id))
     .orderBy(desc(serviceOrderQuote.version))
     .limit(1);
   const version = (latest?.version ?? 0) + 1;
-  const quote = await db.transaction(async (tx) => {
-    const [created] = await tx
-      .insert(serviceOrderQuote)
-      .values({
-        organizationId: order.organizationId,
-        serviceOrderId: order.id,
-        quoteNumber: `${order.serviceOrderNumber}/ORC`,
-        version,
-        validUntil: parseSyncDate(values.validUntil),
-        paymentTerms: values.paymentTerms ?? null,
-        deliveryEstimate: values.deliveryEstimate ?? null,
-        warrantyTerms: values.warrantyTerms ?? null,
-        clientMessage: values.clientMessage ?? null,
-        internalNotes: values.internalNotes ?? null,
-        createdByUserId: actorUserId,
-      })
-      .returning();
-    if (!created) throw new Error("Falha ao criar orcamento");
+  // Written on the event's transaction (`input.o`): one atomic unit with the
+  // claim and the audit of the event.
+  const [created] = await input.o
+    .insert(serviceOrderQuote)
+    .values({
+      organizationId: order.organizationId,
+      serviceOrderId: order.id,
+      quoteNumber: `${order.serviceOrderNumber}/ORC`,
+      version,
+      validUntil: parseSyncDate(values.validUntil),
+      paymentTerms: values.paymentTerms ?? null,
+      deliveryEstimate: values.deliveryEstimate ?? null,
+      warrantyTerms: values.warrantyTerms ?? null,
+      clientMessage: values.clientMessage ?? null,
+      internalNotes: values.internalNotes ?? null,
+      createdByUserId: actorUserId,
+    })
+    .returning();
+  if (!created) throw new Error("Falha ao criar orcamento");
 
-    const totals = await replaceQuoteItems(
-      {
-        organizationId: order.organizationId,
+  const totals = await replaceQuoteItems(
+    {
+      organizationId: order.organizationId,
+      quoteId: created.id,
+      items: values.items.map((item) => ({
+        ...item,
+        warrantyUntil: parseSyncDate(item.warrantyUntil),
+      })),
+    },
+    input.o,
+  );
+  await input.o
+    .update(serviceOrderQuote)
+    .set({
+      subtotalServicesCents: totals.subtotalServicesCents,
+      subtotalPartsCents: totals.subtotalPartsCents,
+      discountCents: totals.discountCents,
+      freightCents: totals.freightCents,
+      totalCents: totals.totalCents,
+    })
+    .where(
+      and(
+        eq(serviceOrderQuote.id, created.id),
+        eq(serviceOrderQuote.organizationId, order.organizationId),
+      ),
+    );
+  await recordServiceOrderEvent(
+    {
+      organizationId: order.organizationId,
+      unitId: order.unitId,
+      serviceOrderId: order.id,
+      actorType: "lab_user",
+      actorId: actorUserId,
+      eventType: "service_order.quote_created",
+      metadata: {
         quoteId: created.id,
-        items: values.items.map((item) => ({
-          ...item,
-          warrantyUntil: parseSyncDate(item.warrantyUntil),
-        })),
+        version,
+        source: "desktop_sync",
       },
-      tx,
-    );
-    await tx
-      .update(serviceOrderQuote)
-      .set({
-        subtotalServicesCents: totals.subtotalServicesCents,
-        subtotalPartsCents: totals.subtotalPartsCents,
-        discountCents: totals.discountCents,
-        freightCents: totals.freightCents,
-        totalCents: totals.totalCents,
-      })
-      .where(
-        and(
-          eq(serviceOrderQuote.id, created.id),
-          eq(serviceOrderQuote.organizationId, order.organizationId),
-        ),
-      );
-    await recordServiceOrderEvent(
-      {
-        organizationId: order.organizationId,
-        unitId: order.unitId,
-        serviceOrderId: order.id,
-        actorType: "lab_user",
-        actorId: actorUserId,
-        eventType: "service_order.quote_created",
-        metadata: {
-          quoteId: created.id,
-          version,
-          source: "desktop_sync",
-        },
-      },
-      tx,
-    );
+    },
+    input.o,
+  );
 
-    return { ...created, ...totals };
-  });
+  const quote = { ...created, ...totals };
 
   await writeDesktopSyncAudit(input, actorUserId, {
     remoteEntityId: quote.id,
@@ -207,7 +207,7 @@ export async function applyLocalServiceOrderExecutionNotes(
     };
   }
 
-  const [order] = await db
+  const [order] = await input.o
     .select()
     .from(serviceOrder)
     .where(
@@ -233,7 +233,7 @@ export async function applyLocalServiceOrderExecutionNotes(
   // applies as today (REQ-REL-SYNC-203), equal/unchanged applies
   // (REQ-REL-SYNC-202). Checked before the write transaction so a conflict
   // leaves the row byte-unchanged.
-  const [existingExecution] = await db
+  const [existingExecution] = await input.o
     .select({
       id: serviceOrderExecution.id,
       updatedAt: serviceOrderExecution.updatedAt,
@@ -271,85 +271,84 @@ export async function applyLocalServiceOrderExecutionNotes(
   }
 
   const values = parseResult.data;
-  const execution = await db.transaction(async (tx) => {
-    const [existing] = await tx
-      .select()
-      .from(serviceOrderExecution)
-      .where(
-        and(
-          eq(serviceOrderExecution.serviceOrderId, order.id),
-          eq(serviceOrderExecution.organizationId, order.organizationId),
-        ),
-      )
-      .limit(1);
-    const [current] =
-      existing !== undefined
-        ? [existing]
-        : await tx
-            .insert(serviceOrderExecution)
-            .values({
-              organizationId: order.organizationId,
-              serviceOrderId: order.id,
-              startedByUserId: actorUserId,
-              technicalNotes: values.technicalNotes ?? null,
-            })
-            .returning();
-    if (!current) throw new Error("Falha ao criar execucao");
+  // Written on the event's transaction (`input.o`).
+  const [existing] = await input.o
+    .select()
+    .from(serviceOrderExecution)
+    .where(
+      and(
+        eq(serviceOrderExecution.serviceOrderId, order.id),
+        eq(serviceOrderExecution.organizationId, order.organizationId),
+      ),
+    )
+    .limit(1);
+  const [current] =
+    existing !== undefined
+      ? [existing]
+      : await input.o
+          .insert(serviceOrderExecution)
+          .values({
+            organizationId: order.organizationId,
+            serviceOrderId: order.id,
+            startedByUserId: actorUserId,
+            technicalNotes: values.technicalNotes ?? null,
+          })
+          .returning();
+  if (!current) throw new Error("Falha ao criar execucao");
 
-    if (values.items) {
-      await replaceExecutionItems(
-        {
-          organizationId: order.organizationId,
-          executionId: current.id,
-          items: values.items.map((item) => ({
-            ...item,
-            warrantyUntil: parseSyncDate(item.warrantyUntil),
-          })),
-        },
-        tx,
-      );
-    }
-
-    const [updated] = await tx
-      .update(serviceOrderExecution)
-      .set({
-        servicePerformed: values.servicePerformed,
-        partsUsedSummary: values.partsUsedSummary,
-        technicalNotes: values.technicalNotes,
-        calibrationRequiredAfterRepair: values.calibrationRequiredAfterRepair,
-        result: values.result,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(serviceOrderExecution.id, current.id),
-          eq(serviceOrderExecution.organizationId, order.organizationId),
-        ),
-      )
-      .returning();
-    await tx
-      .update(serviceOrder)
-      .set({
-        status: "repair_in_progress",
-        repairStartedAt: order.repairStartedAt ?? new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(serviceOrder.id, order.id));
-    await recordServiceOrderEvent(
+  if (values.items) {
+    await replaceExecutionItems(
       {
         organizationId: order.organizationId,
-        unitId: order.unitId,
-        serviceOrderId: order.id,
-        actorType: "lab_user",
-        actorId: actorUserId,
-        eventType: "service_order.repair_started",
-        metadata: { source: "desktop_sync", executionId: current.id },
+        executionId: current.id,
+        items: values.items.map((item) => ({
+          ...item,
+          warrantyUntil: parseSyncDate(item.warrantyUntil),
+        })),
       },
-      tx,
+      input.o,
     );
+  }
 
-    return updated ?? current;
-  });
+  const [updated] = await input.o
+    .update(serviceOrderExecution)
+    .set({
+      servicePerformed: values.servicePerformed,
+      partsUsedSummary: values.partsUsedSummary,
+      technicalNotes: values.technicalNotes,
+      calibrationRequiredAfterRepair: values.calibrationRequiredAfterRepair,
+      result: values.result,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(serviceOrderExecution.id, current.id),
+        eq(serviceOrderExecution.organizationId, order.organizationId),
+      ),
+    )
+    .returning();
+  await input.o
+    .update(serviceOrder)
+    .set({
+      status: "repair_in_progress",
+      repairStartedAt: order.repairStartedAt ?? new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(serviceOrder.id, order.id));
+  await recordServiceOrderEvent(
+    {
+      organizationId: order.organizationId,
+      unitId: order.unitId,
+      serviceOrderId: order.id,
+      actorType: "lab_user",
+      actorId: actorUserId,
+      eventType: "service_order.repair_started",
+      metadata: { source: "desktop_sync", executionId: current.id },
+    },
+    input.o,
+  );
+
+  const execution = updated ?? current;
 
   await writeDesktopSyncAudit(input, actorUserId, {
     remoteEntityId: execution.id,
@@ -376,6 +375,7 @@ export async function applyCreateLocalServiceOrderDeliveryDocumentDraft(
   const existingRemoteEntityId = await findDesktopSyncRemoteEntityId(
     input.memberData.organizationId,
     input.event.entityId,
+    input.o,
   );
   if (existingRemoteEntityId !== null) {
     return { ok: true, remoteEntityId: existingRemoteEntityId };
@@ -407,7 +407,7 @@ export async function applyCreateLocalServiceOrderDeliveryDocumentDraft(
     };
   }
 
-  const [order] = await db
+  const [order] = await input.o
     .select()
     .from(serviceOrder)
     .where(
@@ -428,14 +428,14 @@ export async function applyCreateLocalServiceOrderDeliveryDocumentDraft(
   }
 
   const values = parseResult.data;
-  const [latest] = await db
+  const [latest] = await input.o
     .select({ version: serviceOrderDeliveryDocument.version })
     .from(serviceOrderDeliveryDocument)
     .where(eq(serviceOrderDeliveryDocument.serviceOrderId, order.id))
     .orderBy(desc(serviceOrderDeliveryDocument.version))
     .limit(1);
   const version = (latest?.version ?? 0) + 1;
-  const [document] = await db
+  const [document] = await input.o
     .insert(serviceOrderDeliveryDocument)
     .values({
       organizationId: order.organizationId,
@@ -450,19 +450,22 @@ export async function applyCreateLocalServiceOrderDeliveryDocumentDraft(
     .returning();
   if (!document) throw new Error("Falha ao criar documento de entrega");
 
-  await recordServiceOrderEvent({
-    organizationId: order.organizationId,
-    unitId: order.unitId,
-    serviceOrderId: order.id,
-    actorType: "lab_user",
-    actorId: actorUserId,
-    eventType: "service_order.delivery_document_issued",
-    metadata: {
-      source: "desktop_sync",
-      deliveryDocumentId: document.id,
-      version,
+  await recordServiceOrderEvent(
+    {
+      organizationId: order.organizationId,
+      unitId: order.unitId,
+      serviceOrderId: order.id,
+      actorType: "lab_user",
+      actorId: actorUserId,
+      eventType: "service_order.delivery_document_issued",
+      metadata: {
+        source: "desktop_sync",
+        deliveryDocumentId: document.id,
+        version,
+      },
     },
-  });
+    input.o,
+  );
   await writeDesktopSyncAudit(input, actorUserId, {
     remoteEntityId: document.id,
     remoteServiceOrderId: order.id,

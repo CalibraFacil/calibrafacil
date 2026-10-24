@@ -1,4 +1,3 @@
-import { db } from "@calibra-facil/db";
 import {
   calibrationJob,
   type StandardSnapshot,
@@ -143,7 +142,7 @@ async function rejectLostDesktopExecutionRace(
   jobId: number,
   statusAtRead: string | null,
 ): Promise<ApplyDesktopSyncEventResult> {
-  const [current] = await db
+  const [current] = await input.o
     .select()
     .from(calibrationJob)
     .where(

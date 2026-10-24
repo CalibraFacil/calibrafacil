@@ -141,6 +141,7 @@ vi.mock("@calibra-facil/db", () => ({
 // "already applied", anything else is claimed.
 vi.mock("../modules/sync/applied-events", () => ({
   claimDesktopSyncEvent: async (
+    _o: unknown,
     _organizationId: string,
     _event: unknown,
     findLegacyApplied: () => Promise<Record<string, unknown> | null>,

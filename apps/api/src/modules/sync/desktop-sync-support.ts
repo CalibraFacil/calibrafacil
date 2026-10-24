@@ -1,35 +1,47 @@
 import { type SyncEvent } from "@calibra-facil/contracts";
-import { db } from "@calibra-facil/db";
+import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import { member, organizationEventLog } from "@calibra-facil/db/schema";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { writeOrganizationAuditEvent } from "../../lib/audit";
+import { orgDb } from "../../lib/org-db";
+import { withOrgReader } from "../../lib/org-transaction";
 import { type MemberData } from "../../middleware/permission";
 import { asRecord, getNullableString } from "./helpers";
 import { type ApplyDesktopSyncEventInput } from "./desktop-event-support";
 
+/**
+ * A read of the laboratory's audit log. Inside the event's transaction the
+ * caller passes its handle (`input.o`); before it (the pre-phase of a push)
+ * there is none and the read opens a short transaction that names the laboratory.
+ */
+type AuditLogReader = Pick<OrgExecutor, "select">;
+
 export async function findDesktopSyncRemoteEntityId(
   organizationId: string,
   localEntityId: string,
+  executor?: AuditLogReader,
 ) {
   // Filter in SQL on the key itself. An entity can have far more audit rows
   // than any page, most of them without a remote id (updates, retries); an
   // unordered LIMIT over all of them could miss the row that maps the local id
   // to its cloud row, and the create was then applied a second time. The
   // oldest mapping wins, which is the one the entity was created with.
-  const [row] = await db
-    .select({
-      details: organizationEventLog.details,
-    })
-    .from(organizationEventLog)
-    .where(
-      and(
-        eq(organizationEventLog.organizationId, organizationId),
-        eq(organizationEventLog.entityId, localEntityId),
-        sql`${organizationEventLog.details}->>'remoteEntityId' IS NOT NULL`,
-      ),
-    )
-    .orderBy(asc(organizationEventLog.id))
-    .limit(1);
+  const [row] = await withOrgReader(organizationId, executor, (reader) =>
+    reader
+      .select({
+        details: organizationEventLog.details,
+      })
+      .from(organizationEventLog)
+      .where(
+        and(
+          eq(organizationEventLog.organizationId, organizationId),
+          eq(organizationEventLog.entityId, localEntityId),
+          sql`${organizationEventLog.details}->>'remoteEntityId' IS NOT NULL`,
+        ),
+      )
+      .orderBy(asc(organizationEventLog.id))
+      .limit(1),
+  );
 
   if (!row) return null;
 
@@ -43,23 +55,26 @@ export async function findDesktopSyncRemoteEntityId(
 export async function findAppliedDesktopSyncEvent(
   organizationId: string,
   event: SyncEvent,
+  executor?: AuditLogReader,
 ) {
-  const rows = await db
-    .select({
-      details: organizationEventLog.details,
-    })
-    .from(organizationEventLog)
-    .where(
-      and(
-        eq(organizationEventLog.organizationId, organizationId),
-        eq(organizationEventLog.entityId, event.entityId),
-        // Filter on the op id in SQL: an entity can have far more audit rows
-        // than the page below, and an unordered LIMIT would miss the one that
-        // proves this event was already applied (a retried push re-applied).
-        sql`${organizationEventLog.details}->>'eventId' = ${event.eventId}`,
-      ),
-    )
-    .limit(100);
+  const rows = await withOrgReader(organizationId, executor, (reader) =>
+    reader
+      .select({
+        details: organizationEventLog.details,
+      })
+      .from(organizationEventLog)
+      .where(
+        and(
+          eq(organizationEventLog.organizationId, organizationId),
+          eq(organizationEventLog.entityId, event.entityId),
+          // Filter on the op id in SQL: an entity can have far more audit rows
+          // than the page below, and an unordered LIMIT would miss the one that
+          // proves this event was already applied (a retried push re-applied).
+          sql`${organizationEventLog.details}->>'eventId' = ${event.eventId}`,
+        ),
+      )
+      .limit(100),
+  );
 
   for (const row of rows) {
     const details = asRecord(row.details);
@@ -88,6 +103,7 @@ export async function getRemoteServiceOrderIdFromPayload(
   return findDesktopSyncRemoteEntityId(
     input.memberData.organizationId,
     localServiceOrderId,
+    input.o,
   );
 }
 
@@ -97,30 +113,34 @@ export async function writeDesktopSyncAudit(
   details: Record<string, unknown> = {},
 ) {
   const claimedActorUserId = getClaimedSyncActorUserId(input.event.actorUserId);
-  await writeOrganizationAuditEvent({
-    organizationId: input.memberData.organizationId,
-    unitId: input.event.unitId,
-    actorUserId,
-    actorMemberId: input.memberData.id,
-    action: `desktop_sync.${input.event.operation}`,
-    entityType: input.event.entityType,
-    entityId: input.event.entityId,
-    details: {
-      eventId: input.event.eventId,
-      deviceId: input.deviceId,
-      clientBatchId: input.clientBatchId,
-      idempotencyKey: input.event.idempotencyKey,
-      localVersion: input.event.localVersion,
-      payload: input.event.payload,
-      localEntityId: input.event.entityId,
-      // The offline-actor claim is metadata only (validated as an org member
-      // at push time, never trusted as identity): keep any discrepancy visible.
-      ...(claimedActorUserId !== null && claimedActorUserId !== actorUserId
-        ? { claimedActorUserId }
-        : {}),
-      ...details,
+  await writeOrganizationAuditEvent(
+    {
+      organizationId: input.memberData.organizationId,
+      unitId: input.event.unitId,
+      actorUserId,
+      actorMemberId: input.memberData.id,
+      action: `desktop_sync.${input.event.operation}`,
+      entityType: input.event.entityType,
+      entityId: input.event.entityId,
+      details: {
+        eventId: input.event.eventId,
+        deviceId: input.deviceId,
+        clientBatchId: input.clientBatchId,
+        idempotencyKey: input.event.idempotencyKey,
+        localVersion: input.event.localVersion,
+        payload: input.event.payload,
+        localEntityId: input.event.entityId,
+        // The offline-actor claim is metadata only (validated as an org member
+        // at push time, never trusted as identity): keep any discrepancy visible.
+        ...(claimedActorUserId !== null && claimedActorUserId !== actorUserId
+          ? { claimedActorUserId }
+          : {}),
+        ...details,
+      },
     },
-  });
+    // The event's own transaction: the audit row commits with the change.
+    input.o,
+  );
 }
 
 export function getClaimedSyncActorUserId(
@@ -134,13 +154,19 @@ async function isOrganizationMemberUser(
   userId: string,
   organizationId: string,
 ) {
-  const [record] = await db
-    .select({ id: member.id })
-    .from(member)
-    .where(
-      and(eq(member.userId, userId), eq(member.organizationId, organizationId)),
-    )
-    .limit(1);
+  // Before the event's transaction: a short one that names the laboratory.
+  const [record] = await orgDb(organizationId).transaction((o) =>
+    o
+      .select({ id: member.id })
+      .from(member)
+      .where(
+        and(
+          eq(member.userId, userId),
+          eq(member.organizationId, organizationId),
+        ),
+      )
+      .limit(1),
+  );
 
   return Boolean(record);
 }

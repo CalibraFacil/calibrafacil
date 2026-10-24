@@ -27,3 +27,13 @@ export function isTransactionScopeCallback(callback: object): boolean {
 export function outsideTransactionScope<T>(callback: () => T): T {
   return transactionScopeStorage.exit(callback);
 }
+
+/**
+ * For the RLS shadow harness (apps/api/test/integration/rls-shadow-mode.ts): it
+ * must open a request's transaction scope on its `calibra_app` pool, and keep
+ * `db` resolving to that scope's transaction inside it.
+ */
+export {
+  createTransactionScopeRunner,
+  currentTransactionScope,
+} from "./transaction-scope.js";

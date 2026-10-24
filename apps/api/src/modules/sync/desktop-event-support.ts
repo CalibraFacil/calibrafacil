@@ -1,4 +1,5 @@
 import { type SyncCommand } from "@calibra-facil/contracts";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import { type MemberData } from "../../middleware/permission";
 import {
   type AppliedEventResult,
@@ -20,6 +21,13 @@ export type PushBatchState = {
 export type ApplyDesktopSyncEventInput = {
   event: SyncCommand;
   memberData: MemberData;
+  /**
+   * The event's own transaction, bound to the laboratory of the pushing device
+   * (`applyDesktopEventAtomically`): every read and write of the apply goes
+   * through it, so the change, its audit rows and the "applied" record commit
+   * or roll back together.
+   */
+  o: OrgDb;
   sessionUserId: string;
   deviceId: string;
   clientBatchId: string;

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { db } from "@calibra-facil/db";
+import { db, systemDb } from "@calibra-facil/db";
 import { customer, organization } from "@calibra-facil/db/schema";
 import { and, eq, ne } from "drizzle-orm";
 import { asRecord } from "./helpers";
@@ -84,8 +84,13 @@ export async function findOrganizationCreatedForEvent(
   }
 
   // Cross-laboratory by design: is any OTHER laboratory's customer attached to
-  // this organization? A handle bound to this laboratory could never see it.
-  const [otherLaboratory] = await db
+  // this organization? A handle bound to this laboratory could never see it, and
+  // as `calibra_app` a laboratory's session sees none of another laboratory's
+  // rows, so the answer would always be "no": the system path (the table
+  // owner's connection) is what can answer, and it is one read-only,
+  // one-column lookup by the client organization. Allowlisted in
+  // test/integration/tenant-sql-allowlist.ts.
+  const [otherLaboratory] = await systemDb
     .select({ id: customer.id })
     .from(customer)
     .where(

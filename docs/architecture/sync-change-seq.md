@@ -154,6 +154,16 @@ push once more with the protocol the cloud names (`apps/local-server/src/sync.ts
 that cloud. The legacy
 path is deleted once `SYNC_MIN_DESKTOP_VERSION` excludes the builds that need it (DEPLOYMENT.md).
 
+## Row-level security (P2-18i)
+
+The pull page and each bootstrap page run in one `orgDb(lab).transaction(...)` (READ COMMITTED, as the pool
+statements were): the transaction names the laboratory for the `tenant_isolation` policies, and every
+statement still takes its own snapshot, so the argument above is unchanged. The read-only transaction has no
+transaction id, so it can never be the "oldest in flight" the horizon names. The triggers run as the writer:
+as `calibra_app` a laboratory's write appends an entry of its own organization, which the
+`sync_change_log` policy accepts; a write that would fan out to other laboratories (the global `asset_type`
+catalog) is refused and stays on the owner path (`seedAssetTypes` on `systemDb`).
+
 ## Known limits
 
 - Every write to a mirrored table writes one more row (deduplicated per entity and unit inside a
