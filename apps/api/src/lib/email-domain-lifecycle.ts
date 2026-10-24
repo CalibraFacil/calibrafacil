@@ -13,7 +13,7 @@ import { eq } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import {
   buildFromAddress,
-  findOtherOrganizationHoldingHostname,
+  otherOrganizationHoldsHostname,
 } from "./email-domains";
 import { orgTransactionWithExecutor } from "./org-transaction";
 
@@ -68,11 +68,20 @@ export async function saveManagedEmailDomain(
   input: { hostname: string; fromLocalPart: string },
 ) {
   const apiKey = platformKey();
+  // The cross-laboratory hostname question is asked BEFORE the transaction opens
+  // (it runs on the system path, a second pool connection: never open it while
+  // holding the first). It is only acted on below when this laboratory has no
+  // domain row yet, so the order of the errors is unchanged; a laboratory that
+  // claims the hostname in between is stopped by the unique index, and the
+  // provider domain created here is compensated.
+  const hostnameHeldElsewhere = await otherOrganizationHoldsHostname(
+    input.hostname,
+    actor.organizationId,
+  );
   // ONE transaction that names the laboratory: it takes the tenant lock, and it
   // is held across the provider call ON PURPOSE (it is what serialises a
   // concurrent create for the same organization and lets a rejected database
-  // write be compensated before the lock is released, see below); only the
-  // system-path hostname check and the provider call leave it.
+  // write be compensated before the lock is released, see below).
   return orgTransactionWithExecutor(actor.organizationId, async (lab, tx) => {
     await tx
       .select({ id: organization.id })
@@ -117,11 +126,7 @@ export async function saveManagedEmailDomain(
       });
       return { domain: updated!, created: false };
     }
-    const collision = await findOtherOrganizationHoldingHostname(
-      input.hostname,
-      actor.organizationId,
-    );
-    if (collision)
+    if (hostnameHeldElsewhere)
       return emailDomainError(
         "Este domínio já está em uso por outra organização",
         409,

@@ -9,6 +9,8 @@ export interface RuleContext {
   readonly filename: string;
   /** The linted file's source text (ESLint-compatible `context.sourceCode`). */
   readonly sourceCode: { readonly text: string };
+  /** The options of the rule in the oxlint config (ESLint-compatible). */
+  readonly options?: readonly unknown[];
   report(descriptor: { node: unknown; message: string }): void;
 }
 
@@ -18,6 +20,8 @@ export interface RuleModule {
   meta: {
     type: "problem";
     docs: { description: string };
+    /** JSON schema of the rule options, when it takes any. */
+    schema?: readonly unknown[];
   };
   create(context: RuleContext): Record<string, RuleVisitor | undefined>;
 }

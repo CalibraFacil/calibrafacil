@@ -55,8 +55,8 @@ export async function getOrganizationEmailDomain(
 }
 
 /**
- * The laboratory (other than `organizationId`) that already holds a sending
- * hostname, or null.
+ * Whether a laboratory other than `organizationId` already holds a sending
+ * hostname.
  *
  * System path (P2-18j): a hostname is unique across the platform
  * (`org_email_domain_hostname_uidx`), so "does ANOTHER laboratory hold it" is
@@ -64,7 +64,7 @@ export async function getOrganizationEmailDomain(
  * `calibra.organization_id` (it would always answer "nobody"). One row, only its
  * existence is used.
  */
-export async function findOtherOrganizationHoldingHostname(
+export async function otherOrganizationHoldsHostname(
   hostname: string,
   organizationId: string,
 ) {
@@ -78,7 +78,7 @@ export async function findOtherOrganizationHoldingHostname(
       ),
     )
     .limit(1);
-  return holder ?? null;
+  return holder !== undefined;
 }
 
 /**
