@@ -23,6 +23,7 @@ export const API_ERROR_CODES = [
   "record_immutable",
   "concurrent_update",
   "idempotency_conflict",
+  "idempotency_in_progress",
   "missing_idempotency_key",
 
   // Job status machine.

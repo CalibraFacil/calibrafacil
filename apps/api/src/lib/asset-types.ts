@@ -1,4 +1,5 @@
 import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import { assetType } from "@calibra-facil/db/schema";
 import { eq, ilike, or } from "drizzle-orm";
 
@@ -32,11 +33,18 @@ export async function listAssetTypes(query: string | undefined) {
     .orderBy(assetType.name);
 }
 
-export async function findAssetTypeById(id: number) {
-  const [foundType] = await db
-    .select()
-    .from(assetType)
-    .where(eq(assetType.id, id))
-    .limit(1);
+/**
+ * `executor` is the caller's org-bound transaction: a handler already inside
+ * one reads the catalog through it (the handle passes a global table through
+ * untouched) instead of taking a second connection from the pool.
+ */
+export async function findAssetTypeById(id: number, executor?: OrgDb) {
+  const [foundType] = executor
+    ? await executor
+        .select()
+        .from(assetType)
+        .where(eq(assetType.id, id))
+        .limit(1)
+    : await db.select().from(assetType).where(eq(assetType.id, id)).limit(1);
   return foundType ?? null;
 }

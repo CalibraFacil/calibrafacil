@@ -33,7 +33,12 @@ Mutações (`POST`, `PUT`, `DELETE`) aceitam o header:
 Idempotency-Key: <chave-única>
 ```
 
-Se a mesma chave for usada novamente em até 24 horas com o mesmo payload, o servidor retorna a resposta original sem reexecutar. Use para retries seguros em integrações de rede instável.
+Se a mesma chave for usada novamente com o mesmo payload, o servidor retorna a resposta original (mesmo status e corpo, inclusive recusas como `404` e `409`) sem reexecutar. Use para retries seguros em integrações de rede instável.
+
+- A chave é reservada antes da execução e o registro da resposta é gravado na mesma transação da mutação: o registro só existe se a mutação foi confirmada.
+- Duas requisições simultâneas com a mesma chave executam a mutação uma única vez; a segunda recebe `409` com o código `idempotency_in_progress` (reenvie em instantes e receba a resposta original).
+- A mesma chave com payload diferente responde `409` `idempotency_conflict`.
+- Respostas `5xx` não são registradas: a chave volta a ficar livre e o retry executa a requisição de novo.
 
 Geração recomendada: UUIDv4 por operação lógica do lado cliente. Reutilize a mesma chave em todas as tentativas da mesma operação.
 
