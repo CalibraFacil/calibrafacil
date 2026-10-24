@@ -8,7 +8,7 @@ import {
   publicApiWebhookDelivery,
   publicApiWebhookSubscription,
 } from "@calibra-facil/db/schema";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import {
   PUBLIC_API_WEBHOOK_EVENTS,
   type PublicApiResourceType,
@@ -218,21 +218,82 @@ export async function upsertResourceExternalId(
   });
 }
 
-export async function findIdempotencyRecord(
-  params: {
-    organizationId: string;
-    apiKeyId: string;
-    requestMethod: string;
-    requestPath: string;
-    idempotencyKey: string;
-  },
-  executor?: OrgDb,
-) {
-  const [record] = await inOrgTransaction(
+/**
+ * Idempotency records of the public API.
+ *
+ * A mutation reserves its key FIRST, in a short transaction of its own that
+ * commits before the work starts: the row is born in the in-progress state
+ * (`response_status` 0), so a concurrent duplicate meets the reservation and is
+ * refused instead of running the mutation a second time. The mutation then
+ * writes and finalises the record in ONE transaction (`finalizeIdempotencyRecord`
+ * with the mutation's handle): the record is final if and only if the mutation
+ * committed. A failure releases the reservation; one that never gets released (a
+ * crash) expires after `IDEMPOTENCY_RESERVATION_TTL_MS`, when the next request
+ * with the key takes it over.
+ */
+export const IDEMPOTENCY_IN_PROGRESS_STATUS = 0;
+export const IDEMPOTENCY_RESERVATION_TTL_MS = 5 * 60 * 1000;
+
+export type IdempotencyKeyScope = {
+  organizationId: string;
+  apiKeyId: string;
+  requestMethod: string;
+  requestPath: string;
+  idempotencyKey: string;
+};
+
+export type IdempotencyReservation =
+  /** The caller owns the key; `token` identifies its reservation. */
+  | { kind: "reserved"; token: string }
+  /** The same request already finished: answer with the stored response. */
+  | {
+      kind: "replay";
+      responseStatus: number;
+      responseBody: Record<string, unknown>;
+    }
+  /** The key was used with a different payload. */
+  | { kind: "conflict" }
+  /** Another request holds the key and has not finished. */
+  | { kind: "in_progress" };
+
+/** The reservation the caller holds was taken over (it expired) or released. */
+export class IdempotencyReservationLostError extends Error {
+  constructor() {
+    super("The idempotency reservation is no longer held by this request");
+    this.name = "IdempotencyReservationLostError";
+  }
+}
+
+export async function reserveIdempotencyKey(
+  params: IdempotencyKeyScope & { requestHash: string },
+): Promise<IdempotencyReservation> {
+  return inOrgTransaction(
     params.organizationId,
-    executor,
-    (o) =>
-      o
+    undefined,
+    async (o): Promise<IdempotencyReservation> => {
+      const now = new Date();
+      const reservationExpiresAt = new Date(
+        now.getTime() + IDEMPOTENCY_RESERVATION_TTL_MS,
+      );
+      const [inserted] = await o
+        .insert(publicApiIdempotencyKey)
+        .values({
+          id: crypto.randomUUID(),
+          organizationId: params.organizationId,
+          apiKeyId: params.apiKeyId,
+          requestMethod: params.requestMethod,
+          requestPath: params.requestPath,
+          idempotencyKey: params.idempotencyKey,
+          requestHash: params.requestHash,
+          responseStatus: IDEMPOTENCY_IN_PROGRESS_STATUS,
+          responseBody: {},
+          expiresAt: reservationExpiresAt,
+        })
+        .onConflictDoNothing()
+        .returning({ id: publicApiIdempotencyKey.id });
+      if (inserted) return { kind: "reserved", token: inserted.id };
+
+      const [existing] = await o
         .select()
         .from(publicApiIdempotencyKey)
         .where(
@@ -244,19 +305,59 @@ export async function findIdempotencyRecord(
             eq(publicApiIdempotencyKey.idempotencyKey, params.idempotencyKey),
           ),
         )
-        .limit(1),
+        .limit(1);
+      // Released between the insert and the read: the holder failed. The
+      // client retries and gets the key.
+      if (!existing) return { kind: "in_progress" };
+
+      if (existing.requestHash !== params.requestHash) {
+        return { kind: "conflict" };
+      }
+      if (existing.responseStatus !== IDEMPOTENCY_IN_PROGRESS_STATUS) {
+        return {
+          kind: "replay",
+          responseStatus: existing.responseStatus,
+          responseBody: toStoredBody(existing.responseBody),
+        };
+      }
+
+      // In progress. A reservation past its expiry belongs to a request that
+      // died: take it over with a compare-and-set that also renews the token,
+      // so the dead request can never finalise it.
+      const token = crypto.randomUUID();
+      const [takenOver] = await o
+        .update(publicApiIdempotencyKey)
+        .set({ id: token, expiresAt: reservationExpiresAt })
+        .where(
+          and(
+            eq(publicApiIdempotencyKey.id, existing.id),
+            eq(
+              publicApiIdempotencyKey.responseStatus,
+              IDEMPOTENCY_IN_PROGRESS_STATUS,
+            ),
+            lt(publicApiIdempotencyKey.expiresAt, now),
+          ),
+        )
+        .returning({ id: publicApiIdempotencyKey.id });
+      return takenOver ? { kind: "reserved", token } : { kind: "in_progress" };
+    },
   );
-  return record;
 }
 
-export async function storeIdempotencyRecord(
+function toStoredBody(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value));
+}
+
+/**
+ * Turns the reservation into the final record. Called with the mutation's own
+ * handle so the record commits with the mutation; a reservation that is no
+ * longer the caller's throws, which rolls the mutation back with it.
+ */
+export async function finalizeIdempotencyRecord(
   params: {
     organizationId: string;
-    apiKeyId: string;
-    requestMethod: string;
-    requestPath: string;
-    idempotencyKey: string;
-    requestHash: string;
+    token: string;
     responseStatus: number;
     responseBody: Record<string, unknown>;
     resourceType?: PublicApiResourceType;
@@ -267,22 +368,51 @@ export async function storeIdempotencyRecord(
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + DEFAULT_IDEMPOTENCY_TTL_DAYS);
 
-  await inOrgTransaction(params.organizationId, executor, async (o) => {
-    await o.insert(publicApiIdempotencyKey).values({
-      id: crypto.randomUUID(),
-      organizationId: params.organizationId,
-      apiKeyId: params.apiKeyId,
-      requestMethod: params.requestMethod,
-      requestPath: params.requestPath,
-      idempotencyKey: params.idempotencyKey,
-      requestHash: params.requestHash,
-      responseStatus: params.responseStatus,
-      responseBody: params.responseBody,
-      resourceType: params.resourceType ?? null,
-      resourceId: params.resourceId ? String(params.resourceId) : null,
-      expiresAt,
-    });
-  });
+  const finalized = await inOrgTransaction(
+    params.organizationId,
+    executor,
+    (o) =>
+      o
+        .update(publicApiIdempotencyKey)
+        .set({
+          responseStatus: params.responseStatus,
+          responseBody: params.responseBody,
+          resourceType: params.resourceType ?? null,
+          resourceId: params.resourceId ? String(params.resourceId) : null,
+          expiresAt,
+        })
+        .where(
+          and(
+            eq(publicApiIdempotencyKey.id, params.token),
+            eq(
+              publicApiIdempotencyKey.responseStatus,
+              IDEMPOTENCY_IN_PROGRESS_STATUS,
+            ),
+          ),
+        )
+        .returning({ id: publicApiIdempotencyKey.id }),
+  );
+  if (finalized.length === 0) throw new IdempotencyReservationLostError();
+}
+
+/** Gives the key back after a failed request, so a retry runs it afresh. */
+export async function releaseIdempotencyReservation(params: {
+  organizationId: string;
+  token: string;
+}) {
+  await inOrgTransaction(params.organizationId, undefined, (o) =>
+    o
+      .delete(publicApiIdempotencyKey)
+      .where(
+        and(
+          eq(publicApiIdempotencyKey.id, params.token),
+          eq(
+            publicApiIdempotencyKey.responseStatus,
+            IDEMPOTENCY_IN_PROGRESS_STATUS,
+          ),
+        ),
+      ),
+  );
 }
 
 export async function listAccessibleUnits(

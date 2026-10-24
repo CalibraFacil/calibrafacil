@@ -39,12 +39,15 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
       const apiKey = c.get("apiKey");
       const input = c.req.valid("json");
 
-      return withIdempotentMutation(c, input, async () => {
-        const resolvedCustomerId = await resolveCustomerId({
-          organizationId: apiKey.organizationId,
-          customerId: input.customerId,
-          customerExternalId: input.customerExternalId,
-        });
+      return withIdempotentMutation(c, input, async ({ o, afterCommit }) => {
+        const resolvedCustomerId = await resolveCustomerId(
+          {
+            organizationId: apiKey.organizationId,
+            customerId: input.customerId,
+            customerExternalId: input.customerExternalId,
+          },
+          o,
+        );
 
         if (!resolvedCustomerId) {
           return {
@@ -62,10 +65,13 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
             ...(
               await Promise.all(
                 (input.assetExternalIds ?? []).map((externalId) =>
-                  resolveAssetId({
-                    organizationId: apiKey.organizationId,
-                    assetExternalId: externalId,
-                  }),
+                  resolveAssetId(
+                    {
+                      organizationId: apiKey.organizationId,
+                      assetExternalId: externalId,
+                    },
+                    o,
+                  ),
                 ),
               )
             ).filter((value): value is number => !!value),
@@ -82,39 +88,32 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
           };
         }
 
-        const { foundCustomer, assetsInScope } = await orgDb(
-          apiKey.organizationId,
-        ).transaction(async (o) => {
-          const [found] = await o
-            .select()
-            .from(customer)
-            .where(
-              and(
-                eq(customer.id, resolvedCustomerId),
-                eq(customer.labOrganizationId, apiKey.organizationId),
-              ),
-            )
-            .limit(1);
-          if (!found) {
-            return { foundCustomer: undefined, assetsInScope: [] };
-          }
-
-          const inScope = await o
-            .select({
-              id: asset.id,
-              unitId: asset.unitId,
-            })
-            .from(asset)
-            .where(
-              and(
-                inArray(asset.id, assetIds),
-                eq(asset.customerId, found.id),
-                isNull(asset.deletedAt),
-                eq(asset.status, "ACTIVE"),
-              ),
-            );
-          return { foundCustomer: found, assetsInScope: inScope };
-        });
+        const [foundCustomer] = await o
+          .select()
+          .from(customer)
+          .where(
+            and(
+              eq(customer.id, resolvedCustomerId),
+              eq(customer.labOrganizationId, apiKey.organizationId),
+            ),
+          )
+          .limit(1);
+        const assetsInScope = foundCustomer
+          ? await o
+              .select({
+                id: asset.id,
+                unitId: asset.unitId,
+              })
+              .from(asset)
+              .where(
+                and(
+                  inArray(asset.id, assetIds),
+                  eq(asset.customerId, foundCustomer.id),
+                  isNull(asset.deletedAt),
+                  eq(asset.status, "ACTIVE"),
+                ),
+              )
+          : [];
 
         if (!foundCustomer) {
           return {
@@ -163,81 +162,77 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
           : null;
 
         const externalId = input.externalId?.trim();
-        const created = await orgDb(apiKey.organizationId).transaction(
-          async (tx) => {
-            const [request] = await tx
-              .insert(calibrationRequest)
-              .values({
-                organizationId: apiKey.organizationId,
-                unitId: input.unitId ?? unitIds[0]!,
-                customerId: foundCustomer.id,
-                authOrganizationId: foundCustomer.authOrganizationId,
-                observations: input.observations || null,
-                requestedDueDate,
-                submittedBy: apiKey.createdBy,
-              })
-              .returning();
+        const [created] = await o
+          .insert(calibrationRequest)
+          .values({
+            organizationId: apiKey.organizationId,
+            unitId: input.unitId ?? unitIds[0]!,
+            customerId: foundCustomer.id,
+            authOrganizationId: foundCustomer.authOrganizationId,
+            observations: input.observations || null,
+            requestedDueDate,
+            submittedBy: apiKey.createdBy,
+          })
+          .returning();
 
-            await tx.insert(calibrationRequestItem).values(
-              assetIds.map((assetId) => ({
-                organizationId: apiKey.organizationId,
-                requestId: request!.id,
-                assetId,
-              })),
-            );
-
-            await tx.insert(calibrationRequestAuditLog).values({
-              organizationId: apiKey.organizationId,
-              requestId: request!.id,
-              action: "create",
-              changes: {
-                initial: {
-                  assetIds,
-                  observations: input.observations || null,
-                  requestedDueDate: requestedDueDate?.toISOString() ?? null,
-                },
-              },
-              performedBy: apiKey.createdBy,
-              ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-            });
-
-            if (externalId) {
-              await upsertResourceExternalId(
-                {
-                  organizationId: apiKey.organizationId,
-                  apiKeyId: apiKey.id,
-                  resourceType: "request",
-                  resourceId: request!.id,
-                  externalId,
-                },
-                tx,
-              );
-            }
-
-            return request!;
-          },
+        await o.insert(calibrationRequestItem).values(
+          assetIds.map((assetId) => ({
+            organizationId: apiKey.organizationId,
+            requestId: created!.id,
+            assetId,
+          })),
         );
+
+        await o.insert(calibrationRequestAuditLog).values({
+          organizationId: apiKey.organizationId,
+          requestId: created!.id,
+          action: "create",
+          changes: {
+            initial: {
+              assetIds,
+              observations: input.observations || null,
+              requestedDueDate: requestedDueDate?.toISOString() ?? null,
+            },
+          },
+          performedBy: apiKey.createdBy,
+          ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+        });
+
+        if (externalId) {
+          await upsertResourceExternalId(
+            {
+              organizationId: apiKey.organizationId,
+              apiKeyId: apiKey.id,
+              resourceType: "request",
+              resourceId: created!.id,
+              externalId,
+            },
+            o,
+          );
+        }
 
         const body = {
           data: {
-            id: created.id,
-            status: created.status,
+            id: created!.id,
+            status: created!.status,
             externalId: externalId ?? null,
           },
         };
 
-        await emitPublicApiWebhookEvent({
-          organizationId: apiKey.organizationId,
-          eventType: "request.created",
-          payload: body.data,
-          env: c.env,
-        });
+        afterCommit(() =>
+          emitPublicApiWebhookEvent({
+            organizationId: apiKey.organizationId,
+            eventType: "request.created",
+            payload: body.data,
+            env: c.env,
+          }),
+        );
 
         return {
           status: 201,
           body,
           resourceType: "request" as const,
-          resourceId: created.id,
+          resourceId: created!.id,
         };
       });
     },
@@ -387,55 +382,21 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
         );
       }
 
-      return withIdempotentMutation(c, input, async () => {
-        // Look-up, rejection and audit entry are one transaction.
-        const outcome = await orgDb(apiKey.organizationId).transaction(
-          async (o) => {
-            const [existing] = await o
-              .select()
-              .from(calibrationRequest)
-              .where(
-                and(
-                  eq(calibrationRequest.id, resolvedId),
-                  eq(calibrationRequest.organizationId, apiKey.organizationId),
-                ),
-              )
-              .limit(1);
+      return withIdempotentMutation(c, input, async ({ o, afterCommit }) => {
+        // Look-up, rejection and audit entry are one transaction (and the
+        // idempotency record commits with them).
+        const [existing] = await o
+          .select()
+          .from(calibrationRequest)
+          .where(
+            and(
+              eq(calibrationRequest.id, resolvedId),
+              eq(calibrationRequest.organizationId, apiKey.organizationId),
+            ),
+          )
+          .limit(1);
 
-            if (!existing) return { kind: "missing" as const };
-
-            if (
-              !["PENDING", "UNDER_REVIEW", "APPROVED"].includes(existing.status)
-            ) {
-              return { kind: "not_cancelable" as const };
-            }
-
-            const [row] = await o
-              .update(calibrationRequest)
-              .set({
-                status: "REJECTED",
-                rejectedBy: apiKey.createdBy,
-                rejectedAt: new Date(),
-                rejectionReason: input.reason,
-              })
-              .where(eq(calibrationRequest.id, existing.id))
-              .returning();
-
-            await o.insert(calibrationRequestAuditLog).values({
-              organizationId: apiKey.organizationId,
-              requestId: existing.id,
-              action: "reject",
-              changes: { status: { old: existing.status, new: "REJECTED" } },
-              performedBy: apiKey.createdBy,
-              ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-              reason: input.reason,
-            });
-
-            return { kind: "canceled" as const, updated: row };
-          },
-        );
-
-        if (outcome.kind === "missing") {
+        if (!existing) {
           return {
             status: 404,
             body: buildPublicApiError({
@@ -445,7 +406,9 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
           };
         }
 
-        if (outcome.kind === "not_cancelable") {
+        if (
+          !["PENDING", "UNDER_REVIEW", "APPROVED"].includes(existing.status)
+        ) {
           return {
             status: 409,
             body: buildPublicApiError({
@@ -455,20 +418,41 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
           };
         }
 
-        const { updated } = outcome;
+        const [updated] = await o
+          .update(calibrationRequest)
+          .set({
+            status: "REJECTED",
+            rejectedBy: apiKey.createdBy,
+            rejectedAt: new Date(),
+            rejectionReason: input.reason,
+          })
+          .where(eq(calibrationRequest.id, existing.id))
+          .returning();
+
+        await o.insert(calibrationRequestAuditLog).values({
+          organizationId: apiKey.organizationId,
+          requestId: existing.id,
+          action: "reject",
+          changes: { status: { old: existing.status, new: "REJECTED" } },
+          performedBy: apiKey.createdBy,
+          ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+          reason: input.reason,
+        });
 
         const body = { data: updated! };
 
-        await emitPublicApiWebhookEvent({
-          organizationId: apiKey.organizationId,
-          eventType: "request.canceled",
-          payload: {
-            id: updated!.id,
-            status: updated!.status,
-            rejectionReason: updated!.rejectionReason,
-          },
-          env: c.env,
-        });
+        afterCommit(() =>
+          emitPublicApiWebhookEvent({
+            organizationId: apiKey.organizationId,
+            eventType: "request.canceled",
+            payload: {
+              id: updated!.id,
+              status: updated!.status,
+              rejectionReason: updated!.rejectionReason,
+            },
+            env: c.env,
+          }),
+        );
 
         return {
           status: 200,

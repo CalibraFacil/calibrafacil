@@ -13,11 +13,12 @@ import {
 } from "../../lib/public-api";
 import { requireApiScope } from "../../middleware/api-key-auth";
 import { createCalibrationJob, jobCreationClientErrors } from "../../lib/jobs";
+import { notifyJobAssigned } from "@calibra-facil/notifications";
 import { executeJob, submitJob } from "../../modules/jobs/submit-job";
 import { editJob } from "../../modules/jobs/edit-job";
 import { type PublicApiV2Env } from "./env";
 import { JobCreatePublicSchema, PublicUpdateJobSchema } from "./schemas";
-import { withIdempotentMutation } from "./idempotency";
+import { withIdempotentCommand, withIdempotentMutation } from "./idempotency";
 import {
   resolveAssetId,
   resolveExternalResourceId,
@@ -38,29 +39,40 @@ export const jobWriteRoutes = new Hono<PublicApiV2Env>()
       const apiKey = c.get("apiKey");
       const input = c.req.valid("json");
 
-      return withIdempotentMutation(c, input, async () => {
-        const assetId = await resolveAssetId({
-          organizationId: apiKey.organizationId,
-          assetId: input.assetId,
-          assetExternalId: input.assetExternalId,
-        });
+      return withIdempotentMutation(
+        c,
+        input,
+        async ({ o, tx, afterCommit }) => {
+          const assetId = await resolveAssetId(
+            {
+              organizationId: apiKey.organizationId,
+              assetId: input.assetId,
+              assetExternalId: input.assetExternalId,
+            },
+            o,
+          );
 
-        if (!assetId) {
-          return {
-            status: 404,
-            body: buildPublicApiError({
-              code: "asset_not_found",
-              message: "Ativo não encontrado",
-            }),
-          };
-        }
+          if (!assetId) {
+            return {
+              status: 404,
+              body: buildPublicApiError({
+                code: "asset_not_found",
+                message: "Ativo não encontrado",
+              }),
+            };
+          }
 
-        const unitId = await resolveUnitIdForWrite({
-          organizationId: apiKey.organizationId,
-          requestedUnitId: input.unitId,
-        });
+          const unitId = await resolveUnitIdForWrite(
+            {
+              organizationId: apiKey.organizationId,
+              requestedUnitId: input.unitId,
+            },
+            o,
+          );
 
-        try {
+          // The job, its audit entry and the caller's external id commit
+          // together (and with the idempotency record). A refusal of the
+          // creation throws and is answered by `mapError`, after the rollback.
           const created = await createCalibrationJob({
             organizationId: apiKey.organizationId,
             unitId,
@@ -70,17 +82,24 @@ export const jobWriteRoutes = new Hono<PublicApiV2Env>()
             technicianId: input.technicianId,
             dueDate: input.dueDate,
             ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+            executor: tx,
+            // The assignment notification waits for the commit: a technician
+            // is never told about a job that rolled back.
+            notifyOnAssignment: false,
           });
 
           const externalId = input.externalId?.trim();
           if (externalId) {
-            await upsertResourceExternalId({
-              organizationId: apiKey.organizationId,
-              apiKeyId: apiKey.id,
-              resourceType: "job",
-              resourceId: created.id,
-              externalId,
-            });
+            await upsertResourceExternalId(
+              {
+                organizationId: apiKey.organizationId,
+                apiKeyId: apiKey.id,
+                resourceType: "job",
+                resourceId: created.id,
+                externalId,
+              },
+              o,
+            );
           }
 
           const body = {
@@ -93,12 +112,31 @@ export const jobWriteRoutes = new Hono<PublicApiV2Env>()
             },
           };
 
-          await emitPublicApiWebhookEvent({
-            organizationId: apiKey.organizationId,
-            eventType: "job.created",
-            payload: body.data,
-            env: c.env,
-          });
+          if (input.technicianId) {
+            const technicianId = input.technicianId;
+            afterCommit(async () => {
+              try {
+                await notifyJobAssigned(
+                  created.id,
+                  technicianId,
+                  apiKey.createdBy,
+                );
+              } catch (error) {
+                console.error(
+                  "[Jobs] Failed to send assignment notification:",
+                  error,
+                );
+              }
+            });
+          }
+          afterCommit(() =>
+            emitPublicApiWebhookEvent({
+              organizationId: apiKey.organizationId,
+              eventType: "job.created",
+              payload: body.data,
+              env: c.env,
+            }),
+          );
 
           return {
             status: 201,
@@ -106,18 +144,21 @@ export const jobWriteRoutes = new Hono<PublicApiV2Env>()
             resourceType: "job" as const,
             resourceId: created.id,
           };
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : "Falha ao criar OS";
-          return {
-            status: jobCreationClientErrors.has(message) ? 400 : 500,
-            body: buildPublicApiError({
-              code: "job_create_failed",
-              message,
-            }),
-          };
-        }
-      });
+        },
+        {
+          mapError: (error) => {
+            const message =
+              error instanceof Error ? error.message : "Falha ao criar OS";
+            return {
+              status: jobCreationClientErrors.has(message) ? 400 : 500,
+              body: buildPublicApiError({
+                code: "job_create_failed",
+                message,
+              }),
+            };
+          },
+        },
+      );
     },
   )
   .patch(
@@ -250,7 +291,7 @@ export const jobWriteRoutes = new Hono<PublicApiV2Env>()
         );
       }
 
-      return withIdempotentMutation(c, input, async () => {
+      return withIdempotentCommand(c, input, async (afterCommit) => {
         // Transport only: the policy is `executeJob` (the same command the
         // cloud route and the desktop sync run). The results the client sent
         // are not stored; they are recomputed from the data.
@@ -280,12 +321,14 @@ export const jobWriteRoutes = new Hono<PublicApiV2Env>()
         // results are saved, the submit will refuse until they are replaced.
         const body = { data: updated, warnings: result.warnings };
 
-        await emitPublicApiWebhookEvent({
-          organizationId: apiKey.organizationId,
-          eventType: "job.results_submitted",
-          payload: body.data,
-          env: c.env,
-        });
+        afterCommit(() =>
+          emitPublicApiWebhookEvent({
+            organizationId: apiKey.organizationId,
+            eventType: "job.results_submitted",
+            payload: body.data,
+            env: c.env,
+          }),
+        );
 
         return {
           status: 200,
@@ -319,7 +362,7 @@ export const jobWriteRoutes = new Hono<PublicApiV2Env>()
         );
       }
 
-      return withIdempotentMutation(c, input, async () => {
+      return withIdempotentCommand(c, input, async () => {
         // Transport only: the policy is `submitJob`, the very command the
         // cloud route and the desktop sync run (official calculation, scope,
         // competence, environment, backdate and standards rules).

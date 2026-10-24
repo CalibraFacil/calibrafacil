@@ -20,7 +20,7 @@ import { resolveApiKeyApprover } from "../../lib/api-key-approver";
 import { sendServiceOrdersToFinance } from "../../lib/finance";
 import { type PublicApiV2Env } from "./env";
 import { resolveExternalResourceId } from "./resolvers";
-import { withIdempotentMutation } from "./idempotency";
+import { withIdempotentCommand } from "./idempotency";
 import { jobStatusConflictBody, publicApiJobActor } from "./job-support";
 import { orgDb } from "../../lib/org-db";
 
@@ -48,7 +48,7 @@ export const jobDecisionRoutes = new Hono<PublicApiV2Env>()
         );
       }
 
-      return withIdempotentMutation(c, input, async () => {
+      return withIdempotentCommand(c, input, async (afterCommit) => {
         const [job] = await orgDb(apiKey.organizationId).transaction((o) =>
           o
             .select({ unitId: calibrationJob.unitId })
@@ -190,16 +190,18 @@ export const jobDecisionRoutes = new Hono<PublicApiV2Env>()
           case "approved": {
             const updated = result.job;
             if (updated) {
-              await emitPublicApiWebhookEvent({
-                organizationId: apiKey.organizationId,
-                eventType: "job.approved",
-                payload: {
-                  id: updated.id,
-                  jobId: updated.jobId,
-                  status: updated.status,
-                },
-                env: c.env,
-              });
+              afterCommit(() =>
+                emitPublicApiWebhookEvent({
+                  organizationId: apiKey.organizationId,
+                  eventType: "job.approved",
+                  payload: {
+                    id: updated.id,
+                    jobId: updated.jobId,
+                    status: updated.status,
+                  },
+                  env: c.env,
+                }),
+              );
             }
 
             return {
@@ -235,7 +237,7 @@ export const jobDecisionRoutes = new Hono<PublicApiV2Env>()
         );
       }
 
-      return withIdempotentMutation(c, input, async () => {
+      return withIdempotentCommand(c, input, async () => {
         // Transport only: the policy is `rejectJob` (the same command the
         // cloud route runs).
         const result = await rejectJob({
@@ -297,7 +299,7 @@ export const jobDecisionRoutes = new Hono<PublicApiV2Env>()
         );
       }
 
-      return withIdempotentMutation(c, input, async () => {
+      return withIdempotentCommand(c, input, async (afterCommit) => {
         // Transport only: the policy is `cancelJob` (the same command the
         // cloud route and the visit's remove-job run).
         const result = await cancelJob({
@@ -334,16 +336,18 @@ export const jobDecisionRoutes = new Hono<PublicApiV2Env>()
         }
         const updated = result.job;
 
-        await emitPublicApiWebhookEvent({
-          organizationId: apiKey.organizationId,
-          eventType: "job.canceled",
-          payload: {
-            id: updated.id,
-            jobId: updated.jobId,
-            status: updated.status,
-          },
-          env: c.env,
-        });
+        afterCommit(() =>
+          emitPublicApiWebhookEvent({
+            organizationId: apiKey.organizationId,
+            eventType: "job.canceled",
+            payload: {
+              id: updated.id,
+              jobId: updated.jobId,
+              status: updated.status,
+            },
+            env: c.env,
+          }),
+        );
 
         return {
           status: 200,

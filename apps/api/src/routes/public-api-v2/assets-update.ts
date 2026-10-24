@@ -346,80 +346,81 @@ export const assetUpdateRoutes = new Hono<PublicApiV2Env>()
       );
     }
 
-    return withIdempotentMutation(c, { assetId: resolvedId }, async () => {
-      // Look-up, audit entry and soft delete are one transaction.
-      const existing = await orgDb(apiKey.organizationId).transaction(
-        async (o) => {
-          const [row] = await o
-            .select({
-              id: asset.id,
-              deletedAt: asset.deletedAt,
-              name: asset.name,
-              tag: asset.tag,
-              unitId: asset.unitId,
-              customerId: asset.customerId,
-              assetTypeId: asset.assetTypeId,
-            })
-            .from(asset)
-            .innerJoin(customer, eq(asset.customerId, customer.id))
-            .where(
-              and(
-                eq(asset.id, resolvedId),
-                eq(customer.labOrganizationId, apiKey.organizationId),
-                isNull(asset.deletedAt),
-              ),
-            )
-            .limit(1);
-          if (!row) return null;
+    return withIdempotentMutation(
+      c,
+      { assetId: resolvedId },
+      async ({ o, afterCommit }) => {
+        // Look-up, audit entry and soft delete are one transaction (and the
+        // idempotency record commits with them).
+        const [existing] = await o
+          .select({
+            id: asset.id,
+            deletedAt: asset.deletedAt,
+            name: asset.name,
+            tag: asset.tag,
+            unitId: asset.unitId,
+            customerId: asset.customerId,
+            assetTypeId: asset.assetTypeId,
+          })
+          .from(asset)
+          .innerJoin(customer, eq(asset.customerId, customer.id))
+          .where(
+            and(
+              eq(asset.id, resolvedId),
+              eq(customer.labOrganizationId, apiKey.organizationId),
+              isNull(asset.deletedAt),
+            ),
+          )
+          .limit(1);
 
-          await o.insert(assetAuditLog).values({
-            organizationId: apiKey.organizationId,
-            assetId: row.id,
-            action: "delete",
-            changes: { asset: { old: row, new: null } },
-            performedBy: apiKey.createdBy,
-            ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-          });
+        if (!existing) {
+          return {
+            status: 404,
+            body: buildPublicApiError({
+              code: "asset_not_found",
+              message: "Ativo não encontrado",
+            }),
+          };
+        }
 
-          await o
-            .update(asset)
-            .set({ deletedAt: new Date() })
-            .where(eq(asset.id, row.id));
-          return row;
-        },
-      );
+        await o.insert(assetAuditLog).values({
+          organizationId: apiKey.organizationId,
+          assetId: existing.id,
+          action: "delete",
+          changes: { asset: { old: existing, new: null } },
+          performedBy: apiKey.createdBy,
+          ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+        });
 
-      if (!existing) {
-        return {
-          status: 404,
-          body: buildPublicApiError({
-            code: "asset_not_found",
-            message: "Ativo não encontrado",
-          }),
-        };
-      }
+        await o
+          .update(asset)
+          .set({ deletedAt: new Date() })
+          .where(eq(asset.id, existing.id));
 
-      const body = { data: { id: existing.id, deleted: true } };
-
-      await emitPublicApiWebhookEvent({
-        organizationId: apiKey.organizationId,
-        eventType: "asset.deleted",
-        payload: {
-          id: existing.id,
-          externalId: await getResourceExternalId({
+        const externalId = await getResourceExternalId(
+          {
             organizationId: apiKey.organizationId,
             resourceType: "asset",
             resourceId: existing.id,
-          }),
-        },
-        env: c.env,
-      });
+          },
+          o,
+        );
 
-      return {
-        status: 200,
-        body,
-        resourceType: "asset" as const,
-        resourceId: existing.id,
-      };
-    });
+        afterCommit(() =>
+          emitPublicApiWebhookEvent({
+            organizationId: apiKey.organizationId,
+            eventType: "asset.deleted",
+            payload: { id: existing.id, externalId },
+            env: c.env,
+          }),
+        );
+
+        return {
+          status: 200,
+          body: { data: { id: existing.id, deleted: true } },
+          resourceType: "asset" as const,
+          resourceId: existing.id,
+        };
+      },
+    );
   });

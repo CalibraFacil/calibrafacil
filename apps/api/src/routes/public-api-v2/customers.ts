@@ -29,7 +29,10 @@ import { createClientOrganizationAsServiceOwner } from "../../lib/portal-service
 import { type PublicApiV2Env } from "./env";
 import { ListQuerySchema } from "./schemas";
 import { resolveExternalResourceId } from "./resolvers";
-import { withIdempotentMutation } from "./idempotency";
+import {
+  withIdempotentMutation,
+  withPreparedIdempotentMutation,
+} from "./idempotency";
 import { generateUniqueSlug } from "./helpers";
 
 export const customerRoutes = new Hono<PublicApiV2Env>()
@@ -172,87 +175,90 @@ export const customerRoutes = new Hono<PublicApiV2Env>()
       const apiKey = c.get("apiKey");
       const input = c.req.valid("json");
 
-      return withIdempotentMutation(c, input, async () => {
-        const slug = generateUniqueSlug(input.name);
-        const orgResult = await createClientOrganizationAsServiceOwner({
-          name: input.name,
-          slug,
-        });
+      // The client organization is an identity-table write on the system path
+      // (its own connection): it runs before the transaction the customer and
+      // its idempotency record commit in, not inside it.
+      return withPreparedIdempotentMutation(
+        c,
+        input,
+        () =>
+          createClientOrganizationAsServiceOwner({
+            name: input.name,
+            slug: generateUniqueSlug(input.name),
+          }),
+        async ({ o, afterCommit }, orgResult) => {
+          if (!orgResult?.id) {
+            return {
+              status: 500,
+              body: buildPublicApiError({
+                code: "customer_create_failed",
+                message: "Falha ao criar organização do cliente",
+              }),
+            };
+          }
 
-        if (!orgResult?.id) {
-          return {
-            status: 500,
-            body: buildPublicApiError({
-              code: "customer_create_failed",
-              message: "Falha ao criar organização do cliente",
-            }),
+          const externalId = input.externalId?.trim();
+          // The customer, its audit entry and the caller's external id commit
+          // together (and with the idempotency record).
+          const [created] = await o
+            .insert(customer)
+            .values({
+              name: input.name,
+              taxId: input.taxId || null,
+              email: input.email || null,
+              phone: input.phone || null,
+              address: input.address || null,
+              authOrganizationId: orgResult.id,
+              labOrganizationId: apiKey.organizationId,
+            })
+            .returning();
+
+          await o.insert(customerAuditLog).values({
+            organizationId: apiKey.organizationId,
+            customerId: created!.id,
+            action: "create",
+            changes: { customer: { old: null, new: created } },
+            performedBy: apiKey.createdBy,
+            ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+          });
+
+          if (externalId) {
+            await upsertResourceExternalId(
+              {
+                organizationId: apiKey.organizationId,
+                apiKeyId: apiKey.id,
+                resourceType: "customer",
+                resourceId: created!.id,
+                externalId,
+              },
+              o,
+            );
+          }
+
+          const body = {
+            data: {
+              ...created,
+              externalId: externalId ?? null,
+            },
           };
-        }
 
-        const externalId = input.externalId?.trim();
-        // The customer, its audit entry and the caller's external id commit
-        // together.
-        const created = await orgDb(apiKey.organizationId).transaction(
-          async (o) => {
-            const [row] = await o
-              .insert(customer)
-              .values({
-                name: input.name,
-                taxId: input.taxId || null,
-                email: input.email || null,
-                phone: input.phone || null,
-                address: input.address || null,
-                authOrganizationId: orgResult.id,
-                labOrganizationId: apiKey.organizationId,
-              })
-              .returning();
-
-            await o.insert(customerAuditLog).values({
+          afterCommit(() =>
+            emitPublicApiWebhookEvent({
               organizationId: apiKey.organizationId,
-              customerId: row!.id,
-              action: "create",
-              changes: { customer: { old: null, new: row } },
-              performedBy: apiKey.createdBy,
-              ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-            });
+              eventType: "customer.created",
+              payload: body.data,
+              env: c.env,
+            }),
+          );
 
-            if (externalId) {
-              await upsertResourceExternalId(
-                {
-                  organizationId: apiKey.organizationId,
-                  apiKeyId: apiKey.id,
-                  resourceType: "customer",
-                  resourceId: row!.id,
-                  externalId,
-                },
-                o,
-              );
-            }
-            return row;
-          },
-        );
-
-        const body = {
-          data: {
-            ...created,
-            externalId: externalId ?? null,
-          },
-        };
-
-        await emitPublicApiWebhookEvent({
-          organizationId: apiKey.organizationId,
-          eventType: "customer.created",
-          payload: body.data,
-          env: c.env,
-        });
-
-        return {
-          status: 201,
-          body,
-          resourceType: "customer" as const,
-          resourceId: created!.id,
-        };
-      });
+          return {
+            status: 201,
+            body,
+            resourceType: "customer" as const,
+            resourceId: created!.id,
+          };
+        },
+      );
     },
   )
   .put(
@@ -391,9 +397,11 @@ export const customerRoutes = new Hono<PublicApiV2Env>()
       );
     }
 
-    return withIdempotentMutation(c, { customerId: resolvedId }, async () => {
-      const [existing] = await orgDb(apiKey.organizationId).transaction((o) =>
-        o
+    return withIdempotentMutation(
+      c,
+      { customerId: resolvedId },
+      async ({ o, afterCommit }) => {
+        const [existing] = await o
           .select()
           .from(customer)
           .where(
@@ -402,97 +410,98 @@ export const customerRoutes = new Hono<PublicApiV2Env>()
               eq(customer.labOrganizationId, apiKey.organizationId),
             ),
           )
-          .limit(1),
-      );
+          .limit(1);
 
-      if (!existing) {
-        return {
-          status: 404,
-          body: buildPublicApiError({
-            code: "customer_not_found",
-            message: "Cliente não encontrado",
-          }),
-        };
-      }
-
-      const ipAddress = getPublicApiRequestIp(c.req.raw.headers);
-
-      // Retention (decision Q16): a customer that still has regulated records
-      // cannot be deleted (those foreign keys are RESTRICT). The audit rows share
-      // the transaction, so a refused delete leaves no "delete" entry behind.
-      try {
-        await orgDb(apiKey.organizationId).transaction(async (tx) => {
-          await tx.insert(customerAuditLog).values({
-            organizationId: apiKey.organizationId,
-            customerId: existing.id,
-            action: "delete",
-            changes: { customer: { old: existing, new: null } },
-            performedBy: apiKey.createdBy,
-            ipAddress,
-          });
-
-          // CMP-07 (#692): deleting the customer cascades its assets
-          // (asset.customer_id → customer, intentional). Record a 'delete' audit row
-          // for EACH asset first — the asset_audit_log.asset_id FK no longer cascades,
-          // so these rows survive the delete and the ISO/IEC 17025 trail is preserved.
-          const customerAssets = await tx
-            .select()
-            .from(asset)
-            .where(eq(asset.customerId, existing.id));
-          if (customerAssets.length > 0) {
-            await tx.insert(assetAuditLog).values(
-              customerAssets.map((assetRow) => ({
-                organizationId: apiKey.organizationId,
-                assetId: assetRow.id,
-                action: "delete",
-                changes: { asset: { old: assetRow, new: null } },
-                performedBy: apiKey.createdBy,
-                ipAddress,
-                reason: "Cliente excluído",
-              })),
-            );
-          }
-
-          await tx.delete(customer).where(eq(customer.id, existing.id));
-          await tx
-            .delete(organization)
-            .where(eq(organization.id, existing.authOrganizationId));
-        });
-      } catch (error) {
-        if (isReferencedRowViolation(error)) {
+        if (!existing) {
           return {
-            status: 409,
+            status: 404,
             body: buildPublicApiError({
-              code: "customer_has_retained_records",
-              message:
-                "Cliente possui registros regulados retidos e não pode ser excluído",
+              code: "customer_not_found",
+              message: "Cliente não encontrado",
             }),
           };
         }
-        throw error;
-      }
 
-      const body = { data: { id: existing.id, deleted: true } };
+        const ipAddress = getPublicApiRequestIp(c.req.raw.headers);
 
-      await emitPublicApiWebhookEvent({
-        organizationId: apiKey.organizationId,
-        eventType: "customer.deleted",
-        payload: {
-          id: existing.id,
-          externalId: await getResourceExternalId({
+        // Retention (decision Q16): a customer that still has regulated records
+        // cannot be deleted (those foreign keys are RESTRICT). The audit rows
+        // share the transaction, so a refused delete rolls them back and
+        // leaves no "delete" entry behind (the refusal is mapped below, after
+        // the rollback).
+        await o.insert(customerAuditLog).values({
+          organizationId: apiKey.organizationId,
+          customerId: existing.id,
+          action: "delete",
+          changes: { customer: { old: existing, new: null } },
+          performedBy: apiKey.createdBy,
+          ipAddress,
+        });
+
+        // CMP-07 (#692): deleting the customer cascades its assets
+        // (asset.customer_id → customer, intentional). Record a 'delete' audit row
+        // for EACH asset first — the asset_audit_log.asset_id FK no longer cascades,
+        // so these rows survive the delete and the ISO/IEC 17025 trail is preserved.
+        const customerAssets = await o
+          .select()
+          .from(asset)
+          .where(eq(asset.customerId, existing.id));
+        if (customerAssets.length > 0) {
+          await o.insert(assetAuditLog).values(
+            customerAssets.map((assetRow) => ({
+              organizationId: apiKey.organizationId,
+              assetId: assetRow.id,
+              action: "delete",
+              changes: { asset: { old: assetRow, new: null } },
+              performedBy: apiKey.createdBy,
+              ipAddress,
+              reason: "Cliente excluído",
+            })),
+          );
+        }
+
+        const externalId = await getResourceExternalId(
+          {
             organizationId: apiKey.organizationId,
             resourceType: "customer",
             resourceId: existing.id,
-          }),
-        },
-        env: c.env,
-      });
+          },
+          o,
+        );
 
-      return {
-        status: 200,
-        body,
-        resourceType: "customer" as const,
-        resourceId: existing.id,
-      };
-    });
+        await o.delete(customer).where(eq(customer.id, existing.id));
+        await o
+          .delete(organization)
+          .where(eq(organization.id, existing.authOrganizationId));
+
+        afterCommit(() =>
+          emitPublicApiWebhookEvent({
+            organizationId: apiKey.organizationId,
+            eventType: "customer.deleted",
+            payload: { id: existing.id, externalId },
+            env: c.env,
+          }),
+        );
+
+        return {
+          status: 200,
+          body: { data: { id: existing.id, deleted: true } },
+          resourceType: "customer" as const,
+          resourceId: existing.id,
+        };
+      },
+      {
+        mapError: (error) =>
+          isReferencedRowViolation(error)
+            ? {
+                status: 409,
+                body: buildPublicApiError({
+                  code: "customer_has_retained_records",
+                  message:
+                    "Cliente possui registros regulados retidos e não pode ser excluído",
+                }),
+              }
+            : null,
+      },
+    );
   });

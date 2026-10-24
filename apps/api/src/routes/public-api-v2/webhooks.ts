@@ -60,25 +60,23 @@ export const webhookRoutes = new Hono<PublicApiV2Env>()
       const apiKey = c.get("apiKey");
       const input = c.req.valid("json");
 
-      return withIdempotentMutation(c, input, async () => {
+      return withIdempotentMutation(c, input, async ({ o }) => {
         const secret = createWebhookSecret(c.env);
-        const [created] = await orgDb(apiKey.organizationId).transaction((o) =>
-          o
-            .insert(publicApiWebhookSubscription)
-            .values({
-              id: crypto.randomUUID(),
-              organizationId: apiKey.organizationId,
-              name: input.name,
-              targetUrl: input.targetUrl,
-              events: input.events,
-              status: input.status ?? "ACTIVE",
-              secretPrefix: secret.prefix,
-              encryptedSecret: secret.encryptedSecret,
-              secretIv: secret.secretIv,
-              createdBy: apiKey.createdBy,
-            })
-            .returning(),
-        );
+        const [created] = await o
+          .insert(publicApiWebhookSubscription)
+          .values({
+            id: crypto.randomUUID(),
+            organizationId: apiKey.organizationId,
+            name: input.name,
+            targetUrl: input.targetUrl,
+            events: input.events,
+            status: input.status ?? "ACTIVE",
+            secretPrefix: secret.prefix,
+            encryptedSecret: secret.encryptedSecret,
+            secretIv: secret.secretIv,
+            createdBy: apiKey.createdBy,
+          })
+          .returning();
 
         return {
           status: 201,
@@ -142,9 +140,11 @@ export const webhookRoutes = new Hono<PublicApiV2Env>()
   )
   .delete("/webhooks/:id", requireApiScope("webhooks:manage"), async (c) => {
     const apiKey = c.get("apiKey");
-    return withIdempotentMutation(c, { id: c.req.param("id") }, async () => {
-      const [existing] = await orgDb(apiKey.organizationId).transaction((o) =>
-        o
+    return withIdempotentMutation(
+      c,
+      { id: c.req.param("id") },
+      async ({ o }) => {
+        const [existing] = await o
           .select()
           .from(publicApiWebhookSubscription)
           .where(
@@ -156,29 +156,27 @@ export const webhookRoutes = new Hono<PublicApiV2Env>()
               ),
             ),
           )
-          .limit(1),
-      );
+          .limit(1);
 
-      if (!existing) {
-        return {
-          status: 404,
-          body: buildPublicApiError({
-            code: "webhook_not_found",
-            message: "Webhook não encontrado",
-          }),
-        };
-      }
+        if (!existing) {
+          return {
+            status: 404,
+            body: buildPublicApiError({
+              code: "webhook_not_found",
+              message: "Webhook não encontrado",
+            }),
+          };
+        }
 
-      await orgDb(apiKey.organizationId).transaction((o) =>
-        o
+        await o
           .delete(publicApiWebhookSubscription)
-          .where(eq(publicApiWebhookSubscription.id, existing.id)),
-      );
-      return {
-        status: 200,
-        body: { data: { id: existing.id, deleted: true } },
-      };
-    });
+          .where(eq(publicApiWebhookSubscription.id, existing.id));
+        return {
+          status: 200,
+          body: { data: { id: existing.id, deleted: true } },
+        };
+      },
+    );
   })
   .post("/webhooks/:id/test", requireApiScope("webhooks:manage"), async (c) => {
     const apiKey = c.get("apiKey");
