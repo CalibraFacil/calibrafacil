@@ -419,9 +419,9 @@ added or removed without a migration.
     `calibra_app` cases.
   - **Shadow report, 15 identity / lifecycle specs** (the routes above, `records-retention`, `certificate-drift`,
     `user-cascade-soft-delete`, plus `sync-change-seq` and `db-immutability` for the sync work of P2-18i):
-    before, 194 tests, 44 broken as `calibra_app`, 53 distinct (162 runs) unscoped statements; after, 196 tests,
-    17 broken and 14 distinct (63 runs) unscoped, ALL of them `modules/sync` (`sync-change-seq`, P2-18i). The identity
-    specs are at 0 unscoped / 0 broken.
+    before, 194 tests, 44 broken as `calibra_app`, 53 distinct (162 runs) unscoped statements; after (rebased on
+    P2-18i), 197 tests, 0 broken, 0 unscoped (before the rebase the only rows left were the 17 broken / 14 distinct
+    of `modules/sync`).
   - **Not covered by the shadow report.** The Better Auth adapter statements run on the system path in every
     harness, so the report cannot show them; the specs above are the evidence.
   - **No RLS backstop for Better Auth (Q40).** Accepted: its guard is its own membership and role check plus the
