@@ -28,6 +28,9 @@
  *                   token stays unconsumed.
  *   REQ-18J-INV-3   The public invitation page resolves an invitation by its id
  *                   alone and exposes only that laboratory.
+ *   REQ-18J-PROV-2  A failed provisioning is cleaned up as calibra_app: a laboratory
+ *                   that holds nothing is hard-deleted (advisory lock, purge-only
+ *                   setting, cascade), one that holds evidence is soft-deleted.
  *   REQ-18J-PROV-1  Provisioning creates the laboratory and its first member (the
  *                   owner) under the role split, and a failed provisioning is
  *                   cleaned up.
@@ -38,7 +41,6 @@
  *   REQ-18J-SWEEP-2 The auth maintenance sweep (global tables) works as
  *                   calibra_app.
  */
-import { createHash, randomBytes } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
@@ -49,13 +51,13 @@ import {
   labAccountSetupToken,
   member,
   organization,
+  organizationEventLog,
   personnelCompetence,
   platformEventLog,
   service,
   session as authSession,
   syncChangeLog,
   syncChangeLogPurge,
-  user,
   verification,
 } from "@calibra-facil/db/schema";
 import {
@@ -70,11 +72,25 @@ import {
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { asApplicationRole } from "../../test/integration/application-role";
+import {
+  FUTURE,
+  NOW,
+  seedLab,
+  seedMember,
+  seedUser,
+  sessionRowFor,
+  signInWithMagicLink,
+} from "../../test/integration/identity-fixtures";
 import { cleanupExpiredAuthRecords } from "./auth-maintenance";
 import { purgeSyncChangeLog } from "./sync-change-log-purge";
 import { invitationsRouter } from "../routes/invitations";
 import { labSetupRouter } from "../routes/lab-setup";
-import { provisionLabAccount } from "../services/lab-provisioning";
+import {
+  cleanupFailedLabProvisioning,
+  createLabOrganizationWithUniqueSlug,
+  ensureLabProvisioningUser,
+  provisionLabAccount,
+} from "../services/lab-provisioning";
 import {
   hasActiveLabMembership,
   hasPendingLabInvitation,
@@ -90,100 +106,6 @@ import { getActivationChecklist } from "../services/activation-checklist";
 // This file runs the REAL Better Auth lab instance: the harness's fake
 // `createLabAuth` (only `getSession`) is replaced by the real module.
 vi.mock("@calibra-facil/auth", async (importOriginal) => importOriginal());
-
-const WEB = "http://localhost:5173";
-const API = "http://localhost:3000";
-const NOW = new Date("2026-02-01T00:00:00.000Z");
-const FUTURE = new Date("2099-01-01T00:00:00.000Z");
-
-async function seedUser(id: string, email = `${id}@lab.test`) {
-  await db.insert(user).values({ id, name: `User ${id}`, email });
-  return { id, email };
-}
-
-async function seedLab(
-  orgId: string,
-  type: "LAB" | "CLIENT" = "LAB",
-  deletedAt: Date | null = null,
-) {
-  await db.insert(organization).values({
-    id: orgId,
-    name: `Lab ${orgId}`,
-    slug: orgId,
-    createdAt: NOW,
-    type,
-    status: deletedAt ? "SUSPENDED" : "ACTIVE",
-    ...(deletedAt
-      ? {
-          deletedAt,
-          suspendedAt: deletedAt,
-          suspensionReason: "test",
-        }
-      : {}),
-  });
-}
-
-async function seedMember(
-  orgId: string,
-  userId: string,
-  createdAt: Date,
-  role = "admin",
-) {
-  await db.insert(member).values({
-    id: `m-${orgId}-${userId}`,
-    organizationId: orgId,
-    userId,
-    role,
-    createdAt,
-  });
-}
-
-/** A magic-link verification row for `email` (Better Auth stores the token hashed). */
-async function seedMagicLinkToken(email: string) {
-  const token = randomBytes(24).toString("base64url");
-  await db.insert(verification).values({
-    id: randomBytes(8).toString("hex"),
-    identifier: createHash("sha256").update(token).digest("base64url"),
-    value: JSON.stringify({ email, name: "", attempt: 0 }),
-    expiresAt: FUTURE,
-  });
-  return token;
-}
-
-/** The `Cookie` header of a Set-Cookie list. */
-function cookieHeaderOf(response: Response): string {
-  return response.headers
-    .getSetCookie()
-    .map((cookie) => cookie.split(";")[0])
-    .join("; ");
-}
-
-/**
- * The real sign-in: the real magic-link verify endpoint of the real lab auth
- * (creates the session, runs the session hooks), as the application role.
- */
-async function signInWithMagicLink(email: string): Promise<{
-  cookie: string;
-  status: number;
-}> {
-  const token = await seedMagicLinkToken(email);
-  return asApplicationRole(async () => {
-    const response = await createLabAuth().handler(
-      new Request(
-        `${API}/api/auth/lab/magic-link/verify?token=${token}&callbackURL=${encodeURIComponent(`${WEB}/dashboard`)}`,
-      ),
-    );
-    return { cookie: cookieHeaderOf(response), status: response.status };
-  });
-}
-
-async function sessionRowFor(userId: string) {
-  const [row] = await db
-    .select()
-    .from(authSession)
-    .where(eq(authSession.userId, userId));
-  return row;
-}
 
 describe("identity as calibra_app (P2-18j)", () => {
   beforeEach(async () => {
@@ -442,7 +364,7 @@ describe("identity as calibra_app (P2-18j)", () => {
     });
   });
 
-  it("REQ-18J-PROV-1 [HIGH RISK]: provisioning creates the laboratory and its first member (the owner), and a failed one is cleaned up", async () => {
+  it("REQ-18J-PROV-1 [HIGH RISK]: provisioning creates the laboratory and its first member (the owner); a second one with the same name takes the next slug", async () => {
     const provisioned = await asApplicationRole(() =>
       provisionLabAccount({
         lab: { name: "Laboratório Provisionado", email: "contato@prov.test" },
@@ -549,6 +471,62 @@ describe("identity as calibra_app (P2-18j)", () => {
     expect(done(checklistB, "customer")).toBe(false);
   });
 
+  it("REQ-18J-PROV-2 [HIGH RISK]: a failed provisioning is cleaned up as calibra_app: an empty laboratory is hard-deleted, one that holds evidence is soft-deleted", async () => {
+    const { empty, withEvidence } = await asApplicationRole(async () => {
+      const owner = await ensureLabProvisioningUser({
+        name: "Dona",
+        email: "dona@prov.test",
+      });
+      const auth = createLabAuth();
+      const create = (name: string) =>
+        createLabOrganizationWithUniqueSlug({
+          auth,
+          lab: { name },
+          ownerUserId: owner.user.id,
+          ownerEmail: owner.user.email,
+        });
+      return {
+        empty: await create("Lab Vazio"),
+        withEvidence: await create("Lab Com Registro"),
+      };
+    });
+    // The second laboratory already holds an audit entry: evidence.
+    await db.insert(organizationEventLog).values({
+      organizationId: withEvidence.id,
+      action: "test.evidence",
+      entityType: "organization",
+      entityId: withEvidence.id,
+    });
+
+    await asApplicationRole(async () => {
+      await cleanupFailedLabProvisioning({ organizationId: empty.id });
+      await cleanupFailedLabProvisioning({ organizationId: withEvidence.id });
+    });
+
+    // Hard delete: the organization and its (owner) membership are gone.
+    expect(
+      await db.select().from(organization).where(eq(organization.id, empty.id)),
+    ).toEqual([]);
+    expect(
+      await db.select().from(member).where(eq(member.organizationId, empty.id)),
+    ).toEqual([]);
+    // Soft delete: kept, suspended, stamped.
+    const [kept] = await db
+      .select()
+      .from(organization)
+      .where(eq(organization.id, withEvidence.id));
+    expect(kept?.deletedAt).not.toBeNull();
+    expect(kept?.status).toBe("SUSPENDED");
+    expect(
+      (
+        await db
+          .select()
+          .from(member)
+          .where(eq(member.organizationId, withEvidence.id))
+      ).length,
+    ).toBe(1);
+  });
+
   it("REQ-18J-USER-1 [HIGH RISK]: deleting a person preserves their regulated records in every laboratory, in one transaction", async () => {
     const person = await seedUser("person");
     const labA = await seedOrg({ orgId: "lab-a", userId: "user-lab-a" });
@@ -602,38 +580,73 @@ describe("identity as calibra_app (P2-18j)", () => {
   it("REQ-18J-SWEEP-1 [HIGH RISK]: the change-log retention sweep purges each laboratory in its own transaction: its own old entries, its own horizon", async () => {
     const labA = await seedOrg({ orgId: "lab-a", userId: "user-lab-a" });
     const labB = await seedOrg({ orgId: "lab-b", userId: "user-lab-b" });
-    // Lab A: one old and one recent entry. Lab B: only a recent one.
-    const [oldA] = await db
-      .insert(service)
-      .values({ unitId: labA.unitId, organizationId: "lab-a", name: "old-a" })
-      .returning({ id: service.id });
-    await db
-      .insert(service)
-      .values({ unitId: labA.unitId, organizationId: "lab-a", name: "new-a" });
-    await db
-      .insert(service)
-      .values({ unitId: labB.unitId, organizationId: "lab-b", name: "new-b" });
-    await db.execute(
-      sql`update sync_change_log set changed_at = now() - interval '100 days' where entity_id = ${String(oldA?.id)} and organization_id = 'lab-a'`,
-    );
+    const addService = async (lab: typeof labA, name: string) => {
+      const [row] = await db
+        .insert(service)
+        .values({ unitId: lab.unitId, organizationId: lab.orgId, name })
+        .returning({ id: service.id });
+      return Number(row?.id);
+    };
+    // BOTH laboratories hold old entries (A one service, B two) and recent ones, so
+    // a purge that ignored the laboratory could not pass: each laboratory's horizon
+    // must be ITS OWN newest purged entry, and each keeps exactly its recent entries.
+    const oldA = [await addService(labA, "old-a")];
+    const oldB = [
+      await addService(labB, "old-b1"),
+      await addService(labB, "old-b2"),
+    ];
+    await addService(labA, "new-a");
+    await addService(labB, "new-b");
+    for (const [lab, ids] of [
+      ["lab-a", oldA],
+      ["lab-b", oldB],
+    ] as const) {
+      await db.execute(
+        sql`update sync_change_log set changed_at = now() - interval '100 days' where organization_id = ${lab} and entity_type = 'service' and entity_id in (${sql.join(
+          ids.map((id) => sql`${id}`),
+          sql`, `,
+        )})`,
+      );
+    }
     const before = await db.select().from(syncChangeLog);
-    const beforeByLab = (lab: string) =>
-      before.filter((row) => row.organizationId === lab).length;
+    const old = (lab: string) =>
+      before.filter(
+        (row) =>
+          row.organizationId === lab &&
+          row.entityType === "service" &&
+          (lab === "lab-a" ? oldA : oldB).includes(row.entityId),
+      );
+    const recent = (lab: string) =>
+      before.filter(
+        (row) => row.organizationId === lab && !old(lab).includes(row),
+      );
+    const newest = (rows: typeof before) =>
+      rows.toSorted((x, y) => Number(y.seq) - Number(x.seq))[0];
+    expect(old("lab-a").length).toBeGreaterThan(0);
+    expect(old("lab-b").length).toBeGreaterThan(old("lab-a").length);
 
     const result = await asApplicationRole(() =>
       purgeSyncChangeLog({ retentionDays: 90 }),
     );
 
-    expect(result.organizations).toBe(1);
-    expect(result.purged).toBeGreaterThan(0);
+    expect(result.organizations).toBe(2);
+    expect(result.purged).toBe(old("lab-a").length + old("lab-b").length);
     const after = await db.select().from(syncChangeLog);
-    const afterByLab = (lab: string) =>
-      after.filter((row) => row.organizationId === lab).length;
-    expect(afterByLab("lab-a")).toBe(beforeByLab("lab-a") - result.purged);
-    // Lab B had nothing old: its entries and (absent) horizon are untouched.
-    expect(afterByLab("lab-b")).toBe(beforeByLab("lab-b"));
+    for (const lab of ["lab-a", "lab-b"]) {
+      expect(
+        after.filter((row) => row.organizationId === lab).map((row) => row.seq),
+        lab,
+      ).toEqual(recent(lab).map((row) => row.seq));
+    }
     const horizons = await db.select().from(syncChangeLogPurge);
-    expect(horizons.map((row) => row.organizationId)).toEqual(["lab-a"]);
+    const horizonOf = (lab: string) =>
+      horizons.find((row) => row.organizationId === lab);
+    expect(Number(horizonOf("lab-a")?.purgedThroughSeq)).toBe(
+      Number(newest(old("lab-a"))?.seq),
+    );
+    expect(Number(horizonOf("lab-b")?.purgedThroughSeq)).toBe(
+      Number(newest(old("lab-b"))?.seq),
+    );
   });
 
   it("REQ-18J-SWEEP-2: the auth maintenance sweep removes expired sessions and verifications as calibra_app", async () => {

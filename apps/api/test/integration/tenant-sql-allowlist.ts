@@ -400,7 +400,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     tables: ["organization_email_domain"],
     kinds: ["select"],
     reason:
-      "System path (P2-18j, systemDb): a sending hostname is unique across the platform, so 'does ANOTHER laboratory hold it' (findOtherOrganizationHoldingHostname, run before a domain is created) is cross-organization by design. One row, only its existence is used.",
+      "System path (P2-18j, systemDb): a sending hostname is unique across the platform, so 'does ANOTHER laboratory hold it' (otherOrganizationHoldsHostname, run before a domain is created) is cross-organization by design. One row, only its existence is used.",
   },
   {
     category: "pk-after-scoped-read",
