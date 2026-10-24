@@ -16,11 +16,22 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 const SUPPRESSED_EMAIL = "blocked@empresa.com";
 const ALLOWED_EMAIL = "ok@empresa.com";
 
-const { dbMock, sendMock, isEmailSuppressedMock } = vi.hoisted(() => ({
-  dbMock: { selectDistinct: vi.fn(), select: vi.fn(), insert: vi.fn() },
-  sendMock: vi.fn().mockResolvedValue({ data: { id: "email_1" } }),
-  isEmailSuppressedMock: vi.fn(),
-}));
+// `inOrg(...)` (lab-scope.ts) runs its callback in `db.transaction(...)`: the
+// double runs it on itself (the organization setting needs no canned result).
+const { dbMock, sendMock, isEmailSuppressedMock } = vi.hoisted(() => {
+  const dbMock = {
+    selectDistinct: vi.fn(),
+    select: vi.fn(),
+    insert: vi.fn(),
+    execute: vi.fn(async () => []),
+    transaction: vi.fn(async (run: (tx: unknown) => unknown) => run(dbMock)),
+  };
+  return {
+    dbMock,
+    sendMock: vi.fn().mockResolvedValue({ data: { id: "email_1" } }),
+    isEmailSuppressedMock: vi.fn(),
+  };
+});
 
 vi.mock("@calibra-facil/db", () => ({ db: dbMock, systemDb: dbMock }));
 // These specs exercise the PLATFORM sender path. `resolveLabEmailSender` now

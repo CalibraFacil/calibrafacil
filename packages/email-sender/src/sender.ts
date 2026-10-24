@@ -13,6 +13,7 @@
 
 import { readEmailConfig } from "@calibra-facil/config";
 import { db } from "@calibra-facil/db";
+import { forOrg } from "@calibra-facil/db/for-org";
 import {
   organizationEmailDomain,
   organizationEventLog,
@@ -40,17 +41,21 @@ export interface LabEmailCredential {
 }
 
 async function findUsableEmailDomainRow(organizationId: string) {
-  const [row] = await db
-    .select()
-    .from(organizationEmailDomain)
-    .where(
-      and(
-        eq(organizationEmailDomain.organizationId, organizationId),
-        eq(organizationEmailDomain.isActive, true),
-        ne(organizationEmailDomain.keyStatus, "invalid"),
-      ),
-    )
-    .limit(1);
+  // Every statement of this module runs in an organization-bound transaction
+  // (row-level security: `calibra.organization_id` names the laboratory).
+  const [row] = await forOrg(db, organizationId).transaction((o) =>
+    o
+      .select()
+      .from(organizationEmailDomain)
+      .where(
+        and(
+          eq(organizationEmailDomain.organizationId, organizationId),
+          eq(organizationEmailDomain.isActive, true),
+          ne(organizationEmailDomain.keyStatus, "invalid"),
+        ),
+      )
+      .limit(1),
+  );
 
   if (!row?.verifiedAt) return undefined;
   return row;
@@ -166,30 +171,33 @@ export async function markLabEmailKeyFailure(
   if (!nextStatus) return;
 
   try {
-    const updated = await db
-      .update(organizationEmailDomain)
-      .set({
-        keyStatus: nextStatus,
-        keyLastError: message,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(organizationEmailDomain.organizationId, organizationId),
-          ne(organizationEmailDomain.keyStatus, nextStatus),
-        ),
-      )
-      .returning();
+    // The flip and its audit entry commit together.
+    await forOrg(db, organizationId).transaction(async (o) => {
+      const updated = await o
+        .update(organizationEmailDomain)
+        .set({
+          keyStatus: nextStatus,
+          keyLastError: message,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(organizationEmailDomain.organizationId, organizationId),
+            ne(organizationEmailDomain.keyStatus, nextStatus),
+          ),
+        )
+        .returning();
 
-    const transitioned = updated[0];
-    if (!transitioned) return;
+      const transitioned = updated[0];
+      if (!transitioned) return;
 
-    await db.insert(organizationEventLog).values({
-      organizationId,
-      action: "email_sender_domain.key_failed",
-      entityType: "email_sender_domain",
-      entityId: transitioned.id,
-      details: { failureClass, keyStatus: nextStatus, error: message },
+      await o.insert(organizationEventLog).values({
+        organizationId,
+        action: "email_sender_domain.key_failed",
+        entityType: "email_sender_domain",
+        entityId: transitioned.id,
+        details: { failureClass, keyStatus: nextStatus, error: message },
+      });
     });
   } catch (error) {
     console.error(
@@ -202,15 +210,17 @@ export async function markLabEmailKeyFailure(
 /** Clear a previously recorded key failure (rotation or recovered health). */
 export async function markLabEmailKeyOk(organizationId: string): Promise<void> {
   try {
-    await db
-      .update(organizationEmailDomain)
-      .set({ keyStatus: "ok", keyLastError: null, updatedAt: new Date() })
-      .where(
-        and(
-          eq(organizationEmailDomain.organizationId, organizationId),
-          ne(organizationEmailDomain.keyStatus, "ok"),
-        ),
-      );
+    await forOrg(db, organizationId).transaction(async (o) => {
+      await o
+        .update(organizationEmailDomain)
+        .set({ keyStatus: "ok", keyLastError: null, updatedAt: new Date() })
+        .where(
+          and(
+            eq(organizationEmailDomain.organizationId, organizationId),
+            ne(organizationEmailDomain.keyStatus, "ok"),
+          ),
+        );
+    });
   } catch (error) {
     console.error(
       `[EmailSender] Failed to reset key status for org ${organizationId}:`,

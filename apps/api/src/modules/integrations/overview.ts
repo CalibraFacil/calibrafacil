@@ -1,4 +1,5 @@
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
+import { inOrgTransaction } from "../../lib/org-transaction";
 import {
   integrationEventLog,
   integrationSyncRun,
@@ -53,173 +54,210 @@ import { isCatalogItemPayload } from "./payload-guards";
 
 export async function buildIntegrationOverview(
   record: GenericConnectionRecord,
+  executor?: OrgDb,
 ): Promise<IntegrationOverview> {
-  const now = new Date();
-  const normalizedConfig = normalizeFinancialErpConnectionConfig(
-    record.integration.provider,
-    record.connection.config,
-  );
-  const overviewTargets = getIntegrationOverviewTargets(
-    record.integration.provider,
-  );
-  const [recentRuns, recentErrorEvent, remoteDocuments] = await Promise.all([
-    db.query.integrationSyncRun.findMany({
-      where: eq(integrationSyncRun.integrationId, record.integration.id),
-      orderBy: [desc(integrationSyncRun.createdAt)],
-      limit: 50,
-    }),
-    db.query.integrationEventLog.findFirst({
-      where: and(
-        eq(integrationEventLog.integrationId, record.integration.id),
-        eq(integrationEventLog.level, "error"),
-      ),
-      orderBy: [desc(integrationEventLog.createdAt)],
-    }),
-    record.integration.provider === "conta_azul"
-      ? buildRemoteDocumentSummary(record.integration.id)
-      : Promise.resolve(buildEmptyRemoteDocumentSummary()),
-  ]);
-
-  const coverageEntries = await Promise.all(
-    overviewTargets.map(async (target) => {
-      const [localCount, linkedCount] = await Promise.all([
-        countLocalTargetRecords(record.integration.organizationId, target),
-        countLinkedTargetRecords(record.integration.id, target),
-      ]);
-
-      return [
-        target,
-        {
-          target,
-          localCount,
-          linkedCount,
-          unlinkedCount: Math.max(localCount - linkedCount, 0),
-        } satisfies IntegrationTargetCoverageSummary,
-      ] as const;
-    }),
-  );
-
-  const getCoverage = (target: IntegrationSyncTarget) =>
-    coverageEntries.find(([entryTarget]) => entryTarget === target)?.[1] ??
-    buildEmptyCoverage(target);
-
-  const coverageByTarget: Record<
-    IntegrationSyncTarget,
-    IntegrationTargetCoverageSummary
-  > = {
-    catalog_item: getCoverage("catalog_item"),
-    contract: getCoverage("contract"),
-    customer: getCoverage("customer"),
-    supplier: getCoverage("supplier"),
-    transporter: getCoverage("transporter"),
-    service_order: getCoverage("service_order"),
-    billing_document: getCoverage("billing_document"),
-    payable: getCoverage("payable"),
-  };
-
-  const validated = hasRemoteValidation(record);
-  const targets: IntegrationTargetSyncSummary[] = overviewTargets.map(
-    (target) => {
-      const targetRuns = recentRuns.filter((run) => run.target === target);
-      const lastRun = targetRuns[0] ?? null;
-      const lastSuccessfulRun = targetRuns.find(isSuccessfulRun) ?? null;
-      const warnings = buildDependencyWarnings({
-        target,
-        provider: record.integration.provider,
-        config: normalizedConfig,
-        integrationStatus: record.integration.status,
-        validated,
-        coverageByTarget,
-      });
-      const scheduleConfig = getTargetScheduleConfig(normalizedConfig, target);
-      const hasActiveRun = targetRuns.some(
-        (run) => run.status === "PENDING" || run.status === "RUNNING",
+  return inOrgTransaction(
+    record.integration.organizationId,
+    executor,
+    async (o) => {
+      const now = new Date();
+      const normalizedConfig = normalizeFinancialErpConnectionConfig(
+        record.integration.provider,
+        record.connection.config,
       );
-      const consecutiveFailures = getConsecutiveFailures(targetRuns);
-      const blocked = warnings.some((warning) => warning.severity === "error");
-      const schedule: IntegrationTargetScheduleSummary = {
-        target,
-        mode: scheduleConfig.mode,
-        frequency: scheduleConfig.frequency,
-        status: buildScheduleStatus({
-          mode: scheduleConfig.mode,
-          nextScheduledRunAt: scheduleConfig.nextScheduledRunAt,
-          hasActiveRun,
-          blocked,
-          consecutiveFailures,
-          now,
+      const overviewTargets = getIntegrationOverviewTargets(
+        record.integration.provider,
+      );
+      const [recentRuns, recentErrorEvent, remoteDocuments] = await Promise.all(
+        [
+          o
+            .select()
+            .from(integrationSyncRun)
+            .where(eq(integrationSyncRun.integrationId, record.integration.id))
+            .orderBy(desc(integrationSyncRun.createdAt))
+            .limit(50),
+          o
+            .select()
+            .from(integrationEventLog)
+            .where(
+              and(
+                eq(integrationEventLog.integrationId, record.integration.id),
+                eq(integrationEventLog.level, "error"),
+              ),
+            )
+            .orderBy(desc(integrationEventLog.createdAt))
+            .limit(1)
+            .then(([event]) => event),
+          record.integration.provider === "conta_azul"
+            ? buildRemoteDocumentSummary(
+                record.integration.organizationId,
+                record.integration.id,
+                o,
+              )
+            : Promise.resolve(buildEmptyRemoteDocumentSummary()),
+        ],
+      );
+
+      const coverageEntries = await Promise.all(
+        overviewTargets.map(async (target) => {
+          const [localCount, linkedCount] = await Promise.all([
+            countLocalTargetRecords(
+              record.integration.organizationId,
+              target,
+              o,
+            ),
+            countLinkedTargetRecords(
+              record.integration.organizationId,
+              record.integration.id,
+              target,
+              o,
+            ),
+          ]);
+
+          return [
+            target,
+            {
+              target,
+              localCount,
+              linkedCount,
+              unlinkedCount: Math.max(localCount - linkedCount, 0),
+            } satisfies IntegrationTargetCoverageSummary,
+          ] as const;
         }),
-        nextScheduledRunAt: scheduleConfig.nextScheduledRunAt,
-        lastScheduledRunAt: scheduleConfig.lastScheduledRunAt,
+      );
+
+      const getCoverage = (target: IntegrationSyncTarget) =>
+        coverageEntries.find(([entryTarget]) => entryTarget === target)?.[1] ??
+        buildEmptyCoverage(target);
+
+      const coverageByTarget: Record<
+        IntegrationSyncTarget,
+        IntegrationTargetCoverageSummary
+      > = {
+        catalog_item: getCoverage("catalog_item"),
+        contract: getCoverage("contract"),
+        customer: getCoverage("customer"),
+        supplier: getCoverage("supplier"),
+        transporter: getCoverage("transporter"),
+        service_order: getCoverage("service_order"),
+        billing_document: getCoverage("billing_document"),
+        payable: getCoverage("payable"),
       };
+
+      const validated = hasRemoteValidation(record);
+      const targets: IntegrationTargetSyncSummary[] = overviewTargets.map(
+        (target) => {
+          const targetRuns = recentRuns.filter((run) => run.target === target);
+          const lastRun = targetRuns[0] ?? null;
+          const lastSuccessfulRun = targetRuns.find(isSuccessfulRun) ?? null;
+          const warnings = buildDependencyWarnings({
+            target,
+            provider: record.integration.provider,
+            config: normalizedConfig,
+            integrationStatus: record.integration.status,
+            validated,
+            coverageByTarget,
+          });
+          const scheduleConfig = getTargetScheduleConfig(
+            normalizedConfig,
+            target,
+          );
+          const hasActiveRun = targetRuns.some(
+            (run) => run.status === "PENDING" || run.status === "RUNNING",
+          );
+          const consecutiveFailures = getConsecutiveFailures(targetRuns);
+          const blocked = warnings.some(
+            (warning) => warning.severity === "error",
+          );
+          const schedule: IntegrationTargetScheduleSummary = {
+            target,
+            mode: scheduleConfig.mode,
+            frequency: scheduleConfig.frequency,
+            status: buildScheduleStatus({
+              mode: scheduleConfig.mode,
+              nextScheduledRunAt: scheduleConfig.nextScheduledRunAt,
+              hasActiveRun,
+              blocked,
+              consecutiveFailures,
+              now,
+            }),
+            nextScheduledRunAt: scheduleConfig.nextScheduledRunAt,
+            lastScheduledRunAt: scheduleConfig.lastScheduledRunAt,
+          };
+
+          return {
+            target,
+            lastRunAt: toIsoDate(lastRun?.createdAt) ?? null,
+            lastSuccessfulRunAt:
+              toIsoDate(lastSuccessfulRun?.finishedAt) ?? null,
+            lastStatus: lastRun?.status ?? null,
+            lastTrigger: lastRun?.trigger ?? null,
+            processedCount: lastRun?.processedCount ?? 0,
+            successCount: lastRun?.successCount ?? 0,
+            errorCount: lastRun?.errorCount ?? 0,
+            blocked,
+            warnings,
+            coverage: coverageByTarget[target],
+            schedule,
+            lastRunDurationMs: lastRun ? getRunDurationMs(lastRun) : null,
+            consecutiveFailures,
+            lastBlockedAt: getLastBlockedAt(targetRuns),
+            hasActiveRun,
+          };
+        },
+      );
+
+      const dependencyWarnings = dedupeDependencyWarnings(
+        targets.flatMap((target) => target.warnings),
+      );
+      const setupStatus = buildSetupStatus({
+        record,
+        validated,
+      });
+      const canSync = validated && record.integration.status === "ACTIVE";
+      const readiness: IntegrationReadinessSummary = {
+        setupStatus,
+        readinessStatus: buildReadinessStatus({
+          setupStatus,
+          canSync,
+          dependencyWarnings,
+        }),
+        capabilities: getProviderCapabilities(record.integration.provider),
+        validationRequired: !validated,
+        canSync,
+        lastValidatedAt:
+          record.integration.lastValidatedAt?.toISOString?.() ?? null,
+        lastValidationError: record.integration.lastValidationError,
+        dependencyWarnings,
+      };
+
+      const lastRun = recentRuns[0] ?? null;
+      const lastSuccessfulRun = recentRuns.find(isSuccessfulRun) ?? null;
 
       return {
-        target,
-        lastRunAt: toIsoDate(lastRun?.createdAt) ?? null,
-        lastSuccessfulRunAt: toIsoDate(lastSuccessfulRun?.finishedAt) ?? null,
-        lastStatus: lastRun?.status ?? null,
-        lastTrigger: lastRun?.trigger ?? null,
-        processedCount: lastRun?.processedCount ?? 0,
-        successCount: lastRun?.successCount ?? 0,
-        errorCount: lastRun?.errorCount ?? 0,
-        blocked,
-        warnings,
-        coverage: coverageByTarget[target],
-        schedule,
-        lastRunDurationMs: lastRun ? getRunDurationMs(lastRun) : null,
-        consecutiveFailures,
-        lastBlockedAt: getLastBlockedAt(targetRuns),
-        hasActiveRun,
+        readiness,
+        targets,
+        remoteDocuments,
+        syncSummary: {
+          lastRunAt: toIsoDate(lastRun?.createdAt),
+          lastSuccessfulRunAt: toIsoDate(lastSuccessfulRun?.finishedAt),
+          lastErrorAt: toIsoDate(recentErrorEvent?.createdAt),
+          hasRecentFailures: Boolean(recentErrorEvent),
+        },
       };
     },
   );
-
-  const dependencyWarnings = dedupeDependencyWarnings(
-    targets.flatMap((target) => target.warnings),
-  );
-  const setupStatus = buildSetupStatus({
-    record,
-    validated,
-  });
-  const canSync = validated && record.integration.status === "ACTIVE";
-  const readiness: IntegrationReadinessSummary = {
-    setupStatus,
-    readinessStatus: buildReadinessStatus({
-      setupStatus,
-      canSync,
-      dependencyWarnings,
-    }),
-    capabilities: getProviderCapabilities(record.integration.provider),
-    validationRequired: !validated,
-    canSync,
-    lastValidatedAt:
-      record.integration.lastValidatedAt?.toISOString?.() ?? null,
-    lastValidationError: record.integration.lastValidationError,
-    dependencyWarnings,
-  };
-
-  const lastRun = recentRuns[0] ?? null;
-  const lastSuccessfulRun = recentRuns.find(isSuccessfulRun) ?? null;
-
-  return {
-    readiness,
-    targets,
-    remoteDocuments,
-    syncSummary: {
-      lastRunAt: toIsoDate(lastRun?.createdAt),
-      lastSuccessfulRunAt: toIsoDate(lastSuccessfulRun?.finishedAt),
-      lastErrorAt: toIsoDate(recentErrorEvent?.createdAt),
-      hasRecentFailures: Boolean(recentErrorEvent),
-    },
-  };
 }
 
-export async function previewIntegrationSync(params: {
-  record: GenericConnectionRecord;
-  target: IntegrationSyncTarget;
-  limit: number;
-  mappings?: Partial<IntegrationMappingsConfig>;
-}) {
+export async function previewIntegrationSync(
+  params: {
+    record: GenericConnectionRecord;
+    target: IntegrationSyncTarget;
+    limit: number;
+    mappings?: Partial<IntegrationMappingsConfig>;
+  },
+  executor?: OrgDb,
+) {
   const normalizedConfig = normalizeFinancialErpConnectionConfig(
     params.record.integration.provider,
     {
@@ -234,7 +272,7 @@ export async function previewIntegrationSync(params: {
   );
   assertValidMappings(normalizedConfig, params.target);
 
-  const overview = await buildIntegrationOverview(params.record);
+  const overview = await buildIntegrationOverview(params.record, executor);
   const targetSummary = overview.targets.find(
     (target) => target.target === params.target,
   );
@@ -247,6 +285,7 @@ export async function previewIntegrationSync(params: {
     params.record.integration.organizationId,
     params.target,
     Math.min(params.limit, 25),
+    executor,
   );
   // Mirror the run-time behavior: previews for a Conta Azul catalog only
   // include the kinds (services vs products/materials) the connection enabled.

@@ -1,4 +1,5 @@
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
+import { inOrgTransaction } from "../../lib/org-transaction";
 import { integrationObjectLink } from "@calibra-facil/db/schema";
 import {
   type ContaAzulReferenceItem,
@@ -258,12 +259,15 @@ export function buildContaAzulReferenceLinks(params: {
   ];
 }
 
-export async function cacheContaAzulReferenceLinks(params: {
-  integrationId: string;
-  organizationId: string;
-  domain: ContaAzulReferenceDomain;
-  items: ContaAzulReferenceItem[];
-}) {
+export async function cacheContaAzulReferenceLinks(
+  params: {
+    integrationId: string;
+    organizationId: string;
+    domain: ContaAzulReferenceDomain;
+    items: ContaAzulReferenceItem[];
+  },
+  executor?: OrgDb,
+) {
   const fetchedAt = new Date().toISOString();
   const links = params.items.flatMap((item) =>
     buildContaAzulReferenceLinks({
@@ -273,37 +277,46 @@ export async function cacheContaAzulReferenceLinks(params: {
     }),
   );
 
-  await Promise.all(
-    links.map((link) =>
-      upsertLink({
-        integrationId: params.integrationId,
-        organizationId: params.organizationId,
-        target: link.target,
-        localEntityId: link.localEntityId,
-        remoteEntityId: link.remoteEntityId,
-        remoteDisplayId: link.remoteDisplayId,
-        remoteEntityType: link.remoteEntityType,
-        metadata: link.metadata,
-      }),
-    ),
-  );
+  await inOrgTransaction(params.organizationId, executor, async (o) => {
+    await Promise.all(
+      links.map((link) =>
+        upsertLink(
+          {
+            integrationId: params.integrationId,
+            organizationId: params.organizationId,
+            target: link.target,
+            localEntityId: link.localEntityId,
+            remoteEntityId: link.remoteEntityId,
+            remoteDisplayId: link.remoteDisplayId,
+            remoteEntityType: link.remoteEntityType,
+            metadata: link.metadata,
+          },
+          o,
+        ),
+      ),
+    );
+  });
 }
 
 export async function buildRemoteDocumentSummary(
+  organizationId: string,
   integrationId: string,
+  executor?: OrgDb,
 ): Promise<IntegrationRemoteDocumentSummary> {
-  const links = await db
-    .select({
-      metadata: integrationObjectLink.metadata,
-      lastSyncedAt: integrationObjectLink.lastSyncedAt,
-    })
-    .from(integrationObjectLink)
-    .where(
-      and(
-        eq(integrationObjectLink.integrationId, integrationId),
-        eq(integrationObjectLink.target, "remote_document"),
-      ),
-    );
+  return inOrgTransaction(organizationId, executor, async (o) => {
+    const links = await o
+      .select({
+        metadata: integrationObjectLink.metadata,
+        lastSyncedAt: integrationObjectLink.lastSyncedAt,
+      })
+      .from(integrationObjectLink)
+      .where(
+        and(
+          eq(integrationObjectLink.integrationId, integrationId),
+          eq(integrationObjectLink.target, "remote_document"),
+        ),
+      );
 
-  return summarizeRemoteDocumentLinks(links);
+    return summarizeRemoteDocumentLinks(links);
+  });
 }

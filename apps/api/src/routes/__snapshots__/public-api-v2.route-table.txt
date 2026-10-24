@@ -1,71 +1,71 @@
 v2 ALL /* requireApiKeyAuth
 v2 GET /customers requireApiScope(customers:read)
 v2 GET /customers zValidator(query:page|limit|query|unitId)
-v2 GET /customers <anonymous> #97b2103447
+v2 GET /customers <anonymous> #3e0e019613
 v2 GET /customers/:id requireApiScope(customers:read)
-v2 GET /customers/:id <anonymous> #399c47b3a0
+v2 GET /customers/:id <anonymous> #6b5f94b308
 v2 POST /customers requireApiScope(customers:write)
 v2 POST /customers zValidator(json:name|tradeName|taxId|email|phone|address|groupId|externalId)
-v2 POST /customers <anonymous> #b13e81ecd7
+v2 POST /customers <anonymous> #20e4525fa6
 v2 PUT /customers/:id requireApiScope(customers:write)
 v2 PUT /customers/:id zValidator(json:name|tradeName|taxId|email|phone|address|groupId|externalId)
-v2 PUT /customers/:id <anonymous> #8a021dfa63
+v2 PUT /customers/:id <anonymous> #e188a98d5d
 v2 DELETE /customers/:id requireApiScope(customers:write)
-v2 DELETE /customers/:id <anonymous> #9c5d81ffd8
+v2 DELETE /customers/:id <anonymous> #350ed302cb
 v2 GET /assets requireApiScope(assets:read)
 v2 GET /assets zValidator(query:page|limit|query|unitId|customerId|customerExternalId|status)
-v2 GET /assets <anonymous> #a253f7bcd3
+v2 GET /assets <anonymous> #1e8b096ae8
 v2 GET /assets/:id requireApiScope(assets:read)
-v2 GET /assets/:id <anonymous> #778ce023ef
+v2 GET /assets/:id <anonymous> #aa15070453
 v2 POST /assets requireApiScope(assets:write)
 v2 POST /assets zValidator(json:customerId|assetTypeId|name|manufacturer|model|serialNumber|tag|status|baseMeasurementUnit|lastCalibrationDate|installedAt|comments|specifications|metrologyRegime|regulatedInterval|externalId|unitId|customerExternalId)
-v2 POST /assets <anonymous> #b86606ca05
+v2 POST /assets <anonymous> #98abdee814
 v2 PUT /assets/:id requireApiScope(assets:write)
 v2 PUT /assets/:id zValidator(json:name|manufacturer|model|serialNumber|tag|status|lastCalibrationDate|installedAt|comments|specifications|metrologyRegime|regulatedInterval|externalId)
-v2 PUT /assets/:id <anonymous> #f212f6a5af
+v2 PUT /assets/:id <anonymous> #d607336f28
 v2 DELETE /assets/:id requireApiScope(assets:write)
-v2 DELETE /assets/:id <anonymous> #c65c5018f8
+v2 DELETE /assets/:id <anonymous> #6f1ca49ef1
 v2 GET /services requireApiScope(services:read)
 v2 GET /services zValidator(query:page|limit|query|unitId|isActive)
-v2 GET /services <anonymous> #b85179628e
+v2 GET /services <anonymous> #bfa1552646
 v2 GET /services/:id requireApiScope(services:read)
-v2 GET /services/:id <anonymous> #ab26c6ca65
+v2 GET /services/:id <anonymous> #5c6cdb1a58
 v2 GET /units requireApiScope(units:read)
-v2 GET /units <anonymous> #efdff93227
+v2 GET /units <anonymous> #491df22ed0
 v2 GET /units/:id requireApiScope(units:read)
-v2 GET /units/:id <anonymous> #86ebf7b8f7
+v2 GET /units/:id <anonymous> #17bbbfb383
 v2 GET /reports/consolidated/executive-overview requireApiScope(reports:read)
 v2 GET /reports/consolidated/executive-overview zValidator(query:period|unitIds)
-v2 GET /reports/consolidated/executive-overview <anonymous> #9ca72870bd
+v2 GET /reports/consolidated/executive-overview <anonymous> #519144223a
 v2 GET /reports/consolidated/comparison requireApiScope(reports:read)
 v2 GET /reports/consolidated/comparison zValidator(query:period|unitIds)
-v2 GET /reports/consolidated/comparison <anonymous> #0fdf5cae9b
+v2 GET /reports/consolidated/comparison <anonymous> #49d35468b3
 v2 GET /certificates requireApiScope(certificates:read)
 v2 GET /certificates zValidator(query:page|limit|query|unitId)
-v2 GET /certificates <anonymous> #8bc84fd272
+v2 GET /certificates <anonymous> #a674a52dfd
 v2 GET /certificates/:jobId requireApiScope(certificates:read)
-v2 GET /certificates/:jobId <anonymous> #e1cd27ee06
+v2 GET /certificates/:jobId <anonymous> #6b47e7ea1d
 v2 GET /certificates/:jobId/download requireApiScope(certificates:read)
-v2 GET /certificates/:jobId/download <anonymous> #81f834be9e
+v2 GET /certificates/:jobId/download <anonymous> #6a84f7e08e
 v2 GET /requests requireApiScope(requests:read)
 v2 GET /requests zValidator(query:page|limit|query|unitId|status|customerExternalId|customerId)
-v2 GET /requests <anonymous> #acb4c6839e
+v2 GET /requests <anonymous> #0a5497425d
 v2 GET /requests/:id requireApiScope(requests:read)
-v2 GET /requests/:id <anonymous> #fc6985175d
+v2 GET /requests/:id <anonymous> #60e72238ad
 v2 POST /requests requireApiScope(requests:write)
 v2 POST /requests zValidator(json:observations|requestedDueDate|deliveryMethod|invoiceRemittanceNumber|invoiceRemittanceKey|carrierName|invoiceRemittanceIssuedAt|onsiteAddress|preferredVisitDate|externalId|customerId|customerExternalId|unitId|assetExternalIds|assetIds)
-v2 POST /requests <anonymous> #ac551433c1
+v2 POST /requests <anonymous> #81a76d0425
 v2 PATCH /requests/:id requireApiScope(requests:write)
 v2 PATCH /requests/:id zValidator(json:observations|requestedDueDate)
-v2 PATCH /requests/:id <anonymous> #7ec5317a73
+v2 PATCH /requests/:id <anonymous> #2d5eaec63b
 v2 POST /requests/:id/cancel requireApiScope(requests:write)
 v2 POST /requests/:id/cancel zValidator(json:reason)
-v2 POST /requests/:id/cancel <anonymous> #1d1eb8e3a3
+v2 POST /requests/:id/cancel <anonymous> #8fbd8a162a
 v2 GET /jobs requireApiScope(jobs:read)
 v2 GET /jobs zValidator(query:page|limit|query|unitId|status|customerId|customerExternalId|assetExternalId|assetId|serviceId)
-v2 GET /jobs <anonymous> #d2ba580d4a
+v2 GET /jobs <anonymous> #2520653842
 v2 GET /jobs/:id requireApiScope(jobs:read)
-v2 GET /jobs/:id <anonymous> #fc98a307f5
+v2 GET /jobs/:id <anonymous> #f2fc69224f
 v2 POST /jobs requireApiScope(jobs:write)
 v2 POST /jobs zValidator(json:assetId|serviceId|technicianId|dueDate|sourceServiceOrderId|externalId|unitId|assetExternalId)
 v2 POST /jobs <anonymous> #f650537c0c
@@ -80,7 +80,7 @@ v2 POST /jobs/:id/submit zValidator(json:selectedStandardIds|data|results|enviro
 v2 POST /jobs/:id/submit <anonymous> #ac9578474e
 v2 POST /jobs/:id/approve requireApiScope(jobs:write)
 v2 POST /jobs/:id/approve zValidator(json:reason|environmentalJustification|scopeOverrideJustification)
-v2 POST /jobs/:id/approve <anonymous> #b019ed85cf
+v2 POST /jobs/:id/approve <anonymous> #c262775115
 v2 POST /jobs/:id/reject requireApiScope(jobs:write)
 v2 POST /jobs/:id/reject zValidator(json:reason)
 v2 POST /jobs/:id/reject <anonymous> #60b10a9bd3
@@ -88,19 +88,19 @@ v2 DELETE /jobs/:id requireApiScope(jobs:write)
 v2 DELETE /jobs/:id zValidator(json:reason)
 v2 DELETE /jobs/:id <anonymous> #903843cb92
 v2 GET /webhooks requireApiScope(webhooks:manage)
-v2 GET /webhooks <anonymous> #2aeb377de8
+v2 GET /webhooks <anonymous> #c463260938
 v2 POST /webhooks requireApiScope(webhooks:manage)
 v2 POST /webhooks zValidator(json:name|targetUrl|events|status)
-v2 POST /webhooks <anonymous> #01665aa287
+v2 POST /webhooks <anonymous> #2e288b7f78
 v2 PATCH /webhooks/:id requireApiScope(webhooks:manage)
 v2 PATCH /webhooks/:id zValidator(json:name|targetUrl|events|status)
-v2 PATCH /webhooks/:id <anonymous> #cade99a99b
+v2 PATCH /webhooks/:id <anonymous> #3ee6197eee
 v2 DELETE /webhooks/:id requireApiScope(webhooks:manage)
-v2 DELETE /webhooks/:id <anonymous> #80ddcac0f3
+v2 DELETE /webhooks/:id <anonymous> #4ae4117f20
 v2 POST /webhooks/:id/test requireApiScope(webhooks:manage)
-v2 POST /webhooks/:id/test <anonymous> #767c3a608a
+v2 POST /webhooks/:id/test <anonymous> #4665cf9e62
 v2 GET /webhooks/:id/deliveries requireApiScope(webhooks:manage)
-v2 GET /webhooks/:id/deliveries <anonymous> #7385077f96
+v2 GET /webhooks/:id/deliveries <anonymous> #502580ba1a
 v2 POST /webhooks/:id/deliveries/:deliveryId/replay requireApiScope(webhooks:manage)
 v2 POST /webhooks/:id/deliveries/:deliveryId/replay <anonymous> #ac94292225
 docs GET /openapi <anonymous> #7d65de59ff

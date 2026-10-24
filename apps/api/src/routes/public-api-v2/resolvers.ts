@@ -1,7 +1,7 @@
-import { db } from "@calibra-facil/db";
 import { publicApiResourceRef } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 import { resolvePublicApiUnitScope } from "../../lib/public-api";
+import { orgDb } from "../../lib/org-db";
 
 export async function resolveUnitIdForWrite(params: {
   organizationId: string;
@@ -33,13 +33,19 @@ export async function resolveExternalResourceId(params: {
     return numericId;
   }
 
-  const ref = await db.query.publicApiResourceRef.findFirst({
-    where: and(
-      eq(publicApiResourceRef.organizationId, params.organizationId),
-      eq(publicApiResourceRef.resourceType, params.resourceType),
-      eq(publicApiResourceRef.externalId, params.value),
-    ),
-  });
+  const [ref] = await orgDb(params.organizationId).transaction((o) =>
+    o
+      .select()
+      .from(publicApiResourceRef)
+      .where(
+        and(
+          eq(publicApiResourceRef.organizationId, params.organizationId),
+          eq(publicApiResourceRef.resourceType, params.resourceType),
+          eq(publicApiResourceRef.externalId, params.value),
+        ),
+      )
+      .limit(1),
+  );
 
   if (!ref?.resourceId) {
     return null;

@@ -1,4 +1,4 @@
-import { db } from "@calibra-facil/db";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   integrationObjectLink,
   organizationIntegration,
@@ -8,6 +8,7 @@ import type {
   IntegrationProvider,
 } from "@calibra-facil/shared";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { inOrgTransaction } from "./org-transaction";
 
 export type IntegrationDriftStatus = "REMOTE_MISSING";
 
@@ -93,72 +94,82 @@ function mapRow(row: QueueRow): IntegrationDriftRow | null {
   };
 }
 
-export async function buildIntegrationDriftQueue(params: {
-  organizationId: string;
-  target?: IntegrationObjectLinkTarget;
-  limit?: number;
-}): Promise<IntegrationDriftRow[]> {
+export async function buildIntegrationDriftQueue(
+  params: {
+    organizationId: string;
+    target?: IntegrationObjectLinkTarget;
+    limit?: number;
+  },
+  executor?: OrgDb,
+): Promise<IntegrationDriftRow[]> {
   const limit = Math.max(1, Math.min(params.limit ?? 100, 500));
 
-  const rows = await db
-    .select({
-      linkId: integrationObjectLink.id,
-      integrationId: integrationObjectLink.integrationId,
-      provider: organizationIntegration.provider,
-      target: integrationObjectLink.target,
-      localEntityId: integrationObjectLink.localEntityId,
-      remoteEntityId: integrationObjectLink.remoteEntityId,
-      remoteDisplayId: integrationObjectLink.remoteDisplayId,
-      metadata: integrationObjectLink.metadata,
-      lastSyncedAt: integrationObjectLink.lastSyncedAt,
-    })
-    .from(integrationObjectLink)
-    .innerJoin(
-      organizationIntegration,
-      eq(organizationIntegration.id, integrationObjectLink.integrationId),
-    )
-    .where(
-      and(
-        eq(integrationObjectLink.organizationId, params.organizationId),
-        isNull(integrationObjectLink.driftAcknowledgedAt),
-        params.target
-          ? eq(integrationObjectLink.target, params.target)
-          : undefined,
-        // Push the drift-status predicate to SQL so we don't ship every
-        // non-drift link back to the application layer.
-        sql`(${integrationObjectLink.metadata}->'drift'->>'status') = 'remote_missing'`,
-      ),
-    )
-    .orderBy(desc(integrationObjectLink.lastSyncedAt))
-    .limit(limit);
+  const rows = await inOrgTransaction(params.organizationId, executor, (o) =>
+    o
+      .select({
+        linkId: integrationObjectLink.id,
+        integrationId: integrationObjectLink.integrationId,
+        provider: organizationIntegration.provider,
+        target: integrationObjectLink.target,
+        localEntityId: integrationObjectLink.localEntityId,
+        remoteEntityId: integrationObjectLink.remoteEntityId,
+        remoteDisplayId: integrationObjectLink.remoteDisplayId,
+        metadata: integrationObjectLink.metadata,
+        lastSyncedAt: integrationObjectLink.lastSyncedAt,
+      })
+      .from(integrationObjectLink)
+      .innerJoin(
+        organizationIntegration,
+        eq(organizationIntegration.id, integrationObjectLink.integrationId),
+      )
+      .where(
+        and(
+          eq(integrationObjectLink.organizationId, params.organizationId),
+          isNull(integrationObjectLink.driftAcknowledgedAt),
+          params.target
+            ? eq(integrationObjectLink.target, params.target)
+            : undefined,
+          // Push the drift-status predicate to SQL so we don't ship every
+          // non-drift link back to the application layer.
+          sql`(${integrationObjectLink.metadata}->'drift'->>'status') = 'remote_missing'`,
+        ),
+      )
+      .orderBy(desc(integrationObjectLink.lastSyncedAt))
+      .limit(limit),
+  );
 
   return rows
     .map((row) => mapRow(row))
     .filter((row): row is IntegrationDriftRow => row !== null);
 }
 
-export async function acknowledgeIntegrationDrift(params: {
-  organizationId: string;
-  linkId: string;
-  actorUserId: string;
-  reason: string;
-}): Promise<{ ok: boolean }> {
+export async function acknowledgeIntegrationDrift(
+  params: {
+    organizationId: string;
+    linkId: string;
+    actorUserId: string;
+    reason: string;
+  },
+  executor?: OrgDb,
+): Promise<{ ok: boolean }> {
   const reason = params.reason?.trim?.() ?? "";
   if (!reason) return { ok: false };
 
-  await db
-    .update(integrationObjectLink)
-    .set({
-      driftAcknowledgedAt: new Date(),
-      driftAcknowledgedByUserId: params.actorUserId,
-      driftAcknowledgedReason: reason,
-    })
-    .where(
-      and(
-        eq(integrationObjectLink.id, params.linkId),
-        eq(integrationObjectLink.organizationId, params.organizationId),
-      ),
-    );
+  await inOrgTransaction(params.organizationId, executor, async (o) => {
+    await o
+      .update(integrationObjectLink)
+      .set({
+        driftAcknowledgedAt: new Date(),
+        driftAcknowledgedByUserId: params.actorUserId,
+        driftAcknowledgedReason: reason,
+      })
+      .where(
+        and(
+          eq(integrationObjectLink.id, params.linkId),
+          eq(integrationObjectLink.organizationId, params.organizationId),
+        ),
+      );
+  });
 
   return { ok: true };
 }
@@ -168,21 +179,26 @@ export async function acknowledgeIntegrationDrift(params: {
  * into the drift queue). Not exposed as a route in slice 3; reserved for
  * future bulk-repair tooling.
  */
-export async function resetIntegrationDriftAcknowledgement(params: {
-  organizationId: string;
-  linkId: string;
-}): Promise<void> {
-  await db
-    .update(integrationObjectLink)
-    .set({
-      driftAcknowledgedAt: null,
-      driftAcknowledgedByUserId: null,
-      driftAcknowledgedReason: null,
-    })
-    .where(
-      and(
-        eq(integrationObjectLink.id, params.linkId),
-        eq(integrationObjectLink.organizationId, params.organizationId),
-      ),
-    );
+export async function resetIntegrationDriftAcknowledgement(
+  params: {
+    organizationId: string;
+    linkId: string;
+  },
+  executor?: OrgDb,
+): Promise<void> {
+  await inOrgTransaction(params.organizationId, executor, async (o) => {
+    await o
+      .update(integrationObjectLink)
+      .set({
+        driftAcknowledgedAt: null,
+        driftAcknowledgedByUserId: null,
+        driftAcknowledgedReason: null,
+      })
+      .where(
+        and(
+          eq(integrationObjectLink.id, params.linkId),
+          eq(integrationObjectLink.organizationId, params.organizationId),
+        ),
+      );
+  });
 }

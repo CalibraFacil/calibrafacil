@@ -14,22 +14,17 @@ import {
   ContaAzulAppMissingError,
 } from "../../lib/conta-azul-oauth";
 import { requireContaAzulOAuthConfig } from "../../lib/conta-azul-app";
+import {
+  integrationEventLog,
+  integrationSyncItem,
+  integrationSyncRun,
+} from "@calibra-facil/db/schema";
 
 const mocks = vi.hoisted(() => ({
-  db: {
-    query: {
-      integrationSyncItem: {
-        findMany: vi.fn(),
-      },
-      integrationSyncRun: {
-        findFirst: vi.fn(),
-        findMany: vi.fn(),
-      },
-      integrationEventLog: {
-        findMany: vi.fn(),
-      },
-    },
-  },
+  // Rows the org-bound handle's select() resolves to, by table object.
+  tableRows: new Map<unknown, unknown[]>(),
+  // The limit() each select was given.
+  limits: [] as number[],
   buildIntegrationOverview: vi.fn(),
   enqueueBackgroundJob: vi.fn(),
   failIntegrationSyncRun: vi.fn(),
@@ -104,8 +99,40 @@ vi.mock("../../middleware/permission", () => ({
 }));
 
 vi.mock("@calibra-facil/db", () => ({
-  db: mocks.db,
+  db: {},
 }));
+
+// The handlers read through `orgDb(lab).transaction(...)`: a double whose
+// select() chain resolves to the rows registered for the queried table.
+vi.mock("../../lib/org-db", () => {
+  function selectChain() {
+    let table: unknown;
+    const chain: Record<string, unknown> = {};
+    chain.from = (queried: unknown) => {
+      table = queried;
+      return chain;
+    };
+    for (const method of ["where", "orderBy", "offset", "innerJoin"]) {
+      chain[method] = () => chain;
+    }
+    chain.limit = (count: number) => {
+      mocks.limits.push(count);
+      return chain;
+    };
+    // oxlint-disable-next-line unicorn/no-thenable -- mocks drizzle's awaitable query builder
+    chain.then = (
+      resolve: (rows: unknown[]) => unknown,
+      reject: (error: unknown) => unknown,
+    ) =>
+      Promise.resolve(mocks.tableRows.get(table) ?? []).then(resolve, reject);
+    return chain;
+  }
+  const handle = {
+    select: () => selectChain(),
+    transaction: async (run: (tx: unknown) => unknown) => run(handle),
+  };
+  return { orgDb: () => handle };
+});
 
 vi.mock("@calibra-facil/db/schema", () => ({
   integrationConnection: {},
@@ -201,8 +228,8 @@ function emptyOverview(
 describe("integrations list route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.db.query.integrationSyncRun.findMany.mockResolvedValue([]);
-    mocks.db.query.integrationEventLog.findMany.mockResolvedValue([]);
+    mocks.tableRows.clear();
+    mocks.limits.length = 0;
   });
 
   it("includes provider capabilities in the readiness payload", async () => {
@@ -449,11 +476,15 @@ describe("dispatchSyncRun", () => {
 describe("integrations run items route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.db.query.integrationSyncRun.findFirst.mockResolvedValue({
-      id: "run-1",
-      target: "billing_document",
-    });
-    mocks.db.query.integrationSyncItem.findMany.mockResolvedValue([
+    mocks.tableRows.clear();
+    mocks.limits.length = 0;
+    mocks.tableRows.set(integrationSyncRun, [
+      {
+        id: "run-1",
+        target: "billing_document",
+      },
+    ]);
+    mocks.tableRows.set(integrationSyncItem, [
       {
         id: "item-1",
         runId: "run-1",
@@ -525,11 +556,8 @@ describe("integrations run items route", () => {
         },
       },
     });
-    expect(mocks.db.query.integrationSyncItem.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        limit: 2,
-      }),
-    );
+    // The run lookup is limit(1); the items query takes the requested limit.
+    expect(mocks.limits).toContain(2);
   });
 
   it("does not expose run items when the integration is missing", async () => {
@@ -545,7 +573,7 @@ describe("integrations run items route", () => {
     await expect(response.json()).resolves.toEqual({
       error: "Integração não encontrada",
     });
-    expect(mocks.db.query.integrationSyncItem.findMany).not.toHaveBeenCalled();
+    expect(mocks.limits).toEqual([]);
   });
 });
 
@@ -612,14 +640,16 @@ describe("integration sync target validation", () => {
   });
 
   it("rejects retrying legacy Conta Azul-only targets on generic HTTP integrations", async () => {
-    mocks.db.query.integrationSyncRun.findFirst.mockResolvedValue({
-      id: "run-legacy",
-      integrationId: "int-1",
-      organizationId: "org-1",
-      status: "FAILED",
-      target: "supplier",
-      requestedLimit: 10,
-    });
+    mocks.tableRows.set(integrationSyncRun, [
+      {
+        id: "run-legacy",
+        integrationId: "int-1",
+        organizationId: "org-1",
+        status: "FAILED",
+        target: "supplier",
+        requestedLimit: 10,
+      },
+    ]);
 
     const response = await createTestApp().request(
       "/api/integrations/int-1/runs/run-legacy/retry",

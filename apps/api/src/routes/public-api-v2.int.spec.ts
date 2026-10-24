@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { changeJobBeforeNextTransaction } from "../../test/integration/job-cas";
 import { setJobStatus } from "../../test/integration/job-fixtures";
 import { organizationOf } from "../../test/integration/organization-of";
 import { publicApiV2Router } from "./public-api-v2";
-import { db, getDb } from "@calibra-facil/db";
+import { db } from "@calibra-facil/db";
 import {
   asset,
   assetAuditLog,
@@ -176,6 +177,10 @@ async function seedAsset(params: {
 describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () => {
   beforeEach(async () => {
     await truncateAll();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   // =========================================================================
@@ -951,15 +956,10 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
 
     // Forces the lost compare-and-set deterministically: the handler has read
     // the job as REVIEW; right before it opens the transaction carrying its
-    // write, another actor moves it to GENERATING_PDF.
-    const instance = getDb();
-    const originalTransaction = instance.transaction.bind(instance);
-    vi.spyOn(instance, "transaction").mockImplementationOnce(
-      async (callback, config) => {
-        await setJobStatus(jobId, "GENERATING_PDF");
-        return originalTransaction(callback, config);
-      },
-    );
+    // write, another actor moves it to GENERATING_PDF. The transactions that
+    // only name the organization (the key's last-use touch, the id lookups) are
+    // let by.
+    changeJobBeforeNextTransaction(jobId, { status: "GENERATING_PDF" });
 
     const res = await cancelJob(rawKey, jobId, "cancel-race");
 

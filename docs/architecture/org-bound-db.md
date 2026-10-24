@@ -193,6 +193,43 @@ added or removed without a migration.
   - Specs: `nc-capa-lab-scope.int.spec.ts` and `signatures-signing-lab-scope.int.spec.ts` cover the success
     paths the per-router specs do not reach, each with a cross-laboratory negative, plus an escalation that
     rolls back as a whole.
+- **Integrations, public API, webhooks, API keys, notifications (P2-18h).** The ERP integration routes and
+  modules (`modules/integrations/*`, `lib/conta-azul-app.ts`, `lib/integration-drift.ts`, material stock adjustment),
+  the API-key routes, the public API v1 and v2 (including webhook delivery and replay), the notification routes and
+  `packages/notifications`, the e-mail sender resolution (`packages/email-sender/src/sender.ts`) and the e-mail drains
+  run every statement in a transaction that names an organization; the `routes/**` raw-`db` entries for these files
+  are gone (`api-keys`, `integrations`, `notifications`, `public-api`, `webhooks` and every `public-api-v2/*`).
+  Details worth knowing:
+  - The integration libs take an optional org-bound handle (`executor`) and otherwise open a short transaction of
+    their own (`inOrgTransaction`), so a handler can put a change and its events in one transaction
+    (`writeIntegrationEvent(params, o)`) while the cron sweeps need no change. A remote call (Conta Azul, ERP HTTP,
+    a webhook target, the e-mail transport) never runs inside a transaction: the poll reads, calls, then writes its
+    bookkeeping (config watermark, cursor, event) in one transaction; a webhook delivery inserts its row, posts, then
+    records the outcome. Relational `db.query...` reads became `select` builders (the handle has no `query`).
+  - `requireContaAzulOAuthConfig` (deferred by #112) takes the same optional executor. The OAuth callback's session
+    lookup runs in the laboratory named by the signed state.
+  - API keys: `requireApiKeyAuth` looks the key up by its hash on the system path (the hash IS the credential and
+    names the laboratory); the last-used touch and every handler statement run in `orgDb(key.organizationId)`.
+  - Notifications: a sender is called with the id of an entity its caller just operated on, or with the laboratory.
+    `packages/notifications/src/lab-scope.ts` learns the laboratory of a job / calibration request / visit / audit
+    pack id with a one-column system-path lookup, and everything after runs in `inOrg(organization)`: the entity reads in
+    the laboratory, the notification rows in the RECIPIENT's organization (a portal user's belong to the CLIENT
+    organization), and no transaction is held across the e-mail. Global tables (`user`, `organization`,
+    `notification_preference`) are read on the plain handle. The portal due-digest enumerates the opted-in users of every
+    laboratory on the system path (`listPortalDigestRecipients`) and reads each customer's instruments in its own
+    laboratory. A reminder asked with a laboratory that does not own the entity finds nothing.
+  - Cron sweeps (Conta Azul scheduled sync and polls, the service-order and out-of-tolerance e-mail drains) list the
+    laboratories / owed rows on the system path (one statement each) and then claim, load and finish each row in a
+    transaction naming `row.organizationId`. The drains keep their raw SQL (claim / release / redact) with an explicit
+    `organization_id` predicate, run through `orgTransactionWithExecutor`.
+  - `flagJobOutOfTolerance` / `ensureOotNotificationForNc` without a caller's scope now run the whole workflow in one
+    organization-bound transaction (PDF job after the commit) instead of the plain `db`.
+  - Not in this slice: the raw-`pg` compliance sweep of `packages/jobs-core/src/scheduled/*` (it builds its own
+    `Client` from `DATABASE_URL`, not the application handle: worker cutover), the e-mail-domain settings routes
+    (`routes/email-domains.ts`, `lib/email-domain*.ts`) and the job modules the v2 job endpoints call (P2-18f).
+  - Specs: `public-api-lab-scope`, `integrations-lab-scope` and `notifications-sweeps-lab-scope` (the sweeps and
+    senders run as `calibra_app`) cover the success paths the per-router specs do not reach, each with a
+    cross-laboratory negative.
 - **Tests.** `apps/api/src/lib/rls-shadow.int.spec.ts` runs against a pool whose sessions are `calibra_app`
   (`test/integration/rls.ts`). `pnpm --filter @calibra-facil/api rls:shadow-report` replays every API
   integration spec (`--group routes/jobs` or `--files` narrow it) with each request's database access as

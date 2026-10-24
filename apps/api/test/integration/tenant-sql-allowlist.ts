@@ -42,8 +42,9 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     category: "auth-session",
     file: "apps/api/src/middleware/api-key-auth.ts",
     tables: ["organization_api_key"],
+    kinds: ["select"],
     reason:
-      "API-key authentication: the key hash IS the lookup and yields the organization (and then a last-used touch by the row's own id).",
+      "System path (P2-18h): API-key authentication looks the key up by its hash (systemDb), because the hash IS the credential and the row yields the laboratory. Everything after it, the last-used touch included, runs in orgDb(key.organizationId).transaction.",
   },
   {
     category: "auth-session",
@@ -188,6 +189,54 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     reason:
       "queue-backstop dead-letter handling: the app_queue_job payload carries only the job id, so the owning organization is read from the job itself and every following write is scoped by it.",
   },
+  {
+    category: "cron-queue",
+    file: "apps/api/src/modules/integrations/active-connections.ts",
+    tables: ["organization_integration", "integration_connection"],
+    kinds: ["select"],
+    reason:
+      "System path (P2-18h): the Conta Azul cron sweeps (scheduled sync, payment / payable / fiscal / protocol / drift / stock polling) have no request, so one statement lists which laboratories hold an active Conta Azul connection (ids and the non-secret config). Every run, event, link and cursor after it is written in orgDb(row.organizationId).transaction.",
+  },
+  {
+    category: "cron-queue",
+    file: "apps/api/src/lib/oot-email-drain.ts",
+    tables: ["oot_email_outbox"],
+    kinds: ["select"],
+    sql: /from "oot_email_outbox" where/,
+    reason:
+      "System path (P2-18h): the section 7.10 e-mail drain lists the owed outbox rows of EVERY laboratory in one statement (cron, no request); each row is then claimed, read and finished in a transaction that names row.organizationId.",
+  },
+  {
+    category: "cron-queue",
+    file: "apps/api/src/lib/service-order-email-drain.ts",
+    tables: ["service_order_email_outbox"],
+    kinds: ["select"],
+    sql: /from "service_order_email_outbox" where/,
+    reason:
+      "System path (P2-18h): the service-order e-mail drain lists the owed outbox rows of EVERY laboratory in one statement (cron, no request); each row is then claimed, read and finished in a transaction that names row.organizationId.",
+  },
+  {
+    category: "cron-queue",
+    file: "packages/notifications/src/lab-scope.ts",
+    tables: ["member", "customer", "customer_group"],
+    kinds: ["select"],
+    reason:
+      "System path (P2-18h): the portal due-digest cron has no laboratory; it enumerates, across every laboratory, the members of the CLIENT organizations that opted in (notification_preference is a per-user global row) and each scope's branch customers. The asset reads, the brand and the portal host that follow run in inOrg(labOrganizationId).",
+  },
+  {
+    category: "pk-after-scoped-read",
+    file: "packages/notifications/src/lab-scope.ts",
+    tables: [
+      "calibration_job",
+      "calibration_request",
+      "calibration_visit",
+      "portal_export_job",
+    ],
+    kinds: ["select"],
+    sql: /^select "(?:lab_)?organization_id" from "[a-z_]+" where "[a-z_]+"\."id" = \$1 limit \$2$/,
+    reason:
+      "System path (P2-18h): a notification sender is called with the id of the entity the caller just operated on (already authorised and scoped there); this one-column lookup learns the laboratory of that id. The entity itself, the recipients and the notification rows are then read and written in inOrg(laboratory / recipient organization).",
+  },
   // -------------------------------------------------------------------------
   // portal-cross-org: the portal's data statements all run through the
   // org-bound handle (forOrg / forOrgs, packages/db/src/for-org.ts), so they
@@ -324,30 +373,6 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "pk-after-scoped-read",
-    file: "apps/api/src/modules/integrations/overview.ts",
-    tables: ["integration_event_log", "integration_sync_run"],
-    kinds: ["select"],
-    reason:
-      "Overview/coverage reads keyed by integration_id of the organization-scoped connection record passed in.",
-  },
-  {
-    category: "pk-after-scoped-read",
-    file: "apps/api/src/modules/integrations/payload-targets.ts",
-    tables: ["integration_object_link"],
-    kinds: ["select"],
-    reason:
-      "Overview/coverage reads keyed by integration_id of the organization-scoped connection record passed in.",
-  },
-  {
-    category: "pk-after-scoped-read",
-    file: "apps/api/src/modules/integrations/reference-links.ts",
-    tables: ["integration_object_link"],
-    kinds: ["select"],
-    reason:
-      "Overview/coverage reads keyed by integration_id of the organization-scoped connection record passed in.",
-  },
-  {
-    category: "pk-after-scoped-read",
     file: "apps/api/src/routes/visits.ts",
     tables: ["calibration_job", "visit_reschedule_request"],
     kinds: ["select"],
@@ -376,20 +401,6 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
     tables: ["reference_standard_certificate_document"],
     kinds: ["select"],
     reason: "Current certificates of the standard ids of the scoped list.",
-  },
-  {
-    category: "pk-after-scoped-read",
-    file: "packages/notifications/src/service.ts",
-    tables: [
-      "asset",
-      "calibration_job",
-      "calibration_request",
-      "calibration_visit",
-      "customer",
-    ],
-    kinds: ["select"],
-    reason:
-      "Notification context loaders: callers pass the id of the entity they just operated on after their own scoped lookup; the recipients' organization is derived from the loaded row itself.",
   },
   {
     category: "provisioning",

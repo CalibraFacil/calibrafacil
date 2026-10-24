@@ -11,7 +11,8 @@ import {
   type NonConformanceTriggerSource,
 } from "@calibra-facil/db/schema";
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
-import type { OrgScope } from "./after-commit";
+import { orgDb } from "./org-db";
+import { afterCommitQueue, type OrgScope } from "./after-commit";
 import { enqueueBackgroundJob } from "./background-jobs";
 import { createNonConformanceRecord } from "./non-conformances";
 
@@ -166,10 +167,34 @@ async function createNotificationForNc(
   return notification;
 }
 
+/**
+ * Flags an approved job as out-of-tolerance. `scope` joins the caller's
+ * org-bound transaction; without it the whole workflow (job read, NC, audit
+ * entry, notification, outbox row) runs in ONE transaction that names the
+ * laboratory, and the PDF job is enqueued once it has committed.
+ */
 export async function flagJobOutOfTolerance(
   params: FlagJobOutOfToleranceParams,
+  scope?: OrgScope,
 ): Promise<FlagJobOutOfToleranceResult> {
-  const [job] = await db
+  if (scope) return flagJobOutOfToleranceIn(params, scope);
+
+  const queue = afterCommitQueue();
+  const result = await orgDb(params.organizationId).transaction((o) =>
+    flagJobOutOfToleranceIn(params, {
+      executor: o,
+      afterCommit: queue.add,
+    }),
+  );
+  await queue.run();
+  return result;
+}
+
+async function flagJobOutOfToleranceIn(
+  params: FlagJobOutOfToleranceParams,
+  scope: OrgScope,
+): Promise<FlagJobOutOfToleranceResult> {
+  const [job] = await scope.executor
     .select({
       id: calibrationJob.id,
       jobId: calibrationJob.jobId,
@@ -214,7 +239,7 @@ export async function flagJobOutOfTolerance(
   // One open OOT NC per job. If a previous flag created the NC but died before
   // the notification record, self-heal by attaching the notification now
   // instead of stranding the workflow.
-  const [existing] = await db
+  const [existing] = await scope.executor
     .select()
     .from(nonConformance)
     .where(
@@ -237,7 +262,7 @@ export async function flagJobOutOfTolerance(
       };
     }
 
-    const [existingNotification] = await db
+    const [existingNotification] = await scope.executor
       .select()
       .from(ootNotification)
       .where(eq(ootNotification.ncId, existing.id))
@@ -252,13 +277,16 @@ export async function flagJobOutOfTolerance(
       };
     }
 
-    const notification = await createNotificationForNc({
-      nc: existing,
-      job,
-      organizationId: params.organizationId,
-      actorUserId: params.actorUserId,
-      affectedScope: params.affectedScope,
-    });
+    const notification = await createNotificationForNc(
+      {
+        nc: existing,
+        job,
+        organizationId: params.organizationId,
+        actorUserId: params.actorUserId,
+        affectedScope: params.affectedScope,
+      },
+      scope,
+    );
     return { ok: true, nc: existing, notification };
   }
 
@@ -269,33 +297,39 @@ export async function flagJobOutOfTolerance(
     ? `${description}\n\nEscopo potencialmente afetado: ${params.affectedScope.trim()}`
     : description;
 
-  const newNc = await createNonConformanceRecord({
-    organizationId: params.organizationId,
-    actorUserId: params.actorUserId,
-    type: "out_of_tolerance",
-    description: fullDescription,
-    detectedAt: new Date(),
-    jobId: job.id,
-    triggerSource: params.triggerSource,
-    ipAddress: params.ipAddress,
-    auditChanges: {
-      initial: {
-        type: "out_of_tolerance",
-        triggerSource: params.triggerSource,
-        jobId: job.id,
-        notifyCustomer: params.notifyCustomer,
+  const newNc = await createNonConformanceRecord(
+    {
+      organizationId: params.organizationId,
+      actorUserId: params.actorUserId,
+      type: "out_of_tolerance",
+      description: fullDescription,
+      detectedAt: new Date(),
+      jobId: job.id,
+      triggerSource: params.triggerSource,
+      ipAddress: params.ipAddress,
+      auditChanges: {
+        initial: {
+          type: "out_of_tolerance",
+          triggerSource: params.triggerSource,
+          jobId: job.id,
+          notifyCustomer: params.notifyCustomer,
+        },
       },
     },
-  });
+    scope,
+  );
 
   const notification = params.notifyCustomer
-    ? await createNotificationForNc({
-        nc: newNc,
-        job,
-        organizationId: params.organizationId,
-        actorUserId: params.actorUserId,
-        affectedScope: params.affectedScope,
-      })
+    ? await createNotificationForNc(
+        {
+          nc: newNc,
+          job,
+          organizationId: params.organizationId,
+          actorUserId: params.actorUserId,
+          affectedScope: params.affectedScope,
+        },
+        scope,
+      )
     : null;
 
   return { ok: true, nc: newNc, notification };
@@ -308,22 +342,50 @@ export async function flagJobOutOfTolerance(
  * dispatches on reconnect without any desktop email path. No-op (returns
  * null) when the NC is not OOT-typed, has no job, or already has one.
  */
-export async function ensureOotNotificationForNc(input: {
-  nc: typeof nonConformance.$inferSelect;
-  organizationId: string;
-  actorUserId: string;
-  affectedScope?: string;
-}): Promise<typeof ootNotification.$inferSelect | null> {
+export async function ensureOotNotificationForNc(
+  input: {
+    nc: typeof nonConformance.$inferSelect;
+    organizationId: string;
+    actorUserId: string;
+    affectedScope?: string;
+  },
+  scope?: OrgScope,
+): Promise<typeof ootNotification.$inferSelect | null> {
   if (input.nc.type !== "out_of_tolerance" || !input.nc.jobId) return null;
+  if (scope) return ensureOotNotificationForNcIn(input, scope);
 
-  const [existing] = await db
+  // Without the caller's transaction: one that names the laboratory, with the
+  // PDF job enqueued after it commits.
+  const queue = afterCommitQueue();
+  const notification = await orgDb(input.organizationId).transaction((o) =>
+    ensureOotNotificationForNcIn(input, {
+      executor: o,
+      afterCommit: queue.add,
+    }),
+  );
+  await queue.run();
+  return notification;
+}
+
+async function ensureOotNotificationForNcIn(
+  input: {
+    nc: typeof nonConformance.$inferSelect;
+    organizationId: string;
+    actorUserId: string;
+    affectedScope?: string;
+  },
+  scope: OrgScope,
+): Promise<typeof ootNotification.$inferSelect | null> {
+  if (!input.nc.jobId) return null;
+
+  const [existing] = await scope.executor
     .select({ id: ootNotification.id })
     .from(ootNotification)
     .where(eq(ootNotification.ncId, input.nc.id))
     .limit(1);
   if (existing) return null;
 
-  const [job] = await db
+  const [job] = await scope.executor
     .select({
       id: calibrationJob.id,
       jobId: calibrationJob.jobId,
@@ -341,13 +403,16 @@ export async function ensureOotNotificationForNc(input: {
     .limit(1);
   if (!job) return null;
 
-  return createNotificationForNc({
-    nc: input.nc,
-    job,
-    organizationId: input.organizationId,
-    actorUserId: input.actorUserId,
-    affectedScope: input.affectedScope,
-  });
+  return createNotificationForNc(
+    {
+      nc: input.nc,
+      job,
+      organizationId: input.organizationId,
+      actorUserId: input.actorUserId,
+      affectedScope: input.affectedScope,
+    },
+    scope,
+  );
 }
 
 // =============================================================================

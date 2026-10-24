@@ -1,4 +1,3 @@
-import { db } from "@calibra-facil/db";
 import { integrationConnection } from "@calibra-facil/db/schema";
 import {
   normalizeContaAzulConnectionConfig,
@@ -8,6 +7,7 @@ import {
 } from "@calibra-facil/shared";
 import { eq } from "drizzle-orm";
 import type { IntegrationsEnv } from "../../lib/integrations-env";
+import { inOrgTransaction } from "../../lib/org-transaction";
 import { getIntegrationRecord, writeIntegrationEvent } from "./records";
 import {
   getIntegrationCursor,
@@ -42,6 +42,7 @@ export async function pollContaAzulFiscalDocuments(params: {
 
   const storedCursor = await getIntegrationCursor({
     integrationId: params.integrationId,
+    organizationId: params.organizationId,
     cursorType: CONTA_AZUL_FISCAL_DOCUMENTS_CURSOR_TYPE,
   });
   const adapter = await createContaAzulAdapterForRecord({
@@ -80,31 +81,40 @@ export async function pollContaAzulFiscalDocuments(params: {
     },
   });
 
-  await db
-    .update(integrationConnection)
-    .set({
-      config: nextConfig,
-      updatedAt: new Date(),
-    })
-    .where(eq(integrationConnection.id, record.connection.id));
+  // The poll's bookkeeping (config watermark, cursor, event) commits together.
+  await inOrgTransaction(params.organizationId, undefined, async (o) => {
+    await o
+      .update(integrationConnection)
+      .set({
+        config: nextConfig,
+        updatedAt: new Date(),
+      })
+      .where(eq(integrationConnection.id, record.connection.id));
 
-  await upsertIntegrationCursor({
-    integrationId: params.integrationId,
-    organizationId: params.organizationId,
-    cursor: result.cursor,
-  });
+    await upsertIntegrationCursor(
+      {
+        integrationId: params.integrationId,
+        organizationId: params.organizationId,
+        cursor: result.cursor,
+      },
+      o,
+    );
 
-  await writeIntegrationEvent({
-    integrationId: params.integrationId,
-    organizationId: params.organizationId,
-    level: result.warnings.length > 0 ? "warning" : "info",
-    event: "integration.conta_azul.fiscal_poll.completed",
-    message: "Polling fiscal da Conta Azul concluído",
-    details: {
-      processedCount: result.processedCount,
-      updatedCount: result.updatedCount,
-      warnings: result.warnings,
-    },
+    await writeIntegrationEvent(
+      {
+        integrationId: params.integrationId,
+        organizationId: params.organizationId,
+        level: result.warnings.length > 0 ? "warning" : "info",
+        event: "integration.conta_azul.fiscal_poll.completed",
+        message: "Polling fiscal da Conta Azul concluído",
+        details: {
+          processedCount: result.processedCount,
+          updatedCount: result.updatedCount,
+          warnings: result.warnings,
+        },
+      },
+      o,
+    );
   });
 
   return result;
@@ -182,6 +192,7 @@ export async function pollContaAzulProtocols(params: {
 
   const storedCursor = await getIntegrationCursor({
     integrationId: params.integrationId,
+    organizationId: params.organizationId,
     cursorType: CONTA_AZUL_PROTOCOLS_CURSOR_TYPE,
   });
   const adapter = await createContaAzulAdapterForRecord({
@@ -220,31 +231,40 @@ export async function pollContaAzulProtocols(params: {
     },
   });
 
-  await db
-    .update(integrationConnection)
-    .set({
-      config: nextConfig,
-      updatedAt: new Date(),
-    })
-    .where(eq(integrationConnection.id, record.connection.id));
+  // The poll's bookkeeping (config watermark, cursor, event) commits together.
+  await inOrgTransaction(params.organizationId, undefined, async (o) => {
+    await o
+      .update(integrationConnection)
+      .set({
+        config: nextConfig,
+        updatedAt: new Date(),
+      })
+      .where(eq(integrationConnection.id, record.connection.id));
 
-  await upsertIntegrationCursor({
-    integrationId: params.integrationId,
-    organizationId: params.organizationId,
-    cursor: result.cursor,
-  });
+    await upsertIntegrationCursor(
+      {
+        integrationId: params.integrationId,
+        organizationId: params.organizationId,
+        cursor: result.cursor,
+      },
+      o,
+    );
 
-  await writeIntegrationEvent({
-    integrationId: params.integrationId,
-    organizationId: params.organizationId,
-    level: result.warnings.length > 0 ? "warning" : "info",
-    event: "integration.conta_azul.protocol_poll.completed",
-    message: "Polling de protocolos da Conta Azul concluído",
-    details: {
-      processedCount: result.processedCount,
-      updatedCount: result.updatedCount,
-      warnings: result.warnings,
-    },
+    await writeIntegrationEvent(
+      {
+        integrationId: params.integrationId,
+        organizationId: params.organizationId,
+        level: result.warnings.length > 0 ? "warning" : "info",
+        event: "integration.conta_azul.protocol_poll.completed",
+        message: "Polling de protocolos da Conta Azul concluído",
+        details: {
+          processedCount: result.processedCount,
+          updatedCount: result.updatedCount,
+          warnings: result.warnings,
+        },
+      },
+      o,
+    );
   });
 
   return result;

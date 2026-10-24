@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db } from "@calibra-facil/db";
 import {
   asset,
   calibrationJob,
@@ -20,6 +19,7 @@ import {
   requireApiKeyAuth,
   requireApiScope,
 } from "../middleware/api-key-auth";
+import { orgDb } from "../lib/org-db";
 
 const ListQuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
@@ -47,21 +47,23 @@ export const publicApiRouter = new Hono<{
         filters.push(ilike(customer.name, `%${query}%`));
       }
 
-      const data = await db
-        .select({
-          id: customer.id,
-          name: customer.name,
-          taxId: customer.taxId,
-          email: customer.email,
-          phone: customer.phone,
-          createdAt: customer.createdAt,
-          updatedAt: customer.updatedAt,
-        })
-        .from(customer)
-        .where(and(...filters))
-        .orderBy(customer.name)
-        .limit(limit)
-        .offset(offset);
+      const data = await orgDb(apiKey.organizationId).transaction((o) =>
+        o
+          .select({
+            id: customer.id,
+            name: customer.name,
+            taxId: customer.taxId,
+            email: customer.email,
+            phone: customer.phone,
+            createdAt: customer.createdAt,
+            updatedAt: customer.updatedAt,
+          })
+          .from(customer)
+          .where(and(...filters))
+          .orderBy(customer.name)
+          .limit(limit)
+          .offset(offset),
+      );
 
       return c.json({ data, page, limit });
     },
@@ -75,38 +77,40 @@ export const publicApiRouter = new Hono<{
       const { page, limit, query } = c.req.valid("query");
       const offset = (page - 1) * limit;
 
-      const data = await db
-        .select({
-          id: asset.id,
-          customerId: asset.customerId,
-          customerName: customer.name,
-          name: asset.name,
-          tag: asset.tag,
-          serialNumber: asset.serialNumber,
-          manufacturer: asset.manufacturer,
-          model: asset.model,
-          status: asset.status,
-          nextCalibrationDate: asset.nextCalibrationDate,
-          createdAt: asset.createdAt,
-          updatedAt: asset.updatedAt,
-        })
-        .from(asset)
-        .innerJoin(customer, eq(asset.customerId, customer.id))
-        .where(
-          and(
-            eq(customer.labOrganizationId, apiKey.organizationId),
-            query
-              ? or(
-                  ilike(asset.name, `%${query}%`),
-                  ilike(asset.tag, `%${query}%`),
-                  ilike(asset.serialNumber, `%${query}%`),
-                )
-              : undefined,
-          ),
-        )
-        .orderBy(asset.name)
-        .limit(limit)
-        .offset(offset);
+      const data = await orgDb(apiKey.organizationId).transaction((o) =>
+        o
+          .select({
+            id: asset.id,
+            customerId: asset.customerId,
+            customerName: customer.name,
+            name: asset.name,
+            tag: asset.tag,
+            serialNumber: asset.serialNumber,
+            manufacturer: asset.manufacturer,
+            model: asset.model,
+            status: asset.status,
+            nextCalibrationDate: asset.nextCalibrationDate,
+            createdAt: asset.createdAt,
+            updatedAt: asset.updatedAt,
+          })
+          .from(asset)
+          .innerJoin(customer, eq(asset.customerId, customer.id))
+          .where(
+            and(
+              eq(customer.labOrganizationId, apiKey.organizationId),
+              query
+                ? or(
+                    ilike(asset.name, `%${query}%`),
+                    ilike(asset.tag, `%${query}%`),
+                    ilike(asset.serialNumber, `%${query}%`),
+                  )
+                : undefined,
+            ),
+          )
+          .orderBy(asset.name)
+          .limit(limit)
+          .offset(offset),
+      );
 
       return c.json({ data, page, limit });
     },
@@ -128,26 +132,28 @@ export const publicApiRouter = new Hono<{
         filters.push(ilike(calibrationJob.jobId, `%${query}%`));
       }
 
-      const data = await db
-        .select({
-          id: calibrationJob.id,
-          jobId: calibrationJob.jobId,
-          status: calibrationJob.status,
-          customerName: customer.name,
-          assetName: asset.name,
-          serviceName: service.name,
-          performedAt: calibrationJob.performedAt,
-          approvedAt: calibrationJob.approvedAt,
-          createdAt: calibrationJob.createdAt,
-        })
-        .from(calibrationJob)
-        .innerJoin(customer, eq(calibrationJob.customerId, customer.id))
-        .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
-        .innerJoin(service, eq(calibrationJob.serviceId, service.id))
-        .where(and(...filters))
-        .orderBy(desc(calibrationJob.createdAt))
-        .limit(limit)
-        .offset(offset);
+      const data = await orgDb(apiKey.organizationId).transaction((o) =>
+        o
+          .select({
+            id: calibrationJob.id,
+            jobId: calibrationJob.jobId,
+            status: calibrationJob.status,
+            customerName: customer.name,
+            assetName: asset.name,
+            serviceName: service.name,
+            performedAt: calibrationJob.performedAt,
+            approvedAt: calibrationJob.approvedAt,
+            createdAt: calibrationJob.createdAt,
+          })
+          .from(calibrationJob)
+          .innerJoin(customer, eq(calibrationJob.customerId, customer.id))
+          .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+          .innerJoin(service, eq(calibrationJob.serviceId, service.id))
+          .where(and(...filters))
+          .orderBy(desc(calibrationJob.createdAt))
+          .limit(limit)
+          .offset(offset),
+      );
 
       return c.json({ data, page, limit });
     },
@@ -156,32 +162,34 @@ export const publicApiRouter = new Hono<{
     const apiKey = c.get("apiKey");
     const jobId = c.req.param("jobId");
 
-    const data = await db
-      .select({
-        id: calibrationJob.id,
-        jobId: calibrationJob.jobId,
-        status: calibrationJob.status,
-        customerName: customer.name,
-        assetName: asset.name,
-        assetTag: asset.tag,
-        serviceName: service.name,
-        performedAt: calibrationJob.performedAt,
-        approvedAt: calibrationJob.approvedAt,
-        createdAt: calibrationJob.createdAt,
-        updatedAt: calibrationJob.updatedAt,
-        results: calibrationJob.results,
-      })
-      .from(calibrationJob)
-      .innerJoin(customer, eq(calibrationJob.customerId, customer.id))
-      .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
-      .innerJoin(service, eq(calibrationJob.serviceId, service.id))
-      .where(
-        and(
-          eq(calibrationJob.organizationId, apiKey.organizationId),
-          eq(calibrationJob.jobId, jobId),
-        ),
-      )
-      .limit(1);
+    const data = await orgDb(apiKey.organizationId).transaction((o) =>
+      o
+        .select({
+          id: calibrationJob.id,
+          jobId: calibrationJob.jobId,
+          status: calibrationJob.status,
+          customerName: customer.name,
+          assetName: asset.name,
+          assetTag: asset.tag,
+          serviceName: service.name,
+          performedAt: calibrationJob.performedAt,
+          approvedAt: calibrationJob.approvedAt,
+          createdAt: calibrationJob.createdAt,
+          updatedAt: calibrationJob.updatedAt,
+          results: calibrationJob.results,
+        })
+        .from(calibrationJob)
+        .innerJoin(customer, eq(calibrationJob.customerId, customer.id))
+        .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+        .innerJoin(service, eq(calibrationJob.serviceId, service.id))
+        .where(
+          and(
+            eq(calibrationJob.organizationId, apiKey.organizationId),
+            eq(calibrationJob.jobId, jobId),
+          ),
+        )
+        .limit(1),
+    );
 
     if (!data[0]) {
       return c.json({ error: "Ordem de serviço não encontrada" }, 404);
@@ -207,23 +215,25 @@ export const publicApiRouter = new Hono<{
         filters.push(ilike(calibrationJob.jobId, `%${query}%`));
       }
 
-      const data = await db
-        .select({
-          id: calibrationJob.id,
-          jobId: calibrationJob.jobId,
-          status: calibrationJob.status,
-          approvedAt: calibrationJob.approvedAt,
-          verificationToken: calibrationJob.verificationToken,
-          assetName: asset.name,
-          customerName: customer.name,
-        })
-        .from(calibrationJob)
-        .innerJoin(customer, eq(calibrationJob.customerId, customer.id))
-        .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
-        .where(and(...filters))
-        .orderBy(desc(calibrationJob.approvedAt))
-        .limit(limit)
-        .offset(offset);
+      const data = await orgDb(apiKey.organizationId).transaction((o) =>
+        o
+          .select({
+            id: calibrationJob.id,
+            jobId: calibrationJob.jobId,
+            status: calibrationJob.status,
+            approvedAt: calibrationJob.approvedAt,
+            verificationToken: calibrationJob.verificationToken,
+            assetName: asset.name,
+            customerName: customer.name,
+          })
+          .from(calibrationJob)
+          .innerJoin(customer, eq(calibrationJob.customerId, customer.id))
+          .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
+          .where(and(...filters))
+          .orderBy(desc(calibrationJob.approvedAt))
+          .limit(limit)
+          .offset(offset),
+      );
 
       return c.json({ data, page, limit });
     },
@@ -235,19 +245,21 @@ export const publicApiRouter = new Hono<{
       const apiKey = c.get("apiKey");
       const jobId = c.req.param("jobId");
 
-      const [job] = await db
-        .select({
-          certificateUrl: calibrationJob.certificateUrl,
-        })
-        .from(calibrationJob)
-        .where(
-          and(
-            eq(calibrationJob.organizationId, apiKey.organizationId),
-            eq(calibrationJob.jobId, jobId),
-            inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
-          ),
-        )
-        .limit(1);
+      const [job] = await orgDb(apiKey.organizationId).transaction((o) =>
+        o
+          .select({
+            certificateUrl: calibrationJob.certificateUrl,
+          })
+          .from(calibrationJob)
+          .where(
+            and(
+              eq(calibrationJob.organizationId, apiKey.organizationId),
+              eq(calibrationJob.jobId, jobId),
+              inArray(calibrationJob.status, ["APPROVED", "SUPERSEDED"]),
+            ),
+          )
+          .limit(1),
+      );
 
       if (!job) {
         return c.json({ error: "Certificado não encontrado" }, 404);

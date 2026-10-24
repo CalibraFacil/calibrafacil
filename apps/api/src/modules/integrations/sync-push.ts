@@ -309,6 +309,7 @@ export async function pushTargetRecord(params: {
   }
 
   const existing = await getExistingLink(
+    params.organizationId,
     params.integrationId,
     params.target,
     params.payload.externalId,

@@ -1,11 +1,23 @@
-// Notification dispatch runs on the SYSTEM path (`systemDb`, the owner connection;
-// P2-18a). A dispatcher starts from the id of the entity the caller just operated
-// on (already authorised and scoped there), learns the laboratory from that row,
-// and then writes notification rows for recipients in more than one organization
-// (the laboratory's staff, a portal customer's CLIENT organization), which one
-// `calibra.organization_id` per transaction cannot express. Scoping it per
-// recipient organization is the follow-up (the notifications slice of P2-18).
-import { systemDb } from "@calibra-facil/db";
+// Notification dispatch is scoped per organization (row-level security, P2-18h).
+// A dispatcher starts from the id of the entity the caller just operated on
+// (already authorised and scoped there) or from an explicit laboratory; the
+// one statement that learns the laboratory of an id runs on the system path
+// (lab-scope.ts, `findJobLaboratory` and friends), and every statement after
+// it runs in a transaction that names an organization: the laboratory's for
+// the entity reads, the recipient's for the notification rows (a portal user's
+// belong to the CLIENT organization). No transaction is held across an e-mail
+// send. Global tables (user, organization, notification_preference) are read
+// on the plain handle.
+import { db } from "@calibra-facil/db";
+
+import {
+  findAuditPackLaboratory,
+  findCalibrationRequestLaboratory,
+  findJobLaboratory,
+  findVisitLaboratory,
+  inOrg,
+  listPortalDigestRecipients,
+} from "./lab-scope";
 import {
   notification,
   notificationPreference,
@@ -252,7 +264,7 @@ async function getUserPreferences(userId: string): Promise<{
   emailEnabled: boolean;
   notifySelfActions: boolean;
 }> {
-  const [prefs] = await systemDb
+  const [prefs] = await db
     .select()
     .from(notificationPreference)
     .where(eq(notificationPreference.userId, userId))
@@ -303,21 +315,25 @@ export async function sendNotification(
 
   // Create in-app notification if enabled
   if (typePrefs.inApp) {
-    const [created] = await systemDb
-      .insert(notification)
-      .values({
-        recipientUserId,
-        organizationId,
-        type,
-        priority,
-        title,
-        message,
-        relatedEntity,
-        actionUrl,
-        channelsSent: ["IN_APP"],
-        status: "UNREAD",
-      })
-      .returning();
+    // The row belongs to the RECIPIENT's organization (the laboratory for its
+    // staff, the CLIENT organization for a portal user).
+    const [created] = await inOrg(organizationId, (o) =>
+      o
+        .insert(notification)
+        .values({
+          recipientUserId,
+          organizationId,
+          type,
+          priority,
+          title,
+          message,
+          relatedEntity,
+          actionUrl,
+          channelsSent: ["IN_APP"],
+          status: "UNREAD",
+        })
+        .returning(),
+    );
 
     if (created) {
       notificationId = created.id;
@@ -343,10 +359,13 @@ export async function sendNotification(
 
       // Update notification record with email channel
       if (notificationId) {
-        await systemDb
-          .update(notification)
-          .set({ channelsSent })
-          .where(eq(notification.id, notificationId));
+        const createdId = notificationId;
+        await inOrg(organizationId, async (o) => {
+          await o
+            .update(notification)
+            .set({ channelsSent })
+            .where(eq(notification.id, createdId));
+        });
       }
     }
   }
@@ -561,7 +580,7 @@ function stripBrandSender(
 export async function getLabEmailBrand(
   organizationId: string,
 ): Promise<EmailBrand | undefined> {
-  const [lab] = await systemDb
+  const [lab] = await db
     .select({
       name: organization.name,
       logo: organization.logo,
@@ -918,7 +937,7 @@ async function sendNotificationEmail(options: {
   }
 
   // Get user email
-  const [userData] = await systemDb
+  const [userData] = await db
     .select({ email: user.email, name: user.name })
     .from(user)
     .where(eq(user.id, recipientUserId))
@@ -991,15 +1010,17 @@ export async function getRecipientsByRole(
   organizationId: string,
   roles: string[],
 ): Promise<string[]> {
-  const members = await systemDb
-    .select({ userId: member.userId })
-    .from(member)
-    .where(
-      and(
-        eq(member.organizationId, organizationId),
-        inArray(member.role, roles),
+  const members = await inOrg(organizationId, (o) =>
+    o
+      .select({ userId: member.userId })
+      .from(member)
+      .where(
+        and(
+          eq(member.organizationId, organizationId),
+          inArray(member.role, roles),
+        ),
       ),
-    );
+  );
 
   return members.map((m) => m.userId);
 }
@@ -1015,18 +1036,23 @@ async function getJobDetails(jobId: number): Promise<{
   assetId: number;
   createdBy: string;
 } | null> {
-  const [job] = await systemDb
-    .select({
-      jobIdentifier: calibrationJob.jobId,
-      organizationId: calibrationJob.organizationId,
-      technicianId: calibrationJob.technicianId,
-      customerId: calibrationJob.customerId,
-      assetId: calibrationJob.assetId,
-      createdBy: calibrationJob.createdBy,
-    })
-    .from(calibrationJob)
-    .where(eq(calibrationJob.id, jobId))
-    .limit(1);
+  const laboratoryId = await findJobLaboratory(jobId);
+  if (!laboratoryId) return null;
+
+  const [job] = await inOrg(laboratoryId, (o) =>
+    o
+      .select({
+        jobIdentifier: calibrationJob.jobId,
+        organizationId: calibrationJob.organizationId,
+        technicianId: calibrationJob.technicianId,
+        customerId: calibrationJob.customerId,
+        assetId: calibrationJob.assetId,
+        createdBy: calibrationJob.createdBy,
+      })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, jobId))
+      .limit(1),
+  );
 
   return job ?? null;
 }
@@ -1034,28 +1060,33 @@ async function getJobDetails(jobId: number): Promise<{
 /**
  * Get asset details for notification context
  */
-async function getAssetDetails(assetId: number): Promise<{
+async function getAssetDetails(
+  organizationId: string,
+  assetId: number,
+): Promise<{
   name: string;
   tag: string;
   manufacturer: string | null;
   model: string | null;
 } | null> {
-  const [assetData] = await systemDb
-    .select({
-      name: asset.name,
-      tag: asset.tag,
-      manufacturer: asset.manufacturer,
-      model: asset.model,
-    })
-    .from(asset)
-    .where(eq(asset.id, assetId))
-    .limit(1);
+  const [assetData] = await inOrg(organizationId, (o) =>
+    o
+      .select({
+        name: asset.name,
+        tag: asset.tag,
+        manufacturer: asset.manufacturer,
+        model: asset.model,
+      })
+      .from(asset)
+      .where(eq(asset.id, assetId))
+      .limit(1),
+  );
 
   return assetData ?? null;
 }
 
 async function getActorName(userId: string): Promise<string> {
-  const [actor] = await systemDb
+  const [actor] = await db
     .select({ name: user.name })
     .from(user)
     .where(eq(user.id, userId))
@@ -1074,41 +1105,46 @@ async function getCalibrationRequestDetails(requestId: number): Promise<{
   itemCount: number;
   requestedDueDate: Date | null;
 } | null> {
-  const [request] = await systemDb
-    .select({
-      id: calibrationRequest.id,
-      organizationId: calibrationRequest.organizationId,
-      authOrganizationId: calibrationRequest.authOrganizationId,
-      submittedBy: calibrationRequest.submittedBy,
-      requestedDueDate: calibrationRequest.requestedDueDate,
-      customerName: customer.name,
-      labName: organization.name,
-    })
-    .from(calibrationRequest)
-    .innerJoin(customer, eq(calibrationRequest.customerId, customer.id))
-    .innerJoin(
-      organization,
-      eq(calibrationRequest.organizationId, organization.id),
-    )
-    .where(eq(calibrationRequest.id, requestId))
-    .limit(1);
+  const laboratoryId = await findCalibrationRequestLaboratory(requestId);
+  if (!laboratoryId) return null;
 
-  if (!request) return null;
+  return inOrg(laboratoryId, async (o) => {
+    const [request] = await o
+      .select({
+        id: calibrationRequest.id,
+        organizationId: calibrationRequest.organizationId,
+        authOrganizationId: calibrationRequest.authOrganizationId,
+        submittedBy: calibrationRequest.submittedBy,
+        requestedDueDate: calibrationRequest.requestedDueDate,
+        customerName: customer.name,
+        labName: organization.name,
+      })
+      .from(calibrationRequest)
+      .innerJoin(customer, eq(calibrationRequest.customerId, customer.id))
+      .innerJoin(
+        organization,
+        eq(calibrationRequest.organizationId, organization.id),
+      )
+      .where(eq(calibrationRequest.id, requestId))
+      .limit(1);
 
-  const items = await systemDb
-    .select({ id: calibrationRequestItem.id })
-    .from(calibrationRequestItem)
-    .where(
-      and(
-        eq(calibrationRequestItem.requestId, requestId),
-        eq(calibrationRequestItem.organizationId, request.organizationId),
-      ),
-    );
+    if (!request) return null;
 
-  return {
-    ...request,
-    itemCount: items.length,
-  };
+    const items = await o
+      .select({ id: calibrationRequestItem.id })
+      .from(calibrationRequestItem)
+      .where(
+        and(
+          eq(calibrationRequestItem.requestId, requestId),
+          eq(calibrationRequestItem.organizationId, request.organizationId),
+        ),
+      );
+
+    return {
+      ...request,
+      itemCount: items.length,
+    };
+  });
 }
 
 function createCalibrationRequestEmailContext(
@@ -1336,33 +1372,38 @@ async function getVisitDetails(visitId: number): Promise<{
   requestSubmittedBy: string | null;
   requestAuthOrganizationId: string | null;
 } | null> {
-  const [visit] = await systemDb
-    .select({
-      id: calibrationVisit.id,
-      organizationId: calibrationVisit.organizationId,
-      technicianId: calibrationVisit.technicianId,
-      scheduledAt: calibrationVisit.scheduledAt,
-      sourceRequestId: calibrationVisit.sourceRequestId,
-      address: calibrationVisit.address,
-      customerName: customer.name,
-      labName: organization.name,
-      technicianName: user.name,
-      requestSubmittedBy: calibrationRequest.submittedBy,
-      requestAuthOrganizationId: calibrationRequest.authOrganizationId,
-    })
-    .from(calibrationVisit)
-    .innerJoin(customer, eq(calibrationVisit.customerId, customer.id))
-    .innerJoin(
-      organization,
-      eq(calibrationVisit.organizationId, organization.id),
-    )
-    .leftJoin(user, eq(calibrationVisit.technicianId, user.id))
-    .leftJoin(
-      calibrationRequest,
-      eq(calibrationVisit.sourceRequestId, calibrationRequest.id),
-    )
-    .where(eq(calibrationVisit.id, visitId))
-    .limit(1);
+  const laboratoryId = await findVisitLaboratory(visitId);
+  if (!laboratoryId) return null;
+
+  const [visit] = await inOrg(laboratoryId, (o) =>
+    o
+      .select({
+        id: calibrationVisit.id,
+        organizationId: calibrationVisit.organizationId,
+        technicianId: calibrationVisit.technicianId,
+        scheduledAt: calibrationVisit.scheduledAt,
+        sourceRequestId: calibrationVisit.sourceRequestId,
+        address: calibrationVisit.address,
+        customerName: customer.name,
+        labName: organization.name,
+        technicianName: user.name,
+        requestSubmittedBy: calibrationRequest.submittedBy,
+        requestAuthOrganizationId: calibrationRequest.authOrganizationId,
+      })
+      .from(calibrationVisit)
+      .innerJoin(customer, eq(calibrationVisit.customerId, customer.id))
+      .innerJoin(
+        organization,
+        eq(calibrationVisit.organizationId, organization.id),
+      )
+      .leftJoin(user, eq(calibrationVisit.technicianId, user.id))
+      .leftJoin(
+        calibrationRequest,
+        eq(calibrationVisit.sourceRequestId, calibrationRequest.id),
+      )
+      .where(eq(calibrationVisit.id, visitId))
+      .limit(1),
+  );
 
   return visit ?? null;
 }
@@ -1689,17 +1730,20 @@ export async function notifyVisitRescheduleRequested(
  * linked org, or its group's org in multi-unit (group) mode.
  */
 async function getPortalOrgForCustomer(
+  laboratoryId: string,
   customerId: number,
 ): Promise<string | null> {
-  const [row] = await systemDb
-    .select({
-      authOrganizationId: customer.authOrganizationId,
-      groupAuthOrganizationId: customerGroup.authOrganizationId,
-    })
-    .from(customer)
-    .leftJoin(customerGroup, eq(customer.groupId, customerGroup.id))
-    .where(eq(customer.id, customerId))
-    .limit(1);
+  const [row] = await inOrg(laboratoryId, (o) =>
+    o
+      .select({
+        authOrganizationId: customer.authOrganizationId,
+        groupAuthOrganizationId: customerGroup.authOrganizationId,
+      })
+      .from(customer)
+      .leftJoin(customerGroup, eq(customer.groupId, customerGroup.id))
+      .where(eq(customer.id, customerId))
+      .limit(1),
+  );
   return row?.authOrganizationId ?? row?.groupAuthOrganizationId ?? null;
 }
 
@@ -1717,26 +1761,31 @@ export async function notifyVisitRescheduleDeclined(
   const visit = await getVisitDetails(visitId);
   if (!visit) return;
 
-  const [declined] = await systemDb
-    .select({
-      requestedBy: visitRescheduleRequest.requestedBy,
-      customerId: visitRescheduleRequest.customerId,
-    })
-    .from(visitRescheduleRequest)
-    .where(
-      and(
-        eq(visitRescheduleRequest.visitId, visitId),
-        eq(visitRescheduleRequest.status, "DECLINED"),
-      ),
-    )
-    .orderBy(
-      desc(visitRescheduleRequest.resolvedAt),
-      desc(visitRescheduleRequest.id),
-    )
-    .limit(1);
+  const [declined] = await inOrg(visit.organizationId, (o) =>
+    o
+      .select({
+        requestedBy: visitRescheduleRequest.requestedBy,
+        customerId: visitRescheduleRequest.customerId,
+      })
+      .from(visitRescheduleRequest)
+      .where(
+        and(
+          eq(visitRescheduleRequest.visitId, visitId),
+          eq(visitRescheduleRequest.status, "DECLINED"),
+        ),
+      )
+      .orderBy(
+        desc(visitRescheduleRequest.resolvedAt),
+        desc(visitRescheduleRequest.id),
+      )
+      .limit(1),
+  );
   if (!declined || declined.requestedBy === actorUserId) return;
 
-  const portalOrgId = await getPortalOrgForCustomer(declined.customerId);
+  const portalOrgId = await getPortalOrgForCustomer(
+    visit.organizationId,
+    declined.customerId,
+  );
   if (!portalOrgId) return;
 
   const visitDate = formatVisitDate(visit.scheduledAt);
@@ -1782,7 +1831,7 @@ export async function notifyJobSubmittedForReview(
   if (!job) return;
 
   // Get submitter name
-  const [submitter] = await systemDb
+  const [submitter] = await db
     .select({ name: user.name })
     .from(user)
     .where(eq(user.id, submittedByUserId))
@@ -1836,7 +1885,7 @@ export async function notifyJobApproved(
   if (!job) return;
 
   // Get approver name
-  const [approver] = await systemDb
+  const [approver] = await db
     .select({ name: user.name })
     .from(user)
     .where(eq(user.id, approvedByUserId))
@@ -1886,7 +1935,7 @@ export async function notifyJobRejected(
   if (!job) return;
 
   // Get rejector name
-  const [rejector] = await systemDb
+  const [rejector] = await db
     .select({ name: user.name })
     .from(user)
     .where(eq(user.id, rejectedByUserId))
@@ -1946,7 +1995,7 @@ export async function notifyJobAssigned(
   }
 
   // Get assigner name
-  const [assigner] = await systemDb
+  const [assigner] = await db
     .select({ name: user.name })
     .from(user)
     .where(eq(user.id, assignedByUserId))
@@ -1990,25 +2039,29 @@ export async function notifyCertificateReady(jobId: number): Promise<void> {
   if (!job) return;
 
   // Get the customer's organization ID and name
-  const [customerData] = await systemDb
-    .select({
-      authOrganizationId: customer.authOrganizationId,
-      name: customer.name,
-    })
-    .from(customer)
-    .where(eq(customer.id, job.customerId))
-    .limit(1);
+  const [customerData] = await inOrg(job.organizationId, (o) =>
+    o
+      .select({
+        authOrganizationId: customer.authOrganizationId,
+        name: customer.name,
+      })
+      .from(customer)
+      .where(eq(customer.id, job.customerId))
+      .limit(1),
+  );
 
   if (!customerData?.authOrganizationId) return;
 
   // Get asset details
-  const assetData = await getAssetDetails(job.assetId);
+  const assetData = await getAssetDetails(job.organizationId, job.assetId);
 
   // Get all portal users in the customer organization
-  const portalUsers = await systemDb
-    .select({ userId: member.userId })
-    .from(member)
-    .where(eq(member.organizationId, customerData.authOrganizationId));
+  const portalUsers = await inOrg(customerData.authOrganizationId, (o) =>
+    o
+      .select({ userId: member.userId })
+      .from(member)
+      .where(eq(member.organizationId, customerData.authOrganizationId)),
+  );
 
   const portalUrl = `${getPortalBaseUrl()}/certificates`;
   const emailBrand = await getLabEmailBrand(job.organizationId);
@@ -2055,23 +2108,27 @@ export async function notifyAssetFoundOutOfTolerance(
   const job = await getJobDetails(jobId);
   if (!job) return;
 
-  const [customerData] = await systemDb
-    .select({
-      authOrganizationId: customer.authOrganizationId,
-      name: customer.name,
-    })
-    .from(customer)
-    .where(eq(customer.id, job.customerId))
-    .limit(1);
+  const [customerData] = await inOrg(job.organizationId, (o) =>
+    o
+      .select({
+        authOrganizationId: customer.authOrganizationId,
+        name: customer.name,
+      })
+      .from(customer)
+      .where(eq(customer.id, job.customerId))
+      .limit(1),
+  );
 
   if (!customerData?.authOrganizationId) return;
 
-  const assetData = await getAssetDetails(job.assetId);
+  const assetData = await getAssetDetails(job.organizationId, job.assetId);
 
-  const portalUsers = await systemDb
-    .select({ userId: member.userId })
-    .from(member)
-    .where(eq(member.organizationId, customerData.authOrganizationId));
+  const portalUsers = await inOrg(customerData.authOrganizationId, (o) =>
+    o
+      .select({ userId: member.userId })
+      .from(member)
+      .where(eq(member.organizationId, customerData.authOrganizationId)),
+  );
 
   const portalUrl = `${getPortalBaseUrl()}/assets/${job.assetId}`;
   const emailBrand = await getLabEmailBrand(job.organizationId);
@@ -2111,31 +2168,39 @@ export async function notifyAssetFoundOutOfTolerance(
  * on the portal certificates page.
  */
 export async function notifyAuditPackReady(exportId: number): Promise<void> {
-  const [exportRow] = await systemDb
-    .select({
-      id: portalExportJob.id,
-      labOrganizationId: portalExportJob.labOrganizationId,
-      authOrganizationId: portalExportJob.authOrganizationId,
-      params: portalExportJob.params,
-      certificateCount: portalExportJob.certificateCount,
-      expiresAt: portalExportJob.expiresAt,
-    })
-    .from(portalExportJob)
-    .where(eq(portalExportJob.id, exportId))
-    .limit(1);
+  const laboratoryId = await findAuditPackLaboratory(exportId);
+  if (!laboratoryId) return;
+
+  const [exportRow] = await inOrg(laboratoryId, (o) =>
+    o
+      .select({
+        id: portalExportJob.id,
+        labOrganizationId: portalExportJob.labOrganizationId,
+        authOrganizationId: portalExportJob.authOrganizationId,
+        params: portalExportJob.params,
+        certificateCount: portalExportJob.certificateCount,
+        expiresAt: portalExportJob.expiresAt,
+      })
+      .from(portalExportJob)
+      .where(eq(portalExportJob.id, exportId))
+      .limit(1),
+  );
 
   if (!exportRow) return;
 
-  const [authOrganization] = await systemDb
+  const [authOrganization] = await db
     .select({ name: organization.name })
     .from(organization)
     .where(eq(organization.id, exportRow.authOrganizationId))
     .limit(1);
 
-  const portalUsers = await systemDb
-    .select({ userId: member.userId })
-    .from(member)
-    .where(eq(member.organizationId, exportRow.authOrganizationId));
+  // The members of the requesting CLIENT organization (its own tenant column).
+  const portalUsers = await inOrg(exportRow.authOrganizationId, (o) =>
+    o
+      .select({ userId: member.userId })
+      .from(member)
+      .where(eq(member.organizationId, exportRow.authOrganizationId)),
+  );
 
   const periodLabel = `${formatCalendarDate(exportRow.params.dateFrom)} a ${formatCalendarDate(exportRow.params.dateTo)}`;
   const expiresAtLabel = exportRow.expiresAt
@@ -2185,25 +2250,32 @@ export async function notifyCertificateAmended(
   if (!originalJob || !amendedJob) return;
 
   // Get the customer's organization ID and name
-  const [customerData] = await systemDb
-    .select({
-      authOrganizationId: customer.authOrganizationId,
-      name: customer.name,
-    })
-    .from(customer)
-    .where(eq(customer.id, originalJob.customerId))
-    .limit(1);
+  const [customerData] = await inOrg(originalJob.organizationId, (o) =>
+    o
+      .select({
+        authOrganizationId: customer.authOrganizationId,
+        name: customer.name,
+      })
+      .from(customer)
+      .where(eq(customer.id, originalJob.customerId))
+      .limit(1),
+  );
 
   if (!customerData?.authOrganizationId) return;
 
   // Get asset details
-  const assetData = await getAssetDetails(originalJob.assetId);
+  const assetData = await getAssetDetails(
+    originalJob.organizationId,
+    originalJob.assetId,
+  );
 
   // Get all portal users in the customer organization
-  const portalUsers = await systemDb
-    .select({ userId: member.userId })
-    .from(member)
-    .where(eq(member.organizationId, customerData.authOrganizationId));
+  const portalUsers = await inOrg(customerData.authOrganizationId, (o) =>
+    o
+      .select({ userId: member.userId })
+      .from(member)
+      .where(eq(member.organizationId, customerData.authOrganizationId)),
+  );
 
   // Deep-link to the superseded certificate's detail page (#744): it renders
   // the §7.8.8 supersession banner and links the retificação once issued —
@@ -2300,26 +2372,30 @@ export async function notifyAssetDueForRecalibration(
   organizationId: string,
 ): Promise<void> {
   // Get asset details with customer info
-  const [assetData] = await systemDb
-    .select({
-      name: asset.name,
-      serialNumber: asset.serialNumber,
-      tag: asset.tag,
-      nextCalibrationDate: asset.nextCalibrationDate,
-      customerId: asset.customerId,
-    })
-    .from(asset)
-    .where(eq(asset.id, assetId))
-    .limit(1);
+  const [assetData] = await inOrg(organizationId, (o) =>
+    o
+      .select({
+        name: asset.name,
+        serialNumber: asset.serialNumber,
+        tag: asset.tag,
+        nextCalibrationDate: asset.nextCalibrationDate,
+        customerId: asset.customerId,
+      })
+      .from(asset)
+      .where(eq(asset.id, assetId))
+      .limit(1),
+  );
 
   if (!assetData?.nextCalibrationDate) return;
 
   // Get customer name
-  const [customerData] = await systemDb
-    .select({ name: customer.name })
-    .from(customer)
-    .where(eq(customer.id, assetData.customerId))
-    .limit(1);
+  const [customerData] = await inOrg(organizationId, (o) =>
+    o
+      .select({ name: customer.name })
+      .from(customer)
+      .where(eq(customer.id, assetData.customerId))
+      .limit(1),
+  );
 
   const daysRemaining = getDaysRemaining(assetData.nextCalibrationDate);
   const dueDate = formatCalendarDate(assetData.nextCalibrationDate);
@@ -2373,19 +2449,21 @@ export async function notifyAssetDueForLegalVerification(
   organizationId: string,
 ): Promise<void> {
   // Get asset details with regime + regulated-interval info
-  const [assetData] = await systemDb
-    .select({
-      name: asset.name,
-      serialNumber: asset.serialNumber,
-      tag: asset.tag,
-      metrologyRegime: asset.metrologyRegime,
-      nextLegalVerificationDate: asset.nextLegalVerificationDate,
-      regulatedInterval: asset.regulatedInterval,
-      customerId: asset.customerId,
-    })
-    .from(asset)
-    .where(eq(asset.id, assetId))
-    .limit(1);
+  const [assetData] = await inOrg(organizationId, (o) =>
+    o
+      .select({
+        name: asset.name,
+        serialNumber: asset.serialNumber,
+        tag: asset.tag,
+        metrologyRegime: asset.metrologyRegime,
+        nextLegalVerificationDate: asset.nextLegalVerificationDate,
+        regulatedInterval: asset.regulatedInterval,
+        customerId: asset.customerId,
+      })
+      .from(asset)
+      .where(eq(asset.id, assetId))
+      .limit(1),
+  );
 
   // Track 2 only: never fire for a non-LEGAL regime or a missing legal-verification date.
   if (assetData?.metrologyRegime !== "LEGAL") return;
@@ -2401,11 +2479,13 @@ export async function notifyAssetDueForLegalVerification(
     typeof regulationRefValue === "string" ? regulationRefValue : null;
 
   // Get customer name
-  const [customerData] = await systemDb
-    .select({ name: customer.name })
-    .from(customer)
-    .where(eq(customer.id, assetData.customerId))
-    .limit(1);
+  const [customerData] = await inOrg(organizationId, (o) =>
+    o
+      .select({ name: customer.name })
+      .from(customer)
+      .where(eq(customer.id, assetData.customerId))
+      .limit(1),
+  );
 
   const daysRemaining = getDaysRemaining(assetData.nextLegalVerificationDate);
   const dueDate = formatCalendarDate(assetData.nextLegalVerificationDate);
@@ -2463,16 +2543,18 @@ export async function notifyStandardExpiring(
   organizationId: string,
 ): Promise<void> {
   // Get reference standard details
-  const [standardData] = await systemDb
-    .select({
-      name: referenceStandard.name,
-      serialNumber: referenceStandard.serialNumber,
-      certificateNumber: referenceStandard.certificateNumber,
-      nextCalibrationDate: referenceStandard.nextCalibrationDate,
-    })
-    .from(referenceStandard)
-    .where(eq(referenceStandard.id, standardId))
-    .limit(1);
+  const [standardData] = await inOrg(organizationId, (o) =>
+    o
+      .select({
+        name: referenceStandard.name,
+        serialNumber: referenceStandard.serialNumber,
+        certificateNumber: referenceStandard.certificateNumber,
+        nextCalibrationDate: referenceStandard.nextCalibrationDate,
+      })
+      .from(referenceStandard)
+      .where(eq(referenceStandard.id, standardId))
+      .limit(1),
+  );
 
   if (!standardData?.nextCalibrationDate) return;
 
@@ -2524,14 +2606,16 @@ export async function notifyPtPlanDue(
   planItemId: number,
   organizationId: string,
 ): Promise<void> {
-  const [planItem] = await systemDb
-    .select({
-      scopePart: ptPlanItem.scopePart,
-      nextDueAt: ptPlanItem.nextDueAt,
-    })
-    .from(ptPlanItem)
-    .where(eq(ptPlanItem.id, planItemId))
-    .limit(1);
+  const [planItem] = await inOrg(organizationId, (o) =>
+    o
+      .select({
+        scopePart: ptPlanItem.scopePart,
+        nextDueAt: ptPlanItem.nextDueAt,
+      })
+      .from(ptPlanItem)
+      .where(eq(ptPlanItem.id, planItemId))
+      .limit(1),
+  );
 
   if (!planItem?.nextDueAt) return;
 
@@ -2581,16 +2665,18 @@ export async function notifyStandardExpired(
   standardId: number,
   organizationId: string,
 ): Promise<void> {
-  const [standardData] = await systemDb
-    .select({
-      name: referenceStandard.name,
-      serialNumber: referenceStandard.serialNumber,
-      certificateNumber: referenceStandard.certificateNumber,
-      nextCalibrationDate: referenceStandard.nextCalibrationDate,
-    })
-    .from(referenceStandard)
-    .where(eq(referenceStandard.id, standardId))
-    .limit(1);
+  const [standardData] = await inOrg(organizationId, (o) =>
+    o
+      .select({
+        name: referenceStandard.name,
+        serialNumber: referenceStandard.serialNumber,
+        certificateNumber: referenceStandard.certificateNumber,
+        nextCalibrationDate: referenceStandard.nextCalibrationDate,
+      })
+      .from(referenceStandard)
+      .where(eq(referenceStandard.id, standardId))
+      .limit(1),
+  );
 
   if (!standardData?.nextCalibrationDate) return;
 
@@ -2649,25 +2735,27 @@ export async function notifySigningCertificateExpiring(
   // Org-scoped read (defense in depth): a certificate id is globally unique,
   // but filtering by organizationId guarantees we never resolve/notify across
   // tenants. Join the unit so the alert names which unit's certificate expires.
-  const [certData] = await systemDb
-    .select({
-      name: organizationSigningCertificate.name,
-      serialNumber: organizationSigningCertificate.serialNumber,
-      validUntil: organizationSigningCertificate.validUntil,
-      unitName: organizationUnit.name,
-    })
-    .from(organizationSigningCertificate)
-    .innerJoin(
-      organizationUnit,
-      eq(organizationSigningCertificate.unitId, organizationUnit.id),
-    )
-    .where(
-      and(
-        eq(organizationSigningCertificate.id, certificateId),
-        eq(organizationSigningCertificate.organizationId, organizationId),
-      ),
-    )
-    .limit(1);
+  const [certData] = await inOrg(organizationId, (o) =>
+    o
+      .select({
+        name: organizationSigningCertificate.name,
+        serialNumber: organizationSigningCertificate.serialNumber,
+        validUntil: organizationSigningCertificate.validUntil,
+        unitName: organizationUnit.name,
+      })
+      .from(organizationSigningCertificate)
+      .innerJoin(
+        organizationUnit,
+        eq(organizationSigningCertificate.unitId, organizationUnit.id),
+      )
+      .where(
+        and(
+          eq(organizationSigningCertificate.id, certificateId),
+          eq(organizationSigningCertificate.organizationId, organizationId),
+        ),
+      )
+      .limit(1),
+  );
 
   if (!certData) return;
 
@@ -2754,28 +2842,30 @@ export async function notifyAccreditedScopeLineExpiring(
 ): Promise<void> {
   // Org-scoped read (defense in depth): never resolve/notify across tenants.
   // Join the unit so the alert names which site's scope line expires.
-  const [lineData] = await systemDb
-    .select({
-      quantityKind: accreditedScopeLine.quantityKind,
-      rangeMin: accreditedScopeLine.rangeMin,
-      rangeMax: accreditedScopeLine.rangeMax,
-      rangeUnit: accreditedScopeLine.rangeUnit,
-      description: accreditedScopeLine.description,
-      validUntil: accreditedScopeLine.validUntil,
-      unitName: organizationUnit.name,
-    })
-    .from(accreditedScopeLine)
-    .innerJoin(
-      organizationUnit,
-      eq(accreditedScopeLine.unitId, organizationUnit.id),
-    )
-    .where(
-      and(
-        eq(accreditedScopeLine.id, scopeLineId),
-        eq(accreditedScopeLine.organizationId, organizationId),
-      ),
-    )
-    .limit(1);
+  const [lineData] = await inOrg(organizationId, (o) =>
+    o
+      .select({
+        quantityKind: accreditedScopeLine.quantityKind,
+        rangeMin: accreditedScopeLine.rangeMin,
+        rangeMax: accreditedScopeLine.rangeMax,
+        rangeUnit: accreditedScopeLine.rangeUnit,
+        description: accreditedScopeLine.description,
+        validUntil: accreditedScopeLine.validUntil,
+        unitName: organizationUnit.name,
+      })
+      .from(accreditedScopeLine)
+      .innerJoin(
+        organizationUnit,
+        eq(accreditedScopeLine.unitId, organizationUnit.id),
+      )
+      .where(
+        and(
+          eq(accreditedScopeLine.id, scopeLineId),
+          eq(accreditedScopeLine.organizationId, organizationId),
+        ),
+      )
+      .limit(1),
+  );
 
   if (!lineData?.validUntil) return;
 
@@ -2816,18 +2906,23 @@ export async function notifyAccreditedScopeLineExpiring(
  */
 export async function notifyJobOverdue(jobId: number): Promise<void> {
   // Get job details with extended info
-  const [jobData] = await systemDb
-    .select({
-      jobIdentifier: calibrationJob.jobId,
-      organizationId: calibrationJob.organizationId,
-      technicianId: calibrationJob.technicianId,
-      createdBy: calibrationJob.createdBy,
-      dueDate: calibrationJob.dueDate,
-      status: calibrationJob.status,
-    })
-    .from(calibrationJob)
-    .where(eq(calibrationJob.id, jobId))
-    .limit(1);
+  const laboratoryId = await findJobLaboratory(jobId);
+  if (!laboratoryId) return;
+
+  const [jobData] = await inOrg(laboratoryId, (o) =>
+    o
+      .select({
+        jobIdentifier: calibrationJob.jobId,
+        organizationId: calibrationJob.organizationId,
+        technicianId: calibrationJob.technicianId,
+        createdBy: calibrationJob.createdBy,
+        dueDate: calibrationJob.dueDate,
+        status: calibrationJob.status,
+      })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, jobId))
+      .limit(1),
+  );
 
   if (!jobData?.dueDate) return;
 
@@ -2895,7 +2990,7 @@ export async function notifyNCCreated(
   createdByUserId: string,
 ): Promise<void> {
   // Get creator name
-  const [creator] = await systemDb
+  const [creator] = await db
     .select({ name: user.name })
     .from(user)
     .where(eq(user.id, createdByUserId))
@@ -2993,7 +3088,7 @@ export async function notifyNCEscalatedToCapa(
   escalatedByUserId: string,
 ): Promise<void> {
   // Get escalator name
-  const [escalator] = await systemDb
+  const [escalator] = await db
     .select({ name: user.name })
     .from(user)
     .where(eq(user.id, escalatedByUserId))
@@ -3048,27 +3143,29 @@ export async function notifyCompetenceExpiring(
   competenceId: number,
   organizationId: string,
 ): Promise<void> {
-  const [comp] = await systemDb
-    .select({
-      userId: personnelCompetence.userId,
-      scopeDescription: personnelCompetence.scopeDescription,
-      expiresAt: personnelCompetence.expiresAt,
-      assetTypeId: personnelCompetence.assetTypeId,
-    })
-    .from(personnelCompetence)
-    .where(
-      and(
-        eq(personnelCompetence.id, competenceId),
-        eq(personnelCompetence.organizationId, organizationId),
-      ),
-    )
-    .limit(1);
+  const [comp] = await inOrg(organizationId, (o) =>
+    o
+      .select({
+        userId: personnelCompetence.userId,
+        scopeDescription: personnelCompetence.scopeDescription,
+        expiresAt: personnelCompetence.expiresAt,
+        assetTypeId: personnelCompetence.assetTypeId,
+      })
+      .from(personnelCompetence)
+      .where(
+        and(
+          eq(personnelCompetence.id, competenceId),
+          eq(personnelCompetence.organizationId, organizationId),
+        ),
+      )
+      .limit(1),
+  );
 
   // userId is nullable since migration 0083; skip when the competence has no
   // owning user (deleted) — there is no technician to notify about.
   if (!comp?.expiresAt || !comp.userId) return;
 
-  const [userData] = await systemDb
+  const [userData] = await db
     .select({ name: user.name })
     .from(user)
     .where(eq(user.id, comp.userId))
@@ -3117,27 +3214,29 @@ export async function notifyCompetenceExpired(
   competenceId: number,
   organizationId: string,
 ): Promise<void> {
-  const [comp] = await systemDb
-    .select({
-      userId: personnelCompetence.userId,
-      scopeDescription: personnelCompetence.scopeDescription,
-      expiresAt: personnelCompetence.expiresAt,
-    })
-    .from(personnelCompetence)
-    .where(
-      and(
-        eq(personnelCompetence.id, competenceId),
-        eq(personnelCompetence.organizationId, organizationId),
-      ),
-    )
-    .limit(1);
+  const [comp] = await inOrg(organizationId, (o) =>
+    o
+      .select({
+        userId: personnelCompetence.userId,
+        scopeDescription: personnelCompetence.scopeDescription,
+        expiresAt: personnelCompetence.expiresAt,
+      })
+      .from(personnelCompetence)
+      .where(
+        and(
+          eq(personnelCompetence.id, competenceId),
+          eq(personnelCompetence.organizationId, organizationId),
+        ),
+      )
+      .limit(1),
+  );
 
   // userId is nullable since migration 0083 (a deleted user leaves the
   // competence with user_id NULL). These notifications are about a specific
   // technician, so skip when there is no owning user.
   if (!comp?.userId) return;
 
-  const [userData] = await systemDb
+  const [userData] = await db
     .select({ name: user.name })
     .from(user)
     .where(eq(user.id, comp.userId))
@@ -3187,32 +3286,34 @@ export async function notifyCompetenceRequested(
   organizationId: string,
   requestedByUserId: string,
 ): Promise<void> {
-  const [comp] = await systemDb
-    .select({
-      userId: personnelCompetence.userId,
-      scopeDescription: personnelCompetence.scopeDescription,
-    })
-    .from(personnelCompetence)
-    .where(
-      and(
-        eq(personnelCompetence.id, competenceId),
-        eq(personnelCompetence.organizationId, organizationId),
-      ),
-    )
-    .limit(1);
+  const [comp] = await inOrg(organizationId, (o) =>
+    o
+      .select({
+        userId: personnelCompetence.userId,
+        scopeDescription: personnelCompetence.scopeDescription,
+      })
+      .from(personnelCompetence)
+      .where(
+        and(
+          eq(personnelCompetence.id, competenceId),
+          eq(personnelCompetence.organizationId, organizationId),
+        ),
+      )
+      .limit(1),
+  );
 
   // userId is nullable since migration 0083 (a deleted user leaves the
   // competence with user_id NULL). These notifications are about a specific
   // technician, so skip when there is no owning user.
   if (!comp?.userId) return;
 
-  const [requester] = await systemDb
+  const [requester] = await db
     .select({ name: user.name })
     .from(user)
     .where(eq(user.id, requestedByUserId))
     .limit(1);
 
-  const [technician] = await systemDb
+  const [technician] = await db
     .select({ name: user.name })
     .from(user)
     .where(eq(user.id, comp.userId))
@@ -3262,33 +3363,35 @@ export async function notifyCompetenceApproved(
   organizationId: string,
   approvedByUserId: string,
 ): Promise<void> {
-  const [comp] = await systemDb
-    .select({
-      userId: personnelCompetence.userId,
-      scopeDescription: personnelCompetence.scopeDescription,
-    })
-    .from(personnelCompetence)
-    .where(
-      and(
-        eq(personnelCompetence.id, competenceId),
-        eq(personnelCompetence.organizationId, organizationId),
-      ),
-    )
-    .limit(1);
+  const [comp] = await inOrg(organizationId, (o) =>
+    o
+      .select({
+        userId: personnelCompetence.userId,
+        scopeDescription: personnelCompetence.scopeDescription,
+      })
+      .from(personnelCompetence)
+      .where(
+        and(
+          eq(personnelCompetence.id, competenceId),
+          eq(personnelCompetence.organizationId, organizationId),
+        ),
+      )
+      .limit(1),
+  );
 
   // userId is nullable since migration 0083 (a deleted user leaves the
   // competence with user_id NULL). These notifications are about a specific
   // technician, so skip when there is no owning user.
   if (!comp?.userId) return;
 
-  const [approver] = await systemDb
+  const [approver] = await db
     .select({ name: user.name })
     .from(user)
     .where(eq(user.id, approvedByUserId))
     .limit(1);
 
   const approverName = approver?.name ?? "Um gestor";
-  const [technician] = await systemDb
+  const [technician] = await db
     .select({ name: user.name })
     .from(user)
     .where(eq(user.id, comp.userId))
@@ -3365,17 +3468,19 @@ function describePortalDigestDue(due: Date, now: Date): string {
 async function getPortalDigestBaseUrl(
   labOrganizationId: string,
 ): Promise<string> {
-  const [domain] = await systemDb
-    .select({ hostname: organizationCustomDomain.hostname })
-    .from(organizationCustomDomain)
-    .where(
-      and(
-        eq(organizationCustomDomain.organizationId, labOrganizationId),
-        eq(organizationCustomDomain.isActive, true),
-        isNotNull(organizationCustomDomain.verifiedAt),
-      ),
-    )
-    .limit(1);
+  const [domain] = await inOrg(labOrganizationId, (o) =>
+    o
+      .select({ hostname: organizationCustomDomain.hostname })
+      .from(organizationCustomDomain)
+      .where(
+        and(
+          eq(organizationCustomDomain.organizationId, labOrganizationId),
+          eq(organizationCustomDomain.isActive, true),
+          isNotNull(organizationCustomDomain.verifiedAt),
+        ),
+      )
+      .limit(1),
+  );
 
   return domain?.hostname ? `https://${domain.hostname}` : getPortalBaseUrl();
 }
@@ -3416,71 +3521,8 @@ export async function sendPortalDueDigests(
     scopeLabel: string;
   };
 
-  const optedInWhere = and(
-    eq(organization.type, "CLIENT"),
-    eq(member.role, "client_user"),
-    inArray(notificationPreference.digestFrequency, frequencies),
-    eq(notificationPreference.emailEnabled, true),
-  );
-
-  // Members of a branch customer's CLIENT org → one customer each.
-  const customerRecipients = await systemDb
-    .selectDistinct({
-      userId: user.id,
-      email: user.email,
-      name: user.name,
-      frequency: notificationPreference.digestFrequency,
-      customerId: customer.id,
-      labOrganizationId: customer.labOrganizationId,
-    })
-    .from(member)
-    .innerJoin(organization, eq(member.organizationId, organization.id))
-    .innerJoin(customer, eq(customer.authOrganizationId, organization.id))
-    .innerJoin(user, eq(member.userId, user.id))
-    .innerJoin(
-      notificationPreference,
-      eq(notificationPreference.userId, member.userId),
-    )
-    .where(optedInWhere);
-
-  // Members of a customer-group's CLIENT org → consolidated over its branches.
-  const groupRecipients = await systemDb
-    .selectDistinct({
-      userId: user.id,
-      email: user.email,
-      name: user.name,
-      frequency: notificationPreference.digestFrequency,
-      groupId: customerGroup.id,
-      labOrganizationId: customerGroup.labOrganizationId,
-    })
-    .from(member)
-    .innerJoin(organization, eq(member.organizationId, organization.id))
-    .innerJoin(
-      customerGroup,
-      eq(customerGroup.authOrganizationId, organization.id),
-    )
-    .innerJoin(user, eq(member.userId, user.id))
-    .innerJoin(
-      notificationPreference,
-      eq(notificationPreference.userId, member.userId),
-    )
-    .where(optedInWhere);
-
-  // Resolve each group's branch customer ids in one query.
-  const branchesByGroup = new Map<number, number[]>();
-  const groupIds = [...new Set(groupRecipients.map((row) => row.groupId))];
-  if (groupIds.length > 0) {
-    const branches = await systemDb
-      .select({ id: customer.id, groupId: customer.groupId })
-      .from(customer)
-      .where(inArray(customer.groupId, groupIds));
-    for (const branch of branches) {
-      if (branch.groupId === null) continue;
-      const list = branchesByGroup.get(branch.groupId) ?? [];
-      list.push(branch.id);
-      branchesByGroup.set(branch.groupId, list);
-    }
-  }
+  const { customerRecipients, groupRecipients, branchesByGroup } =
+    await listPortalDigestRecipients(frequencies);
 
   const recipients: DigestRecipient[] = [
     ...customerRecipients.map((row) => ({
@@ -3534,13 +3576,15 @@ export async function sendPortalDueDigests(
       );
 
       // oxlint-disable-next-line eslint/no-await-in-loop -- digests are sent sequentially per recipient on purpose (cron job, small volume).
-      const [counts] = await systemDb
-        .select({
-          total: sql<number>`cast(count(*) as int)`,
-          overdue: sql<number>`cast(count(*) filter (where ${lt(asset.nextCalibrationDate, today)}) as int)`,
-        })
-        .from(asset)
-        .where(dueWhere);
+      const [counts] = await inOrg(recipient.labOrganizationId, (o) =>
+        o
+          .select({
+            total: sql<number>`cast(count(*) as int)`,
+            overdue: sql<number>`cast(count(*) filter (where ${lt(asset.nextCalibrationDate, today)}) as int)`,
+          })
+          .from(asset)
+          .where(dueWhere),
+      );
 
       const total = counts?.total ?? 0;
       if (total === 0) {
@@ -3551,16 +3595,18 @@ export async function sendPortalDueDigests(
       const dueSoonCount = total - overdueCount;
 
       // oxlint-disable-next-line eslint/no-await-in-loop -- sequential per recipient (see above).
-      const dueAssets = await systemDb
-        .select({
-          name: asset.name,
-          tag: asset.tag,
-          nextCalibrationDate: asset.nextCalibrationDate,
-        })
-        .from(asset)
-        .where(dueWhere)
-        .orderBy(asc(asset.nextCalibrationDate), asc(asset.tag))
-        .limit(PORTAL_DIGEST_MAX_ITEMS);
+      const dueAssets = await inOrg(recipient.labOrganizationId, (o) =>
+        o
+          .select({
+            name: asset.name,
+            tag: asset.tag,
+            nextCalibrationDate: asset.nextCalibrationDate,
+          })
+          .from(asset)
+          .where(dueWhere)
+          .orderBy(asc(asset.nextCalibrationDate), asc(asset.tag))
+          .limit(PORTAL_DIGEST_MAX_ITEMS),
+      );
 
       const items: PortalDueDigestItem[] = dueAssets.flatMap((item) => {
         if (!item.nextCalibrationDate) return [];

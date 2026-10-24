@@ -45,7 +45,7 @@
  * across orgs for B/C/D rows.
  */
 
-import { db } from "@calibra-facil/db";
+import { systemDb } from "@calibra-facil/db";
 import { customer, serviceOrderEmailOutbox } from "@calibra-facil/db/schema";
 import { eq, and, isNull, lt, asc } from "drizzle-orm";
 import { sql } from "drizzle-orm";
@@ -74,6 +74,7 @@ import { dispatchNovoOrcamentoEmail } from "../modules/service-orders/novo-orcam
 import { dispatchOrcamentoAprovadoEmail } from "../modules/service-orders/orcamento-aprovado-email-dispatch";
 import { dispatchOrcamentoRecusadoEmail } from "../modules/service-orders/orcamento-recusado-email-dispatch";
 import { isReleaseExhausting } from "./outbox-release";
+import { orgTransactionWithExecutor } from "./org-transaction";
 
 // =============================================================================
 // CONSTANTS
@@ -173,17 +174,30 @@ function toRecordOrNull(
  *     concurrent drains, but an expired lease (a run killed mid-send) is
  *     reclaimable, so the row recovers instead of stranding.
  */
-async function claimOutboxRow(rowId: number): Promise<ClaimResult | undefined> {
-  const result = await db.execute(
-    sql`UPDATE service_order_email_outbox
+async function claimOutboxRow(
+  organizationId: string,
+  rowId: number,
+): Promise<ClaimResult | undefined> {
+  // One short transaction that names the row's laboratory (row-level security);
+  // the statement keeps its explicit organization predicate.
+  const result: unknown = await orgTransactionWithExecutor(
+    organizationId,
+    async (_o, tx) =>
+      tx.execute(
+        sql`UPDATE service_order_email_outbox
         SET claimed_at = now()
         WHERE id = ${rowId}
+          AND organization_id = ${organizationId}
           AND processed_at IS NULL
           AND (claimed_at IS NULL OR claimed_at < now() - (${CLAIM_LEASE_SECONDS}::int * interval '1 second'))
         RETURNING id`,
+      ),
   );
   // Drizzle's db.execute returns a PG QueryResult — rows is on .rows
-  const rows: unknown = Reflect.get(result, "rows") ?? result;
+  const rows: unknown =
+    typeof result === "object" && result !== null
+      ? (Reflect.get(result, "rows") ?? result)
+      : result;
   if (!Array.isArray(rows) || rows.length === 0) {
     return undefined;
   }
@@ -211,28 +225,31 @@ async function claimOutboxRow(rowId: number): Promise<ClaimResult | undefined> {
  * tests.
  */
 async function releaseOutboxRow(
+  organizationId: string,
   rowId: number,
   errorMessage: string,
   deadLetter: boolean,
 ): Promise<void> {
-  if (deadLetter) {
-    await db.execute(
-      sql`UPDATE service_order_email_outbox
+  await orgTransactionWithExecutor(organizationId, async (_o, tx) => {
+    if (deadLetter) {
+      await tx.execute(
+        sql`UPDATE service_order_email_outbox
           SET claimed_at = NULL,
               attempts = attempts + 1,
               last_error = ${errorMessage},
               dead_letter_at = now()
-          WHERE id = ${rowId}`,
-    );
-    return;
-  }
-  await db.execute(
-    sql`UPDATE service_order_email_outbox
+          WHERE id = ${rowId} AND organization_id = ${organizationId}`,
+      );
+      return;
+    }
+    await tx.execute(
+      sql`UPDATE service_order_email_outbox
         SET claimed_at = NULL,
             attempts = attempts + 1,
             last_error = ${errorMessage}
-        WHERE id = ${rowId}`,
-  );
+        WHERE id = ${rowId} AND organization_id = ${organizationId}`,
+    );
+  });
 }
 
 /**
@@ -253,25 +270,28 @@ async function releaseOutboxRow(
  * mirroring releaseOutboxRow.
  */
 async function markOutboxRowProcessed(
+  organizationId: string,
   rowId: number,
   options: { redactCredentials: boolean },
 ): Promise<void> {
-  if (options.redactCredentials) {
-    await db.execute(
-      sql`UPDATE service_order_email_outbox
+  await orgTransactionWithExecutor(organizationId, async (_o, tx) => {
+    if (options.redactCredentials) {
+      await tx.execute(
+        sql`UPDATE service_order_email_outbox
           SET processed_at = now(),
               payload = jsonb_set(
                 jsonb_set(payload, '{publicAccessToken}', '"[REDACTED]"', false),
                 '{approvalCode}', '"[REDACTED]"', false)
-          WHERE id = ${rowId}`,
-    );
-    return;
-  }
-  await db.execute(
-    sql`UPDATE service_order_email_outbox
+          WHERE id = ${rowId} AND organization_id = ${organizationId}`,
+      );
+      return;
+    }
+    await tx.execute(
+      sql`UPDATE service_order_email_outbox
         SET processed_at = now()
-        WHERE id = ${rowId}`,
-  );
+        WHERE id = ${rowId} AND organization_id = ${organizationId}`,
+    );
+  });
 }
 
 // =============================================================================
@@ -619,7 +639,11 @@ export async function drainServiceOrderEmailOutbox(options?: {
 
   try {
     // 1. SELECT pending rows using the pending index (created_at, processed_at).
-    const pendingRows = await db
+    // System path (tenant-sql-allowlist.ts "cron-queue"): the drain has no
+    // request, so the one statement that lists the owed rows of EVERY laboratory
+    // is cross-organization by design; each row is then claimed, read and
+    // finished in a transaction that names row.organizationId.
+    const pendingRows = await systemDb
       .select({
         id: serviceOrderEmailOutbox.id,
         organizationId: serviceOrderEmailOutbox.organizationId,
@@ -645,7 +669,7 @@ export async function drainServiceOrderEmailOutbox(options?: {
     for (const row of pendingRows) {
       try {
         // 2. Atomically claim: only proceed if we won the race.
-        const claimed = await claimOutboxRow(row.id);
+        const claimed = await claimOutboxRow(row.organizationId, row.id);
         if (!claimed) {
           // Another concurrent drain already claimed this row — skip silently.
           result.skipped++;
@@ -685,7 +709,7 @@ export async function drainServiceOrderEmailOutbox(options?: {
           if (handled) {
             // Terminal success — mark done so the lease isn't reclaimed.
             // orcamento_sent payloads carry raw credentials → redact on send.
-            await markOutboxRowProcessed(row.id, {
+            await markOutboxRowProcessed(row.organizationId, row.id, {
               redactCredentials: eventKey.startsWith("orcamento_sent:"),
             });
             result.sent++;
@@ -695,6 +719,7 @@ export async function drainServiceOrderEmailOutbox(options?: {
               "B/C/D dispatch did not complete — released for retry";
             try {
               await releaseOutboxRow(
+                row.organizationId,
                 row.id,
                 releaseMsg,
                 isReleaseExhausting(row.attempts, maxAttempts),
@@ -716,11 +741,37 @@ export async function drainServiceOrderEmailOutbox(options?: {
 
         // 3. Re-load service order + customer (tenant-scoped by organizationId).
         // Raw SQL so the organization_id predicate is directly assertable in tests.
-        const soResult = await db.execute(
-          sql`SELECT id, public_id, organization_id, customer_id, service_order_number, client_contact_snapshot
+        // One transaction that names the laboratory: the service order (raw SQL
+        // so the organization predicate stays assertable) and its customer.
+        const { soResult, custRows } = await orgTransactionWithExecutor(
+          row.organizationId,
+          async (o, tx) => {
+            const loaded = await tx.execute(
+              sql`SELECT id, public_id, organization_id, customer_id, service_order_number, client_contact_snapshot
               FROM service_order
               WHERE id = ${row.serviceOrderId} AND organization_id = ${row.organizationId}
               LIMIT 1`,
+            );
+            const rows: unknown = Reflect.get(loaded, "rows") ?? loaded;
+            const first: unknown = Array.isArray(rows) ? rows[0] : undefined;
+            const customerId =
+              typeof first === "object" && first !== null
+                ? Reflect.get(first, "customer_id")
+                : undefined;
+            const customers =
+              typeof customerId === "number"
+                ? await o
+                    .select({
+                      id: customer.id,
+                      name: customer.name,
+                      email: customer.email,
+                    })
+                    .from(customer)
+                    .where(eq(customer.id, customerId))
+                    .limit(1)
+                : [];
+            return { soResult: loaded, custRows: customers };
+          },
         );
         const soResultRows: unknown = Reflect.get(soResult, "rows") ?? soResult;
         const soRawRow: unknown = Array.isArray(soResultRows)
@@ -761,20 +812,12 @@ export async function drainServiceOrderEmailOutbox(options?: {
           );
           // Graceful terminal skip — the SO is gone, so mark done (don't let the
           // lease expire and re-pick it forever).
-          await markOutboxRowProcessed(row.id, { redactCredentials: false });
+          await markOutboxRowProcessed(row.organizationId, row.id, {
+            redactCredentials: false,
+          });
           result.skipped++;
           continue;
         }
-
-        const custRows = await db
-          .select({
-            id: customer.id,
-            name: customer.name,
-            email: customer.email,
-          })
-          .from(customer)
-          .where(eq(customer.id, soRow.customerId))
-          .limit(1);
 
         const custRow = custRows[0];
         if (!custRow) {
@@ -782,7 +825,9 @@ export async function drainServiceOrderEmailOutbox(options?: {
             `[ServiceOrderEmailDrain] Customer ${soRow.customerId} not found (outbox id=${row.id}); marking processed.`,
           );
           // Graceful terminal skip — mark done so the lease isn't re-claimed.
-          await markOutboxRowProcessed(row.id, { redactCredentials: false });
+          await markOutboxRowProcessed(row.organizationId, row.id, {
+            redactCredentials: false,
+          });
           result.skipped++;
           continue;
         }
@@ -801,13 +846,16 @@ export async function drainServiceOrderEmailOutbox(options?: {
 
         if (sent) {
           // Terminal success — mark done so the lease isn't reclaimed.
-          await markOutboxRowProcessed(row.id, { redactCredentials: false });
+          await markOutboxRowProcessed(row.organizationId, row.id, {
+            redactCredentials: false,
+          });
           result.sent++;
         } else {
           // 5. On failure: release the lease back to pending for retry (or
           // dead-letter the row if this failure exhausts its attempts).
           const releaseMsg = "Send did not complete — released for retry";
           await releaseOutboxRow(
+            row.organizationId,
             row.id,
             releaseMsg,
             isReleaseExhausting(row.attempts, maxAttempts),

@@ -3,8 +3,9 @@ import { HTTPException } from "hono/http-exception";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { and, desc, eq, gt, ne, sql } from "drizzle-orm";
-import { db } from "@calibra-facil/db";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
+import { orgDb } from "../lib/org-db";
+import { orgTransactionWithExecutor } from "../lib/org-transaction";
 import {
   integrationEventLog,
   integrationObjectLink,
@@ -413,16 +414,18 @@ async function requireContaAzulReconnectAfterAppChange(params: {
 }) {
   if (params.clientIdBefore === params.clientIdAfter) return;
 
-  const connected = await db
-    .select({ id: organizationIntegration.id })
-    .from(organizationIntegration)
-    .where(
-      and(
-        eq(organizationIntegration.organizationId, params.organizationId),
-        eq(organizationIntegration.provider, "conta_azul"),
-        ne(organizationIntegration.status, "DISABLED"),
+  const connected = await orgDb(params.organizationId).transaction((o) =>
+    o
+      .select({ id: organizationIntegration.id })
+      .from(organizationIntegration)
+      .where(
+        and(
+          eq(organizationIntegration.organizationId, params.organizationId),
+          eq(organizationIntegration.provider, "conta_azul"),
+          ne(organizationIntegration.status, "DISABLED"),
+        ),
       ),
-    );
+  );
 
   await Promise.all(
     connected.map((integration) =>
@@ -442,37 +445,40 @@ async function resolveContaAzulOAuthCallbackContext(state: {
   userId: string;
   sessionId: string;
 }) {
-  const [record] = await db
-    .select({
-      memberId: memberTable.id,
-      memberRole: memberTable.role,
-      organizationId: organizationTable.id,
-      organizationType: organizationTable.type,
-      userId: userTable.id,
-      sessionId: sessionTable.id,
-    })
-    .from(sessionTable)
-    .innerJoin(userTable, eq(userTable.id, sessionTable.userId))
-    .innerJoin(
-      memberTable,
-      and(
-        eq(memberTable.organizationId, state.organizationId),
-        eq(memberTable.userId, state.userId),
-      ),
-    )
-    .innerJoin(
-      organizationTable,
-      eq(organizationTable.id, memberTable.organizationId),
-    )
-    .where(
-      and(
-        eq(sessionTable.id, state.sessionId),
-        eq(sessionTable.userId, state.userId),
-        eq(sessionTable.activeOrganizationId, state.organizationId),
-        gt(sessionTable.expiresAt, new Date()),
-      ),
-    )
-    .limit(1);
+  // The signed OAuth state names the laboratory, so the lookup runs in it.
+  const [record] = await orgDb(state.organizationId).transaction((o) =>
+    o
+      .select({
+        memberId: memberTable.id,
+        memberRole: memberTable.role,
+        organizationId: organizationTable.id,
+        organizationType: organizationTable.type,
+        userId: userTable.id,
+        sessionId: sessionTable.id,
+      })
+      .from(sessionTable)
+      .innerJoin(userTable, eq(userTable.id, sessionTable.userId))
+      .innerJoin(
+        memberTable,
+        and(
+          eq(memberTable.organizationId, state.organizationId),
+          eq(memberTable.userId, state.userId),
+        ),
+      )
+      .innerJoin(
+        organizationTable,
+        eq(organizationTable.id, memberTable.organizationId),
+      )
+      .where(
+        and(
+          eq(sessionTable.id, state.sessionId),
+          eq(sessionTable.userId, state.userId),
+          eq(sessionTable.activeOrganizationId, state.organizationId),
+          gt(sessionTable.expiresAt, new Date()),
+        ),
+      )
+      .limit(1),
+  );
 
   if (!record) {
     throw new HTTPException(401, { message: "Sessão OAuth inválida" });
@@ -494,81 +500,92 @@ async function resolveContaAzulOAuthCallbackContext(state: {
 }
 
 async function buildListPayload(organizationId: string) {
-  const integrations = await listOrganizationIntegrations(organizationId);
+  return orgDb(organizationId).transaction(async (o) => {
+    const integrations = await listOrganizationIntegrations(organizationId, o);
 
-  const data = await Promise.all(
-    integrations.map(async (integration) => {
-      const recentRuns = await db.query.integrationSyncRun.findMany({
-        where: and(
-          eq(integrationSyncRun.integrationId, integration.id),
-          eq(integrationSyncRun.organizationId, organizationId),
-        ),
-        orderBy: [desc(integrationSyncRun.createdAt)],
-        limit: 5,
-      });
+    const data = await Promise.all(
+      integrations.map(async (integration) => {
+        const recentRuns = await o
+          .select()
+          .from(integrationSyncRun)
+          .where(
+            and(
+              eq(integrationSyncRun.integrationId, integration.id),
+              eq(integrationSyncRun.organizationId, organizationId),
+            ),
+          )
+          .orderBy(desc(integrationSyncRun.createdAt))
+          .limit(5);
 
-      const recentEvents = await db.query.integrationEventLog.findMany({
-        where: and(
-          eq(integrationEventLog.integrationId, integration.id),
-          eq(integrationEventLog.organizationId, organizationId),
-        ),
-        orderBy: [desc(integrationEventLog.createdAt)],
-        limit: 5,
-      });
-      const overview = integration.connection
-        ? await buildIntegrationOverview({
-            integration,
-            connection: integration.connection,
-          })
-        : {
-            readiness: {
-              setupStatus: "NOT_CONFIGURED" as const,
-              readinessStatus: "NOT_READY" as const,
-              capabilities: getProviderCapabilities(integration.provider),
-              validationRequired: true,
-              canSync: false,
-              lastValidatedAt: null,
-              lastValidationError: integration.lastValidationError,
-              dependencyWarnings: [],
-            },
-            targets: [],
-            remoteDocuments: buildEmptyRemoteDocumentSummary(),
-            syncSummary: {
-              lastRunAt: null,
-              lastSuccessfulRunAt: null,
-              lastErrorAt: null,
-              hasRecentFailures: false,
-            },
-          };
+        const recentEvents = await o
+          .select()
+          .from(integrationEventLog)
+          .where(
+            and(
+              eq(integrationEventLog.integrationId, integration.id),
+              eq(integrationEventLog.organizationId, organizationId),
+            ),
+          )
+          .orderBy(desc(integrationEventLog.createdAt))
+          .limit(5);
+        const overview = integration.connection
+          ? await buildIntegrationOverview(
+              {
+                integration,
+                connection: integration.connection,
+              },
+              o,
+            )
+          : {
+              readiness: {
+                setupStatus: "NOT_CONFIGURED" as const,
+                readinessStatus: "NOT_READY" as const,
+                capabilities: getProviderCapabilities(integration.provider),
+                validationRequired: true,
+                canSync: false,
+                lastValidatedAt: null,
+                lastValidationError: integration.lastValidationError,
+                dependencyWarnings: [],
+              },
+              targets: [],
+              remoteDocuments: buildEmptyRemoteDocumentSummary(),
+              syncSummary: {
+                lastRunAt: null,
+                lastSuccessfulRunAt: null,
+                lastErrorAt: null,
+                hasRecentFailures: false,
+              },
+            };
 
-      return {
-        id: integration.id,
-        type: integration.type,
-        provider: integration.provider,
-        name: integration.name,
-        status: integration.status,
-        lastValidatedAt: integration.lastValidatedAt,
-        lastValidationError: integration.lastValidationError,
-        createdAt: integration.createdAt,
-        updatedAt: integration.updatedAt,
-        connection: {
-          id: integration.connection?.id ?? null,
-          credentialType: integration.connection?.credentialType ?? "bearer",
-          config: integration.connection?.config
-            ? normalizeFinancialErpConnectionConfig(
-                integration.provider,
-                integration.connection.config,
-              )
-            : null,
-        },
-        recentRuns,
-        recentEvents,
-        overview,
-      };
-    }),
-  );
+        return {
+          id: integration.id,
+          type: integration.type,
+          provider: integration.provider,
+          name: integration.name,
+          status: integration.status,
+          lastValidatedAt: integration.lastValidatedAt,
+          lastValidationError: integration.lastValidationError,
+          createdAt: integration.createdAt,
+          updatedAt: integration.updatedAt,
+          connection: {
+            id: integration.connection?.id ?? null,
+            credentialType: integration.connection?.credentialType ?? "bearer",
+            config: integration.connection?.config
+              ? normalizeFinancialErpConnectionConfig(
+                  integration.provider,
+                  integration.connection.config,
+                )
+              : null,
+          },
+          recentRuns,
+          recentEvents,
+          overview,
+        };
+      }),
+    );
 
-  return { data };
+    return { data };
+  });
 }
 
 export async function dispatchSyncRun(params: {
@@ -674,7 +691,7 @@ async function upsertContaAzulConnection(params: {
     params.env,
   );
 
-  return db.transaction(async (tx) => {
+  return orgTransactionWithExecutor(params.organizationId, async (o, tx) => {
     // Serialize concurrent OAuth callbacks for the same org+provider so two
     // first-time connect requests cannot both pass findFirst and insert
     // duplicate organization_integration rows. Lock is transaction-scoped and
@@ -683,16 +700,27 @@ async function upsertContaAzulConnection(params: {
       sql`SELECT pg_advisory_xact_lock(hashtextextended(${`integration:conta_azul:${params.organizationId}`}, 0))`,
     );
 
-    const existing = await tx.query.organizationIntegration.findFirst({
-      where: and(
-        eq(organizationIntegration.organizationId, params.organizationId),
-        eq(organizationIntegration.type, "financial_erp"),
-        eq(organizationIntegration.provider, "conta_azul"),
-      ),
-      with: {
-        connection: true,
-      },
-    });
+    const [existingRow] = await o
+      .select({
+        integration: organizationIntegration,
+        connection: integrationConnection,
+      })
+      .from(organizationIntegration)
+      .leftJoin(
+        integrationConnection,
+        eq(integrationConnection.integrationId, organizationIntegration.id),
+      )
+      .where(
+        and(
+          eq(organizationIntegration.organizationId, params.organizationId),
+          eq(organizationIntegration.type, "financial_erp"),
+          eq(organizationIntegration.provider, "conta_azul"),
+        ),
+      )
+      .limit(1);
+    const existing = existingRow
+      ? { ...existingRow.integration, connection: existingRow.connection }
+      : undefined;
     const integrationId = existing?.id ?? crypto.randomUUID();
     const connectionId = existing?.connection?.id ?? crypto.randomUUID();
     const previousConfig = existing?.connection
@@ -710,16 +738,16 @@ async function upsertContaAzulConnection(params: {
       // remote-account identity, so wipe them — callers must re-sync after a
       // reconnect.
       if (existing.connection) {
-        await tx
+        await o
           .delete(integrationObjectLink)
           .where(eq(integrationObjectLink.integrationId, integrationId));
 
-        await tx
+        await o
           .delete(integrationSyncCursor)
           .where(eq(integrationSyncCursor.integrationId, integrationId));
       }
 
-      await tx
+      await o
         .update(organizationIntegration)
         .set({
           name: existing.name || "Conta Azul",
@@ -731,7 +759,7 @@ async function upsertContaAzulConnection(params: {
         })
         .where(eq(organizationIntegration.id, integrationId));
     } else {
-      await tx.insert(organizationIntegration).values({
+      await o.insert(organizationIntegration).values({
         id: integrationId,
         organizationId: params.organizationId,
         type: "financial_erp",
@@ -744,7 +772,7 @@ async function upsertContaAzulConnection(params: {
     }
 
     if (existing?.connection) {
-      await tx
+      await o
         .update(integrationConnection)
         .set({
           credentialType: "oauth2",
@@ -756,7 +784,7 @@ async function upsertContaAzulConnection(params: {
         })
         .where(eq(integrationConnection.id, connectionId));
     } else {
-      await tx.insert(integrationConnection).values({
+      await o.insert(integrationConnection).values({
         id: connectionId,
         integrationId,
         organizationId: params.organizationId,
@@ -1098,8 +1126,10 @@ export const integrationsRouter = new Hono<{
       const integrationId = crypto.randomUUID();
       const connectionId = crypto.randomUUID();
 
-      await db.transaction(async (tx) => {
-        await tx.insert(organizationIntegration).values({
+      // The integration, its connection and the events that record them commit
+      // together.
+      await orgDb(member.organizationId).transaction(async (o) => {
+        await o.insert(organizationIntegration).values({
           id: integrationId,
           organizationId: member.organizationId,
           type: "financial_erp",
@@ -1110,7 +1140,7 @@ export const integrationsRouter = new Hono<{
           updatedBy: session.user.id,
         });
 
-        await tx.insert(integrationConnection).values({
+        await o.insert(integrationConnection).values({
           id: connectionId,
           integrationId,
           organizationId: member.organizationId,
@@ -1121,32 +1151,38 @@ export const integrationsRouter = new Hono<{
           createdBy: session.user.id,
           updatedBy: session.user.id,
         });
-      });
 
-      await writeIntegrationEvent({
-        integrationId,
-        organizationId: member.organizationId,
-        level: "info",
-        event: "integration.created",
-        message: "Integração criada",
-        details: {
-          provider: "generic_http",
-          type: "financial_erp",
-          name: input.name,
-        },
-      });
+        await writeIntegrationEvent(
+          {
+            integrationId,
+            organizationId: member.organizationId,
+            level: "info",
+            event: "integration.created",
+            message: "Integração criada",
+            details: {
+              provider: "generic_http",
+              type: "financial_erp",
+              name: input.name,
+            },
+          },
+          o,
+        );
 
-      await writeOrganizationIntegrationEvent({
-        organizationId: member.organizationId,
-        actorUserId: session.user.id,
-        actorMemberId: member.id,
-        action: "integration.created",
-        entityId: integrationId,
-        details: {
-          provider: "generic_http",
-          type: "financial_erp",
-          name: input.name,
-        },
+        await writeOrganizationIntegrationEvent(
+          {
+            organizationId: member.organizationId,
+            actorUserId: session.user.id,
+            actorMemberId: member.id,
+            action: "integration.created",
+            entityId: integrationId,
+            details: {
+              provider: "generic_http",
+              type: "financial_erp",
+              name: input.name,
+            },
+          },
+          o,
+        );
       });
 
       return c.json(await buildListPayload(member.organizationId), 201);
@@ -1204,8 +1240,8 @@ export const integrationsRouter = new Hono<{
         );
       }
 
-      await db.transaction(async (tx) => {
-        await tx
+      await orgDb(member.organizationId).transaction(async (o) => {
+        await o
           .update(organizationIntegration)
           .set({
             name: input.name ?? record.integration.name,
@@ -1228,26 +1264,32 @@ export const integrationsRouter = new Hono<{
           connectionUpdate.secretIv = encrypted.secretIv;
         }
 
-        await tx
+        await o
           .update(integrationConnection)
           .set(connectionUpdate)
           .where(eq(integrationConnection.integrationId, id));
-      });
 
-      await writeIntegrationEvent({
-        integrationId: id,
-        organizationId: member.organizationId,
-        level: "info",
-        event: "integration.updated",
-        message: "Integração atualizada",
-      });
+        await writeIntegrationEvent(
+          {
+            integrationId: id,
+            organizationId: member.organizationId,
+            level: "info",
+            event: "integration.updated",
+            message: "Integração atualizada",
+          },
+          o,
+        );
 
-      await writeOrganizationIntegrationEvent({
-        organizationId: member.organizationId,
-        actorUserId: session.user.id,
-        actorMemberId: member.id,
-        action: "integration.updated",
-        entityId: id,
+        await writeOrganizationIntegrationEvent(
+          {
+            organizationId: member.organizationId,
+            actorUserId: session.user.id,
+            actorMemberId: member.id,
+            action: "integration.updated",
+            entityId: id,
+          },
+          o,
+        );
       });
 
       return c.json(await buildListPayload(member.organizationId));
@@ -1315,8 +1357,8 @@ export const integrationsRouter = new Hono<{
           scopes: refreshed.scopes,
         });
 
-        await db.transaction(async (tx) => {
-          await tx
+        await orgDb(member.organizationId).transaction(async (o) => {
+          await o
             .update(integrationConnection)
             .set({
               credentialType: "oauth2",
@@ -1328,7 +1370,7 @@ export const integrationsRouter = new Hono<{
             })
             .where(eq(integrationConnection.integrationId, id));
 
-          await tx
+          await o
             .update(organizationIntegration)
             .set({
               status:
@@ -1340,18 +1382,21 @@ export const integrationsRouter = new Hono<{
               updatedAt: new Date(),
             })
             .where(eq(organizationIntegration.id, id));
-        });
 
-        await writeIntegrationEvent({
-          integrationId: id,
-          organizationId: member.organizationId,
-          level: "info",
-          event: "integration.conta_azul.token_refreshed",
-          message: "Token OAuth da Conta Azul renovado",
-          details: {
-            provider: "conta_azul",
-            accessTokenExpiresAt: refreshed.expiresAt,
-          },
+          await writeIntegrationEvent(
+            {
+              integrationId: id,
+              organizationId: member.organizationId,
+              level: "info",
+              event: "integration.conta_azul.token_refreshed",
+              message: "Token OAuth da Conta Azul renovado",
+              details: {
+                provider: "conta_azul",
+                accessTokenExpiresAt: refreshed.expiresAt,
+              },
+            },
+            o,
+          );
         });
 
         return c.json({
@@ -1361,26 +1406,31 @@ export const integrationsRouter = new Hono<{
       } catch (error) {
         const failure = buildContaAzulRefreshFailurePolicy(error);
 
-        await db
-          .update(organizationIntegration)
-          .set({
-            status: failure.status,
-            lastValidationError: failure.message,
-            updatedBy: session.user.id,
-            updatedAt: new Date(),
-          })
-          .where(eq(organizationIntegration.id, id));
+        await orgDb(member.organizationId).transaction(async (o) => {
+          await o
+            .update(organizationIntegration)
+            .set({
+              status: failure.status,
+              lastValidationError: failure.message,
+              updatedBy: session.user.id,
+              updatedAt: new Date(),
+            })
+            .where(eq(organizationIntegration.id, id));
 
-        await writeIntegrationEvent({
-          integrationId: id,
-          organizationId: member.organizationId,
-          level: "error",
-          event: "integration.conta_azul.refresh_failed",
-          message: failure.message,
-          details: {
-            provider: "conta_azul",
-            reason: failure.reason,
-          },
+          await writeIntegrationEvent(
+            {
+              integrationId: id,
+              organizationId: member.organizationId,
+              level: "error",
+              event: "integration.conta_azul.refresh_failed",
+              message: failure.message,
+              details: {
+                provider: "conta_azul",
+                reason: failure.reason,
+              },
+            },
+            o,
+          );
         });
 
         return c.json({ error: failure.message }, 400);
@@ -1402,22 +1452,22 @@ export const integrationsRouter = new Hono<{
         return c.json({ error: "Integração Conta Azul não encontrada" }, 404);
       }
 
-      await db.transaction(async (tx) => {
+      await orgDb(member.organizationId).transaction(async (o) => {
         // Clear remote-link state so a fresh reconnect cannot reuse stale
         // links that belong to the prior Conta Azul account.
-        await tx
+        await o
           .delete(integrationObjectLink)
           .where(eq(integrationObjectLink.integrationId, id));
 
-        await tx
+        await o
           .delete(integrationSyncCursor)
           .where(eq(integrationSyncCursor.integrationId, id));
 
-        await tx
+        await o
           .delete(integrationConnection)
           .where(eq(integrationConnection.integrationId, id));
 
-        await tx
+        await o
           .update(organizationIntegration)
           .set({
             status: "DISABLED",
@@ -1427,28 +1477,34 @@ export const integrationsRouter = new Hono<{
             updatedAt: new Date(),
           })
           .where(eq(organizationIntegration.id, id));
-      });
 
-      await writeIntegrationEvent({
-        integrationId: id,
-        organizationId: member.organizationId,
-        level: "info",
-        event: "integration.conta_azul.disconnected",
-        message: "Conta Azul desconectada",
-        details: {
-          provider: "conta_azul",
-        },
-      });
+        await writeIntegrationEvent(
+          {
+            integrationId: id,
+            organizationId: member.organizationId,
+            level: "info",
+            event: "integration.conta_azul.disconnected",
+            message: "Conta Azul desconectada",
+            details: {
+              provider: "conta_azul",
+            },
+          },
+          o,
+        );
 
-      await writeOrganizationIntegrationEvent({
-        organizationId: member.organizationId,
-        actorUserId: session.user.id,
-        actorMemberId: member.id,
-        action: "integration.conta_azul.disconnected",
-        entityId: id,
-        details: {
-          provider: "conta_azul",
-        },
+        await writeOrganizationIntegrationEvent(
+          {
+            organizationId: member.organizationId,
+            actorUserId: session.user.id,
+            actorMemberId: member.id,
+            action: "integration.conta_azul.disconnected",
+            entityId: id,
+            details: {
+              provider: "conta_azul",
+            },
+          },
+          o,
+        );
       });
 
       return c.json({ success: true });
@@ -1684,34 +1740,42 @@ export const integrationsRouter = new Hono<{
           : currentConfig.enabledTargets,
       });
 
-      await db
-        .update(integrationConnection)
-        .set({
-          config: nextConfig,
-          updatedBy: session.user.id,
-          updatedAt: new Date(),
-        })
-        .where(eq(integrationConnection.integrationId, id));
+      await orgDb(member.organizationId).transaction(async (o) => {
+        await o
+          .update(integrationConnection)
+          .set({
+            config: nextConfig,
+            updatedBy: session.user.id,
+            updatedAt: new Date(),
+          })
+          .where(eq(integrationConnection.integrationId, id));
 
-      await writeIntegrationEvent({
-        integrationId: id,
-        organizationId: member.organizationId,
-        level: "info",
-        event: "integration.conta_azul.config_updated",
-        message: "Configuração da Conta Azul atualizada",
-        details: {
-          provider: "conta_azul",
-          exportMode: nextConfig.exportMode,
-          enabledTargets: nextConfig.enabledTargets,
-        },
-      });
+        await writeIntegrationEvent(
+          {
+            integrationId: id,
+            organizationId: member.organizationId,
+            level: "info",
+            event: "integration.conta_azul.config_updated",
+            message: "Configuração da Conta Azul atualizada",
+            details: {
+              provider: "conta_azul",
+              exportMode: nextConfig.exportMode,
+              enabledTargets: nextConfig.enabledTargets,
+            },
+          },
+          o,
+        );
 
-      await writeOrganizationIntegrationEvent({
-        organizationId: member.organizationId,
-        actorUserId: session.user.id,
-        actorMemberId: member.id,
-        action: "integration.conta_azul.config_updated",
-        entityId: id,
+        await writeOrganizationIntegrationEvent(
+          {
+            organizationId: member.organizationId,
+            actorUserId: session.user.id,
+            actorMemberId: member.id,
+            action: "integration.conta_azul.config_updated",
+            entityId: id,
+          },
+          o,
+        );
       });
 
       return c.json(await buildListPayload(member.organizationId));
@@ -2117,37 +2181,45 @@ export const integrationsRouter = new Hono<{
           });
         }
 
-        await db
-          .update(organizationIntegration)
-          .set({
-            status:
-              record.integration.status === "ACTION_REQUIRED"
-                ? "ACTIVE"
-                : record.integration.status,
-            lastValidatedAt: new Date(),
-            lastValidationError: null,
-            updatedBy: session.user.id,
-            updatedAt: new Date(),
-          })
-          .where(eq(organizationIntegration.id, id));
+        await orgDb(member.organizationId).transaction(async (o) => {
+          await o
+            .update(organizationIntegration)
+            .set({
+              status:
+                record.integration.status === "ACTION_REQUIRED"
+                  ? "ACTIVE"
+                  : record.integration.status,
+              lastValidatedAt: new Date(),
+              lastValidationError: null,
+              updatedBy: session.user.id,
+              updatedAt: new Date(),
+            })
+            .where(eq(organizationIntegration.id, id));
 
-        await writeIntegrationEvent({
-          integrationId: id,
-          organizationId: member.organizationId,
-          level: "info",
-          event: "integration.validation_succeeded",
-          message: "Conexão validada com sucesso",
-          details: {
-            provider: record.integration.provider,
-          },
-        });
+          await writeIntegrationEvent(
+            {
+              integrationId: id,
+              organizationId: member.organizationId,
+              level: "info",
+              event: "integration.validation_succeeded",
+              message: "Conexão validada com sucesso",
+              details: {
+                provider: record.integration.provider,
+              },
+            },
+            o,
+          );
 
-        await writeOrganizationIntegrationEvent({
-          organizationId: member.organizationId,
-          actorUserId: session.user.id,
-          actorMemberId: member.id,
-          action: "integration.validated",
-          entityId: id,
+          await writeOrganizationIntegrationEvent(
+            {
+              organizationId: member.organizationId,
+              actorUserId: session.user.id,
+              actorMemberId: member.id,
+              action: "integration.validated",
+              entityId: id,
+            },
+            o,
+          );
         });
 
         return c.json({ success: true });
@@ -2155,21 +2227,26 @@ export const integrationsRouter = new Hono<{
         const message =
           error instanceof Error ? error.message : "Falha ao validar conexão";
 
-        await db
-          .update(organizationIntegration)
-          .set({
-            lastValidationError: message,
-            updatedBy: session.user.id,
-            updatedAt: new Date(),
-          })
-          .where(eq(organizationIntegration.id, id));
+        await orgDb(member.organizationId).transaction(async (o) => {
+          await o
+            .update(organizationIntegration)
+            .set({
+              lastValidationError: message,
+              updatedBy: session.user.id,
+              updatedAt: new Date(),
+            })
+            .where(eq(organizationIntegration.id, id));
 
-        await writeIntegrationEvent({
-          integrationId: id,
-          organizationId: member.organizationId,
-          level: "error",
-          event: "integration.validation_failed",
-          message,
+          await writeIntegrationEvent(
+            {
+              integrationId: id,
+              organizationId: member.organizationId,
+              level: "error",
+              event: "integration.validation_failed",
+              message,
+            },
+            o,
+          );
         });
 
         return c.json({ error: message }, 400);
@@ -2269,27 +2346,40 @@ export const integrationsRouter = new Hono<{
         );
       }
 
-      const runId = await createSyncRun({
-        integrationId: id,
-        organizationId: member.organizationId,
-        trigger: "manual",
-        target: input.target,
-        initiatedBy: session.user.id,
-        requestedLimit: input.limit,
-      });
+      // The run row and the event that requests it commit together; the
+      // dispatch below (queue, remote calls) runs after.
+      const runId = await orgDb(member.organizationId).transaction(
+        async (o) => {
+          const created = await createSyncRun(
+            {
+              integrationId: id,
+              organizationId: member.organizationId,
+              trigger: "manual",
+              target: input.target,
+              initiatedBy: session.user.id,
+              requestedLimit: input.limit,
+            },
+            o,
+          );
 
-      await writeIntegrationEvent({
-        integrationId: id,
-        organizationId: member.organizationId,
-        runId,
-        level: "info",
-        event: "sync.requested",
-        message: "Sincronização solicitada",
-        details: {
-          target: input.target,
-          limit: input.limit,
+          await writeIntegrationEvent(
+            {
+              integrationId: id,
+              organizationId: member.organizationId,
+              runId: created,
+              level: "info",
+              event: "sync.requested",
+              message: "Sincronização solicitada",
+              details: {
+                target: input.target,
+                limit: input.limit,
+              },
+            },
+            o,
+          );
+          return created;
         },
-      });
+      );
 
       let result;
       try {
@@ -2362,46 +2452,54 @@ export const integrationsRouter = new Hono<{
         lastScheduledRunAt: currentSchedule.lastScheduledRunAt,
       });
 
-      await db
-        .update(integrationConnection)
-        .set({
-          config: updatedConfig,
-          updatedBy: session.user.id,
-          updatedAt: new Date(),
-        })
-        .where(eq(integrationConnection.integrationId, id));
+      await orgDb(member.organizationId).transaction(async (o) => {
+        await o
+          .update(integrationConnection)
+          .set({
+            config: updatedConfig,
+            updatedBy: session.user.id,
+            updatedAt: new Date(),
+          })
+          .where(eq(integrationConnection.integrationId, id));
 
-      await writeIntegrationEvent({
-        integrationId: id,
-        organizationId: member.organizationId,
-        level: "info",
-        event: "integration.schedule_updated",
-        message: "Agendamento do alvo atualizado",
-        details: {
-          target: input.target,
-          mode: input.mode,
-          frequency:
-            input.mode === "scheduled"
-              ? updatedConfig.schedules[input.target].frequency
-              : null,
-          nextScheduledRunAt,
-        },
-      });
+        await writeIntegrationEvent(
+          {
+            integrationId: id,
+            organizationId: member.organizationId,
+            level: "info",
+            event: "integration.schedule_updated",
+            message: "Agendamento do alvo atualizado",
+            details: {
+              target: input.target,
+              mode: input.mode,
+              frequency:
+                input.mode === "scheduled"
+                  ? updatedConfig.schedules[input.target].frequency
+                  : null,
+              nextScheduledRunAt,
+            },
+          },
+          o,
+        );
 
-      await writeOrganizationIntegrationEvent({
-        organizationId: member.organizationId,
-        actorUserId: session.user.id,
-        actorMemberId: member.id,
-        action: "integration.schedule.updated",
-        entityId: id,
-        details: {
-          target: input.target,
-          mode: input.mode,
-          frequency:
-            input.mode === "scheduled"
-              ? updatedConfig.schedules[input.target].frequency
-              : null,
-        },
+        await writeOrganizationIntegrationEvent(
+          {
+            organizationId: member.organizationId,
+            actorUserId: session.user.id,
+            actorMemberId: member.id,
+            action: "integration.schedule.updated",
+            entityId: id,
+            details: {
+              target: input.target,
+              mode: input.mode,
+              frequency:
+                input.mode === "scheduled"
+                  ? updatedConfig.schedules[input.target].frequency
+                  : null,
+            },
+          },
+          o,
+        );
       });
 
       return c.json(await buildListPayload(member.organizationId));
@@ -2431,22 +2529,31 @@ export const integrationsRouter = new Hono<{
         );
       }
 
-      await db
-        .update(organizationIntegration)
-        .set({
-          status: input.enabled ? "ACTIVE" : "DISABLED",
-          disabledAt: input.enabled ? null : new Date(),
-          updatedBy: session.user.id,
-          updatedAt: new Date(),
-        })
-        .where(eq(organizationIntegration.id, id));
+      await orgDb(member.organizationId).transaction(async (o) => {
+        await o
+          .update(organizationIntegration)
+          .set({
+            status: input.enabled ? "ACTIVE" : "DISABLED",
+            disabledAt: input.enabled ? null : new Date(),
+            updatedBy: session.user.id,
+            updatedAt: new Date(),
+          })
+          .where(eq(organizationIntegration.id, id));
 
-      await writeIntegrationEvent({
-        integrationId: id,
-        organizationId: member.organizationId,
-        level: "info",
-        event: input.enabled ? "integration.enabled" : "integration.disabled",
-        message: input.enabled ? "Integração ativada" : "Integração desativada",
+        await writeIntegrationEvent(
+          {
+            integrationId: id,
+            organizationId: member.organizationId,
+            level: "info",
+            event: input.enabled
+              ? "integration.enabled"
+              : "integration.disabled",
+            message: input.enabled
+              ? "Integração ativada"
+              : "Integração desativada",
+          },
+          o,
+        );
       });
 
       return c.json(await buildListPayload(member.organizationId));
@@ -2485,14 +2592,19 @@ export const integrationsRouter = new Hono<{
         return c.json({ error: "Integração não encontrada" }, 404);
       }
 
-      const runs = await db.query.integrationSyncRun.findMany({
-        where: and(
-          eq(integrationSyncRun.integrationId, id),
-          eq(integrationSyncRun.organizationId, member.organizationId),
-        ),
-        orderBy: [desc(integrationSyncRun.createdAt)],
-        limit: 20,
-      });
+      const runs = await orgDb(member.organizationId).transaction((o) =>
+        o
+          .select()
+          .from(integrationSyncRun)
+          .where(
+            and(
+              eq(integrationSyncRun.integrationId, id),
+              eq(integrationSyncRun.organizationId, member.organizationId),
+            ),
+          )
+          .orderBy(desc(integrationSyncRun.createdAt))
+          .limit(20),
+      );
 
       return c.json({ data: runs });
     },
@@ -2514,27 +2626,41 @@ export const integrationsRouter = new Hono<{
         return c.json({ error: "Integração não encontrada" }, 404);
       }
 
-      const run = await db.query.integrationSyncRun.findFirst({
-        where: and(
-          eq(integrationSyncRun.id, runId),
-          eq(integrationSyncRun.integrationId, id),
-          eq(integrationSyncRun.organizationId, member.organizationId),
-        ),
-      });
+      const found = await orgDb(member.organizationId).transaction(
+        async (o) => {
+          const [run] = await o
+            .select()
+            .from(integrationSyncRun)
+            .where(
+              and(
+                eq(integrationSyncRun.id, runId),
+                eq(integrationSyncRun.integrationId, id),
+                eq(integrationSyncRun.organizationId, member.organizationId),
+              ),
+            )
+            .limit(1);
+          if (!run) return null;
 
-      if (!run) {
+          const items = await o
+            .select()
+            .from(integrationSyncItem)
+            .where(
+              and(
+                eq(integrationSyncItem.runId, runId),
+                eq(integrationSyncItem.integrationId, id),
+                eq(integrationSyncItem.organizationId, member.organizationId),
+              ),
+            )
+            .orderBy(desc(integrationSyncItem.updatedAt))
+            .limit(input.limit);
+          return { run, items };
+        },
+      );
+
+      if (!found) {
         return c.json({ error: "Execução não encontrada" }, 404);
       }
-
-      const items = await db.query.integrationSyncItem.findMany({
-        where: and(
-          eq(integrationSyncItem.runId, runId),
-          eq(integrationSyncItem.integrationId, id),
-          eq(integrationSyncItem.organizationId, member.organizationId),
-        ),
-        orderBy: [desc(integrationSyncItem.updatedAt)],
-        limit: input.limit,
-      });
+      const { run, items } = found;
       const statusCounts = items.reduce<Record<string, number>>((acc, item) => {
         acc[item.status] = (acc[item.status] ?? 0) + 1;
         return acc;
@@ -2567,13 +2693,20 @@ export const integrationsRouter = new Hono<{
         return c.json({ error: "Integração não encontrada" }, 404);
       }
 
-      const originalRun = await db.query.integrationSyncRun.findFirst({
-        where: and(
-          eq(integrationSyncRun.id, runId),
-          eq(integrationSyncRun.integrationId, id),
-          eq(integrationSyncRun.organizationId, member.organizationId),
-        ),
-      });
+      const [originalRun] = await orgDb(member.organizationId).transaction(
+        (o) =>
+          o
+            .select()
+            .from(integrationSyncRun)
+            .where(
+              and(
+                eq(integrationSyncRun.id, runId),
+                eq(integrationSyncRun.integrationId, id),
+                eq(integrationSyncRun.organizationId, member.organizationId),
+              ),
+            )
+            .limit(1),
+      );
 
       if (!originalRun) {
         return c.json({ error: "Execução não encontrada" }, 404);
@@ -2710,14 +2843,19 @@ export const integrationsRouter = new Hono<{
         return c.json({ error: "Integração não encontrada" }, 404);
       }
 
-      const events = await db.query.integrationEventLog.findMany({
-        where: and(
-          eq(integrationEventLog.integrationId, id),
-          eq(integrationEventLog.organizationId, member.organizationId),
-        ),
-        orderBy: [desc(integrationEventLog.createdAt)],
-        limit: 30,
-      });
+      const events = await orgDb(member.organizationId).transaction((o) =>
+        o
+          .select()
+          .from(integrationEventLog)
+          .where(
+            and(
+              eq(integrationEventLog.integrationId, id),
+              eq(integrationEventLog.organizationId, member.organizationId),
+            ),
+          )
+          .orderBy(desc(integrationEventLog.createdAt))
+          .limit(30),
+      );
 
       return c.json({ data: events });
     },

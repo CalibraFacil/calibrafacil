@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db } from "@calibra-facil/db";
 import { asset, assetType, customer } from "@calibra-facil/db/schema";
 import { AssetStatusSchema } from "@calibra-facil/schemas";
 import { and, count, eq, ilike, isNull, or } from "drizzle-orm";
@@ -16,6 +15,7 @@ import { denormalizeAssetSpecificationsForResponse } from "../../lib/asset-measu
 import { type PublicApiV2Env } from "./env";
 import { ListQuerySchema } from "./schemas";
 import { resolveCustomerId, resolveExternalResourceId } from "./resolvers";
+import { orgDb } from "../../lib/org-db";
 
 export const assetReadRoutes = new Hono<PublicApiV2Env>()
   .get(
@@ -66,41 +66,45 @@ export const assetReadRoutes = new Hono<PublicApiV2Env>()
           : undefined,
       ];
 
-      const [countResult, rows] = await Promise.all([
-        db
-          .select({ total: count() })
-          .from(asset)
-          .innerJoin(customer, eq(asset.customerId, customer.id))
-          .where(and(...conditions)),
-        db
-          .select({
-            id: asset.id,
-            unitId: asset.unitId,
-            customerId: asset.customerId,
-            customerName: customer.name,
-            assetTypeId: asset.assetTypeId,
-            assetTypeDefinition: assetType.definition,
-            name: asset.name,
-            tag: asset.tag,
-            serialNumber: asset.serialNumber,
-            manufacturer: asset.manufacturer,
-            model: asset.model,
-            status: asset.status,
-            baseMeasurementUnit: asset.baseMeasurementUnit,
-            lastCalibrationDate: asset.lastCalibrationDate,
-            nextCalibrationDate: asset.nextCalibrationDate,
-            specifications: asset.specifications,
-            createdAt: asset.createdAt,
-            updatedAt: asset.updatedAt,
-          })
-          .from(asset)
-          .innerJoin(customer, eq(asset.customerId, customer.id))
-          .innerJoin(assetType, eq(asset.assetTypeId, assetType.id))
-          .where(and(...conditions))
-          .orderBy(asset.name)
-          .limit(limit)
-          .offset(offset),
-      ]);
+      const [countResult, rows] = await orgDb(
+        apiKey.organizationId,
+      ).transaction((o) =>
+        Promise.all([
+          o
+            .select({ total: count() })
+            .from(asset)
+            .innerJoin(customer, eq(asset.customerId, customer.id))
+            .where(and(...conditions)),
+          o
+            .select({
+              id: asset.id,
+              unitId: asset.unitId,
+              customerId: asset.customerId,
+              customerName: customer.name,
+              assetTypeId: asset.assetTypeId,
+              assetTypeDefinition: assetType.definition,
+              name: asset.name,
+              tag: asset.tag,
+              serialNumber: asset.serialNumber,
+              manufacturer: asset.manufacturer,
+              model: asset.model,
+              status: asset.status,
+              baseMeasurementUnit: asset.baseMeasurementUnit,
+              lastCalibrationDate: asset.lastCalibrationDate,
+              nextCalibrationDate: asset.nextCalibrationDate,
+              specifications: asset.specifications,
+              createdAt: asset.createdAt,
+              updatedAt: asset.updatedAt,
+            })
+            .from(asset)
+            .innerJoin(customer, eq(asset.customerId, customer.id))
+            .innerJoin(assetType, eq(asset.assetTypeId, assetType.id))
+            .where(and(...conditions))
+            .orderBy(asset.name)
+            .limit(limit)
+            .offset(offset),
+        ]),
+      );
 
       const externalIds = await getResourceExternalIdMap({
         organizationId: apiKey.organizationId,
@@ -151,39 +155,41 @@ export const assetReadRoutes = new Hono<PublicApiV2Env>()
       );
     }
 
-    const [found] = await db
-      .select({
-        id: asset.id,
-        unitId: asset.unitId,
-        customerId: asset.customerId,
-        customerName: customer.name,
-        assetTypeId: asset.assetTypeId,
-        assetTypeDefinition: assetType.definition,
-        name: asset.name,
-        tag: asset.tag,
-        serialNumber: asset.serialNumber,
-        manufacturer: asset.manufacturer,
-        model: asset.model,
-        status: asset.status,
-        baseMeasurementUnit: asset.baseMeasurementUnit,
-        lastCalibrationDate: asset.lastCalibrationDate,
-        nextCalibrationDate: asset.nextCalibrationDate,
-        comments: asset.comments,
-        specifications: asset.specifications,
-        createdAt: asset.createdAt,
-        updatedAt: asset.updatedAt,
-      })
-      .from(asset)
-      .innerJoin(customer, eq(asset.customerId, customer.id))
-      .innerJoin(assetType, eq(asset.assetTypeId, assetType.id))
-      .where(
-        and(
-          eq(asset.id, resolvedId),
-          eq(customer.labOrganizationId, apiKey.organizationId),
-          isNull(asset.deletedAt),
-        ),
-      )
-      .limit(1);
+    const [found] = await orgDb(apiKey.organizationId).transaction((o) =>
+      o
+        .select({
+          id: asset.id,
+          unitId: asset.unitId,
+          customerId: asset.customerId,
+          customerName: customer.name,
+          assetTypeId: asset.assetTypeId,
+          assetTypeDefinition: assetType.definition,
+          name: asset.name,
+          tag: asset.tag,
+          serialNumber: asset.serialNumber,
+          manufacturer: asset.manufacturer,
+          model: asset.model,
+          status: asset.status,
+          baseMeasurementUnit: asset.baseMeasurementUnit,
+          lastCalibrationDate: asset.lastCalibrationDate,
+          nextCalibrationDate: asset.nextCalibrationDate,
+          comments: asset.comments,
+          specifications: asset.specifications,
+          createdAt: asset.createdAt,
+          updatedAt: asset.updatedAt,
+        })
+        .from(asset)
+        .innerJoin(customer, eq(asset.customerId, customer.id))
+        .innerJoin(assetType, eq(asset.assetTypeId, assetType.id))
+        .where(
+          and(
+            eq(asset.id, resolvedId),
+            eq(customer.labOrganizationId, apiKey.organizationId),
+            isNull(asset.deletedAt),
+          ),
+        )
+        .limit(1),
+    );
 
     if (!found) {
       return c.json(

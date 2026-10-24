@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { db } from "@calibra-facil/db";
 import {
   notification,
   notificationPreference,
@@ -19,6 +18,7 @@ import {
 import { eq, and, desc, count, inArray, sql } from "drizzle-orm";
 
 import { DEFAULT_PREFERENCES } from "../lib/notification-defaults";
+import { orgDb } from "../lib/org-db";
 
 /**
  * Notifications Router - In-App & Email Notification Management
@@ -68,19 +68,22 @@ export const notificationsRouter = new Hono<{ Variables: AuthVariables }>()
       const whereCondition = and(...conditions);
 
       // Get total count
-      const [countResult] = await db
-        .select({ total: count() })
-        .from(notification)
-        .where(whereCondition);
+      const [countResult] = await orgDb(member.organizationId).transaction(
+        (o) =>
+          o.select({ total: count() }).from(notification).where(whereCondition),
+      );
 
       // Get paginated data
-      const notifications = await db
-        .select()
-        .from(notification)
-        .where(whereCondition)
-        .orderBy(desc(notification.createdAt))
-        .limit(limit)
-        .offset(offset);
+      const notifications = await orgDb(member.organizationId).transaction(
+        (o) =>
+          o
+            .select()
+            .from(notification)
+            .where(whereCondition)
+            .orderBy(desc(notification.createdAt))
+            .limit(limit)
+            .offset(offset),
+      );
 
       return c.json({
         data: notifications,
@@ -101,16 +104,18 @@ export const notificationsRouter = new Hono<{ Variables: AuthVariables }>()
     const session = c.get("session");
     const member = c.get("member");
 
-    const [result] = await db
-      .select({ count: count() })
-      .from(notification)
-      .where(
-        and(
-          eq(notification.recipientUserId, session.user.id),
-          eq(notification.organizationId, member.organizationId),
-          eq(notification.status, "UNREAD"),
+    const [result] = await orgDb(member.organizationId).transaction((o) =>
+      o
+        .select({ count: count() })
+        .from(notification)
+        .where(
+          and(
+            eq(notification.recipientUserId, session.user.id),
+            eq(notification.organizationId, member.organizationId),
+            eq(notification.status, "UNREAD"),
+          ),
         ),
-      );
+    );
 
     return c.json({ count: result?.count ?? 0 });
   })
@@ -127,21 +132,23 @@ export const notificationsRouter = new Hono<{ Variables: AuthVariables }>()
       const member = c.get("member");
       const { notificationIds } = c.req.valid("json");
 
-      const updated = await db
-        .update(notification)
-        .set({
-          status: "READ",
-          readAt: new Date(),
-        })
-        .where(
-          and(
-            inArray(notification.id, notificationIds),
-            eq(notification.recipientUserId, session.user.id),
-            eq(notification.organizationId, member.organizationId),
-            eq(notification.status, "UNREAD"),
-          ),
-        )
-        .returning();
+      const updated = await orgDb(member.organizationId).transaction((o) =>
+        o
+          .update(notification)
+          .set({
+            status: "READ",
+            readAt: new Date(),
+          })
+          .where(
+            and(
+              inArray(notification.id, notificationIds),
+              eq(notification.recipientUserId, session.user.id),
+              eq(notification.organizationId, member.organizationId),
+              eq(notification.status, "UNREAD"),
+            ),
+          )
+          .returning(),
+      );
 
       return c.json({
         message: `${updated.length} notificacao(oes) marcada(s) como lida(s)`,
@@ -157,20 +164,22 @@ export const notificationsRouter = new Hono<{ Variables: AuthVariables }>()
     const session = c.get("session");
     const member = c.get("member");
 
-    const updated = await db
-      .update(notification)
-      .set({
-        status: "READ",
-        readAt: new Date(),
-      })
-      .where(
-        and(
-          eq(notification.recipientUserId, session.user.id),
-          eq(notification.organizationId, member.organizationId),
-          eq(notification.status, "UNREAD"),
-        ),
-      )
-      .returning();
+    const updated = await orgDb(member.organizationId).transaction((o) =>
+      o
+        .update(notification)
+        .set({
+          status: "READ",
+          readAt: new Date(),
+        })
+        .where(
+          and(
+            eq(notification.recipientUserId, session.user.id),
+            eq(notification.organizationId, member.organizationId),
+            eq(notification.status, "UNREAD"),
+          ),
+        )
+        .returning(),
+    );
 
     return c.json({
       message: `${updated.length} notificacao(oes) marcada(s) como lida(s)`,
@@ -190,17 +199,19 @@ export const notificationsRouter = new Hono<{ Variables: AuthVariables }>()
       return c.json({ error: "ID invalido" }, 400);
     }
 
-    const [updated] = await db
-      .update(notification)
-      .set({ status: "ARCHIVED" })
-      .where(
-        and(
-          eq(notification.id, id),
-          eq(notification.recipientUserId, session.user.id),
-          eq(notification.organizationId, member.organizationId),
-        ),
-      )
-      .returning();
+    const [updated] = await orgDb(member.organizationId).transaction((o) =>
+      o
+        .update(notification)
+        .set({ status: "ARCHIVED" })
+        .where(
+          and(
+            eq(notification.id, id),
+            eq(notification.recipientUserId, session.user.id),
+            eq(notification.organizationId, member.organizationId),
+          ),
+        )
+        .returning(),
+    );
 
     if (!updated) {
       return c.json({ error: "Notificacao nao encontrada" }, 404);
@@ -214,12 +225,15 @@ export const notificationsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get("/preferences", ...requireLabProtected, async (c) => {
     const session = c.get("session");
+    const member = c.get("member");
 
-    const [prefs] = await db
-      .select()
-      .from(notificationPreference)
-      .where(eq(notificationPreference.userId, session.user.id))
-      .limit(1);
+    const [prefs] = await orgDb(member.organizationId).transaction((o) =>
+      o
+        .select()
+        .from(notificationPreference)
+        .where(eq(notificationPreference.userId, session.user.id))
+        .limit(1),
+    );
 
     // Return default preferences if user hasn't set any
     if (!prefs) {
@@ -248,14 +262,17 @@ export const notificationsRouter = new Hono<{ Variables: AuthVariables }>()
     zValidator("json", UpdateNotificationPreferencesSchema),
     async (c) => {
       const session = c.get("session");
+      const member = c.get("member");
       const input = c.req.valid("json");
 
       // Check if preferences exist
-      const [existing] = await db
-        .select()
-        .from(notificationPreference)
-        .where(eq(notificationPreference.userId, session.user.id))
-        .limit(1);
+      const [existing] = await orgDb(member.organizationId).transaction((o) =>
+        o
+          .select()
+          .from(notificationPreference)
+          .where(eq(notificationPreference.userId, session.user.id))
+          .limit(1),
+      );
 
       if (existing) {
         // Update existing preferences
@@ -281,11 +298,13 @@ export const notificationsRouter = new Hono<{ Variables: AuthVariables }>()
           updateData.digestFrequency = input.digestFrequency;
         }
 
-        const [updated] = await db
-          .update(notificationPreference)
-          .set(updateData)
-          .where(eq(notificationPreference.userId, session.user.id))
-          .returning();
+        const [updated] = await orgDb(member.organizationId).transaction((o) =>
+          o
+            .update(notificationPreference)
+            .set(updateData)
+            .where(eq(notificationPreference.userId, session.user.id))
+            .returning(),
+        );
 
         if (!updated) {
           return c.json({ error: "Erro ao atualizar preferencias" }, 500);
@@ -300,16 +319,18 @@ export const notificationsRouter = new Hono<{ Variables: AuthVariables }>()
         });
       } else {
         // Create new preferences record
-        const [created] = await db
-          .insert(notificationPreference)
-          .values({
-            userId: session.user.id,
-            preferences: input.preferences ?? DEFAULT_PREFERENCES,
-            emailEnabled: input.emailEnabled ?? true,
-            notifySelfActions: input.notifySelfActions ?? false,
-            digestFrequency: input.digestFrequency ?? "NONE",
-          })
-          .returning();
+        const [created] = await orgDb(member.organizationId).transaction((o) =>
+          o
+            .insert(notificationPreference)
+            .values({
+              userId: session.user.id,
+              preferences: input.preferences ?? DEFAULT_PREFERENCES,
+              emailEnabled: input.emailEnabled ?? true,
+              notifySelfActions: input.notifySelfActions ?? false,
+              digestFrequency: input.digestFrequency ?? "NONE",
+            })
+            .returning(),
+        );
 
         if (!created) {
           return c.json({ error: "Erro ao criar preferencias" }, 500);

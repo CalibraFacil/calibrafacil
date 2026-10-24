@@ -1,6 +1,4 @@
 import { Hono } from "hono";
-import { db } from "@calibra-facil/db";
-import { emailWebhookEvent } from "@calibra-facil/db/schema";
 import { suppressEmail } from "@calibra-facil/notifications";
 import {
   parseResendEvent,
@@ -8,6 +6,7 @@ import {
   resendEventRecipients,
   verifyResendSignature,
 } from "../lib/resend-webhook";
+import { recordResendWebhookEvent } from "../lib/resend-webhook-ledger";
 
 const MAX_WEBHOOK_BODY_BYTES = 256 * 1024;
 
@@ -66,23 +65,15 @@ export const webhooksRouter = new Hono().post("/resend", async (c) => {
     return c.json({ received: true }, 200);
   }
 
-  // Idempotency: insert-first by svix-id. A redelivery hits the UNIQUE
-  // constraint, returns no row, and the suppression side effect is skipped
-  // (delivery is at-least-once).
-  // `db` is a Proxy over a union of the neon + postgres-js drivers, so a typed
-  // `.returning({...})` collapses to the 0-arg overload (TS2554). Use 0-arg
-  // returning — only the row count matters for the dedup decision.
-  const inserted = await db
-    .insert(emailWebhookEvent)
-    .values({
-      svixId,
-      eventType: event.type,
-      payload: isRecord(payload) ? payload : {},
-    })
-    .onConflictDoNothing({ target: emailWebhookEvent.svixId })
-    .returning();
+  // Idempotency: insert-first by svix-id (lib/resend-webhook-ledger.ts). A
+  // redelivery skips the suppression side effect (delivery is at-least-once).
+  const { firstDelivery } = await recordResendWebhookEvent({
+    svixId,
+    eventType: event.type,
+    payload: isRecord(payload) ? payload : {},
+  });
 
-  if (inserted.length === 0) {
+  if (!firstDelivery) {
     return c.json({ received: true, duplicate: true }, 200);
   }
 

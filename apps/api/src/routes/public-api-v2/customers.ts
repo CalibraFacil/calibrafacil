@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db } from "@calibra-facil/db";
 import {
   asset,
   assetAuditLog,
@@ -24,6 +23,7 @@ import {
   upsertResourceExternalId,
 } from "../../lib/public-api";
 import { isReferencedRowViolation } from "../../lib/db-errors";
+import { orgDb } from "../../lib/org-db";
 import { requireApiScope } from "../../middleware/api-key-auth";
 import { createClientOrganizationAsServiceOwner } from "../../lib/portal-service-account";
 import { type PublicApiV2Env } from "./env";
@@ -54,33 +54,41 @@ export const customerRoutes = new Hono<PublicApiV2Env>()
         );
       }
 
-      const [countResult, rows] = await Promise.all([
-        db
-          .select({ total: count() })
-          .from(customer)
-          .where(and(...conditions)),
-        db
-          .select({
-            id: customer.id,
-            name: customer.name,
-            taxId: customer.taxId,
-            email: customer.email,
-            phone: customer.phone,
-            address: customer.address,
-            createdAt: customer.createdAt,
-            updatedAt: customer.updatedAt,
-          })
-          .from(customer)
-          .where(and(...conditions))
-          .orderBy(customer.name)
-          .limit(limit)
-          .offset(offset),
-      ]);
+      const { countResult, rows, externalIds } = await orgDb(
+        apiKey.organizationId,
+      ).transaction(async (o) => {
+        const [countResult, rows] = await Promise.all([
+          o
+            .select({ total: count() })
+            .from(customer)
+            .where(and(...conditions)),
+          o
+            .select({
+              id: customer.id,
+              name: customer.name,
+              taxId: customer.taxId,
+              email: customer.email,
+              phone: customer.phone,
+              address: customer.address,
+              createdAt: customer.createdAt,
+              updatedAt: customer.updatedAt,
+            })
+            .from(customer)
+            .where(and(...conditions))
+            .orderBy(customer.name)
+            .limit(limit)
+            .offset(offset),
+        ]);
 
-      const externalIds = await getResourceExternalIdMap({
-        organizationId: apiKey.organizationId,
-        resourceType: "customer",
-        resourceIds: rows.map((row) => row.id),
+        const externalIds = await getResourceExternalIdMap(
+          {
+            organizationId: apiKey.organizationId,
+            resourceType: "customer",
+            resourceIds: rows.map((row) => row.id),
+          },
+          o,
+        );
+        return { countResult, rows, externalIds };
       });
 
       return c.json({
@@ -115,18 +123,33 @@ export const customerRoutes = new Hono<PublicApiV2Env>()
       );
     }
 
-    const [found] = await db
-      .select()
-      .from(customer)
-      .where(
-        and(
-          eq(customer.id, resolvedId),
-          eq(customer.labOrganizationId, apiKey.organizationId),
-        ),
-      )
-      .limit(1);
+    const loaded = await orgDb(apiKey.organizationId).transaction(async (o) => {
+      const [row] = await o
+        .select()
+        .from(customer)
+        .where(
+          and(
+            eq(customer.id, resolvedId),
+            eq(customer.labOrganizationId, apiKey.organizationId),
+          ),
+        )
+        .limit(1);
+      if (!row) return null;
 
-    if (!found) {
+      return {
+        ...row,
+        externalId: await getResourceExternalId(
+          {
+            organizationId: apiKey.organizationId,
+            resourceType: "customer",
+            resourceId: row.id,
+          },
+          o,
+        ),
+      };
+    });
+
+    if (!loaded) {
       return c.json(
         buildPublicApiError({
           code: "customer_not_found",
@@ -136,16 +159,7 @@ export const customerRoutes = new Hono<PublicApiV2Env>()
       );
     }
 
-    return c.json({
-      data: {
-        ...found,
-        externalId: await getResourceExternalId({
-          organizationId: apiKey.organizationId,
-          resourceType: "customer",
-          resourceId: found.id,
-        }),
-      },
-    });
+    return c.json({ data: loaded });
   })
   .post(
     "/customers",
@@ -175,38 +189,48 @@ export const customerRoutes = new Hono<PublicApiV2Env>()
           };
         }
 
-        const [created] = await db
-          .insert(customer)
-          .values({
-            name: input.name,
-            taxId: input.taxId || null,
-            email: input.email || null,
-            phone: input.phone || null,
-            address: input.address || null,
-            authOrganizationId: orgResult.id,
-            labOrganizationId: apiKey.organizationId,
-          })
-          .returning();
-
-        await db.insert(customerAuditLog).values({
-          organizationId: apiKey.organizationId,
-          customerId: created!.id,
-          action: "create",
-          changes: { customer: { old: null, new: created } },
-          performedBy: apiKey.createdBy,
-          ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-        });
-
         const externalId = input.externalId?.trim();
-        if (externalId) {
-          await upsertResourceExternalId({
-            organizationId: apiKey.organizationId,
-            apiKeyId: apiKey.id,
-            resourceType: "customer",
-            resourceId: created!.id,
-            externalId,
-          });
-        }
+        // The customer, its audit entry and the caller's external id commit
+        // together.
+        const created = await orgDb(apiKey.organizationId).transaction(
+          async (o) => {
+            const [row] = await o
+              .insert(customer)
+              .values({
+                name: input.name,
+                taxId: input.taxId || null,
+                email: input.email || null,
+                phone: input.phone || null,
+                address: input.address || null,
+                authOrganizationId: orgResult.id,
+                labOrganizationId: apiKey.organizationId,
+              })
+              .returning();
+
+            await o.insert(customerAuditLog).values({
+              organizationId: apiKey.organizationId,
+              customerId: row!.id,
+              action: "create",
+              changes: { customer: { old: null, new: row } },
+              performedBy: apiKey.createdBy,
+              ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+            });
+
+            if (externalId) {
+              await upsertResourceExternalId(
+                {
+                  organizationId: apiKey.organizationId,
+                  apiKeyId: apiKey.id,
+                  resourceType: "customer",
+                  resourceId: row!.id,
+                  externalId,
+                },
+                o,
+              );
+            }
+            return row;
+          },
+        );
 
         const body = {
           data: {
@@ -257,18 +281,72 @@ export const customerRoutes = new Hono<PublicApiV2Env>()
         );
       }
 
-      const [existing] = await db
-        .select()
-        .from(customer)
-        .where(
-          and(
-            eq(customer.id, resolvedId),
-            eq(customer.labOrganizationId, apiKey.organizationId),
-          ),
-        )
-        .limit(1);
+      const externalId = input.externalId?.trim();
+      const result = await orgDb(apiKey.organizationId).transaction(
+        async (o) => {
+          const [existing] = await o
+            .select()
+            .from(customer)
+            .where(
+              and(
+                eq(customer.id, resolvedId),
+                eq(customer.labOrganizationId, apiKey.organizationId),
+              ),
+            )
+            .limit(1);
+          if (!existing) return null;
 
-      if (!existing) {
+          const [updated] = await o
+            .update(customer)
+            .set({
+              name: input.name ?? existing.name,
+              taxId: input.taxId ?? existing.taxId,
+              email: input.email ?? existing.email,
+              phone: input.phone ?? existing.phone,
+              address: input.address ?? existing.address,
+            })
+            .where(eq(customer.id, existing.id))
+            .returning();
+
+          await o.insert(customerAuditLog).values({
+            organizationId: apiKey.organizationId,
+            customerId: existing.id,
+            action: "update",
+            changes: { customer: { old: existing, new: updated } },
+            performedBy: apiKey.createdBy,
+            ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+          });
+
+          if (externalId) {
+            await upsertResourceExternalId(
+              {
+                organizationId: apiKey.organizationId,
+                apiKeyId: apiKey.id,
+                resourceType: "customer",
+                resourceId: existing.id,
+                externalId,
+              },
+              o,
+            );
+          }
+
+          return {
+            updated,
+            externalId:
+              externalId ??
+              (await getResourceExternalId(
+                {
+                  organizationId: apiKey.organizationId,
+                  resourceType: "customer",
+                  resourceId: existing.id,
+                },
+                o,
+              )),
+          };
+        },
+      );
+
+      if (!result) {
         return c.json(
           buildPublicApiError({
             code: "customer_not_found",
@@ -278,48 +356,10 @@ export const customerRoutes = new Hono<PublicApiV2Env>()
         );
       }
 
-      const [updated] = await db
-        .update(customer)
-        .set({
-          name: input.name ?? existing.name,
-          taxId: input.taxId ?? existing.taxId,
-          email: input.email ?? existing.email,
-          phone: input.phone ?? existing.phone,
-          address: input.address ?? existing.address,
-        })
-        .where(eq(customer.id, existing.id))
-        .returning();
-
-      await db.insert(customerAuditLog).values({
-        organizationId: apiKey.organizationId,
-        customerId: existing.id,
-        action: "update",
-        changes: { customer: { old: existing, new: updated } },
-        performedBy: apiKey.createdBy,
-        ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-      });
-
-      const externalId = input.externalId?.trim();
-      if (externalId) {
-        await upsertResourceExternalId({
-          organizationId: apiKey.organizationId,
-          apiKeyId: apiKey.id,
-          resourceType: "customer",
-          resourceId: existing.id,
-          externalId,
-        });
-      }
-
       const body = {
         data: {
-          ...updated,
-          externalId:
-            externalId ??
-            (await getResourceExternalId({
-              organizationId: apiKey.organizationId,
-              resourceType: "customer",
-              resourceId: existing.id,
-            })),
+          ...result.updated,
+          externalId: result.externalId,
         },
       };
 
@@ -352,16 +392,18 @@ export const customerRoutes = new Hono<PublicApiV2Env>()
     }
 
     return withIdempotentMutation(c, { customerId: resolvedId }, async () => {
-      const [existing] = await db
-        .select()
-        .from(customer)
-        .where(
-          and(
-            eq(customer.id, resolvedId),
-            eq(customer.labOrganizationId, apiKey.organizationId),
-          ),
-        )
-        .limit(1);
+      const [existing] = await orgDb(apiKey.organizationId).transaction((o) =>
+        o
+          .select()
+          .from(customer)
+          .where(
+            and(
+              eq(customer.id, resolvedId),
+              eq(customer.labOrganizationId, apiKey.organizationId),
+            ),
+          )
+          .limit(1),
+      );
 
       if (!existing) {
         return {
@@ -379,7 +421,7 @@ export const customerRoutes = new Hono<PublicApiV2Env>()
       // cannot be deleted (those foreign keys are RESTRICT). The audit rows share
       // the transaction, so a refused delete leaves no "delete" entry behind.
       try {
-        await db.transaction(async (tx) => {
+        await orgDb(apiKey.organizationId).transaction(async (tx) => {
           await tx.insert(customerAuditLog).values({
             organizationId: apiKey.organizationId,
             customerId: existing.id,
