@@ -1,5 +1,5 @@
-// RLS shadow report (roadmap P2-3, P2-18b): which application statements would break
-// if the API connected as `calibra_app` today.
+// RLS shadow report (roadmap P2-3, P2-18b, kept after the P2-18k cutover as a diagnosis
+// tool): which application statements reach a tenant table without an organization.
 //
 //   pnpm --filter @calibra-facil/api rls:shadow-report \
 //     [--files src/routes/a.int.spec.ts,src/routes/b.int.spec.ts] \
@@ -41,19 +41,17 @@
 // the module and layer tables as markdown. The default set leaves out the self-tests
 // of the tenant SQL guard (they need the guard the shadow passes switch off).
 //
-// Runtime: three vitest runs with --maxWorkers=2 over ~115 specs, about 35 minutes
+// Runtime: three vitest runs with --maxWorkers=2 over ~140 specs, about 35 minutes
 // per pass on a 16-core machine (the figure of the last full run is in
-// docs/architecture/org-bound-db.md, "Baseline"); a spec group takes the time of its
-// slowest specs plus about 40 seconds of container and schema start-up per pass.
-// Use --group while migrating one slice.
+// docs/architecture/org-bound-db.md, "Final report"); a spec group takes the time
+// of its slowest specs plus about 40 seconds of container and schema start-up per
+// pass. Use --group for a slice.
 //
-// apps/worker integration tier: not included. It runs serially against one shared
-// database with no per-worker clone, handlers (queue/cron/scheduled) are invoked
-// directly rather than through `app.request(...)`, and the harness scopes the
-// calibra_app pool to the async context of an HTTP request, so the worker specs
-// would stay entirely on the owner connection and report nothing. Covering it needs
-// its own entry point in the worker's test setup (a follow-up, with the worker
-// cutover).
+// apps/worker integration tier: not included. Its handlers are invoked directly
+// rather than through `app.request(...)`, so the request-scoped routing of the
+// harness does not apply; the tier instead builds every handler's env as
+// `calibra_app` (apps/worker/test/integration/env.ts), so a statement without an
+// organization fails its spec in the normal run.
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -95,10 +93,15 @@ function listSpecs(dir) {
   return found;
 }
 
-// Self-tests of the owner-only tenant SQL guard: they need the guard on, which the
-// shadow passes switch off (it would fail every request first), so they only
-// produce noise here. `--files` can still name them.
-const HARNESS_SELF_TESTS = ["src/lib/__tests__/tenant-sql-guard.int.spec.ts"];
+// Self-tests of the harness: the tenant SQL guard's (they need the guard on, which
+// the shadow passes switch off: it would fail every request first) and the
+// application-role routing's (it issues a deliberately unscoped statement to prove
+// that one sees nothing). They only produce noise here. `--files` can still name
+// them.
+const HARNESS_SELF_TESTS = [
+  "src/lib/__tests__/tenant-sql-guard.int.spec.ts",
+  "src/lib/app-role-harness.int.spec.ts",
+];
 
 function selectedFiles() {
   const explicit = argument("files");

@@ -38,7 +38,8 @@ covers the big-picture architecture; `CONTRIBUTING.md` covers the contribution f
   re-exporting it from the old one so public exports stay stable.
 - `pnpm turbo dev --filter=@calibra-facil/api`: run a single app.
 - `cd packages/db && pnpm db:bootstrap`: build a new database (schema push + `sql/schema-extras.sql`)
-  or apply pending migrations to an existing one. Migrations are hand-written SQL files
+  or apply pending migrations to an existing one. It runs as the table owner (`DATABASE_OWNER_URL`,
+  else `DATABASE_URL`) and gives the `calibra_app` login its password when `DATABASE_URL` names it. Migrations are hand-written SQL files
   in `packages/db/drizzle/` plus an entry in `drizzle/meta/_journal.json`.
 
 ## Coding Style & Naming Conventions
@@ -95,7 +96,11 @@ covers the big-picture architecture; `CONTRIBUTING.md` covers the contribution f
 - Preserve tenant, organization, and unit scoping in every query. Route handlers query through the
   org-bound handle `orgDb(organizationId)` (`apps/api/src/lib/org-db.ts`), which adds the
   organization predicate itself; the raw `db` is a lint error in `apps/api/src/routes` beyond the
-  grandfathered per-file counts (`docs/architecture/org-bound-db.md`).
+  grandfathered per-file counts (`docs/architecture/org-bound-db.md`). The application connects as
+  the role `calibra_app` (`DATABASE_URL`), which Postgres row-level security binds
+  (`DATABASE_RLS_MODE=enforced`, the default); only the named `systemDb` path uses the table owner
+  (`DATABASE_OWNER_URL`). A new statement runs in `orgDb(lab).transaction(...)` or is a reviewed
+  system-path entry; the tables are deliberately not `FORCE`d.
 - Preserve Better Auth patterns and RBAC permission boundaries.
 - The math engine (`packages/math-engine`) is versioned: any change to a numeric result needs
   a new `ENGINE_VERSION` and a new dossier directory under `validation/math-engine/`. Never
@@ -121,6 +126,12 @@ covers the big-picture architecture; `CONTRIBUTING.md` covers the contribution f
   A legitimately unscoped access needs an entry with a reason in
   `apps/api/test/integration/tenant-sql-allowlist.ts`. `TENANT_SQL_GUARD=report` (plus
   `TENANT_SQL_GUARD_REPORT=<file>` for JSON lines) or `=off` helps when debugging locally.
+- The integration tier runs every HTTP request of a spec as the database role `calibra_app`, under
+  the real row-level-security policies (`apps/api/test/integration/app-role-mode.ts`); the specs'
+  own seeding and assertions, and `systemDb`, stay on the owner. A statement that forgets its
+  organization sees no row and fails the spec. `CALIBRA_API_DB_ROLE=owner` runs the requests as the
+  owner when you need to tell an RLS refusal from a bug. The worker tier (`apps/worker`) builds its
+  handlers' env the same way (`makeTestEnv`; `CALIBRA_WORKER_DB_ROLE=owner` to debug).
 
 ## Commit & Pull Request Guidelines
 

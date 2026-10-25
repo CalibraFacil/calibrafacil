@@ -146,7 +146,8 @@ the browser console only.
 ### Using hosted services instead
 
 Each dependency can move out of the compose file: delete its service and point the variables
-in the `x-app-env` block of `compose.yaml` elsewhere (`DATABASE_URL` for a managed PostgreSQL,
+in the `x-app-env` block of `compose.yaml` elsewhere (`DATABASE_URL` and `DATABASE_OWNER_URL` for a managed
+PostgreSQL, see "Row-level security" below,
 `R2_*` for Cloudflare R2 or S3, `GOTENBERG_URL`). With a hosted object store, remove
 `R2_PUBLIC_ENDPOINT` and the `FILES_URL` site in the `Caddyfile`. Resend works instead of
 SMTP: set `RESEND_API_KEY` and leave `SMTP_HOST` empty.
@@ -158,6 +159,17 @@ Configuration is now validated when each process starts (see [Configuration](#co
 problem, when production is missing a required variable or one has the wrong shape.** Before,
 most of these only failed at first use, deep inside a request, or never. Check your environment
 **before** you deploy.
+
+**Row-level security is enforced (P2-18k): create the application role and set two connection strings.**
+The API and the worker now connect as `calibra_app`, which the tenant policies of migration 0123 bind, and
+keep the table owner for the few cross-laboratory statements (`DATABASE_OWNER_URL`).
+`DATABASE_RLS_MODE` defaults to `enforced`, and start-up refuses (naming the variable) an application that
+connects as the owner or has no `DATABASE_OWNER_URL`. **Docker Compose:** add `CALIBRA_APP_PASSWORD` to
+`deploy/.env` (any random URL-safe string; `./setup.sh` generates it for new installs) before
+`docker compose up -d`; `init` creates the login. **Other deployments:** give `calibra_app` a login, point
+`DATABASE_URL` at it and `DATABASE_OWNER_URL` at the connection `DATABASE_URL` was, for the API and the worker.
+The steps and the rollback (`DATABASE_RLS_MODE=shadow`) are in "Row-level security (migration 0123) and the
+role split".
 
 **Newly required in production** (`NODE_ENV=production`):
 
@@ -281,33 +293,34 @@ below are a summary.
 
 `apps/api/.env.example` lists every variable with its description. The essentials for production:
 
-| Variable                                                                                            | Notes                                                                                 |
-| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `NODE_ENV=production`                                                                               |                                                                                       |
-| `DATABASE_URL`                                                                                      | PostgreSQL connection string                                                          |
-| `API_URL`, `APP_URL`, `PORTAL_APP_URL`                                                              | Public URLs (`API_URL` = `APP_URL` when the API is served under `/api`)               |
-| `VERIFY_URL`                                                                                        | Optional; host of the verification page (defaults to `PORTAL_APP_URL`)                |
-| `BETTER_AUTH_SECRET`                                                                                | ≥ 32 random characters                                                                |
-| `AUTH_COOKIE_DOMAIN`                                                                                | e.g. `.example.com` when the API and the apps are on different subdomains             |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`                               | Outgoing e-mail; or `RESEND_API_KEY` for Resend (`EMAIL_TRANSPORT` picks when both)   |
-| `EMAIL_FROM`                                                                                        | Sender, e.g. `"Laboratório <calibra@example.com>"`                                    |
-| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`                                                          | Object-storage credentials                                                            |
-| `R2_BUCKET_NAME`, `R2_MEDIA_BUCKET_NAME`                                                            | Documents bucket (regulated records) and media bucket (logos, etc.)                   |
-| `R2_ACCOUNT_ID` **or** `R2_ENDPOINT` (+ `R2_REGION`)                                                | Cloudflare R2 account, or the endpoint of any S3-compatible store                     |
-| `R2_PUBLIC_ENDPOINT`                                                                                | Optional; the store's public address when `R2_ENDPOINT` is internal (download links)  |
-| `GOTENBERG_URL` (+ `GOTENBERG_TOKEN`)                                                               | PDF rendering                                                                         |
-| `SIGNING_MASTER_KEY`, `INTEGRATIONS_MASTER_KEY`, `PUBLIC_API_MASTER_KEY`, `EMAIL_DOMAIN_MASTER_KEY` | 32 random bytes each, base64 (`openssl rand -base64 32`); never reuse one key twice   |
-| `SIGNING_TSA_URL` (+ `SIGNING_TSA_AUTH`, `SIGNING_TSA_ICP_CONFORMANT`, `SIGNING_TSA_TIMEOUT_MS`)    | Optional RFC 3161 time-stamping of certificates: see _Certificate time-stamping_      |
-| `QUOTE_APPROVAL_CODE_PEPPER`, `CRON_SECRET`                                                         | Random strings                                                                        |
-| `PORTAL_SERVICE_USER_ID`                                                                            | Id of the account that owns client-portal organizations (`init` creates it)           |
-| `BACKGROUND_JOBS_MODE`                                                                              | `local` (inside the API process, development) or `queue` (a separate worker)          |
-| `STUCK_RENDER_AFTER_MS`                                                                             | Optional, default `3600000` (60 min): see _Certificates stuck in generation_ below    |
-| `QUEUE_RECEIPTS_MODE`                                                                               | Optional, default `enforce`; `shadow`/`off` opt out: see _Queue idempotency_ below    |
-| `CRON_SCHEDULER=internal`                                                                           | Run the scheduled jobs inside the API (see below)                                     |
-| `RECORDS_PURGE_ENABLED`                                                                             | Optional, default `false`: enables the `records-purge` cron (see _Records retention_) |
-| `RECORDS_PURGE_MODE`                                                                                | Optional, default `dry-run`; only `execute` deletes (see _Records retention_)         |
-| `SYNC_MIN_DESKTOP_VERSION`                                                                          | Optional, default unset (no minimum): see _Minimum desktop version_                   |
-| `SYNC_CHANGE_LOG_RETENTION_DAYS`                                                                    | Optional, default `90` (at least `7`): see _Desktop change log (sync protocol 3)_     |
+| Variable                                                                                            | Notes                                                                                                          |
+| --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV=production`                                                                               |                                                                                                                |
+| `DATABASE_URL`                                                                                      | PostgreSQL connection string of the `calibra_app` role (row-level security binds it)                           |
+| `DATABASE_OWNER_URL`                                                                                | The table owner: the system path and the migrations. Required while `DATABASE_RLS_MODE=enforced` (the default) |
+| `API_URL`, `APP_URL`, `PORTAL_APP_URL`                                                              | Public URLs (`API_URL` = `APP_URL` when the API is served under `/api`)                                        |
+| `VERIFY_URL`                                                                                        | Optional; host of the verification page (defaults to `PORTAL_APP_URL`)                                         |
+| `BETTER_AUTH_SECRET`                                                                                | ≥ 32 random characters                                                                                         |
+| `AUTH_COOKIE_DOMAIN`                                                                                | e.g. `.example.com` when the API and the apps are on different subdomains                                      |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`                               | Outgoing e-mail; or `RESEND_API_KEY` for Resend (`EMAIL_TRANSPORT` picks when both)                            |
+| `EMAIL_FROM`                                                                                        | Sender, e.g. `"Laboratório <calibra@example.com>"`                                                             |
+| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`                                                          | Object-storage credentials                                                                                     |
+| `R2_BUCKET_NAME`, `R2_MEDIA_BUCKET_NAME`                                                            | Documents bucket (regulated records) and media bucket (logos, etc.)                                            |
+| `R2_ACCOUNT_ID` **or** `R2_ENDPOINT` (+ `R2_REGION`)                                                | Cloudflare R2 account, or the endpoint of any S3-compatible store                                              |
+| `R2_PUBLIC_ENDPOINT`                                                                                | Optional; the store's public address when `R2_ENDPOINT` is internal (download links)                           |
+| `GOTENBERG_URL` (+ `GOTENBERG_TOKEN`)                                                               | PDF rendering                                                                                                  |
+| `SIGNING_MASTER_KEY`, `INTEGRATIONS_MASTER_KEY`, `PUBLIC_API_MASTER_KEY`, `EMAIL_DOMAIN_MASTER_KEY` | 32 random bytes each, base64 (`openssl rand -base64 32`); never reuse one key twice                            |
+| `SIGNING_TSA_URL` (+ `SIGNING_TSA_AUTH`, `SIGNING_TSA_ICP_CONFORMANT`, `SIGNING_TSA_TIMEOUT_MS`)    | Optional RFC 3161 time-stamping of certificates: see _Certificate time-stamping_                               |
+| `QUOTE_APPROVAL_CODE_PEPPER`, `CRON_SECRET`                                                         | Random strings                                                                                                 |
+| `PORTAL_SERVICE_USER_ID`                                                                            | Id of the account that owns client-portal organizations (`init` creates it)                                    |
+| `BACKGROUND_JOBS_MODE`                                                                              | `local` (inside the API process, development) or `queue` (a separate worker)                                   |
+| `STUCK_RENDER_AFTER_MS`                                                                             | Optional, default `3600000` (60 min): see _Certificates stuck in generation_ below                             |
+| `QUEUE_RECEIPTS_MODE`                                                                               | Optional, default `enforce`; `shadow`/`off` opt out: see _Queue idempotency_ below                             |
+| `CRON_SCHEDULER=internal`                                                                           | Run the scheduled jobs inside the API (see below)                                                              |
+| `RECORDS_PURGE_ENABLED`                                                                             | Optional, default `false`: enables the `records-purge` cron (see _Records retention_)                          |
+| `RECORDS_PURGE_MODE`                                                                                | Optional, default `dry-run`; only `execute` deletes (see _Records retention_)                                  |
+| `SYNC_MIN_DESKTOP_VERSION`                                                                          | Optional, default unset (no minimum): see _Minimum desktop version_                                            |
+| `SYNC_CHANGE_LOG_RETENTION_DAYS`                                                                    | Optional, default `90` (at least `7`): see _Desktop change log (sync protocol 3)_                              |
 
 Extra origins for CORS and auth can be listed in `CORS_ALLOWED_ORIGINS` and
 `AUTH_TRUSTED_ORIGINS`. The Conta Azul ERP integration needs no server setup: each laboratory
@@ -607,41 +620,88 @@ connection default. When the state machine itself changes, regenerate the functi
 `pnpm --filter @calibra-facil/db gen:job-transitions-sql` and ship it in a new migration; a unit test fails
 while the migration and `sql/schema-extras.sql` differ from the table.
 
-#### Row-level security (migration 0123, shadow mode) and the role split
+#### Row-level security (migration 0123) and the role split
 
-Migration `0123_rls_shadow_mode` prepares Postgres to enforce tenant isolation itself, as a second wall
-behind the `organization_id` predicate the application writes (decision Q15). **Applying it changes
-nothing in production.** It:
+Postgres enforces tenant isolation itself, as a second wall behind the `organization_id` predicate the
+application writes (decision Q15). Migration `0123_rls_shadow_mode` (the name is historical) prepares it, and
+since the cutover (P2-18k) **enforcement is the normal setup**:
 
-- creates the role `calibra_app` (`NOLOGIN`: nothing can connect as it) with `CONNECT` on the database,
-  `USAGE` on schema `public`, `SELECT/INSERT/UPDATE/DELETE` on every table and `USAGE` on every sequence,
-  and the same default privileges for tables the migration owner creates later. `CREATE ROLE` needs the
-  `CREATEROLE` attribute, which the owner of a self-hosted Postgres, Neon, RDS and Supabase has; where it is
-  missing the migration stops with the fix and never skips the role (see "Before you apply it");
-- runs `ENABLE ROW LEVEL SECURITY` (not `FORCE`) on every tenant table (each table of
-  `packages/db/src/tenancy.ts` that carries `organization_id` / `lab_organization_id`) and adds the policy
-  `tenant_isolation FOR ALL TO calibra_app` with `USING` and `WITH CHECK`
+- the migration creates the role `calibra_app` (`NOLOGIN`) with `CONNECT` on the database, `USAGE` on schema
+  `public`, `SELECT/INSERT/UPDATE/DELETE` on every table and `USAGE` on every sequence, and the same default
+  privileges for tables the migration owner creates later. `CREATE ROLE` needs the `CREATEROLE` attribute,
+  which the owner of a self-hosted Postgres, Neon, RDS and Supabase has; where it is missing the migration
+  stops with the fix and never skips the role (see "Hosts without `CREATEROLE`");
+- it runs `ENABLE ROW LEVEL SECURITY` on every tenant table (each table of `packages/db/src/tenancy.ts` that
+  carries `organization_id` / `lab_organization_id`) and adds the policy `tenant_isolation FOR ALL TO calibra_app`
+  with `USING` and `WITH CHECK`
   `<org column> = NULLIF(current_setting('calibra.organization_id', true), '')::text`. Global tables
-  (identity, queues, global catalogs) get no RLS.
+  (identity, queues, global catalogs) get no RLS;
+- the application names the laboratory of every org-scoped transaction
+  (`select set_config('calibra.organization_id', <org>, true)` at its start, `packages/db/src/for-org.ts`), so
+  a `calibra_app` session sees and writes that laboratory's rows only. A statement that names none sees nothing
+  (fail closed), a write for another laboratory is refused.
 
-**Before you apply it (pre-check, 1 minute).** The role the API connects as must be the owner of the tables
-(or a superuser / `BYPASSRLS` role), because only then does RLS not bind it. In the usual deployment one
-`DATABASE_URL` serves the migrations and the API, so check it once, through the API's URL:
+**The two connections.** The API, the worker and the CLI use two Postgres logins:
 
-```sql
-select current_user, r.rolsuper, r.rolbypassrls from pg_roles r where r.rolname = current_user;
-select tableowner from pg_tables where schemaname = 'public' and tablename = 'calibration_job';
-```
+| Variable                                 | Role                                                                                                                                                     |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                           | `calibra_app`: the application. The policies bind it.                                                                                                    |
+| `DATABASE_OWNER_URL`                     | the table owner: the **system path** (below), and the connection `db:bootstrap` / `db:migrate` / `init` use to change the schema. It is exempt from RLS. |
+| `DATABASE_RLS_MODE` (default `enforced`) | `enforced`: the application must be a role RLS binds. `shadow`: diagnosis only, the application connects as the owner.                                   |
 
-`current_user` must equal `tableowner` (or `rolsuper` / `rolbypassrls` is `true`). Three things enforce this,
-so a misconfiguration cannot silently turn the policies on:
+- **Docker Compose does all of it.** `deploy/compose.yaml` sets both URLs; `init` runs `db:bootstrap` as the
+  owner, which creates the `calibra_app` login with the password `CALIBRA_APP_PASSWORD` of `deploy/.env`
+  (`./setup.sh` generates it) on every start, so rotating the password is editing `.env` and
+  `docker compose up -d`.
+- **Your own Postgres.** Give `calibra_app` a login and a password once, as the owner or an admin role, and
+  point the two URLs at it:
 
-- the migration itself stops (`calibra: migration 0123 is run as <role>, which is neither the owner ...`)
-  before changing anything when run by a role RLS would bind;
-- `DATABASE_RLS_MODE=shadow` (the default, `packages/config`): the API and the worker run one catalog query at
-  start-up and **refuse to start** as a role RLS binds (the message begins `connected as "<role>", which is subject to row-level security`). Before migration 0123, when no table has RLS enabled yet, the check passes;
-- `DATABASE_RLS_MODE=enforced` is the post-role-split mode: start-up then accepts a role RLS binds (a member of
-  `calibra_app`). Set it on the API together with the new `DATABASE_URL` in the role split below, and only then.
+  ```sql
+  ALTER ROLE calibra_app LOGIN PASSWORD '<strong password>' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+  ```
+
+  (Or run `db:bootstrap` / `init` with `DATABASE_URL=postgres://calibra_app:<password>@host/db` and
+  `DATABASE_OWNER_URL=<the owner's URL>`: when the application URL names `calibra_app`, the script sets that
+  login and password after the migrations.) A separate login that is a member of the role works as well:
+  `CREATE ROLE calibra_api LOGIN PASSWORD '...' IN ROLE calibra_app;` (keep `INHERIT`, the default).
+
+- **Development.** `pnpm setup:dev` does the same against the compose Postgres: `apps/api/.env` and
+  `apps/worker/.env` carry `DATABASE_URL=postgres://calibra_app:calibra_app@localhost:55432/calibra` and
+  `DATABASE_OWNER_URL=postgres://calibra:calibra@localhost:55432/calibra`; `packages/db/.env` stays the owner
+  (drizzle-kit, the seeds). An `.env` from before the cutover is rewritten that way by `pnpm setup:dev`.
+
+**Start-up refuses a connection that would hide data or skip the wall.** The API and the worker run one catalog
+query (two with `enforced`) before they serve, and stop with a message naming the variable:
+
+- `enforced` and `DATABASE_OWNER_URL` unset: refused (Q40), because the system path would run as the
+  application role and silently see nothing;
+- `enforced` and `DATABASE_URL` is the table owner, a superuser or a `BYPASSRLS` role: refused (RLS would not
+  apply to the application; nobody would notice). To run as the owner knowingly, set `DATABASE_RLS_MODE=shadow`;
+- `enforced` and `DATABASE_OWNER_URL` is a role RLS binds: refused (the system path would match no row);
+- `shadow` and `DATABASE_URL` is a role RLS binds: refused (statements without an organization would
+  silently match no row);
+- before migration 0123, when no table has RLS enabled yet, the role checks pass.
+
+The migration itself stops (`calibra: migration 0123 is run as <role>, which is neither the owner ...`) before
+changing anything when run by a role RLS would bind, so run migrations as the owner.
+
+**Upgrading an existing installation.** Before this release the API and worker connected as the table owner
+with `DATABASE_RLS_MODE` unset (`shadow`). The default is now `enforced`, so an upgrade that changes nothing
+fails at start-up with the messages above, on purpose. Do, once:
+
+1. Docker Compose: add `CALIBRA_APP_PASSWORD=<random>` to `deploy/.env` (for example
+   `echo "CALIBRA_APP_PASSWORD=$(openssl rand -base64 24 | tr '+/' '-_' | tr -d '=')" >> .env`), then
+   `docker compose pull && docker compose up -d`: `init` creates the login and the new compose file wires the
+   URLs. Nothing else changes.
+2. Your own Postgres and processes: give `calibra_app` a login (above); set `DATABASE_URL` to it and
+   `DATABASE_OWNER_URL` to what `DATABASE_URL` was; leave `DATABASE_RLS_MODE` unset (or `enforced`). Do the same
+   for the worker. Run `init` / `db:bootstrap` with both set. Run `pnpm config:check` first.
+3. To go back, set `DATABASE_RLS_MODE=shadow` and `DATABASE_URL` to the owner (the policies stay, the owner
+   bypasses them); nothing else changes.
+
+**Verify** as `calibra_app`: `select count(*) from calibration_job;` returns `0`; inside
+`begin; select set_config('calibra.organization_id', '<org id>', true); select count(*) from calibration_job; commit;`
+it returns that laboratory's jobs only.
 
 **Hosts without `CREATEROLE`.** If the migration owner cannot create roles, the migration stops with
 `the role calibra_app does not exist and <role> may not create it`. An administrator (a role with
@@ -658,38 +718,13 @@ fails fast with `canceling statement due to lock timeout` (SQLSTATE `55P03`) ins
 behind it. It runs in one transaction and is idempotent, so a failed attempt changes nothing: wait for the
 query to finish, or pick a quiet moment, and run `db:migrate` again.
 
-A table owner is exempt from RLS unless the table is `FORCE`d, and the API, the worker and the migrations all
-connect as the owner today, so **no statement behaves differently until you do the role split below.** The
-policies are addressed to `calibra_app` only. The application already names the laboratory of each
-org-bound transaction (`select set_config('calibra.organization_id', <org>, true)` at its start,
-`packages/db/src/for-org.ts`), which is a no-op for the owner.
-
-**Do not do the role split yet.** Many statements still run on the plain `db` or outside a transaction, so
-no organization is set and, as `calibra_app`, they would match no row (fail closed) or be refused. Run
-`pnpm --filter @calibra-facil/api rls:shadow-report` (it needs Docker, like the integration tier): it replays
-the portal and jobs integration specs with the requests' database access as `calibra_app` and lists, by
-spec file, what breaks and every statement that reached a tenant table with no organization set. The split
-is for when that list is empty (or each entry is a deliberate cross-laboratory statement that has its own
-privileged connection).
-
-**The role split (when the owner decides).** All as the owner / an admin role, once:
-
-```sql
--- the application's login: a member of calibra_app, nothing more
-CREATE ROLE calibra_api LOGIN PASSWORD '<strong password>' IN ROLE calibra_app;
-ALTER ROLE calibra_api NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;   -- keep INHERIT (the default)
-
--- a separate login for migrations and the worker's cross-laboratory work stays the existing owner
--- (or create calibra_admin as the owner of the tables); it keeps bypassing RLS because it owns the tables
-```
-
-Then change the API's connection string and set its mode (`DATABASE_RLS_MODE=enforced` tells start-up that a role RLS binds is intended; without it the API refuses to start as `calibra_api`):
-
-| Component                                     | `DATABASE_URL` becomes                                                                                                                                 |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| API (`apps/api`)                              | `postgres://calibra_api:<password>@<host>/<db>`, plus `DATABASE_RLS_MODE=enforced` and `DATABASE_OWNER_URL=<the owner's URL>` (the system path, below) |
-| Migrations (`db:migrate`, `db:bootstrap`)     | unchanged: the owner                                                                                                                                   |
-| Worker (`apps/worker`), cron and queue sweeps | `calibra_api` too, with `DATABASE_RLS_MODE=enforced` and `DATABASE_OWNER_URL` (every handler names its laboratory, P2-18j; see below)                  |
+**Why the tables are not `FORCE`d.** A table owner is exempt from RLS unless the table is `FORCE`d. Forcing
+would also bind the owner, and the owner legitimately runs statements that no single organization can name:
+Better Auth (sessions, the organization plugin), the lookups that learn a laboratory, the cross-laboratory
+sweeps, the global `asset_type` write fan-out, the migrations and the CLI. The policies are addressed to
+`calibra_app` only, so under `FORCE` the owner would match no policy and see nothing; giving it a second,
+all-allowing policy would add nothing. The protection against an accidental owner connection is the start-up
+check above (the application refuses to run as a role RLS does not bind), not `FORCE`.
 
 - **The system path (`DATABASE_OWNER_URL`).** A few statements are cross-laboratory on purpose and cannot name
   one organization first: the lookup that learns which laboratory a request belongs to (the portal's host
@@ -700,36 +735,33 @@ Then change the API's connection string and set its mode (`DATABASE_RLS_MODE=enf
   certificate-drift lists) and writes to the global `asset_type` catalog
   (its change-log trigger writes to every laboratory's log, which `calibra_app` may not do; only the seed writes it).
   The operator CLI (`apps/api/src/cli`) runs as the owner on the same path. They use the named
-  `systemDb` of `@calibra-facil/db`, which connects with `DATABASE_OWNER_URL`; unset, it shares
-  `DATABASE_URL`, so while the API still connects as the owner there is nothing to configure. Set it in the
-  same change as the role split, or those requests see nothing as `calibra_api`: the API and the worker
-  therefore REFUSE TO START when `DATABASE_RLS_MODE=enforced` and `DATABASE_OWNER_URL` is unset (the message names
-  both variables). Better Auth (sessions, the organization plugin) runs on this owner connection too, guarded by
-  its own membership and role checks (pinned by `identity-org-plugin-deny.int.spec.ts`), not by RLS. Every use is a reviewed entry
+  `systemDb` of `@calibra-facil/db`, which connects with `DATABASE_OWNER_URL`. Better Auth (sessions, the
+  organization plugin) runs on this owner connection too, guarded by its own membership and role checks
+  (pinned by `identity-org-plugin-deny.int.spec.ts`), not by RLS. Every use is a reviewed entry
   of `apps/api/test/integration/tenant-sql-allowlist.ts`, and routes may not import it.
-- **The worker's certificate and label jobs.** A queue message names a job, not its laboratory. The worker
-  learns the laboratory with one lookup on the system path (`DATABASE_OWNER_URL`, falling back to
-  `DATABASE_URL`), and every other statement of the job (the frozen input or the legacy live read, the signing
-  certificate, the issuance transaction, the audit rows, the failure rejection) runs in a transaction that
-  names it (`set_config(..., true)`), so those jobs are ready for a worker connected as `calibra_app`. The
-  other handlers do the same since P2-18j: the scheduled compliance sweep, the audit packs, the service-order
-  and out-of-tolerance documents, the sender-domain health cron and the generic-HTTP integration sync list or
-  look up the laboratory on the system path and then work per laboratory. Without `DATABASE_OWNER_URL` the
-  handlers that look a laboratory up by a message's id fail loudly (a retryable error) instead of finding nothing. The queue claim, the
-  stale-lease recovery and the stuck-render sweep list across laboratories and stay on the owner (`systemDb`).
+- **The worker.** It connects like the API (`calibra_app` plus `DATABASE_OWNER_URL`). A queue message names a
+  job, not its laboratory: the worker learns the laboratory with one lookup on the system path, and every
+  other statement of the job (the frozen input or the legacy live read, the signing certificate, the issuance
+  transaction, the audit rows, the failure rejection) runs in a transaction that names it
+  (`set_config(..., true)`). The other handlers do the same: the scheduled compliance sweep, the audit packs,
+  the service-order and out-of-tolerance documents, the sender-domain health cron and the generic-HTTP
+  integration sync list or look up the laboratory on the system path and then work per laboratory. The queue
+  claim, the stale-lease recovery and the stuck-render sweep list across laboratories and stay on the owner
+  (`systemDb`); the queue table itself has no RLS.
 - **Pooler mode.** Transaction pooling (PgBouncer `pool_mode = transaction`, Neon's pooled endpoint,
   Supavisor) is fine: `set_config(..., true)` is transaction-local, so the organization lives and dies with
   the transaction and never reaches the next client on the same server connection. A statement outside
   a transaction sets nothing and sees nothing as `calibra_app`; that is deliberate (fail closed).
   Session pooling is fine too. Do not set `calibra.organization_id` with a plain `SET` or in a role or
   connection default.
-- **Verify** as `calibra_api`: `select count(*) from calibration_job;` returns `0`; inside
-  `begin; select set_config('calibra.organization_id', '<org id>', true); select count(*) from calibration_job; commit;`
-  it returns that laboratory's jobs only.
-- **Rollback.** Point the API's `DATABASE_URL` back at the owner, remove `DATABASE_RLS_MODE=enforced` (or set it to `shadow`), and restart. Nothing else changes: the
-  policies stay in place and the owner bypasses them. To remove the role for good:
-  `REVOKE ALL ON ALL TABLES IN SCHEMA public FROM calibra_app; DROP OWNED BY calibra_api; DROP ROLE calibra_api;`
-  (the policies and `calibra_app` can stay).
+- **Rollback.** `DATABASE_RLS_MODE=shadow` plus `DATABASE_URL` pointing at the owner, then restart. Nothing else
+  changes: the policies stay in place and the owner bypasses them. To remove the login for good:
+  `REVOKE ALL ON ALL TABLES IN SCHEMA public FROM calibra_app; ALTER ROLE calibra_app NOLOGIN;` (the policies
+  and the role can stay).
+- **Diagnosis.** `pnpm --filter @calibra-facil/api rls:shadow-report` (it needs Docker, like the integration
+  tier) replays every API integration spec with the requests' database access as `calibra_app` and lists, by
+  spec file, what breaks and every statement that reached a tenant table with no organization set. The
+  integration tier itself runs the requests as `calibra_app` (see `docs/architecture/org-bound-db.md`).
 - **New tenant tables.** A migration that adds a table with an organization column must also carry the
   regenerated block (`pnpm --filter @calibra-facil/db gen:rls-sql`) in a new migration and in
   `sql/schema-extras.sql`; `packages/db/src/rls-sql.test.ts` fails until it does, so a table never reaches
