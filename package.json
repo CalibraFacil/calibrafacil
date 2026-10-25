@@ -25,6 +25,7 @@
     "dev": "turbo run dev --filter=@calibra-facil/api --filter=@calibra-facil/web --filter=@calibra-facil/portal",
     "dev:isolated": "node scripts/dev-runner.mjs",
     "test:dev-runner": "node scripts/dev-runner.test.mjs",
+    "test:role-split": "node scripts/role-split.test.mjs",
     "dev:all": "turbo run dev",
     "dev:docs": "pnpm --dir apps/docs run dev",
     "dev:site": "pnpm --dir apps/site run dev",

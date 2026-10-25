@@ -19,6 +19,7 @@ import { copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { splitDatabaseRoles } from "./role-split.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const reset = process.argv.includes("--reset");
@@ -126,31 +127,15 @@ for (const [example, target] of [
 function upgradeRoleSplit(target) {
   const file = path.join(root, target);
   if (!existsSync(file)) return;
-  const text = readFileSync(file, "utf8");
-  if (/^DATABASE_OWNER_URL=/m.test(text)) return;
-  const match = text.match(/^DATABASE_URL=(.*)$/m);
-  if (!match) return;
-  const owner = match[1].trim();
-  let application;
-  try {
-    const url = new URL(owner);
-    if (url.username !== "calibra") throw new Error("not the default owner");
-    url.username = "calibra_app";
-    url.password = "calibra_app";
-    application = url.toString();
-  } catch {
+  const result = splitDatabaseRoles(readFileSync(file, "utf8"));
+  if (result.status === "current") return;
+  if (result.status === "manual") {
     console.warn(
       `  ! ${target}: set DATABASE_URL to the calibra_app login and DATABASE_OWNER_URL to the owner (see DEPLOYMENT.md, "Row-level security").`,
     );
     return;
   }
-  writeFileSync(
-    file,
-    text.replace(
-      match[0],
-      `DATABASE_URL=${application}\nDATABASE_OWNER_URL=${owner}`,
-    ),
-  );
+  writeFileSync(file, result.text);
   console.log(
     `  ${target}: DATABASE_URL is now the calibra_app login, DATABASE_OWNER_URL the owner.`,
   );
