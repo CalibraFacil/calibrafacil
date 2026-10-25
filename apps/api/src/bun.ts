@@ -92,8 +92,10 @@ async function createEnv() {
 }
 
 const { env, config } = await createEnv();
-// One query: refuse to start as a role that row-level security binds while
-// DATABASE_RLS_MODE=shadow (migration 0123; DEPLOYMENT.md, "Row-level security").
+// Row-level security start-up check (migration 0123; DEPLOYMENT.md, "Row-level
+// security"): with DATABASE_RLS_MODE=enforced (the default) refuse a DATABASE_URL
+// that RLS does not bind and a missing or bound DATABASE_OWNER_URL; in shadow mode
+// refuse a role RLS binds (and warn loudly in production).
 await failFastAsync(() => assertRlsStartup());
 const port = config.runtime.listenPort ?? 3000;
 const hostname = config.runtime.host;

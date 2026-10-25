@@ -102,8 +102,9 @@ await loadLocalEnv();
 // Validate the configuration before doing anything else: a bad deploy exits
 // here with one message that lists every problem.
 failFast(() => loadWorkerConfig());
-// One query: a role that row-level security binds is refused in shadow mode
-// (migration 0123; DEPLOYMENT.md, "Row-level security").
+// Row-level security start-up check: enforced (the default) refuses a DATABASE_URL
+// that RLS does not bind and a missing or bound DATABASE_OWNER_URL; shadow refuses a
+// role RLS binds (migration 0123; DEPLOYMENT.md, "Row-level security").
 await failFastAsync(() => assertRlsStartup());
 
 const config = readQueueConfig();

@@ -2,8 +2,8 @@
 // tests and the shadow report of row-level security (roadmap P2-3): the test
 // superuser is exempt from every policy, so the policies are only exercised by a
 // session that has switched to `calibra_app`. Nothing in the application imports
-// this; the API still connects as the owner until the owner performs the role
-// split (DEPLOYMENT.md, "Row-level security").
+// this (it connects as calibra_app through DATABASE_URL, DEPLOYMENT.md, "Row-level
+// security"); the integration tiers and the shadow report use it.
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema.js";

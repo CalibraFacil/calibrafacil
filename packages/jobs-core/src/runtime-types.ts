@@ -20,14 +20,15 @@ export interface Env {
    * Connection string of the table OWNER: the system path, used only by the
    * lookups that learn which laboratory a queue message belongs to (the message
    * names a job, an order or an export, not its laboratory) and by the sweeps
-   * that list the laboratories before working on each. Unset, the system path
-   * shares DATABASE_URL, which is the owner while row-level security is in
-   * shadow mode.
+   * that list the laboratories before working on each. Required while
+   * DATABASE_RLS_MODE=enforced (the default; start-up refuses to run without it);
+   * unset (shadow mode only), the system path shares DATABASE_URL, which is then
+   * the owner.
    */
   DATABASE_OWNER_URL?: string;
   /**
-   * `enforced` once the application connects as `calibra_app` (DATABASE_RLS_MODE):
-   * with it set and no `DATABASE_OWNER_URL`, a job that cannot be found on the
+   * `enforced` (the default): the application connects as `calibra_app`
+   * (DATABASE_RLS_MODE). With it set and no `DATABASE_OWNER_URL`, a job that cannot be found on the
    * system path is a misconfiguration to retry, not a job that does not exist.
    */
   DATABASE_RLS_MODE?: "shadow" | "enforced";
