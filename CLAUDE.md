@@ -58,7 +58,7 @@ Database (Drizzle, in `packages/db`):
 cd packages/db
 pnpm db:bootstrap     # new DB: push schema + sql/schema-extras.sql; existing DB: migrate
                       # (runs as the owner: DATABASE_OWNER_URL, else DATABASE_URL)
-pnpm db:migrate       # apply pending migrations (DATABASE_URL must be the owner here)
+pnpm db:migrate       # apply pending migrations (as the owner: DATABASE_OWNER_URL, else DATABASE_URL)
 pnpm db:studio        # Drizzle Studio on :4000
 ```
 

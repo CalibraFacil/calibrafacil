@@ -166,8 +166,10 @@ keep the table owner for the few cross-laboratory statements (`DATABASE_OWNER_UR
 `DATABASE_RLS_MODE` defaults to `enforced`, and start-up refuses (naming the variable) an application that
 connects as the owner or has no `DATABASE_OWNER_URL`. **Docker Compose:** add `CALIBRA_APP_PASSWORD` to
 `deploy/.env` (any random URL-safe string; `./setup.sh` generates it for new installs) before
-`docker compose up -d`; `init` creates the login. **Other deployments:** give `calibra_app` a login, point
-`DATABASE_URL` at it and `DATABASE_OWNER_URL` at the connection `DATABASE_URL` was, for the API and the worker.
+`docker compose up -d`; `init` creates the login. **Other deployments:** first run `init` / `db:bootstrap` as the owner with
+`DATABASE_URL=postgres://calibra_app:<password>@host/db` and `DATABASE_OWNER_URL` set to the connection
+`DATABASE_URL` is today (it migrates, which creates `calibra_app`, and gives it the login), then point the API and the
+worker at those two URLs.
 The steps and the rollback (`DATABASE_RLS_MODE=shadow`) are in "Row-level security (migration 0123) and the
 role split".
 
@@ -653,17 +655,20 @@ since the cutover (P2-18k) **enforcement is the normal setup**:
   owner, which creates the `calibra_app` login with the password `CALIBRA_APP_PASSWORD` of `deploy/.env`
   (`./setup.sh` generates it) on every start, so rotating the password is editing `.env` and
   `docker compose up -d`.
-- **Your own Postgres.** Give `calibra_app` a login and a password once, as the owner or an admin role, and
-  point the two URLs at it:
+- **Your own Postgres.** Run `db:bootstrap` (or `init`) once as the owner with both URLs set,
+  `DATABASE_URL=postgres://calibra_app:<password>@host/db` and `DATABASE_OWNER_URL=<the owner's URL>`: it applies the
+  migrations (migration 0123 creates the role `calibra_app`) and then, because the application URL names
+  `calibra_app`, gives that role `LOGIN` and the password of the URL, on every run (a password change is an edit and a
+  rerun). Nothing else about the role is touched, so it works for a non-superuser owner with `CREATEROLE` (Neon, RDS,
+  Supabase). By hand, once the role exists (the migration created it), as the owner or an admin role:
 
   ```sql
-  ALTER ROLE calibra_app LOGIN PASSWORD '<strong password>' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+  ALTER ROLE calibra_app LOGIN PASSWORD '<strong password>';
   ```
 
-  (Or run `db:bootstrap` / `init` with `DATABASE_URL=postgres://calibra_app:<password>@host/db` and
-  `DATABASE_OWNER_URL=<the owner's URL>`: when the application URL names `calibra_app`, the script sets that
-  login and password after the migrations.) A separate login that is a member of the role works as well:
-  `CREATE ROLE calibra_api LOGIN PASSWORD '...' IN ROLE calibra_app;` (keep `INHERIT`, the default).
+  (`CREATE ROLE`'s defaults are the right ones: not a superuser, no `BYPASSRLS`, no `CREATEDB`, no `CREATEROLE`; start-up
+  refuses an application role that has any of the first two.) A separate login that is a member of the role works as
+  well: `CREATE ROLE calibra_api LOGIN PASSWORD '...' IN ROLE calibra_app;` (keep `INHERIT`, the default).
 
 - **Development.** `pnpm setup:dev` does the same against the compose Postgres: `apps/api/.env` and
   `apps/worker/.env` carry `DATABASE_URL=postgres://calibra_app:calibra_app@localhost:55432/calibra` and
@@ -675,8 +680,10 @@ query (two with `enforced`) before they serve, and stop with a message naming th
 
 - `enforced` and `DATABASE_OWNER_URL` unset: refused (Q40), because the system path would run as the
   application role and silently see nothing;
-- `enforced` and `DATABASE_URL` is the table owner, a superuser or a `BYPASSRLS` role: refused (RLS would not
-  apply to the application; nobody would notice). To run as the owner knowingly, set `DATABASE_RLS_MODE=shadow`;
+- `enforced` and `DATABASE_URL` is the table owner, a superuser or a `BYPASSRLS` role, owns even ONE tenant
+  table, or is a member of such an owner (with or without `INHERIT`: it could `SET ROLE` to it): refused (RLS would
+  not apply to the application, at least on some table; nobody would notice). To run as the owner knowingly, set
+  `DATABASE_RLS_MODE=shadow`, which logs a loud warning when `NODE_ENV=production`;
 - `enforced` and `DATABASE_OWNER_URL` is a role RLS binds: refused (the system path would match no row);
 - `shadow` and `DATABASE_URL` is a role RLS binds: refused (statements without an organization would
   silently match no row);
@@ -693,9 +700,13 @@ fails at start-up with the messages above, on purpose. Do, once:
    `echo "CALIBRA_APP_PASSWORD=$(openssl rand -base64 24 | tr '+/' '-_' | tr -d '=')" >> .env`), then
    `docker compose pull && docker compose up -d`: `init` creates the login and the new compose file wires the
    URLs. Nothing else changes.
-2. Your own Postgres and processes: give `calibra_app` a login (above); set `DATABASE_URL` to it and
-   `DATABASE_OWNER_URL` to what `DATABASE_URL` was; leave `DATABASE_RLS_MODE` unset (or `enforced`). Do the same
-   for the worker. Run `init` / `db:bootstrap` with both set. Run `pnpm config:check` first.
+2. Your own Postgres and processes, in this order (the role does not exist before migration 0123, so the login
+   cannot be created first): (a) with the OLD application still running, run `init` / `db:bootstrap` as the owner
+   with `DATABASE_OWNER_URL=<what DATABASE_URL is today>` and
+   `DATABASE_URL=postgres://calibra_app:<new password>@host/db`: it migrates, which creates `calibra_app`, and gives it
+   the login; (b) then switch the API and the worker to `DATABASE_URL=postgres://calibra_app:<password>@host/db` and
+   `DATABASE_OWNER_URL=<the old URL>`, leave `DATABASE_RLS_MODE` unset (or `enforced`), run `pnpm config:check`, and
+   restart.
 3. To go back, set `DATABASE_RLS_MODE=shadow` and `DATABASE_URL` to the owner (the policies stay, the owner
    bypasses them); nothing else changes.
 
@@ -716,7 +727,8 @@ CREATE ROLE calibra_app NOLOGIN;
 LEVEL SECURITY` takes a short exclusive lock on each tenant table. If a long query holds one, the migration
 fails fast with `canceling statement due to lock timeout` (SQLSTATE `55P03`) instead of queueing every request
 behind it. It runs in one transaction and is idempotent, so a failed attempt changes nothing: wait for the
-query to finish, or pick a quiet moment, and run `db:migrate` again.
+query to finish, or pick a quiet moment, and run `db:migrate` again. `db:migrate` connects as the owner
+(`DATABASE_OWNER_URL` when set, else `DATABASE_URL`, see `packages/db/drizzle.config.ts`), never as `calibra_app`.
 
 **Why the tables are not `FORCE`d.** A table owner is exempt from RLS unless the table is `FORCE`d. Forcing
 would also bind the owner, and the owner legitimately runs statements that no single organization can name:
