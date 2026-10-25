@@ -27,7 +27,7 @@
     "@calibra-facil/db": "workspace:*",
     "@react-email/render": "^2.0.8",
     "drizzle-orm": "^0.45.2",
-    "nodemailer": "^10.0.15",
+    "nodemailer": "^10.1.4",
     "resend": "^6.12.4"
   },
   "devDependencies": {

@@ -50,6 +50,8 @@ overrides:
   # Raised to 7.30.1 for the DoS via an unhandled error on excessive
   # content-encodings (undici >=7.18.0 <7.30.1).
   undici: ^7.30.1
+  # serialize-javascript <7.1.3 (low advisory). Transitive build tooling.
+  "serialize-javascript@<7.1.3": ^7.1.3
   # GHSA-96hv-2xvq-fx4p: ws >=8.0.0 <8.21.0 memory-exhaustion DoS from many tiny
   # fragments. Pulled transitively via Payload (apps/cms). Patch-bump the 8.x
   # line to 8.21.0 (already resolved elsewhere in the tree).
@@ -97,8 +99,8 @@ overrides:
   # to 3.1.7 off the `three` dist-tag. Supersedes the earlier ^3.1.5, which now
   # sits inside the vulnerable range.
   # GHSA-hrr3-gc8f-f4qj (host case normalization via percent-encoded octets)
-  # needs 3.1.8.
-  fast-uri: ^3.1.8
+  # needs 3.1.8; the four later advisories against fast-uri <3.1.9 need 3.1.9.
+  fast-uri: ^3.1.9
   # GHSA-73wf-gq98-2v4g + GHSA-c83g-rgw3-j3cx: browserslist <=4.28.6 crashes /
   # writes to Object.prototype on an untrusted browserslist-stats.json, and
   # grows its query cache without eviction. Build-time only (transitive via
