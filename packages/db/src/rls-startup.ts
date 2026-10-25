@@ -10,13 +10,15 @@
 // check makes a typo in either URL a start-up error instead of a silent hole:
 //
 //   - `enforced` (DATABASE_RLS_MODE, the default): DATABASE_URL must be a role
-//     the policies bind (an application that connected as the owner would run
-//     with no second wall and nobody would know); DATABASE_OWNER_URL must be set
+//     the policies bind on EVERY tenant table (an application that connected as
+//     the owner, owns even one table, or is a member of the owner, so it can
+//     SET ROLE, would run with no second wall there and nobody would know);
+//     DATABASE_OWNER_URL must be set
 //     (Q40: otherwise the system path would run as the application role and
 //     silently match nothing) and must NOT be a role the policies bind;
 //   - `shadow`, kept for diagnosis: the application connects as the owner and
 //     start-up REFUSES a role that RLS binds, so shadow mode can never silently
-//     hide data.
+//     hide data, and warns loudly when that happens in production.
 //
 // Before migration 0123 no table has RLS enabled and the role checks pass.
 import { ConfigError, readDatabaseConfig } from "@calibra-facil/config";
@@ -38,6 +40,12 @@ export type RlsRoleFacts = {
    * table is FORCEd.
    */
   subjectToRls: boolean;
+  /**
+   * The role owns, or can become (membership, inherited or not: `SET ROLE`), the
+   * owner of SOME table with RLS enabled. Such a role is exempt from the policies
+   * of that table, so the wall would have a hole even though other tables bind it.
+   */
+  ownsSomeRlsTable: boolean;
 };
 
 /** The one query of the check. Reads catalogs only. */
@@ -56,7 +64,12 @@ const FACTS_QUERY = sql`
         where c.relnamespace = 'public'::regnamespace and c.relkind = 'r' and c.relrowsecurity
           and (c.relforcerowsecurity or not pg_has_role(current_user, c.relowner, 'USAGE'))
       )
-    ) as subject_to_rls
+    ) as subject_to_rls,
+    exists (
+      select 1 from pg_class c
+      where c.relnamespace = 'public'::regnamespace and c.relkind = 'r' and c.relrowsecurity
+        and pg_has_role(current_user, c.relowner, 'MEMBER')
+    ) as owns_some_rls_table
   from pg_roles r
   where r.rolname = current_user
 `;
@@ -90,6 +103,7 @@ export async function readRlsRoleFacts(
     bypassesRls: field(row, "bypasses_rls") === true,
     rlsEnabled: field(row, "rls_enabled") === true,
     subjectToRls: field(row, "subject_to_rls") === true,
+    ownsSomeRlsTable: field(row, "owns_some_rls_table") === true,
   };
 }
 
@@ -100,8 +114,8 @@ export function rlsStartupProblem(
 ): string | null {
   if (!facts.rlsEnabled) return null;
   if (mode === "enforced") {
-    if (facts.subjectToRls) return null;
-    return `DATABASE_RLS_MODE=enforced (the default), but DATABASE_URL connects as "${facts.role}", which owns the tenant tables or is superuser/BYPASSRLS, so row-level security would not apply to the application. Connect the application as the role calibra_app (or a member of it) and put the owner's connection in DATABASE_OWNER_URL; to run as the owner on purpose (diagnosis), set DATABASE_RLS_MODE=shadow. See DEPLOYMENT.md ("Row-level security").`;
+    if (facts.subjectToRls && !facts.ownsSomeRlsTable) return null;
+    return `DATABASE_RLS_MODE=enforced (the default), but DATABASE_URL connects as "${facts.role}", which owns (or is a member of the owner of, or can SET ROLE to the owner of) some tenant table, or is superuser/BYPASSRLS, so row-level security would not apply to the application. Connect the application as the role calibra_app (or a member of it) and put the owner's connection in DATABASE_OWNER_URL; to run as the owner on purpose (diagnosis), set DATABASE_RLS_MODE=shadow. See DEPLOYMENT.md ("Row-level security").`;
   }
   if (!facts.subjectToRls) return null;
   return `DATABASE_RLS_MODE=shadow, but DATABASE_URL connects as "${facts.role}", which is subject to row-level security (migration 0123: it neither owns the tenant tables nor is superuser/BYPASSRLS), so statements without an organization would silently match no row. Connect as the owner of the tables, or use DATABASE_RLS_MODE=enforced (the default) with DATABASE_OWNER_URL set, see DEPLOYMENT.md ("Row-level security").`;
@@ -133,6 +147,10 @@ export function rlsSystemRoleProblem(
   return `DATABASE_OWNER_URL connects as "${systemFacts.role}", which is subject to row-level security, so the system path would match no row. It must be the owner of the tables (or superuser/BYPASSRLS). See DEPLOYMENT.md ("Row-level security").`;
 }
 
+/** Shadow mode is for diagnosis; running production on the owner has no second wall. */
+export const SHADOW_IN_PRODUCTION_WARNING =
+  'WARNING: DATABASE_RLS_MODE=shadow in production: the application connects as the table owner, so row-level security does NOT protect any laboratory\'s data from a missed organization predicate. Shadow mode is for diagnosis only; use DATABASE_RLS_MODE=enforced (the default) with DATABASE_URL as calibra_app and DATABASE_OWNER_URL as the owner, see DEPLOYMENT.md ("Row-level security").';
+
 /**
  * Runs the check on `executor` (default: the application's database) in `mode`
  * (default: DATABASE_RLS_MODE). In `enforced` mode it also needs
@@ -148,11 +166,19 @@ export async function assertRlsStartup(
     mode?: RlsMode;
     /** Default: DATABASE_OWNER_URL. */
     ownerUrl?: string | undefined;
+    /** Default: console.warn. */
+    warn?: (message: string) => void;
+    /** Default: NODE_ENV. */
+    production?: boolean;
   } = {},
 ): Promise<RlsRoleFacts> {
   const config = readDatabaseConfig();
   const mode = options.mode ?? config.rlsMode;
   const ownerUrl = "ownerUrl" in options ? options.ownerUrl : config.ownerUrl;
+  const production = options.production ?? config.nodeEnv === "production";
+  if (mode === "shadow" && production) {
+    (options.warn ?? console.warn)(SHADOW_IN_PRODUCTION_WARNING);
+  }
   const missingOwner = rlsOwnerUrlProblem(mode, ownerUrl);
   if (missingOwner !== null) {
     throw new ConfigError("database", [

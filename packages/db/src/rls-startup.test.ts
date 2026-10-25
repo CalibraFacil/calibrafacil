@@ -19,6 +19,7 @@ const OWNER: RlsRoleFacts = {
   bypassesRls: false,
   rlsEnabled: true,
   subjectToRls: false,
+  ownsSomeRlsTable: true,
 };
 const SUPERUSER: RlsRoleFacts = {
   ...OWNER,
@@ -34,6 +35,7 @@ const APP_MEMBER: RlsRoleFacts = {
   ...OWNER,
   role: "calibra_api",
   subjectToRls: true,
+  ownsSomeRlsTable: false,
 };
 
 function executorReturning(row: Record<string, unknown>) {
@@ -57,6 +59,14 @@ describe("rlsStartupProblem", () => {
 
   it("REQ-RLS-2: enforced mode (the default) accepts that role", () => {
     expect(rlsStartupProblem(APP_MEMBER, "enforced")).toBeNull();
+  });
+
+  it("REQ-RLS-2 [HIGH RISK]: enforced mode refuses a role that owns (or can become the owner of) only SOME tenant table, though the others bind it", () => {
+    const partial = { ...APP_MEMBER, role: "partial", ownsSomeRlsTable: true };
+    const problem = rlsStartupProblem(partial, "enforced");
+    expect(problem).toContain('"partial"');
+    expect(problem).toContain("DATABASE_URL");
+    expect(problem).toContain("SET ROLE");
   });
 
   it("REQ-RLS-2 [HIGH RISK]: enforced mode refuses an application connection RLS does not bind (owner, superuser, BYPASSRLS), naming DATABASE_URL, shadow mode and DEPLOYMENT.md", () => {
@@ -101,6 +111,37 @@ describe("assertRlsStartup", () => {
     bypasses_rls: facts.bypassesRls,
     rls_enabled: facts.rlsEnabled,
     subject_to_rls: facts.subjectToRls,
+    owns_some_rls_table: facts.ownsSomeRlsTable,
+  });
+
+  it("REQ-RLS-2: shadow mode in production warns loudly (and still starts); enforced mode and non-production stay quiet", async () => {
+    const executor = executorReturning(row(OWNER));
+    const warnings: string[] = [];
+    const warn = (message: string) => warnings.push(message);
+    await assertRlsStartup({
+      executor,
+      mode: "shadow",
+      production: true,
+      warn,
+    });
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("DATABASE_RLS_MODE=shadow in production");
+    expect(warnings[0]).toContain("DEPLOYMENT.md");
+    await assertRlsStartup({
+      executor,
+      mode: "shadow",
+      production: false,
+      warn,
+    });
+    await assertRlsStartup({
+      executor: executorReturning(row(APP_MEMBER)),
+      systemExecutor: executorReturning(row(OWNER)),
+      mode: "enforced",
+      ownerUrl: "postgres://owner@localhost/db",
+      production: true,
+      warn,
+    });
+    expect(warnings).toHaveLength(1);
   });
 
   it("REQ-RLS-2: reads the facts with one query and resolves for an owner", async () => {
