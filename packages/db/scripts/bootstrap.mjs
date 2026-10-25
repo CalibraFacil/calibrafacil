@@ -44,8 +44,6 @@ function applicationLogin() {
   return { password: decodeURIComponent(parsed.password) };
 }
 
-const quoteLiteral = (value) => `'${value.replaceAll("'", "''")}'`;
-
 /** calibra_app exists since migration 0123 (NOLOGIN); the dev and compose stacks log in as it. */
 async function ensureApplicationLogin(sql) {
   const login = applicationLogin();
@@ -62,9 +60,14 @@ async function ensureApplicationLogin(sql) {
         CREATE ROLE calibra_app;
       END IF;
     END $$`);
-  await sql.unsafe(
-    `ALTER ROLE calibra_app LOGIN PASSWORD ${quoteLiteral(login.password)} NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE`,
-  );
+  // Only LOGIN and the password: a CREATEROLE owner that is not a superuser (Neon,
+  // RDS, Supabase) may not touch the other attributes, and CREATE ROLE's defaults
+  // (NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE) are the safe ones; start-up
+  // refuses a superuser or BYPASSRLS application role anyway. The literal is quoted
+  // by the server (format %L), never by hand.
+  const [{ statement }] = await sql`
+    select format('ALTER ROLE calibra_app LOGIN PASSWORD %L', ${login.password}::text) as statement`;
+  await sql.unsafe(statement);
   console.log(
     "Role calibra_app: login enabled with the password of DATABASE_URL.",
   );
