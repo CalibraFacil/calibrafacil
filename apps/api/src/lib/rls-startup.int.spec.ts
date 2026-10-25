@@ -4,7 +4,10 @@ import { sql } from "drizzle-orm";
 import { ConfigError } from "@calibra-facil/config";
 import { db } from "@calibra-facil/db";
 import { rlsTables } from "@calibra-facil/db/rls-sql";
-import { assertRlsStartup } from "@calibra-facil/db/rls-startup";
+import {
+  assertRlsStartup,
+  readRlsRoleFacts,
+} from "@calibra-facil/db/rls-startup";
 import {
   createRoleDatabase,
   type RoleDatabase,
@@ -16,7 +19,7 @@ import { seedTenant } from "../../test/integration/tenancy-fixture";
 import { sqlStateOf } from "../../test/integration/rls";
 
 // The proof that the application's role is NOT bound by row-level security while
-// DATABASE_RLS_MODE=shadow (REQ-RLS-2), against a role that is a real table OWNER
+// DATABASE_RLS_MODE=shadow, the diagnosis mode (REQ-RLS-2), against a role that is a real table OWNER
 // but not a superuser (the test Postgres user is a superuser, which proves
 // nothing: it bypasses everything), plus the start-up check and the migration
 // guard in every case: owner, BYPASSRLS, a calibra_app member, enforced mode.
@@ -25,7 +28,12 @@ const suffix = process.env.VITEST_POOL_ID ?? "0";
 const OWNER = `t_owner_${suffix}`;
 const BYPASS = `t_bypass_${suffix}`;
 const MEMBER = `t_member_${suffix}`;
-const ROLES = [OWNER, BYPASS, MEMBER];
+// Roles the application must NOT be able to hide behind: it owns one table, or it can
+// become the owner (membership with and without INHERIT, `SET ROLE`).
+const PARTIAL = `t_partial_${suffix}`;
+const INHERITS = `t_inherits_${suffix}`;
+const NOINHERIT = `t_noinherit_${suffix}`;
+const ROLES = [PARTIAL, INHERITS, NOINHERIT, OWNER, BYPASS, MEMBER];
 
 const MIGRATION = readFileSync(
   new URL(
@@ -101,6 +109,19 @@ describe("row-level security: who the policies bind", () => {
         END $$`),
     );
     await db.execute(sql.raw(`GRANT USAGE ON SCHEMA public TO ${OWNER}`));
+    await db.execute(
+      sql.raw(
+        `CREATE ROLE ${PARTIAL} NOLOGIN IN ROLE calibra_app; GRANT CREATE ON SCHEMA public TO ${PARTIAL}`,
+      ),
+    );
+    await db.execute(
+      sql.raw(`CREATE ROLE ${INHERITS} NOLOGIN IN ROLE calibra_app, ${OWNER}`),
+    );
+    await db.execute(
+      sql.raw(
+        `CREATE ROLE ${NOINHERIT} NOLOGIN NOINHERIT IN ROLE calibra_app, ${OWNER}`,
+      ),
+    );
   });
 
   afterAll(async () => {
@@ -267,14 +288,123 @@ describe("row-level security: who the policies bind", () => {
       expect(refused.message).toContain("DEPLOYMENT.md");
     });
 
-    it("REQ-RLS-2: enforced mode (after the role split) accepts the calibra_app member", async () => {
+    it("REQ-RLS-2: enforced mode (the default) accepts the calibra_app member with the owner on the system path", async () => {
       const facts = await assertRlsStartup({
         executor: connectAs(MEMBER).db,
+        systemExecutor: connectAs(OWNER).db,
         mode: "enforced",
         ownerUrl: "postgres://owner@localhost/db",
       });
       expect(facts.subjectToRls).toBe(true);
       expect(facts.role).toBe(MEMBER);
+    });
+
+    it("REQ-RLS-2 [HIGH RISK]: enforced mode refuses an application connection that is the owner, a BYPASSRLS role or the superuser (no second wall), naming DATABASE_URL", async () => {
+      for (const who of [
+        connectAs(OWNER),
+        connectAs(BYPASS),
+        connectAs(null),
+      ]) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- one connection each.
+        const refused = await assertRlsStartup({
+          executor: who.db,
+          systemExecutor: connectAs(OWNER).db,
+          ownerUrl: "postgres://owner@localhost/db",
+          mode: "enforced",
+        }).then(
+          () => null,
+          (error: unknown) => error,
+        );
+        expect(refused).toBeInstanceOf(ConfigError);
+        if (!(refused instanceof ConfigError)) throw new Error("not refused");
+        expect(refused.issues.map((issue) => issue.variable)).toEqual([
+          "DATABASE_URL",
+        ]);
+      }
+    });
+
+    it("REQ-RLS-2 [HIGH RISK]: enforced mode refuses a role that owns only SOME tenant table, and a member of the owner with or without INHERIT (it can SET ROLE), naming DATABASE_URL", async () => {
+      await db.execute(sql.raw(`ALTER TABLE customer OWNER TO ${PARTIAL}`));
+      try {
+        const cases = [
+          {
+            who: PARTIAL,
+            facts: { subjectToRls: true, ownsSomeRlsTable: true },
+          },
+          {
+            who: INHERITS,
+            facts: { subjectToRls: false, ownsSomeRlsTable: true },
+          },
+          {
+            who: NOINHERIT,
+            facts: { subjectToRls: true, ownsSomeRlsTable: true },
+          },
+        ];
+        for (const { who, facts } of cases) {
+          // oxlint-disable-next-line eslint/no-await-in-loop -- one connection each.
+          const executor = connectAs(who).db;
+          // oxlint-disable-next-line eslint/no-await-in-loop -- one connection each.
+          const refused = await assertRlsStartup({
+            executor,
+            systemExecutor: connectAs(OWNER).db,
+            ownerUrl: "postgres://owner@localhost/db",
+            mode: "enforced",
+          }).then(
+            () => null,
+            (error: unknown) => error,
+          );
+          expect(refused, who).toBeInstanceOf(ConfigError);
+          if (!(refused instanceof ConfigError)) throw new Error("not refused");
+          expect(refused.issues.map((issue) => issue.variable)).toEqual([
+            "DATABASE_URL",
+          ]);
+          expect(refused.message).toContain(who);
+          // oxlint-disable-next-line eslint/no-await-in-loop -- one connection each.
+          const read = await readRlsRoleFacts(executor);
+          expect(read.ownsSomeRlsTable, who).toBe(facts.ownsSomeRlsTable);
+        }
+      } finally {
+        await db.execute(sql.raw(`ALTER TABLE customer OWNER TO ${OWNER}`));
+      }
+    });
+
+    it("REQ-RLS-2 [HIGH RISK]: enforced mode refuses a NOINHERIT member of the owner even when it owns no table itself", async () => {
+      const facts = await readRlsRoleFacts(connectAs(NOINHERIT).db);
+      expect(facts.ownsSomeRlsTable).toBe(true);
+      expect(facts.subjectToRls).toBe(true);
+      await expect(
+        assertRlsStartup({
+          executor: connectAs(NOINHERIT).db,
+          systemExecutor: connectAs(OWNER).db,
+          ownerUrl: "postgres://owner@localhost/db",
+          mode: "enforced",
+        }),
+      ).rejects.toBeInstanceOf(ConfigError);
+    });
+
+    it("REQ-RLS-2 [HIGH RISK]: enforced mode refuses a system path that is missing or that RLS binds (Q40), naming DATABASE_OWNER_URL", async () => {
+      for (const options of [
+        { ownerUrl: undefined, systemExecutor: undefined },
+        {
+          ownerUrl: "postgres://owner@localhost/db",
+          systemExecutor: connectAs(MEMBER).db,
+        },
+      ]) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- one connection each.
+        const refused = await assertRlsStartup({
+          executor: connectAs(MEMBER).db,
+          mode: "enforced",
+          ...options,
+        }).then(
+          () => null,
+          (error: unknown) => error,
+        );
+        expect(refused).toBeInstanceOf(ConfigError);
+        if (!(refused instanceof ConfigError)) throw new Error("not refused");
+        expect(refused.issues.map((issue) => issue.variable)).toEqual([
+          "DATABASE_OWNER_URL",
+        ]);
+      }
     });
 
     it("REQ-RLS-2: a FORCEd table binds even its owner, so shadow mode refuses the owner then", async () => {

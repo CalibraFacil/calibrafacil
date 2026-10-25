@@ -9,7 +9,7 @@ import * as schema from "./schema";
 // A connection-less executor whose `transaction` runs the callback on a fake
 // `tx` that records what it executes. The real-database behaviour (the setting
 // reaching Postgres, and being gone after the transaction) is covered by
-// apps/api/src/lib/rls-shadow.int.spec.ts.
+// apps/api/src/lib/rls-policies.int.spec.ts.
 const mock = drizzle.mock({ schema });
 const ORG = "lab-a";
 const dialect = new PgDialect();

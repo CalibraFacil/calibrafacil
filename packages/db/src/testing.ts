@@ -29,7 +29,7 @@ export function outsideTransactionScope<T>(callback: () => T): T {
 }
 
 /**
- * For the RLS shadow harness (apps/api/test/integration/rls-shadow-mode.ts): it
+ * For the application-role harness (apps/api/test/integration/app-role-mode.ts): it
  * must open a request's transaction scope on its `calibra_app` pool, and keep
  * `db` resolving to that scope's transaction inside it.
  */

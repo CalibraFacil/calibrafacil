@@ -89,7 +89,7 @@ jobs:
       # Node-only tests for the repo scripts (dev runner, desktop release gate).
       # No workspace package owns them, so `turbo test` never runs them.
       - name: Script tests
-        run: pnpm test:dev-runner && pnpm test:desktop-release-gate && pnpm test:app-boundaries
+        run: pnpm test:dev-runner && pnpm test:role-split && pnpm test:desktop-release-gate && pnpm test:app-boundaries
 
       # Pull requests test the packages they touch and the packages that depend
       # on them (the leading "..." in the filter); pushes to main test all, and

@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { appendFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect } from "vitest";
+import type { QueryObserver } from "@calibra-facil/db";
 import {
   createRoleDatabase,
   type RoleDatabase,
@@ -18,33 +19,40 @@ import {
   sourceModuleFromStack,
 } from "./rls-shadow-report-lib";
 
-// RLS "violation report" mode of the integration tier (roadmap P2-3), switched on
-// by CALIBRA_RLS_SHADOW=1 (see apps/api/scripts/rls-shadow-report.mjs). It never
-// runs in the normal suites: with the variable unset `shadowDatabase` returns the
-// real `@calibra-facil/db` module untouched.
+// The application role of the integration tier (roadmap P2-3, P2-18k).
 //
-// What it does: every HTTP request a spec sends (`app.request(...)`) is handled
-// with its database access on a pool whose sessions run as `calibra_app`, so the
-// `tenant_isolation` policies bind the application code; the specs' own seeding
-// and assertions keep the owner connection (they are the harness, not the app).
+// Every HTTP request a spec sends (`app.request(...)`) is handled with its
+// database access on a pool whose sessions run as `calibra_app`, so the
+// `tenant_isolation` policies of migration 0123 bind the application code exactly
+// as they do in production (DATABASE_RLS_MODE=enforced); the specs' own seeding
+// and assertions keep the owner connection (they are the harness, not the
+// application), and so does `systemDb` (the owner path, like DATABASE_OWNER_URL).
 // A statement that reaches a tenant table without `calibra.organization_id` set
-// in its transaction matches no row under calibra_app; in this mode the worker
-// database's policies call `calibra_rls_probe_org()` instead of reading the
+// in its transaction matches no row as calibra_app and a write for another
+// organization is refused by WITH CHECK: the test that issued it fails.
+//
+// Debugging: CALIBRA_API_DB_ROLE=owner runs the requests on the owner connection
+// like before the cutover (fast, no policy), to tell an RLS refusal from a bug.
+//
+// Report mode (CALIBRA_RLS_REPORT=1, apps/api/scripts/rls-shadow-report.mjs): the
+// worker database's policies call `calibra_rls_probe_org()` instead of reading the
 // setting directly (same result, fail closed) and the function raises a WARNING
-// carrying `current_query()`, which this module records per spec and test. A write
-// refused by WITH CHECK is an error and shows as a failing test.
+// carrying `current_query()`, which this module records per spec and test, so one
+// run lists every statement that reached a tenant table with no organization set
+// (CALIBRA_RLS_REPORT_MODE=audit lets such a statement through, to walk past the
+// first of each request). Attribution: each request carries its path, and the
+// application module that obtained the database handle (innermost stack frame
+// outside drizzle, packages/db, lib/org-db.ts and the harness) is captured when
+// the handle is accessed; the statement text the pool logs is joined to the
+// server's warning. Concurrent statements of one text in one process (a
+// Promise.all race) may be attributed to the latest issuer.
 //
-// Attribution: each request carries its path, and the application module that
-// obtained the database handle (innermost stack frame outside drizzle, packages/db,
-// lib/org-db.ts and the harness) is captured when the handle is accessed; the
-// statement text the pool logs is joined to the server's warning, so every
-// unscoped statement is reported with the module and request path that issued it.
-// Concurrent statements of one text in one process (a Promise.all race) may be
-// attributed to the latest issuer.
+// The tenant SQL guard (tenant-sql-guard.ts) keeps watching the requests: the pool
+// forwards each statement and each handle access to its observer.
 //
-// Limits: a statement on an EMPTY table does not evaluate the policy, so it is not
-// reported; work started outside `request()` (a spec calling a lib function
-// directly, a cron/queue handler) stays on the owner connection.
+// Limits: a statement on an EMPTY table does not evaluate the policy; work started
+// outside `request()` (a spec calling a lib function directly, a cron/queue
+// handler) stays on the owner connection.
 
 const MARKER = "calibra-rls: no organization set | ";
 
@@ -60,7 +68,17 @@ const REPO_ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
 /** Latest issuer of each statement text, to attribute the server's warning. */
 const origins = new Map<string, Store>();
 
+/**
+ * The statement observer the tenant SQL guard installed (through the
+ * `setQueryObserver` of the module the specs see, wrapped below): the calibra_app
+ * pool is a second drizzle instance, so its statements and handle accesses are
+ * forwarded to it by hand.
+ */
+let observer: QueryObserver | null = null;
+
+/** Report mode: attribute the statements that follow to the module that asked for the handle. */
 function tagAccess(): void {
+  if (!reportEnabled()) return;
   const store = context.getStore();
   if (!store) return;
   const holder: { stack?: string } = {};
@@ -75,12 +93,18 @@ function tagAccess(): void {
 }
 const context = new AsyncLocalStorage<Store>();
 
-export function shadowModeEnabled(): boolean {
-  return process.env.CALIBRA_RLS_SHADOW === "1";
+/** Requests run as calibra_app unless CALIBRA_API_DB_ROLE=owner (debugging). */
+export function appRoleEnabled(): boolean {
+  return process.env.CALIBRA_API_DB_ROLE !== "owner";
+}
+
+/** The shadow report's probing policies and attribution (CALIBRA_RLS_REPORT=1). */
+function reportEnabled(): boolean {
+  return process.env.CALIBRA_RLS_REPORT === "1";
 }
 
 function record(entry: Record<string, unknown>): void {
-  const file = process.env.CALIBRA_RLS_SHADOW_REPORT;
+  const file = process.env.CALIBRA_RLS_REPORT_FILE;
   if (file) appendFileSync(file, `${JSON.stringify(entry)}\n`);
 }
 
@@ -97,13 +121,13 @@ $$`;
 
 /**
  * `strict` (default): what ships, fail closed, plus the warning. `audit`
- * (CALIBRA_RLS_SHADOW_MODE=audit): a statement with no organization set is ALLOWED
+ * (CALIBRA_RLS_REPORT_MODE=audit): a statement with no organization set is ALLOWED
  * (and warned about), so one run walks past the first such statement of every
  * request and inventories all of them; a statement with an organization set is
  * still enforced.
  */
 function auditMode(): boolean {
-  return process.env.CALIBRA_RLS_SHADOW_MODE === "audit";
+  return process.env.CALIBRA_RLS_REPORT_MODE === "audit";
 }
 
 /** The worker database's policies, with the probe in place of the bare setting. */
@@ -124,17 +148,17 @@ function probePolicies(): string[] {
 }
 
 /**
- * The `hono` module as the app sees it. Normally the real one; in shadow mode
- * `new Hono()` returns an app whose `request()` runs the whole request inside the
- * "application" async context (`request` is an instance field of Hono, so it
- * cannot be patched on the prototype).
+ * The `hono` module as the app sees it. `new Hono()` returns an app whose
+ * `request()` runs the whole request inside the "application" async context
+ * (`request` is an instance field of Hono, so it cannot be patched on the
+ * prototype). The real module, untouched, when CALIBRA_API_DB_ROLE=owner.
  */
-export function shadowHono<
+export function appRoleHono<
   M extends { Hono: new (...args: never[]) => object },
 >(actual: M): M {
-  if (!shadowModeEnabled()) return actual;
+  if (!appRoleEnabled()) return actual;
   const Base = actual.Hono;
-  class ShadowHono extends Base {
+  class AppRoleHono extends Base {
     constructor(...args: never[]) {
       super(...args);
       const original: unknown = Reflect.get(this, "request");
@@ -147,7 +171,7 @@ export function shadowHono<
       );
     }
   }
-  return { ...actual, Hono: ShadowHono };
+  return { ...actual, Hono: AppRoleHono };
 }
 
 let appDatabase: RoleDatabase | null = null;
@@ -157,7 +181,7 @@ function applicationPool(): RoleDatabase {
   if (appDatabase) return appDatabase;
   const url = process.env.DATABASE_URL;
   assertHarnessWorkerDb(url);
-  if (!url) throw new Error("rls-shadow: DATABASE_URL is not set");
+  if (!url) throw new Error("app-role: DATABASE_URL is not set");
   appDatabase = createRoleDatabase(url, {
     role: "calibra_app",
     max: 10,
@@ -175,7 +199,9 @@ function applicationPool(): RoleDatabase {
         source: origin?.source ?? undefined,
       });
     },
-    onQuery: (query) => {
+    onQuery: (query, params) => {
+      observer?.onQuery(query, params);
+      if (!reportEnabled()) return;
       const store = context.getStore();
       if (store) origins.set(normalizeStatement(query), store);
     },
@@ -184,13 +210,13 @@ function applicationPool(): RoleDatabase {
 }
 
 /**
- * The database instance requests run on in shadow mode (the calibra_app pool),
- * or null when the harness is off. For the harness that forces an interleaving
+ * The database instance requests run on (the calibra_app pool), or null when
+ * the requests run as the owner (CALIBRA_API_DB_ROLE=owner). For the harness that forces an interleaving
  * inside a request's transaction (job-cas.ts): it must spy on the instance the
  * request actually uses.
  */
-export function shadowApplicationDatabase(): RoleDatabase["db"] | null {
-  return shadowModeEnabled() ? applicationPool().db : null;
+export function appRoleDatabaseInstance(): RoleDatabase["db"] | null {
+  return appRoleEnabled() ? applicationPool().db : null;
 }
 
 /**
@@ -203,17 +229,19 @@ export function outsideApplication<T>(work: () => T): T {
 }
 
 /**
- * The `@calibra-facil/db` module as the specs see it. Normally the real one; in
- * shadow mode `db` / `getDb()` resolve to the calibra_app pool inside a request.
+ * The `@calibra-facil/db` module as the specs see it: `db` / `getDb()` resolve to
+ * the calibra_app pool inside a request (the real module, untouched, when
+ * CALIBRA_API_DB_ROLE=owner). `systemDb` stays the owner's.
  */
-export function shadowDatabase<
+export function appRoleDatabase<
   M extends {
     db: object;
+    setQueryObserver: (observer: QueryObserver | null) => void;
     getDb: () => { transaction: (callback: never) => unknown };
     runInTransactionScope: unknown;
   },
 >(actual: M): M {
-  if (!shadowModeEnabled()) return actual;
+  if (!appRoleEnabled()) return actual;
 
   const appPool = applicationPool;
 
@@ -221,13 +249,13 @@ export function shadowDatabase<
     get(_, property) {
       tagAccess();
       // Inside a transaction scope `db` IS the scope's transaction (the real
-      // proxy resolves it); outside one a request's statements take the
-      // calibra_app pool.
-      const target =
-        context.getStore() && !currentTransactionScope()
-          ? appPool().db
-          : actual.db;
-      return Reflect.get(target, property);
+      // proxy resolves it, and reports the access itself); outside one a
+      // request's statements take the calibra_app pool.
+      if (context.getStore() && !currentTransactionScope()) {
+        observer?.onAccess?.();
+        return Reflect.get(appPool().db, property);
+      }
+      return Reflect.get(actual.db, property);
     },
   });
   // A request's transaction scope (the desktop sync event) opens on the
@@ -239,22 +267,28 @@ export function shadowDatabase<
     ...actual,
     db,
     runInTransactionScope,
+    setQueryObserver: (next: QueryObserver | null) => {
+      observer = next;
+      actual.setQueryObserver(next);
+    },
     getDb: () => {
       tagAccess();
-      return context.getStore() ? appPool().db : actual.getDb();
+      if (!context.getStore()) return actual.getDb();
+      observer?.onAccess?.();
+      return appPool().db;
     },
   };
 }
 
 /**
- * Per worker database (call after DATABASE_URL points at it): swap the policies
- * for the probing variant and route requests through the calibra_app pool.
+ * Per worker database (call after DATABASE_URL points at it), in report mode only:
+ * swap the policies for the probing variant (see the header).
  */
-export async function installRlsShadowMode(): Promise<void> {
-  if (!shadowModeEnabled()) return;
+export async function installReportProbes(): Promise<void> {
+  if (!appRoleEnabled() || !reportEnabled()) return;
   const url = process.env.DATABASE_URL;
   assertHarnessWorkerDb(url);
-  if (!url) throw new Error("rls-shadow: DATABASE_URL is not set");
+  if (!url) throw new Error("app-role: DATABASE_URL is not set");
   const owner = createRoleDatabase(url, { role: null, max: 1 });
   try {
     for (const statement of probePolicies()) {

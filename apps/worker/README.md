@@ -69,7 +69,8 @@ pnpm dev
 Create `.env` from `.env.example`:
 
 ```env
-DATABASE_URL=
+DATABASE_URL=            # calibra_app (the application role, bound by row-level security)
+DATABASE_OWNER_URL=      # the table owner (system path); required while DATABASE_RLS_MODE=enforced, the default
 R2_ACCOUNT_ID=
 R2_BUCKET_NAME=
 R2_ACCESS_KEY_ID=

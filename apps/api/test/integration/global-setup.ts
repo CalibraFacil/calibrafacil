@@ -85,7 +85,7 @@ export async function setup({ provide }: GlobalSetupContext) {
     // workers each TRUNCATEing tables that CASCADE into many FK-related tables, the
     // default lock table fills up and causes "out of shared memory" errors.
     execSync(
-      `docker run -d --name ${CONTAINER} -e POSTGRES_PASSWORD=test -e POSTGRES_DB=postgres -p 0:5432 ${postgresImage()} -c max_locks_per_transaction=256`,
+      `docker run -d --name ${CONTAINER} -e POSTGRES_PASSWORD=test -e POSTGRES_DB=postgres -p 0:5432 ${postgresImage()} -c max_locks_per_transaction=256 -c max_connections=400`,
       { stdio: "ignore" },
     );
     startedContainer = CONTAINER;

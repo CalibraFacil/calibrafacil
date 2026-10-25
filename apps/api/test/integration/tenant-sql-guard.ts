@@ -68,6 +68,7 @@ function frameSites(stack: string): string[] {
 const SKIPPED_FRAMES = [
   "packages/db/src/db.ts",
   "packages/db/src/for-org.ts",
+  "apps/api/test/integration/app-role-mode.ts",
   "apps/api/test/integration/tenant-sql-guard.ts",
 ];
 

@@ -61,9 +61,9 @@ memberships), public-token lookups, reads over a SET of laboratories (`orgSetDb`
 fan-out, cron and queue sweeps. They run on the named **system path**: `systemDb` /
 `getSystemDb()` of `@calibra-facil/db` (`packages/db/src/db.ts`), the connection of the table owner.
 
-- It connects with `DATABASE_OWNER_URL`; unset it IS the application connection (while
-  `DATABASE_RLS_MODE=shadow` the application is the owner, so there is nothing to split). The role split
-  sets it (DEPLOYMENT.md, "Row-level security").
+- It connects with `DATABASE_OWNER_URL`, which `DATABASE_RLS_MODE=enforced` (the default) requires: start-up
+  refuses to run without it, or with one whose role RLS binds. Only in `shadow` mode (diagnosis) may it be
+  unset, and then it IS the application connection, which is the owner (DEPLOYMENT.md, "Row-level security").
 - It lives in lib modules, each with a comment saying why the statement cannot name an organization yet
   and an entry in `apps/api/test/integration/tenant-sql-allowlist.ts`; `calibra/no-raw-db-in-routes`
   forbids `systemDb` / `getSystemDb` in `apps/api/src/routes/**` exactly like `db`, so a route reaches it
@@ -96,15 +96,28 @@ the same change that migrates a handler (delete the entry at zero). The baseline
 every route is migrated, so a route that needs a statement outside an organization calls a named lib
 function (`lib/identity.ts`, `lib/public-signup-store.ts`, ...), never the raw handle.
 
-## Row-level security (shadow mode, P2-3)
+## Row-level security (enforced since P2-18k)
 
 Migration 0123 enables RLS (not forced) on every tenant table with the policy `tenant_isolation` for the
 role `calibra_app`: `USING` / `WITH CHECK` `<org column> = NULLIF(current_setting('calibra.organization_id', true), '')::<type>`.
-The table owner is exempt, so nothing changes for the owner connection production uses today; see
-[DEPLOYMENT.md](../../DEPLOYMENT.md) for the role split the owner runs later. The SQL is generated from
+The application connects as `calibra_app` (`DATABASE_URL`) and, since the cutover, that is the normal setup
+everywhere: `DATABASE_RLS_MODE` defaults to `enforced`, the compose files, `pnpm setup:dev`, the integration
+tiers and CI all run the application as that role. The table owner (`DATABASE_OWNER_URL`) is exempt and is only
+used by the named system path, the migrations and the CLI; see [DEPLOYMENT.md](../../DEPLOYMENT.md) ("Row-level
+security") for the role split, the upgrade of an existing installation and the rollback. The SQL is generated from
 `tenancy.ts` (`pnpm --filter @calibra-facil/db gen:rls-sql`) and `rls-sql.test.ts` fails when a tenant table is
 added or removed without a migration.
 
+- **The tables are not `FORCE`d (P2-18k decision).** `FORCE ROW LEVEL SECURITY` would bind the owner too, which
+  would give an accidental owner connection the same wall. But the owner legitimately runs what no one
+  organization can name: Better Auth's adapter (Q40: sessions and the organization plugin run before an
+  organization is chosen), the lookups that learn a laboratory, the cross-laboratory sweeps and listings, the
+  `asset_type` write fan-out (a change-log row per laboratory), the migrations (`ALTER`, backfills) and the
+  CLI. The policies are addressed to `calibra_app` only, so under `FORCE` the owner would match no policy and
+  see nothing; an extra all-allowing owner policy would defeat the point. The accidental owner connection is
+  closed instead at start-up: in `enforced` mode the API and the worker refuse a `DATABASE_URL` whose role RLS
+  does not bind (owner, superuser, BYPASSRLS), a missing `DATABASE_OWNER_URL` and an owner URL whose role RLS
+  binds, naming the variable. No migration is needed for any of this.
 - **The handle names the organization.** `orgDb(id).transaction(...)` runs
   `select set_config('calibra.organization_id', $org, true)` first (transaction-local: it ends with the
   transaction, so it never leaks to the next one on a pooled connection). Inside a bigger transaction (a
@@ -332,7 +345,7 @@ added or removed without a migration.
   - **The shadow harness now follows the transaction scope.** In shadow mode `db` used to resolve to the
     `calibra_app` pool even inside `runInTransactionScope`, and the scope itself opened on the owner connection,
     so the statements of a pushed event ran outside its transaction and with no organization set (that is what
-    the sync rows of the baseline mostly measured). `shadowDatabase` (`test/integration/rls-shadow-mode.ts`) now
+    the sync rows of the baseline mostly measured). `appRoleDatabase` (`test/integration/app-role-mode.ts`, then `shadowDatabase` of `rls-shadow-mode.ts`) now
     opens a request's scope on the `calibra_app` pool and keeps `db` on the scope's transaction inside it
     (`createTransactionScopeRunner` / `currentTransactionScope` from `@calibra-facil/db/testing`).
   - **Measured** (`rls:shadow-report` over the 11 sync specs plus the four job entry-point specs, with the
@@ -436,90 +449,71 @@ added or removed without a migration.
     findings when one audit write fails and then throws `DriftAuditWriteError` (carrying the result); the scheduled
     integration sync does the same (`ScheduledIntegrationSyncError`); the compliance and change-log sweeps already
     continued and report at the end.
-- **Tests.** `apps/api/src/lib/rls-shadow.int.spec.ts` runs against a pool whose sessions are `calibra_app`
-  (`test/integration/rls.ts`). `pnpm --filter @calibra-facil/api rls:shadow-report` replays every API
-  integration spec (`--group routes/jobs` or `--files` narrow it) with each request's database access as
-  `calibra_app` (owner baseline, strict, audit) and prints what breaks, by spec file, and every statement that
-  reached a tenant table without an organization, grouped by the application module that issued it. See
-  "Baseline" below.
-- **Start-up check.** `DATABASE_RLS_MODE` (`shadow` by default) makes the API and the worker run one catalog
-  query at start-up (`packages/db/src/rls-startup.ts`) and refuse to start as a role the policies bind (not the
-  table owner, superuser or BYPASSRLS). The role split sets `enforced` for the API. Migration 0123 applies
-  the same test to the role that runs it.
+- **Tests.** `apps/api/src/lib/rls-policies.int.spec.ts` runs against a pool whose sessions are `calibra_app`
+  (`test/integration/rls.ts`). Since P2-18k **the integration tier itself runs as `calibra_app`**:
+  `test/integration/app-role-mode.ts` (installed by `setup.ts`) mocks `@calibra-facil/db` and `hono` so that every
+  HTTP request a spec sends (`app.request(...)`) takes its database access, and its transaction scope, on a pool
+  whose sessions are `calibra_app`; the specs' own seeding and assertions, and `systemDb`, stay on the owner
+  (`DATABASE_OWNER_URL` is set to the owner, `DATABASE_RLS_MODE` is left at its default). A statement that forgets
+  its organization matches no row and a write for another laboratory is refused by `WITH CHECK`, so the spec that
+  ran it fails in the normal CI job. The tenant SQL guard keeps watching those statements (the pool forwards them
+  to its observer). `app-role-harness.int.spec.ts` pins the routing itself (`current_user` is `calibra_app` in a
+  request, the owner in the spec and in `systemDb`; an unscoped statement of a request sees nothing).
+  `CALIBRA_API_DB_ROLE=owner pnpm --dir apps/api test:integration <file>` runs the requests as the owner, to tell an
+  RLS refusal from a bug. The worker tier (`apps/worker/test/integration/env.ts`, `makeTestEnv`) builds every
+  handler's env as `calibra_app` plus `DATABASE_OWNER_URL` and `DATABASE_RLS_MODE=enforced`
+  (`CALIBRA_WORKER_DB_ROLE=owner` to debug), while the specs seed and assert on the owner. The role exists in the
+  test Postgres from `sql/schema-extras.sql`; no URL or secret is passed in CI.
+- **Shadow report (diagnosis).** `pnpm --filter @calibra-facil/api rls:shadow-report` replays every API
+  integration spec (`--group routes/jobs` or `--files` narrow it) three times (the requests as the owner, as
+  `calibra_app` under probing policies, and the same letting unscoped statements through) and prints what breaks,
+  by spec file, and every statement that reached a tenant table without an organization, grouped by the
+  application module that issued it. The normal integration run supersedes it as the regression gate; it stays
+  for the question "which statements does this change leave unscoped?", which a failing spec only answers one
+  at a time. See "Final report" below.
+- **Start-up check.** `DATABASE_RLS_MODE` (`enforced` by default) makes the API and the worker run the catalog
+  query at start-up (`packages/db/src/rls-startup.ts`): `enforced` refuses an application connection that RLS
+  does not bind, a missing `DATABASE_OWNER_URL` and an owner URL that RLS binds; `shadow` refuses a role the
+  policies bind (not the table owner, superuser or BYPASSRLS). Migration 0123 applies the same test to the role
+  that runs it.
 
-### Baseline (P2-18b)
+### Final report (P2-18k)
 
 `docs/architecture/rls-shadow-baseline.json` is the output of
-`pnpm --filter @calibra-facil/api rls:shadow-report --json <file>` on `origin/main` at `c59be795`, before any
-of the cutover slices (P2-18a, #110, merged after it and already clears the portal routes, `requireOrganization` in
-`middleware/permission.ts` and most of `lib/units.ts`, so those rows overstate what is left): the numbers each slice (master data, quality records, NC/CAPA, jobs, service orders and
-finance, integrations / public API / notifications, desktop sync, pre-org identity) is measured against. After a
-slice, re-run with `--group` for its specs (or the full report) and diff the `byModule` / `byLayer` / `bySpec`
-counts: a migrated module disappears from `byModule`, a slice is done when its modules are gone and `testsBroken`
-for its specs is 0. `--from-full` re-slices a `--json-full` output without running vitest.
+`pnpm --filter @calibra-facil/api rls:shadow-report --json <file>` on `origin/main` at `f33aed08` (every slice
+P2-18a to P2-18j merged), the number the cutover was measured against. The first baseline (P2-18b, `c59be795`, before
+any slice) had **999 of 1552 tests breaking as `calibra_app`** and 2319 distinct (spec, statement) pairs reaching a
+tenant table with no organization set (12428 executions); each slice's own section above records what it cleared.
 
-- **Scope.** 116 integration specs (`apps/api/src/**/*.int.spec.ts`, minus the tenant SQL guard's own
-  self-test), 1552 tests, 0 failing as the owner, **999 break as `calibra_app`** (strict). The audit pass found
-  2319 distinct (spec, statement) pairs reaching a tenant table with no organization set, 12428 executions.
-- **Run time.** About 125 minutes end to end with `--maxWorkers=2`: baseline 35 min, strict 40 min, audit 50 min
-  (measured while another job loaded the same 16-core machine; expect less on an idle one). A single spec costs
-  about 2 minutes, almost all of it per-pass container and schema start-up, so use `--group` while migrating.
+|                                          | before the slices (P2-18b) | final (P2-18k) |
+| ---------------------------------------- | -------------------------: | -------------: |
+| API integration specs                    |                        116 |            141 |
+| Tests                                    |                       1552 |           1740 |
+| Failing as the owner                     |                          0 |              0 |
+| **Breaking as `calibra_app` (strict)**   |                        999 |          **0** |
+| **Distinct unscoped statements (audit)** |                       2319 |          **0** |
+| Executions of an unscoped statement      |                      12428 |              0 |
+
+Nothing is left over: no statement reaches a tenant table without an organization, and none of the 1740 tests
+breaks under the policies. The normal integration run (above, "Tests") now enforces that on every CI run, so the report
+is a diagnosis tool, not a gate: after a change that adds statements, `rls:shadow-report --group <prefix>` lists every
+unscoped statement at once (strict mode stops a request at its first), and a slice is clean when the module
+disappears from `byModule` and `testsBroken` is 0. The JSON carries counts per spec, module and layer (no statement text);
+`--json-full` adds the rows and statements and `--from-full` re-slices such a file without running vitest.
+
+- **Scope.** Every `apps/api/src/**/*.int.spec.ts` except the harness self-tests (the tenant SQL guard's, and
+  `app-role-harness.int.spec.ts`, which issues an unscoped statement on purpose). The three passes run the requests
+  as the owner (`CALIBRA_API_DB_ROLE=owner`), as `calibra_app` with the probing policies (`CALIBRA_RLS_REPORT=1`),
+  and the same letting unscoped statements through (`CALIBRA_RLS_REPORT_MODE=audit`).
+- **Run time.** 6238 s (about 104 minutes) end to end with `--maxWorkers=2` on a 16-core machine that was running other
+  jobs; a single spec costs about 2 minutes of container and schema start-up per pass, so use `--group` for a slice.
 - **Attribution.** The harness records, per unscoped statement, the application module that obtained the
   database handle (innermost stack frame outside drizzle, `packages/db`, `lib/org-db.ts` and the harness) and
   the request path. The request path is not usable as a group: route specs mount a router at `/`. A module is
   credited a broken test when that test ran one of its unscoped statements; a test that breaks otherwise (a
   WITH CHECK refusal) shows only in its spec. Identical statement text issued concurrently in one process (a
   `Promise.all` race) may be attributed to the latest issuer.
-- **Not covered.** `apps/worker`'s integration tier: it runs serially against one shared database with no
-  per-worker clone, its handlers (queue, cron, scheduled) are called directly instead of through
-  `app.request(...)`, and the harness only routes a request's async context to the `calibra_app` pool, so those
-  specs would stay on the owner connection and report nothing. It needs its own entry point in the worker's test
-  setup, with the worker cutover. Work started outside `request()` in an API spec has the same limit, and a
+- **Not covered by the report.** `apps/worker`'s integration tier (its handlers are called directly, not through
+  `app.request(...)`): it is covered by the tier itself, which builds every handler's env as `calibra_app`
+  (126 tests in 22 files pass that way). Work started outside `request()` in an API spec stays on the owner, and a
   statement on an empty table does not evaluate the policy.
-
-By layer (distinct SQL texts per group, executions, tests broken):
-
-| layer                    | distinct statements | runs | tests broken |
-| ------------------------ | ------------------: | ---: | -----------: |
-| `routes`                 |                 394 | 2031 |          538 |
-| `lib`                    |                  99 | 4833 |          922 |
-| `modules/service-orders` |                  56 |  395 |           65 |
-| `modules/sync`           |                  51 |  702 |          151 |
-| `modules/jobs`           |                  45 | 2489 |          393 |
-| `packages/notifications` |                   7 |   37 |           16 |
-| `modules/integrations`   |                   5 |   26 |            7 |
-| `packages/auth`          |                   5 |   16 |            9 |
-| `middleware`             |                   3 | 1897 |          962 |
-| `(unattributed)`         |                   1 |    2 |            1 |
-
-The 25 modules with the most distinct statements (all 116 are in the JSON, `byModule`). `lib/units.ts` and
-`middleware/permission.ts` run on almost every request, so one fix there clears most of the `tests broken`
-column:
-
-| application module                                              | distinct statements | runs | tests broken |
-| --------------------------------------------------------------- | ------------------: | ---: | -----------: |
-| `apps/api/src/routes/portal.ts`                                 |                  52 |  271 |           45 |
-| `apps/api/src/routes/calibration-requests.ts`                   |                  26 |   87 |            6 |
-| `apps/api/src/routes/dashboard.ts`                              |                  25 |  114 |            8 |
-| `apps/api/src/routes/jobs.ts`                                   |                  24 |  362 |          206 |
-| `apps/api/src/routes/visits.ts`                                 |                  19 |   85 |           29 |
-| `apps/api/src/routes/methods.ts`                                |                  17 |   66 |           16 |
-| `apps/api/src/modules/jobs/approve-job.ts`                      |                  15 |  537 |           50 |
-| `apps/api/src/modules/service-orders/service-order.quotes.ts`   |                  15 |   87 |           11 |
-| `apps/api/src/routes/standards.ts`                              |                  15 |   47 |           10 |
-| `apps/api/src/routes/assets.ts`                                 |                  13 |  103 |           16 |
-| `apps/api/src/lib/certificate-release.ts`                       |                  13 |   61 |            3 |
-| `apps/api/src/routes/spc.ts`                                    |                  12 |  196 |            5 |
-| `apps/api/src/modules/service-orders/service-order.commands.ts` |                  12 |   47 |           16 |
-| `apps/api/src/routes/proficiency-tests.ts`                      |                  12 |   39 |            6 |
-| `apps/api/src/routes/reports.ts`                                |                  12 |   32 |            6 |
-| `apps/api/src/modules/sync/apply-service-order-documents.ts`    |                  12 |   30 |            6 |
-| `apps/api/src/routes/competences.ts`                            |                  12 |   22 |            7 |
-| `apps/api/src/lib/jobs.ts`                                      |                  12 |   14 |            1 |
-| `apps/api/src/lib/service-order-workflow.ts`                    |                  11 |  113 |           29 |
-| `apps/api/src/modules/service-orders/service-order.tokens.ts`   |                  11 |   74 |           14 |
-| `apps/api/src/routes/units.ts`                                  |                  11 |   25 |            9 |
-| `apps/api/src/lib/units.ts`                                     |                   9 | 3672 |          732 |
-| `apps/api/src/routes/customers.ts`                              |                   9 |   35 |            9 |
-| `apps/api/src/routes/capa.ts`                                   |                   9 |   32 |            6 |
-| `apps/api/src/routes/non-conformances.ts`                       |                   9 |   31 |            5 |

@@ -32,9 +32,9 @@ export async function withDbClient<T>(
  * cross-organization by design (which laboratory owns this job; which
  * laboratories exist; which rows of every laboratory are owed). Each use is ONE
  * lookup or listing with a comment saying why, never per-laboratory work.
- * `DATABASE_OWNER_URL` is the owner once the application connects as
- * `calibra_app`; unset, the system path shares `DATABASE_URL` (the owner while
- * row-level security is in shadow mode).
+ * `DATABASE_OWNER_URL` is the owner (the application connects as `calibra_app`,
+ * `DATABASE_RLS_MODE=enforced`, which requires it); unset (shadow mode only), the
+ * system path shares `DATABASE_URL`, which is then the owner.
  */
 export async function withSystemDbClient<T>(
   env: Pick<Env, "DATABASE_URL" | "DATABASE_OWNER_URL">,

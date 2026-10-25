@@ -49,7 +49,7 @@ import {
 import { and, eq, sql } from "drizzle-orm";
 import { loginPerRequestHeader } from "../../../test/integration/setup";
 import { truncateAll } from "../../../test/integration/db";
-import { outsideApplication } from "../../../test/integration/rls-shadow-mode";
+import { outsideApplication } from "../../../test/integration/app-role-mode";
 import { seedOrg } from "../../../test/integration/seed";
 import { createApiKeySecret } from "../../lib/api-keys";
 import { jobsRouter } from "../../routes/jobs";

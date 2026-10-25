@@ -6,7 +6,10 @@
 # Every service stands in for a cloud dependency of the production deployment,
 # so no external account is needed to develop:
 #
-#   postgres       PostgreSQL 17 (production: any managed Postgres)
+#   postgres       PostgreSQL 17 (production: any managed Postgres). `calibra` is the
+#                  table OWNER (migrations, seeds, DATABASE_OWNER_URL); the app connects
+#                  as `calibra_app`, whose login `pnpm setup:dev` (db:bootstrap) creates
+#                  once the schema exists, so row-level security binds it like in production
 #   s3             S3-compatible object storage (production: Cloudflare R2)
 #   mailpit        SMTP server + inbox for every email the app sends —
 #                  http://localhost:8025

@@ -30,7 +30,10 @@ pnpm check:cycles     # madge --circular over every workspace's src
 Local development needs no cloud account: `docker-compose.yml` runs Postgres, an
 S3-compatible store, Mailpit (the app sends over SMTP; every email, magic links included,
 lands at http://localhost:8025) and Gotenberg. The seed
-creates a demo lab; sign in as `admin@laboratorio.test` (passwordless).
+creates a demo lab; sign in as `admin@laboratorio.test` (passwordless). The app connects to
+Postgres as the low-privilege role `calibra_app` (`DATABASE_URL`, which row-level security binds)
+and keeps the table owner in `DATABASE_OWNER_URL` (system path, migrations, seeds);
+`pnpm setup:dev` creates the login and writes both URLs.
 
 Single app / package:
 
@@ -54,7 +57,8 @@ Database (Drizzle, in `packages/db`):
 ```bash
 cd packages/db
 pnpm db:bootstrap     # new DB: push schema + sql/schema-extras.sql; existing DB: migrate
-pnpm db:migrate       # apply pending migrations
+                      # (runs as the owner: DATABASE_OWNER_URL, else DATABASE_URL)
+pnpm db:migrate       # apply pending migrations (as the owner: DATABASE_OWNER_URL, else DATABASE_URL)
 pnpm db:studio        # Drizzle Studio on :4000
 ```
 
@@ -193,6 +197,16 @@ See `docs/architecture/portal-frontend.md`. `apps/portal` is the cloud-only clie
   `pnpm --filter @calibra-facil/math-engine run engine:pin`. The engine is exact for formula
   evaluation, sensitivities and Type A sums, but propagation (`u_c`, `ν_eff`, `k`, `U`) runs in
   float64; see `packages/math-engine/README.md`.
+- **Row-level security is enforced.** Every tenant table has a `tenant_isolation` policy for
+  `calibra_app`; the API and worker connect as that role (`DATABASE_URL`) and every application
+  statement runs in an org-scoped transaction (`orgDb(lab).transaction` / `forOrg`) or on the named
+  owner path (`systemDb`, `DATABASE_OWNER_URL`: identity, cross-laboratory lookups and sweeps, the
+  CLI). `DATABASE_RLS_MODE` defaults to `enforced`; start-up refuses an owner as `DATABASE_URL` or a
+  missing `DATABASE_OWNER_URL`; `shadow` is the diagnosis mode. The tables are deliberately not
+  `FORCE`d (the owner path needs them unbound). The integration tier runs every request as
+  `calibra_app` (`apps/api/test/integration/app-role-mode.ts`; `CALIBRA_API_DB_ROLE=owner` for
+  debugging), so a statement that forgets its organization fails the suite. See
+  `docs/architecture/org-bound-db.md` and `DEPLOYMENT.md`.
 - **No third-party error tracking.** Nothing is reported off the device or the server. Server errors
   go through `createLogErrorReporter` (`packages/shared/src/telemetry`) as one redacted JSON line on
   stderr; browser route errors go to the console. Do not add an error-tracking SDK, replay or

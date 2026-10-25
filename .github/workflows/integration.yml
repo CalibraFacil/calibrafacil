@@ -5,6 +5,12 @@ name: Integration tests
 # image docker-compose.yml pins. It takes about a quarter of an hour, so the
 # Safety net workflow calls it only for pull requests that touch what it
 # covers, and always on main and nightly. It can also be run on its own.
+#
+# Row-level security is enforced here like in a deployment: the API tier sends
+# every request as the database role `calibra_app` (created by
+# packages/db/sql/schema-extras.sql in the throwaway Postgres, no secret or URL
+# to pass), the worker tier builds its handlers' env as `calibra_app` plus
+# DATABASE_OWNER_URL. A statement that forgets its organization fails the job.
 on:
   workflow_call:
   workflow_dispatch:

@@ -19,6 +19,7 @@ import { copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { splitDatabaseRoles } from "./role-split.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const reset = process.argv.includes("--reset");
@@ -119,8 +120,33 @@ for (const [example, target] of [
   console.log(`  created ${target}`);
 }
 
+// An .env written before the role split (P2-18k) has the owner in DATABASE_URL
+// and no DATABASE_OWNER_URL; the API now refuses that at start-up (row-level
+// security is enforced). Rewrite just those two lines, keeping the old value as
+// the owner, when it is the development default role.
+function upgradeRoleSplit(target) {
+  const file = path.join(root, target);
+  if (!existsSync(file)) return;
+  const result = splitDatabaseRoles(readFileSync(file, "utf8"));
+  if (result.status === "current") return;
+  if (result.status === "manual") {
+    console.warn(
+      `  ! ${target}: set DATABASE_URL to the calibra_app login and DATABASE_OWNER_URL to the owner (see DEPLOYMENT.md, "Row-level security").`,
+    );
+    return;
+  }
+  writeFileSync(file, result.text);
+  console.log(
+    `  ${target}: DATABASE_URL is now the calibra_app login, DATABASE_OWNER_URL the owner.`,
+  );
+}
+upgradeRoleSplit("apps/api/.env");
+upgradeRoleSplit("apps/worker/.env");
+
 const apiEnv = parseEnvFile(path.join(root, "apps/api/.env"));
 const dbEnv = parseEnvFile(path.join(root, "packages/db/.env"));
+// The owner runs migrations and seeds; the application logs in as calibra_app.
+const ownerUrl = apiEnv.DATABASE_OWNER_URL || dbEnv.DATABASE_URL;
 
 // The optional worker (`pnpm dev:worker`) must share the API's encryption keys.
 {
@@ -156,7 +182,7 @@ step("Waiting for Postgres to accept connections");
   const postgres = requireFromDb("postgres");
   let ready = false;
   for (let attempt = 0; attempt < 60 && !ready; attempt += 1) {
-    const sql = postgres(dbEnv.DATABASE_URL, {
+    const sql = postgres(ownerUrl, {
       max: 1,
       connect_timeout: 3,
       onnotice: () => {},
@@ -170,12 +196,17 @@ step("Waiting for Postgres to accept connections");
       await sql.end({ timeout: 1 }).catch(() => {});
     }
   }
-  if (!ready)
-    fail(`Postgres did not become reachable at ${dbEnv.DATABASE_URL}`);
+  if (!ready) fail(`Postgres did not become reachable at ${ownerUrl}`);
 }
 step("Preparing the database schema");
+// As the owner; the calibra_app login is created with the password of the
+// application's DATABASE_URL (see packages/db/scripts/bootstrap.mjs).
 run(isWindows ? "pnpm.cmd" : "pnpm", ["--dir", "packages/db", "db:bootstrap"], {
-  env: { ...process.env, DATABASE_URL: dbEnv.DATABASE_URL },
+  env: {
+    ...process.env,
+    DATABASE_URL: apiEnv.DATABASE_URL || ownerUrl,
+    DATABASE_OWNER_URL: ownerUrl,
+  },
 });
 
 // ── 5. buckets ────────────────────────────────────────────────────────────────
@@ -221,7 +252,12 @@ step("Creating storage buckets");
 
 // ── 6. seeds ──────────────────────────────────────────────────────────────────
 step("Seeding catalogs and the demo laboratory");
-const seedEnv = { ...process.env, DATABASE_URL: dbEnv.DATABASE_URL };
+// The seeds are operator tooling: they run as the owner.
+const seedEnv = {
+  ...process.env,
+  DATABASE_URL: ownerUrl,
+  DATABASE_OWNER_URL: ownerUrl,
+};
 run("bun", ["src/seed-asset-types.ts"], {
   cwd: path.join(root, "packages/db"),
   env: seedEnv,
@@ -237,9 +273,12 @@ if (skipDemo) {
   // Optional by nature (it needs the PDF service and takes a couple of
   // minutes): a failure must not break the setup that already worked.
   step("Filling the demo laboratory with sample work (about two minutes)");
+  // The demo drives the real API routes in-process, so it runs with the same
+  // two connections as the app: the routes as calibra_app (row-level security
+  // binds them), the CLI's own statements on the owner path.
   const demo = spawnSync("bun", ["src/cli/seed-demo.ts"], {
     cwd: path.join(root, "apps/api"),
-    env: seedEnv,
+    env: { ...seedEnv, DATABASE_URL: apiEnv.DATABASE_URL || ownerUrl },
     stdio: "inherit",
     shell: isWindows,
   });
@@ -261,7 +300,7 @@ console.log(`
   Lab app      http://localhost:5173   sign in as admin@laboratorio.test
   Inbox        http://localhost:8025   every email (magic links included) lands here
   Storage      ${apiEnv.R2_ENDPOINT}
-  Postgres     ${dbEnv.DATABASE_URL}
+  Postgres     ${apiEnv.DATABASE_URL}  (the app, as calibra_app; the owner is ${ownerUrl})
 
   pnpm services:down           stop the containers (data is kept)
   pnpm setup:dev --reset       wipe the containers' data and start over

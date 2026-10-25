@@ -20,9 +20,9 @@ import {
 } from "../../test/integration/tenancy-fixture";
 import { openAppRoleDb, sqlStateOf } from "../../test/integration/rls";
 
-// Real-database proof of row-level security in shadow mode (migration 0123,
+// Real-database proof of the row-level-security policies (migration 0123,
 // roadmap P2-3). The global `db` is the test superuser, which no policy binds
-// (it stands for the owner production connects as today); `openAppRoleDb()`
+// (it stands for the owner: the system path, migrations); `openAppRoleDb()`
 // connects as `calibra_app`, which is bound by the `tenant_isolation` policies.
 
 const A = "lab-a";
@@ -95,7 +95,7 @@ async function ownerCount(table: string, column: string, org: string) {
   return countOf(result);
 }
 
-describe("row-level security, shadow mode", () => {
+describe("row-level security policies", () => {
   let tenants: { a: Tenant; b: Tenant };
 
   beforeEach(async () => {
@@ -103,7 +103,7 @@ describe("row-level security, shadow mode", () => {
     tenants = await seedTwoTenants();
   });
 
-  it("REQ-RLS-2 [HIGH RISK]: as the owner (today's production connection) the policies change nothing: both laboratories stay fully visible and writable", async () => {
+  it("REQ-RLS-2 [HIGH RISK]: as the owner (the system path and the migrations) the policies change nothing: both laboratories stay fully visible and writable", async () => {
     for (const { name, column } of REPRESENTATIVE) {
       expect(await ownerCount(name, column, A), name).toBeGreaterThan(0);
       expect(await ownerCount(name, column, B), name).toBeGreaterThan(0);
@@ -343,7 +343,7 @@ describe("row-level security, shadow mode", () => {
       .select({ id: calibrationJob.id })
       .from(calibrationJob);
     expect(outside).toEqual([]);
-    // As the owner (production today) the very same handle read is unchanged.
+    // As the owner (the system path, the migrations) the very same handle read is unchanged.
     const asOwner = await forOrg(db, A)
       .select({ id: calibrationJob.id })
       .from(calibrationJob);

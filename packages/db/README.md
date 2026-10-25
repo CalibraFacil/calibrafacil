@@ -88,7 +88,12 @@ pnpm --filter @calibra-facil/db gen:job-transitions-sql   # prints the generated
 ## Environment Variables
 
 ```env
-DATABASE_URL=postgres://user:pass@host:5432/database
+# The application: the calibra_app role (row-level security binds it)
+DATABASE_URL=postgres://calibra_app:pass@host:5432/database
+# The table owner: the system path (Better Auth, cross-laboratory lookups) and, for
+# db:bootstrap / db:migrate, the connection that changes the schema. Unset, those
+# commands use DATABASE_URL (so it is the owner there, as in packages/db/.env).
+DATABASE_OWNER_URL=postgres://owner:pass@host:5432/database
 ```
 
 For Cloudflare Workers, the database is accessed via Hyperdrive binding.

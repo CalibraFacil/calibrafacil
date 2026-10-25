@@ -166,7 +166,14 @@ export const DEPLOY_SECTIONS: readonly DeploySection[] = [
     variables: [
       {
         name: "POSTGRES_PASSWORD",
-        description: "Password of the bundled PostgreSQL.",
+        description:
+          "Password of the bundled PostgreSQL's owner role (migrations, the system path).",
+        example: example.generated(),
+      },
+      {
+        name: "CALIBRA_APP_PASSWORD",
+        description:
+          "Password of calibra_app, the role the API and worker connect as (row-level security binds it). `init` creates the login and sets this password on every start.",
         example: example.generated(),
       },
       {
