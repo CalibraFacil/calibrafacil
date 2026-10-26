@@ -1,4 +1,5 @@
 import {
+  SYNC_ATTACHMENT_UPLOAD_PROTOCOL_VERSION,
   SYNC_CHANGE_SEQ_PROTOCOL_VERSION,
   SYNC_PROTOCOL_VERSION,
   SYNC_PULL_PROTOCOL_PARAM,
@@ -297,7 +298,36 @@ export function createLocalSyncRuntime(
 const MAX_PULL_PAGES = 200;
 
 /** The push protocol an older cloud told this process it speaks, per cloud URL. */
-const cloudPushProtocol = new Map<string, number>();
+const cloudPushProtocol = new Map<string, { version: number; at: number }>();
+
+/**
+ * How long a downgrade is remembered. The memo exists so that a cloud that
+ * predates the push protocol is not asked twice per push; it must not outlive an
+ * upgrade of the cloud, or every attachment would stay out of the push (and never
+ * reach the new cloud) for the life of the process. After this the desktop asks
+ * with its own protocol again.
+ */
+const PUSH_PROTOCOL_MEMO_TTL_MS = 10 * 60_000;
+
+function rememberedPushProtocol(cloudApiUrl: string): number | null {
+  const remembered = cloudPushProtocol.get(cloudApiUrl);
+  if (!remembered) return null;
+  if (Date.now() - remembered.at > PUSH_PROTOCOL_MEMO_TTL_MS) {
+    cloudPushProtocol.delete(cloudApiUrl);
+    return null;
+  }
+  return remembered.version;
+}
+
+/**
+ * Only a cloud of protocol 4 or later verifies an attachment's file before
+ * recording its event. Against an older one the event would be acknowledged with
+ * no file behind it (what lost field evidence before), so attachment events are
+ * kept out of the push, still pending, until the cloud speaks protocol 4.
+ */
+function pushCarriesAttachments(protocolVersion: number) {
+  return protocolVersion >= SYNC_ATTACHMENT_UPLOAD_PROTOCOL_VERSION;
+}
 /** A bootstrap page is at most 1000 rows (SYNC_BOOTSTRAP_MAX_PAGE_SIZE): 100k pages is a loop, not a laboratory. */
 const MAX_BOOTSTRAP_PAGES = 100_000;
 
@@ -562,6 +592,9 @@ async function pushPendingOutbox(
   // certificate bytes (certificates are rendered and signed in the cloud after an
   // online approval, so a queued `generate_local_certificate_pdf` from an older
   // build is pushed like any other and the cloud refuses it with a precise code).
+  const attachmentsAllowed = pushCarriesAttachments(
+    rememberedPushProtocol(cloudApiUrl) ?? SYNC_PROTOCOL_VERSION,
+  );
   const ready = await uploadAttachmentsBeforePush(
     {
       config,
@@ -571,7 +604,11 @@ async function pushPendingOutbox(
       applyCloudAuthHeaders: (headers) =>
         applyCloudAuthHeaders(config, headers),
     },
-    pending,
+    attachmentsAllowed
+      ? pending
+      : pending.filter(
+          (event) => event.operation !== "create_local_attachment",
+        ),
   );
   await pushOutboxEvents(config, database, fetchImpl, ready, cloudApiUrl);
 }
@@ -602,20 +639,26 @@ async function pushOutboxEvents(
       // answers "update required" to a build below its minimum.
       protocolVersion,
       desktopVersion: config.appVersion,
-      events: pending.map((event) => ({
-        eventId: event.eventId,
-        entityType: event.entityType,
-        entityId: event.entityId,
-        operation: event.operation,
-        payload: event.payload,
-        occurredAt: event.occurredAt,
-        actorUserId: event.actorUserId ?? context.userId ?? "local",
-        organizationId: context.organizationId ?? "",
-        unitId: context.unitId,
-        idempotencyKey: event.idempotencyKey,
-        localVersion: event.localVersion,
-        baseUpdatedAt: event.baseUpdatedAt ?? null,
-      })),
+      events: pending
+        .filter(
+          (event) =>
+            pushCarriesAttachments(protocolVersion) ||
+            event.operation !== "create_local_attachment",
+        )
+        .map((event) => ({
+          eventId: event.eventId,
+          entityType: event.entityType,
+          entityId: event.entityId,
+          operation: event.operation,
+          payload: event.payload,
+          occurredAt: event.occurredAt,
+          actorUserId: event.actorUserId ?? context.userId ?? "local",
+          organizationId: context.organizationId ?? "",
+          unitId: context.unitId,
+          idempotencyKey: event.idempotencyKey,
+          localVersion: event.localVersion,
+          baseUpdatedAt: event.baseUpdatedAt ?? null,
+        })),
     }) satisfies SyncPushRequest;
 
   // The push wire format did not change with protocol 3 (only the pull and the
@@ -623,7 +666,7 @@ async function pushOutboxEvents(
   // the number. Such a cloud names the newest protocol it speaks
   // (SYNC_PROTOCOL_UNSUPPORTED): ask again with that one, once, and remember it.
   let pushProtocol =
-    cloudPushProtocol.get(cloudApiUrl) ?? SYNC_PROTOCOL_VERSION;
+    rememberedPushProtocol(cloudApiUrl) ?? SYNC_PROTOCOL_VERSION;
   let response: Response;
   try {
     response = await fetchImpl(pushUrl, {
@@ -643,7 +686,10 @@ async function pushOutboxEvents(
         unsupported.data.supportedProtocolVersion < pushProtocol
       ) {
         pushProtocol = unsupported.data.supportedProtocolVersion;
-        cloudPushProtocol.set(cloudApiUrl, pushProtocol);
+        cloudPushProtocol.set(cloudApiUrl, {
+          version: pushProtocol,
+          at: Date.now(),
+        });
         response = await fetchImpl(pushUrl, {
           method: "POST",
           headers,

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import {
   SYNC_ATTACHMENT_MAX_BYTES,
   classifyOutboxRejection,
@@ -182,7 +182,7 @@ async function uploadAttachmentFile(
     );
   }
 
-  const bytes = await readAttachmentFile(context.config, localPath);
+  const bytes = await readAttachmentFile(context.config, localPath, sizeBytes);
   if (
     bytes.byteLength !== sizeBytes ||
     createHash("sha256").update(bytes).digest("hex") !== contentHash
@@ -238,12 +238,28 @@ async function uploadAttachmentFile(
 async function readAttachmentFile(
   config: LocalServerConfig,
   localPath: string,
+  expectedSize: number,
 ): Promise<Buffer> {
   try {
-    return await readFile(
-      resolveLocalStoragePath(config.storageRoot, localPath),
-    );
+    const absolutePath = resolveLocalStoragePath(config.storageRoot, localPath);
+    // The size is checked before the file is read: one that grew (or was swapped
+    // for something large) is not loaded into memory to find out it differs.
+    const info = await stat(absolutePath);
+    if (!info.isFile()) {
+      throw permanent(
+        "ATTACHMENT_FILE_MISSING",
+        "The attachment file is no longer on this computer.",
+      );
+    }
+    if (info.size !== expectedSize) {
+      throw permanent(
+        "ATTACHMENT_FILE_CHANGED",
+        "The attachment file is not the one that was recorded when it was captured.",
+      );
+    }
+    return await readFile(absolutePath);
   } catch (error) {
+    if (error instanceof AttachmentUploadFailure) throw error;
     const code =
       error && typeof error === "object" ? Reflect.get(error, "code") : null;
     if (code === "ENOENT" || code === "ENOTDIR") {

@@ -286,8 +286,10 @@ describe("migration 24: files an older build called synced but never uploaded", 
     ]);
   });
 
-  it("is the last migration and runs once", () => {
-    expect(localDbMigrations.at(-1)?.id).toBe(24);
+  it("is registered under id 24 and runs once", () => {
+    expect(localDbMigrations.some((migration) => migration.id === 24)).toBe(
+      true,
+    );
     const database = openDatabase();
     runLocalMigrations(database);
     expect(

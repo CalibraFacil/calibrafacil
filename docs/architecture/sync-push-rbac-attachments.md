@@ -13,6 +13,11 @@ a non-conformance, a service order). The route now only requires authentication,
 event is checked, after its schema and scope checks and before anything is prepared or applied, against
 `SYNC_OPERATION_PERMISSIONS`.
 
+The role is the member's role **in the event's unit** (`memberForEventUnit`: `event.unitId`, then a numeric `payload.unitId`, then the
+active unit; no assignment there means no unit elevation): the desktop sends no `x-active-unit-id`, so the request's own unit role is
+that of the first accessible unit, which is not the unit the apply writes into. A retry of an event that was already applied is
+acknowledged before the permission is re-decided, so a role downgrade does not dead-letter it.
+
 The check is the online one: `getEffectivePermissionRole(member, permission)` (a unit role elevates only on unit-scoped
 resources) then `hasPermissionLocally(role, permission)`, the two functions `requirePermission` uses. The table is exhaustive by
 type (`satisfies Record<SyncCommandOperation, ...>`): a new push operation does not compile until someone says who may send it.
@@ -73,7 +78,7 @@ desktop                                           cloud
   answered 422 `sync_attachment_integrity_failed`; a missing one is 409 `sync_attachment_not_uploaded`) before writing the audit row
   that records it. That row (organization event log, entity `sync_attachment`, entity id the object key) is the "present and
   verified" record; it stores the ETag, so an object overwritten through the still-valid presigned URL after the check is
-  detected when the event is applied. Hashing reads the object once (at most 25 MiB); no extra table or metadata write was needed.
+  detected when the event is applied. The hash is streamed (never the whole object in memory) and the read is conditional on the ETag the HEAD returned (`If-Match`: an object overwritten in between answers 412 and is `changed`); no extra table or metadata write was needed.
 - **The event.** `create_local_attachment` is recorded only when that row exists and the object still has its ETag and size;
   otherwise it is refused with `SYNC_ATTACHMENT_NOT_UPLOADED` (transient: the desktop uploads again) or
   `SYNC_ATTACHMENT_INTEGRITY_FAILED` (permanent). A push from protocol < 4 is refused with the permanent
@@ -94,7 +99,9 @@ desktop                                           cloud
 `SYNC_PROTOCOL_VERSION` is 4 (`SYNC_ATTACHMENT_UPLOAD_PROTOCOL_VERSION`). The push wire format, the `SyncCommand` contracts, the cursor,
 the ledger, conflict semantics and apply order are unchanged. The desktop keeps stating protocol 3 on the pull and the bootstrap
 (`SYNC_CHANGE_SEQ_PROTOCOL_VERSION`), which did not change. A protocol 4 desktop against an older cloud is told
-`SYNC_PROTOCOL_UNSUPPORTED` and pushes again with protocol 3 (existing mechanism). `SYNC_MIN_DESKTOP_VERSION` does not have to be raised.
+`SYNC_PROTOCOL_UNSUPPORTED` and pushes again with protocol 3 (existing mechanism), **without its attachment events**, which stay pending: a
+protocol 3 cloud acknowledges them without any file. The downgrade is remembered for ten minutes (`PUSH_PROTOCOL_MEMO_TTL_MS`), so
+attachments flow after the cloud is upgraded. `SYNC_MIN_DESKTOP_VERSION` does not have to be raised.
 
 ### Not done
 

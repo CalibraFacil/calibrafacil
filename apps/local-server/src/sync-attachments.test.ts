@@ -3,7 +3,7 @@ import { rm, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   classifyOutboxRejection,
   syncAttachmentInitUploadRequestSchema,
@@ -17,6 +17,7 @@ import {
 } from "@calibra-facil/local-db";
 import type { LocalServerConfig } from "./bootstrap";
 import { createLocalServerRuntime } from "./server";
+import { createAssetStub, seedSyncedReferenceData } from "./test-support";
 
 /**
  * The desktop half of the offline attachment upload leg (REQ-ATT-5): the file goes
@@ -66,6 +67,8 @@ type CloudBehaviour = {
   complete?: () => Response | null;
   /** What the push adds to the acknowledgement of each pushed event. */
   push?: (eventId: string, objectKey: string | null) => Record<string, unknown>;
+  /** The newest push protocol this cloud speaks; a newer push is answered SYNC_PROTOCOL_UNSUPPORTED. */
+  supportedProtocol?: () => number;
   /** A refusal the push answers for every pushed event, or null to accept them. */
   rejectPush?: () => { code: string; reason: string } | null;
 };
@@ -124,6 +127,25 @@ function createCloud(behaviour: CloudBehaviour = {}) {
     }
     if (url.pathname === "/api/sync/push") {
       calls.push({ step: "push", headers, body: parsed });
+      const requested =
+        parsed && typeof parsed === "object" && "protocolVersion" in parsed
+          ? parsed.protocolVersion
+          : null;
+      const supported = behaviour.supportedProtocol?.();
+      if (
+        supported !== undefined &&
+        typeof requested === "number" &&
+        requested > supported
+      ) {
+        return Response.json(
+          {
+            code: "SYNC_PROTOCOL_UNSUPPORTED",
+            supportedProtocolVersion: supported,
+            message: "newer than the cloud supports",
+          },
+          { status: 400 },
+        );
+      }
       const events =
         parsed && typeof parsed === "object" && "events" in parsed
           ? Array.isArray(parsed.events)
@@ -179,6 +201,7 @@ async function setup(
     name: "photo.jpg",
     type: "image/jpeg",
   },
+  overrides: Partial<LocalServerConfig> = {},
 ) {
   const directory = mkdtempSync(path.join(os.tmpdir(), "calibra-att-"));
   tempDirectories.push(directory);
@@ -193,7 +216,7 @@ async function setup(
     )
     .run();
   const cloud = createCloud(behaviour);
-  const config = createConfig(dbPath);
+  const config = { ...createConfig(dbPath), ...overrides };
   const runtime = createLocalServerRuntime(config, database, {
     fetch: cloud.fetchImpl,
   });
@@ -566,5 +589,94 @@ describe("REQ-ATT-5: the desktop uploads an attachment before its event", () => 
 
     expect(cloud.steps().filter((step) => step === "put")).toHaveLength(2);
     expect(attachmentRow(database, attachment.id).uploadStatus).toBe("synced");
+  });
+
+  it("when the file grew, without reading it or calling the cloud", async () => {
+    const { database, cloud, runtime, attachment, config } = await setup();
+    await writeFile(
+      path.join(config.storageRoot, attachment.localPath),
+      "a much longer content than the one that was recorded",
+    );
+
+    await runtime.syncRuntime.runPushSync();
+
+    expect(cloud.calls).toEqual([]);
+    expect(attachmentRow(database, attachment.id).uploadStatus).toBe("dead");
+    expect(outboxRow(database).error_code).toBe("ATTACHMENT_FILE_CHANGED");
+  });
+});
+
+describe("REQ-ATT-6: a cloud that predates the upload leg", () => {
+  it("keeps attachment events out of the push while the cloud speaks protocol 3, and sends them once it speaks 4", async () => {
+    let supported = 3;
+    const { database, cloud, runtime, attachment } = await setup(
+      { supportedProtocol: () => supported },
+      { name: "photo.jpg", type: "image/jpeg" },
+      { cloudApiUrl: "https://old-cloud.example.test" },
+    );
+    seedSyncedReferenceData(database, { organizationId: "org-1", unitId: 1 });
+    const stub = await createAssetStub(runtime.app, "Balanca Memo");
+    expect(stub.status).toBe(201);
+
+    const operationsOfPushes = () =>
+      cloud.calls
+        .filter((call) => call.step === "push")
+        .map((call) => {
+          const body = call.body;
+          const record =
+            body && typeof body === "object"
+              ? Object.fromEntries(Object.entries(body))
+              : {};
+          const events = Array.isArray(record.events) ? record.events : [];
+          return {
+            protocolVersion: record.protocolVersion,
+            operations: events.flatMap((event) =>
+              event && typeof event === "object" && "operation" in event
+                ? [event.operation]
+                : [],
+            ),
+          };
+        });
+
+    // First push: asks with protocol 4, is told 3, sends again without the attachment.
+    await runtime.syncRuntime.runPushSync();
+    const first = operationsOfPushes();
+    expect(first.map((push) => push.protocolVersion)).toEqual([4, 3]);
+    expect(first[1]?.operations).toEqual(["create_local_asset"]);
+    expect(outboxRow(database).status).toBe("pending");
+    expect(attachmentRow(database, attachment.id).uploadStatus).not.toBe(
+      "synced",
+    );
+
+    // The downgrade is remembered: the attachment is neither uploaded nor pushed.
+    const callsBefore = cloud.calls.length;
+    await runtime.syncRuntime.runPushSync({ includeDeferred: true });
+    expect(
+      cloud.calls.slice(callsBefore).map((call) => call.step),
+    ).not.toContain("init");
+    expect(
+      operationsOfPushes()
+        .filter((push) => push.protocolVersion === 3)
+        .flatMap((push) => push.operations),
+    ).not.toContain("create_local_attachment");
+
+    // The cloud is upgraded; the memo expires and the attachment goes with protocol 4.
+    supported = 4;
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(Date.now() + 11 * 60_000);
+      await runtime.syncRuntime.runPushSync({ includeDeferred: true });
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const pushes = operationsOfPushes();
+    const last = pushes[pushes.length - 1];
+    expect(last?.protocolVersion).toBe(4);
+    expect(last?.operations).toContain("create_local_attachment");
+    expect(attachmentRow(database, attachment.id)).toMatchObject({
+      uploadStatus: "synced",
+      remoteKey: cloud.objectKey,
+    });
   });
 });
