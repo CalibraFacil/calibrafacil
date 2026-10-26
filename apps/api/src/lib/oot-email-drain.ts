@@ -36,7 +36,7 @@ import { orgTransactionWithExecutor } from "./org-transaction";
 import {
   createR2Client,
   downloadFromR2,
-  r2EnvFromStorageConfig,
+  r2EnvForStorageDependentWork,
   resolveBucketName,
 } from "./storage";
 
@@ -273,7 +273,11 @@ export async function drainOotEmailOutbox(options?: {
         // Attachment: best-effort download; a transient R2 failure releases
         // the row for retry (the attachment is part of the deliverable).
         let attachment: { filename: string; content: Uint8Array } | undefined;
-        const r2Env = r2EnvFromStorageConfig();
+        // Production without storage throws: the row is released for retry rather
+        // than sending the legal notice without its PDF.
+        const r2Env = r2EnvForStorageDependentWork(
+          "attach the out-of-tolerance notification PDF",
+        );
         if (r2Env) {
           const client = createR2Client(r2Env);
           const bytes = await downloadFromR2(

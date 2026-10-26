@@ -45,7 +45,6 @@ export function buildApiBootEnv(
     : {
         NODE_ENV: processEnv.NODE_ENV ?? "development",
         ...LOCAL_URL_DEFAULTS,
-        R2_ACCOUNT_ID: "local",
         R2_BUCKET_NAME: "calibrafacil-documents-dev",
         R2_MEDIA_BUCKET_NAME: "calibrafacil-media-dev",
         RESEND_FROM_EMAIL: "Calibra Facil <noreply@example.com>",

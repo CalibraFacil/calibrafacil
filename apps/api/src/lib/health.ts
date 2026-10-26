@@ -5,7 +5,8 @@ import {
   countQueueJobsByStatus,
   type QueueDepth,
 } from "@calibra-facil/db/queue";
-import { createR2Client, type R2Env } from "./storage";
+import { isProductionEnv } from "@calibra-facil/config";
+import { createR2Client, r2EnvFromSettings, type R2Env } from "./storage";
 
 // dependency-checking readiness probe behind GET /api/health.
 //
@@ -44,40 +45,31 @@ export type HealthReport = {
 
 export type HealthCheckDeps = {
   pingDatabase: () => Promise<void>;
-  /** Null when R2 is not configured (local dev) — reported as skipped. */
+  /**
+   * Null when storage is not configured. In development that is reported as
+   * skipped; where storage is required (production) it fails the check.
+   */
   probeStorage: (() => Promise<void>) | null;
+  /** True in production: an unconfigured store is an outage, not a skip. */
+  storageRequired: boolean;
   readQueueDepth: () => Promise<QueueDepth>;
   timeoutMs: number;
 };
 
-function readEnvString(value: unknown): string | null {
-  return typeof value === "string" && value.trim() !== "" ? value : null;
+function readEnvString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
 }
 
 function readStorageEnv(env: Record<string, unknown>): R2Env | null {
-  const accountId = readEnvString(env.R2_ACCOUNT_ID);
-  const accessKeyId = readEnvString(env.R2_ACCESS_KEY_ID);
-  const secretAccessKey = readEnvString(env.R2_SECRET_ACCESS_KEY);
-  const bucketName = readEnvString(env.R2_BUCKET_NAME);
-  const mediaBucketName = readEnvString(env.R2_MEDIA_BUCKET_NAME);
-
-  if (
-    !accountId ||
-    !accessKeyId ||
-    !secretAccessKey ||
-    !bucketName ||
-    !mediaBucketName
-  ) {
-    return null;
-  }
-
-  return {
-    R2_ACCOUNT_ID: accountId,
-    R2_ACCESS_KEY_ID: accessKeyId,
-    R2_SECRET_ACCESS_KEY: secretAccessKey,
-    R2_BUCKET_NAME: bucketName,
-    R2_MEDIA_BUCKET_NAME: mediaBucketName,
-  };
+  return r2EnvFromSettings({
+    accountId: readEnvString(env.R2_ACCOUNT_ID),
+    endpoint: readEnvString(env.R2_ENDPOINT),
+    region: readEnvString(env.R2_REGION),
+    accessKeyId: readEnvString(env.R2_ACCESS_KEY_ID),
+    secretAccessKey: readEnvString(env.R2_SECRET_ACCESS_KEY),
+    bucketName: readEnvString(env.R2_BUCKET_NAME),
+    mediaBucketName: readEnvString(env.R2_MEDIA_BUCKET_NAME),
+  });
 }
 
 function createStorageProbe(
@@ -98,12 +90,21 @@ function createStorageProbe(
   };
 }
 
+function stringEnv(env: Record<string, unknown>): Record<string, string> {
+  const strings: Record<string, string> = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (typeof value === "string") strings[key] = value;
+  }
+  return strings;
+}
+
 function defaultDeps(env: Record<string, unknown>): HealthCheckDeps {
   return {
     pingDatabase: async () => {
       await db.execute(sql`select 1`);
     },
     probeStorage: createStorageProbe(env),
+    storageRequired: isProductionEnv(stringEnv(env)),
     readQueueDepth: countQueueJobsByStatus,
     timeoutMs: DEFAULT_CHECK_TIMEOUT_MS,
   };
@@ -174,7 +175,9 @@ export async function runHealthCheck(
     ? storageResult.ok
       ? { ok: true, latencyMs: storageResult.latencyMs }
       : storageResult
-    : { ok: true, latencyMs: 0, skipped: true };
+    : deps.storageRequired
+      ? { ok: false, latencyMs: 0, error: "StorageNotConfigured" }
+      : { ok: true, latencyMs: 0, skipped: true };
 
   const queue: HealthCheck & { depth?: QueueDepth } = queueResult.ok
     ? { ok: true, latencyMs: queueResult.latencyMs, depth: queueResult.value }

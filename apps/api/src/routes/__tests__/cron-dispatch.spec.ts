@@ -8,6 +8,11 @@ const mocks = vi.hoisted(() => ({
   processScheduledContaAzulIntegrationSyncs: vi.fn(),
   processScheduledContaAzulPolls: vi.fn(),
   processScheduledIntegrationSyncs: vi.fn(),
+  runCertificateDriftCheck: vi.fn(),
+}));
+
+vi.mock("../../lib/certificate-drift", () => ({
+  runCertificateDriftCheck: mocks.runCertificateDriftCheck,
 }));
 
 vi.mock("../../lib/auth-maintenance", () => ({
@@ -248,5 +253,65 @@ describe("auth-maintenance cron", () => {
 
     expect(response.status).toBe(503);
     expect(mocks.cleanupExpiredAuthRecords).not.toHaveBeenCalled();
+  });
+});
+
+describe("certificate-drift cron", () => {
+  const storageEnv = {
+    R2_ACCESS_KEY_ID: "key",
+    R2_SECRET_ACCESS_KEY: "secret",
+    R2_BUCKET_NAME: "documents",
+    R2_MEDIA_BUCKET_NAME: "media",
+  };
+
+  beforeEach(() => {
+    process.env.CRON_SECRET = "secret-1";
+    delete process.env.R2_ACCOUNT_ID;
+    delete process.env.R2_ENDPOINT;
+    Object.assign(process.env, storageEnv);
+    mocks.runCertificateDriftCheck.mockResolvedValue({
+      checked: 3,
+      drifted: 0,
+      missing: 0,
+      details: [],
+    });
+  });
+
+  function drift() {
+    return GET(
+      request("/api/cron/certificate-drift", {
+        authorization: "Bearer secret-1",
+      }),
+    );
+  }
+
+  it("fails in production when storage is unconfigured, instead of reporting a clean empty run", async () => {
+    process.env.NODE_ENV = "production";
+
+    const response = await drift();
+
+    expect(response.status).toBe(500);
+    expect(mocks.runCertificateDriftCheck).not.toHaveBeenCalled();
+  });
+
+  it("checks certificates in production with only R2_ENDPOINT set (the self-hosted stack)", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.R2_ENDPOINT = "http://s3:7070";
+
+    const response = await drift();
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ checked: 3 });
+    expect(mocks.runCertificateDriftCheck).toHaveBeenCalledTimes(1);
+  });
+
+  it("still skips in development when storage is unconfigured", async () => {
+    process.env.NODE_ENV = "development";
+
+    const response = await drift();
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ checked: 0 });
+    expect(mocks.runCertificateDriftCheck).not.toHaveBeenCalled();
   });
 });

@@ -331,6 +331,23 @@ describe("drainOotEmailOutbox", () => {
     expect(deadLetterSql).toContain("attempts = attempts + 1");
   });
 
+  it("releases the row without sending when production has no storage configured (never sends the notice without its PDF)", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("R2_ENDPOINT", "");
+    try {
+      enqueueSelects([OUTBOX_ROW], [NOTIFICATION_ROW]);
+
+      const result = await drainOotEmailOutbox();
+
+      expect(result.errors).toBe(1);
+      expect(result.released).toBe(1);
+      expect(result.sent).toBe(0);
+      expect(mockSendOotEmail).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("skips terminally (processed, no send) when the receipt was already acknowledged", async () => {
     enqueueSelects(
       [OUTBOX_ROW],

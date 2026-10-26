@@ -1,9 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
-import {
-  readJobsConfig,
-  readRuntimeConfig,
-  readStorageConfig,
-} from "@calibra-facil/config";
+import { readJobsConfig, readRuntimeConfig } from "@calibra-facil/config";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
 import {
   processScheduledContaAzulIntegrationSyncs,
@@ -22,8 +18,8 @@ import { purgeSyncChangeLog } from "../lib/sync-change-log-purge";
 import {
   createR2Client,
   downloadFromR2,
+  r2EnvForStorageDependentWork,
   resolveBucketName,
-  type R2Env,
 } from "../lib/storage";
 
 // One dispatcher serves every cron job. The scheduler (the in-process one,
@@ -231,31 +227,6 @@ async function handleEmailDomainHealth(request: Request) {
   );
 }
 
-function getDriftR2Env(): R2Env | null {
-  const storage = readStorageConfig();
-  const accountId = storage.accountId;
-  const accessKeyId = storage.accessKeyId;
-  const secretAccessKey = storage.secretAccessKey;
-  const bucketName = storage.bucketName;
-  const mediaBucketName = storage.mediaBucketName;
-  if (
-    !accountId ||
-    !accessKeyId ||
-    !secretAccessKey ||
-    !bucketName ||
-    !mediaBucketName
-  ) {
-    return null;
-  }
-  return {
-    R2_ACCOUNT_ID: accountId,
-    R2_ACCESS_KEY_ID: accessKeyId,
-    R2_SECRET_ACCESS_KEY: secretAccessKey,
-    R2_BUCKET_NAME: bucketName,
-    R2_MEDIA_BUCKET_NAME: mediaBucketName,
-  };
-}
-
 // Certificate drift detection: re-hash a sample of
 // stored issued-certificate artifacts vs their frozen hashes; mismatches
 // become org audit events. Read-only over regulated records.
@@ -265,9 +236,13 @@ async function handleCertificateDrift(request: Request) {
   }
 
   return runCron("certificate-drift", { leaseSeconds: 300 }, () => {
-    const r2Env = getDriftR2Env();
+    // Production without storage throws (the run is recorded as failed): a drift
+    // check that reports "checked: 0" is indistinguishable from a clean one.
+    const r2Env = r2EnvForStorageDependentWork(
+      "run the certificate drift check",
+    );
     if (!r2Env) {
-      console.warn("[drift-check] R2 env unconfigured — skipping");
+      console.warn("[drift-check] storage unconfigured — skipping");
       return Promise.resolve({
         checked: 0,
         drifted: 0,
