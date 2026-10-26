@@ -16,7 +16,10 @@ import {
   buildSyncPushCursor,
 } from "@calibra-facil/contracts";
 import { domainErrorResponse, invalid } from "../../lib/domain-errors";
-import { withLabPermission } from "../../middleware/permission";
+import {
+  requireLabProtected,
+  requireOrgType,
+} from "../../middleware/permission";
 import { applyDesktopEventAtomically } from "../../modules/sync/event-transaction";
 import { type SyncRouterEnv, getMemberData } from "./env";
 import {
@@ -28,14 +31,23 @@ import {
 import {
   findAppliedDesktopSyncEvent,
   getClaimedSyncActorUserId,
+  isDesktopSyncEventApplied,
   validateSyncActorScope,
 } from "../../modules/sync/desktop-sync-support";
 import { prepareDesktopEventSideEffects } from "../../modules/sync/side-effects";
 import { applyDesktopSyncEvent } from "../../modules/sync/apply-event";
+import {
+  authorizeSyncOperation,
+  memberForEventUnit,
+} from "../../modules/sync/operation-permissions";
 
 export const pushRoutes = new Hono<SyncRouterEnv>().post(
   "/push",
-  ...withLabPermission({ calibration: ["create"] }),
+  // Authentication, membership and the laboratory organization only: what each
+  // member may send is decided per event (SYNC_OPERATION_PERMISSIONS), since
+  // one batch carries operations that the online routes guard differently.
+  ...requireLabProtected,
+  requireOrgType("LAB"),
   async (c) => {
     const memberData = getMemberData(c);
     const session = c.get("session");
@@ -170,9 +182,33 @@ export const pushRoutes = new Hono<SyncRouterEnv>().post(
       }
       const command = parsed.command;
 
+      // The same right the online route of this operation asks for. Decided
+      // before anything is prepared or applied: a denied event writes nothing
+      // and is refused for good (the desktop dead-letters it).
+      // The role is the one the member holds in the event's own unit.
+      const permission = authorizeSyncOperation(
+        memberForEventUnit(memberData, event),
+        command.operation,
+      );
+      if (
+        !permission.allowed &&
+        // A retry of an event that was applied is acknowledged, not re-decided.
+        !(await isDesktopSyncEventApplied(memberData.organizationId, event))
+      ) {
+        rejected.push({
+          eventId: event.eventId,
+          code: permission.code,
+          reason: permission.reason,
+        });
+        continue;
+      }
+
       let prepared: PreparedDesktopEventSideEffects;
       try {
-        prepared = await prepareDesktopEventSideEffects(command, memberData);
+        prepared = await prepareDesktopEventSideEffects(command, memberData, {
+          env: c.env,
+          protocolVersion,
+        });
       } catch (error) {
         console.error(
           "[Sync] Preparing a desktop sync event failed:",
@@ -182,10 +218,8 @@ export const pushRoutes = new Hono<SyncRouterEnv>().post(
         rejected.push({
           eventId: event.eventId,
           code: "DESKTOP_SYNC_APPLY_FAILED",
-          reason:
-            error instanceof Error
-              ? error.message
-              : "Desktop sync event could not be prepared.",
+          // The cause is in the server log above; not echoed to the device.
+          reason: "Desktop sync event could not be prepared.",
         });
         continue;
       }

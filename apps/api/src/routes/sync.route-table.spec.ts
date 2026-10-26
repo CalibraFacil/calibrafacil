@@ -21,7 +21,15 @@ import { describe, expect, it, vi } from "vitest";
 // /conflicts/:id/resolve (its audit row is written in `orgDb(lab).transaction`)
 // and the attachment complete-upload / download routes (an attachment id of
 // another laboratory's partition is refused). No route, method, middleware or
-// order changed.
+// order changed. P0-2 (per-operation RBAC) replaced POST /push's single
+// `withLabPermission({calibration:["create"]})` gate with the authentication,
+// membership and LAB-organization middleware (the four unnamed entries before
+// its handler) and decides each operation's permission inside the handler
+// (modules/sync/operation-permissions.ts). P0-5 (offline attachment upload leg)
+// changed the attachment init-upload and complete-upload handlers (a presign bound
+// to the declared size and type; the stored object is verified and recorded) and
+// POST /push (the attachment event is checked against the upload before it is
+// applied).
 const { named } = vi.hoisted(() => ({
   named: <T extends (...args: never[]) => unknown>(fn: T, name: string) =>
     Object.defineProperty(fn, "name", { value: name }),

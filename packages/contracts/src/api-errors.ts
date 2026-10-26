@@ -88,6 +88,13 @@ export const API_ERROR_CODES = [
   "organization_deleted",
   "customer_has_retained_records",
 
+  // Offline attachment upload leg (the desktop upload endpoints; the same
+  // refusals reach a pushed event as the upper-case codes of outbox-rejections.ts).
+  "sync_attachment_type_not_allowed",
+  "sync_attachment_too_large",
+  "sync_attachment_not_uploaded",
+  "sync_attachment_integrity_failed",
+
   // Webhooks.
   "webhook_not_found",
   "webhook_delivery_not_found",

@@ -789,7 +789,8 @@ describe("sync change sequence (protocol 3)", () => {
       });
     expect((await push(3)).status).toBe(200);
     expect((await push(2)).status).toBe(200);
-    expect((await push(4)).status).toBe(400);
+    expect((await push(4)).status).toBe(200);
+    expect((await push(5)).status).toBe(400);
   });
 
   it("REQ-CS-5: every log entry carries its laboratory and a pull reads only its own", async () => {

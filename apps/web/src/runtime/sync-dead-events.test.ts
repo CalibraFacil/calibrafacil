@@ -1,4 +1,5 @@
 import {
+  LOCAL_OUTBOX_FAILURE_CLASSES,
   OUTBOX_REJECTION_CLASSES,
   type LocalDeadOutboxEvent,
 } from '@calibra-facil/contracts'
@@ -58,7 +59,10 @@ describe('describeDeadEvent', () => {
   })
 
   it('REQ-OB-3: covers every permanent rejection code with its own reason', () => {
-    const permanent = Object.entries(OUTBOX_REJECTION_CLASSES)
+    const permanent = Object.entries({
+      ...OUTBOX_REJECTION_CLASSES,
+      ...LOCAL_OUTBOX_FAILURE_CLASSES,
+    })
       .filter(([, rejectionClass]) => rejectionClass === 'permanent')
       .map(([code]) => code)
     const generic = describeDeadEvent(

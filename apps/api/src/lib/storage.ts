@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readRuntimeConfig, readStorageConfig } from "@calibra-facil/config";
 import {
   S3Client,
@@ -273,6 +274,80 @@ export async function generatePresignedUploadUrl(
 }
 
 /**
+ * A presigned PUT that is only valid for an upload of exactly `contentLength`
+ * bytes of `contentType`: both headers are part of the signature, so the store
+ * refuses a body of another size or type (a plain presign signs neither, and
+ * would let the holder of the URL upload anything of any size under the key).
+ * The caller sends the same `Content-Type`; the runtime derives the
+ * `Content-Length` from the body.
+ */
+export async function generateBoundPresignedUploadUrl(
+  client: R2S3Client,
+  bucket: string,
+  key: string,
+  binding: { contentType: string; contentLength: number },
+  expiresIn: number = 900,
+): Promise<string> {
+  const command = new PutObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    ContentType: binding.contentType,
+    ContentLength: binding.contentLength,
+  });
+  return getSignedUrl(presignClientFor(client), command, {
+    expiresIn,
+    signableHeaders: new Set(["content-type", "content-length"]),
+  });
+}
+
+export interface StoredObjectHead {
+  sizeBytes: number;
+  contentType: string | null;
+  /** The store's entity tag, quotes stripped: changes when the object is overwritten. */
+  etag: string | null;
+}
+
+/** HEAD an object: its stored size, type and ETag, or null when it does not exist. */
+export async function headObject(
+  client: R2S3Client,
+  bucket: string,
+  key: string,
+): Promise<StoredObjectHead | null> {
+  let response: unknown;
+  try {
+    response = await client.send(
+      new HeadObjectCommand({ Bucket: bucket, Key: key }),
+    );
+  } catch (error) {
+    if (isObjectNotFoundError(error)) return null;
+    throw error;
+  }
+  const record =
+    response && typeof response === "object" && !Array.isArray(response)
+      ? Object.fromEntries(Object.entries(response))
+      : {};
+  const length = record.ContentLength;
+  const contentType = record.ContentType;
+  const etag = record.ETag;
+  return {
+    sizeBytes: typeof length === "number" ? length : -1,
+    contentType: typeof contentType === "string" ? contentType : null,
+    etag: typeof etag === "string" ? etag.replace(/^"|"$/g, "") : null,
+  };
+}
+
+function isObjectNotFoundError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const metadata: unknown = Reflect.get(error, "$metadata");
+  const status =
+    metadata && typeof metadata === "object" && "httpStatusCode" in metadata
+      ? metadata.httpStatusCode
+      : undefined;
+  const name: unknown = Reflect.get(error, "name");
+  return status === 404 || name === "NotFound" || name === "NoSuchKey";
+}
+
+/**
  * Extract R2 key from stored certificateUrl
  * Format: https://storage.invalid/job-123.pdf -> job-123.pdf (see storedObjectUrl)
  */
@@ -303,6 +378,81 @@ export async function uploadToR2(
 /**
  * Download an object from R2.
  */
+export type StreamedObjectHash =
+  | { ok: true; sha256: string; sizeBytes: number }
+  /** Not there any more, or no longer the object the ETag named (overwritten since the HEAD). */
+  | { ok: false; reason: "missing" | "changed" | "too_large" };
+
+/**
+ * The SHA-256 of an object, streamed chunk by chunk (never held whole in memory).
+ * The GET is conditional on `etag` (`If-Match`): an object overwritten between the
+ * HEAD that read the ETag and this read answers 412 and is reported as `changed`.
+ * Reading stops past `maxBytes`.
+ */
+export async function hashObjectSha256(
+  client: R2S3Client,
+  bucket: string,
+  key: string,
+  options: { etag: string | null; maxBytes: number },
+): Promise<StreamedObjectHash> {
+  let response: unknown;
+  try {
+    response = await client.send(
+      new GetObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        ...(options.etag === null ? {} : { IfMatch: `"${options.etag}"` }),
+      }),
+    );
+  } catch (error) {
+    if (isObjectNotFoundError(error)) return { ok: false, reason: "missing" };
+    const metadata: unknown = Reflect.get(
+      error && typeof error === "object" ? error : {},
+      "$metadata",
+    );
+    if (
+      metadata &&
+      typeof metadata === "object" &&
+      "httpStatusCode" in metadata &&
+      metadata.httpStatusCode === 412
+    ) {
+      return { ok: false, reason: "changed" };
+    }
+    throw error;
+  }
+
+  const body: unknown =
+    response && typeof response === "object"
+      ? Reflect.get(response, "Body")
+      : undefined;
+  const toWebStream: unknown =
+    body && typeof body === "object"
+      ? Reflect.get(body, "transformToWebStream")
+      : undefined;
+  if (typeof toWebStream !== "function") {
+    throw new Error(`R2 object body is not streamable: ${key}`);
+  }
+  const stream: unknown = Reflect.apply(toWebStream, body, []);
+  if (!(stream instanceof ReadableStream)) {
+    throw new Error(`R2 object body is not streamable: ${key}`);
+  }
+
+  const hash = createHash("sha256");
+  let sizeBytes = 0;
+  for await (const chunk of stream) {
+    const bytes: unknown = chunk;
+    if (!(bytes instanceof Uint8Array)) {
+      throw new Error(`R2 object chunk is not binary: ${key}`);
+    }
+    sizeBytes += bytes.byteLength;
+    if (sizeBytes > options.maxBytes) {
+      return { ok: false, reason: "too_large" };
+    }
+    hash.update(bytes);
+  }
+  return { ok: true, sha256: hash.digest("hex"), sizeBytes };
+}
+
 export async function downloadFromR2(
   client: R2S3Client,
   bucket: string,

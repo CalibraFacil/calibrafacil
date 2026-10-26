@@ -82,6 +82,7 @@ import {
   type LocalSyncSchedulerOptions,
 } from "./sync-scheduler";
 import { executeLocalCompiledMethod } from "./execution";
+import { resolveLocalStoragePath } from "./local-storage";
 import { registerPrinterRoutes } from "./printing/routes";
 
 export type LocalServerInstance = {
@@ -1466,17 +1467,6 @@ function buildLocalAttachmentPath(input: {
     toSafePathSegment(input.entityId),
     `${input.contentHash.slice(0, 16)}-${randomUUID()}${suffix}`,
   ].join("/");
-}
-
-function resolveLocalStoragePath(storageRoot: string, localPath: string) {
-  const root = path.resolve(storageRoot);
-  const target = path.resolve(root, localPath);
-
-  if (target !== root && !target.startsWith(`${root}${path.sep}`)) {
-    throw new Error("Caminho de arquivo local invalido");
-  }
-
-  return target;
 }
 
 function toAttachmentResponse(

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Hono } from "hono";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -70,14 +71,17 @@ const mocks = vi.hoisted(() => {
   return {
     selectResults,
     createR2Client: vi.fn(() => ({ send: vi.fn() })),
-    generatePresignedUploadUrl: vi.fn(
+    generateBoundPresignedUploadUrl: vi.fn(
       async (
         _client: unknown,
         _bucket: string,
         objectKey: string,
-        _contentType: string,
+        _binding: { contentType: string; contentLength: number },
       ) => `https://uploads.example.test/${encodeURIComponent(objectKey)}`,
     ),
+    headObject: vi.fn(),
+    hashObjectSha256: vi.fn(),
+    deleteFromR2: vi.fn(async () => undefined),
     generatePresignedUrl: vi.fn(
       async (_client: unknown, _bucket: string, objectKey: string) =>
         `https://downloads.example.test/${encodeURIComponent(objectKey)}`,
@@ -154,14 +158,25 @@ vi.mock("../modules/sync/applied-events", () => ({
   completeDesktopSyncClaim: async () => undefined,
 }));
 
-vi.mock("../middleware/permission", () => ({
+// The real permission helpers (the per-operation push check reads them); only the
+// middleware that would authenticate a request is replaced by the one that sets
+// the session and the member.
+vi.mock("../middleware/permission", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../middleware/permission")>()),
   withLabPermission: mocks.withLabPermission,
+  requireLabProtected: mocks.withLabPermission(),
+  requireOrgType: () => async (_c: unknown, next: () => Promise<void>) => {
+    await next();
+  },
 }));
 
 vi.mock("../lib/storage", () => ({
   createR2Client: mocks.createR2Client,
-  generatePresignedUploadUrl: mocks.generatePresignedUploadUrl,
+  generateBoundPresignedUploadUrl: mocks.generateBoundPresignedUploadUrl,
   generatePresignedUrl: mocks.generatePresignedUrl,
+  headObject: mocks.headObject,
+  hashObjectSha256: mocks.hashObjectSha256,
+  deleteFromR2: mocks.deleteFromR2,
   uploadToR2: mocks.uploadToR2,
 }));
 
@@ -566,7 +581,7 @@ describe("syncRouter", () => {
     expect(mocks.db.insert).not.toHaveBeenCalled();
   });
 
-  it("REQ-SYNC-PUSH-UNKNOWN-004: still acknowledges the audit-only desktop events", async () => {
+  it("REQ-SYNC-PUSH-UNKNOWN-004: still acknowledges the audit-only legacy certificate-draft marker", async () => {
     mocks.selectResults.push([]);
 
     const response = await createApp().request("/api/sync/push", {
@@ -578,9 +593,9 @@ describe("syncRouter", () => {
         baseCursor: null,
         events: [
           syncEvent({
-            eventId: "evt-attachment",
-            entityType: "attachment",
-            operation: "create_local_attachment",
+            eventId: "evt-certificate-draft",
+            entityType: "certificate_draft",
+            operation: "create_local_certificate_draft",
           }),
         ],
       }),
@@ -1481,22 +1496,38 @@ describe("syncRouter", () => {
       `https://uploads.example.test/${encodeURIComponent(body.objectKey)}`,
     );
     expect(body.headers).toEqual({ "content-type": "image/jpeg" });
-    expect(mocks.generatePresignedUploadUrl).toHaveBeenCalledWith(
+    // Bound to the declared size and type, not a plain presign.
+    expect(mocks.generateBoundPresignedUploadUrl).toHaveBeenCalledWith(
       expect.anything(),
       "sync-attachments",
       body.objectKey,
-      "image/jpeg",
+      { contentType: "image/jpeg", contentLength: 4096 },
       900,
     );
   });
 
   it("confirms completed offline sync attachment uploads", async () => {
+    // The stored object is read back: size, type and SHA-256 must be the declared ones.
+    const bytes = new Uint8Array(4096).fill(7);
+    const declared = attachmentUploadRequest({
+      contentHash: createHash("sha256").update(bytes).digest("hex"),
+    });
+    mocks.headObject.mockResolvedValue({
+      sizeBytes: 4096,
+      contentType: "image/jpeg",
+      etag: "etag-1",
+    });
+    mocks.hashObjectSha256.mockResolvedValue({
+      ok: true,
+      sha256: declared.contentHash,
+      sizeBytes: bytes.byteLength,
+    });
     const uploadResponse = await createApp().request(
       "/api/sync/attachments/init-upload",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(attachmentUploadRequest()),
+        body: JSON.stringify(declared),
       },
       testR2Env,
     );
@@ -1510,7 +1541,7 @@ describe("syncRouter", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          ...attachmentUploadRequest(),
+          ...declared,
           attachmentId: upload.attachmentId,
           objectKey: upload.objectKey,
         }),

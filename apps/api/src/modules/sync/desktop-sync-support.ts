@@ -1,6 +1,10 @@
 import { type SyncEvent } from "@calibra-facil/contracts";
 import type { OrgExecutor } from "@calibra-facil/db/for-org";
-import { member, organizationEventLog } from "@calibra-facil/db/schema";
+import {
+  member,
+  organizationEventLog,
+  syncAppliedEvent,
+} from "@calibra-facil/db/schema";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { writeOrganizationAuditEvent } from "../../lib/audit";
 import { orgDb } from "../../lib/org-db";
@@ -50,6 +54,32 @@ export async function findDesktopSyncRemoteEntityId(
     typeof remoteEntityId === "string"
     ? remoteEntityId
     : null;
+}
+
+/**
+ * Whether this very event was already applied (the claim ledger, or the audit
+ * log of an older cloud). A retry of an applied event is acknowledged, not
+ * re-decided: the work was authorized when it was applied, so a later role change
+ * must not dead-letter its retry.
+ */
+export async function isDesktopSyncEventApplied(
+  organizationId: string,
+  event: SyncEvent,
+): Promise<boolean> {
+  const [claim] = await orgDb(organizationId).transaction((o) =>
+    o
+      .select({ appliedAt: syncAppliedEvent.appliedAt })
+      .from(syncAppliedEvent)
+      .where(
+        and(
+          eq(syncAppliedEvent.organizationId, organizationId),
+          eq(syncAppliedEvent.eventId, event.eventId),
+        ),
+      )
+      .limit(1),
+  );
+  if (claim?.appliedAt) return true;
+  return (await findAppliedDesktopSyncEvent(organizationId, event)) !== null;
 }
 
 export async function findAppliedDesktopSyncEvent(

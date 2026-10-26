@@ -3,6 +3,7 @@ import path from "node:path";
 import { mkdtempSync, rmSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  SYNC_CHANGE_SEQ_PROTOCOL_VERSION,
   SYNC_PROTOCOL_VERSION,
   SYNC_PROTOCOL_UNSUPPORTED_CODE,
   buildSyncResyncRequiredResponse,
@@ -201,9 +202,9 @@ describe("the paged bootstrap on the desktop", () => {
 
     const asked = bootstrapRequests(cloud.requests);
     expect(asked.map((request) => request.body)).toEqual([
-      { protocolVersion: SYNC_PROTOCOL_VERSION, pageToken: null },
-      { protocolVersion: SYNC_PROTOCOL_VERSION, pageToken: "tok-1" },
-      { protocolVersion: SYNC_PROTOCOL_VERSION, pageToken: "tok-2" },
+      { protocolVersion: SYNC_CHANGE_SEQ_PROTOCOL_VERSION, pageToken: null },
+      { protocolVersion: SYNC_CHANGE_SEQ_PROTOCOL_VERSION, pageToken: "tok-1" },
+      { protocolVersion: SYNC_CHANGE_SEQ_PROTOCOL_VERSION, pageToken: "tok-2" },
     ]);
     const customers = database
       .prepare<[], { total: number }>("SELECT COUNT(*) AS total FROM customers")
@@ -215,7 +216,7 @@ describe("the paged bootstrap on the desktop", () => {
       (request) => request.url.pathname === "/api/sync/pull",
     );
     expect(pull?.url.searchParams.get("protocolVersion")).toBe(
-      String(SYNC_PROTOCOL_VERSION),
+      String(SYNC_CHANGE_SEQ_PROTOCOL_VERSION),
     );
     expect(pull?.url.searchParams.get("cursor")).toBe("v3|50|0");
     database.close();
@@ -249,7 +250,7 @@ describe("the paged bootstrap on the desktop", () => {
 
     const resumed = bootstrapRequests(cloud.requests).slice(before);
     expect(resumed.map((request) => request.body)).toEqual([
-      { protocolVersion: SYNC_PROTOCOL_VERSION, pageToken: "tok-2" },
+      { protocolVersion: SYNC_CHANGE_SEQ_PROTOCOL_VERSION, pageToken: "tok-2" },
     ]);
     const customers = database
       .prepare<[], { total: number }>("SELECT COUNT(*) AS total FROM customers")

@@ -1,6 +1,8 @@
 import { type SyncCommand } from "@calibra-facil/contracts";
 import { CreateCustomerSchema } from "@calibra-facil/schemas";
 import { type MemberData } from "../../middleware/permission";
+import { type R2Env } from "../../lib/storage";
+import { prepareCreateLocalAttachment } from "./apply-attachment";
 import { asRecord } from "./helpers";
 import {
   desktopCustomerOrganizationMetadata,
@@ -17,7 +19,11 @@ import {
 export async function prepareDesktopEventSideEffects(
   command: SyncCommand,
   memberData: MemberData,
+  context: { env: R2Env | undefined; protocolVersion: number },
 ): Promise<PreparedDesktopEventSideEffects> {
+  if (command.operation === "create_local_attachment") {
+    return prepareCreateLocalAttachment(command, memberData, context);
+  }
   if (command.operation !== "create_local_customer") return {};
 
   // Already applied (a retried push): the transaction answers from its record.

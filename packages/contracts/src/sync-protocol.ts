@@ -28,8 +28,18 @@ import { syncEventSchema } from "./sync";
  *   (sync-change-seq.ts, docs/architecture/sync-change-seq.md). The push wire format
  *   is unchanged; protocols 1 and 2 keep the `updatedAt` pull until
  *   `SYNC_MIN_DESKTOP_VERSION` excludes them (DEPLOYMENT.md).
+ * - Protocol 4 adds the attachment upload leg (sync-attachments.ts): a desktop that
+ *   speaks it uploads an attachment's bytes (init-upload, PUT, complete-upload)
+ *   before pushing `create_local_attachment`, and the cloud refuses that event
+ *   unless the upload was completed. The push wire format and the pull are
+ *   unchanged; an older desktop's attachment event is refused with the permanent
+ *   `SYNC_ATTACHMENT_UPLOAD_UNSUPPORTED` (it has no bytes to send) and waits for
+ *   the update.
  */
-export const SYNC_PROTOCOL_VERSION = 3;
+export const SYNC_PROTOCOL_VERSION = 4;
+
+/** The first protocol whose desktops upload attachment bytes before pushing the event. */
+export const SYNC_ATTACHMENT_UPLOAD_PROTOCOL_VERSION = 4;
 
 /** The protocol of a request that states no `protocolVersion`. */
 export const LEGACY_SYNC_PROTOCOL_VERSION = 1;
@@ -112,7 +122,11 @@ export const syncServiceOrderIntakePayloadSchema = z.looseObject({
   sourceServiceOrderId: z.number().int().nullable().optional(),
 });
 
-/** `create_local_attachment`: audit-only on the cloud; the bytes travel apart. */
+/**
+ * `create_local_attachment`: the cloud records it only once the bytes it names
+ * (`contentHash`, `mimeType`, `sizeBytes`) were uploaded and completed through the
+ * attachment endpoints (sync-attachments.ts).
+ */
 export const syncAttachmentPayloadSchema = z.looseObject({
   attachmentId: z.string().optional(),
   entityType: z.string().optional(),
