@@ -13,6 +13,7 @@
  * the heavy render module graph and lets us drive the ack/retry outcome.
  */
 
+import { hostname } from "node:os";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { WorkerEnv } from "./queue-runtime";
 
@@ -66,7 +67,12 @@ vi.mock("@calibra-facil/jobs-core", () => ({
   default: { queue: workerQueue },
 }));
 
-import { drainQueue, processQueueBatch } from "./queue-runtime";
+import {
+  defaultWorkerId,
+  drainQueue,
+  processQueueBatch,
+  readQueueConfig,
+} from "./queue-runtime";
 
 const CONFIG = {
   workerId: "test-worker",
@@ -511,6 +517,26 @@ describe("queue-runtime claims one row at a time (REQ-QDL-001)", () => {
       CONFIG.workerId,
       expect.anything(),
     );
+  });
+});
+
+describe("worker id", () => {
+  it("differs per process start and carries the host name and pid, so replicas never share one", () => {
+    const first = defaultWorkerId();
+    const second = defaultWorkerId();
+
+    expect(first).not.toBe(second);
+    expect(first).toContain(hostname());
+    expect(first).toContain(String(process.pid));
+  });
+
+  it("WORKER_ID overrides the generated one", () => {
+    vi.stubEnv("WORKER_ID", "replica-a");
+    try {
+      expect(readQueueConfig().workerId).toBe("replica-a");
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
 

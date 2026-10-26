@@ -6,8 +6,7 @@ import {
   setProcessEnvDefault,
 } from "@calibra-facil/config";
 import { assertRlsStartup } from "@calibra-facil/db/rls-startup";
-import { processScheduledNotifications } from "@calibra-facil/jobs-core/scheduled";
-import { processScheduledIntegrationSyncs } from "@calibra-facil/jobs-core/integrations";
+import { createPollLoop } from "./poll-loop.js";
 import {
   createWorkerEnv,
   processQueueBatch,
@@ -66,37 +65,6 @@ async function loadLocalEnv() {
   }
 }
 
-function scheduleEvery(
-  label: string,
-  intervalMs: number,
-  task: () => Promise<void>,
-) {
-  setInterval(() => {
-    task().catch((error) => {
-      console.error(`[Worker] ${label} failed`, error);
-    });
-  }, intervalMs);
-}
-
-function scheduleDailyAt(hourUtc: number, task: () => Promise<void>) {
-  const scheduleNext = () => {
-    const now = new Date();
-    const next = new Date(now);
-    next.setUTCHours(hourUtc, 0, 0, 0);
-    if (next <= now) next.setUTCDate(next.getUTCDate() + 1);
-
-    setTimeout(() => {
-      task()
-        .catch((error) => {
-          console.error("[Worker] daily scheduled task failed", error);
-        })
-        .finally(scheduleNext);
-    }, next.getTime() - now.getTime());
-  };
-
-  scheduleNext();
-}
-
 await loadLocalEnv();
 
 // Validate the configuration before doing anything else: a bad deploy exits
@@ -111,14 +79,19 @@ const config = readQueueConfig();
 const env = createWorkerEnv();
 
 console.log(`[Worker] Starting ${config.workerId}`);
-scheduleEvery("queue poll", config.pollIntervalMs, () =>
-  processQueueBatch(env, config).then(() => undefined),
-);
-scheduleEvery("integration scheduler", 30 * 60_000, () =>
-  processScheduledIntegrationSyncs(env).then(() => undefined),
-);
-scheduleDailyAt(8, () =>
-  processScheduledNotifications(env).then(() => undefined),
-);
 
-await processQueueBatch(env, config);
+// The worker only drains the queue. The scheduled integration syncs and the
+// 08:00 notifications are the API's cron jobs (apps/api/src/lib/cron-scheduler.ts):
+// they run under the cron lease and enqueue the work this loop picks up, so a
+// second scheduler here would run them twice (double e-mails).
+//
+// Self-scheduling: the next poll is set only after the previous one ends, so a
+// slow batch never overlaps the next tick.
+const poll = createPollLoop({
+  intervalMs: config.pollIntervalMs,
+  task: () => processQueueBatch(env, config),
+  onError: (error) => {
+    console.error("[Worker] queue poll failed", error);
+  },
+});
+poll.start();

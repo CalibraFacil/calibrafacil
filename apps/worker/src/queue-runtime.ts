@@ -8,6 +8,8 @@
 // complete/fail with backoff. Keeping the runtime in one place means the
 // container and the local poller stay byte-for-byte identical in how they
 // process a job.
+import { randomBytes } from "node:crypto";
+import { hostname } from "node:os";
 import {
   loadWorkerConfig,
   readJobsConfig,
@@ -48,10 +50,20 @@ export type QueueRuntimeConfig = {
   staleAfterMs: number;
 };
 
+/**
+ * Names this worker in the queue (`locked_by`, the fencing token). The process id
+ * alone is the same in every container replica (it is 1 or close to it), so two
+ * replicas would share an identity and fence each other's leases: it carries the
+ * host name and a random suffix too.
+ */
+export function defaultWorkerId(): string {
+  return `${hostname()}-${process.pid}-${randomBytes(4).toString("hex")}`;
+}
+
 export function readQueueConfig(): QueueRuntimeConfig {
   const jobs = readJobsConfig();
   return {
-    workerId: jobs.workerId ?? `worker-${process.pid}`,
+    workerId: jobs.workerId ?? defaultWorkerId(),
     batchSize: jobs.queueBatchSize,
     pollIntervalMs: jobs.queuePollIntervalMs,
     staleAfterMs: jobs.queueStaleAfterMs,

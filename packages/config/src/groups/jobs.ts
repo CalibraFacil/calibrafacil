@@ -105,7 +105,7 @@ export const jobsGroup = defineGroup({
     workerId: text({
       env: "WORKER_ID",
       description:
-        "Identifies a worker process in the queue (default worker-<pid>).",
+        "Identifies a worker process in the queue (default <host>-<pid>-<random>, unique per replica). If you set it, keep it unique per replica.",
       hidden: true,
     }),
     queueBatchSize: integer({
