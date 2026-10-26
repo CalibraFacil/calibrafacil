@@ -1,4 +1,4 @@
-import { readStorageConfig } from "@calibra-facil/config";
+import { readRuntimeConfig, readStorageConfig } from "@calibra-facil/config";
 import {
   S3Client,
   GetObjectCommand,
@@ -14,7 +14,8 @@ import {
 import type { StorageBucket } from "@calibra-facil/shared/storage-keys";
 
 export interface R2Env {
-  R2_ACCOUNT_ID: string;
+  /** Cloudflare R2 account; not needed when R2_ENDPOINT names the store. */
+  R2_ACCOUNT_ID?: string;
   /** S3-compatible endpoint override (non-R2 stores, local dev). */
   R2_ENDPOINT?: string;
   R2_REGION?: string;
@@ -30,19 +31,39 @@ export interface R2Env {
   API_URL?: string;
 }
 
+/** The raw settings the object store is configured from (env var names aside). */
+export type StorageSettingsInput = {
+  accountId?: string | null;
+  endpoint?: string | null;
+  region?: string | null;
+  accessKeyId?: string | null;
+  secretAccessKey?: string | null;
+  bucketName?: string | null;
+  mediaBucketName?: string | null;
+};
+
+function present(value: string | null | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
 /**
- * R2 credentials from the storage configuration (for code that runs outside any Hono
- * context: cron handlers, the approval command). Null when unconfigured.
+ * The one definition of "storage is configured": credentials and both buckets,
+ * plus a way to reach the store, which is EITHER a Cloudflare R2 account id OR an
+ * S3-compatible endpoint (the self-hosted stack sets only R2_ENDPOINT).
+ * Null when any of it is missing.
  */
-export function r2EnvFromStorageConfig(): R2Env | null {
-  const storage = readStorageConfig();
-  const accountId = storage.accountId;
-  const accessKeyId = storage.accessKeyId;
-  const secretAccessKey = storage.secretAccessKey;
-  const bucketName = storage.bucketName;
-  const mediaBucketName = storage.mediaBucketName;
+export function r2EnvFromSettings(
+  settings: StorageSettingsInput,
+): R2Env | null {
+  const accountId = present(settings.accountId);
+  const endpoint = present(settings.endpoint);
+  const accessKeyId = present(settings.accessKeyId);
+  const secretAccessKey = present(settings.secretAccessKey);
+  const bucketName = present(settings.bucketName);
+  const mediaBucketName = present(settings.mediaBucketName);
   if (
-    !accountId ||
+    (!accountId && !endpoint) ||
     !accessKeyId ||
     !secretAccessKey ||
     !bucketName ||
@@ -51,12 +72,45 @@ export function r2EnvFromStorageConfig(): R2Env | null {
     return null;
   }
   return {
-    R2_ACCOUNT_ID: accountId,
+    ...(accountId ? { R2_ACCOUNT_ID: accountId } : {}),
+    ...(endpoint ? { R2_ENDPOINT: endpoint } : {}),
+    ...(present(settings.region)
+      ? { R2_REGION: present(settings.region) }
+      : {}),
     R2_ACCESS_KEY_ID: accessKeyId,
     R2_SECRET_ACCESS_KEY: secretAccessKey,
     R2_BUCKET_NAME: bucketName,
     R2_MEDIA_BUCKET_NAME: mediaBucketName,
   };
+}
+
+/**
+ * R2 credentials from the storage configuration (for code that runs outside any Hono
+ * context: cron handlers, the approval command). Null when unconfigured.
+ */
+export function r2EnvFromStorageConfig(): R2Env | null {
+  return r2EnvFromSettings(readStorageConfig());
+}
+
+export class StorageNotConfiguredError extends Error {
+  constructor(purpose: string) {
+    super(`Object storage is not configured: cannot ${purpose}`);
+    this.name = "StorageNotConfiguredError";
+  }
+}
+
+/**
+ * Like {@link r2EnvFromStorageConfig}, for work that needs the store: null when
+ * unconfigured in development and test (the caller degrades), but a production
+ * deployment without storage is broken, so it throws instead of doing the work
+ * half-way and reporting success.
+ */
+export function r2EnvForStorageDependentWork(purpose: string): R2Env | null {
+  const env = r2EnvFromStorageConfig();
+  if (!env && readRuntimeConfig().isProduction) {
+    throw new StorageNotConfiguredError(purpose);
+  }
+  return env;
 }
 
 /** Resolve a logical bucket to its concrete (env-configured) bucket name. */

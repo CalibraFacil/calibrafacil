@@ -89,6 +89,17 @@ docker compose up -d
 
 `init` applies the new migrations before the new API starts.
 
+The API and the worker stop gracefully on `SIGTERM` (what `docker compose stop` and an upgrade send): the
+API stops taking requests and the worker claims no further job, both wait up to `SHUTDOWN_GRACE_MS`
+(default `25000`) for the work under way, such as a certificate render, then close their database
+connections and exit. `stop_grace_period` in `deploy/compose.yaml` (40 s) is above it; raise both if
+your renders take longer. A job still running at the deadline is not lost: its lease expires and a
+worker reclaims it.
+
+After changing the storage settings, check them end to end (health probe, a write/read/delete in both
+buckets, and the certificate-drift job) with
+`docker compose exec -T api bun src/cli/check-storage.ts`.
+
 ### Backups
 
 Three things hold all the state: the database, the stored files, and `.env`, whose master keys
@@ -318,6 +329,7 @@ below are a summary.
 | `BACKGROUND_JOBS_MODE`                                                                              | `local` (inside the API process, development) or `queue` (a separate worker)                                   |
 | `STUCK_RENDER_AFTER_MS`                                                                             | Optional, default `3600000` (60 min): see _Certificates stuck in generation_ below                             |
 | `QUEUE_RECEIPTS_MODE`                                                                               | Optional, default `enforce`; `shadow`/`off` opt out: see _Queue idempotency_ below                             |
+| `SHUTDOWN_GRACE_MS`                                                                                 | Optional, default `25000`: how long the API and the worker wait for running work on `SIGTERM`/`SIGINT`         |
 | `CRON_SCHEDULER=internal`                                                                           | Run the scheduled jobs inside the API (see below)                                                              |
 | `RECORDS_PURGE_ENABLED`                                                                             | Optional, default `false`: enables the `records-purge` cron (see _Records retention_)                          |
 | `RECORDS_PURGE_MODE`                                                                                | Optional, default `dry-run`; only `execute` deletes (see _Records retention_)                                  |

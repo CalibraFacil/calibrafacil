@@ -18,7 +18,8 @@
     "./telemetry": "./src/telemetry/index.ts",
     "./units": "./src/units/index.ts",
     "./format": "./src/format.ts",
-    "./money": "./src/money.ts"
+    "./money": "./src/money.ts",
+    "./graceful-shutdown": "./src/graceful-shutdown.ts"
   },
   "scripts": {
     "test": "vitest run --passWithNoTests",

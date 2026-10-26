@@ -3,6 +3,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createR2Client,
   generatePresignedUploadUrl,
+  r2EnvForStorageDependentWork,
+  r2EnvFromSettings,
+  r2EnvFromStorageConfig,
+  StorageNotConfiguredError,
   generatePresignedUrl,
   type R2Env,
 } from "./storage";
@@ -55,5 +59,105 @@ describe("presigned URLs", () => {
     expect(download.searchParams.get("X-Amz-Credential")).toMatch(/^key\//);
     expect(upload.origin).toBe("https://files.lab.example");
     expect(upload.pathname).toBe("/media/logo.png");
+  });
+});
+
+const settings = {
+  accessKeyId: "key",
+  secretAccessKey: "secret",
+  bucketName: "documents",
+  mediaBucketName: "media",
+};
+
+describe("r2EnvFromSettings", () => {
+  it("counts an endpoint alone as configured (the self-hosted stack)", () => {
+    const resolved = r2EnvFromSettings({
+      ...settings,
+      endpoint: "http://s3:7070",
+      region: "us-east-1",
+    });
+
+    expect(resolved).toMatchObject({
+      R2_ENDPOINT: "http://s3:7070",
+      R2_REGION: "us-east-1",
+      R2_BUCKET_NAME: "documents",
+    });
+    expect(resolved?.R2_ACCOUNT_ID).toBeUndefined();
+  });
+
+  it("counts an account id alone as configured (Cloudflare R2)", () => {
+    expect(r2EnvFromSettings({ ...settings, accountId: "abc" })).toMatchObject({
+      R2_ACCOUNT_ID: "abc",
+    });
+  });
+
+  it("is null without a way to reach the store, credentials or a bucket", () => {
+    expect(r2EnvFromSettings(settings)).toBeNull();
+    expect(r2EnvFromSettings({ ...settings, endpoint: "  " })).toBeNull();
+    expect(
+      r2EnvFromSettings({ ...settings, endpoint: "http://s3", bucketName: "" }),
+    ).toBeNull();
+    expect(
+      r2EnvFromSettings({
+        ...settings,
+        endpoint: "http://s3",
+        secretAccessKey: undefined,
+      }),
+    ).toBeNull();
+  });
+
+  it("builds a client for the endpoint, path-style, with no account id", async () => {
+    const resolved = r2EnvFromSettings({
+      ...settings,
+      endpoint: "http://s3:7070",
+    });
+    if (!resolved) throw new Error("expected a resolved environment");
+    vi.stubEnv("R2_PUBLIC_ENDPOINT", "");
+
+    const url = new URL(
+      await generatePresignedUrl(createR2Client(resolved), "documents", "k"),
+    );
+
+    expect(url.origin).toBe("http://s3:7070");
+    expect(url.pathname).toBe("/documents/k");
+  });
+});
+
+describe("storage configuration from the environment", () => {
+  function stubStorageEnv(nodeEnv: string, extra: Record<string, string>) {
+    vi.stubEnv("NODE_ENV", nodeEnv);
+    for (const name of ["R2_ACCOUNT_ID", "R2_ENDPOINT"]) {
+      vi.stubEnv(name, "");
+    }
+    vi.stubEnv("R2_ACCESS_KEY_ID", "key");
+    vi.stubEnv("R2_SECRET_ACCESS_KEY", "secret");
+    vi.stubEnv("R2_BUCKET_NAME", "documents");
+    vi.stubEnv("R2_MEDIA_BUCKET_NAME", "media");
+    for (const [name, value] of Object.entries(extra)) {
+      vi.stubEnv(name, value);
+    }
+  }
+
+  it("resolves with only R2_ENDPOINT, as deploy/compose.yaml sets it", () => {
+    stubStorageEnv("production", { R2_ENDPOINT: "http://s3:7070" });
+
+    expect(r2EnvFromStorageConfig()).toMatchObject({
+      R2_ENDPOINT: "http://s3:7070",
+    });
+    expect(r2EnvForStorageDependentWork("do the work")).not.toBeNull();
+  });
+
+  it("is null in development when unconfigured", () => {
+    stubStorageEnv("development", {});
+
+    expect(r2EnvForStorageDependentWork("do the work")).toBeNull();
+  });
+
+  it("throws in production when unconfigured, instead of degrading silently", () => {
+    stubStorageEnv("production", {});
+
+    expect(() => r2EnvForStorageDependentWork("do the work")).toThrow(
+      StorageNotConfiguredError,
+    );
   });
 });

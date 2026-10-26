@@ -14,7 +14,9 @@ import {
   loadWorkerConfig,
   readRuntimeConfig,
 } from "@calibra-facil/config";
+import { closeDatabases } from "@calibra-facil/db";
 import { assertRlsStartup } from "@calibra-facil/db/rls-startup";
+import { installGracefulShutdown } from "@calibra-facil/shared/graceful-shutdown";
 import {
   createWorkerEnv,
   drainQueue,
@@ -22,13 +24,14 @@ import {
   type QueueRuntimeConfig,
   type WorkerEnv,
 } from "./queue-runtime.js";
+import { createWorkerShutdownPlan } from "./shutdown.js";
 
 // Minimal Bun.serve typing — avoids pulling in @types/bun just for one symbol.
 declare const Bun: {
   serve(options: {
     port?: number;
     fetch(request: Request): Response | Promise<Response>;
-  }): unknown;
+  }): { stop(closeActiveConnections?: boolean): Promise<void> };
 };
 
 // Validate the configuration before binding the port: a bad deploy exits here
@@ -54,6 +57,10 @@ function getEnv(): WorkerEnv {
 
 let draining = false;
 let wakeRequested = false;
+// Set on SIGTERM/SIGINT: no further ping starts a drain and the running one
+// claims nothing more after the job in hand.
+let stopping = false;
+let currentDrain: Promise<void> = Promise.resolve();
 
 // Drain the queue to empty. The `draining` guard means only one drain runs at a
 // time; a `/drain` ping that arrives mid-drain sets `wakeRequested`, and the
@@ -69,11 +76,16 @@ async function runDrain(): Promise<void> {
   try {
     do {
       wakeRequested = false;
-      const processed = await drainQueue(getEnv(), config);
+      const processed = await drainQueue(
+        getEnv(),
+        config,
+        undefined,
+        () => stopping,
+      );
       if (processed > 0) {
         console.log(`[DocumentWorker] Drained ${processed} job(s)`);
       }
-    } while (wakeRequested);
+    } while (wakeRequested && !stopping);
   } catch (error) {
     console.error("[DocumentWorker] Drain failed", error);
   } finally {
@@ -81,7 +93,7 @@ async function runDrain(): Promise<void> {
   }
 }
 
-Bun.serve({
+const server = Bun.serve({
   port,
   fetch(request) {
     const url = new URL(request.url);
@@ -91,11 +103,17 @@ Bun.serve({
     }
 
     if (request.method === "POST" && url.pathname === "/drain") {
+      if (stopping) {
+        return Response.json({ accepted: false, stopping }, { status: 503 });
+      }
       const alreadyDraining = draining;
       // Kick the drain and respond immediately. The container keeps processing
       // after the response (it is a long-running process, not a request-scoped
       // Worker), so we never hold the caller on a long PDF render.
-      void runDrain();
+      // A ping during a drain only asks it for another pass: keep the promise
+      // of the drain that is really running.
+      const started = runDrain();
+      if (!alreadyDraining) currentDrain = started;
       return Response.json(
         { accepted: true, alreadyDraining },
         { status: 202 },
@@ -108,4 +126,20 @@ Bun.serve({
 
 console.log(
   `[DocumentWorker] Listening on :${port} (worker ${config.workerId})`,
+);
+
+// SIGTERM (a container stop) and SIGINT: stop listening, let the job in hand
+// finish (up to SHUTDOWN_GRACE_MS), close the database pools.
+installGracefulShutdown(
+  createWorkerShutdownPlan({
+    stopWork: () => {
+      stopping = true;
+      return currentDrain;
+    },
+    stopListening: () => {
+      void server.stop();
+    },
+    closeDatabases,
+    deadlineMs: readRuntimeConfig().shutdownGraceMs,
+  }),
 );

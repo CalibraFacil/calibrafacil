@@ -8,6 +8,8 @@
 // complete/fail with backoff. Keeping the runtime in one place means the
 // container and the local poller stay byte-for-byte identical in how they
 // process a job.
+import { randomBytes } from "node:crypto";
+import { hostname } from "node:os";
 import {
   loadWorkerConfig,
   readJobsConfig,
@@ -48,10 +50,20 @@ export type QueueRuntimeConfig = {
   staleAfterMs: number;
 };
 
+/**
+ * Names this worker in the queue (`locked_by`, the fencing token). The process id
+ * alone is the same in every container replica (it is 1 or close to it), so two
+ * replicas would share an identity and fence each other's leases: it carries the
+ * host name and a random suffix too.
+ */
+export function defaultWorkerId(): string {
+  return `${hostname()}-${process.pid}-${randomBytes(4).toString("hex")}`;
+}
+
 export function readQueueConfig(): QueueRuntimeConfig {
   const jobs = readJobsConfig();
   return {
-    workerId: jobs.workerId ?? `worker-${process.pid}`,
+    workerId: jobs.workerId ?? defaultWorkerId(),
     batchSize: jobs.queueBatchSize,
     pollIntervalMs: jobs.queuePollIntervalMs,
     staleAfterMs: jobs.queueStaleAfterMs,
@@ -258,11 +270,14 @@ async function claimAndProcessBatch(
   env: WorkerEnv,
   workerId: string,
   batchSize: number,
+  isStopping: () => boolean,
 ): Promise<number> {
   const mode = readQueueReceiptsMode();
   let claimedCount = 0;
 
   for (let slot = 0; slot < batchSize; slot += 1) {
+    // A shutdown claims nothing more: the job in hand was the last.
+    if (isStopping()) break;
     // oxlint-disable-next-line eslint/no-await-in-loop -- one row is claimed only once the previous one is settled; see above.
     const [job] = await claimQueueJobs(workerId, 1);
     if (!job) break;
@@ -354,9 +369,15 @@ async function reclaimStaleJobs(staleAfterMs: number): Promise<void> {
 export async function processQueueBatch(
   env: WorkerEnv,
   config: QueueRuntimeConfig,
+  isStopping: () => boolean = () => false,
 ): Promise<number> {
   await reclaimStaleJobs(config.staleAfterMs);
-  return claimAndProcessBatch(env, config.workerId, config.batchSize);
+  return claimAndProcessBatch(
+    env,
+    config.workerId,
+    config.batchSize,
+    isStopping,
+  );
 }
 
 // Release stale jobs, then keep claiming + processing batches until the queue
@@ -367,15 +388,17 @@ export async function drainQueue(
   env: WorkerEnv,
   config: QueueRuntimeConfig,
   maxBatches = 1_000,
+  isStopping: () => boolean = () => false,
 ): Promise<number> {
   await reclaimStaleJobs(config.staleAfterMs);
 
   let processed = 0;
-  for (let batch = 0; batch < maxBatches; batch += 1) {
+  for (let batch = 0; batch < maxBatches && !isStopping(); batch += 1) {
     const count = await claimAndProcessBatch(
       env,
       config.workerId,
       config.batchSize,
+      isStopping,
     );
     if (count === 0) break;
     processed += count;

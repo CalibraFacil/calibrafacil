@@ -68,6 +68,30 @@ let cachedDatabase: CachedDatabase | null = null;
 // it never evicts the application pool and the other way round.
 let cachedSystemDatabase: CachedDatabase | null = null;
 
+/** Both drivers keep their client on `$client` (postgres.js `Sql`, Neon `Pool`): each can `end()`. */
+async function closeDatabase(database: Database): Promise<void> {
+  const client: unknown = Reflect.get(database, "$client");
+  if (client && typeof client === "object" && "end" in client) {
+    const end: unknown = client.end;
+    if (typeof end === "function") await Reflect.apply(end, client, []);
+  }
+}
+
+/**
+ * Closes the connection pools this process opened (the application pool and the
+ * system path's), for a graceful shutdown: once nothing runs, release the
+ * connections instead of leaving the server to reap them. A later `db` access
+ * opens a new pool. Idempotent.
+ */
+export async function closeDatabases(): Promise<void> {
+  const open = [cachedDatabase, cachedSystemDatabase];
+  cachedDatabase = null;
+  cachedSystemDatabase = null;
+  await Promise.all(
+    open.map((entry) => entry && closeDatabase(entry.database)),
+  );
+}
+
 function isCloudflareWorkersRuntime() {
   return (
     typeof navigator !== "undefined" &&

@@ -4,15 +4,25 @@ import {
   rawEnv,
   setProcessEnv,
 } from "@calibra-facil/config";
+import { closeDatabases } from "@calibra-facil/db";
 import { assertRlsStartup } from "@calibra-facil/db/rls-startup";
+import { installGracefulShutdown } from "@calibra-facil/shared/graceful-shutdown";
 import app from "./index";
 import { GET as dispatchCron } from "./cron/dispatch";
-import { CRON_ENTRIES, startCronScheduler } from "./lib/cron-scheduler";
+import {
+  CRON_ENTRIES,
+  createInFlightRuns,
+  startCronScheduler,
+} from "./lib/cron-scheduler";
+import { flushErrorReporter } from "./lib/observability";
+import { createApiShutdownPlan } from "./server/shutdown";
 import { buildApiBootEnv } from "./server/startup";
 
 type BunServer = {
   hostname: string;
   port: number;
+  /** Stops accepting connections; settles once the requests in flight are done. */
+  stop(closeActiveConnections?: boolean): Promise<void>;
 };
 
 type BunRuntime = {
@@ -122,11 +132,30 @@ console.info(
 
 // CRON_SCHEDULER=internal runs the cron schedule in this process, for installs
 // without an external scheduler (the Docker setup turns it on).
+const inFlightCron = createInFlightRuns();
+let cronJobs: ReturnType<typeof startCronScheduler> = [];
 if (config.jobs.cronScheduler === "internal") {
-  const jobs = startCronScheduler({
+  cronJobs = startCronScheduler({
     entries: CRON_ENTRIES,
     dispatch: dispatchCron,
     secret: config.jobs.cronSecret,
+    inFlight: inFlightCron,
   });
-  console.info(`Scheduled ${jobs.length} cron jobs in-process (UTC)`);
+  console.info(`Scheduled ${cronJobs.length} cron jobs in-process (UTC)`);
 }
+
+// SIGTERM (a container stop or upgrade) and SIGINT: stop taking new work, let
+// the requests and cron runs already under way finish (up to SHUTDOWN_GRACE_MS),
+// then close the database pools and exit.
+installGracefulShutdown(
+  createApiShutdownPlan({
+    stopServer: () => server.stop(),
+    stopCron: () => {
+      for (const job of cronJobs) job.stop();
+    },
+    inFlightCron,
+    closeDatabases,
+    flushErrors: () => flushErrorReporter(),
+    deadlineMs: config.runtime.shutdownGraceMs,
+  }),
+);
