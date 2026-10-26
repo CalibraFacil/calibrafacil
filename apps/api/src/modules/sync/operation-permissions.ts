@@ -110,6 +110,36 @@ export const SYNC_OPERATION_PERMISSIONS = {
   },
 } satisfies Record<SyncCommandOperation, SyncOperationPermission>;
 
+/**
+ * The member as the event's own unit sees them. `memberData.unitRole` is the role
+ * in the ACTIVE unit (the `x-active-unit-id` header, or the first accessible unit:
+ * the desktop sends no header), but the apply writes into the event's unit, so a
+ * member who is a technician in one unit and a plain member in another must not
+ * borrow the first role for the second. The unit is the one the apply uses:
+ * `event.unitId`, then a numeric `payload.unitId` (job drafts and service-order
+ * intakes read it), then the active unit. A unit the member has no assignment in
+ * gives no unit role (so no unit elevation).
+ */
+export function memberForEventUnit(
+  member: Pick<MemberData, "role" | "activeUnitId" | "accessibleUnits">,
+  event: { unitId: number | null; payload?: unknown },
+): Pick<MemberData, "role" | "unitRole"> {
+  const payloadUnit =
+    event.payload && typeof event.payload === "object"
+      ? Reflect.get(event.payload, "unitId")
+      : undefined;
+  const unitId =
+    event.unitId ??
+    (typeof payloadUnit === "number" ? payloadUnit : null) ??
+    member.activeUnitId;
+  const unitRole =
+    unitId === null
+      ? null
+      : (member.accessibleUnits.find((unit) => unit.id === unitId)?.role ??
+        null);
+  return { role: member.role, unitRole };
+}
+
 export type SyncPermissionDecision =
   | { allowed: true }
   | { allowed: false; code: string; reason: string };

@@ -6,6 +6,7 @@ import type { RoleName } from "@calibra-facil/auth/access";
 import {
   SYNC_OPERATION_PERMISSIONS,
   authorizeSyncOperation,
+  memberForEventUnit,
 } from "./operation-permissions";
 
 type Operation = keyof typeof SYNC_OPERATION_PERMISSIONS;
@@ -95,6 +96,45 @@ describe("REQ-SYNC-RBAC-1: the push permission table", () => {
   });
 });
 
+describe("REQ-SYNC-RBAC-5: the unit role is the one of the event's unit", () => {
+  const member = {
+    role: "member" as const,
+    activeUnitId: 1,
+    accessibleUnits: [
+      { id: 1, name: "Alfa", slug: "alfa", role: "technician" as const },
+      { id: 2, name: "Matriz", slug: "matriz", role: "member" as const },
+    ],
+  };
+
+  it("takes the role from the event's unit, not from the active one", () => {
+    expect(memberForEventUnit(member, { unitId: 1 })).toEqual({
+      role: "member",
+      unitRole: "technician",
+    });
+    expect(memberForEventUnit(member, { unitId: 2 })).toEqual({
+      role: "member",
+      unitRole: "member",
+    });
+  });
+
+  it("follows the unit the apply uses when the event names none: payload unit, then active unit", () => {
+    expect(
+      memberForEventUnit(member, { unitId: null, payload: { unitId: 2 } }),
+    ).toMatchObject({ unitRole: "member" });
+    expect(memberForEventUnit(member, { unitId: null })).toMatchObject({
+      unitRole: "technician",
+    });
+  });
+
+  it("gives no unit role in a unit the member has no assignment in", () => {
+    expect(memberForEventUnit(member, { unitId: 99 }).unitRole).toBeNull();
+    expect(
+      memberForEventUnit({ ...member, activeUnitId: null }, { unitId: null })
+        .unitRole,
+    ).toBeNull();
+  });
+});
+
 // The online route an operation was derived from still asks for the same
 // permission: reads the route source and finds
 // `.<method>("<path>", ...withLabPermission({...}))`.
@@ -127,8 +167,17 @@ describe("REQ-SYNC-RBAC-2: the table follows the online routes", () => {
     return method && route && prefix ? [{ op, method, route, prefix }] : [];
   });
 
-  it("derives most operations from a route file", () => {
-    expect(derived.length).toBeGreaterThanOrEqual(12);
+  it("derives every operation from a route file except the two with no route of their own", () => {
+    // The attachment event follows the attachment endpoints' permission and the
+    // legacy certificate-draft marker the push's former gate: neither is a
+    // `withLabPermission` literal in a route file.
+    expect(derived.map(({ op }) => op).toSorted()).toEqual(
+      OPERATIONS.filter(
+        (op) =>
+          op !== "create_local_attachment" &&
+          op !== "create_local_certificate_draft",
+      ).toSorted(),
+    );
   });
 
   it.each(derived)(

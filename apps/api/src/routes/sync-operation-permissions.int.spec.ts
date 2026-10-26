@@ -18,6 +18,7 @@ import {
   customer,
   nonConformance,
   organization,
+  organizationEventLog,
   serviceOrder,
   syncAppliedEvent,
 } from "@calibra-facil/db/schema";
@@ -294,6 +295,16 @@ describe("REQ-SYNC-RBAC-3/4: each desktop operation needs the right of its onlin
           .from(syncAppliedEvent)
           .where(inArray(syncAppliedEvent.eventId, deniedIds));
         expect(claimed).toEqual([]);
+        // ... and no audit row: a row naming a denied event would make its retry
+        // look applied.
+        const audit = await db
+          .select({ details: organizationEventLog.details })
+          .from(organizationEventLog);
+        const audited = audit.flatMap((row) => {
+          const eventId = row.details?.eventId;
+          return typeof eventId === "string" ? [eventId] : [];
+        });
+        expect(audited.filter((id) => deniedIds.includes(id))).toEqual([]);
       }
       const deniedOps = new Set(denied.map((event) => event.operation));
       if (deniedOps.has("create_local_customer")) {

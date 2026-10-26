@@ -31,11 +31,15 @@ import {
 import {
   findAppliedDesktopSyncEvent,
   getClaimedSyncActorUserId,
+  isDesktopSyncEventApplied,
   validateSyncActorScope,
 } from "../../modules/sync/desktop-sync-support";
 import { prepareDesktopEventSideEffects } from "../../modules/sync/side-effects";
 import { applyDesktopSyncEvent } from "../../modules/sync/apply-event";
-import { authorizeSyncOperation } from "../../modules/sync/operation-permissions";
+import {
+  authorizeSyncOperation,
+  memberForEventUnit,
+} from "../../modules/sync/operation-permissions";
 
 export const pushRoutes = new Hono<SyncRouterEnv>().post(
   "/push",
@@ -181,8 +185,16 @@ export const pushRoutes = new Hono<SyncRouterEnv>().post(
       // The same right the online route of this operation asks for. Decided
       // before anything is prepared or applied: a denied event writes nothing
       // and is refused for good (the desktop dead-letters it).
-      const permission = authorizeSyncOperation(memberData, command.operation);
-      if (!permission.allowed) {
+      // The role is the one the member holds in the event's own unit.
+      const permission = authorizeSyncOperation(
+        memberForEventUnit(memberData, event),
+        command.operation,
+      );
+      if (
+        !permission.allowed &&
+        // A retry of an event that was applied is acknowledged, not re-decided.
+        !(await isDesktopSyncEventApplied(memberData.organizationId, event))
+      ) {
         rejected.push({
           eventId: event.eventId,
           code: permission.code,
@@ -206,10 +218,8 @@ export const pushRoutes = new Hono<SyncRouterEnv>().post(
         rejected.push({
           eventId: event.eventId,
           code: "DESKTOP_SYNC_APPLY_FAILED",
-          reason:
-            error instanceof Error
-              ? error.message
-              : "Desktop sync event could not be prepared.",
+          // The cause is in the server log above; not echoed to the device.
+          reason: "Desktop sync event could not be prepared.",
         });
         continue;
       }
