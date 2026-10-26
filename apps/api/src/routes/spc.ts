@@ -26,6 +26,7 @@ import {
 } from "../middleware/permission";
 import { createCorrectiveActionRecord } from "../lib/corrective-actions";
 import { calibrationJobBelongsToOrganization } from "../lib/tenant-refs";
+import { buildUnitScopeCondition } from "../lib/units";
 import { resolveAccessibleUnitContext } from "../lib/unit-operational-settings";
 import { eq, and, asc, desc, count } from "drizzle-orm";
 
@@ -245,6 +246,10 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
             and(
               eq(referenceStandard.id, input.standardId),
               eq(referenceStandard.organizationId, member.organizationId),
+              // A standard outside the caller's units is not visible to them
+              // (the `spc:create` unit elevation relies on this, see
+              // UNIT_ELEVATED_ACTIONS in middleware/permission.ts).
+              buildUnitScopeCondition(referenceStandard.unitId, member),
             ),
           )
           .limit(1);
@@ -604,6 +609,10 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
             and(
               eq(referenceStandard.id, input.standardId),
               eq(referenceStandard.organizationId, member.organizationId),
+              // A standard outside the caller's units is not visible to them
+              // (the `spc:create` unit elevation relies on this, see
+              // UNIT_ELEVATED_ACTIONS in middleware/permission.ts).
+              buildUnitScopeCondition(referenceStandard.unitId, member),
             ),
           )
           .limit(1);

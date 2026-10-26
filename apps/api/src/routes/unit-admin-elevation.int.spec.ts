@@ -87,6 +87,47 @@ const ORGANIZATION_WIDE: readonly Probe[] = [
   { name: "spc:delete", permissions: { spc: ["delete"] } },
 ];
 
+/**
+ * Technician-grade actions (the member role lacks them) on the same resources:
+ * a unit role does not grant them either.
+ */
+const TECHNICIAN_GRADE: readonly Probe[] = [
+  {
+    name: "non_conformance:update",
+    permissions: { non_conformance: ["update"] },
+  },
+  { name: "capa:update", permissions: { capa: ["update"] } },
+  { name: "capa:implement", permissions: { capa: ["implement"] } },
+  {
+    name: "proficiency_test:update",
+    permissions: { proficiency_test: ["update"] },
+  },
+  {
+    name: "proficiency_test:record_results",
+    permissions: { proficiency_test: ["record_results"] },
+  },
+  { name: "spc:update", permissions: { spc: ["update"] } },
+  { name: "spc:recalculate", permissions: { spc: ["recalculate"] } },
+];
+
+/**
+ * `create` on the five quality resources (decision Q49): the one action a unit
+ * role elevates there, because it adds a record and touches no existing row.
+ */
+const UNIT_CREATE: readonly Probe[] = [
+  {
+    name: "non_conformance:create",
+    permissions: { non_conformance: ["create"] },
+  },
+  { name: "capa:create", permissions: { capa: ["create"] } },
+  {
+    name: "proficiency_test:create",
+    permissions: { proficiency_test: ["create"] },
+  },
+  { name: "spc:create", permissions: { spc: ["create"] } },
+  { name: "competence:create", permissions: { competence: ["create"] } },
+];
+
 /** An action the admin role holds and member/technician lack, on a resource that stays unit-scoped. */
 const UNIT_SCOPED: readonly Probe[] = [
   { name: "standard:create", permissions: { standard: ["create"] } },
@@ -164,11 +205,65 @@ describe("unit_admin does not elevate on organization-wide resources (P0-11)", (
     });
   }
 
+  it("REQ-Q49-1: an org member who is a unit_admin is refused the technician-grade actions and can create on the five quality resources", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    const unitAdmin = await seedExtraMember({
+      orgId: org.orgId,
+      userId: "user-unit-admin-member",
+      role: "member",
+      unitId: org.unitId,
+      unitRole: "unit_admin",
+    });
+    loginAs({ userId: unitAdmin.userId, organizationId: org.orgId });
+
+    expectAll(
+      await statusOf(probeApp(TECHNICIAN_GRADE), TECHNICIAN_GRADE),
+      TECHNICIAN_GRADE,
+      403,
+    );
+    expectAll(
+      await statusOf(probeApp(UNIT_CREATE), UNIT_CREATE),
+      UNIT_CREATE,
+      200,
+    );
+  });
+
+  it("REQ-Q49-2: an org member who is a unit technician can create on the five quality resources, and is refused every update, approval and close", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    const unitTechnician = await seedExtraMember({
+      orgId: org.orgId,
+      userId: "user-unit-technician-member",
+      role: "member",
+      unitId: org.unitId,
+      unitRole: "technician",
+    });
+    loginAs({ userId: unitTechnician.userId, organizationId: org.orgId });
+
+    expectAll(
+      await statusOf(probeApp(UNIT_CREATE), UNIT_CREATE),
+      UNIT_CREATE,
+      200,
+    );
+    const refused = [...TECHNICIAN_GRADE, ...ORGANIZATION_WIDE];
+    expectAll(await statusOf(probeApp(refused), refused), refused, 403);
+
+    // Still elevated on a unit-scoped resource: equipment is technician-grade.
+    const scoped: readonly Probe[] = [
+      { name: "equipment:create", permissions: { equipment: ["create"] } },
+    ];
+    expectAll(await statusOf(probeApp(scoped), scoped), scoped, 200);
+  });
+
   it("REQ-P011-3: an organization admin passes every probe", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "admin" });
     loginAs({ userId: org.userId, organizationId: org.orgId });
 
-    const all = [...ORGANIZATION_WIDE, ...UNIT_SCOPED];
+    const all = [
+      ...ORGANIZATION_WIDE,
+      ...TECHNICIAN_GRADE,
+      ...UNIT_CREATE,
+      ...UNIT_SCOPED,
+    ];
     expectAll(await statusOf(probeApp(all), all), all, 200);
   });
 

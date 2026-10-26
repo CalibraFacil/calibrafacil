@@ -300,11 +300,6 @@ export function hasPermissionLocally(
  *
  * A resource belongs here only while EVERY route that guards on it applies a
  * unit predicate (`buildUnitScopeCondition`, `resolveAccessibleUnitContext`).
- * `non_conformance`, `capa`, `competence`, `proficiency_test` and `spc` are
- * deliberately NOT here (architecture review P0-11): their rows are organization
- * wide, so mapping `unit_admin` to `admin` let a unit administrator approve NC
- * dispositions, verify and close CAPAs, and approve competences laboratory-wide.
- * They are authorised by the member's ORGANIZATION role alone.
  */
 const UNIT_SCOPED_RESOURCES = new Set([
   "calibration",
@@ -318,6 +313,39 @@ const UNIT_SCOPED_RESOURCES = new Set([
   "service_order",
 ]);
 
+/**
+ * `resource:action` pairs a unit role may elevate on a resource that is NOT unit
+ * scoped as a whole (architecture review P0-11, decision Q49).
+ *
+ * NC, CAPA, proficiency-test, SPC and competence rows are laboratory-wide and
+ * their routes carry no unit predicate, so a unit role must not raise the member
+ * on them: mapping `unit_admin` to `admin` let a unit administrator verify and
+ * close CAPAs, evaluate and approve competences, escalate NCs and close PTs
+ * across the laboratory. Only `create` is eligible: it adds a new record (a PT
+ * and an SPC chart resolve the caller's accessible unit for it; an SPC reading
+ * is bound to a standard of the caller's units) and touches no existing row.
+ * Every other action (update, implement, verify, close, evaluate, approve,
+ * dispositions, escalate, delete, record results, recalculate) follows the
+ * member's ORGANIZATION role alone.
+ */
+const UNIT_ELEVATED_ACTIONS = new Set([
+  "non_conformance:create",
+  "capa:create",
+  "proficiency_test:create",
+  "spc:create",
+  "competence:create",
+]);
+
+function isUnitElevationEligible(permissions: PermissionCheck): boolean {
+  return Object.entries(permissions).every(
+    ([resource, actions]) =>
+      UNIT_SCOPED_RESOURCES.has(resource) ||
+      (actions ?? []).every((action) =>
+        UNIT_ELEVATED_ACTIONS.has(`${resource}:${action}`),
+      ),
+  );
+}
+
 function getEffectivePermissionRole(
   member: Pick<MemberData, "role" | "unitRole">,
   permissions: PermissionCheck,
@@ -326,12 +354,7 @@ function getEffectivePermissionRole(
     return member.role;
   }
 
-  const resources = Object.keys(permissions);
-  const isUnitScopedOnly = resources.every((resource) =>
-    UNIT_SCOPED_RESOURCES.has(resource),
-  );
-
-  if (!isUnitScopedOnly) {
+  if (!isUnitElevationEligible(permissions)) {
     return member.role;
   }
 
