@@ -1082,6 +1082,8 @@ async function seedScopeGuardWorld(params: {
   point?: number;
   /** false = the unit has no accredited scope lines at all. */
   withScopeLines?: boolean;
+  /** Q52: a second row in the table with a point but no reported uncertainty. */
+  rowWithoutUncertainty?: boolean;
   /** Adds a second table whose point cannot be compared (-> partially evaluated). */
   unresolvableSecondTable?: boolean;
   /** false = the lab's accreditation toggle is off. */
@@ -1131,7 +1133,10 @@ async function seedScopeGuardWorld(params: {
     }),
     certificateName: `JOB-${params.tagSuffix}`,
     data: {
-      pontos_indicacao: [{ carga_nominal: params.point ?? 100 }],
+      pontos_indicacao: [
+        { carga_nominal: params.point ?? 100 },
+        ...(params.rowWithoutUncertainty ? [{ carga_nominal: 200 }] : []),
+      ],
       ...(params.unresolvableSecondTable
         ? { pontos_extra: [{ carga_nominal: 200 }] }
         : {}),
@@ -1406,6 +1411,34 @@ describe("jobsRouter — accreditation seal from the scope verdict (Q42)", () =>
       accredited: false,
       withheldReason: "scope_partially_evaluated",
       scopeEvaluation: { status: "PARTIALLY_EVALUATED" },
+    });
+  });
+
+  it("REQ-SEAL-008 [HIGH RISK] (Q52): a row with a measurement point but no uncertainty is 'sem incerteza', not a silent PASS: partially evaluated, no seal", async () => {
+    const world = await seedScopeGuardWorld({
+      orgId: "org-seal-nou",
+      userId: "user-seal-nou",
+      tagSuffix: "seal-nou",
+      enforcementMode: "warn",
+      reportedU: 0.02,
+      rowWithoutUncertainty: true,
+    });
+
+    const res = await approveAs("user-seal-nou", "org-seal-nou", world.jobId);
+
+    expect(res.status).toBe(200);
+    const [job] = await db
+      .select({
+        status: calibrationJob.scopeComplianceStatus,
+        findings: calibrationJob.scopeComplianceFindings,
+      })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, world.jobId));
+    expect(job?.status).toBe("PARTIALLY_EVALUATED");
+    expect(job?.findings?.[0]?.message).toContain("sem incerteza");
+    expect(await frozenSealOf(world.jobId)).toMatchObject({
+      accredited: false,
+      withheldReason: "scope_partially_evaluated",
     });
   });
 

@@ -420,7 +420,7 @@ export const ACCREDITATION_SEAL_WITHHELD_MESSAGES_PT: Readonly<
   scope_u_below_cmc:
     "A incerteza expandida reportada é menor que a CMC do escopo acreditado.",
   scope_partially_evaluated:
-    "Parte dos pontos não pôde ser comparada ao escopo acreditado (unidade incompatível com a CMC).",
+    "Parte dos pontos não pôde ser comparada ao escopo acreditado (unidade incompatível com a CMC ou ponto sem incerteza).",
   scope_not_evaluated: "Nenhum ponto pôde ser comparado ao escopo acreditado.",
   scope_no_scope_lines:
     "A unidade não tem linhas de escopo acreditado (CMC) cadastradas; o escopo não pôde ser verificado.",

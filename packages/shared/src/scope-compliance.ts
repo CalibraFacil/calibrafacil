@@ -125,8 +125,13 @@ export type ScopeEvaluationPoint = {
   /** Calibrated point (nominal/reference value), in `unit`. */
   value: number;
   unit: string;
-  /** Reported expanded uncertainty, in `uncertaintyUnit`, at `coverageFactor`. */
-  expandedUncertainty: number;
+  /**
+   * Reported expanded uncertainty, in `uncertaintyUnit`, at `coverageFactor`.
+   * Null (Q52): the row has a measurement point but no uncertainty; it cannot
+   * be compared and is surfaced as a `not_evaluated` finding ("sem incerteza"),
+   * never dropped.
+   */
+  expandedUncertainty: number | null;
   uncertaintyUnit: string;
   /** Coverage factor of the reported U; defaults to 2 when absent. */
   coverageFactor?: number | null;
@@ -267,6 +272,24 @@ export function evaluateScopeCompliance(input: {
       continue;
     }
 
+    // Q52: a point inside the scope whose row reports no uncertainty cannot be
+    // compared with the CMC. Counted and surfaced (the job is at most
+    // PARTIALLY_EVALUATED, so the seal is withheld), never silently dropped.
+    if (point.expandedUncertainty === null) {
+      findings.push({
+        kind: "not_evaluated",
+        pointValue: point.value,
+        pointUnit: point.unit,
+        reportedU: null,
+        cmcValue: null,
+        cmcUnit: null,
+        scopeLineId: null,
+        message: `Ponto ${point.value} ${point.unit} sem incerteza expandida reportada (sem incerteza): não pôde ser comparado ao escopo. Verifique manualmente.`,
+      });
+      continue;
+    }
+    const reportedExpandedUncertainty = point.expandedUncertainty;
+
     // Compare against every matching line; keep the most favorable (smallest
     // CMC) for the finding when none passes.
     let best: {
@@ -288,7 +311,7 @@ export function evaluateScopeCompliance(input: {
           : 2;
       const cmc = (cmcAtPoint(line, valueInRangeUnit) / lineK) * 2;
       const uInCmcUnit = convertUnitDelta(
-        point.expandedUncertainty,
+        reportedExpandedUncertainty,
         point.uncertaintyUnit,
         line.cmcUnit,
       );
@@ -513,15 +536,21 @@ export function extractScopeEvaluationPoints(input: {
       formula,
       values: numericSeries(results[formula.outputKey]),
     }))
-    .filter((entry) => entry.values.some((value) => value !== null))
     .sort(
       (a, b) =>
         suffixRank(a.formula.outputKey) - suffixRank(b.formula.outputKey),
     );
-  for (const entry of ranked) {
-    const tableKey = tableKeyOf(entry.formula);
-    if (!tableKey || seriesByTable.has(tableKey)) continue;
-    seriesByTable.set(tableKey, entry);
+  // A series that carries values wins; a table whose declared uncertainty
+  // formula produced NO value at all is still evaluated (Q52), so its points
+  // surface as "sem incerteza" instead of the table vanishing from the verdict.
+  for (const withValues of [true, false]) {
+    for (const entry of ranked) {
+      const hasValues = entry.values.some((value) => value !== null);
+      if (hasValues !== withValues) continue;
+      const tableKey = tableKeyOf(entry.formula);
+      if (!tableKey || seriesByTable.has(tableKey)) continue;
+      seriesByTable.set(tableKey, entry);
+    }
   }
 
   const points: ScopeEvaluationPoint[] = [];
@@ -606,14 +635,17 @@ function extractPointsForTable(params: {
   const kValues = kFormula ? numericSeries(results[kFormula.outputKey]) : [];
 
   const points: ScopeEvaluationPoint[] = [];
-  const count = Math.min(rows.length, chosen.values.length);
-  for (let i = 0; i < count; i += 1) {
+  // Every row with a measurement point is a point to evaluate (Q52): one whose
+  // uncertainty is missing (shorter or empty series, unparseable cell) is kept
+  // with `expandedUncertainty: null` and reported as not evaluated, not dropped.
+  // A row without a point value is not a measurement point and is skipped.
+  for (let i = 0; i < rows.length; i += 1) {
     const row = rows[i];
     if (typeof row !== "object" || row === null) continue;
     const record: Record<string, unknown> = { ...row };
     const value = parseNumericValue(record[pointColumnKey]);
-    const expandedUncertainty = chosen.values[i];
-    if (value == null || expandedUncertainty == null) continue;
+    if (value == null) continue;
+    const expandedUncertainty = chosen.values[i] ?? null;
     points.push({
       value,
       unit: pointUnit,

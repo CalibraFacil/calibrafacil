@@ -500,11 +500,22 @@ describe("extractScopeEvaluationPoints", () => {
     ]);
   });
 
-  it("returns [] when the method emits no expanded uncertainty", () => {
+  it("Q52: a declared expanded-uncertainty formula with no result keeps the points, without an uncertainty", () => {
     const points = extractScopeEvaluationPoints({
       data,
       results: { erro_indicacao_apos: [0.001, 0.002] },
       formulas,
+      dataFields,
+    });
+    expect(points.length).toBeGreaterThan(0);
+    expect(points.every((p) => p.expandedUncertainty === null)).toBe(true);
+  });
+
+  it("returns [] when the method declares no expanded-uncertainty formula at all", () => {
+    const points = extractScopeEvaluationPoints({
+      data,
+      results: { erro_indicacao_apos: [0.001, 0.002] },
+      formulas: [],
       dataFields,
     });
     expect(points).toEqual([]);
@@ -654,10 +665,106 @@ describe("extractScopeEvaluationPoints — sparse result series stay row-aligned
         },
       ],
     });
-    // Point 100 (null U) is skipped; 200↔0.02 and 500↔0.03 stay paired.
-    expect(points).toHaveLength(2);
-    expect(points[0]).toMatchObject({ value: 200, expandedUncertainty: 0.02 });
-    expect(points[1]).toMatchObject({ value: 500, expandedUncertainty: 0.03 });
+    // Q52: point 100 (null U) is KEPT with no uncertainty (reported as "sem
+    // incerteza", never dropped); 200↔0.02 and 500↔0.03 stay paired.
+    expect(points).toHaveLength(3);
+    expect(points[0]).toMatchObject({ value: 100, expandedUncertainty: null });
+    expect(points[1]).toMatchObject({ value: 200, expandedUncertainty: 0.02 });
+    expect(points[2]).toMatchObject({ value: 500, expandedUncertainty: 0.03 });
+  });
+});
+
+describe("Q52 — a point without an uncertainty is not evaluated, never dropped", () => {
+  const formulas = [
+    {
+      outputKey: "incerteza_expandida_apos",
+      unit: "g",
+      scope: { kind: "table_row", tableKey: "pontos_indicacao" },
+      reporting: {
+        role: "expanded_uncertainty",
+        group: "calibration_result",
+      },
+    },
+  ];
+  const dataFields = [
+    {
+      key: "pontos_indicacao",
+      type: "table",
+      columns: [{ key: "carga_nominal", type: "number", unit: "g" }],
+    },
+  ];
+
+  it("a row with a point and a shorter U series keeps the extra point with a null U", () => {
+    const points = extractScopeEvaluationPoints({
+      data: {
+        pontos_indicacao: [{ carga_nominal: 100 }, { carga_nominal: 200 }],
+      },
+      results: { incerteza_expandida_apos: [0.02] },
+      formulas,
+      dataFields,
+    });
+    expect(points.map((p) => p.expandedUncertainty)).toEqual([0.02, null]);
+  });
+
+  it("a row without a measurement point is still not a point", () => {
+    const points = extractScopeEvaluationPoints({
+      data: {
+        pontos_indicacao: [{ carga_nominal: "" }, { carga_nominal: 200 }],
+      },
+      results: { incerteza_expandida_apos: [0.02, 0.03] },
+      formulas,
+      dataFields,
+    });
+    expect(points).toHaveLength(1);
+    expect(points[0]).toMatchObject({ value: 200, expandedUncertainty: 0.03 });
+  });
+
+  it("a table whose declared U formula produced nothing is still evaluated", () => {
+    const points = extractScopeEvaluationPoints({
+      data: { pontos_indicacao: [{ carga_nominal: 100 }] },
+      results: { incerteza_expandida_apos: [null] },
+      formulas,
+      dataFields,
+    });
+    expect(points).toHaveLength(1);
+    expect(points[0]?.expandedUncertainty).toBeNull();
+  });
+
+  it("an in-scope point with no U is a not_evaluated finding ('sem incerteza'), so the job is at most PARTIALLY_EVALUATED", () => {
+    const result = evaluateScopeCompliance({
+      scopeLines: [massLine],
+      points: [
+        point({ expandedUncertainty: 0.02 }),
+        point({ value: 200, expandedUncertainty: null }),
+      ],
+      atDate: AT_DATE,
+    });
+    expect(result.status).toBe("PARTIALLY_EVALUATED");
+    expect(result.pointsEvaluated).toBe(1);
+    expect(result.pointsTotal).toBe(2);
+    const finding = result.findings.find((f) => f.kind === "not_evaluated");
+    expect(finding?.pointValue).toBe(200);
+    expect(finding?.message).toContain("sem incerteza");
+  });
+
+  it("only points without U make the job NOT_EVALUATED, never PASS", () => {
+    expect(
+      evaluateScopeCompliance({
+        scopeLines: [massLine],
+        points: [point({ expandedUncertainty: null })],
+        atDate: AT_DATE,
+      }).status,
+    ).toBe("NOT_EVALUATED");
+  });
+
+  it("an out-of-scope point is adverse whether or not it has a U (out of scope wins)", () => {
+    expect(
+      evaluateScopeCompliance({
+        scopeLines: [massLine],
+        points: [point({ value: 99999, expandedUncertainty: null })],
+        atDate: AT_DATE,
+      }).status,
+    ).toBe("OUT_OF_SCOPE");
   });
 });
 
