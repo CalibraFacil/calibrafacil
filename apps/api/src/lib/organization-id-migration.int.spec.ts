@@ -109,6 +109,12 @@ function revertToMain(): string {
   const later = CREATED_AFTER_0118.map(
     (table) => `DROP TABLE IF EXISTS ${table};`,
   );
+  // The audit hash chain (migration 0128) is newer than 0118 as well: its trigger
+  // reads NEW.organization_id, so it goes before the column does.
+  const chain = [
+    "DROP TRIGGER IF EXISTS job_audit_log_hash_chain ON job_audit_log;",
+    "ALTER TABLE job_audit_log DROP COLUMN IF EXISTS chain_seq, DROP COLUMN IF EXISTS prev_hash, DROP COLUMN IF EXISTS row_hash;",
+  ];
   const columns = ORGANIZATION_BACKFILL.map((entry) => entry.table)
     .toReversed()
     .map(
@@ -120,7 +126,7 @@ function revertToMain(): string {
         `ALTER TABLE ${table.name} DROP CONSTRAINT IF EXISTS ${unique.name};`,
     ),
   );
-  return [...later, ...columns, ...uniques].join("\n");
+  return [...later, ...chain, ...columns, ...uniques].join("\n");
 }
 
 function tableList(): string {

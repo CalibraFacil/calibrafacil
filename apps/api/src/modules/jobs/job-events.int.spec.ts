@@ -73,7 +73,7 @@ async function seedWorld(status: JobStatus) {
   return { jobId, technician };
 }
 
-/** The stored row, without its generated id and clock. */
+/** The stored row, without its generated id and clock and the hash-chain columns (migration 0128; audit-chain.int.spec.ts covers those). */
 async function storedRows(jobId: number) {
   const rows = await db
     .select()
@@ -82,7 +82,16 @@ async function storedRows(jobId: number) {
       and(eq(jobAuditLog.jobId, jobId), eq(jobAuditLog.organizationId, ORG)),
     )
     .orderBy(jobAuditLog.id);
-  return rows.map(({ id: _id, performedAt: _performedAt, ...row }) => row);
+  return rows.map(
+    ({
+      id: _id,
+      performedAt: _performedAt,
+      chainSeq: _chainSeq,
+      prevHash: _prevHash,
+      rowHash: _rowHash,
+      ...row
+    }) => row,
+  );
 }
 
 const base = { unitScope: null, organizationId: ORG } as const;
