@@ -1286,7 +1286,6 @@ describe("calibra_app cannot rewrite or delete evidence (migration 0130)", () =>
         `DELETE FROM public."${table}" WHERE false`,
         `TRUNCATE public."${table}"`,
       ]) {
-        // oxlint-disable-next-line eslint/no-await-in-loop -- sequential on purpose: one connection
         const state = await sqlStateOf(
           asAppWithHatches(app, fixture.orgId, (tx) =>
             tx.execute(sql.raw(statement)),

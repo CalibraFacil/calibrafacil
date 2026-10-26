@@ -911,6 +911,13 @@
       "when": 1793200000000,
       "tag": "0130_evidence_privileges_owner_hatch",
       "breakpoints": true
+    },
+    {
+      "idx": 131,
+      "version": "7",
+      "when": 1793300000000,
+      "tag": "0131_audit_hash_chain",
+      "breakpoints": true
     }
   ]
 }

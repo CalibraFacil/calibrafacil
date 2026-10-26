@@ -483,6 +483,7 @@ Or trigger them with your scheduler of choice:
 | `auth-maintenance`           | `30 4 * * 1`   |
 | `records-purge`              | `0 5 * * 0`    |
 | `sync-change-log-purge`      | `15 4 * * *`   |
+| `audit-chain-verify`         | `45 4 * * *`   |
 
 `approval-effects-reconcile` (ISO/IEC 17025 7.10) repairs what an approval can still be missing: the
 asset out-of-tolerance event, the asset calibration-date advance and the customer alert. New
@@ -706,6 +707,25 @@ Migration `0130_evidence_privileges_owner_hatch` (roadmap 2, B1) makes that a pr
   connection only: the records purge (`records-purge.ts`, `removeLabOrganization`), the demo seed, an
   operator's audited repair in `psql` as the owner, and the test harness. A deployment whose `DATABASE_URL` is
   the owner (`DATABASE_RLS_MODE=shadow`) has no protection: use the role split.
+
+- **Hash chain (migration 0131).** `job_audit_log` carries a per-organization hash chain: `chain_seq`,
+  `prev_hash` and `row_hash = sha256(prev_hash || canonical row)`, assigned by a `BEFORE INSERT` trigger that
+  takes `pg_advisory_xact_lock(hashtextextended('job_audit_log:<organization>', 7041))` to the end of the
+  transaction, so concurrent writers of one laboratory are serialised and cannot fork it (a unique index on
+  `(organization_id, chain_seq)` refuses a fork even under REPEATABLE READ). Cost: transactions that write an
+  audit row for the same laboratory run one after the other from that insert on; write the audit row last in a
+  transaction (a row lock taken after it, against another transaction that takes it before, is a deadlock that
+  Postgres detects and aborts). The migration chains the existing rows per organization in id order. The
+  **`audit-chain-verify` cron** (daily, 04:45 UTC) recomputes every laboratory's chain, records a checkpoint of
+  each intact head in `platform_event_log` (`audit.chain.verified`; this is the hook for an external timestamp,
+  roadmap 2 B4) and, on a break (`row_hash_mismatch`, `prev_hash_mismatch`, `sequence_gap`, `unchained_row`,
+  or `checkpoint_missing` / `checkpoint_mismatch` for a deleted or replaced tail), writes `audit.chain.broken`
+  to `platform_event_log`, `audit.chain_broken` to the laboratory's event log and notifies its admins, once per
+  distinct break; the run itself fails until a human resolves it. On demand:
+  `pnpm --dir apps/api verify-audit-chain [--org <organization id> | --slug <slug>] [--record]` (read-only
+  unless `--record`; exit code 1 on a break). Nothing is repaired automatically. The demo seed re-seals the
+  chain after back-dating (`calibra_audit_chain_backfill(..., p_rebuild => true)`, owner only); do not use it on
+  real data except as a deliberate, documented repair.
 
 **Applying it.** The migration is idempotent and sets a 5 s lock timeout. Existing rows are untouched. After
 it, a statement that the application should never issue (an `UPDATE` of an audit row) fails with

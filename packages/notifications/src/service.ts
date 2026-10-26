@@ -238,6 +238,7 @@ const DEFAULT_PREFERENCES: NotificationPreferenceMap = {
   STANDARD_EXPIRED: { inApp: true, email: true },
   SIGNING_CERTIFICATE_EXPIRING: { inApp: true, email: true },
   SIGNING_CERTIFICATE_LAPSED: { inApp: true, email: true },
+  AUDIT_CHAIN_BROKEN: { inApp: true, email: true },
   JOB_OVERDUE: { inApp: true, email: true },
   NC_CREATED: { inApp: true, email: true },
   NC_ESCALATED_TO_CAPA: { inApp: true, email: true },
@@ -2787,6 +2788,57 @@ export async function notifySigningCertificateExpiring(
           daysRemaining,
         },
       },
+    });
+  }
+}
+
+/** What the audit-chain verifier found, in words a laboratory admin can act on. */
+const AUDIT_CHAIN_BREAK_LABEL: Record<string, string> = {
+  row_hash_mismatch: "um registro foi alterado depois de gravado",
+  prev_hash_mismatch: "o encadeamento entre dois registros não confere",
+  sequence_gap: "há um registro removido da sequência",
+  unchained_row: "há um registro que nunca foi encadeado",
+  checkpoint_missing:
+    "registros verificados anteriormente foram removidos do fim da trilha",
+  checkpoint_mismatch:
+    "um registro verificado anteriormente foi alterado ou substituído",
+};
+
+/**
+ * Alert a lab's admins/owners that the verification of the audit-trail hash chain
+ * found a break (roadmap 2 B1): a record of the calibration audit trail was
+ * edited, removed or inserted outside the application (ISO/IEC 17025 8.4 control of
+ * records). Nothing is repaired automatically; the evidence is preserved as found.
+ */
+export async function notifyAuditChainBroken(
+  organizationId: string,
+  context: {
+    table: string;
+    kind: string;
+    chainSeq: number | null;
+    rowId: number | null;
+  },
+): Promise<void> {
+  const recipients = await getRecipientsByRole(organizationId, [
+    "admin",
+    "owner",
+  ]);
+  const what = AUDIT_CHAIN_BREAK_LABEL[context.kind] ?? "a trilha não confere";
+  const where =
+    context.chainSeq !== null
+      ? ` (posição ${context.chainSeq}${context.rowId !== null ? `, registro ${context.rowId}` : ""})`
+      : context.rowId !== null
+        ? ` (registro ${context.rowId})`
+        : "";
+
+  for (const recipientId of recipients) {
+    await sendNotification({
+      recipientUserId: recipientId,
+      organizationId,
+      type: "AUDIT_CHAIN_BROKEN",
+      priority: "HIGH",
+      title: "Trilha de auditoria com inconsistência",
+      message: `A verificação da trilha de auditoria de calibrações (${context.table}) encontrou uma inconsistência: ${what}${where}. Os registros foram preservados como estão. Contate o suporte e preserve o banco de dados e os backups para a investigação.`,
     });
   }
 }

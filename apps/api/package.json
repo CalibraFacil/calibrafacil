@@ -14,6 +14,7 @@
     "init": "bun src/cli/init.ts",
     "create-lab": "bun src/cli/create-lab.ts",
     "soft-delete-lab": "bun src/cli/soft-delete-lab.ts",
+    "verify-audit-chain": "bun src/cli/verify-audit-chain.ts",
     "seed:demo": "bun src/cli/seed-demo.ts",
     "test": "vitest",
     "test:run": "vitest run",

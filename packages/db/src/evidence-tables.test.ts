@@ -136,7 +136,7 @@ describe("evidence grants SQL, generated from evidence-tables.ts", () => {
     expect(begin).toBeGreaterThan(extras.indexOf(RLS_ROLE_SQL));
   });
 
-  it("REQ-EVID-2: the migration carries exactly the block, and is journaled after 0126 with a larger timestamp", () => {
+  it("REQ-EVID-2: the migration carries exactly the block, and is journaled after 0129 with a larger timestamp", () => {
     const migration = read(`../drizzle/${GRANTS_MIGRATION}`);
     const begin = migration.indexOf(EVIDENCE_GRANTS_BEGIN);
     const end = migration.indexOf(EVIDENCE_GRANTS_END, begin);
@@ -194,10 +194,17 @@ describe("escape hatch is gated on role (migration 0130)", () => {
   it("REQ-EVID-3: no GUC alone lifts a guard in any function the application role can reach", () => {
     const extras = read("../sql/schema-extras.sql");
     // Every place that reads one of the hatch settings goes through the owner check.
+    // (The owner-only audit-chain backfill saves the previous value of the setting
+    // to put it back; it reads it into `v_was` and gates itself on the owner.)
     const uses = Array.from(
       extras.matchAll(
         /current_setting\('calibra\.allow_(audit_rewrite|status_repair|org_purge)'/g,
       ),
+    ).filter(
+      (use) =>
+        !extras
+          .slice(Math.max(0, (use.index ?? 0) - 40), use.index)
+          .includes("v_was text :="),
     );
     expect(uses).toHaveLength(3);
     for (const use of uses) {
