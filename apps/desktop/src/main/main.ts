@@ -85,6 +85,7 @@ import {
   installNavigationGuards,
 } from "./navigation-guards";
 import { isTrustedUrl, resolveTrustedOrigins } from "./trusted-origins";
+import { installPermissionPolicy } from "./permissions";
 import { installUnloadConfirmation } from "./unload-confirmation";
 import { getDesktopLogFilePath, installDesktopLogger } from "./desktop-log";
 
@@ -1451,6 +1452,9 @@ function focusMainWindow() {
 
 app.whenReady().then(async () => {
   installDesktopLogger();
+  // Deny-by-default before any window exists, so no page is ever granted a
+  // permission by Electron's allow-all fallback.
+  installPermissionPolicy(electronSession.defaultSession, trustedOrigins);
   registerDeepLinkScheme();
   // Electron: on Linux the badge is bound to the app's .desktop file, and does
   // nothing at all unless the name matches. `executableName` in
