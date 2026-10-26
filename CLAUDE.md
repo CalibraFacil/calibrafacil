@@ -67,7 +67,9 @@ write new migrations by hand (`packages/db/drizzle/NNNN_name.sql`) and append th
 to `drizzle/meta/_journal.json`. New databases are built from `src/schema.ts` (the historical
 chain is not replayable from scratch), so a migration that adds something schema.ts cannot
 express — an extension, function, partial/expression index or CHECK constraint — must also be
-added to `packages/db/sql/schema-extras.sql`.
+added to `packages/db/sql/schema-extras.sql`. Each journal entry's `when` must be strictly larger than every entry before it
+and its `idx` must continue the sequence (`packages/db/src/migration-journal.test.ts` enforces it; renumber yours when rebasing
+over another migration).
 
 ## Tooling notes (non-obvious)
 
