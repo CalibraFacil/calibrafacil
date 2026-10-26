@@ -55,12 +55,14 @@ const FIELD: MethodInputField = {
 function Harness({
   options = DEFAULT_OPTIONS,
   onChange,
+  initialValue = null,
 }: {
   options?: StandardCertifiedValueOption[]
   onChange?: (rows: Array<Record<string, unknown>>) => void
+  initialValue?: number | null
 }) {
   const [rows, setRows] = useState<Array<Record<string, unknown>>>([
-    { ponto: '100 N', valor_padrao: null },
+    { ponto: '100 N', valor_padrao: initialValue },
   ])
   return (
     <TableInputRenderer
@@ -104,6 +106,24 @@ describe('TableInputRenderer standard_value branch', () => {
       k_referencia: 2.1,
       deriva: 0.01,
     })
+  })
+
+  it('does not re-commit the stored value when focus and blur happen without typing', () => {
+    const calls: Array<Array<Record<string, unknown>>> = []
+    render(
+      <Harness
+        options={[]}
+        initialValue={100.123456789012}
+        onChange={(rows) => calls.push(rows)}
+      />,
+    )
+
+    const input = screen.getAllByRole('textbox')[1]
+    // The field shows 12 significant digits; the stored value has more.
+    expect(input).toHaveProperty('value', '100.123456789')
+    fireEvent.focus(input)
+    fireEvent.blur(input)
+    expect(calls).toEqual([])
   })
 
   it('keeps the column manually editable as a fallback', () => {

@@ -55,6 +55,10 @@ export function StandardValueCell({
 }: StandardValueCellProps) {
   const [focused, setFocused] = useState(false)
   const [draft, setDraft] = useState('')
+  // The text the field showed when it took focus. Blur commits only when the
+  // draft moved off it: the shown text is rounded/converted, so committing it
+  // unedited would overwrite the stored canonical value with a lossy copy.
+  const [focusSeed, setFocusSeed] = useState('')
   const [open, setOpen] = useState(false)
 
   const conversionActive =
@@ -98,6 +102,7 @@ export function StandardValueCell({
 
   const handleBlur = () => {
     setFocused(false)
+    if (draft === focusSeed) return
     const normalized = draft.replace(',', '.')
     if (normalized === '' || normalized === '-' || normalized === '.') {
       onCommit(null)
@@ -120,7 +125,9 @@ export function StandardValueCell({
       inputMode="decimal"
       value={inputValue}
       onFocus={() => {
-        setDraft(formatForDisplay(canonicalValue))
+        const seed = formatForDisplay(canonicalValue)
+        setDraft(seed)
+        setFocusSeed(seed)
         setFocused(true)
       }}
       onChange={(event) => handleChange(event.target.value)}
