@@ -29,7 +29,9 @@ import { createHmac } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@calibra-facil/db";
+import { processBackgroundJob } from "@calibra-facil/jobs-core";
 import {
+  appQueueJob,
   asset,
   assetAuditLog,
   calibrationRequest,
@@ -39,8 +41,15 @@ import {
   organizationApiKey,
   publicApiResourceRef,
   publicApiWebhookDelivery,
+  publicApiWebhookSubscription,
 } from "@calibra-facil/db/schema";
+import { parseBackgroundJobMessage } from "@calibra-facil/schemas";
+import { routeOutboundThroughGlobalFetch } from "@calibra-facil/shared/outbound-testing";
 import { ALL_PUBLIC_API_SCOPES } from "../lib/api-keys";
+import {
+  stagePublicApiWebhookEvent,
+  withPublicApiWebhookTransaction,
+} from "../lib/public-api-webhooks";
 import { truncateAll } from "../../test/integration/db";
 import {
   seedApprovedJob,
@@ -105,6 +114,40 @@ function listOf(body: unknown): Array<Record<string, unknown>> {
   const data: unknown = Reflect.get(Object(body), "data");
   if (!Array.isArray(data)) throw new Error("response has no data list");
   return data.map((row) => Object.fromEntries(Object.entries(Object(row))));
+}
+
+/**
+ * Plays the worker: runs every WEBHOOK_DELIVERY job waiting in `app_queue_job`
+ * through the real handler and settles the row. Returns how many it ran.
+ */
+async function drainWebhookQueue() {
+  const rows = await db
+    .select()
+    .from(appQueueJob)
+    .where(eq(appQueueJob.status, "PENDING"));
+  const env = {
+    DATABASE_URL: process.env.DATABASE_URL ?? "",
+    DATABASE_OWNER_URL: process.env.DATABASE_OWNER_URL,
+    PUBLIC_API_MASTER_KEY: ENV.PUBLIC_API_MASTER_KEY,
+    CERTIFICATES_BUCKET: { get: async () => null, put: async () => {} },
+    MEDIA_BUCKET: { get: async () => null, put: async () => {} },
+  };
+  for (const row of rows) {
+    expect(row.type).toBe("WEBHOOK_DELIVERY");
+    const parsed = parseBackgroundJobMessage(row.payload);
+    if (!parsed.ok) throw new Error(parsed.reason);
+    // oxlint-disable-next-line eslint/no-await-in-loop -- the queue runs its jobs one after the other.
+    await processBackgroundJob(env, parsed.message, {
+      attempt: row.attempts + 1,
+      maxAttempts: row.maxAttempts,
+    });
+    // oxlint-disable-next-line eslint/no-await-in-loop -- settles the row just run.
+    await db
+      .update(appQueueJob)
+      .set({ status: "COMPLETED" })
+      .where(eq(appQueueJob.id, row.id));
+  }
+  return rows.length;
 }
 
 type World = {
@@ -174,6 +217,7 @@ describe("public API: laboratory scope of the key (P2-18h)", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   it("REQ-18H-PAPI-1: v2 and v1 reads return only the key's laboratory, by list and by id", async () => {
@@ -518,6 +562,9 @@ describe("public API: laboratory scope of the key (P2-18h)", () => {
     const w = await seedWorld();
     const fetchMock = vi.fn(async () => new Response("ok", { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
+    // Deliveries are queued for the worker; the subscriber is the stubbed fetch.
+    vi.stubEnv("BACKGROUND_JOBS_MODE", "queue");
+    const restoreOutbound = routeOutboundThroughGlobalFetch();
 
     const subscribe = async (key: string, url: string, idem: string) => {
       const response = await send(
@@ -548,6 +595,9 @@ describe("public API: laboratory scope of the key (P2-18h)", () => {
     expect((await createRequest(w.keyB, w.b, "b-request-hook")).status).toBe(
       201,
     );
+    // Queued with the request, not sent inside it.
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await drainWebhookQueue()).toBe(1);
     expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual([
       "https://erp-b.example.com/hook",
     ]);
@@ -557,6 +607,8 @@ describe("public API: laboratory scope of the key (P2-18h)", () => {
     expect((await createRequest(w.keyA, w.a, "a-request-hook")).status).toBe(
       201,
     );
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await drainWebhookQueue()).toBe(1);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0] ?? [];
     expect(String(url)).toBe("https://erp-a.example.com/hook");
@@ -643,9 +695,262 @@ describe("public API: laboratory scope of the key (P2-18h)", () => {
       `/webhooks/${hookA.id}/deliveries/${deliveryId}/replay`,
     );
     expect(replay.status).toBe(200);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await drainWebhookQueue()).toBe(1);
     expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual([
       "https://erp-a.example.com/hook",
     ]);
+    restoreOutbound();
+  });
+
+  it("REQ-A8-WH-1: a webhook cannot be pointed at a private address, and the deliveries endpoint returns only a short snippet of the subscriber's answer", async () => {
+    const w = await seedWorld();
+    for (const targetUrl of [
+      "https://10.0.0.5/hook",
+      "https://169.254.169.254/latest/meta-data",
+      "https://[::1]/hook",
+      "https://localhost/hook",
+      "https://user:pass@erp.example.com/hook",
+      "ftp://erp.example.com/hook",
+    ]) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- independent refusals, order is irrelevant.
+      const response = await send(
+        w.keyA,
+        "POST",
+        "/webhooks",
+        { name: "Integração ERP", targetUrl, events: ["request.created"] },
+        `refused-${targetUrl}`,
+      );
+      expect(response.status, targetUrl).toBeGreaterThanOrEqual(400);
+      expect(response.status, targetUrl).toBeLessThan(500);
+    }
+    expect(
+      listOf(await jsonOf(await send(w.keyA, "GET", "/webhooks"))),
+    ).toEqual([]);
+
+    const created = await send(
+      w.keyA,
+      "POST",
+      "/webhooks",
+      {
+        name: "Integração ERP",
+        targetUrl: "https://erp-a.example.com/hook",
+        events: ["request.created"],
+      },
+      "ok-hook",
+    );
+    expect(created.status).toBe(201);
+    const hook = dataOf(await jsonOf(created));
+    await db.insert(publicApiWebhookDelivery).values({
+      id: "legacy-delivery",
+      subscriptionId: String(hook.id),
+      organizationId: w.a.orgId,
+      eventId: "evt",
+      eventType: "request.created",
+      requestUrl: "https://erp-a.example.com/hook",
+      requestBody: {},
+      responseBody: "x".repeat(5000),
+    });
+    const [delivery] = listOf(
+      await jsonOf(
+        await send(w.keyA, "GET", `/webhooks/${hook.id}/deliveries`),
+      ),
+    );
+    expect(String(delivery?.responseBody)).toHaveLength(512);
+  });
+
+  async function subscribe(
+    key: string,
+    name: string,
+    url: string,
+    events: string[],
+  ) {
+    const response = await send(
+      key,
+      "POST",
+      "/webhooks",
+      { name, targetUrl: url, events },
+      `hook-${name}`,
+    );
+    expect(response.status).toBe(201);
+    return String(dataOf(await jsonOf(response)).id);
+  }
+
+  it("REQ-A8-WH-2: switching a disabled subscription back to ACTIVE clears why it was disabled and its failure streak", async () => {
+    const w = await seedWorld();
+    const id = await subscribe(
+      w.keyA,
+      "Integração ERP",
+      "https://erp-a.example.com/hook",
+      ["request.created"],
+    );
+    await db
+      .update(publicApiWebhookSubscription)
+      .set({
+        status: "INACTIVE",
+        disabledAt: new Date(),
+        disabledReason: "consecutive_failures",
+        consecutiveFailures: 10,
+      })
+      .where(eq(publicApiWebhookSubscription.id, id));
+
+    const listed = listOf(await jsonOf(await send(w.keyA, "GET", "/webhooks")));
+    expect(listed[0]).toMatchObject({
+      status: "INACTIVE",
+      disabledReason: "consecutive_failures",
+      consecutiveFailures: 10,
+    });
+    expect(listed[0]?.disabledAt).not.toBeNull();
+
+    const patched = await send(w.keyA, "PATCH", `/webhooks/${id}`, {
+      status: "ACTIVE",
+    });
+    expect(patched.status).toBe(200);
+    expect(dataOf(await jsonOf(patched))).toMatchObject({
+      status: "ACTIVE",
+      disabledAt: null,
+      disabledReason: null,
+      consecutiveFailures: 0,
+    });
+    const [row] = await db
+      .select()
+      .from(publicApiWebhookSubscription)
+      .where(eq(publicApiWebhookSubscription.id, id));
+    expect(row).toMatchObject({
+      status: "ACTIVE",
+      disabledAt: null,
+      disabledReason: null,
+      consecutiveFailures: 0,
+    });
+
+    // Another edit of an active subscription leaves the counters alone.
+    await db
+      .update(publicApiWebhookSubscription)
+      .set({ consecutiveFailures: 4 })
+      .where(eq(publicApiWebhookSubscription.id, id));
+    expect(
+      (await send(w.keyA, "PATCH", `/webhooks/${id}`, { name: "Renomeado" }))
+        .status,
+    ).toBe(200);
+    const [after] = await db
+      .select()
+      .from(publicApiWebhookSubscription)
+      .where(eq(publicApiWebhookSubscription.id, id));
+    expect(after?.consecutiveFailures).toBe(4);
+  });
+
+  it("REQ-A8-WH-3: a delivery can only be replayed to the subscription it belongs to, even within one laboratory", async () => {
+    const w = await seedWorld();
+    vi.stubEnv("BACKGROUND_JOBS_MODE", "queue");
+    const fetchMock = vi.fn(async () => new Response("ok", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const restoreOutbound = routeOutboundThroughGlobalFetch();
+    try {
+      const first = await subscribe(
+        w.keyA,
+        "Primeiro",
+        "https://erp-one.example.com/hook",
+        ["request.created"],
+      );
+      const second = await subscribe(
+        w.keyA,
+        "Segundo",
+        "https://erp-two.example.com/hook",
+        ["customer.created"],
+      );
+      expect((await createRequest(w.keyA, w.a, "wh3-request")).status).toBe(
+        201,
+      );
+      expect(await drainWebhookQueue()).toBe(1);
+      fetchMock.mockClear();
+
+      const [delivery] = listOf(
+        await jsonOf(
+          await send(w.keyA, "GET", `/webhooks/${first}/deliveries`),
+        ),
+      );
+      const deliveryId = String(delivery?.id);
+      const rowsBefore = await db.select().from(publicApiWebhookDelivery);
+      const queueBefore = await db.select().from(appQueueJob);
+
+      // The second subscription of the SAME laboratory cannot replay it.
+      const crossed = await send(
+        w.keyA,
+        "POST",
+        `/webhooks/${second}/deliveries/${deliveryId}/replay`,
+      );
+      expect(crossed.status).toBe(404);
+      expect(await db.select().from(publicApiWebhookDelivery)).toHaveLength(
+        rowsBefore.length,
+      );
+      expect(await db.select().from(appQueueJob)).toHaveLength(
+        queueBefore.length,
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      // Its own subscription can.
+      const own = await send(
+        w.keyA,
+        "POST",
+        `/webhooks/${first}/deliveries/${deliveryId}/replay`,
+      );
+      expect(own.status).toBe(200);
+      expect(await drainWebhookQueue()).toBe(1);
+      expect(fetchMock.mock.calls.map((call) => String(call[0]))).toEqual([
+        "https://erp-one.example.com/hook",
+      ]);
+    } finally {
+      restoreOutbound();
+    }
+  });
+
+  it("REQ-A8-WH-4: an event raised in a rolled-back transaction stages nothing; a committed one stages its delivery row and its queue row together", async () => {
+    const w = await seedWorld();
+    vi.stubEnv("BACKGROUND_JOBS_MODE", "queue");
+    const id = await subscribe(
+      w.keyA,
+      "Integração ERP",
+      "https://erp-a.example.com/hook",
+      ["customer.created"],
+    );
+    const event = {
+      organizationId: w.a.orgId,
+      eventType: "customer.created" as const,
+      payload: { id: 1 },
+    };
+
+    await expect(
+      withPublicApiWebhookTransaction(w.a.orgId, async (_o, webhooks) => {
+        await stagePublicApiWebhookEvent(webhooks, event);
+        // Staged inside the transaction, then the mutation fails.
+        throw new Error("the mutation failed");
+      }),
+    ).rejects.toThrow("the mutation failed");
+    expect(await db.select().from(publicApiWebhookDelivery)).toHaveLength(0);
+    expect(await db.select().from(appQueueJob)).toHaveLength(0);
+
+    await withPublicApiWebhookTransaction(w.a.orgId, (_o, webhooks) =>
+      stagePublicApiWebhookEvent(webhooks, event),
+    );
+    const deliveries = await db.select().from(publicApiWebhookDelivery);
+    const queued = await db.select().from(appQueueJob);
+    expect(deliveries).toHaveLength(1);
+    expect(deliveries[0]).toMatchObject({
+      subscriptionId: id,
+      status: "PENDING",
+      organizationId: w.a.orgId,
+    });
+    expect(queued).toHaveLength(1);
+    expect(queued[0]).toMatchObject({
+      type: "WEBHOOK_DELIVERY",
+      status: "PENDING",
+      maxAttempts: 5,
+      payload: {
+        type: "WEBHOOK_DELIVERY",
+        deliveryId: deliveries[0]?.id,
+        organizationId: w.a.orgId,
+      },
+    });
   });
 
   it("REQ-18H-PAPI-6: a request touches the last-use stamp of its own key only", async () => {

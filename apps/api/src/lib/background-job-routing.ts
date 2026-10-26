@@ -41,6 +41,7 @@ export function resolveQueueJobType(message: BackgroundJobMessage): string {
     case "OOT_NOTIFICATION":
     case "SCHEDULED_NOTIFICATIONS":
     case "PORTAL_DIGEST":
+    case "WEBHOOK_DELIVERY":
       return message.type;
     default:
       return "CERTIFICATE";

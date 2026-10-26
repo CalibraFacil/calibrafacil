@@ -110,6 +110,18 @@ export const IntegrationSyncJobMessageSchema = z.object({
 });
 
 /**
+ * One delivery of a public-API webhook event to a subscriber. Everything the
+ * call needs lives on the `public_api_webhook_delivery` row (and its
+ * subscription); the message points at it. The laboratory is named so the
+ * handler can bind its transaction to it (row-level security).
+ */
+export const WebhookDeliveryJobMessageSchema = z.object({
+  type: z.literal("WEBHOOK_DELIVERY"),
+  deliveryId: z.string(),
+  organizationId: z.string(),
+});
+
+/**
  * Portal audit pack (issue #738): bulk export of released certificates +
  * fleet-status report requested by a portal user. All request parameters live
  * on the `portal_export_job` row; the message only points at it.
@@ -160,6 +172,7 @@ export const QueueMessageSchema = z.discriminatedUnion("type", [
   OotNotificationJobMessageSchema,
   IntegrationSyncJobMessageSchema,
   AuditPackJobMessageSchema,
+  WebhookDeliveryJobMessageSchema,
   SpcRecomputeJobMessageSchema,
   EmailDomainHealthJobMessageSchema,
 ]);
@@ -184,6 +197,9 @@ export type IntegrationSyncBackgroundJobMessage = z.infer<
 >;
 export type AuditPackBackgroundJobMessage = z.infer<
   typeof AuditPackJobMessageSchema
+>;
+export type WebhookDeliveryBackgroundJobMessage = z.infer<
+  typeof WebhookDeliveryJobMessageSchema
 >;
 export type QueueMessage = z.infer<typeof QueueMessageSchema>;
 export type BackgroundJobMessage = z.infer<typeof BackgroundJobMessageSchema>;

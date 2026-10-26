@@ -7,13 +7,13 @@ Webhooks notificam sistemas externos sobre eventos operacionais sem necessidade 
 
 ## Eventos disponíveis
 
-| Categoria | Evento |
-| :--- | :--- |
-| Cliente | `customer.created`, `customer.updated`, `customer.deleted` |
-| Ativo | `asset.created`, `asset.updated`, `asset.deleted` |
-| Solicitação | `request.created`, `request.updated`, `request.submitted`, `request.canceled` |
+| Categoria           | Evento                                                                                |
+| :------------------ | :------------------------------------------------------------------------------------ |
+| Cliente             | `customer.created`, `customer.updated`, `customer.deleted`                            |
+| Ativo               | `asset.created`, `asset.updated`, `asset.deleted`                                     |
+| Solicitação         | `request.created`, `request.updated`, `request.submitted`, `request.canceled`         |
 | Ordem de calibração | `job.created`, `job.updated`, `job.results_submitted`, `job.approved`, `job.canceled` |
-| Certificado | `certificate.available` |
+| Certificado         | `certificate.available`                                                               |
 
 A subscrição é seletiva: ao criar um webhook, escolha apenas os eventos que interessam.
 
@@ -21,7 +21,7 @@ A subscrição é seletiva: ao criar um webhook, escolha apenas os eventos que i
 
 Em **Configurações → Integrações** (`/dashboard/settings/integrations`) ou via API com escopo `webhooks:manage`:
 
-1. Informe o **endpoint** (URL HTTPS pública).
+1. Informe o **endpoint** (URL HTTPS pública). Endereços privados, de loopback ou link-local (por exemplo `10.x.x.x`, `192.168.x.x`, `169.254.x.x`) são recusados, e o endereço é verificado novamente a cada entrega.
 2. Selecione os **eventos** desejados.
 3. Defina (opcionalmente) um **segredo compartilhado** para validação HMAC. Se omitido, o sistema gera um.
 4. Ative o webhook.
@@ -66,13 +66,14 @@ Falhas de validação devem retornar `401` — o sistema interpretará como entr
 
 ## Retries automáticos
 
-Entregas com resposta diferente de `2xx` são retentadas:
+As entregas são enfileiradas junto com a alteração que gerou o evento (uma alteração desfeita não envia nada) e enviadas por um worker. Entregas com resposta diferente de `2xx`, erro de conexão ou tempo esgotado (10 s) são retentadas:
 
-- backoff exponencial com jitter;
-- até **10 tentativas** ao longo de até 24 horas;
-- após esgotamento, a entrega é marcada como falhada e o webhook é sinalizado.
+- backoff exponencial: 30 s, 2 min, 8 min e 32 min entre as tentativas;
+- até **5 tentativas** por entrega; cada tentativa fica registrada em `attempts`;
+- redirecionamentos não são seguidos (um `3xx` conta como falha);
+- após esgotar as tentativas, a entrega é marcada como `FAILED`.
 
-Webhooks com falhas consecutivas em série (`consecutiveFailures` alto) podem ser automaticamente desativados — fique atento ao painel de saúde do webhook.
+Após **10 entregas consecutivas** esgotadas, a subscription é desativada automaticamente (`status: INACTIVE`, com `disabledAt` e `disabledReason: consecutive_failures`). Reative-a com `PATCH` (`status: ACTIVE`) depois de corrigir o endpoint.
 
 ## Replay manual
 
@@ -96,8 +97,9 @@ ou o botão **Reenviar** na tela de entregas do painel. O sistema:
 - evento
 - status (`PENDING`, `SUCCESS`, `FAILED`)
 - HTTP status retornado pelo endpoint
-- duração da requisição
-- timestamp da tentativa
+- um trecho (até 512 bytes) da resposta do endpoint, nunca o corpo completo
+- `attempts`: cada tentativa, com horário, duração, status e erro
+- `nextAttemptAt`: quando a próxima tentativa está prevista
 - `consecutiveFailures` corrente do webhook
 
 Use para auditoria ou para reconciliação retroativa.
@@ -110,5 +112,7 @@ Use para auditoria ou para reconciliação retroativa.
 - **Logue tudo.** Mantenha o `X-Calibra-Delivery` no seu próprio log para correlação cruzada com a tela de entregas.
 
 <Aside type="note">
-  Webhooks **não substituem** consistência forte. Não dependa exclusivamente deles para invariantes críticas (ex.: cobrança). Para essas, complemente com consulta direta à API após o evento.
+  Webhooks **não substituem** consistência forte. Não dependa exclusivamente
+  deles para invariantes críticas (ex.: cobrança). Para essas, complemente com
+  consulta direta à API após o evento.
 </Aside>

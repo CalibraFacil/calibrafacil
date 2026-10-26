@@ -68,6 +68,12 @@ const PRODUCER_FIXTURES = {
     notificationId: 11,
     userId: "user_1",
   },
+  // apps/api/src/lib/public-api-webhooks.ts (staged with the event's transaction)
+  "public API webhook delivery": {
+    type: "WEBHOOK_DELIVERY",
+    deliveryId: "5c2f2c1e-0000-4000-8000-000000000001",
+    organizationId: "org_1",
+  },
   // apps/api/src/routes/integrations.ts (generic ERP, no provider)
   "integration sync without provider": {
     type: "INTEGRATION_SYNC",
@@ -142,7 +148,7 @@ describe("background job union", () => {
     );
     // Only the certificate render may omit its discriminator.
     expect(values).toEqual(["(omitted)"]);
-    expect(types).toHaveLength(13);
+    expect(types).toHaveLength(14);
   });
 
   it("REQ-Q-3 an unknown type is rejected with a reason naming it", () => {
@@ -197,6 +203,7 @@ describe("background job union", () => {
       },
       { type: "SERVICE_ORDER_TAG", serviceOrderId: "1", userId: "u" },
       { type: "OOT_NOTIFICATION", notificationId: 1 },
+      { type: "WEBHOOK_DELIVERY", deliveryId: "d" },
       {
         type: "INTEGRATION_SYNC",
         integrationId: "i",

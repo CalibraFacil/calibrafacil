@@ -39,6 +39,7 @@ import type {
   IntegrationType,
   JobCommercialSnapshotSource,
   PublicApiResourceType,
+  PublicApiWebhookAttempt,
   PublicApiWebhookDeliveryStatus,
   PublicApiWebhookEvent,
   PublicApiWebhookSubscriptionStatus,
@@ -1151,6 +1152,10 @@ export const publicApiWebhookSubscription = pgTable(
     lastSuccessAt: timestamp("last_success_at"),
     lastFailureAt: timestamp("last_failure_at"),
     consecutiveFailures: integer("consecutive_failures").default(0).notNull(),
+    // Set when the subscription switched itself off after too many failed
+    // deliveries in a row (and why); cleared when it is activated again.
+    disabledAt: timestamp("disabled_at"),
+    disabledReason: text("disabled_reason"),
     createdBy: text("created_by")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
@@ -1188,8 +1193,17 @@ export const publicApiWebhookDelivery = pgTable(
       .$type<Record<string, unknown>>()
       .notNull(),
     responseStatus: integer("response_status"),
+    // A snippet (a few hundred bytes) of the subscriber's last answer, never
+    // the whole body: the subscriber is outside our control.
     responseBody: text("response_body"),
     attemptCount: integer("attempt_count").default(0).notNull(),
+    // One entry per call made (PublicApiWebhookAttempt), oldest first, capped.
+    attempts: jsonb("attempts")
+      .$type<PublicApiWebhookAttempt[]>()
+      .default([])
+      .notNull(),
+    // When the queue will try again; null once delivered or given up.
+    nextAttemptAt: timestamp("next_attempt_at"),
     status: text("status")
       .$type<PublicApiWebhookDeliveryStatus>()
       .default("PENDING")
@@ -7022,7 +7036,8 @@ export type AppQueueJobType =
   | "SERVICE_ORDER_DELIVERY_RECEIPT"
   | "INTEGRATION_SYNC"
   | "AUDIT_PACK"
-  | "OOT_NOTIFICATION";
+  | "OOT_NOTIFICATION"
+  | "WEBHOOK_DELIVERY";
 
 export type AppQueueJobStatus =
   | "PENDING"

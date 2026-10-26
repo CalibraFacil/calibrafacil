@@ -9,6 +9,7 @@ import { processIntegrationSync } from "./integrations.js";
 import type { BackgroundJobMessage } from "@calibra-facil/schemas";
 import { type DeliveryAttempt, type Env } from "./runtime-types.js";
 import { processAuditPackJob } from "./audit-pack.js";
+import { processWebhookDelivery } from "./webhook-delivery.js";
 import { processDocumentMessage } from "./document-messages.js";
 
 // one capture site covering every run mode (container drain, local poller, inline/local dev): a failing job is
@@ -41,6 +42,11 @@ async function processBackgroundJobUnreported(
 
   if (message.type === "INTEGRATION_SYNC") {
     await processIntegrationSync(env, message);
+    return;
+  }
+
+  if (message.type === "WEBHOOK_DELIVERY") {
+    await processWebhookDelivery(env, message, delivery);
     return;
   }
 

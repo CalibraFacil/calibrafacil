@@ -712,7 +712,7 @@ export function buildPublicApiV2OpenApiDocument(origin: string) {
           summary: "Criar subscription de webhook",
           tag: "Webhooks",
           requestBodyDescription:
-            "Configura endpoint, eventos e status da subscription.",
+            "Configura endpoint, eventos e status da subscription. O targetUrl deve ser https (http só fora de produção) e não pode apontar para endereços privados, de loopback ou link-local; hosts são verificados novamente a cada entrega.",
           responseStatus: 201,
         }),
       },
@@ -785,6 +785,8 @@ export function buildPublicApiV2OpenApiDocument(origin: string) {
         get: {
           tags: ["Webhooks"],
           summary: "Listar deliveries do webhook",
+          description:
+            "Entregas são enfileiradas e reenviadas com backoff exponencial (até 5 tentativas); cada tentativa fica registrada em `attempts`. `responseBody` traz apenas um trecho (até 512 bytes) da resposta do destino, nunca o corpo completo. Após 10 entregas consecutivas esgotadas a subscription é desativada (`disabledAt`, `disabledReason`).",
           security: [{ ApiKeyAuth: [] }],
           parameters: [
             buildPathParameter("id", "Identificador da subscription"),

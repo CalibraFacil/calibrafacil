@@ -1,3 +1,5 @@
+import { classifyParsedIp, parseIp } from "./net/ip-range";
+
 export type IntegrationType = "financial_erp";
 
 export type IntegrationProvider = "generic_http" | "conta_azul";
@@ -993,53 +995,6 @@ export const INTEGRATION_REQUIRED_DESTINATION_FIELDS: Record<
   payable: ["externalId", "supplierExternalId", "amountCents", "dueDate"],
 };
 
-function parseIpv4Address(hostname: string): number[] | null {
-  const parts = hostname.split(".");
-  if (parts.length !== 4) return null;
-
-  const numbers = parts.map((part) => Number(part));
-  if (
-    numbers.some(
-      (part, index) =>
-        !Number.isInteger(part) ||
-        part < 0 ||
-        part > 255 ||
-        (parts[index] ?? "").trim() === "",
-    )
-  ) {
-    return null;
-  }
-
-  return numbers;
-}
-
-function isUnsafeIpv4Address(parts: number[]) {
-  const [a = -1, b = -1] = parts;
-
-  return (
-    a === 0 ||
-    a === 10 ||
-    a === 127 ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168)
-  );
-}
-
-function isUnsafeIpv6Address(hostname: string) {
-  const normalized = hostname.toLowerCase();
-
-  if (normalized === "::1" || normalized === "::") {
-    return true;
-  }
-
-  if (/^fe[89ab]/i.test(normalized)) {
-    return true;
-  }
-
-  return normalized.startsWith("fc") || normalized.startsWith("fd");
-}
-
 export function normalizeIntegrationBaseUrl(baseUrl: string): string {
   let url: URL;
 
@@ -1066,12 +1021,11 @@ export function normalizeIntegrationBaseUrl(baseUrl: string): string {
     throw new Error("Base URL não pode apontar para loopback ou localhost");
   }
 
-  const ipv4 = parseIpv4Address(hostname);
-  if (ipv4 && isUnsafeIpv4Address(ipv4)) {
-    throw new Error("Base URL não pode apontar para endereços privados");
-  }
-
-  if (hostname.includes(":") && isUnsafeIpv6Address(hostname)) {
+  // An IP literal in a refused range (private, loopback, link-local, CGNAT,
+  // multicast, an IPv6 form wrapping one of those). A host NAME is judged when
+  // it resolves, at call time, by `safeOutboundFetch`.
+  const literal = parseIp(hostname);
+  if (literal && classifyParsedIp(literal).kind === "blocked") {
     throw new Error("Base URL não pode apontar para endereços privados");
   }
 

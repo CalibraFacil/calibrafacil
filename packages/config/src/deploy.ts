@@ -137,6 +137,24 @@ export const DEPLOY_SECTIONS: readonly DeploySection[] = [
     ],
   },
   {
+    title: "Outbound requests to customer-configured URLs (optional)",
+    intro: [
+      "Webhooks and the generic HTTP ERP integration call URLs a laboratory",
+      "configures. They are refused when the host resolves to a private address",
+      "(see DEPLOYMENT.md). List a host here only to reach, say, an ERP on your LAN.",
+    ],
+    variables: [
+      {
+        name: "OUTBOUND_ALLOW_PRIVATE_HOSTS",
+        example: example.commented("erp.lan,10.20.0.0/24"),
+      },
+      {
+        name: "OUTBOUND_ALLOW_INSECURE_HTTP",
+        example: example.commented("false"),
+      },
+    ],
+  },
+  {
     title: "Optional",
     variables: [
       {

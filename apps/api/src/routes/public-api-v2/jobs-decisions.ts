@@ -9,9 +9,9 @@ import {
 import { and, eq } from "drizzle-orm";
 import {
   buildPublicApiError,
-  emitPublicApiWebhookEvent,
   getPublicApiRequestIp,
 } from "../../lib/public-api";
+import { emitPublicApiWebhookEvent } from "../../lib/public-api-webhooks";
 import { requireApiScope } from "../../middleware/api-key-auth";
 import { approveJob } from "../../modules/jobs/approve-job";
 import { cancelJob } from "../../modules/jobs/cancel-job";
@@ -199,7 +199,6 @@ export const jobDecisionRoutes = new Hono<PublicApiV2Env>()
                     jobId: updated.jobId,
                     status: updated.status,
                   },
-                  env: c.env,
                 }),
               );
             }
@@ -345,7 +344,6 @@ export const jobDecisionRoutes = new Hono<PublicApiV2Env>()
               jobId: updated.jobId,
               status: updated.status,
             },
-            env: c.env,
           }),
         );
 

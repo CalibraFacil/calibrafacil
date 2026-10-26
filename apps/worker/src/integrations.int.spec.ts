@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sql } from "drizzle-orm";
 import { processIntegrationSync } from "@calibra-facil/jobs-core/integrations";
+import { routeOutboundThroughGlobalFetch } from "@calibra-facil/shared/outbound-testing";
 import { db, truncateAll } from "../test/integration/db";
 import { makeTestEnv } from "../test/integration/env";
 import {
@@ -148,11 +149,17 @@ async function seedTwoTenants() {
   return { orgA, orgB, custA1, custA2, custB1 };
 }
 
+let restoreOutbound = () => {};
+
 beforeEach(async () => {
   await truncateAll();
+  // The generic ERP push goes through safeOutboundFetch: send it through the
+  // stubbed global fetch so the remote system stays a mock.
+  restoreOutbound = routeOutboundThroughGlobalFetch();
 });
 
 afterEach(() => {
+  restoreOutbound();
   vi.unstubAllGlobals();
 });
 

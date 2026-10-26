@@ -65,6 +65,7 @@ export {
   readJobsConfig,
   readLocalServerSettings,
   readObservabilityConfig,
+  readOutboundConfig,
   readOriginsConfig,
   readRenderingConfig,
   readRetentionConfig,

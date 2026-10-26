@@ -19,7 +19,11 @@
     "./units": "./src/units/index.ts",
     "./format": "./src/format.ts",
     "./money": "./src/money.ts",
-    "./graceful-shutdown": "./src/graceful-shutdown.ts"
+    "./graceful-shutdown": "./src/graceful-shutdown.ts",
+    "./ip-range": "./src/net/ip-range.ts",
+    "./outbound-policy": "./src/net/outbound-policy.ts",
+    "./safe-outbound-fetch": "./src/net/safe-outbound-fetch.ts",
+    "./outbound-testing": "./src/net/testing.ts"
   },
   "scripts": {
     "test": "vitest run --passWithNoTests",
@@ -29,6 +33,9 @@
   "keywords": [],
   "author": "",
   "license": "MIT",
+  "dependencies": {
+    "@calibra-facil/config": "workspace:^"
+  },
   "devDependencies": {
     "@repo/typescript-config": "workspace:^",
     "@types/node": "^24.13.0",

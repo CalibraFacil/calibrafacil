@@ -16,12 +16,15 @@ import { and, count, eq, ilike, or } from "drizzle-orm";
 import {
   buildListMeta,
   buildPublicApiError,
-  emitPublicApiWebhookEvent,
   getPublicApiRequestIp,
   getResourceExternalId,
   getResourceExternalIdMap,
   upsertResourceExternalId,
 } from "../../lib/public-api";
+import {
+  stagePublicApiWebhookEvent,
+  withPublicApiWebhookTransaction,
+} from "../../lib/public-api-webhooks";
 import { isReferencedRowViolation } from "../../lib/db-errors";
 import { orgDb } from "../../lib/org-db";
 import { requireApiScope } from "../../middleware/api-key-auth";
@@ -186,7 +189,7 @@ export const customerRoutes = new Hono<PublicApiV2Env>()
             name: input.name,
             slug: generateUniqueSlug(input.name),
           }),
-        async ({ o, afterCommit }, orgResult) => {
+        async ({ o, tx, afterCommit }, orgResult) => {
           if (!orgResult?.id) {
             return {
               status: 500,
@@ -242,13 +245,13 @@ export const customerRoutes = new Hono<PublicApiV2Env>()
             },
           };
 
-          afterCommit(() =>
-            emitPublicApiWebhookEvent({
+          await stagePublicApiWebhookEvent(
+            { o, tx, afterCommit },
+            {
               organizationId: apiKey.organizationId,
               eventType: "customer.created",
               payload: body.data,
-              env: c.env,
-            }),
+            },
           );
 
           return {
@@ -288,8 +291,9 @@ export const customerRoutes = new Hono<PublicApiV2Env>()
       }
 
       const externalId = input.externalId?.trim();
-      const result = await orgDb(apiKey.organizationId).transaction(
-        async (o) => {
+      const result = await withPublicApiWebhookTransaction(
+        apiKey.organizationId,
+        async (o, webhooks) => {
           const [existing] = await o
             .select()
             .from(customer)
@@ -336,19 +340,24 @@ export const customerRoutes = new Hono<PublicApiV2Env>()
             );
           }
 
-          return {
-            updated,
-            externalId:
-              externalId ??
-              (await getResourceExternalId(
-                {
-                  organizationId: apiKey.organizationId,
-                  resourceType: "customer",
-                  resourceId: existing.id,
-                },
-                o,
-              )),
-          };
+          const resolvedExternalId =
+            externalId ??
+            (await getResourceExternalId(
+              {
+                organizationId: apiKey.organizationId,
+                resourceType: "customer",
+                resourceId: existing.id,
+              },
+              o,
+            ));
+          // The event is queued with the update and goes out after it commits.
+          await stagePublicApiWebhookEvent(webhooks, {
+            organizationId: apiKey.organizationId,
+            eventType: "customer.updated",
+            payload: { ...updated, externalId: resolvedExternalId },
+          });
+
+          return { updated, externalId: resolvedExternalId };
         },
       );
 
@@ -368,13 +377,6 @@ export const customerRoutes = new Hono<PublicApiV2Env>()
           externalId: result.externalId,
         },
       };
-
-      await emitPublicApiWebhookEvent({
-        organizationId: apiKey.organizationId,
-        eventType: "customer.updated",
-        payload: body.data,
-        env: c.env,
-      });
 
       return c.json(body);
     },
@@ -400,7 +402,7 @@ export const customerRoutes = new Hono<PublicApiV2Env>()
     return withIdempotentMutation(
       c,
       { customerId: resolvedId },
-      async ({ o, afterCommit }) => {
+      async ({ o, tx, afterCommit }) => {
         const [existing] = await o
           .select()
           .from(customer)
@@ -474,13 +476,13 @@ export const customerRoutes = new Hono<PublicApiV2Env>()
           .delete(organization)
           .where(eq(organization.id, existing.authOrganizationId));
 
-        afterCommit(() =>
-          emitPublicApiWebhookEvent({
+        await stagePublicApiWebhookEvent(
+          { o, tx, afterCommit },
+          {
             organizationId: apiKey.organizationId,
             eventType: "customer.deleted",
             payload: { id: existing.id, externalId },
-            env: c.env,
-          }),
+          },
         );
 
         return {

@@ -9,6 +9,9 @@
  * never an error and never a false REVOKED.
  */
 
+import { readOutboundPolicy } from "@calibra-facil/shared/outbound-policy";
+import { safeOutboundFetch } from "@calibra-facil/shared/safe-outbound-fetch";
+
 const DEFAULT_TIMEOUT_MS = 4_000;
 const DEFAULT_MAX_BYTES = 2 * 1024 * 1024; // ICP LCRs are typically well under 2 MB.
 const DEFAULT_CACHE_TTL_MS = 30 * 60 * 1000;
@@ -42,21 +45,24 @@ export function createCrlFetcher(
     }
 
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
-      let response: Response;
-      try {
-        response = await fetch(url, {
-          signal: controller.signal,
-          redirect: "follow",
-        });
-      } finally {
-        clearTimeout(timer);
-      }
+      // The CRL address comes from the certificate of the document being
+      // checked, so it is not trusted: public addresses only, pinned DNS,
+      // bounded time and size. CRL distribution points are conventionally
+      // plain http, so that scheme stays open here (a refused address does not).
+      const response = await safeOutboundFetch(
+        url,
+        {},
+        {
+          policy: { ...readOutboundPolicy(), allowInsecureHttp: true },
+          timeoutMs,
+          maxResponseBytes: maxBytes,
+          maxRedirects: 3,
+        },
+      );
       if (!response.ok) return null;
 
       const body = new Uint8Array(await response.arrayBuffer());
-      if (body.byteLength === 0 || body.byteLength > maxBytes) return null;
+      if (body.byteLength === 0) return null;
 
       if (cache.size >= MAX_CACHE_ENTRIES) cache.clear();
       cache.set(url, { bytes: body, expiresAt: now + cacheTtlMs });

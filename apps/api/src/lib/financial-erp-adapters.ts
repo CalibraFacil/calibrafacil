@@ -5,6 +5,11 @@ import {
   validateIntegrationMappings,
 } from "@calibra-facil/shared";
 import { normalizeCnpj } from "@calibra-facil/shared/cnpj";
+import {
+  REMOTE_API_OUTBOUND_OPTIONS,
+  createOutboundFetch,
+  type OutboundFetch,
+} from "@calibra-facil/shared/safe-outbound-fetch";
 import type {
   ContaAzulConnectionConfig,
   ContaAzulReferenceDomain,
@@ -114,7 +119,7 @@ type GenericHttpAdapterOptions = {
   organizationId: string;
   config: GenericFinancialErpConnectionConfig;
   secret: string;
-  fetchImpl?: typeof fetch;
+  fetchImpl?: OutboundFetch;
   links?: AdapterLinks;
 };
 
@@ -171,7 +176,7 @@ function toRecord(value: unknown): Record<string, unknown> {
 }
 
 async function callRemoteJson(
-  fetchImpl: typeof fetch,
+  fetchImpl: OutboundFetch,
   url: string,
   init: RequestInit,
 ): Promise<RemoteJsonResult> {
@@ -974,13 +979,14 @@ export class GenericHttpFinancialErpAdapter implements FinancialErpAdapter {
   readonly provider = "generic_http" as const;
   private readonly config: GenericFinancialErpConnectionConfig;
   private readonly secret: string;
-  private readonly fetchImpl: typeof fetch;
+  private readonly fetchImpl: OutboundFetch;
   private readonly links: GenericHttpAdapterOptions["links"];
 
   constructor(options: GenericHttpAdapterOptions) {
     this.config = normalizeGenericFinancialErpConfig(options.config);
     this.secret = options.secret;
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    this.fetchImpl =
+      options.fetchImpl ?? createOutboundFetch(REMOTE_API_OUTBOUND_OPTIONS);
     this.links = options.links;
   }
 
