@@ -7,6 +7,7 @@ import type { WebhookDeliveryBackgroundJobMessage } from "@calibra-facil/schemas
 import {
   PUBLIC_API_WEBHOOK_EVENTS,
   PUBLIC_API_WEBHOOK_RESPONSE_SNIPPET_BYTES,
+  truncateUtf8Bytes,
   type PublicApiWebhookEvent,
 } from "@calibra-facil/shared";
 import { and, desc, eq, sql } from "drizzle-orm";
@@ -249,8 +250,9 @@ export function mapWebhookDelivery(row: DeliveryRow) {
     responseBody:
       row.responseBody === null
         ? null
-        : Buffer.from(row.responseBody)
-            .subarray(0, PUBLIC_API_WEBHOOK_RESPONSE_SNIPPET_BYTES)
-            .toString(),
+        : truncateUtf8Bytes(
+            row.responseBody,
+            PUBLIC_API_WEBHOOK_RESPONSE_SNIPPET_BYTES,
+          ),
   };
 }

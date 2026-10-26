@@ -21,7 +21,13 @@ ALTER TABLE "public_api_webhook_delivery" ADD COLUMN IF NOT EXISTS "attempts" js
 --> statement-breakpoint
 ALTER TABLE "public_api_webhook_delivery" ADD COLUMN IF NOT EXISTS "next_attempt_at" timestamp;
 --> statement-breakpoint
--- Answers stored before this change may hold a whole response body: cut them to the snippet length.
-UPDATE "public_api_webhook_delivery"
-SET "response_body" = left("response_body", 512)
-WHERE "response_body" IS NOT NULL AND length("response_body") > 512;
+-- Answers stored before this change may hold a whole response body: cut them to the snippet
+-- length, 512 BYTES of UTF-8, on a character boundary (the largest whole-character prefix whose
+-- octet_length is at most 512; octet_length never decreases as the prefix grows, so max(n) is it).
+UPDATE "public_api_webhook_delivery" d
+SET "response_body" = (
+  SELECT left(d."response_body", max(n))
+  FROM generate_series(0, 512) AS n
+  WHERE octet_length(left(d."response_body", n)) <= 512
+)
+WHERE octet_length(d."response_body") > 512;

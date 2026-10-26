@@ -1,4 +1,6 @@
 import { createHmac } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import {
   createServer,
   type IncomingMessage,
@@ -6,7 +8,7 @@ import {
   type ServerResponse,
 } from "node:http";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { processBackgroundJob } from "@calibra-facil/jobs-core";
 import {
   publicApiWebhookDelivery,
@@ -334,4 +336,95 @@ describe("WEBHOOK_DELIVERY (worker real-DB integration)", () => {
     expect(Date.now() - started).toBeLessThan(20_000);
     expect((await deliveryRow()).lastError).toMatch(/Tempo esgotado/);
   }, 30_000);
+
+  it("keeps at most 512 BYTES of the answer, whatever its encoding", async () => {
+    const answers = [
+      Buffer.alloc(2000, 0xff), // invalid UTF-8: each byte decodes to a 3-byte U+FFFD
+      Buffer.from("€".repeat(1000)), // multibyte text cut between characters
+      Buffer.from("😀".repeat(500)),
+    ];
+    let next = 0;
+    const url = await listen((response) => {
+      response.writeHead(200);
+      response.end(answers[next++]);
+    });
+    const org = await seedDelivery({ targetUrl: url });
+
+    await deliver(org.orgId);
+    let stored = (await deliveryRow()).responseBody ?? "";
+    expect(Buffer.byteLength(stored)).toBeLessThanOrEqual(512);
+    expect(stored.length).toBeGreaterThan(0);
+
+    for (const expected of ["€", "😀"]) {
+      await db
+        .update(publicApiWebhookDelivery)
+        .set({ status: "PENDING", attemptCount: 0, attempts: [] });
+      await deliver(org.orgId);
+      stored = (await deliveryRow()).responseBody ?? "";
+      expect(Buffer.byteLength(stored)).toBeLessThanOrEqual(512);
+      expect(Buffer.byteLength(stored)).toBeGreaterThan(512 - 4);
+      expect(stored).not.toContain("\uFFFD");
+      expect(stored).toBe(expected.repeat(stored.length / expected.length));
+    }
+  });
+
+  it("ends the delivery as FAILED, with a reason, when the webhook secret cannot be read", async () => {
+    const url = await listen((response) => response.end("ok"));
+    const org = await seedDelivery({ targetUrl: url });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    // The worker holds another master key than the one that encrypted the secret.
+    await processBackgroundJob(
+      makeTestEnv({
+        PUBLIC_API_MASTER_KEY: Buffer.alloc(32, 9).toString("base64"),
+      }),
+      {
+        type: "WEBHOOK_DELIVERY",
+        deliveryId: "del-1",
+        organizationId: org.orgId,
+      },
+      { attempt: 1, maxAttempts: 5 },
+    );
+
+    expect(seen).toHaveLength(0);
+    const row = await deliveryRow();
+    expect(row.status).toBe("FAILED");
+    expect(row.lastError).toBe("Não foi possível ler o segredo do webhook");
+    expect(row.nextAttemptAt).toBeNull();
+  });
+
+  it("does not send again a delivery that already gave up (a redelivered message)", async () => {
+    const url = await listen((response) => response.end("ok"));
+    const org = await seedDelivery({ targetUrl: url });
+    await db
+      .update(publicApiWebhookDelivery)
+      .set({ status: "FAILED", lastError: "HTTP 500", attemptCount: 5 });
+
+    await deliver(org.orgId, { attempt: 1, maxAttempts: 5 });
+
+    expect(seen).toHaveLength(0);
+    expect((await deliveryRow()).attemptCount).toBe(5);
+  });
+
+  it("migration 0127 cuts old answers to 512 bytes on a character boundary", async () => {
+    const migration = readFileSync(
+      fileURLToPath(
+        new URL(
+          "../../../packages/db/drizzle/0127_webhook_delivery_queue.sql",
+          import.meta.url,
+        ),
+      ),
+      "utf8",
+    );
+    const update = migration.slice(migration.indexOf("UPDATE"));
+    const url = await listen((response) => response.end("ok"));
+    await seedDelivery({ targetUrl: url });
+    await db
+      .update(publicApiWebhookDelivery)
+      .set({ responseBody: "€".repeat(400) });
+    await db.execute(sql.raw(update));
+    const stored = (await deliveryRow()).responseBody ?? "";
+    expect(Buffer.byteLength(stored)).toBe(510);
+    expect(stored).toBe("€".repeat(170));
+  });
 });

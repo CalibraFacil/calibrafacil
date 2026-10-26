@@ -6,6 +6,7 @@ import {
   type AppQueueJobType,
 } from "./schema.js";
 import { parseQueueMessage, type QueueMessage } from "@calibra-facil/schemas";
+import { PUBLIC_API_WEBHOOK_MAX_ATTEMPTS } from "@calibra-facil/shared";
 
 export type { QueueMessage };
 
@@ -98,7 +99,7 @@ function toClaimedRow(value: unknown): ClaimedRow {
  * webhook subscriber that is down for a while is retried longer than a render.
  */
 function defaultMaxAttempts(type: AppQueueJobType) {
-  return type === "WEBHOOK_DELIVERY" ? 5 : 3;
+  return type === "WEBHOOK_DELIVERY" ? PUBLIC_API_WEBHOOK_MAX_ATTEMPTS : 3;
 }
 
 /**

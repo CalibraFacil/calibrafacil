@@ -5,6 +5,7 @@ import {
   PUBLIC_API_WEBHOOK_AUTO_DISABLE_AFTER,
   PUBLIC_API_WEBHOOK_AUTO_DISABLE_REASON,
   PUBLIC_API_WEBHOOK_RESPONSE_SNIPPET_BYTES,
+  truncateUtf8Bytes,
   type PublicApiWebhookAttempt,
 } from "@calibra-facil/shared";
 import {
@@ -59,9 +60,13 @@ function isAttemptList(value: unknown): value is PublicApiWebhookAttempt[] {
  */
 function toSnippet(bytes: Uint8Array): string | null {
   if (bytes.length === 0) return null;
-  return new TextDecoder()
+  // Invalid UTF-8 decodes to U+FFFD (3 bytes each), so the decoded text can be
+  // longer than the bytes it came from: the cap is applied to the TEXT, on a
+  // character boundary.
+  const text = new TextDecoder()
     .decode(bytes.subarray(0, PUBLIC_API_WEBHOOK_RESPONSE_SNIPPET_BYTES))
     .replaceAll("\u0000", "");
+  return truncateUtf8Bytes(text, PUBLIC_API_WEBHOOK_RESPONSE_SNIPPET_BYTES);
 }
 
 type Outcome = {
@@ -118,6 +123,34 @@ async function callSubscriber(
   }
 }
 
+/**
+ * One call to the subscriber. A secret that cannot be read (the master key is
+ * missing or wrong) is a failure no retry fixes: it ends the delivery as
+ * FAILED instead of leaving it PENDING behind a job that keeps throwing.
+ */
+async function deliverOnce(env: Env, row: DeliveryRow): Promise<Outcome> {
+  let secret: string;
+  try {
+    secret = decryptPassword(
+      row.encrypted_secret,
+      row.secret_iv,
+      webhookMasterKey(env),
+    );
+  } catch (error) {
+    console.error(
+      `[Webhook] cannot read the secret of subscription ${row.subscription_id}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return {
+      status: null,
+      snippet: null,
+      error: "Não foi possível ler o segredo do webhook",
+      durationMs: 0,
+      permanent: true,
+    };
+  }
+  return callSubscriber(row, secret);
+}
+
 async function loadDelivery(
   session: OrgSession,
   deliveryId: string,
@@ -159,8 +192,9 @@ export async function processWebhookDelivery(
       );
       return;
     }
-    // A repeated message (lease reclaim) for a delivery already made.
-    if (row.status === "SUCCESS") return;
+    // A repeated message (lease reclaim, redelivery after the final attempt)
+    // for a delivery that already ended: delivered, or given up on.
+    if (row.status !== "PENDING") return;
 
     const isReplay = row.replay_of_delivery_id !== null;
     const attemptNumber = row.attempt_count + 1;
@@ -182,12 +216,7 @@ export async function processWebhookDelivery(
       return;
     }
 
-    const secret = decryptPassword(
-      row.encrypted_secret,
-      row.secret_iv,
-      webhookMasterKey(env),
-    );
-    const outcome = await callSubscriber(row, secret);
+    const outcome = await deliverOnce(env, row);
     const entry: PublicApiWebhookAttempt = {
       attempt: attemptNumber,
       at: new Date().toISOString(),
