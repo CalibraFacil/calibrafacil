@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isValidCnpj } from "@calibra-facil/shared/cnpj";
 
 /**
  * The laboratory profile: CNPJ, the accreditation claim (CGCRE/RBC number, body,
@@ -25,6 +26,23 @@ const profileText = (max: number) =>
     .nullish()
     .transform((value) => (value === undefined ? undefined : value || null));
 
+const validEmail = z.email();
+
+/** An http(s) address; a bare host such as `www.lab.com.br` is read as https. */
+function isWebsite(value: string): boolean {
+  try {
+    const url = new URL(
+      /^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `https://${value}`,
+    );
+    return (
+      (url.protocol === "http:" || url.protocol === "https:") &&
+      url.hostname.includes(".")
+    );
+  } catch {
+    return false;
+  }
+}
+
 const profileInstant = z
   .string()
   .trim()
@@ -35,28 +53,49 @@ const profileInstant = z
   )
   .transform((value) => (value === undefined ? undefined : value || null));
 
-export const UpdateOrganizationProfileSchema = z.object({
-  cnpj: profileText(32),
-  accreditationNumber: profileText(64),
-  accreditationBody: profileText(120),
-  accreditationActive: z.boolean().optional(),
-  accreditationValidFrom: profileInstant,
-  accreditationValidUntil: profileInstant,
-  permissionariaAuthorizationNumber: profileText(64),
-  permissionariaAuthorizationState: profileText(2),
-  street: profileText(200),
-  number: profileText(32),
-  complement: profileText(120),
-  neighbourhood: profileText(120),
-  city: profileText(120),
-  state: profileText(64),
-  cep: profileText(16),
-  phone: profileText(40),
-  email: profileText(254),
-  website: profileText(254),
-  technicalManagerName: profileText(160),
-  technicalManagerTitle: profileText(160),
-});
+export const UpdateOrganizationProfileSchema = z
+  .object({
+    cnpj: profileText(32).refine(
+      (value) => !value || isValidCnpj(value),
+      "CNPJ inválido",
+    ),
+    accreditationNumber: profileText(64),
+    accreditationBody: profileText(120),
+    accreditationActive: z.boolean().optional(),
+    accreditationValidFrom: profileInstant,
+    accreditationValidUntil: profileInstant,
+    permissionariaAuthorizationNumber: profileText(64),
+    permissionariaAuthorizationState: profileText(2),
+    street: profileText(200),
+    number: profileText(32),
+    complement: profileText(120),
+    neighbourhood: profileText(120),
+    city: profileText(120),
+    state: profileText(64),
+    cep: profileText(16),
+    phone: profileText(40),
+    email: profileText(254).refine(
+      (value) => !value || validEmail.safeParse(value).success,
+      "E-mail inválido",
+    ),
+    website: profileText(254).refine(
+      (value) => !value || isWebsite(value),
+      "Endereço do site inválido",
+    ),
+    technicalManagerName: profileText(160),
+    technicalManagerTitle: profileText(160),
+  })
+  .refine(
+    (value) =>
+      !value.accreditationValidFrom ||
+      !value.accreditationValidUntil ||
+      new Date(value.accreditationValidFrom).getTime() <=
+        new Date(value.accreditationValidUntil).getTime(),
+    {
+      message: "O início da vigência não pode ser posterior ao fim",
+      path: ["accreditationValidUntil"],
+    },
+  );
 
 export type UpdateOrganizationProfileInput = z.input<
   typeof UpdateOrganizationProfileSchema

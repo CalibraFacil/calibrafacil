@@ -114,7 +114,8 @@ describe("organizationProfileRouter (PATCH /profile)", () => {
     });
     expect(events[0]?.details).toMatchObject({
       fields: expect.arrayContaining(["accreditationActive"]),
-      accreditation: expect.arrayContaining([
+      claims: expect.arrayContaining([
+        { field: "cnpj", from: null, to: CLAIM.cnpj },
         { field: "accreditationActive", from: false, to: true },
         { field: "accreditationNumber", from: null, to: "0123" },
       ]),
@@ -207,6 +208,40 @@ describe("organizationProfileRouter (PATCH /profile)", () => {
       accreditationActive: false,
       accreditationNumber: null,
     });
+  });
+
+  it("REQ-P01-PROF-6: an invalid CNPJ, email, website or a vigência that ends before it starts is a 400, also against the stored bound", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    const refusals = await inSequence(
+      [
+        { cnpj: "11.222.333/0001-82" },
+        { email: "contato" },
+        { website: "javascript:alert(1)" },
+        {
+          accreditationValidFrom: "2027-01-01T00:00:00.000Z",
+          accreditationValidUntil: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+      async (bad) => (await patch(bad)).status,
+    );
+    expect(refusals).toEqual([400, 400, 400, 400]);
+
+    // One bound at a time is checked against the stored one.
+    expect(
+      (await patch({ accreditationValidUntil: "2026-06-30T00:00:00.000Z" }))
+        .status,
+    ).toBe(200);
+    const merged = await patch({
+      accreditationValidFrom: "2027-01-01T00:00:00.000Z",
+    });
+    expect(merged.status).toBe(400);
+    expect((await merged.json()).code).toBe("invalid_request");
+    const row = await profileOf(org.orgId);
+    expect(row.accreditationValidFrom).toBeNull();
+    expect(row.cnpj).toBeNull();
+    expect(row.email).toBeNull();
   });
 
   it("REQ-P01-PROF-5: an invalid date or UF is a 400 and writes nothing; unauthenticated is 401", async () => {

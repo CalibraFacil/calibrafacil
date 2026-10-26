@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { organization } from "@calibra-facil/db/schema";
 import { UpdateOrganizationProfileSchema } from "@calibra-facil/schemas";
 import { writeOrganizationAuditEvent } from "../lib/audit";
-import { domainErrorResponse, notFound } from "../lib/domain-errors";
+import { domainErrorResponse, invalid, notFound } from "../lib/domain-errors";
 import { orgDb } from "../lib/org-db";
 import {
   type AuthVariables,
@@ -72,8 +72,12 @@ const TEXT_FIELDS = [
   "technicalManagerTitle",
 ] as const satisfies readonly ProfileField[];
 
-/** The fields that are the laboratory's accreditation claim (audited with before/after). */
-const ACCREDITATION_FIELDS = [
+/**
+ * The fields that are the laboratory's identity and accreditation claim: the
+ * audit event records their before and after (the others only by name).
+ */
+const CLAIM_FIELDS = [
+  "cnpj",
   "accreditationNumber",
   "accreditationBody",
   "accreditationActive",
@@ -135,6 +139,20 @@ export const organizationProfileRouter = new Hono<{
         if (!before) return null;
         if (fields.length === 0) return before;
 
+        // The window must stay ordered once the change is merged with what is
+        // stored (the schema checks it only when both bounds are sent).
+        const from =
+          set.accreditationValidFrom === undefined
+            ? before.accreditationValidFrom
+            : set.accreditationValidFrom;
+        const until =
+          set.accreditationValidUntil === undefined
+            ? before.accreditationValidUntil
+            : set.accreditationValidUntil;
+        if (from && until && from.getTime() > until.getTime()) {
+          return "invalid_window" as const;
+        }
+
         const [after] = await tx
           .update(organization)
           .set(set)
@@ -152,7 +170,7 @@ export const organizationProfileRouter = new Hono<{
             entityId: member.organizationId,
             details: {
               fields,
-              accreditation: ACCREDITATION_FIELDS.filter((field) =>
+              claims: CLAIM_FIELDS.filter((field) =>
                 fields.includes(field),
               ).map((field) => ({
                 field,
@@ -167,6 +185,15 @@ export const organizationProfileRouter = new Hono<{
       },
     );
 
+    if (outcome === "invalid_window") {
+      return domainErrorResponse(
+        c,
+        invalid(
+          "invalid_request",
+          "O início da vigência não pode ser posterior ao fim",
+        ),
+      );
+    }
     if (!outcome) {
       return domainErrorResponse(
         c,
