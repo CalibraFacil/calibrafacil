@@ -39,6 +39,7 @@ import {
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { inSequence } from "../../test/integration/in-sequence";
 import { seedExtraMember } from "../../test/integration/tenant-refs";
 import {
   withLabPermission,
@@ -114,13 +115,14 @@ async function statusOf(
   app: ReturnType<typeof probeApp>,
   probes: readonly Probe[],
 ) {
-  const statuses: Record<string, number> = {};
-  for (const [index, probe] of probes.entries()) {
-    // oxlint-disable-next-line no-await-in-loop -- one probe at a time keeps the session mock simple.
-    const res = await app.request(`/probe/${index}`);
-    statuses[probe.name] = res.status;
-  }
-  return statuses;
+  const entries = await inSequence(
+    probes,
+    async (probe, index): Promise<[string, number]> => [
+      probe.name,
+      (await app.request(`/probe/${index}`)).status,
+    ],
+  );
+  return Object.fromEntries(entries);
 }
 
 function expectAll(
