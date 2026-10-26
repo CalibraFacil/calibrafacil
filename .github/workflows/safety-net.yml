@@ -69,7 +69,7 @@ jobs:
           }
           decide integration '^(apps/api|apps/worker|packages)/|^docker-compose\.yml$'
           decide dev_stack '^(apps/api|apps/web|apps/portal|apps/worker|packages)/|^docker-compose\.yml$|^scripts/dev-setup\.mjs$'
-          decide self_host '^Dockerfile|^\.dockerignore$|^deploy/|^scripts/static-server\.ts$|^apps/api/src/cli/'
+          decide self_host '^Dockerfile|^\.dockerignore$|^deploy/|^scripts/static-server\.ts$|^apps/api/src/(cli/|bun\.ts|cron/|server/startup|lib/(storage|health|cron-scheduler))|^apps/worker/src/|^packages/config/src/'
           decide desktop '^(apps/desktop|apps/local-server|packages/local-db)/|^scripts/(build-desktop-artifact|smoke-desktop-)'
           decide web_e2e '^(apps/web|packages/client-runtime|packages/contracts)/'
           decide site '^(apps/site|apps/docs)/'
@@ -188,6 +188,15 @@ jobs:
       - name: Create a laboratory
         working-directory: deploy
         run: docker compose exec -T api bun src/cli/create-lab.ts --name "Laboratório CI" --email admin@ci.example
+
+      # The shipped compose configures storage with R2_ENDPOINT only (no
+      # R2_ACCOUNT_ID). Every storage reader must accept that: the health probe
+      # must really run (a skipped probe fails), a probe object must round-trip
+      # through both buckets, and the certificate-drift cron must run instead
+      # of reporting a clean empty sweep (P0-3).
+      - name: Prove the object storage is wired
+        working-directory: deploy
+        run: docker compose exec -T api bun src/cli/check-storage.ts
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
