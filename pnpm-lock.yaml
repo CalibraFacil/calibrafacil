@@ -1384,6 +1384,9 @@ importers:
 
   packages/signing:
     dependencies:
+      '@calibra-facil/shared':
+        specifier: workspace:^
+        version: link:../shared
       '@signpdf/placeholder-pdf-lib':
         specifier: ^3.2.5
         version: 3.3.0(pdf-lib@1.17.1)

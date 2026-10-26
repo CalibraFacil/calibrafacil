@@ -1,4 +1,8 @@
 import { type GenericFinancialErpConnectionConfig } from "@calibra-facil/shared";
+import {
+  REMOTE_API_OUTBOUND_OPTIONS,
+  createOutboundFetch,
+} from "@calibra-facil/shared/safe-outbound-fetch";
 import { createFinancialErpAdapter } from "../../lib/financial-erp-adapters";
 import { toRecord } from "./utils";
 
@@ -9,11 +13,15 @@ export function buildAuthHeaders(secret: string) {
   };
 }
 
+// The base URL is whatever the laboratory configured: every call goes through
+// the SSRF-safe helper (private addresses refused, pinned DNS, bounded).
+const outboundFetch = createOutboundFetch(REMOTE_API_OUTBOUND_OPTIONS);
+
 export async function callRemoteJson(
   url: string,
   init: RequestInit,
 ): Promise<{ ok: boolean; status: number; data: unknown }> {
-  const response = await fetch(url, init);
+  const response = await outboundFetch(url, init);
   const contentType = response.headers.get("content-type") ?? "";
 
   let data: unknown = null;

@@ -113,6 +113,27 @@ export interface SafeOutboundOptions {
   readonly transport?: PinnedTransport;
 }
 
+let testOverrides: {
+  readonly resolver?: HostResolver;
+  readonly transport?: PinnedTransport;
+} | null = null;
+
+/**
+ * Test seam. A spec that cannot reach a real network (a fixed `erp.example.com`
+ * that must "answer") installs its own resolver and transport for the process;
+ * `undefined` restores the real ones. Production code never calls this.
+ *
+ * @internal
+ */
+export function setOutboundTestOverrides(
+  overrides: {
+    readonly resolver?: HostResolver;
+    readonly transport?: PinnedTransport;
+  } | null,
+): void {
+  testOverrides = overrides;
+}
+
 export const DEFAULT_OUTBOUND_TIMEOUT_MS = 10_000;
 export const DEFAULT_OUTBOUND_CONNECT_TIMEOUT_MS = 5_000;
 export const DEFAULT_OUTBOUND_MAX_RESPONSE_BYTES = 64 * 1024;
@@ -424,8 +445,10 @@ export async function safeOutboundFetch(
   const maxResponseBytes =
     options.maxResponseBytes ?? DEFAULT_OUTBOUND_MAX_RESPONSE_BYTES;
   const maxRedirects = options.maxRedirects ?? 0;
-  const resolver = options.resolver ?? resolveHostAddresses;
-  const transport = options.transport ?? nodePinnedTransport;
+  const resolver =
+    options.resolver ?? testOverrides?.resolver ?? resolveHostAddresses;
+  const transport =
+    options.transport ?? testOverrides?.transport ?? nodePinnedTransport;
 
   const timeout = AbortSignal.timeout(timeoutMs);
   const signal = options.signal
@@ -561,6 +584,16 @@ export type OutboundFetch = (
   input: string | URL,
   init?: RequestInit,
 ) => Promise<Response>;
+
+/**
+ * What a call to a laboratory's own ERP/remote JSON API gets: more room than a
+ * webhook (the answer is the point of the call), still bounded.
+ */
+export const REMOTE_API_OUTBOUND_OPTIONS = {
+  timeoutMs: 30_000,
+  maxResponseBytes: 8 * 1024 * 1024,
+  maxRedirects: 3,
+} as const satisfies SafeOutboundOptions;
 
 /**
  * An `OutboundFetch` with these options fixed: for the ERP adapters, which

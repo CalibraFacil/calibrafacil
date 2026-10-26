@@ -1,4 +1,8 @@
 import type { Client } from "pg";
+import {
+  REMOTE_API_OUTBOUND_OPTIONS,
+  createOutboundFetch,
+} from "@calibra-facil/shared/safe-outbound-fetch";
 import { type OrgSession } from "../pdf-render.js";
 import type {
   GenericFinancialErpConnectionConfig,
@@ -85,8 +89,11 @@ function buildHeaders(secret: string) {
   };
 }
 
+// The base URL is whatever the laboratory configured: SSRF-safe helper.
+const outboundFetch = createOutboundFetch(REMOTE_API_OUTBOUND_OPTIONS);
+
 async function callRemoteJson(url: string, init: RequestInit) {
-  const response = await fetch(url, init);
+  const response = await outboundFetch(url, init);
   const contentType = response.headers.get("content-type") ?? "";
   const data = contentType.includes("application/json")
     ? await response.json().catch(() => null)

@@ -50,6 +50,10 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import {
+  REMOTE_API_OUTBOUND_OPTIONS,
+  createOutboundFetch,
+} from "@calibra-facil/shared/safe-outbound-fetch";
 import type { IntegrationsEnv } from "./integrations-env";
 import { buildUnitScopeCondition } from "./units";
 import { decryptPassword, encryptPassword } from "@calibra-facil/signing";
@@ -444,13 +448,15 @@ function extractRemoteId(data: unknown): string | null {
   return null;
 }
 
+const outboundFetch = createOutboundFetch(REMOTE_API_OUTBOUND_OPTIONS);
+
 async function callRemoteJson(
   url: string,
   secret: string,
   method: "POST" | "PUT",
   body: unknown,
 ) {
-  const response = await fetch(url, {
+  const response = await outboundFetch(url, {
     method,
     headers: {
       Authorization: `Bearer ${secret}`,

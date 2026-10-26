@@ -43,6 +43,7 @@ import {
   receivableInstallment,
   serviceOrder,
 } from "@calibra-facil/db/schema";
+import { routeOutboundThroughGlobalFetch } from "@calibra-facil/shared/outbound-testing";
 import { encryptPassword } from "@calibra-facil/signing";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { loginAs } from "../../../test/integration/setup";
@@ -169,11 +170,17 @@ async function createDraftThroughApi(jobId: number) {
 }
 
 describe("finance routes — success paths and cross-laboratory negatives", () => {
+  let restoreOutbound = () => {};
+
   beforeEach(async () => {
     await truncateAll();
+    // The ERP export goes through safeOutboundFetch: route it through the
+    // stubbed global fetch so the remote system stays a mock.
+    restoreOutbound = routeOutboundThroughGlobalFetch();
   });
 
   afterEach(() => {
+    restoreOutbound();
     vi.unstubAllGlobals();
   });
 
@@ -736,7 +743,7 @@ describe("finance routes — success paths and cross-laboratory negatives", () =
     expect(String(url)).toBe("https://erp.example.test/billing-documents");
     expect(init).toMatchObject({
       method: "POST",
-      headers: expect.objectContaining({ Authorization: "Bearer erp-secret" }),
+      headers: expect.objectContaining({ authorization: "Bearer erp-secret" }),
     });
     const links = await db
       .select({

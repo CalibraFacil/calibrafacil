@@ -22,6 +22,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@calibra-facil/shared": "workspace:^",
     "@signpdf/placeholder-pdf-lib": "^3.2.5",
     "@signpdf/signer-p12": "^3.2.5",
     "@signpdf/signpdf": "^3.2.5",

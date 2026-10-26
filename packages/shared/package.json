@@ -22,7 +22,8 @@
     "./graceful-shutdown": "./src/graceful-shutdown.ts",
     "./ip-range": "./src/net/ip-range.ts",
     "./outbound-policy": "./src/net/outbound-policy.ts",
-    "./safe-outbound-fetch": "./src/net/safe-outbound-fetch.ts"
+    "./safe-outbound-fetch": "./src/net/safe-outbound-fetch.ts",
+    "./outbound-testing": "./src/net/testing.ts"
   },
   "scripts": {
     "test": "vitest run --passWithNoTests",
