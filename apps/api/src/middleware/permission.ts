@@ -182,7 +182,7 @@ function orgTypeFromUnknown(value: unknown): OrgType {
   return isOrgType(value) ? value : "LAB";
 }
 
-function roleNameFromUnknown(value: unknown): RoleName {
+export function roleNameFromUnknown(value: unknown): RoleName {
   if (
     value === "owner" ||
     value === "admin" ||

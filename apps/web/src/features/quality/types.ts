@@ -207,6 +207,8 @@ export type CapaDetail = {
   verifiedBy: string | null
   verificationNotes: string | null
   effectivenessConfirmed: boolean | null
+  verificationIndependence: 'independent' | 'waived_single_verifier' | null
+  verificationIndependenceJustification: string | null
   status: string
   closedAt: string | null
   closedBy: string | null

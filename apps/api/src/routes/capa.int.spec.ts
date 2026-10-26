@@ -21,6 +21,16 @@
  *               person who implemented it cannot verify its effectiveness
  *               (403 self_approval_blocked); an independent admin can.
  *
+ * REQ-CAPA-008  Q50: anyone who was EVER the responsible person (audit history of
+ *               responsibleId, not only the current owner) is not independent;
+ *               reassign-then-verify is blocked.
+ * REQ-CAPA-009  Q50: a lab with a single eligible verifier lets that person
+ *               verify only with a written justification (min length), recorded
+ *               in the row, the audit entry and the DTO as
+ *               verification_independence: waived_single_verifier; a lab with
+ *               another eligible verifier never waives; an independent verifier
+ *               is flagged "independent".
+ *
  * IDENTITY-SEPARATION NOTE:
  *   Verification is identity-checked (REQ-CAPA-007). Closing a CAPA is still
  *   role-based only: the person who verified may close. ISO §8.2.3 independence
@@ -30,12 +40,18 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { capaRouter } from "./capa";
 import { db } from "@calibra-facil/db";
-import { correctiveAction, member, user } from "@calibra-facil/db/schema";
+import {
+  correctiveAction,
+  correctiveActionAuditLog,
+  member,
+  user,
+} from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { seedExtraMember } from "../../test/integration/tenant-refs";
+import { inSequence } from "../../test/integration/in-sequence";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -835,6 +851,280 @@ describe("capaRouter — responsibleId is tenant-scoped", () => {
     expect(verified).toEqual({
       status: "VERIFICATION",
       verifiedBy: independent.userId,
+    });
+  });
+
+  // =========================================================================
+  // REQ-CAPA-008  Anyone who was ever responsible is not independent (Q50)
+  // =========================================================================
+  it("REQ-CAPA-008: reassigning the CAPA does not make the former owner independent; an admin who never touched it can verify", async () => {
+    const creator = await seedOrg({
+      orgId: "org-hist",
+      userId: "user-hist-creator",
+      role: "admin",
+    });
+    const first = await seedExtraMember({
+      orgId: creator.orgId,
+      userId: "user-hist-first-owner",
+      role: "admin",
+    });
+    const second = await seedExtraMember({
+      orgId: creator.orgId,
+      userId: "user-hist-second-owner",
+      role: "admin",
+    });
+
+    loginAs({ userId: creator.userId, organizationId: creator.orgId });
+    const created = await capaRouter.request("/", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(makeCreatePayload({ responsibleId: first.userId })),
+    });
+    expect(created.status).toBe(201);
+    const id: number = (await created.json()).id;
+
+    // Ownership moves to the second admin, who also implements it.
+    const reassigned = await capaRouter.request(`/${id}`, {
+      method: "PUT",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ responsibleId: second.userId }),
+    });
+    expect(reassigned.status).toBe(200);
+    loginAs({ userId: second.userId, organizationId: creator.orgId });
+    expect(
+      (
+        await capaRouter.request(`/${id}/implement`, {
+          method: "POST",
+          headers: JSON_HEADERS,
+          body: JSON.stringify({
+            implementationEvidence:
+              "Procedimento revisado e equipe retreinada.",
+          }),
+        })
+      ).status,
+    ).toBe(200);
+
+    const body = JSON.stringify({
+      effectivenessConfirmed: true,
+      verificationNotes: "Eficácia confirmada em auditoria interna posterior.",
+    });
+    // The FIRST owner is no longer `responsibleId`, but the audit history names
+    // them: blocked. So is the current owner/implementer.
+    const refusals = await inSequence(
+      [first.userId, second.userId],
+      async (blocked) => {
+        loginAs({ userId: blocked, organizationId: creator.orgId });
+        const res = await capaRouter.request(`/${id}/verify`, {
+          method: "POST",
+          headers: JSON_HEADERS,
+          body,
+        });
+        return { status: res.status, body: await res.json() };
+      },
+    );
+    for (const refusal of refusals) {
+      expect(refusal.status).toBe(403);
+      expect(refusal.body.code).toBe("self_approval_blocked");
+      // Another eligible verifier exists, so no waiver is on offer.
+      expect(refusal.body.details).toEqual({
+        independence_waiver_available: false,
+      });
+    }
+
+    // The creator (never responsible, never implemented) is independent.
+    loginAs({ userId: creator.userId, organizationId: creator.orgId });
+    const verified = await capaRouter.request(`/${id}/verify`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body,
+    });
+    expect(verified.status).toBe(200);
+    const [row] = await db
+      .select({
+        verifiedBy: correctiveAction.verifiedBy,
+        independence: correctiveAction.verificationIndependence,
+        justification: correctiveAction.verificationIndependenceJustification,
+      })
+      .from(correctiveAction)
+      .where(eq(correctiveAction.id, id));
+    expect(row).toEqual({
+      verifiedBy: creator.userId,
+      independence: "independent",
+      justification: null,
+    });
+  });
+
+  // =========================================================================
+  // REQ-CAPA-009  The sole eligible verifier may verify with a justification (Q50)
+  // =========================================================================
+  it("REQ-CAPA-009: a lab with one eligible verifier needs a written justification; a normal lab never waives", async () => {
+    const sole = await seedOrg({
+      orgId: "org-sole",
+      userId: "user-sole-admin",
+      role: "admin",
+    });
+    // Neither a technician (cannot verify) nor a banned admin is an alternative.
+    await seedExtraMember({
+      orgId: sole.orgId,
+      userId: "user-sole-technician",
+      role: "technician",
+    });
+    const banned = await seedExtraMember({
+      orgId: sole.orgId,
+      userId: "user-sole-banned-admin",
+      role: "admin",
+    });
+    await db
+      .update(user)
+      .set({ banned: true })
+      .where(eq(user.id, banned.userId));
+
+    const capaId = await seedCapa({
+      capaNumber: "CAPA-SOLE-1",
+      organizationId: sole.orgId,
+      createdBy: sole.userId,
+      status: "OPEN",
+    });
+    await db
+      .update(correctiveAction)
+      .set({ responsibleId: sole.userId })
+      .where(eq(correctiveAction.id, capaId));
+
+    loginAs({ userId: sole.userId, organizationId: sole.orgId });
+    expect(
+      (
+        await capaRouter.request(`/${capaId}/implement`, {
+          method: "POST",
+          headers: JSON_HEADERS,
+          body: JSON.stringify({
+            implementationEvidence:
+              "Procedimento revisado e equipe retreinada.",
+          }),
+        })
+      ).status,
+    ).toBe(200);
+
+    const verify = (extra: Record<string, unknown>) =>
+      capaRouter.request(`/${capaId}/verify`, {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          effectivenessConfirmed: true,
+          verificationNotes:
+            "Eficácia confirmada em auditoria interna posterior.",
+          ...extra,
+        }),
+      });
+
+    // No justification: refused, and the response says a waiver is available.
+    const noJustification = await verify({});
+    expect(noJustification.status).toBe(403);
+    const refusal = await noJustification.json();
+    expect(refusal.code).toBe("self_approval_blocked");
+    expect(refusal.details).toEqual({ independence_waiver_available: true });
+
+    // A justification below the minimum length is a validation error.
+    expect((await verify({ independenceJustification: "só eu" })).status).toBe(
+      400,
+    );
+
+    const [still] = await db
+      .select({ status: correctiveAction.status })
+      .from(correctiveAction)
+      .where(eq(correctiveAction.id, capaId));
+    expect(still?.status).toBe("IMPLEMENTATION");
+
+    const justification =
+      "Laboratório com um único administrador; não há outro verificador habilitado.";
+    const waived = await verify({ independenceJustification: justification });
+    expect(waived.status).toBe(200);
+    const waivedBody = await waived.json();
+    expect(waivedBody.data).toMatchObject({
+      status: "VERIFICATION",
+      verifiedBy: sole.userId,
+      verificationIndependence: "waived_single_verifier",
+      verificationIndependenceJustification: justification,
+    });
+
+    // The CAPA DTO carries it.
+    const detail = await capaRouter.request(`/${capaId}`, {
+      headers: JSON_HEADERS,
+    });
+    expect(await detail.json()).toMatchObject({
+      verificationIndependence: "waived_single_verifier",
+      verificationIndependenceJustification: justification,
+    });
+
+    // The audit entry records the flag and the justification.
+    const audit = await db
+      .select({ changes: correctiveActionAuditLog.changes })
+      .from(correctiveActionAuditLog)
+      .where(eq(correctiveActionAuditLog.capaId, capaId));
+    expect(audit.map((row) => row.changes)).toContainEqual(
+      expect.objectContaining({
+        verification_independence: "waived_single_verifier",
+        independenceJustification: justification,
+      }),
+    );
+
+    // A normal lab: with another eligible admin the owner is refused even WITH a
+    // justification, and an independent verifier is flagged "independent" (the
+    // justification, if sent, is not kept).
+    const normal = await seedOrg({
+      orgId: "org-normal",
+      userId: "user-normal-owner",
+      role: "admin",
+    });
+    const peer = await seedExtraMember({
+      orgId: normal.orgId,
+      userId: "user-normal-peer",
+      role: "admin",
+    });
+    const normalCapa = await seedCapa({
+      capaNumber: "CAPA-NORMAL-1",
+      organizationId: normal.orgId,
+      createdBy: normal.userId,
+      status: "IMPLEMENTATION",
+    });
+    await db
+      .update(correctiveAction)
+      .set({ responsibleId: normal.userId })
+      .where(eq(correctiveAction.id, normalCapa));
+    const verifyNormal = (extra: Record<string, unknown>) =>
+      capaRouter.request(`/${normalCapa}/verify`, {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          effectivenessConfirmed: true,
+          verificationNotes:
+            "Eficácia confirmada em auditoria interna posterior.",
+          ...extra,
+        }),
+      });
+
+    loginAs({ userId: normal.userId, organizationId: normal.orgId });
+    const ownerWithJustification = await verifyNormal({
+      independenceJustification: justification,
+    });
+    expect(ownerWithJustification.status).toBe(403);
+    expect((await ownerWithJustification.json()).details).toEqual({
+      independence_waiver_available: false,
+    });
+
+    loginAs({ userId: peer.userId, organizationId: normal.orgId });
+    expect(
+      (await verifyNormal({ independenceJustification: justification })).status,
+    ).toBe(200);
+    const [independentRow] = await db
+      .select({
+        independence: correctiveAction.verificationIndependence,
+        justification: correctiveAction.verificationIndependenceJustification,
+      })
+      .from(correctiveAction)
+      .where(eq(correctiveAction.id, normalCapa));
+    expect(independentRow).toEqual({
+      independence: "independent",
+      justification: null,
     });
   });
 });

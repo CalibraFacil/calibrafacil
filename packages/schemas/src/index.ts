@@ -2733,11 +2733,28 @@ export type ImplementCorrectiveActionInput = z.infer<
 /**
  * Schema for verifying CAPA effectiveness
  */
+export const CAPA_INDEPENDENCE_JUSTIFICATION_MIN_LENGTH = 30;
+export const CAPA_INDEPENDENCE_JUSTIFICATION_MAX_LENGTH = 1000;
+
 export const VerifyCorrectiveActionSchema = z.object({
   effectivenessConfirmed: z.boolean(),
   verificationNotes: z
     .string()
     .min(10, "Notas de verificação devem ter pelo menos 10 caracteres"),
+  /**
+   * Only honoured when the verifier is not independent of the CAPA AND no other
+   * eligible verifier exists in the laboratory (decision Q50): why the sole
+   * verifier verifies it anyway. Ignored for an independent verifier.
+   */
+  independenceJustification: z
+    .string()
+    .trim()
+    .min(
+      CAPA_INDEPENDENCE_JUSTIFICATION_MIN_LENGTH,
+      `A justificativa deve ter pelo menos ${CAPA_INDEPENDENCE_JUSTIFICATION_MIN_LENGTH} caracteres`,
+    )
+    .max(CAPA_INDEPENDENCE_JUSTIFICATION_MAX_LENGTH)
+    .optional(),
 });
 
 export type VerifyCorrectiveActionInput = z.infer<

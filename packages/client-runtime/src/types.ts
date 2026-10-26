@@ -1413,6 +1413,11 @@ export type CapaImplementInput = {
 export type CapaVerifyInput = {
   effectivenessConfirmed: boolean;
   verificationNotes?: string;
+  /**
+   * Only for a verifier who is not independent of the CAPA and is the
+   * laboratory's sole eligible verifier (decision Q50): why they verify anyway.
+   */
+  independenceJustification?: string;
 };
 
 export type CapaCloseInput = {

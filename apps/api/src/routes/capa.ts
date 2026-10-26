@@ -3,6 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import {
   correctiveAction,
   correctiveActionAuditLog,
+  type CapaVerificationIndependence,
   nonConformance,
   user,
 } from "@calibra-facil/db/schema";
@@ -12,6 +13,7 @@ import {
   ImplementCorrectiveActionSchema,
   VerifyCorrectiveActionSchema,
   CloseCorrectiveActionSchema,
+  CAPA_INDEPENDENCE_JUSTIFICATION_MIN_LENGTH,
   ListCorrectiveActionsQuerySchema,
 } from "@calibra-facil/schemas";
 import {
@@ -22,6 +24,7 @@ import { createCorrectiveActionRecord } from "../lib/corrective-actions";
 import { userIsOrganizationMember } from "../lib/tenant-refs";
 import { orgDb } from "../lib/org-db";
 import { domainErrorResponse, forbidden } from "../lib/domain-errors";
+import { assessCapaVerifierIndependence } from "../lib/capa-verification-independence";
 import { eq, and, or, ilike, desc, count, lte, sql } from "drizzle-orm";
 
 /**
@@ -711,34 +714,42 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
           );
         }
 
-        // Separation of duties (ISO/IEC 17025 §8.7): whoever owns the CAPA or
-        // recorded its implementation does not verify its effectiveness. The
-        // owner is `responsibleId`; an implementer is any actor of an "implement"
-        // audit entry (the row keeps no implementer column).
-        const [implementedByCaller] = await o
-          .select({ id: correctiveActionAuditLog.id })
-          .from(correctiveActionAuditLog)
-          .where(
-            and(
-              eq(
-                correctiveActionAuditLog.organizationId,
-                member.organizationId,
-              ),
-              eq(correctiveActionAuditLog.capaId, id),
-              eq(correctiveActionAuditLog.action, "implement"),
-              eq(correctiveActionAuditLog.performedBy, session.user.id),
-            ),
-          )
-          .limit(1);
-        if (existing.responsibleId === session.user.id || implementedByCaller) {
+        // Separation of duties (ISO/IEC 17025 §8.7, decision Q50): the verifier
+        // is independent of the CAPA, i.e. neither its owner now or ever nor
+        // anyone who implemented it. A lab with no other eligible verifier lets
+        // the sole one verify with a written justification (recorded, flagged).
+        const independence = await assessCapaVerifierIndependence(o, {
+          organizationId: member.organizationId,
+          capaId: id,
+          currentResponsibleId: existing.responsibleId,
+          verifierUserId: session.user.id,
+        });
+        const waived =
+          independence.status === "waivable" &&
+          !!input.independenceJustification;
+        if (
+          independence.status === "blocked" ||
+          (independence.status === "waivable" && !waived)
+        ) {
           return domainErrorResponse(
             c,
             forbidden(
               "self_approval_blocked",
-              "Separação de responsabilidades (ISO/IEC 17025): quem é responsável pela CAPA ou registrou sua implementação não pode verificar a eficácia. Solicite a verificação a outro membro autorizado.",
+              independence.status === "waivable"
+                ? `Separação de responsabilidades (ISO/IEC 17025): você é responsável pela CAPA ou registrou sua implementação, mas é o único verificador disponível. Informe a justificativa (mínimo ${CAPA_INDEPENDENCE_JUSTIFICATION_MIN_LENGTH} caracteres) para verificar sem independência.`
+                : "Separação de responsabilidades (ISO/IEC 17025): quem é ou já foi responsável pela CAPA, ou registrou sua implementação, não pode verificar a eficácia. Solicite a verificação a outro membro autorizado.",
+              {
+                details: {
+                  independence_waiver_available:
+                    independence.status === "waivable",
+                },
+              },
             ),
           );
         }
+        const verificationIndependence: CapaVerificationIndependence = waived
+          ? "waived_single_verifier"
+          : "independent";
 
         const [updated] = await o
           .update(correctiveAction)
@@ -747,6 +758,10 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
             verifiedBy: session.user.id,
             verificationNotes: input.verificationNotes,
             effectivenessConfirmed: input.effectivenessConfirmed,
+            verificationIndependence,
+            verificationIndependenceJustification: waived
+              ? (input.independenceJustification ?? null)
+              : null,
             status: "VERIFICATION",
           })
           // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
@@ -769,6 +784,10 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
             status: { old: existing.status, new: "VERIFICATION" },
             effectivenessConfirmed: input.effectivenessConfirmed,
             verificationNotes: input.verificationNotes,
+            verification_independence: verificationIndependence,
+            ...(waived
+              ? { independenceJustification: input.independenceJustification }
+              : {}),
           },
           performedBy: session.user.id,
           ipAddress: c.req.header("x-forwarded-for") || null,
