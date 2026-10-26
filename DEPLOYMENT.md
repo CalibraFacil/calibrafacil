@@ -844,6 +844,35 @@ value is checked when the API starts: anything that is not a version stops it wi
 naming `SYNC_MIN_DESKTOP_VERSION`, because a minimum that cannot be read would silently keep
 the exemption open.
 
+#### Desktop push permissions and offline attachments (sync protocol 4)
+
+Design and tables: `docs/architecture/sync-push-rbac-attachments.md`.
+
+- **Per-operation permissions.** `POST /api/sync/push` no longer gates the whole request on
+  `calibration:create`: each event is checked against the permission of the online route that does
+  the same thing, with the pushing member's effective role. A denied event is answered
+  `SYNC_PERMISSION_DENIED` (a permanent refusal: the desktop moves it to its refused list, where a
+  person discards it or re-queues it after a role change). Nothing is applied or claimed for it.
+  There is nothing to configure; a member who only holds service-order rights (for example the
+  `member` role) can now push the service orders they may create online.
+- **Attachment files.** A desktop of protocol 4 uploads an attachment's file before pushing its
+  `create_local_attachment` event: `init-upload` returns a presigned PUT bound to the declared size and
+  content type (the store must honour the signed `content-length` and `content-type` headers; the
+  self-hosted S3 gateway does, and `complete-upload` re-verifies size, type and SHA-256 whatever the
+  store does), `complete-upload` reads the object back and records it in the organization event log
+  (`sync_attachment.upload_completed`), and the event is refused (`SYNC_ATTACHMENT_NOT_UPLOADED`) unless
+  that record exists and the object is unchanged. Accepted types: JPEG, PNG, WebP, HEIC/HEIF, PDF,
+  plain text; at most 25 MiB. The objects live under `org/<id>/sync-attachments/` in
+  `R2_BUCKET_NAME` (the documents bucket): include that prefix in its backup and retention policy.
+- **Compatibility.** The push wire format is unchanged. A desktop of protocol 3 or earlier cannot upload
+  files, so its attachment events are refused for good with `SYNC_ATTACHMENT_UPLOAD_UNSUPPORTED` (before
+  this change they were acknowledged without any file, which is how field evidence stayed on the
+  laptop); they wait in the desktop's refused list and are re-queued after the update. On its first
+  start the updated desktop also queues again every attachment an older build had marked synced without
+  a remote key. A protocol 4 desktop against a cloud that predates protocol 4 is answered
+  `SYNC_PROTOCOL_UNSUPPORTED` and pushes again with protocol 3, as for protocol 3 above; its pull and
+  bootstrap keep stating protocol 3. `SYNC_MIN_DESKTOP_VERSION` need not be raised for this change.
+
 #### Desktop change log (sync protocol 3)
 
 Protocol 3 replaces the `updatedAt` pull cursor and the one-shot bootstrap of protocols 1 and 2

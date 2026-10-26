@@ -273,6 +273,80 @@ export async function generatePresignedUploadUrl(
 }
 
 /**
+ * A presigned PUT that is only valid for an upload of exactly `contentLength`
+ * bytes of `contentType`: both headers are part of the signature, so the store
+ * refuses a body of another size or type (a plain presign signs neither, and
+ * would let the holder of the URL upload anything of any size under the key).
+ * The caller sends the same `Content-Type`; the runtime derives the
+ * `Content-Length` from the body.
+ */
+export async function generateBoundPresignedUploadUrl(
+  client: R2S3Client,
+  bucket: string,
+  key: string,
+  binding: { contentType: string; contentLength: number },
+  expiresIn: number = 900,
+): Promise<string> {
+  const command = new PutObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    ContentType: binding.contentType,
+    ContentLength: binding.contentLength,
+  });
+  return getSignedUrl(presignClientFor(client), command, {
+    expiresIn,
+    signableHeaders: new Set(["content-type", "content-length"]),
+  });
+}
+
+export interface StoredObjectHead {
+  sizeBytes: number;
+  contentType: string | null;
+  /** The store's entity tag, quotes stripped: changes when the object is overwritten. */
+  etag: string | null;
+}
+
+/** HEAD an object: its stored size, type and ETag, or null when it does not exist. */
+export async function headObject(
+  client: R2S3Client,
+  bucket: string,
+  key: string,
+): Promise<StoredObjectHead | null> {
+  let response: unknown;
+  try {
+    response = await client.send(
+      new HeadObjectCommand({ Bucket: bucket, Key: key }),
+    );
+  } catch (error) {
+    if (isObjectNotFoundError(error)) return null;
+    throw error;
+  }
+  const record =
+    response && typeof response === "object" && !Array.isArray(response)
+      ? Object.fromEntries(Object.entries(response))
+      : {};
+  const length = record.ContentLength;
+  const contentType = record.ContentType;
+  const etag = record.ETag;
+  return {
+    sizeBytes: typeof length === "number" ? length : -1,
+    contentType: typeof contentType === "string" ? contentType : null,
+    etag: typeof etag === "string" ? etag.replace(/^"|"$/g, "") : null,
+  };
+}
+
+function isObjectNotFoundError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const metadata: unknown = Reflect.get(error, "$metadata");
+  const status =
+    metadata && typeof metadata === "object" && "httpStatusCode" in metadata
+      ? metadata.httpStatusCode
+      : undefined;
+  const name: unknown = Reflect.get(error, "name");
+  return status === 404 || name === "NotFound" || name === "NoSuchKey";
+}
+
+/**
  * Extract R2 key from stored certificateUrl
  * Format: https://storage.invalid/job-123.pdf -> job-123.pdf (see storedObjectUrl)
  */

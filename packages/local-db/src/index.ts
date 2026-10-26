@@ -66,6 +66,10 @@ export {
   createLocalAttachment,
   getLocalAttachment,
   listLocalAttachments,
+  markAttachmentUploaded,
+  markAttachmentUploadDead,
+  resetAttachmentUpload,
+  type AttachmentUploadStatus,
   type CreateLocalAttachmentInput,
   type LocalAttachment,
 } from "./attachments";

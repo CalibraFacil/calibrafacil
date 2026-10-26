@@ -148,7 +148,7 @@ A fresh bootstrap's cursor is `(xmin, 0)`, above any horizon.
 Protocol 1 and 2 desktops send neither `protocolVersion` on the bootstrap body nor on the pull: they get the
 old behaviour unchanged (`loadCloudSyncEventsSince`, the one-shot bootstrap), with a `Deprecation: true`
 header. A protocol 3 desktop against a cloud that predates it gets the old answers (the field is ignored)
-and reads them as before. `SYNC_PROTOCOL_VERSION` is 3; the push wire format did not change, so when an
+and reads them as before. The pull and the bootstrap state `SYNC_CHANGE_SEQ_PROTOCOL_VERSION` (3); the push states `SYNC_PROTOCOL_VERSION` (4 since the attachment upload leg, `sync-push-rbac-attachments.md`) and its wire format did not change, so when an
 older cloud refuses the push for its protocol number (`SYNC_PROTOCOL_UNSUPPORTED`) the desktop sends the same
 push once more with the protocol the cloud names (`apps/local-server/src/sync.ts`) and remembers it for
 that cloud. The legacy

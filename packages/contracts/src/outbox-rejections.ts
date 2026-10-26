@@ -34,6 +34,17 @@ export const OUTBOX_REJECTION_CLASSES = {
   // too). Refused for good: until a person decides (re-queue after a role
   // change, or discard) retrying would only repeat it.
   SYNC_PERMISSION_DENIED: "permanent",
+  // The offline attachment upload leg (sync-attachments.ts). What is declared is
+  // not something offline capture produces, or the stored bytes are not the
+  // declared ones: re-sending the same file will not change that.
+  SYNC_ATTACHMENT_TYPE_NOT_ALLOWED: "permanent",
+  SYNC_ATTACHMENT_TOO_LARGE: "permanent",
+  SYNC_ATTACHMENT_INTEGRITY_FAILED: "permanent",
+  // A build that predates the upload leg cannot send the bytes: update, then re-queue.
+  SYNC_ATTACHMENT_UPLOAD_UNSUPPORTED: "permanent",
+  // The blob is not (or no longer) confirmed on the cloud: the desktop uploads it
+  // again before pushing the event once more.
+  SYNC_ATTACHMENT_NOT_UPLOADED: "transient",
   INVALID_STANDARD_SNAPSHOT: "permanent",
   COMPILED_METHOD_SNAPSHOT_INVALID: "permanent",
   CALIBRATION_RECORD_INCOMPLETE: "permanent",
@@ -66,19 +77,44 @@ export const OUTBOX_REJECTION_CLASSES = {
 } as const satisfies Record<string, OutboxRejectionClass>;
 
 /**
+ * Failures the desktop itself records on an event it cannot send (no cloud
+ * answer is involved, so the API never emits them and the spec that compares
+ * the table with the API does not list them). All permanent: the file behind the
+ * attachment is gone or is no longer the file that was recorded, or the cloud
+ * refused the upload with a 4xx that names no code.
+ */
+export const LOCAL_OUTBOX_FAILURE_CLASSES = {
+  ATTACHMENT_FILE_MISSING: "permanent",
+  ATTACHMENT_FILE_CHANGED: "permanent",
+  ATTACHMENT_UPLOAD_REJECTED: "permanent",
+} as const satisfies Record<string, OutboxRejectionClass>;
+
+/**
  * A code the desktop does not know (a newer cloud, an older desktop) is
  * transient: backing off is always safe, whereas declaring unknown work dead
  * would hide regulated records behind a decision nobody made.
  */
 export function classifyOutboxRejection(code: string): OutboxRejectionClass {
-  const known = Object.entries(OUTBOX_REJECTION_CLASSES).find(
-    ([knownCode]) => knownCode === code,
-  );
+  const known = Object.entries({
+    ...OUTBOX_REJECTION_CLASSES,
+    ...LOCAL_OUTBOX_FAILURE_CLASSES,
+  }).find(([knownCode]) => knownCode === code);
   return known?.[1] ?? "transient";
 }
 
+/** Whether the table (cloud rejections or the desktop's own failures) has a decision for `code`. */
+export function isKnownOutboxRejectionCode(code: string): boolean {
+  return (
+    Object.hasOwn(OUTBOX_REJECTION_CLASSES, code) ||
+    Object.hasOwn(LOCAL_OUTBOX_FAILURE_CLASSES, code)
+  );
+}
+
 export const PERMANENT_OUTBOX_REJECTION_CODES: readonly string[] =
-  Object.entries(OUTBOX_REJECTION_CLASSES)
+  Object.entries({
+    ...OUTBOX_REJECTION_CLASSES,
+    ...LOCAL_OUTBOX_FAILURE_CLASSES,
+  })
     .filter(([, rejectionClass]) => rejectionClass === "permanent")
     .map(([code]) => code);
 

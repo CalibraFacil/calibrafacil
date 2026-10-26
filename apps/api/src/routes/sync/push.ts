@@ -193,7 +193,10 @@ export const pushRoutes = new Hono<SyncRouterEnv>().post(
 
       let prepared: PreparedDesktopEventSideEffects;
       try {
-        prepared = await prepareDesktopEventSideEffects(command, memberData);
+        prepared = await prepareDesktopEventSideEffects(command, memberData, {
+          env: c.env,
+          protocolVersion,
+        });
       } catch (error) {
         console.error(
           "[Sync] Preparing a desktop sync event failed:",

@@ -25,7 +25,11 @@ import { describe, expect, it, vi } from "vitest";
 // `withLabPermission({calibration:["create"]})` gate with the authentication,
 // membership and LAB-organization middleware (the four unnamed entries before
 // its handler) and decides each operation's permission inside the handler
-// (modules/sync/operation-permissions.ts).
+// (modules/sync/operation-permissions.ts). P0-5 (offline attachment upload leg)
+// changed the attachment init-upload and complete-upload handlers (a presign bound
+// to the declared size and type; the stored object is verified and recorded) and
+// POST /push (the attachment event is checked against the upload before it is
+// applied).
 const { named } = vi.hoisted(() => ({
   named: <T extends (...args: never[]) => unknown>(fn: T, name: string) =>
     Object.defineProperty(fn, "name", { value: name }),

@@ -8,6 +8,7 @@ import {
   applyCreateLocalJobDraft,
 } from "./apply-job-draft-and-asset-create";
 import { applyUpdateLocalAsset } from "./apply-asset-update";
+import { applyCreateLocalAttachment } from "./apply-attachment";
 import {
   applyCreateLocalCustomer,
   applyUpdateLocalCustomer,
@@ -79,11 +80,13 @@ export async function applyDesktopSyncEvent(
           reason:
             "Certificates are issued online only: approve the job in the cloud app and the certificate is generated and signed there. Client-rendered certificate PDFs are not accepted.",
         };
-      // Audit-only events: the desktop records them in its outbox, but the
-      // cloud has nothing to apply (attachment bytes travel through the
-      // attachment endpoints, the legacy certificate-draft marker carries no
-      // data).
+      // The attachment's bytes travel through the attachment endpoints; the event
+      // is recorded only once they were verified (prepareCreateLocalAttachment
+      // refused it before this point otherwise).
       case "create_local_attachment":
+        return await applyCreateLocalAttachment(input, actorUserId);
+      // Audit-only: the legacy certificate-draft marker carries no data, so the
+      // cloud has nothing to apply.
       case "create_local_certificate_draft":
         await writeDesktopSyncAudit(input, actorUserId);
         return { ok: true };

@@ -4,6 +4,7 @@ export * from "./sync-protocol";
 export * from "./sync-change-seq";
 export * from "./outbox-rejections";
 export * from "./attachments";
+export * from "./sync-attachments";
 export * from "./diagnostics";
 export type { AppType } from "./api-app";
 export {

@@ -15,7 +15,11 @@ import {
 } from "@calibra-facil/local-db";
 import { createLocalServer } from "./server";
 import { createMethodDefinitionEngine } from "./method-engine";
-import { createAssetStub, seedSyncedReferenceData } from "./test-support";
+import {
+  answerAttachmentUpload,
+  createAssetStub,
+  seedSyncedReferenceData,
+} from "./test-support";
 import type { LocalServerConfig } from "./bootstrap";
 
 const tempDirectories: string[] = [];
@@ -1739,6 +1743,8 @@ INSERT INTO sync_conflicts (
     const syncOptions = {
       fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
+        const attachmentAnswer = answerAttachmentUpload(url, init);
+        if (attachmentAnswer) return attachmentAnswer;
         expect(new Headers(init?.headers).get("authorization")).toBe(
           "Bearer cloud-token",
         );

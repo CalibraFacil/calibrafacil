@@ -1,4 +1,5 @@
 import {
+  SYNC_CHANGE_SEQ_PROTOCOL_VERSION,
   SYNC_PROTOCOL_VERSION,
   SYNC_PULL_PROTOCOL_PARAM,
   desktopUpdateRequiredMessage,
@@ -35,6 +36,7 @@ import {
   type LocalDatabase,
 } from "@calibra-facil/local-db";
 import { randomUUID } from "node:crypto";
+import { uploadAttachmentsBeforePush } from "./attachment-upload";
 import type { LocalServerConfig } from "./bootstrap";
 
 export type LocalSyncRuntime = {
@@ -397,7 +399,7 @@ async function bootstrapFromCloud(
       method: "POST",
       headers,
       body: JSON.stringify({
-        protocolVersion: SYNC_PROTOCOL_VERSION,
+        protocolVersion: SYNC_CHANGE_SEQ_PROTOCOL_VERSION,
         pageToken: token,
       }),
     });
@@ -490,7 +492,7 @@ async function pullCloudChanges(
     // the commit-ordered change log, an older one ignores it and serves `updatedAt`.
     pullUrl.searchParams.set(
       SYNC_PULL_PROTOCOL_PARAM,
-      String(SYNC_PROTOCOL_VERSION),
+      String(SYNC_CHANGE_SEQ_PROTOCOL_VERSION),
     );
     const cursor = getSyncCursor(database);
     if (cursor) {
@@ -553,11 +555,25 @@ async function pushPendingOutbox(
   });
   if (pending.length === 0) return;
 
-  // Every event travels as an event. There is no side channel for certificate
-  // bytes: certificates are rendered and signed in the cloud after an online
-  // approval, so a queued `generate_local_certificate_pdf` (an older build) is
-  // pushed like any other and the cloud refuses it with a precise code.
-  await pushOutboxEvents(config, database, fetchImpl, pending, cloudApiUrl);
+  // An attachment's file goes to the cloud before its event does (init-upload,
+  // PUT, complete-upload: attachment-upload.ts); an event whose file is not on
+  // the cloud yet stays out of this push and is retried or dead, as the cause
+  // decides. Every other event travels as an event: there is no side channel for
+  // certificate bytes (certificates are rendered and signed in the cloud after an
+  // online approval, so a queued `generate_local_certificate_pdf` from an older
+  // build is pushed like any other and the cloud refuses it with a precise code).
+  const ready = await uploadAttachmentsBeforePush(
+    {
+      config,
+      database,
+      fetchImpl,
+      cloudApiUrl,
+      applyCloudAuthHeaders: (headers) =>
+        applyCloudAuthHeaders(config, headers),
+    },
+    pending,
+  );
+  await pushOutboxEvents(config, database, fetchImpl, ready, cloudApiUrl);
 }
 
 async function pushOutboxEvents(

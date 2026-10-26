@@ -74,6 +74,34 @@ const REASONS: ReadonlyArray<readonly [string, string]> = [
     'Seu perfil de acesso não permite esta operação na nuvem, mesmo online. Peça a um gestor para fazê-la, ou reenvie depois que o perfil for alterado.',
   ],
   [
+    'SYNC_ATTACHMENT_TYPE_NOT_ALLOWED',
+    'Este tipo de arquivo não é aceito como anexo. Use foto (JPEG, PNG, WebP, HEIC), PDF ou texto.',
+  ],
+  [
+    'SYNC_ATTACHMENT_TOO_LARGE',
+    'O arquivo deste anexo é maior que o limite de 25 MB.',
+  ],
+  [
+    'SYNC_ATTACHMENT_INTEGRITY_FAILED',
+    'O arquivo enviado não confere com o anexo registrado neste computador. Reenvie o anexo.',
+  ],
+  [
+    'SYNC_ATTACHMENT_UPLOAD_UNSUPPORTED',
+    'Esta versão do aplicativo não envia arquivos de anexo. Atualize o aplicativo e reenvie o anexo.',
+  ],
+  [
+    'ATTACHMENT_FILE_MISSING',
+    'O arquivo deste anexo não está mais neste computador, então não pode ser enviado.',
+  ],
+  [
+    'ATTACHMENT_FILE_CHANGED',
+    'O arquivo deste anexo foi alterado depois de registrado e não corresponde mais ao que foi capturado.',
+  ],
+  [
+    'ATTACHMENT_UPLOAD_REJECTED',
+    'A nuvem recusou o envio do arquivo deste anexo.',
+  ],
+  [
     'INVALID_STATUS_TRANSITION',
     'Na nuvem, a calibração está em um status que não permite esta alteração.',
   ],

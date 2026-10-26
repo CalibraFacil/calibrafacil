@@ -5,6 +5,7 @@ import {
   stringifySyncConflictPayload,
 } from "@calibra-facil/contracts";
 import type { LocalDatabase } from "./database";
+import { resetAttachmentUpload } from "./attachments";
 import { releaseSettledSkippedRows } from "./skipped-rows";
 import {
   recomputeServiceOrderSyncStates,
@@ -382,6 +383,16 @@ WHERE event_id = @eventId
 `,
       )
       .run({ eventId });
+    // A dead attachment goes through the upload leg again, from the start.
+    const requeuedEvent = database
+      .prepare<
+        { eventId: string },
+        { aggregate_kind: string; aggregate_id: string }
+      >("SELECT aggregate_kind, aggregate_id FROM domain_events WHERE event_id = @eventId")
+      .get({ eventId });
+    if (requeuedEvent?.aggregate_kind === "attachment") {
+      resetAttachmentUpload(database, requeuedEvent.aggregate_id);
+    }
     requeued = true;
   })();
 
@@ -555,6 +566,22 @@ WHERE event_id = @eventId
           >("SELECT attempt_count FROM outbox WHERE event_id = @eventId")
           .get({ eventId })?.attempt_count ?? 0;
       const lastError = `${rejection.code}: ${rejection.reason}`;
+      const rejectedEvent = eventsById.get(eventId);
+
+      // The cloud does not confirm the file (never completed, or not the file
+      // that was verified): a retry uploads it again before sending the event.
+      // A permanent refusal leaves the attachment dead alongside its event.
+      if (rejectedEvent?.aggregate_kind === "attachment") {
+        if (classifyOutboxRejection(rejection.code) === "permanent") {
+          database
+            .prepare(
+              "UPDATE attachments SET upload_status = 'dead' WHERE id = @id AND upload_status <> 'synced'",
+            )
+            .run({ id: rejectedEvent.aggregate_id });
+        } else {
+          resetAttachmentUpload(database, rejectedEvent.aggregate_id);
+        }
+      }
 
       if (classifyOutboxRejection(rejection.code) === "permanent") {
         // Never going to be accepted as it stands: park it where nothing
@@ -787,6 +814,33 @@ function applyAcceptedRemoteEntity(
   event: DomainEventRow | undefined,
   accepted: SyncPushResponse["accepted"][number],
 ) {
+  if (event?.aggregate_kind === "attachment") {
+    // Synced means the cloud holds the file: only an attachment that has a
+    // `remote_key` (set by the upload leg once the cloud verified the bytes, or
+    // returned by this acknowledgement) can become synced. An acknowledgement
+    // alone proves nothing about the bytes: an older cloud accepted the event
+    // without ever having them, which is how files were lost before.
+    database
+      .prepare(
+        `
+UPDATE attachments
+SET upload_status = 'synced',
+  remote_key = COALESCE(@remoteKey, remote_key)
+WHERE id = @localId
+  AND COALESCE(@remoteKey, remote_key) IS NOT NULL
+`,
+      )
+      .run({
+        remoteKey:
+          typeof accepted.remoteEntityId === "string"
+            ? accepted.remoteEntityId
+            : null,
+        localId: event.aggregate_id,
+      });
+
+    return;
+  }
+
   if (!event || accepted.remoteEntityId === undefined) return;
 
   if (
@@ -871,25 +925,6 @@ WHERE id = @localId
           asRecord(accepted.remoteEntity),
           "updatedAt",
         ),
-        localId: event.aggregate_id,
-      });
-  }
-
-  if (event.aggregate_kind === "attachment") {
-    database
-      .prepare(
-        `
-UPDATE attachments
-SET upload_status = 'synced',
-  remote_key = COALESCE(@remoteKey, remote_key)
-WHERE id = @localId
-`,
-      )
-      .run({
-        remoteKey:
-          typeof accepted.remoteEntityId === "string"
-            ? accepted.remoteEntityId
-            : null,
         localId: event.aggregate_id,
       });
   }

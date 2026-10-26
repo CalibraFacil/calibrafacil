@@ -227,11 +227,11 @@ describe("syncRouter — real DB + real middleware (tenant isolation cut-line)",
   });
 
   // ───────────────────────────────────────────────────────────────────────────
-  // REQ-SYNC-003: RBAC gate — member=403, operator=200
-  // withLabPermission({ calibration: ["create"] }) — member role has only "read"
-  // RED-able: downgrading the guard to calibration:read would let member through.
+  // REQ-SYNC-003: RBAC — decided per event (P0-2, sync-operation-permissions.int.spec.ts):
+  // a member (read-only) is refused SYNC_PERMISSION_DENIED, an operator is not.
+  // RED-able: dropping the per-event check would let the member's event through.
   // ───────────────────────────────────────────────────────────────────────────
-  it("REQ-SYNC-003a: POST /push as role=member → 403 (calibration:create denied)", async () => {
+  it("REQ-SYNC-003a: POST /push as role=member → the event is refused SYNC_PERMISSION_DENIED (P0-2: decided per operation, not by one gate)", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "member" });
     loginAs({ userId: org.userId, organizationId: org.orgId });
 
@@ -239,15 +239,24 @@ describe("syncRouter — real DB + real middleware (tenant isolation cut-line)",
       method: "POST",
       headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
       body: buildPushBody([
-        buildSyncEvent({
-          organizationId: org.orgId,
-          unitId: org.unitId,
-          actorUserId: org.userId,
-        }),
+        {
+          ...buildSyncEvent({
+            organizationId: org.orgId,
+            unitId: org.unitId,
+            actorUserId: org.userId,
+          }),
+          entityType: "asset",
+          operation: "create_local_asset",
+        },
       ]),
     });
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.accepted).toEqual([]);
+    expect(body.rejected).toEqual([
+      expect.objectContaining({ code: "SYNC_PERMISSION_DENIED" }),
+    ]);
   });
 
   it("REQ-SYNC-003b: POST /push as role=operator with valid same-org empty-events batch → 200 (not 403)", async () => {
@@ -961,7 +970,7 @@ describe("syncRouter — real DB + real middleware (tenant isolation cut-line)",
     expect(audit).toHaveLength(0);
   });
 
-  it("REQ-SYNC-PUSH-UNKNOWN-002: the audit-only desktop events (attachment, certificate draft) are still acknowledged", async () => {
+  it("REQ-SYNC-PUSH-UNKNOWN-002: the audit-only legacy certificate-draft marker is still acknowledged; an attachment is not (sync-attachments.int.spec.ts)", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "operator" });
     loginAs({ userId: org.userId, organizationId: org.orgId });
 
@@ -993,8 +1002,11 @@ describe("syncRouter — real DB + real middleware (tenant isolation cut-line)",
     });
 
     const body = await res.json();
-    expect(body.rejected).toHaveLength(0);
-    expect(body.accepted).toHaveLength(2);
+    // An attachment event that names no uploaded file is no longer acknowledged.
+    expect(body.rejected).toHaveLength(1);
+    expect(body.rejected[0].eventId).toBe("evt-attachment-001");
+    expect(body.accepted).toHaveLength(1);
+    expect(body.accepted[0].eventId).toBe("evt-draft-001");
   });
 
   // ───────────────────────────────────────────────────────────────────────────
