@@ -29,6 +29,7 @@ import { competencesRouter } from "./competences";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { seedExtraMember } from "../../test/integration/tenant-refs";
 
 const JSON_HEADERS = { "content-type": "application/json" } as const;
 
@@ -229,9 +230,15 @@ describe("competences router: workflow handlers (P2-18d)", () => {
     expect(cancelledRow.status).toBe("CANCELLED");
     expect(cancelledRow.notes).toBe("Desistência do técnico");
 
+    // Separation of duties: the person being re-qualified is someone else.
+    const subject = await seedExtraMember({
+      orgId: a.orgId,
+      userId: "user-renewed",
+      role: "technician",
+    });
     const toSuspend = await seedCompetence({
       organizationId: a.orgId,
-      userId: a.userId,
+      userId: subject.userId,
       status: "ACTIVE",
     });
     const suspended = await post(`/${toSuspend}/suspend`);
@@ -255,6 +262,35 @@ describe("competences router: workflow handlers (P2-18d)", () => {
     expect(await auditActions(toSuspend)).toEqual(
       expect.arrayContaining(["suspend", "renew"]),
     );
+  });
+
+  it("REQ-18D-COMP-4: renew by the competence's own user is 403 self_approval_blocked and changes nothing; another admin can renew", async () => {
+    const { a } = await twoLabs();
+    const other = await seedExtraMember({
+      orgId: a.orgId,
+      userId: "user-other-admin",
+      role: "admin",
+    });
+    const own = await seedCompetence({
+      organizationId: a.orgId,
+      userId: a.userId,
+      status: "SUSPENDED",
+    });
+
+    const refused = await post(`/${own}/renew`, { passed: true });
+    expect(refused.status).toBe(403);
+    expect((await refused.json()).code).toBe("self_approval_blocked");
+    const unchanged = await competenceRow(own);
+    expect(unchanged.status).toBe("SUSPENDED");
+    expect(unchanged.approvedBy).toBeNull();
+    expect(await auditActions(own)).toEqual([]);
+
+    loginAs({ userId: other.userId, organizationId: a.orgId });
+    const renewed = await post(`/${own}/renew`, { passed: true });
+    expect(renewed.status).toBe(200);
+    const row = await competenceRow(own);
+    expect(row.status).toBe("ACTIVE");
+    expect(row.approvedBy).toBe(other.userId);
   });
 
   it("REQ-18D-COMP-3: lab B's competence id is a 404 on every workflow handler and lab B's row is untouched", async () => {

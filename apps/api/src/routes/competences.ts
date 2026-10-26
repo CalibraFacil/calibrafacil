@@ -1050,6 +1050,19 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
           );
         }
 
+        // Separation of duties (ISO/IEC 17025 §6.2): renewing re-activates the
+        // competence and records the renewer as its approver, so the person
+        // being qualified cannot renew their own.
+        if (existing.userId === session.user.id) {
+          return domainErrorResponse(
+            c,
+            forbidden(
+              "self_approval_blocked",
+              "Separação de responsabilidades (ISO/IEC 17025): ninguém pode renovar a própria competência. Solicite a renovação a outro membro autorizado.",
+            ),
+          );
+        }
+
         const qualifiedAt = input.qualifiedAt
           ? new Date(input.qualifiedAt)
           : new Date();
