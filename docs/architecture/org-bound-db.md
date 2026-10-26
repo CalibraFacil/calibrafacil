@@ -395,8 +395,9 @@ added or removed without a migration.
     never inside a transaction); `organization-media` commits the new logo and its audit entry together and
     removes the previous object from storage after the commit; `email-domains` verify / activate commit the
     change with its audit entry. `organization-lifecycle` and `lib/records-retention.ts` soft-delete in one
-    organization-naming transaction (stamp, key revocations, audit rows), and `removeLabOrganization` hands its
-    raw transaction to the evidence probe. `services/lab-provisioning.ts` creates the first membership in the new
+    organization-naming transaction (stamp, key revocations, audit rows), and `removeLabOrganization` (the hard
+    delete of a just-created, record-less laboratory) runs on the system path: the guard of the `organization`
+    row yields to `calibra.allow_org_purge` for the table owner only (migration 0127), never for `calibra_app`. `services/lab-provisioning.ts` creates the first membership in the new
     laboratory's transaction; `services/activation-checklist.ts` reads one laboratory in one transaction.
     Public self-serve sign-up keeps its slot ledger in the global `platform_event_log`
     (`lib/public-signup-store.ts`); its one tenant read ("is this person already in a laboratory") is a system-path
