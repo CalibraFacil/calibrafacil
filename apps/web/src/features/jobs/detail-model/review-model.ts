@@ -21,7 +21,9 @@ import { buildJobVerdictModel, formatExpandedUncertainty } from './verdict'
 /**
  * Signer-facing warnings from the frozen accredited-scope (CMC) verdict.
  * One item per server finding when available, else a single generic warning
- * for the adverse status. PASS/NOT_EVALUATED/absent produce nothing.
+ * for the adverse status. A clean PASS or an absent status produces nothing;
+ * every non-positive verdict (partial, not evaluated, no scope lines) says the
+ * certificate will be issued without the accreditation seal (Q42).
  */
 export function buildScopeComplianceWarnings(
   job: ReviewJobDetailData | null | undefined,
@@ -36,32 +38,67 @@ export function buildScopeComplianceWarnings(
       {
         key: 'scope-compliance-not-evaluated',
         message:
-          'O escopo acreditado (CMC) não pôde ser verificado automaticamente para este job. Confira os pontos e a incerteza manualmente contra o escopo antes de assinar.',
+          'O escopo acreditado (CMC) não pôde ser verificado automaticamente para este job. O certificado será emitido sem o símbolo de acreditação. Confira os pontos e a incerteza manualmente contra o escopo antes de assinar.',
         severity: 'warning',
         status: 'warning',
       },
     ]
   }
 
-  // On PASS, only partial-coverage notes surface (points the gate had to
-  // skip); on adverse statuses every finding surfaces.
+  // The unit has no accredited scope lines at all (Q42): nothing to compare,
+  // never a positive verdict.
+  if (status === 'NO_SCOPE_LINES') {
+    return [
+      {
+        key: 'scope-compliance-no-scope-lines',
+        message:
+          'A unidade não tem linhas de escopo acreditado (CMC) cadastradas, então o escopo não pôde ser verificado. O certificado será emitido sem o símbolo de acreditação.',
+        severity: 'warning',
+        status: 'warning',
+      },
+    ]
+  }
+
+  // Partially evaluated is never PASS (Q42): the findings below name the points
+  // that could not be compared, and the seal is withheld.
+  const sealNote =
+    status === 'PARTIALLY_EVALUATED' ||
+    (status === 'PASS' &&
+      findings.some((finding) => finding?.kind === 'not_evaluated'))
+      ? [
+          {
+            key: 'scope-compliance-partial',
+            message:
+              'Parte dos pontos não pôde ser comparada ao escopo acreditado (CMC). O certificado será emitido sem o símbolo de acreditação.',
+            severity: 'warning' as const,
+            status: 'warning' as const,
+          },
+        ]
+      : []
+
+  // On a partial verdict the findings are the points the gate could not
+  // compare; on adverse statuses every finding surfaces.
   const relevant =
     status === 'OUT_OF_SCOPE' || status === 'U_BELOW_CMC'
       ? findings
-      : status === 'PASS'
+      : status === 'PASS' || status === 'PARTIALLY_EVALUATED'
         ? findings.filter((finding) => finding?.kind === 'not_evaluated')
         : []
   const findingMessages = relevant.flatMap((finding) =>
     finding?.message ? [finding.message] : [],
   )
   if (findingMessages.length > 0) {
-    return findingMessages.map((message, index) => ({
-      key: `scope-compliance-${index}`,
-      message,
-      severity: 'warning' as const,
-      status: 'warning' as const,
-    }))
+    return [
+      ...sealNote,
+      ...findingMessages.map((message, index) => ({
+        key: `scope-compliance-${index}`,
+        message,
+        severity: 'warning' as const,
+        status: 'warning' as const,
+      })),
+    ]
   }
+  if (sealNote.length > 0) return sealNote
   if (status !== 'OUT_OF_SCOPE' && status !== 'U_BELOW_CMC') return []
   return [
     {

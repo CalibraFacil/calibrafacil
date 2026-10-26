@@ -243,11 +243,13 @@ export const organization = pgTable(
     // #427 Phase 1: accredited-scope (CMC) guard behavior. 'warn' keeps the
     // Phase 0 classification-only behavior; 'enforce' blocks accredited
     // approval on scope violations unless a documented override downgrades
-    // the issuance to non-accredited (seal suppressed).
-    scopeEnforcementMode: text("scope_enforcement_mode")
-      .$type<ScopeEnforcementMode>()
-      .default("warn")
-      .notNull(),
+    // the issuance to non-accredited (seal suppressed). NULL = the lab never
+    // chose (Q45, migration 0128): the effective mode is
+    // `resolveScopeEnforcementMode` (enforce while accredited, else warn), so
+    // an explicit choice is never overridden by the default.
+    scopeEnforcementMode: text(
+      "scope_enforcement_mode",
+    ).$type<ScopeEnforcementMode>(),
     // Legal-metrology repair authorization (RBMLQ-I "oficina permissionária").
     // Distinct from the RBC/CGCRE accreditation above: required on repair OS
     // documents for instruments subject to legal metrology (Port. Inmetro 65/2015),
@@ -445,6 +447,20 @@ export const organizationUnit = pgTable(
      * unsigned. Signing FAILURES always fail regardless of this flag.
      */
     requireSignature: boolean("require_signature").default(false).notNull(),
+    /**
+     * Q51 (migration 0129): the unit issues certificates UNSIGNED on purpose.
+     * Non-null = the setting is on, and this is its mandatory justification.
+     * Only an admin/owner sets it, never implicitly (an expired certificate does
+     * not): without it a unit that has ever had a signing certificate fails
+     * closed when none is valid (P0-8). The change is audited in
+     * `organization_event_log`; who/when are kept here.
+     */
+    unsignedIssuanceReason: text("unsigned_issuance_reason"),
+    unsignedIssuanceSetBy: text("unsigned_issuance_set_by").references(
+      () => user.id,
+      { onDelete: "set null" },
+    ),
+    unsignedIssuanceSetAt: timestamp("unsigned_issuance_set_at"),
     createdBy: text("created_by").references(() => user.id, {
       onDelete: "set null",
     }),
@@ -6779,7 +6795,8 @@ export type NotificationType =
   | "ASSET_DUE_FOR_LEGAL_VERIFICATION" // Legal-metrology TRACK 2 — regulation-fixed verification periodicity (Inmetro/RBMLQ-I), independent of recalibration
   | "STANDARD_EXPIRING"
   | "STANDARD_EXPIRED" // ISO 17025 Clause 6.4.6 - Standard expired, jobs blocked
-  | "SIGNING_CERTIFICATE_EXPIRING" // CMP-02 - ICP-Brasil A1 signing certificate nearing validUntil (emission degrades to unsigned once expired)
+  | "SIGNING_CERTIFICATE_EXPIRING" // CMP-02 - ICP-Brasil A1 signing certificate nearing validUntil (emission is BLOCKED once it lapses, P0-8)
+  | "SIGNING_CERTIFICATE_LAPSED" // P0-8 - a certificate was NOT issued because the unit's signing certificate expired/was revoked/is missing
   | "ACCREDITATION_EXPIRING" // #647 - Cgcre/RBC accreditation vigência nearing validUntil (seal stops rendering once expired)
   | "ACCREDITED_SCOPE_LINE_EXPIRING" // #427 Phase 2 - a scope line's vigência nearing validUntil (points stop matching once expired)
   | "JOB_OVERDUE"

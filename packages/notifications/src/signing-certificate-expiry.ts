@@ -3,26 +3,36 @@
  * (issue #645 · CMP-02). Kept in its OWN module — no DB / wall-clock / email
  * imports — so it is directly unit-testable with fixed dates.
  *
- * An A1 certificate has ~1yr validity. When it expires, emission silently
- * degrades to unsigned (a separate issue, CMP-01). This decider only READS the
- * certificate's `validUntil` and decides whether to warn the lab ahead of time.
- * It does NOT touch signing crypto.
+ * An A1 certificate has ~1yr validity. Once it expires, issuance for the unit
+ * FAILS CLOSED (P0-8: no unsigned PDF), so the lab is warned ahead of time.
+ * This decider only READS the certificate's `validUntil` and decides whether to
+ * warn. It does NOT touch signing crypto.
  *
- * Escalating lead windows (days before `validUntil`): 30 → 15 → 7. On any given
- * cron run a certificate belongs to exactly one window — the smallest lead that
- * is still ≥ the days remaining. Idempotency is "per window": once an alert has
- * been recorded for a window (its `leadTimeDays`), that window never re-fires;
- * crossing into the next, smaller window fires a fresh, more urgent alert.
+ * Escalating lead windows (days before `validUntil`): 30 → 14 → 7 for signing
+ * certificates (P0-8). On any given cron run a certificate belongs to exactly
+ * one window — the smallest lead that is still ≥ the days remaining.
+ * Idempotency is "per window": once an alert has been recorded for a window
+ * (its `leadTimeDays`), that window never re-fires; crossing into the next,
+ * smaller window fires a fresh, more urgent alert.
+ *
+ * The other validity alerts that reuse this decider (the accreditation vigência
+ * and the accredited-scope lines) keep their 30 → 15 → 7 windows: they pass no
+ * `leadDays`.
  */
 
 /**
- * Lead windows in days before `validUntil`, from widest to narrowest. The
- * widest (30) defines the overall "within ≤30 days" alerting threshold
- * (REQ-CMP-EXP-001).
+ * Lead windows in days before a signing certificate's `validUntil`, from widest
+ * to narrowest. The widest (30) defines the overall "within ≤30 days" alerting
+ * threshold (REQ-CMP-EXP-001).
  */
-export const SIGNING_CERTIFICATE_EXPIRY_LEAD_DAYS = [30, 15, 7] as const;
+export const SIGNING_CERTIFICATE_EXPIRY_LEAD_DAYS = [30, 14, 7] as const;
+
+/** Windows of the other validity alerts (accreditation vigência, scope lines). */
+export const DEFAULT_EXPIRY_LEAD_DAYS = [30, 15, 7] as const;
 
 export interface SigningCertificateExpiryInput {
+  /** Lead windows to alert at; defaults to {@link DEFAULT_EXPIRY_LEAD_DAYS}. */
+  leadDays?: readonly number[];
   /** The certificate's ICP-Brasil validity end (`organizationSigningCertificate.validUntil`). */
   validUntil: Date;
   /** Evaluation instant (the cron run's "now"). */
@@ -72,7 +82,8 @@ export function decideSigningCertificateExpiryAlert(
 ): SigningCertificateExpiryDecision {
   const daysUntilExpiry = daysUntilCalendar(input.now, input.validUntil);
 
-  const widest = Math.max(...SIGNING_CERTIFICATE_EXPIRY_LEAD_DAYS);
+  const leadDays = input.leadDays ?? DEFAULT_EXPIRY_LEAD_DAYS;
+  const widest = Math.max(...leadDays);
 
   // Out of window: already expired (< 0 — CMP-01 territory, not an early
   // warning) or further out than the widest lead.
@@ -81,10 +92,8 @@ export function decideSigningCertificateExpiryAlert(
   }
 
   // The active window is the smallest lead that still covers the days remaining
-  // (e.g. 25 days → 30-day window; 12 → 15; 5 → 7).
-  const ascending = [...SIGNING_CERTIFICATE_EXPIRY_LEAD_DAYS].sort(
-    (a, b) => a - b,
-  );
+  // (30 → 14 → 7: 25 days → the 30 window; 12 → 14; 5 → 7).
+  const ascending = [...leadDays].sort((a, b) => a - b);
   const leadTimeDays =
     ascending.find((lead) => daysUntilExpiry <= lead) ?? null;
 

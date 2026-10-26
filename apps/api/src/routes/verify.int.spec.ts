@@ -6,6 +6,7 @@ import {
   asset,
   assetType,
   calibrationJob,
+  certificateInput,
   customer,
   organization,
   organizationUnit,
@@ -724,6 +725,109 @@ describe("verifyRouter — real DB, public certificate verification", () => {
     expect(body.accreditation.accredited).toBe(false);
     expect(body.accreditation.number).toBeNull();
   });
+  // =========================================================================
+  // Q42 — the seal is the decision FROZEN at approval (certificate_input.seal);
+  // the lab's current accreditation fields never re-decide an issued
+  // certificate. Both directions are pinned, on a lab whose live fields say the
+  // opposite of the frozen decision.
+  // =========================================================================
+  async function freezeSeal(
+    cert: SeededCert,
+    seal: { accredited: boolean; withheldReason?: string | null },
+    accreditationNumber?: string,
+  ) {
+    await db.insert(certificateInput).values({
+      organizationId: cert.lab.orgId,
+      jobId: cert.jobRowId,
+      schemaVersion: 1,
+      input: {
+        seal: { evaluatedAt: NOW.toISOString(), ...seal },
+        ...(accreditationNumber === undefined
+          ? {}
+          : { job: { lab: { accreditationNumber } } }),
+      },
+      sha256: "a".repeat(64),
+      layoutKey: "calibration-certificate-fixed",
+      layoutVersion: "1.0.0",
+    });
+  }
+
+  async function accreditationOf(token: string) {
+    const res = await verifyRouter.request(`/${token}`);
+    expect(res.status).toBe(200);
+    const body: unknown = await res.json();
+    if (!isRecord(body) || !isRecord(body.accreditation)) {
+      throw new Error("unexpected body shape");
+    }
+    return body.accreditation;
+  }
+
+  it("Q42 [HIGH RISK]: a frozen 'no seal' decision holds although the lab's live fields would seal it", async () => {
+    const cert = await seedVerifiableCert({
+      orgId: "org-a",
+      token: VALID_UUID_A,
+      jobId: "CAL-A-FROZEN-NO",
+      accreditationActive: true,
+      accreditationNumber: "9999",
+      methodAccreditedScope: true,
+    });
+    await freezeSeal(cert, {
+      accredited: false,
+      withheldReason: "scope_out_of_scope",
+    });
+
+    const accreditation = await accreditationOf(cert.token);
+
+    expect(accreditation.accredited).toBe(false);
+    expect(accreditation.number).toBeNull();
+  });
+
+  it("Q42: a frozen 'sealed' decision holds after the lab's accreditation was switched off", async () => {
+    const cert = await seedVerifiableCert({
+      orgId: "org-a",
+      token: VALID_UUID_A,
+      jobId: "CAL-A-FROZEN-YES",
+      accreditationActive: false,
+      accreditationNumber: "9999",
+      methodAccreditedScope: false,
+    });
+    await freezeSeal(cert, { accredited: true });
+
+    const accreditation = await accreditationOf(cert.token);
+
+    expect(accreditation.accredited).toBe(true);
+    expect(accreditation.number).toBe("9999");
+  });
+
+  it("Q42 [HIGH RISK]: the number shown is the one frozen with the certificate, not the lab's current one", async () => {
+    const cert = await seedVerifiableCert({
+      orgId: "org-a",
+      token: VALID_UUID_A,
+      jobId: "CAL-A-FROZEN-NUM",
+      accreditationActive: true,
+      accreditationNumber: "9999",
+      methodAccreditedScope: true,
+    });
+    await freezeSeal(cert, { accredited: true }, "0123");
+
+    const accreditation = await accreditationOf(cert.token);
+
+    expect(accreditation).toEqual({ accredited: true, number: "0123" });
+  });
+
+  it("Q42: a certificate approved before the decision was frozen keeps the rule it was issued under", async () => {
+    const cert = await seedVerifiableCert({
+      orgId: "org-a",
+      token: VALID_UUID_A,
+      jobId: "CAL-A-LEGACY",
+      accreditationActive: true,
+      accreditationNumber: "9999",
+      methodAccreditedScope: true,
+    });
+
+    expect((await accreditationOf(cert.token)).accredited).toBe(true);
+  });
+
   // The vigência window is judged by the laboratory's calendar day: the API
   // clock is UTC, so a certificate approved at 23:30 -03:00 on the last day is
   // already the next UTC day.

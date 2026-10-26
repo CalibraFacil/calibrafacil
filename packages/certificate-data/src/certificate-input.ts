@@ -24,7 +24,10 @@
  */
 
 import { createHash } from "node:crypto";
-import { shouldRenderAccreditationSeal } from "@calibra-facil/shared";
+import {
+  decideAccreditationSeal,
+  type AccreditationSealWithheldReason,
+} from "@calibra-facil/shared";
 import { certificateVerificationUrl } from "@calibra-facil/shared/public-urls";
 import type {
   AssetSnapshot,
@@ -54,6 +57,17 @@ export const CERTIFICATE_INPUT_SCHEMA_VERSION = 1;
 
 // ── the document ────────────────────────────────────────────────────────────
 
+/**
+ * The accredited-scope (CMC) evaluation of the job as approved
+ * (`calibration_job.scope_compliance_*`, frozen at approval): the status and the
+ * findings. Null where no evaluation was made (the lab or the method is not
+ * eligible for the seal, so the guard did not run).
+ */
+export type FrozenScopeEvaluation = {
+  status: string;
+  findings: ReadonlyArray<{ kind: string; message?: string }> | null;
+};
+
 export type CertificateInput = {
   schemaVersion: typeof CERTIFICATE_INPUT_SCHEMA_VERSION;
   /** The layout (and its revision) this input was frozen for. */
@@ -63,11 +77,24 @@ export type CertificateInput = {
   /** Public verification link printed on (and encoded in the QR of) the certificate. */
   verificationUrl: string;
   /**
-   * The accreditation-seal decision taken at approval. It is a decision, not a
-   * computation to repeat: the vigência window is evaluated at `evaluatedAt`
-   * (= `approved_at`), never at the clock of whoever renders.
+   * The accreditation-seal decision taken at approval (Q42). It is a decision,
+   * not a computation to repeat: the vigência window is evaluated at
+   * `evaluatedAt` (= `approved_at`), never at the clock of whoever renders, and
+   * the scope (CMC) verdict it rests on is frozen alongside it.
+   *
+   * `withheldReason` and `scopeEvaluation` are absent on inputs frozen before
+   * Q42 (their `accredited` was decided without the scope verdict); every input
+   * built now writes both. Verification and the portal read `accredited` from
+   * here and never re-decide it from the lab's live fields.
    */
-  seal: { accredited: boolean; evaluatedAt: string };
+  seal: {
+    accredited: boolean;
+    evaluatedAt: string;
+    /** Why the seal was withheld; null when it was applied. */
+    withheldReason?: AccreditationSealWithheldReason | null;
+    /** The scope evaluation the decision rests on; null = none was made. */
+    scopeEvaluation?: FrozenScopeEvaluation | null;
+  };
   /**
    * Lab identity and accreditation, signatory, customer, asset, method,
    * standards, environment, execution data and results. JSON-safe: instants
@@ -258,21 +285,24 @@ function toInstant(value: Date | string | null | undefined): Date | null {
 
 /**
  * Freezes the data the renderer reads. The seal is decided here, as of the
- * approval instant. Throws when the job has no approval instant: a certificate
+ * approval instant and from the scope evaluation frozen on the job. Throws when the job has no approval instant: a certificate
  * input is only ever built for an approved job.
  */
 export function buildCertificateInput(
   job: CertificateJobData,
+  /** The scope evaluation frozen on the job at approval; null when none was made. */
+  scopeEvaluation: FrozenScopeEvaluation | null,
 ): CertificateInput {
   const approvedAt = toInstant(job.approvedAt);
   if (!approvedAt) {
     throw new Error("A certificate input needs the job's approval instant");
   }
 
-  const accredited = shouldRenderAccreditationSeal({
+  const seal = decideAccreditationSeal({
     lab: job.lab,
     methodAccreditedScope: job.methodSnapshot?.accreditedScope,
     scopeOverrideJustification: job.scopeOverrideJustification,
+    scopeEvaluation,
     atDate: approvedAt,
   });
 
@@ -284,7 +314,12 @@ export function buildCertificateInput(
     },
     engineVersion: job.methodSnapshot?.engineVersion ?? null,
     verificationUrl: certificateVerificationUrl(job.verificationToken),
-    seal: { accredited, evaluatedAt: approvedAt.toISOString() },
+    seal: {
+      accredited: seal.accredited,
+      evaluatedAt: approvedAt.toISOString(),
+      withheldReason: seal.withheldReason,
+      scopeEvaluation,
+    },
     job,
   };
   return normalizeCertificateInput(input);

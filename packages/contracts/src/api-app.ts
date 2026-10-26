@@ -261,6 +261,7 @@ type ApiRoutePath =
   | "/api/spc/readings/:id"
   | "/api/signing/certificates"
   | "/api/signing/policy"
+  | "/api/signing/unsigned-issuance"
   | "/api/signing/certificates/:id"
   | "/api/signing/certificates/:id/set-default"
   | "/api/sso/providers"

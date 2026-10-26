@@ -90,7 +90,7 @@ under "Nulled".
 
 ## Evidence tables
 
-73 evidence tables out of 137; 396 foreign keys in schema.ts, 116 of them ON DELETE CASCADE.
+73 evidence tables out of 137; 397 foreign keys in schema.ts, 116 of them ON DELETE CASCADE.
 Each entry lists the foreign keys the table itself carries, which are the only way a parent's deletion reaches it.
 
 ### Technical records (calibration, SPC, OOT) (10)

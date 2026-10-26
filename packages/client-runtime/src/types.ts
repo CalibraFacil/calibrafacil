@@ -1172,8 +1172,13 @@ export type ScopeEnforcementMode = "warn" | "enforce";
 export type AccreditedScopeResponse = {
   lines: AccreditedScopeLine[];
   unit: { unitId: number | null; unitName: string | null };
-  /** Org-level guard behavior (#427 Phase 1). */
+  /** Org-level guard behavior (#427 Phase 1): the EFFECTIVE mode (Q45). */
   enforcementMode: ScopeEnforcementMode;
+  /**
+   * True when the lab never chose a mode and the default applies (`enforce` for
+   * an accredited lab, `warn` otherwise); false when the mode was set explicitly.
+   */
+  enforcementModeIsDefault?: boolean;
 };
 
 export type SaveAccreditedScopeLineInput = {
@@ -2696,6 +2701,16 @@ export type SigningCertificatesListResponse = {
   unit?: unknown;
   /** #644: the unit's "assinatura obrigatória" policy flag. */
   requireSignature?: boolean;
+  /** Q51: the unit's explicit "emitir sem assinatura digital" setting. */
+  unsignedIssuance?: UnsignedIssuanceSetting;
+};
+
+/** Q51: issuing unsigned on purpose; `reason` is mandatory while enabled. */
+export type UnsignedIssuanceSetting = {
+  enabled: boolean;
+  reason: string | null;
+  setAt?: string | Date | null;
+  setByName?: string | null;
 };
 
 export type UploadSigningCertificateInput = {
@@ -2736,6 +2751,10 @@ export interface SigningCertificatesApi {
   ): Promise<SigningCertificateActionResponse>;
   /** #644: set the unit's "assinatura obrigatória" policy. */
   setPolicy(requireSignature: boolean): Promise<{ requireSignature: boolean }>;
+  /** Q51: admin/owner only; enabling needs a reason (min 15 characters). */
+  setUnsignedIssuance(
+    input: { enabled: true; reason: string } | { enabled: false },
+  ): Promise<{ unsignedIssuance: UnsignedIssuanceSetting }>;
 }
 
 export interface PublicInvitationsApi {

@@ -237,6 +237,7 @@ const DEFAULT_PREFERENCES: NotificationPreferenceMap = {
   STANDARD_EXPIRING: { inApp: true, email: true },
   STANDARD_EXPIRED: { inApp: true, email: true },
   SIGNING_CERTIFICATE_EXPIRING: { inApp: true, email: true },
+  SIGNING_CERTIFICATE_LAPSED: { inApp: true, email: true },
   JOB_OVERDUE: { inApp: true, email: true },
   NC_CREATED: { inApp: true, email: true },
   NC_ESCALATED_TO_CAPA: { inApp: true, email: true },
@@ -2776,7 +2777,7 @@ export async function notifySigningCertificateExpiring(
       type: "SIGNING_CERTIFICATE_EXPIRING",
       priority: daysRemaining <= 7 ? "HIGH" : "MEDIUM",
       title: "Certificado de assinatura expirando",
-      message: `O certificado de assinatura ${certData.name} (${certData.serialNumber}) da unidade ${certData.unitName} expira em ${daysRemaining} ${daysRemaining === 1 ? "dia" : "dias"} (${dueDate}). Renove o certificado A1 ICP-Brasil antes do vencimento para manter a emissão assinada.`,
+      message: `O certificado de assinatura ${certData.name} (${certData.serialNumber}) da unidade ${certData.unitName} expira em ${daysRemaining} ${daysRemaining === 1 ? "dia" : "dias"} (${dueDate}). Renove o certificado A1 ICP-Brasil antes do vencimento: depois dele, nenhum certificado de calibração desta unidade é emitido até que um novo certificado de assinatura seja enviado.`,
       actionUrl: "/dashboard/settings/signature",
       emailContext: {
         type: "compliance",
@@ -2786,6 +2787,43 @@ export async function notifySigningCertificateExpiring(
           daysRemaining,
         },
       },
+    });
+  }
+}
+
+/**
+ * Tell the lab's admins/owners that a certificate was NOT issued because the
+ * unit's signing certificate expired, was revoked or is missing (P0-8, Q44):
+ * issuance fails closed instead of producing an unsigned PDF, so someone has
+ * to upload a new A1 certificate and re-approve. `reason` is the pt-BR
+ * explanation the job was rejected with.
+ */
+export async function notifySigningCertificateLapsed(
+  jobId: number,
+  reason: string,
+): Promise<void> {
+  const job = await getJobDetails(jobId);
+  if (!job) return;
+
+  const recipients = await getRecipientsByRole(job.organizationId, [
+    "admin",
+    "owner",
+  ]);
+
+  for (const recipientId of recipients) {
+    await sendNotification({
+      recipientUserId: recipientId,
+      organizationId: job.organizationId,
+      type: "SIGNING_CERTIFICATE_LAPSED",
+      priority: "HIGH",
+      title: "Certificado não emitido: assinatura digital indisponível",
+      message: `O certificado ${job.jobIdentifier} não foi emitido: ${reason}`,
+      relatedEntity: {
+        entityType: "job",
+        entityId: jobId,
+        jobId: job.jobIdentifier,
+      },
+      actionUrl: "/dashboard/settings/signature",
     });
   }
 }

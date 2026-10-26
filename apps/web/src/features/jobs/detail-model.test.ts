@@ -541,7 +541,22 @@ describe('buildScopeComplianceWarnings — NOT_EVALUATED visibility', () => {
     expect(items[0]?.message).toContain('não pôde ser verificado')
   })
 
-  it('surfaces partial-coverage notes on a PASS', () => {
+  it('Q42: a partially evaluated verdict says the seal is withheld and lists the points', () => {
+    const items = buildScopeComplianceWarnings({
+      scopeComplianceStatus: 'PARTIALLY_EVALUATED',
+      scopeComplianceFindings: [
+        {
+          kind: 'not_evaluated',
+          message: 'Ponto 200 g não pôde ser comparado ao escopo.',
+        },
+      ],
+    })
+    expect(items).toHaveLength(2)
+    expect(items[0]?.message).toContain('sem o símbolo de acreditação')
+    expect(items[1]?.message).toContain('não pôde ser comparado')
+  })
+
+  it('Q42: a legacy PASS carrying not_evaluated findings is treated as partial', () => {
     const items = buildScopeComplianceWarnings({
       scopeComplianceStatus: 'PASS',
       scopeComplianceFindings: [
@@ -551,8 +566,17 @@ describe('buildScopeComplianceWarnings — NOT_EVALUATED visibility', () => {
         },
       ],
     })
+    expect(items).toHaveLength(2)
+    expect(items[0]?.message).toContain('sem o símbolo de acreditação')
+  })
+
+  it('Q42: a unit without scope lines warns that the seal is withheld', () => {
+    const items = buildScopeComplianceWarnings({
+      scopeComplianceStatus: 'NO_SCOPE_LINES',
+    })
     expect(items).toHaveLength(1)
-    expect(items[0]?.message).toContain('não pôde ser comparado')
+    expect(items[0]?.message).toContain('não tem linhas de escopo')
+    expect(items[0]?.message).toContain('sem o símbolo de acreditação')
   })
 
   it('stays silent on a clean PASS', () => {

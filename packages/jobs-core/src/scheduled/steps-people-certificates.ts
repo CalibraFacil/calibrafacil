@@ -9,6 +9,7 @@ import {
   notifySigningCertificateExpiring,
   notifyPtPlanDue,
   notifyVisitReminder,
+  SIGNING_CERTIFICATE_EXPIRY_LEAD_DAYS,
 } from "@calibra-facil/notifications";
 import {
   type AccreditationExpiringRow,
@@ -236,6 +237,8 @@ export async function processSigningCertificatesExpiring(
     for (const cert of signingCertBatch) {
       try {
         const decision = decideSigningCertificateExpiryAlert({
+          // P0-8: 30, 14 and 7 days before the unit's certificate expires.
+          leadDays: SIGNING_CERTIFICATE_EXPIRY_LEAD_DAYS,
           validUntil: cert.valid_until,
           now,
           alreadyAlertedLeadDays: cert.alerted_lead_days,

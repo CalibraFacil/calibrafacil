@@ -53,4 +53,5 @@ export {
   isCertificateInput,
   type CertificateInput,
   type CertificateJobSource,
+  type FrozenScopeEvaluation,
 } from "./certificate-input.js";

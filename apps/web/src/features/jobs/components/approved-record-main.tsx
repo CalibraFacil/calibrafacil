@@ -7,6 +7,7 @@ import {
 } from '@calibra-facil/ui/accordion'
 import { Label } from '@calibra-facil/ui/label'
 import {
+  accreditationSealWithheldMessage,
   convertMassValue,
   formatCalibrationValue,
   normalizeAccreditationNumber,
@@ -35,13 +36,18 @@ export function ApprovedRecordMain({
   job,
   model,
   certificateAccredited,
+  sealWithheldReason,
   accreditationNumber,
 }: {
   job: ApprovedJobRecordData
   model: ApprovedRecordModel
   certificateAccredited: boolean
+  /** Why the certificate was issued without the seal (frozen at approval), when it was. */
+  sealWithheldReason: string | null
   accreditationNumber: ReturnType<typeof normalizeAccreditationNumber>
 }) {
+  const sealWithheldMessage =
+    accreditationSealWithheldMessage(sealWithheldReason)
   const { methodSnapshot, standardsSnapshot } = job
   const {
     equipmentSpecItems,
@@ -66,6 +72,15 @@ export function ApprovedRecordMain({
             />
           ) : null}
         </div>
+        {!certificateAccredited && sealWithheldMessage ? (
+          <p
+            className="mt-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
+            data-testid="seal-withheld-reason"
+          >
+            Certificado emitido sem o símbolo de acreditação:{' '}
+            {sealWithheldMessage}
+          </p>
+        ) : null}
         <BlueprintGrid className="mt-4 sm:grid-cols-2 lg:grid-cols-4">
           <BlueprintField label="Cliente">
             <span className="font-medium">{job.customerName || '-'}</span>

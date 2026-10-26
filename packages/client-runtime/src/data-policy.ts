@@ -206,6 +206,7 @@ export const calibraApiPolicyRegistry = {
     setDefault: "cloud-only",
     revoke: "cloud-only",
     setPolicy: "cloud-only",
+    setUnsignedIssuance: "cloud-only",
   },
   customers: {
     list: "local-first-read-through-sync",

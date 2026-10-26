@@ -558,8 +558,24 @@ export const scopeComplianceStatusSchema = z.enum([
   "PASS",
   "OUT_OF_SCOPE",
   "U_BELOW_CMC",
+  "PARTIALLY_EVALUATED",
   "NOT_EVALUATED",
+  "NO_SCOPE_LINES",
 ]);
+
+/**
+ * The accreditation-seal decision frozen at approval (`certificate_input.seal`,
+ * Q42): whether the certificate carries the seal and, when it does not, the
+ * code of the reason (see `ACCREDITATION_SEAL_WITHHELD_MESSAGES_PT` in
+ * `@calibra-facil/shared`). Null until the job is approved, and for records
+ * approved before the decision was frozen.
+ */
+export const jobAccreditationSealSchema = z.object({
+  accredited: z.boolean(),
+  withheldReason: nullableString,
+  evaluatedAt: z.string(),
+});
+export type JobAccreditationSeal = z.infer<typeof jobAccreditationSealSchema>;
 
 const scopeComplianceFindingSchema = z.object({
   kind: z.enum(["out_of_scope", "u_below_cmc", "not_evaluated"]),
@@ -648,6 +664,9 @@ export const jobDetailSchema = z.object({
   scopeComplianceStatus: scopeComplianceStatusSchema.nullable(),
   scopeComplianceFindings: z.array(scopeComplianceFindingSchema).nullable(),
   scopeOverrideJustification: nullableString,
+  // Q42: the seal decision frozen at approval, with the reason it was withheld.
+  // Absent from the desktop local server (cloud-frozen data only).
+  accreditationSeal: jobAccreditationSealSchema.nullable().optional(),
   methodDeviations: nullableString,
   // Frozen snapshot, or (for jobs still open) one derived from the live asset.
   assetSnapshot: jobAssetSnapshotSchema.nullable(),

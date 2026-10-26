@@ -533,6 +533,11 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "setUnsignedIssuance",
+          "namespace": "signingCertificates",
+          "policy": "cloud-only",
+        },
+        {
           "method": "list",
           "namespace": "customers",
           "policy": "local-first-read-through-sync",

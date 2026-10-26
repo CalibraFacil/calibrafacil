@@ -385,7 +385,10 @@ describe("REQ-CIN-1: approval freezes the certificate input", () => {
       methodName: "Calibração de balança",
       methodVersion: 2,
     });
-    // the seal decision, as of approved_at
+    // the seal decision, as of approved_at. This fixture's unit has no
+    // accredited scope lines, so (Q42) the scope could not be verified and the
+    // certificate is frozen WITHOUT the seal, with the reason and the
+    // evaluation it rests on; the positive case lives in jobs.int.spec.ts.
     const [approved] = await db
       .select({ approvedAt: calibrationJob.approvedAt })
       .from(calibrationJob)
@@ -396,8 +399,10 @@ describe("REQ-CIN-1: approval freezes the certificate input", () => {
         ),
       );
     expect(field(input, "seal")).toEqual({
-      accredited: true,
+      accredited: false,
       evaluatedAt: approved?.approvedAt?.toISOString(),
+      withheldReason: "scope_no_scope_lines",
+      scopeEvaluation: { status: "NO_SCOPE_LINES", findings: [] },
     });
     expect(field(job, "approvedAt")).toBe(approved?.approvedAt?.toISOString());
 

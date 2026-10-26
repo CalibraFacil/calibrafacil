@@ -13,7 +13,8 @@
  *    metadata (`reporting.role`), with well-known-key fallbacks for legacy
  *    snapshots.
  *  - {@link evaluateScopeCompliance} — compares each point against the
- *    scope lines and classifies PASS / OUT_OF_SCOPE / U_BELOW_CMC.
+ *    scope lines and classifies PASS / OUT_OF_SCOPE / U_BELOW_CMC, or
+ *    PARTIALLY_EVALUATED / NOT_EVALUATED when points could not be compared.
  *
  * Callers gate on `shouldRenderAccreditationSeal(...)` first — the guard
  * applies only to *accredited* issuance (see accreditation.ts).
@@ -65,12 +66,34 @@ export function quantityKindLabelPt(kind: string): string {
 }
 
 /**
- * Org-level guard behavior (#427 Phase 1). Labs start in `warn` (Phase 0
- * classification only) and opt into `enforce` after trusting the output:
- * enforce blocks accredited approval on OUT_OF_SCOPE/U_BELOW_CMC unless a
- * documented override downgrades the issuance to non-accredited.
+ * Org-level guard behavior (#427 Phase 1). `enforce` blocks accredited approval
+ * on OUT_OF_SCOPE/U_BELOW_CMC unless a documented override downgrades the
+ * issuance to non-accredited; `warn` only classifies. Which one a lab gets when
+ * it never chose is {@link resolveScopeEnforcementMode} (Q45).
  */
 export type ScopeEnforcementMode = "warn" | "enforce";
+
+/**
+ * The guard mode in force for a lab (decision Q45). `stored` is
+ * `organization.scope_enforcement_mode`, which is NULL until the lab chooses:
+ *
+ *  - an explicit `warn` or `enforce` is returned as is, never overridden;
+ *  - never chosen: `enforce` while the accreditation toggle is on (an accredited
+ *    lab is blocked from issuing an adverse accredited result by default), else
+ *    `warn` (nothing to guard).
+ *
+ * `warn` stays selectable but never seals an adverse or unevaluated result
+ * (Q42), whichever way the mode was arrived at.
+ */
+export function resolveScopeEnforcementMode(params: {
+  stored: ScopeEnforcementMode | null | undefined;
+  accreditationActive: boolean | null | undefined;
+}): ScopeEnforcementMode {
+  if (params.stored === "warn" || params.stored === "enforce") {
+    return params.stored;
+  }
+  return params.accreditationActive === true ? "enforce" : "warn";
+}
 
 /**
  * One line of the lab's accredited scope (grandeza × faixa × CMC), as
@@ -102,18 +125,32 @@ export type ScopeEvaluationPoint = {
   /** Calibrated point (nominal/reference value), in `unit`. */
   value: number;
   unit: string;
-  /** Reported expanded uncertainty, in `uncertaintyUnit`, at `coverageFactor`. */
-  expandedUncertainty: number;
+  /**
+   * Reported expanded uncertainty, in `uncertaintyUnit`, at `coverageFactor`.
+   * Null (Q52): the row has a measurement point but no uncertainty; it cannot
+   * be compared and is surfaced as a `not_evaluated` finding ("sem incerteza"),
+   * never dropped.
+   */
+  expandedUncertainty: number | null;
   uncertaintyUnit: string;
   /** Coverage factor of the reported U; defaults to 2 when absent. */
   coverageFactor?: number | null;
 };
 
+/**
+ * Q42: only `PASS` is positive, and `PASS` means EVERY point was compared and
+ * none is adverse. `PARTIALLY_EVALUATED` (some points compared and clean, others
+ * `not_evaluated`), `NOT_EVALUATED` (nothing could be compared) and
+ * `NO_SCOPE_LINES` (the unit has no accredited scope lines at all) are
+ * never positive: the certificate issues without the accreditation seal.
+ */
 export type ScopeComplianceStatus =
   | "PASS"
   | "OUT_OF_SCOPE"
   | "U_BELOW_CMC"
-  | "NOT_EVALUATED";
+  | "PARTIALLY_EVALUATED"
+  | "NOT_EVALUATED"
+  | "NO_SCOPE_LINES";
 
 export type ScopeComplianceFinding = {
   /** `not_evaluated` = the point matched a line but its U could not be compared (unit mismatch); never adverse, always surfaced. */
@@ -187,7 +224,9 @@ function withinRange(value: number, min: number, max: number): boolean {
  *  - A point passes when ANY matching, in-vigência line has CMC ≤ U.
  *  - A point whose unit kind or value matches no line is out of scope.
  *  - Points whose U cannot be resolved against a matching line's unit are
- *    skipped (counted in pointsTotal, not pointsEvaluated).
+ *    not evaluated (counted in pointsTotal, not pointsEvaluated, and surfaced
+ *    as `not_evaluated` findings): the verdict is then PARTIALLY_EVALUATED, or
+ *    NOT_EVALUATED when no point could be compared — never PASS.
  */
 export function evaluateScopeCompliance(input: {
   scopeLines: readonly AccreditedScopeLineLike[];
@@ -233,6 +272,24 @@ export function evaluateScopeCompliance(input: {
       continue;
     }
 
+    // Q52: a point inside the scope whose row reports no uncertainty cannot be
+    // compared with the CMC. Counted and surfaced (the job is at most
+    // PARTIALLY_EVALUATED, so the seal is withheld), never silently dropped.
+    if (point.expandedUncertainty === null) {
+      findings.push({
+        kind: "not_evaluated",
+        pointValue: point.value,
+        pointUnit: point.unit,
+        reportedU: null,
+        cmcValue: null,
+        cmcUnit: null,
+        scopeLineId: null,
+        message: `Ponto ${point.value} ${point.unit} sem incerteza expandida reportada (sem incerteza): não pôde ser comparado ao escopo. Verifique manualmente.`,
+      });
+      continue;
+    }
+    const reportedExpandedUncertainty = point.expandedUncertainty;
+
     // Compare against every matching line; keep the most favorable (smallest
     // CMC) for the finding when none passes.
     let best: {
@@ -254,7 +311,7 @@ export function evaluateScopeCompliance(input: {
           : 2;
       const cmc = (cmcAtPoint(line, valueInRangeUnit) / lineK) * 2;
       const uInCmcUnit = convertUnitDelta(
-        point.expandedUncertainty,
+        reportedExpandedUncertainty,
         point.uncertaintyUnit,
         line.cmcUnit,
       );
@@ -308,14 +365,17 @@ export function evaluateScopeCompliance(input: {
 
   const hasOutOfScope = findings.some((f) => f.kind === "out_of_scope");
   const hasBelowCmc = findings.some((f) => f.kind === "u_below_cmc");
+  const hasNotEvaluated = findings.some((f) => f.kind === "not_evaluated");
 
   const status: ScopeComplianceStatus = hasOutOfScope
     ? "OUT_OF_SCOPE"
     : hasBelowCmc
       ? "U_BELOW_CMC"
-      : pointsEvaluated > 0
-        ? "PASS"
-        : "NOT_EVALUATED";
+      : pointsEvaluated === 0
+        ? "NOT_EVALUATED"
+        : hasNotEvaluated
+          ? "PARTIALLY_EVALUATED"
+          : "PASS";
 
   return {
     status,
@@ -476,15 +536,21 @@ export function extractScopeEvaluationPoints(input: {
       formula,
       values: numericSeries(results[formula.outputKey]),
     }))
-    .filter((entry) => entry.values.some((value) => value !== null))
     .sort(
       (a, b) =>
         suffixRank(a.formula.outputKey) - suffixRank(b.formula.outputKey),
     );
-  for (const entry of ranked) {
-    const tableKey = tableKeyOf(entry.formula);
-    if (!tableKey || seriesByTable.has(tableKey)) continue;
-    seriesByTable.set(tableKey, entry);
+  // A series that carries values wins; a table whose declared uncertainty
+  // formula produced NO value at all is still evaluated (Q52), so its points
+  // surface as "sem incerteza" instead of the table vanishing from the verdict.
+  for (const withValues of [true, false]) {
+    for (const entry of ranked) {
+      const hasValues = entry.values.some((value) => value !== null);
+      if (hasValues !== withValues) continue;
+      const tableKey = tableKeyOf(entry.formula);
+      if (!tableKey || seriesByTable.has(tableKey)) continue;
+      seriesByTable.set(tableKey, entry);
+    }
   }
 
   const points: ScopeEvaluationPoint[] = [];
@@ -569,14 +635,17 @@ function extractPointsForTable(params: {
   const kValues = kFormula ? numericSeries(results[kFormula.outputKey]) : [];
 
   const points: ScopeEvaluationPoint[] = [];
-  const count = Math.min(rows.length, chosen.values.length);
-  for (let i = 0; i < count; i += 1) {
+  // Every row with a measurement point is a point to evaluate (Q52): one whose
+  // uncertainty is missing (shorter or empty series, unparseable cell) is kept
+  // with `expandedUncertainty: null` and reported as not evaluated, not dropped.
+  // A row without a point value is not a measurement point and is skipped.
+  for (let i = 0; i < rows.length; i += 1) {
     const row = rows[i];
     if (typeof row !== "object" || row === null) continue;
     const record: Record<string, unknown> = { ...row };
     const value = parseNumericValue(record[pointColumnKey]);
-    const expandedUncertainty = chosen.values[i];
-    if (value == null || expandedUncertainty == null) continue;
+    if (value == null) continue;
+    const expandedUncertainty = chosen.values[i] ?? null;
     points.push({
       value,
       unit: pointUnit,

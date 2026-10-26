@@ -3,12 +3,18 @@ import {
   asset,
   calibrationJob,
   calibrationMethod,
+  certificateInput,
   customer,
   issuedCertificateSnapshot,
   organization,
   service,
 } from "@calibra-facil/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
+import {
+  frozenAccreditationNumberColumn,
+  frozenSealColumn,
+  frozenSealJoin,
+} from "./frozen-seal";
 import { orgDb } from "./org-db";
 
 /**
@@ -57,6 +63,9 @@ export async function findCertificateByVerificationToken(token: string) {
       labAccreditationValidFrom: organization.accreditationValidFrom,
       labAccreditationValidUntil: organization.accreditationValidUntil,
       labAccreditationNumber: organization.accreditationNumber,
+      // The seal decision frozen at approval (Q42); null before migration 0120.
+      frozenSeal: frozenSealColumn,
+      frozenAccreditationNumber: frozenAccreditationNumberColumn,
     })
     .from(calibrationJob)
     .innerJoin(customer, eq(calibrationJob.customerId, customer.id))
@@ -64,6 +73,7 @@ export async function findCertificateByVerificationToken(token: string) {
     .innerJoin(service, eq(calibrationJob.serviceId, service.id))
     .innerJoin(organization, eq(calibrationJob.organizationId, organization.id))
     .leftJoin(calibrationMethod, eq(service.methodId, calibrationMethod.id))
+    .leftJoin(certificateInput, frozenSealJoin)
     .where(
       and(
         eq(calibrationJob.verificationToken, token),

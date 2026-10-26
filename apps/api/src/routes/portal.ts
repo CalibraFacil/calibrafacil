@@ -9,6 +9,7 @@ import {
   customerGroup,
   calibrationJob,
   calibrationMethod,
+  certificateInput,
   calibrationRequest,
   calibrationRequestItem,
   serviceOrder,
@@ -89,8 +90,13 @@ import {
   addCalendarDays,
   labToday as labTodayDate,
   normalizeAccreditationNumber,
-  shouldRenderAccreditationSeal,
 } from "@calibra-facil/shared";
+import {
+  frozenAccreditationNumberColumn,
+  frozenSealColumn,
+  frozenSealJoin,
+  issuedSealOf,
+} from "../lib/frozen-seal";
 
 // Mirrors the portal frontend's DUE_SOON window (apps/portal calibration-status).
 // An instrument is "due soon" within this many days of its next calibration.
@@ -2155,6 +2161,9 @@ export const portalRouter = new Hono<{
           labAccreditationNumber: organization.accreditationNumber,
           labAccreditationValidFrom: organization.accreditationValidFrom,
           labAccreditationValidUntil: organization.accreditationValidUntil,
+          // The seal decision frozen at approval (Q42); null before migration 0120.
+          frozenSeal: frozenSealColumn,
+          frozenAccreditationNumber: frozenAccreditationNumberColumn,
         })
         .from(calibrationJob)
         .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
@@ -2164,6 +2173,7 @@ export const portalRouter = new Hono<{
           eq(calibrationJob.organizationId, organization.id),
         )
         .leftJoin(calibrationMethod, eq(service.methodId, calibrationMethod.id))
+        .leftJoin(certificateInput, frozenSealJoin)
         .where(
           and(
             matchPortalCertificateParam(certificateParam),
@@ -2193,22 +2203,26 @@ export const portalRouter = new Hono<{
       );
       const releaseStatus = gated?.releaseStatus ?? "RELEASED";
 
-      // #647: vigência evaluated at the certificate's EMISSION date.
-      const accredited = shouldRenderAccreditationSeal({
-        lab: {
-          accreditationActive: certificate.labAccreditationActive,
-          accreditationNumber: certificate.labAccreditationNumber,
-          accreditationValidFrom: certificate.labAccreditationValidFrom,
-          accreditationValidUntil: certificate.labAccreditationValidUntil,
+      // The seal is the decision frozen at approval (Q42); only a record
+      // approved before it was frozen falls back to the rule it was issued
+      // under (#647 vigência at EMISSION, #427 Phase 1 override).
+      const { accredited, accreditationNumber } = issuedSealOf({
+        frozenSeal: certificate.frozenSeal,
+        frozenAccreditationNumber: certificate.frozenAccreditationNumber,
+        legacy: {
+          lab: {
+            accreditationActive: certificate.labAccreditationActive,
+            accreditationNumber: certificate.labAccreditationNumber,
+            accreditationValidFrom: certificate.labAccreditationValidFrom,
+            accreditationValidUntil: certificate.labAccreditationValidUntil,
+          },
+          methodAccreditedScope:
+            certificate.methodSnapshot?.accreditedScope ??
+            certificate.serviceMethodAccreditedScope ??
+            false,
+          scopeOverrideJustification: certificate.scopeOverrideJustification,
+          ...(certificate.approvedAt ? { atDate: certificate.approvedAt } : {}),
         },
-        methodAccreditedScope:
-          certificate.methodSnapshot?.accreditedScope ??
-          certificate.serviceMethodAccreditedScope ??
-          false,
-        // #427 Phase 1: an approval overridden past the CMC guard was
-        // downgraded to non-accredited issuance.
-        scopeOverrideJustification: certificate.scopeOverrideJustification,
-        ...(certificate.approvedAt ? { atDate: certificate.approvedAt } : {}),
       });
 
       const verdict = buildPortalCertificateVerdict({
@@ -2268,9 +2282,7 @@ export const portalRouter = new Hono<{
         accreditation: {
           accredited,
           number: accredited
-            ? normalizeAccreditationNumber(
-                certificate.labAccreditationNumber ?? "",
-              )
+            ? normalizeAccreditationNumber(accreditationNumber ?? "")
             : null,
         },
         serviceMethodAccreditedScope: undefined,
@@ -2278,6 +2290,8 @@ export const portalRouter = new Hono<{
         labAccreditationNumber: undefined,
         labAccreditationValidFrom: undefined,
         labAccreditationValidUntil: undefined,
+        frozenSeal: undefined,
+        frozenAccreditationNumber: undefined,
         // Internal release-gate detail; the customer only sees `accredited`.
         scopeOverrideJustification: undefined,
       };

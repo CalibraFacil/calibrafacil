@@ -174,7 +174,10 @@ async function seedApprovedJob(
     .where(eq(organization.id, org.orgId));
   await db.execute(
     sql`UPDATE calibration_job
-        SET method_snapshot = jsonb_set(method_snapshot, '{accreditedScope}', 'true')
+        SET method_snapshot = jsonb_set(method_snapshot, '{accreditedScope}', 'true'),
+            -- Q42: the seal rests on the scope verdict frozen at approval
+            scope_compliance_status = 'PASS',
+            scope_compliance_findings = '[]'::jsonb
         WHERE id = ${job.jobId}`,
   );
   await db
@@ -307,6 +310,53 @@ describe("REQ-CIN-2: the worker renders from the frozen certificate input", () =
     // the seal decision was taken at approval (2026-01-01, inside the
     // vigência), not at render time (after it ended)
     expect(field(data, "accredited")).toBe(true);
+  });
+
+  // Q42: the seal the PDF carries is the frozen decision, even when the lab's
+  // live fields (accredited, in vigência, method in scope) would seal it.
+  async function renderWithScopeVerdict(status: string) {
+    const rendered: string[] = [];
+    stubGotenberg(rendered);
+    const { org, job } = await seedApprovedJob({ freeze: false });
+    await db.execute(
+      sql`UPDATE calibration_job
+          SET scope_compliance_status = ${status}, scope_compliance_findings = '[]'::jsonb
+          WHERE id = ${job.jobId}`,
+    );
+    await freezeJob(job.jobId, org.orgId);
+    // The lab is fully eligible at render time: vigência open, accreditation on.
+    await db
+      .update(organization)
+      .set({
+        accreditationActive: true,
+        accreditationValidUntil: new Date("2099-12-31T00:00:00.000Z"),
+      })
+      .where(eq(organization.id, org.orgId));
+
+    await processBackgroundJob(makeEnv(), {
+      type: "CERTIFICATE",
+      jobId: job.jobId,
+      userId: USER_ID,
+    });
+    const [issued] = await snapshots(job.jobId);
+    return {
+      html: rendered[0] ?? "",
+      accredited: field(issued?.inputDataSnapshot, "accredited"),
+    };
+  }
+
+  it("REQ-SEAL-R01 [HIGH RISK] a frozen scope-withheld seal renders WITHOUT the seal although the live lab fields are eligible", async () => {
+    const withheld = await renderWithScopeVerdict("OUT_OF_SCOPE");
+
+    expect(withheld.accredited).toBe(false);
+    expect(withheld.html).not.toContain(`class="masthead__seal"`);
+  });
+
+  it("REQ-SEAL-R02 the same fixture with a PASS verdict renders WITH the seal (so R01 proves the frozen decision, not a missing seal)", async () => {
+    const sealed = await renderWithScopeVerdict("PASS");
+
+    expect(sealed.accredited).toBe(true);
+    expect(sealed.html).toContain(`class="masthead__seal"`);
   });
 
   it("REQ-CIN-2 [HIGH RISK] records that the frozen path was used, with the hash of the input", async () => {
@@ -678,6 +728,8 @@ describe("REQ-CIN-1: parity of the frozen document with the legacy live assembly
     await db.execute(
       sql`UPDATE calibration_job
           SET method_snapshot = jsonb_set(method_snapshot, '{accreditedScope}', 'true'),
+              scope_compliance_status = 'PASS',
+              scope_compliance_findings = '[]'::jsonb,
               supersedes_id = ${original.jobId},
               amendment_number = 1,
               amendment_reason = 'erro de digitação',

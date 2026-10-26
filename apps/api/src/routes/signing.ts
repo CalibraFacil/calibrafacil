@@ -7,11 +7,20 @@ import {
   user,
 } from "@calibra-facil/db/schema";
 import { eq, and, desc } from "drizzle-orm";
+import { UnsignedIssuanceSettingSchema } from "@calibra-facil/schemas";
 import {
   requireLabProtected,
   requireOrgType,
+  requirePermission,
   type AuthVariables,
 } from "../middleware/permission";
+import { writeOrganizationAuditEvent } from "../lib/audit";
+import {
+  conflict,
+  domainErrorResponse,
+  invalid,
+  notFound,
+} from "../lib/domain-errors";
 import { orgDb } from "../lib/org-db";
 import {
   getCertificateInfo,
@@ -111,8 +120,14 @@ export const signingRouter = new Hono<{
         // #644: the unit's signing policy rides along so the settings page can
         // render the "assinatura obrigatória" toggle without a second call.
         const policyRow = await o
-          .select({ requireSignature: organizationUnit.requireSignature })
+          .select({
+            requireSignature: organizationUnit.requireSignature,
+            unsignedIssuanceReason: organizationUnit.unsignedIssuanceReason,
+            unsignedIssuanceSetAt: organizationUnit.unsignedIssuanceSetAt,
+            unsignedIssuanceSetByName: user.name,
+          })
           .from(organizationUnit)
+          .leftJoin(user, eq(organizationUnit.unsignedIssuanceSetBy, user.id))
           .where(
             and(
               eq(organizationUnit.id, unit.unitId),
@@ -125,6 +140,127 @@ export const signingRouter = new Hono<{
           certificates: certificatesWithStatus,
           unit,
           requireSignature: policyRow[0]?.requireSignature ?? false,
+          // Q51: the explicit "emitir sem assinatura digital" setting.
+          unsignedIssuance: {
+            enabled: Boolean(policyRow[0]?.unsignedIssuanceReason),
+            reason: policyRow[0]?.unsignedIssuanceReason ?? null,
+            setAt: policyRow[0]?.unsignedIssuanceSetAt ?? null,
+            setByName: policyRow[0]?.unsignedIssuanceSetByName ?? null,
+          },
+        });
+      });
+    },
+  )
+
+  // ===========================================================================
+  // PATCH /unsigned-issuance - "Emitir sem assinatura digital" (Q51)
+  //
+  // Once a unit has had a signing certificate, issuance fails closed when none is
+  // valid (P0-8). This explicit setting is the only way to issue unsigned again:
+  // admin/owner only (a unit_admin must not relax the lab's signing), a mandatory
+  // reason, never implicit, and every change lands in the organization audit
+  // trail in the same transaction.
+  // ===========================================================================
+  .patch(
+    "/unsigned-issuance",
+    ...requireLabProtected,
+    requireOrgType("LAB"),
+    requirePermission({ settings: ["update"] }),
+    zValidator("json", UnsignedIssuanceSettingSchema),
+    async (c) => {
+      const input = c.req.valid("json");
+      const memberData = c.get("member");
+      const session = c.get("session");
+
+      return orgDb(memberData.organizationId).transaction(async (o) => {
+        const unit = resolveAccessibleUnitContext(memberData);
+        if (unit.unitId === null) {
+          return domainErrorResponse(
+            c,
+            invalid("invalid_request", "Selecione uma unidade"),
+          );
+        }
+        const scope = and(
+          eq(organizationUnit.id, unit.unitId),
+          eq(organizationUnit.organizationId, memberData.organizationId),
+        );
+
+        const [before] = await o
+          .select({
+            requireSignature: organizationUnit.requireSignature,
+            reason: organizationUnit.unsignedIssuanceReason,
+          })
+          .from(organizationUnit)
+          .where(scope)
+          .limit(1)
+          // Row lock: "assinatura obrigatória" (PATCH /policy) takes the same lock
+          // before it reads this setting, so two concurrent writes cannot leave
+          // both switched on.
+          .for("update");
+        if (!before) {
+          return domainErrorResponse(
+            c,
+            notFound("unit_not_found", "Unidade não encontrada"),
+          );
+        }
+        // "Assinatura obrigatória" and "emitir sem assinatura" contradict each
+        // other: the stricter one wins, so the second cannot be switched on.
+        if (input.enabled && before.requireSignature) {
+          return domainErrorResponse(
+            c,
+            conflict(
+              "conflict",
+              "A assinatura é obrigatória nesta unidade: desative-a antes de permitir a emissão sem assinatura digital",
+            ),
+          );
+        }
+
+        const now = new Date();
+        await o
+          .update(organizationUnit)
+          .set(
+            input.enabled
+              ? {
+                  unsignedIssuanceReason: input.reason,
+                  unsignedIssuanceSetBy: session.user.id,
+                  unsignedIssuanceSetAt: now,
+                }
+              : {
+                  unsignedIssuanceReason: null,
+                  unsignedIssuanceSetBy: null,
+                  unsignedIssuanceSetAt: null,
+                },
+          )
+          .where(scope);
+
+        await writeOrganizationAuditEvent(
+          {
+            organizationId: memberData.organizationId,
+            unitId: unit.unitId,
+            actorUserId: session.user.id,
+            actorMemberId: memberData.id,
+            action: input.enabled
+              ? "signing.unsigned_issuance_enabled"
+              : "signing.unsigned_issuance_disabled",
+            entityType: "organization_unit",
+            entityId: String(unit.unitId),
+            details: {
+              enabled: input.enabled,
+              wasEnabled: Boolean(before.reason),
+              ...(input.enabled ? { reason: input.reason } : {}),
+              previousReason: before.reason,
+              ipAddress: c.req.header("x-forwarded-for") ?? null,
+            },
+          },
+          o,
+        );
+
+        return c.json({
+          unsignedIssuance: {
+            enabled: input.enabled,
+            reason: input.enabled ? input.reason : null,
+            setAt: input.enabled ? now : null,
+          },
         });
       });
     },
@@ -144,6 +280,30 @@ export const signingRouter = new Hono<{
         requireUnitOperationalSettingsManager(memberData);
         const unit = resolveAccessibleUnitContext(memberData);
         const { requireSignature } = c.req.valid("json");
+
+        // Row lock, taken for both values of the flag and shared with
+        // PATCH /unsigned-issuance: the exclusion with "emitir sem assinatura"
+        // is checked and written under it, so a race cannot set both.
+        const [current] = await o
+          .select({ reason: organizationUnit.unsignedIssuanceReason })
+          .from(organizationUnit)
+          .where(
+            and(
+              eq(organizationUnit.id, unit.unitId),
+              eq(organizationUnit.organizationId, memberData.organizationId),
+            ),
+          )
+          .limit(1)
+          .for("update");
+        if (requireSignature && current?.reason) {
+          return domainErrorResponse(
+            c,
+            conflict(
+              "conflict",
+              "Esta unidade emite sem assinatura digital: desative essa opção antes de tornar a assinatura obrigatória",
+            ),
+          );
+        }
 
         const updated = await o
           .update(organizationUnit)

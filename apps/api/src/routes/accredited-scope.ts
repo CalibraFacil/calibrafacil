@@ -9,7 +9,7 @@ import {
 import { eq, and, asc } from "drizzle-orm";
 import { z } from "zod";
 import { AccreditedScopeLineSchema } from "@calibra-facil/schemas";
-import { unitKind } from "@calibra-facil/shared";
+import { resolveScopeEnforcementMode, unitKind } from "@calibra-facil/shared";
 import {
   requireLabProtected,
   requireOrgType,
@@ -91,7 +91,10 @@ export const accreditedScopeRouter = new Hono<{
             asc(accreditedScopeLine.rangeMin),
           ),
         tx
-          .select({ scopeEnforcementMode: organization.scopeEnforcementMode })
+          .select({
+            scopeEnforcementMode: organization.scopeEnforcementMode,
+            accreditationActive: organization.accreditationActive,
+          })
           .from(organization)
           .where(eq(organization.id, memberData.organizationId))
           .limit(1),
@@ -100,7 +103,12 @@ export const accreditedScopeRouter = new Hono<{
       return c.json({
         lines,
         unit,
-        enforcementMode: org?.scopeEnforcementMode ?? "warn",
+        // The EFFECTIVE mode (Q45); a lab that never chose gets the default.
+        enforcementMode: resolveScopeEnforcementMode({
+          stored: org?.scopeEnforcementMode,
+          accreditationActive: org?.accreditationActive,
+        }),
+        enforcementModeIsDefault: !org?.scopeEnforcementMode,
       });
     });
   })
@@ -124,27 +132,48 @@ export const accreditedScopeRouter = new Hono<{
 
       return await orgDb(memberData.organizationId).transaction(async (tx) => {
         const [before] = await tx
-          .select({ scopeEnforcementMode: organization.scopeEnforcementMode })
+          .select({
+            scopeEnforcementMode: organization.scopeEnforcementMode,
+            accreditationActive: organization.accreditationActive,
+          })
           .from(organization)
           .where(eq(organization.id, memberData.organizationId))
           .limit(1);
 
-        // The mode change and its audit row commit (or fail) together.
+        // What was in force (Q45: for a lab that never chose, the default),
+        // so the trail reads "enforce -> warn" even when the stored value was
+        // still unset.
+        const effectiveBefore = before
+          ? resolveScopeEnforcementMode({
+              stored: before.scopeEnforcementMode,
+              accreditationActive: before.accreditationActive,
+            })
+          : null;
+
+        // The mode change and its audit row commit (or fail) together. Choosing
+        // a mode makes it explicit, even one equal to the default: from then on
+        // the lab's choice is never overridden by the default.
         await tx
           .update(organization)
           .set({ scopeEnforcementMode: input.mode })
           .where(eq(organization.id, memberData.organizationId));
 
-        if (before && before.scopeEnforcementMode !== input.mode) {
+        // Audited whenever the effective mode changes, or a default becomes an
+        // explicit choice (the record that the lab chose, and by whom).
+        if (
+          before &&
+          (effectiveBefore !== input.mode || !before.scopeEnforcementMode)
+        ) {
           await tx.insert(accreditedScopeLineAuditLog).values({
             scopeLineId: null,
             organizationId: memberData.organizationId,
             action: "enforcement_mode_change",
             changes: {
               scopeEnforcementMode: {
-                old: before.scopeEnforcementMode,
+                old: effectiveBefore,
                 new: input.mode,
               },
+              wasDefault: !before.scopeEnforcementMode,
             },
             performedBy: session.user.id,
             ipAddress: c.req.header("x-forwarded-for") || null,

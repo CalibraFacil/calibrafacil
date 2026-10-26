@@ -1,6 +1,6 @@
 import {
   formatAccreditationNumber,
-  shouldRenderAccreditationSeal,
+  isAccreditationSealEligible,
 } from "@calibra-facil/shared";
 import {
   convertMassValue,
@@ -783,7 +783,7 @@ export function buildCertificateData(
   );
   // #647: vigência is evaluated at the EMISSION instant — outside the window
   // the certificate is generated without the Cgcre seal (decided 2026-07-05).
-  const certificateAccredited = shouldRenderAccreditationSeal({
+  const certificateAccredited = isAccreditationSealEligible({
     lab: job.lab,
     methodAccreditedScope: job.methodSnapshot?.accreditedScope,
     scopeOverrideJustification: job.scopeOverrideJustification,
