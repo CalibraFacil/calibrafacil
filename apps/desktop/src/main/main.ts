@@ -21,7 +21,6 @@ import {
   desktopAuthFetchRequestSchema,
   desktopAuthFetchResponseSchema,
   desktopSecretNameSchema,
-  desktopSecretWriteSchema,
   desktopUpdateStateSchema,
   localEnvironmentBootstrapSchema,
   localDiagnosticsSchema,
@@ -76,6 +75,16 @@ import {
   desktopWindowIconPath,
   hideMainWindowMenu,
 } from "./main-window";
+import {
+  buildContentSecurityPolicy,
+  rendererResponseHeaders,
+} from "./content-security-policy";
+import {
+  externalUrlToOpen,
+  installNavigationGuards,
+} from "./navigation-guards";
+import { isTrustedUrl, resolveTrustedOrigins } from "./trusted-origins";
+import { installPermissionPolicy } from "./permissions";
 import { installUnloadConfirmation } from "./unload-confirmation";
 import { getDesktopLogFilePath, installDesktopLogger } from "./desktop-log";
 
@@ -149,6 +158,17 @@ const localServer = new LocalServerManager();
 let mainWindow: BrowserWindow | null = null;
 let cloudAuthProxy: DesktopCloudAuthProxy | null = null;
 
+// Every web contents (the main window, but also anything a page manages to
+// spawn) is fenced to the app before it can load a page.
+app.on("web-contents-created", (_event, contents) => {
+  installNavigationGuards(contents, {
+    trustedOrigins,
+    openExternal: (url) => {
+      void shell.openExternal(url);
+    },
+  });
+});
+
 app.setName(desktopAppName);
 app.userAgentFallback = buildDesktopUserAgent(app.getVersion());
 
@@ -179,6 +199,11 @@ function cloudApiUrl() {
 function registerPackagedRendererProtocol() {
   if (!app.isPackaged) return;
 
+  const contentSecurityPolicy = buildContentSecurityPolicy({
+    localServerHost: localServer.host,
+    cloudApiUrls: [defaultCloudApiUrl, cloudApiUrl()],
+  });
+
   protocol.handle(desktopAppScheme, async (request) => {
     const url = new URL(request.url);
     if (url.hostname !== desktopAppHost) {
@@ -197,9 +222,10 @@ function registerPackagedRendererProtocol() {
     try {
       const bytes = await readFile(filePath);
       return new Response(bytes, {
-        headers: {
-          "Content-Type": contentTypeForPath(filePath),
-        },
+        headers: rendererResponseHeaders(
+          contentTypeForPath(filePath),
+          contentSecurityPolicy,
+        ),
       });
     } catch (error) {
       if (!isRendererNavigationRequest(request, requestedPath)) {
@@ -214,9 +240,10 @@ function registerPackagedRendererProtocol() {
       try {
         const indexHtml = await readFile(path.join(rendererRoot, "index.html"));
         return new Response(indexHtml, {
-          headers: {
-            "Content-Type": "text/html; charset=utf-8",
-          },
+          headers: rendererResponseHeaders(
+            "text/html; charset=utf-8",
+            contentSecurityPolicy,
+          ),
         });
       } catch (indexError) {
         console.error("[desktop-renderer] packaged index not found", {
@@ -310,14 +337,6 @@ function createWindow(restored: ResolvedWindowState) {
   mainWindow.on("page-title-updated", (event) => {
     event.preventDefault();
     mainWindow?.setTitle(desktopAppName);
-  });
-
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith("https://") || url.startsWith("http://")) {
-      void shell.openExternal(url);
-    }
-
-    return { action: "deny" };
   });
 
   window
@@ -482,30 +501,21 @@ function installRendererDiagnostics(window: BrowserWindow) {
   );
 }
 
-function assertTrustedSender(event: IpcMainInvokeEvent) {
-  const url = event.senderFrame?.url ?? "";
-  const allowed =
-    url.startsWith(`${desktopAppScheme}://${desktopAppHost}/`) ||
-    trustedRendererOrigins().some((origin) => url.startsWith(origin));
-
-  if (!allowed) {
-    throw new Error(`Blocked IPC call from untrusted sender: ${url}`);
-  }
+function trustedOrigins() {
+  return resolveTrustedOrigins({
+    appScheme: desktopAppScheme,
+    appHost: desktopAppHost,
+    isPackaged: app.isPackaged,
+    configuredRendererUrl: process.env.CALIBRA_DESKTOP_RENDERER_URL,
+  });
 }
 
-function trustedRendererOrigins() {
-  const origins = new Set(["http://localhost:5173", "http://127.0.0.1:5173"]);
-  const configured = process.env.CALIBRA_DESKTOP_RENDERER_URL;
+function assertTrustedSender(event: IpcMainInvokeEvent) {
+  const url = event.senderFrame?.url ?? "";
 
-  if (configured) {
-    try {
-      origins.add(new URL(configured).origin);
-    } catch {
-      // Invalid renderer URLs fail later in BrowserWindow.loadURL.
-    }
+  if (!isTrustedUrl(url, trustedOrigins())) {
+    throw new Error(`Blocked IPC call from untrusted sender: ${url}`);
   }
-
-  return [...origins];
 }
 
 function handle(
@@ -575,10 +585,6 @@ function registerIpc(
 
   handle(desktopIpcChannels.getSecretStatuses, () =>
     secretsStore.getStatuses(),
-  );
-
-  handle(desktopIpcChannels.setSecret, (_event, secret) =>
-    secretsStore.set(desktopSecretWriteSchema.parse(secret)),
   );
 
   handle(desktopIpcChannels.deleteSecret, (_event, name) =>
@@ -690,11 +696,9 @@ function registerIpc(
   });
 
   handle(desktopIpcChannels.openExternal, async (_event, url) => {
-    if (typeof url !== "string") return false;
-    const parsed = new URL(url);
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:")
-      return false;
-    await shell.openExternal(parsed.toString());
+    const external = externalUrlToOpen(url);
+    if (!external) return false;
+    await shell.openExternal(external);
     return true;
   });
 
@@ -1443,6 +1447,9 @@ function focusMainWindow() {
 
 app.whenReady().then(async () => {
   installDesktopLogger();
+  // Deny-by-default before any window exists, so no page is ever granted a
+  // permission by Electron's allow-all fallback.
+  installPermissionPolicy(electronSession.defaultSession, trustedOrigins);
   registerDeepLinkScheme();
   // Electron: on Linux the badge is bound to the app's .desktop file, and does
   // nothing at all unless the name matches. `executableName` in

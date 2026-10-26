@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { safeStorage } from "electron";
+import { isSecretEncryptionAvailable } from "./secret-encryption";
 import {
   desktopSecretNameSchema,
   desktopSecretStatusSchema,
@@ -62,7 +63,7 @@ export class DesktopSecretsStore {
   async set(secret: unknown): Promise<DesktopSecretStatus> {
     const parsed = desktopSecretWriteSchema.parse(secret);
 
-    if (!safeStorage.isEncryptionAvailable()) {
+    if (!isSecretEncryptionAvailable(safeStorage)) {
       throw new Error("Electron safeStorage encryption is not available.");
     }
 
@@ -101,7 +102,7 @@ export class DesktopSecretsStore {
     await this.load();
     const storedSecret = this.current.secrets[name];
     if (!storedSecret) return null;
-    if (!safeStorage.isEncryptionAvailable()) return null;
+    if (!isSecretEncryptionAvailable(safeStorage)) return null;
 
     return safeStorage.decryptString(
       Buffer.from(storedSecret.ciphertext, "base64"),
@@ -113,7 +114,7 @@ export class DesktopSecretsStore {
     return desktopSecretStatusSchema.parse({
       name,
       stored: Boolean(storedSecret),
-      encryptionAvailable: safeStorage.isEncryptionAvailable(),
+      encryptionAvailable: isSecretEncryptionAvailable(safeStorage),
       updatedAt: storedSecret?.updatedAt ?? null,
     });
   }

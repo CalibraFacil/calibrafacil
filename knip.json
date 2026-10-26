@@ -61,12 +61,14 @@
       "project": ["src/**/*.ts", "*.ts"],
       // Native modules the local-server loads at runtime and electron-builder.yml
       // packages by path (node_modules/<name>/**); electron-builder is invoked by
-      // scripts/build-desktop-artifact.mjs.
+      // scripts/build-desktop-artifact.mjs. @electron/fuses is what electron-builder
+      // loads for `electronFuses` and what scripts/check-desktop-fuses.mjs reads.
       "ignoreDependencies": [
         "better-sqlite3",
         "serialport",
         "usb",
-        "electron-builder"
+        "electron-builder",
+        "@electron/fuses"
       ]
     },
     "apps/web": {

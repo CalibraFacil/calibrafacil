@@ -86,6 +86,9 @@ jobs:
       - name: Build Windows desktop installer
         run: bun run dist:desktop:win
 
+      - name: Verify Electron fuses on the packaged binary
+        run: bun run check:desktop:fuses
+
       - name: Verify staged desktop artifact
         run: bun run smoke:desktop:artifact
 

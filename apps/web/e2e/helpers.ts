@@ -2,7 +2,6 @@ import { expect, type Page } from '@playwright/test'
 import type {
   DesktopAuthFetchRequest,
   DesktopSecretName,
-  DesktopSecretWrite,
 } from '@calibra-facil/contracts'
 
 export type JsonRouteOptions = {
@@ -194,14 +193,6 @@ export async function installDesktopBridge(
         },
         async getSecretStatuses() {
           return []
-        },
-        async setSecret(secret: DesktopSecretWrite) {
-          return {
-            name: secret.name,
-            stored: true,
-            encryptionAvailable: true,
-            updatedAt: null,
-          }
         },
         async deleteSecret(name: DesktopSecretName) {
           return {

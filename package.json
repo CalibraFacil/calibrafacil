@@ -39,6 +39,7 @@
     "dist:desktop:mac": "node scripts/build-desktop-artifact.mjs --mac",
     "dist:desktop:win": "node scripts/build-desktop-artifact.mjs --win",
     "smoke:desktop:electron": "node scripts/smoke-desktop-electron.mjs",
+    "check:desktop:fuses": "node scripts/check-desktop-fuses.mjs",
     "smoke:desktop:artifact": "node scripts/smoke-desktop-artifact.mjs",
     "smoke:desktop:local-server": "node scripts/smoke-desktop-local-server.mjs",
     "smoke:desktop:packaged-offline": "node scripts/smoke-desktop-packaged-offline.mjs",

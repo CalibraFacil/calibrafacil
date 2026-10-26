@@ -301,7 +301,6 @@ export type DesktopSettings = z.infer<typeof desktopSettingsSchema>;
 export type DesktopSettingsPatch = z.infer<typeof desktopSettingsPatchSchema>;
 export type DesktopSecretName = z.infer<typeof desktopSecretNameSchema>;
 export type DesktopSecretStatus = z.infer<typeof desktopSecretStatusSchema>;
-export type DesktopSecretWrite = z.infer<typeof desktopSecretWriteSchema>;
 export type SyncActionResult = z.infer<typeof syncActionResultSchema>;
 export type SyncStatusSnapshot = z.infer<typeof syncStatusSnapshotSchema>;
 export type SyncTrigger = z.infer<typeof syncTriggerSchema>;
@@ -335,7 +334,6 @@ export interface CalibraBridge {
   getSettings(): Promise<DesktopSettings>;
   setSettings(patch: DesktopSettingsPatch): Promise<DesktopSettings>;
   getSecretStatuses(): Promise<DesktopSecretStatus[]>;
-  setSecret(secret: DesktopSecretWrite): Promise<DesktopSecretStatus>;
   deleteSecret(name: DesktopSecretName): Promise<DesktopSecretStatus>;
   getSyncState(): Promise<SyncState>;
   getSyncStatus(): Promise<SyncStatusSnapshot>;
