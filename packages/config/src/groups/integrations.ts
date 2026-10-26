@@ -1,4 +1,12 @@
-import { defineGroup, example, flag, integer, text, url } from "../define";
+import {
+  defineGroup,
+  example,
+  flag,
+  integer,
+  list,
+  text,
+  url,
+} from "../define";
 
 export const integrationsGroup = defineGroup({
   name: "integrations",
@@ -91,6 +99,32 @@ export const signingGroup = defineGroup({
       min: 1000,
       max: 60_000,
       example: example.commented("30000"),
+    }),
+  },
+});
+
+export const outboundGroup = defineGroup({
+  name: "outbound",
+  title: "Outbound requests to customer-configured URLs",
+  intro: [
+    "Public-API webhooks and the generic HTTP ERP integration call URLs a laboratory",
+    "configures. Those requests resolve the host once, refuse private, loopback,",
+    "link-local, CGNAT and multicast addresses (so a configured URL cannot reach the",
+    "database, the object store or the PDF service on the internal network), do not",
+    "follow redirects to such addresses and cap the time and the response size.",
+  ],
+  vars: {
+    allowPrivateHosts: list({
+      env: "OUTBOUND_ALLOW_PRIVATE_HOSTS",
+      description:
+        "Comma-separated hosts the server may call even though they resolve to a private address, for a self-hosted laboratory whose ERP lives on its LAN. Each entry is a host name (`erp.lan`), a `*.suffix` wildcard, an IP address or a CIDR range (`10.20.0.0/24`). Off by default: list only what you mean to reach.",
+      example: example.commented("erp.lan,10.20.0.0/24"),
+    }),
+    allowInsecureHttp: flag({
+      env: "OUTBOUND_ALLOW_INSECURE_HTTP",
+      description:
+        "`true` lets customer-configured URLs use plain http in production. Outside production (development, tests) http is always allowed.",
+      default: false,
     }),
   },
 });

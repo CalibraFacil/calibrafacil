@@ -344,6 +344,38 @@ Secret in **Configurações → Integrações**, which shows the redirect URL to
 laboratory instead, set `CONTA_AZUL_CLIENT_ID` and `CONTA_AZUL_CLIENT_SECRET`
 (`CONTA_AZUL_OAUTH_REDIRECT_URI` overrides the redirect URL).
 
+#### Outbound requests to customer-configured URLs (webhooks, ERP)
+
+Public-API webhooks and the generic HTTP ERP integration call URLs a laboratory types in, so the
+server treats them as untrusted (SSRF). Every such call goes through one helper
+(`safeOutboundFetch`, `packages/shared/src/net`) that:
+
+- allows `https:` only in production (`NODE_ENV=production`). `OUTBOUND_ALLOW_INSECURE_HTTP=true`
+  reopens plain `http:`; outside production it is always allowed;
+- resolves the host once and refuses the call when **any** address is private, loopback,
+  link-local (the cloud metadata address included), carrier-grade NAT, unique-local, multicast,
+  unspecified or reserved, or an IPv6 form wrapping one of those (`::ffff:10.0.0.1`), and then
+  connects to the address it checked, so a DNS answer that changes between the check and the
+  connection cannot redirect it;
+- does not follow redirects (a 3xx counts as a failed delivery); the ERP integration follows up to
+  three, checking each hop like the first;
+- gives up after 10 seconds and reads at most 64 KiB of a webhook answer (a few MiB for an ERP).
+
+**Reaching a host on your own network.** A self-hosted laboratory whose ERP lives on its LAN has to
+say so: list the host in `OUTBOUND_ALLOW_PRIVATE_HOSTS` (comma-separated, **off by default**). An
+entry is a host name (`erp.lan`), a `*.suffix` wildcard (`*.corp.example`), an IP address or a
+CIDR range (`10.20.0.0/24`). A listed host may resolve to any address; a listed range only covers
+addresses inside it. List what you mean to reach and nothing broader: every laboratory of the
+instance can then point a webhook or an ERP integration at it. An entry that cannot be read is
+ignored and logged.
+
+Webhook deliveries are queued (`BACKGROUND_JOBS_MODE=queue`: the worker sends them, five attempts
+with exponential backoff, and disables a subscription after 10 deliveries in a row fail). The
+worker needs the same `PUBLIC_API_MASTER_KEY` as the API (it falls back to
+`INTEGRATIONS_MASTER_KEY` when that is unset, as the API does) and the same `OUTBOUND_*`
+settings. With `BACKGROUND_JOBS_MODE=local` (development) a delivery runs once, in the API
+process, without retries.
+
 #### Certificate time-stamping (RFC 3161)
 
 Set `SIGNING_TSA_URL` to the endpoint of a time-stamp authority and every signed certificate gets

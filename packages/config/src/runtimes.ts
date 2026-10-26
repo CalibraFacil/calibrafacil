@@ -3,7 +3,11 @@ import { authGroup } from "./groups/auth";
 import { databaseGroup } from "./groups/database";
 import { emailGroup } from "./groups/email";
 import { portalGroup, webGroup } from "./groups/frontends";
-import { integrationsGroup, signingGroup } from "./groups/integrations";
+import {
+  integrationsGroup,
+  outboundGroup,
+  signingGroup,
+} from "./groups/integrations";
 import { jobsGroup } from "./groups/jobs";
 import { localServerGroup } from "./groups/local-server";
 import { originsGroup } from "./groups/origins";
@@ -46,6 +50,7 @@ export const apiRuntime = defineRuntime({
     jobs: jobsGroup,
     sync: syncGroup,
     integrations: integrationsGroup,
+    outbound: outboundGroup,
     signing: signingGroup,
     retention: retentionGroup,
     observability: observabilityGroup,
@@ -92,6 +97,7 @@ export const workerRuntime = defineRuntime({
     rendering: renderingGroup,
     jobs: jobsGroup,
     integrations: integrationsGroup,
+    outbound: outboundGroup,
     signing: signingGroup,
     observability: observabilityGroup,
   },
@@ -148,6 +154,7 @@ export const readRenderingConfig = defineReader(renderingGroup);
 export const readJobsConfig = defineReader(jobsGroup);
 export const readSyncConfig = defineReader(syncGroup);
 export const readIntegrationsConfig = defineReader(integrationsGroup);
+export const readOutboundConfig = defineReader(outboundGroup);
 export const readSigningConfig = defineReader(signingGroup);
 export const readRetentionConfig = defineReader(retentionGroup);
 export const readObservabilityConfig = defineReader(observabilityGroup);
