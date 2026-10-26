@@ -1,4 +1,5 @@
 import { CreateServiceOrderSchema } from '@calibra-facil/schemas'
+import { parseMoneyToCents } from '@calibra-facil/shared/money'
 import type { CreateServiceOrderInput as ClientRuntimeCreateServiceOrderInput } from '@calibra-facil/client-runtime'
 
 import {
@@ -184,16 +185,13 @@ function optionalText(value: string) {
   return trimmed ? trimmed : null
 }
 
+// Blank is "no fee" (the field is optional); anything else must read as an
+// amount, never a silent 0.
 function parseCurrencyCents(value: string) {
-  const normalized = value.trim().replace(',', '.')
-  if (!normalized) return 0
+  if (!value.trim()) return 0
 
-  const amount = Number(normalized)
-  if (!Number.isFinite(amount) || amount < 0) {
-    return 'invalid'
-  }
-
-  return Math.round(amount * 100)
+  const parsed = parseMoneyToCents(value)
+  return parsed.ok ? parsed.cents : 'invalid'
 }
 
 function appendFieldErrors<TField extends string>(

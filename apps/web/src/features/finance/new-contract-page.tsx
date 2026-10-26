@@ -43,6 +43,7 @@ export function NewFinanceContractPage() {
   const [effectiveTo, setEffectiveTo] = useState('')
   const [defaultPaymentTermDays, setDefaultPaymentTermDays] = useState('28')
   const [notes, setNotes] = useState('')
+  const [serviceTermsValid, setServiceTermsValid] = useState(true)
   const [serviceTerms, setServiceTerms] = useState<ServiceTermDraft[]>(() => [
     createEmptyServiceTerm(),
   ])
@@ -208,6 +209,7 @@ export function NewFinanceContractPage() {
           <ServiceTermsEditor
             value={serviceTerms}
             onChange={setServiceTerms}
+            onValidityChange={setServiceTermsValid}
             services={servicesQuery.data?.data ?? []}
           />
         </div>
@@ -240,7 +242,7 @@ export function NewFinanceContractPage() {
         <Button
           type="button"
           onClick={() => createMutation.mutate()}
-          disabled={createMutation.isPending}
+          disabled={createMutation.isPending || !serviceTermsValid}
         >
           {createMutation.isPending ? 'Criando…' : 'Criar contrato'}
         </Button>

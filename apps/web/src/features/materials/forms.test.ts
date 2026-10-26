@@ -66,6 +66,29 @@ describe('materials feature forms', () => {
     })
   })
 
+  it('reads costs and prices with the shared money parser', () => {
+    const result = parseMaterialForm({
+      ...validMaterialForm(),
+      unitCostCents: '1.234,56',
+      unitPriceCents: 'R$ 12.50',
+    })
+
+    expect(result).toMatchObject({
+      success: true,
+      data: { unitCostCents: 123456, unitPriceCents: 1250 },
+    })
+
+    expect(
+      parseMaterialForm({
+        ...validMaterialForm(),
+        unitCostCents: '1.234.56',
+      }),
+    ).toMatchObject({
+      success: false,
+      fieldErrors: [{ field: 'unitCostCents', message: 'Custo inválido' }],
+    })
+  })
+
   it('maps invalid material inputs to route fields (REQ-MATUI-002)', () => {
     const result = parseMaterialForm({
       ...validMaterialForm(),

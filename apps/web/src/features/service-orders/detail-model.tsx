@@ -16,6 +16,10 @@ import {
   formatMoneyBRL,
   formatNumber,
 } from '@calibra-facil/shared/format'
+import {
+  MONEY_PARSE_FAILURE_MESSAGES,
+  parseMoneyToCents,
+} from '@calibra-facil/shared/money'
 import type {
   MaterialsListData,
   ServiceOrderCommunicationStatus,
@@ -490,12 +494,6 @@ export function serviceOrderFinancialStatusSummary(
   }
 }
 
-export function parseMoneyToCents(value: string) {
-  const normalized = value.replace(/\./g, '').replace(',', '.')
-  const parsed = Number(normalized)
-  return Number.isFinite(parsed) ? Math.round(parsed * 100) : Number.NaN
-}
-
 export function createEmptyQuoteItem(
   type: ServiceOrderItemType = 'service',
 ): QuoteDraftItem {
@@ -614,9 +612,9 @@ export function quoteItemLineTotal(item: QuoteDraftItem): number | null {
   // emptiness has to be checked before parsing. A typed "0,00" still totals 0.
   if (!item.quantity.trim() || !item.unitPrice.trim()) return null
   const quantity = Number(item.quantity.replace(',', '.'))
-  const cents = parseMoneyToCents(item.unitPrice)
-  if (!Number.isFinite(quantity) || !Number.isFinite(cents)) return null
-  return Math.round(quantity * cents)
+  const price = parseMoneyToCents(item.unitPrice)
+  if (!Number.isFinite(quantity) || !price.ok) return null
+  return Math.round(quantity * price.cents)
 }
 
 export function quoteItemsTotal(items: QuoteDraftItem[]) {
@@ -629,22 +627,24 @@ export function quoteItemsTotal(items: QuoteDraftItem[]) {
 export function toApiItems(items: QuoteDraftItem[]) {
   return items.map((item) => {
     const quantity = Number(item.quantity.replace(',', '.'))
-    const unitPriceCents = parseMoneyToCents(item.unitPrice)
+    const unitPrice = parseMoneyToCents(item.unitPrice)
     if (!item.description.trim()) {
       throw new Error('Informe a descrição de todos os itens.')
     }
     if (!Number.isFinite(quantity) || quantity <= 0) {
       throw new Error('Informe uma quantidade válida para todos os itens.')
     }
-    if (!Number.isFinite(unitPriceCents)) {
-      throw new Error('Informe um valor válido para todos os itens.')
+    if (!unitPrice.ok) {
+      throw new Error(
+        `Valor unitário do item "${item.description.trim()}": ${MONEY_PARSE_FAILURE_MESSAGES[unitPrice.reason]}`,
+      )
     }
     return {
       type: item.type,
       description: item.description.trim(),
       quantity,
       unit: item.unit.trim() || 'un',
-      unitPriceCents,
+      unitPriceCents: unitPrice.cents,
       taxable: true,
       warrantyCovered: false,
       materialId: item.materialId ?? null,

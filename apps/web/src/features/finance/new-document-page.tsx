@@ -55,6 +55,7 @@ export function NewFinanceDocumentPage() {
   const [selectedJobIds, setSelectedJobIds] = useState<number[]>([])
   const [dueDate, setDueDate] = useState('')
   const [discountCents, setDiscountCents] = useState(0)
+  const [discountValid, setDiscountValid] = useState(true)
   const [notes, setNotes] = useState('')
 
   const eligibleJobsQuery = useFinanceEligibleJobsData({
@@ -188,6 +189,7 @@ export function NewFinanceDocumentPage() {
                 <CurrencyInput
                   valueCents={discountCents}
                   onValueChange={setDiscountCents}
+                  onValidityChange={setDiscountValid}
                   currency={FINANCE_CURRENCY}
                 />
               </Field>
@@ -325,7 +327,11 @@ export function NewFinanceDocumentPage() {
         <Button
           type="button"
           onClick={() => createMutation.mutate()}
-          disabled={createMutation.isPending || selectedJobIds.length === 0}
+          disabled={
+            createMutation.isPending ||
+            selectedJobIds.length === 0 ||
+            !discountValid
+          }
         >
           {createMutation.isPending ? 'Criando…' : 'Criar documento'}
         </Button>

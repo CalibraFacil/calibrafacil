@@ -4,6 +4,7 @@ import {
   type CreateServiceInput,
   type UpdateServiceInput,
 } from '@calibra-facil/schemas'
+import { parseMoneyToCents } from '@calibra-facil/shared/money'
 
 import {
   zodFormError,
@@ -117,15 +118,9 @@ function optionalText(value: string) {
 }
 
 function parsePriceInCents(value: string) {
-  const normalized = value.trim().replace(',', '.')
-  if (!normalized) return 'empty'
-
-  const price = Number(normalized)
-  if (!Number.isFinite(price) || price < 0) {
-    return 'invalid'
-  }
-
-  return Math.round(price * 100)
+  const parsed = parseMoneyToCents(value)
+  if (parsed.ok) return parsed.cents
+  return parsed.reason === 'empty' ? 'empty' : 'invalid'
 }
 
 function parseTat(value: string) {

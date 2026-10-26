@@ -168,9 +168,8 @@ describe("parseMoneyToCents: negatives only when allowed", () => {
 
   it("negative zero is plain zero, allowed or not", () => {
     expect(cents("-0,00")).toEqual(ok(0));
-    expect(Object.is((cents("-0", true) as { cents: number }).cents, 0)).toBe(
-      true,
-    );
+    // toEqual tells -0 from 0, so this also pins the sign of zero.
+    expect(cents("-0", true)).toEqual(ok(0));
   });
 });
 

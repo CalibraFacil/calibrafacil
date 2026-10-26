@@ -4,6 +4,7 @@ import {
   type CreateMaterialInput,
   type UpdateMaterialInput,
 } from '@calibra-facil/schemas'
+import { parseMoneyToCents } from '@calibra-facil/shared/money'
 
 import {
   zodFormError,
@@ -128,15 +129,9 @@ function optionalText(value: string) {
 }
 
 function parseMoneyInCents(value: string) {
-  const normalized = value.trim().replace(',', '.')
-  if (!normalized) return 'empty'
-
-  const amount = Number(normalized)
-  if (!Number.isFinite(amount) || amount < 0) {
-    return 'invalid'
-  }
-
-  return Math.round(amount * 100)
+  const parsed = parseMoneyToCents(value)
+  if (parsed.ok) return parsed.cents
+  return parsed.reason === 'empty' ? 'empty' : 'invalid'
 }
 
 function appendFieldError<TField extends string>(
