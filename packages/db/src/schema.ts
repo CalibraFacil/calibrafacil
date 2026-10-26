@@ -5022,7 +5022,9 @@ export const serviceOrderIntakeDocument = pgTable(
   },
   (table) => [
     index("service_order_intake_document_order_idx").on(table.serviceOrderId),
-    uniqueIndex("service_order_intake_document_number_version_uidx").on(
+    // Numbers derive from the per-laboratory order number: unique per laboratory (migration 0125).
+    uniqueIndex("service_order_intake_document_org_number_version_uidx").on(
+      table.organizationId,
       table.documentNumber,
       table.version,
     ),
@@ -5056,7 +5058,11 @@ export const serviceOrderTag = pgTable(
   },
   (table) => [
     index("service_order_tag_order_idx").on(table.serviceOrderId),
-    uniqueIndex("service_order_tag_number_uidx").on(table.tagNumber),
+    // Numbers derive from the per-laboratory order number: unique per laboratory (migration 0125).
+    uniqueIndex("service_order_tag_org_number_uidx").on(
+      table.organizationId,
+      table.tagNumber,
+    ),
     index("service_order_tag_org_idx").on(table.organizationId),
     foreignKey({
       columns: [table.serviceOrderId, table.organizationId],
@@ -5093,7 +5099,9 @@ export const serviceOrderDeliveryDocument = pgTable(
   },
   (table) => [
     index("service_order_delivery_document_order_idx").on(table.serviceOrderId),
-    uniqueIndex("service_order_delivery_document_number_version_uidx").on(
+    // Numbers derive from the per-laboratory order number: unique per laboratory (migration 0125).
+    uniqueIndex("service_order_delivery_document_org_number_version_uidx").on(
+      table.organizationId,
       table.documentNumber,
       table.version,
     ),
@@ -5222,7 +5230,9 @@ export const serviceOrderQuote = pgTable(
       table.serviceOrderId,
       table.version,
     ),
-    uniqueIndex("service_order_quote_number_version_uidx").on(
+    // Numbers derive from the per-laboratory order number: unique per laboratory (migration 0125).
+    uniqueIndex("service_order_quote_org_number_version_uidx").on(
+      table.organizationId,
       table.quoteNumber,
       table.version,
     ),
