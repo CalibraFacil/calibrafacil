@@ -9,6 +9,7 @@ import { makeTestEnv } from "../test/integration/env";
 import { makeMinimalPdf, makeSignerP12 } from "../test/integration/mock-tsa";
 import { seedOrg, type SeededOrg } from "../test/integration/seed";
 import { seedIssuableJob } from "../test/integration/seed-certificate";
+import { setJobStatus } from "../test/integration/job-fixtures";
 
 /**
  * P0-8 / Q44: an expired signing certificate FAILS CLOSED.
@@ -431,6 +432,71 @@ describe("an expired signing certificate fails closed (P0-8)", () => {
     const after = await jobRow(job.jobId);
     expect(after.status).toBe("APPROVED");
     expect(field(after.signatureMetadata, "signerName")).toBeTruthy();
+    expect(mocks.lapsed).not.toHaveBeenCalled();
+  });
+
+  // An already-issued certificate is never touched again: a certificate that
+  // lapsed later must not break the re-drive of its job, nor replace its PDF.
+  async function issueThenLapse() {
+    stubGotenberg();
+    const { env, stored } = makeEnv({ masterKey: true });
+    const { org, job } = await seedJob();
+    await insertCertificate(org, { name: "A1" });
+    await issue(env, org, job.jobId);
+    const issuedRow = await jobRow(job.jobId);
+    expect(issuedRow.status).toBe("APPROVED");
+    expect(issuedRow.signatureMetadata).not.toBeNull();
+    const snapshotBefore = await db.execute(
+      sql`SELECT pdf_r2_key, pdf_sha256 FROM issued_certificate_snapshot WHERE job_id = ${job.jobId}`,
+    );
+    // The A1 expires after the certificate was issued.
+    await db.execute(
+      sql`UPDATE organization_signing_certificate SET valid_until = ${LONG_AGO.toISOString()}::timestamp WHERE organization_id = ${org.orgId}`,
+    );
+    mocks.lapsed.mockClear();
+    return {
+      env,
+      org,
+      job,
+      stored,
+      issuedRow,
+      snapshotBefore: toRows(snapshotBefore),
+    };
+  }
+
+  it("REQ-P08-020 [HIGH RISK]: re-driving an already APPROVED job after its certificate expired is a no-op: same PDF, still signed, no failure, no alert", async () => {
+    const ctx = await issueThenLapse();
+    const storedBefore = ctx.stored.size;
+
+    await issue(ctx.env, ctx.org, ctx.job.jobId);
+
+    const after = await jobRow(ctx.job.jobId);
+    expect(after.status).toBe("APPROVED");
+    expect(after.certificateUrl).toBe(ctx.issuedRow.certificateUrl);
+    expect(after.signatureMetadata).toEqual(ctx.issuedRow.signatureMetadata);
+    expect(ctx.stored.size).toBe(storedBefore);
+    const snapshotAfter = await db.execute(
+      sql`SELECT pdf_r2_key, pdf_sha256 FROM issued_certificate_snapshot WHERE job_id = ${ctx.job.jobId}`,
+    );
+    expect(toRows(snapshotAfter)).toEqual(ctx.snapshotBefore);
+    expect(mocks.lapsed).not.toHaveBeenCalled();
+  });
+
+  it("REQ-P08-021 [HIGH RISK]: the watermark refresh of a SUPERSEDED job after its certificate expired does not sign again or fail: the issued snapshot and signature stay as they are", async () => {
+    const ctx = await issueThenLapse();
+    await setJobStatus(ctx.job.jobId, "SUPERSEDED");
+    const storedBefore = ctx.stored.size;
+
+    await issue(ctx.env, ctx.org, ctx.job.jobId);
+
+    const after = await jobRow(ctx.job.jobId);
+    expect(after.status).toBe("SUPERSEDED");
+    expect(after.signatureMetadata).toEqual(ctx.issuedRow.signatureMetadata);
+    expect(ctx.stored.size).toBe(storedBefore);
+    const snapshotAfter = await db.execute(
+      sql`SELECT pdf_r2_key, pdf_sha256 FROM issued_certificate_snapshot WHERE job_id = ${ctx.job.jobId}`,
+    );
+    expect(toRows(snapshotAfter)).toEqual(ctx.snapshotBefore);
     expect(mocks.lapsed).not.toHaveBeenCalled();
   });
 
