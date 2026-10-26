@@ -10,6 +10,7 @@ import {
   OutboundRequestError,
   createOutboundFetch,
   safeOutboundFetch,
+  setOutboundTestOverrides,
   type HostResolver,
   type PinnedRequest,
   type PinnedTransport,
@@ -325,7 +326,12 @@ describe("redirects", () => {
       {
         method: "POST",
         body: "payload",
-        headers: { authorization: "Bearer secret", "x-keep": "1" },
+        headers: {
+          authorization: "Bearer secret",
+          "x-api-key": "key",
+          "x-tenant": "lab-1",
+          accept: "application/json",
+        },
       },
       {
         policy: PRODUCTION,
@@ -338,7 +344,12 @@ describe("redirects", () => {
     expect(requests).toHaveLength(2);
     expect(requests[0]?.headers.authorization).toBe("Bearer secret");
     expect(requests[1]?.headers.authorization).toBeUndefined();
-    expect(requests[1]?.headers["x-keep"]).toBe("1");
+    // Only content negotiation follows a redirect to another origin.
+    expect(requests[1]?.headers["x-api-key"]).toBeUndefined();
+    expect(requests[1]?.headers["x-tenant"]).toBeUndefined();
+    expect(requests[1]?.headers.accept).toBe("application/json");
+    // Within the same origin everything is kept.
+    expect(requests[0]?.headers["x-api-key"]).toBe("key");
     expect(requests[1]?.method).toBe("POST");
     expect(new TextDecoder().decode(requests[1]?.body)).toBe("payload");
   });
@@ -739,5 +750,69 @@ describe("over a real socket", () => {
       body: "x",
     });
     expect(await response.text()).toBe("PUT 42");
+  });
+
+  it("rejects (never throws synchronously) on a body it cannot send", async () => {
+    const outboundFetch = createOutboundFetch({ policy: LOOPBACK_ALLOWED });
+    const pending = outboundFetch("http://127.0.0.1:1/", {
+      method: "POST",
+      body: new Blob(["x"]),
+    });
+    await expect(pending).rejects.toBeInstanceOf(TypeError);
+  });
+});
+
+describe("what the caller is told", () => {
+  it("does not reveal the address class, the resolved address or whether an internal name exists", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { transport } = recordingTransport(() => answer(200));
+    const refusedPrivate = await rejection(
+      safeOutboundFetch(
+        "https://db.internal.example.com/",
+        {},
+        {
+          policy: PRODUCTION,
+          resolver: resolvingTo("172.18.0.3"),
+          transport,
+        },
+      ),
+    );
+    const refusedLiteral = await rejection(
+      safeOutboundFetch("https://169.254.169.254/", {}, { policy: PRODUCTION }),
+    );
+    const missing = await rejection(
+      safeOutboundFetch(
+        "https://nope.internal.example.com/",
+        {},
+        { policy: PRODUCTION, resolver: failingResolver, transport },
+      ),
+    );
+    const messages = [refusedPrivate, refusedLiteral, missing].map((error) =>
+      error instanceof Error ? error.message : "",
+    );
+    expect(new Set(messages).size).toBe(1);
+    for (const message of messages) {
+      expect(message).not.toMatch(
+        /172\.18|169\.254|metadata|private|privad|link-local|db\.internal|nope\.internal/i,
+      );
+    }
+    // The detail is for the operator.
+    expect(warn.mock.calls.flat().join(" ")).toMatch(
+      /172\.18\.0\.3|private network/,
+    );
+    warn.mockRestore();
+  });
+});
+
+describe("test seam", () => {
+  it("refuses to install in production", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    try {
+      expect(() =>
+        setOutboundTestOverrides({ resolver: resolvingTo(PUBLIC_IP) }),
+      ).toThrow(/production/);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

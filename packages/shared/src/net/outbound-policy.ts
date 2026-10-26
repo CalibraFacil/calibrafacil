@@ -157,7 +157,10 @@ export type OutboundUrlCheck =
       readonly ok: false;
       /** `blocked_address`: the host is a refused address; else the URL is unusable. */
       readonly code: "invalid_url" | "blocked_address";
+      /** Safe to show the caller. */
       readonly reason: string;
+      /** For the server log only: the class of address refused. */
+      readonly detail?: string;
     };
 
 /**
@@ -204,7 +207,8 @@ export function checkOutboundUrl(
       return {
         ok: false,
         code: "blocked_address",
-        reason: `Endereço não permitido (${verdict.reason})`,
+        reason: "Endereço não permitido",
+        detail: verdict.reason,
       };
     }
   } else if (
@@ -214,7 +218,8 @@ export function checkOutboundUrl(
     return {
       ok: false,
       code: "blocked_address",
-      reason: "Endereço não permitido (loopback)",
+      reason: "Endereço não permitido",
+      detail: "loopback",
     };
   }
   return { ok: true, url };

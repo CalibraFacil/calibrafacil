@@ -2,6 +2,7 @@ import { lookup } from "node:dns/promises";
 import http from "node:http";
 import https from "node:https";
 import { isIP } from "node:net";
+import { readRuntimeConfig } from "@calibra-facil/config";
 import {
   checkOutboundUrl,
   judgeOutboundAddress,
@@ -131,6 +132,10 @@ export function setOutboundTestOverrides(
     readonly transport?: PinnedTransport;
   } | null,
 ): void {
+  // The seam would defeat the whole guard: it cannot exist in production.
+  if (overrides !== null && readRuntimeConfig().isProduction) {
+    throw new Error("setOutboundTestOverrides is not available in production");
+  }
   testOverrides = overrides;
 }
 
@@ -154,10 +159,16 @@ const HOP_BY_HOP_HEADERS = new Set([
   "keep-alive",
   "upgrade",
 ]);
-const CREDENTIAL_HEADERS = new Set([
-  "authorization",
-  "cookie",
-  "proxy-authorization",
+// What may follow a redirect to ANOTHER origin: plain content negotiation.
+// Everything else (credentials, API keys, tenant or signature headers) stays
+// with the origin the caller chose.
+const CROSS_ORIGIN_HEADERS = new Set([
+  "accept",
+  "accept-encoding",
+  "accept-language",
+  "content-type",
+  "content-length",
+  "user-agent",
 ]);
 
 export async function resolveHostAddresses(
@@ -371,6 +382,10 @@ export const nodePinnedTransport: PinnedTransport = (request) =>
     clientRequest.end();
   });
 
+// One text for "refused" and "does not resolve": two texts would let a caller
+// tell an internal host name that exists from one that does not.
+const UNREACHABLE_MESSAGE = "Destino não permitido ou não encontrado";
+
 function tooLarge(limit: number) {
   return new OutboundRequestError(
     "response_too_large",
@@ -401,17 +416,10 @@ async function resolveAndJudge(
       addresses = await raceAbort(resolver(hostname), signal);
     } catch (error) {
       if (error instanceof OutboundRequestError || signal.aborted) throw error;
-      throw new OutboundRequestError(
-        "dns_failed",
-        `Não foi possível resolver ${hostname}: ${describe(error)}`,
-        error,
-      );
+      throw new OutboundRequestError("dns_failed", UNREACHABLE_MESSAGE, error);
     }
     if (addresses.length === 0) {
-      throw new OutboundRequestError(
-        "dns_failed",
-        `Não foi possível resolver ${hostname}`,
-      );
+      throw new OutboundRequestError("dns_failed", UNREACHABLE_MESSAGE);
     }
   }
 
@@ -420,10 +428,12 @@ async function resolveAndJudge(
   for (const entry of addresses) {
     const verdict = judgeOutboundAddress(policy, hostname, entry.address);
     if (!verdict.allowed) {
-      throw new OutboundRequestError(
-        "blocked_address",
-        `Destino não permitido: ${hostname} resolve para um endereço restrito (${verdict.reason})`,
+      // The class of address stays in the server log: telling the caller
+      // would turn the configured URL into a probe of the internal network.
+      console.warn(
+        `[outbound] refused ${hostname}: resolves to a restricted address (${verdict.reason})`,
       );
+      throw new OutboundRequestError("blocked_address", UNREACHABLE_MESSAGE);
     }
   }
   return addresses;
@@ -465,6 +475,10 @@ export async function safeOutboundFetch(
   for (let hop = 0; ; hop += 1) {
     const checked = checkOutboundUrl(current ?? input, policy);
     if (!checked.ok) {
+      if (checked.code === "blocked_address") {
+        console.warn(`[outbound] refused a URL: ${checked.detail}`);
+        throw new OutboundRequestError("blocked_address", UNREACHABLE_MESSAGE);
+      }
       throw new OutboundRequestError(checked.code, checked.reason);
     }
     const url = checked.url;
@@ -551,11 +565,11 @@ export async function safeOutboundFetch(
           ),
         );
       }
-      // Credentials never follow a redirect to another origin.
+      // Only safelisted headers follow a redirect to another origin.
       if (next.origin !== url.origin) {
         headers = Object.fromEntries(
-          Object.entries(headers).filter(
-            ([name]) => !CREDENTIAL_HEADERS.has(name),
+          Object.entries(headers).filter(([name]) =>
+            CROSS_ORIGIN_HEADERS.has(name),
           ),
         );
       }
@@ -612,7 +626,10 @@ export function createOutboundFetch(
       !(body instanceof ArrayBuffer) &&
       !(body instanceof URLSearchParams)
     ) {
-      throw new TypeError("safeOutboundFetch: unsupported request body type");
+      // A rejected promise, like `fetch`: callers handle one failure path.
+      return Promise.reject(
+        new TypeError("safeOutboundFetch: unsupported request body type"),
+      );
     }
     return safeOutboundFetch(
       input,

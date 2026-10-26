@@ -117,7 +117,7 @@ export const outboundGroup = defineGroup({
     allowPrivateHosts: list({
       env: "OUTBOUND_ALLOW_PRIVATE_HOSTS",
       description:
-        "Comma-separated hosts the server may call even though they resolve to a private address, for a self-hosted laboratory whose ERP lives on its LAN. Each entry is a host name (`erp.lan`), a `*.suffix` wildcard, an IP address or a CIDR range (`10.20.0.0/24`). Off by default: list only what you mean to reach.",
+        "Comma-separated hosts the server may call even though they resolve to a private address, for a self-hosted laboratory whose ERP lives on its LAN. Each entry is a host name (`erp.lan`), a `*.suffix` wildcard, an IP address or a CIDR range (`10.20.0.0/24`). A host name permits ANY address it resolves to (loopback and the internal network included), so list a name only if you control its DNS; an IP address or CIDR range permits exactly those addresses. Off by default: list only what you mean to reach.",
       example: example.commented("erp.lan,10.20.0.0/24"),
     }),
     allowInsecureHttp: flag({

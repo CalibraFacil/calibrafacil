@@ -364,10 +364,20 @@ server treats them as untrusted (SSRF). Every such call goes through one helper
 **Reaching a host on your own network.** A self-hosted laboratory whose ERP lives on its LAN has to
 say so: list the host in `OUTBOUND_ALLOW_PRIVATE_HOSTS` (comma-separated, **off by default**). An
 entry is a host name (`erp.lan`), a `*.suffix` wildcard (`*.corp.example`), an IP address or a
-CIDR range (`10.20.0.0/24`). A listed host may resolve to any address; a listed range only covers
-addresses inside it. List what you mean to reach and nothing broader: every laboratory of the
-instance can then point a webhook or an ERP integration at it. An entry that cannot be read is
-ignored and logged.
+CIDR range (`10.20.0.0/24`).
+
+**An allow-listed host name permits ANY address it resolves to**, including `127.0.0.1`, the
+database, the object store and the cloud metadata address: the guard trusts the name, not the
+address, and whoever controls that name's DNS controls where the call goes. List a host name only
+if you control its DNS; prefer an IP address or a CIDR range, which permits exactly those addresses
+and nothing else. A `*.suffix` wildcard permits every name under it, with the same consequence. Every
+laboratory of the instance can then point a webhook or an ERP integration at what you listed, so
+list what you mean to reach and nothing broader. An entry that cannot be read is ignored and
+logged.
+
+Refusals are deliberately vague to the caller ("destino não permitido ou não encontrado", the same
+text as an unknown host, so a laboratory cannot use a webhook to probe your network); the address
+class that was refused is written to the server log (`[outbound] refused ...`).
 
 Webhook deliveries are queued (`BACKGROUND_JOBS_MODE=queue`: the worker sends them, five attempts
 with exponential backoff, and disables a subscription after 10 deliveries in a row fail). The
