@@ -46,7 +46,7 @@ import {
 import { sql } from "drizzle-orm";
 import { portalRouter } from "./portal";
 import { verifyRouter } from "./verify";
-import { createAssetOotEventForApprovedJob } from "../lib/asset-oot-events";
+import { seedAssetOotEvent } from "../../test/integration/oot-fixtures";
 import { insertJobs } from "../../test/integration/job-fixtures";
 import { loginAsPortal } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
@@ -338,7 +338,7 @@ describe("portal endpoints: real responses honor the contract schemas (P2-15 REQ
     );
     expect(drift.cycles).toHaveLength(2);
 
-    await createAssetOotEventForApprovedJob({
+    await seedAssetOotEvent({
       jobId: second,
       assetId,
       customerId: ctx.customerId,

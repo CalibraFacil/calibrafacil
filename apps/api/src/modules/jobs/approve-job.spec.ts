@@ -12,8 +12,9 @@ const {
   mockBuildVerdict,
   mockAdvanceDates,
   mockEnqueueBackgroundJob,
-  mockNotifyJobApproved,
-  mockCreateOotEvent,
+  mockRecordOotEvent,
+  mockWithdrawOotEvent,
+  mockRevertAdvance,
   mockFindServiceOrders,
   mockTriggerAutomaticSend,
   mockLockJob,
@@ -44,10 +45,16 @@ const {
       conformity: "CONFORMING",
       margins: null,
     })),
-    mockAdvanceDates: vi.fn(async () => undefined),
+    // The pure database effects run in the approval's own transaction (B2):
+    // the date advance returns what it changed (null: nothing), the OOT event
+    // its id (null: it already existed).
+    mockAdvanceDates: vi.fn(async (): Promise<unknown> => null),
     mockEnqueueBackgroundJob: vi.fn(async () => undefined),
-    mockNotifyJobApproved: vi.fn(async () => undefined),
-    mockCreateOotEvent: vi.fn(async () => undefined),
+    mockRecordOotEvent: vi.fn(
+      async (): Promise<{ eventId: number } | null> => ({ eventId: 77 }),
+    ),
+    mockWithdrawOotEvent: vi.fn(async () => undefined),
+    mockRevertAdvance: vi.fn(async () => undefined),
     mockFindServiceOrders: vi.fn(async () => []),
     mockTriggerAutomaticSend: vi.fn(async () => undefined),
     // The frozen certificate input reads the lab, customer, asset and approver
@@ -142,16 +149,15 @@ vi.mock("../../lib/as-found-reliability-verdict", () => ({
   buildAsFoundReliabilityVerdict: mockBuildVerdict,
 }));
 vi.mock("../../lib/asset-calibration-advance", () => ({
-  advanceAssetCalibrationDatesOnApproval: mockAdvanceDates,
+  advanceAssetCalibrationDates: mockAdvanceDates,
+  revertAssetCalibrationAdvance: mockRevertAdvance,
 }));
 vi.mock("../../lib/background-jobs", () => ({
   enqueueBackgroundJob: mockEnqueueBackgroundJob,
 }));
-vi.mock("@calibra-facil/notifications", () => ({
-  notifyJobApproved: mockNotifyJobApproved,
-}));
 vi.mock("../../lib/asset-oot-events", () => ({
-  createAssetOotEventForApprovedJob: mockCreateOotEvent,
+  recordAssetOotEvent: mockRecordOotEvent,
+  withdrawAssetOotEvent: mockWithdrawOotEvent,
 }));
 vi.mock("../../lib/automatic-send", () => ({
   findServiceOrdersForCalibrationJob: mockFindServiceOrders,
@@ -230,6 +236,8 @@ beforeEach(() => {
   state.updateCalls = [];
   state.insertCalls = [];
   vi.clearAllMocks();
+  mockAdvanceDates.mockResolvedValue(null);
+  mockRecordOotEvent.mockResolvedValue({ eventId: 77 });
   mockCheckSignatory.mockResolvedValue({ ok: true });
   mockBuildVerdict.mockReturnValue({ conformity: "CONFORMING", margins: null });
   mockFindServiceOrders.mockResolvedValue([]);
@@ -355,15 +363,26 @@ describe("approveJob transition effects", () => {
       ipAddress: "10.0.0.1",
       reason: "OK",
     });
+    // B2: the date advance runs INSIDE the approval transaction (on its handle),
+    // never as a post-commit follow-up.
     expect(mockAdvanceDates).toHaveBeenCalledWith(
+      expect.anything(),
       expect.objectContaining({ assetId: 55, source: "job_approval" }),
     );
     expect(mockEnqueueBackgroundJob).toHaveBeenCalledWith({
       jobId: 10,
       userId: "approver-1",
     });
-    expect(mockNotifyJobApproved).toHaveBeenCalledWith(10, "approver-1");
-    expect(mockCreateOotEvent).not.toHaveBeenCalled();
+    // The technician notification is a staged queue job, not an in-process call.
+    expect(mockEnqueueBackgroundJob).toHaveBeenCalledWith({
+      type: "JOB_APPROVED_NOTIFICATION",
+      jobId: 10,
+      userId: "approver-1",
+    });
+    expect(mockRecordOotEvent).not.toHaveBeenCalled();
+    expect(mockEnqueueBackgroundJob).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "ASSET_OOT_NOTIFICATION" }),
+    );
   });
 
   it("raises a customer-facing OOT event when the as-found verdict is non-conforming", async () => {
@@ -376,9 +395,78 @@ describe("approveJob transition effects", () => {
 
     await callApprove();
 
-    expect(mockCreateOotEvent).toHaveBeenCalledWith(
+    // The event is written in the approval transaction; its customer alert is a
+    // staged queue job that names the event.
+    expect(mockRecordOotEvent).toHaveBeenCalledWith(
+      expect.anything(),
       expect.objectContaining({ jobId: 10, assetId: 55, customerId: 9 }),
     );
+    expect(mockEnqueueBackgroundJob).toHaveBeenCalledWith({
+      type: "ASSET_OOT_NOTIFICATION",
+      eventId: 77,
+      organizationId: "org-1",
+      userId: "approver-1",
+    });
+  });
+
+  it("stages no customer alert when the event already exists (a re-approval after a rejection cycle)", async () => {
+    state.jobRows = [reviewJob()];
+    state.updateReturning = [reviewJob({ status: "GENERATING_PDF" })];
+    mockBuildVerdict.mockReturnValue({
+      conformity: "NON_CONFORMING",
+      margins: null,
+    });
+    mockRecordOotEvent.mockResolvedValue(null);
+
+    await callApprove();
+
+    expect(mockEnqueueBackgroundJob).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "ASSET_OOT_NOTIFICATION" }),
+    );
+  });
+
+  it("a failing OOT-event or date-advance write fails the approval: nothing is dispatched after it", async () => {
+    state.jobRows = [reviewJob()];
+    state.updateReturning = [reviewJob({ status: "GENERATING_PDF" })];
+    mockBuildVerdict.mockReturnValue({
+      conformity: "NON_CONFORMING",
+      margins: null,
+    });
+    mockRecordOotEvent.mockRejectedValueOnce(new Error("audit insert failed"));
+
+    await expect(callApprove()).rejects.toThrow("audit insert failed");
+    expect(mockEnqueueBackgroundJob).not.toHaveBeenCalled();
+
+    mockAdvanceDates.mockRejectedValueOnce(new Error("asset audit failed"));
+    await expect(callApprove()).rejects.toThrow("asset audit failed");
+    expect(mockEnqueueBackgroundJob).not.toHaveBeenCalled();
+  });
+
+  it("an approval reverted because the certificate job could not be dispatched takes its OOT event and date advance with it", async () => {
+    state.jobRows = [reviewJob()];
+    state.updateReturning = [reviewJob({ status: "GENERATING_PDF" })];
+    mockBuildVerdict.mockReturnValue({
+      conformity: "NON_CONFORMING",
+      margins: null,
+    });
+    const applied = { assetId: 55, next: { lastCalibrationDate: new Date() } };
+    mockAdvanceDates.mockResolvedValue(applied);
+    // The certificate job is the first dispatch: it fails.
+    mockEnqueueBackgroundJob.mockRejectedValueOnce(new Error("queue down"));
+
+    await expect(callApprove()).resolves.toEqual({ status: "dispatch_failed" });
+
+    expect(mockWithdrawOotEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ eventId: 77, jobId: 10 }),
+    );
+    expect(mockRevertAdvance).toHaveBeenCalledWith(
+      expect.anything(),
+      applied,
+      expect.objectContaining({ performedBy: "approver-1" }),
+    );
+    // No notification is dispatched for an approval that was reverted.
+    expect(mockEnqueueBackgroundJob).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -490,7 +578,8 @@ describe("approveJob actor, role gate and compare-and-set", () => {
     });
     expect(state.insertCalls).toHaveLength(0);
     expect(mockEnqueueBackgroundJob).not.toHaveBeenCalled();
-    expect(mockNotifyJobApproved).not.toHaveBeenCalled();
+    expect(mockRecordOotEvent).not.toHaveBeenCalled();
+    expect(mockAdvanceDates).not.toHaveBeenCalled();
   });
 });
 
@@ -588,6 +677,7 @@ describe("approveJob freezes the certificate input (REQ-CIN-1)", () => {
     });
 
     expect(mockEnqueueBackgroundJob).not.toHaveBeenCalled();
-    expect(mockNotifyJobApproved).not.toHaveBeenCalled();
+    expect(mockRecordOotEvent).not.toHaveBeenCalled();
+    expect(mockAdvanceDates).not.toHaveBeenCalled();
   });
 });
