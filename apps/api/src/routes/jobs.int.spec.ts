@@ -1075,7 +1075,8 @@ async function seedScopeGuardWorld(params: {
   orgId: string;
   userId: string;
   tagSuffix: string;
-  enforcementMode: "warn" | "enforce";
+  /** `null` = the lab never chose a mode (Q45: the default applies). */
+  enforcementMode: "warn" | "enforce" | null;
   reportedU: number;
   /** Calibrated point in grams; the scope line covers 0-500 g. */
   point?: number;
@@ -1478,6 +1479,64 @@ describe("jobsRouter — accreditation seal from the scope verdict (Q42)", () =>
     expect(res.status).toBe(422);
     expect((await res.json()).scopeCompliance.status).toBe("OUT_OF_SCOPE");
     expect(await frozenSealOf(world.jobId)).toBeUndefined();
+  });
+
+  // Q45 — `enforce` is the default for an accredited lab that never chose.
+  it("REQ-ENF-001 [HIGH RISK]: a lab that never chose a mode is ENFORCED while accredited: an adverse result is blocked", async () => {
+    const world = await seedScopeGuardWorld({
+      orgId: "org-enf-default",
+      userId: "user-enf-default",
+      tagSuffix: "enf-default",
+      enforcementMode: null,
+      reportedU: 0.002,
+    });
+
+    const res = await approveAs(
+      "user-enf-default",
+      "org-enf-default",
+      world.jobId,
+    );
+
+    expect(res.status).toBe(422);
+    expect((await res.json()).code).toBe("SCOPE_VIOLATION");
+    expect(await frozenSealOf(world.jobId)).toBeUndefined();
+  });
+
+  it("REQ-ENF-002 [HIGH RISK]: an EXPLICIT 'warn' is never overridden by the default: the adverse result is approved, unsealed", async () => {
+    const world = await seedScopeGuardWorld({
+      orgId: "org-enf-warn",
+      userId: "user-enf-warn",
+      tagSuffix: "enf-warn",
+      enforcementMode: "warn",
+      reportedU: 0.002,
+    });
+
+    const res = await approveAs("user-enf-warn", "org-enf-warn", world.jobId);
+
+    expect(res.status).toBe(200);
+    expect(await frozenSealOf(world.jobId)).toMatchObject({
+      accredited: false,
+      withheldReason: "scope_u_below_cmc",
+    });
+  });
+
+  it("REQ-ENF-003: a lab that never chose and is NOT accredited keeps the warn default (nothing to guard)", async () => {
+    const world = await seedScopeGuardWorld({
+      orgId: "org-enf-plain",
+      userId: "user-enf-plain",
+      tagSuffix: "enf-plain",
+      enforcementMode: null,
+      reportedU: 0.002,
+      accreditationActive: false,
+    });
+
+    const res = await approveAs("user-enf-plain", "org-enf-plain", world.jobId);
+
+    expect(res.status).toBe(200);
+    expect(await frozenSealOf(world.jobId)).toMatchObject({
+      accredited: false,
+      withheldReason: "lab_accreditation_inactive",
+    });
   });
 
   it("REQ-SEAL-007: the job detail carries the frozen decision and the reason the seal was withheld", async () => {

@@ -306,6 +306,113 @@ describe("accreditedScopeRouter — real DB + real middleware", () => {
     },
   );
 
+  // Q45 — a lab that never chose a mode is enforced while accredited.
+  async function seedUnsetLab(accreditationActive: boolean) {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    await db
+      .update(organization)
+      .set({ scopeEnforcementMode: null, accreditationActive })
+      .where(eq(organization.id, org.orgId));
+    return org;
+  }
+
+  async function getScope(org: {
+    userId: string;
+    orgId: string;
+    unitId: number;
+  }) {
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await accreditedScopeRouter.request("/", {
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+    });
+    expect(res.status).toBe(200);
+    return res.json();
+  }
+
+  it("REQ-ENF-004: GET / reports the EFFECTIVE default: enforce for an accredited lab that never chose", async () => {
+    const org = await seedUnsetLab(true);
+
+    const body = await getScope(org);
+
+    expect(body.enforcementMode).toBe("enforce");
+    expect(body.enforcementModeIsDefault).toBe(true);
+  });
+
+  it("REQ-ENF-004: GET / reports warn for a lab that never chose and is not accredited", async () => {
+    const org = await seedUnsetLab(false);
+
+    const body = await getScope(org);
+
+    expect(body.enforcementMode).toBe("warn");
+    expect(body.enforcementModeIsDefault).toBe(true);
+  });
+
+  it("REQ-ENF-005: an explicit mode is reported as chosen, whatever the accreditation", async () => {
+    const org = await seedUnsetLab(true);
+    await db
+      .update(organization)
+      .set({ scopeEnforcementMode: "warn" })
+      .where(eq(organization.id, org.orgId));
+
+    const body = await getScope(org);
+
+    expect(body.enforcementMode).toBe("warn");
+    expect(body.enforcementModeIsDefault).toBe(false);
+  });
+
+  it("REQ-ENF-006: relaxing the default to 'warn' is audited as enforce -> warn (by whom, and that it was the default) and sticks", async () => {
+    const org = await seedUnsetLab(true);
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await accreditedScopeRouter.request("/enforcement", {
+      method: "PUT",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ mode: "warn" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await readMode(org.orgId)).toBe("warn");
+    const audit = await db
+      .select()
+      .from(accreditedScopeLineAuditLog)
+      .where(
+        and(
+          eq(accreditedScopeLineAuditLog.organizationId, org.orgId),
+          eq(accreditedScopeLineAuditLog.action, "enforcement_mode_change"),
+        ),
+      );
+    expect(audit).toHaveLength(1);
+    expect(audit[0]?.performedBy).toBe(org.userId);
+    expect(audit[0]?.changes).toEqual({
+      scopeEnforcementMode: { old: "enforce", new: "warn" },
+      wasDefault: true,
+    });
+    expect((await getScope(org)).enforcementModeIsDefault).toBe(false);
+  });
+
+  it("REQ-ENF-006: choosing 'enforce' on an unset accredited lab records the choice (it was already enforced)", async () => {
+    const org = await seedUnsetLab(true);
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const res = await accreditedScopeRouter.request("/enforcement", {
+      method: "PUT",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ mode: "enforce" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await readMode(org.orgId)).toBe("enforce");
+    const audit = await db
+      .select()
+      .from(accreditedScopeLineAuditLog)
+      .where(eq(accreditedScopeLineAuditLog.organizationId, org.orgId));
+    expect(audit).toHaveLength(1);
+    expect(audit[0]?.changes).toEqual({
+      scopeEnforcementMode: { old: "enforce", new: "enforce" },
+      wasDefault: true,
+    });
+  });
+
   it("REQ-CMC-006: PUT /enforcement as a single-unit unit_admin -> 403 and the org mode is unchanged", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "technician" });
     await grantUnitAdmin(org);

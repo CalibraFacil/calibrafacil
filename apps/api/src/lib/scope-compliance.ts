@@ -27,6 +27,7 @@ import {
   evaluateScopeCompliance,
   extractScopeEvaluationPoints,
   isAccreditationSealEligible,
+  resolveScopeEnforcementMode,
   type ScopeComplianceResult,
   type ScopeEnforcementMode,
 } from "@calibra-facil/shared";
@@ -74,7 +75,11 @@ export async function classifyJobScopeCompliance(
     .from(organization)
     .where(eq(organization.id, input.organizationId))
     .limit(1);
-  const enforcementMode = lab?.scopeEnforcementMode ?? "warn";
+  // Q45: a lab that never chose a mode is enforced while it is accredited.
+  const enforcementMode = resolveScopeEnforcementMode({
+    stored: lab?.scopeEnforcementMode,
+    accreditationActive: lab?.accreditationActive,
+  });
 
   const sealWouldRender =
     lab !== undefined &&

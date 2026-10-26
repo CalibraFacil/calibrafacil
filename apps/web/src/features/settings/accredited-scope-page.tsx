@@ -224,9 +224,12 @@ export function AccreditedScopeSettingsPage() {
               </Select>
               <p className="mt-2 text-xs text-muted-foreground">
                 No modo bloqueio, a aprovação só passa com justificativa
-                documentada e o certificado sai sem o selo de acreditação.
-                Comece no modo aviso e ative o bloqueio depois de validar as
-                linhas do escopo.
+                documentada e o certificado sai sem o selo de acreditação. Em
+                qualquer modo, o selo só é aplicado quando todos os pontos foram
+                comparados ao escopo e nenhum é adverso.
+                {scopeData?.enforcementModeIsDefault
+                  ? ' Esta é a configuração padrão: laboratórios com acreditação ativa bloqueiam; escolha "Apenas avisar" só durante uma transição.'
+                  : ''}
               </p>
               {canSetEnforcement ? null : (
                 <p className="mt-2 text-xs text-muted-foreground">

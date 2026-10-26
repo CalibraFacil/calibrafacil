@@ -66,12 +66,34 @@ export function quantityKindLabelPt(kind: string): string {
 }
 
 /**
- * Org-level guard behavior (#427 Phase 1). Labs start in `warn` (Phase 0
- * classification only) and opt into `enforce` after trusting the output:
- * enforce blocks accredited approval on OUT_OF_SCOPE/U_BELOW_CMC unless a
- * documented override downgrades the issuance to non-accredited.
+ * Org-level guard behavior (#427 Phase 1). `enforce` blocks accredited approval
+ * on OUT_OF_SCOPE/U_BELOW_CMC unless a documented override downgrades the
+ * issuance to non-accredited; `warn` only classifies. Which one a lab gets when
+ * it never chose is {@link resolveScopeEnforcementMode} (Q45).
  */
 export type ScopeEnforcementMode = "warn" | "enforce";
+
+/**
+ * The guard mode in force for a lab (decision Q45). `stored` is
+ * `organization.scope_enforcement_mode`, which is NULL until the lab chooses:
+ *
+ *  - an explicit `warn` or `enforce` is returned as is, never overridden;
+ *  - never chosen: `enforce` while the accreditation toggle is on (an accredited
+ *    lab is blocked from issuing an adverse accredited result by default), else
+ *    `warn` (nothing to guard).
+ *
+ * `warn` stays selectable but never seals an adverse or unevaluated result
+ * (Q42), whichever way the mode was arrived at.
+ */
+export function resolveScopeEnforcementMode(params: {
+  stored: ScopeEnforcementMode | null | undefined;
+  accreditationActive: boolean | null | undefined;
+}): ScopeEnforcementMode {
+  if (params.stored === "warn" || params.stored === "enforce") {
+    return params.stored;
+  }
+  return params.accreditationActive === true ? "enforce" : "warn";
+}
 
 /**
  * One line of the lab's accredited scope (grandeza × faixa × CMC), as

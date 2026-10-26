@@ -2,10 +2,46 @@ import { describe, expect, it } from "vitest";
 import {
   evaluateScopeCompliance,
   extractScopeEvaluationPoints,
+  resolveScopeEnforcementMode,
   roundToSignificantDigits,
   type AccreditedScopeLineLike,
   type ScopeEvaluationPoint,
 } from "./scope-compliance";
+
+describe("resolveScopeEnforcementMode (Q45)", () => {
+  it("a lab that never chose is enforced while accredited and warned otherwise", () => {
+    expect(
+      resolveScopeEnforcementMode({ stored: null, accreditationActive: true }),
+    ).toBe("enforce");
+    expect(
+      resolveScopeEnforcementMode({
+        stored: undefined,
+        accreditationActive: true,
+      }),
+    ).toBe("enforce");
+    expect(
+      resolveScopeEnforcementMode({ stored: null, accreditationActive: false }),
+    ).toBe("warn");
+    expect(
+      resolveScopeEnforcementMode({ stored: null, accreditationActive: null }),
+    ).toBe("warn");
+  });
+
+  it("an explicit choice is never overridden by the default", () => {
+    expect(
+      resolveScopeEnforcementMode({
+        stored: "warn",
+        accreditationActive: true,
+      }),
+    ).toBe("warn");
+    expect(
+      resolveScopeEnforcementMode({
+        stored: "enforce",
+        accreditationActive: false,
+      }),
+    ).toBe("enforce");
+  });
+});
 
 const AT_DATE = new Date("2026-07-15T12:00:00Z");
 

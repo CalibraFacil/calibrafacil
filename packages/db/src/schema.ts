@@ -243,11 +243,13 @@ export const organization = pgTable(
     // #427 Phase 1: accredited-scope (CMC) guard behavior. 'warn' keeps the
     // Phase 0 classification-only behavior; 'enforce' blocks accredited
     // approval on scope violations unless a documented override downgrades
-    // the issuance to non-accredited (seal suppressed).
-    scopeEnforcementMode: text("scope_enforcement_mode")
-      .$type<ScopeEnforcementMode>()
-      .default("warn")
-      .notNull(),
+    // the issuance to non-accredited (seal suppressed). NULL = the lab never
+    // chose (Q45, migration 0128): the effective mode is
+    // `resolveScopeEnforcementMode` (enforce while accredited, else warn), so
+    // an explicit choice is never overridden by the default.
+    scopeEnforcementMode: text(
+      "scope_enforcement_mode",
+    ).$type<ScopeEnforcementMode>(),
     // Legal-metrology repair authorization (RBMLQ-I "oficina permissionária").
     // Distinct from the RBC/CGCRE accreditation above: required on repair OS
     // documents for instruments subject to legal metrology (Port. Inmetro 65/2015),

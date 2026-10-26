@@ -1172,8 +1172,13 @@ export type ScopeEnforcementMode = "warn" | "enforce";
 export type AccreditedScopeResponse = {
   lines: AccreditedScopeLine[];
   unit: { unitId: number | null; unitName: string | null };
-  /** Org-level guard behavior (#427 Phase 1). */
+  /** Org-level guard behavior (#427 Phase 1): the EFFECTIVE mode (Q45). */
   enforcementMode: ScopeEnforcementMode;
+  /**
+   * True when the lab never chose a mode and the default applies (`enforce` for
+   * an accredited lab, `warn` otherwise); false when the mode was set explicitly.
+   */
+  enforcementModeIsDefault?: boolean;
 };
 
 export type SaveAccreditedScopeLineInput = {
