@@ -5,6 +5,10 @@ import {
   CreateJobSchema,
   UpdateJobSchema,
 } from "@calibra-facil/schemas";
+import {
+  checkOutboundUrl,
+  readOutboundPolicy,
+} from "@calibra-facil/shared/outbound-policy";
 
 export const ListQuerySchema = z.object({
   page: z.coerce.number().min(1).default(1),
@@ -68,9 +72,24 @@ export const CancelRequestPublicSchema = z.object({
   reason: z.string().trim().min(3),
 });
 
+/**
+ * A webhook target. https only in production, no credentials in the URL, and
+ * not an IP literal in a private, loopback, link-local or similar range. A host
+ * NAME is judged when it resolves, at delivery time (`safeOutboundFetch`), so a
+ * name that later points inside the network is refused then.
+ */
+const WebhookTargetUrlSchema = z
+  .string()
+  .trim()
+  .max(2048)
+  .superRefine((value, ctx) => {
+    const checked = checkOutboundUrl(value, readOutboundPolicy());
+    if (!checked.ok) ctx.addIssue({ code: "custom", message: checked.reason });
+  });
+
 export const WebhookSubscriptionSchema = z.object({
   name: z.string().trim().min(3).max(80),
-  targetUrl: z.string().url(),
+  targetUrl: WebhookTargetUrlSchema,
   events: z
     .array(
       z.enum([

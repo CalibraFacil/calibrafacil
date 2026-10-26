@@ -80,6 +80,7 @@ CHROMIUM_PACK_R2_KEY=
 CHROMIUM_PACK_URL=
 SIGNING_MASTER_KEY=
 INTEGRATIONS_MASTER_KEY=
+PUBLIC_API_MASTER_KEY=   # webhook secrets; the worker delivers webhooks
 ```
 
 ## Deployment

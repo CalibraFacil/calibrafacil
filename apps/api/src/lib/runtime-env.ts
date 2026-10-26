@@ -33,6 +33,7 @@ export type WorkerRuntimeEnv = WorkerSigningEnv & {
   GOTENBERG_URL?: string;
   GOTENBERG_TOKEN?: string;
   INTEGRATIONS_MASTER_KEY?: string;
+  PUBLIC_API_MASTER_KEY?: string;
   // Conta Azul syncs run with this environment and may refresh a token with
   // the server-supplied application (laboratories' own come from the database).
   API_URL?: string;
@@ -130,6 +131,7 @@ export function createWorkerRuntimeEnv(): WorkerRuntimeEnv {
     // The master key and every SIGNING_TSA_* variable, shared with createWorkerEnv.
     ...workerSigningEnv(config.signing),
     INTEGRATIONS_MASTER_KEY: config.integrations.masterKey,
+    PUBLIC_API_MASTER_KEY: config.integrations.publicApiMasterKey,
     API_URL: config.origins.apiUrl,
     CONTA_AZUL_CLIENT_ID: config.integrations.contaAzulClientId,
     CONTA_AZUL_CLIENT_SECRET: config.integrations.contaAzulClientSecret,

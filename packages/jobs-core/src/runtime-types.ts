@@ -43,6 +43,8 @@ export interface Env {
   SIGNING_TSA_ICP_CONFORMANT?: string; // "true" ONLY for a credentialed ICP-Brasil ACT
   SIGNING_TSA_TIMEOUT_MS?: string; // TSA request timeout; unset => 30000
   INTEGRATIONS_MASTER_KEY?: string;
+  /** Encrypts webhook secrets; falls back to INTEGRATIONS_MASTER_KEY, as the API does. */
+  PUBLIC_API_MASTER_KEY?: string;
   RESEND_API_KEY?: string;
   RESEND_FROM_EMAIL?: string;
   EMAIL_FROM?: string;

@@ -6,11 +6,14 @@ import {
 } from "@calibra-facil/schemas";
 import {
   buildPublicApiError,
-  emitPublicApiWebhookEvent,
   getPublicApiRequestIp,
   getResourceExternalId,
   upsertResourceExternalId,
 } from "../../lib/public-api";
+import {
+  emitPublicApiWebhookEvent,
+  stagePublicApiWebhookEvent,
+} from "../../lib/public-api-webhooks";
 import { requireApiScope } from "../../middleware/api-key-auth";
 import { createCalibrationJob, jobCreationClientErrors } from "../../lib/jobs";
 import { notifyJobAssigned } from "@calibra-facil/notifications";
@@ -129,13 +132,13 @@ export const jobWriteRoutes = new Hono<PublicApiV2Env>()
               }
             });
           }
-          afterCommit(() =>
-            emitPublicApiWebhookEvent({
+          await stagePublicApiWebhookEvent(
+            { o, tx, afterCommit },
+            {
               organizationId: apiKey.organizationId,
               eventType: "job.created",
               payload: body.data,
-              env: c.env,
-            }),
+            },
           );
 
           return {
@@ -262,7 +265,6 @@ export const jobWriteRoutes = new Hono<PublicApiV2Env>()
         organizationId: apiKey.organizationId,
         eventType: "job.updated",
         payload: body.data,
-        env: c.env,
       });
 
       return c.json(body);
@@ -326,7 +328,6 @@ export const jobWriteRoutes = new Hono<PublicApiV2Env>()
             organizationId: apiKey.organizationId,
             eventType: "job.results_submitted",
             payload: body.data,
-            env: c.env,
           }),
         );
 

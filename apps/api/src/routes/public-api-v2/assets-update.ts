@@ -14,11 +14,14 @@ import {
 import { and, eq, isNull } from "drizzle-orm";
 import {
   buildPublicApiError,
-  emitPublicApiWebhookEvent,
   getPublicApiRequestIp,
   getResourceExternalId,
   upsertResourceExternalId,
 } from "../../lib/public-api";
+import {
+  stagePublicApiWebhookEvent,
+  withPublicApiWebhookTransaction,
+} from "../../lib/public-api-webhooks";
 import { isUniqueViolation } from "../../lib/db-errors";
 import { orgDb } from "../../lib/org-db";
 import { requireApiScope } from "../../middleware/api-key-auth";
@@ -232,61 +235,61 @@ export const assetUpdateRoutes = new Hono<PublicApiV2Env>()
       try {
         // The update, its audit entry and the caller's external id commit
         // together; a tag collision rolls all of them back.
-        written = await orgDb(apiKey.organizationId).transaction(async (o) => {
-          const [row] = await o
-            .update(asset)
-            .set({
-              name: input.name ?? existing.name,
-              manufacturer: input.manufacturer ?? existing.manufacturer,
-              model: input.model ?? existing.model,
-              serialNumber: input.serialNumber ?? existing.serialNumber,
-              tag: input.tag ?? existing.tag,
-              status: input.status ?? existing.status,
-              lastCalibrationDate:
-                lastCalibrationDate === undefined
-                  ? existing.lastCalibrationDate
-                  : lastCalibrationDate,
-              nextCalibrationDate,
-              ...(installedAt !== undefined ? { installedAt } : {}),
-              comments: input.comments ?? existing.comments,
-              specifications:
-                normalizedSpecifications?.specifications ??
-                existing.specifications,
-              ...regimeUpdate,
-            })
-            .where(eq(asset.id, existing.id))
-            .returning();
+        written = await withPublicApiWebhookTransaction(
+          apiKey.organizationId,
+          async (o, webhooks) => {
+            const [row] = await o
+              .update(asset)
+              .set({
+                name: input.name ?? existing.name,
+                manufacturer: input.manufacturer ?? existing.manufacturer,
+                model: input.model ?? existing.model,
+                serialNumber: input.serialNumber ?? existing.serialNumber,
+                tag: input.tag ?? existing.tag,
+                status: input.status ?? existing.status,
+                lastCalibrationDate:
+                  lastCalibrationDate === undefined
+                    ? existing.lastCalibrationDate
+                    : lastCalibrationDate,
+                nextCalibrationDate,
+                ...(installedAt !== undefined ? { installedAt } : {}),
+                comments: input.comments ?? existing.comments,
+                specifications:
+                  normalizedSpecifications?.specifications ??
+                  existing.specifications,
+                ...regimeUpdate,
+              })
+              .where(eq(asset.id, existing.id))
+              .returning();
 
-          await o.insert(assetAuditLog).values({
-            organizationId: apiKey.organizationId,
-            assetId: existing.id,
-            action: "update",
-            changes: {
-              asset: { old: existing, new: row },
-              unitConversions: normalizedSpecifications?.conversions.length
-                ? normalizedSpecifications.conversions
-                : undefined,
-            },
-            performedBy: apiKey.createdBy,
-            ipAddress: getPublicApiRequestIp(c.req.raw.headers),
-          });
-
-          if (externalId) {
-            await upsertResourceExternalId(
-              {
-                organizationId: apiKey.organizationId,
-                apiKeyId: apiKey.id,
-                resourceType: "asset",
-                resourceId: existing.id,
-                externalId,
+            await o.insert(assetAuditLog).values({
+              organizationId: apiKey.organizationId,
+              assetId: existing.id,
+              action: "update",
+              changes: {
+                asset: { old: existing, new: row },
+                unitConversions: normalizedSpecifications?.conversions.length
+                  ? normalizedSpecifications.conversions
+                  : undefined,
               },
-              o,
-            );
-          }
+              performedBy: apiKey.createdBy,
+              ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+            });
 
-          return {
-            updated: row,
-            externalId:
+            if (externalId) {
+              await upsertResourceExternalId(
+                {
+                  organizationId: apiKey.organizationId,
+                  apiKeyId: apiKey.id,
+                  resourceType: "asset",
+                  resourceId: existing.id,
+                  externalId,
+                },
+                o,
+              );
+            }
+
+            const resolvedExternalId =
               externalId ??
               (await getResourceExternalId(
                 {
@@ -295,9 +298,17 @@ export const assetUpdateRoutes = new Hono<PublicApiV2Env>()
                   resourceId: existing.id,
                 },
                 o,
-              )),
-          };
-        });
+              ));
+            // The event is queued with the update and goes out after it commits.
+            await stagePublicApiWebhookEvent(webhooks, {
+              organizationId: apiKey.organizationId,
+              eventType: "asset.updated",
+              payload: { ...row, externalId: resolvedExternalId },
+            });
+
+            return { updated: row, externalId: resolvedExternalId };
+          },
+        );
       } catch (error) {
         if (isUniqueViolation(error)) {
           return c.json(
@@ -317,13 +328,6 @@ export const assetUpdateRoutes = new Hono<PublicApiV2Env>()
           externalId: written?.externalId ?? null,
         },
       };
-
-      await emitPublicApiWebhookEvent({
-        organizationId: apiKey.organizationId,
-        eventType: "asset.updated",
-        payload: body.data,
-        env: c.env,
-      });
 
       return c.json(body);
     },
@@ -349,7 +353,7 @@ export const assetUpdateRoutes = new Hono<PublicApiV2Env>()
     return withIdempotentMutation(
       c,
       { assetId: resolvedId },
-      async ({ o, afterCommit }) => {
+      async ({ o, tx, afterCommit }) => {
         // Look-up, audit entry and soft delete are one transaction (and the
         // idempotency record commits with them).
         const [existing] = await o
@@ -406,13 +410,13 @@ export const assetUpdateRoutes = new Hono<PublicApiV2Env>()
           o,
         );
 
-        afterCommit(() =>
-          emitPublicApiWebhookEvent({
+        await stagePublicApiWebhookEvent(
+          { o, tx, afterCommit },
+          {
             organizationId: apiKey.organizationId,
             eventType: "asset.deleted",
             payload: { id: existing.id, externalId },
-            env: c.env,
-          }),
+          },
         );
 
         return {

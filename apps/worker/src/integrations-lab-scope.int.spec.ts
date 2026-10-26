@@ -6,6 +6,7 @@ import {
   ScheduledIntegrationSyncError,
   type IntegrationSyncQueueMessage,
 } from "@calibra-facil/jobs-core/integrations";
+import { routeOutboundThroughGlobalFetch } from "@calibra-facil/shared/outbound-testing";
 import { db, truncateAll } from "../test/integration/db";
 import {
   asString,
@@ -144,11 +145,17 @@ function messageFor(
   };
 }
 
+let restoreOutbound = () => {};
+
 beforeEach(async () => {
   await truncateAll();
+  // The ERP push goes through safeOutboundFetch: route it through the stubbed
+  // global fetch so the remote system stays a mock.
+  restoreOutbound = routeOutboundThroughGlobalFetch();
 });
 
 afterEach(() => {
+  restoreOutbound();
   vi.unstubAllGlobals();
 });
 

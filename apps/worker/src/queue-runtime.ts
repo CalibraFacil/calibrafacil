@@ -144,6 +144,7 @@ export function createWorkerEnv(): WorkerEnv {
     // The master key and every SIGNING_TSA_* variable, shared with the API.
     ...workerSigningEnv(config.signing),
     INTEGRATIONS_MASTER_KEY: config.integrations.masterKey,
+    PUBLIC_API_MASTER_KEY: config.integrations.publicApiMasterKey,
     RESEND_API_KEY: config.email.resendApiKey,
     RESEND_FROM_EMAIL: config.email.resendFromEmail,
     EMAIL_FROM: config.email.emailFrom,

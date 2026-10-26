@@ -5,12 +5,12 @@ import {
   publicApiWebhookSubscription,
 } from "@calibra-facil/db/schema";
 import { and, desc, eq } from "drizzle-orm";
+import { buildPublicApiError, createWebhookSecret } from "../../lib/public-api";
 import {
-  buildPublicApiError,
-  createWebhookSecret,
   emitPublicApiWebhookEvent,
+  mapWebhookDelivery,
   replayPublicApiWebhookDelivery,
-} from "../../lib/public-api";
+} from "../../lib/public-api-webhooks";
 import { requireApiScope } from "../../middleware/api-key-auth";
 import { type PublicApiV2Env } from "./env";
 import { WebhookSubscriptionSchema } from "./schemas";
@@ -30,6 +30,8 @@ function mapWebhookSubscription(
     lastSuccessAt: record.lastSuccessAt,
     lastFailureAt: record.lastFailureAt,
     consecutiveFailures: record.consecutiveFailures,
+    disabledAt: record.disabledAt,
+    disabledReason: record.disabledReason,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };
@@ -129,6 +131,15 @@ export const webhookRoutes = new Hono<PublicApiV2Env>()
             targetUrl: input.targetUrl ?? existing.targetUrl,
             events: input.events ?? existing.events,
             status: input.status ?? existing.status,
+            // Switching it on again clears why it was switched off and the
+            // failure streak that did it.
+            ...(input.status === "ACTIVE" && existing.status !== "ACTIVE"
+              ? {
+                  disabledAt: null,
+                  disabledReason: null,
+                  consecutiveFailures: 0,
+                }
+              : {}),
             updatedBy: apiKey.createdBy,
           })
           .where(eq(publicApiWebhookSubscription.id, existing.id))
@@ -213,7 +224,6 @@ export const webhookRoutes = new Hono<PublicApiV2Env>()
         test: true,
         subscriptionId: existing.id,
       },
-      env: c.env,
     });
 
     return c.json({ data: { id: existing.id, tested: true } });
@@ -239,7 +249,7 @@ export const webhookRoutes = new Hono<PublicApiV2Env>()
           .orderBy(desc(publicApiWebhookDelivery.createdAt))
           .limit(50),
       );
-      return c.json({ data: deliveries });
+      return c.json({ data: deliveries.map(mapWebhookDelivery) });
     },
   )
   .post(
@@ -251,7 +261,6 @@ export const webhookRoutes = new Hono<PublicApiV2Env>()
         organizationId: apiKey.organizationId,
         subscriptionId: c.req.param("id"),
         deliveryId: c.req.param("deliveryId"),
-        env: c.env,
       });
 
       if (!replay) {
@@ -264,6 +273,6 @@ export const webhookRoutes = new Hono<PublicApiV2Env>()
         );
       }
 
-      return c.json({ data: replay });
+      return c.json({ data: mapWebhookDelivery(replay) });
     },
   );

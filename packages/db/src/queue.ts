@@ -52,6 +52,7 @@ function getMessageType(message: QueueMessage): AppQueueJobType {
     case "INTEGRATION_SYNC":
     case "AUDIT_PACK":
     case "OOT_NOTIFICATION":
+    case "WEBHOOK_DELIVERY":
       return message.type;
     default:
       return "CERTIFICATE";
@@ -92,8 +93,26 @@ function toClaimedRow(value: unknown): ClaimedRow {
   };
 }
 
-function getRetryDelayMs(attempts: number) {
-  return Math.min(5 * 60_000, 5_000 * 2 ** Math.max(0, attempts - 1));
+/**
+ * Attempts a job of this type gets unless the producer says otherwise. A
+ * webhook subscriber that is down for a while is retried longer than a render.
+ */
+function defaultMaxAttempts(type: AppQueueJobType) {
+  return type === "WEBHOOK_DELIVERY" ? 5 : 3;
+}
+
+/**
+ * Wait before the next attempt, doubling per attempt. A webhook subscriber is
+ * an outside system that may need minutes to recover (30 s, 2 min, 8 min,
+ * 32 min, capped at an hour), unlike our own jobs (5 s, 10 s, ... capped at
+ * five minutes).
+ */
+export function getRetryDelayMs(attempts: number, type?: string) {
+  const step = Math.max(0, attempts - 1);
+  if (type === "WEBHOOK_DELIVERY") {
+    return Math.min(60 * 60_000, 30_000 * 4 ** step);
+  }
+  return Math.min(5 * 60_000, 5_000 * 2 ** step);
 }
 
 /** A db handle or an open transaction: anything that can `execute` SQL. */
@@ -126,7 +145,7 @@ export async function enqueueQueueJob(
     values (
       ${getMessageType(validMessage)},
       ${JSON.stringify(validMessage)}::jsonb,
-      ${options.maxAttempts ?? 3},
+      ${options.maxAttempts ?? defaultMaxAttempts(getMessageType(validMessage))},
       ${availableAt.toISOString()}::timestamptz
     )
     returning id
@@ -281,6 +300,7 @@ export async function failQueueJob(
     .select({
       attempts: appQueueJob.attempts,
       maxAttempts: appQueueJob.maxAttempts,
+      type: appQueueJob.type,
     })
     .from(appQueueJob)
     .where(ownedProcessingRow(id, workerId))
@@ -296,7 +316,7 @@ export async function failQueueJob(
   const status: AppQueueJobStatus = exhausted ? "FAILED" : "PENDING";
   const availableAt = exhausted
     ? new Date()
-    : new Date(Date.now() + getRetryDelayMs(job.attempts));
+    : new Date(Date.now() + getRetryDelayMs(job.attempts, job.type));
 
   // The same fence on the write: the lease can be reclaimed between the read
   // above and this update, and `attempts` is only valid for the claim we read.
@@ -397,7 +417,8 @@ function isAppQueueJobType(value: unknown): value is AppQueueJobType {
     value === "SERVICE_ORDER_DELIVERY_RECEIPT" ||
     value === "INTEGRATION_SYNC" ||
     value === "AUDIT_PACK" ||
-    value === "OOT_NOTIFICATION"
+    value === "OOT_NOTIFICATION" ||
+    value === "WEBHOOK_DELIVERY"
   );
 }
 

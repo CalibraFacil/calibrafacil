@@ -4,10 +4,10 @@ import { asset, assetAuditLog, customer } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 import {
   buildPublicApiError,
-  emitPublicApiWebhookEvent,
   getPublicApiRequestIp,
   upsertResourceExternalId,
 } from "../../lib/public-api";
+import { stagePublicApiWebhookEvent } from "../../lib/public-api-webhooks";
 import { isUniqueViolation } from "../../lib/db-errors";
 import { findAssetTypeById } from "../../lib/asset-types";
 import { requireApiScope } from "../../middleware/api-key-auth";
@@ -34,7 +34,7 @@ export const assetCreateRoutes = new Hono<PublicApiV2Env>().post(
     return withIdempotentMutation(
       c,
       input,
-      async ({ o, afterCommit }) => {
+      async ({ o, tx, afterCommit }) => {
         const resolvedCustomerId = await resolveCustomerId(
           {
             organizationId: apiKey.organizationId,
@@ -242,13 +242,13 @@ export const assetCreateRoutes = new Hono<PublicApiV2Env>().post(
           },
         };
 
-        afterCommit(() =>
-          emitPublicApiWebhookEvent({
+        await stagePublicApiWebhookEvent(
+          { o, tx, afterCommit },
+          {
             organizationId: apiKey.organizationId,
             eventType: "asset.created",
             payload: body.data,
-            env: c.env,
-          }),
+          },
         );
 
         return {
