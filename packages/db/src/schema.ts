@@ -448,7 +448,7 @@ export const organizationUnit = pgTable(
      */
     requireSignature: boolean("require_signature").default(false).notNull(),
     /**
-     * Q51 (migration 0127): the unit issues certificates UNSIGNED on purpose.
+     * Q51 (migration 0128): the unit issues certificates UNSIGNED on purpose.
      * Non-null = the setting is on, and this is its mandatory justification.
      * Only an admin/owner sets it, never implicitly (an expired certificate does
      * not): without it a unit that has ever had a signing certificate fails
