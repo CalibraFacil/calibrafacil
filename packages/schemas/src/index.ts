@@ -9,6 +9,7 @@ export * from "./standards-judgement";
 export * from "./job-transitions";
 export * from "./self-serve-signup";
 export * from "./organization-lifecycle";
+export * from "./organization-profile";
 export * from "./integrations";
 export * from "./portal-fleet";
 export * from "./printing";

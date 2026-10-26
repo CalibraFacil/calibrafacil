@@ -238,8 +238,10 @@ export function OrganizationProfileSection({
     e.preventDefault()
     setIsUpdatingIso(true)
     try {
-      const result = await authClient.organization.update({
-        data: buildOrganizationIsoPayload({
+      // The accreditation claim and the profile are written by the laboratory's
+      // own route (Better Auth's organization.update no longer takes them).
+      await calibraApi.organizationProfile.update(
+        buildOrganizationIsoPayload({
           cnpj,
           accreditationNumber,
           accreditationBody,
@@ -261,15 +263,9 @@ export function OrganizationProfileSection({
           technicalManagerName,
           technicalManagerTitle,
         }),
-      })
-      if (result.error) {
-        throw new Error(
-          translateAuthErrorMessage(
-            result.error.message,
-            'Falha ao atualizar informações',
-          ),
-        )
-      }
+      )
+      // The active organization is read through Better Auth: refetch it.
+      authClient.$store.notify('$activeOrgSignal')
       toast.success('Informações ISO 17025 atualizadas com sucesso!')
     } catch (err) {
       const message =

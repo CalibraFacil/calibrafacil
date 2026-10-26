@@ -363,6 +363,11 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "update",
+          "namespace": "organizationProfile",
+          "policy": "cloud-only",
+        },
+        {
           "method": "getNonConformance",
           "namespace": "entityLabels",
           "policy": "cloud-only",

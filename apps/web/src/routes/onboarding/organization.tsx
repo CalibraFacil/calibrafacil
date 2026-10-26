@@ -27,6 +27,7 @@ import { MaskedInput } from '@/components/ui/masked-input'
 import { setStoredDashboardOrganizationId } from '@/features/dashboard/dashboard-scope-storage'
 import { brazilPhoneMask, cnpjMask } from '@/lib/input-masks'
 import { getClientSession, readSessionWithRetry } from '@/lib/auth-session'
+import { calibraApi } from '@/utils/api'
 
 // readSessionWithRetry's naked type parameter widens TSession to `{}`, so name
 // it explicitly off the auth client (same pattern as the dashboard guard).
@@ -100,23 +101,12 @@ function OrganizationOnboardingPage() {
         return
       }
 
-      const result = await authClient.organization.update({
-        data: {
-          cnpj: optionalFormText(formData.get('cnpj')),
-          phone: optionalFormText(formData.get('phone')),
-          email: optionalFormText(formData.get('email')),
-        },
+      await calibraApi.organizationProfile.update({
+        cnpj: optionalFormText(formData.get('cnpj')),
+        phone: optionalFormText(formData.get('phone')),
+        email: optionalFormText(formData.get('email')),
       })
-
-      if (result.error) {
-        setError(
-          translateAuthErrorMessage(
-            result.error.message,
-            'Falha ao atualizar laboratório',
-          ),
-        )
-        return
-      }
+      authClient.$store.notify('$activeOrgSignal')
 
       setStoredDashboardOrganizationId(labOrganization.id)
 

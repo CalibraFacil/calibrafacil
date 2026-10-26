@@ -10,6 +10,7 @@ import type {
   CreateServiceOrderQuoteInput,
   CreateSsoProviderInput,
   SoftDeleteOrganizationRequest,
+  UpdateOrganizationProfileRequest,
   DeliverServiceOrderInput,
   IssueServiceOrderDeliveryDocumentInput,
   MethodCompileDraftInput,
@@ -49,6 +50,7 @@ import {
 import { createAccessApi } from "./modules/access";
 import { createApiKeysApi } from "./modules/api-keys";
 import { createOrganizationLifecycleApi } from "./modules/organization-lifecycle";
+import { createOrganizationProfileApi } from "./modules/organization-profile";
 import { createAssetsApi } from "./modules/assets";
 import { createAssetTypesApi } from "./modules/asset-types";
 import { createCloudAttachmentsApi } from "./modules/attachments";
@@ -191,6 +193,11 @@ export function createCloudApiClient(
         "soft-delete": {
           $post(input: {
             json: SoftDeleteOrganizationRequest;
+          }): Promise<Response>;
+        };
+        profile: {
+          $patch(input: {
+            json: UpdateOrganizationProfileRequest;
           }): Promise<Response>;
         };
       };
@@ -717,6 +724,7 @@ export function createCloudApiClient(
     sso: createSsoApi(rawCloudClient),
     apiKeys: createApiKeysApi(rawCloudClient),
     organizationLifecycle: createOrganizationLifecycleApi(rawCloudClient),
+    organizationProfile: createOrganizationProfileApi(rawCloudClient),
     entityLabels: createEntityLabelsApi(rawCloudClient),
     certificateNumbering: createCertificateNumberingApi(rawCloudClient),
     portalDomains: createPortalDomainsApi(rawCloudClient),

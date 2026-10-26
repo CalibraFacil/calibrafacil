@@ -153,6 +153,9 @@ export const calibraApiPolicyRegistry = {
   organizationLifecycle: {
     softDelete: "cloud-only",
   },
+  organizationProfile: {
+    update: "cloud-only",
+  },
   entityLabels: {
     getNonConformance: "cloud-only",
     getCapa: "cloud-only",
