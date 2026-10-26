@@ -1,5 +1,9 @@
 import { readAuthConfig, readOriginsConfig } from "@calibra-facil/config";
-import { createLabAuth, createPortalAuth } from "@calibra-facil/auth";
+import {
+  createLabAuth,
+  createPortalAuth,
+  provisionOrganization,
+} from "@calibra-facil/auth";
 import {
   INTERNAL_ROLES,
   PORTAL_MANAGEABLE_MEMBER_ROLES,
@@ -179,31 +183,17 @@ export async function createClientOrganizationAsServiceOwner(params: {
   const serviceUser = await getPortalServiceUser();
   const labAuth = createLabAuth();
 
-  const orgResult = await labAuth.api.createOrganization({
-    body: {
-      name: params.name,
-      slug: params.slug,
-      type: "CLIENT",
-      cnpj: "",
-      accreditationNumber: "",
-      accreditationBody: "",
-      street: "",
-      number: "",
-      complement: "",
-      neighbourhood: "",
-      city: "",
-      state: "",
-      cep: "",
-      phone: "",
-      email: "",
-      website: "",
-      technicalManagerName: "",
-      technicalManagerTitle: "",
-      userId: serviceUser.id,
-      keepCurrentActiveOrganization: true,
-      ...(params.metadata ? { metadata: params.metadata } : {}),
-    },
-  });
+  const orgResult = await provisionOrganization({ type: "CLIENT" }, () =>
+    labAuth.api.createOrganization({
+      body: {
+        name: params.name,
+        slug: params.slug,
+        userId: serviceUser.id,
+        keepCurrentActiveOrganization: true,
+        ...(params.metadata ? { metadata: params.metadata } : {}),
+      },
+    }),
+  );
 
   if (!orgResult?.id) {
     throw new PortalServiceAccountError(

@@ -1,5 +1,6 @@
 import type { Context, Hono } from "hono";
 import { createLabAuth, createPortalAuth } from "@calibra-facil/auth";
+import { isAllowedAuthRoute, type AuthSurface } from "./auth-route-allowlist";
 import { getCorsOrigin } from "./cors";
 import type { Env } from "./env";
 
@@ -21,16 +22,40 @@ function withCors(c: Context<{ Bindings: Env }>, res: Response) {
   })();
 }
 
-export function mountAuthRoutes(app: Hono<{ Bindings: Env }>) {
-  app.on(["GET", "POST"], "/api/auth/lab/*", async (c) => {
-    const labAuth = createLabAuth();
-    const res = await labAuth.handler(c.req.raw);
-    return await withCors(c, res);
-  });
+/**
+ * Forward a request to a Better Auth instance only when the surface exposes that
+ * endpoint (`auth-route-allowlist.ts`); everything else is a 404 and never reaches
+ * Better Auth. The path is read from the same parsed URL Better Auth routes on.
+ */
+async function handleAuthRequest(
+  c: Context<{ Bindings: Env }>,
+  surface: AuthSurface,
+  handle: (request: Request) => Promise<Response>,
+) {
+  const prefix = `/api/auth/${surface}`;
+  const { pathname } = new URL(c.req.raw.url);
+  const subPath = pathname.startsWith(prefix)
+    ? pathname.slice(prefix.length)
+    : "";
 
-  app.on(["GET", "POST"], "/api/auth/portal/*", async (c) => {
-    const portalAuth = createPortalAuth();
-    const res = await portalAuth.handler(c.req.raw);
-    return await withCors(c, res);
-  });
+  if (!isAllowedAuthRoute(surface, c.req.method, subPath)) {
+    return await withCors(
+      c,
+      c.json({ error: "Not found", code: "auth_route_not_found" }, 404),
+    );
+  }
+
+  return await withCors(c, await handle(c.req.raw));
+}
+
+export function mountAuthRoutes(app: Hono<{ Bindings: Env }>) {
+  app.on(["GET", "POST"], "/api/auth/lab/*", (c) =>
+    handleAuthRequest(c, "lab", (request) => createLabAuth().handler(request)),
+  );
+
+  app.on(["GET", "POST"], "/api/auth/portal/*", (c) =>
+    handleAuthRequest(c, "portal", (request) =>
+      createPortalAuth().handler(request),
+    ),
+  );
 }

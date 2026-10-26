@@ -68,7 +68,11 @@ async function desktopAuthFetch(input: RequestInfo | URL, init?: RequestInit) {
   });
 }
 
-// Shared organization plugin config
+// Shared organization plugin config. Every additional field is `input: false`,
+// as on the server (auth.ts): these declarations only type what the organization
+// READS return. The laboratory profile and its accreditation claim are written
+// through the product route `PATCH /api/organization/profile`
+// (`calibraApi.organizationProfile.update`), never through `organization.update`.
 const organizationPluginConfig = organizationClient({
   ac,
   roles,
@@ -78,15 +82,15 @@ const organizationPluginConfig = organizationClient({
         type: {
           type: "string",
           defaultValue: "LAB",
-          input: true,
+          input: false,
         },
         // ISO 17025 / RBC compliance fields
-        cnpj: { type: "string", input: true },
-        accreditationNumber: { type: "string", input: true },
-        accreditationBody: { type: "string", input: true },
+        cnpj: { type: "string", input: false },
+        accreditationNumber: { type: "string", input: false },
+        accreditationBody: { type: "string", input: false },
         accreditationActive: {
           type: "boolean",
-          input: true,
+          input: false,
           required: false,
           defaultValue: false,
         },
@@ -95,26 +99,26 @@ const organizationPluginConfig = organizationClient({
         // bodies (z.date() vs. the serialized string), see auth.ts.
         accreditationValidFrom: {
           type: "string",
-          input: true,
+          input: false,
           required: false,
         },
         accreditationValidUntil: {
           type: "string",
-          input: true,
+          input: false,
           required: false,
         },
-        street: { type: "string", input: true },
-        number: { type: "string", input: true },
-        complement: { type: "string", input: true },
-        neighbourhood: { type: "string", input: true },
-        city: { type: "string", input: true },
-        state: { type: "string", input: true },
-        cep: { type: "string", input: true },
-        phone: { type: "string", input: true },
-        email: { type: "string", input: true },
-        website: { type: "string", input: true },
-        technicalManagerName: { type: "string", input: true },
-        technicalManagerTitle: { type: "string", input: true },
+        street: { type: "string", input: false },
+        number: { type: "string", input: false },
+        complement: { type: "string", input: false },
+        neighbourhood: { type: "string", input: false },
+        city: { type: "string", input: false },
+        state: { type: "string", input: false },
+        cep: { type: "string", input: false },
+        phone: { type: "string", input: false },
+        email: { type: "string", input: false },
+        website: { type: "string", input: false },
+        technicalManagerName: { type: "string", input: false },
+        technicalManagerTitle: { type: "string", input: false },
       },
     },
   },

@@ -47,6 +47,7 @@ type ApiRoutePath =
   | "/api/assets/:id"
   | "/api/assets/:id/audit-log"
   | "/api/onboarding/checklist"
+  | "/api/organization/profile"
   | "/api/organization/soft-delete"
   | "/api/calibration-requests"
   | "/api/calibration-requests/:id"

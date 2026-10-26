@@ -7332,6 +7332,11 @@ export const memberVisualSignatureRelations = relations(
 // CORRECTIVE ACTION (CAPA) - ISO 17025:2017 Clause 8.2 / 8.7 / 8.9
 // =============================================================================
 
+/** How the verifier of a CAPA relates to it (decision Q50). */
+export type CapaVerificationIndependence =
+  | "independent"
+  | "waived_single_verifier";
+
 /**
  * CAPA status values for lifecycle tracking
  */
@@ -7456,6 +7461,16 @@ export const correctiveAction = pgTable(
     verifiedBy: text("verified_by").references(() => user.id),
     verificationNotes: text("verification_notes"),
     effectivenessConfirmed: boolean("effectiveness_confirmed"),
+    // Independence of the verifier (decision Q50): "independent" when nobody tied
+    // to the CAPA verified it, "waived_single_verifier" when the laboratory had no
+    // other eligible verifier and the sole one verified with a written
+    // justification (recorded here and in the audit entry).
+    verificationIndependence: text(
+      "verification_independence",
+    ).$type<CapaVerificationIndependence>(),
+    verificationIndependenceJustification: text(
+      "verification_independence_justification",
+    ),
 
     // Status tracking
     status: text("status")

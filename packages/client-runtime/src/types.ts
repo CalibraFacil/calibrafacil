@@ -14,6 +14,7 @@ import type {
   CreateNonConformanceSchema,
   CreateServiceSchema,
   SoftDeleteOrganizationSchema,
+  UpdateOrganizationProfileSchema,
   UpdateAssetSchema,
   UpdateCertificateNumberingProfileSchema,
   UpdateCustomerSchema,
@@ -28,6 +29,9 @@ export type AdjustMaterialStockInput = z.input<
 export type CreateAssetInput = z.input<typeof CreateAssetSchema>;
 export type SoftDeleteOrganizationRequest = z.input<
   typeof SoftDeleteOrganizationSchema
+>;
+export type UpdateOrganizationProfileRequest = z.input<
+  typeof UpdateOrganizationProfileSchema
 >;
 export type CreateCustomerInput = z.input<typeof CreateCustomerSchema>;
 export type CreateCustomerGroupInput = z.input<
@@ -1409,6 +1413,11 @@ export type CapaImplementInput = {
 export type CapaVerifyInput = {
   effectivenessConfirmed: boolean;
   verificationNotes?: string;
+  /**
+   * Only for a verifier who is not independent of the CAPA and is the
+   * laboratory's sole eligible verifier (decision Q50): why they verify anyway.
+   */
+  independenceJustification?: string;
 };
 
 export type CapaCloseInput = {
@@ -2336,6 +2345,41 @@ export interface OrganizationLifecycleApi {
   ): Promise<SoftDeleteOrganizationResponse>;
 }
 
+/** The laboratory profile as `PATCH /api/organization/profile` answers it. */
+export type OrganizationProfileResponse = {
+  cnpj: string | null;
+  accreditationNumber: string | null;
+  accreditationBody: string | null;
+  accreditationActive: boolean;
+  accreditationValidFrom: string | null;
+  accreditationValidUntil: string | null;
+  permissionariaAuthorizationNumber: string | null;
+  permissionariaAuthorizationState: string | null;
+  street: string | null;
+  number: string | null;
+  complement: string | null;
+  neighbourhood: string | null;
+  city: string | null;
+  state: string | null;
+  cep: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  technicalManagerName: string | null;
+  technicalManagerTitle: string | null;
+};
+
+/**
+ * The laboratory profile: CNPJ, accreditation claim, address, contacts and the
+ * technical manager. Written only here (Better Auth's `organization.update` no
+ * longer accepts these fields). Admin or owner; cloud only.
+ */
+export interface OrganizationProfileApi {
+  update(
+    input: UpdateOrganizationProfileRequest,
+  ): Promise<OrganizationProfileResponse>;
+}
+
 export type EntityLabelResponse = {
   label?: string | null;
 };
@@ -2735,6 +2779,7 @@ export interface CalibraApi {
   sso: SsoApi;
   apiKeys: ApiKeysApi;
   organizationLifecycle: OrganizationLifecycleApi;
+  organizationProfile: OrganizationProfileApi;
   entityLabels: EntityLabelsApi;
   certificateNumbering: CertificateNumberingApi;
   portalDomains: PortalDomainsApi;

@@ -8,7 +8,7 @@ import {
   user,
   verification,
 } from "@calibra-facil/db/schema";
-import { createLabAuth } from "@calibra-facil/auth";
+import { createLabAuth, createPortalAuth } from "@calibra-facil/auth";
 import { asApplicationRole } from "./application-role";
 
 // Fixtures of the identity specs that run the REAL Better Auth lab instance as
@@ -17,6 +17,7 @@ import { asApplicationRole } from "./application-role";
 // so `createLabAuth` is the real one, not the harness's fake.
 
 const WEB = "http://localhost:5173";
+const PORTAL = "http://localhost:5174";
 const API = "http://localhost:3000";
 export const NOW = new Date("2026-02-01T00:00:00.000Z");
 export const FUTURE = new Date("2099-01-01T00:00:00.000Z");
@@ -96,6 +97,22 @@ export async function signInWithMagicLink(email: string): Promise<{
     const response = await createLabAuth().handler(
       new Request(
         `${API}/api/auth/lab/magic-link/verify?token=${token}&callbackURL=${encodeURIComponent(`${WEB}/dashboard`)}`,
+      ),
+    );
+    return { cookie: cookieHeaderOf(response), status: response.status };
+  });
+}
+
+/** The same real sign-in on the PORTAL instance (portal_session cookie). */
+export async function signInWithPortalMagicLink(email: string): Promise<{
+  cookie: string;
+  status: number;
+}> {
+  const token = await seedMagicLinkToken(email);
+  return asApplicationRole(async () => {
+    const response = await createPortalAuth().handler(
+      new Request(
+        `${API}/api/auth/portal/magic-link/verify?token=${token}&callbackURL=${encodeURIComponent(`${PORTAL}/`)}`,
       ),
     );
     return { cookie: cookieHeaderOf(response), status: response.status };

@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
-import { createLabAuth } from "@calibra-facil/auth";
+import { createLabAuth, provisionOrganization } from "@calibra-facil/auth";
 import { db } from "@calibra-facil/db";
 import {
   member,
@@ -116,30 +116,23 @@ export async function createLabOrganizationWithUniqueSlug(input: {
 
     try {
       // oxlint-disable-next-line no-await-in-loop -- retry the next suffix only after a slug conflict.
-      const orgResult = await input.auth.api.createOrganization({
-        body: {
-          name: input.lab.name,
-          slug: resolvedSlug,
+      const orgResult = await provisionOrganization(
+        {
           type: "LAB",
           cnpj: input.lab.cnpj ?? "",
-          accreditationNumber: "",
-          accreditationBody: "",
-          street: "",
-          number: "",
-          complement: "",
-          neighbourhood: "",
-          city: "",
-          state: "",
-          cep: "",
           phone: input.lab.phone ?? "",
           email: input.lab.email ?? input.ownerEmail,
-          website: "",
-          technicalManagerName: "",
-          technicalManagerTitle: "",
-          userId: input.ownerUserId,
-          keepCurrentActiveOrganization: true,
         },
-      });
+        () =>
+          input.auth.api.createOrganization({
+            body: {
+              name: input.lab.name,
+              slug: resolvedSlug,
+              userId: input.ownerUserId,
+              keepCurrentActiveOrganization: true,
+            },
+          }),
+      );
       const org = recordFromUnknown(orgResult);
 
       if (typeof org.id !== "string") {

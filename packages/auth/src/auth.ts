@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError } from "better-auth/api";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { randomBytes } from "node:crypto";
 import { getDb, getSystemDb } from "@calibra-facil/db";
 import * as schema from "@calibra-facil/db/schema";
@@ -1156,21 +1157,46 @@ async function ensureLabInvitationUser(email: string): Promise<void> {
   }
 }
 
-// #647: vigência fields travel as ISO strings (see additionalFields below);
-// these convert string ↔ Date at the adapter boundary. Invalid or empty
-// input clears the field rather than storing an Invalid Date.
-function parseVigenciaInput(value: unknown): Date | null {
-  if (value instanceof Date) return value;
-  if (typeof value === "string" && value) {
-    const date = new Date(value);
-    if (!Number.isNaN(date.getTime())) return date;
-  }
-  return null;
-}
-
+// #647: vigência fields travel as ISO strings (see additionalFields below).
 function formatVigenciaOutput(value: unknown): string | null {
   if (value instanceof Date) return value.toISOString();
   return typeof value === "string" && value ? value : null;
+}
+
+/**
+ * What a server-side provisioning flow names for the organization it creates.
+ *
+ * Every additional field of the organization is `input: false` below, so a
+ * client can never choose them (nor `type`, nor the accreditation claim): Better
+ * Auth strips them from the request body of `organization/create` and
+ * `organization/update`. The product's own flows (lab provisioning, public
+ * sign-up, the CLIENT organization of a customer) state them here, through
+ * {@link provisionOrganization}, and `beforeCreateOrganization` writes them.
+ * The accreditation claim is never a creation attribute: the laboratory declares
+ * it later through `PATCH /api/organization/profile`.
+ */
+export type OrganizationProvisioning = {
+  type: "LAB" | "CLIENT";
+  cnpj?: string;
+  phone?: string;
+  email?: string;
+};
+
+const organizationProvisioning =
+  new AsyncLocalStorage<OrganizationProvisioning>();
+
+/**
+ * Run an `auth.api.createOrganization(...)` call as a platform provisioning
+ * flow. This is the only way an organization can be created: the
+ * `organization/create` HTTP endpoint is closed (`allowUserToCreateOrganization:
+ * false`, and absent from the mounted routes), and the creation hook refuses a
+ * call made outside this scope.
+ */
+export function provisionOrganization<T>(
+  attributes: OrganizationProvisioning,
+  create: () => Promise<T>,
+): Promise<T> {
+  return organizationProvisioning.run(attributes, create);
 }
 
 // Organization plugin configuration factory
@@ -1180,88 +1206,101 @@ function createOrganizationPlugin() {
     roles,
     defaultMemberRole: "member",
     creatorRole: "owner",
+    // Architecture review P0-1: organizations are created by the platform only
+    // (public sign-up, lab provisioning, the portal service account). With
+    // `false`, Better Auth still lets a server call that names `userId` and has
+    // no session through (its "system action") and refuses every signed-in user.
+    allowUserToCreateOrganization: false,
     // Records retention (decision Q16): an organization that holds regulated
     // records is never hard-deleted through the API. Soft delete is a platform
     // operation (softDeleteLabOrganization), and Postgres refuses the DELETE.
     disableOrganizationDeletion: true,
     schema: {
       organization: {
+        // Every field below is `input: false` (architecture review P0-1): a
+        // client request cannot set or change any of them. Server code writes
+        // them: `provisionOrganization` at creation and the laboratory's profile
+        // route (`PATCH /api/organization/profile`, which checks the role and
+        // writes an audit event) afterwards.
         additionalFields: {
           type: {
             type: "string",
             defaultValue: "LAB",
-            input: true,
+            input: false,
           },
           // Lab profile fields
-          cnpj: { type: "string", input: true },
-          accreditationNumber: { type: "string", input: true },
-          accreditationBody: { type: "string", input: true },
+          cnpj: { type: "string", input: false },
+          accreditationNumber: { type: "string", input: false },
+          accreditationBody: { type: "string", input: false },
           accreditationActive: {
             type: "boolean",
-            input: true,
+            input: false,
             required: false,
             defaultValue: false,
           },
           // #647: vigência window (nullable). Declared "string" on the wire:
           // Better Auth validates `type: "date"` additional fields with a
           // plain z.date(), which rejects every JSON body (the Date arrives
-          // as an ISO string). The transforms restore Date semantics at the
-          // DB boundary (a Postgres `date` column: the day the Date names).
+          // as an ISO string). The output transform restores an ISO string at
+          // the API boundary (a Postgres `date` column).
           accreditationValidFrom: {
             type: "string",
-            input: true,
+            input: false,
             required: false,
             transform: {
-              input: parseVigenciaInput,
               output: formatVigenciaOutput,
             },
           },
           accreditationValidUntil: {
             type: "string",
-            input: true,
+            input: false,
             required: false,
             transform: {
-              input: parseVigenciaInput,
               output: formatVigenciaOutput,
             },
           },
           // Legal-metrology repair authorization (RBMLQ-I oficina permissionária).
-          // Optional: existing createOrganization/createUser call sites
-          // (lab provisioning, portal-service-account) must not be forced to
-          // pass these.
           permissionariaAuthorizationNumber: {
             type: "string",
-            input: true,
+            input: false,
             required: false,
           },
           permissionariaAuthorizationState: {
             type: "string",
-            input: true,
+            input: false,
             required: false,
           },
-          street: { type: "string", input: true },
-          number: { type: "string", input: true },
-          complement: { type: "string", input: true },
-          neighbourhood: { type: "string", input: true },
-          city: { type: "string", input: true },
-          state: { type: "string", input: true },
-          cep: { type: "string", input: true },
-          phone: { type: "string", input: true },
-          email: { type: "string", input: true },
-          website: { type: "string", input: true },
-          technicalManagerName: { type: "string", input: true },
-          technicalManagerTitle: { type: "string", input: true },
+          street: { type: "string", input: false },
+          number: { type: "string", input: false },
+          complement: { type: "string", input: false },
+          neighbourhood: { type: "string", input: false },
+          city: { type: "string", input: false },
+          state: { type: "string", input: false },
+          cep: { type: "string", input: false },
+          phone: { type: "string", input: false },
+          email: { type: "string", input: false },
+          website: { type: "string", input: false },
+          technicalManagerName: { type: "string", input: false },
+          technicalManagerTitle: { type: "string", input: false },
         },
       },
     },
     organizationHooks: {
-      beforeCreateOrganization: async ({ organization, user }) => {
-        const requestedType = organization.type ?? "LAB";
+      beforeCreateOrganization: async ({ user }) => {
+        // Defense in depth behind `allowUserToCreateOrganization: false`: a
+        // creation that did not come through `provisionOrganization` (a new
+        // server call site added without thinking) is refused.
+        const provisioning = organizationProvisioning.getStore();
+        if (!provisioning) {
+          throw new APIError("FORBIDDEN", {
+            message: "Organizations are provisioned by the platform only",
+          });
+        }
 
         // 3B guardrail: CLIENT organizations are system-owned.
         // They must be created through server-side flows using the
         // configured service account (PORTAL_SERVICE_USER_ID).
-        if (requestedType === "CLIENT") {
+        if (provisioning.type === "CLIENT") {
           const serviceUserId = process.env.PORTAL_SERVICE_USER_ID?.trim();
 
           if (!serviceUserId) {
@@ -1277,6 +1316,21 @@ function createOrganizationPlugin() {
             });
           }
         }
+
+        return {
+          data: {
+            type: provisioning.type,
+            ...(provisioning.cnpj !== undefined
+              ? { cnpj: provisioning.cnpj }
+              : {}),
+            ...(provisioning.phone !== undefined
+              ? { phone: provisioning.phone }
+              : {}),
+            ...(provisioning.email !== undefined
+              ? { email: provisioning.email }
+              : {}),
+          },
+        };
       },
     },
     async sendInvitationEmail(data) {

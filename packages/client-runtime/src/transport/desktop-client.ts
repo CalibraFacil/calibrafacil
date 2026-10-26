@@ -239,6 +239,9 @@ export function createDesktopApiClient(
     organizationLifecycle: desktopCloudOnlyStubs("organizationLifecycle", {
       action: "Exclusão da organização",
     }),
+    organizationProfile: desktopCloudOnlyStubs("organizationProfile", {
+      action: "Perfil do laboratório",
+    }),
     entityLabels: {
       async getNonConformance() {
         return null;

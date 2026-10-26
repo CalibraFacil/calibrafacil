@@ -27,6 +27,7 @@ import {
   useDesktopCloudOnlyUnavailable,
 } from '@/runtime/sync-status'
 import { formatCalendarDate, formatInstant } from '@calibra-facil/shared/format'
+import { isIndependenceWaiverOffered } from '@/features/quality/capa-verification'
 
 const statusLabels: Record<string, string> = {
   OPEN: 'Aberta',
@@ -84,6 +85,8 @@ export function CAPADetailPage({ id }: { id: string }) {
   const [implementationEvidence, setImplementationEvidence] = useState('')
   const [verificationNotes, setVerificationNotes] = useState('')
   const [effectivenessConfirmed, setEffectivenessConfirmed] = useState(false)
+  const [independenceJustification, setIndependenceJustification] = useState('')
+  const [waiverOffered, setWaiverOffered] = useState(false)
   const [closeReason, setCloseReason] = useState('')
 
   const { data: capa, isLoading } = useCapaDetailData({
@@ -120,15 +123,24 @@ export function CAPADetailPage({ id }: { id: string }) {
       return calibraApi.capas.verify(id, {
         effectivenessConfirmed,
         verificationNotes,
+        ...(waiverOffered && independenceJustification.trim()
+          ? { independenceJustification: independenceJustification.trim() }
+          : {}),
       })
     },
     onSuccess: () => {
       toast.success('Verificação de eficácia registrada')
       setVerificationNotes('')
       setEffectivenessConfirmed(false)
+      setIndependenceJustification('')
+      setWaiverOffered(false)
       invalidate()
     },
-    onError: (e) => toast.error(e.message),
+    onError: (e) => {
+      // Sole eligible verifier: the API offers to verify with a justification.
+      if (isIndependenceWaiverOffered(e)) setWaiverOffered(true)
+      toast.error(e.message)
+    },
   })
 
   const closeMutation = useMutation({
@@ -364,6 +376,18 @@ export function CAPADetailPage({ id }: { id: string }) {
               {capa.verificationNotes && (
                 <p className="whitespace-pre-wrap">{capa.verificationNotes}</p>
               )}
+              {capa.verificationIndependence === 'waived_single_verifier' && (
+                <div className="space-y-1">
+                  <Badge variant="outline">
+                    Verificação sem independência (único verificador)
+                  </Badge>
+                  {capa.verificationIndependenceJustification && (
+                    <p className="whitespace-pre-wrap">
+                      {capa.verificationIndependenceJustification}
+                    </p>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -468,10 +492,28 @@ export function CAPADetailPage({ id }: { id: string }) {
                       rows={4}
                     />
                   </div>
+                  {waiverOffered && (
+                    <div className="space-y-2">
+                      <Label>
+                        Justificativa para verificar sem independência
+                      </Label>
+                      <Textarea
+                        value={independenceJustification}
+                        onChange={(e) =>
+                          setIndependenceJustification(e.target.value)
+                        }
+                        placeholder="Você é o único verificador habilitado do laboratório. Explique por que a verificação é feita sem independência (mínimo de 30 caracteres)..."
+                        rows={3}
+                      />
+                    </div>
+                  )}
                   <Button
                     onClick={() => verifyMutation.mutate()}
                     disabled={
-                      verifyMutation.isPending || verificationNotes.length < 10
+                      verifyMutation.isPending ||
+                      verificationNotes.length < 10 ||
+                      (waiverOffered &&
+                        independenceJustification.trim().length < 30)
                     }
                     variant="secondary"
                   >
