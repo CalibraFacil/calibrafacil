@@ -15,6 +15,7 @@ export * from "./units/convert";
 export * from "./mass-units";
 export * from "./service-orders";
 export * from "./format";
+export * from "./money";
 export * from "./format-specifications";
 export * from "./portal-digest";
 export * from "./accreditation";

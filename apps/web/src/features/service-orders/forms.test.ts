@@ -97,6 +97,35 @@ describe('service order feature forms', () => {
     })
   })
 
+  it('reads the evaluation fee with the shared money parser', () => {
+    const fee = (evaluationFeeCents: string) =>
+      parseServiceOrderForm({ ...validServiceOrderForm(), evaluationFeeCents })
+
+    expect(fee('1.234,56')).toMatchObject({
+      success: true,
+      data: { evaluationFeeCents: 123456 },
+    })
+    expect(fee('12.50')).toMatchObject({
+      success: true,
+      data: { evaluationFeeCents: 1250 },
+    })
+    expect(fee('')).toMatchObject({
+      success: true,
+      data: { evaluationFeeCents: 0 },
+    })
+    for (const bad of ['abc', '1.234.56', '-5']) {
+      expect(fee(bad)).toMatchObject({
+        success: false,
+        fieldErrors: [
+          {
+            field: 'evaluationFeeCents',
+            message: 'Taxa de avaliação inválida',
+          },
+        ],
+      })
+    }
+  })
+
   it('maps required intake fields to form errors', () => {
     const result = parseServiceOrderForm({
       ...validServiceOrderForm(),

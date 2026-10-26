@@ -1,4 +1,9 @@
 import { formatCalendarDate, formatMoney } from '@calibra-facil/shared/format'
+import {
+  MONEY_PARSE_FAILURE_MESSAGES,
+  parseMoneyToCents,
+  type ParseMoneyOptions,
+} from '@calibra-facil/shared/money'
 
 export type BillingMode = 'single' | 'consolidated'
 
@@ -8,15 +13,17 @@ export function formatFinanceMoney(value: number, currency = 'BRL') {
   return formatMoney(value ?? 0, currency)
 }
 
-export function parseFinanceCurrencyInputToCents(value: string) {
-  const normalized = value.replace(/\s/g, '').replace(',', '.')
-  const parsed = Number.parseFloat(normalized)
-
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    return 0
-  }
-
-  return Math.round(parsed * 100)
+/**
+ * Field-error text for typed money, or null when the text is blank (a
+ * required-field check is the caller's call) or reads as an amount.
+ */
+export function moneyFieldError(
+  value: string,
+  options: ParseMoneyOptions = {},
+): string | null {
+  const parsed = parseMoneyToCents(value, options)
+  if (parsed.ok || parsed.reason === 'empty') return null
+  return MONEY_PARSE_FAILURE_MESSAGES[parsed.reason]
 }
 
 export function getBillingModeLabel(mode: BillingMode) {

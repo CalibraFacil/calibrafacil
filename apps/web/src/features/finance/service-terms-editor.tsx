@@ -5,6 +5,7 @@
  * selecting a service auto-fills its catalog price. Price is held as integer
  * cents via CurrencyInput — no raw-cents or free-text parsing at the call site.
  */
+import { useState } from 'react'
 import { Delete02Icon, PlusSignIcon } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 
@@ -35,11 +36,29 @@ export function ServiceTermsEditor({
   value,
   onChange,
   services,
+  onValidityChange,
 }: {
   value: ServiceTermDraft[]
   onChange: (next: ServiceTermDraft[]) => void
   services: FinanceContractServiceOption[]
+  /** False while any price field holds text that is not an amount. */
+  onValidityChange?: (valid: boolean) => void
 }) {
+  // Ids of the rows whose price text does not parse: those rows keep their
+  // last valid cents in `value`, so the parent has to hold its save.
+  const [invalidIds, setInvalidIds] = useState<string[]>([])
+
+  function setTermValidity(id: string, valid: boolean) {
+    const next = valid
+      ? invalidIds.filter((entry) => entry !== id)
+      : invalidIds.includes(id)
+        ? invalidIds
+        : [...invalidIds, id]
+    if (next === invalidIds || next.length === invalidIds.length) return
+    setInvalidIds(next)
+    onValidityChange?.(next.length === 0)
+  }
+
   function updateAt(index: number, patch: Partial<ServiceTermDraft>) {
     onChange(
       value.map((entry, entryIndex) =>
@@ -90,6 +109,7 @@ export function ServiceTermsEditor({
             <CurrencyInput
               valueCents={term.priceCents}
               onValueChange={(priceCents) => updateAt(index, { priceCents })}
+              onValidityChange={(valid) => setTermValidity(term.id, valid)}
               currency={FINANCE_CURRENCY}
             />
           </Field>
@@ -101,13 +121,11 @@ export function ServiceTermsEditor({
               size="icon"
               aria-label="Remover serviço"
               disabled={value.length === 1}
-              onClick={() =>
-                onChange(
-                  value.length === 1
-                    ? value
-                    : value.filter((_, entryIndex) => entryIndex !== index),
-                )
-              }
+              onClick={() => {
+                if (value.length === 1) return
+                setTermValidity(term.id, true)
+                onChange(value.filter((_, entryIndex) => entryIndex !== index))
+              }}
             >
               <HugeiconsIcon icon={Delete02Icon} className="size-4" />
             </Button>

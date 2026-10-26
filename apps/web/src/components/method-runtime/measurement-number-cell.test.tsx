@@ -121,6 +121,95 @@ describe('MeasurementNumberCell', () => {
     expect(onCommit).toHaveBeenLastCalledWith(0.0013)
   })
 
+  describe('focus and blur without typing leave the stored value alone', () => {
+    function focusAndBlur(input: HTMLInputElement) {
+      fireEvent.focus(input)
+      fireEvent.blur(input)
+    }
+
+    it('does not re-commit a value that has more digits than the display shows', () => {
+      const onCommit = vi.fn()
+      render(
+        <MeasurementNumberCell
+          value={1234.56789}
+          onCommit={onCommit}
+          columnUnit="g"
+          displayUnit="g"
+          maxDecimals={2}
+        />,
+      )
+      const input = getInput()
+      expect(input.value).toBe('1234.57')
+      focusAndBlur(input)
+      expect(onCommit).not.toHaveBeenCalled()
+    })
+
+    it('does not re-commit a converted value (display unit differs from storage)', () => {
+      const onCommit = vi.fn()
+      render(
+        <MeasurementNumberCell
+          value={500123}
+          onCommit={onCommit}
+          columnUnit="g"
+          displayUnit="kg"
+          maxDecimals={1}
+        />,
+      )
+      const input = getInput()
+      expect(input.value).toBe('500.1')
+      focusAndBlur(input)
+      expect(onCommit).not.toHaveBeenCalled()
+    })
+
+    it('does not commit null for an empty cell that was only tabbed through', () => {
+      const onCommit = vi.fn()
+      render(
+        <MeasurementNumberCell
+          value={null}
+          onCommit={onCommit}
+          columnUnit="g"
+          displayUnit="g"
+        />,
+      )
+      focusAndBlur(getInput())
+      expect(onCommit).not.toHaveBeenCalled()
+    })
+
+    it('keeps the stored value through repeated tab-throughs', () => {
+      const onCommit = vi.fn()
+      render(
+        <MeasurementNumberCell
+          value={0.1234567891234}
+          onCommit={onCommit}
+          columnUnit="g"
+          displayUnit="g"
+        />,
+      )
+      const input = getInput()
+      focusAndBlur(input)
+      focusAndBlur(input)
+      expect(onCommit).not.toHaveBeenCalled()
+    })
+
+    it('still commits an edit on blur', () => {
+      const onCommit = vi.fn()
+      render(
+        <MeasurementNumberCell
+          value={1234.56789}
+          onCommit={onCommit}
+          columnUnit="g"
+          displayUnit="g"
+          maxDecimals={2}
+        />,
+      )
+      const input = getInput()
+      fireEvent.focus(input)
+      fireEvent.change(input, { target: { value: '1234.5' } })
+      fireEvent.blur(input)
+      expect(onCommit).toHaveBeenLastCalledWith(1234.5)
+    })
+  })
+
   it('commits null when cleared', () => {
     const onCommit = vi.fn()
     render(

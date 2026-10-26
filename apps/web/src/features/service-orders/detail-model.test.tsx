@@ -18,7 +18,6 @@ import {
   getPublicUrl,
   isServiceOrderLifecycleError,
   materialToQuoteItemPatch,
-  parseMoneyToCents,
   quoteDraftItemFromApiItem,
   quoteItemLineTotal,
   quoteItemsTotal,
@@ -71,10 +70,44 @@ describe('service order communications (#343)', () => {
 })
 
 describe('service order detail model', () => {
-  it('parses Brazilian money strings into cents', () => {
-    expect(parseMoneyToCents('1.234,56')).toBe(123456)
-    expect(parseMoneyToCents('12,34')).toBe(1234)
-    expect(Number.isNaN(parseMoneyToCents('abc'))).toBe(true)
+  it('totals a quote line from pt-BR and dot-decimal prices without a 100x error', () => {
+    const line = (unitPrice: string) =>
+      quoteItemLineTotal({
+        id: 'a',
+        type: 'service',
+        description: 'Reparo',
+        quantity: '1',
+        unit: 'un',
+        unitPrice,
+      })
+
+    expect(line('1.234,56')).toBe(123456)
+    expect(line('12,34')).toBe(1234)
+    expect(line('12.50')).toBe(1250)
+    expect(line('R$ 12,50')).toBe(1250)
+    expect(line('0,00')).toBe(0)
+    // Unreadable or ambiguous prices are not totalled (and never read as 0).
+    expect(line('abc')).toBeNull()
+    expect(line('1.234.56')).toBeNull()
+    expect(line('')).toBeNull()
+  })
+
+  it('refuses to build API items from a price that does not parse', () => {
+    const item = (unitPrice: string) => ({
+      id: 'a',
+      type: 'service' as const,
+      description: 'Reparo',
+      quantity: '1',
+      unit: 'un',
+      unitPrice,
+    })
+
+    expect(toApiItems([item('12.50')])[0]?.unitPriceCents).toBe(1250)
+    expect(toApiItems([item('1.234,56')])[0]?.unitPriceCents).toBe(123456)
+    expect(() => toApiItems([item('abc')])).toThrow(/Valor unitário/)
+    expect(() => toApiItems([item('1.234.56')])).toThrow(/ambíguo/)
+    expect(() => toApiItems([item('')])).toThrow(/Informe um valor/)
+    expect(() => toApiItems([item('-5')])).toThrow(/negativo/)
   })
 
   it('creates quote draft items and totals valid rows', () => {

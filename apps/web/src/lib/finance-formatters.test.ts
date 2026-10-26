@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatFinanceDate } from './finance-formatters'
+import { formatFinanceDate, moneyFieldError } from './finance-formatters'
 
 describe('formatFinanceDate (REQ-DATE-007)', () => {
   it('shows a due date stored at UTC midnight on the day that was typed', () => {
@@ -20,5 +20,21 @@ describe('formatFinanceDate (REQ-DATE-007)', () => {
   it('has a label for a missing or invalid value', () => {
     expect(formatFinanceDate(null)).toBe('Sem data')
     expect(formatFinanceDate('nope')).toBe('Sem data')
+  })
+})
+
+describe('moneyFieldError', () => {
+  it('is null for blank text and for anything that reads as an amount', () => {
+    expect(moneyFieldError('')).toBeNull()
+    expect(moneyFieldError('  ')).toBeNull()
+    expect(moneyFieldError('1.234,56')).toBeNull()
+    expect(moneyFieldError('12.50')).toBeNull()
+  })
+
+  it('explains text that does not read as an amount', () => {
+    expect(moneyFieldError('abc')).toMatch(/inválido/)
+    expect(moneyFieldError('1.234.56')).toMatch(/ambíguo/)
+    expect(moneyFieldError('-5')).toMatch(/negativo/)
+    expect(moneyFieldError('-5', { allowNegative: true })).toBeNull()
   })
 })

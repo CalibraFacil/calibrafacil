@@ -78,6 +78,7 @@ import {
 } from '@/features/service-orders/components/stage-state'
 import { DatePicker } from '@calibra-facil/ui/date-picker'
 import { EventTimeline } from '@/components/event-timeline'
+import { moneyFieldError } from '@/lib/finance-formatters'
 import { cn } from '@/lib/utils'
 import { Button } from '@calibra-facil/ui/button'
 import { Badge } from '@calibra-facil/ui/badge'
@@ -1628,6 +1629,7 @@ function ServiceOrderDetailContent({
                     </div>
                     {quoteItems.map((item, index) => {
                       const lineTotal = quoteItemLineTotal(item)
+                      const unitPriceError = moneyFieldError(item.unitPrice)
                       return (
                         <div
                           key={item.id}
@@ -1735,8 +1737,17 @@ function ServiceOrderDetailContent({
                                   })
                                 }
                                 placeholder="0,00"
+                                aria-invalid={unitPriceError !== null}
                               />
                             </div>
+                            {unitPriceError ? (
+                              <p
+                                role="alert"
+                                className="text-xs text-destructive"
+                              >
+                                {unitPriceError}
+                              </p>
+                            ) : null}
                           </div>
                           <div className="space-y-2">
                             <Label className="lg:sr-only">Total</Label>

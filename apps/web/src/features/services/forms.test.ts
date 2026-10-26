@@ -69,6 +69,26 @@ describe('service feature forms', () => {
     })
   })
 
+  it('reads prices with the shared money parser: thousands separators, no 100x errors', () => {
+    const price = (value: string) =>
+      parseServiceForm({ ...validServiceForm(), price: value })
+
+    expect(price('1.234,56')).toMatchObject({
+      success: true,
+      data: { price: 123456 },
+    })
+    expect(price('12.50')).toMatchObject({
+      success: true,
+      data: { price: 1250 },
+    })
+    for (const bad of ['1.234.56', '1,234.56', 'abc']) {
+      expect(price(bad)).toMatchObject({
+        success: false,
+        fieldErrors: [{ field: 'price', message: 'Preço inválido' }],
+      })
+    }
+  })
+
   it('builds service update payloads with schema validation', () => {
     const result = parseServiceEditForm({
       ...validServiceForm(),

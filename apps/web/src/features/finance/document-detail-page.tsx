@@ -444,6 +444,7 @@ function DocumentParametersCard({
 }) {
   const [dueDate, setDueDate] = useState(dateOnlyToInputValue(document.dueDate))
   const [discountCents, setDiscountCents] = useState(document.discountCents)
+  const [discountValid, setDiscountValid] = useState(true)
   const [notes, setNotes] = useState(document.notes ?? '')
   const isDraft = document.status === 'DRAFT'
 
@@ -464,6 +465,7 @@ function DocumentParametersCard({
           <CurrencyInput
             valueCents={discountCents}
             onValueChange={setDiscountCents}
+            onValidityChange={setDiscountValid}
             currency={document.currency}
             disabled={!isDraft}
           />
@@ -481,7 +483,7 @@ function DocumentParametersCard({
         <Button
           className={ACTION_BUTTON_CLASS}
           onClick={() => onSave({ dueDate, discountCents, notes })}
-          disabled={isSaving}
+          disabled={isSaving || !discountValid}
         >
           {isSaving ? 'Salvando…' : 'Salvar rascunho'}
         </Button>
