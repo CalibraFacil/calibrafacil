@@ -51,6 +51,7 @@ describe("CRON_ENTRIES", () => {
       "/api/cron/certificate-drift": "0 6 * * *",
       "/api/cron/records-purge": "0 5 * * 0",
       "/api/cron/sync-change-log-purge": "15 4 * * *",
+      "/api/cron/approval-effects-reconcile": "45 3 * * *",
     });
   });
 });

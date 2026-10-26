@@ -15,6 +15,7 @@ import { runCron } from "./cron-run";
 import { runCertificateDriftCheck } from "../lib/certificate-drift";
 import { runRecordsPurge } from "../lib/records-purge";
 import { purgeSyncChangeLog } from "../lib/sync-change-log-purge";
+import { reconcileApprovalEffects } from "../lib/approval-effects-reconciler";
 import {
   createR2Client,
   downloadFromR2,
@@ -292,6 +293,21 @@ async function handleSyncChangeLogPurge(request: Request) {
   );
 }
 
+// Roadmap 2 B2 (ISO/IEC 17025 7.10): nightly repair of the post-approval effects
+// that can still be missing: the asset out-of-tolerance event, the asset
+// calibration-date advance and the customer alert (approvals that predate the
+// transactional write, notification jobs the queue gave up on). Idempotent; see
+// lib/approval-effects-reconciler.ts.
+async function handleApprovalEffectsReconcile(request: Request) {
+  if (!isCronAuthorized(request)) {
+    return cronAuthFailureResponse();
+  }
+
+  return runCron("approval-effects-reconcile", { leaseSeconds: 600 }, () =>
+    reconcileApprovalEffects(),
+  );
+}
+
 export const JOB_HANDLERS: Record<
   string,
   (request: Request) => Promise<Response>
@@ -308,6 +324,7 @@ export const JOB_HANDLERS: Record<
   "certificate-drift": handleCertificateDrift,
   "records-purge": handleRecordsPurge,
   "sync-change-log-purge": handleSyncChangeLogPurge,
+  "approval-effects-reconcile": handleApprovalEffectsReconcile,
 };
 
 function resolveJob(request: Request) {
