@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readRuntimeConfig, readStorageConfig } from "@calibra-facil/config";
 import {
   S3Client,
@@ -377,6 +378,81 @@ export async function uploadToR2(
 /**
  * Download an object from R2.
  */
+export type StreamedObjectHash =
+  | { ok: true; sha256: string; sizeBytes: number }
+  /** Not there any more, or no longer the object the ETag named (overwritten since the HEAD). */
+  | { ok: false; reason: "missing" | "changed" | "too_large" };
+
+/**
+ * The SHA-256 of an object, streamed chunk by chunk (never held whole in memory).
+ * The GET is conditional on `etag` (`If-Match`): an object overwritten between the
+ * HEAD that read the ETag and this read answers 412 and is reported as `changed`.
+ * Reading stops past `maxBytes`.
+ */
+export async function hashObjectSha256(
+  client: R2S3Client,
+  bucket: string,
+  key: string,
+  options: { etag: string | null; maxBytes: number },
+): Promise<StreamedObjectHash> {
+  let response: unknown;
+  try {
+    response = await client.send(
+      new GetObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        ...(options.etag === null ? {} : { IfMatch: `"${options.etag}"` }),
+      }),
+    );
+  } catch (error) {
+    if (isObjectNotFoundError(error)) return { ok: false, reason: "missing" };
+    const metadata: unknown = Reflect.get(
+      error && typeof error === "object" ? error : {},
+      "$metadata",
+    );
+    if (
+      metadata &&
+      typeof metadata === "object" &&
+      "httpStatusCode" in metadata &&
+      metadata.httpStatusCode === 412
+    ) {
+      return { ok: false, reason: "changed" };
+    }
+    throw error;
+  }
+
+  const body: unknown =
+    response && typeof response === "object"
+      ? Reflect.get(response, "Body")
+      : undefined;
+  const toWebStream: unknown =
+    body && typeof body === "object"
+      ? Reflect.get(body, "transformToWebStream")
+      : undefined;
+  if (typeof toWebStream !== "function") {
+    throw new Error(`R2 object body is not streamable: ${key}`);
+  }
+  const stream: unknown = Reflect.apply(toWebStream, body, []);
+  if (!(stream instanceof ReadableStream)) {
+    throw new Error(`R2 object body is not streamable: ${key}`);
+  }
+
+  const hash = createHash("sha256");
+  let sizeBytes = 0;
+  for await (const chunk of stream) {
+    const bytes: unknown = chunk;
+    if (!(bytes instanceof Uint8Array)) {
+      throw new Error(`R2 object chunk is not binary: ${key}`);
+    }
+    sizeBytes += bytes.byteLength;
+    if (sizeBytes > options.maxBytes) {
+      return { ok: false, reason: "too_large" };
+    }
+    hash.update(bytes);
+  }
+  return { ok: true, sha256: hash.digest("hex"), sizeBytes };
+}
+
 export async function downloadFromR2(
   client: R2S3Client,
   bucket: string,

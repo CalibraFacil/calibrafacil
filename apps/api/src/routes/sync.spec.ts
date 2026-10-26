@@ -80,7 +80,7 @@ const mocks = vi.hoisted(() => {
       ) => `https://uploads.example.test/${encodeURIComponent(objectKey)}`,
     ),
     headObject: vi.fn(),
-    downloadFromR2: vi.fn(),
+    hashObjectSha256: vi.fn(),
     deleteFromR2: vi.fn(async () => undefined),
     generatePresignedUrl: vi.fn(
       async (_client: unknown, _bucket: string, objectKey: string) =>
@@ -175,7 +175,7 @@ vi.mock("../lib/storage", () => ({
   generateBoundPresignedUploadUrl: mocks.generateBoundPresignedUploadUrl,
   generatePresignedUrl: mocks.generatePresignedUrl,
   headObject: mocks.headObject,
-  downloadFromR2: mocks.downloadFromR2,
+  hashObjectSha256: mocks.hashObjectSha256,
   deleteFromR2: mocks.deleteFromR2,
   uploadToR2: mocks.uploadToR2,
 }));
@@ -1517,7 +1517,11 @@ describe("syncRouter", () => {
       contentType: "image/jpeg",
       etag: "etag-1",
     });
-    mocks.downloadFromR2.mockResolvedValue(bytes);
+    mocks.hashObjectSha256.mockResolvedValue({
+      ok: true,
+      sha256: declared.contentHash,
+      sizeBytes: bytes.byteLength,
+    });
     const uploadResponse = await createApp().request(
       "/api/sync/attachments/init-upload",
       {

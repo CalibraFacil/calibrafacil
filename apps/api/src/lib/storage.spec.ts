@@ -1,8 +1,11 @@
+import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   createR2Client,
+  generateBoundPresignedUploadUrl,
   generatePresignedUploadUrl,
+  hashObjectSha256,
   r2EnvForStorageDependentWork,
   r2EnvFromSettings,
   r2EnvFromStorageConfig,
@@ -159,5 +162,123 @@ describe("storage configuration from the environment", () => {
     expect(() => r2EnvForStorageDependentWork("do the work")).toThrow(
       StorageNotConfiguredError,
     );
+  });
+});
+
+describe("generateBoundPresignedUploadUrl", () => {
+  const signedHeaders = (url: string) =>
+    (new URL(url).searchParams.get("X-Amz-SignedHeaders") ?? "").split(";");
+
+  it("signs content-length and content-type into the upload (the binding the store enforces)", async () => {
+    vi.stubEnv("R2_PUBLIC_ENDPOINT", "");
+    const url = await generateBoundPresignedUploadUrl(
+      createR2Client(env),
+      "documents",
+      "k.jpg",
+      { contentType: "image/jpeg", contentLength: 2048 },
+    );
+
+    expect(signedHeaders(url)).toEqual(
+      expect.arrayContaining(["content-length", "content-type", "host"]),
+    );
+  });
+
+  it("is what makes the difference: a plain presign signs neither header", async () => {
+    vi.stubEnv("R2_PUBLIC_ENDPOINT", "");
+    const url = await generatePresignedUploadUrl(
+      createR2Client(env),
+      "documents",
+      "k.jpg",
+      "image/jpeg",
+    );
+
+    expect(signedHeaders(url)).not.toContain("content-length");
+    expect(signedHeaders(url)).not.toContain("content-type");
+  });
+});
+
+describe("hashObjectSha256", () => {
+  function clientAnswering(answer: () => unknown) {
+    const client = createR2Client(env);
+    const sent: unknown[] = [];
+    vi.spyOn(client, "send").mockImplementation(async (command: unknown) => {
+      sent.push(command);
+      return answer();
+    });
+    return { client, sent };
+  }
+
+  const chunked = (...chunks: Uint8Array[]) => ({
+    Body: {
+      transformToWebStream: () =>
+        new ReadableStream({
+          start(controller) {
+            for (const chunk of chunks) controller.enqueue(chunk);
+            controller.close();
+          },
+        }),
+    },
+  });
+
+  it("hashes the object chunk by chunk, conditional on the ETag it was told", async () => {
+    const { client, sent } = clientAnswering(() =>
+      chunked(
+        new TextEncoder().encode("hello "),
+        new TextEncoder().encode("world"),
+      ),
+    );
+
+    const hashed = await hashObjectSha256(client, "documents", "k", {
+      etag: "abc",
+      maxBytes: 100,
+    });
+
+    expect(hashed).toEqual({
+      ok: true,
+      sha256: createHash("sha256").update("hello world").digest("hex"),
+      sizeBytes: 11,
+    });
+    expect(sent[0]).toMatchObject({ input: { IfMatch: '"abc"' } });
+  });
+
+  it("reports an object replaced since the HEAD (412) as changed", async () => {
+    const { client } = clientAnswering(() => {
+      throw Object.assign(new Error("PreconditionFailed"), {
+        name: "PreconditionFailed",
+        $metadata: { httpStatusCode: 412 },
+      });
+    });
+
+    await expect(
+      hashObjectSha256(client, "documents", "k", {
+        etag: "abc",
+        maxBytes: 100,
+      }),
+    ).resolves.toEqual({ ok: false, reason: "changed" });
+  });
+
+  it("reports a missing object, and stops reading past the limit", async () => {
+    const missing = clientAnswering(() => {
+      throw Object.assign(new Error("NoSuchKey"), {
+        name: "NoSuchKey",
+        $metadata: { httpStatusCode: 404 },
+      });
+    });
+    await expect(
+      hashObjectSha256(missing.client, "documents", "k", {
+        etag: null,
+        maxBytes: 100,
+      }),
+    ).resolves.toEqual({ ok: false, reason: "missing" });
+
+    const big = clientAnswering(() =>
+      chunked(new Uint8Array(60), new Uint8Array(60)),
+    );
+    await expect(
+      hashObjectSha256(big.client, "documents", "k", {
+        etag: null,
+        maxBytes: 100,
+      }),
+    ).resolves.toEqual({ ok: false, reason: "too_large" });
   });
 });

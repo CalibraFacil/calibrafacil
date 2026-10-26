@@ -88,10 +88,23 @@ vi.mock("../lib/storage", async (importOriginal) => ({
         }
       : null;
   },
-  downloadFromR2: async (_client: unknown, _bucket: string, key: string) => {
+  hashObjectSha256: async (
+    _client: unknown,
+    _bucket: string,
+    key: string,
+    options: { etag: string | null },
+  ) => {
     const object = store.objects.get(key);
-    if (!object) throw new Error("not found");
-    return object.bytes;
+    if (!object) return { ok: false, reason: "missing" };
+    // The conditional GET: an object replaced since the HEAD answers 412.
+    if (options.etag !== null && options.etag !== object.etag) {
+      return { ok: false, reason: "changed" };
+    }
+    return {
+      ok: true,
+      sha256: createHash("sha256").update(object.bytes).digest("hex"),
+      sizeBytes: object.bytes.byteLength,
+    };
   },
   deleteFromR2: async (_client: unknown, _bucket: string, key: string) => {
     store.objects.delete(key);

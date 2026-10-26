@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import {
   SYNC_ATTACHMENT_MAX_BYTES,
   type SyncAttachmentMimeType,
@@ -14,7 +13,7 @@ import {
   type R2Env,
   createR2Client,
   deleteFromR2,
-  downloadFromR2,
+  hashObjectSha256,
   headObject,
 } from "../../lib/storage";
 import { type MemberData } from "../../middleware/permission";
@@ -114,18 +113,7 @@ export async function checkStoredSyncAttachment(
 ): Promise<StoredAttachmentCheck> {
   const client = createR2Client(env);
   const head = await headObject(client, env.R2_BUCKET_NAME, objectKey);
-  if (!head) {
-    return {
-      ok: false,
-      discard: false,
-      refusal: {
-        code: "SYNC_ATTACHMENT_NOT_UPLOADED",
-        apiCode: "sync_attachment_not_uploaded",
-        status: 409,
-        reason: "The attachment bytes were not uploaded.",
-      },
-    };
-  }
+  if (!head) return notUploaded();
 
   const expectedType = normalizeSyncAttachmentMimeType(declared.mimeType);
   const storedType = head.contentType?.split(";")[0]?.trim().toLowerCase();
@@ -135,15 +123,45 @@ export async function checkStoredSyncAttachment(
     );
   }
 
-  const bytes = await downloadFromR2(client, env.R2_BUCKET_NAME, objectKey);
-  const digest = createHash("sha256").update(bytes).digest("hex");
-  if (digest !== declared.contentHash) {
+  // Streamed (never whole in memory) and conditional on the ETag the HEAD read:
+  // an object overwritten in between is "changed", not silently hashed.
+  const hashed = await hashObjectSha256(client, env.R2_BUCKET_NAME, objectKey, {
+    etag: head.etag,
+    maxBytes: SYNC_ATTACHMENT_MAX_BYTES,
+  });
+  if (!hashed.ok) {
+    if (hashed.reason === "missing") {
+      return notUploaded();
+    }
+    return integrityFailure(
+      "The stored attachment changed while it was being verified.",
+    );
+  }
+  if (hashed.sizeBytes !== declared.sizeBytes) {
+    return integrityFailure(
+      "The stored attachment does not match its declared size or type.",
+    );
+  }
+  if (hashed.sha256 !== declared.contentHash) {
     return integrityFailure(
       "The stored attachment does not match its declared SHA-256.",
     );
   }
 
   return { ok: true, etag: head.etag };
+}
+
+function notUploaded(): StoredAttachmentCheck {
+  return {
+    ok: false,
+    discard: false,
+    refusal: {
+      code: "SYNC_ATTACHMENT_NOT_UPLOADED",
+      apiCode: "sync_attachment_not_uploaded",
+      status: 409,
+      reason: "The attachment bytes were not uploaded.",
+    },
+  };
 }
 
 function integrityFailure(reason: string): StoredAttachmentCheck {
