@@ -142,10 +142,9 @@ describe("resolveTrustedOrigins", () => {
         isPackaged: false,
         configuredRendererUrl,
       });
-      expect([...trusted.web].toSorted()).toEqual([
-        "http://127.0.0.1:5173",
-        "http://localhost:5173",
-      ]);
+      expect(trusted.web).toEqual(
+        new Set(["http://127.0.0.1:5173", "http://localhost:5173"]),
+      );
     }
   });
 });

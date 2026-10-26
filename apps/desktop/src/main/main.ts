@@ -77,6 +77,10 @@ import {
   hideMainWindowMenu,
 } from "./main-window";
 import {
+  buildContentSecurityPolicy,
+  rendererResponseHeaders,
+} from "./content-security-policy";
+import {
   externalUrlToOpen,
   installNavigationGuards,
 } from "./navigation-guards";
@@ -195,6 +199,11 @@ function cloudApiUrl() {
 function registerPackagedRendererProtocol() {
   if (!app.isPackaged) return;
 
+  const contentSecurityPolicy = buildContentSecurityPolicy({
+    localServerHost: localServer.host,
+    cloudApiUrls: [defaultCloudApiUrl, cloudApiUrl()],
+  });
+
   protocol.handle(desktopAppScheme, async (request) => {
     const url = new URL(request.url);
     if (url.hostname !== desktopAppHost) {
@@ -213,9 +222,10 @@ function registerPackagedRendererProtocol() {
     try {
       const bytes = await readFile(filePath);
       return new Response(bytes, {
-        headers: {
-          "Content-Type": contentTypeForPath(filePath),
-        },
+        headers: rendererResponseHeaders(
+          contentTypeForPath(filePath),
+          contentSecurityPolicy,
+        ),
       });
     } catch (error) {
       if (!isRendererNavigationRequest(request, requestedPath)) {
@@ -230,9 +240,10 @@ function registerPackagedRendererProtocol() {
       try {
         const indexHtml = await readFile(path.join(rendererRoot, "index.html"));
         return new Response(indexHtml, {
-          headers: {
-            "Content-Type": "text/html; charset=utf-8",
-          },
+          headers: rendererResponseHeaders(
+            "text/html; charset=utf-8",
+            contentSecurityPolicy,
+          ),
         });
       } catch (indexError) {
         console.error("[desktop-renderer] packaged index not found", {
