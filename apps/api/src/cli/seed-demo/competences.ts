@@ -159,8 +159,10 @@ export async function seedCompetences(
         `/api/competences/${competenceId}/complete-training`,
         {},
       );
+      // Separation of duties: nobody evaluates their own competence, so the
+      // owner evaluates the reviewer's and the reviewer everyone else's.
       await ctx.api.call(
-        "reviewer",
+        person.actor === "reviewer" ? "owner" : "reviewer",
         "POST",
         `/api/competences/${competenceId}/evaluate`,
         {
