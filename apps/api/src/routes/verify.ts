@@ -122,8 +122,9 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
     // then. The lab's CURRENT accreditation fields never re-decide an issued
     // certificate; only a record approved before the decision was frozen falls
     // back to the rule it was issued under (#647, #427 Phase 1).
-    const { accredited } = issuedSealOf({
+    const { accredited, accreditationNumber } = issuedSealOf({
       frozenSeal: job.frozenSeal,
+      frozenAccreditationNumber: job.frozenAccreditationNumber,
       legacy: {
         lab: {
           accreditationActive: job.labAccreditationActive,
@@ -149,7 +150,7 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
       accreditation: {
         accredited,
         number: accredited
-          ? normalizeAccreditationNumber(job.labAccreditationNumber ?? "")
+          ? normalizeAccreditationNumber(accreditationNumber ?? "")
           : null,
       },
       customer: job.customerName,

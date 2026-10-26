@@ -92,6 +92,7 @@ import {
   normalizeAccreditationNumber,
 } from "@calibra-facil/shared";
 import {
+  frozenAccreditationNumberColumn,
   frozenSealColumn,
   frozenSealJoin,
   issuedSealOf,
@@ -2162,6 +2163,7 @@ export const portalRouter = new Hono<{
           labAccreditationValidUntil: organization.accreditationValidUntil,
           // The seal decision frozen at approval (Q42); null before migration 0120.
           frozenSeal: frozenSealColumn,
+          frozenAccreditationNumber: frozenAccreditationNumberColumn,
         })
         .from(calibrationJob)
         .innerJoin(asset, eq(calibrationJob.assetId, asset.id))
@@ -2204,8 +2206,9 @@ export const portalRouter = new Hono<{
       // The seal is the decision frozen at approval (Q42); only a record
       // approved before it was frozen falls back to the rule it was issued
       // under (#647 vigência at EMISSION, #427 Phase 1 override).
-      const { accredited } = issuedSealOf({
+      const { accredited, accreditationNumber } = issuedSealOf({
         frozenSeal: certificate.frozenSeal,
+        frozenAccreditationNumber: certificate.frozenAccreditationNumber,
         legacy: {
           lab: {
             accreditationActive: certificate.labAccreditationActive,
@@ -2279,9 +2282,7 @@ export const portalRouter = new Hono<{
         accreditation: {
           accredited,
           number: accredited
-            ? normalizeAccreditationNumber(
-                certificate.labAccreditationNumber ?? "",
-              )
+            ? normalizeAccreditationNumber(accreditationNumber ?? "")
             : null,
         },
         serviceMethodAccreditedScope: undefined,
@@ -2290,6 +2291,7 @@ export const portalRouter = new Hono<{
         labAccreditationValidFrom: undefined,
         labAccreditationValidUntil: undefined,
         frozenSeal: undefined,
+        frozenAccreditationNumber: undefined,
         // Internal release-gate detail; the customer only sees `accredited`.
         scopeOverrideJustification: undefined,
       };

@@ -22,6 +22,15 @@ export const frozenSealJoin = and(
 
 export const frozenSealColumn = sql<unknown>`${certificateInput.input} -> 'seal'`;
 
+/**
+ * The accreditation number as it was frozen with the certificate
+ * (`certificate_input.input.job.lab.accreditationNumber`): the number printed on
+ * the PDF, whatever the lab's profile says today.
+ */
+export const frozenAccreditationNumberColumn = sql<
+  string | null
+>`${certificateInput.input} #>> '{job,lab,accreditationNumber}'`;
+
 /** The seal as the lab's job page and the public pages show it. */
 export type IssuedSeal = {
   accredited: boolean;
@@ -29,6 +38,12 @@ export type IssuedSeal = {
   withheldReason: string | null;
   /** The frozen decision, or the pre-freeze rule for a record that has none. */
   source: "frozen" | "legacy";
+  /**
+   * The accreditation number to show: the one frozen with the certificate when
+   * there is one, else (a record approved before the input existed) the lab's
+   * current number. Null when neither exists.
+   */
+  accreditationNumber: string | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -65,6 +80,8 @@ export function frozenSealOf(frozenSeal: unknown): {
  */
 export function issuedSealOf(params: {
   frozenSeal: unknown;
+  /** `certificate_input.input.job.lab.accreditationNumber`, when the input exists. */
+  frozenAccreditationNumber?: string | null;
   legacy: AccreditationSealEligibilityParams;
 }): IssuedSeal {
   const { accredited, withheldReason, source } = resolveIssuedAccreditationSeal(
@@ -73,5 +90,10 @@ export function issuedSealOf(params: {
       legacy: params.legacy,
     },
   );
-  return { accredited, withheldReason, source };
+  const frozenNumber = params.frozenAccreditationNumber;
+  const accreditationNumber =
+    source === "frozen" && typeof frozenNumber === "string"
+      ? frozenNumber
+      : (params.legacy.lab.accreditationNumber ?? null);
+  return { accredited, withheldReason, source, accreditationNumber };
 }

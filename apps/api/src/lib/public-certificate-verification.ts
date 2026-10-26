@@ -10,7 +10,11 @@ import {
   service,
 } from "@calibra-facil/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
-import { frozenSealColumn, frozenSealJoin } from "./frozen-seal";
+import {
+  frozenAccreditationNumberColumn,
+  frozenSealColumn,
+  frozenSealJoin,
+} from "./frozen-seal";
 import { orgDb } from "./org-db";
 
 /**
@@ -61,6 +65,7 @@ export async function findCertificateByVerificationToken(token: string) {
       labAccreditationNumber: organization.accreditationNumber,
       // The seal decision frozen at approval (Q42); null before migration 0120.
       frozenSeal: frozenSealColumn,
+      frozenAccreditationNumber: frozenAccreditationNumberColumn,
     })
     .from(calibrationJob)
     .innerJoin(customer, eq(calibrationJob.customerId, customer.id))

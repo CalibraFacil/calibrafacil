@@ -734,12 +734,18 @@ describe("verifyRouter — real DB, public certificate verification", () => {
   async function freezeSeal(
     cert: SeededCert,
     seal: { accredited: boolean; withheldReason?: string | null },
+    accreditationNumber?: string,
   ) {
     await db.insert(certificateInput).values({
       organizationId: cert.lab.orgId,
       jobId: cert.jobRowId,
       schemaVersion: 1,
-      input: { seal: { evaluatedAt: NOW.toISOString(), ...seal } },
+      input: {
+        seal: { evaluatedAt: NOW.toISOString(), ...seal },
+        ...(accreditationNumber === undefined
+          ? {}
+          : { job: { lab: { accreditationNumber } } }),
+      },
       sha256: "a".repeat(64),
       layoutKey: "calibration-certificate-fixed",
       layoutVersion: "1.0.0",
@@ -791,6 +797,22 @@ describe("verifyRouter — real DB, public certificate verification", () => {
 
     expect(accreditation.accredited).toBe(true);
     expect(accreditation.number).toBe("9999");
+  });
+
+  it("Q42 [HIGH RISK]: the number shown is the one frozen with the certificate, not the lab's current one", async () => {
+    const cert = await seedVerifiableCert({
+      orgId: "org-a",
+      token: VALID_UUID_A,
+      jobId: "CAL-A-FROZEN-NUM",
+      accreditationActive: true,
+      accreditationNumber: "9999",
+      methodAccreditedScope: true,
+    });
+    await freezeSeal(cert, { accredited: true }, "0123");
+
+    const accreditation = await accreditationOf(cert.token);
+
+    expect(accreditation).toEqual({ accredited: true, number: "0123" });
   });
 
   it("Q42: a certificate approved before the decision was frozen keeps the rule it was issued under", async () => {
