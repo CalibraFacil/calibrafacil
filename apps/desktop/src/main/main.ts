@@ -76,6 +76,10 @@ import {
   desktopWindowIconPath,
   hideMainWindowMenu,
 } from "./main-window";
+import {
+  externalUrlToOpen,
+  installNavigationGuards,
+} from "./navigation-guards";
 import { isTrustedUrl, resolveTrustedOrigins } from "./trusted-origins";
 import { installUnloadConfirmation } from "./unload-confirmation";
 import { getDesktopLogFilePath, installDesktopLogger } from "./desktop-log";
@@ -149,6 +153,17 @@ const localServer = new LocalServerManager();
 
 let mainWindow: BrowserWindow | null = null;
 let cloudAuthProxy: DesktopCloudAuthProxy | null = null;
+
+// Every web contents (the main window, but also anything a page manages to
+// spawn) is fenced to the app before it can load a page.
+app.on("web-contents-created", (_event, contents) => {
+  installNavigationGuards(contents, {
+    trustedOrigins,
+    openExternal: (url) => {
+      void shell.openExternal(url);
+    },
+  });
+});
 
 app.setName(desktopAppName);
 app.userAgentFallback = buildDesktopUserAgent(app.getVersion());
@@ -311,14 +326,6 @@ function createWindow(restored: ResolvedWindowState) {
   mainWindow.on("page-title-updated", (event) => {
     event.preventDefault();
     mainWindow?.setTitle(desktopAppName);
-  });
-
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith("https://") || url.startsWith("http://")) {
-      void shell.openExternal(url);
-    }
-
-    return { action: "deny" };
   });
 
   window
@@ -682,11 +689,9 @@ function registerIpc(
   });
 
   handle(desktopIpcChannels.openExternal, async (_event, url) => {
-    if (typeof url !== "string") return false;
-    const parsed = new URL(url);
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:")
-      return false;
-    await shell.openExternal(parsed.toString());
+    const external = externalUrlToOpen(url);
+    if (!external) return false;
+    await shell.openExternal(external);
     return true;
   });
 

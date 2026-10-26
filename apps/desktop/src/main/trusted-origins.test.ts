@@ -142,7 +142,7 @@ describe("resolveTrustedOrigins", () => {
         isPackaged: false,
         configuredRendererUrl,
       });
-      expect([...trusted.web].sort()).toEqual([
+      expect([...trusted.web].toSorted()).toEqual([
         "http://127.0.0.1:5173",
         "http://localhost:5173",
       ]);
