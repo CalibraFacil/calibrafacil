@@ -10,6 +10,12 @@
  *   expired A1 must not look like "no certificate" and quietly degrade to
  *   unsigned PDFs for a lab that signs its certificates. `code:
  *   "SIGNING_CERTIFICATE_LAPSED"` lets the caller alert the lab's admins.
+ * - ...unless the unit explicitly chose to issue unsigned (Q51,
+ *   `organization_unit.unsigned_issuance_reason`): an audited admin/owner setting
+ *   with a mandatory reason, never set implicitly. Then issuance is unsigned and
+ *   the issued certificate records `unsignedByPolicy` with that reason. It only
+ *   relaxes the lapsed-certificate failure: `require_signature` still wins, and a
+ *   valid certificate is still used.
  * - A unit that NEVER had a certificate is governed by the per-unit
  *   `organization_unit.require_signature` flag: false (default) emits unsigned
  *   with the visible UNSIGNED verdict; true fails with a named reason.
@@ -17,7 +23,12 @@
 
 export type SigningPolicyDecision =
   | { action: "SIGN" }
-  | { action: "EMIT_UNSIGNED"; warning: string }
+  | {
+      action: "EMIT_UNSIGNED";
+      warning: string;
+      /** Q51: the reason the unit recorded for issuing unsigned; null when it did not choose to. */
+      unsignedByPolicy: string | null;
+    }
   | {
       action: "FAIL";
       reason: string;
@@ -37,18 +48,21 @@ export function resolveSigningPolicy(input: {
   hadCertificate: boolean;
   /** pt-BR phrase for why the last certificate is unusable ("expirou em 12/03/2026"). */
   lapse?: string;
+  /** Q51: the unit's recorded reason for issuing unsigned on purpose; null/absent = not chosen. */
+  unsignedIssuanceReason?: string | null;
   /** organization_unit.require_signature. */
   requireSignature: boolean;
 }): SigningPolicyDecision {
   const { hasMasterKey, hasCertificate, hadCertificate, requireSignature } =
     input;
+  const unsignedByPolicy = input.unsignedIssuanceReason?.trim() || null;
 
   if (hasCertificate && hasMasterKey) return { action: "SIGN" };
 
   // A unit that signed before never falls back to unsigned: the platform key
   // missing or the certificate lapsed is a failure to fix, not a configuration
-  // to run without.
-  if (hadCertificate) {
+  // to run without. Only the unit's own explicit, audited choice (Q51) lifts it.
+  if (hadCertificate && !unsignedByPolicy) {
     return {
       action: "FAIL",
       code: "SIGNING_CERTIFICATE_LAPSED",
@@ -68,6 +82,7 @@ export function resolveSigningPolicy(input: {
       : {
           action: "EMIT_UNSIGNED",
           warning: "SIGNING_MASTER_KEY not set — emitting unsigned",
+          unsignedByPolicy,
         };
   }
 
@@ -79,7 +94,10 @@ export function resolveSigningPolicy(input: {
       }
     : {
         action: "EMIT_UNSIGNED",
-        warning: "No signing certificate configured — emitting unsigned",
+        warning: unsignedByPolicy
+          ? "Unit issues unsigned by policy — emitting unsigned"
+          : "No signing certificate configured — emitting unsigned",
+        unsignedByPolicy,
       };
 }
 

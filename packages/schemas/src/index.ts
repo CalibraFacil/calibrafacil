@@ -12,6 +12,7 @@ export * from "./organization-lifecycle";
 export * from "./organization-profile";
 export * from "./integrations";
 export * from "./portal-fleet";
+export * from "./signing-policy";
 export * from "./printing";
 export * from "./proficiency-tests";
 export * from "./quality";

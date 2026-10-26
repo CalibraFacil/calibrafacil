@@ -101,22 +101,34 @@ interface SigningCertificateData {
   subjectCn: string;
 }
 
-/** #644: the unit's signing-policy flag (organization_unit.require_signature). */
-async function fetchUnitRequireSignature(
+/**
+ * The unit's signing policy: #644 `require_signature` and, since Q51, the
+ * recorded reason of its explicit "emitir sem assinatura digital" setting
+ * (null = the unit did not choose to issue unsigned).
+ */
+async function fetchUnitSigningPolicy(
   client: Client,
   organizationId: string,
   unitId: number,
-): Promise<boolean> {
+): Promise<{
+  requireSignature: boolean;
+  unsignedIssuanceReason: string | null;
+}> {
   const result = await client.query(
     `
-        SELECT require_signature
+        SELECT require_signature, unsigned_issuance_reason
         FROM organization_unit
         WHERE id = $1 AND organization_id = $2
         LIMIT 1
         `,
     [unitId, organizationId],
   );
-  return result.rows[0]?.require_signature === true;
+  const reason: unknown = result.rows[0]?.unsigned_issuance_reason;
+  return {
+    requireSignature: result.rows[0]?.require_signature === true,
+    unsignedIssuanceReason:
+      typeof reason === "string" && reason.trim() ? reason : null,
+  };
 }
 
 /**
@@ -253,7 +265,11 @@ export async function updateJobWithCertificate(
   userId: string,
   signatureMetadata?: SignatureMetadata,
   signatureVerdict?: StoredSignatureVerdict,
-  options: { preserveSignatureMetadata?: boolean } = {},
+  options: {
+    preserveSignatureMetadata?: boolean;
+    /** Q51: the reason the unit recorded for issuing unsigned; written on the audit event. */
+    unsignedByPolicy?: string;
+  } = {},
 ): Promise<CertificateTransitionResult> {
   const now = new Date();
 
@@ -319,7 +335,9 @@ export async function updateJobWithCertificate(
   // Watermark regeneration of a SUPERSEDED job vs. the first issuance.
   const signatureAudit: SignatureAudit = auditSignatureMetadata
     ? { signed: true, signerName: auditSignatureMetadata.signerName }
-    : { signed: false };
+    : options.unsignedByPolicy
+      ? { signed: false, unsignedByPolicy: options.unsignedByPolicy }
+      : { signed: false };
   const organizationId = jobOrganizationOf(updated.rows, jobId);
   const actor = workerJobActor(userId);
   await appendJobEvent(
@@ -376,6 +394,8 @@ export async function signPdfWithUnitCertificate(
   pdfBuffer: Buffer;
   signatureMetadata?: SignatureMetadata;
   signatureVerdict?: StoredSignatureVerdict;
+  /** Q51: set when the unit issues unsigned on purpose; the reason it recorded. */
+  unsignedByPolicy?: string;
 }> {
   const signStart = performance.now();
   if (!organizationId) {
@@ -388,12 +408,12 @@ export async function signPdfWithUnitCertificate(
   // #644 (CMP-01): the unit's signing policy governs the missing-cert /
   // missing-master-key paths. Unresolvable flag (legacy job without unit)
   // keeps the pre-#644 permissive behavior.
-  const requireSignature =
+  const { requireSignature, unsignedIssuanceReason } =
     organizationId && unitId
       ? await withOrgDbClient(env, organizationId, (client) =>
-          fetchUnitRequireSignature(client, organizationId, unitId),
+          fetchUnitSigningPolicy(client, organizationId, unitId),
         )
-      : false;
+      : { requireSignature: false, unsignedIssuanceReason: null };
 
   const signingCert =
     env.SIGNING_MASTER_KEY && organizationId && unitId
@@ -417,6 +437,7 @@ export async function signPdfWithUnitCertificate(
     hasCertificate: signingCert !== null,
     hadCertificate: history.hadCertificate,
     ...(history.lapse ? { lapse: history.lapse } : {}),
+    unsignedIssuanceReason,
     requireSignature,
   });
   if (policy.action === "FAIL") {
@@ -443,7 +464,14 @@ export async function signPdfWithUnitCertificate(
     console.warn(
       `[JOB ${jobId}] ${policy.action === "EMIT_UNSIGNED" ? policy.warning : "No signing certificate available"}`,
     );
-    return { pdfBuffer };
+    // Q51: when the unit chose to issue unsigned, the issued certificate records
+    // that it was unsigned BY POLICY, with the reason, next to the plain UNSIGNED.
+    return {
+      pdfBuffer,
+      ...(policy.action === "EMIT_UNSIGNED" && policy.unsignedByPolicy
+        ? { unsignedByPolicy: policy.unsignedByPolicy }
+        : {}),
+    };
   }
 
   // Narrowing only: the certificate fetch above is gated on the master key,

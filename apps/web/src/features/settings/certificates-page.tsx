@@ -65,6 +65,7 @@ import { Textarea } from '@calibra-facil/ui/textarea'
 import { cn } from '@/lib/utils'
 import { useSigningCertificatesData } from '@/features/settings/queries'
 import { formatInstant } from '@calibra-facil/shared/format'
+import { buildUnsignedIssuancePayload } from '@/features/settings/unsigned-issuance-form'
 
 type Certificate = SigningCertificate
 
@@ -79,6 +80,10 @@ export function CertificatesSettingsPage({
   const [selectedCert, setSelectedCert] = useState<Certificate | null>(null)
   const [revokeDialogOpen, setRevokeDialogOpen] = useState(false)
   const [certToRevoke, setCertToRevoke] = useState<Certificate | null>(null)
+  // Q51: the justification being typed to issue unsigned on purpose (null = form closed)
+  const [unsignedReasonDraft, setUnsignedReasonDraft] = useState<string | null>(
+    null,
+  )
 
   const { isCheckingAccess, isConsolidated, selectedUnit } = useDashboardUnits()
 
@@ -119,6 +124,32 @@ export function CertificatesSettingsPage({
       toast.error(error.message)
     },
   })
+
+  const unsignedIssuanceMutation = useMutation({
+    mutationFn: (
+      input: { enabled: true; reason: string } | { enabled: false },
+    ) => calibraApi.signingCertificates.setUnsignedIssuance(input),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({
+        queryKey: ['signing-certificates', selectedUnit?.id ?? 'no-unit'],
+      })
+      setUnsignedReasonDraft(null)
+      toast.success(
+        result.unsignedIssuance.enabled
+          ? 'Esta unidade agora emite sem assinatura digital'
+          : 'A assinatura digital voltou a ser exigida nesta unidade',
+      )
+    },
+    onError: (error) => {
+      toast.error(error.message)
+    },
+  })
+
+  const unsignedIssuance = data?.unsignedIssuance
+  const unsignedPayload =
+    unsignedReasonDraft === null
+      ? null
+      : buildUnsignedIssuancePayload(unsignedReasonDraft)
 
   const revokeMutation = useMutation({
     mutationFn: ({ id, reason }: { id: number; reason: string }) =>
@@ -216,6 +247,94 @@ export function CertificatesSettingsPage({
                 aria-label="Assinatura obrigatória"
               />
             </div>
+          </Panel>
+
+          {/* Emitir sem assinatura digital (Q51) */}
+          <Panel className="p-5 sm:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-medium">
+                  Emitir sem assinatura digital
+                </h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Uma unidade que já teve certificado de assinatura não emite
+                  certificados sem assinatura quando o certificado expira ou é
+                  revogado: a emissão é bloqueada até que um novo certificado
+                  seja enviado. Ative esta opção somente se o laboratório
+                  decidiu, de forma deliberada, deixar de assinar. A decisão
+                  exige justificativa, fica registrada na trilha de auditoria e
+                  aparece em cada certificado emitido sem assinatura.
+                </p>
+                {unsignedIssuance?.enabled ? (
+                  <p className="mt-2 text-sm" data-testid="unsigned-reason">
+                    <span className="font-medium">Justificativa:</span>{' '}
+                    {unsignedIssuance.reason}
+                    {unsignedIssuance.setByName
+                      ? ` (${unsignedIssuance.setByName}${
+                          unsignedIssuance.setAt
+                            ? `, ${formatInstant(unsignedIssuance.setAt, 'date')}`
+                            : ''
+                        })`
+                      : ''}
+                  </p>
+                ) : null}
+              </div>
+              <Switch
+                checked={Boolean(unsignedIssuance?.enabled)}
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    setUnsignedReasonDraft('')
+                  } else {
+                    unsignedIssuanceMutation.mutate({ enabled: false })
+                  }
+                }}
+                disabled={unsignedIssuanceMutation.isPending || isLoading}
+                aria-label="Emitir sem assinatura digital"
+              />
+            </div>
+            {unsignedReasonDraft !== null && !unsignedIssuance?.enabled ? (
+              <div className="mt-4 space-y-3">
+                <Field data-invalid={unsignedPayload?.ok === false}>
+                  <FieldLabel htmlFor="unsigned-issuance-reason">
+                    Justificativa
+                  </FieldLabel>
+                  <Textarea
+                    id="unsigned-issuance-reason"
+                    value={unsignedReasonDraft}
+                    onChange={(event) =>
+                      setUnsignedReasonDraft(event.target.value)
+                    }
+                    rows={3}
+                  />
+                  {unsignedReasonDraft.length > 0 &&
+                  unsignedPayload?.ok === false ? (
+                    <FieldError>{unsignedPayload.error}</FieldError>
+                  ) : null}
+                </Field>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    disabled={
+                      !unsignedPayload?.ok || unsignedIssuanceMutation.isPending
+                    }
+                    onClick={() => {
+                      if (unsignedPayload?.ok) {
+                        unsignedIssuanceMutation.mutate(unsignedPayload.payload)
+                      }
+                    }}
+                  >
+                    Confirmar emissão sem assinatura
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setUnsignedReasonDraft(null)}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </Panel>
 
           {/* Certificates */}

@@ -104,13 +104,88 @@ describe("resolveSigningPolicy — an expired/revoked certificate fails closed (
   });
 
   it("a unit that never had one is unchanged: unsigned unless require_signature", () => {
+    const decision = resolveSigningPolicy({
+      hasMasterKey: true,
+      hasCertificate: false,
+      hadCertificate: false,
+      requireSignature: false,
+    });
+    expect(decision.action).toBe("EMIT_UNSIGNED");
+    if (decision.action === "EMIT_UNSIGNED") {
+      expect(decision.unsignedByPolicy).toBeNull();
+    }
+  });
+});
+
+describe("resolveSigningPolicy — the unit's explicit 'emitir sem assinatura digital' (Q51)", () => {
+  const REASON = "O laboratório decidiu deixar de assinar.";
+
+  it("a unit that signed before may issue unsigned again ONLY with the setting, and the reason is carried", () => {
+    const decision = resolveSigningPolicy({
+      hasMasterKey: true,
+      hasCertificate: false,
+      hadCertificate: true,
+      unsignedIssuanceReason: REASON,
+      requireSignature: false,
+    });
+    expect(decision).toMatchObject({
+      action: "EMIT_UNSIGNED",
+      unsignedByPolicy: REASON,
+    });
+    // Same facts, setting off: fails closed.
     expect(
       resolveSigningPolicy({
         hasMasterKey: true,
         hasCertificate: false,
-        hadCertificate: false,
+        hadCertificate: true,
+        unsignedIssuanceReason: null,
         requireSignature: false,
       }).action,
-    ).toBe("EMIT_UNSIGNED");
+    ).toBe("FAIL");
+  });
+
+  it("a blank reason is not a choice", () => {
+    expect(
+      resolveSigningPolicy({
+        hasMasterKey: true,
+        hasCertificate: false,
+        hadCertificate: true,
+        unsignedIssuanceReason: "   ",
+        requireSignature: false,
+      }).action,
+    ).toBe("FAIL");
+  });
+
+  it("works when the platform key is missing too", () => {
+    expect(
+      resolveSigningPolicy({
+        hasMasterKey: false,
+        hasCertificate: false,
+        hadCertificate: true,
+        unsignedIssuanceReason: REASON,
+        requireSignature: false,
+      }),
+    ).toMatchObject({ action: "EMIT_UNSIGNED", unsignedByPolicy: REASON });
+  });
+
+  it("only relaxes the lapsed failure: a valid certificate still signs, and require_signature still fails", () => {
+    expect(
+      resolveSigningPolicy({
+        hasMasterKey: true,
+        hasCertificate: true,
+        hadCertificate: true,
+        unsignedIssuanceReason: REASON,
+        requireSignature: false,
+      }),
+    ).toEqual({ action: "SIGN" });
+    expect(
+      resolveSigningPolicy({
+        hasMasterKey: true,
+        hasCertificate: false,
+        hadCertificate: true,
+        unsignedIssuanceReason: REASON,
+        requireSignature: true,
+      }).action,
+    ).toBe("FAIL");
   });
 });

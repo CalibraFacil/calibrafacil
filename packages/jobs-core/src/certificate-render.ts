@@ -339,8 +339,19 @@ export async function processJob(
     };
     const renderMetadata = {
       signature: signed.signatureMetadata
-        ? { signed: true, signerName: signed.signatureMetadata.signerName }
-        : { signed: false },
+        ? {
+            signed: true,
+            signing: "signed",
+            signerName: signed.signatureMetadata.signerName,
+          }
+        : signed.unsignedByPolicy
+          ? {
+              // Q51: the unit chose to issue unsigned, with this recorded reason.
+              signed: false,
+              signing: "unsigned_by_policy",
+              unsignedByPolicy: signed.unsignedByPolicy,
+            }
+          : { signed: false, signing: "unsigned" },
       // Where the certificate's content came from, and a hash of exactly what
       // the template was handed: the same frozen input and layout version give
       // the same hash on any later render (the PDF bytes may differ, they embed
@@ -438,7 +449,12 @@ export async function processJob(
             ? signed.signatureMetadata
             : parseSignatureMetadata(stored?.signature_metadata),
           insertedPdfR2Key ? signed.signatureVerdict : undefined,
-          { preserveSignatureMetadata: !insertedPdfR2Key },
+          {
+            preserveSignatureMetadata: !insertedPdfR2Key,
+            ...(insertedPdfR2Key && signed.unsignedByPolicy
+              ? { unsignedByPolicy: signed.unsignedByPolicy }
+              : {}),
+          },
         );
         if (transition.outcome === "skipped") {
           throw new CertificateIssuanceSkipped(transition.currentStatus);

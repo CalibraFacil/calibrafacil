@@ -897,6 +897,13 @@
       "when": 1793000000000,
       "tag": "0128_scope_enforcement_default",
       "breakpoints": true
+    },
+    {
+      "idx": 127,
+      "version": "7",
+      "when": 1792900000000,
+      "tag": "0127_unit_unsigned_issuance",
+      "breakpoints": true
     }
   ]
 }

@@ -265,6 +265,110 @@ describe("an expired signing certificate fails closed (P0-8)", () => {
     expect((await jobRow(job.jobId)).status).toBe("REJECTED");
   });
 
+  // Q51: the unit's explicit "emitir sem assinatura digital" lifts the failure.
+  async function enableUnsignedIssuance(org: SeededOrg, reason: string) {
+    await db.execute(
+      sql`UPDATE organization_unit
+          SET unsigned_issuance_reason = ${reason},
+              unsigned_issuance_set_by = ${org.userId},
+              unsigned_issuance_set_at = now()
+          WHERE id = ${org.unitId}`,
+    );
+  }
+
+  async function snapshotSignature(jobId: number) {
+    const result = await db.execute(
+      sql`SELECT render_metadata->'signature' AS signature
+          FROM issued_certificate_snapshot WHERE job_id = ${jobId}`,
+    );
+    return field(toRows(result)[0], "signature");
+  }
+
+  async function lastIssueAudit(jobId: number) {
+    const result = await db.execute(
+      sql`SELECT changes FROM job_audit_log
+          WHERE job_id = ${jobId} AND action = 'certificate_generated'
+          ORDER BY id DESC LIMIT 1`,
+    );
+    return field(toRows(result)[0], "changes");
+  }
+
+  it("REQ-Q51-010 [HIGH RISK]: expired certificate + the setting ON issues UNSIGNED, flagged unsigned_by_policy with the reason (snapshot and audit event), and nobody is alerted", async () => {
+    stubGotenberg();
+    const { env, stored } = makeEnv({ masterKey: true });
+    const { org, job } = await seedJob();
+    await insertCertificate(org, { name: "A1 vencido", validUntil: LONG_AGO });
+    await enableUnsignedIssuance(org, "Deixamos de assinar os certificados");
+
+    await issue(env, org, job.jobId);
+
+    const after = await jobRow(job.jobId);
+    expect(after.status).toBe("APPROVED");
+    expect(after.signatureMetadata).toBeNull();
+    expect(stored.size).toBe(1);
+    expect(await snapshotCount(job.jobId)).toBe(1);
+    expect(await snapshotSignature(job.jobId)).toEqual({
+      signed: false,
+      signing: "unsigned_by_policy",
+      unsignedByPolicy: "Deixamos de assinar os certificados",
+    });
+    expect(
+      field(
+        field(await lastIssueAudit(job.jobId), "signatureMetadata"),
+        "unsignedByPolicy",
+      ),
+    ).toBe("Deixamos de assinar os certificados");
+    expect(mocks.lapsed).not.toHaveBeenCalled();
+  });
+
+  it("REQ-Q51-011 [HIGH RISK]: the same expired certificate with the setting OFF still fails closed", async () => {
+    stubGotenberg();
+    const { env, stored } = makeEnv({ masterKey: true });
+    const { org, job } = await seedJob();
+    await insertCertificate(org, { name: "A1 vencido", validUntil: LONG_AGO });
+    await enableUnsignedIssuance(org, "Deixamos de assinar os certificados");
+    await db.execute(
+      sql`UPDATE organization_unit
+          SET unsigned_issuance_reason = NULL, unsigned_issuance_set_by = NULL,
+              unsigned_issuance_set_at = NULL
+          WHERE id = ${org.unitId}`,
+    );
+
+    await expect(issue(env, org, job.jobId)).rejects.toThrow(
+      /expirado\/ausente/,
+    );
+
+    expect((await jobRow(job.jobId)).status).toBe("REJECTED");
+    expect(stored.size).toBe(0);
+  });
+
+  it("REQ-Q51-012: the setting does not stop a unit with a valid certificate from signing", async () => {
+    stubGotenberg();
+    const { env } = makeEnv({ masterKey: true });
+    const { org, job } = await seedJob();
+    await insertCertificate(org, { name: "A1 novo" });
+    await enableUnsignedIssuance(org, "Deixamos de assinar os certificados");
+
+    await issue(env, org, job.jobId);
+
+    const after = await jobRow(job.jobId);
+    expect(after.status).toBe("APPROVED");
+    expect(field(after.signatureMetadata, "signerName")).toBeTruthy();
+  });
+
+  it("REQ-Q51-013: the setting is per unit: another unit's choice does not lift this unit's failure", async () => {
+    stubGotenberg();
+    const { env } = makeEnv({ masterKey: true });
+    const { org, job } = await seedJob();
+    await insertCertificate(org, { name: "A1 vencido", validUntil: LONG_AGO });
+    const other = await seedOrg({ orgId: "org-2", userId: "user-org-2" });
+    await enableUnsignedIssuance(other, "Outra unidade deixou de assinar");
+
+    await expect(issue(env, org, job.jobId)).rejects.toThrow(
+      /expirado\/ausente/,
+    );
+  });
+
   it("REQ-P08-005: a missing platform key is refused too once the unit has had a certificate", async () => {
     stubGotenberg();
     const { env, stored } = makeEnv({ masterKey: false });

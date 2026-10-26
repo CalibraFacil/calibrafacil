@@ -168,7 +168,11 @@ export type JobApprovedChanges = {
 /** Whether the issued PDF was signed, and by whom (never the key material). */
 export type SignatureAudit =
   | { signed: true; signerName: string }
-  | { signed: false };
+  | {
+      signed: false;
+      /** Q51: the unit issues unsigned on purpose; the reason it recorded. */
+      unsignedByPolicy?: string;
+    };
 
 export type JobEvent =
   | (JobEventBase & { action: "create"; changes: JobCreatedChanges })

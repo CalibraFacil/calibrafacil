@@ -3,6 +3,7 @@ import type {
   SigningCertificatesApi,
   SigningCertificatesListResponse,
   UploadSigningCertificateInput,
+  UnsignedIssuanceSetting,
   UploadSigningCertificateResponse,
 } from "../types";
 import { readJsonResponse } from "../transport/response";
@@ -50,6 +51,14 @@ export function createSigningCertificatesApi(
           json: { requireSignature },
         }),
         "Failed to update signing policy",
+      );
+    },
+    async setUnsignedIssuance(input) {
+      return readJsonResponse<{ unsignedIssuance: UnsignedIssuanceSetting }>(
+        await rawCloudClient.api.signing["unsigned-issuance"].$patch({
+          json: input,
+        }),
+        "Failed to update unsigned issuance",
       );
     },
   };

@@ -49,13 +49,14 @@ vi.mock("@calibra-facil/signing", async (importOriginal) => {
 import { signingRouter } from "./signing";
 import { db } from "@calibra-facil/db";
 import {
+  organizationEventLog,
   organizationSigningCertificate,
   organizationUnit,
 } from "@calibra-facil/db/schema";
 import { eq, and } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
-import { seedOrg } from "../../test/integration/seed";
+import { grantUnitAdmin, seedOrg } from "../../test/integration/seed";
 import {
   getCertificateInfo,
   decryptPassword,
@@ -705,5 +706,191 @@ describe("signingRouter — real DB + real middleware", () => {
       .from(organizationUnit)
       .where(eq(organizationUnit.id, org.unitId));
     expect(row?.requireSignature).toBe(false);
+  });
+
+  // =========================================================================
+  // Q51: "emitir sem assinatura digital" — explicit, audited, admin/owner only
+  // =========================================================================
+
+  const REASON = "O laboratório decidiu deixar de assinar digitalmente.";
+
+  async function patchUnsigned(
+    org: { unitId: number },
+    body: Record<string, unknown>,
+  ) {
+    return signingRouter.request("/unsigned-issuance", {
+      method: "PATCH",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify(body),
+    });
+  }
+
+  async function unitRow(unitId: number) {
+    const [row] = await db
+      .select({
+        reason: organizationUnit.unsignedIssuanceReason,
+        setBy: organizationUnit.unsignedIssuanceSetBy,
+        setAt: organizationUnit.unsignedIssuanceSetAt,
+      })
+      .from(organizationUnit)
+      .where(eq(organizationUnit.id, unitId));
+    return row;
+  }
+
+  async function auditRows(orgId: string) {
+    return db
+      .select()
+      .from(organizationEventLog)
+      .where(eq(organizationEventLog.organizationId, orgId));
+  }
+
+  it("REQ-Q51-001 [HIGH RISK]: an admin enables it with a reason: stored with who/when, audited in the organization trail, and GET reflects it", async () => {
+    const org = await seedOrg({ orgId: "org-q51", role: "admin" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    const res = await patchUnsigned(org, { enabled: true, reason: REASON });
+
+    expect(res.status).toBe(200);
+    const row = await unitRow(org.unitId);
+    expect(row?.reason).toBe(REASON);
+    expect(row?.setBy).toBe(org.userId);
+    expect(row?.setAt).toBeInstanceOf(Date);
+
+    const audit = await auditRows(org.orgId);
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({
+      action: "signing.unsigned_issuance_enabled",
+      entityType: "organization_unit",
+      entityId: String(org.unitId),
+      unitId: org.unitId,
+      actorUserId: org.userId,
+    });
+    expect(audit[0]?.details).toMatchObject({
+      enabled: true,
+      wasEnabled: false,
+      reason: REASON,
+    });
+
+    const list = await signingRouter.request("/certificates", {
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+    });
+    expect((await list.json()).unsignedIssuance).toMatchObject({
+      enabled: true,
+      reason: REASON,
+    });
+  });
+
+  it("REQ-Q51-002: disabling clears the setting and is audited too, keeping the previous reason in the trail", async () => {
+    const org = await seedOrg({ orgId: "org-q51-off", role: "admin" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    await patchUnsigned(org, { enabled: true, reason: REASON });
+
+    const res = await patchUnsigned(org, { enabled: false });
+
+    expect(res.status).toBe(200);
+    expect(await unitRow(org.unitId)).toMatchObject({
+      reason: null,
+      setBy: null,
+      setAt: null,
+    });
+    const audit = await auditRows(org.orgId);
+    expect(audit.map((row) => row.action).sort()).toEqual([
+      "signing.unsigned_issuance_disabled",
+      "signing.unsigned_issuance_enabled",
+    ]);
+    expect(
+      audit.find((row) => row.action === "signing.unsigned_issuance_disabled")
+        ?.details,
+    ).toMatchObject({ wasEnabled: true, previousReason: REASON });
+  });
+
+  it.each([
+    ["no reason", { enabled: true }],
+    ["an empty reason", { enabled: true, reason: "   " }],
+    ["a too short reason", { enabled: true, reason: "curto" }],
+  ])(
+    "REQ-Q51-003 [HIGH RISK]: %s is refused (400) and nothing is stored or audited",
+    async (_name, body) => {
+      const org = await seedOrg({ orgId: "org-q51-bad", role: "admin" });
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+
+      const res = await patchUnsigned(org, body);
+
+      expect(res.status).toBe(400);
+      expect((await unitRow(org.unitId))?.reason).toBeNull();
+      expect(await auditRows(org.orgId)).toHaveLength(0);
+    },
+  );
+
+  it("REQ-Q51-004 [HIGH RISK]: a technician and a single-unit unit_admin are refused (403): only admin/owner may stop a lab from signing", async () => {
+    const tech = await seedOrg({ orgId: "org-q51-tech", role: "technician" });
+    loginAs({ userId: tech.userId, organizationId: tech.orgId });
+    expect(
+      (await patchUnsigned(tech, { enabled: true, reason: REASON })).status,
+    ).toBe(403);
+
+    const unitAdmin = await seedOrg({
+      orgId: "org-q51-ua",
+      role: "technician",
+    });
+    await grantUnitAdmin(unitAdmin);
+    loginAs({ userId: unitAdmin.userId, organizationId: unitAdmin.orgId });
+    expect(
+      (await patchUnsigned(unitAdmin, { enabled: true, reason: REASON }))
+        .status,
+    ).toBe(403);
+
+    expect((await unitRow(tech.unitId))?.reason).toBeNull();
+    expect((await unitRow(unitAdmin.unitId))?.reason).toBeNull();
+    expect(await auditRows(tech.orgId)).toHaveLength(0);
+    expect(await auditRows(unitAdmin.orgId)).toHaveLength(0);
+  });
+
+  it("REQ-Q51-005: an unauthenticated request is refused (401)", async () => {
+    logout();
+    const res = await signingRouter.request("/unsigned-issuance", {
+      method: "PATCH",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": "1" },
+      body: JSON.stringify({ enabled: true, reason: REASON }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("REQ-Q51-006: it is never implicit: a fresh unit has it off, and an owner can set it too", async () => {
+    const org = await seedOrg({ orgId: "org-q51-owner", role: "owner" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    expect((await unitRow(org.unitId))?.reason).toBeNull();
+
+    const res = await patchUnsigned(org, { enabled: true, reason: REASON });
+
+    expect(res.status).toBe(200);
+    expect((await unitRow(org.unitId))?.reason).toBe(REASON);
+  });
+
+  it("REQ-Q51-007: 'assinatura obrigatória' and 'emitir sem assinatura' exclude each other (409 both ways)", async () => {
+    const org = await seedOrg({ orgId: "org-q51-excl", role: "admin" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    await signingRouter.request("/policy", {
+      method: "PATCH",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({ requireSignature: true }),
+    });
+    expect(
+      (await patchUnsigned(org, { enabled: true, reason: REASON })).status,
+    ).toBe(409);
+    expect((await unitRow(org.unitId))?.reason).toBeNull();
+
+    await signingRouter.request("/policy", {
+      method: "PATCH",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({ requireSignature: false }),
+    });
+    await patchUnsigned(org, { enabled: true, reason: REASON });
+    const res = await signingRouter.request("/policy", {
+      method: "PATCH",
+      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+      body: JSON.stringify({ requireSignature: true }),
+    });
+    expect(res.status).toBe(409);
   });
 });

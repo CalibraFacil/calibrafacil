@@ -2701,6 +2701,16 @@ export type SigningCertificatesListResponse = {
   unit?: unknown;
   /** #644: the unit's "assinatura obrigatória" policy flag. */
   requireSignature?: boolean;
+  /** Q51: the unit's explicit "emitir sem assinatura digital" setting. */
+  unsignedIssuance?: UnsignedIssuanceSetting;
+};
+
+/** Q51: issuing unsigned on purpose; `reason` is mandatory while enabled. */
+export type UnsignedIssuanceSetting = {
+  enabled: boolean;
+  reason: string | null;
+  setAt?: string | Date | null;
+  setByName?: string | null;
 };
 
 export type UploadSigningCertificateInput = {
@@ -2741,6 +2751,10 @@ export interface SigningCertificatesApi {
   ): Promise<SigningCertificateActionResponse>;
   /** #644: set the unit's "assinatura obrigatória" policy. */
   setPolicy(requireSignature: boolean): Promise<{ requireSignature: boolean }>;
+  /** Q51: admin/owner only; enabling needs a reason (min 15 characters). */
+  setUnsignedIssuance(
+    input: { enabled: true; reason: string } | { enabled: false },
+  ): Promise<{ unsignedIssuance: UnsignedIssuanceSetting }>;
 }
 
 export interface PublicInvitationsApi {
