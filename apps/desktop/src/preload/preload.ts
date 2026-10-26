@@ -29,7 +29,6 @@ const calibraBridge: CalibraBridge = {
   getSettings: () => invoke(desktopIpcChannels.getSettings),
   setSettings: (patch) => invoke(desktopIpcChannels.setSettings, patch),
   getSecretStatuses: () => invoke(desktopIpcChannels.getSecretStatuses),
-  setSecret: (secret) => invoke(desktopIpcChannels.setSecret, secret),
   deleteSecret: (name) => invoke(desktopIpcChannels.deleteSecret, name),
   getSyncState: () => invoke(desktopIpcChannels.getSyncState),
   getSyncStatus: () => invoke(desktopIpcChannels.getSyncStatus),

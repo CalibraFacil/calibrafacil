@@ -21,7 +21,6 @@ import {
   desktopAuthFetchRequestSchema,
   desktopAuthFetchResponseSchema,
   desktopSecretNameSchema,
-  desktopSecretWriteSchema,
   desktopUpdateStateSchema,
   localEnvironmentBootstrapSchema,
   localDiagnosticsSchema,
@@ -586,10 +585,6 @@ function registerIpc(
 
   handle(desktopIpcChannels.getSecretStatuses, () =>
     secretsStore.getStatuses(),
-  );
-
-  handle(desktopIpcChannels.setSecret, (_event, secret) =>
-    secretsStore.set(desktopSecretWriteSchema.parse(secret)),
   );
 
   handle(desktopIpcChannels.deleteSecret, (_event, name) =>

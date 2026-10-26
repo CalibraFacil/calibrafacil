@@ -5,7 +5,6 @@ export const desktopIpcChannels = {
   getSettings: "calibra:settings:get",
   setSettings: "calibra:settings:set",
   getSecretStatuses: "calibra:secrets:status",
-  setSecret: "calibra:secrets:set",
   deleteSecret: "calibra:secrets:delete",
   getSyncState: "calibra:sync:state",
   getSyncStatus: "calibra:sync:status",

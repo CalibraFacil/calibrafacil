@@ -4,7 +4,6 @@ import {
   desktopAuthFetchResponseSchema,
   desktopSecretNameSchema,
   desktopSecretStatusSchema,
-  desktopSecretWriteSchema,
   desktopSettingsPatchSchema,
   desktopSettingsSchema,
   desktopNotificationsPublishSchema,
@@ -138,10 +137,6 @@ export const desktopIpcInvokeContracts = {
   [desktopIpcChannels.getSecretStatuses]: {
     args: noArgs(),
     response: arrayOf(desktopSecretStatusSchema),
-  },
-  [desktopIpcChannels.setSecret]: {
-    args: oneArg(desktopSecretWriteSchema),
-    response: desktopSecretStatusSchema,
   },
   [desktopIpcChannels.deleteSecret]: {
     args: oneArg(desktopSecretNameSchema),

@@ -39,7 +39,6 @@ const expectedBridgeKeys = [
   "resumeSync",
   "retrySync",
   "saveFile",
-  "setSecret",
   "setSettings",
   "startSync",
   "wakeSync",
