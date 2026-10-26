@@ -74,6 +74,18 @@ const PRODUCER_FIXTURES = {
     deliveryId: "5c2f2c1e-0000-4000-8000-000000000001",
     organizationId: "org_1",
   },
+  // apps/api/src/modules/jobs/approve-job.ts (outbox, staged in the approval transaction)
+  "job approved notification": {
+    type: "JOB_APPROVED_NOTIFICATION",
+    jobId: 42,
+    userId: "user_1",
+  },
+  "asset out-of-tolerance notification": {
+    type: "ASSET_OOT_NOTIFICATION",
+    eventId: 5,
+    organizationId: "org_1",
+    userId: "user_1",
+  },
   // apps/api/src/routes/integrations.ts (generic ERP, no provider)
   "integration sync without provider": {
     type: "INTEGRATION_SYNC",
@@ -148,7 +160,7 @@ describe("background job union", () => {
     );
     // Only the certificate render may omit its discriminator.
     expect(values).toEqual(["(omitted)"]);
-    expect(types).toHaveLength(14);
+    expect(types).toHaveLength(16);
   });
 
   it("REQ-Q-3 an unknown type is rejected with a reason naming it", () => {
@@ -204,6 +216,8 @@ describe("background job union", () => {
       { type: "SERVICE_ORDER_TAG", serviceOrderId: "1", userId: "u" },
       { type: "OOT_NOTIFICATION", notificationId: 1 },
       { type: "WEBHOOK_DELIVERY", deliveryId: "d" },
+      { type: "JOB_APPROVED_NOTIFICATION", jobId: "1", userId: "u" },
+      { type: "ASSET_OOT_NOTIFICATION", eventId: 1, userId: "u" },
       {
         type: "INTEGRATION_SYNC",
         integrationId: "i",

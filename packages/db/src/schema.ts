@@ -7054,7 +7054,9 @@ export type AppQueueJobType =
   | "INTEGRATION_SYNC"
   | "AUDIT_PACK"
   | "OOT_NOTIFICATION"
-  | "WEBHOOK_DELIVERY";
+  | "WEBHOOK_DELIVERY"
+  | "JOB_APPROVED_NOTIFICATION"
+  | "ASSET_OOT_NOTIFICATION";
 
 export type AppQueueJobStatus =
   | "PENDING"

@@ -98,6 +98,34 @@ export const OotNotificationJobMessageSchema = z.object({
   userId,
 });
 
+/**
+ * Post-approval notification to the technician (or job creator) that the
+ * calibration was approved. Staged in the approval's own transaction (outbox),
+ * so it is delivered after the commit with the queue's retries and never for an
+ * approval that rolled back.
+ */
+export const JobApprovedNotificationJobMessageSchema = z.object({
+  type: z.literal("JOB_APPROVED_NOTIFICATION"),
+  jobId: id,
+  /** The approver. */
+  userId,
+});
+
+/**
+ * Customer-facing out-of-tolerance alert of an as-found NON_CONFORMING approval
+ * (ISO/IEC 17025 7.10, #740 Track B). The event row itself is written in the
+ * approval's transaction; this message only delivers the in-app notification
+ * and the e-mail and records the `notify` audit entry. Idempotent per event.
+ */
+export const AssetOotNotificationJobMessageSchema = z.object({
+  type: z.literal("ASSET_OOT_NOTIFICATION"),
+  eventId: id,
+  /** The laboratory that owns the event (the handler scopes its reads to it). */
+  organizationId: z.string(),
+  /** The approver (or the reconciler's actor) the audit entry is attributed to. */
+  userId,
+});
+
 export const IntegrationSyncJobMessageSchema = z.object({
   type: z.literal("INTEGRATION_SYNC"),
   provider: IntegrationProviderSchema.optional(),
@@ -170,6 +198,8 @@ export const QueueMessageSchema = z.discriminatedUnion("type", [
   ServiceOrderQuoteJobMessageSchema,
   ServiceOrderDeliveryReceiptJobMessageSchema,
   OotNotificationJobMessageSchema,
+  JobApprovedNotificationJobMessageSchema,
+  AssetOotNotificationJobMessageSchema,
   IntegrationSyncJobMessageSchema,
   AuditPackJobMessageSchema,
   WebhookDeliveryJobMessageSchema,
@@ -192,6 +222,12 @@ export type DocumentBackgroundJobMessage =
   | z.infer<typeof ServiceOrderQuoteJobMessageSchema>
   | z.infer<typeof ServiceOrderDeliveryReceiptJobMessageSchema>
   | z.infer<typeof OotNotificationJobMessageSchema>;
+export type JobApprovedNotificationBackgroundJobMessage = z.infer<
+  typeof JobApprovedNotificationJobMessageSchema
+>;
+export type AssetOotNotificationBackgroundJobMessage = z.infer<
+  typeof AssetOotNotificationJobMessageSchema
+>;
 export type IntegrationSyncBackgroundJobMessage = z.infer<
   typeof IntegrationSyncJobMessageSchema
 >;
