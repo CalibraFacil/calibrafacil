@@ -1,10 +1,23 @@
 import { describe, it, expect } from "vitest";
 
 import {
+  DEFAULT_EXPIRY_LEAD_DAYS,
   SIGNING_CERTIFICATE_EXPIRY_LEAD_DAYS,
   daysUntilCalendar,
-  decideSigningCertificateExpiryAlert,
+  decideSigningCertificateExpiryAlert as decideWithLeadDays,
+  type SigningCertificateExpiryInput,
 } from "./signing-certificate-expiry";
+
+// Signing certificates alert at 30, 14 and 7 days (P0-8): every case below is
+// about them, so the windows are fixed here once.
+function decideSigningCertificateExpiryAlert(
+  input: Omit<SigningCertificateExpiryInput, "leadDays">,
+) {
+  return decideWithLeadDays({
+    leadDays: SIGNING_CERTIFICATE_EXPIRY_LEAD_DAYS,
+    ...input,
+  });
+}
 
 // CMP-02 (issue #645). Pure decider for the ICP-Brasil A1 signing-certificate
 // expiry alert — exercised directly (no DB / no mock), with fixed dates under
@@ -40,23 +53,23 @@ describe("decideSigningCertificateExpiryAlert (CMP-02)", () => {
       expect(decision.leadTimeDays).toBe(30);
     });
 
-    it("escalates into the 15-day window", () => {
+    it("escalates into the 14-day window", () => {
       const decision = decideSigningCertificateExpiryAlert({
         validUntil: daysFromNow(12),
         now: NOW,
-        // Already warned at the 30-day window; the 15-day window is fresh.
+        // Already warned at the 30-day window; the 14-day window is fresh.
         alreadyAlertedLeadDays: [30],
       });
 
       expect(decision.shouldAlert).toBe(true);
-      expect(decision.leadTimeDays).toBe(15);
+      expect(decision.leadTimeDays).toBe(14);
     });
 
     it("escalates into the 7-day window", () => {
       const decision = decideSigningCertificateExpiryAlert({
         validUntil: daysFromNow(5),
         now: NOW,
-        alreadyAlertedLeadDays: [30, 15],
+        alreadyAlertedLeadDays: [30, 14],
       });
 
       expect(decision.shouldAlert).toBe(true);
@@ -128,7 +141,7 @@ describe("decideSigningCertificateExpiryAlert (CMP-02)", () => {
       const decision = decideSigningCertificateExpiryAlert({
         validUntil: daysFromNow(3),
         now: NOW,
-        alreadyAlertedLeadDays: [30, 15, 7],
+        alreadyAlertedLeadDays: [30, 14, 7],
       });
 
       expect(decision.shouldAlert).toBe(false);
@@ -144,7 +157,36 @@ describe("decideSigningCertificateExpiryAlert (CMP-02)", () => {
     });
 
     it("exposes the escalating lead windows widest-first", () => {
-      expect(SIGNING_CERTIFICATE_EXPIRY_LEAD_DAYS).toEqual([30, 15, 7]);
+      expect(SIGNING_CERTIFICATE_EXPIRY_LEAD_DAYS).toEqual([30, 14, 7]);
+    });
+
+    it("the other validity alerts keep their 30/15/7 windows", () => {
+      expect(DEFAULT_EXPIRY_LEAD_DAYS).toEqual([30, 15, 7]);
+      // No `leadDays`: 12 days out is still the 15-day window.
+      expect(
+        decideWithLeadDays({
+          validUntil: daysFromNow(12),
+          now: NOW,
+          alreadyAlertedLeadDays: [30],
+        }).leadTimeDays,
+      ).toBe(15);
+    });
+
+    it("P0-8: 15 days out is still the 30 window for a signing certificate, 14 is the 14 window", () => {
+      expect(
+        decideSigningCertificateExpiryAlert({
+          validUntil: daysFromNow(15),
+          now: NOW,
+          alreadyAlertedLeadDays: [],
+        }).leadTimeDays,
+      ).toBe(30);
+      expect(
+        decideSigningCertificateExpiryAlert({
+          validUntil: daysFromNow(14),
+          now: NOW,
+          alreadyAlertedLeadDays: [30],
+        }).leadTimeDays,
+      ).toBe(14);
     });
   });
 });

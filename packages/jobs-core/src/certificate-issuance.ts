@@ -16,7 +16,11 @@ import {
 } from "@calibra-facil/signing";
 import { resolveTsaConfig } from "./tsa-config.js";
 import { resolveSigningPolicy, SigningPolicyError } from "./signing-policy.js";
-import { notifyCertificateReady } from "@calibra-facil/notifications";
+import {
+  notifyCertificateReady,
+  notifySigningCertificateLapsed,
+} from "@calibra-facil/notifications";
+import { formatInstant } from "@calibra-facil/shared/format";
 import {
   jobEventTransaction,
   jobOrganizationOf,
@@ -113,6 +117,52 @@ async function fetchUnitRequireSignature(
     [unitId, organizationId],
   );
   return result.rows[0]?.require_signature === true;
+}
+
+/**
+ * Whether the unit has EVER had a signing certificate (P0-8): any row, expired,
+ * revoked and deactivated ones included, and the state of the newest one, for the
+ * reason a blocked issuance reports. `fetchSigningCertificate` only sees a valid
+ * default certificate, so without this an expired A1 looks like "never had one".
+ */
+async function fetchSigningCertificateHistory(
+  client: Client,
+  organizationId: string,
+  unitId: number,
+): Promise<{ hadCertificate: boolean; lapse: string | undefined }> {
+  const result = await client.query<{
+    valid_until: Date;
+    is_active: boolean;
+    is_default: boolean;
+    revoked_at: Date | null;
+    expired: boolean;
+  }>(
+    `
+        SELECT valid_until, is_active, is_default, revoked_at,
+               valid_until <= NOW() AS expired
+        FROM organization_signing_certificate
+        WHERE organization_id = $1
+          AND unit_id = $2
+        ORDER BY valid_until DESC, id DESC
+        LIMIT 1
+        `,
+    [organizationId, unitId],
+  );
+  const latest = result.rows[0];
+  if (!latest) return { hadCertificate: false, lapse: undefined };
+  if (latest.revoked_at || !latest.is_active) {
+    return { hadCertificate: true, lapse: "o último certificado foi revogado" };
+  }
+  if (latest.expired) {
+    return {
+      hadCertificate: true,
+      lapse: `o último certificado expirou em ${formatInstant(latest.valid_until, "date")}`,
+    };
+  }
+  return {
+    hadCertificate: true,
+    lapse: "nenhum certificado de assinatura está definido como padrão",
+  };
 }
 
 /**
@@ -352,12 +402,39 @@ export async function signPdfWithUnitCertificate(
         )
       : null;
 
+  // P0-8: a unit that has ever had a signing certificate and has no valid one
+  // now fails closed (never an unsigned PDF). Not read for a certificate that
+  // is valid: the history only matters when there is nothing to sign with.
+  const history =
+    signingCert === null && organizationId && unitId
+      ? await withOrgDbClient(env, organizationId, (client) =>
+          fetchSigningCertificateHistory(client, organizationId, unitId),
+        )
+      : { hadCertificate: false, lapse: undefined };
+
   const policy = resolveSigningPolicy({
     hasMasterKey: Boolean(env.SIGNING_MASTER_KEY),
     hasCertificate: signingCert !== null,
+    hadCertificate: history.hadCertificate,
+    ...(history.lapse ? { lapse: history.lapse } : {}),
     requireSignature,
   });
   if (policy.action === "FAIL") {
+    if (policy.code === "SIGNING_CERTIFICATE_LAPSED") {
+      // The job is rejected by the caller with this reason (the existing
+      // render-failure path, which writes its audit event); the lab's admins
+      // are told here, best effort — a notification failure must not change
+      // the outcome, the issuance is already refused.
+      console.error(`[JOB ${jobId}] ${policy.reason}`);
+      try {
+        await notifySigningCertificateLapsed(jobId, policy.reason);
+      } catch (notifyError) {
+        console.error(
+          `[JOB ${jobId}] Failed to notify the lab about the lapsed signing certificate:`,
+          notifyError,
+        );
+      }
+    }
     throw new SigningPolicyError(policy.reason);
   }
   if (policy.action === "EMIT_UNSIGNED" || !signingCert) {

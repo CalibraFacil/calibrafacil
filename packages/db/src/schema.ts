@@ -6779,7 +6779,8 @@ export type NotificationType =
   | "ASSET_DUE_FOR_LEGAL_VERIFICATION" // Legal-metrology TRACK 2 — regulation-fixed verification periodicity (Inmetro/RBMLQ-I), independent of recalibration
   | "STANDARD_EXPIRING"
   | "STANDARD_EXPIRED" // ISO 17025 Clause 6.4.6 - Standard expired, jobs blocked
-  | "SIGNING_CERTIFICATE_EXPIRING" // CMP-02 - ICP-Brasil A1 signing certificate nearing validUntil (emission degrades to unsigned once expired)
+  | "SIGNING_CERTIFICATE_EXPIRING" // CMP-02 - ICP-Brasil A1 signing certificate nearing validUntil (emission is BLOCKED once it lapses, P0-8)
+  | "SIGNING_CERTIFICATE_LAPSED" // P0-8 - a certificate was NOT issued because the unit's signing certificate expired/was revoked/is missing
   | "ACCREDITATION_EXPIRING" // #647 - Cgcre/RBC accreditation vigência nearing validUntil (seal stops rendering once expired)
   | "ACCREDITED_SCOPE_LINE_EXPIRING" // #427 Phase 2 - a scope line's vigência nearing validUntil (points stop matching once expired)
   | "JOB_OVERDUE"

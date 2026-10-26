@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
-import { accreditedScopeLine } from "@calibra-facil/db/schema";
+import {
+  accreditedScopeLine,
+  organizationSigningCertificate,
+} from "@calibra-facil/db/schema";
 import { processScheduledNotifications } from "@calibra-facil/jobs-core/scheduled";
 import { db, truncateAll } from "../test/integration/db";
 import {
@@ -727,5 +730,143 @@ describe("processScheduledNotifications — accredited-scope line expiry (REQ-CM
     expect(rows.map((row) => row.lead_time_days).sort((a, b) => a - b)).toEqual(
       [15, 30],
     );
+  });
+});
+
+// ── P0-8: signing-certificate expiry warnings at 30, 14 and 7 days ───────────
+describe("processScheduledNotifications — signing-certificate expiry (P0-8)", () => {
+  async function seedCertificate(params: {
+    organizationId: string;
+    unitId: number;
+    userId: string;
+    validUntil: Date;
+  }): Promise<number> {
+    const [row] = await db
+      .insert(organizationSigningCertificate)
+      .values({
+        organizationId: params.organizationId,
+        unitId: params.unitId,
+        name: "A1 da unidade",
+        serialNumber: "SERIAL-1",
+        issuerCn: "AC Teste",
+        subjectCn: "Lab Teste",
+        validFrom: daysFromNow(-300),
+        validUntil: params.validUntil,
+        encryptedP12: "enc",
+        encryptedPassword: "enc",
+        passwordIv: "iv",
+        isActive: true,
+        isDefault: true,
+        createdBy: params.userId,
+      })
+      .returning();
+    if (!row) throw new Error("seedCertificate: insert failed");
+    return row.id;
+  }
+
+  async function adminAlerts(): Promise<number> {
+    const result = await db.execute(
+      sql`SELECT count(*)::int AS n FROM notification
+          WHERE type = 'SIGNING_CERTIFICATE_EXPIRING'`,
+    );
+    return asNumber(field(toRows(result)[0], "n"));
+  }
+
+  async function leadDays(certificateId: number): Promise<number[]> {
+    const rows = await scheduledNotificationRows({
+      type: "SIGNING_CERTIFICATE_EXPIRING",
+      entityType: "signing_certificate",
+      entityId: certificateId,
+    });
+    return rows.map((row) => row.lead_time_days).sort((a, b) => b - a);
+  }
+
+  it("REQ-P08-010 [HIGH RISK]: the lab's admins are alerted once per threshold (30, 14, 7) and a re-run never repeats one", async () => {
+    const org = await seedScheduledOrg({
+      orgId: "org-sign-exp",
+      userId: "owner-sign-exp",
+    });
+    await seedMember({
+      memberId: "member-sign-exp",
+      organizationId: org.orgId,
+      userId: org.ownerUserId,
+      role: "admin",
+    });
+    const certificateId = await seedCertificate({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      userId: org.ownerUserId,
+      validUntil: daysFromNow(25),
+    });
+    const setValidity = (days: number) =>
+      db
+        .update(organizationSigningCertificate)
+        .set({ validUntil: daysFromNow(days) })
+        .where(eq(organizationSigningCertificate.id, certificateId));
+
+    // 25 days out: the 30-day threshold fires, once.
+    expect(
+      (await processScheduledNotifications(buildEnv())).signingCertsProcessed,
+    ).toBe(1);
+    expect(await leadDays(certificateId)).toEqual([30]);
+    expect(await adminAlerts()).toBe(1);
+    expect(
+      (await processScheduledNotifications(buildEnv())).signingCertsProcessed,
+    ).toBe(0);
+    expect(await adminAlerts()).toBe(1);
+
+    // 15 days out is still the 30-day window (the 14-day one has not opened).
+    await setValidity(15);
+    expect(
+      (await processScheduledNotifications(buildEnv())).signingCertsProcessed,
+    ).toBe(0);
+    expect(await leadDays(certificateId)).toEqual([30]);
+
+    // 14 days out: the 14-day threshold fires, once.
+    await setValidity(14);
+    expect(
+      (await processScheduledNotifications(buildEnv())).signingCertsProcessed,
+    ).toBe(1);
+    expect(
+      (await processScheduledNotifications(buildEnv())).signingCertsProcessed,
+    ).toBe(0);
+    expect(await leadDays(certificateId)).toEqual([30, 14]);
+    expect(await adminAlerts()).toBe(2);
+
+    // 7 days out: the 7-day threshold fires, once.
+    await setValidity(7);
+    expect(
+      (await processScheduledNotifications(buildEnv())).signingCertsProcessed,
+    ).toBe(1);
+    expect(
+      (await processScheduledNotifications(buildEnv())).signingCertsProcessed,
+    ).toBe(0);
+    expect(await leadDays(certificateId)).toEqual([30, 14, 7]);
+    expect(await adminAlerts()).toBe(3);
+  });
+
+  it("REQ-P08-011: a certificate more than 30 days from expiry, or already expired, raises no warning", async () => {
+    const org = await seedScheduledOrg({
+      orgId: "org-sign-far",
+      userId: "owner-sign-far",
+    });
+    const far = await seedCertificate({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      userId: org.ownerUserId,
+      validUntil: daysFromNow(90),
+    });
+    const expired = await seedCertificate({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      userId: org.ownerUserId,
+      validUntil: daysFromNow(-3),
+    });
+
+    expect(
+      (await processScheduledNotifications(buildEnv())).signingCertsProcessed,
+    ).toBe(0);
+    expect(await leadDays(far)).toEqual([]);
+    expect(await leadDays(expired)).toEqual([]);
   });
 });

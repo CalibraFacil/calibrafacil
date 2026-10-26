@@ -23,6 +23,7 @@ export {
   notifyPtPlanDue,
   notifyAssetFoundOutOfTolerance,
   notifySigningCertificateExpiring,
+  notifySigningCertificateLapsed,
   notifyAccreditationExpiring,
   notifyAccreditedScopeLineExpiring,
   notifyJobOverdue,
@@ -54,6 +55,7 @@ export {
   decideSigningCertificateExpiryAlert,
   daysUntilCalendar,
   SIGNING_CERTIFICATE_EXPIRY_LEAD_DAYS,
+  DEFAULT_EXPIRY_LEAD_DAYS,
   type SigningCertificateExpiryInput,
   type SigningCertificateExpiryDecision,
 } from "./signing-certificate-expiry";
