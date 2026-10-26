@@ -293,6 +293,19 @@ export function hasPermissionLocally(
   }
 }
 
+/**
+ * Resources whose routes filter by the member's unit scope: a member's UNIT role
+ * (unit_admin, technician) may raise their effective role for these, because the
+ * elevated action can only reach rows of the units they are assigned to.
+ *
+ * A resource belongs here only while EVERY route that guards on it applies a
+ * unit predicate (`buildUnitScopeCondition`, `resolveAccessibleUnitContext`).
+ * `non_conformance`, `capa`, `competence`, `proficiency_test` and `spc` are
+ * deliberately NOT here (architecture review P0-11): their rows are organization
+ * wide, so mapping `unit_admin` to `admin` let a unit administrator approve NC
+ * dispositions, verify and close CAPAs, and approve competences laboratory-wide.
+ * They are authorised by the member's ORGANIZATION role alone.
+ */
 const UNIT_SCOPED_RESOURCES = new Set([
   "calibration",
   "request",
@@ -303,11 +316,6 @@ const UNIT_SCOPED_RESOURCES = new Set([
   "audit",
   "service",
   "service_order",
-  "non_conformance",
-  "capa",
-  "proficiency_test",
-  "spc",
-  "competence",
 ]);
 
 function getEffectivePermissionRole(

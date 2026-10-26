@@ -34,10 +34,9 @@ import { seedOrg } from "../../test/integration/seed";
 //    competence:create → technician, admin, owner   (member + operator: read only)
 //    competence:update → admin, owner               (technician: create+read only)
 //    competence:delete → admin, owner
-//  `competence` is in UNIT_SCOPED_RESOURCES (permission.ts line 357), so
-//  getEffectivePermissionRole maps a seeded member's role to its self-healed
-//  unitRole (getDefaultUnitRole: technician→technician, member/operator→member).
-//  Net effect for these tests matches the org-role table above.
+//  `competence` is NOT in UNIT_SCOPED_RESOURCES (P0-11): the unit role never
+//  changes the effective role here, so the org-role table above is the whole
+//  story (unit-admin-elevation.int.spec.ts pins it).
 //
 //  TENANT SCOPING: training_record is ORG-scoped (organization_id column,
 //  schema.ts line 7817). The WHERE clause on every read/mutation pins
