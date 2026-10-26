@@ -76,6 +76,7 @@ import {
   desktopWindowIconPath,
   hideMainWindowMenu,
 } from "./main-window";
+import { isTrustedUrl, resolveTrustedOrigins } from "./trusted-origins";
 import { installUnloadConfirmation } from "./unload-confirmation";
 import { getDesktopLogFilePath, installDesktopLogger } from "./desktop-log";
 
@@ -482,30 +483,21 @@ function installRendererDiagnostics(window: BrowserWindow) {
   );
 }
 
-function assertTrustedSender(event: IpcMainInvokeEvent) {
-  const url = event.senderFrame?.url ?? "";
-  const allowed =
-    url.startsWith(`${desktopAppScheme}://${desktopAppHost}/`) ||
-    trustedRendererOrigins().some((origin) => url.startsWith(origin));
-
-  if (!allowed) {
-    throw new Error(`Blocked IPC call from untrusted sender: ${url}`);
-  }
+function trustedOrigins() {
+  return resolveTrustedOrigins({
+    appScheme: desktopAppScheme,
+    appHost: desktopAppHost,
+    isPackaged: app.isPackaged,
+    configuredRendererUrl: process.env.CALIBRA_DESKTOP_RENDERER_URL,
+  });
 }
 
-function trustedRendererOrigins() {
-  const origins = new Set(["http://localhost:5173", "http://127.0.0.1:5173"]);
-  const configured = process.env.CALIBRA_DESKTOP_RENDERER_URL;
+function assertTrustedSender(event: IpcMainInvokeEvent) {
+  const url = event.senderFrame?.url ?? "";
 
-  if (configured) {
-    try {
-      origins.add(new URL(configured).origin);
-    } catch {
-      // Invalid renderer URLs fail later in BrowserWindow.loadURL.
-    }
+  if (!isTrustedUrl(url, trustedOrigins())) {
+    throw new Error(`Blocked IPC call from untrusted sender: ${url}`);
   }
-
-  return [...origins];
 }
 
 function handle(
