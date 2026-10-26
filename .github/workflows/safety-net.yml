@@ -264,6 +264,7 @@ jobs:
       - name: Smoke-test the package
         timeout-minutes: 10
         run: |
+          pnpm check:desktop:fuses
           pnpm smoke:desktop:artifact
           pnpm smoke:desktop:local-server
           pnpm smoke:desktop:electron

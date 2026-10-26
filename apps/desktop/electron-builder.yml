@@ -14,6 +14,21 @@ asarUnpack:
   - node_modules/usb/**
   - node_modules/serialport/**
   - node_modules/@serialport/**
+# Electron fuses, flipped on the packaged binary right before signing. The same
+# expectations are asserted against the built binary by
+# scripts/check-desktop-fuses.mjs (CI's Desktop job); see docs/desktop-security.md.
+electronFuses:
+  # Must stay ON for now: the local server is spawned as
+  # `process.execPath` with ELECTRON_RUN_AS_NODE=1 (local-server-manager.ts).
+  # Turning it off needs the server moved to utilityProcess first.
+  runAsNode: true
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  # The renderer is served from the app:// protocol, never file://.
+  grantFileProtocolExtraPrivileges: false
 directories:
   output: out
   buildResources: assets

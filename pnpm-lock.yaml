@@ -234,6 +234,9 @@ importers:
         specifier: 4.6.7
         version: 4.6.7
     devDependencies:
+      '@electron/fuses':
+        specifier: ^1.8.0
+        version: 1.8.0
       '@repo/typescript-config':
         specifier: workspace:^
         version: link:../../packages/typescript-config
