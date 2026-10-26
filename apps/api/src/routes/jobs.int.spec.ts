@@ -37,6 +37,7 @@ import { db } from "@calibra-facil/db";
 import {
   accreditedScopeLine,
   calibrationJob,
+  certificateInput,
   jobAuditLog,
   organization,
   assetType,
@@ -979,8 +980,17 @@ describe("jobsRouter — calibration approval workflow (ISO/IEC 17025)", () => {
 //   REQ-CMC-013  enforce mode + passing U → approved, status PASS
 // ---------------------------------------------------------------------------
 
-/** MethodSnapshot with role-tagged per-point expanded uncertainty (mass). */
-function scopeGuardMethodSnapshot() {
+/**
+ * MethodSnapshot with role-tagged per-point expanded uncertainty (mass). With
+ * `unresolvableSecondTable` a second table is added whose uncertainty is in a
+ * unit no CMC can be compared with (metres), so its point is `not_evaluated`.
+ */
+function scopeGuardMethodSnapshot(
+  options: {
+    unresolvableSecondTable?: boolean;
+  } = {},
+) {
+  const secondTable = options.unresolvableSecondTable === true;
   return {
     methodId: 1,
     methodName: "Massa - Balanças",
@@ -994,6 +1004,23 @@ function scopeGuardMethodSnapshot() {
           { key: "carga_nominal", label: "Carga", type: "number", unit: "g" },
         ],
       },
+      ...(secondTable
+        ? [
+            {
+              key: "pontos_extra",
+              label: "Pontos extra",
+              type: "table",
+              columns: [
+                {
+                  key: "carga_nominal",
+                  label: "Carga",
+                  type: "number",
+                  unit: "g",
+                },
+              ],
+            },
+          ]
+        : []),
     ],
     variableBindings: [],
     formulas: [
@@ -1013,6 +1040,29 @@ function scopeGuardMethodSnapshot() {
         scope: { kind: "table_row", tableKey: "pontos_indicacao" },
         reporting: { role: "coverage_factor", group: "uncertainty_budget" },
       },
+      ...(secondTable
+        ? [
+            {
+              outputKey: "incerteza_expandida_extra_apos",
+              expression: "1",
+              unit: "m",
+              scope: { kind: "table_row", tableKey: "pontos_extra" },
+              reporting: {
+                role: "expanded_uncertainty",
+                group: "calibration_result",
+              },
+            },
+            {
+              outputKey: "fator_k_extra_apos",
+              expression: "1",
+              scope: { kind: "table_row", tableKey: "pontos_extra" },
+              reporting: {
+                role: "coverage_factor",
+                group: "uncertainty_budget",
+              },
+            },
+          ]
+        : []),
     ],
     measurementModels: [],
     validations: [],
@@ -1027,6 +1077,14 @@ async function seedScopeGuardWorld(params: {
   tagSuffix: string;
   enforcementMode: "warn" | "enforce";
   reportedU: number;
+  /** Calibrated point in grams; the scope line covers 0-500 g. */
+  point?: number;
+  /** false = the unit has no accredited scope lines at all. */
+  withScopeLines?: boolean;
+  /** Adds a second table whose point cannot be compared (-> partially evaluated). */
+  unresolvableSecondTable?: boolean;
+  /** false = the lab's accreditation toggle is off. */
+  accreditationActive?: boolean;
 }) {
   const fixture = await seedJobFixture({
     orgId: params.orgId,
@@ -1038,23 +1096,25 @@ async function seedScopeGuardWorld(params: {
   await db
     .update(organization)
     .set({
-      accreditationActive: true,
+      accreditationActive: params.accreditationActive ?? true,
       accreditationNumber: "1234",
       scopeEnforcementMode: params.enforcementMode,
     })
     .where(eq(organization.id, params.orgId));
-  await db.insert(accreditedScopeLine).values({
-    organizationId: params.orgId,
-    unitId: fixture.unitId,
-    quantityKind: "mass",
-    rangeMin: 0,
-    rangeMax: 500,
-    rangeUnit: "g",
-    cmcType: "fixed",
-    cmcA: 0.01,
-    cmcUnit: "g",
-    updatedBy: params.userId,
-  });
+  if (params.withScopeLines !== false) {
+    await db.insert(accreditedScopeLine).values({
+      organizationId: params.orgId,
+      unitId: fixture.unitId,
+      quantityKind: "mass",
+      rangeMin: 0,
+      rangeMax: 500,
+      rangeUnit: "g",
+      cmcType: "fixed",
+      cmcA: 0.01,
+      cmcUnit: "g",
+      updatedBy: params.userId,
+    });
+  }
 
   const [job] = await insertJobs({
     jobId: `JOB-${params.tagSuffix}`,
@@ -1065,12 +1125,22 @@ async function seedScopeGuardWorld(params: {
     serviceId: fixture.serviceId,
     createdBy: params.userId, // solo lab: self-approval exempt
     status: "REVIEW",
-    methodSnapshot: scopeGuardMethodSnapshot(),
+    methodSnapshot: scopeGuardMethodSnapshot({
+      unresolvableSecondTable: params.unresolvableSecondTable === true,
+    }),
     certificateName: `JOB-${params.tagSuffix}`,
-    data: { pontos_indicacao: [{ carga_nominal: 100 }] },
+    data: {
+      pontos_indicacao: [{ carga_nominal: params.point ?? 100 }],
+      ...(params.unresolvableSecondTable
+        ? { pontos_extra: [{ carga_nominal: 200 }] }
+        : {}),
+    },
     results: {
       incerteza_expandida_apos: [params.reportedU],
       fator_k_apos: [2],
+      ...(params.unresolvableSecondTable
+        ? { incerteza_expandida_extra_apos: [0.02], fator_k_extra_apos: [2] }
+        : {}),
     },
     performedAt: new Date("2026-07-01T12:00:00.000Z"),
   });
@@ -1205,6 +1275,254 @@ describe("jobsRouter — accredited-scope (CMC) guard at approval (#427 Phase 1)
       .where(eq(calibrationJob.id, world.jobId));
     expect(row?.scopeComplianceStatus).toBe("PASS");
     expect(row?.scopeOverrideJustification).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Q42 (P0-7) — the accreditation seal is decided at approval from the frozen
+// scope verdict. Asserted on the FROZEN certificate input, which is what the
+// renderer, the public verification page and the portal read.
+//
+//   REQ-SEAL-001  PASS (every point compared, none adverse)  -> sealed
+//   REQ-SEAL-002  U below CMC, issued in warn mode            -> NO seal
+//   REQ-SEAL-003  point out of scope, issued in warn mode     -> NO seal
+//   REQ-SEAL-004  partially evaluated (a point not compared)  -> NO seal
+//   REQ-SEAL-005  unit without scope lines                    -> NO seal
+//   REQ-SEAL-006  enforce blocks an out-of-scope approval
+//   REQ-SEAL-007  the job detail carries the decision and the reason it was withheld
+// ---------------------------------------------------------------------------
+
+async function frozenSealOf(jobId: number) {
+  const [row] = await db
+    .select({ input: certificateInput.input })
+    .from(certificateInput)
+    .where(eq(certificateInput.jobId, jobId));
+  const seal: unknown = row?.input?.seal;
+  return seal;
+}
+
+async function approveAs(userId: string, orgId: string, jobId: number) {
+  loginAs({ userId, organizationId: orgId });
+  return jobsRouter.request(`/${jobId}/approve`, {
+    method: "POST",
+    headers: JSON_HEADERS,
+    body: JSON.stringify({}),
+  });
+}
+
+describe("jobsRouter — accreditation seal from the scope verdict (Q42)", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  it("REQ-SEAL-001 [HIGH RISK]: a PASS freezes the certificate WITH the seal and the evaluation it rests on", async () => {
+    const world = await seedScopeGuardWorld({
+      orgId: "org-seal-pass",
+      userId: "user-seal-pass",
+      tagSuffix: "seal-pass",
+      enforcementMode: "warn",
+      reportedU: 0.02,
+    });
+
+    const res = await approveAs("user-seal-pass", "org-seal-pass", world.jobId);
+
+    expect(res.status).toBe(200);
+    expect(await frozenSealOf(world.jobId)).toMatchObject({
+      accredited: true,
+      withheldReason: null,
+      scopeEvaluation: { status: "PASS", findings: [] },
+    });
+  });
+
+  it("REQ-SEAL-002 [HIGH RISK]: U below CMC approved in warn mode is frozen WITHOUT the seal", async () => {
+    const world = await seedScopeGuardWorld({
+      orgId: "org-seal-cmc",
+      userId: "user-seal-cmc",
+      tagSuffix: "seal-cmc",
+      enforcementMode: "warn",
+      reportedU: 0.002,
+    });
+
+    const res = await approveAs("user-seal-cmc", "org-seal-cmc", world.jobId);
+
+    expect(res.status).toBe(200);
+    expect(await frozenSealOf(world.jobId)).toMatchObject({
+      accredited: false,
+      withheldReason: "scope_u_below_cmc",
+      scopeEvaluation: { status: "U_BELOW_CMC" },
+    });
+  });
+
+  it("REQ-SEAL-003 [HIGH RISK]: a point outside the scope approved in warn mode is frozen WITHOUT the seal", async () => {
+    const world = await seedScopeGuardWorld({
+      orgId: "org-seal-oos",
+      userId: "user-seal-oos",
+      tagSuffix: "seal-oos",
+      enforcementMode: "warn",
+      reportedU: 0.02,
+      point: 600, // the scope line stops at 500 g
+    });
+
+    const res = await approveAs("user-seal-oos", "org-seal-oos", world.jobId);
+
+    expect(res.status).toBe(200);
+    expect(await frozenSealOf(world.jobId)).toMatchObject({
+      accredited: false,
+      withheldReason: "scope_out_of_scope",
+      scopeEvaluation: { status: "OUT_OF_SCOPE" },
+    });
+  });
+
+  it("REQ-SEAL-004 [HIGH RISK]: a partially evaluated job is NOT a PASS and is frozen WITHOUT the seal", async () => {
+    const world = await seedScopeGuardWorld({
+      orgId: "org-seal-partial",
+      userId: "user-seal-partial",
+      tagSuffix: "seal-partial",
+      enforcementMode: "warn",
+      reportedU: 0.02,
+      unresolvableSecondTable: true,
+    });
+
+    const res = await approveAs(
+      "user-seal-partial",
+      "org-seal-partial",
+      world.jobId,
+    );
+
+    expect(res.status).toBe(200);
+    const [job] = await db
+      .select({
+        status: calibrationJob.scopeComplianceStatus,
+        findings: calibrationJob.scopeComplianceFindings,
+      })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, world.jobId));
+    expect(job?.status).toBe("PARTIALLY_EVALUATED");
+    expect(job?.findings?.map((finding) => finding.kind)).toEqual([
+      "not_evaluated",
+    ]);
+    expect(await frozenSealOf(world.jobId)).toMatchObject({
+      accredited: false,
+      withheldReason: "scope_partially_evaluated",
+      scopeEvaluation: { status: "PARTIALLY_EVALUATED" },
+    });
+  });
+
+  it("REQ-SEAL-005 [HIGH RISK]: a unit with no scope lines gets NO_SCOPE_LINES, never a PASS, and no seal", async () => {
+    const world = await seedScopeGuardWorld({
+      orgId: "org-seal-nolines",
+      userId: "user-seal-nolines",
+      tagSuffix: "seal-nolines",
+      enforcementMode: "warn",
+      reportedU: 0.02,
+      withScopeLines: false,
+    });
+
+    const res = await approveAs(
+      "user-seal-nolines",
+      "org-seal-nolines",
+      world.jobId,
+    );
+
+    expect(res.status).toBe(200);
+    const [job] = await db
+      .select({ status: calibrationJob.scopeComplianceStatus })
+      .from(calibrationJob)
+      .where(eq(calibrationJob.id, world.jobId));
+    expect(job?.status).toBe("NO_SCOPE_LINES");
+    expect(await frozenSealOf(world.jobId)).toMatchObject({
+      accredited: false,
+      withheldReason: "scope_no_scope_lines",
+    });
+  });
+
+  it("REQ-SEAL-005: no scope lines does not block an enforce-mode approval (only an adverse verdict does); it just issues unsealed", async () => {
+    const world = await seedScopeGuardWorld({
+      orgId: "org-seal-nolines-enf",
+      userId: "user-seal-nolines-enf",
+      tagSuffix: "seal-nolines-enf",
+      enforcementMode: "enforce",
+      reportedU: 0.02,
+      withScopeLines: false,
+    });
+
+    const res = await approveAs(
+      "user-seal-nolines-enf",
+      "org-seal-nolines-enf",
+      world.jobId,
+    );
+
+    expect(res.status).toBe(200);
+    expect(await frozenSealOf(world.jobId)).toMatchObject({
+      accredited: false,
+      withheldReason: "scope_no_scope_lines",
+    });
+  });
+
+  it("REQ-SEAL-006: enforce mode blocks an out-of-scope approval with 422 SCOPE_VIOLATION and freezes nothing", async () => {
+    const world = await seedScopeGuardWorld({
+      orgId: "org-seal-block",
+      userId: "user-seal-block",
+      tagSuffix: "seal-block",
+      enforcementMode: "enforce",
+      reportedU: 0.02,
+      point: 600,
+    });
+
+    const res = await approveAs(
+      "user-seal-block",
+      "org-seal-block",
+      world.jobId,
+    );
+
+    expect(res.status).toBe(422);
+    expect((await res.json()).scopeCompliance.status).toBe("OUT_OF_SCOPE");
+    expect(await frozenSealOf(world.jobId)).toBeUndefined();
+  });
+
+  it("REQ-SEAL-007: the job detail carries the frozen decision and the reason the seal was withheld", async () => {
+    const world = await seedScopeGuardWorld({
+      orgId: "org-seal-detail",
+      userId: "user-seal-detail",
+      tagSuffix: "seal-detail",
+      enforcementMode: "warn",
+      reportedU: 0.002,
+    });
+    expect(
+      (await approveAs("user-seal-detail", "org-seal-detail", world.jobId))
+        .status,
+    ).toBe(200);
+
+    loginAs({ userId: "user-seal-detail", organizationId: "org-seal-detail" });
+    const res = await jobsRouter.request(`/${world.jobId}`, {
+      headers: JSON_HEADERS,
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.accreditationSeal).toMatchObject({
+      accredited: false,
+      withheldReason: "scope_u_below_cmc",
+    });
+    expect(body).not.toHaveProperty("frozenSeal");
+  });
+
+  it("REQ-SEAL-007: a job that is not approved yet has no frozen decision", async () => {
+    const world = await seedScopeGuardWorld({
+      orgId: "org-seal-open",
+      userId: "user-seal-open",
+      tagSuffix: "seal-open",
+      enforcementMode: "warn",
+      reportedU: 0.02,
+    });
+
+    loginAs({ userId: "user-seal-open", organizationId: "org-seal-open" });
+    const res = await jobsRouter.request(`/${world.jobId}`, {
+      headers: JSON_HEADERS,
+    });
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).accreditationSeal).toBeNull();
   });
 });
 

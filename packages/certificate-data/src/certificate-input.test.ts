@@ -111,8 +111,18 @@ function source(
   };
 }
 
-function frozen(overrides: Partial<CertificateJobSource> = {}) {
-  return buildCertificateInput(assembleCertificateJobData(source(overrides)));
+const PASS_EVALUATION = { status: "PASS", findings: [] };
+
+function frozen(
+  overrides: Partial<CertificateJobSource> = {},
+  scopeEvaluation: Parameters<
+    typeof buildCertificateInput
+  >[1] = PASS_EVALUATION,
+) {
+  return buildCertificateInput(
+    assembleCertificateJobData(source(overrides)),
+    scopeEvaluation,
+  );
 }
 
 describe("REQ-CIN-1: the frozen certificate input carries everything the renderer needs", () => {
@@ -191,6 +201,47 @@ describe("REQ-CIN-1: the frozen certificate input carries everything the rendere
     ).toBe(false);
   });
 
+  it.each([
+    ["OUT_OF_SCOPE", "scope_out_of_scope"],
+    ["U_BELOW_CMC", "scope_u_below_cmc"],
+    ["PARTIALLY_EVALUATED", "scope_partially_evaluated"],
+    ["NOT_EVALUATED", "scope_not_evaluated"],
+    ["NO_SCOPE_LINES", "scope_no_scope_lines"],
+  ])(
+    "Q42: a %s scope evaluation freezes the certificate WITHOUT the seal and says why",
+    (status, reason) => {
+      const input = frozen({}, { status, findings: [] });
+      expect(input.seal.accredited).toBe(false);
+      expect(input.seal.withheldReason).toBe(reason);
+      expect(input.seal.scopeEvaluation).toEqual({ status, findings: [] });
+    },
+  );
+
+  it("Q42: a PASS freezes the seal together with the evaluation it rests on", () => {
+    const input = frozen();
+    expect(input.seal).toEqual({
+      accredited: true,
+      evaluatedAt: "2026-03-10T12:00:00.000Z",
+      withheldReason: null,
+      scopeEvaluation: PASS_EVALUATION,
+    });
+  });
+
+  it("Q42: no scope evaluation at all (null) never seals", () => {
+    const input = frozen({}, null);
+    expect(input.seal.accredited).toBe(false);
+    expect(input.seal.withheldReason).toBe("scope_not_assessed");
+    expect(input.seal.scopeEvaluation).toBeNull();
+  });
+
+  it("Q42: the frozen evaluation is part of the hashed document", () => {
+    expect(certificateInputSha256(frozen())).not.toBe(
+      certificateInputSha256(
+        frozen({}, { status: "NOT_EVALUATED", findings: [] }),
+      ),
+    );
+  });
+
   it("REQ-CIN-1: an old snapshot without the accredited flag falls back to the method's current flag", () => {
     const { accreditedScope: _flag, ...legacySnapshot } =
       source().methodSnapshot;
@@ -212,6 +263,7 @@ describe("REQ-CIN-1: the frozen certificate input carries everything the rendere
     expect(() =>
       buildCertificateInput(
         assembleCertificateJobData(source({ approvedAt: null })),
+        PASS_EVALUATION,
       ),
     ).toThrow(/approval/);
   });

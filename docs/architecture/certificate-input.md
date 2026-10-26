@@ -17,7 +17,21 @@ migration 0118). The document type is `CertificateInput`
 
 - `schemaVersion`, `layout` (`key`, `version`), `engineVersion`, `verificationUrl`
 - `seal`: the accreditation-seal decision **as of `approved_at`** (`accredited`,
-  `evaluatedAt`), never re-evaluated at render time
+  `evaluatedAt`, `withheldReason`, `scopeEvaluation`), never re-evaluated at
+  render or verification time. Since Q42 (P0-7) the seal needs a positive scope
+  verdict: `decideAccreditationSeal` (`packages/shared/src/accreditation.ts`)
+  seals only when the lab is accredited at `approved_at`, the method is in the
+  accredited scope, no override or external result downgraded the issuance AND
+  the frozen scope evaluation (`scopeEvaluation`: the job's
+  `scope_compliance_status` and findings) is a `PASS` with no `not_evaluated`
+  point. `OUT_OF_SCOPE`, `U_BELOW_CMC`, `PARTIALLY_EVALUATED`, `NOT_EVALUATED`,
+  `NO_SCOPE_LINES` or no evaluation issue **without** the seal, and
+  `withheldReason` says why (the job detail shows it as `accreditationSeal`).
+  The public verification page, the portal and the job page read this decision;
+  only a record approved before migration 0120 (no `certificate_input`) falls
+  back to the rule it was issued under (lab and method eligibility at the
+  emission date, `isAccreditationSealEligible`). Inputs frozen before Q42 lack
+  `withheldReason` and `scopeEvaluation`.
 - `job`: lab identity and accreditation, the technical manager's title, the
   approver's name and drawn signature, customer, asset, method snapshot (name,
   version, procedure, reference standards, formulas), standards snapshot,

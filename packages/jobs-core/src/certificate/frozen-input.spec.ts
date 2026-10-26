@@ -106,7 +106,7 @@ afterEach(() => {
 });
 
 function frozen(): CertificateInput {
-  return buildCertificateInput(job());
+  return buildCertificateInput(job(), { status: "PASS", findings: [] });
 }
 
 function layoutFromFrozen(input: CertificateInput) {

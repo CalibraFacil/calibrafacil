@@ -26,6 +26,7 @@ import {
   jobAuditLog,
   asset,
   assetType,
+  certificateInput,
   customer,
   organization,
   service,
@@ -98,6 +99,11 @@ import {
 } from "../lib/storage";
 import { createCalibrationJob, jobCreationClientErrors } from "../lib/jobs";
 import { loadJobFinancialContexts } from "../lib/finance";
+import {
+  frozenSealColumn,
+  frozenSealJoin,
+  frozenSealOf,
+} from "../lib/frozen-seal";
 import { alias } from "drizzle-orm/pg-core";
 import { getExecuteRows } from "../lib/db";
 import { buildUnitScopeCondition } from "../lib/units";
@@ -603,6 +609,9 @@ export const jobsRouter = new Hono<{
             technicianName: user.name,
             approverName: approverUser.name,
             rejectorName: rejectorUser.name,
+            // Q42: the seal decision frozen at approval (null before approval
+            // and for records approved before migration 0120).
+            frozenSeal: frozenSealColumn,
           })
           .from(calibrationJob)
           .leftJoin(customer, eq(calibrationJob.customerId, customer.id))
@@ -622,6 +631,7 @@ export const jobsRouter = new Hono<{
             rejectorUser,
             eq(calibrationJob.rejectedBy, rejectorUser.id),
           )
+          .leftJoin(certificateInput, frozenSealJoin)
           .where(
             and(
               eq(calibrationJob.id, id),
@@ -646,7 +656,8 @@ export const jobsRouter = new Hono<{
     if (!loaded) {
       return c.json({ error: "Job nao encontrado" }, 404);
     }
-    const { job, financialContextMap } = loaded;
+    const { job: loadedJob, financialContextMap } = loaded;
+    const { frozenSeal, ...job } = loadedJob;
     const derivedAssetSnapshot =
       job.assetSnapshot ??
       (["DRAFT", "IN_PROGRESS", "REVIEW", "REJECTED"].includes(job.status)
@@ -671,6 +682,7 @@ export const jobsRouter = new Hono<{
     const result = {
       ...job,
       assetSnapshot: derivedAssetSnapshot,
+      accreditationSeal: frozenSealOf(frozenSeal),
       isOverdue: job.dueDate
         ? isCalendarDatePast(job.dueDate, now) &&
           ["DRAFT", "IN_PROGRESS", "REVIEW"].includes(job.status)

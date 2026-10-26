@@ -1,9 +1,7 @@
 import { createHash } from "node:crypto";
 import { Hono } from "hono";
-import {
-  normalizeAccreditationNumber,
-  shouldRenderAccreditationSeal,
-} from "@calibra-facil/shared";
+import { normalizeAccreditationNumber } from "@calibra-facil/shared";
+import { issuedSealOf } from "../lib/frozen-seal";
 import {
   verifyPdf,
   getIcpBrasilTrustAnchors,
@@ -119,23 +117,27 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
       }
     }
 
-    // #647: the seal reflects the accreditation vigência AT EMISSION — a
-    // window that expires later must not strip the seal from old certificates.
-    const accredited = shouldRenderAccreditationSeal({
-      lab: {
-        accreditationActive: job.labAccreditationActive,
-        accreditationNumber: job.labAccreditationNumber,
-        accreditationValidFrom: job.labAccreditationValidFrom,
-        accreditationValidUntil: job.labAccreditationValidUntil,
+    // The seal is the decision frozen at approval (Q42): vigência at emission,
+    // the method's scope and the frozen scope (CMC) verdict were all judged
+    // then. The lab's CURRENT accreditation fields never re-decide an issued
+    // certificate; only a record approved before the decision was frozen falls
+    // back to the rule it was issued under (#647, #427 Phase 1).
+    const { accredited } = issuedSealOf({
+      frozenSeal: job.frozenSeal,
+      legacy: {
+        lab: {
+          accreditationActive: job.labAccreditationActive,
+          accreditationNumber: job.labAccreditationNumber,
+          accreditationValidFrom: job.labAccreditationValidFrom,
+          accreditationValidUntil: job.labAccreditationValidUntil,
+        },
+        methodAccreditedScope:
+          job.methodSnapshot?.accreditedScope ??
+          job.serviceMethodAccreditedScope ??
+          false,
+        scopeOverrideJustification: job.scopeOverrideJustification,
+        ...(job.approvedAt ? { atDate: job.approvedAt } : {}),
       },
-      methodAccreditedScope:
-        job.methodSnapshot?.accreditedScope ??
-        job.serviceMethodAccreditedScope ??
-        false,
-      // #427 Phase 1: an approval overridden past the CMC guard was
-      // downgraded to non-accredited issuance.
-      scopeOverrideJustification: job.scopeOverrideJustification,
-      ...(job.approvedAt ? { atDate: job.approvedAt } : {}),
     });
 
     return c.json({

@@ -435,7 +435,17 @@ export async function freezeCertificateInput(
   images: PrefetchedImages,
 ): Promise<{ sha256: string; input: CertificateInput }> {
   const source = await loadCertificateJobSource(tx, job, images);
-  const input = buildCertificateInput(assembleCertificateJobData(source));
+  // The seal rests on the scope evaluation the approval just froze on the job
+  // (`job` is the row it wrote): null when the guard did not run.
+  const input = buildCertificateInput(
+    assembleCertificateJobData(source),
+    job.scopeComplianceStatus
+      ? {
+          status: job.scopeComplianceStatus,
+          findings: job.scopeComplianceFindings,
+        }
+      : null,
+  );
   const sha256 = certificateInputSha256(input);
 
   await tx.insert(certificateInput).values({

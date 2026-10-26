@@ -133,6 +133,9 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
       "customer",
       "service",
       "issued_certificate_snapshot",
+      // The seal decision frozen at approval (`certificate_input.seal`), joined
+      // on the job AND its organization; only the `seal` key is selected.
+      "certificate_input",
     ],
     kinds: ["select"],
     reason:

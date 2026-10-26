@@ -738,7 +738,7 @@ describe("evaluateScopeCompliance — unresolvable points surface as not_evaluat
     expect(result.findings[0]?.message).toContain("Verifique manualmente");
   });
 
-  it("keeps PASS when other points pass, with the partial-coverage finding attached", () => {
+  it("Q42: is PARTIALLY_EVALUATED, never PASS, when other points pass but one could not be compared", () => {
     const result = evaluateScopeCompliance({
       scopeLines: [massLine],
       points: [
@@ -753,10 +753,39 @@ describe("evaluateScopeCompliance — unresolvable points surface as not_evaluat
       ],
       atDate: AT_DATE,
     });
-    expect(result.status).toBe("PASS");
+    expect(result.status).toBe("PARTIALLY_EVALUATED");
     expect(result.pointsEvaluated).toBe(1);
     expect(
       result.findings.filter((f) => f.kind === "not_evaluated"),
     ).toHaveLength(1);
+  });
+});
+
+describe("evaluateScopeCompliance — Q42 verdict precedence", () => {
+  const unresolvable = {
+    value: 200,
+    unit: "g",
+    expandedUncertainty: 0.02,
+    uncertaintyUnit: "unidade-desconhecida",
+    coverageFactor: 2,
+  };
+
+  it("an adverse point wins over an unevaluated one", () => {
+    const result = evaluateScopeCompliance({
+      scopeLines: [massLine],
+      points: [point({ expandedUncertainty: 0.0001 }), unresolvable],
+      atDate: AT_DATE,
+    });
+    expect(result.status).toBe("U_BELOW_CMC");
+  });
+
+  it("every point compared and clean is PASS", () => {
+    const result = evaluateScopeCompliance({
+      scopeLines: [massLine],
+      points: [point({ expandedUncertainty: 0.02 })],
+      atDate: AT_DATE,
+    });
+    expect(result.status).toBe("PASS");
+    expect(result.findings).toHaveLength(0);
   });
 });

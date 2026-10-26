@@ -866,7 +866,11 @@ async function runJobExecutionIn(
               ? "Submetido com ponto fora do escopo acreditado (CMC)"
               : scopeCompliance?.status === "U_BELOW_CMC"
                 ? "Submetido com incerteza menor que a CMC acreditada"
-                : null,
+                : scopeCompliance?.status === "PARTIALLY_EVALUATED" ||
+                    scopeCompliance?.status === "NOT_EVALUATED" ||
+                    scopeCompliance?.status === "NO_SCOPE_LINES"
+                  ? "Escopo acreditado (CMC) não verificado por completo: o certificado será emitido sem o selo de acreditação"
+                  : null,
             backdated
               ? `${SUBMIT_BACKDATE_NOTE} (${performed.backdateDays} dias): ${backdateReason}`
               : null,

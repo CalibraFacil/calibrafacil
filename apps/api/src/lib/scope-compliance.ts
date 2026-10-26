@@ -7,9 +7,12 @@
  * the check must not be bypassable by the client. Pure comparison logic lives
  * in `@calibra-facil/shared` (scope-compliance.ts) so desktop can share it.
  *
- * Returns `null` (nothing stamped) when the guard does not apply: the
- * certificate would not carry the accreditation seal, or the lab has no
- * scope lines configured for the job's unit. Phase 0 never blocks.
+ * Returns `null` (nothing stamped) when the guard does not apply: the lab or the
+ * method is not eligible for the accreditation seal at all (nothing to guard;
+ * the seal is withheld for that reason). A unit WITHOUT scope lines is not
+ * "nothing to guard": it yields the distinct `NO_SCOPE_LINES` status, which is
+ * never positive — the certificate issues without the seal (Q42). Only
+ * `enforce` mode blocks, and only on an adverse verdict.
  */
 
 import { db } from "@calibra-facil/db";
@@ -23,14 +26,14 @@ import {
 import {
   evaluateScopeCompliance,
   extractScopeEvaluationPoints,
-  shouldRenderAccreditationSeal,
+  isAccreditationSealEligible,
   type ScopeComplianceResult,
   type ScopeEnforcementMode,
 } from "@calibra-facil/shared";
 import { and, eq } from "drizzle-orm";
 
 export type JobScopeClassification = {
-  /** Null when the guard does not apply (no seal, or no scope lines). */
+  /** Null when the guard does not apply (lab or method not eligible for the seal). */
   compliance: ScopeComplianceResult | null;
   /** Org-level guard behavior (#427 Phase 1); 'warn' when the org is absent. */
   enforcementMode: ScopeEnforcementMode;
@@ -75,7 +78,7 @@ export async function classifyJobScopeCompliance(
 
   const sealWouldRender =
     lab !== undefined &&
-    shouldRenderAccreditationSeal({
+    isAccreditationSealEligible({
       lab,
       methodAccreditedScope: input.methodSnapshot.accreditedScope ?? false,
       atDate: input.atDate,
@@ -91,7 +94,17 @@ export async function classifyJobScopeCompliance(
         eq(accreditedScopeLine.unitId, input.unitId),
       ),
     );
-  if (scopeLines.length === 0) return { compliance: null, enforcementMode };
+  if (scopeLines.length === 0) {
+    return {
+      compliance: {
+        status: "NO_SCOPE_LINES",
+        findings: [],
+        pointsEvaluated: 0,
+        pointsTotal: 0,
+      },
+      enforcementMode,
+    };
+  }
 
   const points = extractScopeEvaluationPoints({
     data: input.data,

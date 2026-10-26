@@ -31,7 +31,7 @@ import {
 } from "@calibra-facil/certificate-data";
 import {
   formatAccreditationNumber,
-  shouldRenderAccreditationSeal,
+  isAccreditationSealEligible,
 } from "@calibra-facil/shared";
 import {
   formatCalendarDate,
@@ -639,7 +639,7 @@ export function buildCertificateLayoutData(
   // read here; the legacy path (no frozen input) still evaluates it now.
   const accredited =
     options.accredited ??
-    shouldRenderAccreditationSeal({
+    isAccreditationSealEligible({
       lab: job.lab,
       methodAccreditedScope: job.methodSnapshot?.accreditedScope,
       scopeOverrideJustification: job.scopeOverrideJustification,

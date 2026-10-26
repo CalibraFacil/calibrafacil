@@ -174,7 +174,10 @@ async function seedApprovedJob(
     .where(eq(organization.id, org.orgId));
   await db.execute(
     sql`UPDATE calibration_job
-        SET method_snapshot = jsonb_set(method_snapshot, '{accreditedScope}', 'true')
+        SET method_snapshot = jsonb_set(method_snapshot, '{accreditedScope}', 'true'),
+            -- Q42: the seal rests on the scope verdict frozen at approval
+            scope_compliance_status = 'PASS',
+            scope_compliance_findings = '[]'::jsonb
         WHERE id = ${job.jobId}`,
   );
   await db
@@ -678,6 +681,8 @@ describe("REQ-CIN-1: parity of the frozen document with the legacy live assembly
     await db.execute(
       sql`UPDATE calibration_job
           SET method_snapshot = jsonb_set(method_snapshot, '{accreditedScope}', 'true'),
+              scope_compliance_status = 'PASS',
+              scope_compliance_findings = '[]'::jsonb,
               supersedes_id = ${original.jobId},
               amendment_number = 1,
               amendment_reason = 'erro de digitação',

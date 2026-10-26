@@ -13,7 +13,8 @@
  *    metadata (`reporting.role`), with well-known-key fallbacks for legacy
  *    snapshots.
  *  - {@link evaluateScopeCompliance} — compares each point against the
- *    scope lines and classifies PASS / OUT_OF_SCOPE / U_BELOW_CMC.
+ *    scope lines and classifies PASS / OUT_OF_SCOPE / U_BELOW_CMC, or
+ *    PARTIALLY_EVALUATED / NOT_EVALUATED when points could not be compared.
  *
  * Callers gate on `shouldRenderAccreditationSeal(...)` first — the guard
  * applies only to *accredited* issuance (see accreditation.ts).
@@ -109,11 +110,20 @@ export type ScopeEvaluationPoint = {
   coverageFactor?: number | null;
 };
 
+/**
+ * Q42: only `PASS` is positive, and `PASS` means EVERY point was compared and
+ * none is adverse. `PARTIALLY_EVALUATED` (some points compared and clean, others
+ * `not_evaluated`), `NOT_EVALUATED` (nothing could be compared) and
+ * `NO_SCOPE_LINES` (the unit has no accredited scope lines at all) are
+ * never positive: the certificate issues without the accreditation seal.
+ */
 export type ScopeComplianceStatus =
   | "PASS"
   | "OUT_OF_SCOPE"
   | "U_BELOW_CMC"
-  | "NOT_EVALUATED";
+  | "PARTIALLY_EVALUATED"
+  | "NOT_EVALUATED"
+  | "NO_SCOPE_LINES";
 
 export type ScopeComplianceFinding = {
   /** `not_evaluated` = the point matched a line but its U could not be compared (unit mismatch); never adverse, always surfaced. */
@@ -187,7 +197,9 @@ function withinRange(value: number, min: number, max: number): boolean {
  *  - A point passes when ANY matching, in-vigência line has CMC ≤ U.
  *  - A point whose unit kind or value matches no line is out of scope.
  *  - Points whose U cannot be resolved against a matching line's unit are
- *    skipped (counted in pointsTotal, not pointsEvaluated).
+ *    not evaluated (counted in pointsTotal, not pointsEvaluated, and surfaced
+ *    as `not_evaluated` findings): the verdict is then PARTIALLY_EVALUATED, or
+ *    NOT_EVALUATED when no point could be compared — never PASS.
  */
 export function evaluateScopeCompliance(input: {
   scopeLines: readonly AccreditedScopeLineLike[];
@@ -308,14 +320,17 @@ export function evaluateScopeCompliance(input: {
 
   const hasOutOfScope = findings.some((f) => f.kind === "out_of_scope");
   const hasBelowCmc = findings.some((f) => f.kind === "u_below_cmc");
+  const hasNotEvaluated = findings.some((f) => f.kind === "not_evaluated");
 
   const status: ScopeComplianceStatus = hasOutOfScope
     ? "OUT_OF_SCOPE"
     : hasBelowCmc
       ? "U_BELOW_CMC"
-      : pointsEvaluated > 0
-        ? "PASS"
-        : "NOT_EVALUATED";
+      : pointsEvaluated === 0
+        ? "NOT_EVALUATED"
+        : hasNotEvaluated
+          ? "PARTIALLY_EVALUATED"
+          : "PASS";
 
   return {
     status,

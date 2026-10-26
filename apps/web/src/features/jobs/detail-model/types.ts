@@ -111,6 +111,12 @@ export type ApprovedJobRecordData = {
   asFoundConformity?: AsFoundConformity | null
   asFoundMargins?: number[] | null
   scopeOverrideJustification?: string | null
+  /** The seal decision frozen at approval (Q42); null/absent for records approved before it was frozen. */
+  accreditationSeal?: {
+    accredited: boolean
+    withheldReason: string | null
+    evaluatedAt: string
+  } | null
 }
 
 export type ReviewValidation = {

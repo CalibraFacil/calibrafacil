@@ -12,7 +12,14 @@ import {
   isAccreditationActive,
   normalizeAccreditationNumber,
   shouldRenderAccreditationSeal,
+  decideAccreditationSeal,
+  isAccreditationSealEligible,
+  resolveIssuedAccreditationSeal,
+  accreditationSealWithheldMessage,
+  ACCREDITATION_SEAL_WITHHELD_MESSAGES_PT,
 } from "./accreditation";
+
+const PASS = { status: "PASS", findings: [] };
 
 // REQ-ACCR-001: free-form inputs normalize to digits-only "0123"
 describe("normalizeAccreditationNumber", () => {
@@ -159,6 +166,7 @@ describe("shouldRenderAccreditationSeal", () => {
   it("REQ-ACCR-010: returns true when lab is active and method is in accredited scope", () => {
     expect(
       shouldRenderAccreditationSeal({
+        scopeEvaluation: PASS,
         lab: activeLab,
         methodAccreditedScope: true,
       }),
@@ -169,6 +177,7 @@ describe("shouldRenderAccreditationSeal", () => {
   it("REQ-ACCR-011: returns false when lab is active but methodAccreditedScope is false", () => {
     expect(
       shouldRenderAccreditationSeal({
+        scopeEvaluation: PASS,
         lab: activeLab,
         methodAccreditedScope: false,
       }),
@@ -178,6 +187,7 @@ describe("shouldRenderAccreditationSeal", () => {
   it("REQ-ACCR-011: returns false when lab is active but methodAccreditedScope is null", () => {
     expect(
       shouldRenderAccreditationSeal({
+        scopeEvaluation: PASS,
         lab: activeLab,
         methodAccreditedScope: null,
       }),
@@ -187,6 +197,7 @@ describe("shouldRenderAccreditationSeal", () => {
   it("REQ-ACCR-011: returns false when lab is active but methodAccreditedScope is undefined", () => {
     expect(
       shouldRenderAccreditationSeal({
+        scopeEvaluation: PASS,
         lab: activeLab,
         methodAccreditedScope: undefined,
       }),
@@ -196,6 +207,7 @@ describe("shouldRenderAccreditationSeal", () => {
   it("REQ-ACCR-010+011: returns false when lab is inactive even if scope is true", () => {
     expect(
       shouldRenderAccreditationSeal({
+        scopeEvaluation: PASS,
         lab: inactiveLab,
         methodAccreditedScope: true,
       }),
@@ -255,6 +267,7 @@ describe("external-provider results suppress the seal", () => {
   it("REQ-ACCR-014: any external-provider result suppresses the seal", () => {
     expect(
       shouldRenderAccreditationSeal({
+        scopeEvaluation: PASS,
         lab: accreditedLab,
         methodAccreditedScope: true,
         hasExternalProviderResults: true,
@@ -266,12 +279,14 @@ describe("external-provider results suppress the seal", () => {
     // Same inputs, only the flag differs — proves the flag is what decides.
     expect(
       shouldRenderAccreditationSeal({
+        scopeEvaluation: PASS,
         lab: accreditedLab,
         methodAccreditedScope: true,
       }),
     ).toBe(true);
     expect(
       shouldRenderAccreditationSeal({
+        scopeEvaluation: PASS,
         lab: accreditedLab,
         methodAccreditedScope: true,
         hasExternalProviderResults: true,
@@ -282,6 +297,7 @@ describe("external-provider results suppress the seal", () => {
   it("REQ-ACCR-014: absent or false leaves today's behaviour untouched", () => {
     expect(
       shouldRenderAccreditationSeal({
+        scopeEvaluation: PASS,
         lab: accreditedLab,
         methodAccreditedScope: true,
         hasExternalProviderResults: false,
@@ -289,6 +305,7 @@ describe("external-provider results suppress the seal", () => {
     ).toBe(true);
     expect(
       shouldRenderAccreditationSeal({
+        scopeEvaluation: PASS,
         lab: accreditedLab,
         methodAccreditedScope: true,
       }),
@@ -315,6 +332,7 @@ describe("accreditation vigência window", () => {
     expect(getAccreditationStatus(lab, before)).toBe("expired");
     expect(
       shouldRenderAccreditationSeal({
+        scopeEvaluation: PASS,
         lab,
         methodAccreditedScope: true,
         atDate: after,
@@ -322,6 +340,7 @@ describe("accreditation vigência window", () => {
     ).toBe(false);
     expect(
       shouldRenderAccreditationSeal({
+        scopeEvaluation: PASS,
         lab,
         methodAccreditedScope: true,
         atDate: before,
@@ -339,6 +358,7 @@ describe("accreditation vigência window", () => {
     expect(getAccreditationStatus(lab, inside)).toBe("active");
     expect(
       shouldRenderAccreditationSeal({
+        scopeEvaluation: PASS,
         lab,
         methodAccreditedScope: true,
         atDate: inside,
@@ -355,6 +375,7 @@ describe("accreditation vigência window", () => {
     expect(getAccreditationStatus(lab, new Date("2099-01-01"))).toBe("active");
     expect(
       shouldRenderAccreditationSeal({
+        scopeEvaluation: PASS,
         lab,
         methodAccreditedScope: true,
         atDate: new Date("2099-01-01"),
@@ -421,6 +442,7 @@ describe("shouldRenderAccreditationSeal — scope-override downgrade", () => {
   it("suppresses the seal when a scope-override justification is frozen on the job", () => {
     expect(
       shouldRenderAccreditationSeal({
+        scopeEvaluation: PASS,
         lab: activeLab,
         methodAccreditedScope: true,
         scopeOverrideJustification: "Cliente exigiu emissão fora do escopo.",
@@ -431,6 +453,7 @@ describe("shouldRenderAccreditationSeal — scope-override downgrade", () => {
   it("keeps the seal when the override field is null, absent or blank", () => {
     expect(
       shouldRenderAccreditationSeal({
+        scopeEvaluation: PASS,
         lab: activeLab,
         methodAccreditedScope: true,
         scopeOverrideJustification: null,
@@ -438,6 +461,7 @@ describe("shouldRenderAccreditationSeal — scope-override downgrade", () => {
     ).toBe(true);
     expect(
       shouldRenderAccreditationSeal({
+        scopeEvaluation: PASS,
         lab: activeLab,
         methodAccreditedScope: true,
         scopeOverrideJustification: "   ",
@@ -475,6 +499,7 @@ describe("accreditation vigência window — laboratory calendar days", () => {
       expect(getAccreditationStatus(lab, issuedAt)).toBe("active");
       expect(
         shouldRenderAccreditationSeal({
+          scopeEvaluation: PASS,
           lab,
           methodAccreditedScope: true,
           atDate: issuedAt,
@@ -487,6 +512,7 @@ describe("accreditation vigência window — laboratory calendar days", () => {
       expect(getAccreditationStatus(lab, issuedAt)).toBe("expired");
       expect(
         shouldRenderAccreditationSeal({
+          scopeEvaluation: PASS,
           lab,
           methodAccreditedScope: true,
           atDate: issuedAt,
@@ -540,5 +566,162 @@ describe("accreditation vigência window — laboratory calendar days", () => {
     expect(accreditationDayToInstant("2027-02-30", "start")).toBeNull();
     expect(accreditationDayToInstant("2027-13-01", "end")).toBeNull();
     expect(accreditationDayToInstant("03/05/2027", "end")).toBeNull();
+  });
+});
+
+// Q42 (P0-7): the seal needs a positive frozen scope verdict.
+describe("decideAccreditationSeal — scope verdict (Q42)", () => {
+  const lab = {
+    accreditationActive: true,
+    accreditationNumber: "9999",
+    accreditationValidFrom: new Date("2026-01-01T12:00:00.000Z"),
+    accreditationValidUntil: new Date("2027-01-01T12:00:00.000Z"),
+  };
+  const issueDate = new Date("2026-06-01T12:00:00.000Z");
+  const decide = (
+    overrides: Partial<Parameters<typeof decideAccreditationSeal>[0]> = {},
+  ) =>
+    decideAccreditationSeal({
+      lab,
+      methodAccreditedScope: true,
+      atDate: issueDate,
+      scopeEvaluation: PASS,
+      ...overrides,
+    });
+
+  it("seals a positive PASS inside the window for a method in scope", () => {
+    expect(decide()).toEqual({ accredited: true, withheldReason: null });
+  });
+
+  it.each([
+    ["OUT_OF_SCOPE", "scope_out_of_scope"],
+    ["U_BELOW_CMC", "scope_u_below_cmc"],
+    ["PARTIALLY_EVALUATED", "scope_partially_evaluated"],
+    ["NOT_EVALUATED", "scope_not_evaluated"],
+    ["NO_SCOPE_LINES", "scope_no_scope_lines"],
+    ["SOMETHING_NEW", "scope_not_assessed"],
+  ])("withholds the seal on %s", (status, reason) => {
+    expect(decide({ scopeEvaluation: { status, findings: [] } })).toEqual({
+      accredited: false,
+      withheldReason: reason,
+    });
+  });
+
+  it("withholds the seal when there is no evaluation at all", () => {
+    expect(decide({ scopeEvaluation: null })).toEqual({
+      accredited: false,
+      withheldReason: "scope_not_assessed",
+    });
+  });
+
+  it("a legacy PASS that carries a not_evaluated finding never seals", () => {
+    expect(
+      decide({
+        scopeEvaluation: {
+          status: "PASS",
+          findings: [{ kind: "not_evaluated" }],
+        },
+      }),
+    ).toEqual({
+      accredited: false,
+      withheldReason: "scope_partially_evaluated",
+    });
+  });
+
+  it("a PASS without findings stays positive", () => {
+    expect(
+      decide({ scopeEvaluation: { status: "PASS", findings: [] } }).accredited,
+    ).toBe(true);
+    expect(
+      decide({ scopeEvaluation: { status: "PASS", findings: null } })
+        .accredited,
+    ).toBe(true);
+  });
+
+  it("a PASS cannot rescue an ineligible lab, method or issuance", () => {
+    expect(decide({ methodAccreditedScope: false })).toEqual({
+      accredited: false,
+      withheldReason: "method_not_in_scope",
+    });
+    expect(
+      decide({ lab: { ...lab, accreditationActive: false } }).withheldReason,
+    ).toBe("lab_accreditation_inactive");
+    expect(
+      decide({ lab: { ...lab, accreditationNumber: "" } }).withheldReason,
+    ).toBe("lab_accreditation_incomplete");
+    expect(
+      decide({ atDate: new Date("2027-06-01T12:00:00.000Z") }).withheldReason,
+    ).toBe("lab_accreditation_expired");
+    expect(
+      decide({ atDate: new Date("2025-06-01T12:00:00.000Z") }).withheldReason,
+    ).toBe("lab_accreditation_expired");
+    expect(decide({ scopeOverrideJustification: "  cliente pediu " })).toEqual({
+      accredited: false,
+      withheldReason: "scope_override",
+    });
+    expect(decide({ hasExternalProviderResults: true }).withheldReason).toBe(
+      "external_provider_results",
+    );
+  });
+
+  it("eligibility ignores the verdict, which is what legacy records were sealed under", () => {
+    expect(
+      isAccreditationSealEligible({
+        lab,
+        methodAccreditedScope: true,
+        atDate: issueDate,
+      }),
+    ).toBe(true);
+  });
+
+  it("every reason has a pt-BR message", () => {
+    for (const [code, message] of Object.entries(
+      ACCREDITATION_SEAL_WITHHELD_MESSAGES_PT,
+    )) {
+      expect(message.length).toBeGreaterThan(10);
+      expect(accreditationSealWithheldMessage(code)).toBe(message);
+    }
+    expect(accreditationSealWithheldMessage(null)).toBeNull();
+  });
+});
+
+describe("resolveIssuedAccreditationSeal", () => {
+  const legacy = {
+    lab: { accreditationActive: true, accreditationNumber: "9999" },
+    methodAccreditedScope: true,
+  };
+
+  it("the frozen decision wins over the lab's current fields", () => {
+    expect(
+      resolveIssuedAccreditationSeal({
+        frozenSeal: {
+          accredited: false,
+          withheldReason: "scope_out_of_scope",
+        },
+        legacy,
+      }),
+    ).toEqual({
+      accredited: false,
+      withheldReason: "scope_out_of_scope",
+      source: "frozen",
+    });
+    expect(
+      resolveIssuedAccreditationSeal({
+        frozenSeal: { accredited: true },
+        legacy: { ...legacy, methodAccreditedScope: false },
+      }).accredited,
+    ).toBe(true);
+  });
+
+  it("a record without a frozen decision keeps the rule it was issued under", () => {
+    expect(
+      resolveIssuedAccreditationSeal({ frozenSeal: null, legacy }),
+    ).toEqual({ accredited: true, withheldReason: null, source: "legacy" });
+    expect(
+      resolveIssuedAccreditationSeal({
+        frozenSeal: { accredited: "yes" },
+        legacy: { ...legacy, methodAccreditedScope: false },
+      }).accredited,
+    ).toBe(false);
   });
 });
