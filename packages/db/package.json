@@ -6,6 +6,7 @@
     ".": "./src/db.ts",
     "./for-org": "./src/for-org.ts",
     "./certificate-input": "./src/certificate-input.ts",
+    "./evidence-tables": "./src/evidence-tables.ts",
     "./job-events": "./src/job-events.ts",
     "./queue": "./src/queue.ts",
     "./role-connection": "./src/role-connection.ts",

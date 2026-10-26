@@ -61,7 +61,8 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
   IF calibra_history_rewrite_allowed()
-     OR coalesce(current_setting('${JOB_STATUS_REPAIR_SETTING}', true), '') = 'on' THEN
+     OR (calibra_session_is_owner()
+         AND coalesce(current_setting('${JOB_STATUS_REPAIR_SETTING}', true), '') = 'on') THEN
     RETURN NEW;
   END IF;
 

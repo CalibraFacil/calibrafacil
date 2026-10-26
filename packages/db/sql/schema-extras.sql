@@ -77,16 +77,39 @@ ALTER TABLE organization_email_domain
 -- CASCADE foreign keys that migration drops are simply absent from schema.ts.
 --
 -- Escape hatch. Seeded demo data rewrites history on purpose (back-dated
--- `performed_at`, `approved_at`, ...). `SET LOCAL calibra.allow_audit_rewrite =
--- 'on'` lifts every immutability trigger below for the current transaction only
--- (SET LOCAL reverts at COMMIT/ROLLBACK). It is a convention for
--- apps/api/src/cli/seed-demo, not a security boundary: nothing in the
--- application sets it.
+-- `performed_at`, `approved_at`, ...), and the records purge erases an organization's
+-- evidence. `SET LOCAL calibra.allow_audit_rewrite = 'on'` lifts every immutability
+-- trigger below for the current transaction only (SET LOCAL reverts at
+-- COMMIT/ROLLBACK), BUT ONLY FOR THE TABLE OWNER (migration 0130, roadmap 2 B1): the
+-- setting alone is not enough, calibra_session_is_owner() must also be true, so a
+-- calibra_app session that sets the GUC lifts nothing. The users are the owner
+-- connection only (DATABASE_OWNER_URL / systemDb): apps/api/src/cli/seed-demo, the
+-- records purge, an audited repair run by an operator, the test harness.
+-- True when the session user AND the current user are the owner of the tables (or a
+-- member of that role; a superuser is a member of every role). The session user is
+-- checked too: a foreign-key action runs as the table owner inside an application
+-- session, and must not open the hatch for it. The functions pin their search_path.
+CREATE OR REPLACE FUNCTION calibra_session_is_owner()
+RETURNS boolean
+LANGUAGE sql STABLE
+SET search_path = pg_catalog, pg_temp
+AS $$
+  SELECT pg_has_role(
+           session_user,
+           (SELECT c.relowner FROM pg_catalog.pg_class c WHERE c.oid = 'public.organization'::regclass),
+           'MEMBER')
+     AND pg_has_role(
+           current_user,
+           (SELECT c.relowner FROM pg_catalog.pg_class c WHERE c.oid = 'public.organization'::regclass),
+           'MEMBER')
+$$;
 CREATE OR REPLACE FUNCTION calibra_history_rewrite_allowed()
 RETURNS boolean
 LANGUAGE sql STABLE
+SET search_path = pg_catalog, pg_temp
 AS $$
-  SELECT coalesce(current_setting('calibra.allow_audit_rewrite', true), '') = 'on'
+  SELECT public.calibra_session_is_owner()
+     AND coalesce(current_setting('calibra.allow_audit_rewrite', true), '') = 'on'
 $$;
 -- Append-only guard for evidence tables: the *_audit_log tables, the event logs
 -- and issued_certificate_snapshot. UPDATE and DELETE raise, except:
@@ -281,7 +304,8 @@ CREATE TRIGGER platform_event_log_append_only
 --     `SET LOCAL calibra.allow_org_purge = 'on'` (the records purge job, and the
 --     cleanup of a just-created organization that holds no records) or with the
 --     seed escape hatch `calibra.allow_audit_rewrite` of migration 0115. Both
---     are conventions for application code, not a security boundary.
+--     work for the table owner only (calibra_session_is_owner(), migration 0130):
+--     the application role cannot lift the guard by setting them.
 --   * calibra_retain_until(org, record_date) is the date a record of that
 --     organization may first be purged: record_date + retention_years.
 ALTER TABLE organization DROP CONSTRAINT IF EXISTS organization_retention_years_min;
@@ -294,9 +318,11 @@ ALTER TABLE organization
 CREATE OR REPLACE FUNCTION calibra_org_purge_allowed()
 RETURNS boolean
 LANGUAGE sql STABLE
+SET search_path = pg_catalog, pg_temp
 AS $$
-  SELECT calibra_history_rewrite_allowed()
-      OR coalesce(current_setting('calibra.allow_org_purge', true), '') = 'on'
+  SELECT public.calibra_session_is_owner()
+     AND (public.calibra_history_rewrite_allowed()
+          OR coalesce(current_setting('calibra.allow_org_purge', true), '') = 'on')
 $$;
 CREATE OR REPLACE FUNCTION calibra_organization_delete_guard()
 RETURNS trigger
@@ -381,7 +407,8 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
   IF calibra_history_rewrite_allowed()
-     OR coalesce(current_setting('calibra.allow_status_repair', true), '') = 'on' THEN
+     OR (calibra_session_is_owner()
+         AND coalesce(current_setting('calibra.allow_status_repair', true), '') = 'on') THEN
     RETURN NEW;
   END IF;
 
@@ -739,6 +766,37 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO calibra_a
 GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO calibra_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO calibra_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE ON SEQUENCES TO calibra_app;
+-- Evidence tables: no UPDATE/DELETE/TRUNCATE for the application role (migration 0130).
+-- Must stay AFTER the blanket GRANT above.
+-- BEGIN generated: calibra_evidence_grants
+REVOKE UPDATE, DELETE, TRUNCATE ON public."accredited_scope_line_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."asset_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."asset_oot_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."authorized_signatory_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."automatic_send_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."calibration_request_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."certificate_numbering_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."certificate_release_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."control_chart_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."corrective_action_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."customer_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."financial_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."integration_event_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."issued_certificate_snapshot" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."job_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."method_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."non_conformance_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."organization_api_key_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."organization_event_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."personnel_competence_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."proficiency_test_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."reference_standard_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."service_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."service_order_event_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."training_record_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."visit_audit_log" FROM calibra_app;
+REVOKE UPDATE, TRUNCATE ON public."certificate_input" FROM calibra_app;
+-- END generated: calibra_evidence_grants
 
 -- BEGIN generated: calibra_rls_tenant_isolation
 ALTER TABLE public."accredited_scope_line" ENABLE ROW LEVEL SECURITY;

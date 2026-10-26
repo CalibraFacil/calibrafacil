@@ -93,7 +93,9 @@ migration 0120 and `sql/schema-extras.sql`): UPDATE is always refused; DELETE is
 allowed only while the job is back in `REVIEW` (an approval whose dispatch
 failed is reverted, or a rejected job is approved again — the approval command
 removes the stale row before the status moves). The seed escape hatch
-`calibra.allow_audit_rewrite` lifts it for one transaction, which is also how
-the records purge job erases an organization.
+`calibra.allow_audit_rewrite` lifts it for one transaction, for the table owner
+only (migration 0130: the application role cannot lift it, and has no UPDATE
+privilege on the table; it keeps DELETE for the revert above). That is also how
+the records purge job, on the owner connection, erases an organization.
 
 An amendment is a new job: it is approved on its own and freezes its own input.

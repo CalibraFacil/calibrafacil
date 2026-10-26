@@ -1,7 +1,11 @@
-// Prints the generated row-level-security block (the per-table ENABLE ROW LEVEL
-// SECURITY + tenant_isolation policy) from src/tenancy.ts and the schema:
-//   pnpm --filter @calibra-facil/db gen:rls-sql
+// Prints a generated SQL block of the tenancy / evidence classification:
+//   pnpm --filter @calibra-facil/db gen:rls-sql            the row-level-security block
+//                                                          (ENABLE ROW LEVEL SECURITY + tenant_isolation policy)
+//   pnpm --filter @calibra-facil/db gen:rls-sql evidence   the evidence grants block
+//                                                          (REVOKE UPDATE/DELETE/TRUNCATE on the evidence tables)
 // Paste it into the new migration and into sql/schema-extras.sql.
-import { rlsSqlBlock } from "../src/rls-sql";
+import { evidenceGrantsBlock, rlsSqlBlock } from "../src/rls-sql";
 
-console.log(rlsSqlBlock());
+console.log(
+  process.argv[2] === "evidence" ? evidenceGrantsBlock() : rlsSqlBlock(),
+);

@@ -678,11 +678,39 @@ UPDATE calibration_job SET status = 'REVIEW' WHERE id = 123;
 COMMIT;
 ```
 
-The hatch is a convention, not a security boundary: nothing in the application sets it, and
-`calibra.allow_audit_rewrite` (the demo seed) lifts the guard too. Do not set it with plain `SET` or in a
+Run it on the **owner connection** (`DATABASE_OWNER_URL`, the role that owns the tables): since migration
+0130 the hatches work for a session of the table owner only, so `calibra_app` (the application) that sets
+`calibra.allow_status_repair` or `calibra.allow_audit_rewrite` lifts nothing. `calibra.allow_audit_rewrite`
+(the demo seed, the records purge) lifts the guard too. Do not set either with plain `SET` or in a
 connection default. When the state machine itself changes, regenerate the function with
 `pnpm --filter @calibra-facil/db gen:job-transitions-sql` and ship it in a new migration; a unit test fails
 while the migration and `sql/schema-extras.sql` differ from the table.
+
+#### Evidence immutability: privileges and the owner-only hatch (migration 0130)
+
+ISO/IEC 17025 7.5.2 and 8.4: the history of a record must not be rewritable by the application.
+Migration `0130_evidence_privileges_owner_hatch` (roadmap 2, B1) makes that a property of the database:
+
+- **Privileges.** `calibra_app` has no `UPDATE`, `DELETE` or `TRUNCATE` on the append-only evidence tables
+  (the `*_audit_log` tables, `organization_event_log`, `integration_event_log`, `service_order_event_log`,
+  `issued_certificate_snapshot`) and no `UPDATE` / `TRUNCATE` on `certificate_input`; it keeps `INSERT` and
+  `SELECT`. The list is `packages/db/src/evidence-tables.ts`; the `REVOKE` block is generated from it
+  (`pnpm --filter @calibra-facil/db gen:rls-sql evidence`) and repeated in `sql/schema-extras.sql`. A drift test
+  fails when an audit or event log is added without being classified. Left to the triggers alone, each with
+  the reason in that file: `calibration_job` (UPDATEd until approval), `certificate_input` `DELETE` (the revert
+  of an approval), `platform_event_log` (the public-signup reservation row) and `organization`.
+  The `ON DELETE SET NULL` actions of foreign keys keep working: Postgres runs them as the table owner.
+- **The hatches are the owner's.** `calibra.allow_audit_rewrite`, `calibra.allow_status_repair` and
+  `calibra.allow_org_purge` only take effect when the session user and the current user are the owner of the
+  tables or members of that role (`calibra_session_is_owner()`). The runners are therefore the owner
+  connection only: the records purge (`records-purge.ts`, `removeLabOrganization`), the demo seed, an
+  operator's audited repair in `psql` as the owner, and the test harness. A deployment whose `DATABASE_URL` is
+  the owner (`DATABASE_RLS_MODE=shadow`) has no protection: use the role split.
+
+**Applying it.** The migration is idempotent and sets a 5 s lock timeout. Existing rows are untouched. After
+it, a statement that the application should never issue (an `UPDATE` of an audit row) fails with
+`permission denied for table ...`; the integration tier runs as `calibra_app`, so a legitimate path that lost
+its privilege fails a test.
 
 #### Row-level security (migration 0123) and the role split
 
