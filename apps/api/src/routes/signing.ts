@@ -192,7 +192,11 @@ export const signingRouter = new Hono<{
           })
           .from(organizationUnit)
           .where(scope)
-          .limit(1);
+          .limit(1)
+          // Row lock: "assinatura obrigatória" (PATCH /policy) takes the same lock
+          // before it reads this setting, so two concurrent writes cannot leave
+          // both switched on.
+          .for("update");
         if (!before) {
           return domainErrorResponse(
             c,
@@ -277,26 +281,28 @@ export const signingRouter = new Hono<{
         const unit = resolveAccessibleUnitContext(memberData);
         const { requireSignature } = c.req.valid("json");
 
-        if (requireSignature) {
-          const [current] = await o
-            .select({ reason: organizationUnit.unsignedIssuanceReason })
-            .from(organizationUnit)
-            .where(
-              and(
-                eq(organizationUnit.id, unit.unitId),
-                eq(organizationUnit.organizationId, memberData.organizationId),
-              ),
-            )
-            .limit(1);
-          if (current?.reason) {
-            return domainErrorResponse(
-              c,
-              conflict(
-                "conflict",
-                "Esta unidade emite sem assinatura digital: desative essa opção antes de tornar a assinatura obrigatória",
-              ),
-            );
-          }
+        // Row lock, taken for both values of the flag and shared with
+        // PATCH /unsigned-issuance: the exclusion with "emitir sem assinatura"
+        // is checked and written under it, so a race cannot set both.
+        const [current] = await o
+          .select({ reason: organizationUnit.unsignedIssuanceReason })
+          .from(organizationUnit)
+          .where(
+            and(
+              eq(organizationUnit.id, unit.unitId),
+              eq(organizationUnit.organizationId, memberData.organizationId),
+            ),
+          )
+          .limit(1)
+          .for("update");
+        if (requireSignature && current?.reason) {
+          return domainErrorResponse(
+            c,
+            conflict(
+              "conflict",
+              "Esta unidade emite sem assinatura digital: desative essa opção antes de tornar a assinatura obrigatória",
+            ),
+          );
         }
 
         const updated = await o

@@ -893,4 +893,94 @@ describe("signingRouter — real DB + real middleware", () => {
     });
     expect(res.status).toBe(409);
   });
+
+  // The exclusion is checked and written under a row lock on the unit, shared by
+  // both writes, so a race cannot leave both switched on.
+  it.each([
+    [
+      "PATCH /unsigned-issuance",
+      () => ({
+        path: "/unsigned-issuance",
+        body: { enabled: true, reason: REASON },
+      }),
+    ],
+    [
+      "PATCH /policy",
+      () => ({ path: "/policy", body: { requireSignature: true } }),
+    ],
+  ])(
+    "REQ-Q51-008 [HIGH RISK]: %s waits for the unit's row lock",
+    async (_name, build) => {
+      const org = await seedOrg({ orgId: "org-q51-lock", role: "admin" });
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+      const { path, body } = build();
+      let release: () => void = () => {};
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let locked: () => void = () => {};
+      const lockTaken = new Promise<void>((resolve) => {
+        locked = resolve;
+      });
+      const holder = db.transaction(async (tx) => {
+        await tx
+          .select({ id: organizationUnit.id })
+          .from(organizationUnit)
+          .where(eq(organizationUnit.id, org.unitId))
+          .for("update");
+        locked();
+        await held;
+      });
+      await lockTaken;
+
+      let settled = false;
+      const request = signingRouter
+        .request(path, {
+          method: "PATCH",
+          headers: {
+            ...JSON_HEADERS,
+            "x-active-unit-id": String(org.unitId),
+          },
+          body: JSON.stringify(body),
+        })
+        .then((res) => {
+          settled = true;
+          return res;
+        });
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      expect(settled, "the write must wait for the row lock").toBe(false);
+
+      release();
+      await holder;
+      expect((await request).status).toBe(200);
+    },
+  );
+
+  it("REQ-Q51-009: two concurrent opposite writes never leave both switched on", async () => {
+    const org = await seedOrg({ orgId: "org-q51-race", role: "admin" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const headers = {
+      ...JSON_HEADERS,
+      "x-active-unit-id": String(org.unitId),
+    };
+
+    const results = await Promise.all([
+      signingRouter.request("/policy", {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ requireSignature: true }),
+      }),
+      patchUnsigned(org, { enabled: true, reason: REASON }),
+    ]);
+
+    expect(results.map((res) => res.status).sort()).toEqual([200, 409]);
+    const [row] = await db
+      .select({
+        requireSignature: organizationUnit.requireSignature,
+        reason: organizationUnit.unsignedIssuanceReason,
+      })
+      .from(organizationUnit)
+      .where(eq(organizationUnit.id, org.unitId));
+    expect(Boolean(row?.requireSignature) && Boolean(row?.reason)).toBe(false);
+  });
 });
