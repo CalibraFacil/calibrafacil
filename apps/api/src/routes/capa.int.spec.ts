@@ -17,10 +17,14 @@
  * REQ-CAPA-005  OPEN→INVESTIGATION auto-transition via rootCauseAnalysis
  * REQ-CAPA-006  Unauthenticated verify/close → 401
  *
- * IDENTITY-SEPARATION NOTE (escalation, not asserted):
- *   capa.ts enforces role-based RBAC only; there is NO identity-based four-eyes
- *   guard (unlike jobs.ts). The CAPA creator can verify and close their own CAPA.
- *   ISO §8.2.3 independence consideration — flagged for human review.
+ * REQ-CAPA-007  Separation of duties: the CAPA's owner (responsibleId) and the
+ *               person who implemented it cannot verify its effectiveness
+ *               (403 self_approval_blocked); an independent admin can.
+ *
+ * IDENTITY-SEPARATION NOTE:
+ *   Verification is identity-checked (REQ-CAPA-007). Closing a CAPA is still
+ *   role-based only: the person who verified may close. ISO §8.2.3 independence
+ *   of the closure remains flagged for human review.
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
@@ -303,7 +307,15 @@ describe("capaRouter — ISO 17025 §8.2 CAPA workflow (real DB + real RBAC)", (
       .where(eq(correctiveAction.id, lifecycleId));
     expect(afterImpl?.status).toBe("IMPLEMENTATION");
 
-    // verify (IMPLEMENTATION → VERIFICATION, verifiedBy set)
+    // verify (IMPLEMENTATION → VERIFICATION, verifiedBy set). Separation of
+    // duties: the person who implemented the CAPA does not verify it, so a
+    // second admin takes over for verification and closure.
+    const verifier = await seedExtraMember({
+      orgId: org.orgId,
+      userId: "user-capa-verifier",
+      role: "admin",
+    });
+    loginAs({ userId: verifier.userId, organizationId: org.orgId });
     const verifyRes2 = await capaRouter.request(`/${lifecycleId}/verify`, {
       method: "POST",
       headers: JSON_HEADERS,
@@ -316,7 +328,7 @@ describe("capaRouter — ISO 17025 §8.2 CAPA workflow (real DB + real RBAC)", (
     expect(verifyRes2.status).toBe(200);
     const verifyBody2 = await verifyRes2.json();
     expect(verifyBody2.data.status).toBe("VERIFICATION");
-    expect(verifyBody2.data.verifiedBy).toBe(org.userId);
+    expect(verifyBody2.data.verifiedBy).toBe(verifier.userId);
 
     // DB check
     const [afterVerify] = await db
@@ -327,7 +339,7 @@ describe("capaRouter — ISO 17025 §8.2 CAPA workflow (real DB + real RBAC)", (
       .from(correctiveAction)
       .where(eq(correctiveAction.id, lifecycleId));
     expect(afterVerify?.status).toBe("VERIFICATION");
-    expect(afterVerify?.verifiedBy).toBe(org.userId);
+    expect(afterVerify?.verifiedBy).toBe(verifier.userId);
 
     // close (VERIFICATION → CLOSED, closedBy set)
     const closeRes2 = await capaRouter.request(`/${lifecycleId}/close`, {
@@ -340,7 +352,7 @@ describe("capaRouter — ISO 17025 §8.2 CAPA workflow (real DB + real RBAC)", (
     expect(closeRes2.status).toBe(200);
     const closeBody2 = await closeRes2.json();
     expect(closeBody2.data.status).toBe("CLOSED");
-    expect(closeBody2.data.closedBy).toBe(org.userId);
+    expect(closeBody2.data.closedBy).toBe(verifier.userId);
 
     // DB check
     const [afterClose] = await db
@@ -351,7 +363,7 @@ describe("capaRouter — ISO 17025 §8.2 CAPA workflow (real DB + real RBAC)", (
       .from(correctiveAction)
       .where(eq(correctiveAction.id, lifecycleId));
     expect(afterClose?.status).toBe("CLOSED");
-    expect(afterClose?.closedBy).toBe(org.userId);
+    expect(afterClose?.closedBy).toBe(verifier.userId);
   });
 
   // =========================================================================
@@ -716,5 +728,113 @@ describe("capaRouter — responsibleId is tenant-scoped", () => {
       .from(correctiveAction)
       .where(eq(correctiveAction.id, capaId));
     expect(row?.responsibleId).toBeNull();
+  });
+
+  // =========================================================================
+  // REQ-CAPA-007  Separation of duties on effectiveness verification
+  // =========================================================================
+  it("REQ-CAPA-007: the owner and the implementer cannot verify; an independent admin can", async () => {
+    const org = await seedOrg({
+      orgId: "org-sod",
+      userId: "user-sod-implementer",
+      role: "admin",
+    });
+    const owner = await seedExtraMember({
+      orgId: org.orgId,
+      userId: "user-sod-owner",
+      role: "admin",
+    });
+    const independent = await seedExtraMember({
+      orgId: org.orgId,
+      userId: "user-sod-independent",
+      role: "admin",
+    });
+
+    const [row] = await db
+      .insert(correctiveAction)
+      .values({
+        capaNumber: "CAPA-SOD-1",
+        organizationId: org.orgId,
+        source: "nc_detection",
+        title: "CAPA com responsável",
+        description: "Responsável definido para o teste de segregação.",
+        type: "corrective",
+        severity: "minor",
+        category: "procedure",
+        status: "OPEN",
+        responsibleId: owner.userId,
+        createdBy: org.userId,
+      })
+      .returning({ id: correctiveAction.id });
+    if (!row) throw new Error("seed failed");
+    const id = row.id;
+
+    // The implementer records the implementation...
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const implementRes = await capaRouter.request(`/${id}/implement`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        implementationEvidence:
+          "Procedimento revisado e equipe retreinada, com lista de presença.",
+      }),
+    });
+    expect(implementRes.status).toBe(200);
+
+    const verifyBody = JSON.stringify({
+      effectivenessConfirmed: true,
+      verificationNotes: "Eficácia confirmada em auditoria interna posterior.",
+    });
+    const stillImplemented = async () => {
+      const [after] = await db
+        .select({
+          status: correctiveAction.status,
+          verifiedBy: correctiveAction.verifiedBy,
+        })
+        .from(correctiveAction)
+        .where(eq(correctiveAction.id, id));
+      expect(after).toEqual({ status: "IMPLEMENTATION", verifiedBy: null });
+    };
+
+    // ...and cannot verify it.
+    const implementerVerify = await capaRouter.request(`/${id}/verify`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: verifyBody,
+    });
+    expect(implementerVerify.status).toBe(403);
+    expect((await implementerVerify.json()).code).toBe("self_approval_blocked");
+    await stillImplemented();
+
+    // The owner (responsibleId) cannot verify it either.
+    loginAs({ userId: owner.userId, organizationId: org.orgId });
+    const ownerVerify = await capaRouter.request(`/${id}/verify`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: verifyBody,
+    });
+    expect(ownerVerify.status).toBe(403);
+    expect((await ownerVerify.json()).code).toBe("self_approval_blocked");
+    await stillImplemented();
+
+    // An independent admin can.
+    loginAs({ userId: independent.userId, organizationId: org.orgId });
+    const independentVerify = await capaRouter.request(`/${id}/verify`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: verifyBody,
+    });
+    expect(independentVerify.status).toBe(200);
+    const [verified] = await db
+      .select({
+        status: correctiveAction.status,
+        verifiedBy: correctiveAction.verifiedBy,
+      })
+      .from(correctiveAction)
+      .where(eq(correctiveAction.id, id));
+    expect(verified).toEqual({
+      status: "VERIFICATION",
+      verifiedBy: independent.userId,
+    });
   });
 });

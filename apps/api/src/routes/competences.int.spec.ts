@@ -9,6 +9,7 @@ import { eq, and } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { seedExtraMember } from "../../test/integration/tenant-refs";
 
 // Real-DB + real-RBAC integration test for the competences router.
 // Only the better-auth session is mocked (see test/integration/setup.ts).
@@ -364,13 +365,19 @@ describe("competencesRouter — real DB + real middleware", () => {
   // REQ-COMP-012 — POST /:id/evaluate as admin approves competence → ACTIVE
   it("POST /:id/evaluate as admin with passed=true -> 200, competence status=ACTIVE", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    // Separation of duties: the person being qualified is someone else.
+    const subject = await seedExtraMember({
+      orgId: org.orgId,
+      userId: "user-subject",
+      role: "technician",
+    });
 
     const [row] = await db
       .insert(personnelCompetence)
       .values({
         organizationId: org.orgId,
-        userId: org.userId,
-        requestedBy: org.userId,
+        userId: subject.userId,
+        requestedBy: subject.userId,
         createdBy: org.userId,
         scopeDescription: "Evaluation scope",
         status: "PENDING_EVALUATION",
@@ -405,6 +412,68 @@ describe("competencesRouter — real DB + real middleware", () => {
         ),
       );
     expect(audit).toHaveLength(1);
+  });
+
+  // REQ-COMP-SOD — nobody evaluates their own competence
+  it("POST /:id/evaluate by the competence's own user -> 403 self_approval_blocked, status unchanged, for approve and reject", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    const other = await seedExtraMember({
+      orgId: org.orgId,
+      userId: "user-other-admin",
+      role: "admin",
+    });
+    const compId = await db
+      .insert(personnelCompetence)
+      .values({
+        organizationId: org.orgId,
+        userId: org.userId,
+        requestedBy: org.userId,
+        createdBy: org.userId,
+        scopeDescription: "Self evaluation scope",
+        status: "PENDING_EVALUATION",
+      })
+      .returning({ id: personnelCompetence.id })
+      .then((rows) => rows[0]?.id);
+    if (!compId) throw new Error("seed failed");
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    for (const passed of [true, false]) {
+      const res = await competencesRouter.request(`/${compId}/evaluate`, {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ passed }),
+      });
+      expect(res.status, `passed=${passed}`).toBe(403);
+      expect((await res.json()).code).toBe("self_approval_blocked");
+    }
+    const [unchanged] = await db
+      .select({
+        status: personnelCompetence.status,
+        evaluatedBy: personnelCompetence.evaluatedBy,
+        approvedBy: personnelCompetence.approvedBy,
+      })
+      .from(personnelCompetence)
+      .where(eq(personnelCompetence.id, compId));
+    expect(unchanged).toEqual({
+      status: "PENDING_EVALUATION",
+      evaluatedBy: null,
+      approvedBy: null,
+    });
+    const audit = await db
+      .select()
+      .from(personnelCompetenceAuditLog)
+      .where(eq(personnelCompetenceAuditLog.competenceId, compId));
+    expect(audit).toHaveLength(0);
+
+    // Another admin of the same laboratory can.
+    loginAs({ userId: other.userId, organizationId: org.orgId });
+    const approved = await competencesRouter.request(`/${compId}/evaluate`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ passed: true }),
+    });
+    expect(approved.status).toBe(200);
+    expect((await approved.json()).evaluatedBy).toBe(other.userId);
   });
 
   // REQ-COMP-013 — unauthenticated → 401

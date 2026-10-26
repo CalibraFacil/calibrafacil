@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { orgDb } from "../lib/org-db";
 import { afterCommitQueue } from "../lib/after-commit";
+import { domainErrorResponse, forbidden } from "../lib/domain-errors";
 import {
   personnelCompetence,
   personnelCompetenceAuditLog,
@@ -765,6 +766,19 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
                   "Avaliação só pode ser feita no status PENDING_EVALUATION",
               },
               400,
+            );
+          }
+
+          // Separation of duties (ISO/IEC 17025 §6.2): nobody evaluates,
+          // approves or rejects their own competence. `userId` is the person
+          // being qualified; the evaluator must be someone else.
+          if (existing.userId === session.user.id) {
+            return domainErrorResponse(
+              c,
+              forbidden(
+                "self_approval_blocked",
+                "Separação de responsabilidades (ISO/IEC 17025): ninguém pode avaliar a própria competência. Solicite a avaliação a outro membro autorizado.",
+              ),
             );
           }
 

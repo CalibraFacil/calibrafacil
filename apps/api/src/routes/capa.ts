@@ -21,6 +21,7 @@ import {
 import { createCorrectiveActionRecord } from "../lib/corrective-actions";
 import { userIsOrganizationMember } from "../lib/tenant-refs";
 import { orgDb } from "../lib/org-db";
+import { domainErrorResponse, forbidden } from "../lib/domain-errors";
 import { eq, and, or, ilike, desc, count, lte, sql } from "drizzle-orm";
 
 /**
@@ -707,6 +708,35 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
                 "CAPA deve estar em status IMPLEMENTATION para verificacao de eficacia",
             },
             400,
+          );
+        }
+
+        // Separation of duties (ISO/IEC 17025 §8.7): whoever owns the CAPA or
+        // recorded its implementation does not verify its effectiveness. The
+        // owner is `responsibleId`; an implementer is any actor of an "implement"
+        // audit entry (the row keeps no implementer column).
+        const [implementedByCaller] = await o
+          .select({ id: correctiveActionAuditLog.id })
+          .from(correctiveActionAuditLog)
+          .where(
+            and(
+              eq(
+                correctiveActionAuditLog.organizationId,
+                member.organizationId,
+              ),
+              eq(correctiveActionAuditLog.capaId, id),
+              eq(correctiveActionAuditLog.action, "implement"),
+              eq(correctiveActionAuditLog.performedBy, session.user.id),
+            ),
+          )
+          .limit(1);
+        if (existing.responsibleId === session.user.id || implementedByCaller) {
+          return domainErrorResponse(
+            c,
+            forbidden(
+              "self_approval_blocked",
+              "Separação de responsabilidades (ISO/IEC 17025): quem é responsável pela CAPA ou registrou sua implementação não pode verificar a eficácia. Solicite a verificação a outro membro autorizado.",
+            ),
           );
         }
 
