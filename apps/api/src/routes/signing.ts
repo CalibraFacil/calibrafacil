@@ -15,6 +15,12 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { writeOrganizationAuditEvent } from "../lib/audit";
+import {
+  conflict,
+  domainErrorResponse,
+  invalid,
+  notFound,
+} from "../lib/domain-errors";
 import { orgDb } from "../lib/org-db";
 import {
   getCertificateInfo,
@@ -169,7 +175,10 @@ export const signingRouter = new Hono<{
       return orgDb(memberData.organizationId).transaction(async (o) => {
         const unit = resolveAccessibleUnitContext(memberData);
         if (unit.unitId === null) {
-          return c.json({ error: "Selecione uma unidade" }, 400);
+          return domainErrorResponse(
+            c,
+            invalid("invalid_request", "Selecione uma unidade"),
+          );
         }
         const scope = and(
           eq(organizationUnit.id, unit.unitId),
@@ -185,17 +194,20 @@ export const signingRouter = new Hono<{
           .where(scope)
           .limit(1);
         if (!before) {
-          return c.json({ error: "Unidade não encontrada" }, 404);
+          return domainErrorResponse(
+            c,
+            notFound("unit_not_found", "Unidade não encontrada"),
+          );
         }
         // "Assinatura obrigatória" and "emitir sem assinatura" contradict each
         // other: the stricter one wins, so the second cannot be switched on.
         if (input.enabled && before.requireSignature) {
-          return c.json(
-            {
-              error:
-                "A assinatura é obrigatória nesta unidade: desative-a antes de permitir a emissão sem assinatura digital",
-            },
-            409,
+          return domainErrorResponse(
+            c,
+            conflict(
+              "conflict",
+              "A assinatura é obrigatória nesta unidade: desative-a antes de permitir a emissão sem assinatura digital",
+            ),
           );
         }
 
@@ -277,12 +289,12 @@ export const signingRouter = new Hono<{
             )
             .limit(1);
           if (current?.reason) {
-            return c.json(
-              {
-                error:
-                  "Esta unidade emite sem assinatura digital: desative essa opção antes de tornar a assinatura obrigatória",
-              },
-              409,
+            return domainErrorResponse(
+              c,
+              conflict(
+                "conflict",
+                "Esta unidade emite sem assinatura digital: desative essa opção antes de tornar a assinatura obrigatória",
+              ),
             );
           }
         }
