@@ -270,11 +270,14 @@ async function claimAndProcessBatch(
   env: WorkerEnv,
   workerId: string,
   batchSize: number,
+  isStopping: () => boolean,
 ): Promise<number> {
   const mode = readQueueReceiptsMode();
   let claimedCount = 0;
 
   for (let slot = 0; slot < batchSize; slot += 1) {
+    // A shutdown claims nothing more: the job in hand was the last.
+    if (isStopping()) break;
     // oxlint-disable-next-line eslint/no-await-in-loop -- one row is claimed only once the previous one is settled; see above.
     const [job] = await claimQueueJobs(workerId, 1);
     if (!job) break;
@@ -366,9 +369,15 @@ async function reclaimStaleJobs(staleAfterMs: number): Promise<void> {
 export async function processQueueBatch(
   env: WorkerEnv,
   config: QueueRuntimeConfig,
+  isStopping: () => boolean = () => false,
 ): Promise<number> {
   await reclaimStaleJobs(config.staleAfterMs);
-  return claimAndProcessBatch(env, config.workerId, config.batchSize);
+  return claimAndProcessBatch(
+    env,
+    config.workerId,
+    config.batchSize,
+    isStopping,
+  );
 }
 
 // Release stale jobs, then keep claiming + processing batches until the queue
@@ -379,15 +388,17 @@ export async function drainQueue(
   env: WorkerEnv,
   config: QueueRuntimeConfig,
   maxBatches = 1_000,
+  isStopping: () => boolean = () => false,
 ): Promise<number> {
   await reclaimStaleJobs(config.staleAfterMs);
 
   let processed = 0;
-  for (let batch = 0; batch < maxBatches; batch += 1) {
+  for (let batch = 0; batch < maxBatches && !isStopping(); batch += 1) {
     const count = await claimAndProcessBatch(
       env,
       config.workerId,
       config.batchSize,
+      isStopping,
     );
     if (count === 0) break;
     processed += count;

@@ -520,6 +520,54 @@ describe("queue-runtime claims one row at a time (REQ-QDL-001)", () => {
   });
 });
 
+describe("queue-runtime graceful shutdown", () => {
+  function useInMemoryQueue(ids: number[]) {
+    const pending = [...ids];
+    claimQueueJobs.mockImplementation(async () => {
+      const id = pending.shift();
+      return id === undefined ? [] : [makeJob(id)];
+    });
+  }
+
+  it("claims nothing more once a shutdown has begun, after the job in hand settles", async () => {
+    useInMemoryQueue([301, 302, 303]);
+    let stopping = false;
+    workerQueue.mockImplementation(async (batch: MessageBatchLike) => {
+      // The signal arrives while the first job is running.
+      stopping = true;
+      batch.messages[0]?.ack();
+    });
+
+    const claimed = await processQueueBatch(fakeEnv, CONFIG, () => stopping);
+
+    expect(claimed).toBe(1);
+    expect(completeQueueJob).toHaveBeenCalledTimes(1);
+    expect(completeQueueJob).toHaveBeenCalledWith(301, CONFIG.workerId);
+  });
+
+  it("claims no job at all when the shutdown began before the poll", async () => {
+    useInMemoryQueue([311]);
+
+    const claimed = await processQueueBatch(fakeEnv, CONFIG, () => true);
+
+    expect(claimed).toBe(0);
+    expect(claimQueueJobs).not.toHaveBeenCalled();
+  });
+
+  it("drainQueue stops between batches", async () => {
+    useInMemoryQueue([321, 322]);
+    let stopping = false;
+    workerQueue.mockImplementation(async (batch: MessageBatchLike) => {
+      stopping = true;
+      batch.messages[0]?.ack();
+    });
+
+    const processed = await drainQueue(fakeEnv, CONFIG, 1_000, () => stopping);
+
+    expect(processed).toBe(1);
+  });
+});
+
 describe("worker id", () => {
   it("differs per process start and carries the host name and pid, so replicas never share one", () => {
     const first = defaultWorkerId();

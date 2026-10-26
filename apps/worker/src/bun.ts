@@ -3,15 +3,19 @@ import {
   failFastAsync,
   loadWorkerConfig,
   rawEnv,
+  readRuntimeConfig,
   setProcessEnvDefault,
 } from "@calibra-facil/config";
+import { closeDatabases } from "@calibra-facil/db";
 import { assertRlsStartup } from "@calibra-facil/db/rls-startup";
+import { installGracefulShutdown } from "@calibra-facil/shared/graceful-shutdown";
 import { createPollLoop } from "./poll-loop.js";
 import {
   createWorkerEnv,
   processQueueBatch,
   readQueueConfig,
 } from "./queue-runtime.js";
+import { createWorkerShutdownPlan } from "./shutdown.js";
 
 type BunRuntime = {
   file(path: URL): {
@@ -89,9 +93,19 @@ console.log(`[Worker] Starting ${config.workerId}`);
 // slow batch never overlaps the next tick.
 const poll = createPollLoop({
   intervalMs: config.pollIntervalMs,
-  task: () => processQueueBatch(env, config),
+  task: (isStopping) => processQueueBatch(env, config, isStopping),
   onError: (error) => {
     console.error("[Worker] queue poll failed", error);
   },
 });
 poll.start();
+
+// SIGTERM (a container stop or upgrade) and SIGINT: claim no further job, let
+// the one in hand finish (up to SHUTDOWN_GRACE_MS), close the database pools.
+installGracefulShutdown(
+  createWorkerShutdownPlan({
+    stopWork: () => poll.stop(),
+    closeDatabases,
+    deadlineMs: readRuntimeConfig().shutdownGraceMs,
+  }),
+);

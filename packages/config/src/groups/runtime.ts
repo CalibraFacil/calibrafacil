@@ -32,6 +32,15 @@ export const runtimeGroup = defineGroup({
       max: 65_535,
       hidden: true,
     }),
+    shutdownGraceMs: integer({
+      env: "SHUTDOWN_GRACE_MS",
+      description:
+        "On SIGTERM/SIGINT the API and the worker stop taking new work and wait this long for what is running (a certificate render, a request) before they give up and exit. Keep the container's stop_grace_period above it (default 25 seconds). An unusable value means the default.",
+      min: 0,
+      default: 25_000,
+      tolerant: true,
+      example: example.commented("25000"),
+    }),
     host: text({
       env: "HOST",
       description: "Address the API binds to.",

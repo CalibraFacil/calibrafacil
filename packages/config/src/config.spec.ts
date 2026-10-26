@@ -125,6 +125,16 @@ describe("REQ-CFG-1 defaults", () => {
     expect(config.database.url).toBe("postgres://a/b");
   });
 
+  it("the shutdown grace period defaults to 25 s and falls back when unusable", () => {
+    expect(loadApiConfig({}).runtime.shutdownGraceMs).toBe(25_000);
+    expect(
+      loadApiConfig({ SHUTDOWN_GRACE_MS: "40000" }).runtime.shutdownGraceMs,
+    ).toBe(40_000);
+    expect(
+      loadApiConfig({ SHUTDOWN_GRACE_MS: "soon" }).runtime.shutdownGraceMs,
+    ).toBe(25_000);
+  });
+
   it("REQ-CFG-1: comma-separated lists are split, trimmed and cleaned", () => {
     const config = loadApiConfig({
       CORS_ALLOWED_ORIGINS: " https://a.example , ,https://b.example ",

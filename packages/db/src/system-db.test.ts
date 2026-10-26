@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getDb, getSystemDb, setQueryObserver, systemDb } from "./db";
+import {
+  closeDatabases,
+  getDb,
+  getSystemDb,
+  setQueryObserver,
+  systemDb,
+} from "./db";
 
 // The SYSTEM path (P2-18): the owner connection that the statements which are
 // cross-organization by design run on. postgres.js connects lazily, so these
@@ -78,5 +84,28 @@ describe("systemDb (P2-18: the named owner/system path)", () => {
     );
     getSystemDb();
     expect(onAccess).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("closeDatabases (graceful shutdown)", () => {
+  it("closes both pools, forgets them, and is idempotent", async () => {
+    vi.stubEnv(
+      "DATABASE_URL",
+      "postgres://calibra_app_login:pw@localhost:1/db",
+    );
+    vi.stubEnv(
+      "DATABASE_OWNER_URL",
+      "postgres://table_owner:pw@localhost:1/db",
+    );
+    const application = getDb();
+    const system = getSystemDb();
+
+    await closeDatabases();
+    await closeDatabases();
+
+    // A later access opens a fresh pool rather than reusing a closed one.
+    expect(getDb()).not.toBe(application);
+    expect(getSystemDb()).not.toBe(system);
+    await closeDatabases();
   });
 });

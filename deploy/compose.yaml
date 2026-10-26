@@ -101,6 +101,10 @@ services:
   api:
     image: ghcr.io/calibrafacil/calibrafacil-api:${CALIBRA_VERSION:-latest}
     restart: unless-stopped
+    # On SIGTERM the API stops taking requests and waits up to SHUTDOWN_GRACE_MS
+    # (25 s by default) for the ones running; Docker kills it after this period,
+    # so keep it above SHUTDOWN_GRACE_MS.
+    stop_grace_period: 40s
     environment: *app-env
     healthcheck:
       test:
@@ -121,6 +125,10 @@ services:
   worker:
     image: ghcr.io/calibrafacil/calibrafacil-worker:${CALIBRA_VERSION:-latest}
     restart: unless-stopped
+    # On SIGTERM the worker claims no further job and waits up to
+    # SHUTDOWN_GRACE_MS (25 s by default) for the one in hand (a certificate
+    # render); keep this above SHUTDOWN_GRACE_MS.
+    stop_grace_period: 40s
     environment: *app-env
     depends_on:
       init:
