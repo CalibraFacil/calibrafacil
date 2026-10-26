@@ -154,8 +154,16 @@ vi.mock("../modules/sync/applied-events", () => ({
   completeDesktopSyncClaim: async () => undefined,
 }));
 
-vi.mock("../middleware/permission", () => ({
+// The real permission helpers (the per-operation push check reads them); only the
+// middleware that would authenticate a request is replaced by the one that sets
+// the session and the member.
+vi.mock("../middleware/permission", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../middleware/permission")>()),
   withLabPermission: mocks.withLabPermission,
+  requireLabProtected: mocks.withLabPermission(),
+  requireOrgType: () => async (_c: unknown, next: () => Promise<void>) => {
+    await next();
+  },
 }));
 
 vi.mock("../lib/storage", () => ({

@@ -16,7 +16,10 @@ import {
   buildSyncPushCursor,
 } from "@calibra-facil/contracts";
 import { domainErrorResponse, invalid } from "../../lib/domain-errors";
-import { withLabPermission } from "../../middleware/permission";
+import {
+  requireLabProtected,
+  requireOrgType,
+} from "../../middleware/permission";
 import { applyDesktopEventAtomically } from "../../modules/sync/event-transaction";
 import { type SyncRouterEnv, getMemberData } from "./env";
 import {
@@ -32,10 +35,15 @@ import {
 } from "../../modules/sync/desktop-sync-support";
 import { prepareDesktopEventSideEffects } from "../../modules/sync/side-effects";
 import { applyDesktopSyncEvent } from "../../modules/sync/apply-event";
+import { authorizeSyncOperation } from "../../modules/sync/operation-permissions";
 
 export const pushRoutes = new Hono<SyncRouterEnv>().post(
   "/push",
-  ...withLabPermission({ calibration: ["create"] }),
+  // Authentication, membership and the laboratory organization only: what each
+  // member may send is decided per event (SYNC_OPERATION_PERMISSIONS), since
+  // one batch carries operations that the online routes guard differently.
+  ...requireLabProtected,
+  requireOrgType("LAB"),
   async (c) => {
     const memberData = getMemberData(c);
     const session = c.get("session");
@@ -169,6 +177,19 @@ export const pushRoutes = new Hono<SyncRouterEnv>().post(
         continue;
       }
       const command = parsed.command;
+
+      // The same right the online route of this operation asks for. Decided
+      // before anything is prepared or applied: a denied event writes nothing
+      // and is refused for good (the desktop dead-letters it).
+      const permission = authorizeSyncOperation(memberData, command.operation);
+      if (!permission.allowed) {
+        rejected.push({
+          eventId: event.eventId,
+          code: permission.code,
+          reason: permission.reason,
+        });
+        continue;
+      }
 
       let prepared: PreparedDesktopEventSideEffects;
       try {

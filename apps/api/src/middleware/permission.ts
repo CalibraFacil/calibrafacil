@@ -346,7 +346,7 @@ function isUnitElevationEligible(permissions: PermissionCheck): boolean {
   );
 }
 
-function getEffectivePermissionRole(
+export function getEffectivePermissionRole(
   member: Pick<MemberData, "role" | "unitRole">,
   permissions: PermissionCheck,
 ): RoleName {

@@ -30,6 +30,10 @@ export const OUTBOX_REJECTION_CLASSES = {
   INVALID_DESKTOP_EVENT_PAYLOAD: "permanent",
   // The event does not fit the typed push protocol (envelope or payload schema).
   INVALID_SYNC_COMMAND: "permanent",
+  // The pushing member's role may not do this offline (the online route denies it
+  // too). Refused for good: until a person decides (re-queue after a role
+  // change, or discard) retrying would only repeat it.
+  SYNC_PERMISSION_DENIED: "permanent",
   INVALID_STANDARD_SNAPSHOT: "permanent",
   COMPILED_METHOD_SNAPSHOT_INVALID: "permanent",
   CALIBRATION_RECORD_INCOMPLETE: "permanent",

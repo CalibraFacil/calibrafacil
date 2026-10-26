@@ -70,6 +70,10 @@ const REASONS: ReadonlyArray<readonly [string, string]> = [
     'O registro ao qual esta alteração se refere não existe mais na nuvem.',
   ],
   [
+    'SYNC_PERMISSION_DENIED',
+    'Seu perfil de acesso não permite esta operação na nuvem, mesmo online. Peça a um gestor para fazê-la, ou reenvie depois que o perfil for alterado.',
+  ],
+  [
     'INVALID_STATUS_TRANSITION',
     'Na nuvem, a calibração está em um status que não permite esta alteração.',
   ],

@@ -18,6 +18,7 @@ import {
   syncAttachmentObjectKeyBelongsToOrganization,
   tryDecodeSyncAttachmentId,
 } from "../../modules/sync/helpers";
+import { SYNC_ATTACHMENT_PERMISSION } from "../../modules/sync/operation-permissions";
 import { type SyncRouterEnv, getMemberData } from "./env";
 
 const SYNC_ATTACHMENT_URL_EXPIRES_IN_SECONDS = 900;
@@ -25,7 +26,7 @@ const SYNC_ATTACHMENT_URL_EXPIRES_IN_SECONDS = 900;
 export const attachmentRoutes = new Hono<SyncRouterEnv>()
   .post(
     "/attachments/init-upload",
-    ...withLabPermission({ calibration: ["create"] }),
+    ...withLabPermission(SYNC_ATTACHMENT_PERMISSION),
     async (c) => {
       const memberData = getMemberData(c);
       const body = syncAttachmentInitUploadRequestSchema.parse(
@@ -55,7 +56,7 @@ export const attachmentRoutes = new Hono<SyncRouterEnv>()
   )
   .post(
     "/attachments/complete-upload",
-    ...withLabPermission({ calibration: ["create"] }),
+    ...withLabPermission(SYNC_ATTACHMENT_PERMISSION),
     async (c) => {
       const memberData = getMemberData(c);
       const body = syncAttachmentCompleteUploadRequestSchema.parse(
