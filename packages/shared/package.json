@@ -17,7 +17,8 @@
     "./storage-endpoint": "./src/storage-endpoint.ts",
     "./telemetry": "./src/telemetry/index.ts",
     "./units": "./src/units/index.ts",
-    "./format": "./src/format.ts"
+    "./format": "./src/format.ts",
+    "./money": "./src/money.ts"
   },
   "scripts": {
     "test": "vitest run --passWithNoTests",
