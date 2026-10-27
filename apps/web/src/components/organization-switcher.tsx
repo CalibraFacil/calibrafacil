@@ -39,6 +39,7 @@ import {
   setStoredDashboardActiveUnitIdForOrganization,
   setStoredDashboardOrganizationId,
 } from '@/features/dashboard/dashboard-scope-storage'
+import { switchScope } from '@/lib/switch-scope'
 
 export function OrganizationSwitcher() {
   const navigate = useNavigate()
@@ -60,17 +61,19 @@ export function OrganizationSwitcher() {
   }, [allOrganizations])
 
   const handleSetActiveOrganization = async (orgId: string) => {
-    await organization.setActive({ organizationId: orgId })
-    setStoredDashboardOrganizationId(orgId)
-    await queryClient.invalidateQueries()
+    await switchScope(queryClient, async () => {
+      await organization.setActive({ organizationId: orgId })
+      setStoredDashboardOrganizationId(orgId)
+    })
   }
 
   const handleSetActiveUnit = async (value: string) => {
-    if (!activeOrg?.id) return
+    const organizationId = activeOrg?.id
+    if (!organizationId) return
 
-    setStoredDashboardActiveUnitIdForOrganization(activeOrg.id, value)
-
-    await queryClient.invalidateQueries()
+    await switchScope(queryClient, () => {
+      setStoredDashboardActiveUnitIdForOrganization(organizationId, value)
+    })
   }
 
   if (isLoadingOrgs) {
