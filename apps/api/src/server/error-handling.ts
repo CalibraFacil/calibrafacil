@@ -1,9 +1,39 @@
+import type { ApiErrorCode } from "@calibra-facil/contracts";
 import type { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { extractPgErrorCode } from "../lib/db-errors";
 import { DomainError, domainErrorBody } from "../lib/domain-errors";
 import { flushErrorReporter, reportServerError } from "../lib/observability";
 import type { Env } from "./env";
+
+const STATUS_CODES: Partial<Record<number, ApiErrorCode>> = {
+  400: "invalid_request",
+  401: "unauthenticated",
+  403: "forbidden",
+  404: "not_found",
+  409: "conflict",
+  422: "unprocessable",
+};
+
+const STATUS_MESSAGES: Partial<Record<number, string>> = {
+  400: "Requisição inválida",
+  401: "Não autenticado",
+  403: "Acesso negado",
+  404: "Não encontrado",
+  409: "Conflito",
+  422: "Não foi possível processar",
+};
+
+/** `{ error, code }` for an HTTPException thrown without a body of its own. */
+export function httpExceptionBody(error: HTTPException): {
+  error: string;
+  code?: ApiErrorCode;
+} {
+  const message =
+    error.message || STATUS_MESSAGES[error.status] || "Erro na requisição";
+  const code = STATUS_CODES[error.status];
+  return code ? { error: message, code } : { error: message };
+}
 
 export type ErrorHandlingDeps = {
   report: typeof reportServerError;
@@ -24,7 +54,11 @@ export function applyErrorHandling(
 ): Hono<{ Bindings: Env }> {
   app.onError(async (error, c) => {
     if (error instanceof HTTPException) {
-      return error.getResponse();
+      // A response the route built itself (a domain body, a challenge) is kept;
+      // otherwise the same JSON shape as every other failure, never plain text
+      // (roadmap 2 D2).
+      if (error.res) return error.getResponse();
+      return c.json(httpExceptionBody(error), error.status);
     }
 
     const reportDefect = () =>

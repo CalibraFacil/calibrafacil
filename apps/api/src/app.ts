@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { applyBodyLimit } from "./server/body-limit";
 import { applyCors } from "./server/cors";
+import { applyValidationErrorShape } from "./server/validation-error-shape";
 import { applyOriginGuard } from "./server/origin-guard";
 import { applyRateLimit } from "./server/rate-limit";
 import { applyErrorHandling } from "./server/error-handling";
@@ -20,6 +21,7 @@ export function createApiApp() {
   applyBodyLimit(app);
   applyRuntimeEnv(app);
   applyErrorHandling(app);
+  applyValidationErrorShape(app);
   mountAuthRoutes(app);
 
   return mountApiRoutes(app);
