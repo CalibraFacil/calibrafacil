@@ -14,6 +14,7 @@ import {
 import { emitPublicApiWebhookEvent } from "../../lib/public-api-webhooks";
 import { requireApiScope } from "../../middleware/api-key-auth";
 import { approveJob } from "../../modules/jobs/approve-job";
+import { approvalStandardsRefusalDomainError } from "../../modules/jobs/standards-judgement";
 import { cancelJob } from "../../modules/jobs/cancel-job";
 import { rejectJob } from "../../modules/jobs/reject-job";
 import { resolveApiKeyApprover } from "../../lib/api-key-approver";
@@ -145,6 +146,26 @@ export const jobDecisionRoutes = new Hono<PublicApiV2Env>()
                   "A OS foi alterada por outra aprovação ou revisão em andamento",
               }),
             };
+          case "signatory_roster_empty":
+            return {
+              status: 403,
+              body: buildPublicApiError({
+                code: "approval_requires_signatory",
+                message:
+                  "O laboratório acreditado não mantém signatários autorizados ativos (ISO/IEC 17025 §6.2.6): ninguém pode liberar o certificado. Cadastre ao menos um signatário autorizado",
+              }),
+            };
+          case "standards_refused": {
+            const refusal = approvalStandardsRefusalDomainError(result.refusal);
+            return {
+              status: 422,
+              body: buildPublicApiError({
+                code: refusal.code,
+                message: refusal.message,
+                details: { standardIds: result.refusal.standardIds },
+              }),
+            };
+          }
           case "approval_requires_signatory":
           case "role_not_permitted":
           case "not_authorized_signatory":
@@ -162,7 +183,7 @@ export const jobDecisionRoutes = new Hono<PublicApiV2Env>()
               body: buildPublicApiError({
                 code: "self_approval_blocked",
                 message:
-                  "Separação de responsabilidades (ISO/IEC 17025): quem executou ou criou a calibração não pode aprová-la, nem por chave de API",
+                  "Separação de responsabilidades (ISO/IEC 17025): quem executou, criou ou submeteu a calibração para revisão não pode aprová-la, nem por chave de API",
               }),
             };
           case "environmental_justification_required":

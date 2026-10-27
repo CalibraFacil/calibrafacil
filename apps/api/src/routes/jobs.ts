@@ -119,6 +119,7 @@ import {
   buildLocalJobFileUrl,
 } from "../modules/jobs/helpers";
 import { approveJob } from "../modules/jobs/approve-job";
+import { approvalStandardsRefusalDomainError } from "../modules/jobs/standards-judgement";
 import { amendJob } from "../modules/jobs/amend-job";
 import { withdrawCertificate } from "../modules/jobs/withdraw-certificate";
 import { loadCertificateLifecycles } from "../lib/certificate-lifecycle";
@@ -1138,10 +1139,24 @@ export const jobsRouter = new Hono<{
           return c.json(
             {
               error:
-                "Separação de responsabilidades (ISO/IEC 17025): quem executou ou criou a calibração não pode aprová-la. Solicite a aprovação a outro membro autorizado.",
+                "Separação de responsabilidades (ISO/IEC 17025): quem executou, criou ou submeteu a calibração para revisão não pode aprová-la. Solicite a aprovação a outro membro autorizado.",
               code: "SELF_APPROVAL_BLOCKED",
             },
             403,
+          );
+        case "signatory_roster_empty":
+          return c.json(
+            {
+              error:
+                "O laboratório acreditado não mantém signatários autorizados ativos (ISO/IEC 17025 §6.2.6): ninguém pode liberar o certificado. Cadastre ao menos um signatário autorizado e tente novamente.",
+              code: "APPROVAL_ROSTER_EMPTY",
+            },
+            403,
+          );
+        case "standards_refused":
+          return domainErrorResponse(
+            c,
+            approvalStandardsRefusalDomainError(result.refusal),
           );
         case "not_authorized_signatory":
           return c.json(

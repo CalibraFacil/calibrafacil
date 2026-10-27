@@ -20,6 +20,7 @@ import { db } from "@calibra-facil/db";
 import {
   asset,
   assetType,
+  authorizedSignatory,
   calibrationJob,
   certificateInput,
   customer,
@@ -27,6 +28,7 @@ import {
   member,
   memberVisualSignature,
   organization,
+  referenceStandard,
   service,
   user,
 } from "@calibra-facil/db/schema";
@@ -128,6 +130,34 @@ async function seedFixture() {
     userId: CHECKER,
     role: "admin",
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
+  });
+  // The standard the jobs below name in their snapshot: the approval re-judges it
+  // (roadmap 2 B5), so it exists in this laboratory and is valid on the performed date.
+  await db.insert(referenceStandard).values({
+    id: 11,
+    organizationId: ORG,
+    unitId: org.unitId,
+    createdBy: MAKER,
+    name: "Massa padrão 1 kg",
+    kind: "generic_scalar",
+    serialNumber: "SN-STD-11",
+    certificateNumber: "RBC-777",
+    calibrationDate: new Date("2025-12-01T00:00:00.000Z"),
+    nextCalibrationDate: new Date("2027-12-01T00:00:00.000Z"),
+    coverageFactor: 2,
+    distribution: "normal",
+    status: "ACTIVE",
+    referenceValue: 1,
+    uncertainty: 0.001,
+  });
+  // An accredited laboratory keeps an authorized-signatory roster (roadmap 2 B5):
+  // the approver is on it.
+  await db.insert(authorizedSignatory).values({
+    organizationId: ORG,
+    userId: CHECKER,
+    assetTypeId: null,
+    status: "ACTIVE",
+    authorizedBy: MAKER,
   });
   await db.insert(memberVisualSignature).values({
     memberId: `member-${CHECKER}`,

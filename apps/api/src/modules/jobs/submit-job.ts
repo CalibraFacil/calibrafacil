@@ -743,6 +743,12 @@ async function runJobExecutionIn(
         status: nextStatus,
         // A draft save without a usable date leaves the stored one alone.
         ...(performedAt ? { performedAt } : {}),
+        // Who moved the job to REVIEW, and when (ISO/IEC 17025 §6.2.4): the
+        // person whose work approval must be independent of. Whatever the
+        // entry point (cloud route, public API key's creator, desktop sync
+        // session user), `actor.userId` is the accountable person. A
+        // resubmission overwrites it; a draft save never touches it.
+        ...(isSubmit ? { submittedBy: actor.userId, submittedAt: now } : {}),
         // Absent = untouched: the worksheet auto-saves and a partial payload
         // must not wipe a deviation already recorded.
         ...(nextDeviations === undefined

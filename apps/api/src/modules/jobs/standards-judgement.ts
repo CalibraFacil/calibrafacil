@@ -173,3 +173,15 @@ export function standardsRefusalDomainError(refusal: StandardsRefusal) {
     { details: { standardIds: refusal.standardIds } },
   );
 }
+
+/**
+ * The same refusal when it is the APPROVAL that re-judged the standards: the
+ * stable code and details are unchanged, the message says what to do about it.
+ */
+export function approvalStandardsRefusalDomainError(refusal: StandardsRefusal) {
+  return invalid(
+    standardsRefusalApiCode(refusal),
+    `${standardsRefusalMessage(refusal)}. A aprovação foi recusada: os padrões de referência são julgados novamente na liberação do certificado (ISO/IEC 17025 §6.4). Substitua o padrão na calibração e submeta-a novamente.`,
+    { details: { standardIds: refusal.standardIds } },
+  );
+}

@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   state,
   mockCheckSignatory,
+  mockJudgeStandards,
   mockBuildVerdict,
   mockAdvanceDates,
   mockEnqueueBackgroundJob,
@@ -40,7 +41,17 @@ const {
 
   return {
     state,
-    mockCheckSignatory: vi.fn(async () => ({ ok: true })),
+    mockCheckSignatory: vi.fn(
+      async (_params?: unknown): Promise<{ ok: boolean; reason?: string }> => ({
+        ok: true,
+      }),
+    ),
+    mockJudgeStandards: vi.fn(
+      async (_input?: unknown, _reader?: unknown): Promise<unknown> => ({
+        ok: true,
+        standardIds: [],
+      }),
+    ),
     mockBuildVerdict: vi.fn(() => ({
       conformity: "CONFORMING",
       margins: null,
@@ -145,6 +156,12 @@ vi.mock("../../lib/org-transaction", async () => {
 vi.mock("../../lib/signatory", () => ({
   checkApproverIsAuthorizedSignatory: mockCheckSignatory,
 }));
+// The standards judgement itself is covered by its own specs and against a real
+// Postgres (approval-sod-gates.int.spec.ts); here only the command's wiring of it.
+vi.mock("./standards-judgement", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./standards-judgement")>();
+  return { ...actual, judgeSnapshotStandards: mockJudgeStandards };
+});
 vi.mock("../../lib/as-found-reliability-verdict", () => ({
   buildAsFoundReliabilityVerdict: mockBuildVerdict,
 }));
@@ -239,6 +256,7 @@ beforeEach(() => {
   mockAdvanceDates.mockResolvedValue(null);
   mockRecordOotEvent.mockResolvedValue({ eventId: 77 });
   mockCheckSignatory.mockResolvedValue({ ok: true });
+  mockJudgeStandards.mockResolvedValue({ ok: true, standardIds: [] });
   mockBuildVerdict.mockReturnValue({ conformity: "CONFORMING", margins: null });
   mockFindServiceOrders.mockResolvedValue([]);
   mockLockJob.mockResolvedValue(true);
@@ -341,6 +359,123 @@ describe("approveJob gates", () => {
     expect(snapshotUpdate).toMatchObject({
       outOfLimitsJustification: "Estufa em manutenção",
     });
+  });
+});
+
+describe("approveJob roadmap 2 B5 gates", () => {
+  const STANDARD = {
+    id: 7,
+    name: "Massa padrão",
+    certificateNumber: "C-1",
+    calibrationDate: new Date("2026-01-01T00:00:00Z"),
+    nextCalibrationDate: new Date("2027-01-01T00:00:00Z"),
+    uncertainty: 0.01,
+    uncertaintyUnit: "g",
+    coverageFactor: 2,
+    distribution: "normal",
+    drift: null,
+    certifiedValues: null,
+  };
+
+  it("REQ-B5-1: blocks the member who submitted the job even when another member is the technician and creator", async () => {
+    state.jobRows = [reviewJob({ submittedBy: "approver-1" })];
+    state.memberRows = [{ id: "member-2" }];
+    await expect(callApprove()).resolves.toEqual({
+      status: "self_approval_blocked",
+    });
+    expect(state.updateCalls).toHaveLength(0);
+    expect(mockEnqueueBackgroundJob).not.toHaveBeenCalled();
+  });
+
+  it("REQ-B5-1: a job with no recorded submitter (legacy) is judged on the technician and creator only", async () => {
+    state.jobRows = [reviewJob({ submittedBy: null })];
+    state.memberRows = [];
+    state.updateReturning = [reviewJob({ status: "GENERATING_PDF" })];
+    expect((await callApprove()).status).toBe("approved");
+  });
+
+  it("REQ-B5-1: the approval never writes the submitter", async () => {
+    state.jobRows = [reviewJob({ submittedBy: "someone-else" })];
+    state.updateReturning = [reviewJob({ status: "GENERATING_PDF" })];
+    await callApprove();
+    expect(state.updateCalls[0]).not.toHaveProperty("submittedBy");
+  });
+
+  it("REQ-B5-2: an accredited laboratory has no solo exemption: the submitter is blocked", async () => {
+    state.jobRows = [reviewJob({ submittedBy: "approver-1" })];
+    // The organization row (accredited); no other member row can approve.
+    state.memberRows = [{ accreditationActive: true }];
+    await expect(callApprove()).resolves.toEqual({
+      status: "self_approval_blocked",
+    });
+    expect(mockCheckSignatory).not.toHaveBeenCalled();
+  });
+
+  it("REQ-B5-2: an accredited laboratory makes the signatory roster mandatory; an empty one refuses", async () => {
+    state.jobRows = [reviewJob()];
+    state.memberRows = [{ accreditationActive: true }];
+    mockCheckSignatory.mockResolvedValue({ ok: false, reason: "empty_roster" });
+    await expect(callApprove()).resolves.toEqual({
+      status: "signatory_roster_empty",
+    });
+    expect(mockCheckSignatory.mock.calls[0]?.[0]).toMatchObject({
+      mandatory: true,
+    });
+    expect(state.updateCalls).toHaveLength(0);
+  });
+
+  it("REQ-B5-2: a laboratory that is not accredited does not make the roster mandatory", async () => {
+    state.jobRows = [reviewJob()];
+    state.memberRows = [];
+    state.updateReturning = [reviewJob({ status: "GENERATING_PDF" })];
+    await callApprove();
+    expect(mockCheckSignatory.mock.calls[0]?.[0]).toMatchObject({
+      mandatory: false,
+    });
+  });
+
+  it("REQ-B5-3: re-judges the standards of the snapshot on the performed date, in this laboratory", async () => {
+    const performedAt = new Date("2026-06-10T00:00:00Z");
+    state.jobRows = [reviewJob({ standardsSnapshot: [STANDARD], performedAt })];
+    state.updateReturning = [reviewJob({ status: "GENERATING_PDF" })];
+    mockJudgeStandards.mockResolvedValue({ ok: true, standardIds: [7] });
+    expect((await callApprove()).status).toBe("approved");
+    expect(mockJudgeStandards).toHaveBeenCalledWith(
+      expect.objectContaining({
+        standardIds: [7],
+        organizationId: "org-1",
+        performedAt,
+        mode: "cloud",
+        requireBackdateReason: false,
+      }),
+      expect.anything(),
+    );
+  });
+
+  it("REQ-B5-3: a refused standard stops the approval before anything is written or dispatched", async () => {
+    state.jobRows = [reviewJob({ standardsSnapshot: [STANDARD] })];
+    const refusal = {
+      ok: false,
+      code: "standard_inactive",
+      standardIds: [7],
+      standardNames: ["Massa padrão"],
+    };
+    mockJudgeStandards.mockResolvedValue(refusal);
+    await expect(callApprove()).resolves.toEqual({
+      status: "standards_refused",
+      refusal,
+    });
+    expect(state.updateCalls).toHaveLength(0);
+    expect(state.insertCalls).toHaveLength(0);
+    expect(mockLockJob).not.toHaveBeenCalled();
+    expect(mockEnqueueBackgroundJob).not.toHaveBeenCalled();
+  });
+
+  it("REQ-B5-3: a job with no standards is not judged", async () => {
+    state.jobRows = [reviewJob({ standardsSnapshot: [] })];
+    state.updateReturning = [reviewJob({ status: "GENERATING_PDF" })];
+    expect((await callApprove()).status).toBe("approved");
+    expect(mockJudgeStandards).not.toHaveBeenCalled();
   });
 });
 

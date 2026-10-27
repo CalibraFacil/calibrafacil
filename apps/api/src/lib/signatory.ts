@@ -34,23 +34,40 @@ export function isAuthorizedToSign(
   });
 }
 
-export interface SignatoryGateResult {
-  ok: boolean;
-  /** True when the org maintains a signatory roster (the gate is active). */
-  enforced: boolean;
-}
+export type SignatoryGateResult =
+  | {
+      ok: true;
+      /** True when the org maintains a signatory roster (the gate is active). */
+      enforced: boolean;
+    }
+  | {
+      ok: false;
+      enforced: true;
+      /**
+       * `empty_roster`: the laboratory must keep a roster (accredited) and has no
+       * active record, so nobody is authorized to sign. `not_authorized`: the
+       * roster exists and does not name the approver for this instrument type.
+       */
+      reason: "empty_roster" | "not_authorized";
+    };
 
 /**
- * Authorized-signatory gate for approval. Auto-detected: when the org has zero
- * ACTIVE signatory records the gate is a no-op (`ok: true, enforced: false`), so
- * orgs that don't use the roster are unaffected — mirroring the personnel
- * competence gate.
+ * Authorized-signatory gate for approval.
+ *
+ * Optional for a laboratory that is not accredited: auto-detected, so when it
+ * has zero ACTIVE signatory records the gate is a no-op (`ok: true, enforced:
+ * false`) and orgs that don't use the roster are unaffected. MANDATORY for an
+ * accredited laboratory (`mandatory: true`, roadmap 2 B5, decision Q45): an
+ * empty roster means nobody is authorized to sign, so it fails CLOSED
+ * (`empty_roster`) instead of letting every approver through.
  */
 export async function checkApproverIsAuthorizedSignatory(
   params: {
     organizationId: string;
     approverId: string;
     assetId: number;
+    /** The laboratory must keep a roster (it is accredited). Default: false. */
+    mandatory?: boolean;
   },
   /** The org-bound handle of the caller's transaction (row-level security). */
   executor: Pick<OrgExecutor, "select"> = db,
@@ -67,7 +84,9 @@ export async function checkApproverIsAuthorizedSignatory(
     );
 
   if ((orgCount?.total ?? 0) === 0) {
-    return { ok: true, enforced: false };
+    return params.mandatory
+      ? { ok: false, enforced: true, reason: "empty_roster" }
+      : { ok: true, enforced: false };
   }
 
   const [assetRow] = await executor
@@ -96,8 +115,7 @@ export async function checkApproverIsAuthorizedSignatory(
       ),
     );
 
-  return {
-    ok: isAuthorizedToSign(records, assetRow?.assetTypeId ?? null, new Date()),
-    enforced: true,
-  };
+  return isAuthorizedToSign(records, assetRow?.assetTypeId ?? null, new Date())
+    ? { ok: true, enforced: true }
+    : { ok: false, enforced: true, reason: "not_authorized" };
 }

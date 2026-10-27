@@ -568,6 +568,28 @@ describe.each(ENTRY_POINTS)("submit and execute policy [$name]", (entry) => {
     ]);
   });
 
+  it("REQ-B5-1 [HIGH RISK]: a submit records WHO submitted and when (submitted_by / submitted_at); a save records neither", async () => {
+    const world = await seedWorld({ status: "DRAFT" });
+
+    await expect(entry.run(world, { command: "execute" })).resolves.toEqual({
+      ok: true,
+    });
+    expect(await jobRow(world.jobId)).toMatchObject({
+      submittedBy: null,
+      submittedAt: null,
+    });
+
+    const before = Date.now();
+    await expect(entry.run(world, { command: "submit" })).resolves.toEqual({
+      ok: true,
+    });
+
+    const job = await jobRow(world.jobId);
+    expect(job.status).toBe("REVIEW");
+    expect(job.submittedBy).toBe(TECHNICIAN);
+    expect(job.submittedAt?.getTime()).toBeGreaterThanOrEqual(before - 1000);
+  });
+
   it("REQ-SUB-5f [HIGH RISK]: saving results on a REJECTED job keeps it REJECTED (Q18); only a submit moves it on", async () => {
     const world = await seedWorld({ status: "REJECTED" });
 
