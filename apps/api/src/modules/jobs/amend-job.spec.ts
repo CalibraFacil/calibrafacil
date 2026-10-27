@@ -47,6 +47,8 @@ const NOT_CARRIED: Record<string, string> = {
   rejectedBy: "review is done again",
   rejectedAt: "review is done again",
   rejectionReason: "review is done again",
+  submittedBy: "the amendment is submitted again (roadmap 2 B5)",
+  submittedAt: "the amendment is submitted again (roadmap 2 B5)",
   supersedesId: "set explicitly: the link to the original",
   supersededById: "set when a later amendment is issued",
   amendmentNumber: "set explicitly",
