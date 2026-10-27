@@ -81,18 +81,16 @@ jobs:
           docker run --detach --name drill-postgres \
             --env POSTGRES_USER=calibra --env POSTGRES_PASSWORD=calibra --env POSTGRES_DB=calibra \
             --publish 127.0.0.1:5432:5432 "$image"
+          # Always the PostgreSQL project's repository: the dump comes from the
+          # image's newest minor, whose archive format (1.16 since 17.6) an older
+          # minor of the same major (the runner's, or Ubuntu's) cannot read.
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
           sudo apt-get update
-          if ! psql --version | grep -qE " ${major}\."; then
-            sudo apt-get install -y "postgresql-client-${major}" || {
-              sudo install -d /usr/share/postgresql-common/pgdg
-              sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
-              echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
-              sudo apt-get update
-              sudo apt-get install -y "postgresql-client-${major}"
-            }
-          fi
-          sudo apt-get install -y age
+          sudo apt-get install -y "postgresql-client-${major}" age
           psql --version
+          pg_restore --version
           age --version
           for _ in $(seq 1 60); do
             if pg_isready -h 127.0.0.1 -p 5432 -U calibra -d calibra; then exit 0; fi
