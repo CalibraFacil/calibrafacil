@@ -21,10 +21,6 @@ export const PALETTE_BASELINE: Baseline = new Map<string, number>([
   ["apps/web/src/features/finance/document-timeline.tsx", 2],
   ["apps/web/src/features/finance/finance-display.tsx", 4],
   ["apps/web/src/features/finance/installments-block.tsx", 3],
-  [
-    "apps/web/src/features/jobs/components/approved-record-amendment-banner.tsx",
-    14,
-  ],
   ["apps/web/src/features/jobs/components/approved-record-aside.tsx", 3],
   ["apps/web/src/features/jobs/components/approved-record-dialogs.tsx", 4],
   ["apps/web/src/features/jobs/components/approved-record-hero.tsx", 14],
