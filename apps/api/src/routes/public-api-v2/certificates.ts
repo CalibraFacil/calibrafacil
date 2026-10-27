@@ -40,7 +40,7 @@ export const certificateRoutes = new Hono<PublicApiV2Env>()
       const [countResult, rows, lifecycles] = await orgDb(
         apiKey.organizationId,
       ).transaction(async (o) => {
-        const [total, page] = await Promise.all([
+        const [total, pageRows] = await Promise.all([
           o
             .select({ total: count() })
             .from(calibrationJob)
@@ -67,7 +67,11 @@ export const certificateRoutes = new Hono<PublicApiV2Env>()
             .limit(limit)
             .offset(offset),
         ]);
-        return [total, page, await loadCertificateLifecycles(o, page)] as const;
+        return [
+          total,
+          pageRows,
+          await loadCertificateLifecycles(o, pageRows),
+        ] as const;
       });
 
       return c.json({
