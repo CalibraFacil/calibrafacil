@@ -30,5 +30,8 @@ COPY --from=build /repo/packages ./packages
 COPY --from=build /repo/apps/api ./apps/api
 
 WORKDIR /repo/apps/api
+# Run as the image's unprivileged user (uid 1000). The application is read-only
+# on disk: everything it keeps goes to the database and the object store.
+USER bun
 EXPOSE 3000
 CMD ["bun", "src/bun.ts"]

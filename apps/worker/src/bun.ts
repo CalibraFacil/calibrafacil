@@ -9,6 +9,7 @@ import {
 import { closeDatabases } from "@calibra-facil/db";
 import { assertRlsStartup } from "@calibra-facil/db/rls-startup";
 import { installGracefulShutdown } from "@calibra-facil/shared/graceful-shutdown";
+import { touchHeartbeat } from "./heartbeat.js";
 import { createPollLoop } from "./poll-loop.js";
 import {
   createWorkerEnv,
@@ -93,7 +94,14 @@ console.log(`[Worker] Starting ${config.workerId}`);
 // slow batch never overlaps the next tick.
 const poll = createPollLoop({
   intervalMs: config.pollIntervalMs,
-  task: (isStopping) => processQueueBatch(env, config, isStopping),
+  task: async (isStopping) => {
+    await touchHeartbeat();
+    try {
+      return await processQueueBatch(env, config, isStopping);
+    } finally {
+      await touchHeartbeat();
+    }
+  },
   onError: (error) => {
     console.error("[Worker] queue poll failed", error);
   },

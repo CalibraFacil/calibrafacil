@@ -12,7 +12,9 @@
 // application's DATABASE_URL names the login `calibra_app` and differs from the
 // owner (the normal role split, DEPLOYMENT.md "Row-level security"), the script
 // finally makes sure that role can log in with the password of that URL
-// (CREATE/ALTER ROLE, idempotent), so one command prepares the whole database.
+// (CREATE/ALTER ROLE, idempotent), so one command prepares the whole database. It
+// also sets statement_timeout and idle_in_transaction_session_timeout on that role
+// only (ALTER ROLE ... SET): the owner, migrations and sweeps are unaffected.
 // Runs under Node or Bun; drizzle-kit runs under whichever started this script,
 // so it also works in the Bun-only API image.
 import "dotenv/config";
@@ -28,8 +30,12 @@ const packageDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-const { DATABASE_URL: applicationUrl, DATABASE_OWNER_URL: ownerUrl } =
-  process.env;
+const {
+  DATABASE_URL: applicationUrl,
+  DATABASE_OWNER_URL: ownerUrl,
+  DB_APP_STATEMENT_TIMEOUT_MS: statementTimeoutEnv,
+  DB_APP_IDLE_IN_TRANSACTION_TIMEOUT_MS: idleTimeoutEnv,
+} = process.env;
 const databaseUrl = ownerUrl || applicationUrl;
 if (!databaseUrl) {
   console.error("DATABASE_URL is not set (see packages/db/.env.example)");
@@ -42,6 +48,25 @@ function applicationLogin() {
   const parsed = new URL(applicationUrl);
   if (decodeURIComponent(parsed.username) !== "calibra_app") return null;
   return { password: decodeURIComponent(parsed.password) };
+}
+
+// Session timeouts of the application role (milliseconds; 0 turns one off). A
+// statement that runs this long is a bug or a runaway query, and a transaction
+// left idle holds locks and a connection: the server ends both instead of letting
+// them pile up. Override with DB_APP_STATEMENT_TIMEOUT_MS and
+// DB_APP_IDLE_IN_TRANSACTION_TIMEOUT_MS (deploy/.env).
+const DEFAULT_STATEMENT_TIMEOUT_MS = 120_000;
+const DEFAULT_IDLE_IN_TRANSACTION_TIMEOUT_MS = 60_000;
+
+function timeoutFromEnv(name, raw, fallback) {
+  raw = raw?.trim();
+  if (!raw) return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0) {
+    console.error(`${name} must be a whole number of milliseconds (0 = off).`);
+    process.exit(1);
+  }
+  return value;
 }
 
 /** calibra_app exists since migration 0123 (NOLOGIN); the dev and compose stacks log in as it. */
@@ -70,6 +95,28 @@ async function ensureApplicationLogin(sql) {
   await sql.unsafe(statement);
   console.log(
     "Role calibra_app: login enabled with the password of DATABASE_URL.",
+  );
+
+  const statementTimeout = timeoutFromEnv(
+    "DB_APP_STATEMENT_TIMEOUT_MS",
+    statementTimeoutEnv,
+    DEFAULT_STATEMENT_TIMEOUT_MS,
+  );
+  const idleTimeout = timeoutFromEnv(
+    "DB_APP_IDLE_IN_TRANSACTION_TIMEOUT_MS",
+    idleTimeoutEnv,
+    DEFAULT_IDLE_IN_TRANSACTION_TIMEOUT_MS,
+  );
+  // Integers validated above, so interpolating them is safe. Applies to new
+  // sessions of the role; the application reconnects on its next start.
+  await sql.unsafe(
+    `ALTER ROLE calibra_app SET statement_timeout = ${statementTimeout}`,
+  );
+  await sql.unsafe(
+    `ALTER ROLE calibra_app SET idle_in_transaction_session_timeout = ${idleTimeout}`,
+  );
+  console.log(
+    `Role calibra_app: statement_timeout=${statementTimeout} ms, idle_in_transaction_session_timeout=${idleTimeout} ms.`,
   );
 }
 

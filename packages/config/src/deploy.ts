@@ -177,6 +177,196 @@ export const DEPLOY_SECTIONS: readonly DeploySection[] = [
     ],
   },
   {
+    title: "Logs and memory limits (optional)",
+    intro: [
+      "Every service rotates its container logs and is capped in memory, so one",
+      "runaway process cannot take the whole machine down. The defaults suit a",
+      "laboratory on a 4 GB server (limits are ceilings, not reservations: the",
+      "sum may exceed the RAM). Raise a limit if `docker compose ps` shows a",
+      "service restarting with exit code 137 (killed for memory).",
+    ],
+    variables: [
+      {
+        name: "LOG_MAX_SIZE",
+        description: "Largest container log file before Docker rotates it.",
+        example: example.commented("10m"),
+      },
+      {
+        name: "LOG_MAX_FILE",
+        description: "Rotated log files kept per container.",
+        example: example.commented("5"),
+      },
+      {
+        name: "MEM_LIMIT_API",
+        description: "Memory limit of the API.",
+        example: example.commented("1g"),
+      },
+      {
+        name: "MEM_LIMIT_WORKER",
+        description:
+          "Memory limit of the background worker (certificate signing and PDF handling).",
+        example: example.commented("1g"),
+      },
+      {
+        name: "MEM_LIMIT_INIT",
+        description:
+          "Memory limit of the one-shot `init` (schema and migrations).",
+        example: example.commented("1g"),
+      },
+      {
+        name: "MEM_LIMIT_WEB",
+        description: "Memory limit of the lab app's static server.",
+        example: example.commented("192m"),
+      },
+      {
+        name: "MEM_LIMIT_PORTAL",
+        description: "Memory limit of the client portal's static server.",
+        example: example.commented("192m"),
+      },
+      {
+        name: "MEM_LIMIT_POSTGRES",
+        description:
+          "Memory limit of PostgreSQL. Do not set it below what shared_buffers and your connections need: an out-of-memory kill of the database is the worst outcome here.",
+        example: example.commented("1g"),
+      },
+      {
+        name: "MEM_LIMIT_S3",
+        description: "Memory limit of the bundled object store.",
+        example: example.commented("512m"),
+      },
+      {
+        name: "MEM_LIMIT_GOTENBERG",
+        description:
+          "Memory limit of the PDF renderer (Chromium and LibreOffice), the heaviest service.",
+        example: example.commented("1536m"),
+      },
+      {
+        name: "MEM_LIMIT_CADDY",
+        description: "Memory limit of the HTTPS proxy.",
+        example: example.commented("256m"),
+      },
+      {
+        name: "MEM_LIMIT_MAILPIT",
+        description: "Memory limit of the optional test inbox.",
+        example: example.commented("128m"),
+      },
+      {
+        name: "MEM_LIMIT_BACKUP",
+        description: "Memory limit of the optional backup service.",
+        example: example.commented("256m"),
+      },
+    ],
+  },
+  {
+    title: "Database timeouts of the application role (optional)",
+    intro: [
+      "`init` sets these on the calibra_app role only (ALTER ROLE ... SET), so a",
+      "runaway statement or a forgotten open transaction is ended by the server.",
+      "The owner role, migrations and the system sweeps are not affected. 0 turns",
+      "a timeout off. They apply to new connections: restart the API and worker.",
+    ],
+    variables: [
+      {
+        name: "DB_APP_STATEMENT_TIMEOUT_MS",
+        description:
+          "statement_timeout of calibra_app, in milliseconds. Default 120000 (2 minutes).",
+        example: example.commented("120000"),
+      },
+      {
+        name: "DB_APP_IDLE_IN_TRANSACTION_TIMEOUT_MS",
+        description:
+          "idle_in_transaction_session_timeout of calibra_app, in milliseconds. Default 60000 (1 minute).",
+        example: example.commented("60000"),
+      },
+    ],
+  },
+  {
+    title: "Backups (optional, COMPOSE_PROFILES=backup)",
+    intro: [
+      "A daily pg_dump plus a mirror of the object-store buckets, kept in BACKUP_DIR",
+      "on this machine. Copy them off the machine too (BACKUP_OFFSITE_*, or your own",
+      "tool). Read docs/operations/backup-restore.md before relying on them; test a",
+      "restore. The master keys in .env are NOT part of the backup: keep .env safe",
+      "separately.",
+    ],
+    variables: [
+      {
+        name: "COMPOSE_PROFILES",
+        description:
+          "Compose profiles to start: `backup` (scheduled backups), `mailpit` (test inbox). Comma-separated.",
+        example: example.commented("backup"),
+      },
+      {
+        name: "BACKUP_DIR",
+        description:
+          "Where the backup service writes (host path, relative to deploy/). Contains personal data: keep it private.",
+        example: example.commented("./backups"),
+      },
+      {
+        name: "BACKUP_SCHEDULE",
+        description: "Time of the daily backup, HH:MM in UTC.",
+        example: example.commented("02:30"),
+      },
+      {
+        name: "BACKUP_ON_START",
+        description:
+          "`true` also takes a backup shortly after the service starts (so every `docker compose up` leaves a fresh one).",
+        example: example.commented("true"),
+      },
+      {
+        name: "BACKUP_RETENTION_DAYS",
+        description: "Days to keep database dumps.",
+        example: example.commented("14"),
+      },
+      {
+        name: "BACKUP_KEEP_MIN",
+        description:
+          "Newest dumps that are never deleted, however old (a stopped service must not empty the folder).",
+        example: example.commented("3"),
+      },
+      {
+        name: "BACKUP_AGE_RECIPIENT",
+        description:
+          "age public key(s), comma-separated: dumps are encrypted to them (age-keygen makes the pair; keep the private key OFF this machine). Empty: dumps are not encrypted.",
+        example: example.commented("age1..."),
+      },
+      {
+        name: "BACKUP_FILES",
+        description:
+          "`false` skips the mirror of the object-store buckets (certificate PDFs, uploads).",
+        example: example.commented("true"),
+      },
+      {
+        name: "BACKUP_OFFSITE_URI",
+        description:
+          "s3://bucket/prefix of an off-site copy of BACKUP_DIR (any S3-compatible store). Empty: no off-site copy.",
+        example: example.commented("s3://my-backups/calibra"),
+      },
+      {
+        name: "BACKUP_OFFSITE_ENDPOINT",
+        description:
+          "Endpoint of the off-site store; empty for AWS S3 (e.g. https://<account>.r2.cloudflarestorage.com for R2).",
+        example: example.commented(""),
+      },
+      {
+        name: "BACKUP_OFFSITE_REGION",
+        description:
+          "Region of the off-site store (default us-east-1; auto for R2).",
+        example: example.commented(""),
+      },
+      {
+        name: "BACKUP_OFFSITE_ACCESS_KEY_ID",
+        description: "Access key of the off-site store (write-only is enough).",
+        example: example.commented(""),
+      },
+      {
+        name: "BACKUP_OFFSITE_SECRET_ACCESS_KEY",
+        description: "Secret key of the off-site store.",
+        example: example.commented(""),
+      },
+    ],
+  },
+  {
     title: "Secrets (generated by ./setup.sh)",
     intro: [
       "32 random bytes, base64, for the keys. Never change a key once data exists.",

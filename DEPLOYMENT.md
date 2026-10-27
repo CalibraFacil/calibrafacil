@@ -52,6 +52,14 @@ jobs itself (`CRON_SCHEDULER=internal`).
 | `postgres`  | the database (volume `postgres-data`)                                   |
 | `s3`        | file storage, S3-compatible (volume `s3-data`)                          |
 | `gotenberg` | HTML → PDF                                                              |
+| `backup`    | optional (`COMPOSE_PROFILES=backup`): daily database dump + file mirror |
+
+The compose file is hardened for unattended running: container logs rotate, every service has a
+memory limit and a restart policy, the app images run as an unprivileged user, the API, worker, web,
+portal, PostgreSQL and Gotenberg have healthchecks, Caddy sends a Content-Security-Policy and the
+other browser security headers and does not expose `/api/cron/*`, and the application's database role
+has statement and idle-transaction timeouts. The details and the settings are in
+[`docs/operations/compose-hardening.md`](./docs/operations/compose-hardening.md).
 
 ### Trying it on your own computer
 
@@ -106,16 +114,26 @@ Three things hold all the state: the database, the stored files, and `.env`, who
 encrypt the signing certificates and integration tokens. **Without `.env`, a database backup
 cannot be fully restored.**
 
+Turn on the scheduled backups with `COMPOSE_PROFILES=backup` in `deploy/.env` and
+`docker compose up -d`: the `backup` service takes a checked `pg_dump` (custom format, optionally
+encrypted with age) every day at 02:30 UTC, mirrors the file buckets right after it, keeps the dumps
+for 14 days (never fewer than the newest three) and can copy everything to an off-site bucket. Default
+targets: **RPO 24 hours, RTO 4 hours**. Restore with `deploy/restore.sh`, which refuses to
+overwrite a database that has data (without `--force`), restores in one transaction, applies the
+migrations and verifies the audit-trail hash chains. A restore drill runs in CI every week
+([`.github/workflows/restore-drill.yml`](./.github/workflows/restore-drill.yml)).
+
 ```bash
-docker compose exec -T postgres pg_dump -U calibra -Fc calibra > calibra-$(date +%F).dump
-docker run --rm -v calibrafacil_s3-data:/data:ro -v "$PWD":/backup alpine \
-  tar czf /backup/files-$(date +%F).tgz -C /data .
-cp .env env-$(date +%F).backup
+docker compose --profile backup run --rm backup once        # a backup now, e.g. before an update
+sudo ./restore.sh backups/dumps/latest                      # restore into an empty database
+docker compose --profile backup run --rm backup restore-files   # then the files
 ```
 
-Keep copies off the server. To restore into a fresh install with the same `.env`: start
-`postgres` and `s3` only, `pg_restore -U calibra -d calibra --clean` the dump inside the
-`postgres` container, untar the files into the `s3-data` volume, then `docker compose up -d`.
+Keep copies off the server, keep `.env` in a password manager, and put the issued-certificate bucket
+under object versioning or lock. Everything (what is backed up, why the order matters, encryption,
+off-site copies, tighter RPO with WAL archiving, the full restore procedure, the manual drill, and
+how to enable versioning or lock on S3, R2 and MinIO) is in
+[`docs/operations/backup-restore.md`](./docs/operations/backup-restore.md).
 
 ### Logs and errors
 
@@ -150,7 +168,9 @@ docker compose logs --no-log-prefix api worker | grep '"level":"error"'    # err
 
 To keep or alert on them, point the Docker logging driver at your collector (journald, Loki,
 Fluent Bit, CloudWatch, ...) or ship `docker compose logs` to it, and match on `"level":"error"`.
-Set `max-size`/`max-file` on the `json-file` driver (or use the `local` driver) so container logs
+The compose file already rotates container logs (`json-file`, `LOG_MAX_SIZE` and `LOG_MAX_FILE`; see
+[`docs/operations/compose-hardening.md`](./docs/operations/compose-hardening.md)); with another
+setup, set `max-size`/`max-file` on the `json-file` driver (or use the `local` driver) so they
 cannot fill the disk. The browser apps send nothing off the device: a route error is written to
 the browser console only.
 
@@ -164,6 +184,17 @@ PostgreSQL, see "Row-level security" below,
 SMTP: set `RESEND_API_KEY` and leave `SMTP_HOST` empty.
 
 ## Upgrading to this release
+
+**Docker Compose hardening (roadmap 2, G1 and G3).** Nothing is required: `docker compose pull` and
+`docker compose up -d` work with your existing `.env`. What changes: the app containers run as the
+unprivileged user `bun` (a volume you mounted into one must be writable by uid 1000); every service
+has a log-rotation setting, a memory limit and (where it was missing) a healthcheck, so `docker
+compose ps` may show a service `unhealthy` that used to look fine; Caddy now sends a
+Content-Security-Policy on the app and portal pages (if a page of yours calls an external service,
+add its origin to `deploy/Caddyfile`) and answers 404 for `/api/cron/*`; `init` sets a 2-minute
+`statement_timeout` and a 1-minute `idle_in_transaction_session_timeout` on the `calibra_app` role
+(`DB_APP_*_TIMEOUT_MS` in `.env` change or disable them). Scheduled backups are opt-in:
+[`docs/operations/backup-restore.md`](./docs/operations/backup-restore.md).
 
 Configuration is now validated when each process starts (see [Configuration](#configuration)):
 **the API, the worker and the local server refuse to start, with one message listing every
@@ -446,7 +477,8 @@ Vite bakes these in at build time. The Docker images also read them when the con
 image serves any domain; `VITE_API_URL` is the exception and stays a build argument.
 
 Review the legal pages (`/termos-de-uso`, `/privacidade`) and the content-security policy in
-`apps/web/public/_headers` before going live.
+`apps/web/public/_headers` before going live. (The Docker setup's Caddy sends the same policy,
+widened for the file-storage address: `deploy/Caddyfile`.)
 
 ### Database and first laboratory
 
@@ -466,7 +498,10 @@ The API serves its scheduled jobs at `/api/cron/<job>`, protected by
 `Authorization: Bearer $CRON_SECRET`. The simplest option is `CRON_SCHEDULER=internal` on the API:
 it runs the schedule below in-process (the Docker setup turns it on; the list is `CRON_ENTRIES` in
 `apps/api/src/lib/cron-scheduler.ts`), and a lease keeps two replicas from running a job twice.
-Or trigger them with your scheduler of choice:
+Or trigger them with your scheduler of choice. (In the Docker setup, Caddy answers 404 for
+`/api/cron/*` from outside: the in-process scheduler never uses the network. To call them from an
+external scheduler, remove the two `import block_cron` lines of `deploy/Caddyfile`, or call the API
+from inside the compose network.)
 
 | Job                          | Schedule (UTC) |
 | ---------------------------- | -------------- |

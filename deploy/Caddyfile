@@ -8,18 +8,51 @@
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
 		-Server
 	}
+}
+
+# The scheduled jobs (/api/cron/*) run inside the API (CRON_SCHEDULER=internal),
+# never through this proxy, so nothing outside needs to reach them. They stay
+# behind CRON_SECRET too. To trigger them from an external scheduler instead,
+# remove the two `import block_cron` lines (see DEPLOYMENT.md, "Scheduled jobs").
+(block_cron) {
+	@cron path /api/cron /api/cron/*
+	handle @cron {
+		respond 404
+	}
+}
+
+# Content-Security-Policy of the SPAs. Same rules as apps/web/public/_headers
+# (the Cloudflare/Netlify format of the same policy), plus what a self-hosted
+# install adds: the file-storage address (uploads, signed downloads, logos and
+# the certificate preview frame) in connect-src, img-src and frame-src.
+# Scripts are same-origin files only; style-src keeps 'unsafe-inline' because the
+# UI libraries set style attributes. packages/config/src/caddyfile.spec.ts
+# keeps these in step with _headers and with the portal's inline theme script.
+(csp_web) {
+	# viacep.com.br: the CEP lookup of the customer forms. localhost:9100/9101: Zebra
+	# Browser Print, the local label-printing agent.
+	header Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: {$FILES_URL}; font-src 'self' data:; connect-src 'self' {$FILES_URL} https://viacep.com.br http://localhost:9100 https://localhost:9101; frame-src 'self' blob: {$FILES_URL}"
+}
+
+# The portal's index.html has one inline script (the theme, applied before first
+# paint); its hash is pinned here.
+(csp_portal) {
+	header Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'sha256-AP/p830QixSXZbJAuCvcDPeTBEXlFS7ctMz5fNolRpg='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: {$FILES_URL}; font-src 'self' data:; connect-src 'self' {$FILES_URL}; frame-src 'none'"
 }
 
 # Lab app. Its API calls go to /api on the same address.
 {$APP_URL} {
 	import common
-	header X-Frame-Options "DENY"
+	import block_cron
 	handle /api/* {
 		reverse_proxy api:3000
 	}
 	handle {
+		header X-Frame-Options "DENY"
+		import csp_web
 		reverse_proxy web:8080
 	}
 }
@@ -27,17 +60,21 @@
 # Client portal, also with the API under /api.
 {$PORTAL_URL} {
 	import common
-	header X-Frame-Options "DENY"
+	import block_cron
 	handle /api/* {
 		reverse_proxy api:3000
 	}
 	handle {
+		header X-Frame-Options "DENY"
+		import csp_portal
 		reverse_proxy portal:8080
 	}
 }
 
 # File storage. Links to certificates and uploads are presigned for this
 # address, so the Host header must reach the store unchanged (Caddy's default).
+# No framing restriction here: the lab app shows the certificate preview in a
+# frame served from this address.
 {$FILES_URL} {
 	import common
 	reverse_proxy s3:7070

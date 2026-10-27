@@ -62,3 +62,6 @@ packages/documents/src/*.xlsx
 
 # Optional local checkouts of upstream dependency sources (read-only references).
 .repos/
+
+# Backups written by the compose `backup` profile (deploy/compose.yaml)
+deploy/backups/

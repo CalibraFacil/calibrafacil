@@ -32,3 +32,7 @@ test-results
 .dev.vars
 *.log
 .DS_Store
+
+# Backups of the compose `backup` profile: never part of an image
+deploy/backups
+**/backups/dumps

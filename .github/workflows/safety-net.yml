@@ -218,6 +218,55 @@ jobs:
           STACK_LAB_EMAIL: admin@ci.example
         run: pnpm --dir apps/web test:stack --project sign-in
 
+      # Hardening of the compose file and the proxy (roadmap 2 G3): every
+      # service that declares a healthcheck gets healthy, the pages carry a
+      # Content-Security-Policy and the other browser security headers, the
+      # scheduled-job endpoints are not reachable from outside, and the app
+      # containers do not run as root.
+      - name: Check healthchecks, headers and users
+        working-directory: deploy
+        run: |
+          for service in api worker web portal postgres gotenberg caddy s3; do
+            for _ in $(seq 1 30); do
+              status=$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q "$service")")
+              [ "$status" = healthy ] && break
+              sleep 4
+            done
+            echo "$service: $status"
+            [ "$status" = healthy ] || { docker compose logs --no-color --tail 50 "$service"; exit 1; }
+          done
+          for service in api worker web portal; do
+            user=$(docker compose exec -T "$service" id -u)
+            echo "$service runs as uid $user"
+            [ "$user" != 0 ] || { echo "$service runs as root"; exit 1; }
+          done
+          for host in app.localhost portal.localhost; do
+            headers=$(curl -fsSI --resolve "$host:80:127.0.0.1" "http://$host/")
+            for header in content-security-policy strict-transport-security x-content-type-options referrer-policy permissions-policy; do
+              echo "$headers" | grep -qi "^$header:" || { echo "$host: missing $header"; exit 1; }
+            done
+            code=$(curl -s -o /dev/null -w '%{http_code}' --resolve "$host:80:127.0.0.1" "http://$host/api/cron/queue-backstop")
+            echo "$host /api/cron/*: $code"
+            [ "$code" = 404 ] || exit 1
+          done
+
+      # The backup service dumps the live database and mirrors the buckets, and
+      # restore.sh (compose mode) puts the dump back over it with --force, applies
+      # migrations and verifies the audit chains. The weekly restore drill
+      # (restore-drill.yml) covers the dump/restore round trip in depth.
+      - name: Back up and restore the stack
+        working-directory: deploy
+        env:
+          COMPOSE_FILE: compose.yaml:compose.build.yaml
+        run: |
+          docker compose --profile backup run --rm -T backup once
+          sudo ls -l backups/dumps
+          sudo test -n "$(sudo find backups/dumps -name 'calibra-*.dump' -size +10k)"
+          docker compose stop api worker caddy
+          sudo env COMPOSE_FILE="$COMPOSE_FILE" ./restore.sh --force backups/dumps/latest
+          docker compose --profile backup run --rm -T backup restore-files
+          docker compose up -d --wait api worker caddy
+
       - name: Service logs
         if: failure()
         working-directory: deploy

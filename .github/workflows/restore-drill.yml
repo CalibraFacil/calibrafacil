@@ -1,0 +1,121 @@
+name: Restore drill
+
+# A backup nobody has restored is a hope. This workflow takes a backup with the
+# real `backup` image of deploy/compose.yaml from a freshly built and seeded
+# database, restores it into a new database with deploy/restore.sh (which also
+# runs the migrations and verify-audit-chain) and requires every table to have
+# exactly the same number of rows; then it checks the refusals (non-empty target,
+# damaged or tampered dump). The same steps run by hand: deploy/backup/drill.sh.
+#
+# It runs weekly, and on any change to what a restore depends on: deploy/**,
+# the schema extras, the audit-chain CLI and this file. It takes a few minutes.
+on:
+  schedule:
+    - cron: "23 4 * * 1"
+  pull_request:
+    branches: [main]
+    paths:
+      - "deploy/**"
+      - "packages/db/sql/**"
+      - "packages/db/scripts/bootstrap.mjs"
+      - "apps/api/src/cli/verify-audit-chain.ts"
+      - ".github/workflows/restore-drill.yml"
+  push:
+    branches: [main]
+    paths:
+      - "deploy/**"
+      - "packages/db/sql/**"
+      - "packages/db/scripts/bootstrap.mjs"
+      - "apps/api/src/cli/verify-audit-chain.ts"
+      - ".github/workflows/restore-drill.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  drill:
+    name: Backup, restore, verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_OWNER_URL: postgres://calibra:calibra@localhost:5432/calibra
+      DATABASE_URL: postgres://calibra_app:drill-app-password@localhost:5432/calibra
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: "pnpm"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      # Only what bootstrap and create-lab need, not the whole monorepo.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --filter "@calibra-facil/db..." --filter "@calibra-facil/api..."
+
+      # The same PostgreSQL the production compose file runs. Its client tools
+      # (psql, pg_restore) must be that major or newer to talk to it; the
+      # runner's are older, so install them (see integration.yml), and age for
+      # the encrypted leg.
+      - name: Start PostgreSQL and install matching client tools
+        run: |
+          image=$(sed -nE 's/^[[:space:]]*image:[[:space:]]*(postgres:[^[:space:]]+).*/\1/p' deploy/compose.yaml | head -1)
+          major=$(echo "$image" | sed -E 's/^postgres:([0-9]+).*/\1/')
+          echo "Server image: $image (major $major)"
+          docker run --detach --name drill-postgres \
+            --env POSTGRES_USER=calibra --env POSTGRES_PASSWORD=calibra --env POSTGRES_DB=calibra \
+            --publish 127.0.0.1:5432:5432 "$image"
+          sudo apt-get update
+          if ! psql --version | grep -qE " ${major}\."; then
+            sudo apt-get install -y "postgresql-client-${major}" || {
+              sudo install -d /usr/share/postgresql-common/pgdg
+              sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+              echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+              sudo apt-get update
+              sudo apt-get install -y "postgresql-client-${major}"
+            }
+          fi
+          sudo apt-get install -y age
+          psql --version
+          age --version
+          for _ in $(seq 1 60); do
+            if pg_isready -h 127.0.0.1 -p 5432 -U calibra -d calibra; then exit 0; fi
+            sleep 1
+          done
+          echo "PostgreSQL did not become ready"
+          docker logs drill-postgres
+          exit 1
+
+      # What a real instance has: the schema and the calibra_app role (the same
+      # bootstrap `init` runs), and a laboratory with its administrator.
+      - name: Build and seed the source database
+        run: |
+          pnpm --dir packages/db db:bootstrap
+          cd apps/api
+          APP_URL=http://app.localhost \
+            BETTER_AUTH_SECRET=drill-secret-drill-secret-drill-secret-0123 \
+            PORTAL_SERVICE_USER_ID=portal-service \
+            bun src/cli/create-lab.ts --name "Laboratório Drill" --email drill@example.com --no-email
+
+      - name: Back up, restore and verify
+        run: deploy/backup/drill.sh "$DATABASE_OWNER_URL"
+
+      - name: PostgreSQL log
+        if: failure()
+        run: docker logs drill-postgres | tail -n 100

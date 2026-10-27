@@ -15,12 +15,33 @@
 #   s3        S3-compatible file storage (FILES_URL)
 #   gotenberg HTML → PDF
 #   mailpit   optional test inbox: COMPOSE_PROFILES=mailpit (see .env.example)
+#   backup    optional: COMPOSE_PROFILES=backup. Daily pg_dump + object-store mirror
+#             into ./backups (docs/operations/backup-restore.md)
+#
+# Every service rotates its logs (LOG_MAX_SIZE x LOG_MAX_FILE), is capped in memory
+# (MEM_LIMIT_*, see .env.example) and restarts unless stopped. The app images run
+# as an unprivileged user.
 #
 # Images come from GHCR. To build them from this checkout instead:
 #   docker compose -f compose.yaml -f compose.build.yaml up -d --build
 #
 # See DEPLOYMENT.md for updates, backups and using hosted services instead.
 name: calibrafacil
+
+# Container logs are kept by Docker's json-file driver: rotate them so they cannot
+# fill the disk (`docker compose logs` reads what is kept).
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: ${LOG_MAX_SIZE:-10m}
+    max-file: ${LOG_MAX_FILE:-5}
+
+# What the app containers (api, worker, init, web, portal) never need.
+x-hardened: &hardened
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
 
 x-app-env: &app-env
   NODE_ENV: production
@@ -72,6 +93,15 @@ services:
   caddy:
     image: caddy:2.11-alpine
     restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_LIMIT_CADDY:-256m}
+    healthcheck:
+      # Caddy's admin endpoint answers once the configuration is loaded.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2019/config/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     ports:
       - "${HTTP_BIND:-80}:80"
       - "${HTTPS_BIND:-443}:443"
@@ -93,7 +123,17 @@ services:
   init:
     image: ghcr.io/calibrafacil/calibrafacil-api:${CALIBRA_VERSION:-latest}
     command: ["bun", "src/cli/init.ts"]
-    environment: *app-env
+    # One-shot: runs to completion on every `up`, never restarted by itself.
+    restart: "no"
+    <<: *hardened
+    logging: *logging
+    mem_limit: ${MEM_LIMIT_INIT:-1g}
+    environment:
+      <<: *app-env
+      # Session timeouts of the calibra_app role (ALTER ROLE ... SET, only that role;
+      # the owner and the migrations are unaffected). 0 turns one off.
+      DB_APP_STATEMENT_TIMEOUT_MS: ${DB_APP_STATEMENT_TIMEOUT_MS:-120000}
+      DB_APP_IDLE_IN_TRANSACTION_TIMEOUT_MS: ${DB_APP_IDLE_IN_TRANSACTION_TIMEOUT_MS:-60000}
     depends_on:
       postgres:
         condition: service_healthy
@@ -107,6 +147,9 @@ services:
     # (25 s by default) for the ones running; Docker kills it after this period,
     # so keep it above SHUTDOWN_GRACE_MS.
     stop_grace_period: 40s
+    <<: *hardened
+    logging: *logging
+    mem_limit: ${MEM_LIMIT_API:-1g}
     environment: *app-env
     healthcheck:
       test:
@@ -131,7 +174,23 @@ services:
     # SHUTDOWN_GRACE_MS (25 s by default) for the one in hand (a certificate
     # render); keep this above SHUTDOWN_GRACE_MS.
     stop_grace_period: 40s
+    <<: *hardened
+    logging: *logging
+    mem_limit: ${MEM_LIMIT_WORKER:-1g}
     environment: *app-env
+    healthcheck:
+      # The worker has no port: each poll tick (every 2 s, and around every job)
+      # touches /tmp/calibra-worker-heartbeat (apps/worker/src/heartbeat.ts). A file
+      # older than 5 minutes means the loop is stuck.
+      test:
+        - CMD
+        - bun
+        - -e
+        - "process.exit(Date.now() - require('node:fs').statSync('/tmp/calibra-worker-heartbeat').mtimeMs < 300000 ? 0 : 1)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
     depends_on:
       init:
         condition: service_completed_successfully
@@ -141,6 +200,19 @@ services:
   web:
     image: ghcr.io/calibrafacil/calibrafacil-web:${CALIBRA_VERSION:-latest}
     restart: unless-stopped
+    <<: *hardened
+    logging: *logging
+    mem_limit: ${MEM_LIMIT_WEB:-192m}
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - "fetch('http://127.0.0.1:8080/').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     # Read by the browser at startup (public values only).
     environment:
       VITE_PORTAL_APP_URL: ${PORTAL_URL}
@@ -152,12 +224,27 @@ services:
   portal:
     image: ghcr.io/calibrafacil/calibrafacil-portal:${CALIBRA_VERSION:-latest}
     restart: unless-stopped
+    <<: *hardened
+    logging: *logging
+    mem_limit: ${MEM_LIMIT_PORTAL:-192m}
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - "fetch('http://127.0.0.1:8080/').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     environment:
       VITE_WEB_URL: ${APP_URL}
 
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_LIMIT_POSTGRES:-1g}
     environment:
       POSTGRES_USER: calibra
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -169,11 +256,21 @@ services:
       interval: 3s
       timeout: 3s
       retries: 30
+      start_period: 10s
 
   s3:
     # Versity S3 Gateway (Apache-2.0): a plain directory served over the S3 API.
     image: versity/versitygw:v1.10.0
     restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_LIMIT_S3:-512m}
+    healthcheck:
+      # The gateway answers every unsigned request with 403, so check the port.
+      test: ["CMD", "nc", "-z", "127.0.0.1", "7070"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     environment:
       ROOT_ACCESS_KEY: calibra
       ROOT_SECRET_KEY: ${S3_SECRET_KEY}
@@ -186,13 +283,73 @@ services:
   gotenberg:
     image: gotenberg/gotenberg:8.38.1
     restart: unless-stopped
+    logging: *logging
+    # Chromium and LibreOffice render the PDFs; the heaviest container.
+    mem_limit: ${MEM_LIMIT_GOTENBERG:-1536m}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   mailpit:
     image: axllent/mailpit:v1.32.0
     profiles: ["mailpit"]
     restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_LIMIT_MAILPIT:-128m}
     ports:
       - "${MAILPIT_BIND:-127.0.0.1:8025}:8025"
+
+  # Scheduled backups: COMPOSE_PROFILES=backup (or `docker compose --profile backup
+  # up -d backup`). Not started by default. A daily pg_dump (custom format, checked,
+  # optionally encrypted with age) and a mirror of the object-store buckets go to
+  # ${BACKUP_DIR:-./backups}, with retention. See docs/operations/backup-restore.md,
+  # which also covers restoring (./restore.sh) and moving the copies off this machine.
+  # With a hosted object store, set the R2_* values below like the ones in x-app-env.
+  backup:
+    profiles: ["backup"]
+    build: ./backup
+    image: calibrafacil-backup:local
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_LIMIT_BACKUP:-256m}
+    # A backup in progress is worth finishing before the container stops.
+    stop_grace_period: 2m
+    environment:
+      DATABASE_OWNER_URL: postgres://calibra:${POSTGRES_PASSWORD:?run ./setup.sh first}@postgres:5432/calibra
+      R2_ENDPOINT: http://s3:7070
+      R2_REGION: us-east-1
+      R2_ACCESS_KEY_ID: calibra
+      R2_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:?run ./setup.sh first}
+      R2_BUCKET_NAME: calibra-documents
+      R2_MEDIA_BUCKET_NAME: calibra-media
+      BACKUP_SCHEDULE: ${BACKUP_SCHEDULE:-02:30}
+      BACKUP_ON_START: ${BACKUP_ON_START:-true}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_KEEP_MIN: ${BACKUP_KEEP_MIN:-3}
+      BACKUP_AGE_RECIPIENT: ${BACKUP_AGE_RECIPIENT:-}
+      BACKUP_FILES: ${BACKUP_FILES:-true}
+      BACKUP_OFFSITE_URI: ${BACKUP_OFFSITE_URI:-}
+      BACKUP_OFFSITE_ENDPOINT: ${BACKUP_OFFSITE_ENDPOINT:-}
+      BACKUP_OFFSITE_REGION: ${BACKUP_OFFSITE_REGION:-}
+      BACKUP_OFFSITE_ACCESS_KEY_ID: ${BACKUP_OFFSITE_ACCESS_KEY_ID:-}
+      BACKUP_OFFSITE_SECRET_ACCESS_KEY: ${BACKUP_OFFSITE_SECRET_ACCESS_KEY:-}
+    volumes:
+      - ${BACKUP_DIR:-./backups}:/backups
+    healthcheck:
+      # Unhealthy when no backup has finished for 36 hours (the schedule is daily).
+      test: ["CMD-SHELL", "test -n \"$$(find /backups/.last-success -mmin -2160 2>/dev/null)\""]
+      interval: 1h
+      timeout: 10s
+      retries: 1
+      start_period: 10m
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      s3:
+        condition: service_started
 
 volumes:
   postgres-data:
