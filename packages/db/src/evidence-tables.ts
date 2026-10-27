@@ -42,6 +42,7 @@ export const APPEND_ONLY_EVIDENCE_TABLES: readonly string[] = [
   "financial_audit_log",
   "integration_event_log",
   "issued_certificate_snapshot",
+  "issued_certificate_status_event",
   "job_audit_log",
   "method_audit_log",
   "non_conformance_audit_log",

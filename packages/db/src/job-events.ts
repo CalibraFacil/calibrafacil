@@ -214,6 +214,35 @@ export type JobEvent =
         reason: string;
       };
     })
+  // On the ORIGINAL, when an amendment is opened: the original stays APPROVED
+  // (still the valid certificate) until the replacement is issued; the
+  // `supersede` event then records the status change.
+  | (JobEventBase & {
+      action: "amendment_started";
+      changes: JobActorAuditFields & {
+        amendedJobId: number;
+        amendmentNumber: number;
+        reason: string;
+      };
+    })
+  // On the ORIGINAL, when its amendment is cancelled before it was issued: the
+  // original stays the valid certificate and may be amended again.
+  | (JobEventBase & {
+      action: "amendment_canceled";
+      changes: JobActorAuditFields & {
+        amendedJobId: number;
+        amendmentStatus: Change<string>;
+      };
+    })
+  // On the job whose issued certificate was withdrawn (ISO/IEC 17025 §7.10).
+  // The job keeps its status; the certificate lifecycle moves to WITHDRAWN.
+  | (JobEventBase & {
+      action: "certificate_withdrawn";
+      changes: JobActorAuditFields & {
+        certificateStatus: Change<string>;
+        reason: string;
+      };
+    })
   | (JobEventBase & {
       action: "certificate_generated";
       changes: {

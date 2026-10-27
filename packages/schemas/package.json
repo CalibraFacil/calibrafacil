@@ -10,6 +10,10 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./certificate-lifecycle": {
+      "types": "./src/certificate-lifecycle.ts",
+      "default": "./src/certificate-lifecycle.ts"
+    },
     "./job-transitions": {
       "types": "./src/job-transitions.ts",
       "default": "./src/job-transitions.ts"

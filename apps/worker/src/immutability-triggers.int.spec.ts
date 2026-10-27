@@ -50,7 +50,7 @@ describe("worker real-DB tier runs against the immutability triggers", () => {
     );
 
     expect(guard?.n).toBe(1);
-    expect(appendOnly?.n).toBe(27);
+    expect(appendOnly?.n).toBe(28);
   });
 
   it("REQ-DBIMM-002 the worker's label write (label_url + updated_at) on an APPROVED job is allowed", async () => {

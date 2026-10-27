@@ -34,12 +34,16 @@ export function ApprovedRecordAside({
   isDownloadingLabel,
   labelPending,
   amendAvailability,
+  canAmend,
+  canWithdraw,
+  withdrawAvailability,
   flagOutOfToleranceAvailability,
   canFlagOutOfTolerance,
   handleDownloadCertificate,
   handleDownloadLabel,
   handleGenerateLabel,
   setIsAmendDialogOpen,
+  setIsWithdrawDialogOpen,
   setIsOotDialogOpen,
 }: {
   job: ApprovedJobRecordData
@@ -49,12 +53,16 @@ export function ApprovedRecordAside({
   isDownloadingLabel: boolean
   labelPending: boolean
   amendAvailability: Availability
+  canAmend: boolean
+  canWithdraw: boolean
+  withdrawAvailability: Availability
   flagOutOfToleranceAvailability: Availability
   canFlagOutOfTolerance: boolean
   handleDownloadCertificate: () => void
   handleDownloadLabel: () => void
   handleGenerateLabel: () => void
   setIsAmendDialogOpen: (open: boolean) => void
+  setIsWithdrawDialogOpen: (open: boolean) => void
   setIsOotDialogOpen: (open: boolean) => void
 }) {
   return (
@@ -156,7 +164,7 @@ export function ApprovedRecordAside({
               <HugeiconsIcon icon={Mail01Icon} className="mr-2 h-4 w-4" />
               Enviar por Email
             </Button>
-            {job.status !== 'SUPERSEDED' && (
+            {canAmend && (
               <ActionAvailabilityGate
                 availability={amendAvailability}
                 className="w-full"
@@ -170,6 +178,27 @@ export function ApprovedRecordAside({
                   >
                     <HugeiconsIcon icon={Edit02Icon} className="mr-2 h-4 w-4" />
                     Retificar Certificado
+                  </Button>
+                )}
+              </ActionAvailabilityGate>
+            )}
+            {canWithdraw && (
+              <ActionAvailabilityGate
+                availability={withdrawAvailability}
+                className="w-full"
+              >
+                {({ disabled }) => (
+                  <Button
+                    variant="ghost"
+                    disabled={disabled}
+                    className={`${REVIEW_ACTION_BUTTON_CLASS} w-full justify-start text-destructive hover:bg-destructive/10 hover:text-destructive`}
+                    onClick={() => setIsWithdrawDialogOpen(true)}
+                  >
+                    <HugeiconsIcon
+                      icon={Alert02Icon}
+                      className="mr-2 h-4 w-4"
+                    />
+                    Retirar Certificado
                   </Button>
                 )}
               </ActionAvailabilityGate>

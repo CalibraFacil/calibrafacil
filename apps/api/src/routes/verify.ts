@@ -3,6 +3,11 @@ import { Hono } from "hono";
 import { normalizeAccreditationNumber } from "@calibra-facil/shared";
 import { issuedSealOf } from "../lib/frozen-seal";
 import {
+  loadCertificateLifecycles,
+  withdrawalOf,
+} from "../lib/certificate-lifecycle";
+import { orgDb } from "../lib/org-db";
+import {
   verifyPdf,
   getIcpBrasilTrustAnchors,
   type VerifyPdfResult,
@@ -75,12 +80,24 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
       );
     }
 
+    // The certificate's lifecycle is the latest row of its append-only status
+    // stream (ISSUED / SUPERSEDED / WITHDRAWN, migration 0130). An original
+    // whose amendment is still being worked on is ISSUED: it stays the valid
+    // certificate until the replacement is issued, and only then reads as
+    // superseded (the worker writes both in one transaction).
+    const lifecycle = (
+      await orgDb(job.organizationId).transaction((o) =>
+        loadCertificateLifecycles(o, [
+          { id: job.id, supersededById: job.supersededById },
+        ]),
+      )
+    ).get(job.id);
+    const certificateStatus = lifecycle?.status ?? "ISSUED";
+    const withdrawal = withdrawalOf(lifecycle);
+
     // If superseded, get the replacement job info — but only once the
-    // replacement is itself publicly verifiable. When an amendment is opened
-    // the replacement is created as DRAFT and supersededById is set on the
-    // original immediately; /verify only serves APPROVED/SUPERSEDED jobs, so
-    // surfacing a still-draft replacement would link auditors from a valid
-    // superseded certificate to an "invalid" page labelled as the current one.
+    // replacement is itself publicly verifiable (an issued, approved job), so a
+    // valid certificate never links to a draft.
     let supersededByInfo = null;
     if (job.supersededById) {
       const replacement = await findPublicAmendmentLink(
@@ -142,7 +159,10 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
     });
 
     return c.json({
-      valid: true,
+      // A withdrawn certificate is authentic but must not be relied on.
+      valid: certificateStatus !== "WITHDRAWN",
+      certificateStatus,
+      withdrawnAt: withdrawal ? withdrawal.withdrawnAt.toISOString() : null,
       jobId: job.jobId,
       status: job.status,
       hasDocument: !!job.certificateUrl,
@@ -174,7 +194,7 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
           }
         : { signed: false },
       // Amendment information - ISO 17025 Clause 7.8.4.1
-      isSuperseded: !!job.supersededById,
+      isSuperseded: !!job.supersededById || certificateStatus === "SUPERSEDED",
       isAmendment: !!job.supersedesId,
       amendmentNumber: job.amendmentNumber,
       amendmentReason: job.amendmentReason,

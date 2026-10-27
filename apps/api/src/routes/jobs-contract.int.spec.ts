@@ -367,14 +367,19 @@ describe("jobs endpoints: real responses honor the contract schemas (REQ-TC-5)",
       jobAmendResponseSchema,
       201,
     );
-    expect(amended.originalJob.status).toBe("SUPERSEDED");
+    expect(amended.originalJob.status).toBe("APPROVED");
     expect(amended.amendedJob.amendmentNumber).toBe(1);
 
-    const superseded = await parsedBody(
+    // Still the valid certificate: not superseded until the replacement is issued.
+    const original = await parsedBody(
       await jobsRouter.request(`/${id}`),
       jobDetailSchema,
     );
-    expect(superseded.supersededById).toBe(amended.amendedJob.id);
+    expect(original.supersededById).toBeNull();
+    expect(original.amendmentInProgress).toMatchObject({
+      id: amended.amendedJob.id,
+      status: "DRAFT",
+    });
     await parsedBody(
       await jobsRouter.request(`/${amended.amendedJob.id}`),
       jobDetailSchema,

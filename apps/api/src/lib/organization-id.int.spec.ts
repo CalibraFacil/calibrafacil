@@ -423,6 +423,11 @@ async function fillerRow(
 
 const COMPOSITE_KEYS = listTenancy().flatMap((table) => table.compositeKeys);
 
+/** Filler values a table's CHECK constraints need (the generic 'x' would fail them). */
+const CHECKED_FILLERS: Record<string, Record<string, string>> = {
+  issued_certificate_status_event: { event: "'ISSUED'", source: "'api'" },
+};
+
 describe("REQ-ORG-3: every composite tenant key refuses a cross-tenant child (all of them, from the registry)", () => {
   beforeEach(async () => {
     await truncateAll();
@@ -479,6 +484,7 @@ describe("REQ-ORG-3: every composite tenant key refuses a cross-tenant child (al
         );
         if (!parent) throw new Error("probe parent not stored");
         const childRow = await fillerRow(key.table, {
+          ...CHECKED_FILLERS[key.table],
           organization_id: `'${childOrganization}'`,
           [key.column]: String(parent.id),
         });

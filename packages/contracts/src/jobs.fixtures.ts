@@ -7,6 +7,7 @@ import type {
   JobFlagOotResponse,
   JobGenerateLabelResponse,
   JobMutationResponse,
+  JobWithdrawCertificateResponse,
   JobRow,
   JobsListResponse,
 } from "./jobs";
@@ -321,13 +322,22 @@ export function buildJobsList(): JobsListResponse {
 export function buildJobAmendResponse(): JobAmendResponse {
   return {
     message: "Retificacao criada com sucesso",
-    originalJob: { id: 7, jobId: "CAL-0007", status: "SUPERSEDED" },
+    originalJob: { id: 7, jobId: "CAL-0007", status: "APPROVED" },
     amendedJob: {
       id: 8,
       jobId: "CAL-0007-R1",
       status: "DRAFT",
       amendmentNumber: 1,
     },
+  };
+}
+
+export function buildJobWithdrawCertificateResponse(): JobWithdrawCertificateResponse {
+  return {
+    message: "Certificado retirado com sucesso",
+    job: { id: 7, jobId: "CAL-0007", status: "APPROVED" },
+    certificateStatus: "WITHDRAWN",
+    withdrawnAt: "2026-03-10T14:30:00.000Z",
   };
 }
 

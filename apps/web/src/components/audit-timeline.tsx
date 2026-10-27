@@ -318,6 +318,9 @@ const actionLabels: Record<string, string> = {
   execute: 'Executado',
   supersede: 'Certificado retificado',
   create_amendment: 'Retificação criada',
+  amendment_started: 'Retificação iniciada (o certificado segue válido)',
+  amendment_canceled: 'Retificação cancelada (o certificado segue válido)',
+  certificate_withdrawn: 'Certificado retirado',
 }
 
 /**
@@ -351,6 +354,9 @@ function mapActionToEventType(action: string): TimelineEvent['type'] {
     execute: 'executed',
     supersede: 'superseded',
     create_amendment: 'amendment_created',
+    amendment_started: 'amendment_created',
+    amendment_canceled: 'canceled',
+    certificate_withdrawn: 'canceled',
   }
   return actionMap[action] || 'custom'
 }

@@ -5,6 +5,7 @@ import {
   buildJobExecutionWarning,
   buildJobMutationResponse,
   buildJobsList,
+  buildJobWithdrawCertificateResponse,
 } from "@calibra-facil/contracts/jobs-fixtures";
 import { describe, expect, it, vi } from "vitest";
 
@@ -120,6 +121,33 @@ describe("jobs module response contracts", () => {
     const { client } = clientReplying({ body: link });
     expect(await client.jobs.getCertificateDownloadUrl(7)).toEqual(link);
     expect(await client.jobs.getLabelDownloadUrl(7)).toEqual(link);
+  });
+
+  it("REQ-TC-2: withdrawCertificate posts the reason to the certificate route and validates the answer", async () => {
+    const { client, requests } = clientReplying({
+      body: buildJobWithdrawCertificateResponse(),
+    });
+
+    const withdrawn = await client.jobs.withdrawCertificate(
+      7,
+      "Padrao de referencia recolhido",
+    );
+
+    expect(withdrawn.certificateStatus).toBe("WITHDRAWN");
+    expect(requests).toEqual([
+      {
+        url: "https://api.example.test/api/jobs/7/certificate/withdraw",
+        method: "POST",
+      },
+    ]);
+    await expect(
+      clientReplying({
+        body: {
+          ...buildJobWithdrawCertificateResponse(),
+          certificateStatus: "ISSUED",
+        },
+      }).client.jobs.withdrawCertificate(7, "Padrao de referencia recolhido"),
+    ).rejects.toBeInstanceOf(ResponseContractError);
   });
 
   it("REQ-TC-2: strict mode (the default) rejects a response that breaks its contract", async () => {

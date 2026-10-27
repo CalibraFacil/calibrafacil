@@ -646,6 +646,35 @@ export type JobsListResponse = z.infer<typeof jobsListResponseSchema>;
 // GET /api/jobs/:id
 // ---------------------------------------------------------------------------
 
+export const certificateLifecycleStatusSchema = z.enum([
+  "ISSUED",
+  "SUPERSEDED",
+  "WITHDRAWN",
+]);
+export type CertificateLifecycleStatusValue = z.infer<
+  typeof certificateLifecycleStatusSchema
+>;
+
+export const jobCertificateLifecycleSchema = z.object({
+  status: certificateLifecycleStatusSchema,
+  /** When the latest status event happened; null for a certificate with no event. */
+  changedAt: nullableTimestamp,
+  /** The written reason of the latest event (a withdrawal always has one). */
+  reason: nullableString,
+});
+export type JobCertificateLifecycle = z.infer<
+  typeof jobCertificateLifecycleSchema
+>;
+
+export const jobAmendmentInProgressSchema = z.object({
+  id: z.number(),
+  jobId: z.string(),
+  status: jobStatusSchema,
+});
+export type JobAmendmentInProgress = z.infer<
+  typeof jobAmendmentInProgressSchema
+>;
+
 export const jobDetailSchema = z.object({
   id: z.number(),
   jobId: z.string(),
@@ -667,6 +696,14 @@ export const jobDetailSchema = z.object({
   // Q42: the seal decision frozen at approval, with the reason it was withheld.
   // Absent from the desktop local server (cloud-frozen data only).
   accreditationSeal: jobAccreditationSealSchema.nullable().optional(),
+  // The lifecycle of the issued certificate, derived from its append-only
+  // status events (ISO/IEC 17025 §7.8.8, §7.10): ISSUED, SUPERSEDED once an
+  // amendment was issued, WITHDRAWN. Null for a job with no issued certificate;
+  // absent from the desktop local server (cloud-only data).
+  certificateLifecycle: jobCertificateLifecycleSchema.nullable().optional(),
+  // The open amendment of this certificate, when there is one: the original
+  // stays APPROVED (the valid certificate) until the replacement is issued.
+  amendmentInProgress: jobAmendmentInProgressSchema.nullable().optional(),
   methodDeviations: nullableString,
   // Frozen snapshot, or (for jobs still open) one derived from the live asset.
   assetSnapshot: jobAssetSnapshotSchema.nullable(),
@@ -857,10 +894,11 @@ export type JobExecutionResponse = z.infer<typeof jobExecutionResponseSchema>;
 /** POST /:id/amend */
 export const jobAmendResponseSchema = z.object({
   message: z.string(),
+  // Still APPROVED: the original is superseded only when the replacement is issued.
   originalJob: z.object({
     id: z.number(),
     jobId: z.string(),
-    status: z.literal("SUPERSEDED"),
+    status: z.literal("APPROVED"),
   }),
   amendedJob: z.object({
     id: z.number(),
@@ -870,6 +908,21 @@ export const jobAmendResponseSchema = z.object({
   }),
 });
 export type JobAmendResponse = z.infer<typeof jobAmendResponseSchema>;
+
+/** POST /:id/certificate/withdraw */
+export const jobWithdrawCertificateResponseSchema = z.object({
+  message: z.string(),
+  job: z.object({
+    id: z.number(),
+    jobId: z.string(),
+    status: jobStatusSchema,
+  }),
+  certificateStatus: z.literal("WITHDRAWN"),
+  withdrawnAt: isoTimestamp,
+});
+export type JobWithdrawCertificateResponse = z.infer<
+  typeof jobWithdrawCertificateResponseSchema
+>;
 
 /** GET /technicians/list */
 export const jobTechniciansResponseSchema = z.object({

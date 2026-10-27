@@ -31,6 +31,8 @@ function jsonResponse(body: unknown, init?: ResponseInit): Response {
 function validPayload(overrides: Record<string, unknown> = {}) {
   return {
     valid: true,
+    certificateStatus: "ISSUED",
+    withdrawnAt: null,
     jobId: "CAL-2026-0001",
     status: "APPROVED",
     hasDocument: true,
@@ -204,6 +206,67 @@ describe("VerificationPage", () => {
 
     expect(
       await screen.findByRole("heading", { name: "Certificado substituído" }),
+    ).toBeTruthy();
+    expect(screen.getByText("Ver versão vigente: CAL-2026-0002")).toBeTruthy();
+  });
+
+  it("REQ-B3-V1: an original whose amendment is still in progress reads as a valid, authentic certificate", async () => {
+    // The API says nothing about an open amendment: the original is ISSUED.
+    stubFetch(
+      validPayload({ certificateStatus: "ISSUED", isSuperseded: false }),
+    );
+
+    renderPage();
+
+    expect(
+      await screen.findByRole("heading", { name: "Certificado autêntico" }),
+    ).toBeTruthy();
+    expect(screen.queryByText("Certificado substituído")).toBeNull();
+    expect(screen.queryByText("Certificado retirado")).toBeNull();
+  });
+
+  it("REQ-B3-V2 [HIGH RISK]: a withdrawn certificate says so, with the date, and is not presented as authentic and current", async () => {
+    stubFetch(
+      validPayload({
+        valid: false,
+        certificateStatus: "WITHDRAWN",
+        withdrawnAt: "2026-07-01T12:00:00.000Z",
+      }),
+    );
+
+    renderPage();
+
+    expect(
+      await screen.findByRole("heading", { name: "Certificado retirado" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/foi retirado pelo laboratório emissor/),
+    ).toBeTruthy();
+    expect(screen.getByText(/Não o utilize como referência/)).toBeTruthy();
+    expect(screen.queryByText("Certificado autêntico")).toBeNull();
+  });
+
+  it("REQ-B3-V2: a superseded certificate that was also withdrawn leads with the withdrawal and still links to its replacement", async () => {
+    stubFetch(
+      validPayload({
+        valid: false,
+        status: "SUPERSEDED",
+        certificateStatus: "WITHDRAWN",
+        withdrawnAt: "2026-07-01T12:00:00.000Z",
+        isSuperseded: true,
+        supersededAt: "2026-06-01T12:00:00.000Z",
+        supersededBy: {
+          id: 2,
+          jobId: "CAL-2026-0002",
+          verificationToken: "22222222-2222-2222-2222-222222222222",
+        },
+      }),
+    );
+
+    renderPage();
+
+    expect(
+      await screen.findByRole("heading", { name: "Certificado retirado" }),
     ).toBeTruthy();
     expect(screen.getByText("Ver versão vigente: CAL-2026-0002")).toBeTruthy();
   });

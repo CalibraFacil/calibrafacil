@@ -1,9 +1,14 @@
 import { Client } from "pg";
+import { appendCertificateStatusEvent } from "@calibra-facil/db/certificate-status-events";
 import {
   appendJobEvent,
   type SignatureAudit,
 } from "@calibra-facil/db/job-events";
-import { targetOf } from "@calibra-facil/schemas/job-transitions";
+import { deriveCertificateLifecycle } from "@calibra-facil/schemas/certificate-lifecycle";
+import {
+  requireTargetOf,
+  targetOf,
+} from "@calibra-facil/schemas/job-transitions";
 import {
   signAndTimestampPdf,
   verifyPdf,
@@ -17,6 +22,7 @@ import {
 import { resolveTsaConfig } from "./tsa-config.js";
 import { resolveSigningPolicy, SigningPolicyError } from "./signing-policy.js";
 import {
+  notifyCertificateAmended,
   notifyCertificateReady,
   notifySigningCertificateLapsed,
 } from "@calibra-facil/notifications";
@@ -221,7 +227,15 @@ async function fetchSigningCertificate(
  *   whatever it created for this issuance.
  */
 export type CertificateTransitionResult =
-  | { outcome: "issued" }
+  | {
+      outcome: "issued";
+      /**
+       * Set when this issuance replaced an earlier certificate (an amendment):
+       * the original job, superseded in the SAME transaction, and the written
+       * reason of the amendment. The caller tells the customer once it commits.
+       */
+      supersession?: { originalJobId: number; reason: string | null };
+    }
   | { outcome: "watermarked" }
   | { outcome: "skipped"; currentStatus: string | null };
 
@@ -304,7 +318,13 @@ export async function updateJobWithCertificate(
   // Compare-and-set: SUPERSEDED jobs are being regenerated with watermark and
   // keep their status; GENERATING_PDF becomes APPROVED. A job that left the
   // expected status since the read above matches zero rows.
-  const updated = await client.query<{ id: number; organization_id: string }>(
+  const updated = await client.query<{
+    id: number;
+    organization_id: string;
+    job_id: string;
+    supersedes_id: number | null;
+    amendment_reason: string | null;
+  }>(
     `
     UPDATE calibration_job
     SET
@@ -314,7 +334,7 @@ export async function updateJobWithCertificate(
       signature_verdict = CASE WHEN $6 THEN $7::jsonb ELSE signature_verdict END,
       updated_at = $4
     WHERE id = $1 AND status = $9
-    RETURNING id, organization_id
+    RETURNING id, organization_id, job_id, supersedes_id, amendment_reason
     `,
     [
       jobId,
@@ -340,6 +360,32 @@ export async function updateJobWithCertificate(
       : { signed: false };
   const organizationId = jobOrganizationOf(updated.rows, jobId);
   const actor = workerJobActor(userId);
+
+  // The amendment's certificate is issued: the original stops being the valid
+  // one in THIS transaction, never before (ISO/IEC 17025 §7.8.8). It takes the
+  // original's row lock, so it runs BEFORE this transaction's first audit row:
+  // an audit insert holds the organization's hash-chain lock until COMMIT
+  // (migration 0131), and a row lock taken after it can deadlock against a
+  // transaction (a withdrawal, an amendment) that holds that row and then audits.
+  const replaced = updated.rows[0];
+  let supersession: { originalJobId: number; reason: string | null } | null =
+    null;
+  if (!isSuperseded && replaced?.supersedes_id) {
+    await supersedeOriginalOnIssuance(client, {
+      organizationId,
+      originalJobId: replaced.supersedes_id,
+      replacementJobId: jobId,
+      replacementNumber: replaced.job_id,
+      reason: replaced.amendment_reason,
+      userId,
+      now,
+    });
+    supersession = {
+      originalJobId: replaced.supersedes_id,
+      reason: replaced.amendment_reason,
+    };
+  }
+
   await appendJobEvent(
     jobEventTransaction(client),
     isSuperseded
@@ -369,7 +415,199 @@ export async function updateJobWithCertificate(
         },
   );
 
-  return { outcome: isSuperseded ? "watermarked" : "issued" };
+  if (isSuperseded) return { outcome: "watermarked" };
+  return supersession
+    ? { outcome: "issued", supersession }
+    : { outcome: "issued" };
+}
+
+/**
+ * Records the ISSUED event of the certificate `jobId` just got (migration 0132),
+ * once: a re-drain or a replay of an interrupted issuance finds it and adds
+ * nothing. Runs on the issuance transaction, after the snapshot row exists.
+ */
+export async function recordCertificateIssued(
+  client: Client,
+  params: { organizationId: string; jobId: number; userId: string; at: Date },
+): Promise<void> {
+  const snapshot = await client.query<{ id: number }>(
+    `SELECT id FROM issued_certificate_snapshot WHERE job_id = $1 LIMIT 1`,
+    [params.jobId],
+  );
+  const certificateId = snapshot.rows[0]?.id;
+  if (certificateId === undefined) return;
+  const existing = await client.query(
+    `SELECT 1 FROM issued_certificate_status_event
+      WHERE certificate_id = $1 AND event = 'ISSUED' LIMIT 1`,
+    [certificateId],
+  );
+  if (existing.rows.length > 0) return;
+  await appendCertificateStatusEvent(jobEventTransaction(client), {
+    organizationId: params.organizationId,
+    certificateId,
+    jobId: params.jobId,
+    event: "ISSUED",
+    source: "worker",
+    actorUserId: params.userId,
+    occurredAt: params.at,
+  });
+}
+
+/**
+ * The original of an amendment becomes SUPERSEDED, in the transaction that
+ * issues the replacement (roadmap 2 B3): compare-and-set APPROVED -> SUPERSEDED
+ * under the original's row lock, its `supersede` audit row and its SUPERSEDED
+ * status event. Until this runs the original stays APPROVED and valid, so a
+ * cancelled or rejected amendment, or a render that failed, leaves it untouched.
+ *
+ * An original an earlier release already superseded at creation time (an
+ * amendment opened before 0132 and still in flight) is linked to this job
+ * already: only its event is added. Anything else is an inconsistency that must
+ * not issue a second "current" certificate: it throws and the issuance rolls back.
+ *
+ * A certificate WITHDRAWN in the meantime stays withdrawn: the job is linked to
+ * its replacement, but no SUPERSEDED event is appended, because the latest event
+ * is what the verification page shows and "do not rely on it" outranks
+ * "replaced".
+ */
+async function supersedeOriginalOnIssuance(
+  client: Client,
+  params: {
+    organizationId: string;
+    originalJobId: number;
+    replacementJobId: number;
+    replacementNumber: string;
+    reason: string | null;
+    userId: string;
+    now: Date;
+  },
+): Promise<void> {
+  const original = await client.query<{
+    status: string;
+    superseded_by_id: number | null;
+  }>(
+    `SELECT status, superseded_by_id FROM calibration_job
+      WHERE id = $1 AND organization_id = $2 FOR UPDATE`,
+    [params.originalJobId, params.organizationId],
+  );
+  const row = original.rows[0];
+  if (!row) {
+    throw new Error(
+      `Amendment ${params.replacementJobId}: the original job ${params.originalJobId} was not found`,
+    );
+  }
+  const supersededStatus = requireTargetOf("APPROVED", "amend");
+
+  if (row.status === "APPROVED" && row.superseded_by_id === null) {
+    const updated = await client.query(
+      `UPDATE calibration_job
+          SET status = $3,
+              superseded_by_id = $4,
+              superseded_at = $5,
+              amendment_reason = $6
+        WHERE id = $1 AND organization_id = $2
+          AND status = 'APPROVED' AND superseded_by_id IS NULL`,
+      [
+        params.originalJobId,
+        params.organizationId,
+        supersededStatus,
+        params.replacementJobId,
+        params.now,
+        params.reason,
+      ],
+    );
+    if (updated.rowCount !== 1) {
+      throw new Error(
+        `Amendment ${params.replacementJobId}: the original job ${params.originalJobId} changed under the issuance`,
+      );
+    }
+    await appendJobEvent(jobEventTransaction(client), {
+      action: "supersede",
+      organizationId: params.organizationId,
+      jobId: params.originalJobId,
+      actor: workerJobActor(params.userId),
+      performedAt: params.now,
+      changes: {
+        status: { old: row.status, new: supersededStatus },
+        supersededById: params.replacementJobId,
+      },
+      reason: `Certificado retificado. Novo: ${params.replacementNumber}. Motivo: ${params.reason ?? "nao informado"}`,
+    });
+  } else if (
+    !(
+      row.status === supersededStatus &&
+      row.superseded_by_id === params.replacementJobId
+    )
+  ) {
+    throw new Error(
+      `Amendment ${params.replacementJobId}: the original job ${params.originalJobId} is ${row.status} (superseded by ${row.superseded_by_id ?? "nobody"}) and cannot be superseded by it`,
+    );
+  }
+
+  const certificate = await client.query<{ id: number }>(
+    `SELECT id FROM issued_certificate_snapshot
+      WHERE job_id = $1 AND organization_id = $2 LIMIT 1`,
+    [params.originalJobId, params.organizationId],
+  );
+  const certificateId = certificate.rows[0]?.id;
+  if (certificateId === undefined) return;
+  const events = await client.query<{
+    id: number;
+    event: "ISSUED" | "SUPERSEDED" | "WITHDRAWN" | "REINSTATED";
+    reason: string | null;
+    occurred_at: Date;
+  }>(
+    `SELECT id, event, reason, occurred_at FROM issued_certificate_status_event
+      WHERE certificate_id = $1 ORDER BY id`,
+    [certificateId],
+  );
+  const lifecycle = deriveCertificateLifecycle(
+    events.rows.map((event) => ({
+      id: event.id,
+      event: event.event,
+      reason: event.reason,
+      occurredAt: event.occurred_at,
+    })),
+    null,
+  );
+  if (lifecycle.status === "WITHDRAWN" || lifecycle.status === "SUPERSEDED") {
+    return;
+  }
+  await appendCertificateStatusEvent(jobEventTransaction(client), {
+    organizationId: params.organizationId,
+    certificateId,
+    jobId: params.originalJobId,
+    event: "SUPERSEDED",
+    supersededByJobId: params.replacementJobId,
+    reason: params.reason,
+    source: "worker",
+    actorUserId: params.userId,
+    occurredAt: params.now,
+  });
+}
+
+/**
+ * Customer-facing "certificate amended" notice: sent only once the replacement is
+ * issued and the original superseded (after the issuance COMMITs), never when the
+ * amendment is merely opened. Best effort, like the "ready" mail.
+ */
+export async function notifyCertificateSuperseded(
+  originalJobId: number,
+  replacementJobId: number,
+  reason: string | null,
+): Promise<void> {
+  try {
+    await notifyCertificateAmended(
+      originalJobId,
+      replacementJobId,
+      reason ?? "Retificacao do certificado",
+    );
+  } catch (error) {
+    console.error(
+      `[JOB ${replacementJobId}] Failed to send the amendment notification for ${originalJobId}:`,
+      error,
+    );
+  }
 }
 
 /** Customer-facing "certificate ready" mail; only after the issuance COMMITs. */

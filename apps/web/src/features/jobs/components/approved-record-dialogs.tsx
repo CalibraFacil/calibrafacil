@@ -42,9 +42,11 @@ export function AmendCertificateDialog({
             Retificar Certificado
           </DialogTitle>
           <DialogDescription>
-            Esta ação criará uma nova versão do certificado e marcará o atual
-            como <strong>CANCELADO</strong>. Esta operação é irreversível e será
-            registrada no histórico de auditoria.
+            Esta ação criará um rascunho de retificação com todo o registro
+            técnico do certificado atual. O certificado atual{' '}
+            <strong>permanece válido</strong> e só passa a substituído quando a
+            retificação for emitida; se o rascunho for cancelado, nada muda. A
+            ação é registrada no histórico de auditoria.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
@@ -93,6 +95,85 @@ export function AmendCertificateDialog({
               </>
             ) : (
               'Criar Retificação'
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export function WithdrawCertificateDialog({
+  isWithdrawDialogOpen,
+  setIsWithdrawDialogOpen,
+  withdrawalReason,
+  setWithdrawalReason,
+  isWithdrawing,
+  handleWithdrawCertificate,
+}: {
+  isWithdrawDialogOpen: boolean
+  setIsWithdrawDialogOpen: Dispatch<SetStateAction<boolean>>
+  withdrawalReason: string
+  setWithdrawalReason: Dispatch<SetStateAction<string>>
+  isWithdrawing: boolean
+  handleWithdrawCertificate: () => void
+}) {
+  return (
+    <Dialog open={isWithdrawDialogOpen} onOpenChange={setIsWithdrawDialogOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <HugeiconsIcon
+              icon={Alert02Icon}
+              className="h-5 w-5 text-destructive"
+            />
+            Retirar Certificado
+          </DialogTitle>
+          <DialogDescription>
+            O certificado deixa de valer: a página pública de verificação e o
+            portal do cliente passam a mostrá-lo como <strong>retirado</strong>.
+            O registro e o PDF são mantidos. A ação é registrada no histórico de
+            auditoria e só pode ser feita uma vez.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 py-4">
+          <Label htmlFor="withdrawal-reason">
+            Motivo da retirada <span className="text-destructive">*</span>
+          </Label>
+          <Textarea
+            id="withdrawal-reason"
+            placeholder="Descreva o motivo da retirada (mínimo 10 caracteres)..."
+            value={withdrawalReason}
+            onChange={(e) => setWithdrawalReason(e.target.value)}
+            rows={4}
+          />
+          <p className="text-xs text-muted-foreground">
+            {withdrawalReason.trim().length}/10 caracteres mínimos
+          </p>
+        </div>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button
+            variant="outline"
+            onClick={() => {
+              setIsWithdrawDialogOpen(false)
+              setWithdrawalReason('')
+            }}
+            disabled={isWithdrawing}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={handleWithdrawCertificate}
+            disabled={isWithdrawing || withdrawalReason.trim().length < 10}
+          >
+            {isWithdrawing ? (
+              <>
+                <Spinner className="mr-2 h-4 w-4" />
+                Retirando...
+              </>
+            ) : (
+              'Retirar Certificado'
             )}
           </Button>
         </DialogFooter>

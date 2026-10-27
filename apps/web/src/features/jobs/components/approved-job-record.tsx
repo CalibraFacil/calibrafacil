@@ -14,6 +14,7 @@ import { ApprovedRecordHero } from './approved-record-hero'
 import {
   AmendCertificateDialog,
   OutOfToleranceDialog,
+  WithdrawCertificateDialog,
 } from './approved-record-dialogs'
 import { ApprovedRecordAmendmentBanner } from './approved-record-amendment-banner'
 import { ApprovedRecordMain } from './approved-record-main'
@@ -89,6 +90,16 @@ export function ApprovedJobRecord({
     amendmentReason,
     setAmendmentReason,
     isAmending,
+    canAmend,
+    canWithdraw,
+    isWithdrawn,
+    withdrawAvailability,
+    isWithdrawDialogOpen,
+    setIsWithdrawDialogOpen,
+    withdrawalReason,
+    setWithdrawalReason,
+    isWithdrawing,
+    handleWithdrawCertificate,
     isOutOfToleranceAsFound,
     flagOutOfToleranceAvailability,
     amendAvailability,
@@ -132,15 +143,20 @@ export function ApprovedJobRecord({
         isGeneratingLabel={isGeneratingLabel}
         isDownloadingLabel={isDownloadingLabel}
         amendAvailability={amendAvailability}
+        canAmend={canAmend}
+        canWithdraw={canWithdraw}
+        withdrawAvailability={withdrawAvailability}
         handleDownloadLabel={handleDownloadLabel}
         handleGenerateLabel={handleGenerateLabel}
         setIsAmendDialogOpen={setIsAmendDialogOpen}
+        setIsWithdrawDialogOpen={setIsWithdrawDialogOpen}
       />
 
       {/* Quality-record seal hero */}
       <ApprovedRecordHero
         job={job}
         isSuperseded={isSuperseded}
+        isWithdrawn={isWithdrawn}
         isOutOfToleranceAsFound={isOutOfToleranceAsFound}
         pointsTotal={pointsTotal}
         pointsWithin={pointsWithin}
@@ -158,6 +174,16 @@ export function ApprovedJobRecord({
         handleAmendCertificate={handleAmendCertificate}
       />
 
+      {/* Withdrawal Dialog - ISO 17025 Clause 7.10 */}
+      <WithdrawCertificateDialog
+        isWithdrawDialogOpen={isWithdrawDialogOpen}
+        setIsWithdrawDialogOpen={setIsWithdrawDialogOpen}
+        withdrawalReason={withdrawalReason}
+        setWithdrawalReason={setWithdrawalReason}
+        isWithdrawing={isWithdrawing}
+        handleWithdrawCertificate={handleWithdrawCertificate}
+      />
+
       {/* §7.10 Out-of-tolerance NC Dialog (#426) */}
       <OutOfToleranceDialog
         isOotDialogOpen={isOotDialogOpen}
@@ -173,9 +199,10 @@ export function ApprovedJobRecord({
       />
 
       {/* Amendment Info Banner - ISO 17025 Clause 7.8.4.1 */}
-      {(job.supersedesId || job.supersededById) && (
-        <ApprovedRecordAmendmentBanner job={job} />
-      )}
+      {(job.supersedesId ||
+        job.supersededById ||
+        job.amendmentInProgress ||
+        isWithdrawn) && <ApprovedRecordAmendmentBanner job={job} />}
 
       <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <ApprovedRecordMain
@@ -193,12 +220,16 @@ export function ApprovedJobRecord({
           isDownloadingLabel={isDownloadingLabel}
           labelPending={labelPending}
           amendAvailability={amendAvailability}
+          canAmend={canAmend}
+          canWithdraw={canWithdraw}
+          withdrawAvailability={withdrawAvailability}
           flagOutOfToleranceAvailability={flagOutOfToleranceAvailability}
           canFlagOutOfTolerance={canFlagOutOfTolerance}
           handleDownloadCertificate={handleDownloadCertificate}
           handleDownloadLabel={handleDownloadLabel}
           handleGenerateLabel={handleGenerateLabel}
           setIsAmendDialogOpen={setIsAmendDialogOpen}
+          setIsWithdrawDialogOpen={setIsWithdrawDialogOpen}
           setIsOotDialogOpen={setIsOotDialogOpen}
         />
       </div>

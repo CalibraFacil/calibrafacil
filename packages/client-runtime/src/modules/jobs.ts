@@ -8,6 +8,7 @@ import {
   jobGenerateLabelResponseSchema,
   jobMutationResponseSchema,
   jobTechniciansResponseSchema,
+  jobWithdrawCertificateResponseSchema,
   jobsListResponseSchema,
   standardsListResponseSchema,
   type JobStatus,
@@ -75,6 +76,9 @@ export type JobsRawCloudClient = {
           ): Promise<Response>;
         };
         amend: JobPostRoute<JobIdParam & { json: { reason: string } }>;
+        certificate: {
+          withdraw: JobPostRoute<JobIdParam & { json: { reason: string } }>;
+        };
         execute: JobPostRoute<JobIdParam & { json: JobExecutionPayload }>;
         submit: JobPostRoute<JobIdParam & { json: JobExecutionPayload }>;
       };
@@ -334,6 +338,17 @@ export function createJobsApi(
         jobAmendResponseSchema,
         "POST /api/jobs/:id/amend",
         "Falha ao criar retificação",
+      );
+    },
+    async withdrawCertificate(jobId: string | number, reason: string) {
+      return validated(
+        await rawCloudClient.api.jobs[":id"].certificate.withdraw.$post({
+          param: { id: apiRouteParam(jobId) },
+          json: { reason },
+        }),
+        jobWithdrawCertificateResponseSchema,
+        "POST /api/jobs/:id/certificate/withdraw",
+        "Falha ao retirar o certificado",
       );
     },
   };

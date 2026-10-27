@@ -93,6 +93,7 @@ import type {
   EffectiveEnvironmentalLimitsResponse,
   EnvironmentalLimitsResponse,
   JobAmendResponse,
+  JobWithdrawCertificateResponse,
   JobCreateResponse,
   JobDetail,
   JobDownloadUrlResponse,
@@ -236,6 +237,15 @@ export interface JobsApi {
     options?: { language?: "zpl" | "tspl"; dpi?: 203 | 300 },
   ): Promise<string>;
   amend(jobId: string | number, reason: string): Promise<JobAmendResponse>;
+  /**
+   * §7.10: withdraws the issued certificate (admin/owner; a written reason is
+   * mandatory). The job keeps its status; the certificate lifecycle becomes
+   * WITHDRAWN and the verification page and the portal say so.
+   */
+  withdrawCertificate(
+    jobId: string | number,
+    reason: string,
+  ): Promise<JobWithdrawCertificateResponse>;
   /**
    * §7.10 (#426): flags an approved job as out-of-tolerance (as found) —
    * opens a typed NC and, when notifyCustomer, generates the customer

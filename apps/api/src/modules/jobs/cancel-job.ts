@@ -151,6 +151,26 @@ export async function cancelJob(
       ipAddress: actor.ipAddress ?? null,
       reason: command.reason,
     });
+
+    // An amendment cancelled before it was issued: the original was never
+    // superseded (it stays APPROVED, the valid certificate) and may be amended
+    // again, because a CANCELED job no longer occupies the one-amendment slot
+    // (migration 0130). Say so on the original's own trail.
+    if (existing.supersedesId !== null) {
+      await appendJobEvent(tx, {
+        action: "amendment_canceled",
+        organizationId,
+        jobId: existing.supersedesId,
+        actor: { kind: "user", userId: actor.userId },
+        changes: {
+          ...jobActorAuditFields(actor),
+          amendedJobId: existing.id,
+          amendmentStatus: { old: existing.status, new: canceledStatus },
+        },
+        ipAddress: actor.ipAddress ?? null,
+        reason: `Retificacao ${existing.jobId} cancelada: o certificado original segue valido. ${command.reason}`,
+      });
+    }
     return row;
   });
   if (!updated) return { status: "concurrent_update" };

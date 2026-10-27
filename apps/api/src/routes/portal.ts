@@ -354,6 +354,10 @@ import {
   resolvePortalAmendmentInfo,
   PORTAL_TERMINAL_CERTIFICATE_STATUSES,
 } from "../lib/certificate-amendment-chain";
+import {
+  loadCertificateLifecycles,
+  withdrawalOf,
+} from "../lib/certificate-lifecycle";
 import { portalBaseUrl } from "@calibra-facil/shared/public-urls";
 
 /**
@@ -2073,14 +2077,30 @@ export const portalRouter = new Hono<{
       // Amendment chips (§7.8.8) — derived from the row's own links, same
       // semantics as the public verification page: superseded reads as
       // superseded even while its replacement is still in DRAFT.
-      const certificates = gatedCertificates.map((row) => ({
-        ...row,
-        isSuperseded:
-          row.supersededById !== null || row.status === "SUPERSEDED",
-        isAmendment: row.supersedesId !== null,
-        supersedesId: undefined,
-        supersededById: undefined,
-      }));
+      // The lifecycle (ISSUED / SUPERSEDED / WITHDRAWN) is the latest row of
+      // the certificate's append-only status stream: an original whose
+      // amendment is still in progress is ISSUED and stays valid.
+      const lifecycles = await loadCertificateLifecycles(
+        o,
+        gatedCertificates.map((row) => ({
+          id: row.id,
+          supersededById: row.supersededById,
+        })),
+      );
+      const certificates = gatedCertificates.map((row) => {
+        const lifecycle = lifecycles.get(row.id);
+        return {
+          ...row,
+          certificateStatus: lifecycle?.status ?? "ISSUED",
+          withdrawnAt:
+            withdrawalOf(lifecycle)?.withdrawnAt.toISOString() ?? null,
+          isSuperseded:
+            row.supersededById !== null || row.status === "SUPERSEDED",
+          isAmendment: row.supersedesId !== null,
+          supersedesId: undefined,
+          supersededById: undefined,
+        };
+      });
 
       return c.json({
         data: certificates,
@@ -2202,6 +2222,11 @@ export const portalRouter = new Hono<{
         labOrganizationIds,
       );
       const releaseStatus = gated?.releaseStatus ?? "RELEASED";
+      const lifecycle = (
+        await loadCertificateLifecycles(o, [
+          { id: certificate.id, supersededById: certificate.supersededById },
+        ])
+      ).get(certificate.id);
 
       // The seal is the decision frozen at approval (Q42); only a record
       // approved before it was frozen falls back to the rule it was issued
@@ -2268,6 +2293,8 @@ export const portalRouter = new Hono<{
             ? null
             : certificate.certificateUrl,
         releaseStatus,
+        certificateStatus: lifecycle?.status ?? "ISSUED",
+        withdrawnAt: withdrawalOf(lifecycle)?.withdrawnAt.toISOString() ?? null,
         verdict,
         onSite,
         amendment,

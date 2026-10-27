@@ -172,6 +172,7 @@ type ApiRoutePath =
   | "/api/jobs/:id/amend"
   | "/api/jobs/:id/approve"
   | "/api/jobs/:id/assign"
+  | "/api/jobs/:id/certificate/withdraw"
   | "/api/jobs/:id/download"
   | "/api/jobs/:id/download-label"
   | "/api/jobs/:id/execute"

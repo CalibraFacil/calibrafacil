@@ -440,7 +440,7 @@ describe("calibration_job immutability trigger (migration 0115)", () => {
     expect(await statusOf(id)).toBe("SUPERSEDED");
   });
 
-  it("REQ-DBIMM-002: the amend route still supersedes an APPROVED job and creates the DRAFT amendment", async () => {
+  it("REQ-DBIMM-002: the amend route creates the DRAFT amendment and leaves the APPROVED original untouched (it is superseded when the replacement is issued)", async () => {
     const fixture = await seedFixture();
     loginAs({ userId: fixture.userId, organizationId: fixture.orgId });
     const id = await seedJob(fixture, "APPROVED", { jobId: "CAL-ROUTE-AMEND" });
@@ -452,7 +452,7 @@ describe("calibration_job immutability trigger (migration 0115)", () => {
     });
 
     expect(res.status).toBe(201);
-    expect(await statusOf(id)).toBe("SUPERSEDED");
+    expect(await statusOf(id)).toBe("APPROVED");
     const amendments = await db
       .select({ status: calibrationJob.status })
       .from(calibrationJob)

@@ -13,6 +13,7 @@ import {
   jobMethodSnapshotSchema,
   jobMutationResponseSchema,
   jobRowSchema,
+  jobWithdrawCertificateResponseSchema,
   jobsListResponseSchema,
 } from "./jobs";
 import { portalOverviewResponseSchema } from "./portal";
@@ -37,6 +38,10 @@ const registry = {
   buildJobAmendResponse: [
     fixtures.buildJobAmendResponse,
     jobAmendResponseSchema,
+  ],
+  buildJobWithdrawCertificateResponse: [
+    fixtures.buildJobWithdrawCertificateResponse,
+    jobWithdrawCertificateResponseSchema,
   ],
   buildSimpleMethodSnapshot: [
     fixtures.buildSimpleMethodSnapshot,
