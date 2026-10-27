@@ -783,6 +783,7 @@ REVOKE UPDATE, DELETE, TRUNCATE ON public."customer_audit_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."financial_audit_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."integration_event_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."issued_certificate_snapshot" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."issued_certificate_status_event" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."job_audit_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."method_audit_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."non_conformance_audit_log" FROM calibra_app;
@@ -798,6 +799,10 @@ REVOKE UPDATE, DELETE, TRUNCATE ON public."visit_audit_log" FROM calibra_app;
 REVOKE UPDATE, TRUNCATE ON public."certificate_input" FROM calibra_app;
 -- END generated: calibra_evidence_grants
 
+../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24"} (current: {"node":"v22.21.1","pnpm":"11.3.0"})
+Scope: all 32 workspace projects
+
+Done in 5.5s using pnpm v11.3.0
 -- BEGIN generated: calibra_rls_tenant_isolation
 ALTER TABLE public."accredited_scope_line" ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON public."accredited_scope_line";
@@ -1047,6 +1052,11 @@ CREATE POLICY tenant_isolation ON public."invitation" AS PERMISSIVE FOR ALL TO c
 ALTER TABLE public."issued_certificate_snapshot" ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON public."issued_certificate_snapshot";
 CREATE POLICY tenant_isolation ON public."issued_certificate_snapshot" AS PERMISSIVE FOR ALL TO calibra_app
+  USING ("organization_id" = NULLIF(current_setting('calibra.organization_id', true), '')::text)
+  WITH CHECK ("organization_id" = NULLIF(current_setting('calibra.organization_id', true), '')::text);
+ALTER TABLE public."issued_certificate_status_event" ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON public."issued_certificate_status_event";
+CREATE POLICY tenant_isolation ON public."issued_certificate_status_event" AS PERMISSIVE FOR ALL TO calibra_app
   USING ("organization_id" = NULLIF(current_setting('calibra.organization_id', true), '')::text)
   WITH CHECK ("organization_id" = NULLIF(current_setting('calibra.organization_id', true), '')::text);
 ALTER TABLE public."job_audit_log" ENABLE ROW LEVEL SECURITY;
@@ -1704,3 +1714,37 @@ DROP TRIGGER IF EXISTS job_audit_log_hash_chain ON public.job_audit_log;
 CREATE TRIGGER job_audit_log_hash_chain
   BEFORE INSERT ON public.job_audit_log
   FOR EACH ROW EXECUTE FUNCTION calibra_audit_chain_before_insert();
+
+
+-- Certificate lifecycle events (migration 0132): append-only status stream of an issued
+-- certificate (ISSUED / SUPERSEDED / WITHDRAWN / REINSTATED). Same guard as the other
+-- evidence tables and the CHECKs a drizzle push cannot express; UPDATE, DELETE and TRUNCATE
+-- are revoked from calibra_app by the generated evidence-grants block above.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'issued_certificate_status_event_event_check') THEN
+    ALTER TABLE "issued_certificate_status_event"
+      ADD CONSTRAINT "issued_certificate_status_event_event_check"
+      CHECK ("event" IN ('ISSUED', 'SUPERSEDED', 'WITHDRAWN', 'REINSTATED'));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'issued_certificate_status_event_reason_check') THEN
+    ALTER TABLE "issued_certificate_status_event"
+      ADD CONSTRAINT "issued_certificate_status_event_reason_check"
+      CHECK ("event" NOT IN ('WITHDRAWN', 'REINSTATED') OR length(btrim(coalesce("reason", ''))) > 0);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'issued_certificate_status_event_superseded_by_check') THEN
+    ALTER TABLE "issued_certificate_status_event"
+      ADD CONSTRAINT "issued_certificate_status_event_superseded_by_check"
+      CHECK ("event" <> 'SUPERSEDED' OR "superseded_by_job_id" IS NOT NULL);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'issued_certificate_status_event_source_check') THEN
+    ALTER TABLE "issued_certificate_status_event"
+      ADD CONSTRAINT "issued_certificate_status_event_source_check"
+      CHECK ("source" IN ('api', 'worker', 'migration'));
+  END IF;
+END
+$$;
+DROP TRIGGER IF EXISTS issued_certificate_status_event_append_only ON public.issued_certificate_status_event;
+CREATE TRIGGER issued_certificate_status_event_append_only
+  BEFORE UPDATE OR DELETE ON public.issued_certificate_status_event
+  FOR EACH ROW EXECUTE FUNCTION calibra_append_only();

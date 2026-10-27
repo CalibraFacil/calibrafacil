@@ -90,7 +90,7 @@ under "Nulled".
 
 ## Evidence tables
 
-73 evidence tables out of 137; 397 foreign keys in schema.ts, 116 of them ON DELETE CASCADE.
+74 evidence tables out of 138; 402 foreign keys in schema.ts, 116 of them ON DELETE CASCADE.
 Each entry lists the foreign keys the table itself carries, which are the only way a parent's deletion reaches it.
 
 ### Technical records (calibration, SPC, OOT) (10)
@@ -154,7 +154,7 @@ Each entry lists the foreign keys the table itself carries, which are the only w
   - `unit_id` to `organization_unit`: RESTRICT. blocks the delete of the parent.
   - `created_by` to `user`: RESTRICT. blocks the delete of the parent.
 
-### Certificates (4)
+### Certificates (5)
 
 - `certificate_input`
   - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
@@ -172,6 +172,12 @@ Each entry lists the foreign keys the table itself carries, which are the only w
   - `job_id` to `calibration_job`: RESTRICT. blocks the delete of the parent.
   - `issued_by` to `user`: SET NULL. actor column: the row stays, the actor reference is cleared.
   - `voided_by` to `user`: SET NULL. actor column: the row stays, the actor reference is cleared.
+- `issued_certificate_status_event`
+  - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
+  - `certificate_id` to `issued_certificate_snapshot`: RESTRICT. blocks the delete of the parent.
+  - `job_id` to `calibration_job`: RESTRICT. blocks the delete of the parent.
+  - `superseded_by_job_id` to `calibration_job`: RESTRICT. blocks the delete of the parent.
+  - `actor_user_id` to `user`: SET NULL. actor column: the row stays, the actor reference is cleared.
 
 ### Audit logs (22)
 
@@ -458,7 +464,7 @@ Rows Postgres deletes along with it (47 tables by CASCADE): `accredited_scope_li
 
 - Evidence deleted by CASCADE: **0**.
 - Evidence columns nulled by SET NULL: **9**.
-- Evidence tables that make Postgres refuse the delete (RESTRICT / NO ACTION): **95**.
+- Evidence tables that make Postgres refuse the delete (RESTRICT / NO ACTION): **96**.
 
 Nulled:
 
@@ -519,6 +525,7 @@ Refused by:
 - `organization` ⇒ `corrective_action_audit_log.organization_id` RESTRICT (`corrective_action_audit_log`)
 - `organization` ⇒ `customer_audit_log.organization_id` RESTRICT (`customer_audit_log`)
 - `organization` ⇒ `issued_certificate_snapshot.organization_id` RESTRICT (`issued_certificate_snapshot`)
+- `organization` ⇒ `issued_certificate_status_event.organization_id` RESTRICT (`issued_certificate_status_event`)
 - `organization` ⇒ `job_audit_log.organization_id` RESTRICT (`job_audit_log`)
 - `organization` → `customer` (`auth_organization_id`) ⇒ `job_commercial_snapshot.customer_id` RESTRICT (`job_commercial_snapshot`)
 - `organization` ⇒ `job_commercial_snapshot.organization_id` RESTRICT (`job_commercial_snapshot`)
@@ -623,7 +630,7 @@ Refused by:
 Rows Postgres deletes along with it (12 tables by CASCADE): `account`, `invitation`, `lab_account_setup_token`, `member`, `member_unit_assignment`, `member_visual_signature`, `notification`, `notification_preference`, `passkey`, `portal_export_job`, `session`, `sso_provider`.
 
 - Evidence deleted by CASCADE: **0**.
-- Evidence columns nulled by SET NULL: **41**.
+- Evidence columns nulled by SET NULL: **42**.
 - Evidence tables that make Postgres refuse the delete (RESTRICT / NO ACTION): **55**.
 
 Nulled:
@@ -649,6 +656,7 @@ Nulled:
 - `user` ⇒ `certificate_release_audit_log.actor_user_id` (`certificate_release_audit_log`)
 - `user` ⇒ `issued_certificate_snapshot.issued_by` (`issued_certificate_snapshot`)
 - `user` ⇒ `issued_certificate_snapshot.voided_by` (`issued_certificate_snapshot`)
+- `user` ⇒ `issued_certificate_status_event.actor_user_id` (`issued_certificate_status_event`)
 - `user` ⇒ `organization_api_key_audit_log.performed_by` (`organization_api_key_audit_log`)
 - `user` → `member` (`user_id`) ⇒ `organization_event_log.actor_member_id` (`organization_event_log`)
 - `user` ⇒ `organization_event_log.actor_user_id` (`organization_event_log`)

@@ -73,7 +73,10 @@ export const GLOBAL_TABLES: Readonly<Record<string, string>> = {
  * not part of 0118's backfill: its specs and its emulation of the database as it
  * was before the migration leave them out.
  */
-export const CREATED_AFTER_0118: readonly string[] = ["certificate_input"];
+export const CREATED_AFTER_0118: readonly string[] = [
+  "certificate_input",
+  "issued_certificate_status_event",
+];
 
 /**
  * Tenant children that gained `organization_id` in migration 0118. `column` is

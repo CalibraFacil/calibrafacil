@@ -918,6 +918,13 @@
       "when": 1793300000000,
       "tag": "0131_audit_hash_chain",
       "breakpoints": true
+    },
+    {
+      "idx": 132,
+      "version": "7",
+      "when": 1793400000000,
+      "tag": "0132_certificate_lifecycle_events",
+      "breakpoints": true
     }
   ]
 }

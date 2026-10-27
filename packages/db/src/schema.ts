@@ -874,10 +874,36 @@ export const organizationEmailDomain = pgTable(
  */
 export type IssuedCertificateRenderPipeline = "XLSX_LEGACY" | "FIXED_LAYOUT";
 
+/**
+ * @deprecated Never written. `issued_certificate_snapshot.status` (and
+ * `superseded_by_id`, `voided_*`) sit behind the append-only trigger of
+ * migration 0115, so they stay at their defaults forever. The lifecycle of an
+ * issued certificate is the status-event stream
+ * (`issued_certificate_status_event`, migration 0132); read it, not this.
+ */
 export type IssuedCertificateSnapshotStatus =
   | "ISSUED"
   | "SUPERSEDED"
   | "VOIDED";
+
+/**
+ * One step of an issued certificate's life (ISO/IEC 17025 §7.8.8 amendments,
+ * §7.10 nonconforming work):
+ *
+ * - ISSUED: the certificate was released (the worker's issuance transaction).
+ * - SUPERSEDED: an amendment replaced it, written in the same transaction that
+ *   issues the replacement (`supersededByJobId` names it).
+ * - WITHDRAWN: the laboratory withdrew it (a recall, say); a written reason is
+ *   mandatory.
+ * - REINSTATED: a withdrawal was lifted; a written reason is mandatory.
+ *
+ * The current state is the LATEST event of the certificate.
+ */
+export type IssuedCertificateStatusEventType =
+  | "ISSUED"
+  | "SUPERSEDED"
+  | "WITHDRAWN"
+  | "REINSTATED";
 
 export type CertificateXlsxRenderPolicy = {
   formulas: "preserve" | "rejectVolatile";
@@ -947,6 +973,12 @@ export const issuedCertificateSnapshot = pgTable(
     inputDataSnapshot: jsonb("input_data_snapshot")
       .$type<Record<string, unknown>>()
       .notNull(),
+    /**
+     * @deprecated Dead column, kept so no data is dropped: the append-only
+     * trigger (0115) makes it unwritable, so it is always "ISSUED". The
+     * certificate's current state is the latest row of
+     * `issued_certificate_status_event`.
+     */
     status: text("status")
       .$type<IssuedCertificateSnapshotStatus>()
       .default("ISSUED")
@@ -955,11 +987,15 @@ export const issuedCertificateSnapshot = pgTable(
       onDelete: "set null",
     }),
     issuedAt: timestamp("issued_at").defaultNow().notNull(),
+    /** @deprecated Dead column (see `status`): use the status events. */
     supersededById: integer("superseded_by_id"),
+    /** @deprecated Dead column (see `status`): use the status events. */
     voidedAt: timestamp("voided_at"),
+    /** @deprecated Dead column (see `status`): use the status events. */
     voidedBy: text("voided_by").references(() => user.id, {
       onDelete: "set null",
     }),
+    /** @deprecated Dead column (see `status`): use the status events. */
     voidReason: text("void_reason"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
@@ -971,6 +1007,65 @@ export const issuedCertificateSnapshot = pgTable(
       table.templateVersionId,
     ),
     index("issued_certificate_snapshot_status_idx").on(table.status),
+  ],
+);
+
+/**
+ * The lifecycle of an issued certificate as an append-only event stream
+ * (roadmap 2 B3; ISO/IEC 17025 §7.8.8, §7.10). Written by the issuance
+ * (ISSUED), by the amendment's issuance (SUPERSEDED, on the ORIGINAL, in the
+ * same transaction that issues the replacement) and by the withdraw command
+ * (WITHDRAWN / REINSTATED). Never updated or deleted: the trigger of migration
+ * 0132 refuses both, like the other evidence tables.
+ *
+ * The state of a certificate is its latest event, `deriveCertificateLifecycle`
+ * in `@calibra-facil/schemas`. A certificate issued before this table has its
+ * ISSUED (and SUPERSEDED) rows from the 0132 backfill.
+ *
+ * `certificateId` and `jobId` are RESTRICT, like the snapshot: evidence is never
+ * erased by deleting what it documents.
+ */
+export const issuedCertificateStatusEvent = pgTable(
+  "issued_certificate_status_event",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "restrict" }),
+    certificateId: integer("certificate_id")
+      .notNull()
+      .references(() => issuedCertificateSnapshot.id, { onDelete: "restrict" }),
+    /** The job whose certificate this is (denormalised for lookups by job). */
+    jobId: integer("job_id")
+      .notNull()
+      .references(() => calibrationJob.id, { onDelete: "restrict" }),
+    event: text("event").$type<IssuedCertificateStatusEventType>().notNull(),
+    /** SUPERSEDED only: the job whose issuance replaced this certificate. */
+    supersededByJobId: integer("superseded_by_job_id").references(
+      () => calibrationJob.id,
+      { onDelete: "restrict" },
+    ),
+    /** Mandatory for WITHDRAWN and REINSTATED (CHECK, schema-extras.sql). */
+    reason: text("reason"),
+    actorUserId: text("actor_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    /** Which process wrote it: the API, the worker finishing an issuance, or the 0132 backfill. */
+    source: text("source").$type<"api" | "worker" | "migration">().notNull(),
+    occurredAt: timestamp("occurred_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("issued_certificate_status_event_cert_idx").on(
+      table.certificateId,
+      table.id,
+    ),
+    index("issued_certificate_status_event_job_idx").on(table.jobId),
+    index("issued_certificate_status_event_org_idx").on(table.organizationId),
+    foreignKey({
+      columns: [table.jobId, table.organizationId],
+      foreignColumns: [calibrationJob.id, calibrationJob.organizationId],
+      name: "issued_certificate_status_event_job_id_tenant_fk",
+    }).onDelete("restrict"),
   ],
 );
 
@@ -3982,11 +4077,16 @@ export const calibrationJob = pgTable(
     uniqueIndex("job_org_job_id_uidx").on(table.organizationId, table.jobId),
     // Amendment tracking indexes for efficient chain lookups
     index("job_supersedes_id_idx").on(table.supersedesId),
-    // A certificate is amended at most once: two concurrent amendments of the
-    // same approved job must not both survive (ISO 17025 §7.8.8 chain).
+    // One amendment in progress per certificate: two concurrent amendments of
+    // the same approved job must not both survive (ISO 17025 §7.8.8 chain). A
+    // CANCELED amendment (terminal) is not "in progress": the original is still
+    // the valid certificate and may be amended again (migration 0132; until
+    // then the index covered every amendment ever started).
     uniqueIndex("job_supersedes_id_uidx")
       .on(table.supersedesId)
-      .where(sql`${table.supersedesId} is not null`),
+      .where(
+        sql`${table.supersedesId} is not null and ${table.status} <> 'CANCELED'`,
+      ),
     index("job_superseded_by_id_idx").on(table.supersededById),
     // DOM-02: resolve "does this repair OS already have a calibration opened?"
     // (the pending-after-repair queue leftJoins on this column).

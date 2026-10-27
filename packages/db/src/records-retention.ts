@@ -91,6 +91,7 @@ export const EVIDENCE_REGISTRY: Readonly<Record<string, EvidenceCategory>> = {
   // certificates
   issued_certificate_snapshot: "certificate",
   certificate_input: "certificate",
+  issued_certificate_status_event: "certificate",
   certificate_release: "certificate",
   certificate_numbering_sequence: "certificate",
   // reference standards

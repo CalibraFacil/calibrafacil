@@ -434,6 +434,75 @@ describe("appendJobEvent stored row shapes (REQ-AUD-2)", () => {
   });
 });
 
+describe("appendJobEvent certificate lifecycle events (REQ-AUD-2, roadmap 2 B3)", () => {
+  it("REQ-AUD-2: amendment_started stores the amendment opened on the original, which stays valid", async () => {
+    const row = await storedRow({
+      action: "amendment_started",
+      organizationId: ORG,
+      jobId: 7,
+      actor,
+      reason: "Retificacao iniciada",
+      changes: { amendedJobId: 8, amendmentNumber: 1, reason: "erro" },
+    });
+    expect(row).toEqual({
+      organizationId: ORG,
+      jobId: 7,
+      action: "amendment_started",
+      changes: { amendedJobId: 8, amendmentNumber: 1, reason: "erro" },
+      performedBy: USER,
+      ipAddress: null,
+      reason: "Retificacao iniciada",
+    });
+  });
+
+  it("REQ-AUD-2: amendment_canceled stores the cancelled amendment on the original", async () => {
+    const row = await storedRow({
+      action: "amendment_canceled",
+      organizationId: ORG,
+      jobId: 7,
+      actor,
+      changes: {
+        amendedJobId: 8,
+        amendmentStatus: { old: "DRAFT", new: "CANCELED" },
+      },
+    });
+    expect(row).toMatchObject({
+      action: "amendment_canceled",
+      changes: {
+        amendedJobId: 8,
+        amendmentStatus: { old: "DRAFT", new: "CANCELED" },
+      },
+    });
+  });
+
+  it("REQ-AUD-2: certificate_withdrawn stores the lifecycle move and the written reason", async () => {
+    const row = await storedRow({
+      action: "certificate_withdrawn",
+      organizationId: ORG,
+      jobId: 7,
+      actor,
+      ipAddress: "203.0.113.7",
+      reason: "Padrao recolhido",
+      changes: {
+        certificateStatus: { old: "ISSUED", new: "WITHDRAWN" },
+        reason: "Padrao recolhido",
+      },
+    });
+    expect(row).toEqual({
+      organizationId: ORG,
+      jobId: 7,
+      action: "certificate_withdrawn",
+      changes: {
+        certificateStatus: { old: "ISSUED", new: "WITHDRAWN" },
+        reason: "Padrao recolhido",
+      },
+      performedBy: USER,
+      ipAddress: "203.0.113.7",
+      reason: "Padrao recolhido",
+    });
+  });
+});
+
 describe("appendJobEvent worker and backstop events (REQ-AUD-2)", () => {
   const workerActor = {
     kind: "system",
