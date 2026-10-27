@@ -79,6 +79,8 @@ type Certificate = {
   isSuperseded: boolean;
   isAmendment: boolean;
   amendmentNumber: number | null;
+  /** Lifecycle of the issued certificate (ISO 17025 §7.10): WITHDRAWN = do not rely on it. */
+  certificateStatus: "ISSUED" | "SUPERSEDED" | "WITHDRAWN";
 };
 
 type CertificatesResponse = {
@@ -213,7 +215,9 @@ const columns: ColumnDef<Certificate>[] = [
     // distinguishable at a glance — same vocabulary as the public
     // verification page.
     cell: ({ row }) =>
-      row.original.isSuperseded ? (
+      row.original.certificateStatus === "WITHDRAWN" ? (
+        <StatusPill tone="critical">Retirado</StatusPill>
+      ) : row.original.isSuperseded ? (
         <StatusPill tone="warning">Substituído</StatusPill>
       ) : row.original.isAmendment ? (
         <StatusPill tone="info">

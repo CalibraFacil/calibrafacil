@@ -25,6 +25,7 @@ import { CertificateReleaseControl } from '@/features/finance/certificate-releas
 export function ApprovedRecordHero({
   job,
   isSuperseded,
+  isWithdrawn,
   isOutOfToleranceAsFound,
   pointsTotal,
   pointsWithin,
@@ -33,6 +34,7 @@ export function ApprovedRecordHero({
 }: {
   job: ApprovedJobRecordData
   isSuperseded: boolean
+  isWithdrawn: boolean
   isOutOfToleranceAsFound: boolean
   pointsTotal: number
   pointsWithin: number
@@ -83,18 +85,30 @@ export function ApprovedRecordHero({
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
             <Badge
-              variant={isSuperseded ? 'outline' : 'default'}
+              variant={
+                isWithdrawn
+                  ? 'destructive'
+                  : isSuperseded
+                    ? 'outline'
+                    : 'default'
+              }
               className={cn(
-                isSuperseded
-                  ? 'border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
-                  : 'bg-emerald-600 text-white',
+                isWithdrawn
+                  ? undefined
+                  : isSuperseded
+                    ? 'border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
+                    : 'bg-emerald-600 text-white',
               )}
             >
               <HugeiconsIcon
                 icon={CheckmarkCircle02Icon}
                 className="mr-1 h-3 w-3"
               />
-              {isSuperseded ? 'Retificado' : 'Aprovado'}
+              {isWithdrawn
+                ? 'Retirado'
+                : isSuperseded
+                  ? 'Retificado'
+                  : 'Aprovado'}
             </Badge>
             {isOutOfToleranceAsFound && (
               <Badge variant="destructive">

@@ -98,6 +98,7 @@ describe("REQ-OFF-2: the policy registry matches the Q13 offline scope", () => {
     "jobs.reject",
     "jobs.getCertificateDownloadUrl",
     "jobs.amend",
+    "jobs.withdrawCertificate",
     "signingCertificates.upload",
     "finance.getOverview",
     "organizationLifecycle.softDelete",

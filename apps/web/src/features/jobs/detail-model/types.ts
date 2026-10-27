@@ -108,6 +108,18 @@ export type ApprovedJobRecordData = {
   amendmentNumber?: number | null
   amendmentReason?: string | null
   supersededAt?: string | null
+  /**
+   * The lifecycle of the issued certificate (ISO/IEC 17025 §7.8.8, §7.10),
+   * from its status events: ISSUED, SUPERSEDED once an amendment was issued,
+   * WITHDRAWN. Absent for a job read from the desktop local server.
+   */
+  certificateLifecycle?: {
+    status: 'ISSUED' | 'SUPERSEDED' | 'WITHDRAWN'
+    changedAt: string | null
+    reason: string | null
+  } | null
+  /** The open amendment of this certificate: it stays valid until that one is issued. */
+  amendmentInProgress?: { id: number; jobId: string; status: string } | null
   asFoundConformity?: AsFoundConformity | null
   asFoundMargins?: number[] | null
   scopeOverrideJustification?: string | null

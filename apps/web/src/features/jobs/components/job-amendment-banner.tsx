@@ -22,7 +22,7 @@ export function JobAmendmentBanner({ job }: { job: JobDetailData }) {
         <p className="text-sm text-amber-700">
           Esta calibração é uma <strong>retificação</strong> (versão{' '}
           {job.amendmentNumber || 1}) que substituirá o certificado original
-          após aprovação.
+          quando for emitida. Até lá, o certificado original permanece válido.
         </p>
         {job.amendmentReason && (
           <div className="mt-3 p-3 bg-white/60 rounded-md border border-amber-200">

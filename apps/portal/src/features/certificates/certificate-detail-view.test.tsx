@@ -43,6 +43,8 @@ function certificate(overrides: Partial<Certificate> = {}): Certificate {
     dueDate: null,
     certificateUrl: "https://r2.example/cert.pdf",
     releaseStatus: "RELEASED",
+    certificateStatus: "ISSUED",
+    withdrawnAt: null,
     verificationToken: "11111111-2222-3333-4444-555555555555",
     verdict: null,
     methodSnapshot: null,
@@ -85,6 +87,30 @@ function amendmentInfo(
 
 afterEach(() => {
   cleanup();
+});
+
+describe("CertificateDetailView — withdrawn certificate (§7.10)", () => {
+  it("REQ-B3-V3 [HIGH RISK]: a withdrawn certificate is flagged first, with the date, and the header pill says Retirado", () => {
+    render(
+      <CertificateDetailView
+        certificate={certificate({
+          certificateStatus: "WITHDRAWN",
+          withdrawnAt: "2026-07-03T12:00:00.000Z",
+        })}
+      />,
+    );
+
+    expect(screen.getByText("Certificado retirado")).toBeTruthy();
+    expect(screen.getByText(/Não o utilize como referência/)).toBeTruthy();
+    expect(screen.getByText("Retirado")).toBeTruthy();
+  });
+
+  it("REQ-B3-V3: an issued certificate, even with an amendment in progress, shows no withdrawal", () => {
+    render(<CertificateDetailView certificate={certificate()} />);
+
+    expect(screen.queryByText("Certificado retirado")).toBeNull();
+    expect(screen.queryByText("Retirado")).toBeNull();
+  });
 });
 
 describe("CertificateDetailView — amendment chain (§7.8.8)", () => {

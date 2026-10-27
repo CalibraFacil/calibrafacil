@@ -699,6 +699,7 @@ export function createDesktopApiClient(
           getLabelDownloadUrl: "Download de etiqueta publicada",
           getLabelCommands: "Geração de comandos da etiqueta",
           amend: "Retificação de certificado",
+          withdrawCertificate: "Retirada de certificado",
           flagOutOfTolerance: "Sinalização de fora de tolerância",
         },
       }),

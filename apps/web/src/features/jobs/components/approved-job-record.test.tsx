@@ -6,8 +6,10 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ApprovedJobRecordData } from '@/features/jobs/detail-model'
@@ -29,6 +31,7 @@ const toastMocks = vi.hoisted(() => ({
 const apiMocks = vi.hoisted(() => ({
   amend: vi.fn(),
   generateLabel: vi.fn(),
+  withdrawCertificate: vi.fn(),
 }))
 
 vi.mock('@/components/method-runtime/math-runtime', () => ({
@@ -38,6 +41,13 @@ vi.mock('@/components/method-runtime/math-runtime', () => ({
 
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => navigate,
+  Link: ({
+    children,
+    className,
+  }: {
+    children?: ReactNode
+    className?: string
+  }) => <a className={className}>{children}</a>,
 }))
 
 vi.mock('@/features/jobs/queries', () => queryMocks)
@@ -47,6 +57,7 @@ vi.mock('@/utils/api', () => ({
     jobs: {
       amend: apiMocks.amend,
       generateLabel: apiMocks.generateLabel,
+      withdrawCertificate: apiMocks.withdrawCertificate,
     },
   },
 }))
@@ -121,8 +132,127 @@ describe('ApprovedJobRecord certificate distribution', () => {
   })
 })
 
+describe('ApprovedJobRecord certificate lifecycle (7.8.8 amendments, 7.10 withdrawal)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    queryMocks.useJobCertificateDownloadUrlData.mockReturnValue({ data: null })
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('says an original with an amendment in progress is still valid, links the amendment and offers no second amendment', () => {
+    renderApprovedJobRecord({
+      amendmentInProgress: { id: 8, jobId: 'CAL-0007-R1', status: 'DRAFT' },
+      certificateLifecycle: {
+        status: 'ISSUED',
+        changedAt: '2026-05-20T10:00:00.000Z',
+        reason: null,
+      },
+    })
+
+    expect(screen.getByText('Retificação em andamento')).toBeTruthy()
+    expect(screen.getByText('CAL-0007-R1')).toBeTruthy()
+    expect(screen.getByText(/permanece válido/)).toBeTruthy()
+    expect(screen.queryByText('Retificado')).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: /retificar certificado/i }),
+    ).toBeNull()
+  })
+
+  it('offers amendment and withdrawal on an issued certificate with no amendment open', () => {
+    renderApprovedJobRecord()
+
+    expect(
+      screen.getByRole('button', { name: /retificar certificado/i }),
+    ).toBeTruthy()
+    expect(
+      screen.getByRole('button', { name: /retirar certificado/i }),
+    ).toBeTruthy()
+  })
+
+  it('shows a withdrawn certificate as retirado, with the date and reason, and offers neither action', () => {
+    renderApprovedJobRecord({
+      certificateLifecycle: {
+        status: 'WITHDRAWN',
+        changedAt: '2026-06-01T12:00:00.000Z',
+        reason: 'Padrão de referência recolhido',
+      },
+    })
+
+    expect(screen.getByText('Certificado Retirado')).toBeTruthy()
+    expect(screen.getByText('Padrão de referência recolhido')).toBeTruthy()
+    expect(screen.getByText('Retirado')).toBeTruthy()
+    expect(
+      screen.queryByRole('button', { name: /retirar certificado/i }),
+    ).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: /retificar certificado/i }),
+    ).toBeNull()
+  })
+
+  it('confirms the withdrawal in a dialog that needs a written reason, then calls the API and refreshes the record', async () => {
+    apiMocks.withdrawCertificate.mockResolvedValue({})
+    const onRefresh = vi.fn()
+    renderApprovedJobRecord({}, onRefresh)
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /retirar certificado/i }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    const confirm = within(dialog).getByRole('button', {
+      name: /retirar certificado/i,
+    })
+    expect(confirm).toHaveProperty('disabled', true)
+
+    fireEvent.change(within(dialog).getByLabelText(/motivo da retirada/i), {
+      target: { value: '  Padrão de referência recolhido  ' },
+    })
+    expect(confirm).toHaveProperty('disabled', false)
+    fireEvent.click(confirm)
+
+    await waitFor(() => {
+      expect(apiMocks.withdrawCertificate).toHaveBeenCalledWith(
+        7,
+        'Padrão de referência recolhido',
+      )
+    })
+    await waitFor(() => expect(onRefresh).toHaveBeenCalled())
+    expect(toastMocks.success).toHaveBeenCalledWith('Certificado retirado')
+  })
+
+  it('keeps the dialog open and reports the failure when the API refuses', async () => {
+    apiMocks.withdrawCertificate.mockRejectedValue(
+      new Error('Este certificado ja foi retirado'),
+    )
+    const onRefresh = vi.fn()
+    renderApprovedJobRecord({}, onRefresh)
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /retirar certificado/i }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText(/motivo da retirada/i), {
+      target: { value: 'Padrão de referência recolhido' },
+    })
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: /retirar certificado/i }),
+    )
+
+    await waitFor(() => {
+      expect(toastMocks.error).toHaveBeenCalledWith(
+        'Este certificado ja foi retirado',
+      )
+    })
+    expect(onRefresh).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).toBeTruthy()
+  })
+})
+
 function renderApprovedJobRecord(
   overrides: Partial<ApprovedJobRecordData> = {},
+  onRefresh: () => void = vi.fn(),
 ) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -132,7 +262,7 @@ function renderApprovedJobRecord(
       <ApprovedJobRecord
         job={approvedJob(overrides)}
         onBack={vi.fn()}
-        onRefresh={vi.fn()}
+        onRefresh={onRefresh}
       />
     </QueryClientProvider>,
   )

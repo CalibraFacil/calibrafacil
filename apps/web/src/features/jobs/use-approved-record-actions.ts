@@ -43,6 +43,21 @@ export function useApprovedRecordActions({
     'flagOutOfTolerance',
   )
   const amendAvailability = useOperationAvailability('jobs', 'amend')
+  const withdrawAvailability = useOperationAvailability(
+    'jobs',
+    'withdrawCertificate',
+  )
+  // The original stays valid while an amendment is in progress, but only one
+  // amendment may be open; a withdrawn certificate is not amended.
+  const isWithdrawn = job.certificateLifecycle?.status === 'WITHDRAWN'
+  const hasAmendmentInProgress = Boolean(job.amendmentInProgress)
+  const canAmend =
+    job.status !== 'SUPERSEDED' && !isWithdrawn && !hasAmendmentInProgress
+  const canWithdraw = !isWithdrawn
+  // Withdrawal state - ISO 17025 Clause 7.10
+  const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false)
+  const [withdrawalReason, setWithdrawalReason] = useState('')
+  const [isWithdrawing, setIsWithdrawing] = useState(false)
   const canFlagOutOfTolerance = isOutOfToleranceAsFound
   const [isOotDialogOpen, setIsOotDialogOpen] = useState(false)
   const [ootDescription, setOotDescription] = useState('')
@@ -135,6 +150,31 @@ export function useApprovedRecordActions({
     }
   }
 
+  // Withdraw the issued certificate - ISO 17025 Clause 7.10. The reason is
+  // mandatory; the job keeps its status and the record is refreshed.
+  const handleWithdrawCertificate = async () => {
+    const reason = withdrawalReason.trim()
+    if (reason.length < 10) {
+      toast.error('O motivo da retirada deve ter pelo menos 10 caracteres')
+      return
+    }
+
+    setIsWithdrawing(true)
+    try {
+      await calibraApi.jobs.withdrawCertificate(job.id, reason)
+      toast.success('Certificado retirado')
+      setIsWithdrawDialogOpen(false)
+      setWithdrawalReason('')
+      onRefresh()
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Erro ao retirar certificado',
+      )
+    } finally {
+      setIsWithdrawing(false)
+    }
+  }
+
   // §7.10 (#426): open a typed NC (and optional customer notification) for an
   // as-found out-of-tolerance result. Cloud-only — the button is hidden on desktop.
   const handleFlagOutOfTolerance = async () => {
@@ -174,6 +214,16 @@ export function useApprovedRecordActions({
     amendmentReason,
     setAmendmentReason,
     isAmending,
+    canAmend,
+    canWithdraw,
+    isWithdrawn,
+    withdrawAvailability,
+    isWithdrawDialogOpen,
+    setIsWithdrawDialogOpen,
+    withdrawalReason,
+    setWithdrawalReason,
+    isWithdrawing,
+    handleWithdrawCertificate,
     isOutOfToleranceAsFound,
     flagOutOfToleranceAvailability,
     amendAvailability,

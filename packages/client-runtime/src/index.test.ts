@@ -998,6 +998,11 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "withdrawCertificate",
+          "namespace": "jobs",
+          "policy": "cloud-only",
+        },
+        {
           "method": "flagOutOfTolerance",
           "namespace": "jobs",
           "policy": "cloud-only",

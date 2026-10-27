@@ -3,6 +3,7 @@ import {
   PrinterIcon,
   Mail01Icon,
   Edit02Icon,
+  Alert02Icon,
   ArrowLeft01Icon,
   MoreVerticalIcon,
 } from '@hugeicons/core-free-icons'
@@ -31,9 +32,13 @@ export function ApprovedRecordToolbar({
   isGeneratingLabel,
   isDownloadingLabel,
   amendAvailability,
+  canAmend,
+  canWithdraw,
+  withdrawAvailability,
   handleDownloadLabel,
   handleGenerateLabel,
   setIsAmendDialogOpen,
+  setIsWithdrawDialogOpen,
 }: {
   job: ApprovedJobRecordData
   onBack: () => void
@@ -41,9 +46,13 @@ export function ApprovedRecordToolbar({
   isGeneratingLabel: boolean
   isDownloadingLabel: boolean
   amendAvailability: Availability
+  canAmend: boolean
+  canWithdraw: boolean
+  withdrawAvailability: Availability
   handleDownloadLabel: () => void
   handleGenerateLabel: () => void
   setIsAmendDialogOpen: (open: boolean) => void
+  setIsWithdrawDialogOpen: (open: boolean) => void
 }) {
   return (
     <div className="flex items-center justify-between">
@@ -90,19 +99,31 @@ export function ApprovedRecordToolbar({
               Enviar por Email
             </DropdownMenuItem>
           </DropdownMenuGroup>
-          {job.status !== 'SUPERSEDED' && (
+          {(canAmend || canWithdraw) && (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
                 <DropdownMenuLabel>Mais opções</DropdownMenuLabel>
-                <DropdownMenuItem
-                  className="text-muted-foreground"
-                  disabled={!amendAvailability.available}
-                  onClick={() => setIsAmendDialogOpen(true)}
-                >
-                  <HugeiconsIcon icon={Edit02Icon} className="h-4 w-4" />
-                  Retificar Certificado
-                </DropdownMenuItem>
+                {canAmend && (
+                  <DropdownMenuItem
+                    className="text-muted-foreground"
+                    disabled={!amendAvailability.available}
+                    onClick={() => setIsAmendDialogOpen(true)}
+                  >
+                    <HugeiconsIcon icon={Edit02Icon} className="h-4 w-4" />
+                    Retificar Certificado
+                  </DropdownMenuItem>
+                )}
+                {canWithdraw && (
+                  <DropdownMenuItem
+                    className="text-destructive"
+                    disabled={!withdrawAvailability.available}
+                    onClick={() => setIsWithdrawDialogOpen(true)}
+                  >
+                    <HugeiconsIcon icon={Alert02Icon} className="h-4 w-4" />
+                    Retirar Certificado
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuGroup>
             </>
           )}

@@ -91,12 +91,22 @@ function Notice({
 }
 
 function StatusHero({ data }: { data: VerificationData }) {
+  // The lifecycle comes from the certificate's status events (ISO/IEC 17025
+  // §7.8.8, §7.10): withdrawn outranks superseded, and an original whose
+  // amendment is still in progress is simply valid.
+  const withdrawn = data.certificateStatus === "WITHDRAWN";
   const superseded = data.isSuperseded;
-  const tone: SignalTone = superseded ? "warning" : "ok";
-  const title = superseded
-    ? "Certificado substituído"
-    : "Certificado autêntico";
-  const icon = superseded ? Alert02Icon : CheckmarkCircle02Icon;
+  const tone: SignalTone = withdrawn
+    ? "critical"
+    : superseded
+      ? "warning"
+      : "ok";
+  const title = withdrawn
+    ? "Certificado retirado"
+    : superseded
+      ? "Certificado substituído"
+      : "Certificado autêntico";
+  const icon = withdrawn || superseded ? Alert02Icon : CheckmarkCircle02Icon;
 
   return (
     <Panel className="relative overflow-hidden">
@@ -454,6 +464,20 @@ export function VerificationPage({ token }: { token: string }) {
             </p>
           </div>
         </Panel>
+      ) : null}
+
+      {data.certificateStatus === "WITHDRAWN" ? (
+        <Notice tone="critical" icon={Alert02Icon} title="Certificado retirado">
+          <p>
+            Este certificado é autêntico, mas foi retirado pelo laboratório
+            emissor
+            {data.withdrawnAt
+              ? ` em ${formatInstant(data.withdrawnAt, "date")}`
+              : ""}
+            . Não o utilize como referência; em caso de dúvida, contate o
+            laboratório.
+          </p>
+        </Notice>
       ) : null}
 
       {data.isSuperseded ? (

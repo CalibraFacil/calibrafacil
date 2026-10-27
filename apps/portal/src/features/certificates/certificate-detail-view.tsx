@@ -541,6 +541,24 @@ export function CertificateDetailView({
         Certificados
       </Button>
 
+      {/* §7.10 — a withdrawn certificate must not be relied on. */}
+      {certificate.certificateStatus === "WITHDRAWN" ? (
+        <Alert variant="destructive">
+          <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} />
+          <AlertTitle>Certificado retirado</AlertTitle>
+          <AlertDescription>
+            <p>
+              Este certificado foi retirado pelo laboratório emissor
+              {certificate.withdrawnAt
+                ? ` em ${formatInstant(certificate.withdrawnAt, "date-medium")}`
+                : ""}
+              . Não o utilize como referência; em caso de dúvida, contate o
+              laboratório.
+            </p>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       {/* §7.8.8 — supersession / retificação must be the first thing read. */}
       {amendment && (amendment.isSuperseded || amendment.isAmendment) ? (
         <AmendmentNotice amendment={amendment} />
@@ -591,7 +609,9 @@ export function CertificateDetailView({
                   <StatusPill tone={conformityTone}>
                     {conformityLabel}
                   </StatusPill>
-                  {amendment?.isSuperseded ? (
+                  {certificate.certificateStatus === "WITHDRAWN" ? (
+                    <StatusPill tone="critical">Retirado</StatusPill>
+                  ) : amendment?.isSuperseded ? (
                     <StatusPill tone="warning">Substituído</StatusPill>
                   ) : amendment?.isAmendment ? (
                     <StatusPill tone="info">

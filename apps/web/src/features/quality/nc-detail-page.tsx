@@ -836,8 +836,9 @@ function OotAmendCertificateDialog({
         <DialogHeader>
           <DialogTitle>Retificar certificado</DialogTitle>
           <DialogDescription>
-            Emite um certificado retificado para a ordem {job.jobId}. O
-            certificado original passa a constar como substituído.
+            Abre um rascunho de retificação para a ordem {job.jobId}. O
+            certificado original permanece válido e só passa a constar como
+            substituído quando a retificação for emitida.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
