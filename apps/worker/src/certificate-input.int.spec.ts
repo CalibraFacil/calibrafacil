@@ -640,6 +640,10 @@ describe("REQ-CIN-4: re-rendering the same frozen input is reproducible", () => 
       await tx.execute(
         sql`select set_config('calibra.allow_audit_rewrite', 'on', true)`,
       );
+      // The snapshot's lifecycle events reference it (RESTRICT): they go first.
+      await tx.execute(
+        sql`DELETE FROM issued_certificate_status_event WHERE job_id = ${job.jobId}`,
+      );
       await tx.execute(
         sql`DELETE FROM issued_certificate_snapshot WHERE job_id = ${job.jobId}`,
       );
