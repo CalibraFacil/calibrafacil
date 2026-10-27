@@ -3,6 +3,14 @@ name: Docker images
 # Publishes the four images deploy/compose.yaml runs to GHCR, for amd64 and
 # arm64, tagged X.Y.Z, X.Y and latest. release.yml calls this for every
 # release; run it by hand to rebuild an existing version.
+#
+# Supply chain (roadmap 2 G4): every image carries a buildx SBOM and SLSA
+# provenance attestation; the multi-arch digest is signed keyless with cosign
+# (GitHub OIDC, no key to keep) and scanned with Trivy, which fails the release
+# on a CRITICAL vulnerability that has a fix. Verify an image with:
+#   cosign verify ghcr.io/calibrafacil/calibrafacil-api:<version> \
+#     --certificate-identity-regexp 'https://github.com/CalibraFacil/calibrafacil/' \
+#     --certificate-oidc-issuer https://token.actions.githubusercontent.com
 on:
   workflow_call:
     inputs:
@@ -20,6 +28,8 @@ on:
 permissions:
   contents: read
   packages: write
+  # cosign keyless signing (merge job).
+  id-token: write
 
 env:
   REGISTRY_IMAGE_PREFIX: ghcr.io/calibrafacil/calibrafacil
@@ -67,6 +77,8 @@ jobs:
             org.opencontainers.image.version=${{ inputs.version }}
             org.opencontainers.image.licenses=MIT
           outputs: type=image,name=${{ env.REGISTRY_IMAGE_PREFIX }}-${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
+          sbom: true
+          provenance: mode=max
           cache-from: type=gha,scope=${{ matrix.image }}-${{ matrix.arch }}
           cache-to: type=gha,scope=${{ matrix.image }}-${{ matrix.arch }},mode=max
 
@@ -136,4 +148,30 @@ jobs:
             $(printf "$IMAGE@sha256:%s " *)
 
       - name: Inspect
-        run: docker buildx imagetools inspect ${{ env.REGISTRY_IMAGE_PREFIX }}-${{ matrix.image }}:${{ inputs.version }}
+        id: inspect
+        env:
+          IMAGE: ${{ env.REGISTRY_IMAGE_PREFIX }}-${{ matrix.image }}:${{ inputs.version }}
+        run: |
+          docker buildx imagetools inspect "$IMAGE"
+          echo "digest=$(docker buildx imagetools inspect "$IMAGE" --format '{{json .Manifest.Digest}}' | tr -d '"')" >> "$GITHUB_OUTPUT"
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v4
+
+      - name: Sign the image (keyless)
+        env:
+          IMAGE: ${{ env.REGISTRY_IMAGE_PREFIX }}-${{ matrix.image }}@${{ steps.inspect.outputs.digest }}
+        run: cosign sign --yes "$IMAGE"
+
+      # Trivy from its own image, pinned by digest (not a third-party action).
+      - name: Scan the image (CRITICAL with a fix fails the release)
+        env:
+          IMAGE: ${{ env.REGISTRY_IMAGE_PREFIX }}-${{ matrix.image }}@${{ steps.inspect.outputs.digest }}
+          # The packages are private until the owner publishes them (Q43).
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          docker run --rm -e TRIVY_USERNAME -e TRIVY_PASSWORD \
+            aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c \
+            image --no-progress --ignore-unfixed --severity CRITICAL --exit-code 1 \
+            "$IMAGE"

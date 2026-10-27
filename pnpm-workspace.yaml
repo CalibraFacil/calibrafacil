@@ -257,7 +257,26 @@ allowBuilds:
   usb: true
   workerd: true
 
+# A version must be three days old before pnpm resolves it (roadmap 2 G4): the
+# same cooldown as Dependabot (.github/dependabot.yml), long enough for most
+# compromised releases to be caught and pulled. A security fix that cannot wait
+# goes in minimumReleaseAgeExclude below, pinned exactly, with the advisory.
+minimumReleaseAge: 4320
+
 minimumReleaseAgeExclude:
+  # GHSA-965c-763c-88jm (critical): better-auth <1.7.7 lets an OAuth state be
+  # used as a magic link to sign in as another user. 1.7.13 and its siblings
+  # (#144); drop these once they are three days old.
+  - better-auth@1.7.13
+  - "@better-auth/core@1.7.13"
+  - "@better-auth/drizzle-adapter@1.7.13"
+  - "@better-auth/kysely-adapter@1.7.13"
+  - "@better-auth/memory-adapter@1.7.13"
+  - "@better-auth/mongo-adapter@1.7.13"
+  - "@better-auth/passkey@1.7.13"
+  - "@better-auth/prisma-adapter@1.7.13"
+  - "@better-auth/sso@1.7.13"
+  - "@better-auth/telemetry@1.7.13"
   # usb 2.19.1 builds with C++17, which node-addon-api 8.8+ needs; 2.17 broke
   # the Electron packaging. Reviewed: same install script and dependencies.
   - usb@2.19.1

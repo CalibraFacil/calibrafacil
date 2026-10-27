@@ -51,6 +51,7 @@ updates:
     directories:
       - /
       - /services/gotenberg
+      - /deploy/backup
     schedule:
       interval: weekly
       day: monday

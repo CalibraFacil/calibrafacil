@@ -85,6 +85,22 @@ run unreleased code, or a fork):
 docker compose -f compose.yaml -f compose.build.yaml up -d --build
 ```
 
+Images are published only after the post-merge Safety net passed on the release commit. Each one
+carries an SBOM and a SLSA provenance attestation, is scanned with Trivy (a CRITICAL
+vulnerability with a fix stops the release), and is signed keyless with cosign. To check that an
+image was built by this repository's release workflow:
+
+```bash
+cosign verify ghcr.io/calibrafacil/calibrafacil-api:<version> \
+  --certificate-identity-regexp 'https://github.com/CalibraFacil/calibrafacil/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+docker buildx imagetools inspect ghcr.io/calibrafacil/calibrafacil-api:<version> \
+  --format '{{ json .SBOM }}'
+```
+
+The base images are pinned by digest, and the runtime Bun is the one in `.bun-version`, the same
+Bun that CI runs.
+
 ### Updating
 
 Read the [changelog](./CHANGELOG.md), back up (below), set the new `CALIBRA_VERSION` in `.env`,

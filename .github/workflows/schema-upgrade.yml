@@ -1,0 +1,108 @@
+name: Schema upgrade
+
+# Roadmap 2 G4 (review 3.6): the upgrade path is tested, not only a fresh install.
+#
+# A database bootstrapped by the previous release (N-1) is upgraded by this commit
+# (db:bootstrap on an existing database applies the pending migrations), and its
+# schema is compared with a database bootstrapped fresh by this commit (schema.ts +
+# sql/schema-extras.sql), object by object. Any difference (a migration that schema.ts or the extras
+# do not reproduce, or the reverse: a CHECK, trigger, grant, policy or index that
+# exists on one side only) fails the job.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "packages/db/**"
+      - ".github/workflows/schema-upgrade.yml"
+  push:
+    branches: [main]
+    paths:
+      - "packages/db/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: schema-upgrade-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  upgrade:
+    name: N-1 upgrade equals a fresh install
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PGPASSWORD: postgres
+      APP_PASSWORD: schema-upgrade-app-password
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: "pnpm"
+
+      - name: Start PostgreSQL and install the matching client
+        run: |
+          image=$(sed -nE 's/^[[:space:]]*image:[[:space:]]*(postgres:[^[:space:]]+).*/\1/p' deploy/compose.yaml | head -1)
+          major=$(echo "$image" | sed -E 's/^postgres:([0-9]+).*/\1/')
+          docker run --detach --name schema-pg --env POSTGRES_PASSWORD=postgres \
+            --publish 127.0.0.1:5432:5432 "$image"
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y "postgresql-client-${major}"
+          for attempt in $(seq 1 30); do
+            pg_isready -h 127.0.0.1 -U postgres && break
+            sleep 2
+          done
+          psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE upgraded" -c "CREATE DATABASE fresh"
+
+      - name: Bootstrap the previous release (N-1)
+        run: |
+          previous=$(git tag --list 'v*' --sort=-v:refname | head -1)
+          echo "Previous release: $previous"
+          git worktree add /tmp/previous "$previous"
+          cd /tmp/previous
+          pnpm install --frozen-lockfile --filter "@calibra-facil/db..."
+          DATABASE_OWNER_URL=postgres://postgres:postgres@127.0.0.1:5432/upgraded \
+          DATABASE_URL=postgres://calibra_app:${APP_PASSWORD}@127.0.0.1:5432/upgraded \
+            pnpm --dir packages/db db:bootstrap
+
+      - name: Upgrade it with this commit (N)
+        run: |
+          pnpm install --frozen-lockfile --filter "@calibra-facil/db..."
+          DATABASE_OWNER_URL=postgres://postgres:postgres@127.0.0.1:5432/upgraded \
+          DATABASE_URL=postgres://calibra_app:${APP_PASSWORD}@127.0.0.1:5432/upgraded \
+            pnpm --dir packages/db db:bootstrap
+
+      - name: Bootstrap this commit fresh
+        run: |
+          DATABASE_OWNER_URL=postgres://postgres:postgres@127.0.0.1:5432/fresh \
+          DATABASE_URL=postgres://calibra_app:${APP_PASSWORD}@127.0.0.1:5432/fresh \
+            pnpm --dir packages/db db:bootstrap
+
+      - name: Compare the two schemas
+        run: |
+          # packages/db/scripts/schema-snapshot.sql: one sorted line per column,
+          # constraint, index, trigger, function, policy and grant, so column order
+          # (a migration's ADD COLUMN appends) does not count as a difference.
+          for db in upgraded fresh; do
+            psql -h 127.0.0.1 -U postgres -d "$db" -X -q \
+              -f packages/db/scripts/schema-snapshot.sql > "/tmp/$db.txt"
+          done
+          if ! diff -u /tmp/fresh.txt /tmp/upgraded.txt > /tmp/schema.diff; then
+            echo "::error::An upgraded database differs from a fresh one (fresh = -, upgraded = +):"
+            head -200 /tmp/schema.diff
+            exit 1
+          fi
+          echo "The upgraded schema equals a fresh install ($(wc -l < /tmp/fresh.txt) objects)."

@@ -50,6 +50,9 @@ jobs:
       - name: Check blocked dependencies
         run: bun scripts/check-blocked-deps.mjs
 
+      - name: Image pins (Bun version, base-image digests)
+        run: node scripts/check-bun-pin.mjs
+
       # No app may depend on another app: code two apps share lives in a package
       # (the background-job handlers are @calibra-facil/jobs-core).
       - name: App boundaries
