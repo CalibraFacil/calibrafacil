@@ -1,3 +1,4 @@
+import { useFieldControlId } from "./field-control-context";
 import { ComponentProps, ReactNode } from "react";
 import { Select as SelectPrimitive } from "@base-ui/react/select";
 
@@ -40,12 +41,15 @@ function SelectTrigger({
   className,
   size = "default",
   children,
+  id,
   ...props
 }: SelectPrimitive.Trigger.Props & {
   size?: "sm" | "default";
 }) {
+  const fieldControlId = useFieldControlId();
   return (
     <SelectPrimitive.Trigger
+      id={id ?? fieldControlId}
       data-slot="select-trigger"
       data-size={size}
       className={cn(

@@ -1,11 +1,14 @@
+import { useFieldControlId } from "./field-control-context";
 import { ComponentProps } from "react";
 import { Input as InputPrimitive } from "@base-ui/react/input";
 
 import { cn } from "../lib/utils";
 
-function Input({ className, type, ...props }: ComponentProps<"input">) {
+function Input({ className, type, id, ...props }: ComponentProps<"input">) {
+  const fieldControlId = useFieldControlId();
   return (
     <InputPrimitive
+      id={id ?? fieldControlId}
       type={type}
       data-slot="input"
       className={cn(
