@@ -1510,13 +1510,13 @@ INSERT INTO sync_conflicts (
             "Bearer cloud-token",
           );
           expect(await new Request("https://local.test", init).json()).toEqual({
-            status: "ignored",
+            status: "discarded_by_user",
           });
 
           return Response.json({
             data: {
               id: "conflict:job:1",
-              status: "ignored",
+              status: "discarded_by_user",
               resolvedAt: "2026-01-15T10:05:00.000Z",
             },
           });
@@ -1562,7 +1562,7 @@ INSERT INTO sync_conflicts (
     await expect(response.json()).resolves.toMatchObject({
       data: {
         id: "conflict:job:1",
-        status: "ignored",
+        status: "discarded_by_user",
       },
       cloudResolution: {
         state: "recorded",

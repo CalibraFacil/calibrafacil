@@ -300,10 +300,12 @@ export function createLocalSyncScheduler(
     // and draining would spin on them.)
     // (Nor do events waiting out a retry delay: they are not due, and a run
     // would find nothing to send.)
+    // (Nor do events held behind a refused or conflicting one: they wait for a person.)
     if (
       (lastSnapshot?.pendingOutboxCount ?? 0) -
         (lastSnapshot?.pendingForOtherUserCount ?? 0) -
-        (lastSnapshot?.deferredOutboxCount ?? 0) >
+        (lastSnapshot?.deferredOutboxCount ?? 0) -
+        (lastSnapshot?.blockedOutboxCount ?? 0) >
       0
     ) {
       schedule(drainIntervalMs, "poll");

@@ -457,7 +457,7 @@ describe("local sync partial-failure / conflict reconciliation", () => {
   });
 
   // GAP 2 (continued): ignored => closed (synced) without re-sending.
-  it("closes an ignored conflict without re-sending the event", async () => {
+  it("discards an ignored conflict without re-sending the event", async () => {
     const dbPath = createTempDatabasePath();
     const database = openLocalDatabase({ filePath: dbPath });
     seedTenant(database);
@@ -531,8 +531,8 @@ describe("local sync partial-failure / conflict reconciliation", () => {
     expect(pushedEventIds).toEqual([conflicted.eventId]);
     expect(readEventSyncState(database, conflicted.eventId)).toBe("conflict");
 
-    // Resolve as "ignored" -> event is closed (synced) without re-queue
-    // (conflicts.ts:77 else branch).
+    // Resolve as "ignored" (the old name of a discard) -> the event is discarded: kept for
+    // audit, never re-sent, and never marked synced (the cloud did not receive it).
     conflictOnNextPush = false;
     const resolveResponse = await app.request(
       "/api/local/sync/conflicts/conflict-row-2/resolve",
@@ -543,8 +543,8 @@ describe("local sync partial-failure / conflict reconciliation", () => {
       },
     );
     expect(resolveResponse.status).toBe(200);
-    expect(readOutboxStatus(database, conflicted.eventId)).toBe("synced");
-    expect(readEventSyncState(database, conflicted.eventId)).toBe("synced");
+    expect(readOutboxStatus(database, conflicted.eventId)).toBe("discarded");
+    expect(readEventSyncState(database, conflicted.eventId)).toBe("discarded");
 
     // Re-run sync -> nothing re-sent (array stays at the single first push).
     await app.request("/api/local/sync/retry", { method: "POST" });

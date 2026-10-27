@@ -1300,7 +1300,7 @@ WHERE outbox.event_id = 'event-conflict'
     database.close();
   });
 
-  it("ignores sync conflicts by closing the local event", () => {
+  it("ignores sync conflicts (the old name of a discard) by discarding, never by marking the event synced", () => {
     const database = openLocalDatabase({ filePath: createTempDatabasePath() });
     const conflictId = seedCalibrationJobConflict(database);
 
@@ -1308,7 +1308,7 @@ WHERE outbox.event_id = 'event-conflict'
 
     expect(ignored).toMatchObject({
       id: conflictId,
-      status: "ignored",
+      status: "discarded_by_user",
       resolvedAt: expect.any(String),
     });
     expect(listPendingOutboxEvents(database)).toHaveLength(0);
@@ -1334,9 +1334,10 @@ WHERE outbox.event_id = 'event-conflict'
     );
 
     expect(row).toEqual({
-      outbox_status: "synced",
-      last_error: null,
-      sync_state: "synced",
+      outbox_status: "discarded",
+      // The reason it was held stays on the row: part of the audit trace.
+      last_error: "status_transition: conflict requires review",
+      sync_state: "discarded",
     });
 
     database.close();

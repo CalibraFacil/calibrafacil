@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -12,6 +13,8 @@ import {
   CardTitle,
 } from '@calibra-facil/ui/card'
 import { Skeleton } from '@calibra-facil/ui/skeleton'
+import { Textarea } from '@calibra-facil/ui/textarea'
+import { BlockedEventsSection } from '@/features/sync/components/blocked-events-section'
 import { DeadEventsSection } from '@/features/sync/components/dead-events-section'
 import { useOpenSyncConflictsData } from '@/features/sync/queries'
 import { calibraApi } from '@/utils/api'
@@ -22,6 +25,11 @@ import {
   type SyncConflictEditTarget,
   type SyncConflictFieldDiff,
 } from '@/runtime/sync-conflict-actions'
+import {
+  conflictStatusLabel,
+  getConflictDiscardPrompt,
+  validateDiscardReason,
+} from '@/runtime/sync-conflict-discard'
 import { getSyncConflictReturnSearch } from '@/runtime/sync-conflict-return'
 import { formatInstant } from '@calibra-facil/shared/format'
 
@@ -30,14 +38,22 @@ export function SyncConflictsPage() {
   const conflictsQuery = useOpenSyncConflictsData({
     enabled: sync.isDesktop,
   })
+  const [discarding, setDiscarding] = useState<{
+    id: string
+    reason: string
+  } | null>(null)
   const resolveMutation = useMutation({
-    mutationFn: (input: { id: string; status: 'resolved' | 'ignored' }) =>
-      calibraApi.sync.resolveConflict(input.id, input.status),
+    mutationFn: (input: {
+      id: string
+      status: 'resolved' | 'discarded_by_user'
+      reason?: string
+    }) => calibraApi.sync.resolveConflict(input.id, input.status, input.reason),
     onSuccess: async (_data, variables) => {
+      setDiscarding(null)
       await Promise.all([conflictsQuery.refetch(), sync.refresh()])
       toast.success(
-        variables.status === 'ignored'
-          ? 'Estado da nuvem mantido.'
+        variables.status === 'discarded_by_user'
+          ? 'Alteração local descartada. O descarte ficou registrado e ela não será reenviada.'
           : 'Alteração local liberada para nova tentativa.',
       )
     },
@@ -138,7 +154,9 @@ export function SyncConflictsPage() {
                       {formatInstant(conflict.createdAt, 'date-time')}
                     </CardDescription>
                   </div>
-                  <Badge variant="outline">{conflict.status}</Badge>
+                  <Badge variant="outline">
+                    {conflictStatusLabel(conflict.status)}
+                  </Badge>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -147,37 +165,53 @@ export function SyncConflictsPage() {
                   <PayloadPanel title="Local" value={conflict.localPayload} />
                   <PayloadPanel title="Nuvem" value={conflict.remotePayload} />
                 </div>
-                <div className="flex flex-wrap justify-end gap-2">
-                  {editTarget ? (
-                    <ConflictEditButton
-                      target={editTarget}
-                      conflictId={conflict.id}
-                    />
-                  ) : null}
-                  <Button
-                    variant="outline"
-                    onClick={() =>
+                {discarding?.id === conflict.id ? (
+                  <DiscardConflictForm
+                    regulated={conflict.regulated}
+                    reason={discarding.reason}
+                    busy={resolveMutation.isPending}
+                    onReasonChange={(reason) =>
+                      setDiscarding({ id: conflict.id, reason })
+                    }
+                    onCancel={() => setDiscarding(null)}
+                    onConfirm={() =>
                       resolveMutation.mutate({
                         id: conflict.id,
-                        status: 'ignored',
+                        status: 'discarded_by_user',
+                        reason: discarding.reason.trim() || undefined,
                       })
                     }
-                    disabled={resolveMutation.isPending}
-                  >
-                    Manter nuvem
-                  </Button>
-                  <Button
-                    onClick={() =>
-                      resolveMutation.mutate({
-                        id: conflict.id,
-                        status: 'resolved',
-                      })
-                    }
-                    disabled={resolveMutation.isPending}
-                  >
-                    Tentar novamente com local
-                  </Button>
-                </div>
+                  />
+                ) : (
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {editTarget ? (
+                      <ConflictEditButton
+                        target={editTarget}
+                        conflictId={conflict.id}
+                      />
+                    ) : null}
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        setDiscarding({ id: conflict.id, reason: '' })
+                      }
+                      disabled={resolveMutation.isPending}
+                    >
+                      Descartar minha alteração
+                    </Button>
+                    <Button
+                      onClick={() =>
+                        resolveMutation.mutate({
+                          id: conflict.id,
+                          status: 'resolved',
+                        })
+                      }
+                      disabled={resolveMutation.isPending}
+                    >
+                      Tentar novamente com local
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )
@@ -185,6 +219,56 @@ export function SyncConflictsPage() {
       )}
 
       <DeadEventsSection />
+      <BlockedEventsSection />
+    </div>
+  )
+}
+
+function DiscardConflictForm({
+  regulated,
+  reason,
+  busy,
+  onReasonChange,
+  onCancel,
+  onConfirm,
+}: {
+  regulated: boolean
+  reason: string
+  busy: boolean
+  onReasonChange: (reason: string) => void
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  const prompt = getConflictDiscardPrompt({ regulated })
+  const problem = validateDiscardReason(reason, prompt.reasonRequired)
+
+  return (
+    <div
+      role="alert"
+      className="space-y-3 rounded-md border border-destructive/40 bg-destructive/5 p-3"
+    >
+      <p className="text-sm font-medium">{prompt.title}</p>
+      <p className="text-sm text-muted-foreground">{prompt.description}</p>
+      <label className="block space-y-1 text-sm">
+        <span className="font-medium">{prompt.reasonLabel}</span>
+        <Textarea
+          value={reason}
+          onChange={(event) => onReasonChange(event.target.value)}
+          aria-invalid={reason.length > 0 && problem !== null}
+        />
+      </label>
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button variant="outline" onClick={onCancel}>
+          Cancelar
+        </Button>
+        <Button
+          variant="destructive"
+          onClick={onConfirm}
+          disabled={busy || problem !== null}
+        >
+          {prompt.confirmLabel}
+        </Button>
+      </div>
     </div>
   )
 }

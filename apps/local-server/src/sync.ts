@@ -21,6 +21,7 @@ import {
   applySyncBootstrap,
   applySyncBootstrapPage,
   applySyncPushResult,
+  countBlockedOutbox,
   countDeadOutbox,
   countDeferredOutbox,
   countOpenSyncConflicts,
@@ -34,6 +35,7 @@ import {
   listPendingOutboxEvents,
   releaseSettledSkippedRows,
   markOutboxEventsFailedForRetry,
+  recomputeBlockedOutbox,
   type LocalDatabase,
 } from "@calibra-facil/local-db";
 import { randomUUID } from "node:crypto";
@@ -99,6 +101,7 @@ export function createLocalSyncRuntime(
     ),
     deferredOutboxCount: countDeferredOutbox(database),
     deadOutboxCount: countDeadOutbox(database),
+    blockedOutboxCount: countBlockedOutbox(database),
     conflictCount: countOpenSyncConflicts(database),
     lastSyncedAt: getSyncCursorUpdatedAt(database),
     activeRunId: null,
@@ -352,8 +355,9 @@ function createSyncRunId(kind: "initial" | "push") {
 export async function notifyCloudConflictResolution(
   config: LocalServerConfig,
   conflictId: string,
-  status: "resolved" | "ignored",
+  status: "resolved" | "discarded_by_user",
   fetchImpl: typeof fetch = fetch,
+  reason: string | null = null,
 ): Promise<CloudConflictResolutionStatus> {
   if (!config.syncEnabled) {
     return { state: "skipped", reason: "sync disabled" };
@@ -377,7 +381,7 @@ export async function notifyCloudConflictResolution(
     const response = await fetchImpl(url, {
       method: "POST",
       headers,
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, ...(reason ? { reason } : {}) }),
     });
 
     if (!response.ok) {
@@ -579,6 +583,9 @@ async function pushPendingOutbox(
   // Only what the signed-in user authored (or nobody did): the cloud records
   // the pushing session as the actor, so a colleague's offline work must not be
   // sent under this session. It stays queued until its author signs in.
+  // Dependents of an event that needs a person are held behind it (a release the person
+  // made, an upgrade that brought dead events along): settle that before choosing.
+  recomputeBlockedOutbox(database);
   const pending = listPendingOutboxEvents(database, 50, {
     includeDeferred: options.includeDeferred,
     actorUserId: getLocalSyncContext(config, database).userId,
@@ -613,6 +620,71 @@ async function pushPendingOutbox(
   await pushOutboxEvents(config, database, fetchImpl, ready, cloudApiUrl);
 }
 
+/**
+ * What one push request carries at most, in bytes of JSON. Events beyond it stay queued for the
+ * next run (the drain loop comes back for them); one event larger than this travels alone.
+ */
+export const MAX_PUSH_BODY_BYTES = 1_000_000;
+
+/**
+ * The answers to a push request that mean "this request, as sent, is refused" rather than
+ * "try again later": the same bytes will get the same answer. A request that carries several
+ * events is then split to find the one (or ones) responsible; a single event that is still
+ * refused is dead (`PUSH_REQUEST_REJECTED`). Everything else (5xx, rate limits, auth, a
+ * timeout, a network failure) fails the whole request and backs off, as before.
+ */
+const POISON_PUSH_STATUSES: readonly number[] = [400, 413, 414, 415, 422];
+
+type PushWireContext = ReturnType<typeof getLocalSyncContext>;
+
+function toWireEvent(
+  config: LocalServerConfig,
+  context: PushWireContext,
+  event: ReturnType<typeof listPendingOutboxEvents>[number],
+) {
+  return {
+    eventId: event.eventId,
+    entityType: event.entityType,
+    entityId: event.entityId,
+    operation: event.operation,
+    payload: event.payload,
+    occurredAt: event.occurredAt,
+    actorUserId: event.actorUserId ?? context.userId ?? "local",
+    organizationId: context.organizationId ?? "",
+    unitId: context.unitId,
+    idempotencyKey: event.idempotencyKey,
+    localVersion: event.localVersion,
+    baseUpdatedAt: event.baseUpdatedAt ?? null,
+    // The version of this record the cloud must be at: a stale write is a conflict, never
+    // an overwrite. Null for a row this desktop never wrote through a cloud that keeps
+    // versions (the cloud then compares `baseUpdatedAt` alone, as for every older build).
+    expectedVersion: event.expectedVersion,
+  } satisfies SyncPushRequest["events"][number];
+}
+
+/**
+ * The longest prefix of `events` (in push order) whose JSON stays within
+ * `MAX_PUSH_BODY_BYTES`; always at least one event.
+ */
+function withinByteCap(
+  config: LocalServerConfig,
+  database: LocalDatabase,
+  events: ReturnType<typeof listPendingOutboxEvents>,
+) {
+  const context = getLocalSyncContext(config, database);
+  const taken: typeof events = [];
+  let bytes = 0;
+  for (const event of events) {
+    const size = Buffer.byteLength(
+      JSON.stringify(toWireEvent(config, context, event)),
+    );
+    if (taken.length > 0 && bytes + size > MAX_PUSH_BODY_BYTES) break;
+    taken.push(event);
+    bytes += size;
+  }
+  return taken;
+}
+
 async function pushOutboxEvents(
   config: LocalServerConfig,
   database: LocalDatabase,
@@ -621,6 +693,26 @@ async function pushOutboxEvents(
   cloudApiUrl: string,
 ) {
   if (pending.length === 0) return;
+
+  const batch = withinByteCap(config, database, pending);
+  await pushEventBatch(config, database, fetchImpl, batch, cloudApiUrl);
+}
+
+/** Pushes one batch; a request the cloud refuses outright is bisected (see POISON_PUSH_STATUSES). */
+async function pushEventBatch(
+  config: LocalServerConfig,
+  database: LocalDatabase,
+  fetchImpl: typeof fetch,
+  events: ReturnType<typeof listPendingOutboxEvents>,
+  cloudApiUrl: string,
+) {
+  const sent = events.filter(
+    (event) =>
+      pushCarriesAttachments(
+        rememberedPushProtocol(cloudApiUrl) ?? SYNC_PROTOCOL_VERSION,
+      ) || event.operation !== "create_local_attachment",
+  );
+  if (sent.length === 0) return;
 
   const context = getLocalSyncContext(config, database);
   const pushUrl = new URL("/api/sync/push", cloudApiUrl);
@@ -639,26 +731,13 @@ async function pushOutboxEvents(
       // answers "update required" to a build below its minimum.
       protocolVersion,
       desktopVersion: config.appVersion,
-      events: pending
+      events: sent
         .filter(
           (event) =>
             pushCarriesAttachments(protocolVersion) ||
             event.operation !== "create_local_attachment",
         )
-        .map((event) => ({
-          eventId: event.eventId,
-          entityType: event.entityType,
-          entityId: event.entityId,
-          operation: event.operation,
-          payload: event.payload,
-          occurredAt: event.occurredAt,
-          actorUserId: event.actorUserId ?? context.userId ?? "local",
-          organizationId: context.organizationId ?? "",
-          unitId: context.unitId,
-          idempotencyKey: event.idempotencyKey,
-          localVersion: event.localVersion,
-          baseUpdatedAt: event.baseUpdatedAt ?? null,
-        })),
+        .map((event) => toWireEvent(config, context, event)),
     }) satisfies SyncPushRequest;
 
   // The push wire format did not change with protocol 3 (only the pull and the
@@ -702,7 +781,7 @@ async function pushOutboxEvents(
       error instanceof Error ? error.message : "Cloud push request failed";
     markOutboxEventsFailedForRetry(
       database,
-      pending.map((event) => event.eventId),
+      sent.map((event) => event.eventId),
       message,
     );
     throw error;
@@ -721,9 +800,21 @@ async function pushOutboxEvents(
   }
 
   if (!response.ok) {
+    if (POISON_PUSH_STATUSES.includes(response.status)) {
+      await isolatePoisonEvents(
+        config,
+        database,
+        fetchImpl,
+        sent,
+        cloudApiUrl,
+        response.status,
+      );
+      return;
+    }
+
     markOutboxEventsFailedForRetry(
       database,
-      pending.map((event) => event.eventId),
+      sent.map((event) => event.eventId),
       `Cloud push failed with HTTP ${response.status}`,
     );
     throw new Error(`Cloud push failed with HTTP ${response.status}`);
@@ -733,6 +824,62 @@ async function pushOutboxEvents(
     database,
     syncPushResponseSchema.parse(await response.json()),
   );
+}
+
+/**
+ * The cloud refused a whole push request outright (413, a malformed body). One event of it may
+ * be the cause, and the same request would be refused for ever, taking every other event down
+ * with it. Split it in two and push each half; a half that is refused is split again, until a
+ * single event is refused on its own: that one is dead (`PUSH_REQUEST_REJECTED`, with the HTTP
+ * status), and the rest of the batch goes through.
+ *
+ * The first half goes first, and what depends on a poison event in it (the later events of
+ * the same record, the records that refer to it) is held behind it (`blocked_by`) before the
+ * second half is chosen, so the second half never carries a dependent of a dead event.
+ */
+async function isolatePoisonEvents(
+  config: LocalServerConfig,
+  database: LocalDatabase,
+  fetchImpl: typeof fetch,
+  events: ReturnType<typeof listPendingOutboxEvents>,
+  cloudApiUrl: string,
+  status: number,
+) {
+  const [only] = events;
+  if (events.length === 1 && only) {
+    applySyncPushResult(database, {
+      accepted: [],
+      conflicts: [],
+      rejected: [
+        {
+          eventId: only.eventId,
+          code: "PUSH_REQUEST_REJECTED",
+          reason: `A nuvem recusou o envio desta alteração (HTTP ${status}).`,
+        },
+      ],
+    });
+    return;
+  }
+
+  const middle = Math.ceil(events.length / 2);
+  await pushEventBatch(
+    config,
+    database,
+    fetchImpl,
+    events.slice(0, middle),
+    cloudApiUrl,
+  );
+
+  // Re-read the rest: the first half may have moved versions, and an event held behind a
+  // poison one is not sent.
+  const restIds = new Set(events.slice(middle).map((event) => event.eventId));
+  const rest = listPendingOutboxEvents(database, restIds.size + 500, {
+    includeDeferred: true,
+    actorUserId: getLocalSyncContext(config, database).userId,
+  }).filter((event) => restIds.has(event.eventId));
+  if (rest.length === 0) return;
+
+  await pushEventBatch(config, database, fetchImpl, rest, cloudApiUrl);
 }
 
 function getLocalSyncContext(
@@ -806,6 +953,7 @@ function withLocalCounts(
     ),
     deferredOutboxCount: countDeferredOutbox(database),
     deadOutboxCount: countDeadOutbox(database),
+    blockedOutboxCount: countBlockedOutbox(database),
     conflictCount: countOpenSyncConflicts(database),
     lastSyncedAt: snapshot.lastSyncedAt ?? getSyncCursorUpdatedAt(database),
   };

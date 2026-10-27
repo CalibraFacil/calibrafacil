@@ -48,6 +48,7 @@ const Q13_OFFLINE_METHODS = [
   "sync.listConflicts",
   "sync.resolveConflict",
   "sync.listDeadEvents",
+  "sync.listBlockedEvents",
   "sync.discardDeadEvent",
   "sync.requeueDeadEvent",
 ] as const;

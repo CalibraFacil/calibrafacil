@@ -5,7 +5,10 @@ import {
   type SyncStatusSnapshot,
 } from '@calibra-facil/contracts'
 
-import { getDeadEventsBannerLabel } from '@/runtime/sync-dead-events'
+import {
+  getBlockedEventsBannerLabel,
+  getDeadEventsBannerLabel,
+} from '@/runtime/sync-dead-events'
 
 export type DesktopSyncAvailabilitySnapshot = {
   isDesktop: boolean
@@ -19,6 +22,8 @@ export type DataSourceIndicatorSnapshot = DesktopSyncAvailabilitySnapshot & {
   pendingForOtherUserCount?: number
   /** Events the cloud refused for good: not pending, waiting for a decision. */
   deadOutboxCount?: number
+  /** Part of `pendingOutboxCount` held behind a refused or conflicting change. */
+  blockedOutboxCount?: number
   /** The cloud's minimum desktop version when it refused this build's pushes. */
   updateRequiredVersion?: string | null
   conflictCount: number
@@ -106,6 +111,19 @@ export function getDataSourceIndicatorModel(
       description: `${deadLabel} Revise-as em Conflitos de sincronização: descarte ou tente novamente.`,
       variant: 'destructive',
       dotClassName: 'bg-destructive',
+    }
+  }
+
+  // Held behind a refused or conflicting change: not something syncing again fixes.
+  const blockedLabel = getBlockedEventsBannerLabel(sync.blockedOutboxCount)
+  if (blockedLabel) {
+    return {
+      label: 'Aguardando decisão',
+      title: 'Alterações aguardando outra alteração',
+      description: `${blockedLabel} Revise-as em Conflitos de sincronização.`,
+      variant: 'outline',
+      className: 'text-amber-700 dark:text-amber-300',
+      dotClassName: 'bg-amber-500',
     }
   }
 

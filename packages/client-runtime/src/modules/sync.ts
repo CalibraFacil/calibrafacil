@@ -27,6 +27,12 @@ export function createCloudSyncApi(): SyncApi {
         total: 0,
       };
     },
+    async listBlockedEvents() {
+      return {
+        data: [],
+        total: 0,
+      };
+    },
     async discardDeadEvent() {
       throw new Error("A fila local de envio existe apenas no desktop");
     },

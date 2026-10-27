@@ -1123,6 +1123,11 @@ describe("client runtime data policy registry", () => {
           "policy": "local-only",
         },
         {
+          "method": "listBlockedEvents",
+          "namespace": "sync",
+          "policy": "local-only",
+        },
+        {
           "method": "discardDeadEvent",
           "namespace": "sync",
           "policy": "local-only",

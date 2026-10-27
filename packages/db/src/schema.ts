@@ -585,11 +585,21 @@ export const syncAppliedEvent = pgTable(
     claimedAt: timestamp("claimed_at").defaultNow().notNull(),
     appliedAt: timestamp("applied_at"),
     result: jsonb("result").$type<Record<string, unknown>>(),
+    // The version of the aggregate (entity_type + entity_id) this event produced:
+    // 1 for the first desktop event applied to it, then 2, 3... The aggregate's
+    // current version is the largest one; a pushed event that expects another one
+    // is refused as a conflict (roadmap 2 E1). NULL on rows applied before it existed.
+    aggregateVersion: integer("aggregate_version"),
   },
   (table) => [
     uniqueIndex("sync_applied_event_org_event_uidx").on(
       table.organizationId,
       table.eventId,
+    ),
+    index("sync_applied_event_aggregate_idx").on(
+      table.organizationId,
+      table.entityType,
+      table.entityId,
     ),
   ],
 );

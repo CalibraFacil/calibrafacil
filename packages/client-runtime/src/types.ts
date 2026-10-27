@@ -106,6 +106,7 @@ import type {
   JobStatus,
   LocalAttachment,
   LocalAttachmentsResponse,
+  LocalBlockedOutboxEventsResponse,
   LocalDeadOutboxEvent,
   LocalDeadOutboxEventsResponse,
   LocalSessionSnapshotResponse,
@@ -175,6 +176,7 @@ export type {
 export type {
   LocalAttachment,
   LocalAttachmentsResponse,
+  LocalBlockedOutboxEventsResponse,
   LocalDeadOutboxEvent,
   LocalDeadOutboxEventsResponse,
   LocalSessionSnapshotResponse,
@@ -286,17 +288,31 @@ export interface SyncApi {
    */
   reconcile(): Promise<SyncReconcileResult>;
   listConflicts(input?: {
-    status?: "open" | "resolved" | "ignored";
+    status?: LocalSyncConflict["status"];
     limit?: number;
   }): Promise<LocalSyncConflictsResponse>;
+  /**
+   * Decide a conflict. `resolved` keeps the local change (it is sent again);
+   * `discarded_by_user` gives it up: recorded with who, when and why, kept for audit, never
+   * sent. A change that carries calibration readings needs a `reason`.
+   */
   resolveConflict(
     id: string,
-    status?: "resolved" | "ignored",
+    status?: "resolved" | "discarded_by_user",
+    reason?: string,
   ): Promise<{ data: LocalSyncConflict }>;
   /** Events the cloud refused for good: out of the push queue, awaiting a decision. */
   listDeadEvents(): Promise<LocalDeadOutboxEventsResponse>;
-  /** Drop a dead event from the queue. The local data it described stays. */
-  discardDeadEvent(eventId: string): Promise<{
+  /** Changes held behind a refused or conflicting one: not sent until that one is resolved. */
+  listBlockedEvents(): Promise<LocalBlockedOutboxEventsResponse>;
+  /**
+   * Drop a dead (or blocked) event from the queue. The local data it described stays; the
+   * discard is recorded with who, when and the optional `reason`.
+   */
+  discardDeadEvent(
+    eventId: string,
+    reason?: string,
+  ): Promise<{
     data: LocalDeadOutboxEvent;
     syncStatus: SyncStatusSnapshot;
   }>;

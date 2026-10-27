@@ -156,6 +156,13 @@ export const syncStatusSnapshotSchema = z.object({
    * discard or re-queue them. Absent from builds that predate it: read as 0.
    */
   deadOutboxCount: z.number().int().nonnegative().optional(),
+  /**
+   * How many of `pendingOutboxCount` wait for another change (an earlier edit of
+   * the same record, or its parent) that was refused or is in conflict. They are
+   * not sent until that change is resolved, so a drain loop must not spin on
+   * them. Absent from builds that predate it: read as 0.
+   */
+  blockedOutboxCount: z.number().int().nonnegative().optional(),
   conflictCount: z.number().int().nonnegative(),
   lastSyncedAt: z.string().datetime().nullable(),
   activeRunId: z.string().nullable().optional(),

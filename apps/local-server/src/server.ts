@@ -32,15 +32,18 @@ import {
   listLocalStandards,
   adoptLegacyLocalDatabase,
   assertLocalDatabaseOwner,
+  countBlockedOutbox,
   countDeadOutbox,
   countPendingOutbox,
   discardDeadOutboxEvent,
+  listBlockedOutboxEvents,
   listDeadOutboxEvents,
   listSyncConflicts,
   openLocalDatabase,
   requeueDeadOutboxEvent,
   resolveSyncConflict,
   saveLocalJobExecution,
+  SyncConflictReasonRequiredError,
   type LocalDatabase,
 } from "@calibra-facil/local-db";
 import {
@@ -53,6 +56,7 @@ import {
 import {
   localAttachmentSchema,
   localAttachmentsResponseSchema,
+  localBlockedOutboxEventsResponseSchema,
   localDeadOutboxEventSchema,
   localDeadOutboxEventsResponseSchema,
   localDiagnosticsSchema,
@@ -451,21 +455,38 @@ export function createLocalServerRuntime(
     const resolution = localSyncConflictResolutionSchema.parse(
       await readJsonOrEmpty(c.req.raw),
     );
-    const conflict = resolveSyncConflict(
-      database,
-      c.req.param("id"),
-      resolution.status,
-    );
+    let conflict;
+    try {
+      conflict = resolveSyncConflict(
+        database,
+        c.req.param("id"),
+        resolution.status,
+        {
+          // Who decided: the signed-in user of this computer. Kept with the conflict.
+          resolvedBy: getLocalRequestContext(config, database).userId,
+          reason: resolution.reason,
+        },
+      );
+    } catch (error) {
+      if (error instanceof SyncConflictReasonRequiredError) {
+        return c.json({ error: error.message, code: "REASON_REQUIRED" }, 422);
+      }
+      throw error;
+    }
 
     if (!conflict) {
       return c.json({ error: "Conflito de sincronizacao nao encontrado" }, 404);
     }
 
+    // Keeping the local change makes the queue sendable again.
+    if (conflict.status === "resolved") nudgeScheduler("local-mutation");
+
     const cloudResolution = await notifyCloudConflictResolution(
       config,
       conflict.id,
-      resolution.status,
+      conflict.status === "resolved" ? "resolved" : "discarded_by_user",
       fetchImpl,
+      conflict.resolutionReason,
     );
 
     return c.json({
@@ -489,8 +510,25 @@ export function createLocalServerRuntime(
     );
   });
 
-  app.post("/api/local/sync/dead-events/:eventId/discard", (c) => {
-    const discarded = discardDeadOutboxEvent(database, c.req.param("eventId"));
+  // Events held behind a refused or conflicting one: not sent until that one is
+  // resolved. The user may also give one up (the discard route below takes them).
+  app.get("/api/local/sync/blocked-events", (c) => {
+    return c.json(
+      localBlockedOutboxEventsResponseSchema.parse({
+        data: listBlockedOutboxEvents(database, {
+          limit: Number(c.req.query("limit") ?? "100"),
+        }),
+        total: countBlockedOutbox(database),
+      }),
+    );
+  });
+
+  app.post("/api/local/sync/dead-events/:eventId/discard", async (c) => {
+    const body = recordFromUnknown(await readJsonOrEmpty(c.req.raw));
+    const discarded = discardDeadOutboxEvent(database, c.req.param("eventId"), {
+      discardedBy: getLocalRequestContext(config, database).userId,
+      reason: typeof body.reason === "string" ? body.reason : null,
+    });
 
     if (!discarded) {
       return c.json({ error: "Evento recusado nao encontrado" }, 404);

@@ -8,6 +8,11 @@ import type { LocalDatabase } from "./database";
 import { resetAttachmentUpload } from "./attachments";
 import { releaseSettledSkippedRows } from "./skipped-rows";
 import {
+  baseExpectedVersion,
+  recomputeBlockedOutbox,
+  recordAggregateVersion,
+} from "./outbox-ordering";
+import {
   recomputeServiceOrderSyncStates,
   resolveServiceOrdersForAggregates,
 } from "./service-orders";
@@ -26,6 +31,14 @@ export type PendingOutboxEvent = {
   // Base version the local edit was made against (the cloud row's `updatedAt`
   // captured at pull time), or null when the row was never pulled / is legacy.
   baseUpdatedAt: string | null;
+  /**
+   * The version of the record the cloud must be at for this event to apply: the version
+   * it confirmed for the record's previous event, counted forward over the earlier events
+   * of the same record in this batch. Null: no expectation (see `baseExpectedVersion`).
+   */
+  expectedVersion: number | null;
+  /** Position in this database's own event sequence: the order the outbox is pushed in. */
+  sequence: number;
 };
 
 export function countPendingOutbox(database: LocalDatabase) {
@@ -42,8 +55,53 @@ WHERE status IN ('pending', 'failed')
   return row?.total ?? 0;
 }
 
-const RECORDED_ACTOR_SQL = `(domain_events.actor_user_id IS NOT NULL
-    AND domain_events.actor_user_id NOT IN ('', 'local'))`;
+const recordedActorSql = (
+  events: string,
+) => `(${events}.actor_user_id IS NOT NULL
+    AND ${events}.actor_user_id NOT IN ('', 'local'))`;
+const RECORDED_ACTOR_SQL = recordedActorSql("domain_events");
+
+/**
+ * Whether the outbox row `o` (of the event row `d`) is not due on a scheduled run: it waits
+ * out a retry delay itself, or an earlier event of the same record does (it goes after that
+ * one, whatever its own delay).
+ */
+const notDueSql = (o: string, d: string) => `(
+    (${o}.next_attempt_at IS NOT NULL AND ${o}.next_attempt_at > @now)
+    OR EXISTS (
+      SELECT 1
+      FROM outbox AS earlier_outbox
+      INNER JOIN domain_events AS earlier
+        ON earlier.event_id = earlier_outbox.event_id
+      WHERE earlier.aggregate_kind = ${d}.aggregate_kind
+        AND earlier.aggregate_id = ${d}.aggregate_id
+        AND earlier.sequence < ${d}.sequence
+        AND earlier_outbox.status IN ('pending', 'failed')
+        AND earlier_outbox.blocked_by_event_id IS NULL
+        AND earlier_outbox.next_attempt_at IS NOT NULL
+        AND earlier_outbox.next_attempt_at > @now
+    )
+  )`;
+
+/**
+ * Whether the outbox row `o` (of the event row `d`) can be sent now: still to be sent, not
+ * waiting for another event, due (or deferral waived), and written by the signed-in user
+ * (or by nobody in particular).
+ */
+const sendableSql = (o: string, d: string) => `(
+    ${o}.status IN ('pending', 'failed')
+    AND ${o}.blocked_by_event_id IS NULL
+    AND (
+      @includeDeferred = 1
+      OR ${o}.next_attempt_at IS NULL
+      OR ${o}.next_attempt_at <= @now
+    )
+    AND (
+      @actorUserId IS NULL
+      OR NOT ${recordedActorSql(d)}
+      OR ${d}.actor_user_id = @actorUserId
+    )
+  )`;
 
 /**
  * An outbox event whose recorded author is not `actorUserId`. Events with no
@@ -161,6 +219,7 @@ export function listPendingOutboxEvents(
     >(
       `
 SELECT
+  domain_events.sequence,
   domain_events.event_id,
   domain_events.aggregate_kind,
   domain_events.aggregate_id,
@@ -192,24 +251,25 @@ SELECT
   END AS remote_base_updated_at
 FROM outbox
 INNER JOIN domain_events ON domain_events.event_id = outbox.event_id
-WHERE outbox.status IN ('pending', 'failed')
-  AND (
-    @includeDeferred = 1
-    OR outbox.next_attempt_at IS NULL
-    OR outbox.next_attempt_at <= @now
+WHERE ${sendableSql("outbox", "domain_events")}
+  -- Per-record head-of-line: a record's later event is never sent while an earlier one of
+  -- the same record is not (backing off, blocked, in conflict, dead, another user's).
+  AND NOT EXISTS (
+    SELECT 1
+    FROM outbox AS earlier_outbox
+    INNER JOIN domain_events AS earlier
+      ON earlier.event_id = earlier_outbox.event_id
+    WHERE earlier.aggregate_kind = domain_events.aggregate_kind
+      AND earlier.aggregate_id = domain_events.aggregate_id
+      AND earlier.sequence < domain_events.sequence
+      AND earlier_outbox.status IN ('pending', 'failed', 'conflict', 'dead')
+      AND NOT ${sendableSql("earlier_outbox", "earlier")}
   )
-  AND (
-    @actorUserId IS NULL
-    OR NOT ${RECORDED_ACTOR_SQL}
-    OR domain_events.actor_user_id = @actorUserId
-  )
+-- Due events first, then the ones still backing off (a deliberate sync tries those too); a
+-- record's events stay in sequence either way: one behind a delayed event is delayed with it.
 ORDER BY
-  CASE
-    WHEN outbox.next_attempt_at IS NOT NULL AND outbox.next_attempt_at > @now
-      THEN 1
-    ELSE 0
-  END ASC,
-  outbox.created_at ASC
+  CASE WHEN ${notDueSql("outbox", "domain_events")} THEN 1 ELSE 0 END ASC,
+  domain_events.sequence ASC
 LIMIT @limit
 `,
     )
@@ -220,7 +280,24 @@ LIMIT @limit
       actorUserId: options.actorUserId ?? null,
     });
 
-  return rows.map((row) => ({
+  // Expected versions: the record's confirmed version for its first event of the batch,
+  // then one more for each event of the same record that goes before it in this batch.
+  const nextVersion = new Map<string, number | null>();
+  const withVersions = rows.map((row) => {
+    const key = `${row.aggregate_kind}\u0000${row.aggregate_id}`;
+    const base = nextVersion.has(key)
+      ? (nextVersion.get(key) ?? null)
+      : baseExpectedVersion(
+          database,
+          row.aggregate_kind,
+          row.aggregate_id,
+          row.event_type,
+        );
+    nextVersion.set(key, base === null ? null : base + 1);
+    return { row, expectedVersion: base };
+  });
+
+  return withVersions.map(({ row, expectedVersion }) => ({
     eventId: row.event_id,
     entityType: row.aggregate_kind,
     entityId: row.aggregate_id,
@@ -232,6 +309,8 @@ LIMIT @limit
     idempotencyKey: row.idempotency_key,
     localVersion: row.aggregate_version,
     baseUpdatedAt: row.remote_base_updated_at,
+    expectedVersion,
+    sequence: row.sequence,
   }));
 }
 
@@ -254,16 +333,21 @@ export type DeadOutboxEvent = {
   regulated: boolean;
 };
 
-/** Pending events that are waiting out a retry delay, so not due yet. */
+/**
+ * Pending events that cannot be sent on a scheduled run yet: waiting out a retry delay, or
+ * held behind an earlier event of the same record that is. Blocked events are counted apart
+ * (`countBlockedOutbox`).
+ */
 export function countDeferredOutbox(database: LocalDatabase) {
   const row = database
     .prepare<{ now: string }, { total: number }>(
       `
 SELECT COUNT(*) AS total
 FROM outbox
-WHERE status IN ('pending', 'failed')
-  AND next_attempt_at IS NOT NULL
-  AND next_attempt_at > @now
+INNER JOIN domain_events ON domain_events.event_id = outbox.event_id
+WHERE outbox.status IN ('pending', 'failed')
+  AND outbox.blocked_by_event_id IS NULL
+  AND ${notDueSql("outbox", "domain_events")}
 `,
     )
     .get({ now: new Date().toISOString() });
@@ -299,20 +383,35 @@ LIMIT @limit`,
     .map(mapDeadOutboxEvent);
 }
 
+export type DiscardOutboxEventOptions = {
+  /** The signed-in user who decided: recorded with the discard. */
+  discardedBy?: string | null;
+  /** Why: recorded with the discard. */
+  reason?: string | null;
+};
+
 /**
- * Takes a dead event out of the queue for good. The row stays, as `discarded`
- * with its code, message and time, and the event stays in `domain_events`: that
- * is the local audit trace. Only a dead event can be discarded. The local data
- * the event described is not touched.
+ * Takes an event the user decided to give up out of the queue for good: a dead event, or one
+ * that waits behind another (`blocked_by`). The row stays, as `discarded` with who discarded
+ * it, when and why, and the event stays in `domain_events`: that is the local audit trace.
+ * It is never sent. The local data the event described is not touched.
+ *
+ * Discarding the creation of a record the cloud never received keeps that record's
+ * dependents blocked by it, so each one gets its own decision.
  */
 export function discardDeadOutboxEvent(
   database: LocalDatabase,
   eventId: string,
+  options: DiscardOutboxEventOptions = {},
 ): DeadOutboxEvent | null {
   const existing = database
     .prepare<{ eventId: string }, DeadOutboxEventRow>(
       `${DEAD_OUTBOX_SELECT}
-WHERE outbox.status = 'dead' AND outbox.event_id = @eventId`,
+WHERE outbox.event_id = @eventId
+  AND (
+    outbox.status = 'dead'
+    OR (outbox.status IN ('pending', 'failed') AND outbox.blocked_by_event_id IS NOT NULL)
+  )`,
     )
     .get({ eventId });
   if (!existing) return null;
@@ -324,11 +423,21 @@ WHERE outbox.status = 'dead' AND outbox.event_id = @eventId`,
 UPDATE outbox
 SET status = 'discarded',
   discarded_at = @now,
+  discarded_by = @discardedBy,
+  discard_reason = @reason,
+  blocked_by_event_id = NULL,
+  blocked_at = NULL,
   next_attempt_at = NULL
-WHERE event_id = @eventId AND status = 'dead'
+WHERE event_id = @eventId
+  AND (status = 'dead' OR blocked_by_event_id IS NOT NULL)
 `,
       )
-      .run({ eventId, now: new Date().toISOString() });
+      .run({
+        eventId,
+        now: new Date().toISOString(),
+        discardedBy: options.discardedBy ?? null,
+        reason: options.reason?.trim() || null,
+      });
     database
       .prepare(
         `
@@ -342,6 +451,8 @@ WHERE event_id = @eventId
     // Discarding gives up the local change: a pull that skipped the row while
     // the change was queued can bring the cloud's version in now.
     releaseSettledSkippedRows(database);
+    // What waited for it is released, or stays blocked by it when it was a creation.
+    recomputeBlockedOutbox(database);
   })();
 
   return mapDeadOutboxEvent(existing);
@@ -393,6 +504,8 @@ WHERE event_id = @eventId
     if (requeuedEvent?.aggregate_kind === "attachment") {
       resetAttachmentUpload(database, requeuedEvent.aggregate_id);
     }
+    // What waited for it is released (it is ahead of them again, as an ordinary event).
+    recomputeBlockedOutbox(database);
     requeued = true;
   })();
 
@@ -543,6 +656,17 @@ WHERE event_id = @eventId
         )
         .run({ eventId });
       applyAcceptedRemoteEntity(database, eventsById.get(eventId), accepted);
+      // The version the cloud confirmed for the record: the next event of it expects it.
+      // A cloud that predates versions sends none, and nothing is remembered.
+      const acceptedEvent = eventsById.get(eventId);
+      if (acceptedEvent && accepted.aggregateVersion !== undefined) {
+        recordAggregateVersion(
+          database,
+          acceptedEvent.aggregate_kind,
+          acceptedEvent.aggregate_id,
+          accepted.aggregateVersion,
+        );
+      }
     }
 
     // Child acceptances leave the parent order dirty on their own; recompute
@@ -567,6 +691,19 @@ WHERE event_id = @eventId
           .get({ eventId })?.attempt_count ?? 0;
       const lastError = `${rejection.code}: ${rejection.reason}`;
       const rejectedEvent = eventsById.get(eventId);
+
+      // Not looked at: an earlier event of the same record, in the same push, was not
+      // applied. This is no attempt and no failure of its own; it stays where it was and
+      // is held behind that event (head-of-line, and `blocked_by` once that one is dead
+      // or in conflict).
+      if (rejection.code === "SYNC_PRECEDING_EVENT_NOT_APPLIED") {
+        database
+          .prepare(
+            "UPDATE outbox SET last_error = @lastError WHERE event_id = @eventId",
+          )
+          .run({ eventId, lastError });
+        continue;
+      }
 
       // The cloud does not confirm the file (never completed, or not the file
       // that was verified): a retry uploads it again before sending the event.
@@ -716,6 +853,9 @@ INSERT OR IGNORE INTO sync_conflicts (
           createdAt: now,
         });
     }
+
+    // What waits for an event that now needs a person is held behind it.
+    recomputeBlockedOutbox(database);
 
     // Accepted events have cleared their rows; a skipped pull row that is now
     // clean is fetched again (an accepted change normally comes back through
@@ -1078,6 +1218,7 @@ function parseJson(value: string) {
 }
 
 type PendingOutboxEventRow = {
+  sequence: number;
   event_id: string;
   aggregate_kind: string;
   aggregate_id: string;
