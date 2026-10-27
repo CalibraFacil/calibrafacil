@@ -89,8 +89,11 @@ jobs:
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
           sudo apt-get update
           sudo apt-get install -y "postgresql-client-${major}" age
-          psql --version
-          pg_restore --version
+          # Debian's pg_wrapper resolves pg_restore to the runner's preinstalled
+          # cluster version (16), not the newest client: put this major first.
+          echo "/usr/lib/postgresql/${major}/bin" >> "$GITHUB_PATH"
+          "/usr/lib/postgresql/${major}/bin/psql" --version
+          "/usr/lib/postgresql/${major}/bin/pg_restore" --version
           age --version
           for _ in $(seq 1 60); do
             if pg_isready -h 127.0.0.1 -p 5432 -U calibra -d calibra; then exit 0; fi
