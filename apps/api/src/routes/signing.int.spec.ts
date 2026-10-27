@@ -18,33 +18,15 @@
  *                               active DELETE → 200 + DB-verified)
  *   REQ-SCERT-006              Unauthenticated GET /certificates → 401
  *
- * NOTE on vi.mock: @calibra-facil/signing is mocked at module scope (required by
- * Vitest's hoisting rules). encryptPassword, encryptBinary, decryptPassword,
- * decryptBinary, and SigningError are delegated to vi.importActual so the
- * real AES-256-GCM encryption is exercised. Only getCertificateInfo is replaced
- * with a spy so REQ-SCERT-002 can inject a valid future-dated cert without a real
- * PKCS#12 file. For all other tests the spy is NOT called (they seed cert rows
- * directly or use routes that don't parse P12), so hoisting is harmless.
+ * NOTE (B4a): POST /certificates now validates the P12 (validity window, key
+ * usage, chain to the trust store), so the upload tests use REAL fixtures: a fixture
+ * CA and the PKCS#12 it issued (`@calibra-facil/signing/testing`), with the CA handed
+ * to the route as the trust store (SIGNING_TRUST_STORE_FILE). The stubbed
+ * `getCertificateInfo` they used before returned `certificate: null`, which is not a
+ * certificate the validator can (or should) accept.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-// vi.mock MUST appear before any imports that cause the mocked module to load.
-// getCertificateInfo is replaced with a spy; all crypto helpers are real.
-vi.mock("@calibra-facil/signing", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("@calibra-facil/signing")>();
-  // getCertificateInfoSpy is an untyped spy so REQ-SCERT-002 can inject any
-  // return value without forge-typed stubs (no `as` assertion needed).
-  // Default: vi.fn() returns undefined, causing the handler to throw — which is
-  // fine since the only test that exercises POST /certificates (REQ-SCERT-002)
-  // always calls mockReturnValueOnce before the request.
-  const getCertificateInfoSpy = vi.fn();
-  return {
-    ...actual,
-    getCertificateInfo: getCertificateInfoSpy,
-  };
-});
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { signingRouter } from "./signing";
 import { db } from "@calibra-facil/db";
@@ -58,10 +40,16 @@ import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { grantUnitAdmin, seedOrg } from "../../test/integration/seed";
 import {
-  getCertificateInfo,
-  decryptPassword,
-  decryptBinary,
+  openSigningCredential,
+  signingKeyringFromEnv,
 } from "@calibra-facil/signing";
+import {
+  makeFixtureCa,
+  makeFixtureSigner,
+} from "@calibra-facil/signing/testing";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -76,9 +64,20 @@ const JSON_HEADERS = { "content-type": "application/json" };
  */
 const TEST_MASTER_KEY = Buffer.alloc(32).toString("base64");
 
-const TEST_ENV = {
-  SIGNING_MASTER_KEY: TEST_MASTER_KEY,
-};
+// The fixture CA the route trusts (SIGNING_TRUST_STORE_FILE), set in beforeAll.
+let TEST_ENV: { SIGNING_MASTER_KEY: string; SIGNING_TRUST_STORE_FILE: string } =
+  { SIGNING_MASTER_KEY: TEST_MASTER_KEY, SIGNING_TRUST_STORE_FILE: "" };
+let fixtureCa: ReturnType<typeof makeFixtureCa>;
+
+beforeAll(() => {
+  fixtureCa = makeFixtureCa();
+  const file = join(mkdtempSync(join(tmpdir(), "signing-int-")), "roots.pem");
+  writeFileSync(file, fixtureCa.pem);
+  TEST_ENV = {
+    SIGNING_MASTER_KEY: TEST_MASTER_KEY,
+    SIGNING_TRUST_STORE_FILE: file,
+  };
+}, 60_000);
 
 // Sentinel values used to detect secret leakage in REQ-SCERT-001.
 const SENTINEL_P12 = "SENTINEL_P12";
@@ -227,29 +226,12 @@ describe("signingRouter — real DB + real middleware", () => {
   // REQ-SCERT-002 [HIGH RISK]: Encrypted at rest on upload
   // =========================================================================
 
-  it("REQ-SCERT-002: POST /certificates stores encryptedPassword !== plaintext, passwordIv non-empty, encryptedP12 !== raw p12 — DB-verified", async () => {
-    // getCertificateInfo is an untyped spy from the module-level vi.mock, so
-    // mockReturnValueOnce accepts any value — no `as` assertion needed.
-    // The handler reads only: serialNumber, issuerCn, subjectCn, subjectCpfCnpj,
-    // validFrom, validUntil. Fields certificate/privateKey/chain are not used.
-    vi.mocked(getCertificateInfo).mockReturnValueOnce({
-      serialNumber: "SN-UPLOAD-001",
-      issuerCn: "AC Test CA",
-      subjectCn: "Test Lab",
-      subjectCpfCnpj: "12345678000195",
-      validFrom: new Date("2026-01-01T00:00:00.000Z"),
-      // 2 years from now — definitely not expired
-      validUntil: new Date("2028-01-01T00:00:00.000Z"),
-      certificate: null,
-      privateKey: null,
-      chain: [],
-    });
+  it("REQ-SCERT-002: POST /certificates seals the P12 and password as an envelope (kek id + format version), DB-verified, and they open again", async () => {
+    const plainPassword = "s3cret-pw-test";
+    const signer = makeFixtureSigner(fixtureCa, { password: plainPassword });
 
     const org = await seedOrg({ orgId: "org-1", role: "admin" });
     loginAs({ userId: org.userId, organizationId: org.orgId });
-
-    const rawP12 = Buffer.from("dummy-p12-content");
-    const plainPassword = "s3cret-pw-test";
 
     const res = await signingRouter.request(
       "/certificates",
@@ -261,7 +243,7 @@ describe("signingRouter — real DB + real middleware", () => {
         },
         body: JSON.stringify({
           name: "Certificado Upload Teste",
-          p12Base64: rawP12.toString("base64"),
+          p12Base64: signer.p12.toString("base64"),
           password: plainPassword,
         }),
       },
@@ -283,34 +265,63 @@ describe("signingRouter — real DB + real middleware", () => {
     expect(typeof certId).toBe("number");
 
     const [row] = await db
-      .select({
-        encryptedP12: organizationSigningCertificate.encryptedP12,
-        encryptedPassword: organizationSigningCertificate.encryptedPassword,
-        passwordIv: organizationSigningCertificate.passwordIv,
-      })
+      .select()
       .from(organizationSigningCertificate)
       .where(eq(organizationSigningCertificate.id, certId));
 
     if (!row) throw new Error("REQ-SCERT-002: no row found in DB after insert");
 
-    // Password must NOT be stored as plaintext.
-    expect(row.encryptedPassword).not.toBe(plainPassword);
-    // IV must be non-empty.
+    // Password must NOT be stored as plaintext, the P12 not as its base64.
+    expect(row.encryptedPassword).not.toContain(plainPassword);
+    expect(row.encryptedP12).not.toBe(signer.p12.toString("base64"));
+    // REQ-B4A-1: the record carries the KEK id and the envelope format version.
+    expect(row.kekId).toBe("k1");
+    expect(row.custodyFormatVersion).toBe(2);
+    expect(row.encryptedP12.startsWith("enc:v2:k1:")).toBe(true);
+    expect(row.encryptedPassword.startsWith("enc:v2:k1:")).toBe(true);
     expect(row.passwordIv.length).toBeGreaterThan(0);
-    // P12 must NOT be stored as the raw base64 of the input bytes.
-    expect(row.encryptedP12).not.toBe(rawP12.toString("base64"));
 
-    // Round-trip decryption must recover the original password.
-    const recovered = decryptPassword(
-      row.encryptedPassword,
-      row.passwordIv,
-      TEST_MASTER_KEY,
+    // Round-trip: it opens with the org + unit + serial it is bound to...
+    const keyring = signingKeyringFromEnv(TEST_ENV);
+    if (!keyring) throw new Error("no keyring");
+    const binding = {
+      organizationId: row.organizationId,
+      unitId: row.unitId,
+      serialNumber: row.serialNumber,
+    };
+    const opened = openSigningCredential(
+      {
+        encryptedP12: row.encryptedP12,
+        encryptedPassword: row.encryptedPassword,
+        passwordIv: row.passwordIv,
+        kekId: row.kekId,
+        formatVersion: row.custodyFormatVersion,
+      },
+      binding,
+      keyring,
     );
-    expect(recovered).toBe(plainPassword);
+    expect(opened.password).toBe(plainPassword);
+    expect(opened.p12.toString("hex")).toBe(signer.p12.toString("hex"));
 
-    // Round-trip decryption of the p12 blob must recover the original bytes.
-    const recoveredP12 = decryptBinary(row.encryptedP12, TEST_MASTER_KEY);
-    expect(recoveredP12.toString("hex")).toBe(rawP12.toString("hex"));
+    // ...and not with another organization's or unit's binding (REQ-B4A-1).
+    for (const other of [
+      { ...binding, organizationId: "org-other" },
+      { ...binding, unitId: binding.unitId + 1 },
+    ]) {
+      expect(() =>
+        openSigningCredential(
+          {
+            encryptedP12: row.encryptedP12,
+            encryptedPassword: row.encryptedPassword,
+            passwordIv: row.passwordIv,
+            kekId: row.kekId,
+            formatVersion: row.custodyFormatVersion,
+          },
+          other,
+          keyring,
+        ),
+      ).toThrow();
+    }
   });
 
   // =========================================================================

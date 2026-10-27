@@ -7393,6 +7393,16 @@ export const organizationSigningCertificate = pgTable(
     revokedAt: timestamp("revoked_at"),
     revokedBy: text("revoked_by").references(() => user.id),
     revokedReason: text("revoked_reason"),
+    // Key custody (roadmap 2 B4a). `kek_id` names the master key the credential's
+    // data keys are wrapped under (NULL for a legacy row); `custody_format_version`
+    // is 1 for the legacy storage (P12 and password straight under the master key)
+    // and 2 for the envelope (per-field data key wrapped by the KEK, AAD =
+    // organization + unit + serial). The CHECK that keeps the two in step lives in
+    // sql/schema-extras.sql (migration 0133).
+    kekId: text("kek_id"),
+    custodyFormatVersion: integer("custody_format_version")
+      .default(1)
+      .notNull(),
   },
   (table) => [
     index("org_signing_cert_org_id_idx").on(table.organizationId),
@@ -7402,6 +7412,44 @@ export const organizationSigningCertificate = pgTable(
       table.organizationId,
       table.unitId,
       table.isDefault,
+    ),
+  ],
+);
+
+// Append-only audit of the laboratory's compliance configuration (roadmap 2 B4a,
+// review 3.1, ISO/IEC 17025 8.4): signing-credential create / replace / delete,
+// the "emitir sem assinatura" switch, the signing policy, and the accreditation
+// profile (number, scope guard, seal settings). `changes` holds the before and
+// after values and never a secret (no P12, password or key material). The row is
+// written in the same transaction as the change; the append-only trigger and the
+// REVOKE of UPDATE/DELETE from calibra_app live in sql/schema-extras.sql
+// (migration 0133).
+export const organizationComplianceAuditLog = pgTable(
+  "organization_compliance_audit_log",
+  {
+    id: serial("id").primaryKey(),
+    // Evidence trail: a soft reference on purpose (no FK, mirrors the CMP-07
+    // #692 audit tables), so the row survives deletion of its organization.
+    organizationId: text("organization_id").notNull(),
+    unitId: integer("unit_id").references(() => organizationUnit.id, {
+      onDelete: "set null",
+    }),
+    action: text("action").notNull(),
+    entityType: text("entity_type").notNull(),
+    entityId: text("entity_id"),
+    changes: jsonb("changes").$type<Record<string, unknown>>(),
+    // NULL when the platform acted (the re-encrypt CLI).
+    performedBy: text("performed_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    ipAddress: text("ip_address"),
+    performedAt: timestamp("performed_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("organization_compliance_audit_org_idx").on(table.organizationId),
+    index("organization_compliance_audit_action_idx").on(table.action),
+    index("organization_compliance_audit_performed_at_idx").on(
+      table.performedAt,
     ),
   ],
 );

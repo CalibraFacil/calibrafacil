@@ -15,6 +15,8 @@
  */
 export type WorkerSigningEnv = {
   SIGNING_MASTER_KEY?: string;
+  SIGNING_MASTER_KEY_ID?: string;
+  SIGNING_MASTER_KEY_PREVIOUS?: string;
   SIGNING_TSA_URL?: string;
   SIGNING_TSA_AUTH?: string;
   SIGNING_TSA_ICP_CONFORMANT?: string;
@@ -23,6 +25,8 @@ export type WorkerSigningEnv = {
 
 type SigningSettings = {
   readonly masterKey: string | undefined;
+  readonly masterKeyId: string | undefined;
+  readonly masterKeyPrevious: string | undefined;
   readonly tsaUrl: string | undefined;
   readonly tsaAuth: string | undefined;
   readonly tsaIcpConformant: boolean;
@@ -32,6 +36,8 @@ type SigningSettings = {
 export function workerSigningEnv(signing: SigningSettings): WorkerSigningEnv {
   return {
     SIGNING_MASTER_KEY: signing.masterKey,
+    SIGNING_MASTER_KEY_ID: signing.masterKeyId,
+    SIGNING_MASTER_KEY_PREVIOUS: signing.masterKeyPrevious,
     SIGNING_TSA_URL: signing.tsaUrl,
     SIGNING_TSA_AUTH: signing.tsaAuth,
     SIGNING_TSA_ICP_CONFORMANT: signing.tsaIcpConformant ? "true" : "false",

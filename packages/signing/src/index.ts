@@ -92,3 +92,38 @@ export {
 } from "./revocation.js";
 export type { RevocationStatus, RevocationAdjudication } from "./revocation.js";
 export { createCrlFetcher } from "./crl-fetcher.js";
+
+// Envelope encryption of the signing credentials (roadmap 2 B4a): per-field data
+// keys wrapped by an identified KEK, AAD = organization + unit + serial.
+export {
+  CREDENTIAL_FORMAT_ENVELOPE,
+  CREDENTIAL_FORMAT_LEGACY,
+  DEFAULT_KEK_ID,
+  ENVELOPE_PASSWORD_IV_PLACEHOLDER,
+  createSigningKeyring,
+  credentialNeedsRewrap,
+  openSigningCredential,
+  sealSigningCredential,
+  signingKeyringFromEnv,
+} from "./envelope.js";
+export type {
+  OpenedSigningCredential,
+  SigningCredentialBinding,
+  SigningKeyring,
+  SigningKeyringEnv,
+  SigningKeyringInput,
+  StoredSigningCredential,
+} from "./envelope.js";
+
+// Validation of a signing credential at upload (roadmap 2 B4a): validity window,
+// key usage and the chain to the configured trust store.
+export {
+  resolveSigningTrustAnchors,
+  validateSigningCredential,
+} from "./credential-validation.js";
+export type {
+  CredentialRejectionCode,
+  CredentialValidationOptions,
+  CredentialValidationResult,
+  TrustStoreEnv,
+} from "./credential-validation.js";

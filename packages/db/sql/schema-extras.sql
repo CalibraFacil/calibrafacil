@@ -293,6 +293,21 @@ DROP TRIGGER IF EXISTS platform_event_log_append_only ON public.platform_event_l
 CREATE TRIGGER platform_event_log_append_only
   BEFORE UPDATE OR DELETE ON public.platform_event_log
   FOR EACH ROW EXECUTE FUNCTION calibra_append_only('signup_reservation');
+-- Append-only trigger of the compliance audit log (migration 0133, roadmap 2 B4a). Its own
+-- statement (not in the list above, which migration 0115 repeats verbatim).
+DROP TRIGGER IF EXISTS organization_compliance_audit_log_append_only ON public.organization_compliance_audit_log;
+CREATE TRIGGER organization_compliance_audit_log_append_only
+  BEFORE UPDATE OR DELETE ON public.organization_compliance_audit_log
+  FOR EACH ROW EXECUTE FUNCTION calibra_append_only();
+-- Signing-credential custody (migration 0133, roadmap 2 B4a): the legacy format (1) has no
+-- KEK id; the envelope format (2) always names the KEK its data keys are wrapped under.
+ALTER TABLE organization_signing_certificate DROP CONSTRAINT IF EXISTS organization_signing_certificate_custody_check;
+ALTER TABLE organization_signing_certificate
+  ADD CONSTRAINT organization_signing_certificate_custody_check
+  CHECK (
+    (custody_format_version = 1 AND kek_id IS NULL)
+    OR (custody_format_version = 2 AND kek_id IS NOT NULL)
+  );
 -- Records retention (migration 0117, decision Q16).
 --
 -- A LAB organization is never hard-deleted by accident:
@@ -1143,6 +1158,11 @@ CREATE POLICY tenant_isolation ON public."organization_api_key" AS PERMISSIVE FO
 ALTER TABLE public."organization_api_key_audit_log" ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON public."organization_api_key_audit_log";
 CREATE POLICY tenant_isolation ON public."organization_api_key_audit_log" AS PERMISSIVE FOR ALL TO calibra_app
+  USING ("organization_id" = NULLIF(current_setting('calibra.organization_id', true), '')::text)
+  WITH CHECK ("organization_id" = NULLIF(current_setting('calibra.organization_id', true), '')::text);
+ALTER TABLE public."organization_compliance_audit_log" ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON public."organization_compliance_audit_log";
+CREATE POLICY tenant_isolation ON public."organization_compliance_audit_log" AS PERMISSIVE FOR ALL TO calibra_app
   USING ("organization_id" = NULLIF(current_setting('calibra.organization_id', true), '')::text)
   WITH CHECK ("organization_id" = NULLIF(current_setting('calibra.organization_id', true), '')::text);
 ALTER TABLE public."organization_custom_domain" ENABLE ROW LEVEL SECURITY;

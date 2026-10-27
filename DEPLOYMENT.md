@@ -284,7 +284,8 @@ passes these variables from `deploy/.env` to the API and the worker (all optiona
 Generate a missing key or secret with `openssl rand -base64 32` (never reuse one key for two
 purposes, and never replace `SIGNING_MASTER_KEY`, `INTEGRATIONS_MASTER_KEY`,
 `PUBLIC_API_MASTER_KEY` or `EMAIL_DOMAIN_MASTER_KEY` once data is encrypted with it: add only the
-ones you do not have yet).
+ones you do not have yet. `SIGNING_MASTER_KEY` can be rotated, but only by the procedure in
+_Signing certificate custody_ below).
 
 ## Other ways to host
 
@@ -355,6 +356,7 @@ below are a summary.
 | `GOTENBERG_URL` (+ `GOTENBERG_TOKEN`)                                                               | PDF rendering                                                                                                  |
 | `SIGNING_MASTER_KEY`, `INTEGRATIONS_MASTER_KEY`, `PUBLIC_API_MASTER_KEY`, `EMAIL_DOMAIN_MASTER_KEY` | 32 random bytes each, base64 (`openssl rand -base64 32`); never reuse one key twice                            |
 | `SIGNING_TSA_URL` (+ `SIGNING_TSA_AUTH`, `SIGNING_TSA_ICP_CONFORMANT`, `SIGNING_TSA_TIMEOUT_MS`)    | Optional RFC 3161 time-stamping of certificates: see _Certificate time-stamping_                               |
+| `SIGNING_MASTER_KEY_ID`, `SIGNING_MASTER_KEY_PREVIOUS`, `SIGNING_TRUST_STORE_FILE`                  | Optional: key rotation and the upload trust store: see _Signing certificate custody_                           |
 | `QUOTE_APPROVAL_CODE_PEPPER`, `CRON_SECRET`                                                         | Random strings                                                                                                 |
 | `PORTAL_SERVICE_USER_ID`                                                                            | Id of the account that owns client-portal organizations (`init` creates it)                                    |
 | `BACKGROUND_JOBS_MODE`                                                                              | `local` (inside the API process, development) or `queue` (a separate worker)                                   |
@@ -463,6 +465,54 @@ certificado: Falha ao obter carimbo do tempo RFC 3161 ...`, and can be sent for 
 
 Laboratories that sign certificates therefore depend on the authority being available: monitor
 it, or leave `SIGNING_TSA_URL` empty until you have a contracted one.
+
+#### Signing certificate custody (envelope encryption, key rotation)
+
+Each laboratory's A1 certificate (the PKCS#12 and its password) is stored as an **envelope**: a
+random AES-256-GCM data key per field, wrapped by the key encryption key (KEK) that is
+`SIGNING_MASTER_KEY`. The additional authenticated data of both the wrap and the data binds the
+organization, the unit and the certificate serial, so a stored credential copied to another row does
+not decrypt. Every record carries the id of its KEK (`kek_id`) and a format version
+(`custody_format_version`: 1 = the legacy storage straight under the master key, 2 = the envelope).
+Credentials stored before this change are format 1 and **keep working** (they are tried against the
+current and the previous keys); `reencrypt-signing-credentials` migrates them.
+
+| Variable                      | Meaning                                                                                                  |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `SIGNING_MASTER_KEY`          | The **current** KEK, 32 random bytes, base64. Required in production (API and worker).                   |
+| `SIGNING_MASTER_KEY_ID`       | Id of the current KEK (letters, digits, `_`, `.`, `-`, up to 64). Unset: `k1`.                           |
+| `SIGNING_MASTER_KEY_PREVIOUS` | Previous KEKs as comma-separated `id:base64key`. Needed while any credential is still sealed under them. |
+| `SIGNING_TRUST_STORE_FILE`    | Path of a PEM bundle that **replaces** the bundled ICP-Brasil roots for upload validation. Optional.     |
+
+The API **and** the worker must receive the same three key variables (Docker Compose passes them to
+both).
+
+**Rotating the KEK.**
+
+1. Generate a new key (`openssl rand -base64 32`). Set `SIGNING_MASTER_KEY` to it and
+   `SIGNING_MASTER_KEY_ID` to a new id (e.g. `k2`). Move the old key to
+   `SIGNING_MASTER_KEY_PREVIOUS=k1:<old key>`. For a deployment that never set the id, the old key's
+   id is `k1`. Restart the API and the worker. Nothing breaks: every credential still opens.
+2. Run `docker compose exec api bun src/cli/reencrypt-signing-credentials.ts --dry-run`: it opens
+   every credential and lists what it would change, writing nothing.
+3. Run it without `--dry-run` (or `pnpm --dir apps/api reencrypt-signing-credentials`). It moves
+   every credential (legacy ones included) to the envelope format under the current KEK, with a fresh
+   data key, one audit row per credential, on the owner connection (`DATABASE_OWNER_URL`). It is
+   idempotent: run it again and nothing changes. It exits non-zero if any credential cannot be
+   opened (that credential is left untouched).
+4. Once it reports `failed 0` and nothing is left under the old key, remove
+   `SIGNING_MASTER_KEY_PREVIOUS` and restart. Keep the old key until then: a credential still sealed
+   under a key that is not configured makes certificate issuance fail closed for that unit.
+
+**Upload validation.** A P12 is refused with HTTP 422 and a pt-BR reason when it is expired, not valid
+yet, allows neither `digitalSignature` nor `nonRepudiation`, or its chain does not build to the trust
+store (the bundled ICP-Brasil roots, or `SIGNING_TRUST_STORE_FILE`). Nothing is stored in that case.
+
+**Audit.** Credential create / default replaced / delete, the "emitir sem assinatura" switch, the
+"assinatura obrigatória" policy and accreditation-profile changes (number, body, active toggle,
+vigência, scope-guard mode) are written to the append-only `organization_compliance_audit_log` in the
+same transaction as the change, with the actor and the before/after values (never a secret). The
+application role cannot UPDATE or DELETE it.
 
 ### Frontends
 

@@ -219,6 +219,7 @@ The value was backfilled from the parent along the path shown (parents first).
 | `oot_notification`                        | `organization_id`     | RESTRICT           |
 | `organization_api_key`                    | `organization_id`     | CASCADE            |
 | `organization_api_key_audit_log`          | `organization_id`     | none               |
+| `organization_compliance_audit_log`       | `organization_id`     | none               |
 | `organization_custom_domain`              | `organization_id`     | CASCADE            |
 | `organization_email_domain`               | `organization_id`     | CASCADE            |
 | `organization_event_log`                  | `organization_id`     | none               |
