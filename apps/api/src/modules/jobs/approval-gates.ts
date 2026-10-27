@@ -103,10 +103,14 @@ export async function selfApprovalBlocked(
 
 /**
  * The reference standards of the job, judged again at the moment of approval
- * with the ONE standards judgement the submit uses (`judgeSnapshotStandards`):
- * each standard must exist in this laboratory, not be deleted, be ACTIVE (a
- * standard flagged out of tolerance, i.e. recalled, or sent for calibration, i.e.
- * in quarantine, is not) and have been valid on the day the work was PERFORMED.
+ * with the ONE standards judgement the submit uses (`judgeSnapshotStandards`),
+ * refusing only what casts doubt on the measurement: a standard that is not in
+ * this laboratory, was deleted, was flagged out of tolerance (recalled: a
+ * problem was found) or was out of its calibration validity on the day the work
+ * was PERFORMED. A standard retired (INACTIVE) or sent for calibration after the
+ * measurement is a normal lifecycle step and does not block the release (the
+ * status model cannot tell a quarantine for a problem from a routine
+ * calibration, so the narrower rule applies).
  * The back-date justification is not asked again: the submit recorded it.
  * Returns the refusal, or null when the job may go on.
  */
@@ -128,6 +132,7 @@ export async function standardsRefusalAtApproval(
       now: params.now,
       mode: "cloud",
       requireBackdateReason: false,
+      lifecycleStatusesAfterTheWorkAreFine: true,
     },
     reader,
   );

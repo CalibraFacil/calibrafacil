@@ -447,6 +447,7 @@ describe("approveJob roadmap 2 B5 gates", () => {
         performedAt,
         mode: "cloud",
         requireBackdateReason: false,
+        lifecycleStatusesAfterTheWorkAreFine: true,
       }),
       expect.anything(),
     );

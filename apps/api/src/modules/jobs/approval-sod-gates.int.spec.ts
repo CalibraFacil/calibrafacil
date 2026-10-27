@@ -15,8 +15,9 @@
  *             "no other approver exists" exemption of a solo lab does not apply. A
  *             non-accredited laboratory keeps its behaviour.
  *   REQ-B5-3  the reference standards are re-judged at approval, on the date the work
- *             was performed: expired then, deleted, recalled (out of tolerance) or in
- *             quarantine (sent for calibration) refuses the approval.
+ *             was performed: expired then, deleted or recalled (out of tolerance)
+ *             refuses the approval; a standard retired (INACTIVE) or sent for
+ *             calibration after the measurement is a normal lifecycle step and does not.
  *   REQ-B5-5  deny paths end to end, including cross-laboratory access.
  */
 
@@ -660,17 +661,49 @@ describe("approval separation of duties and mandatory gates (roadmap 2 B5)", () 
       await expectNotReleased(jobId);
     });
 
-    it("REQ-B5-3 [HIGH RISK]: a standard in quarantine (sent for calibration) refuses the approval", async () => {
-      const standard = await seedStandard(world);
-      const jobId = await seedReviewJobWithStandard(world, standard);
-      await db
-        .update(referenceStandard)
-        .set({ status: "SENT_FOR_CALIBRATION" })
-        .where(eq(referenceStandard.id, standard.id));
+    it.each(["SENT_FOR_CALIBRATION", "INACTIVE"] as const)(
+      "REQ-B5-3 [HIGH RISK]: a standard valid on the performed date and then %s (a normal lifecycle step) does not block the release",
+      async (status) => {
+        const standard = await seedStandard(world);
+        const jobId = await seedReviewJobWithStandard(world, standard);
+        await db
+          .update(referenceStandard)
+          .set({ status })
+          .where(eq(referenceStandard.id, standard.id));
+
+        await expect(approveCloud(jobId, CHECKER)).resolves.toEqual({
+          approved: true,
+        });
+        expect((await readJob(jobId)).status).toBe("GENERATING_PDF");
+      },
+    );
+
+    it("REQ-B5-3: the lifecycle statuses do not excuse a standard that was expired on the performed date", async () => {
+      const standard = await seedStandard(world, {
+        status: "SENT_FOR_CALIBRATION",
+        nextCalibrationDate: addCalendarDays(labToday(), -40),
+      });
+      const jobId = await seedReviewJobWithStandard(world, standard, {
+        performedAt: new Date(Date.now() - 30 * DAY_MS),
+      });
 
       await expect(approveCloud(jobId, CHECKER)).resolves.toMatchObject({
         approved: false,
-        code: "standard_inactive",
+        code: "standard_expired",
+      });
+      await expectNotReleased(jobId);
+    });
+
+    it("REQ-B5-3: a deleted standard is refused whatever its status", async () => {
+      const standard = await seedStandard(world, {
+        status: "INACTIVE",
+        deletedAt: new Date(),
+      });
+      const jobId = await seedReviewJobWithStandard(world, standard);
+
+      await expect(approveCloud(jobId, CHECKER)).resolves.toMatchObject({
+        approved: false,
+        code: "standard_deleted",
       });
       await expectNotReleased(jobId);
     });
