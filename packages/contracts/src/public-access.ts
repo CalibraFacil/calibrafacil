@@ -34,7 +34,12 @@ const digitalSignatureSchema = z.discriminatedUnion("signed", [
 
 /** GET /api/verify/:token */
 export const verificationResponseSchema = z.object({
-  valid: z.literal(true),
+  // False for a withdrawn certificate: authentic, but not to be relied on.
+  valid: z.boolean(),
+  // The certificate lifecycle (ISO/IEC 17025 §7.8.8, §7.10): ISSUED, SUPERSEDED
+  // once an amendment was issued, WITHDRAWN (`withdrawnAt` then says when).
+  certificateStatus: z.enum(["ISSUED", "SUPERSEDED", "WITHDRAWN"]),
+  withdrawnAt: nullableString,
   jobId: z.string(),
   status: z.string(),
   hasDocument: z.boolean(),

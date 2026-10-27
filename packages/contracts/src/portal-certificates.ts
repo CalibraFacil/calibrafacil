@@ -10,6 +10,11 @@ import { nullableNumber, nullableString, paginationSchema } from "./common";
 
 const jsonRecordSchema = z.record(z.string(), z.unknown());
 const releaseStatusSchema = z.enum(["RELEASED", "PAYMENT_PENDING"]);
+const certificateLifecycleStatusSchema = z.enum([
+  "ISSUED",
+  "SUPERSEDED",
+  "WITHDRAWN",
+]);
 
 /** One row of GET /api/portal/certificates. */
 export const portalCertificateListItemSchema = z.object({
@@ -35,6 +40,9 @@ export const portalCertificateListItemSchema = z.object({
   /** Amendment chain (ISO/IEC 17025 §7.8.8). */
   isSuperseded: z.boolean(),
   isAmendment: z.boolean(),
+  /** Lifecycle of the issued certificate; WITHDRAWN (ISO/IEC 17025 §7.10) says "do not rely on it". */
+  certificateStatus: certificateLifecycleStatusSchema,
+  withdrawnAt: nullableString,
 });
 export type PortalCertificateListItem = z.infer<
   typeof portalCertificateListItemSchema
@@ -128,6 +136,8 @@ export const portalCertificateDetailSchema = z.object({
   dueDate: nullableString,
   certificateUrl: nullableString,
   releaseStatus: releaseStatusSchema,
+  certificateStatus: certificateLifecycleStatusSchema,
+  withdrawnAt: nullableString,
   verificationToken: z.string(),
   verdict: z
     .object({

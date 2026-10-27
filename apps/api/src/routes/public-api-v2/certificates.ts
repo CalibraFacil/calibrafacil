@@ -13,6 +13,10 @@ import { requireApiScope } from "../../middleware/api-key-auth";
 import { type PublicApiV2Env } from "./env";
 import { ListQuerySchema } from "./schemas";
 import { orgDb } from "../../lib/org-db";
+import {
+  loadCertificateLifecycles,
+  withdrawalOf,
+} from "../../lib/certificate-lifecycle";
 
 export const certificateRoutes = new Hono<PublicApiV2Env>()
   .get(
@@ -33,10 +37,10 @@ export const certificateRoutes = new Hono<PublicApiV2Env>()
         query ? ilike(calibrationJob.jobId, `%${query}%`) : undefined,
       ];
 
-      const [countResult, rows] = await orgDb(
+      const [countResult, rows, lifecycles] = await orgDb(
         apiKey.organizationId,
-      ).transaction((o) =>
-        Promise.all([
+      ).transaction(async (o) => {
+        const [total, page] = await Promise.all([
           o
             .select({ total: count() })
             .from(calibrationJob)
@@ -51,6 +55,7 @@ export const certificateRoutes = new Hono<PublicApiV2Env>()
               verificationToken: calibrationJob.verificationToken,
               certificateUrl: calibrationJob.certificateUrl,
               unitId: calibrationJob.unitId,
+              supersededById: calibrationJob.supersededById,
               assetName: asset.name,
               customerName: customer.name,
             })
@@ -61,11 +66,19 @@ export const certificateRoutes = new Hono<PublicApiV2Env>()
             .orderBy(desc(calibrationJob.approvedAt))
             .limit(limit)
             .offset(offset),
-        ]),
-      );
+        ]);
+        return [total, page, await loadCertificateLifecycles(o, page)] as const;
+      });
 
       return c.json({
-        data: rows,
+        data: rows.map(({ supersededById: _supersededById, ...row }) => ({
+          ...row,
+          // ISSUED, SUPERSEDED once an amendment was issued, WITHDRAWN (§7.10):
+          // a withdrawn certificate must not be relied on.
+          certificateStatus: lifecycles.get(row.id)?.status ?? "ISSUED",
+          withdrawnAt:
+            withdrawalOf(lifecycles.get(row.id))?.withdrawnAt ?? null,
+        })),
         meta: buildListMeta({
           page,
           limit,
@@ -96,6 +109,7 @@ export const certificateRoutes = new Hono<PublicApiV2Env>()
             assetName: asset.name,
             customerId: calibrationJob.customerId,
             customerName: customer.name,
+            supersededById: calibrationJob.supersededById,
           })
           .from(calibrationJob)
           .innerJoin(customer, eq(calibrationJob.customerId, customer.id))
@@ -109,6 +123,13 @@ export const certificateRoutes = new Hono<PublicApiV2Env>()
           )
           .limit(1),
       );
+      const lifecycle = job
+        ? (
+            await orgDb(apiKey.organizationId).transaction((o) =>
+              loadCertificateLifecycles(o, [job]),
+            )
+          ).get(job.id)
+        : undefined;
 
       if (!job) {
         return c.json(
@@ -120,7 +141,15 @@ export const certificateRoutes = new Hono<PublicApiV2Env>()
         );
       }
 
-      return c.json({ data: job });
+      const { supersededById: _supersededById, ...data } = job;
+      return c.json({
+        data: {
+          ...data,
+          // ISSUED, SUPERSEDED once an amendment was issued, WITHDRAWN (§7.10).
+          certificateStatus: lifecycle?.status ?? "ISSUED",
+          withdrawnAt: withdrawalOf(lifecycle)?.withdrawnAt ?? null,
+        },
+      });
     },
   )
   .get(

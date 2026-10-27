@@ -39,7 +39,6 @@ import {
   notifyJobSubmittedForReview,
   notifyJobRejected,
   notifyJobAssigned,
-  notifyCertificateAmended,
 } from "@calibra-facil/notifications";
 import {
   CreateJobSchema,
@@ -52,10 +51,12 @@ import {
   CancelJobSchema,
   ExecuteJobSchema,
   AmendJobSchema,
+  WithdrawCertificateSchema,
   FlagJobOutOfToleranceSchema,
 } from "@calibra-facil/schemas";
 import type {
   JobAmendResponse,
+  JobWithdrawCertificateResponse,
   JobDetail,
   JobCreateResponse,
   JobDownloadUrlResponse,
@@ -70,6 +71,7 @@ import { flagJobOutOfTolerance } from "../lib/oot-notifications";
 import { syncJobStandardLinks } from "../lib/job-standards";
 import {
   addServerTiming,
+  requireRole,
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
@@ -89,6 +91,7 @@ import {
   gte,
   inArray,
   lt,
+  ne,
   or,
   sql,
 } from "drizzle-orm";
@@ -117,6 +120,8 @@ import {
 } from "../modules/jobs/helpers";
 import { approveJob } from "../modules/jobs/approve-job";
 import { amendJob } from "../modules/jobs/amend-job";
+import { withdrawCertificate } from "../modules/jobs/withdraw-certificate";
+import { loadCertificateLifecycles } from "../lib/certificate-lifecycle";
 import { assignJob } from "../modules/jobs/assign-job";
 import { cancelJob } from "../modules/jobs/cancel-job";
 import { editJob } from "../modules/jobs/edit-job";
@@ -650,13 +655,45 @@ export const jobsRouter = new Hono<{
           [job.id],
           o,
         );
-        return { job, financialContextMap };
+        // The lifecycle of the issued certificate (ISSUED / SUPERSEDED /
+        // WITHDRAWN, from its status events) and the open amendment, if any:
+        // an original with an amendment in progress is still the valid one.
+        const certificateLifecycle =
+          (await loadCertificateLifecycles(o, [job])).get(job.id) ?? null;
+        const [amendmentInProgress] =
+          job.status === "APPROVED"
+            ? await o
+                .select({
+                  id: calibrationJob.id,
+                  jobId: calibrationJob.jobId,
+                  status: calibrationJob.status,
+                })
+                .from(calibrationJob)
+                .where(
+                  and(
+                    eq(calibrationJob.supersedesId, job.id),
+                    ne(calibrationJob.status, "CANCELED"),
+                  ),
+                )
+                .limit(1)
+            : [];
+        return {
+          job,
+          financialContextMap,
+          certificateLifecycle,
+          amendmentInProgress: amendmentInProgress ?? null,
+        };
       },
     );
     if (!loaded) {
       return c.json({ error: "Job nao encontrado" }, 404);
     }
-    const { job: loadedJob, financialContextMap } = loaded;
+    const {
+      job: loadedJob,
+      financialContextMap,
+      certificateLifecycle,
+      amendmentInProgress,
+    } = loaded;
     const { frozenSeal, ...job } = loadedJob;
     const derivedAssetSnapshot =
       job.assetSnapshot ??
@@ -683,6 +720,16 @@ export const jobsRouter = new Hono<{
       ...job,
       assetSnapshot: derivedAssetSnapshot,
       accreditationSeal: frozenSealOf(frozenSeal),
+      certificateLifecycle: certificateLifecycle
+        ? {
+            status: certificateLifecycle.status,
+            changedAt: certificateLifecycle.latest
+              ? new Date(certificateLifecycle.latest.occurredAt)
+              : null,
+            reason: certificateLifecycle.latest?.reason ?? null,
+          }
+        : null,
+      amendmentInProgress,
       isOverdue: job.dueDate
         ? isCalendarDatePast(job.dueDate, now) &&
           ["DRAFT", "IN_PROGRESS", "REVIEW"].includes(job.status)
@@ -1352,12 +1399,9 @@ export const jobsRouter = new Hono<{
           return c.json({ error: "Job nao encontrado" }, 404);
         case "illegal_transition":
         case "already_amended":
+        case "amendment_in_progress":
+        case "certificate_withdrawn":
           return domainErrorResponse(c, outcome.error);
-        case "concurrent_update":
-          return domainErrorResponse(
-            c,
-            await statusConflictFor(id, memberData.organizationId),
-          );
         case "ok":
           break;
       }
@@ -1374,19 +1418,10 @@ export const jobsRouter = new Hono<{
         orgDb(memberData.organizationId),
       );
 
-      await enqueueBackgroundJob({
-        jobId: originalJob.id,
-        userId: session.user.id,
-      });
-
-      // Notify customer (async)
-      notifyCertificateAmended(
-        originalJob.id,
-        amendedJob.id,
-        input.reason,
-      ).catch((err) => {
-        console.error("[Jobs] Failed to send amendment notification:", err);
-      });
+      // The original stays APPROVED (the valid certificate) until the
+      // replacement is issued: the worker supersedes it in the issuance
+      // transaction and tells the customer then. Nothing is enqueued or sent
+      // for the original here.
 
       return c.json(
         {
@@ -1394,7 +1429,7 @@ export const jobsRouter = new Hono<{
           originalJob: {
             id: originalJob.id,
             jobId: originalJob.jobId,
-            status: "SUPERSEDED",
+            status: "APPROVED",
           },
           amendedJob: {
             id: amendedJob.id,
@@ -1405,6 +1440,60 @@ export const jobsRouter = new Hono<{
         } satisfies ServerShape<JobAmendResponse>,
         201,
       );
+    },
+  )
+
+  // =========================================================================
+  // POST /:id/certificate/withdraw - Withdraw an issued certificate
+  // ISO 17025:2017 Clause 7.10 - Nonconforming work (e.g. after a recall)
+  // The job keeps its status; the certificate lifecycle gets a WITHDRAWN event.
+  // =========================================================================
+  .post(
+    "/:id/certificate/withdraw",
+    ...withLabPermission({ calibration: ["approve"] }),
+    requireRole(["admin", "owner"]), // Only admin/owner can withdraw
+    zValidator("json", WithdrawCertificateSchema),
+    async (c) => {
+      const memberData = c.get("member");
+      const session = c.get("session");
+      const id = await resolveJobRouteId(c.req.param("id"), memberData);
+      const input = c.req.valid("json");
+
+      if (id === null) {
+        return c.json({ error: "Job nao encontrado" }, 404);
+      }
+
+      const outcome = await withdrawCertificate({
+        actor: {
+          kind: "user",
+          userId: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        },
+        jobId: id,
+        organizationId: memberData.organizationId,
+        unitScope: memberData,
+        reason: input.reason,
+      });
+      switch (outcome.status) {
+        case "not_found":
+          return c.json({ error: "Job nao encontrado" }, 404);
+        case "not_issued":
+        case "already_withdrawn":
+          return domainErrorResponse(c, outcome.error);
+        case "ok":
+          break;
+      }
+
+      return c.json({
+        message: "Certificado retirado com sucesso",
+        job: {
+          id: outcome.jobId,
+          jobId: outcome.jobNumber,
+          status: outcome.jobStatus,
+        },
+        certificateStatus: "WITHDRAWN",
+        withdrawnAt: outcome.withdrawnAt.toISOString(),
+      } satisfies ServerShape<JobWithdrawCertificateResponse>);
     },
   )
 

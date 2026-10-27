@@ -7,6 +7,7 @@ import {
   buildJobMutationResponse,
   buildJobRow,
   buildJobsList,
+  buildJobWithdrawCertificateResponse,
 } from "./jobs.fixtures";
 import {
   compiledMethodSnapshotSchema,
@@ -16,6 +17,7 @@ import {
   jobMutationResponseSchema,
   jobRowSchema,
   jobTechniciansResponseSchema,
+  jobWithdrawCertificateResponseSchema,
   jobsListResponseSchema,
   type JobDetail,
   type ServerShape,
@@ -118,6 +120,29 @@ describe("jobs response schemas", () => {
         }).success,
       ).toBe(false);
     }
+  });
+
+  it("REQ-TC-1: the withdraw response says the certificate is WITHDRAWN and nothing else", () => {
+    expect(
+      jobWithdrawCertificateResponseSchema.safeParse(
+        buildJobWithdrawCertificateResponse(),
+      ).success,
+    ).toBe(true);
+    expect(
+      jobWithdrawCertificateResponseSchema.safeParse({
+        ...buildJobWithdrawCertificateResponse(),
+        certificateStatus: "ISSUED",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("REQ-TC-1: an amendment leaves the original APPROVED (it is superseded when the replacement is issued)", () => {
+    expect(
+      jobAmendResponseSchema.safeParse({
+        ...buildJobAmendResponse(),
+        originalJob: { id: 7, jobId: "CAL-0007", status: "SUPERSEDED" },
+      }).success,
+    ).toBe(false);
   });
 
   it("REQ-TC-1: amend, technicians and download responses are covered", () => {

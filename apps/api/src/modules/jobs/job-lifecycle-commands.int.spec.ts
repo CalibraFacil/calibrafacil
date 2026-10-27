@@ -837,7 +837,7 @@ describe("job lifecycle commands (real Postgres)", () => {
   });
 
   describe("amendJob", () => {
-    it("REQ-LC-1e: APPROVED -> SUPERSEDED plus a DRAFT amendment, both audited", async () => {
+    it("REQ-LC-1e: a DRAFT amendment is opened, the original stays APPROVED, both audited", async () => {
       const { jobId } = await seedWorld("APPROVED");
 
       const result = await COMMANDS.amend(jobId);
@@ -851,12 +851,14 @@ describe("job lifecycle commands (real Postgres)", () => {
         amendmentReason: "Erro de digitacao no certificado",
       });
       const original = await jobRow(jobId);
+      // The original is superseded only when the replacement is issued.
       expect(original).toMatchObject({
-        status: "SUPERSEDED",
-        supersededById: result.amendedJob.id,
+        status: "APPROVED",
+        supersededById: null,
+        supersededAt: null,
       });
       expect((await auditRows(jobId)).map((row) => row.action)).toEqual([
-        "supersede",
+        "amendment_started",
       ]);
       expect(
         (await auditRows(result.amendedJob.id)).map((row) => row.action),

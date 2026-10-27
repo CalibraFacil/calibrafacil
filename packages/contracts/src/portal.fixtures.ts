@@ -217,6 +217,8 @@ export function buildPortalCertificateListItem(
     serviceName: "Calibração de massa",
     labName: "Laboratório Exemplo",
     releaseStatus: "RELEASED",
+    certificateStatus: "ISSUED",
+    withdrawnAt: null,
     isSuperseded: false,
     isAmendment: false,
     ...overrides,
@@ -244,6 +246,8 @@ export function buildPortalCertificateDetail(
     dueDate: "2027-01-10T00:00:00.000Z",
     certificateUrl: "/certificates/7.pdf",
     releaseStatus: "RELEASED",
+    certificateStatus: "ISSUED",
+    withdrawnAt: null,
     verificationToken: "6f1c1d1e-0000-4000-8000-000000000001",
     verdict: {
       conformity: "CONFORMING",
@@ -603,6 +607,8 @@ export function buildVerificationResponse(
 ): VerificationResponse {
   return {
     valid: true,
+    certificateStatus: "ISSUED",
+    withdrawnAt: null,
     jobId: "CAL-0007",
     status: "APPROVED",
     hasDocument: true,

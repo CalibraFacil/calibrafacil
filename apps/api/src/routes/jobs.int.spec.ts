@@ -1986,7 +1986,9 @@ describe("jobsRouter — status guards (cancel allow-list, compare-and-set)", ()
       });
     const [first, second] = await Promise.all([amend(), amend()]);
 
-    expect([first.status, second.status].toSorted()).toEqual([201, 400]);
+    // The second request waits on the original's row lock, then finds the
+    // amendment in progress.
+    expect([first.status, second.status].toSorted()).toEqual([201, 409]);
 
     const amendments = await db
       .select({ id: calibrationJob.id, status: calibrationJob.status })
@@ -1994,11 +1996,12 @@ describe("jobsRouter — status guards (cancel allow-list, compare-and-set)", ()
       .where(eq(calibrationJob.supersedesId, id));
     expect(amendments).toHaveLength(1);
     expect(amendments[0]?.status).toBe("DRAFT");
-    expect(await statusOf(id)).toBe("SUPERSEDED");
-    const supersedeAudits = (await auditActions(id)).filter(
-      (action) => action === "supersede",
+    // The original stays APPROVED until the replacement is issued.
+    expect(await statusOf(id)).toBe("APPROVED");
+    const startedAudits = (await auditActions(id)).filter(
+      (action) => action === "amendment_started",
     );
-    expect(supersedeAudits).toHaveLength(1);
+    expect(startedAudits).toHaveLength(1);
     expect(fixture.unitId).toBeGreaterThan(0);
   });
 

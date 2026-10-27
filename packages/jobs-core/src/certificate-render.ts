@@ -44,7 +44,9 @@ import {
   CertificateIssuanceSkipped,
   lockJobStatus,
   notifyCertificateIssued,
+  notifyCertificateSuperseded,
   parseSignatureMetadata,
+  recordCertificateIssued,
   signPdfWithUnitCertificate,
   updateJobWithCertificate,
 } from "./certificate-issuance.js";
@@ -163,12 +165,27 @@ export async function processJob(
             if (result.outcome === "skipped") {
               throw new CertificateIssuanceSkipped(result.currentStatus);
             }
+            if (result.outcome === "issued") {
+              await recordCertificateIssued(client, {
+                organizationId: existing.organization_id,
+                jobId,
+                userId,
+                at: new Date(),
+              });
+            }
             return result;
           },
         ),
       );
       if (transition.outcome === "issued") {
         await notifyCertificateIssued(jobId);
+        if (transition.supersession) {
+          await notifyCertificateSuperseded(
+            transition.supersession.originalJobId,
+            jobId,
+            transition.supersession.reason,
+          );
+        }
       }
     } catch (error) {
       if (error instanceof CertificateIssuanceSkipped) {
@@ -459,12 +476,36 @@ export async function processJob(
         if (transition.outcome === "skipped") {
           throw new CertificateIssuanceSkipped(transition.currentStatus);
         }
-        return { key: snapshotPdfR2Key, outcome: transition.outcome };
+        // The certificate's first lifecycle event, in the same transaction as
+        // its snapshot and its APPROVED status (idempotent on a re-drain).
+        if (transition.outcome === "issued") {
+          await recordCertificateIssued(client, {
+            organizationId: issuingOrganizationId,
+            jobId,
+            userId,
+            at: new Date(),
+          });
+        }
+        return {
+          key: snapshotPdfR2Key,
+          outcome: transition.outcome,
+          supersession:
+            transition.outcome === "issued"
+              ? transition.supersession
+              : undefined,
+        };
       }),
     );
 
     if (issued.outcome === "issued") {
       await notifyCertificateIssued(jobId);
+      if (issued.supersession) {
+        await notifyCertificateSuperseded(
+          issued.supersession.originalJobId,
+          jobId,
+          issued.supersession.reason,
+        );
+      }
     }
 
     return {

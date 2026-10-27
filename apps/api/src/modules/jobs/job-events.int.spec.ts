@@ -229,7 +229,7 @@ describe("job lifecycle audit rows through appendJobEvent (real Postgres)", () =
     },
   );
 
-  it("REQ-AUD-2: amend stores supersede on the original and create_amendment on the new job", async () => {
+  it("REQ-AUD-2: amend stores amendment_started on the original (still APPROVED) and create_amendment on the new job", async () => {
     const { jobId } = await seedWorld("APPROVED");
 
     const result = await amendJob({
@@ -246,14 +246,15 @@ describe("job lifecycle audit rows through appendJobEvent (real Postgres)", () =
       {
         organizationId: ORG,
         jobId,
-        action: "supersede",
+        action: "amendment_started",
         changes: {
-          status: { old: "APPROVED", new: "SUPERSEDED" },
-          supersededById: amendedJob.id,
+          amendedJobId: amendedJob.id,
+          amendmentNumber,
+          reason: "Erro de digitacao no certificado",
         },
         performedBy: USER,
         ipAddress: IP,
-        reason: `Certificado retificado. Novo: ${amendedJob.jobId}. Motivo: Erro de digitacao no certificado`,
+        reason: `Retificacao iniciada. Nova: ${amendedJob.jobId}. O certificado original segue valido ate a emissao da retificacao. Motivo: Erro de digitacao no certificado`,
       },
     ]);
     expect(await storedRows(amendedJob.id)).toEqual([
