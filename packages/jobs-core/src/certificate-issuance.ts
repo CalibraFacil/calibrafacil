@@ -360,6 +360,32 @@ export async function updateJobWithCertificate(
       : { signed: false };
   const organizationId = jobOrganizationOf(updated.rows, jobId);
   const actor = workerJobActor(userId);
+
+  // The amendment's certificate is issued: the original stops being the valid
+  // one in THIS transaction, never before (ISO/IEC 17025 §7.8.8). It takes the
+  // original's row lock, so it runs BEFORE this transaction's first audit row:
+  // an audit insert holds the organization's hash-chain lock until COMMIT
+  // (migration 0131), and a row lock taken after it can deadlock against a
+  // transaction (a withdrawal, an amendment) that holds that row and then audits.
+  const replaced = updated.rows[0];
+  let supersession: { originalJobId: number; reason: string | null } | null =
+    null;
+  if (!isSuperseded && replaced?.supersedes_id) {
+    await supersedeOriginalOnIssuance(client, {
+      organizationId,
+      originalJobId: replaced.supersedes_id,
+      replacementJobId: jobId,
+      replacementNumber: replaced.job_id,
+      reason: replaced.amendment_reason,
+      userId,
+      now,
+    });
+    supersession = {
+      originalJobId: replaced.supersedes_id,
+      reason: replaced.amendment_reason,
+    };
+  }
+
   await appendJobEvent(
     jobEventTransaction(client),
     isSuperseded
@@ -390,33 +416,13 @@ export async function updateJobWithCertificate(
   );
 
   if (isSuperseded) return { outcome: "watermarked" };
-
-  // The amendment's certificate is issued: the original stops being the valid
-  // one in THIS transaction, never before (ISO/IEC 17025 §7.8.8).
-  const replaced = updated.rows[0];
-  if (replaced?.supersedes_id) {
-    await supersedeOriginalOnIssuance(client, {
-      organizationId,
-      originalJobId: replaced.supersedes_id,
-      replacementJobId: jobId,
-      replacementNumber: replaced.job_id,
-      reason: replaced.amendment_reason,
-      userId,
-      now,
-    });
-    return {
-      outcome: "issued",
-      supersession: {
-        originalJobId: replaced.supersedes_id,
-        reason: replaced.amendment_reason,
-      },
-    };
-  }
-  return { outcome: "issued" };
+  return supersession
+    ? { outcome: "issued", supersession }
+    : { outcome: "issued" };
 }
 
 /**
- * Records the ISSUED event of the certificate `jobId` just got (migration 0130),
+ * Records the ISSUED event of the certificate `jobId` just got (migration 0132),
  * once: a re-drain or a replay of an interrupted issuance finds it and adds
  * nothing. Runs on the issuance transaction, after the snapshot row exists.
  */
@@ -455,7 +461,7 @@ export async function recordCertificateIssued(
  * cancelled or rejected amendment, or a render that failed, leaves it untouched.
  *
  * An original an earlier release already superseded at creation time (an
- * amendment opened before 0130 and still in flight) is linked to this job
+ * amendment opened before 0132 and still in flight) is linked to this job
  * already: only its event is added. Anything else is an inconsistency that must
  * not issue a second "current" certificate: it throws and the issuance rolls back.
  *

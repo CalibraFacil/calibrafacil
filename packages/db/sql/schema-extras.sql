@@ -799,10 +799,6 @@ REVOKE UPDATE, DELETE, TRUNCATE ON public."visit_audit_log" FROM calibra_app;
 REVOKE UPDATE, TRUNCATE ON public."certificate_input" FROM calibra_app;
 -- END generated: calibra_evidence_grants
 
-../..                                    | [WARN] Unsupported engine: wanted: {"node":">=24"} (current: {"node":"v22.21.1","pnpm":"11.3.0"})
-Scope: all 32 workspace projects
-
-Done in 5.5s using pnpm v11.3.0
 -- BEGIN generated: calibra_rls_tenant_isolation
 ALTER TABLE public."accredited_scope_line" ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON public."accredited_scope_line";

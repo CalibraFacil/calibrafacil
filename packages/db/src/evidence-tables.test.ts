@@ -40,7 +40,18 @@ function appendOnlyTriggerTables(): string[] {
   );
   const tables = Array.from(array.matchAll(/'([a-z_]+)'/g), (m) => m[1] ?? "");
   // platform_event_log has its own trigger statement (signup reservation).
-  return [...tables, "platform_event_log"];
+  // A table added later attaches the same guard in its own migration.
+  const later = readdirSync(MIGRATIONS_DIR)
+    .filter((name) => name.endsWith(".sql") && name > "0115")
+    .flatMap((name) =>
+      Array.from(
+        read(`../drizzle/${name}`).matchAll(
+          /CREATE TRIGGER [a-z_]+_append_only\s+BEFORE UPDATE OR DELETE ON public\.([a-z_]+)\s+FOR EACH ROW EXECUTE FUNCTION calibra_append_only\(\)/g,
+        ),
+        (m) => m[1] ?? "",
+      ),
+    );
+  return [...tables, "platform_event_log", ...later];
 }
 
 describe("evidence tables: privileges classification", () => {
@@ -136,8 +147,17 @@ describe("evidence grants SQL, generated from evidence-tables.ts", () => {
     expect(begin).toBeGreaterThan(extras.indexOf(RLS_ROLE_SQL));
   });
 
-  it("REQ-EVID-2: the migration carries exactly the block, and is journaled after 0129 with a larger timestamp", () => {
-    const migration = read(`../drizzle/${GRANTS_MIGRATION}`);
+  it("REQ-EVID-2: the newest migration that defines the block carries exactly the current one, and the grants migration is journaled after 0129", () => {
+    // The list grows with the evidence tables (a new migration repeats the block
+    // right after the blanket GRANT), so the NEWEST definition is the current one.
+    const defining = readdirSync(MIGRATIONS_DIR)
+      .filter((name) => name.endsWith(".sql"))
+      .sort()
+      .filter((name) =>
+        read(`../drizzle/${name}`).includes(EVIDENCE_GRANTS_BEGIN),
+      );
+    expect(defining[0]).toBe(GRANTS_MIGRATION);
+    const migration = read(`../drizzle/${defining.at(-1)}`);
     const begin = migration.indexOf(EVIDENCE_GRANTS_BEGIN);
     const end = migration.indexOf(EVIDENCE_GRANTS_END, begin);
     expect(migration.slice(begin, end + EVIDENCE_GRANTS_END.length)).toBe(
