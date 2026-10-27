@@ -34,6 +34,7 @@ import {
   removePortalMemberAsService,
 } from "../lib/portal-service-account";
 import { orgDb } from "../lib/org-db";
+import { clientIp } from "../lib/client-ip";
 
 // Mirrors the portal's DUE_SOON window (apps/portal calibration-status / portal.ts).
 const DUE_SOON_DAYS = 30;
@@ -91,12 +92,6 @@ function generateUniqueSlug(name: string): string {
     .substring(0, 40);
   const suffix = Math.random().toString(36).substring(2, 8);
   return `grupo-${base}-${suffix}`;
-}
-
-function clientIp(c: {
-  req: { header: (name: string) => string | undefined };
-}) {
-  return c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null;
 }
 
 /**

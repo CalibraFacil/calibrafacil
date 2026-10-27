@@ -1,4 +1,12 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import {
+  beforeEach,
+  describe,
+  expect,
+  it,
+  beforeAll,
+  afterAll,
+  vi,
+} from "vitest";
 import { organizationOf } from "../../test/integration/organization-of";
 import { publicServiceOrderAccessRouter } from "./service-orders";
 import { db } from "@calibra-facil/db";
@@ -17,6 +25,15 @@ import { eq, sql } from "drizzle-orm";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { createPublicServiceOrderAccessToken } from "../lib/service-order-workflow";
+
+// The requests below arrive as from behind one trusted reverse proxy (the Caddy of
+// deploy/compose.yaml), which writes X-Forwarded-For: lib/client-ip.ts.
+beforeAll(() => {
+  vi.stubEnv("TRUSTED_PROXY_HOPS", "1");
+});
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
 
 // Public approval-code redemption — spec quote-approval-public-access
 // (issue #785), mini-spec B. Real DB; no session (the code IS the credential).

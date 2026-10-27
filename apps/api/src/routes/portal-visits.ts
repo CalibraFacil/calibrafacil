@@ -28,6 +28,7 @@ import {
 import { resolveLabOrganizationIdByPortalHostname } from "../lib/portal-domains";
 import { resolvePortalCustomerScope } from "../lib/portal-customer-scope";
 import { orgDb } from "../lib/org-db";
+import { clientIp, type ClientIpContext } from "../lib/client-ip";
 
 async function getPortalLabScope(c: {
   req: { header: (name: string) => string | undefined };
@@ -42,12 +43,8 @@ async function getPortalLabScope(c: {
   }
 }
 
-function requestIp(c: {
-  req: { header: (name: string) => string | undefined };
-}) {
-  return (
-    c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for") ?? null
-  );
+function requestIp(c: ClientIpContext) {
+  return clientIp(c);
 }
 
 function requestUserAgent(c: {

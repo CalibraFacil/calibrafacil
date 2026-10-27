@@ -69,6 +69,10 @@ x-app-env: &app-env
   # Background jobs wait in the database for the worker.
   BACKGROUND_JOBS_MODE: queue
   CRON_SCHEDULER: internal
+  # The API sits behind one reverse proxy (Caddy), which writes X-Forwarded-For:
+  # the client's address for the audit trail and the rate limits is the entry it
+  # appended. Raise it if another proxy (a load balancer) stands in front of Caddy.
+  TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-1}
   CRON_SECRET: ${CRON_SECRET:?run ./setup.sh first}
   SIGNING_MASTER_KEY: ${SIGNING_MASTER_KEY:?run ./setup.sh first}
   SIGNING_TSA_URL: ${SIGNING_TSA_URL:-}

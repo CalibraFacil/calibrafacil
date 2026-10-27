@@ -57,6 +57,7 @@ import {
 } from "../lib/portal-service-account";
 import { resolveCustomerRouteId } from "../lib/customer-route-id";
 import { orgDb } from "../lib/org-db";
+import { clientIp } from "../lib/client-ip";
 
 const CommandPaletteCustomerSearchQuerySchema = z.object({
   query: z.string().trim().min(2),
@@ -616,10 +617,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
               action: "update",
               changes,
               performedBy: session.user.id,
-              ipAddress:
-                c.req.header("x-forwarded-for") ??
-                c.req.header("x-real-ip") ??
-                null,
+              ipAddress: clientIp(c),
             });
           }
 
@@ -660,8 +658,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
       // TODO: Check for active calibrations before deleting
       // For now, we allow deletion
 
-      const ipAddress =
-        c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null;
+      const ipAddress = clientIp(c);
 
       // Retention (decision Q16): a customer that still has regulated records
       // (jobs, certificates, service orders, billing documents, requests,
@@ -919,10 +916,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
               invitationId: inviteResult.id,
             },
             performedBy: session.user.id,
-            ipAddress:
-              c.req.header("x-forwarded-for") ??
-              c.req.header("x-real-ip") ??
-              null,
+            ipAddress: clientIp(c),
           }),
         );
 
@@ -1109,10 +1103,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
             action: "invitation_canceled",
             changes: { email: foundInvitation.email, invitationId: invId },
             performedBy: session.user.id,
-            ipAddress:
-              c.req.header("x-forwarded-for") ??
-              c.req.header("x-real-ip") ??
-              null,
+            ipAddress: clientIp(c),
           }),
         );
 
@@ -1221,10 +1212,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
               memberId,
             },
             performedBy: session.user.id,
-            ipAddress:
-              c.req.header("x-forwarded-for") ??
-              c.req.header("x-real-ip") ??
-              null,
+            ipAddress: clientIp(c),
           }),
         );
 
@@ -1338,10 +1326,7 @@ export const customersRouter = new Hono<{ Variables: AuthVariables }>()
               new: updatedCompliance,
             },
             performedBy: session.user.id,
-            ipAddress:
-              c.req.header("x-forwarded-for") ??
-              c.req.header("x-real-ip") ??
-              null,
+            ipAddress: clientIp(c),
             reason,
           });
 

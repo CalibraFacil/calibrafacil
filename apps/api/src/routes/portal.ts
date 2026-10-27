@@ -97,6 +97,7 @@ import {
   frozenSealJoin,
   issuedSealOf,
 } from "../lib/frozen-seal";
+import { clientIp } from "../lib/client-ip";
 
 // Mirrors the portal frontend's DUE_SOON window (apps/portal calibration-status).
 // An instrument is "due soon" within this many days of its next calibration.
@@ -1859,10 +1860,7 @@ export const portalRouter = new Hono<{
               },
             },
             performedBy: session.user.id,
-            ipAddress:
-              c.req.header("x-forwarded-for") ??
-              c.req.header("x-real-ip") ??
-              null,
+            ipAddress: clientIp(c),
             reason: rationale,
           });
 
@@ -3321,10 +3319,7 @@ export const portalRouter = new Hono<{
             );
           }
 
-          const ipAddress =
-            c.req.header("x-forwarded-for") ??
-            c.req.header("x-real-ip") ??
-            null;
+          const ipAddress = clientIp(c);
           const userAgent = c.req.header("user-agent") ?? null;
 
           const [assessment] = await o

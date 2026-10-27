@@ -1,4 +1,5 @@
 import type { ContentfulStatusCode } from "hono/utils/http-status";
+import type { ClientIpContext } from "../../lib/client-ip";
 import {
   buildPublicApiError,
   getPublicApiRequestIp,
@@ -25,13 +26,13 @@ export function jobStatusConflictBody() {
 /** The key's creator is the accountable person; the key itself is recorded. */
 export function publicApiJobActor(
   apiKey: ApiKeyAuthVariables["apiKey"],
-  headers: Headers,
+  c: ClientIpContext,
 ) {
   return {
     kind: "api_key",
     userId: apiKey.createdBy,
     apiKey: { id: apiKey.id, name: apiKey.name, keyPrefix: apiKey.keyPrefix },
-    ipAddress: getPublicApiRequestIp(headers),
+    ipAddress: getPublicApiRequestIp(c),
   } satisfies JobExecutionActor;
 }
 

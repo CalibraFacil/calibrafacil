@@ -222,7 +222,7 @@ export const customerRoutes = new Hono<PublicApiV2Env>()
             action: "create",
             changes: { customer: { old: null, new: created } },
             performedBy: apiKey.createdBy,
-            ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+            ipAddress: getPublicApiRequestIp(c),
           });
 
           if (externalId) {
@@ -324,7 +324,7 @@ export const customerRoutes = new Hono<PublicApiV2Env>()
             action: "update",
             changes: { customer: { old: existing, new: updated } },
             performedBy: apiKey.createdBy,
-            ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+            ipAddress: getPublicApiRequestIp(c),
           });
 
           if (externalId) {
@@ -424,7 +424,7 @@ export const customerRoutes = new Hono<PublicApiV2Env>()
           };
         }
 
-        const ipAddress = getPublicApiRequestIp(c.req.raw.headers);
+        const ipAddress = getPublicApiRequestIp(c);
 
         // Retention (decision Q16): a customer that still has regulated records
         // cannot be deleted (those foreign keys are RESTRICT). The audit rows

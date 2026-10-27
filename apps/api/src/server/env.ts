@@ -7,6 +7,12 @@
  */
 export interface Env {
   NODE_ENV: string;
+  /**
+   * The address of the peer of this request's connection (the client, or the
+   * reverse proxy in front of the API), set per request by the Bun entry from the
+   * socket. Never read from a header. See lib/client-ip.ts.
+   */
+  REMOTE_ADDRESS?: string;
   API_URL: string;
   APP_URL: string;
   BETTER_AUTH_SECRET: string;

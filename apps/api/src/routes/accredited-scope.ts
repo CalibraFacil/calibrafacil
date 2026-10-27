@@ -20,6 +20,7 @@ import {
   requireUnitOperationalSettingsManager,
   resolveAccessibleUnitContext,
 } from "../lib/unit-operational-settings";
+import { clientIp } from "../lib/client-ip";
 
 type ScopeLineRow = typeof accreditedScopeLine.$inferSelect;
 
@@ -176,7 +177,7 @@ export const accreditedScopeRouter = new Hono<{
               wasDefault: !before.scopeEnforcementMode,
             },
             performedBy: session.user.id,
-            ipAddress: c.req.header("x-forwarded-for") || null,
+            ipAddress: clientIp(c),
           });
         }
 
@@ -270,7 +271,7 @@ export const accreditedScopeRouter = new Hono<{
               action: "update",
               changes: diffScopeLine(existing, updated),
               performedBy: session.user.id,
-              ipAddress: c.req.header("x-forwarded-for") || null,
+              ipAddress: clientIp(c),
             });
           }
 
@@ -298,7 +299,7 @@ export const accreditedScopeRouter = new Hono<{
             action: "create",
             changes: null,
             performedBy: session.user.id,
-            ipAddress: c.req.header("x-forwarded-for") || null,
+            ipAddress: clientIp(c),
           });
         }
 
@@ -347,7 +348,7 @@ export const accreditedScopeRouter = new Hono<{
         action: "delete",
         changes: null,
         performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
+        ipAddress: clientIp(c),
       });
 
       return c.json({ message: "Linha de escopo removida" });

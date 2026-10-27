@@ -32,6 +32,7 @@ import {
   requireUnitOperationalSettingsManager,
   resolveAccessibleUnitContext,
 } from "../lib/unit-operational-settings";
+import { clientIp } from "../lib/client-ip";
 
 // =============================================================================
 // VALIDATION SCHEMAS
@@ -249,7 +250,7 @@ export const signingRouter = new Hono<{
               wasEnabled: Boolean(before.reason),
               ...(input.enabled ? { reason: input.reason } : {}),
               previousReason: before.reason,
-              ipAddress: c.req.header("x-forwarded-for") ?? null,
+              ipAddress: clientIp(c),
             },
           },
           o,

@@ -15,6 +15,7 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../middleware/permission";
+import { clientIp } from "../lib/client-ip";
 
 /**
  * Authorized Signatories Router - ISO/IEC 17025:2017 Clause 6.2.6
@@ -127,7 +128,7 @@ export const authorizedSignatoriesRouter = new Hono<{
             action: "grant",
             changes: { status: { old: null, new: "ACTIVE" } },
             performedBy: session.user.id,
-            ipAddress: c.req.header("x-forwarded-for") || null,
+            ipAddress: clientIp(c),
           });
         }
 
@@ -193,7 +194,7 @@ export const authorizedSignatoriesRouter = new Hono<{
           action: "revoke",
           changes: { status: { old: existing.status, new: "REVOKED" } },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
           reason: input.reason || null,
         });
 

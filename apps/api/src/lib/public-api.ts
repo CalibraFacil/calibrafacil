@@ -10,6 +10,7 @@ import { and, eq, inArray, lt } from "drizzle-orm";
 import { type PublicApiResourceType } from "@calibra-facil/shared";
 import { encryptPassword } from "@calibra-facil/signing";
 import { inOrgTransaction } from "./org-transaction";
+import { clientIp, type ClientIpContext } from "./client-ip";
 
 const DEFAULT_IDEMPOTENCY_TTL_DAYS = 7;
 
@@ -18,13 +19,9 @@ export interface PublicApiEnv {
   INTEGRATIONS_MASTER_KEY?: string;
 }
 
-export function getPublicApiRequestIp(headers: Headers) {
-  return (
-    headers.get("cf-connecting-ip") ??
-    headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    headers.get("x-real-ip") ??
-    null
-  );
+/** The caller's address for the audit trail: see lib/client-ip.ts. */
+export function getPublicApiRequestIp(c: ClientIpContext) {
+  return clientIp(c);
 }
 
 /**

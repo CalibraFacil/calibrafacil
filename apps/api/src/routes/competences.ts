@@ -38,6 +38,7 @@ import {
   gte,
   inArray,
 } from "drizzle-orm";
+import { clientIp } from "../lib/client-ip";
 
 /**
  * Competences Router - ISO 17025:2017 Clause 6.2.3 (Personnel Competence)
@@ -399,7 +400,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
               },
             },
             performedBy: session.user.id,
-            ipAddress: c.req.header("x-forwarded-for") || null,
+            ipAddress: clientIp(c),
           });
 
           // Notify admins, once the request is committed (the notification reads it).
@@ -481,7 +482,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
           action: "update",
           changes: updateData,
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         return c.json(updated);
@@ -585,7 +586,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
             trainingRecordIds: input.trainingRecordIds,
           },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         return c.json(updated);
@@ -649,7 +650,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
             status: { old: "TRAINING_ASSIGNED", new: "IN_TRAINING" },
           },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         return c.json(updated);
@@ -712,7 +713,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
             status: { old: "IN_TRAINING", new: "PENDING_EVALUATION" },
           },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         return c.json(updated);
@@ -815,7 +816,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
                 expiresAt: expiresAt?.toISOString() ?? null,
               },
               performedBy: session.user.id,
-              ipAddress: c.req.header("x-forwarded-for") || null,
+              ipAddress: clientIp(c),
               reason: input.notes ?? null,
             });
 
@@ -860,7 +861,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
                 passed: false,
               },
               performedBy: session.user.id,
-              ipAddress: c.req.header("x-forwarded-for") || null,
+              ipAddress: clientIp(c),
               reason: input.notes ?? null,
             });
 
@@ -939,7 +940,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
             status: { old: existing.status, new: "CANCELLED" },
           },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
           reason: input.notes ?? null,
         });
 
@@ -999,7 +1000,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
           action: "suspend",
           changes: { status: { old: "ACTIVE", new: "SUSPENDED" } },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         return c.json(updated);
@@ -1090,7 +1091,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
             expiresAt: expiresAt?.toISOString() ?? null,
           },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
           reason: input.notes ?? null,
         });
 
@@ -1142,7 +1143,7 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
           action: "delete",
           changes: { deletedAt: new Date().toISOString() },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         return c.json({ message: "Competência removida" });

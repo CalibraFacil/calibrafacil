@@ -1,7 +1,6 @@
 import { rawEnv, readOriginsConfig } from "@calibra-facil/config";
 import type { Hono } from "hono";
 import { cors } from "hono/cors";
-import { isAllowedPortalOrigin } from "../lib/portal-domains";
 import type { Env } from "./env";
 
 function originOf(value: string | undefined): string | null {
@@ -89,11 +88,22 @@ function isPrivateDevOrigin(origin: string, nodeEnv?: string): boolean {
   }
 }
 
+/**
+ * The origins allowed to call the API with credentials: the configured app and
+ * portal addresses (plus the desktop shell and, in development, the local dev
+ * servers). Nothing else (roadmap 2 D1, review 3.3).
+ *
+ * A laboratory's verified custom portal domain is NOT one of them: credentialed
+ * CORS for every such domain let whoever controls one read and write the API as
+ * any visitor. A custom portal domain is served with the API under its own
+ * `/api` (the reverse proxy forwards it, as the Caddy of deploy/compose.yaml does
+ * for the app and the portal), so its requests are same-origin and need no CORS.
+ */
 export async function getCorsOrigin(origin?: string, env?: Env) {
   if (!origin) return undefined;
   if (configuredAllowedOrigins(env).has(origin)) return origin;
   if (isPrivateDevOrigin(origin, env?.NODE_ENV)) return origin;
-  return (await isAllowedPortalOrigin(origin)) ? origin : undefined;
+  return undefined;
 }
 
 export function applyCors(app: Hono<{ Bindings: Env }>) {

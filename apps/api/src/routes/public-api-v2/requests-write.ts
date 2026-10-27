@@ -203,7 +203,7 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
               },
             },
             performedBy: apiKey.createdBy,
-            ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+            ipAddress: getPublicApiRequestIp(c),
           });
 
           if (externalId) {
@@ -310,7 +310,7 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
             action: "update",
             changes: { request: { old: existing, new: updated } },
             performedBy: apiKey.createdBy,
-            ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+            ipAddress: getPublicApiRequestIp(c),
           });
 
           const externalId = await getResourceExternalId(
@@ -444,7 +444,7 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
             action: "reject",
             changes: { status: { old: existing.status, new: "REJECTED" } },
             performedBy: apiKey.createdBy,
-            ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+            ipAddress: getPublicApiRequestIp(c),
             reason: input.reason,
           });
 

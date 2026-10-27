@@ -19,6 +19,7 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { eq, and, desc, count } from "drizzle-orm";
+import { clientIp } from "../lib/client-ip";
 
 /**
  * Training Records Router - ISO 17025:2017 Clause 6.2.3 (Training Evidence)
@@ -253,7 +254,7 @@ export const trainingRecordsRouter = new Hono<{ Variables: AuthVariables }>()
             },
           },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         return c.json(created, 201);
@@ -335,7 +336,7 @@ export const trainingRecordsRouter = new Hono<{ Variables: AuthVariables }>()
           action: "update",
           changes: updateData,
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         return c.json(updated);
@@ -393,7 +394,7 @@ export const trainingRecordsRouter = new Hono<{ Variables: AuthVariables }>()
           action: "complete",
           changes: { status: { old: existing.status, new: "completed" } },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         return c.json(updated);
@@ -448,7 +449,7 @@ export const trainingRecordsRouter = new Hono<{ Variables: AuthVariables }>()
           action: "delete",
           changes: { deletedAt: new Date().toISOString() },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         return c.json({ message: "Registro de treinamento removido" });

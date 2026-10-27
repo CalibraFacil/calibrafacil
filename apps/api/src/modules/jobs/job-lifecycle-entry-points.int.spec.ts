@@ -1,4 +1,5 @@
 /**
+
  * job-lifecycle-entry-points.int.spec.ts: reject, cancel, assign and edit are
  * ONE policy each, whichever door the request comes through.
  *
@@ -28,7 +29,16 @@
  */
 
 import { setJobStatus } from "../../../test/integration/job-fixtures";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  beforeAll,
+  afterAll,
+} from "vitest";
 import { and, asc, eq } from "drizzle-orm";
 import { organizationOf } from "../../../test/integration/organization-of";
 import { db } from "@calibra-facil/db";
@@ -58,6 +68,15 @@ import {
 import { jobsRouter } from "../../routes/jobs";
 import { publicApiV2Router } from "../../routes/public-api-v2";
 import { visitJobsRouter } from "../../routes/visits";
+
+// The requests below arrive as from behind one trusted reverse proxy (the Caddy of
+// deploy/compose.yaml), which writes X-Forwarded-For: lib/client-ip.ts.
+beforeAll(() => {
+  vi.stubEnv("TRUSTED_PROXY_HOPS", "1");
+});
+afterAll(() => {
+  vi.unstubAllEnvs();
+});
 
 vi.mock("../../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),

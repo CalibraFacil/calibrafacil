@@ -53,6 +53,7 @@ import {
   buildMethodRouteIdentifier,
   parseNumericRouteIdentifier,
 } from "../lib/route-identifiers";
+import { clientIp } from "../lib/client-ip";
 
 const technicalReviewerUser = alias(user, "technicalReviewerUser");
 const approverUser = alias(user, "approverUser");
@@ -1680,7 +1681,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             action: "create",
             changes: { initial: input },
             performedBy: session.user.id,
-            ipAddress: c.req.header("x-forwarded-for") || null,
+            ipAddress: clientIp(c),
           });
 
           return c.json(newMethod, 201);
@@ -1825,7 +1826,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
                 : null,
             },
             performedBy: session.user.id,
-            ipAddress: c.req.header("x-forwarded-for") || null,
+            ipAddress: clientIp(c),
           });
 
           return c.json(newMethod, 201);
@@ -2028,7 +2029,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             action: "update",
             changes,
             performedBy: session.user.id,
-            ipAddress: c.req.header("x-forwarded-for") || null,
+            ipAddress: clientIp(c),
           });
 
           return c.json(updated);
@@ -2168,7 +2169,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
               },
             },
             performedBy: session.user.id,
-            ipAddress: c.req.header("x-forwarded-for") || null,
+            ipAddress: clientIp(c),
           });
 
           return c.json(updated);
@@ -2242,7 +2243,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
               technicalReviewedBy: { old: null, new: session.user.id },
             },
             performedBy: session.user.id,
-            ipAddress: c.req.header("x-forwarded-for") || null,
+            ipAddress: clientIp(c),
           });
 
           return c.json(updated);
@@ -2428,7 +2429,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
               },
             },
             performedBy: session.user.id,
-            ipAddress: c.req.header("x-forwarded-for") || null,
+            ipAddress: clientIp(c),
           });
 
           return c.json(published);
@@ -2514,7 +2515,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             action: "return_to_draft",
             changes: { status: { old: existing.status, new: "DRAFT" } },
             performedBy: session.user.id,
-            ipAddress: c.req.header("x-forwarded-for") || null,
+            ipAddress: clientIp(c),
             reason,
           });
 
@@ -2703,7 +2704,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
               },
             },
             performedBy: session.user.id,
-            ipAddress: c.req.header("x-forwarded-for") || null,
+            ipAddress: clientIp(c),
           });
 
           return c.json(published);
@@ -2774,7 +2775,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             action: "archive",
             changes: { status: { old: "PUBLISHED", new: "ARCHIVED" } },
             performedBy: session.user.id,
-            ipAddress: c.req.header("x-forwarded-for") || null,
+            ipAddress: clientIp(c),
           });
 
           return c.json(archived);
@@ -2911,7 +2912,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
               newVersion,
             },
             performedBy: session.user.id,
-            ipAddress: c.req.header("x-forwarded-for") || null,
+            ipAddress: clientIp(c),
           });
 
           return c.json(normalizeMethodRecord(newMethod), 201);
@@ -2975,7 +2976,7 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           action: "delete",
           changes: { method: { old: existing, new: null } },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         await tx.delete(calibrationMethod).where(eq(calibrationMethod.id, id));
