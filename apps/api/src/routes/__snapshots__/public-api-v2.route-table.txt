@@ -80,7 +80,7 @@ v2 POST /jobs/:id/submit zValidator(json:selectedStandardIds|data|results|enviro
 v2 POST /jobs/:id/submit <anonymous> #e207da5038
 v2 POST /jobs/:id/approve requireApiScope(jobs:write)
 v2 POST /jobs/:id/approve zValidator(json:reason|environmentalJustification|scopeOverrideJustification)
-v2 POST /jobs/:id/approve <anonymous> #608e7326d1
+v2 POST /jobs/:id/approve <anonymous> #701df5d0e2
 v2 POST /jobs/:id/reject requireApiScope(jobs:write)
 v2 POST /jobs/:id/reject zValidator(json:reason)
 v2 POST /jobs/:id/reject <anonymous> #51684d56c6
