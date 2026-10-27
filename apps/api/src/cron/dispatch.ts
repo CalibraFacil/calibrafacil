@@ -303,8 +303,16 @@ async function handleApprovalEffectsReconcile(request: Request) {
     return cronAuthFailureResponse();
   }
 
-  return runCron("approval-effects-reconcile", { leaseSeconds: 600 }, () =>
-    reconcileApprovalEffects(),
+  return runCron(
+    "approval-effects-reconcile",
+    {
+      leaseSeconds: 600,
+      failed: (value) =>
+        typeof value === "object" &&
+        value !== null &&
+        Number(Reflect.get(value, "failures")) > 0,
+    },
+    () => reconcileApprovalEffects(),
   );
 }
 

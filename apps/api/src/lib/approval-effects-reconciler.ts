@@ -28,7 +28,7 @@
  * the out-of-tolerance event itself). Gaps older than the window are counted and
  * logged, never repaired, so the owner can decide.
  *
- * Cross-laboratory by design (cron, no request): THREE statements on the system
+ * Cross-laboratory by design (cron, no request): FOUR statements on the system
  * path (`systemDb`, allowlisted in test/integration/tenant-sql-allowlist.ts) list
  * the candidates of every laboratory, ids only. Everything after that runs per
  * job in a transaction that names its laboratory (`orgTransactionWithExecutor`),
@@ -80,6 +80,14 @@ const APPROVED_STATUSES: JobStatus[] = [
   "APPROVED",
   "SUPERSEDED",
 ];
+
+/**
+ * The statuses whose out-of-tolerance verdict still stands. A SUPERSEDED job's
+ * verdict was replaced by its amendment (which may have corrected it), so the
+ * reconciler never creates an event, nor alerts a customer, for one: the
+ * amendment's own approval carries the effect.
+ */
+const CURRENT_VERDICT_STATUSES: JobStatus[] = ["GENERATING_PDF", "APPROVED"];
 
 export type ApprovalEffectsReconcileResult = {
   /** Out-of-tolerance events written for approvals that lacked one. */
@@ -135,7 +143,7 @@ export async function reconcileApprovalEffects(
     .where(
       and(
         eq(calibrationJob.asFoundConformity, "NON_CONFORMING"),
-        inArray(calibrationJob.status, APPROVED_STATUSES),
+        inArray(calibrationJob.status, CURRENT_VERDICT_STATUSES),
         isNotNull(calibrationJob.approvedBy),
         gte(calibrationJob.approvedAt, oldest),
         lte(calibrationJob.approvedAt, newest),
@@ -172,7 +180,7 @@ export async function reconcileApprovalEffects(
     .where(
       and(
         eq(calibrationJob.asFoundConformity, "NON_CONFORMING"),
-        inArray(calibrationJob.status, APPROVED_STATUSES),
+        inArray(calibrationJob.status, CURRENT_VERDICT_STATUSES),
         isNotNull(calibrationJob.approvedBy),
         lt(calibrationJob.approvedAt, oldest),
         notExists(
@@ -244,6 +252,8 @@ export async function reconcileApprovalEffects(
     .where(
       and(
         isNotNull(calibrationJob.approvedBy),
+        // No late alert for a verdict an amendment has since replaced.
+        inArray(calibrationJob.status, CURRENT_VERDICT_STATUSES),
         gte(assetOotEvent.createdAt, oldest),
         lte(assetOotEvent.createdAt, newest),
         notExists(
@@ -342,10 +352,13 @@ async function repairMissingOotEvent(
           and(
             eq(calibrationJob.id, candidate.jobId),
             eq(calibrationJob.asFoundConformity, "NON_CONFORMING"),
-            inArray(calibrationJob.status, APPROVED_STATUSES),
+            inArray(calibrationJob.status, CURRENT_VERDICT_STATUSES),
           ),
         )
-        .limit(1);
+        .limit(1)
+        // Holds the status against a concurrent transition (amendment, a
+        // failed render) until this repair commits.
+        .for("share");
       if (!job?.approvedBy || !job.approvedAt) return null;
 
       const event = await recordAssetOotEvent(o, {
@@ -392,7 +405,8 @@ async function repairStaleAssetDates(candidate: Candidate): Promise<boolean> {
             inArray(calibrationJob.status, APPROVED_STATUSES),
           ),
         )
-        .limit(1);
+        .limit(1)
+        .for("share");
       if (!job?.approvedBy) return null;
 
       return advanceAssetCalibrationDates(o, {

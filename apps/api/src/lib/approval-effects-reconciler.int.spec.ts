@@ -17,6 +17,8 @@
  *   REQ-B2-RECON-2   it is idempotent: a second run finds nothing.
  *   REQ-B2-RECON-3   it leaves a job approved moments ago alone and never
  *                    repairs beyond its look-back window (it counts the gap).
+ *   REQ-B2-RECON-4   a SUPERSEDED job gets no event and no customer alert: its
+ *                    amendment carries the verdict.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
@@ -103,7 +105,11 @@ const DAY = 24 * HOUR;
 async function seedApproved(
   lab: BillingLab,
   number: string,
-  options: { nonConforming: boolean; ageMs: number },
+  options: {
+    nonConforming: boolean;
+    ageMs: number;
+    status?: "APPROVED" | "SUPERSEDED";
+  },
 ): Promise<number> {
   const approvedAt = new Date(Date.now() - options.ageMs);
   const [row] = await insertJobs({
@@ -114,7 +120,7 @@ async function seedApproved(
     assetId: lab.assetId,
     serviceId: lab.serviceId,
     createdBy: lab.userId,
-    status: "APPROVED",
+    status: options.status ?? "APPROVED",
     approvedBy: lab.userId,
     approvedAt,
     performedAt: approvedAt,
@@ -490,6 +496,49 @@ describe("approval effects reconciler (REQ-B2-RECON-1..3)", () => {
     expect(await eventsOf(lab)).toEqual([]);
     expect(await eventsOf(old)).toEqual([]);
     expect(warn).toHaveBeenCalled();
+    expect(mocks.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("REQ-B2-RECON-4: a superseded non-conforming job gets no event and no alert (its amendment carries the verdict)", async () => {
+    vi.stubEnv("BACKGROUND_JOBS_MODE", "queue");
+    vi.stubEnv("DOCUMENT_WORKER_URL", "");
+    const lab = await seedBillingLab("lab-a");
+    await seedApproved(lab, "CAL-A-1", {
+      nonConforming: true,
+      ageMs: 2 * HOUR,
+      status: "SUPERSEDED",
+    });
+    // A superseded job whose event exists but whose alert never left.
+    const withEvent = await seedApproved(lab, "CAL-A-2", {
+      nonConforming: true,
+      ageMs: 2 * HOUR,
+      status: "SUPERSEDED",
+    });
+    await seedAssetOotEvent({
+      jobId: withEvent,
+      assetId: lab.assetId,
+      customerId: lab.customerId,
+      labOrganizationId: lab.orgId,
+      detectedAt: new Date(Date.now() - 2 * HOUR),
+      actorUserId: lab.userId,
+    });
+    await db
+      .update(assetOotEvent)
+      .set({ createdAt: new Date(Date.now() - 2 * HOUR) });
+    const before = await eventsOf(lab);
+
+    const result = await asApp(() => reconcileApprovalEffects());
+
+    expect(result.ootEventsCreated).toBe(0);
+    expect(result.notificationsRestaged).toBe(0);
+    expect(result.failures).toBe(0);
+    expect(await eventsOf(lab)).toEqual(before);
+    expect(
+      await db
+        .select()
+        .from(appQueueJob)
+        .where(eq(appQueueJob.type, "ASSET_OOT_NOTIFICATION")),
+    ).toEqual([]);
     expect(mocks.enqueue).not.toHaveBeenCalled();
   });
 
