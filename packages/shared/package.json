@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./accreditation": "./src/accreditation.ts",
+    "./decision-rule": "./src/decision-rule.ts",
     "./calendar-date": "./src/calendar-date.ts",
     "./calibration-format": "./src/calibration-format.ts",
     "./cnpj": "./src/cnpj.ts",

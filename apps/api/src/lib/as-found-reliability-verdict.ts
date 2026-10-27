@@ -18,7 +18,21 @@
  *
  * Margin convention ground truth: `apps/web/src/features/jobs/detail-model.ts`
  * (`margem_conformidade_antes` / `_apos`) and `portal-certificate-verdict.ts`.
+ *
+ * The verdict follows the method's declared decision rule (ISO/IEC 17025 7.8.6,
+ * ILAC-G8; roadmap 2 C4, `@calibra-facil/shared/decision-rule`): with a guard band
+ * (w = U) the per-point as-found expanded uncertainty
+ * (`incerteza_expandida_antes`) takes part. A method that declares none is judged
+ * by simple acceptance, as before, and the verdict says the rule was undeclared
+ * (Q57). The verdict drives the out-of-tolerance event and the customer alert.
  */
+
+import {
+  type DecisionRuleKind,
+  type PointDecision,
+  decidePoint,
+  isNonConformingDecision,
+} from "@calibra-facil/shared/decision-rule";
 
 export type AsFoundConformity = "CONFORMING" | "NON_CONFORMING" | "UNKNOWN";
 
@@ -31,6 +45,10 @@ export type AsFoundReliabilityVerdict = {
   pointsWithin: number;
   /** The parsed per-point as-found margins (for persistence / later analysis). */
   margins: number[];
+  /** The rule the points were judged by; "undeclared" judges by simple acceptance. */
+  decisionRule: DecisionRuleKind | "undeclared";
+  /** One decision per point, in the order of `margins`. */
+  decisions: PointDecision[];
 };
 
 /**
@@ -39,6 +57,8 @@ export type AsFoundReliabilityVerdict = {
  * would corrupt the reliability signal.
  */
 const AS_FOUND_MARGIN_KEY = "margem_conformidade_antes";
+/** The as-found expanded uncertainty per point: the guard band of guarded rules. */
+const AS_FOUND_UNCERTAINTY_KEY = "incerteza_expandida_antes";
 
 /** Parse a number from unknown, tolerating comma decimals (matches the dashboard). */
 function numberFromUnknown(value: unknown): number | null {
@@ -61,19 +81,40 @@ function numericValues(value: unknown): number[] {
 
 export function buildAsFoundReliabilityVerdict(input: {
   results: Record<string, unknown> | null | undefined;
+  /** The frozen method's declared rule (`certificateContent.decisionRuleKind`). */
+  decisionRule?: DecisionRuleKind | null;
 }): AsFoundReliabilityVerdict {
   const results = input.results ?? null;
+  const rule: DecisionRuleKind = input.decisionRule ?? "simple_acceptance";
 
   const margins = numericValues(results?.[AS_FOUND_MARGIN_KEY]);
+  const uncertainties = numericValues(results?.[AS_FOUND_UNCERTAINTY_KEY]);
+  // A guard band is per point: only a list as long as the margins pairs up.
+  const uncertaintyAt = (index: number) =>
+    uncertainties.length === margins.length
+      ? (uncertainties[index] ?? null)
+      : null;
+  const decisions = margins.map((margin, index) =>
+    decidePoint(rule, margin, uncertaintyAt(index)),
+  );
   const pointsTotal = margins.length;
   const pointsWithin = margins.filter((margin) => margin >= 0).length;
 
   const conformity: AsFoundConformity =
     pointsTotal === 0
       ? "UNKNOWN"
-      : pointsWithin === pointsTotal
-        ? "CONFORMING"
-        : "NON_CONFORMING";
+      : decisions.some(isNonConformingDecision)
+        ? "NON_CONFORMING"
+        : decisions.some((decision) => decision === "undetermined")
+          ? "UNKNOWN"
+          : "CONFORMING";
 
-  return { conformity, pointsTotal, pointsWithin, margins };
+  return {
+    conformity,
+    pointsTotal,
+    pointsWithin,
+    margins,
+    decisionRule: input.decisionRule ?? "undeclared",
+    decisions,
+  };
 }

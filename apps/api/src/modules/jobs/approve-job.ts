@@ -212,9 +212,14 @@ async function evaluateRelease(
       : undefined;
 
   // Derive the AS-FOUND (pre-adjustment) reliability verdict from the frozen
-  // results, for ILAC-G24 / NCSL RP-1 interval analysis. Read-only over
-  // `results`; it does NOT influence approval, conformity, or the certificate.
-  const asFound = buildAsFoundReliabilityVerdict({ results: existing.results });
+  // results, for ILAC-G24 / NCSL RP-1 interval analysis and the out-of-tolerance
+  // event. Read-only over `results`; it does not block the approval.
+  // The method's declared decision rule (roadmap 2 C4) decides which as-found
+  // points do not conform, and so whether the out-of-tolerance alert goes out.
+  const asFound = buildAsFoundReliabilityVerdict({
+    results: existing.results,
+    decisionRule: existing.methodSnapshot?.certificateContent?.decisionRuleKind,
+  });
 
   // Accredited-scope (CMC) guard — ISO/IEC 17025 §7.6/§7.8.3, ILAC P14
   // (#427). Re-classified here at the emission date so the frozen record is
@@ -593,6 +598,7 @@ export async function approveJob(
               labOrganizationId: memberData.organizationId,
               detectedAt: updated.approvedAt ?? approvedAt,
               actorUserId: approverId,
+              decisionRule: evaluation.asFound.decisionRule,
             })
           : null;
       const dateAdvance = await advanceAssetCalibrationDates(o, {

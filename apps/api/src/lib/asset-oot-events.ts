@@ -28,6 +28,12 @@ export type AssetOotEventInput = {
    * before it): the audit entry says so.
    */
   reconciled?: boolean;
+  /**
+   * The decision rule the as-found non-conformity was judged by (roadmap 2 C4;
+   * "undeclared": the method declares none, judged by simple acceptance).
+   * Recorded on the audit entry with the event.
+   */
+  decisionRule?: string;
 };
 
 /**
@@ -63,6 +69,7 @@ export async function recordAssetOotEvent(
       jobId: params.jobId,
       assetId: params.assetId,
       detectedAt: params.detectedAt.toISOString(),
+      ...(params.decisionRule ? { decisionRule: params.decisionRule } : {}),
       ...(params.reconciled
         ? { reconciled: true, source: "approval-effects-reconciler" }
         : {}),
