@@ -925,6 +925,13 @@
       "when": 1793400000000,
       "tag": "0132_certificate_lifecycle_events",
       "breakpoints": true
+    },
+    {
+      "idx": 133,
+      "version": "7",
+      "when": 1793500000000,
+      "tag": "0133_signing_custody_audit",
+      "breakpoints": true
     }
   ]
 }

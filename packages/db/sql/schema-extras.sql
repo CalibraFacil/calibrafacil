@@ -783,6 +783,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE O
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE ON SEQUENCES TO calibra_app;
 -- Evidence tables: no UPDATE/DELETE/TRUNCATE for the application role (migration 0130).
 -- Must stay AFTER the blanket GRANT above.
+
 -- BEGIN generated: calibra_evidence_grants
 REVOKE UPDATE, DELETE, TRUNCATE ON public."accredited_scope_line_audit_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."asset_audit_log" FROM calibra_app;

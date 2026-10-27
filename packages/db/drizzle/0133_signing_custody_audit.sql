@@ -375,6 +375,11 @@ DROP POLICY IF EXISTS tenant_isolation ON public."issued_certificate_snapshot";
 CREATE POLICY tenant_isolation ON public."issued_certificate_snapshot" AS PERMISSIVE FOR ALL TO calibra_app
   USING ("organization_id" = NULLIF(current_setting('calibra.organization_id', true), '')::text)
   WITH CHECK ("organization_id" = NULLIF(current_setting('calibra.organization_id', true), '')::text);
+ALTER TABLE public."issued_certificate_status_event" ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON public."issued_certificate_status_event";
+CREATE POLICY tenant_isolation ON public."issued_certificate_status_event" AS PERMISSIVE FOR ALL TO calibra_app
+  USING ("organization_id" = NULLIF(current_setting('calibra.organization_id', true), '')::text)
+  WITH CHECK ("organization_id" = NULLIF(current_setting('calibra.organization_id', true), '')::text);
 ALTER TABLE public."job_audit_log" ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON public."job_audit_log";
 CREATE POLICY tenant_isolation ON public."job_audit_log" AS PERMISSIVE FOR ALL TO calibra_app
@@ -740,6 +745,7 @@ CREATE POLICY tenant_isolation ON public."visit_reschedule_request" AS PERMISSIV
 -- What the application role may not do to the evidence tables, now including
 -- organization_compliance_audit_log (evidence-tables.ts; after the blanket grant above,
 -- which would otherwise give UPDATE and DELETE back).
+
 -- BEGIN generated: calibra_evidence_grants
 REVOKE UPDATE, DELETE, TRUNCATE ON public."accredited_scope_line_audit_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."asset_audit_log" FROM calibra_app;
@@ -755,6 +761,7 @@ REVOKE UPDATE, DELETE, TRUNCATE ON public."customer_audit_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."financial_audit_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."integration_event_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."issued_certificate_snapshot" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."issued_certificate_status_event" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."job_audit_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."method_audit_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."non_conformance_audit_log" FROM calibra_app;

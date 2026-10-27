@@ -96,7 +96,7 @@ columns, foreign keys, unique constraints and indexes are all expressed in
 
 ## Summary
 
-138 tables: 122 tenant (an organization column), 16 global (no organization column, with the reason below). Of the tenant tables, 106 have the column NOT NULL and 16 (the audit logs) have it nullable, guarded by a `CHECK (organization_id IS NOT NULL) NOT VALID` that refuses every new row without one. 37 tenant tables gained `organization_id` in migration 0118.
+139 tables: 123 tenant (an organization column), 16 global (no organization column, with the reason below). Of the tenant tables, 107 have the column NOT NULL and 16 (the audit logs) have it nullable, guarded by a `CHECK (organization_id IS NOT NULL) NOT VALID` that refuses every new row without one. 37 tenant tables gained `organization_id` in migration 0118.
 
 ## Global tables
 
