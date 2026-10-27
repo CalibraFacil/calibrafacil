@@ -1,6 +1,8 @@
 import { calibraApi } from '@/utils/api'
 import { toast } from 'sonner'
 import { useCallback, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { jobEventQueryKeys } from '@/lib/query-effects'
 import {
   getJobCertificateDownloadUrl,
   getJobLabelDownloadUrl,
@@ -23,6 +25,18 @@ export function useApprovedRecordActions({
   onRefresh: () => void
 }) {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  /** Refresh what a lifecycle event changed (lib/query-effects.ts). */
+  const refreshAfter = useCallback(
+    async (event: 'amended' | 'withdrawn') => {
+      await Promise.all(
+        jobEventQueryKeys(event).map((queryKey) =>
+          queryClient.invalidateQueries({ queryKey }),
+        ),
+      )
+    },
+    [queryClient],
+  )
   const [isDownloading, setIsDownloading] = useState(false)
   const [isGeneratingLabel, setIsGeneratingLabel] = useState(false)
   const [isDownloadingLabel, setIsDownloadingLabel] = useState(false)
@@ -132,6 +146,8 @@ export function useApprovedRecordActions({
     try {
       const result = await calibraApi.jobs.amend(job.id, amendmentReason)
 
+      // The original now shows the amendment in progress; lists show the new job.
+      await refreshAfter('amended')
       toast.success(`Retificação criada: ${result.amendedJob.jobId}`)
       setIsAmendDialogOpen(false)
       setAmendmentReason('')
@@ -162,6 +178,7 @@ export function useApprovedRecordActions({
     setIsWithdrawing(true)
     try {
       await calibraApi.jobs.withdrawCertificate(job.id, reason)
+      await refreshAfter('withdrawn')
       toast.success('Certificado retirado')
       setIsWithdrawDialogOpen(false)
       setWithdrawalReason('')

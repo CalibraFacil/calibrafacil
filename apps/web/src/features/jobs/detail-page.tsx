@@ -1,6 +1,11 @@
+import { jobEventQueryKeys } from '@/lib/query-effects'
 import { useNavigate } from '@tanstack/react-router'
 import { canTransition } from '@calibra-facil/schemas/job-transitions'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import {
+  type QueryKey,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query'
 import { useState, useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -126,7 +131,7 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
    * appear not to have changed. Reconcile first, then invalidate.
    */
   const settleAfterCloudCommand = useCallback(
-    async (message: string, queryKeys: readonly unknown[][]) => {
+    async (message: string, queryKeys: readonly QueryKey[]) => {
       const result = await reconcileAfterCloudCommand(queryClient, queryKeys)
       const lag = describeReconcileLag(result)
 
@@ -147,10 +152,10 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
       )
     },
     onSuccess: async () => {
-      await settleAfterCloudCommand('Job aprovado com sucesso!', [
-        ['jobs'],
-        ['jobs', id],
-      ])
+      await settleAfterCloudCommand(
+        'Job aprovado com sucesso!',
+        jobEventQueryKeys('approved'),
+      )
       setApproveDialogOpen(false)
       setEnvJustification('')
       setScopeViolationBlocked(false)
@@ -170,7 +175,10 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
       return calibraApi.jobs.reject(apiJobId, rejectReason)
     },
     onSuccess: async () => {
-      await settleAfterCloudCommand('Job rejeitado', [['jobs'], ['jobs', id]])
+      await settleAfterCloudCommand(
+        'Job rejeitado',
+        jobEventQueryKeys('rejected'),
+      )
       setRejectDialogOpen(false)
       setRejectReason('')
     },
@@ -185,7 +193,10 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
       return calibraApi.jobs.cancel(apiJobId, cancelReason)
     },
     onSuccess: async () => {
-      await settleAfterCloudCommand('Job cancelado', [['jobs'], ['jobs', id]])
+      await settleAfterCloudCommand(
+        'Job cancelado',
+        jobEventQueryKeys('cancelled'),
+      )
       setCancelDialogOpen(false)
       setCancelReason('')
       navigate({ to: '/dashboard/jobs' })
@@ -201,10 +212,10 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
       return calibraApi.jobs.assign(apiJobId, selectedTechnician)
     },
     onSuccess: async () => {
-      await settleAfterCloudCommand('Técnico atribuído com sucesso!', [
-        ['jobs'],
-        ['jobs', id],
-      ])
+      await settleAfterCloudCommand(
+        'Técnico atribuído com sucesso!',
+        jobEventQueryKeys('assigned'),
+      )
       setAssignDialogOpen(false)
       setSelectedTechnician('')
     },
