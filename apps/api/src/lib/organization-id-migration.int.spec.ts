@@ -109,7 +109,7 @@ function revertToMain(): string {
   const later = CREATED_AFTER_0118.map(
     (table) => `DROP TABLE IF EXISTS ${table};`,
   );
-  // The audit hash chain (migration 0128) is newer than 0118 as well: its trigger
+  // The audit hash chain (migration 0131) is newer than 0118 as well: its trigger
   // reads NEW.organization_id, so it goes before the column does.
   const chain = [
     "DROP TRIGGER IF EXISTS job_audit_log_hash_chain ON job_audit_log;",

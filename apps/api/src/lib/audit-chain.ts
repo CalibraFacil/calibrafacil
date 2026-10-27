@@ -250,10 +250,11 @@ async function alreadyAnnounced(found: AuditChainBreak): Promise<boolean> {
 }
 
 /**
- * Records a break: the platform event (survives the organization, carries the
- * fingerprint that keeps the next run quiet), the organization's own event log
- * entry (written in a transaction that names it) and the notification to its
- * admins and owners.
+ * Records a break: the organization's own event log entry (written in a
+ * transaction that names it), the notification to its admins and owners, and
+ * last the platform event (survives the organization, carries the fingerprint
+ * that keeps the next run quiet). Last on purpose: if an earlier step fails, the
+ * break is not marked announced and the next run tries again.
  */
 async function announce(found: AuditChainBreak): Promise<void> {
   const details = {
@@ -264,14 +265,6 @@ async function announce(found: AuditChainBreak): Promise<void> {
     expectedHash: found.expectedHash,
     actualHash: found.actualHash,
   };
-  await systemDb.insert(platformEventLog).values({
-    actorUserId: null,
-    targetUserId: null,
-    action: CHAIN_BROKEN_PLATFORM_ACTION,
-    entityType: CHAIN_ENTITY_TYPE,
-    entityId: entityIdOf(found.table, found.organizationId),
-    details: { ...details, fingerprint: fingerprintOf(found) },
-  });
   await orgDb(found.organizationId).transaction((tx) =>
     writeOrganizationAuditEvent(
       {
@@ -289,6 +282,14 @@ async function announce(found: AuditChainBreak): Promise<void> {
     kind: found.kind,
     chainSeq: found.chainSeq,
     rowId: found.rowId,
+  });
+  await systemDb.insert(platformEventLog).values({
+    actorUserId: null,
+    targetUserId: null,
+    action: CHAIN_BROKEN_PLATFORM_ACTION,
+    entityType: CHAIN_ENTITY_TYPE,
+    entityId: entityIdOf(found.table, found.organizationId),
+    details: { ...details, fingerprint: fingerprintOf(found) },
   });
 }
 

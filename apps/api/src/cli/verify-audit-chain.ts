@@ -57,6 +57,14 @@ async function main(): Promise<number> {
       .limit(1);
     if (!lab) fail(`No organization has the slug "${slug}".`);
     organizationId = lab.id;
+  } else if (organizationId !== undefined) {
+    const id = organizationId;
+    const [lab] = await ownerDb
+      .select({ id: organization.id })
+      .from(organization)
+      .where(eq(organization.id, id))
+      .limit(1);
+    if (!lab) fail(`No organization has the id "${id}".`);
   }
 
   const report = await verifyAuditChains({

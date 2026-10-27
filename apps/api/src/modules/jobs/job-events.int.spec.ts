@@ -73,7 +73,7 @@ async function seedWorld(status: JobStatus) {
   return { jobId, technician };
 }
 
-/** The stored row, without its generated id and clock and the hash-chain columns (migration 0128; audit-chain.int.spec.ts covers those). */
+/** The stored row, without its generated id and clock and the hash-chain columns (migration 0131; audit-chain.int.spec.ts covers those). */
 async function storedRows(jobId: number) {
   const rows = await db
     .select()
