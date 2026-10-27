@@ -36,6 +36,7 @@ import {
 } from "../lib/portal-customer-scope";
 import { orgDb } from "../lib/org-db";
 import type { OrgDb } from "@calibra-facil/db/for-org";
+import { clientIp } from "../lib/client-ip";
 
 function getPortalHostOrigin(c: {
   req: { header: (name: string) => string | undefined };
@@ -281,8 +282,7 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
       const session = c.get("session");
       const portalLabScope = await getPortalLabScope(c);
       const input = c.req.valid("json");
-      const ipAddress =
-        c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null;
+      const ipAddress = clientIp(c);
 
       const linkedCustomer = await resolvePortalLinkedCustomer({
         authOrganizationId: member.organizationId,
@@ -486,8 +486,7 @@ export const portalRequestsRouter = new Hono<{ Variables: AuthVariables }>()
       const session = c.get("session");
       const portalLabScope = await getPortalLabScope(c);
       const input = c.req.valid("json");
-      const ipAddress =
-        c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? null;
+      const ipAddress = clientIp(c);
 
       const scope = await resolvePortalCustomerScope({
         activeOrgId: member.organizationId,

@@ -213,7 +213,7 @@ export const assetCreateRoutes = new Hono<PublicApiV2Env>().post(
                 : undefined,
           },
           performedBy: apiKey.createdBy,
-          ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+          ipAddress: getPublicApiRequestIp(c),
         });
 
         if (externalId) {

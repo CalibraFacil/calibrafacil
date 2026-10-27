@@ -43,6 +43,7 @@ import {
   normalizeAssetSpecificationsFromInput,
   resolveAssetBaseMeasurementUnit,
 } from "../lib/asset-measurement";
+import { clientIp } from "../lib/client-ip";
 
 const CommandPaletteAssetSearchQuerySchema = z.object({
   query: z.string().trim().min(2),
@@ -318,10 +319,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
                   : undefined,
             },
             performedBy: session.user.id,
-            ipAddress:
-              c.req.header("x-forwarded-for") ??
-              c.req.header("x-real-ip") ??
-              null,
+            ipAddress: clientIp(c),
           });
 
           return c.json(
@@ -920,10 +918,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
               action: isStatusChange ? "status_change" : "update",
               changes,
               performedBy: session.user.id,
-              ipAddress:
-                c.req.header("x-forwarded-for") ??
-                c.req.header("x-real-ip") ??
-                null,
+              ipAddress: clientIp(c),
             });
           }
 
@@ -1029,10 +1024,7 @@ export const assetsRouter = new Hono<{ Variables: AuthVariables }>()
             action: "delete",
             changes: { asset: { old: existingAsset, new: null } },
             performedBy: session.user.id,
-            ipAddress:
-              c.req.header("x-forwarded-for") ??
-              c.req.header("x-real-ip") ??
-              null,
+            ipAddress: clientIp(c),
           });
 
           return c.json({ success: true });

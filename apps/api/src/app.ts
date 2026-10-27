@@ -1,5 +1,8 @@
 import { Hono } from "hono";
+import { applyBodyLimit } from "./server/body-limit";
 import { applyCors } from "./server/cors";
+import { applyOriginGuard } from "./server/origin-guard";
+import { applyRateLimit } from "./server/rate-limit";
 import { applyErrorHandling } from "./server/error-handling";
 import { applyRuntimeEnv } from "./server/runtime-env";
 import { applySecurityHeaders } from "./server/security-headers";
@@ -12,6 +15,9 @@ export function createApiApp() {
 
   applyCors(app);
   applySecurityHeaders(app);
+  applyOriginGuard(app);
+  applyRateLimit(app);
+  applyBodyLimit(app);
   applyRuntimeEnv(app);
   applyErrorHandling(app);
   mountAuthRoutes(app);

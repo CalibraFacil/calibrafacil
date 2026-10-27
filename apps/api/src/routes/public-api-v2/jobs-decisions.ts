@@ -96,7 +96,7 @@ export const jobDecisionRoutes = new Hono<PublicApiV2Env>()
             member: approver,
           },
           values: input,
-          metadata: { ipAddress: getPublicApiRequestIp(c.req.raw.headers) },
+          metadata: { ipAddress: getPublicApiRequestIp(c) },
           completion: {
             kind: "generate_certificate_pdf",
             sendServiceOrdersToFinance: async (params) =>
@@ -240,7 +240,7 @@ export const jobDecisionRoutes = new Hono<PublicApiV2Env>()
         // Transport only: the policy is `rejectJob` (the same command the
         // cloud route runs).
         const result = await rejectJob({
-          actor: publicApiJobActor(apiKey, c.req.raw.headers),
+          actor: publicApiJobActor(apiKey, c),
           jobId: resolvedId,
           organizationId: apiKey.organizationId,
           unitScope: null,
@@ -302,7 +302,7 @@ export const jobDecisionRoutes = new Hono<PublicApiV2Env>()
         // Transport only: the policy is `cancelJob` (the same command the
         // cloud route and the visit's remove-job run).
         const result = await cancelJob({
-          actor: publicApiJobActor(apiKey, c.req.raw.headers),
+          actor: publicApiJobActor(apiKey, c),
           jobId: resolvedId,
           organizationId: apiKey.organizationId,
           unitScope: null,

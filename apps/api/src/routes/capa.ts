@@ -26,6 +26,7 @@ import { orgDb } from "../lib/org-db";
 import { domainErrorResponse, forbidden } from "../lib/domain-errors";
 import { assessCapaVerifierIndependence } from "../lib/capa-verification-independence";
 import { eq, and, or, ilike, desc, count, lte, sql } from "drizzle-orm";
+import { clientIp } from "../lib/client-ip";
 
 /**
  * CAPA Router - ISO 17025:2017 Clause 8.2 (Corrective Actions)
@@ -466,7 +467,7 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
             preventiveMeasures: input.preventiveMeasures ?? null,
             responsibleId: input.responsibleId,
             dueDate: new Date(input.dueDate),
-            ipAddress: c.req.header("x-forwarded-for") || null,
+            ipAddress: clientIp(c),
             auditChanges: { initial: input },
           },
           o,
@@ -577,7 +578,7 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
           action: "update",
           changes: { before: existing, after: input },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         return c.json(updated);
@@ -660,7 +661,7 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
             implementationEvidence: input.implementationEvidence,
           },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         return c.json({
@@ -790,7 +791,7 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
               : {}),
           },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         return c.json({
@@ -871,7 +872,7 @@ export const capaRouter = new Hono<{ Variables: AuthVariables }>()
             reason: input.reason,
           },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
           reason: input.reason || null,
         });
 

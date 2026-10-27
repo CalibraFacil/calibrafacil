@@ -133,6 +133,7 @@ import {
 } from "../modules/jobs/submit-job";
 import { jobStatusConflict } from "../modules/jobs/job-status-transitions";
 import { certificateVerificationUrl } from "@calibra-facil/shared/public-urls";
+import { clientIp } from "../lib/client-ip";
 
 // Aliases for multiple user joins
 const approverUser = alias(user, "approverUser");
@@ -780,7 +781,7 @@ export const jobsRouter = new Hono<{
               // from, when opened from the pending-after-repair flow. Org-scoped
               // in createCalibrationJob.
               sourceServiceOrderId: input.sourceServiceOrderId ?? null,
-              ipAddress: c.req.header("x-forwarded-for") || null,
+              ipAddress: clientIp(c),
               executor: tx,
               // Defer the assignment notification until after commit (below) —
               // sending it from inside an open transaction that might still
@@ -846,7 +847,7 @@ export const jobsRouter = new Hono<{
         actor: {
           kind: "user",
           userId: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         },
         jobId: id,
         organizationId: memberData.organizationId,
@@ -904,7 +905,7 @@ export const jobsRouter = new Hono<{
         actor: {
           kind: "user",
           userId: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         },
         jobId: id,
         organizationId: memberData.organizationId,
@@ -964,7 +965,7 @@ export const jobsRouter = new Hono<{
         actor: {
           kind: "user",
           userId: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         },
         jobId: id,
         organizationId: memberData.organizationId,
@@ -1021,7 +1022,7 @@ export const jobsRouter = new Hono<{
         actor: {
           kind: "user",
           userId: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         },
         jobId: id,
         organizationId: memberData.organizationId,
@@ -1075,7 +1076,7 @@ export const jobsRouter = new Hono<{
         jobId: id,
         actor: { kind: "user", member: memberData },
         values: input,
-        metadata: { ipAddress: c.req.header("x-forwarded-for") || null },
+        metadata: { ipAddress: clientIp(c) },
         completion: {
           kind: "generate_certificate_pdf",
           sendServiceOrdersToFinance: (params) =>
@@ -1200,7 +1201,7 @@ export const jobsRouter = new Hono<{
         actor: {
           kind: "user",
           userId: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         },
         jobId: id,
         organizationId: memberData.organizationId,
@@ -1288,7 +1289,7 @@ export const jobsRouter = new Hono<{
                 scoped.asFoundConformity === "NON_CONFORMING"
                   ? "as_found_verdict"
                   : "manual",
-              ipAddress: c.req.header("x-forwarded-for") || null,
+              ipAddress: clientIp(c),
             },
             { executor: o, afterCommit: afterCommit.add },
           );
@@ -1339,7 +1340,7 @@ export const jobsRouter = new Hono<{
         actor: {
           kind: "user",
           userId: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         },
         jobId: id,
         organizationId: memberData.organizationId,
@@ -1387,7 +1388,7 @@ export const jobsRouter = new Hono<{
         actor: {
           kind: "user",
           userId: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         },
         jobId: id,
         organizationId: memberData.organizationId,

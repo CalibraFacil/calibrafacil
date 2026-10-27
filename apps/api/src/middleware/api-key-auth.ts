@@ -10,6 +10,7 @@ import {
 import { and, eq, isNull } from "drizzle-orm";
 import { domainErrorBody, forbidden } from "../lib/domain-errors";
 import { orgDb } from "../lib/org-db";
+import { clientIp } from "../lib/client-ip";
 
 export interface ApiKeyAuthVariables {
   apiKey: {
@@ -20,15 +21,6 @@ export interface ApiKeyAuthVariables {
     keyPrefix: string;
     createdBy: string;
   };
-}
-
-function getRequestIp(headers: Headers) {
-  return (
-    headers.get("cf-connecting-ip") ??
-    headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    headers.get("x-real-ip") ??
-    null
-  );
 }
 
 /**
@@ -119,7 +111,7 @@ export const requireApiKeyAuth = createMiddleware<{
       .update(organizationApiKey)
       .set({
         lastUsedAt: new Date(),
-        lastUsedIp: getRequestIp(c.req.raw.headers),
+        lastUsedIp: clientIp(c),
       })
       .where(eq(organizationApiKey.id, keyRecord.id));
   });

@@ -194,6 +194,12 @@ export const DEPLOY_SECTIONS: readonly DeploySection[] = [
           "Where the optional test inbox (COMPOSE_PROFILES=mailpit) is published.",
         example: example.commented("127.0.0.1:8025"),
       },
+      {
+        name: "TRUSTED_PROXY_HOPS",
+        description:
+          "Reverse proxies in front of the API that append the client's address to X-Forwarded-For (1: the Caddy of this setup; 2 with a load balancer in front of it).",
+        example: example.commented("1"),
+      },
     ],
   },
   {

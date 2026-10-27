@@ -34,6 +34,7 @@ import {
 import { createCorrectiveActionRecord } from "../lib/corrective-actions";
 import { resolveAccessibleUnitContext } from "../lib/unit-operational-settings";
 import { eq, and, or, ilike, desc, asc, count } from "drizzle-orm";
+import { clientIp } from "../lib/client-ip";
 
 /**
  * Proficiency Testing Router - ISO/IEC 17025 §7.7.2 (issue #60 Phase 0)
@@ -600,7 +601,7 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
           action: "create",
           changes: { initial: input },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         return c.json(created, 201);
@@ -708,7 +709,7 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
           action: "update",
           changes: { input },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         return c.json(updated);
@@ -779,7 +780,7 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
               detectionDate: resultReportedAt,
               severity: "major",
               category: "method",
-              ipAddress: c.req.header("x-forwarded-for") || null,
+              ipAddress: clientIp(c),
             },
             tx,
           );
@@ -812,7 +813,7 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
             ...(capaId !== existing.capaId ? { capaId } : {}),
           },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         // Advance the 4-year compliance clock for this scope part
@@ -887,7 +888,7 @@ export const proficiencyTestsRouter = new Hono<{ Variables: AuthVariables }>()
           proficiencyTestId: id,
           action: "delete",
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         return c.json({ message: "Ensaio removido" });

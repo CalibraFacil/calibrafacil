@@ -57,6 +57,7 @@ import {
   canAddJobToVisit,
   resolveVisitJobRemoval,
 } from "../lib/visit-jobs";
+import { clientIp } from "../lib/client-ip";
 
 const technicianUser = alias(user, "calibrationVisitTechnician");
 
@@ -868,7 +869,7 @@ export const visitJobsRouter = new Hono<{ Variables: AuthVariables }>()
           actor: {
             kind: "user",
             userId: session.user.id,
-            ipAddress: c.req.header("x-forwarded-for") || null,
+            ipAddress: clientIp(c),
           },
           jobId,
           organizationId: member.organizationId,
@@ -1023,7 +1024,7 @@ export const visitRescheduleRequestsRouter = new Hono<{
               scheduledAt: { old: visit.scheduledAt, new: nextScheduledAt },
             },
             performedBy: session.user.id,
-            ipAddress: c.req.header("x-forwarded-for") || null,
+            ipAddress: clientIp(c),
             reason: input.resolutionNote ?? null,
           });
 
@@ -1101,7 +1102,7 @@ export const visitRescheduleRequestsRouter = new Hono<{
             action: "reschedule_request_decline",
             changes: { rescheduleRequestId: requestId },
             performedBy: session.user.id,
-            ipAddress: c.req.header("x-forwarded-for") || null,
+            ipAddress: clientIp(c),
             reason: input.resolutionNote ?? null,
           });
 

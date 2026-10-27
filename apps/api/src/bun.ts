@@ -25,6 +25,11 @@ type BunServer = {
   stop(closeActiveConnections?: boolean): Promise<void>;
 };
 
+/** The part of Bun's server a request handler sees: the peer of the connection. */
+type BunRequestServer = {
+  requestIP(request: Request): { address: string } | null;
+};
+
 type BunRuntime = {
   file(path: URL): {
     exists(): Promise<boolean>;
@@ -33,7 +38,11 @@ type BunRuntime = {
   serve(options: {
     hostname: string;
     port: number;
-    fetch(request: Request): Response | Promise<Response>;
+    maxRequestBodySize?: number;
+    fetch(
+      request: Request,
+      server: BunRequestServer,
+    ): Response | Promise<Response>;
   }): BunServer;
 };
 
@@ -113,16 +122,25 @@ const hostname = config.runtime.host;
 const server = Bun.serve({
   hostname,
   port,
+  // The socket-level cap, a little above the API's own limit (server/body-limit.ts)
+  // so that limit answers with its 413 and no larger body is ever buffered.
+  maxRequestBodySize: config.runtime.maxBodyBytes + 64 * 1024,
   // @ts-expect-error Bun supports idleTimeout, but the bundled type in this workspace has not caught up.
   idleTimeout: 120,
-  fetch(request) {
+  fetch(request, bunServer) {
     // The /api/cron/* handlers are served by this process, so the internal
     // scheduler or any external one can trigger them with the CRON_SECRET
     // bearer token. See DEPLOYMENT.md for the schedule.
     if (new URL(request.url).pathname.startsWith("/api/cron/")) {
       return dispatchCron(request);
     }
-    return app.fetch(request, env);
+    // The connection's peer, from the socket (never a header): lib/client-ip.ts
+    // trusts X-Forwarded-For only as far as TRUSTED_PROXY_HOPS proxies wrote it.
+    const remoteAddress = bunServer.requestIP(request)?.address;
+    return app.fetch(
+      request,
+      remoteAddress ? { ...env, REMOTE_ADDRESS: remoteAddress } : env,
+    );
   },
 });
 

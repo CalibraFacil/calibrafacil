@@ -2,11 +2,7 @@ import { readOriginsConfig } from "@calibra-facil/config";
 import { randomBytes } from "node:crypto";
 import { systemDb } from "@calibra-facil/db";
 import { customer, organizationCustomDomain } from "@calibra-facil/db/schema";
-import {
-  isLocalHostname,
-  normalizeHostname,
-  normalizeOrigin,
-} from "@calibra-facil/shared";
+import { isLocalHostname, normalizeHostname } from "@calibra-facil/shared";
 import { and, eq, ne } from "drizzle-orm";
 import { portalBaseUrl } from "@calibra-facil/shared/public-urls";
 import { orgDb } from "./org-db";
@@ -155,15 +151,4 @@ export async function resolveLabOrganizationIdByPortalHostname(
   if (!match?.organizationId || !match.verifiedAt) return null;
 
   return match.organizationId;
-}
-
-export async function isAllowedPortalOrigin(origin: string): Promise<boolean> {
-  const normalizedOrigin = normalizeOrigin(origin);
-  if (!normalizedOrigin) return false;
-
-  const { hostname } = new URL(normalizedOrigin);
-  const labOrganizationId =
-    await resolveLabOrganizationIdByPortalHostname(hostname);
-
-  return Boolean(labOrganizationId);
 }

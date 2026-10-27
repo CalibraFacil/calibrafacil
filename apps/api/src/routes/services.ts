@@ -24,6 +24,7 @@ import {
   buildServiceRouteIdentifier,
   parseLegacyNumericIdentifier,
 } from "../lib/route-identifiers";
+import { clientIp } from "../lib/client-ip";
 
 /**
  * Services Router - Commercial Service Catalog (Product Registry)
@@ -361,7 +362,7 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
           action: "create",
           changes: { initial: input },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         return c.json(newService, 201);
@@ -531,7 +532,7 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
           action: "update",
           changes,
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         return c.json(updated);
@@ -583,7 +584,7 @@ export const servicesRouter = new Hono<{ Variables: AuthVariables }>()
         action: "deactivate",
         changes: { isActive: { old: true, new: false } },
         performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
+        ipAddress: clientIp(c),
       });
 
       return c.json({

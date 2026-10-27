@@ -84,7 +84,7 @@ export const jobWriteRoutes = new Hono<PublicApiV2Env>()
             serviceId: input.serviceId,
             technicianId: input.technicianId,
             dueDate: input.dueDate,
-            ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+            ipAddress: getPublicApiRequestIp(c),
             executor: tx,
             // The assignment notification waits for the commit: a technician
             // is never told about a job that rolled back.
@@ -190,7 +190,7 @@ export const jobWriteRoutes = new Hono<PublicApiV2Env>()
       // Transport only: the policy is `editJob` (the same command the cloud
       // PUT runs).
       const result = await editJob({
-        actor: publicApiJobActor(apiKey, c.req.raw.headers),
+        actor: publicApiJobActor(apiKey, c),
         jobId: resolvedId,
         organizationId: apiKey.organizationId,
         unitScope: null,
@@ -298,7 +298,7 @@ export const jobWriteRoutes = new Hono<PublicApiV2Env>()
         // cloud route and the desktop sync run). The results the client sent
         // are not stored; they are recomputed from the data.
         const result = await executeJob({
-          actor: publicApiJobActor(apiKey, c.req.raw.headers),
+          actor: publicApiJobActor(apiKey, c),
           jobId: resolvedId,
           organizationId: apiKey.organizationId,
           unitScope: null,
@@ -368,7 +368,7 @@ export const jobWriteRoutes = new Hono<PublicApiV2Env>()
         // cloud route and the desktop sync run (official calculation, scope,
         // competence, environment, backdate and standards rules).
         const result = await submitJob({
-          actor: publicApiJobActor(apiKey, c.req.raw.headers),
+          actor: publicApiJobActor(apiKey, c),
           jobId: resolvedId,
           organizationId: apiKey.organizationId,
           unitScope: null,

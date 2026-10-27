@@ -29,6 +29,7 @@ import { calibrationJobBelongsToOrganization } from "../lib/tenant-refs";
 import { buildUnitScopeCondition } from "../lib/units";
 import { resolveAccessibleUnitContext } from "../lib/unit-operational-settings";
 import { eq, and, asc, desc, count } from "drizzle-orm";
+import { clientIp } from "../lib/client-ip";
 
 /**
  * SPC Router - ISO/IEC 17025 §7.7.1 (issue #60 Phase 1)
@@ -304,7 +305,7 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
           action: "create",
           changes: { initial: input },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         await recomputeControlChart(created, tx);
@@ -359,7 +360,7 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
           action: "update",
           changes: { input },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         if (updated) {
@@ -402,7 +403,7 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
           controlChartId: id,
           action: "delete",
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
         return c.json({ message: "Carta removida" });
       });
@@ -439,7 +440,7 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
             fingerprint: evaluation.fingerprint,
           },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         const refreshed = await loadChartScoped(id, member.organizationId, tx);
@@ -503,7 +504,7 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
             detectionDate: chart.lastEvaluatedAt ?? new Date(),
             severity: chart.status === "out_of_control" ? "major" : "minor",
             category: "equipment",
-            ipAddress: c.req.header("x-forwarded-for") || null,
+            ipAddress: clientIp(c),
           },
           tx,
         );
@@ -527,7 +528,7 @@ export const spcRouter = new Hono<{ Variables: AuthVariables }>()
             capaNumber: newCapa.capaNumber,
           },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         const refreshed = await loadChartScoped(id, member.organizationId, tx);

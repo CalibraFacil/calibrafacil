@@ -21,6 +21,7 @@ import {
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { writeOrganizationAuditEvent } from "../lib/audit";
 import { orgDb } from "../lib/org-db";
+import { clientIp } from "../lib/client-ip";
 
 const ScopeSchema = z.enum([
   "customers:read",
@@ -44,12 +45,7 @@ const CreateApiKeySchema = z.object({
 });
 
 function getRequestIp(c: Context<{ Variables: AuthVariables }>) {
-  return (
-    c.req.header("cf-connecting-ip") ??
-    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
-    c.req.header("x-real-ip") ??
-    null
-  );
+  return clientIp(c);
 }
 
 async function writeAuditLog(

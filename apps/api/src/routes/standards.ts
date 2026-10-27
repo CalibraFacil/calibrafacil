@@ -83,6 +83,7 @@ import {
   labDaysUntil,
   labToday,
 } from "@calibra-facil/shared";
+import { clientIp } from "../lib/client-ip";
 
 const MAX_STANDARD_CERTIFICATE_FILE_SIZE = 25 * 1024 * 1024;
 const STANDARD_CERTIFICATE_CONTENT_TYPE = "application/pdf";
@@ -959,7 +960,7 @@ export const standardsRouter = new Hono<{
               },
             },
             performedBy: session.user.id,
-            ipAddress: c.req.header("x-forwarded-for") || null,
+            ipAddress: clientIp(c),
           });
           return updated;
         });
@@ -1117,7 +1118,7 @@ export const standardsRouter = new Hono<{
             },
           },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         return c.json(newStandard satisfies ServerShape<StandardRecord>, 201);
@@ -1362,7 +1363,7 @@ export const standardsRouter = new Hono<{
             action: changes.status ? "status_change" : "update",
             changes,
             performedBy: session.user.id,
-            ipAddress: c.req.header("x-forwarded-for") || null,
+            ipAddress: clientIp(c),
           });
 
           // #426 Phase 1: flagging a standard OUT_OF_TOLERANCE auto-opens the
@@ -1399,7 +1400,7 @@ export const standardsRouter = new Hono<{
                 organizationId: member.organizationId,
                 actorUserId: session.user.id,
                 standard: standardToRecall,
-                ipAddress: c.req.header("x-forwarded-for") || null,
+                ipAddress: clientIp(c),
               },
               { executor: tx, afterCommit: afterCommit.add },
             ),
@@ -1675,7 +1676,7 @@ export const standardsRouter = new Hono<{
               certificateNumber: standard.certificateNumber,
               calibrationDate: standard.calibrationDate,
             },
-            ipAddress: c.req.header("x-forwarded-for") || null,
+            ipAddress: clientIp(c),
           },
           { executor: tx, afterCommit: ensureQueue.add },
         );
@@ -1737,7 +1738,7 @@ export const standardsRouter = new Hono<{
             to: input.to ?? null,
           },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
           reason: `Recall §7.10 aprovado: ${input.jobIds.length} certificado(s) notificado(s)`,
         });
 
@@ -1823,7 +1824,7 @@ export const standardsRouter = new Hono<{
         action: "delete",
         changes: { deletedAt: { old: null, new: new Date().toISOString() } },
         performedBy: session.user.id,
-        ipAddress: c.req.header("x-forwarded-for") || null,
+        ipAddress: clientIp(c),
       });
 
       return c.json({
@@ -1970,7 +1971,7 @@ export const standardsRouter = new Hono<{
           action: "renew",
           changes,
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
           reason: input.reason,
         });
 

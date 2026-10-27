@@ -43,6 +43,7 @@ import {
   sql,
   isNull,
 } from "drizzle-orm";
+import { clientIp } from "../lib/client-ip";
 
 /**
  * Non-Conformance Router - ISO 17025:2017 Clause 8.7 (Control of Nonconforming Work)
@@ -437,7 +438,7 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
               detectedAt: new Date(input.detectedAt),
               jobId: input.jobId ?? null,
               triggerSource: "manual",
-              ipAddress: c.req.header("x-forwarded-for") || null,
+              ipAddress: clientIp(c),
               auditChanges: { initial: input },
             },
             { executor: o, afterCommit: queue.add },
@@ -549,7 +550,7 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
             },
           },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
           reason: input.justification || null,
         });
 
@@ -636,7 +637,7 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
             },
           },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         return c.json({
@@ -729,7 +730,7 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
               actionPlan: input.actionPlan || null,
               responsibleId: input.responsibleId || null,
               dueDate: input.dueDate ? new Date(input.dueDate) : null,
-              ipAddress: c.req.header("x-forwarded-for") || null,
+              ipAddress: clientIp(c),
             },
             o,
           );
@@ -758,7 +759,7 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
               capaNumber: newCapa.capaNumber,
             },
             performedBy: session.user.id,
-            ipAddress: c.req.header("x-forwarded-for") || null,
+            ipAddress: clientIp(c),
           });
 
           // Notify admins/owners of escalation (fire-and-forget, after the commit:
@@ -1001,7 +1002,7 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
             action: "oot_acknowledged",
             changes: { acknowledgedVia: "manual" },
             performedBy: session.user.id,
-            ipAddress: c.req.header("x-forwarded-for") || null,
+            ipAddress: clientIp(c),
             reason: input.note,
           });
 
@@ -1178,7 +1179,7 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
           action: "impact_assessment_saved",
           changes: { conclusion: input.conclusion ?? null },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         return c.json({ message: "Avaliacao de impacto salva", data: saved });
@@ -1282,7 +1283,7 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
           action: "impact_assessment_signed",
           changes: { conclusion: signed.conclusion },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") || null,
+          ipAddress: clientIp(c),
         });
 
         return c.json({

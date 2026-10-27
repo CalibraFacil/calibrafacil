@@ -273,7 +273,7 @@ export const assetUpdateRoutes = new Hono<PublicApiV2Env>()
                   : undefined,
               },
               performedBy: apiKey.createdBy,
-              ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+              ipAddress: getPublicApiRequestIp(c),
             });
 
             if (externalId) {
@@ -393,7 +393,7 @@ export const assetUpdateRoutes = new Hono<PublicApiV2Env>()
           action: "delete",
           changes: { asset: { old: existing, new: null } },
           performedBy: apiKey.createdBy,
-          ipAddress: getPublicApiRequestIp(c.req.raw.headers),
+          ipAddress: getPublicApiRequestIp(c),
         });
 
         await o

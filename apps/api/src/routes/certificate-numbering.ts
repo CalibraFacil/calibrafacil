@@ -23,6 +23,7 @@ import {
   validateCertificateNumberingConfig,
 } from "../lib/certificate-numbering";
 import { orgDb } from "../lib/org-db";
+import { clientIp } from "../lib/client-ip";
 
 export const certificateNumberingRouter = new Hono<{
   Variables: AuthVariables;
@@ -176,10 +177,7 @@ export const certificateNumberingRouter = new Hono<{
               },
             },
             performedBy: session.user.id,
-            ipAddress:
-              c.req.header("x-forwarded-for") ??
-              c.req.header("x-real-ip") ??
-              null,
+            ipAddress: clientIp(c),
           });
 
           return saved;

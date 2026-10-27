@@ -115,6 +115,7 @@ import {
   sendServiceOrderQuote,
   updateServiceOrderQuoteDraft,
 } from "../modules/service-orders/service-order.quotes";
+import { clientIp, type ClientIpContext } from "../lib/client-ip";
 
 type ServiceOrderEnv = ServiceOrderDocumentEnv;
 
@@ -144,12 +145,8 @@ const PortalQuoteParamSchema = z.object({
   quoteId: z.coerce.number().int().positive(),
 });
 
-function requestIp(c: {
-  req: { header: (name: string) => string | undefined };
-}) {
-  return (
-    c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for") ?? null
-  );
+function requestIp(c: ClientIpContext) {
+  return clientIp(c);
 }
 
 function requestUserAgent(c: {

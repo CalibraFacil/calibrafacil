@@ -51,6 +51,7 @@ import { formatOnsiteAddressText } from "../lib/onsite-address";
 import { isAssignableTechnician } from "../lib/tenant-refs";
 import { orgDb } from "../lib/org-db";
 import { orgTransactionWithExecutor } from "../lib/org-transaction";
+import { clientIp } from "../lib/client-ip";
 
 const submitterUser = alias(user, "calibrationRequestSubmitter");
 const reviewerUser = alias(user, "calibrationRequestReviewer");
@@ -466,7 +467,7 @@ export const calibrationRequestsRouter = new Hono<{
             internalNotes: input.internalNotes || null,
           },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") ?? null,
+          ipAddress: clientIp(c),
         });
 
         return {
@@ -590,7 +591,7 @@ export const calibrationRequestsRouter = new Hono<{
             internalNotes: input.internalNotes || null,
           },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") ?? null,
+          ipAddress: clientIp(c),
         });
 
         return { success: true };
@@ -718,7 +719,7 @@ export const calibrationRequestsRouter = new Hono<{
             internalNotes: input.internalNotes || null,
           },
           performedBy: session.user.id,
-          ipAddress: c.req.header("x-forwarded-for") ?? null,
+          ipAddress: clientIp(c),
           reason: input.reason,
         });
 
@@ -757,7 +758,7 @@ export const calibrationRequestsRouter = new Hono<{
       const session = c.get("session");
       const id = parseInt(c.req.param("id"), 10);
       const input = c.req.valid("json");
-      const ipAddress = c.req.header("x-forwarded-for") ?? null;
+      const ipAddress = clientIp(c);
 
       if (isNaN(id)) {
         return c.json({ error: "ID invalido" }, 400);
