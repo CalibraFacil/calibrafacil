@@ -54,6 +54,8 @@ function getMessageType(message: QueueMessage): AppQueueJobType {
     case "AUDIT_PACK":
     case "OOT_NOTIFICATION":
     case "WEBHOOK_DELIVERY":
+    case "JOB_APPROVED_NOTIFICATION":
+    case "ASSET_OOT_NOTIFICATION":
       return message.type;
     default:
       return "CERTIFICATE";
@@ -419,7 +421,9 @@ function isAppQueueJobType(value: unknown): value is AppQueueJobType {
     value === "INTEGRATION_SYNC" ||
     value === "AUDIT_PACK" ||
     value === "OOT_NOTIFICATION" ||
-    value === "WEBHOOK_DELIVERY"
+    value === "WEBHOOK_DELIVERY" ||
+    value === "JOB_APPROVED_NOTIFICATION" ||
+    value === "ASSET_OOT_NOTIFICATION"
   );
 }
 

@@ -239,6 +239,33 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "cron-queue",
+    file: "apps/api/src/lib/approval-effects-reconciler.ts",
+    tables: ["calibration_job", "asset_oot_event"],
+    kinds: ["select"],
+    sql: /from "calibration_job" where .*not exists \(select 1 from "asset_oot_event"/,
+    reason:
+      "System path (roadmap 2 B2, systemDb): the nightly approval-effects reconciler lists, across EVERY laboratory (cron, no request), the approved NON_CONFORMING jobs that have no out-of-tolerance event (ids only, and a count of the ones older than its window). Each job is then repaired in orgTransactionWithExecutor(job.organizationId), which re-reads it under row-level security before writing.",
+  },
+  {
+    category: "cron-queue",
+    file: "apps/api/src/lib/approval-effects-reconciler.ts",
+    tables: ["calibration_job", "asset"],
+    kinds: ["select"],
+    sql: /from "calibration_job" inner join "asset"/,
+    reason:
+      "System path (roadmap 2 B2, systemDb): the approval-effects reconciler lists, across every laboratory, the approved jobs whose asset's last calibration date is older than the job's own (ids only). Each advance runs in orgTransactionWithExecutor(job.organizationId).",
+  },
+  {
+    category: "cron-queue",
+    file: "apps/api/src/lib/approval-effects-reconciler.ts",
+    tables: ["asset_oot_event", "calibration_job", "asset_oot_audit_log"],
+    kinds: ["select"],
+    sql: /from "asset_oot_event" inner join "calibration_job"/,
+    reason:
+      "System path (roadmap 2 B2, systemDb): the approval-effects reconciler lists, across every laboratory, the out-of-tolerance events whose customer alert never left (no `notify` audit entry, no live queue job): event id, its laboratory and the approver. The alert is staged in orgTransactionWithExecutor(event.labOrganizationId).",
+  },
+  {
+    category: "cron-queue",
     file: "apps/api/src/lib/oot-email-drain.ts",
     tables: ["oot_email_outbox"],
     kinds: ["select"],

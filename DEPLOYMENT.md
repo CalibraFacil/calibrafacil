@@ -468,20 +468,28 @@ it runs the schedule below in-process (the Docker setup turns it on; the list is
 `apps/api/src/lib/cron-scheduler.ts`), and a lease keeps two replicas from running a job twice.
 Or trigger them with your scheduler of choice:
 
-| Job                     | Schedule (UTC) |
-| ----------------------- | -------------- |
-| `integrations`          | `*/30 * * * *` |
-| `service-order-emails`  | `*/30 * * * *` |
-| `oot-emails`            | `*/30 * * * *` |
-| `queue-backstop`        | `*/30 * * * *` |
-| `spc-recompute`         | `0 3 * * *`    |
-| `email-domain-health`   | `30 3 * * *`   |
-| `certificate-drift`     | `0 6 * * *`    |
-| `notifications`         | `0 8 * * *`    |
-| `portal-digest`         | `0 9 * * *`    |
-| `auth-maintenance`      | `30 4 * * 1`   |
-| `records-purge`         | `0 5 * * 0`    |
-| `sync-change-log-purge` | `15 4 * * *`   |
+| Job                          | Schedule (UTC) |
+| ---------------------------- | -------------- |
+| `integrations`               | `*/30 * * * *` |
+| `service-order-emails`       | `*/30 * * * *` |
+| `oot-emails`                 | `*/30 * * * *` |
+| `queue-backstop`             | `*/30 * * * *` |
+| `spc-recompute`              | `0 3 * * *`    |
+| `approval-effects-reconcile` | `45 3 * * *`   |
+| `email-domain-health`        | `30 3 * * *`   |
+| `certificate-drift`          | `0 6 * * *`    |
+| `notifications`              | `0 8 * * *`    |
+| `portal-digest`              | `0 9 * * *`    |
+| `auth-maintenance`           | `30 4 * * 1`   |
+| `records-purge`              | `0 5 * * 0`    |
+| `sync-change-log-purge`      | `15 4 * * *`   |
+
+`approval-effects-reconcile` (ISO/IEC 17025 7.10) repairs what an approval can still be missing: the
+asset out-of-tolerance event, the asset calibration-date advance and the customer alert. New
+approvals write the event and the date advance in their own transaction and stage the notifications
+as queue jobs, so the sweep mostly finds approvals committed before that change. It only looks at
+approvals from the last 30 days (older gaps are counted and logged, never repaired, so the first run
+does not notify customers about old calibrations) and is idempotent.
 
 Example crontab line:
 

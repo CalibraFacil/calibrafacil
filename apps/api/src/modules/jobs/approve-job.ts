@@ -5,7 +5,7 @@ import {
   type JobApprovedChanges,
 } from "@calibra-facil/db/job-events";
 import { calibrationJob, member } from "@calibra-facil/db/schema";
-import type { ApproveJobSchema } from "@calibra-facil/schemas";
+import type { ApproveJobSchema, QueueMessage } from "@calibra-facil/schemas";
 import {
   allowedFrom,
   canTransition,
@@ -28,8 +28,15 @@ import {
   isAdverseScopeCompliance,
 } from "../../lib/scope-compliance";
 import type { ScopeComplianceResult } from "@calibra-facil/shared";
-import { createAssetOotEventForApprovedJob } from "../../lib/asset-oot-events";
-import { advanceAssetCalibrationDatesOnApproval } from "../../lib/asset-calibration-advance";
+import {
+  recordAssetOotEvent,
+  withdrawAssetOotEvent,
+} from "../../lib/asset-oot-events";
+import {
+  advanceAssetCalibrationDates,
+  revertAssetCalibrationAdvance,
+  type AssetCalibrationAdvanceApplied,
+} from "../../lib/asset-calibration-advance";
 import { checkApproverIsAuthorizedSignatory } from "../../lib/signatory";
 import {
   CertificateImagesChangedError,
@@ -48,7 +55,6 @@ import {
 import { orgDb } from "../../lib/org-db";
 import { orgTransactionWithExecutor } from "../../lib/org-transaction";
 import { buildUnitScopeCondition } from "../../lib/units";
-import { notifyJobApproved } from "@calibra-facil/notifications";
 
 type JobRow = typeof calibrationJob.$inferSelect;
 type ApproveJobInput = z.infer<typeof ApproveJobSchema>;
@@ -263,7 +269,20 @@ async function evaluateRelease(
  * `WHERE id AND organization_id AND status = <status evaluated>` inside a
  * transaction together with its audit row, so a concurrent or repeated
  * approval matches zero rows and yields `concurrent_approval` instead of
- * double-releasing. Fire-and-forget side effects run after the commit.
+ * double-releasing.
+ *
+ * What the approval implies is split by its nature (roadmap 2 B2, ISO/IEC
+ * 17025 7.10):
+ * - the pure database effects (the asset out-of-tolerance event and the asset
+ *   calibration-date advance, each with its audit row) are written in the SAME
+ *   transaction as the approval: an approval cannot commit without them and
+ *   they cannot exist without it;
+ * - the effects that leave the database (the technician notification, the
+ *   customer out-of-tolerance alert) are staged as queue jobs in that same
+ *   transaction (outbox) and delivered after the commit with the queue's
+ *   retries; a rolled-back approval stages nothing;
+ * - the financial automatic-send needs this process (ERP integration, the
+ *   member's unit scope) and stays a post-commit step.
  */
 export async function approveJob(
   input: ApproveJobCommand,
@@ -467,7 +486,7 @@ export async function approveJob(
   // which run raw SQL. Every statement in it carries the organization predicate.
   const outcome = await orgTransactionWithExecutor(
     memberData.organizationId,
-    async (_o, tx) => {
+    async (o, tx) => {
       // Serialise on the job and clear what an earlier, unfinished approval of it
       // left behind (its frozen certificate input) while it is still in REVIEW.
       const locked = await lockJobForApproval(tx, {
@@ -558,16 +577,71 @@ export async function approveJob(
           : values.reason || "Aprovado - Gerando PDF",
       });
 
-      // Outbox: when certificate jobs are dispatched through `app_queue_job`
-      // (same Postgres) the queue row commits atomically with the approval, so a
-      // dispatch failure can never strand the job in GENERATING_PDF — the
-      // stale-lease backstop owns every row that exists.
+      // The pure database effects of the approval, in this transaction (same
+      // executor, after the job row is locked and written): the customer-facing
+      // out-of-tolerance event of a NON_CONFORMING as-found verdict (idempotent
+      // per job: a re-approval writes nothing and re-notifies nobody) and the
+      // forward-only advance of the asset's calibration dates, each with its
+      // audit row. A failure throws and rolls the whole approval back (the
+      // status, the frozen input, the job audit row and the queue rows too).
+      const ootEvent =
+        evaluation.asFound.conformity === "NON_CONFORMING"
+          ? await recordAssetOotEvent(o, {
+              jobId,
+              assetId: existing.assetId,
+              customerId: existing.customerId,
+              labOrganizationId: memberData.organizationId,
+              detectedAt: updated.approvedAt ?? approvedAt,
+              actorUserId: approverId,
+            })
+          : null;
+      const dateAdvance = await advanceAssetCalibrationDates(o, {
+        assetId: existing.assetId,
+        calibrationDate: existing.performedAt ?? updated.approvedAt ?? null,
+        performedBy: approverId,
+        source: "job_approval",
+      });
+
+      // Outbox: when jobs are dispatched through `app_queue_job` (same Postgres)
+      // the queue rows commit atomically with the approval, so a dispatch failure
+      // can never strand the job in GENERATING_PDF (the stale-lease backstop owns
+      // every row that exists) and a notification exists only for an approval
+      // that committed.
       const staged = await stageBackgroundJob(tx, {
         jobId,
         userId: approverId,
       });
+      const approvedNotification: QueueMessage = {
+        type: "JOB_APPROVED_NOTIFICATION",
+        jobId,
+        userId: approverId,
+      };
+      const effects: StagedEffect[] = [
+        {
+          message: approvedNotification,
+          staged: await stageBackgroundJob(tx, approvedNotification),
+        },
+      ];
+      if (ootEvent) {
+        const ootNotification: QueueMessage = {
+          type: "ASSET_OOT_NOTIFICATION",
+          eventId: ootEvent.eventId,
+          organizationId: memberData.organizationId,
+          userId: approverId,
+        };
+        effects.push({
+          message: ootNotification,
+          staged: await stageBackgroundJob(tx, ootNotification),
+        });
+      }
 
-      return { updated, staged };
+      return {
+        updated,
+        staged,
+        effects,
+        ootEventId: ootEvent?.eventId ?? null,
+        dateAdvance,
+      };
     },
   ).catch((error: unknown) => {
     // The lab changed its logo (or the approver their signature) between the
@@ -579,9 +653,11 @@ export async function approveJob(
   if (!outcome) {
     return { status: "concurrent_approval" };
   }
-  const { updated, staged } = outcome;
+  const { updated, staged, effects, ootEventId, dateAdvance } = outcome;
 
   if (staged) {
+    // The certificate job and the notification jobs are rows of the queue,
+    // committed with the approval; one wake-up drains them all.
     await dispatchStagedBackgroundJob();
   } else {
     try {
@@ -595,30 +671,23 @@ export async function approveJob(
         approverId,
         error,
         ipAddress: input.metadata.ipAddress ?? null,
+        ootEventId,
+        dateAdvance,
       });
       return { status: "dispatch_failed" };
     }
   }
 
-  // Advance the asset's calibration dates from the approved work
-  // (last_calibration_date + the derived next dates) — forward-only and
-  // never fails the approval. Without this the due sweeps re-remind for
-  // an instrument that was just calibrated.
-  await advanceAssetCalibrationDatesOnApproval({
-    organizationId: memberData.organizationId,
-    jobId,
-    assetId: existing.assetId,
-    calibrationDate: existing.performedAt ?? updated.approvedAt ?? null,
-    performedBy: approverId,
-    source: "job_approval",
-  });
+  // In-process dispatch (no database queue: development) has no outbox row to
+  // drain, so the notification jobs are dispatched here, after the commit and
+  // after the certificate job went out; a failure is logged, never fails the
+  // approval. In `queue` mode `staged` is set for every one and nothing is left.
+  await dispatchUnstagedEffects(effects);
 
   runCloudApprovalSideEffects({
     existing,
-    updated,
     approverId,
     organizationId: memberData.organizationId,
-    conformity: evaluation.asFound.conformity,
     sendServiceOrdersToFinance: completion.sendServiceOrdersToFinance,
   });
 
@@ -641,6 +710,10 @@ async function revertApprovalAfterDispatchFailure(params: {
   approverId: string;
   error: unknown;
   ipAddress: string | null;
+  /** The out-of-tolerance event this approval wrote, if any. */
+  ootEventId: number | null;
+  /** The asset date advance this approval made, if any. */
+  dateAdvance: AssetCalibrationAdvanceApplied | null;
 }) {
   const { existing, approverId } = params;
   const message =
@@ -650,56 +723,74 @@ async function revertApprovalAfterDispatchFailure(params: {
     const revertedStatus = requireTargetOf(approvedStatus, "revert_approval");
     // Names the laboratory (row-level security); raw executor for the frozen
     // input's delete and the audit row, which carry the organization predicate.
-    await orgTransactionWithExecutor(
-      existing.organizationId,
-      async (_o, tx) => {
-        const [reverted] = await tx
-          .update(calibrationJob)
-          .set({
-            status: revertedStatus,
-            approvedBy: existing.approvedBy,
-            approvedAt: existing.approvedAt,
-            environmentalSnapshot: existing.environmentalSnapshot,
-            asFoundConformity: existing.asFoundConformity,
-            asFoundMargins: existing.asFoundMargins,
-            scopeComplianceStatus: existing.scopeComplianceStatus,
-            scopeComplianceFindings: existing.scopeComplianceFindings,
-            scopeOverrideJustification: existing.scopeOverrideJustification,
-            rejectedBy: existing.rejectedBy,
-            rejectedAt: existing.rejectedAt,
-            rejectionReason: existing.rejectionReason,
-          })
-          .where(
-            and(
-              eq(calibrationJob.id, existing.id),
-              eq(calibrationJob.organizationId, existing.organizationId),
-              inArray(calibrationJob.status, allowedFrom("revert_approval")),
-              eq(calibrationJob.approvedBy, approverId),
-            ),
-          )
-          .returning();
+    await orgTransactionWithExecutor(existing.organizationId, async (o, tx) => {
+      const [reverted] = await tx
+        .update(calibrationJob)
+        .set({
+          status: revertedStatus,
+          approvedBy: existing.approvedBy,
+          approvedAt: existing.approvedAt,
+          environmentalSnapshot: existing.environmentalSnapshot,
+          asFoundConformity: existing.asFoundConformity,
+          asFoundMargins: existing.asFoundMargins,
+          scopeComplianceStatus: existing.scopeComplianceStatus,
+          scopeComplianceFindings: existing.scopeComplianceFindings,
+          scopeOverrideJustification: existing.scopeOverrideJustification,
+          rejectedBy: existing.rejectedBy,
+          rejectedAt: existing.rejectedAt,
+          rejectionReason: existing.rejectionReason,
+        })
+        .where(
+          and(
+            eq(calibrationJob.id, existing.id),
+            eq(calibrationJob.organizationId, existing.organizationId),
+            inArray(calibrationJob.status, allowedFrom("revert_approval")),
+            eq(calibrationJob.approvedBy, approverId),
+          ),
+        )
+        .returning();
 
-        if (!reverted) return;
+      if (!reverted) return;
 
-        // The approval did not complete: what it froze documents nothing released.
-        await discardUnreleasedCertificateInput(tx, {
+      // The approval did not complete: what it froze documents nothing released.
+      await discardUnreleasedCertificateInput(tx, {
+        jobId: existing.id,
+        organizationId: existing.organizationId,
+      });
+
+      await appendJobEvent(tx, {
+        action: "approve_reverted",
+        organizationId: existing.organizationId,
+        jobId: existing.id,
+        actor: { kind: "user", userId: approverId },
+        changes: {
+          status: { old: approvedStatus, new: revertedStatus },
+        },
+        ipAddress: params.ipAddress,
+        reason: `Aprovação revertida: falha ao enfileirar a geração do certificado (${message})`,
+      });
+
+      // The records the approval wrote in its own transaction go with it: the job
+      // is back in REVIEW, so no customer-facing out-of-tolerance event and no
+      // advanced calibration date may outlive an approval that was not released.
+      // Their audit rows are append-only and stay; entries say what was undone.
+      const undone = `Aprovação do job ${existing.id} revertida antes da emissão`;
+      if (params.ootEventId !== null) {
+        await withdrawAssetOotEvent(o, {
+          eventId: params.ootEventId,
           jobId: existing.id,
-          organizationId: existing.organizationId,
+          labOrganizationId: existing.organizationId,
+          actorUserId: approverId,
+          reason: undone,
         });
-
-        await appendJobEvent(tx, {
-          action: "approve_reverted",
-          organizationId: existing.organizationId,
-          jobId: existing.id,
-          actor: { kind: "user", userId: approverId },
-          changes: {
-            status: { old: approvedStatus, new: revertedStatus },
-          },
-          ipAddress: params.ipAddress,
-          reason: `Aprovação revertida: falha ao enfileirar a geração do certificado (${message})`,
+      }
+      if (params.dateAdvance) {
+        await revertAssetCalibrationAdvance(o, params.dateAdvance, {
+          performedBy: approverId,
+          reason: undone,
         });
-      },
-    );
+      }
+    });
   } catch (revertError) {
     console.error(
       "[Jobs] Approval dispatch failed AND the revert failed; job may be stuck in GENERATING_PDF",
@@ -708,41 +799,51 @@ async function revertApprovalAfterDispatchFailure(params: {
   }
 }
 
+/** A notification job the approval transaction staged (null: no database queue). */
+type StagedEffect = {
+  message: QueueMessage;
+  staged: Awaited<ReturnType<typeof stageBackgroundJob>>;
+};
+
 /**
- * Post-commit, fire-and-forget effects of a cloud approval. Never blocks or
- * fails the approval response.
+ * Dispatch, after the commit, the notification jobs that were NOT written to
+ * the database queue (in-process dispatch). Never throws: the approval stands.
+ */
+async function dispatchUnstagedEffects(
+  effects: readonly StagedEffect[],
+): Promise<void> {
+  await Promise.all(
+    effects
+      .filter((effect) => !effect.staged)
+      .map(async (effect) => {
+        try {
+          await enqueueBackgroundJob(effect.message);
+        } catch (error) {
+          console.error(
+            "[Jobs] Failed to dispatch a post-approval notification",
+            {
+              type: effect.message.type,
+              error: error instanceof Error ? error.message : "unknown error",
+            },
+          );
+        }
+      }),
+  );
+}
+
+/**
+ * Post-commit, fire-and-forget financial step of a cloud approval. Never
+ * blocks or fails the approval response. (The notifications and the asset
+ * records are not here: they are written / staged in the approval transaction.)
  */
 function runCloudApprovalSideEffects(params: {
   existing: JobRow;
-  updated: JobRow;
   approverId: string;
   organizationId: string;
-  conformity: JobRow["asFoundConformity"];
   sendServiceOrdersToFinance: ApprovalCompletion["sendServiceOrdersToFinance"];
 }) {
-  const { existing, updated, approverId, organizationId } = params;
+  const { existing, approverId, organizationId } = params;
   const jobId = existing.id;
-
-  // Send notification to technician (fire and forget)
-  notifyJobApproved(jobId, approverId).catch((err) => {
-    console.error("[Jobs] Failed to send approval notification:", err);
-  });
-
-  // #740 Track B: as-found non-conforming → customer-facing OOT event +
-  // "avaliar impacto" alert (ISO 9001 §7.1.5.2). Idempotent per job;
-  // fire-and-forget — never blocks the approval.
-  if (params.conformity === "NON_CONFORMING") {
-    createAssetOotEventForApprovedJob({
-      jobId,
-      assetId: existing.assetId,
-      customerId: existing.customerId,
-      labOrganizationId: organizationId,
-      detectedAt: updated.approvedAt ?? new Date(),
-      actorUserId: approverId,
-    }).catch((err) => {
-      console.error("[Jobs] Failed to create asset OOT event:", err);
-    });
-  }
 
   // Phase 2 slice 4 wire-up: fire automatic-send for every SO linked
   // to this job. Fire-and-forget — never block the approval response

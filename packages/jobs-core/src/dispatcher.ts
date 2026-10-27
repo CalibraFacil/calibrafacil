@@ -11,6 +11,10 @@ import { type DeliveryAttempt, type Env } from "./runtime-types.js";
 import { processAuditPackJob } from "./audit-pack.js";
 import { processWebhookDelivery } from "./webhook-delivery.js";
 import { processDocumentMessage } from "./document-messages.js";
+import {
+  processAssetOotNotification,
+  processJobApprovedNotification,
+} from "./approval-notifications.js";
 
 // one capture site covering every run mode (container drain, local poller, inline/local dev): a failing job is
 // reported with structural tags before the error continues into the caller's
@@ -37,6 +41,16 @@ async function processBackgroundJobUnreported(
 ) {
   if (message.type === "AUDIT_PACK") {
     await processAuditPackJob(env, message);
+    return;
+  }
+
+  if (message.type === "JOB_APPROVED_NOTIFICATION") {
+    await processJobApprovedNotification(message);
+    return;
+  }
+
+  if (message.type === "ASSET_OOT_NOTIFICATION") {
+    await processAssetOotNotification(message);
     return;
   }
 

@@ -56,7 +56,6 @@ import { jobsRouter } from "../../routes/jobs";
 import { syncRouter } from "../../routes/sync";
 import { publicApiV2Router } from "../../routes/public-api-v2";
 import { approveJob } from "./approve-job";
-import { createAssetOotEventForApprovedJob } from "../../lib/asset-oot-events";
 
 const mocks = vi.hoisted(() => {
   const scope: {
@@ -725,10 +724,20 @@ describe("approval policy — one policy across every entry point", () => {
         approved: true,
       });
 
-      const rows = await db.select().from(appQueueJob);
-      expect(rows).toHaveLength(1);
-      expect(rows[0]).toMatchObject({ type: "CERTIFICATE", status: "PENDING" });
+      // The certificate job and the approval notification are rows of the queue,
+      // committed with the approval (B2: the notification is an outbox job too).
+      const rows = await db.select().from(appQueueJob).orderBy(appQueueJob.id);
+      expect(rows.map((row) => row.type)).toEqual([
+        "CERTIFICATE",
+        "JOB_APPROVED_NOTIFICATION",
+      ]);
+      expect(rows.every((row) => row.status === "PENDING")).toBe(true);
       expect(rows[0]?.payload).toMatchObject({ jobId, userId: CHECKER });
+      expect(rows[1]?.payload).toMatchObject({
+        type: "JOB_APPROVED_NOTIFICATION",
+        jobId,
+        userId: CHECKER,
+      });
       expect(mocks.enqueue).not.toHaveBeenCalled();
     });
 
@@ -745,7 +754,14 @@ describe("approval policy — one policy across every entry point", () => {
         cloud.approve(raced, CHECKER),
         cloud.approve(raced, "user-checker-2"),
       ]);
-      expect(await db.select().from(appQueueJob)).toHaveLength(1);
+      // Exactly one approval won: one certificate row and one notification row.
+      const queued = await db.select().from(appQueueJob);
+      expect(queued.filter((row) => row.type === "CERTIFICATE")).toHaveLength(
+        1,
+      );
+      expect(
+        queued.filter((row) => row.type === "JOB_APPROVED_NOTIFICATION"),
+      ).toHaveLength(1);
     });
 
     it("REQ-APPROVAL-011: if the queue insert fails the whole approval rolls back (job stays REVIEW, no audit row)", async () => {
@@ -1166,11 +1182,12 @@ describe("approval policy — public API (key creator is the approver)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Q39: the follow-ups of a committed approval (the asset calibration-date
-// advance, the asset out-of-tolerance event) stay atomic with their audit row
-// and survive a transient audit failure: the transaction is retried (3
-// attempts). A persistent failure drops them, logs an error naming the job and
-// the asset, and never touches the approval.
+// Roadmap 2 B2 (supersedes the retry model of Q39): the pure database effects
+// of an approval (the asset calibration-date advance, the asset out-of-tolerance
+// event, each with its audit row) are written in the approval's OWN transaction,
+// and the notifications are staged as queue jobs in it. "Never lost, never
+// without audit" is now met by atomicity: an approval cannot commit without
+// them, and they cannot exist without the approval.
 // ---------------------------------------------------------------------------
 
 /**
@@ -1209,25 +1226,53 @@ async function failInsertsInto(
 
 async function assetDates(assetId: number) {
   const [row] = await db
-    .select({ last: asset.lastCalibrationDate })
+    .select({
+      last: asset.lastCalibrationDate,
+      next: asset.nextCalibrationDate,
+    })
     .from(asset)
     .where(eq(asset.id, assetId));
   const audits = await db
     .select({ action: assetAuditLog.action, changes: assetAuditLog.changes })
     .from(assetAuditLog)
     .where(eq(assetAuditLog.assetId, assetId));
-  return {
-    last: row?.last ?? null,
-    advanceAudits: audits.filter(
-      (entry) =>
-        typeof entry.changes === "object" &&
-        entry.changes !== null &&
-        Reflect.get(entry.changes, "source") === "job_approval",
-    ),
-  };
+  const sources = audits.map((entry) =>
+    typeof entry.changes === "object" && entry.changes !== null
+      ? Reflect.get(entry.changes, "source")
+      : undefined,
+  );
+  return { last: row?.last ?? null, next: row?.next ?? null, sources };
 }
 
-describe("approval follow-ups survive a transient audit failure (Q39)", () => {
+async function ootRows(jobId: number) {
+  const events = await db
+    .select({ id: assetOotEvent.id })
+    .from(assetOotEvent)
+    .where(eq(assetOotEvent.jobId, jobId));
+  const audits = await db
+    .select({ action: assetOotAuditLog.action })
+    .from(assetOotAuditLog);
+  return { events, audits: audits.map((entry) => entry.action) };
+}
+
+/** A REVIEW job whose as-found verdict derives to NON_CONFORMING. */
+function nonConformingJob(fixture: Fixture) {
+  return seedReviewJob(fixture, {
+    results: { margem_conformidade_antes: [0.2, -0.1] },
+    performedAt: new Date("2026-03-01T10:00:00.000Z"),
+  });
+}
+
+async function approveRaw(jobId: number) {
+  loginPerRequestHeader(ORG);
+  return jobsRouter.request(`/${jobId}/approve`, {
+    method: "POST",
+    headers: { ...JSON_HEADERS, "x-test-user-id": CHECKER },
+    body: JSON.stringify({}),
+  });
+}
+
+describe("post-approval effects are atomic with the approval (roadmap 2 B2, Q39)", () => {
   let fixture: Fixture;
 
   beforeEach(async () => {
@@ -1243,99 +1288,176 @@ describe("approval follow-ups survive a transient audit failure (Q39)", () => {
     vi.restoreAllMocks();
   });
 
-  it("Q39 [HIGH RISK]: the date advance fails once on its audit row, is retried: the approval stands, the date and its audit row both exist", async () => {
-    const jobId = await seedReviewJob(fixture);
-    const restore = await failInsertsInto("asset_audit_log", 1);
-    let outcome: Outcome;
-    try {
-      outcome = await cloud.approve(jobId, CHECKER);
-    } finally {
-      await restore();
-    }
+  it("B2 [HIGH RISK]: a normal approval of a non-conforming job writes the OOT event, the date advance and their audit rows with it", async () => {
+    const jobId = await nonConformingJob(fixture);
 
-    expect(outcome).toEqual({ approved: true });
+    await expect(cloud.approve(jobId, CHECKER)).resolves.toEqual({
+      approved: true,
+    });
+
     expect((await readJob(jobId)).status).toBe("GENERATING_PDF");
+    const oot = await ootRows(jobId);
+    expect(oot.events).toHaveLength(1);
+    expect(oot.audits).toEqual(["create"]);
     const dates = await assetDates(fixture.assetId);
     expect(dates.last).not.toBeNull();
-    expect(dates.advanceAudits).toHaveLength(1);
-  });
-
-  it("Q39 [HIGH RISK]: the date advance fails on every attempt: neither the date nor its audit row exist, the error names the job and the asset, the approval stands", async () => {
-    const jobId = await seedReviewJob(fixture);
-    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
-    const restore = await failInsertsInto("asset_audit_log", 1_000_000);
-    let outcome: Outcome;
-    try {
-      outcome = await cloud.approve(jobId, CHECKER);
-    } finally {
-      await restore();
-    }
-
-    expect(outcome).toEqual({ approved: true });
-    expect((await readJob(jobId)).status).toBe("GENERATING_PDF");
-    expect(await releaseAuditRows(jobId)).toHaveLength(1);
-    const dates = await assetDates(fixture.assetId);
-    expect(dates.last).toBeNull();
-    expect(dates.advanceAudits).toEqual([]);
-    const logged = errors.mock.calls
-      .map((call) => String(call[0]))
-      .find((line) => line.includes("asset-calibration-advance"));
-    expect(logged).toContain(`asset ${fixture.assetId}`);
-    expect(logged).toContain(`job ${jobId}`);
-  });
-
-  async function ootEvent(jobId: number) {
-    return createAssetOotEventForApprovedJob({
-      jobId,
-      assetId: fixture.assetId,
-      customerId: fixture.customerId,
-      labOrganizationId: ORG,
-      detectedAt: new Date("2026-03-01T00:00:00.000Z"),
-      actorUserId: CHECKER,
+    expect(dates.sources).toEqual(["job_approval"]);
+    // In-process dispatch: the certificate job, then the two notifications.
+    const types = mocks.enqueue.mock.calls.map(([message]) => message.type);
+    expect(types).toEqual([
+      undefined,
+      "JOB_APPROVED_NOTIFICATION",
+      "ASSET_OOT_NOTIFICATION",
+    ]);
+    expect(mocks.enqueue.mock.calls[2]?.[0]).toMatchObject({
+      eventId: oot.events[0]?.id,
+      organizationId: ORG,
+      userId: CHECKER,
     });
-  }
+  });
 
-  async function ootRows(jobId: number) {
-    const events = await db
-      .select({ id: assetOotEvent.id })
-      .from(assetOotEvent)
-      .where(eq(assetOotEvent.jobId, jobId));
-    const audits = await db
-      .select({ action: assetOotAuditLog.action })
-      .from(assetOotAuditLog);
-    return { events, audits: audits.map((entry) => entry.action) };
-  }
+  it("B2: a conforming approval writes the date advance but no OOT event and no customer alert", async () => {
+    const jobId = await seedReviewJob(fixture, {
+      results: { margem_conformidade_antes: [0.2, 0.1] },
+    });
 
-  it("Q39 [HIGH RISK]: the OOT event fails once on its audit row, is retried: the event and its audit row both exist", async () => {
-    const jobId = await seedReviewJob(fixture);
+    await expect(cloud.approve(jobId, CHECKER)).resolves.toEqual({
+      approved: true,
+    });
+
+    expect((await ootRows(jobId)).events).toEqual([]);
+    expect((await assetDates(fixture.assetId)).sources).toEqual([
+      "job_approval",
+    ]);
+    const types = mocks.enqueue.mock.calls.map(([message]) => message.type);
+    expect(types).not.toContain("ASSET_OOT_NOTIFICATION");
+  });
+
+  it.each([
+    ["asset_oot_audit_log", "the OOT event's audit row"],
+    ["asset_audit_log", "the asset date advance's audit row"],
+  ])(
+    "B2 [HIGH RISK]: a forced failure on %s (%s) rolls the WHOLE approval back: nothing committed, nothing staged, the job still in REVIEW",
+    async (table) => {
+      const jobId = await nonConformingJob(fixture);
+      const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+      vi.stubEnv("BACKGROUND_JOBS_MODE", "queue");
+      vi.stubEnv("DOCUMENT_WORKER_URL", "");
+      const restore = await failInsertsInto(table, 1_000_000);
+      try {
+        expect((await approveRaw(jobId)).status).toBe(500);
+      } finally {
+        await restore();
+        vi.unstubAllEnvs();
+        errors.mockRestore();
+      }
+
+      expect(await readJob(jobId)).toMatchObject({
+        status: "REVIEW",
+        approvedBy: null,
+        approvedAt: null,
+      });
+      expect(await releaseAuditRows(jobId)).toHaveLength(0);
+      expect(await ootRows(jobId)).toEqual({ events: [], audits: [] });
+      const dates = await assetDates(fixture.assetId);
+      expect(dates.last).toBeNull();
+      expect(dates.sources).toEqual([]);
+      // The outbox rows roll back too: not even the certificate job was queued.
+      expect(await db.select().from(appQueueJob)).toEqual([]);
+      expect(mocks.enqueue).not.toHaveBeenCalled();
+    },
+  );
+
+  it("B2: a rolled-back approval can simply be retried: the effects are written once, by the approval that commits", async () => {
+    const jobId = await nonConformingJob(fixture);
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
     const restore = await failInsertsInto("asset_oot_audit_log", 1);
     try {
-      const result = await ootEvent(jobId);
-      expect(result.created).toBe(true);
+      expect((await approveRaw(jobId)).status).toBe(500);
     } finally {
       await restore();
+      errors.mockRestore();
     }
 
-    const rows = await ootRows(jobId);
-    expect(rows.events).toHaveLength(1);
-    expect(rows.audits).toContain("create");
+    await expect(cloud.approve(jobId, CHECKER)).resolves.toEqual({
+      approved: true,
+    });
+
+    expect((await ootRows(jobId)).events).toHaveLength(1);
+    expect((await assetDates(fixture.assetId)).sources).toEqual([
+      "job_approval",
+    ]);
   });
 
-  it("Q39 [HIGH RISK]: the OOT event fails on every attempt: neither the event nor its audit row exist, and the error names the job and the asset", async () => {
-    const jobId = await seedReviewJob(fixture);
-    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
-    const restore = await failInsertsInto("asset_oot_audit_log", 1_000_000);
-    try {
-      await expect(ootEvent(jobId)).rejects.toThrow();
-    } finally {
-      await restore();
-    }
+  it("B2: an approval reverted for a failed certificate dispatch takes its OOT event and date advance with it (append-only audit says why)", async () => {
+    const jobId = await nonConformingJob(fixture);
+    mocks.enqueue.mockRejectedValueOnce(new Error("queue down"));
 
-    expect(await ootRows(jobId)).toEqual({ events: [], audits: [] });
-    const logged = errors.mock.calls
-      .map((call) => String(call[0]))
-      .find((line) => line.includes("[AssetOOT]"));
-    expect(logged).toContain(`asset ${fixture.assetId}`);
-    expect(logged).toContain(`job ${jobId}`);
+    await expect(cloud.approve(jobId, CHECKER)).resolves.toMatchObject({
+      approved: false,
+    });
+
+    expect((await readJob(jobId)).status).toBe("REVIEW");
+    const oot = await ootRows(jobId);
+    expect(oot.events).toEqual([]);
+    // The audit trail is append-only: the create entry stays, the withdrawal is added.
+    expect(oot.audits).toEqual(["create", "withdraw"]);
+    const dates = await assetDates(fixture.assetId);
+    expect(dates.last).toBeNull();
+    expect(dates.sources).toEqual(["job_approval", "job_approval_reverted"]);
+    // Only the certificate dispatch was attempted: no notification for a reverted approval.
+    expect(mocks.enqueue).toHaveBeenCalledTimes(1);
+
+    // The same approval retried leaves the effects in place, once.
+    await expect(cloud.approve(jobId, CHECKER)).resolves.toEqual({
+      approved: true,
+    });
+    expect((await ootRows(jobId)).events).toHaveLength(1);
+    expect((await assetDates(fixture.assetId)).last).not.toBeNull();
+  });
+
+  describe("with the database queue (BACKGROUND_JOBS_MODE=queue)", () => {
+    beforeEach(() => {
+      vi.stubEnv("BACKGROUND_JOBS_MODE", "queue");
+      vi.stubEnv("DOCUMENT_WORKER_URL", "");
+    });
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it("B2: the notifications are queue rows committed with the approval: the technician notification and the customer OOT alert naming the event", async () => {
+      const jobId = await nonConformingJob(fixture);
+
+      await expect(cloud.approve(jobId, CHECKER)).resolves.toEqual({
+        approved: true,
+      });
+
+      const oot = await ootRows(jobId);
+      const rows = await db.select().from(appQueueJob).orderBy(appQueueJob.id);
+      expect(rows.map((row) => row.type)).toEqual([
+        "CERTIFICATE",
+        "JOB_APPROVED_NOTIFICATION",
+        "ASSET_OOT_NOTIFICATION",
+      ]);
+      expect(rows[2]?.payload).toEqual({
+        type: "ASSET_OOT_NOTIFICATION",
+        eventId: oot.events[0]?.id,
+        organizationId: ORG,
+        userId: CHECKER,
+      });
+      expect(mocks.enqueue).not.toHaveBeenCalled();
+    });
+
+    it("B2: a refused approval stages no notification", async () => {
+      const jobId = await nonConformingJob(fixture);
+
+      await expect(cloud.approve(jobId, MAKER)).resolves.toMatchObject({
+        approved: false,
+      });
+
+      expect(await db.select().from(appQueueJob)).toEqual([]);
+      expect(await ootRows(jobId)).toEqual({ events: [], audits: [] });
+    });
   });
 });

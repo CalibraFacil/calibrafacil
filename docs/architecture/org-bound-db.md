@@ -261,8 +261,14 @@ added or removed without a migration.
     evaluation in one short transaction (`PreparedApproval`), reads the logo and signature objects after it ended
     (`prefetchCertificateImages` was split into `findCertificateImageKeys` + `readCertificateImages`; the
     function itself is unchanged), then writes the status, the frozen input, the audit row and the outbox queue
-    row in one `orgTransactionWithExecutor`. The post-commit steps (asset-date advance, OOT event) open their own
-    org transactions.
+    row in one `orgTransactionWithExecutor`. Since roadmap 2 B2 that same transaction also writes the pure
+    database effects of the approval (the asset OOT event and the asset-date advance, each with its audit row,
+    on the transaction's own handle) and stages the notifications as queue jobs (`JOB_APPROVED_NOTIFICATION`,
+    `ASSET_OOT_NOTIFICATION`): an approval cannot commit without them, a failed write rolls the approval back,
+    and a rolled-back approval stages nothing. The nightly `approval-effects-reconcile` cron
+    (`lib/approval-effects-reconciler.ts`: candidates on the system path, each repair in the job's own
+    laboratory) repairs what an approval from before that change can still be missing. The financial
+    automatic-send (ERP env, the member's unit scope) stays a post-commit step.
   - **Lib functions take an optional reader.** `loadScopedJob`, the technician and competence gates, the
     standards judgement, the execution snapshots and `reconcileMethodSnapshotEngine` take an optional org-bound
     handle and, absent, read in a short transaction of their own (`withOrgReader`, `lib/org-transaction.ts`).
@@ -271,7 +277,8 @@ added or removed without a migration.
     the notification in one transaction.
   - **Behaviour that is stricter than before.** The label update and its audit row of the worker, the asset-date
     advance and its audit row, and the asset OOT event and its first audit entry are now one transaction each
-    (they were separate autocommit statements); `POST /:id/flag-oot` no longer leaves an NC behind when the
+    (they were separate autocommit statements; B2 then moved both into the approval's own transaction);
+    `POST /:id/flag-oot` no longer leaves an NC behind when the
     notification insert fails.
   - **The worker.** `packages/jobs-core` learns the laboratory of a certificate or label message with one lookup
     on the system path (`findJobOrganization`, `DATABASE_OWNER_URL`, falling back to `DATABASE_URL`) and runs

@@ -26,7 +26,7 @@ import {
   assetOotEvent,
 } from "@calibra-facil/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { createAssetOotEventForApprovedJob } from "../lib/asset-oot-events";
+import { seedAssetOotEvent } from "../../test/integration/oot-fixtures";
 import { loginAsPortal, logoutPortal } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import {
@@ -316,9 +316,9 @@ describe("portal fleet analytics + OOT workflow (integration)", () => {
       detectedAt: new Date("2026-06-01T00:00:00Z"),
       actorUserId: ctx.portalUserId,
     };
-    const first = await createAssetOotEventForApprovedJob(params);
+    const first = await seedAssetOotEvent(params);
     expect(first.created).toBe(true);
-    const second = await createAssetOotEventForApprovedJob(params);
+    const second = await seedAssetOotEvent(params);
     expect(second.created).toBe(false);
 
     const events = await db
@@ -357,7 +357,7 @@ describe("portal fleet analytics + OOT workflow (integration)", () => {
       approvedAt: new Date("2026-06-01T00:00:00Z"),
       conformity: "NON_CONFORMING",
     });
-    const { eventId } = await createAssetOotEventForApprovedJob({
+    const { eventId } = await seedAssetOotEvent({
       jobId: failingJobId,
       assetId,
       customerId: ctx.customerId,
@@ -442,7 +442,7 @@ describe("portal fleet analytics + OOT workflow (integration)", () => {
       approvedAt: new Date("2026-06-01T00:00:00Z"),
       conformity: "NON_CONFORMING",
     });
-    const { eventId } = await createAssetOotEventForApprovedJob({
+    const { eventId } = await seedAssetOotEvent({
       jobId,
       assetId,
       customerId: ctx.customerId,

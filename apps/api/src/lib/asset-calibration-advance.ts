@@ -22,12 +22,11 @@
  * path (assets route / sync push).
  */
 
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import { asset, assetAuditLog } from "@calibra-facil/db/schema";
 import { RegulatedIntervalSchema } from "@calibra-facil/schemas";
 import { calendarDateKey } from "@calibra-facil/shared";
 import { and, eq, isNull } from "drizzle-orm";
-import { orgDb } from "./org-db";
-import { retryFollowUp } from "./retry-follow-up";
 import { deriveNextCalibrationDate } from "./portal-asset-interval";
 import { deriveRegulatedNextDate } from "./regulated-interval";
 
@@ -94,88 +93,152 @@ export function decideAssetCalibrationAdvance(
   return advance;
 }
 
+/** What an advance changed, kept by the approval so a reverted approval can undo it. */
+export type AssetCalibrationAdvanceApplied = {
+  assetId: number;
+  labOrganizationId: string;
+  previous: {
+    lastCalibrationDate: Date | null;
+    nextCalibrationDate: Date | null;
+    nextLegalVerificationDate: Date | null;
+  };
+  next: AssetCalibrationAdvance;
+};
+
 /**
- * Load, decide, persist + audit. Never throws — an advance failure must not
- * fail the approval itself (the job state change is the regulated record; this
- * is derived bookkeeping the next sweep/pull picks up).
+ * Load, decide, persist + audit, on `o` (the caller's transaction). Since
+ * roadmap 2 B2 this runs INSIDE the approval's own transaction: the read, the
+ * forward-only update and its audit row commit or roll back with the approval
+ * (no date change without its audit trail, no approval without the advance), so
+ * there is no retry and no swallowed failure: an error rolls the approval back.
+ * Returns what changed, or null when nothing advanced (no asset, no date, or the
+ * recorded date is not older: forward-only, hence idempotent).
  */
-export async function advanceAssetCalibrationDatesOnApproval(input: {
-  /** The laboratory the job belongs to: every statement runs bound to it. */
-  organizationId: string;
-  /** The approved job, named in the error log if the advance cannot be made. */
-  jobId?: number;
-  assetId: number | null;
-  calibrationDate: Date | null;
-  performedBy: string;
-  source: "job_approval";
-}): Promise<void> {
-  try {
-    if (input.assetId === null) return;
-    const assetId = input.assetId;
+export async function advanceAssetCalibrationDates(
+  o: OrgDb,
+  input: {
+    assetId: number | null;
+    calibrationDate: Date | null;
+    performedBy: string;
+    source: "job_approval" | "job_approval_reconciliation";
+  },
+): Promise<AssetCalibrationAdvanceApplied | null> {
+  if (input.assetId === null) return null;
+  const assetId = input.assetId;
 
-    // One transaction that names the laboratory (row-level security): the read,
-    // the forward-only update and its audit row commit together (no date change
-    // without its audit trail). A transient failure retries the whole
-    // transaction (3 attempts); only a persistent one gives up, with an error
-    // that names the job and the asset.
-    await retryFollowUp(() =>
-      orgDb(input.organizationId).transaction(async (o) => {
-        const [existing] = await o
-          .select({
-            id: asset.id,
-            labOrganizationId: asset.labOrganizationId,
-            lastCalibrationDate: asset.lastCalibrationDate,
-            nextCalibrationDate: asset.nextCalibrationDate,
-            nextLegalVerificationDate: asset.nextLegalVerificationDate,
-            calibrationIntervalMonths: asset.calibrationIntervalMonths,
-            regulatedInterval: asset.regulatedInterval,
-            installedAt: asset.installedAt,
-          })
-          .from(asset)
-          .where(and(eq(asset.id, assetId), isNull(asset.deletedAt)))
-          .limit(1);
-        if (!existing) return;
+  const [existing] = await o
+    .select({
+      id: asset.id,
+      labOrganizationId: asset.labOrganizationId,
+      lastCalibrationDate: asset.lastCalibrationDate,
+      nextCalibrationDate: asset.nextCalibrationDate,
+      nextLegalVerificationDate: asset.nextLegalVerificationDate,
+      calibrationIntervalMonths: asset.calibrationIntervalMonths,
+      regulatedInterval: asset.regulatedInterval,
+      installedAt: asset.installedAt,
+    })
+    .from(asset)
+    .where(and(eq(asset.id, assetId), isNull(asset.deletedAt)))
+    .limit(1);
+  if (!existing) return null;
 
-        const advance = decideAssetCalibrationAdvance({
-          calibrationDate: input.calibrationDate,
-          asset: existing,
-        });
-        if (!advance) return;
+  const advance = decideAssetCalibrationAdvance({
+    calibrationDate: input.calibrationDate,
+    asset: existing,
+  });
+  if (!advance) return null;
 
-        await o
-          .update(asset)
-          .set({ ...advance, updatedAt: new Date() })
-          .where(eq(asset.id, existing.id));
+  await o
+    .update(asset)
+    .set({ ...advance, updatedAt: new Date() })
+    .where(eq(asset.id, existing.id));
 
-        const changes: Record<string, { old: unknown; new: unknown }> = {
-          lastCalibrationDate: {
-            old: existing.lastCalibrationDate,
-            new: advance.lastCalibrationDate,
-          },
-          nextCalibrationDate: {
-            old: existing.nextCalibrationDate,
-            new: advance.nextCalibrationDate,
-          },
-        };
-        if (advance.nextLegalVerificationDate !== undefined) {
-          changes.nextLegalVerificationDate = {
-            old: existing.nextLegalVerificationDate,
-            new: advance.nextLegalVerificationDate,
-          };
-        }
-        await o.insert(assetAuditLog).values({
-          organizationId: existing.labOrganizationId,
-          assetId: existing.id,
-          action: "update",
-          changes: { source: input.source, ...changes },
-          performedBy: input.performedBy,
-        });
-      }),
-    );
-  } catch (error) {
-    console.error(
-      `[asset-calibration-advance] Failed to advance asset ${input.assetId} dates after approval of job ${input.jobId ?? "(unknown)"} (3 attempts):`,
-      error,
-    );
+  const changes: Record<string, { old: unknown; new: unknown }> = {
+    lastCalibrationDate: {
+      old: existing.lastCalibrationDate,
+      new: advance.lastCalibrationDate,
+    },
+    nextCalibrationDate: {
+      old: existing.nextCalibrationDate,
+      new: advance.nextCalibrationDate,
+    },
+  };
+  if (advance.nextLegalVerificationDate !== undefined) {
+    changes.nextLegalVerificationDate = {
+      old: existing.nextLegalVerificationDate,
+      new: advance.nextLegalVerificationDate,
+    };
   }
+  await o.insert(assetAuditLog).values({
+    organizationId: existing.labOrganizationId,
+    assetId: existing.id,
+    action: "update",
+    changes: { source: input.source, ...changes },
+    performedBy: input.performedBy,
+  });
+
+  return {
+    assetId: existing.id,
+    labOrganizationId: existing.labOrganizationId,
+    previous: {
+      lastCalibrationDate: existing.lastCalibrationDate,
+      nextCalibrationDate: existing.nextCalibrationDate,
+      nextLegalVerificationDate: existing.nextLegalVerificationDate,
+    },
+    next: advance,
+  };
+}
+
+/**
+ * Undo `advanceAssetCalibrationDates` for an approval that is being reverted
+ * before it was released (the certificate job could not be dispatched, in-process
+ * dispatch only). It restores the previous dates only while the asset still
+ * carries the dates this advance wrote (a later edit or advance is never
+ * overwritten) and appends an audit entry saying so.
+ */
+export async function revertAssetCalibrationAdvance(
+  o: OrgDb,
+  applied: AssetCalibrationAdvanceApplied,
+  params: { performedBy: string; reason: string },
+): Promise<void> {
+  const restored = await o
+    .update(asset)
+    .set({
+      lastCalibrationDate: applied.previous.lastCalibrationDate,
+      nextCalibrationDate: applied.previous.nextCalibrationDate,
+      ...(applied.next.nextLegalVerificationDate !== undefined
+        ? {
+            nextLegalVerificationDate:
+              applied.previous.nextLegalVerificationDate,
+          }
+        : {}),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(asset.id, applied.assetId),
+        eq(asset.lastCalibrationDate, applied.next.lastCalibrationDate),
+      ),
+    )
+    .returning({ id: asset.id });
+  if (restored.length === 0) return;
+
+  await o.insert(assetAuditLog).values({
+    organizationId: applied.labOrganizationId,
+    assetId: applied.assetId,
+    action: "update",
+    changes: {
+      source: "job_approval_reverted",
+      lastCalibrationDate: {
+        old: applied.next.lastCalibrationDate,
+        new: applied.previous.lastCalibrationDate,
+      },
+      nextCalibrationDate: {
+        old: applied.next.nextCalibrationDate,
+        new: applied.previous.nextCalibrationDate,
+      },
+    },
+    performedBy: params.performedBy,
+    reason: params.reason,
+  });
 }

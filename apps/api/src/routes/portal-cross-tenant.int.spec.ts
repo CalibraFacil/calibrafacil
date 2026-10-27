@@ -41,7 +41,7 @@ import { portalRequestsRouter } from "./portal-requests";
 import { portalVisitsRouter } from "./portal-visits";
 import { portalNotificationsRouter } from "./portal-notifications";
 import { portalServiceOrdersRouter } from "./service-orders";
-import { createAssetOotEventForApprovedJob } from "../lib/asset-oot-events";
+import { seedAssetOotEvent } from "../../test/integration/oot-fixtures";
 import { loginAsPortal } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { insertJobs } from "../../test/integration/job-fixtures";
@@ -209,7 +209,7 @@ async function seedLab(params: {
     .returning({ id: ootNotification.id, token: ootNotification.ackToken });
   if (!ootNotice) throw new Error("oot notification not seeded");
 
-  const { eventId } = await createAssetOotEventForApprovedJob({
+  const { eventId } = await seedAssetOotEvent({
     jobId: job.id,
     assetId: assetRow.id,
     customerId: ctx.customerId,
