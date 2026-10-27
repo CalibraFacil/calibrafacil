@@ -147,12 +147,8 @@ function createNeonServerlessDatabase(connectionString: string) {
  * Creates a fresh database connection.
  *
  * Uses different drivers based on environment:
- * - HYPERDRIVE_URL: Uses postgres.js driver (recommended for Cloudflare Hyperdrive)
  * - DATABASE_URL in Bun/Node: Uses postgres.js with a cached connection pool
  * - DATABASE_URL in Cloudflare: Uses Neon serverless driver as a Workers-safe fallback
- *
- * @see https://neon.com/docs/guides/cloudflare-hyperdrive
- * @see https://developers.cloudflare.com/hyperdrive/examples/connect-to-postgres/postgres-drivers-and-libraries/drizzle-orm/
  */
 export function getDb(): Database {
   queryObserver?.onAccess?.();
@@ -171,24 +167,7 @@ export function getDb(): Database {
   }
   const isCloudflare = isCloudflareWorkersRuntime();
 
-  // Prefer direct DATABASE_URL in development to avoid Hyperdrive local overhead.
   const databaseUrl = config.url;
-  if (!isProduction && databaseUrl) {
-    return cacheDatabase(`database:${databaseUrl}:${config.poolMax}`, () => {
-      if (isCloudflare) return createNeonServerlessDatabase(databaseUrl);
-      return createPostgresJsDatabase(databaseUrl, config.poolMax);
-    });
-  }
-
-  // Hyperdrive - use postgres.js driver (recommended by Cloudflare and Neon)
-  const hyperdriveUrl = config.hyperdriveUrl;
-  if (hyperdriveUrl) {
-    return cacheDatabase(`hyperdrive:${hyperdriveUrl}:${config.poolMax}`, () =>
-      createPostgresJsDatabase(hyperdriveUrl, config.poolMax),
-    );
-  }
-
-  // Fallback to direct DATABASE_URL when Hyperdrive is not available
   if (databaseUrl) {
     return cacheDatabase(`database:${databaseUrl}:${config.poolMax}`, () => {
       if (isCloudflare) return createNeonServerlessDatabase(databaseUrl);
@@ -196,9 +175,7 @@ export function getDb(): Database {
     });
   }
 
-  throw new Error(
-    "No database connection configured. Set HYPERDRIVE_URL or DATABASE_URL.",
-  );
+  throw new Error("No database connection configured. Set DATABASE_URL.");
 }
 
 /**

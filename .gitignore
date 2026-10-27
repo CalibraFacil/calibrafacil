@@ -21,8 +21,6 @@ test-results/
 # Turbo
 .turbo
 
-# Vercel
-.vercel
 .calibra-local/
 
 # Build Outputs

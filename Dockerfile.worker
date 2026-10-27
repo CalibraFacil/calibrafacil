@@ -12,9 +12,6 @@ RUN corepack enable
 
 WORKDIR /repo
 COPY . .
-# pnpm-workspace.yaml asks for native binaries for every platform a hosted
-# build may run on; an image only needs its own.
-RUN sed -i '/^supportedArchitectures:/,/^[^ ]/{/^supportedArchitectures:/d;/^ /d}' pnpm-workspace.yaml
 # Only the worker and the workspace packages it imports, without dev tooling.
 RUN pnpm install --frozen-lockfile --prod --filter "@calibra-facil/worker..."
 

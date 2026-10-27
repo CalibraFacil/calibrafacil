@@ -1,6 +1,6 @@
 /**
  * One-shot setup for an install: `pnpm --dir apps/api init`, or the `init`
- * service of docker-compose.prod.yml, which runs it before the API starts.
+ * service of deploy/compose.yaml, which runs it before the API starts.
  *
  *  1. Database: create the schema on an empty database, or apply pending
  *     migrations (packages/db/scripts/bootstrap.mjs).

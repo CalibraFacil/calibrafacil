@@ -26,8 +26,4 @@ export interface Env {
   PORTAL_APP_URL?: string;
   PORTAL_INVITATION_EXPIRES_IN?: string;
   DATABASE_URL: string;
-  /** Injected by Cloudflare Hyperdrive: `{ connectionString }`. */
-  HYPERDRIVE?: unknown;
-  /** Wrangler's local Hyperdrive connection string (development only). */
-  CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE?: string;
 }

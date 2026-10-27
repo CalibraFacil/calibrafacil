@@ -17,8 +17,6 @@ coverage
 **/.next
 .wrangler
 **/.wrangler
-.vercel
-**/.vercel
 **/*.tsbuildinfo
 playwright-report
 **/playwright-report

@@ -64,11 +64,5 @@ export function buildApiBootEnv(
     }
   }
 
-  const hyperdriveLocalConnectionString =
-    bindings.HYPERDRIVE_LOCAL_CONNECTION_STRING ?? bindings.DATABASE_URL;
-  if (typeof hyperdriveLocalConnectionString === "string") {
-    bindings.DATABASE_URL = hyperdriveLocalConnectionString;
-  }
-
   return { bindings, config: loadApiConfig(stringEntries(bindings)) };
 }

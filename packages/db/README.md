@@ -109,8 +109,6 @@ DATABASE_URL=postgres://calibra_app:pass@host:5432/database
 DATABASE_OWNER_URL=postgres://owner:pass@host:5432/database
 ```
 
-For Cloudflare Workers, the database is accessed via Hyperdrive binding.
-
 ## Exports
 
 - `@calibra-facil/db` - Database connection instance

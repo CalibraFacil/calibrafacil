@@ -96,14 +96,11 @@ describe("API start-up configuration (REQ-CFG-2)", () => {
   it("REQ-CFG-2: the local .env files sit between the defaults and the real environment", () => {
     const { bindings } = buildApiBootEnv(
       { APP_URL: "http://localhost:9000" },
-      {
-        APP_URL: "http://localhost:1",
-        HYPERDRIVE_LOCAL_CONNECTION_STRING: "postgres://local/db",
-      },
+      { APP_URL: "http://localhost:1", PORTAL_APP_URL: "http://localhost:2" },
     );
 
     expect(bindings.APP_URL).toBe("http://localhost:9000");
-    expect(bindings.DATABASE_URL).toBe("postgres://local/db");
+    expect(bindings.PORTAL_APP_URL).toBe("http://localhost:2");
   });
 });
 

@@ -208,7 +208,7 @@ let publicPresignClient: { endpoint: string; client: R2S3Client } | undefined;
 /**
  * The client presigned URLs are signed with. Browsers open those URLs
  * directly, so when the API reaches the store at an internal address
- * (R2_ENDPOINT=http://s3:7070 in docker-compose.prod.yml), R2_PUBLIC_ENDPOINT
+ * (R2_ENDPOINT=http://s3:7070 in deploy/compose.yaml), R2_PUBLIC_ENDPOINT
  * names the address browsers use instead. Signing is local: nothing is sent
  * to that address from here.
  */
