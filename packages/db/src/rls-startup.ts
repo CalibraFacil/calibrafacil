@@ -30,6 +30,8 @@ export type RlsMode = "shadow" | "enforced";
 export type RlsRoleFacts = {
   /** `current_user`. */
   role: string;
+  /** The session's `TimeZone` setting; must be UTC (roadmap 2 C5). */
+  timeZone: string;
   isSuperuser: boolean;
   bypassesRls: boolean;
   /** Some table of the `public` schema has row-level security enabled. */
@@ -52,6 +54,7 @@ export type RlsRoleFacts = {
 const FACTS_QUERY = sql`
   select
     current_user::text as role,
+    current_setting('TimeZone') as time_zone,
     coalesce(r.rolsuper, false) as is_superuser,
     coalesce(r.rolbypassrls, false) as bypasses_rls,
     exists (
@@ -89,6 +92,19 @@ function field(row: unknown, name: string): unknown {
     : undefined;
 }
 
+/**
+ * The session TimeZone must be UTC (roadmap 2 C5, review 3.2): the schema keeps
+ * regulated instants in naive `timestamp` columns and some SQL does date
+ * arithmetic with now(), so another zone would shift them silently. The clients
+ * set it on connect; this catches a pool or proxy that drops the startup
+ * parameter, or a role/database default that overrides it.
+ */
+export function sessionTimeZoneProblem(timeZone: string): string | null {
+  return timeZone === "UTC" || timeZone === "Etc/UTC"
+    ? null
+    : `the database session TimeZone is "${timeZone}", not UTC: naive timestamps would be shifted. Remove the role/database TimeZone setting or set it to UTC.`;
+}
+
 export async function readRlsRoleFacts(
   executor: Pick<OrgExecutor, "execute">,
 ): Promise<RlsRoleFacts> {
@@ -97,8 +113,10 @@ export async function readRlsRoleFacts(
   if (typeof role !== "string") {
     throw new Error("rls start-up check: the role query returned no row");
   }
+  const timeZone = field(row, "time_zone");
   return {
     role,
+    timeZone: typeof timeZone === "string" ? timeZone : "unknown",
     isSuperuser: field(row, "is_superuser") === true,
     bypassesRls: field(row, "bypasses_rls") === true,
     rlsEnabled: field(row, "rls_enabled") === true,
@@ -187,6 +205,12 @@ export async function assertRlsStartup(
   }
   const executor = options.executor ?? (await import("./db.js")).getDb();
   const facts = await readRlsRoleFacts(executor);
+  const timeZoneProblem = sessionTimeZoneProblem(facts.timeZone);
+  if (timeZoneProblem !== null) {
+    throw new ConfigError("database", [
+      { variable: "DATABASE_URL", message: timeZoneProblem },
+    ]);
+  }
   const problem = rlsStartupProblem(facts, mode);
   if (problem !== null) {
     throw new ConfigError("database", [

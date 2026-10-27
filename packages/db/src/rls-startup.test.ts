@@ -5,6 +5,7 @@ import {
   readRlsRoleFacts,
   rlsOwnerUrlProblem,
   rlsStartupProblem,
+  sessionTimeZoneProblem,
   rlsSystemRoleProblem,
   type RlsRoleFacts,
 } from "./rls-startup";
@@ -15,6 +16,7 @@ import {
 
 const OWNER: RlsRoleFacts = {
   role: "calibra_owner",
+  timeZone: "UTC",
   isSuperuser: false,
   bypassesRls: false,
   rlsEnabled: true,
@@ -107,6 +109,7 @@ describe("rlsSystemRoleProblem", () => {
 describe("assertRlsStartup", () => {
   const row = (facts: RlsRoleFacts) => ({
     role: facts.role,
+    time_zone: facts.timeZone,
     is_superuser: facts.isSuperuser,
     bypasses_rls: facts.bypassesRls,
     rls_enabled: facts.rlsEnabled,
@@ -254,5 +257,36 @@ describe("assertRlsStartup", () => {
       execute: async () => ({ rows: [row(BYPASS)] }),
     });
     expect(facts).toEqual(BYPASS);
+  });
+});
+
+describe("session TimeZone (roadmap 2 C5)", () => {
+  it("accepts UTC and refuses any other zone, naming DATABASE_URL", async () => {
+    expect(sessionTimeZoneProblem("UTC")).toBeNull();
+    expect(sessionTimeZoneProblem("Etc/UTC")).toBeNull();
+    expect(sessionTimeZoneProblem("America/Sao_Paulo")).toContain(
+      "America/Sao_Paulo",
+    );
+
+    const refused = await assertRlsStartup({
+      executor: executorReturning({
+        role: OWNER.role,
+        time_zone: "America/Sao_Paulo",
+        is_superuser: false,
+        bypasses_rls: false,
+        rls_enabled: true,
+        subject_to_rls: false,
+        owns_some_rls_table: true,
+      }),
+      mode: "shadow",
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(refused).toBeInstanceOf(ConfigError);
+    if (!(refused instanceof ConfigError)) throw new Error("not refused");
+    expect(refused.issues.map((issue) => issue.variable)).toEqual([
+      "DATABASE_URL",
+    ]);
   });
 });

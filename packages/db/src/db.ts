@@ -134,6 +134,9 @@ function createPostgresJsDatabase(connectionString: string, poolMax: number) {
   const sql = postgres(connectionString, {
     max: poolMax,
     fetch_types: false,
+    // Naive `timestamp` columns and the date arithmetic in SQL are written for a
+    // UTC session (roadmap 2 C5); assertRlsStartup checks it took.
+    connection: { TimeZone: "UTC" },
   });
   return drizzlePostgres(sql, { schema, logger: observingLogger });
 }
