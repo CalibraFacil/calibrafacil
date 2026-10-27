@@ -740,8 +740,11 @@ describe("REQ-RET-3: a LAB organization is soft-deleted, never hard-deleted", ()
     const token = randomBytes(24).toString("base64url");
     await db.insert(verification).values({
       id: "ver-1",
-      identifier: createHash("sha256").update(token).digest("base64url"),
-      value: JSON.stringify({ email: "preview-user@lab.test", name: null }),
+      identifier: `magic-link:${createHash("sha256").update(token).digest("base64url")}`,
+      value: JSON.stringify({
+        type: "magic-link",
+        email: "preview-user@lab.test",
+      }),
       expiresAt: new Date(Date.now() + 600_000),
     });
     const preview = async () => {

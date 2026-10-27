@@ -69,8 +69,9 @@ async function seedMagicLinkToken(email: string) {
   const token = randomBytes(24).toString("base64url");
   await db.insert(verification).values({
     id: randomBytes(8).toString("hex"),
-    identifier: createHash("sha256").update(token).digest("base64url"),
-    value: JSON.stringify({ email, name: "", attempt: 0 }),
+    // Better Auth >= 1.7: `magic-link:` + the hashed token; a strict record.
+    identifier: `magic-link:${createHash("sha256").update(token).digest("base64url")}`,
+    value: JSON.stringify({ type: "magic-link", email, name: "" }),
     expiresAt: FUTURE,
   });
   return token;

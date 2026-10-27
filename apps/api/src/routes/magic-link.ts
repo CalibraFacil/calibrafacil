@@ -29,11 +29,12 @@ export const magicLinkRouter = new Hono().get("/preview", async (c) => {
   const organizationType =
     c.req.query("surface") === "portal" ? "CLIENT" : "LAB";
 
-  // Better Auth stores magic-link tokens as base64url(SHA-256(token)) — see
-  // better-auth `defaultKeyHasher`. Hash the same way to look the row up.
+  // Better Auth (>= 1.7) stores a magic-link token under the identifier
+  // `magic-link:` + base64url(SHA-256(token)) (storeToken "hashed", its
+  // `defaultKeyHasher`). Build the same identifier to look the row up.
   const hashedToken = createHash("sha256").update(token).digest("base64url");
 
-  const value = await findLiveVerificationValue(hashedToken);
+  const value = await findLiveVerificationValue(`magic-link:${hashedToken}`);
   if (value === null) {
     return c.json({ found: false });
   }
