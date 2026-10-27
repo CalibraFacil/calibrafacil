@@ -18,6 +18,7 @@
  * the API. Nothing it prints is secret: ids, serials and outcomes only.
  */
 import { parseArgs } from "node:util";
+import { readSigningConfig } from "@calibra-facil/config";
 import { signingKeyringFromEnv } from "@calibra-facil/signing";
 
 import { reencryptSigningCredentials } from "../lib/reencrypt-signing-credentials";
@@ -43,7 +44,12 @@ async function main() {
 
   let keyring;
   try {
-    keyring = signingKeyringFromEnv(process.env);
+    const signing = readSigningConfig();
+    keyring = signingKeyringFromEnv({
+      SIGNING_MASTER_KEY: signing.masterKey,
+      SIGNING_MASTER_KEY_ID: signing.masterKeyId,
+      SIGNING_MASTER_KEY_PREVIOUS: signing.masterKeyPrevious,
+    });
   } catch (error) {
     return fail(
       `The signing key ring is misconfigured: ${error instanceof Error ? error.message : String(error)}`,

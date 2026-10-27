@@ -36,9 +36,9 @@ import {
 
 import { writeComplianceAuditEvent } from "./compliance-audit";
 
-export type ReencryptOutcome = "rewrapped" | "unchanged" | "skipped" | "failed";
+type ReencryptOutcome = "rewrapped" | "unchanged" | "skipped" | "failed";
 
-export type ReencryptRowReport = {
+type ReencryptRowReport = {
   id: number;
   organizationId: string;
   unitId: number;

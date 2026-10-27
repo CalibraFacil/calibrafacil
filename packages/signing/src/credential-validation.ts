@@ -11,6 +11,7 @@
  * homologation roots, a private test CA, or an updated ITI bundle.
  */
 import { readFileSync } from "node:fs";
+import { formatInstant } from "@calibra-facil/shared/format";
 import type * as pkijs from "pkijs";
 
 import {
@@ -38,7 +39,7 @@ export interface CredentialValidationOptions {
 }
 
 function brDate(value: Date): string {
-  return value.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+  return formatInstant(value, "date");
 }
 
 /**
@@ -132,6 +133,7 @@ export function resolveSigningTrustAnchors(
       `SIGNING_TRUST_STORE_FILE (${file}) cannot be read: ${
         error instanceof Error ? error.message : String(error)
       }`,
+      { cause: error },
     );
   }
   const anchors = parsePemCertificates(content);

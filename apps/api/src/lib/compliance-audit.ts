@@ -17,7 +17,7 @@ import { organizationComplianceAuditLog } from "@calibra-facil/db/schema";
  * password or a key by accident.
  */
 
-export type ComplianceAuditAction =
+type ComplianceAuditAction =
   | "signing_credential.created"
   | "signing_credential.default_replaced"
   | "signing_credential.deleted"

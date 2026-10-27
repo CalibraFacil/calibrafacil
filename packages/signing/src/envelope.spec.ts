@@ -38,6 +38,10 @@ function stored(
   };
 }
 
+function parts(blob: string): string[] {
+  return blob.split(":");
+}
+
 function legacyRow(masterKey: string): StoredSigningCredential {
   const { encryptedPassword, iv } = encryptPassword(PASSWORD, masterKey);
   return {
@@ -86,7 +90,6 @@ describe("REQ-B4A-1: envelope encryption of the signing credential", () => {
       BINDING,
       ring,
     );
-    const parts = (blob: string) => blob.split(":");
     // enc : v2 : kekId : wrapped : data
     expect(parts(a.encryptedP12)[3]).not.toBe(parts(b.encryptedP12)[3]);
     expect(parts(a.encryptedP12)[4]).not.toBe(parts(b.encryptedP12)[4]);
@@ -243,7 +246,7 @@ describe("signing keyring configuration", () => {
       SIGNING_MASTER_KEY_PREVIOUS: `old1:${keyB}, old2:${generateMasterKey()}`,
     });
     expect(ring?.currentId).toBe("k1");
-    expect([...(ring?.keys.keys() ?? [])].sort()).toEqual([
+    expect([...(ring?.keys.keys() ?? [])].toSorted()).toEqual([
       "k1",
       "old1",
       "old2",
