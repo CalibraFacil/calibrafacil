@@ -48,9 +48,10 @@ $$;
 -- Escape hatch. Seeded demo data rewrites history on purpose (back-dated
 -- `performed_at`, `approved_at`, ...). `SET LOCAL calibra.allow_audit_rewrite =
 -- 'on'` lifts every immutability trigger below for the current transaction only
--- (SET LOCAL reverts at COMMIT/ROLLBACK). It is a convention for
--- apps/api/src/cli/seed-demo, not a security boundary: nothing in the
--- application sets it.
+-- (SET LOCAL reverts at COMMIT/ROLLBACK). As written in this migration it was a
+-- convention for apps/api/src/cli/seed-demo, not a security boundary: any session
+-- could set it. Migration 0130 (roadmap 2 B1) gates it on the table owner
+-- (calibra_session_is_owner()): a calibra_app session that sets it lifts nothing.
 CREATE OR REPLACE FUNCTION calibra_history_rewrite_allowed()
 RETURNS boolean
 LANGUAGE sql STABLE

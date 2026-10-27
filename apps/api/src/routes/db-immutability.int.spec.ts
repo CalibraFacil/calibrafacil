@@ -19,6 +19,9 @@
  *                  with a client error instead of reaching the trigger
  *   REQ-DBIMM-008  evidence survives deletion of the organization / user that
  *                  it documents (no cascading FK, FK SET NULL still works)
+ *   REQ-EVID-4..8  (migration 0130) the application role cannot rewrite or delete
+ *                  evidence: UPDATE/DELETE/TRUNCATE are not granted, and no GUC lifts
+ *                  a guard for a session that is not the table owner
  *
  * The harness builds the schema from schema.ts and applies the migration-0115
  * section of packages/db/sql/schema-extras.sql, so these tests also prove the
@@ -56,6 +59,12 @@ import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { hardDeleteOrganizationAsPurge } from "../../test/integration/records-retention";
 import { createApiKeySecret } from "../lib/api-keys";
+import { openAppRoleDb, sqlStateOf } from "../../test/integration/rls";
+import {
+  APPEND_ONLY_EVIDENCE_TABLES,
+  NO_UPDATE_EVIDENCE_TABLES,
+} from "@calibra-facil/db/evidence-tables";
+import { createRoleDatabase } from "@calibra-facil/db/role-connection";
 import { seedExtraMember } from "../../test/integration/tenant-refs";
 import { applyJobTimeline } from "../cli/seed-demo/timeline";
 import { jobsRouter } from "./jobs";
@@ -1222,5 +1231,339 @@ describe("routes refuse writes to an issued certificate (migration 0115)", () =>
 
     expect(res.status).toBe(409);
     expect(await technicianOf(id)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The application role (calibra_app) against the evidence tables, migration 0130.
+// The specs above run as the table owner (the harness); these run a session as
+// calibra_app, the way the API, the worker and the CLI connect.
+
+const ALL_HATCHES = [
+  "calibra.allow_audit_rewrite",
+  "calibra.allow_status_repair",
+  "calibra.allow_org_purge",
+] as const;
+
+type AppDb = ReturnType<typeof openAppRoleDb>["db"];
+type AppTx = Parameters<Parameters<AppDb["transaction"]>[0]>[0];
+
+/** An org-bound transaction of calibra_app with every escape-hatch GUC set. */
+async function asAppWithHatches<T>(
+  app: AppDb,
+  orgId: string,
+  run: (tx: AppTx) => Promise<T>,
+): Promise<T> {
+  return app.transaction(async (tx) => {
+    await tx.execute(
+      sql`select set_config('calibra.organization_id', ${orgId}, true)`,
+    );
+    for (const setting of ALL_HATCHES) {
+      await tx.execute(sql`select set_config(${setting}, 'on', true)`);
+    }
+    return run(tx);
+  });
+}
+
+function textArray(values: readonly string[]) {
+  return sql.raw(
+    `ARRAY[${values.map((value) => `'${value}'`).join(",")}]::text[]`,
+  );
+}
+
+describe("calibra_app cannot rewrite or delete evidence (migration 0130)", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  it("REQ-EVID-4 [HIGH RISK]: UPDATE, DELETE and TRUNCATE on every append-only table fail with permission denied, even with every hatch GUC set", async () => {
+    const fixture = await seedFixture();
+    const app = openAppRoleDb().db;
+    const outcomes: string[] = [];
+    for (const table of APPEND_ONLY_EVIDENCE_TABLES) {
+      for (const statement of [
+        `UPDATE public."${table}" SET id = id WHERE false`,
+        `DELETE FROM public."${table}" WHERE false`,
+        `TRUNCATE public."${table}"`,
+      ]) {
+        const state = await sqlStateOf(
+          asAppWithHatches(app, fixture.orgId, (tx) =>
+            tx.execute(sql.raw(statement)),
+          ),
+        );
+        outcomes.push(`${state} ${statement}`);
+      }
+    }
+    expect(outcomes.filter((line) => !line.startsWith("42501 "))).toEqual([]);
+    expect(outcomes).toHaveLength(APPEND_ONLY_EVIDENCE_TABLES.length * 3);
+  });
+
+  it("REQ-EVID-4: an audit row of the application's own organization cannot be edited or deleted, and is unchanged afterwards", async () => {
+    const fixture = await seedFixture();
+    const jobId = await seedJob(fixture, "REVIEW", { jobId: "CAL-APP-1" });
+    const [audit] = await db
+      .insert(jobAuditLog)
+      .values({
+        organizationId: fixture.orgId,
+        jobId,
+        action: "create",
+        performedBy: fixture.userId,
+        reason: "original",
+      })
+      .returning({ id: jobAuditLog.id });
+    if (!audit) throw new Error("audit insert failed");
+    const app = openAppRoleDb().db;
+
+    expect(
+      await sqlStateOf(
+        asAppWithHatches(app, fixture.orgId, (tx) =>
+          tx
+            .update(jobAuditLog)
+            .set({ reason: "rewritten" })
+            .where(eq(jobAuditLog.id, audit.id)),
+        ),
+      ),
+    ).toBe("42501");
+    expect(
+      await sqlStateOf(
+        asAppWithHatches(app, fixture.orgId, (tx) =>
+          tx.delete(jobAuditLog).where(eq(jobAuditLog.id, audit.id)),
+        ),
+      ),
+    ).toBe("42501");
+
+    const [after] = await db
+      .select({ reason: jobAuditLog.reason })
+      .from(jobAuditLog)
+      .where(eq(jobAuditLog.id, audit.id));
+    expect(after?.reason).toBe("original");
+  });
+
+  it("REQ-EVID-4: the application keeps INSERT and SELECT on the evidence tables, and certificate_input keeps DELETE (the revert of an approval) but not UPDATE", async () => {
+    const tables = [
+      ...APPEND_ONLY_EVIDENCE_TABLES,
+      ...NO_UPDATE_EVIDENCE_TABLES,
+    ];
+    const rows = await db.execute<{
+      table_name: string;
+      priv: string;
+      granted: boolean;
+    }>(sql`
+      select t.table_name, p.priv,
+             has_table_privilege('calibra_app', format('public.%I', t.table_name), p.priv) as granted
+        from unnest(${textArray(tables)}) as t(table_name)
+       cross join (values ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE'), ('TRUNCATE')) as p(priv)`);
+    const granted = new Set(
+      Array.from(rows)
+        .filter((row) => row.granted)
+        .map((row) => `${row.table_name}:${row.priv}`),
+    );
+    for (const table of tables) {
+      expect(granted.has(`${table}:SELECT`), `${table} SELECT`).toBe(true);
+      expect(granted.has(`${table}:INSERT`), `${table} INSERT`).toBe(true);
+      expect(granted.has(`${table}:UPDATE`), `${table} UPDATE`).toBe(false);
+      expect(granted.has(`${table}:TRUNCATE`), `${table} TRUNCATE`).toBe(false);
+    }
+    for (const table of APPEND_ONLY_EVIDENCE_TABLES) {
+      expect(granted.has(`${table}:DELETE`), `${table} DELETE`).toBe(false);
+    }
+    expect(granted.has("certificate_input:DELETE")).toBe(true);
+  });
+
+  it("REQ-EVID-5 [HIGH RISK]: setting every hatch GUC as calibra_app lifts none of the trigger guards", async () => {
+    const fixture = await seedFixture();
+    const approved = await seedJob(fixture, "APPROVED", { jobId: "CAL-APP-2" });
+    const draft = await seedJob(fixture, "DRAFT", { jobId: "CAL-APP-3" });
+    const app = openAppRoleDb().db;
+
+    // The hatch functions answer no for the application, GUC set or not.
+    const hatch = await asAppWithHatches(app, fixture.orgId, (tx) =>
+      tx.execute<{ open: boolean; owner: boolean; purge: boolean }>(sql`
+        select calibra_history_rewrite_allowed() as open,
+               calibra_session_is_owner() as owner,
+               calibra_org_purge_allowed() as purge`),
+    );
+    expect(Array.from(hatch)[0]).toEqual({
+      open: false,
+      owner: false,
+      purge: false,
+    });
+
+    // 0115: a frozen job stays frozen (the application UPDATEs calibration_job, so the trigger answers).
+    const frozen = await failureOf(() =>
+      asAppWithHatches(app, fixture.orgId, (tx) =>
+        tx
+          .update(calibrationJob)
+          .set({ results: { value: 99 } })
+          .where(eq(calibrationJob.id, approved)),
+      ),
+    );
+    expect(frozen.code).toBe("P0001");
+    expect(frozen.message).toContain("column results is frozen");
+
+    // 0119: the status machine still refuses DRAFT -> APPROVED.
+    const illegal = await failureOf(() =>
+      asAppWithHatches(app, fixture.orgId, (tx) =>
+        tx
+          .update(calibrationJob)
+          .set({ status: "APPROVED" })
+          .where(eq(calibrationJob.id, draft)),
+      ),
+    );
+    expect(illegal.code).toBe("CF001");
+    expect(await statusOf(draft)).toBe("DRAFT");
+
+    // 0117: a LAB organization cannot be hard-deleted by the application.
+    const purge = await failureOf(() =>
+      asAppWithHatches(app, fixture.orgId, (tx) =>
+        tx.delete(organization).where(eq(organization.id, fixture.orgId)),
+      ),
+    );
+    expect(purge.code).toBe("P0001");
+    expect(purge.message).toContain("cannot be hard-deleted");
+
+    // 0115: an approved job cannot be deleted.
+    const deleteApproved = await failureOf(() =>
+      asAppWithHatches(app, fixture.orgId, (tx) =>
+        tx.delete(calibrationJob).where(eq(calibrationJob.id, approved)),
+      ),
+    );
+    expect(deleteApproved.code).toBe("P0001");
+  });
+
+  it("REQ-EVID-5: the same statements succeed on the owner path: the hatch is the owner's", async () => {
+    const fixture = await seedFixture();
+    const approved = await seedJob(fixture, "APPROVED", { jobId: "CAL-OWN-1" });
+    const [audit] = await db
+      .insert(jobAuditLog)
+      .values({
+        organizationId: fixture.orgId,
+        jobId: approved,
+        action: "approve",
+        performedBy: fixture.userId,
+      })
+      .returning({ id: jobAuditLog.id });
+    if (!audit) throw new Error("audit insert failed");
+
+    await db.transaction(async (tx) => {
+      for (const setting of ALL_HATCHES) {
+        await tx.execute(sql`select set_config(${setting}, 'on', true)`);
+      }
+      const hatch = await tx.execute<{ open: boolean; owner: boolean }>(
+        sql`select calibra_history_rewrite_allowed() as open, calibra_session_is_owner() as owner`,
+      );
+      expect(Array.from(hatch)[0]).toEqual({ open: true, owner: true });
+      await tx
+        .update(calibrationJob)
+        .set({ results: { value: 7 } })
+        .where(eq(calibrationJob.id, approved));
+      await tx.delete(jobAuditLog).where(eq(jobAuditLog.id, audit.id));
+    });
+    const rows = await db
+      .select({ id: jobAuditLog.id })
+      .from(jobAuditLog)
+      .where(eq(jobAuditLog.id, audit.id));
+    expect(rows).toHaveLength(0);
+  });
+
+  it("REQ-EVID-6: a non-superuser LOGIN member of calibra_app (the production shape) is not the owner, and a foreign-key action inside its session does not open the hatch", async () => {
+    const fixture = await seedFixture();
+    const login = `b1_app_login_${process.pid}`;
+    const password = "b1-test-password";
+    await db.execute(
+      sql.raw(
+        `CREATE ROLE "${login}" LOGIN PASSWORD '${password}' IN ROLE calibra_app`,
+      ),
+    );
+    const url = new URL(process.env.DATABASE_URL ?? "");
+    url.username = login;
+    url.password = password;
+    const app = createRoleDatabase(url.toString(), { role: null, max: 1 });
+    try {
+      const result = await asAppWithHatches(app.db, fixture.orgId, (tx) =>
+        tx.execute<{ who: string; owner: boolean; open: boolean }>(sql`
+          select session_user::text as who,
+                 calibra_session_is_owner() as owner,
+                 calibra_history_rewrite_allowed() as open`),
+      );
+      expect(Array.from(result)[0]).toEqual({
+        who: login,
+        owner: false,
+        open: false,
+      });
+      // Refused at the privilege layer like the SET ROLE session.
+      expect(
+        await sqlStateOf(
+          app.db.transaction((tx) =>
+            tx.execute(sql`delete from public.job_audit_log where false`),
+          ),
+        ),
+      ).toBe("42501");
+
+      // Postgres runs a foreign-key action as the table owner: with the GUC set
+      // by this session it must not open the hatch, yet a SET NULL keeps working.
+      await db
+        .insert(user)
+        .values({ id: "gone-user", name: "Gone", email: "gone@lab.test" });
+      const [event] = await db
+        .insert(organizationEventLog)
+        .values({
+          organizationId: fixture.orgId,
+          actorUserId: "gone-user",
+          action: "test.event",
+          entityType: "test",
+        })
+        .returning({ id: organizationEventLog.id });
+      if (!event) throw new Error("event insert failed");
+      await asAppWithHatches(app.db, fixture.orgId, (tx) =>
+        tx.delete(user).where(eq(user.id, "gone-user")),
+      );
+      const [kept] = await db
+        .select({ actor: organizationEventLog.actorUserId })
+        .from(organizationEventLog)
+        .where(eq(organizationEventLog.id, event.id));
+      expect(kept).toEqual({ actor: null });
+    } finally {
+      await app.close();
+      await db.execute(sql.raw(`DROP ROLE IF EXISTS "${login}"`));
+    }
+  });
+
+  it("REQ-EVID-7: ON DELETE SET NULL keeps working for the application role: deleting a user an audit row names nulls the reference and keeps the row", async () => {
+    const fixture = await seedFixture();
+    await db
+      .insert(user)
+      .values({ id: "gone-user-2", name: "Gone", email: "gone2@lab.test" });
+    const [event] = await db
+      .insert(organizationEventLog)
+      .values({
+        organizationId: fixture.orgId,
+        actorUserId: "gone-user-2",
+        action: "test.event",
+        entityType: "test",
+      })
+      .returning({ id: organizationEventLog.id });
+    if (!event) throw new Error("event insert failed");
+
+    await openAppRoleDb().db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select set_config('calibra.organization_id', ${fixture.orgId}, true)`,
+      );
+      await tx.delete(user).where(eq(user.id, "gone-user-2"));
+    });
+    const [kept] = await db
+      .select({ actor: organizationEventLog.actorUserId })
+      .from(organizationEventLog)
+      .where(eq(organizationEventLog.id, event.id));
+    expect(kept).toEqual({ actor: null });
+  });
+
+  it("REQ-EVID-8: no evidence table is the child of an ON DELETE CASCADE foreign key (a cascade runs as the owner and would skip the privileges)", async () => {
+    const rows = await db.execute<{ child: string; parent: string }>(sql`
+      select conrelid::regclass::text as child, confrelid::regclass::text as parent
+        from pg_constraint
+       where contype = 'f' and confdeltype = 'c'
+         and conrelid::regclass::text = any(${textArray(APPEND_ONLY_EVIDENCE_TABLES)})`);
+    expect(Array.from(rows)).toEqual([]);
   });
 });

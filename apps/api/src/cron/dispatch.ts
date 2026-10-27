@@ -14,6 +14,7 @@ import { createWorkerRuntimeEnv } from "../lib/runtime-env";
 import { runCron } from "./cron-run";
 import { runCertificateDriftCheck } from "../lib/certificate-drift";
 import { runRecordsPurge } from "../lib/records-purge";
+import { runAuditChainVerification } from "../lib/audit-chain";
 import { purgeSyncChangeLog } from "../lib/sync-change-log-purge";
 import { reconcileApprovalEffects } from "../lib/approval-effects-reconciler";
 import {
@@ -316,6 +317,22 @@ async function handleApprovalEffectsReconcile(request: Request) {
   );
 }
 
+// Tamper evidence of the audit trail (roadmap 2 B1): recomputes the per-organization
+// hash chain of job_audit_log, records a checkpoint of each intact head and, when a
+// chain is broken, writes the platform + organization events and notifies the
+// laboratory's admins. A broken chain fails the run, so the cron_run heartbeat and
+// the trigger's status code show it until a human resolves it. Read-only over the
+// regulated records; nothing is repaired.
+async function handleAuditChainVerify(request: Request) {
+  if (!isCronAuthorized(request)) {
+    return cronAuthFailureResponse();
+  }
+
+  return runCron("audit-chain-verify", { leaseSeconds: 900 }, () =>
+    runAuditChainVerification(),
+  );
+}
+
 export const JOB_HANDLERS: Record<
   string,
   (request: Request) => Promise<Response>
@@ -333,6 +350,7 @@ export const JOB_HANDLERS: Record<
   "records-purge": handleRecordsPurge,
   "sync-change-log-purge": handleSyncChangeLogPurge,
   "approval-effects-reconcile": handleApprovalEffectsReconcile,
+  "audit-chain-verify": handleAuditChainVerify,
 };
 
 function resolveJob(request: Request) {

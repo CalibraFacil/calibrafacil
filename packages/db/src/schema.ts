@@ -589,6 +589,13 @@ const xid8 = customType<{ data: string; driverData: string }>({
   },
 });
 
+/** Postgres `bytea`: the hash-chain columns (migration 0131). Raw bytes on the wire. */
+const bytea = customType<{ data: Uint8Array; driverData: Uint8Array }>({
+  dataType() {
+    return "bytea";
+  },
+});
+
 // The change log the desktop pull reads (protocol 3, migration 0122,
 // docs/architecture/sync-change-seq.md). Triggers on the tables the desktop mirrors
 // (sql/schema-extras.sql, `calibra_sync_change_log`) append one row per change, in
@@ -4020,6 +4027,17 @@ export const jobAuditLog = pgTable(
     performedAt: timestamp("performed_at").defaultNow().notNull(),
     ipAddress: text("ip_address"),
     reason: text("reason"), // Required for rejections, cancellations, approvals
+    // Tamper evidence (migration 0131, roadmap 2 B1): a per-organization hash chain.
+    // NEVER written by the application: the BEFORE INSERT trigger
+    // `job_audit_log_hash_chain` assigns all three under a per-organization advisory
+    // lock (a value an insert carries is overwritten). `chain_seq` counts 1, 2, 3...
+    // within the organization; `row_hash = sha256(prev_hash || canonical row)`.
+    // NULL only on an orphan row of an entity hard-deleted before migration 0118
+    // (no organization, so no chain). Verified by `calibra_audit_chain_verify` /
+    // the daily audit-chain-verify cron / `cli/verify-audit-chain.ts`.
+    chainSeq: bigint("chain_seq", { mode: "number" }),
+    prevHash: bytea("prev_hash"),
+    rowHash: bytea("row_hash"),
   },
   (table) => [
     index("job_audit_log_job_id_idx").on(table.jobId),
@@ -4028,6 +4046,11 @@ export const jobAuditLog = pgTable(
     index("job_audit_log_org_performed_at_idx").on(
       table.organizationId,
       table.performedAt,
+    ),
+    // One link per position of an organization's chain: even a trigger bypass cannot fork it.
+    uniqueIndex("job_audit_log_org_chain_seq_uidx").on(
+      table.organizationId,
+      table.chainSeq,
     ),
   ],
 );
@@ -6797,6 +6820,7 @@ export type NotificationType =
   | "STANDARD_EXPIRED" // ISO 17025 Clause 6.4.6 - Standard expired, jobs blocked
   | "SIGNING_CERTIFICATE_EXPIRING" // CMP-02 - ICP-Brasil A1 signing certificate nearing validUntil (emission is BLOCKED once it lapses, P0-8)
   | "SIGNING_CERTIFICATE_LAPSED" // P0-8 - a certificate was NOT issued because the unit's signing certificate expired/was revoked/is missing
+  | "AUDIT_CHAIN_BROKEN" // Roadmap 2 B1 - the daily verifier found a break in the audit-trail hash chain (possible tampering)
   | "ACCREDITATION_EXPIRING" // #647 - Cgcre/RBC accreditation vigência nearing validUntil (seal stops rendering once expired)
   | "ACCREDITED_SCOPE_LINE_EXPIRING" // #427 Phase 2 - a scope line's vigência nearing validUntil (points stop matching once expired)
   | "JOB_OVERDUE"

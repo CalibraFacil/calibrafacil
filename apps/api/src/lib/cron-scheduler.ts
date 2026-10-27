@@ -25,6 +25,7 @@ export const CRON_ENTRIES: readonly CronEntry[] = [
   { path: "/api/cron/records-purge", schedule: "0 5 * * 0" },
   { path: "/api/cron/sync-change-log-purge", schedule: "15 4 * * *" },
   { path: "/api/cron/approval-effects-reconcile", schedule: "45 3 * * *" },
+  { path: "/api/cron/audit-chain-verify", schedule: "45 4 * * *" },
 ];
 
 /**

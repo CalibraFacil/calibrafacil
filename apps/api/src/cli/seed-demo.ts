@@ -30,7 +30,7 @@
 import { systemDb as ownerDb } from "@calibra-facil/db";
 import { assetType, organization } from "@calibra-facil/db/schema";
 import { seedAssetTypes } from "@calibra-facil/db/seed-asset-types";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { createSeedApi, LAB_ID } from "./seed-demo/api";
 import { ageFoundations, seedAssetCalibrationDates } from "./seed-demo/aging";
@@ -196,6 +196,14 @@ async function main() {
     console.log("Finishing touches");
     await seedAssetCalibrationDates(ctx, assets);
     await ageFoundations(ctx);
+
+    // The seed back-dates audit rows (timeline.ts, inside the owner's history-rewrite
+    // transaction), which changes what the audit-trail hash chain (migration 0131) hashed
+    // when each row was written. Seal the demo laboratory's chain again, on the owner path:
+    // a rebuild rewrites history on purpose, which is only right for made-up data.
+    await ownerDb.execute(
+      sql`select calibra_audit_chain_backfill('job_audit_log', ${LAB_ID}, true)`,
+    );
 
     await ownerDb
       .update(organization)

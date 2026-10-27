@@ -199,15 +199,26 @@ describe("REQ-RET-3 / REQ-RET-4: organization columns and SQL objects", () => {
   it("REQ-RET-3: schema-extras.sql repeats the retention objects of migration 0117", () => {
     const migration = normalized(read("../drizzle/0117_records_retention.sql"));
     const extras = normalized(read("../sql/schema-extras.sql"));
-    const shared = migration.slice(
-      migration.indexOf(
-        "ALTER TABLE organization DROP CONSTRAINT IF EXISTS organization_retention_years_min",
-      ),
+    const start = migration.indexOf(
+      "ALTER TABLE organization DROP CONSTRAINT IF EXISTS organization_retention_years_min",
     );
-    expect(shared).toContain("calibra_org_purge_allowed");
+    // calibra_org_purge_allowed is redefined by migration 0130 (gated on the
+    // table owner, covered by immutability-sql-sync.test.ts): the extras carry
+    // that newer version, so everything but that one function is compared here.
+    const purgeFunction = migration.indexOf(
+      "CREATE OR REPLACE FUNCTION calibra_org_purge_allowed",
+    );
+    const guardFunction = migration.indexOf(
+      "CREATE OR REPLACE FUNCTION calibra_organization_delete_guard",
+    );
+    const constraints = migration.slice(start, purgeFunction);
+    const shared = migration.slice(guardFunction);
+    expect(migration).toContain("calibra_org_purge_allowed");
     expect(shared).toContain("organization_lab_delete_guard");
     expect(shared).toContain("calibra_retain_until");
+    expect(extras).toContain(constraints.trim());
     expect(extras).toContain(shared);
+    expect(extras).toContain("calibra_org_purge_allowed");
   });
 
   it("REQ-RET-3: the migration is journaled after 0116 with a larger timestamp", () => {

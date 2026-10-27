@@ -9,6 +9,8 @@
  * only two callers allowed to lift that guard, for the length of one
  * transaction, are the records purge job (records-purge.ts) and the cleanup of
  * an organization that was created a moment ago and holds no record at all.
+ * Both run on the owner connection (`systemDb`): Postgres honours the setting
+ * for the table owner only (migration 0130), never for `calibra_app`.
  */
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { systemDb } from "@calibra-facil/db";
@@ -25,7 +27,6 @@ import {
 } from "@calibra-facil/db/records-retention";
 import { getExecuteRows } from "./db";
 import { orgDb } from "./org-db";
-import { orgTransactionWithExecutor } from "./org-transaction";
 
 export const SOFT_DELETE_SUSPENSION_REASON =
   "Organização excluída: registros regulados retidos";
@@ -44,7 +45,7 @@ export async function evidenceTablesHoldingRecords(
   organizationId: string,
   // Default: the system path. The probe is one EXISTS per evidence table, each
   // already bound to the organization by `organizationScopeSql`; a caller that
-  // holds an organization-naming transaction (removeLabOrganization) passes it.
+  // holds its own transaction (removeLabOrganization) passes it.
   executor: Executor = systemDb,
 ): Promise<string[]> {
   const probes = listEvidenceTables()
@@ -178,38 +179,39 @@ export async function removeLabOrganization(input: {
   deletedBy: string | null;
   reason: string;
 }): Promise<RemoveLabOrganizationOutcome> {
-  // The organization-naming transaction hands the raw one to the callees that
-  // run raw SQL (`execute`): the evidence probe and the purge-only setting.
-  const hardDeleted = await orgTransactionWithExecutor(
-    input.organizationId,
-    async (_labDb, tx) => {
-      const [locked] = await tx
-        .select({ type: organization.type })
-        .from(organization)
-        .where(eq(organization.id, input.organizationId))
-        .for("update");
-      if (!locked) return { status: "not_found" } as const;
-      if (locked.type !== null && locked.type !== "LAB") {
-        return { status: "not_lab" } as const;
-      }
+  // The system path (the table owner), on purpose: the hard delete lifts the
+  // guard of the `organization` row with `calibra.allow_org_purge`, which
+  // Postgres honours for the table owner only (migration 0130; a calibra_app
+  // session that sets it lifts nothing). The proof that the organization holds
+  // no evidence and the delete share this one transaction and the row lock
+  // taken by the check; every statement of it names the organization.
+  const hardDeleted = await systemDb.transaction(async (tx) => {
+    const [locked] = await tx
+      .select({ type: organization.type })
+      .from(organization)
+      .where(eq(organization.id, input.organizationId))
+      .for("update");
+    if (!locked) return { status: "not_found" } as const;
+    if (locked.type !== null && locked.type !== "LAB") {
+      return { status: "not_lab" } as const;
+    }
 
-      const recordTables = await evidenceTablesHoldingRecords(
-        input.organizationId,
-        tx,
-      );
-      if (recordTables.length > 0) {
-        return { status: "has_records", recordTables } as const;
-      }
+    const recordTables = await evidenceTablesHoldingRecords(
+      input.organizationId,
+      tx,
+    );
+    if (recordTables.length > 0) {
+      return { status: "has_records", recordTables } as const;
+    }
 
-      await tx.execute(
-        sql`select set_config('calibra.allow_org_purge', 'on', true)`,
-      );
-      await tx
-        .delete(organization)
-        .where(eq(organization.id, input.organizationId));
-      return { status: "hard_deleted" } as const;
-    },
-  );
+    await tx.execute(
+      sql`select set_config('calibra.allow_org_purge', 'on', true)`,
+    );
+    await tx
+      .delete(organization)
+      .where(eq(organization.id, input.organizationId));
+    return { status: "hard_deleted" } as const;
+  });
 
   if (hardDeleted.status !== "has_records") return hardDeleted;
 

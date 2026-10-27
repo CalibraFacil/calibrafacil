@@ -204,6 +204,14 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "cron-queue",
+    file: "apps/api/src/lib/audit-chain.ts",
+    tables: ["job_audit_log"],
+    kinds: ["select"],
+    reason:
+      "System path (roadmap 2 B1, systemDb): the audit-chain verifier lists which laboratories hold audit rows (one EXISTS per organization row) to recompute each one's hash chain (platform integrity job, not request-scoped, like the certificate drift sweep). The chain itself is read through calibra_audit_chain_verify(table, organization), which names the laboratory; its findings are written in orgDb(organizationId).transaction.",
+  },
+  {
+    category: "cron-queue",
     file: "packages/db/src/queue-render-recovery.ts",
     tables: ["calibration_job"],
     kinds: ["select"],

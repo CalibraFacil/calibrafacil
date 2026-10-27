@@ -16,8 +16,12 @@
 --   * Escape hatch for audited data repair, same convention as the immutability
 --     triggers of migration 0115: `SET LOCAL calibra.allow_status_repair = 'on'`
 --     inside a transaction (reverts at COMMIT/ROLLBACK). The seed hatch
---     `calibra.allow_audit_rewrite` lifts it as well. Nothing in the application
---     sets either.
+--     `calibra.allow_audit_rewrite` lifts it as well. As written here they were
+--     conventions: any session could set them. Since migration 0130 (roadmap 2 B1)
+--     both work for a session of the table owner only (calibra_session_is_owner()),
+--     so the application role (calibra_app) cannot lift the guard by setting them;
+--     they are for the owner connection: an operator's audited repair, the demo
+--     seed, the records purge and the test harness.
 --
 -- Existing rows are not re-validated: production data that already sits in a
 -- state the table would not produce does not block this migration; the trigger

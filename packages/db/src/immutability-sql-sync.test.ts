@@ -21,14 +21,34 @@ describe("immutability SQL: migration 0115 and schema-extras.sql", () => {
     const migration = normalized("../drizzle/0115_db_immutability.sql");
     const extras = normalized("../sql/schema-extras.sql");
 
-    // Everything after the foreign-key drop (the first statement) is shared.
+    // Everything after the escape-hatch function is shared. The hatch function
+    // itself is redefined by migration 0130 (gated on the table owner), so the
+    // extras carry that newer version; it is checked below.
     const shared = migration.slice(
-      migration.indexOf(
-        "CREATE OR REPLACE FUNCTION calibra_history_rewrite_allowed",
-      ),
+      migration.indexOf("CREATE OR REPLACE FUNCTION calibra_append_only"),
     );
     expect(shared).toContain("calibra_append_only");
     expect(shared).toContain("calibra_calibration_job_guard");
     expect(extras).toContain(shared);
+  });
+
+  it("schema-extras.sql carries the owner-gated escape-hatch functions of migration 0130", () => {
+    const migration = normalized(
+      "../drizzle/0130_evidence_privileges_owner_hatch.sql",
+    );
+    const extras = normalized("../sql/schema-extras.sql");
+    const hatch = migration.slice(
+      migration.indexOf("CREATE OR REPLACE FUNCTION calibra_session_is_owner"),
+      migration.indexOf(
+        "CREATE OR REPLACE FUNCTION calibra_calibration_job_status_guard",
+      ),
+    );
+    expect(hatch).toContain("calibra_history_rewrite_allowed");
+    expect(hatch).toContain("calibra_org_purge_allowed");
+    const statements = hatch.split(/(?=CREATE OR REPLACE FUNCTION)/);
+    expect(statements).toHaveLength(3);
+    for (const statement of statements) {
+      expect(extras).toContain(statement.trim());
+    }
   });
 });

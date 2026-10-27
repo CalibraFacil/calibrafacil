@@ -15,6 +15,10 @@
 // table cannot ship without a migration that carries it.
 import { is } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
+import {
+  APPEND_ONLY_EVIDENCE_TABLES,
+  NO_UPDATE_EVIDENCE_TABLES,
+} from "./evidence-tables";
 import * as schema from "./schema";
 import { classifyTables, TENANT_COLUMNS } from "./tenancy";
 
@@ -159,3 +163,40 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${APP_ROL
 GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO ${APP_ROLE};
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${APP_ROLE};
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE ON SEQUENCES TO ${APP_ROLE};`;
+
+export const EVIDENCE_GRANTS_BEGIN =
+  "-- BEGIN generated: calibra_evidence_grants";
+export const EVIDENCE_GRANTS_END = "-- END generated: calibra_evidence_grants";
+
+function byName(names: readonly string[]): string[] {
+  return [...names].sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * What the application role may NOT do to the evidence tables (evidence-tables.ts):
+ * the privileges layer of ISO/IEC 17025 7.5.2 / 8.4 immutability. Generated from the
+ * lists there, pasted verbatim into the migration that (re)defines it and into
+ * sql/schema-extras.sql (`pnpm --filter @calibra-facil/db gen:rls-sql evidence`);
+ * rls-sql.test.ts fails when either copy differs.
+ *
+ * It must run AFTER `RLS_ROLE_SQL`: that statement grants UPDATE and DELETE on
+ * ALL TABLES (and as a default privilege), so every migration that repeats it
+ * repeats this block right after it. Idempotent (REVOKE of a privilege that is not
+ * held is a no-op). Only the table owner can GRANT the privilege back.
+ */
+export function evidenceGrantsBlock(): string {
+  const appendOnly = byName(APPEND_ONLY_EVIDENCE_TABLES).map(
+    (table) =>
+      `REVOKE UPDATE, DELETE, TRUNCATE ON public.${ident(table)} FROM ${APP_ROLE};`,
+  );
+  const noUpdate = byName(NO_UPDATE_EVIDENCE_TABLES).map(
+    (table) =>
+      `REVOKE UPDATE, TRUNCATE ON public.${ident(table)} FROM ${APP_ROLE};`,
+  );
+  return [
+    EVIDENCE_GRANTS_BEGIN,
+    ...appendOnly,
+    ...noUpdate,
+    EVIDENCE_GRANTS_END,
+  ].join("\n");
+}

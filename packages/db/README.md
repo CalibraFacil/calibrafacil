@@ -81,9 +81,22 @@ pnpm --filter @calibra-facil/db gen:job-transitions-sql   # prints the generated
   (SQLSTATE `CF001`); inserts are accepted only in `DRAFT`.
 - When the table changes, ship a **new** migration with the regenerated function and update
   `sql/schema-extras.sql`; `src/job-transitions-sql.test.ts` fails until both match.
-- Audited repair: `SET LOCAL calibra.allow_status_repair = 'on'` inside a transaction (an APPROVED or
-  SUPERSEDED job also needs `calibra.allow_audit_rewrite`, the immutability hatch of migration 0115). See
+- Audited repair: `SET LOCAL calibra.allow_status_repair = 'on'` inside a transaction on the OWNER connection
+  (an APPROVED or SUPERSEDED job also needs `calibra.allow_audit_rewrite`, the immutability hatch of
+  migration 0115). Both hatches only work for the table owner since migration 0130; `calibra_app` cannot lift
+  a guard by setting them, and has no UPDATE/DELETE on the evidence tables (`src/evidence-tables.ts`). See
   `DEPLOYMENT.md`.
+
+### Audit hash chain (migration 0128)
+
+`job_audit_log` rows are linked per organization (`chain_seq`, `prev_hash`, `row_hash`) by a `BEFORE INSERT`
+trigger that serialises writers of one organization with an advisory transaction lock. The SQL functions
+`calibra_audit_chain_verify` / `_head` / `_link_hash` recompute and read a chain, `calibra_audit_chain_backfill`
+(owner only) links rows that have no link. `apps/api` verifies every laboratory daily (`audit-chain-verify`
+cron) and on demand (`pnpm --dir apps/api verify-audit-chain`). The functions are generated nowhere: they are
+repeated verbatim between the markers of the migration and `sql/schema-extras.sql`
+(`src/audit-chain-sql.test.ts` keeps them equal, and the hashed column list equal to the table's columns).
+See `DEPLOYMENT.md`.
 
 ## Environment Variables
 
