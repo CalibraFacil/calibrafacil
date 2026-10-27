@@ -37,13 +37,54 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
+  # Roadmap 2 G4: no image is published for a commit the post-merge Safety net
+  # has not passed. The release commit's own Safety net run starts with this
+  # workflow (both on the push to main); wait for it, and stop on anything but
+  # success.
+  safety-net-gate:
+    name: Safety net passed on the release commit
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      actions: read
+    steps:
+      - name: Wait for the Safety net run of ${{ github.sha }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          for attempt in $(seq 1 110); do
+            run=$(gh run list --repo "$REPO" --workflow safety-net.yml --commit "$SHA" \
+              --event push --limit 1 --json status,conclusion,url \
+              --jq '.[0] // empty')
+            if [ -n "$run" ]; then
+              status=$(jq -r .status <<< "$run")
+              conclusion=$(jq -r .conclusion <<< "$run")
+              echo "Safety net: $status ${conclusion} ($(jq -r .url <<< "$run"))"
+              if [ "$status" = "completed" ]; then
+                [ "$conclusion" = "success" ] && exit 0
+                echo "::error::The Safety net did not pass on $SHA; no images are published."
+                exit 1
+              fi
+            else
+              echo "No Safety net run for $SHA yet (attempt $attempt)."
+            fi
+            sleep 60
+          done
+          echo "::error::Timed out waiting for the Safety net on $SHA."
+          exit 1
+
   docker-images:
     name: Docker images
-    needs: release-please
+    needs: [release-please, safety-net-gate]
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     permissions:
       contents: read
       packages: write
+      id-token: write
     uses: ./.github/workflows/docker-images.yml
     with:
       version: ${{ needs.release-please.outputs.version }}

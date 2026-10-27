@@ -4,7 +4,7 @@
 #   docker build -f Dockerfile.api -t calibrafacil-api .
 #
 # Configure it with the environment variables listed in DEPLOYMENT.md.
-FROM node:24-bookworm-slim AS build
+FROM node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS build
 
 # pnpm itself comes from the "packageManager" field of package.json.
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
@@ -15,7 +15,8 @@ COPY . .
 # Only the API and the workspace packages it imports, without dev tooling.
 RUN pnpm install --frozen-lockfile --prod --filter "@calibra-facil/api..."
 
-FROM oven/bun:1-slim
+# The Bun of .bun-version (what CI runs), pinned by digest; Dependabot bumps both.
+FROM oven/bun:1.4.3-slim@sha256:14a223fa35747ec728bce300ef85888bc5f7958164d15bbba6a54b22b52a3288
 
 ENV NODE_ENV=production
 WORKDIR /repo
