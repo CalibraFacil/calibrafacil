@@ -1,7 +1,11 @@
-import { cloneElement, isValidElement, useId, useMemo } from "react";
+import { Children, cloneElement, isValidElement, useId, useMemo } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "../lib/utils";
+import {
+  FieldControlIdContext,
+  useFieldControlId,
+} from "./field-control-context";
 import { Label } from "./label";
 import { Separator } from "./separator";
 
@@ -102,17 +106,23 @@ type FieldProps = LabelledFieldProps | ComposableFieldProps;
 
 function Field(props: FieldProps) {
   const generatedId = useId();
+  const composableControlId = useMemo(
+    () => `field-${generatedId}`,
+    [generatedId],
+  );
 
   if (props.label === undefined) {
     const { className, orientation = "vertical", ...rest } = props;
     return (
-      <div
-        role="group"
-        data-slot="field"
-        data-orientation={orientation}
-        className={cn(fieldVariants({ orientation }), className)}
-        {...rest}
-      />
+      <FieldControlIdContext.Provider value={composableControlId}>
+        <div
+          role="group"
+          data-slot="field"
+          data-orientation={orientation}
+          className={cn(fieldVariants({ orientation }), className)}
+          {...rest}
+        />
+      </FieldControlIdContext.Provider>
     );
   }
 
@@ -187,10 +197,20 @@ function FieldContent({ className, ...props }: React.ComponentProps<"div">) {
 
 function FieldLabel({
   className,
+  htmlFor,
+  children,
   ...props
 }: React.ComponentProps<typeof Label>) {
+  const controlId = useFieldControlId();
+  // Only a plain-text label points at the Field's control: a label that wraps
+  // its control (a choice card) is associated by containment, and an htmlFor
+  // there would take the click away from what it wraps.
+  const textOnly = Children.toArray(children).every(
+    (child) => typeof child === "string" || typeof child === "number",
+  );
   return (
     <Label
+      htmlFor={htmlFor ?? (textOnly ? controlId : undefined)}
       data-slot="field-label"
       className={cn(
         "has-data-checked:bg-primary/5 has-data-checked:border-primary dark:has-data-checked:bg-primary/10 gap-2 group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-md has-[>[data-slot=field]]:border [&>*]:data-[slot=field]:p-3 group/field-label peer/field-label flex w-fit leading-snug",
@@ -198,7 +218,9 @@ function FieldLabel({
         className,
       )}
       {...props}
-    />
+    >
+      {children}
+    </Label>
   );
 }
 
@@ -312,6 +334,7 @@ function FieldError({
 }
 
 export {
+  useFieldControlId,
   Field,
   FieldLabel,
   FieldDescription,
