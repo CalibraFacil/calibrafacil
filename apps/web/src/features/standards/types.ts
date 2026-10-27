@@ -44,8 +44,21 @@ export type ImpactedCertificate = {
   alreadyNotified: boolean
 }
 
+/** A job still on its way to a certificate that uses the recalled standard. */
+export type InFlightRecallJob = {
+  jobId: number
+  certificateNumber: string
+  status: string
+  performedAt: string | null
+  customer: {
+    id: number
+    name: string
+  }
+}
+
 export type ImpactedCertificatesData = {
   data: ImpactedCertificate[]
+  inFlight: InFlightRecallJob[]
   window: { from: string; to: string }
 }
 

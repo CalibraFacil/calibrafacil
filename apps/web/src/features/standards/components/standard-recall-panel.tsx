@@ -40,6 +40,7 @@ import {
 } from '@/features/standards/queries'
 import type {
   ImpactedCertificate,
+  InFlightRecallJob,
   StandardRecall,
   StandardRecallAcknowledgedVia,
   StandardRecallNotification,
@@ -281,6 +282,10 @@ function RecallDraftWizard({
         </>
       )}
 
+      {!hideNotified && (impacted?.inFlight.length ?? 0) > 0 ? (
+        <InFlightJobsTable rows={impacted?.inFlight ?? []} />
+      ) : null}
+
       <div className="flex flex-wrap items-center gap-3">
         <ShowForRole role={['owner', 'admin']}>
           <Button
@@ -347,6 +352,70 @@ function RecallDraftWizard({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+const IN_FLIGHT_STATUS_LABELS: Record<string, string> = {
+  DRAFT: 'Rascunho',
+  IN_PROGRESS: 'Em execução',
+  REVIEW: 'Em revisão',
+  GENERATING_PDF: 'Gerando certificado',
+}
+
+/**
+ * Jobs that still use the recalled standard and have no certificate yet
+ * (ISO/IEC 17025 §6.4, §7.10). The API refuses their submission and approval
+ * while the standard is not active; a job already generating its certificate
+ * was approved before the recall and needs a decision from the laboratory.
+ */
+function InFlightJobsTable({ rows }: { rows: InFlightRecallJob[] }) {
+  return (
+    <div className="space-y-2">
+      <div>
+        <h4 className="text-sm font-medium">
+          Calibrações em andamento com este padrão
+        </h4>
+        <p className="text-sm text-muted-foreground">
+          Ainda sem certificado emitido. A aprovação é recusada enquanto o
+          padrão estiver fora de tolerância; substitua o padrão na calibração e
+          submeta-a novamente. Uma calibração já em geração de certificado foi
+          aprovada antes do recall: avalie-a antes de liberar.
+        </p>
+      </div>
+      <div className={TABLE_WRAPPER_CLASS}>
+        <table className="w-full min-w-[36rem] text-sm">
+          <thead>
+            <tr className="border-b border-border/70 bg-muted/40">
+              <th className={TH_CLASS}>Calibração</th>
+              <th className={TH_CLASS}>Cliente</th>
+              <th className={TH_CLASS}>Executada em</th>
+              <th className={TH_CLASS}>Situação</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr
+                key={row.jobId}
+                className="border-b border-border/70 transition-colors last:border-0 hover:bg-muted/35"
+              >
+                <td className="px-3 py-2.5 font-mono tabular-nums">
+                  {row.certificateNumber}
+                </td>
+                <td className="px-3 py-2.5">{row.customer.name}</td>
+                <td className="px-3 py-2.5 font-mono tabular-nums">
+                  {formatStandardDate(row.performedAt)}
+                </td>
+                <td className="px-3 py-2.5">
+                  <Badge variant="outline">
+                    {IN_FLIGHT_STATUS_LABELS[row.status] ?? row.status}
+                  </Badge>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

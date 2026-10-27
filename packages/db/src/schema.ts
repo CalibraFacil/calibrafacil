@@ -3956,6 +3956,20 @@ export const calibrationJob = pgTable(
       .defaultNow()
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
+    // Submission tracking (ISO/IEC 17025 §6.2.4, impartiality): WHO moved the job
+    // to REVIEW, and when. Written by the submit command (every entry point: cloud
+    // route, public API, desktop sync) and overwritten by a resubmission, so it is
+    // always the person whose work is under review. Separation of duties at
+    // approval is checked against this actor, not only against the assigned
+    // technician or the creator. Null on a job that never reached REVIEW and on
+    // jobs approved before the column existed (migration 0134 backfills the rest
+    // from `job_audit_log`). RESTRICT, not SET NULL: an approved job is frozen
+    // (`calibra_calibration_job_guard`), so a referential SET NULL could not
+    // rewrite it; the submitter is also named by the append-only audit row.
+    submittedBy: text("submitted_by").references(() => user.id, {
+      onDelete: "restrict",
+    }),
+    submittedAt: timestamp("submitted_at"),
     // Approval tracking
     approvedBy: text("approved_by").references(() => user.id, {
       onDelete: "set null",

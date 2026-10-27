@@ -6,6 +6,7 @@ import {
   jobStandard,
   ootNotification,
   standardRecall,
+  type JobStatus,
   type StandardSnapshot,
 } from "@calibra-facil/db/schema";
 import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
@@ -198,5 +199,69 @@ export async function findImpactedCertificates(
       ? (replacementNumberById.get(row.supersededById) ?? null)
       : null,
     alreadyNotified: notifiedJobIds.has(row.jobId),
+  }));
+}
+
+/**
+ * The statuses of a job that is still on its way to a certificate: a recalled
+ * standard on any of them reaches a NEW certificate unless somebody acts.
+ * GENERATING_PDF is already approved (the worker is rendering it): it is
+ * listed so the laboratory can stop or amend it, not because approval can still
+ * refuse it.
+ */
+export const IN_FLIGHT_JOB_STATUSES = [
+  "DRAFT",
+  "IN_PROGRESS",
+  "REVIEW",
+  "GENERATING_PDF",
+] as const satisfies readonly JobStatus[];
+
+export type InFlightJob = {
+  jobId: number;
+  certificateNumber: string;
+  status: string;
+  performedAt: Date | null;
+  customer: { id: number; name: string };
+};
+
+/**
+ * Recall impact beyond the issued certificates (roadmap 2 B5, ISO/IEC 17025
+ * §6.4, §7.10): the jobs in flight (`IN_FLIGHT_JOB_STATUSES`) that carry the
+ * standard in their saved snapshot (the `job_standard` projection). Not
+ * date-bounded: none of them is issued yet. Tenant-scoped in SQL.
+ */
+export async function findInFlightJobsUsingStandard(
+  input: { standardId: number; organizationId: string },
+  /** The org-bound handle of the caller's transaction (row-level security). */
+  executor: Pick<OrgExecutor, "select"> = db,
+): Promise<InFlightJob[]> {
+  const rows = await executor
+    .select({
+      jobId: calibrationJob.id,
+      certificateNumber: calibrationJob.jobId,
+      status: calibrationJob.status,
+      performedAt: calibrationJob.performedAt,
+      customerId: customer.id,
+      customerName: customer.name,
+    })
+    .from(jobStandard)
+    .innerJoin(calibrationJob, eq(jobStandard.jobId, calibrationJob.id))
+    .innerJoin(customer, eq(calibrationJob.customerId, customer.id))
+    .where(
+      and(
+        eq(jobStandard.standardId, input.standardId),
+        eq(jobStandard.organizationId, input.organizationId),
+        eq(calibrationJob.organizationId, input.organizationId),
+        inArray(calibrationJob.status, [...IN_FLIGHT_JOB_STATUSES]),
+      ),
+    )
+    .orderBy(desc(calibrationJob.updatedAt));
+
+  return rows.map((row) => ({
+    jobId: row.jobId,
+    certificateNumber: row.certificateNumber,
+    status: row.status,
+    performedAt: row.performedAt,
+    customer: { id: row.customerId, name: row.customerName },
   }));
 }

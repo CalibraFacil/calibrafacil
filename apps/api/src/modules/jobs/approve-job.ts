@@ -4,14 +4,14 @@ import {
   appendJobEvent,
   type JobApprovedChanges,
 } from "@calibra-facil/db/job-events";
-import { calibrationJob, member } from "@calibra-facil/db/schema";
+import { calibrationJob } from "@calibra-facil/db/schema";
 import type { ApproveJobSchema, QueueMessage } from "@calibra-facil/schemas";
 import {
   allowedFrom,
   canTransition,
   requireTargetOf,
 } from "@calibra-facil/schemas/job-transitions";
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { z } from "zod";
 import {
   getCalibrationAuthorizationRole,
@@ -38,6 +38,12 @@ import {
   type AssetCalibrationAdvanceApplied,
 } from "../../lib/asset-calibration-advance";
 import { checkApproverIsAuthorizedSignatory } from "../../lib/signatory";
+import {
+  laboratoryIsAccredited,
+  selfApprovalBlocked,
+  standardsRefusalAtApproval,
+} from "./approval-gates";
+import type { StandardsRefusal } from "./standards-judgement";
 import {
   CertificateImagesChangedError,
   type CertificateImageKeys,
@@ -119,6 +125,18 @@ export type ApproveJobResult =
   | { status: "role_not_permitted" }
   | { status: "self_approval_blocked" }
   | { status: "not_authorized_signatory" }
+  /**
+   * An accredited laboratory (Q45) keeps no active authorized-signatory
+   * roster: nobody is authorized to release a certificate, so the approval
+   * fails closed instead of letting every approver through.
+   */
+  | { status: "signatory_roster_empty" }
+  /**
+   * A reference standard of the job is no longer fit (deleted, recalled or in
+   * quarantine, or it was out of its calibration validity on the day the work
+   * was performed): re-judged at approval with the one standards judgement.
+   */
+  | { status: "standards_refused"; refusal: StandardsRefusal }
   | {
       /**
        * The certificate job could not be dispatched after the approval
@@ -347,59 +365,80 @@ export async function approveJob(
         };
       }
 
-      // Separation of duties (ISO/IEC 17025 §6.2.4 / §7.1): the technician who
-      // executed — or the user who created — the calibration must not approve
-      // their own work. Auto-detected like the personnel-competence gate: it is
-      // enforced only when the organization actually has an *eligible alternate
-      // approver*, so a genuine solo lab — or one whose only other members are
-      // technicians/operators who cannot approve — is exempt rather than left
-      // with a REVIEW job nobody can release. An eligible approver is another
-      // member whose role grants `calibration.approve`, which access.ts grants
-      // to admin/owner only; both are global multi-unit roles, so any such
-      // member can access the job's unit by construction (no unit-scope join
-      // needed here).
-      if (
-        existing.technicianId === approverId ||
-        existing.createdBy === approverId
-      ) {
-        const [alternateApprover] = await o
-          .select({ id: member.id })
-          .from(member)
-          .where(
-            and(
-              eq(member.organizationId, memberData.organizationId),
-              inArray(member.role, ["admin", "owner"]),
-              ne(member.userId, approverId),
-            ),
-          )
-          .limit(1);
+      // The gates below are mandatory for an accredited laboratory (Q45) and
+      // auto-detected for one that is not.
+      const accredited = await laboratoryIsAccredited(
+        memberData.organizationId,
+        o,
+      );
 
-        if (alternateApprover) {
-          return {
-            kind: "refused",
-            result: { status: "self_approval_blocked" },
-          };
-        }
+      // Separation of duties (ISO/IEC 17025 §6.2.4 / §7.1): whoever did the work
+      // must not approve it: the assigned technician, the creator, and the member
+      // who ACTUALLY submitted the job for review (`submitted_by`, recorded by the
+      // submit command: the assignee and the submitter can be different people).
+      // An accredited laboratory has no exemption. Otherwise the gate is enforced
+      // only when the organization has an *eligible alternate approver*, so a
+      // genuine solo lab (or one whose only other members cannot approve) is not
+      // left with a REVIEW job nobody can release.
+      if (
+        await selfApprovalBlocked(
+          {
+            job: existing,
+            organizationId: memberData.organizationId,
+            approverId,
+            accredited,
+          },
+          o,
+        )
+      ) {
+        return {
+          kind: "refused",
+          result: { status: "self_approval_blocked" },
+        };
       }
 
       // Authorized-signatory scope (ISO/IEC 17025 §6.2.6): when the organization
       // maintains a signatory roster, the approver must be authorized to sign for
       // this instrument's asset type (or be an org-wide signatory). Auto-detected
-      // — skipped when the org has no signatory records. Distinct from execution
-      // competence (which gates the technician at assignment) and from the
-      // self-approval gate above — four-eyes by identity vs. signatory scope.
+      // for a laboratory that is not accredited (skipped when it has no signatory
+      // records); MANDATORY for an accredited one, where an empty roster refuses
+      // (nobody is authorized). Distinct from execution competence (which gates the
+      // technician at assignment) and from the self-approval gate above.
       const signatoryGate = await checkApproverIsAuthorizedSignatory(
         {
           organizationId: memberData.organizationId,
           approverId,
           assetId: existing.assetId,
+          mandatory: accredited,
         },
         o,
       );
       if (!signatoryGate.ok) {
         return {
           kind: "refused",
-          result: { status: "not_authorized_signatory" },
+          result:
+            signatoryGate.reason === "empty_roster"
+              ? { status: "signatory_roster_empty" }
+              : { status: "not_authorized_signatory" },
+        };
+      }
+
+      // Reference standards, re-judged now (ISO/IEC 17025 §6.4, §7.10): between
+      // the submit and the release a standard can be recalled, quarantined or
+      // deleted, and the one judgement also holds that each was valid on the day
+      // the work was performed.
+      const standardsRefusal = await standardsRefusalAtApproval(
+        {
+          job: existing,
+          organizationId: memberData.organizationId,
+          now: new Date(),
+        },
+        o,
+      );
+      if (standardsRefusal) {
+        return {
+          kind: "refused",
+          result: { status: "standards_refused", refusal: standardsRefusal },
         };
       }
 

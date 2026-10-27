@@ -84,12 +84,29 @@ export async function judgeSnapshotStandards(
     backdateReason?: string | null;
     mode: StandardsJudgementMode;
     requireBackdateReason?: boolean;
+    /**
+     * The APPROVAL re-judgement: only a status that says a problem was found
+     * (OUT_OF_TOLERANCE, i.e. recalled) counts against a standard. INACTIVE
+     * (retired) and SENT_FOR_CALIBRATION are ordinary lifecycle steps that
+     * follow a measurement made while the standard was valid; the status model
+     * cannot tell a quarantine for a problem from a routine calibration, so they
+     * do not block. Deleted, not found and expired on the performed date still
+     * refuse. Default false: the submit keeps the strict rule (ACTIVE only).
+     */
+    lifecycleStatusesAfterTheWorkAreFine?: boolean;
   },
   // The caller's org-bound handle (row-level security); absent, a short
   // transaction of its own that names the laboratory.
   executor?: Pick<OrgExecutor, "select">,
 ): Promise<StandardsJudgement> {
-  const facts = await loadStandardFacts(input, executor);
+  const loaded = await loadStandardFacts(input, executor);
+  const facts = input.lifecycleStatusesAfterTheWorkAreFine
+    ? loaded.map((fact) =>
+        fact.status === "INACTIVE" || fact.status === "SENT_FOR_CALIBRATION"
+          ? { ...fact, status: "ACTIVE" }
+          : fact,
+      )
+    : loaded;
   return judgeExecutionStandards(
     {
       standardIds: input.standardIds,
@@ -170,6 +187,18 @@ export function standardsRefusalDomainError(refusal: StandardsRefusal) {
   return invalid(
     standardsRefusalApiCode(refusal),
     standardsRefusalMessage(refusal),
+    { details: { standardIds: refusal.standardIds } },
+  );
+}
+
+/**
+ * The same refusal when it is the APPROVAL that re-judged the standards: the
+ * stable code and details are unchanged, the message says what to do about it.
+ */
+export function approvalStandardsRefusalDomainError(refusal: StandardsRefusal) {
+  return invalid(
+    standardsRefusalApiCode(refusal),
+    `${standardsRefusalMessage(refusal)}. A aprovação foi recusada: os padrões de referência são julgados novamente na liberação do certificado (ISO/IEC 17025 §6.4). Substitua o padrão na calibração e submeta-a novamente.`,
     { details: { standardIds: refusal.standardIds } },
   );
 }

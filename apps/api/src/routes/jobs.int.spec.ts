@@ -36,6 +36,7 @@ import {
 import { db } from "@calibra-facil/db";
 import {
   accreditedScopeLine,
+  authorizedSignatory,
   calibrationJob,
   certificateInput,
   jobAuditLog,
@@ -57,6 +58,7 @@ import { eq, sql } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { seedExtraMember } from "../../test/integration/tenant-refs";
 
 // ---------------------------------------------------------------------------
 // Mock background jobs and notifications — these are side-effects we don't want
@@ -1104,6 +1106,26 @@ async function seedScopeGuardWorld(params: {
       scopeEnforcementMode: params.enforcementMode,
     })
     .where(eq(organization.id, params.orgId));
+  // The work was done by a technician; the logged-in admin is the approver. An
+  // accredited lab (roadmap 2 B5) has no solo exemption and must keep an
+  // authorized-signatory roster, so the approver is on it.
+  const maker = `${params.userId}-maker`;
+  await seedExtraMember({
+    orgId: params.orgId,
+    userId: maker,
+    role: "technician",
+    unitId: fixture.unitId,
+    unitRole: "technician",
+  });
+  if (params.accreditationActive !== false) {
+    await db.insert(authorizedSignatory).values({
+      organizationId: params.orgId,
+      userId: params.userId,
+      assetTypeId: null,
+      status: "ACTIVE",
+      authorizedBy: params.userId,
+    });
+  }
   if (params.withScopeLines !== false) {
     await db.insert(accreditedScopeLine).values({
       organizationId: params.orgId,
@@ -1126,7 +1148,9 @@ async function seedScopeGuardWorld(params: {
     customerId: fixture.customerId,
     assetId: fixture.assetId,
     serviceId: fixture.serviceId,
-    createdBy: params.userId, // solo lab: self-approval exempt
+    createdBy: maker,
+    technicianId: maker,
+    submittedBy: maker,
     status: "REVIEW",
     methodSnapshot: scopeGuardMethodSnapshot({
       unresolvableSecondTable: params.unresolvableSecondTable === true,

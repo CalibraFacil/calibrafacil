@@ -43,7 +43,10 @@ import {
   type RecallStandardIdentity,
 } from "../lib/oot-notifications";
 import { afterCommitQueue } from "../lib/after-commit";
-import { findImpactedCertificates } from "../lib/job-standards";
+import {
+  findImpactedCertificates,
+  findInFlightJobsUsingStandard,
+} from "../lib/job-standards";
 import {
   withLabPermission,
   type AuthVariables,
@@ -1472,8 +1475,16 @@ export const standardsRouter = new Hono<{
           tx,
         );
 
+        // The jobs still on their way to a certificate (§6.4, §7.10): not in the
+        // issued list, but a recalled standard would reach their certificate.
+        const inFlight = await findInFlightJobsUsingStandard(
+          { standardId: id, organizationId: member.organizationId },
+          tx,
+        );
+
         return c.json({
           data: impacted,
+          inFlight,
           window: { from: from.toISOString(), to: to.toISOString() },
         });
       });

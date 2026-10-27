@@ -90,7 +90,7 @@ under "Nulled".
 
 ## Evidence tables
 
-75 evidence tables out of 139; 404 foreign keys in schema.ts, 116 of them ON DELETE CASCADE.
+75 evidence tables out of 139; 405 foreign keys in schema.ts, 116 of them ON DELETE CASCADE.
 Each entry lists the foreign keys the table itself carries, which are the only way a parent's deletion reaches it.
 
 ### Technical records (calibration, SPC, OOT) (10)
@@ -114,6 +114,7 @@ Each entry lists the foreign keys the table itself carries, which are the only w
   - `visit_id` to `calibration_visit`: SET NULL. pointer column: the row stays, the pointer is cleared.
   - `source_service_order_id` to `service_order`: SET NULL. pointer column: the row stays, the pointer is cleared.
   - `created_by` to `user`: RESTRICT. blocks the delete of the parent.
+  - `submitted_by` to `user`: RESTRICT. blocks the delete of the parent.
   - `approved_by` to `user`: SET NULL. actor column: the row stays, the actor reference is cleared.
   - `rejected_by` to `user`: SET NULL. actor column: the row stays, the actor reference is cleared.
 - `check_standard_reading`
@@ -635,7 +636,7 @@ Rows Postgres deletes along with it (12 tables by CASCADE): `account`, `invitati
 
 - Evidence deleted by CASCADE: **0**.
 - Evidence columns nulled by SET NULL: **43**.
-- Evidence tables that make Postgres refuse the delete (RESTRICT / NO ACTION): **55**.
+- Evidence tables that make Postgres refuse the delete (RESTRICT / NO ACTION): **56**.
 
 Nulled:
 
@@ -694,6 +695,7 @@ Refused by:
 - `user` ⇒ `billing_document.created_by` NO ACTION (`billing_document`)
 - `user` ⇒ `billing_document.updated_by` NO ACTION (`billing_document`)
 - `user` ⇒ `calibration_job.created_by` RESTRICT (`calibration_job`)
+- `user` ⇒ `calibration_job.submitted_by` RESTRICT (`calibration_job`)
 - `user` ⇒ `calibration_request.submitted_by` RESTRICT (`calibration_request`)
 - `user` ⇒ `calibration_request_audit_log.performed_by` NO ACTION (`calibration_request_audit_log`)
 - `user` ⇒ `calibration_visit.created_by` RESTRICT (`calibration_visit`)
