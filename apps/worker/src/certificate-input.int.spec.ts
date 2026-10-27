@@ -3,6 +3,7 @@ import { Client } from "pg";
 import { and, eq, sql } from "drizzle-orm";
 import {
   canonicalJson,
+  certificateContentRulesFor,
   certificateInputSha256,
   isCertificateInput,
 } from "@calibra-facil/certificate-data";
@@ -746,30 +747,154 @@ describe("roadmap 2 C1/C2: certificates already issued re-render as they always 
     });
   }
 
-  it("a 1.0.0 input renders under the legacy rules: the profile's title, no calibrating body, the original coverage sentence; and its snapshot records layout 1.0.0", async () => {
+  const FREE_TEXT_SENTENCE = "rastreáveis ao Sistema Internacional";
+  const OLD_COVERAGE =
+    "que para uma distribuição t com os graus de liberdade efetivos indicados corresponde a uma probabilidade de abrangência de aproximadamente 95 %.";
+
+  /** The standards as a lab recorded them before C2: a provider NAMED in free text. */
+  async function seedFreeTextStandards(jobId: number) {
+    await db.execute(
+      sql`UPDATE calibration_job
+          SET standards_snapshot = ${JSON.stringify([
+            {
+              id: 11,
+              name: "Massa padrão 1 kg",
+              certificateNumber: "RBC-777",
+              calibratedBy: "Laboratório RBC",
+              calibrationDate: "2025-12-01",
+              nextCalibrationDate: "2027-12-01",
+              uncertainty: 0.001,
+              uncertaintyUnit: "g",
+              coverageFactor: 2,
+            },
+          ])}::jsonb
+          WHERE id = ${jobId}`,
+    );
+  }
+
+  /** A certificate for this job was issued before: its event is on record. */
+  async function markAlreadyIssued(jobId: number, organizationId: string) {
+    await appendJobEvent(db, {
+      action: "certificate_generated",
+      organizationId,
+      jobId,
+      actor: { kind: "user", userId: USER_ID },
+      changes: {
+        status: { old: "GENERATING_PDF", new: "APPROVED" },
+        certificateUrl: { old: null, new: "https://storage.invalid/old.pdf" },
+        signatureMetadata: { signed: false },
+      },
+      ipAddress: null,
+      reason: "Certificado emitido",
+    });
+  }
+
+  /** An approval made before C2, with free-text standards: frozen 1.0.0, or no frozen input at all. */
+  async function seedPreC1C2Job(path: "frozen" | "legacy_live") {
+    const { org, job } = await seedApprovedJob({ freeze: false });
+    await seedFreeTextStandards(job.jobId);
+    if (path === "frozen") {
+      await freezeJob(job.jobId, org.orgId);
+      await downgradeToPreC1C2Input(job.jobId);
+    } else {
+      await recordApproval(job.jobId, org.orgId, null);
+    }
+    return { org, job };
+  }
+
+  async function renderOnce(jobId: number) {
     const rendered: string[] = [];
     stubGotenberg(rendered);
-    const { job } = await seedApprovedJob();
-    await downgradeToPreC1C2Input(job.jobId);
-
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
     await processBackgroundJob(makeEnv(), {
       type: "CERTIFICATE",
-      jobId: job.jobId,
+      jobId,
       userId: USER_ID,
     });
-
-    expect(await jobStatus(job.jobId)).toBe("APPROVED");
-    const html = rendered[0] ?? "";
-    expect(html).toContain("Gerente Técnica Original");
-    expect(html).not.toContain("Signatária Autorizada Original");
-    expect(html).not.toContain("Laboratório calibrador");
-    expect(html).toContain(
-      "que para uma distribuição t com os graus de liberdade efetivos indicados corresponde a uma probabilidade de abrangência de aproximadamente 95 %.",
-    );
+    expect(await jobStatus(jobId)).toBe("APPROVED");
     const result = await db.execute(
-      sql`SELECT layout_version FROM issued_certificate_snapshot WHERE job_id = ${job.jobId}`,
+      sql`SELECT layout_version FROM issued_certificate_snapshot WHERE job_id = ${jobId}`,
     );
-    expect(field(toRows(result)[0], "layout_version")).toBe("1.0.0");
+    return {
+      html: rendered[0] ?? "",
+      layoutVersion: field(toRows(result)[0], "layout_version"),
+    };
+  }
+
+  it("REQ-C2-2 [HIGH RISK] the FIRST issuance of a 1.0.0 input with a free-text provider never asserts SI traceability, borrows no profile title, and records layout 1.1.0", async () => {
+    const { job } = await seedPreC1C2Job("frozen");
+
+    const { html, layoutVersion } = await renderOnce(job.jobId);
+
+    expect(html).not.toContain(FREE_TEXT_SENTENCE);
+    expect(html).not.toContain("Gerente Técnica Original");
+    expect(html).not.toContain(OLD_COVERAGE);
+    expect(html).toContain("o qual para uma distribuição normal");
+    expect(html).not.toContain("Laboratório calibrador");
+    expect(layoutVersion).toBe("1.1.0");
+  });
+
+  it("REQ-C2-2 [HIGH RISK] a RE-render of an already-issued 1.0.0 certificate is byte-identical to what it was issued with", async () => {
+    const { org, job } = await seedPreC1C2Job("frozen");
+    await markAlreadyIssued(job.jobId, org.orgId);
+    const [row] = await db
+      .select()
+      .from(certificateInput)
+      .where(eq(certificateInput.jobId, job.jobId));
+    const frozen = row?.input;
+    if (!isCertificateInput(frozen)) throw new Error("no frozen input");
+
+    const { html, layoutVersion } = await renderOnce(job.jobId);
+
+    // the statements it was issued with
+    expect(html).toContain(FREE_TEXT_SENTENCE);
+    expect(html).toContain("calibrados por Laboratório RBC.");
+    expect(html).toContain("Gerente Técnica Original");
+    expect(html).toContain(OLD_COVERAGE);
+    expect(html).not.toContain("Laboratório calibrador");
+    expect(layoutVersion).toBe("1.0.0");
+
+    // and the very layout data the legacy rules build from that input
+    const expected = buildCertificateLayoutData(frozen.job, {
+      contentRules: "legacy",
+      accredited: frozen.seal.accredited,
+      verificationUrl: frozen.verificationUrl,
+      qrCodeDataUrl: null,
+    });
+    const [issued] = await snapshots(job.jobId);
+    const { qrCodeDataUrl: _qr, ...stored } = isRecord(
+      issued?.inputDataSnapshot,
+    )
+      ? issued.inputDataSnapshot
+      : {};
+    expect(expected.ok).toBe(true);
+    const { qrCodeDataUrl: _expectedQr, ...expectedData } = expected.ok
+      ? expected.data
+      : { qrCodeDataUrl: null };
+    expect(canonicalJson(stored)).toBe(canonicalJson(expectedData));
+  });
+
+  it("REQ-C2-2 [HIGH RISK] the FIRST issuance through the legacy live read (no frozen input) never asserts SI traceability either", async () => {
+    const { job } = await seedPreC1C2Job("legacy_live");
+
+    const { html, layoutVersion } = await renderOnce(job.jobId);
+
+    expect(html).not.toContain(FREE_TEXT_SENTENCE);
+    expect(html).not.toContain("Gerente Técnica Original");
+    expect(html).not.toContain(OLD_COVERAGE);
+    expect(layoutVersion).toBe("1.1.0");
+  });
+
+  it("REQ-C2-2 [HIGH RISK] a RE-render through the legacy live read of an already-issued certificate reproduces it", async () => {
+    const { org, job } = await seedPreC1C2Job("legacy_live");
+    await markAlreadyIssued(job.jobId, org.orgId);
+
+    const { html, layoutVersion } = await renderOnce(job.jobId);
+
+    expect(html).toContain(FREE_TEXT_SENTENCE);
+    expect(html).toContain("Gerente Técnica Original");
+    expect(html).toContain(OLD_COVERAGE);
+    expect(layoutVersion).toBe("1.0.0");
   });
 
   it("a 1.1.0 input renders under the current rules: the record's title, the calibrating body, the frozen-result coverage sentence; layout 1.1.0", async () => {
@@ -924,6 +1049,38 @@ describe("REQ-CIN-1: parity of the frozen document with the legacy live assembly
     });
     expect(fromLegacy.ok).toBe(true);
     expect(fromFrozen).toEqual(fromLegacy);
+
+    // The input is frozen at layout 1.1.0: under ITS rules the template is
+    // handed the same data as the live read except for exactly the C1/C2
+    // statements (coverage sentence, traceability, the signatory's title, the
+    // calibrating body, and the header's CNPJ printed formatted).
+    expect(input.layout.version).toBe("1.1.0");
+    expect(certificateContentRulesFor(input.layout.version)).toBe("current");
+    const fromFrozenCurrent = buildCertificateLayoutData(input.job, {
+      qrCodeDataUrl: null,
+      accredited: input.seal.accredited,
+      verificationUrl: input.verificationUrl,
+      contentRules: "current",
+    });
+    if (!fromFrozenCurrent.ok || !fromLegacy.ok) {
+      throw new Error("both layouts must build");
+    }
+    const { calibratingBody: printedBody, ...currentData } =
+      fromFrozenCurrent.data;
+    expect(printedBody).toMatchObject({
+      legalName: "Laboratório Aprovado",
+      cnpj: "12.345.678/0001-99",
+    });
+    expect(currentData).toEqual({
+      ...fromLegacy.data,
+      lab: { ...fromLegacy.data.lab, cnpj: "12.345.678/0001-99" },
+      uncertaintyStatement: currentData.uncertaintyStatement,
+      traceabilityStatementText: null,
+      signatory: { ...fromLegacy.data.signatory, role: null },
+    });
+    expect(currentData.uncertaintyStatement).not.toBe(
+      fromLegacy.data.uncertaintyStatement,
+    );
     expect(canonicalJson(fromFrozen.ok ? fromFrozen.data : null)).toBe(
       canonicalJson(fromLegacy.ok ? fromLegacy.data : null),
     );

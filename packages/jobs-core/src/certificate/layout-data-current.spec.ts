@@ -270,7 +270,7 @@ describe("REQ-C2-1: the calibrating body on the certificate", () => {
     unitId: 2,
     unitName: "Filial Sul",
     legalName: "Lab Filial Ltda",
-    cnpj: "22.222.222/0001-22",
+    cnpj: "22222222000122",
     street: "Av. da Filial",
     number: "200",
     complement: null,
@@ -298,12 +298,13 @@ describe("REQ-C2-1: the calibrating body on the certificate", () => {
           ...unitBody,
           source: "organization",
           legalName: "Laboratório Teste",
-          cnpj: "11.111.111/0001-11",
+          cnpj: "11111111000111",
           street: "Rua da Matriz",
           number: "1",
         },
       }),
     );
+    // stored as digits, formatted on print
     expect(data.calibratingBody?.cnpj).toBe("11.111.111/0001-11");
   });
 
@@ -447,5 +448,76 @@ describe("existing certificates re-render byte-identically from their frozen inp
       options,
     );
     expect(JSON.stringify(withNewFields)).toBe(JSON.stringify(plain));
+  });
+});
+
+describe("REQ-C2-2: the FIRST issuance of an input frozen under the legacy rules asserts nothing unverified", () => {
+  const FREE_TEXT_TRACEABILITY = "metrologicamente rastreáveis ao Sistema";
+
+  /** A 1.0.0 input: free-text provider, no C1/C2 decisions. */
+  function legacyJob(): CertificateJobData {
+    const { calibrationProvider: _omitted, ...freeText } = VERIFIED_STANDARD;
+    return job({ standardsSnapshot: [freeText] });
+  }
+
+  it("a re-render of an already-issued certificate reproduces the free-text sentence, the profile title and the fixed coverage sentence", () => {
+    const data = unwrap(
+      buildCertificateLayoutData(legacyJob(), {
+        contentRules: "legacy",
+        firstIssuance: false,
+      }),
+    );
+    expect(data.traceabilityStatementText).toContain(FREE_TEXT_TRACEABILITY);
+    expect(data.signatory.role).toBe("Gerente Técnico");
+    expect(data.uncertaintyStatement).toContain(
+      "que para uma distribuição t com os graus de liberdade efetivos indicados",
+    );
+  });
+
+  it("a first issuance omits the traceability sentence (no verified decision exists for such an input)", () => {
+    const data = unwrap(
+      buildCertificateLayoutData(legacyJob(), {
+        contentRules: "legacy",
+        firstIssuance: true,
+      }),
+    );
+    expect(data.traceabilityStatementText).toBeNull();
+    expect(JSON.stringify(data)).not.toContain(FREE_TEXT_TRACEABILITY);
+  });
+
+  it("a first issuance borrows no title from the lab profile and builds the coverage sentence from the frozen result", () => {
+    const data = unwrap(
+      buildCertificateLayoutData(legacyJob(), {
+        contentRules: "legacy",
+        firstIssuance: true,
+      }),
+    );
+    expect(data.signatory.role).toBeNull();
+    expect(data.signatory.name).toBe("Ana Aprovadora");
+    expect(data.uncertaintyStatement).toContain(
+      "o qual para uma distribuição normal",
+    );
+    // the calibrating body is a frozen C2 decision: absent for such an input
+    expect(data.calibratingBody).toBeUndefined();
+  });
+
+  it("a verified frozen decision is still honoured on a first issuance", () => {
+    const data = unwrap(
+      buildCertificateLayoutData(
+        {
+          ...legacyJob(),
+          traceability: {
+            verified: true,
+            evaluatedAt: "2026-06-26T12:00:00.000Z",
+            providers: [
+              { name: "Laboratório RBC", accreditationNumber: "CAL 0123" },
+            ],
+            failures: [],
+          },
+        },
+        { contentRules: "legacy", firstIssuance: true },
+      ),
+    );
+    expect(data.traceabilityStatementText).toContain("acreditação CAL 0123");
   });
 });

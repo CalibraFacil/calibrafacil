@@ -47,6 +47,7 @@ import {
   type CertificateStandard,
 } from "@calibra-facil/documents";
 import { certificateVerificationUrl } from "@calibra-facil/shared/public-urls";
+import { formatCnpj } from "@calibra-facil/shared/cnpj";
 import {
   buildCoverageStatement,
   frozenCoverageProbability,
@@ -598,6 +599,15 @@ export type BuildLayoutDataOptions = {
    * traceability only when it was verified.
    */
   contentRules?: CertificateContentRules;
+  /**
+   * True for the FIRST issuance of a certificate. Under the legacy rules it
+   * then takes the verified statements instead of reproducing the old ones: the
+   * coverage sentence from the frozen result, no SI-traceability sentence unless
+   * a verified decision was frozen (an input frozen before C2 has none), and no
+   * title borrowed from the lab profile. False (the default) is the RE-render of
+   * an already-issued certificate, which reproduces what was issued.
+   */
+  firstIssuance?: boolean;
 };
 
 /**
@@ -691,6 +701,9 @@ export function buildCertificateLayoutData(
     });
 
   const current = options.contentRules === "current";
+  // The statements built from the frozen decisions: always under the current
+  // rules, and for the first issuance of an input frozen under the legacy ones.
+  const verified = current || options.firstIssuance === true;
   const calibratingBody = current ? (job.calibratingBody ?? null) : null;
 
   const indicatorSvg = renderEccentricityIndicatorSvgMarkup(
@@ -709,7 +722,9 @@ export function buildCertificateLayoutData(
       ? {
           calibratingBody: {
             legalName: calibratingBody.legalName,
-            cnpj: calibratingBody.cnpj,
+            cnpj: calibratingBody.cnpj
+              ? formatCnpj(calibratingBody.cnpj)
+              : null,
             addressText: calibratingBodyAddressText(calibratingBody),
           },
         }
@@ -719,7 +734,11 @@ export function buildCertificateLayoutData(
       name: job.lab.name,
       // The establishment that performed the calibration (a unit's own, when it
       // is a distinct one) is what the header identifies.
-      cnpj: calibratingBody ? calibratingBody.cnpj : job.lab.cnpj,
+      cnpj: calibratingBody
+        ? calibratingBody.cnpj
+          ? formatCnpj(calibratingBody.cnpj)
+          : null
+        : job.lab.cnpj,
       addressText: calibratingBody
         ? calibratingBodyAddressText(calibratingBody)
         : joinAddress(job),
@@ -783,7 +802,7 @@ export function buildCertificateLayoutData(
 
     accredited,
     resultTables: tables,
-    uncertaintyStatement: current
+    uncertaintyStatement: verified
       ? buildCoverageStatement({
           rows: tables.flatMap((table) => table.rows),
           probability: frozenCoverageProbability(job.results),
@@ -791,7 +810,7 @@ export function buildCertificateLayoutData(
       : buildUncertaintyStatement(tables),
 
     standards: buildStandards(job),
-    traceabilityStatementText: current
+    traceabilityStatementText: verified
       ? buildVerifiedTraceabilityStatement(job)
       : buildTraceabilityStatement(job),
 
@@ -812,7 +831,7 @@ export function buildCertificateLayoutData(
       // approval. The lab profile's technical-manager title belongs to the
       // manager, not to whoever approved; the legacy rules still print it.
       name: (current ? job.signatory?.name : null) ?? job.approverName ?? "",
-      role: current
+      role: verified
         ? (job.signatory?.title ?? null)
         : job.lab.technicalManagerTitle,
       placeAndDateText: buildPlaceAndDate(job),

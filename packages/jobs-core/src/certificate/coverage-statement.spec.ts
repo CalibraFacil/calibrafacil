@@ -125,6 +125,31 @@ describe("REQ-C1-1: the coverage sentence (golden)", () => {
     );
   });
 
+  it("a row with no k among rows that share one does not make the shared k speak for all", () => {
+    const text = buildCoverageStatement({
+      rows: [
+        { coverageFactor: "2,00", effectiveDegreesOfFreedom: "∞" },
+        { coverageFactor: null, effectiveDegreesOfFreedom: null },
+      ],
+      probability: P95,
+    });
+    expect(text).not.toContain("k = 2,00");
+    expect(text).toContain("indicado para cada ponto na tabela de resultados");
+  });
+
+  it("a row with no ν_eff among rows that share one does not make it speak for all", () => {
+    const text = buildCoverageStatement({
+      rows: [
+        { coverageFactor: "2,31", effectiveDegreesOfFreedom: "8" },
+        { coverageFactor: "2,31", effectiveDegreesOfFreedom: null },
+      ],
+      probability: P95,
+    });
+    expect(text).toContain("k = 2,31");
+    expect(text).not.toContain("ν_eff = 8 ");
+    expect(text).toContain("indicados para cada ponto na tabela de resultados");
+  });
+
   it("no k in the results at all: per point in the table, nothing invented", () => {
     expect(
       buildCoverageStatement({

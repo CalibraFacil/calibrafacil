@@ -120,13 +120,23 @@ export function buildCoverageStatement(params: {
     params.rows.map((row) => row.effectiveDegreesOfFreedom),
   );
 
+  const someMissingFactor = params.rows.some(
+    (row) => row.coverageFactor === null || row.coverageFactor === undefined,
+  );
+  const someMissingDof = params.rows.some(
+    (row) =>
+      row.effectiveDegreesOfFreedom === null ||
+      row.effectiveDegreesOfFreedom === undefined,
+  );
+
   // No k at all: the table carries whatever there is, per point.
   if (factors.length === 0) {
     return `${BASE}, indicado para cada ponto na tabela de resultados, correspondendo a ${ending}`;
   }
 
-  // k that varies by point: the table carries k (and ν_eff) on every row.
-  if (factors.length > 1) {
+  // k that varies by point, or is missing on some row (so the rows that
+  // carry one do not speak for all): the table carries k (and ν_eff) per row.
+  if (factors.length > 1 || someMissingFactor) {
     const finiteDof = dofs.some((dof) => dof !== "∞");
     return finiteDof
       ? `${BASE}, indicado para cada ponto na tabela de resultados, o qual ` +
@@ -146,13 +156,13 @@ export function buildCoverageStatement(params: {
     return `${BASE} = ${k}, o qual para uma distribuição t corresponde a ${ending}`;
   }
   const [dof] = dofs;
-  if (dofs.length === 1 && dof === "∞") {
+  if (dofs.length === 1 && !someMissingDof && dof === "∞") {
     return (
       `${BASE} = ${k}, com ν_eff = ∞ graus de liberdade efetivos, o qual ` +
       `para uma distribuição normal corresponde a ${ending}`
     );
   }
-  if (dofs.length === 1) {
+  if (dofs.length === 1 && !someMissingDof) {
     return (
       `${BASE} = ${k}, o qual para uma distribuição t com ν_eff = ${dof} ` +
       `graus de liberdade efetivos corresponde a ${ending}`

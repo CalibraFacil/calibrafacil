@@ -10,7 +10,7 @@ import {
 import { and, eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
-import { seedOrg } from "../../test/integration/seed";
+import { grantUnitAdmin, seedOrg } from "../../test/integration/seed";
 
 // Real-DB + real-RBAC integration tests for the unitsRouter.
 // Only the better-auth session is mocked (see test/integration/setup.ts);
@@ -269,7 +269,8 @@ describe("unitsRouter — real DB + real middleware", () => {
       .where(eq(organizationUnit.id, org.unitId));
     expect(row).toMatchObject({
       legalName: "Lab Filial Ltda",
-      cnpj: "11.222.333/0001-81",
+      // stored normalised (no punctuation); the certificate formats it on print
+      cnpj: "11222333000181",
       street: "Av. da Filial",
       number: "200",
       city: "Pelotas",
@@ -296,20 +297,29 @@ describe("unitsRouter — real DB + real middleware", () => {
     );
   });
 
-  it("REQ-C2-1: a unit_admin / member cannot change the calibrating body (global managers only)", async () => {
+  it("REQ-C2-1: neither a member nor a unit_admin can change the calibrating body (global managers only)", async () => {
     const org = await seedOrg({ orgId: "org-a", role: "member" });
+    const patch = () =>
+      unitsRouter.request(`/admin/units/${org.unitId}`, {
+        method: "PATCH",
+        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+        body: JSON.stringify({ calibratingBody: { legalName: "Falsa Ltda" } }),
+      });
+    const legalName = async () => {
+      const [row] = await db
+        .select({ legalName: organizationUnit.legalName })
+        .from(organizationUnit)
+        .where(eq(organizationUnit.id, org.unitId));
+      return row?.legalName;
+    };
+
     loginAs({ userId: org.userId, organizationId: org.orgId });
-    const res = await unitsRouter.request(`/admin/units/${org.unitId}`, {
-      method: "PATCH",
-      headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
-      body: JSON.stringify({ calibratingBody: { legalName: "Falsa Ltda" } }),
-    });
-    expect(res.status).toBe(403);
-    const [row] = await db
-      .select({ legalName: organizationUnit.legalName })
-      .from(organizationUnit)
-      .where(eq(organizationUnit.id, org.unitId));
-    expect(row?.legalName).toBeNull();
+    expect((await patch()).status).toBe(403);
+    expect(await legalName()).toBeNull();
+
+    await grantUnitAdmin(org);
+    expect((await patch()).status).toBe(403);
+    expect(await legalName()).toBeNull();
   });
 
   // REQ-UNIT-006: Cross-tenant read — GET /admin/units shows ONLY own org's units with exact count

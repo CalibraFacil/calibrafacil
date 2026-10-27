@@ -17,6 +17,7 @@
  * the rows; these functions decide.
  */
 
+import { normalizeCnpj } from "@calibra-facil/shared/cnpj";
 import {
   calendarDateFromKey,
   calendarDateKey,
@@ -149,7 +150,7 @@ export function resolveCalibratingBody(params: {
   unit: (CalibratingBodySource & { id: number; name: string }) | null;
 }): FrozenCalibratingBody {
   const { organization, unit } = params;
-  if (unit && blankToNull(unit.cnpj)) {
+  if (unit && blankToNull(normalizeCnpj(unit.cnpj))) {
     return {
       source: "unit",
       unitId: unit.id,
@@ -159,7 +160,7 @@ export function resolveCalibratingBody(params: {
         blankToNull(organization.legalName) ??
         blankToNull(organization.name) ??
         unit.name,
-      cnpj: blankToNull(unit.cnpj),
+      cnpj: blankToNull(normalizeCnpj(unit.cnpj)),
       ...addressOf(unit),
     };
   }
@@ -171,7 +172,7 @@ export function resolveCalibratingBody(params: {
       blankToNull(organization.legalName) ??
       blankToNull(organization.name) ??
       "Laboratório de Calibração",
-    cnpj: blankToNull(organization.cnpj),
+    cnpj: blankToNull(normalizeCnpj(organization.cnpj)),
     ...addressOf(organization),
   };
 }

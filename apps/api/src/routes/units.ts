@@ -20,7 +20,7 @@ import {
   withLabPermission,
 } from "../middleware/permission";
 import { orgDb } from "../lib/org-db";
-import { isValidCnpj } from "@calibra-facil/shared/cnpj";
+import { isValidCnpj, normalizeCnpj } from "@calibra-facil/shared/cnpj";
 import { calibrationWorkflowPermissions } from "@calibra-facil/auth/access";
 import type { RoleName } from "@calibra-facil/auth/access";
 
@@ -67,9 +67,13 @@ const bodyText = (max: number) =>
  */
 const CalibratingBodySchema = z.object({
   legalName: bodyText(200),
-  cnpj: bodyText(32).refine((value) => !value || isValidCnpj(value), {
-    message: "CNPJ inválido",
-  }),
+  // Stored normalised (digits, or the alphanumeric CNPJ's characters, no
+  // punctuation); the certificate formats it on print.
+  cnpj: bodyText(32)
+    .refine((value) => !value || isValidCnpj(value), {
+      message: "CNPJ inválido",
+    })
+    .transform((value) => (value ? normalizeCnpj(value) : value)),
   street: bodyText(200),
   number: bodyText(30),
   complement: bodyText(120),

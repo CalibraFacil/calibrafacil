@@ -210,7 +210,7 @@ describe("REQ-C2-1: the calibrating body", () => {
       source: "organization",
       unitId: 5,
       legalName: "Lab Matriz",
-      cnpj: "11.111.111/0001-11",
+      cnpj: "11111111000111",
       street: "Rua da Matriz",
       city: "Canoas",
     });
@@ -241,7 +241,7 @@ describe("REQ-C2-1: the calibrating body", () => {
       unitId: 6,
       unitName: "Filial Sul",
       legalName: "Lab Filial Ltda",
-      cnpj: "22.222.222/0001-22",
+      cnpj: "22222222000122",
       city: "Pelotas",
     });
     expect(calibratingBodyAddressText(body)).toBe(
