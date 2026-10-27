@@ -57,18 +57,31 @@ export interface SigningKeyring {
   readonly keys: ReadonlyMap<string, Buffer>;
 }
 
+// Same shape the configuration accepts (packages/config): canonical base64, no
+// trailing garbage after the padding.
+const BASE64_KEY = /^[A-Za-z0-9+/]+={0,2}$/;
+
+/**
+ * NO error below ever echoes a value read from the environment: a key pasted
+ * into the id setting, or an entry written `key:id` instead of `id:key`, must not
+ * end up in a log. Errors name the variable (and the entry's position), never
+ * its content.
+ */
 function parseKey(material: string, label: string): Buffer {
-  const key = Buffer.from(material.trim(), "base64");
+  const trimmed = material.trim();
+  const key = BASE64_KEY.test(trimmed)
+    ? Buffer.from(trimmed, "base64")
+    : Buffer.alloc(0);
   if (key.length !== KEY_LENGTH) {
     throw new Error(`${label} must be a 256-bit key (32 bytes, base64)`);
   }
   return key;
 }
 
-function assertKekId(id: string): string {
+function assertKekId(id: string, label: string): string {
   if (!KEK_ID_PATTERN.test(id)) {
     throw new Error(
-      `Invalid KEK id "${id}": use 1-64 letters, digits, "_", "." or "-"`,
+      `${label} is not a valid KEK id: use 1-64 letters, digits, "_", "." or "-"`,
     );
   }
   return id;
@@ -86,33 +99,34 @@ export interface SigningKeyringInput {
 export function createSigningKeyring(
   input: SigningKeyringInput,
 ): SigningKeyring {
-  const currentId = assertKekId(input.currentId?.trim() || DEFAULT_KEK_ID);
+  const currentId = assertKekId(
+    input.currentId?.trim() || DEFAULT_KEK_ID,
+    "SIGNING_MASTER_KEY_ID",
+  );
   const currentKey = parseKey(input.currentKey, "SIGNING_MASTER_KEY");
   const keys = new Map<string, Buffer>([[currentId, currentKey]]);
 
   const seen = new Set<string>();
+  let position = 0;
   for (const raw of (input.previous ?? "").split(",")) {
     const entry = raw.trim();
     if (entry === "") continue;
+    position += 1;
+    const label = `SIGNING_MASTER_KEY_PREVIOUS entry ${position}`;
     const separator = entry.indexOf(":");
     if (separator === -1) {
-      throw new Error(
-        "SIGNING_MASTER_KEY_PREVIOUS entries must look like id:base64key",
-      );
+      throw new Error(`${label} must look like id:base64key`);
     }
-    const id = assertKekId(entry.slice(0, separator).trim());
-    const key = parseKey(
-      entry.slice(separator + 1),
-      `SIGNING_MASTER_KEY_PREVIOUS (${id})`,
-    );
+    const id = assertKekId(entry.slice(0, separator).trim(), `${label}'s id`);
+    const key = parseKey(entry.slice(separator + 1), `${label}'s key`);
     if (seen.has(id)) {
-      throw new Error(`KEK id "${id}" is listed twice in the previous keys`);
+      throw new Error(`${label} repeats the id of an earlier entry`);
     }
     seen.add(id);
     const existing = keys.get(id);
     if (existing && !existing.equals(key)) {
       throw new Error(
-        `KEK id "${id}" is the current key's id but names a different key`,
+        `${label} has the current key's id but names a different key`,
       );
     }
     keys.set(id, key);

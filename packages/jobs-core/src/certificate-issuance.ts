@@ -730,7 +730,12 @@ export async function signPdfWithUnitCertificate(
     // the job like any other: it never falls through to an unsigned PDF.
     const keyring = signingKeyringFromEnv(env);
     if (!keyring) {
-      return { pdfBuffer };
+      // Unreachable while the fetch above is gated on the key, but never an
+      // unsigned return: a credential is configured, so signing must succeed.
+      throw new SigningPolicyError(
+        "Assinatura digital não configurada no servidor: chave de custódia ausente",
+        { permanent: false },
+      );
     }
     const { p12: p12Buffer, password } = openSigningCredential(
       signingCert,

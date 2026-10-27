@@ -47,7 +47,7 @@ const BASE64_KEY = /^[A-Za-z0-9+/]+={0,2}$/;
  * to be signed, so it stops the start instead. The shapes mirror
  * `createSigningKeyring` in @calibra-facil/signing, which is what parses them.
  */
-function signingIssues(signing: SigningSettings): ConfigIssue[] {
+export function signingIssues(signing: SigningSettings): ConfigIssue[] {
   const issues: ConfigIssue[] = [];
   const currentId = signing.masterKeyId ?? "k1";
   if (signing.masterKeyId !== undefined && !KEK_ID.test(signing.masterKeyId)) {

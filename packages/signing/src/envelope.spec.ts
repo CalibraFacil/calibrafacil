@@ -246,7 +246,7 @@ describe("signing keyring configuration", () => {
       SIGNING_MASTER_KEY_PREVIOUS: `old1:${keyB}, old2:${generateMasterKey()}`,
     });
     expect(ring?.currentId).toBe("k1");
-    expect([...(ring?.keys.keys() ?? [])].toSorted()).toEqual([
+    expect(Array.from(ring?.keys.keys() ?? []).sort()).toEqual([
       "k1",
       "old1",
       "old2",
@@ -264,14 +264,14 @@ describe("signing keyring configuration", () => {
         currentId: "k2",
         previous: `k1:${keyB},k1:${keyB}`,
       }),
-    ).toThrow(/k1/);
+    ).toThrow(/repeats the id/);
     expect(() =>
       createSigningKeyring({
         currentKey: keyA,
         currentId: "k2",
         previous: `k2:${keyB}`,
       }),
-    ).toThrow(/k2/);
+    ).toThrow(/current key's id/);
     expect(() =>
       createSigningKeyring({
         currentKey: keyA,
@@ -287,5 +287,112 @@ describe("signing keyring configuration", () => {
     expect(() =>
       createSigningKeyring({ currentKey: keyA, currentId: "bad:id" }),
     ).toThrow();
+  });
+
+  it("rejects trailing garbage after the base64 padding, as the configuration does", () => {
+    expect(() =>
+      createSigningKeyring({ currentKey: `${keyA}!!garbage` }),
+    ).toThrow(/256-bit/);
+    expect(() =>
+      createSigningKeyring({ currentKey: keyA, previous: `k0:${keyB}@@@` }),
+    ).toThrow(/256-bit/);
+  });
+
+  it("never echoes a value read from the environment in an error (a key in the wrong place stays secret)", () => {
+    const leaks = (build: () => unknown, secret: string) => {
+      let message = "no error";
+      try {
+        build();
+      } catch (error) {
+        message = error instanceof Error ? error.message : String(error);
+      }
+      expect(message).not.toBe("no error");
+      expect(message).not.toContain(secret);
+    };
+    // reversed entry: key:id instead of id:key
+    leaks(
+      () => createSigningKeyring({ currentKey: keyA, previous: `${keyB}:k0` }),
+      keyB,
+    );
+    // the key pasted into the id setting (also one without padding or "+/")
+    leaks(
+      () => createSigningKeyring({ currentKey: keyA, currentId: keyB }),
+      keyB,
+    );
+    const noPadding = "A".repeat(43);
+    leaks(
+      () =>
+        createSigningKeyring({ currentKey: keyA, currentId: `${noPadding}:` }),
+      noPadding,
+    );
+    // a short or malformed key, as the current key and as a previous one
+    leaks(
+      () => createSigningKeyring({ currentKey: "c2VjcmV0LXNob3J0" }),
+      "c2VjcmV0LXNob3J0",
+    );
+    leaks(
+      () =>
+        createSigningKeyring({
+          currentKey: keyA,
+          previous: "k0:c2VjcmV0LXNob3J0",
+        }),
+      "c2VjcmV0LXNob3J0",
+    );
+    // an id repeated or colliding with the current one
+    leaks(
+      () =>
+        createSigningKeyring({
+          currentKey: keyA,
+          currentId: "secret-looking-id",
+          previous: `secret-looking-id:${keyB}`,
+        }),
+      "secret-looking-id",
+    );
+    leaks(
+      () =>
+        createSigningKeyring({
+          currentKey: keyA,
+          previous: `dup-secret-id:${keyB},dup-secret-id:${keyB}`,
+        }),
+      "dup-secret-id",
+    );
+  });
+});
+
+describe("REQ-B4A-1: every IV is unique", () => {
+  it("N seals never reuse an IV: the wrap IVs and the data IVs, for both fields, are all distinct", () => {
+    const ring = createSigningKeyring({
+      currentKey: generateMasterKey(),
+      currentId: "k1",
+    });
+    const wrapIvs = new Set<string>();
+    const dataIvs = new Set<string>();
+    const seals = 40;
+    for (let index = 0; index < seals; index += 1) {
+      const sealed = sealSigningCredential(
+        { p12: P12, password: PASSWORD },
+        BINDING,
+        ring,
+      );
+      for (const blob of [sealed.encryptedP12, sealed.encryptedPassword]) {
+        const [, , , wrapped, data] = parts(blob);
+        wrapIvs.add(
+          Buffer.from(wrapped ?? "", "base64")
+            .subarray(0, 12)
+            .toString("hex"),
+        );
+        dataIvs.add(
+          Buffer.from(data ?? "", "base64")
+            .subarray(0, 12)
+            .toString("hex"),
+        );
+      }
+    }
+    // 2 fields per seal, each with its own wrap IV and data IV.
+    expect(wrapIvs.size).toBe(seals * 2);
+    expect(dataIvs.size).toBe(seals * 2);
+    // GCM IVs are 96 bits and none is the all-zero IV.
+    expect(wrapIvs.has("0".repeat(24))).toBe(false);
+    expect(dataIvs.has("0".repeat(24))).toBe(false);
   });
 });

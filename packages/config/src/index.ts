@@ -71,6 +71,7 @@ export {
   readRetentionConfig,
   readRuntimeConfig,
   readSigningConfig,
+  signingIssues,
   readSyncConfig,
   readStorageConfig,
 } from "./runtimes";

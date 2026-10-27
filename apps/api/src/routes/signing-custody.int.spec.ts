@@ -28,6 +28,7 @@ import {
 } from "@calibra-facil/db/schema";
 import {
   openSigningCredential,
+  sealSigningCredential,
   signingKeyringFromEnv,
 } from "@calibra-facil/signing";
 import {
@@ -601,6 +602,77 @@ describe("REQ-B4A-5: deny tests through the real RBAC layer", () => {
     });
     expect(missing.status).toBe(403);
     expect(await certRows(lab.orgId)).toHaveLength(0);
+  });
+
+  it("a technician of the SAME laboratory cannot set the default either: 403, the default and the trail are unchanged", async () => {
+    const lab = await seedOrg({ orgId: "org-same-sd", role: "technician" });
+    // The laboratory's credentials, seeded as the owner path would have them.
+    const sealed = sealSigningCredential(
+      { p12: Buffer.from("p12"), password: PASSWORD },
+      {
+        organizationId: lab.orgId,
+        unitId: lab.unitId,
+        serialNumber: "SD-1",
+      },
+      signingKeyringFromEnv(TRUSTED_ENV) ??
+        (() => {
+          throw new Error("no keyring");
+        })(),
+    );
+    const [current] = await db
+      .insert(organizationSigningCertificate)
+      .values({
+        organizationId: lab.orgId,
+        unitId: lab.unitId,
+        name: "Atual",
+        serialNumber: "SD-1",
+        issuerCn: "AC",
+        subjectCn: "LAB",
+        validFrom: new Date(Date.now() - DAY),
+        validUntil: new Date(Date.now() + 365 * DAY),
+        encryptedP12: sealed.encryptedP12,
+        encryptedPassword: sealed.encryptedPassword,
+        passwordIv: sealed.passwordIv,
+        kekId: sealed.kekId,
+        custodyFormatVersion: sealed.formatVersion,
+        isActive: true,
+        isDefault: true,
+        createdBy: lab.userId,
+      })
+      .returning();
+    const [other] = await db
+      .insert(organizationSigningCertificate)
+      .values({
+        organizationId: lab.orgId,
+        unitId: lab.unitId,
+        name: "Outro",
+        serialNumber: "SD-2",
+        issuerCn: "AC",
+        subjectCn: "LAB",
+        validFrom: new Date(Date.now() - DAY),
+        validUntil: new Date(Date.now() + 365 * DAY),
+        encryptedP12: sealed.encryptedP12,
+        encryptedPassword: sealed.encryptedPassword,
+        passwordIv: sealed.passwordIv,
+        kekId: sealed.kekId,
+        custodyFormatVersion: sealed.formatVersion,
+        isActive: true,
+        isDefault: false,
+        createdBy: lab.userId,
+      })
+      .returning();
+    loginAs({ userId: lab.userId, organizationId: lab.orgId });
+
+    const res = await signingRouter.request(
+      `/certificates/${other?.id}/set-default`,
+      { method: "POST", headers: headers(lab) },
+    );
+
+    expect(res.status).toBe(403);
+    const rows = await certRows(lab.orgId);
+    expect(rows.find((row) => row.id === current?.id)?.isDefault).toBe(true);
+    expect(rows.find((row) => row.id === other?.id)?.isDefault).toBe(false);
+    expect(await auditRows(lab.orgId)).toHaveLength(0);
   });
 
   it("another laboratory can neither read nor alter the credential: 404 on the routes, invisible and untouched through the application role", async () => {

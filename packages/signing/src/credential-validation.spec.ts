@@ -146,6 +146,28 @@ describe("REQ-B4A-3: validateSigningCredential", () => {
     expect(result.message).toMatch(/cadeia de certificação/i);
   });
 
+  it("rejects a leaf issued by an IMPOSTOR CA with the same name as the trusted root but another key (the chain is verified by signature, not by name)", async () => {
+    const impostor = makeFixtureCa("Fixture ICP Root");
+    // Same subject as the trusted root, different key pair.
+    expect(impostor.cert.subject.hash).toBe(ca.cert.subject.hash);
+    expect(impostor.pem).not.toBe(ca.pem);
+
+    const result = await validateSigningCredential(
+      parse(makeLeafP12(impostor)),
+      { trustAnchors: anchors },
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe("INVALID_CHAIN");
+
+    // Control: the genuine root with the same name still validates.
+    expect(
+      await validateSigningCredential(parse(makeLeafP12(ca)), {
+        trustAnchors: anchors,
+      }),
+    ).toEqual({ ok: true });
+  });
+
   it("fails closed when the trust store is empty", async () => {
     const result = await validateSigningCredential(parse(makeLeafP12(ca)), {
       trustAnchors: [],
