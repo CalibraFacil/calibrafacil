@@ -72,6 +72,9 @@ export const standardRecordSchema = z.object({
   model: nullableString,
   certificateNumber: z.string(),
   calibratedBy: nullableString,
+  /** Roadmap 2 C2: the provider's accreditation, evidence for the SI-traceability sentence. */
+  calibrationProviderAccreditationNumber: nullableString,
+  calibrationProviderMraRecognized: z.boolean(),
   calibrationDate: z.string(),
   nextCalibrationDate: z.string(),
   referenceValue: nullableNumber,

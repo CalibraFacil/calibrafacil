@@ -50,6 +50,7 @@ export {
 } from "./certificate/certificate-styles.js";
 export type {
   CalibrationCertificateData,
+  CertificateCalibratingBody,
   CertificateConformity,
   CertificateCustomer,
   CertificateDates,

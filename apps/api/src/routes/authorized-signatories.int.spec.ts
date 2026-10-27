@@ -372,6 +372,136 @@ describe("authorizedSignatoriesRouter — real DB + real middleware", () => {
   });
 
   // -------------------------------------------------------------------------
+  // REQ-C1-2 — the title printed under the signature lives on the record
+  // -------------------------------------------------------------------------
+  it("REQ-C1-2 POST / stores the title; PATCH /:id sets or clears it (admin only, audited, tenant-scoped)", async () => {
+    const adminOrg = await seedOrg({
+      orgId: "org-a",
+      userId: "admin-u",
+      role: "admin",
+    });
+    await seedExtraMember({
+      userId: "grantee-u",
+      orgId: adminOrg.orgId,
+      role: "technician",
+    });
+    loginAs({ userId: adminOrg.userId, organizationId: adminOrg.orgId });
+
+    const created = await authorizedSignatoriesRouter.request("/", {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        userId: "grantee-u",
+        title: "  Signatário Autorizado — Massa  ",
+      }),
+    });
+    expect(created.status).toBe(201);
+    const createdBody: { signatory: { id: number; title: string | null } } =
+      await created.json();
+    expect(createdBody.signatory.title).toBe("Signatário Autorizado — Massa");
+    const id = createdBody.signatory.id;
+
+    const patched = await authorizedSignatoriesRouter.request(`/${id}`, {
+      method: "PATCH",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ title: "Gerente da Qualidade" }),
+    });
+    expect(patched.status).toBe(200);
+    const [row] = await db
+      .select({ title: authorizedSignatory.title })
+      .from(authorizedSignatory)
+      .where(eq(authorizedSignatory.id, id));
+    expect(row?.title).toBe("Gerente da Qualidade");
+
+    const audit = await db
+      .select()
+      .from(authorizedSignatoryAuditLog)
+      .where(
+        and(
+          eq(authorizedSignatoryAuditLog.signatoryId, id),
+          eq(authorizedSignatoryAuditLog.action, "update"),
+        ),
+      );
+    expect(audit).toHaveLength(1);
+    expect(audit[0]?.changes).toEqual({
+      title: {
+        old: "Signatário Autorizado — Massa",
+        new: "Gerente da Qualidade",
+      },
+    });
+
+    // A blank title clears it: the certificate then prints no title at all.
+    const cleared = await authorizedSignatoriesRouter.request(`/${id}`, {
+      method: "PATCH",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ title: "   " }),
+    });
+    expect(cleared.status).toBe(200);
+    const [after] = await db
+      .select({ title: authorizedSignatory.title })
+      .from(authorizedSignatory)
+      .where(eq(authorizedSignatory.id, id));
+    expect(after?.title).toBeNull();
+  });
+
+  it("REQ-C1-2 PATCH /:id as technician → 403 and on another org's record → 404; the title is unchanged", async () => {
+    const orgA = await seedOrg({
+      orgId: "org-a",
+      userId: "admin-a",
+      role: "admin",
+    });
+    const orgB = await seedOrg({
+      orgId: "org-b",
+      userId: "admin-b",
+      role: "admin",
+    });
+    const foreignId = await seedSignatory({
+      organizationId: orgB.orgId,
+      userId: orgB.userId,
+      authorizedBy: orgB.userId,
+    });
+    await db
+      .update(authorizedSignatory)
+      .set({ title: "Título da B" })
+      .where(eq(authorizedSignatory.id, foreignId));
+
+    loginAs({ userId: orgA.userId, organizationId: orgA.orgId });
+    const crossTenant = await authorizedSignatoriesRouter.request(
+      `/${foreignId}`,
+      {
+        method: "PATCH",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ title: "Invadido" }),
+      },
+    );
+    expect(crossTenant.status).toBe(404);
+
+    await seedExtraMember({
+      userId: "tech-a",
+      orgId: orgA.orgId,
+      role: "technician",
+    });
+    const ownId = await seedSignatory({
+      organizationId: orgA.orgId,
+      userId: "tech-a",
+      authorizedBy: orgA.userId,
+    });
+    loginAs({ userId: "tech-a", organizationId: orgA.orgId });
+    const blocked = await authorizedSignatoriesRouter.request(`/${ownId}`, {
+      method: "PATCH",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ title: "Auto-promovido" }),
+    });
+    expect(blocked.status).toBe(403);
+
+    const rows = await db
+      .select({ id: authorizedSignatory.id, title: authorizedSignatory.title })
+      .from(authorizedSignatory);
+    expect(rows.find((row) => row.id === foreignId)?.title).toBe("Título da B");
+    expect(rows.find((row) => row.id === ownId)?.title).toBeNull();
+  });
+
+  // -------------------------------------------------------------------------
   // REQ-SGTRY-005 — Unauthenticated requests → 401
   // -------------------------------------------------------------------------
   it("REQ-SGTRY-005 unauthenticated GET / and POST / → 401", async () => {

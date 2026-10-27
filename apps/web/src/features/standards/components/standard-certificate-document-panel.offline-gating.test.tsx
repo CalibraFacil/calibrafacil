@@ -32,6 +32,8 @@ const standard: StandardDetail = {
   model: null,
   certificateNumber: 'CERT-001',
   calibratedBy: null,
+  calibrationProviderAccreditationNumber: null,
+  calibrationProviderMraRecognized: false,
   calibrationDate: '2026-01-15T00:00:00.000Z',
   nextCalibrationDate: '2027-01-15T00:00:00.000Z',
   referenceValue: 1000,

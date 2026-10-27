@@ -28,6 +28,7 @@ import {
   member,
   memberVisualSignature,
   organization,
+  organizationUnit,
   referenceStandard,
   service,
   user,
@@ -613,6 +614,235 @@ describe("REQ-CIN-1: approval freezes the certificate input", () => {
     expect(field(field(field(rows[0]?.input, "job"), "lab"), "name")).toBe(
       "Laboratório Renomeado",
     );
+  });
+});
+
+describe("roadmap 2 C1/C2: the content decisions are frozen at approval", () => {
+  async function assetTypeIdOf(fixture: Fixture): Promise<number> {
+    const [row] = await db
+      .select({ assetTypeId: asset.assetTypeId })
+      .from(asset)
+      .where(eq(asset.id, fixture.assetId));
+    if (!row) throw new Error("asset missing");
+    return row.assetTypeId;
+  }
+
+  async function frozenJob(jobId: number): Promise<unknown> {
+    const [row] = await frozenRows(jobId);
+    return field(row?.input, "job");
+  }
+
+  it("REQ-C1-2 [HIGH RISK] the signatory is the approver's authorized-signatory record, with ITS title, not the lab profile's technical-manager title", async () => {
+    const fixture = await seedFixture();
+    const assetTypeId = await assetTypeIdOf(fixture);
+    // An org-wide record and a record for this asset type: the scope's wins.
+    await db.insert(authorizedSignatory).values([
+      {
+        organizationId: ORG,
+        userId: CHECKER,
+        assetTypeId: null,
+        title: "Signatário Autorizado (geral)",
+        authorizedBy: MAKER,
+      },
+      {
+        organizationId: ORG,
+        userId: CHECKER,
+        assetTypeId,
+        title: "Signatária Autorizada — Massa",
+        authorizedBy: MAKER,
+      },
+    ]);
+    const jobId = await seedReviewJob(fixture);
+
+    expect((await approve(jobId)).status).toBe(200);
+
+    const job = await frozenJob(jobId);
+    expect(field(job, "signatory")).toMatchObject({
+      name: "Ana Aprovadora",
+      title: "Signatária Autorizada — Massa",
+      assetTypeId,
+    });
+    // The profile's manager title is still frozen (legacy renders read it), but
+    // it is not the signatory's.
+    expect(field(field(job, "lab"), "technicalManagerTitle")).toBe(
+      "Gerente Técnica",
+    );
+    expect(field(field(job, "signatory"), "title")).not.toBe("Gerente Técnica");
+  });
+
+  it("REQ-C1-2 the frozen title does not follow a later edit of the record", async () => {
+    const fixture = await seedFixture();
+    await db.insert(authorizedSignatory).values({
+      organizationId: ORG,
+      userId: CHECKER,
+      assetTypeId: null,
+      title: "Título na aprovação",
+      authorizedBy: MAKER,
+    });
+    const jobId = await seedReviewJob(fixture);
+    expect((await approve(jobId)).status).toBe(200);
+
+    await db
+      .update(authorizedSignatory)
+      .set({ title: "Título alterado depois" })
+      .where(eq(authorizedSignatory.organizationId, ORG));
+
+    expect(field(field(await frozenJob(jobId), "signatory"), "title")).toBe(
+      "Título na aprovação",
+    );
+  });
+
+  it("REQ-C1-2 an org with no signatory roster freezes no signatory (name only on the certificate, never the manager's title)", async () => {
+    const fixture = await seedFixture();
+    const jobId = await seedReviewJob(fixture);
+    expect((await approve(jobId)).status).toBe(200);
+    expect(field(await frozenJob(jobId), "signatory")).toBeNull();
+  });
+
+  it("REQ-C1-2 an approver without a record is refused when the org keeps a roster (existing gate)", async () => {
+    const fixture = await seedFixture();
+    await db.insert(authorizedSignatory).values({
+      organizationId: ORG,
+      userId: MAKER,
+      assetTypeId: null,
+      authorizedBy: MAKER,
+    });
+    const jobId = await seedReviewJob(fixture);
+    const response = await approve(jobId);
+    expect(response.status).not.toBe(200);
+    expect(await frozenRows(jobId)).toHaveLength(0);
+  });
+
+  it("REQ-C2-1 the calibrating body is the organization when the unit declares no CNPJ of its own", async () => {
+    const fixture = await seedFixture();
+    const jobId = await seedReviewJob(fixture);
+    expect((await approve(jobId)).status).toBe(200);
+    expect(field(await frozenJob(jobId), "calibratingBody")).toMatchObject({
+      source: "organization",
+      unitId: fixture.unitId,
+      legalName: "Laboratório Um",
+      cnpj: "12345678000199",
+      city: "Curitiba",
+      state: "PR",
+    });
+  });
+
+  it("REQ-C2-1 [HIGH RISK] a unit that declares its own CNPJ is the calibrating body: its legal name, CNPJ and address are frozen", async () => {
+    const fixture = await seedFixture();
+    await db
+      .update(organizationUnit)
+      .set({
+        legalName: "Laboratório Um Filial Sul Ltda",
+        cnpj: "98765432000155",
+        street: "Av. da Filial",
+        number: "200",
+        city: "Pelotas",
+        state: "RS",
+      })
+      .where(eq(organizationUnit.id, fixture.unitId));
+    const jobId = await seedReviewJob(fixture);
+    expect((await approve(jobId)).status).toBe(200);
+
+    expect(field(await frozenJob(jobId), "calibratingBody")).toMatchObject({
+      source: "unit",
+      unitId: fixture.unitId,
+      legalName: "Laboratório Um Filial Sul Ltda",
+      cnpj: "98765432000155",
+      street: "Av. da Filial",
+      city: "Pelotas",
+      state: "RS",
+    });
+
+    // Frozen: a later edit of the unit does not reach the document.
+    await db
+      .update(organizationUnit)
+      .set({ city: "Outra cidade" })
+      .where(eq(organizationUnit.id, fixture.unitId));
+    expect(
+      field(field(await frozenJob(jobId), "calibratingBody"), "city"),
+    ).toBe("Pelotas");
+  });
+
+  it("REQ-C2-2 [HIGH RISK] traceability is frozen as NOT verified when the provider is only named (free text)", async () => {
+    const fixture = await seedFixture();
+    const jobId = await seedReviewJob(fixture);
+    expect((await approve(jobId)).status).toBe(200);
+    expect(field(await frozenJob(jobId), "traceability")).toMatchObject({
+      verified: false,
+      providers: [],
+      failures: [{ standardId: 11, reason: "provider_not_accredited" }],
+    });
+  });
+
+  it("REQ-C2-2 [HIGH RISK] traceability is frozen as verified when every standard has an accredited, MRA-recognised provider and a certificate valid on the calibration day", async () => {
+    const fixture = await seedFixture();
+    const jobId = await seedReviewJob(fixture, {
+      standardsSnapshot: [
+        {
+          id: 11,
+          name: "Massa padrão 1 kg",
+          certificateNumber: "RBC-777",
+          calibratedBy: "Laboratório RBC",
+          calibrationProvider: {
+            accreditationNumber: "CAL 0123",
+            mraRecognized: true,
+          },
+          calibrationDate: new Date("2025-12-01T00:00:00.000Z"),
+          nextCalibrationDate: new Date("2027-12-01T00:00:00.000Z"),
+          uncertainty: 0.001,
+          uncertaintyUnit: "g",
+          coverageFactor: 2,
+          distribution: "normal",
+          drift: null,
+          certifiedValues: null,
+        },
+      ],
+    });
+    expect((await approve(jobId)).status).toBe(200);
+    expect(field(await frozenJob(jobId), "traceability")).toMatchObject({
+      verified: true,
+      providers: [{ name: "Laboratório RBC", accreditationNumber: "CAL 0123" }],
+      failures: [],
+    });
+  });
+
+  it("REQ-C2-2 an expired standard certificate on the calibration day is not verified", async () => {
+    const fixture = await seedFixture();
+    const jobId = await seedReviewJob(fixture, {
+      standardsSnapshot: [
+        {
+          id: 11,
+          name: "Massa padrão 1 kg",
+          certificateNumber: "RBC-777",
+          calibratedBy: "Laboratório RBC",
+          calibrationProvider: {
+            accreditationNumber: "CAL 0123",
+            mraRecognized: true,
+          },
+          calibrationDate: new Date("2024-01-01T00:00:00.000Z"),
+          nextCalibrationDate: new Date("2026-01-01T00:00:00.000Z"),
+          uncertainty: 0.001,
+          uncertaintyUnit: "g",
+          coverageFactor: 2,
+          distribution: "normal",
+          drift: null,
+          certifiedValues: null,
+        },
+      ],
+    });
+    expect((await approve(jobId)).status).toBe(200);
+    expect(
+      field(field(await frozenJob(jobId), "traceability"), "verified"),
+    ).toBe(false);
+  });
+
+  it("every new input is frozen under the layout that carries these rules", async () => {
+    const fixture = await seedFixture();
+    const jobId = await seedReviewJob(fixture);
+    expect((await approve(jobId)).status).toBe(200);
+    const [row] = await frozenRows(jobId);
+    expect(row?.layoutVersion).toBe("1.1.0");
+    expect(field(field(row?.input, "layout"), "version")).toBe("1.1.0");
   });
 });
 

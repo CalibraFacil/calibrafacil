@@ -12,6 +12,7 @@ import {
 } from "@calibra-facil/db/certificate-input";
 import { appendJobEvent } from "@calibra-facil/db/job-events";
 import {
+  authorizedSignatory,
   calibrationJob,
   certificateInput,
   customer,
@@ -184,6 +185,15 @@ async function seedApprovedJob(
     .update(user)
     .set({ name: "Ana Aprovadora" })
     .where(eq(user.id, USER_ID));
+  // C1: the title under the signature is the approver's authorized-signatory
+  // record's, not the lab profile's technical-manager title.
+  await db.insert(authorizedSignatory).values({
+    organizationId: org.orgId,
+    userId: USER_ID,
+    assetTypeId: null,
+    title: "Signatária Autorizada Original",
+    authorizedBy: USER_ID,
+  });
   if (freeze) await freezeJob(job.jobId, org.orgId);
   // Released after the fact: a superseded job is frozen content, so it is moved last.
   if (options.status) await setJobStatus(job.jobId, options.status);
@@ -256,6 +266,10 @@ async function changeEverythingAfterApproval(
     .set({ name: "Bruno Substituto" })
     .where(eq(user.id, USER_ID));
   await db
+    .update(authorizedSignatory)
+    .set({ title: "Título Novo do Signatário" })
+    .where(eq(authorizedSignatory.organizationId, organizationId));
+  await db
     .update(customer)
     .set({ name: "Cliente Renomeado Ltda" })
     .where(
@@ -295,12 +309,16 @@ describe("REQ-CIN-2: the worker renders from the frozen certificate input", () =
     expect(html).toContain("Laboratório Aprovado");
     expect(html).toContain("Cliente Aprovado SA");
     expect(html).toContain("Ana Aprovadora");
-    expect(html).toContain("Gerente Técnica Original");
+    // C1: the signatory's title is the authorized-signatory record's as it was
+    // at approval; the lab profile's manager title is not printed under it
+    expect(html).toContain("Signatária Autorizada Original");
+    expect(html).not.toContain("Gerente Técnica Original");
     // ...and none of what changed since
     expect(html).not.toContain("Laboratório Renomeado");
     expect(html).not.toContain("Cliente Renomeado Ltda");
     expect(html).not.toContain("Bruno Substituto");
     expect(html).not.toContain("Gerente Técnica Nova");
+    expect(html).not.toContain("Título Novo do Signatário");
 
     const [issued] = await snapshots(job.jobId);
     const data = issued?.inputDataSnapshot;
@@ -687,6 +705,100 @@ describe("REQ-CIN-4: re-rendering the same frozen input is reproducible", () => 
   });
 });
 
+describe("roadmap 2 C1/C2: certificates already issued re-render as they always did", () => {
+  /**
+   * Rewrites the frozen input of a job into the shape an approval made BEFORE
+   * C1/C2 stored: layout 1.0.0, none of the C1/C2 decisions. The approval audit
+   * row records the new hash, as the approval did.
+   */
+  async function downgradeToPreC1C2Input(jobId: number) {
+    const [row] = await db
+      .select()
+      .from(certificateInput)
+      .where(eq(certificateInput.jobId, jobId));
+    const original = row?.input;
+    if (!isCertificateInput(original)) throw new Error("no frozen input");
+    const {
+      signatory: _signatory,
+      calibratingBody: _calibratingBody,
+      traceability: _traceability,
+      ...oldJob
+    } = original.job;
+    const legacyInput = {
+      ...original,
+      layout: { ...original.layout, version: "1.0.0" },
+      job: oldJob,
+    };
+    const sha256 = certificateInputSha256(legacyInput);
+    await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select set_config('calibra.allow_audit_rewrite', 'on', true)`,
+      );
+      await tx
+        .update(certificateInput)
+        .set({ input: legacyInput, sha256, layoutVersion: "1.0.0" })
+        .where(eq(certificateInput.jobId, jobId));
+      await tx.execute(
+        sql`UPDATE job_audit_log
+            SET changes = jsonb_set(changes, '{certificateInputSha256}', to_jsonb(${sha256}::text))
+            WHERE job_id = ${jobId} AND action = 'approve'`,
+      );
+    });
+  }
+
+  it("a 1.0.0 input renders under the legacy rules: the profile's title, no calibrating body, the original coverage sentence; and its snapshot records layout 1.0.0", async () => {
+    const rendered: string[] = [];
+    stubGotenberg(rendered);
+    const { job } = await seedApprovedJob();
+    await downgradeToPreC1C2Input(job.jobId);
+
+    await processBackgroundJob(makeEnv(), {
+      type: "CERTIFICATE",
+      jobId: job.jobId,
+      userId: USER_ID,
+    });
+
+    expect(await jobStatus(job.jobId)).toBe("APPROVED");
+    const html = rendered[0] ?? "";
+    expect(html).toContain("Gerente Técnica Original");
+    expect(html).not.toContain("Signatária Autorizada Original");
+    expect(html).not.toContain("Laboratório calibrador");
+    expect(html).toContain(
+      "que para uma distribuição t com os graus de liberdade efetivos indicados corresponde a uma probabilidade de abrangência de aproximadamente 95 %.",
+    );
+    const result = await db.execute(
+      sql`SELECT layout_version FROM issued_certificate_snapshot WHERE job_id = ${job.jobId}`,
+    );
+    expect(field(toRows(result)[0], "layout_version")).toBe("1.0.0");
+  });
+
+  it("a 1.1.0 input renders under the current rules: the record's title, the calibrating body, the frozen-result coverage sentence; layout 1.1.0", async () => {
+    const rendered: string[] = [];
+    stubGotenberg(rendered);
+    const { job } = await seedApprovedJob();
+
+    await processBackgroundJob(makeEnv(), {
+      type: "CERTIFICATE",
+      jobId: job.jobId,
+      userId: USER_ID,
+    });
+
+    const html = rendered[0] ?? "";
+    expect(html).toContain("Signatária Autorizada Original");
+    expect(html).toContain("Laboratório calibrador");
+    expect(html).toContain("o qual para uma distribuição");
+    expect(html).not.toContain(
+      "graus de liberdade efetivos indicados corresponde",
+    );
+    // The seeded standards carry free-text providers only: nothing is asserted.
+    expect(html).not.toContain("metrologicamente rastreáveis");
+    const result = await db.execute(
+      sql`SELECT layout_version FROM issued_certificate_snapshot WHERE job_id = ${job.jobId}`,
+    );
+    expect(field(toRows(result)[0], "layout_version")).toBe("1.1.0");
+  });
+});
+
 describe("REQ-CIN-1: parity of the frozen document with the legacy live assembly", () => {
   it("REQ-CIN-1 [HIGH RISK] on a seeded job the legacy live read and the frozen document hand the template identical render data", async () => {
     // a rich graph: logo and signature images, a linked service order, an
@@ -788,7 +900,14 @@ describe("REQ-CIN-1: parity of the frozen document with the legacy live assembly
     const { input } = await freezeJob(job.jobId, org.orgId);
 
     // the assembled data is the same, field for field (instants as ISO strings)
-    expect(input.job).toEqual(JSON.parse(JSON.stringify(legacy)));
+    // (the C1/C2 decisions — signatory, calibrating body, traceability — exist
+    // only in the frozen document, by design; they are asserted separately)
+    const { signatory, calibratingBody, traceability, ...assembled } =
+      input.job;
+    expect(assembled).toEqual(JSON.parse(JSON.stringify(legacy)));
+    expect(signatory).toBeNull();
+    expect(calibratingBody).toMatchObject({ source: "organization" });
+    expect(traceability).toMatchObject({ verified: false });
     expect(input.job.serviceOrder?.intakeCondition).toBe("Riscos na carcaça");
     expect(input.job.originalJobId).toBe("CAL-2026-0001");
     expect(input.job.lab.logo).toBe(dataUrl(LOGO_BYTES));

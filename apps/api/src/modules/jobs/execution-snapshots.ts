@@ -297,6 +297,10 @@ async function standardSnapshotEntries(
         kind: s.kind,
         certificateNumber: s.certificateNumber,
         calibratedBy: s.calibratedBy,
+        calibrationProvider: {
+          accreditationNumber: s.calibrationProviderAccreditationNumber,
+          mraRecognized: s.calibrationProviderMraRecognized,
+        },
         calibrationDate: s.calibrationDate,
         nextCalibrationDate: s.nextCalibrationDate,
         uncertainty: s.uncertainty,

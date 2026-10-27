@@ -2,15 +2,19 @@ import {
   assembleCertificateJobData,
   buildCertificateInput,
   certificateInputSha256,
+  freezeSignatory,
   imageDataUrl,
+  pickSignatoryRecord,
+  resolveCalibratingBody,
   type CertificateInput,
   type CertificateJobSource,
 } from "@calibra-facil/certificate-data";
 import { getLogoKeyFromUrl } from "@calibra-facil/shared/storage-keys";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import type { db } from "./db";
 import {
   asset,
+  authorizedSignatory,
   calibrationJob,
   calibrationMethod,
   certificateInput,
@@ -18,6 +22,7 @@ import {
   member,
   memberVisualSignature,
   organization,
+  organizationUnit,
   serviceOrder,
   serviceOrderCertificateLink,
   user,
@@ -267,6 +272,50 @@ export async function loadCertificateJobSource(
         .limit(1)
     : [];
 
+  // C1: the approver's authorized-signatory record for this scope, read under
+  // the approval's own lock and frozen. The title printed under the signature is
+  // the record's, never the lab profile's technical-manager title.
+  const signatoryRecords = job.approvedBy
+    ? await tx
+        .select({
+          id: authorizedSignatory.id,
+          assetTypeId: authorizedSignatory.assetTypeId,
+          title: authorizedSignatory.title,
+          scopeDescription: authorizedSignatory.scopeDescription,
+          authorizedAt: authorizedSignatory.authorizedAt,
+          expiresAt: authorizedSignatory.expiresAt,
+        })
+        .from(authorizedSignatory)
+        .where(
+          and(
+            eq(authorizedSignatory.organizationId, organizationId),
+            eq(authorizedSignatory.userId, job.approvedBy),
+            eq(authorizedSignatory.status, "ACTIVE"),
+            isNull(authorizedSignatory.deletedAt),
+          ),
+        )
+    : [];
+  const signatoryRecord = pickSignatoryRecord(
+    signatoryRecords,
+    assetRow.assetTypeId ?? null,
+    job.approvedAt ?? new Date(),
+  );
+
+  // C2: the calibrating body is the unit that performed the calibration when it
+  // is a distinct establishment, else the organization.
+  const [unitRow] = job.unitId
+    ? await tx
+        .select()
+        .from(organizationUnit)
+        .where(
+          and(
+            eq(organizationUnit.id, job.unitId),
+            eq(organizationUnit.organizationId, organizationId),
+          ),
+        )
+        .limit(1)
+    : [];
+
   const [signature] = job.approvedBy
     ? await tx
         .select({
@@ -417,6 +466,40 @@ export async function loadCertificateJobSource(
           ? imageDataUrl(signatureBytes, signature.contentType)
           : null,
     },
+    signatory:
+      signatoryRecord && approver?.name
+        ? freezeSignatory(signatoryRecord, approver.name)
+        : null,
+    calibratingBody: resolveCalibratingBody({
+      organization: {
+        name: lab.name,
+        // The organization has no separate legal-name column: its name is it.
+        legalName: null,
+        cnpj: lab.cnpj,
+        street: lab.street,
+        number: lab.number,
+        complement: lab.complement,
+        neighbourhood: lab.neighbourhood,
+        city: lab.city,
+        state: lab.state,
+        cep: lab.cep,
+      },
+      unit: unitRow
+        ? {
+            id: unitRow.id,
+            name: unitRow.name,
+            legalName: unitRow.legalName,
+            cnpj: unitRow.cnpj,
+            street: unitRow.street,
+            number: unitRow.number,
+            complement: unitRow.complement,
+            neighbourhood: unitRow.neighbourhood,
+            city: unitRow.city,
+            state: unitRow.state,
+            cep: unitRow.cep,
+          }
+        : null,
+    }),
     original: original
       ? { jobId: original.jobId, approvedAt: original.approvedAt }
       : null,

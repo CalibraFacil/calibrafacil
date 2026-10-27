@@ -23,6 +23,7 @@ import {
   UpdateReferenceStandardSchema,
   ListReferenceStandardsQuerySchema,
   RenewCertificateSchema,
+  providerAccreditationIssue,
   MassCompositionProfileCreateSchema,
   MassCompositionProfileUpdateSchema,
   ImpactedCertificatesQuerySchema,
@@ -66,7 +67,7 @@ import {
   inArray,
 } from "drizzle-orm";
 import { buildUnitScopeCondition } from "../lib/units";
-import { notFound } from "../lib/domain-errors";
+import { domainErrorResponse, invalid, notFound } from "../lib/domain-errors";
 import {
   parseLegacyNumericIdentifier,
   slugifyRouteIdentifier,
@@ -134,6 +135,58 @@ function toCompositionProfileDto(
     coverageFactor: row.coverageFactor,
     quantityAvailable: row.quantityAvailable,
   };
+}
+
+type ProviderFactsOutcome =
+  | { ok: true; number: string | null; mraRecognized: boolean }
+  | { ok: false; message: string };
+
+/**
+ * Roadmap 2 C2: the calibration provider's accreditation facts after a write.
+ * They describe the provider named in `calibratedBy`, so a write that names a
+ * DIFFERENT provider without supplying its facts resets them (not verified)
+ * instead of carrying the previous provider's accreditation over. The MRA flag
+ * needs an accreditation number.
+ */
+function nextProviderFacts(
+  existing: {
+    calibratedBy: string | null;
+    calibrationProviderAccreditationNumber: string | null;
+    calibrationProviderMraRecognized: boolean;
+  },
+  input: {
+    calibratedBy?: string | null;
+    calibrationProviderAccreditationNumber?: string | null;
+    calibrationProviderMraRecognized?: boolean;
+  },
+): ProviderFactsOutcome {
+  const normalise = (value: string | null | undefined) =>
+    value?.trim().toLowerCase() || null;
+  const providerChanged =
+    input.calibratedBy !== undefined &&
+    normalise(input.calibratedBy) !== normalise(existing.calibratedBy);
+  const factsSupplied =
+    input.calibrationProviderAccreditationNumber !== undefined ||
+    input.calibrationProviderMraRecognized !== undefined;
+  const reset = providerChanged && !factsSupplied;
+
+  const number = reset
+    ? null
+    : input.calibrationProviderAccreditationNumber !== undefined
+      ? input.calibrationProviderAccreditationNumber?.trim() || null
+      : existing.calibrationProviderAccreditationNumber;
+  const mraRecognized = reset
+    ? false
+    : (input.calibrationProviderMraRecognized ??
+      existing.calibrationProviderMraRecognized);
+
+  const issue = providerAccreditationIssue({
+    calibrationProviderAccreditationNumber: number,
+    calibrationProviderMraRecognized: mraRecognized,
+  });
+  return issue
+    ? { ok: false, message: issue }
+    : { ok: true, number, mraRecognized };
 }
 
 async function resolveStandardRouteId(
@@ -419,6 +472,10 @@ export const standardsRouter = new Hono<{
             model: referenceStandard.model,
             certificateNumber: referenceStandard.certificateNumber,
             calibratedBy: referenceStandard.calibratedBy,
+            calibrationProviderAccreditationNumber:
+              referenceStandard.calibrationProviderAccreditationNumber,
+            calibrationProviderMraRecognized:
+              referenceStandard.calibrationProviderMraRecognized,
             calibrationDate: referenceStandard.calibrationDate,
             nextCalibrationDate: referenceStandard.nextCalibrationDate,
             referenceValue: referenceStandard.referenceValue,
@@ -1087,6 +1144,10 @@ export const standardsRouter = new Hono<{
             model: input.model || null,
             certificateNumber: input.certificateNumber,
             calibratedBy: input.calibratedBy || null,
+            calibrationProviderAccreditationNumber:
+              input.calibrationProviderAccreditationNumber?.trim() || null,
+            calibrationProviderMraRecognized:
+              input.calibrationProviderMraRecognized ?? false,
             calibrationDate: new Date(input.calibrationDate),
             nextCalibrationDate: new Date(input.nextCalibrationDate),
             referenceValue: input.referenceValue ?? null,
@@ -1233,6 +1294,35 @@ export const standardsRouter = new Hono<{
               new: input.calibratedBy,
             };
             updateData.calibratedBy = input.calibratedBy;
+          }
+          const providerFacts = nextProviderFacts(existing, input);
+          if (!providerFacts.ok) {
+            return domainErrorResponse(
+              c,
+              invalid("invalid_request", providerFacts.message),
+            );
+          }
+          if (
+            providerFacts.number !==
+            existing.calibrationProviderAccreditationNumber
+          ) {
+            changes.calibrationProviderAccreditationNumber = {
+              old: existing.calibrationProviderAccreditationNumber,
+              new: providerFacts.number,
+            };
+            updateData.calibrationProviderAccreditationNumber =
+              providerFacts.number;
+          }
+          if (
+            providerFacts.mraRecognized !==
+            existing.calibrationProviderMraRecognized
+          ) {
+            changes.calibrationProviderMraRecognized = {
+              old: existing.calibrationProviderMraRecognized,
+              new: providerFacts.mraRecognized,
+            };
+            updateData.calibrationProviderMraRecognized =
+              providerFacts.mraRecognized;
           }
           if (input.calibrationDate !== undefined) {
             const newDate = new Date(input.calibrationDate);
@@ -1900,6 +1990,26 @@ export const standardsRouter = new Hono<{
           };
           updateData.calibratedBy = input.calibratedBy;
         }
+        // C2: a renewal from another provider must re-attest its accreditation.
+        const renewedProviderFacts = nextProviderFacts(existing, input);
+        if (!renewedProviderFacts.ok) {
+          return domainErrorResponse(
+            c,
+            invalid("invalid_request", renewedProviderFacts.message),
+          );
+        }
+        changes.calibrationProviderAccreditationNumber = {
+          old: existing.calibrationProviderAccreditationNumber,
+          new: renewedProviderFacts.number,
+        };
+        updateData.calibrationProviderAccreditationNumber =
+          renewedProviderFacts.number;
+        changes.calibrationProviderMraRecognized = {
+          old: existing.calibrationProviderMraRecognized,
+          new: renewedProviderFacts.mraRecognized,
+        };
+        updateData.calibrationProviderMraRecognized =
+          renewedProviderFacts.mraRecognized;
 
         const newCalibrationDate = new Date(input.calibrationDate);
         changes.calibrationDate = {

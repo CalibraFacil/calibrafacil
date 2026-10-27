@@ -54,6 +54,8 @@ export function buildStandardRecord(
     model: "M-1",
     certificateNumber: "CERT-001",
     calibratedBy: "Laboratório RBC",
+    calibrationProviderAccreditationNumber: "CAL 0123",
+    calibrationProviderMraRecognized: true,
     calibrationDate: "2026-01-10T00:00:00.000Z",
     nextCalibrationDate: "2027-01-10T00:00:00.000Z",
     referenceValue: 1,

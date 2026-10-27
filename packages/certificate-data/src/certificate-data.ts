@@ -17,6 +17,12 @@ import {
   formatInstant,
 } from "@calibra-facil/shared/format";
 import { certificateVerificationUrl } from "@calibra-facil/shared/public-urls";
+import type {
+  CalibrationProviderFacts,
+  FrozenCalibratingBody,
+  FrozenSignatory,
+  FrozenTraceability,
+} from "./frozen-content.js";
 
 /**
  * The job snapshot a certificate is rendered from — every value that can land
@@ -109,6 +115,23 @@ export type CertificateJobData = {
   data: Record<string, unknown> | null;
   results: Record<string, unknown> | null;
   approverName: string | null;
+  /**
+   * C1 (frozen at approval; absent on inputs frozen before it): the approver's
+   * authorized-signatory record. The certificate prints ITS title under the
+   * signature, never the lab profile's technical-manager title.
+   */
+  signatory?: FrozenSignatory | null;
+  /**
+   * C2 (frozen at approval; absent before it): the legal entity and place that
+   * performed the calibration — the unit's own when it is a distinct
+   * establishment, else the organization's.
+   */
+  calibratingBody?: FrozenCalibratingBody | null;
+  /**
+   * C2 (frozen at approval; absent before it): whether SI traceability was
+   * VERIFIED from the standards data. The sentence prints only when true.
+   */
+  traceability?: FrozenTraceability | null;
   certificateTemplateSnapshot?: Record<string, unknown> | null;
   approverSignatureUrl?: string | null;
   supersedesId?: number | null;
@@ -301,6 +324,8 @@ export type StandardSnapshot = {
   type?: string | null;
   certificateNumber: string;
   calibratedBy?: string | null;
+  /** What the lab recorded about the accreditation of that provider (C2). */
+  calibrationProvider?: CalibrationProviderFacts | null;
   calibrationDate: Date | string;
   nextCalibrationDate?: Date | string | null;
   uncertainty: number | null;

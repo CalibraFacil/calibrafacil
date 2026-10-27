@@ -1781,6 +1781,34 @@ export const CertifiedValueSchema = z.object({
 export type CertifiedValue = z.infer<typeof CertifiedValueSchema>;
 
 /**
+ * Roadmap 2 C2: who calibrated the standard, as evidence for the SI-traceability
+ * sentence. The sentence is printed only when the provider is recorded as
+ * accredited by an ILAC-MRA signatory (Cgcre/RBC in Brazil) WITH its
+ * accreditation number; `mraRecognized` without a number is refused by
+ * `providerAccreditationIssue`.
+ */
+const CalibrationProviderFields = {
+  calibrationProviderAccreditationNumber: z
+    .string()
+    .trim()
+    .max(60)
+    .optional()
+    .nullable(),
+  calibrationProviderMraRecognized: z.boolean().optional(),
+};
+
+/** The refusal message when the MRA flag is set without an accreditation number, else null. */
+export function providerAccreditationIssue(input: {
+  calibrationProviderAccreditationNumber?: string | null;
+  calibrationProviderMraRecognized?: boolean;
+}): string | null {
+  return input.calibrationProviderMraRecognized === true &&
+    !input.calibrationProviderAccreditationNumber?.trim()
+    ? "Informe o número de acreditação do laboratório que calibrou o padrão"
+    : null;
+}
+
+/**
  * Schema for creating a new reference standard
  * Supports both single-value and multi-value (set) standards
  */
@@ -1795,6 +1823,7 @@ export const CreateReferenceStandardSchema = z
     // Certificate traceability
     certificateNumber: z.string().min(1, "Número do certificado é obrigatório"),
     calibratedBy: z.string().optional(),
+    ...CalibrationProviderFields,
     calibrationDate: z.string().min(1, "Data de calibração é obrigatória"),
     nextCalibrationDate: z.string().min(1, "Próxima calibração é obrigatória"),
     // Single-value metrology data (optional if using certifiedValues)
@@ -1826,7 +1855,12 @@ export const CreateReferenceStandardSchema = z
       message:
         "Informe os dados metrológicos do padrão, como canais, valores de massa ou valor de referência",
     },
-  );
+  )
+  .refine((data) => providerAccreditationIssue(data) === null, {
+    message:
+      "Informe o número de acreditação do laboratório que calibrou o padrão",
+    path: ["calibrationProviderAccreditationNumber"],
+  });
 
 export type CreateReferenceStandardInput = z.infer<
   typeof CreateReferenceStandardSchema
@@ -1844,6 +1878,7 @@ export const UpdateReferenceStandardSchema = z.object({
   model: z.string().optional().nullable(),
   certificateNumber: z.string().min(1).optional(),
   calibratedBy: z.string().optional().nullable(),
+  ...CalibrationProviderFields,
   calibrationDate: z.string().optional(),
   nextCalibrationDate: z.string().optional(),
   referenceValue: z.coerce.number().optional().nullable(),
@@ -1865,21 +1900,28 @@ export type UpdateReferenceStandardInput = z.infer<
  * Schema for renewing a reference standard's calibration certificate
  * This is a special action that requires a reason for audit purposes
  */
-export const RenewCertificateSchema = z.object({
-  certificateNumber: z.string().min(1, "Número do certificado é obrigatório"),
-  calibratedBy: z.string().optional(),
-  calibrationDate: z.string().min(1, "Data de calibração é obrigatória"),
-  nextCalibrationDate: z.string().min(1, "Próxima calibração é obrigatória"),
-  // Updated metrology data
-  referenceValue: z.coerce.number().optional().nullable(),
-  uncertainty: z.coerce.number().positive().optional().nullable(),
-  uncertaintyUnit: z.string().optional().nullable(),
-  coverageFactor: z.coerce.number().positive().optional(),
-  certifiedValues: z.array(CertifiedValueSchema).optional().nullable(),
-  metrologyData: ReferenceStandardMetrologyDataSchema.optional().nullable(),
-  // Required for audit trail (ISO 17025)
-  reason: z.string().min(1, "Motivo da renovação é obrigatório"),
-});
+export const RenewCertificateSchema = z
+  .object({
+    certificateNumber: z.string().min(1, "Número do certificado é obrigatório"),
+    calibratedBy: z.string().optional(),
+    ...CalibrationProviderFields,
+    calibrationDate: z.string().min(1, "Data de calibração é obrigatória"),
+    nextCalibrationDate: z.string().min(1, "Próxima calibração é obrigatória"),
+    // Updated metrology data
+    referenceValue: z.coerce.number().optional().nullable(),
+    uncertainty: z.coerce.number().positive().optional().nullable(),
+    uncertaintyUnit: z.string().optional().nullable(),
+    coverageFactor: z.coerce.number().positive().optional(),
+    certifiedValues: z.array(CertifiedValueSchema).optional().nullable(),
+    metrologyData: ReferenceStandardMetrologyDataSchema.optional().nullable(),
+    // Required for audit trail (ISO 17025)
+    reason: z.string().min(1, "Motivo da renovação é obrigatório"),
+  })
+  .refine((data) => providerAccreditationIssue(data) === null, {
+    message:
+      "Informe o número de acreditação do laboratório que calibrou o padrão",
+    path: ["calibrationProviderAccreditationNumber"],
+  });
 
 export type RenewCertificateInput = z.infer<typeof RenewCertificateSchema>;
 

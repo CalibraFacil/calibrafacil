@@ -152,6 +152,152 @@ describe("standardsRouter — real DB + real middleware", () => {
     expect(audit[0]?.performedBy).toBe(org.userId);
   });
 
+  // REQ-C2-2: who calibrated the standard, as evidence for the traceability sentence
+  describe("REQ-C2-2: the calibration provider's accreditation is recorded on the standard", () => {
+    const ACCREDITED = {
+      ...VALID_STANDARD_PAYLOAD,
+      calibratedBy: "Laboratório RBC",
+      calibrationProviderAccreditationNumber: "CAL 0123",
+      calibrationProviderMraRecognized: true,
+    };
+
+    async function create(org: { unitId: number }, body: unknown) {
+      return standardsRouter.request("/", {
+        method: "POST",
+        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+        body: JSON.stringify(body),
+      });
+    }
+
+    it("POST / stores the number and the MRA flag; the default is NOT recognised", async () => {
+      const org = await seedOrg({ orgId: "org-a", role: "admin" });
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+
+      const plain = await create(org, VALID_STANDARD_PAYLOAD);
+      expect(plain.status).toBe(201);
+      expect(await plain.json()).toMatchObject({
+        calibrationProviderAccreditationNumber: null,
+        calibrationProviderMraRecognized: false,
+      });
+
+      const accredited = await create(org, {
+        ...ACCREDITED,
+        serialNumber: "SN-2",
+      });
+      expect(accredited.status).toBe(201);
+      expect(await accredited.json()).toMatchObject({
+        calibrationProviderAccreditationNumber: "CAL 0123",
+        calibrationProviderMraRecognized: true,
+      });
+    });
+
+    it("POST / refuses the MRA flag without an accreditation number (400)", async () => {
+      const org = await seedOrg({ orgId: "org-a", role: "admin" });
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+      const res = await create(org, {
+        ...VALID_STANDARD_PAYLOAD,
+        calibrationProviderMraRecognized: true,
+      });
+      expect(res.status).toBe(400);
+    });
+
+    it("PUT /:id naming ANOTHER provider without its facts resets them (never carries the old accreditation over); naming the same one keeps them; the change is audited", async () => {
+      const org = await seedOrg({ orgId: "org-a", role: "admin" });
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+      const created: { id: number } = await (
+        await create(org, ACCREDITED)
+      ).json();
+      const put = (body: unknown) =>
+        standardsRouter.request(`/${created.id}`, {
+          method: "PUT",
+          headers: {
+            ...JSON_HEADERS,
+            "x-active-unit-id": String(org.unitId),
+          },
+          body: JSON.stringify(body),
+        });
+      const read = async () => {
+        const [row] = await db
+          .select({
+            number: referenceStandard.calibrationProviderAccreditationNumber,
+            mra: referenceStandard.calibrationProviderMraRecognized,
+          })
+          .from(referenceStandard)
+          .where(eq(referenceStandard.id, created.id));
+        return row;
+      };
+
+      expect((await put({ calibratedBy: "laboratório rbc" })).status).toBe(200);
+      expect(await read()).toEqual({ number: "CAL 0123", mra: true });
+
+      expect((await put({ calibratedBy: "Outro Laboratório" })).status).toBe(
+        200,
+      );
+      expect(await read()).toEqual({ number: null, mra: false });
+
+      const audit = await db
+        .select()
+        .from(referenceStandardAuditLog)
+        .where(eq(referenceStandardAuditLog.standardId, created.id));
+      const resetEntry = audit.find(
+        (row) =>
+          row.action === "update" &&
+          JSON.stringify(row.changes).includes(
+            "calibrationProviderMraRecognized",
+          ),
+      );
+      expect(resetEntry).toBeDefined();
+
+      // Explicit facts with the new provider are stored.
+      expect(
+        (
+          await put({
+            calibrationProviderAccreditationNumber: "CAL 0456",
+            calibrationProviderMraRecognized: true,
+          })
+        ).status,
+      ).toBe(200);
+      expect(await read()).toEqual({ number: "CAL 0456", mra: true });
+
+      // The flag cannot be set while clearing the number.
+      expect(
+        (await put({ calibrationProviderAccreditationNumber: null })).status,
+      ).toBe(400);
+      expect(await read()).toEqual({ number: "CAL 0456", mra: true });
+    });
+
+    it("POST /:id/renew from another provider re-attests: without its facts the standard is no longer verified", async () => {
+      const org = await seedOrg({ orgId: "org-a", role: "admin" });
+      loginAs({ userId: org.userId, organizationId: org.orgId });
+      const created: { id: number } = await (
+        await create(org, ACCREDITED)
+      ).json();
+      const renew = await standardsRouter.request(`/${created.id}/renew`, {
+        method: "POST",
+        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+        body: JSON.stringify({
+          certificateNumber: "RBC-2027-001",
+          calibratedBy: "Outro Laboratório",
+          calibrationDate: "2027-01-02",
+          nextCalibrationDate: "2028-01-02",
+          referenceValue: 1000,
+          uncertainty: 0.01,
+          uncertaintyUnit: "g",
+          reason: "Renovação anual",
+        }),
+      });
+      expect(renew.status).toBe(200);
+      const [row] = await db
+        .select({
+          number: referenceStandard.calibrationProviderAccreditationNumber,
+          mra: referenceStandard.calibrationProviderMraRecognized,
+        })
+        .from(referenceStandard)
+        .where(eq(referenceStandard.id, created.id));
+      expect(row).toEqual({ number: null, mra: false });
+    });
+  });
+
   // REQ-STD-005: Unit-scope filtering — member scoped to unit A excludes unit-B rows
   it("REQ-STD-005: GET / unit-scope — admin with active-unit-id header sees only own unit's standards", async () => {
     const orgA = await seedOrg({ orgId: "org-a", role: "admin" });

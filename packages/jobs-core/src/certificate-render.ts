@@ -13,6 +13,7 @@ import {
   canonicalJson,
   CERTIFICATE_LAYOUT_KEY,
   CERTIFICATE_LAYOUT_VERSION,
+  certificateContentRulesFor,
   type CertificateJobData,
 } from "@calibra-facil/certificate-data";
 import { buildCertificateLayoutData } from "./certificate/layout-data.js";
@@ -258,6 +259,15 @@ export async function processJob(
         permanent: true,
       };
     }
+    // Roadmap 2 C1/C2: an input frozen under an earlier layout re-renders under
+    // the statement rules it was issued with (byte-identical); the live legacy
+    // read (approved before the input existed) always has.
+    const contentRules =
+      source.status === "ok"
+        ? certificateContentRulesFor(source.input.layout.version)
+        : "legacy";
+    const renderedLayoutVersion =
+      contentRules === "current" ? CERTIFICATE_LAYOUT_VERSION : "1.0.0";
     const certificateInputSource =
       source.status === "ok"
         ? { source: "frozen", sha256: source.sha256 }
@@ -266,12 +276,9 @@ export async function processJob(
       console.log(
         `[JOB ${jobId}] Rendering from the frozen certificate input (sha256 ${source.sha256})`,
       );
-      if (
-        source.input.layout.key !== CERTIFICATE_LAYOUT_KEY ||
-        source.input.layout.version !== CERTIFICATE_LAYOUT_VERSION
-      ) {
+      if (source.input.layout.key !== CERTIFICATE_LAYOUT_KEY) {
         console.warn(
-          `[JOB ${jobId}] The input was frozen for layout ${source.input.layout.key}@${source.input.layout.version}; rendering with ${CERTIFICATE_LAYOUT_KEY}@${CERTIFICATE_LAYOUT_VERSION}`,
+          `[JOB ${jobId}] The input was frozen for layout ${source.input.layout.key}@${source.input.layout.version}; rendering with ${CERTIFICATE_LAYOUT_KEY}@${renderedLayoutVersion}`,
         );
       }
     } else {
@@ -288,6 +295,7 @@ export async function processJob(
         ? source.input.verificationUrl
         : certificateVerificationUrl(job.verificationToken);
     const layout = buildCertificateLayoutData(job, {
+      contentRules,
       qrCodeDataUrl: await QRCode.toDataURL(verificationUrl, {
         margin: 0,
         width: 240,
@@ -352,7 +360,7 @@ export async function processJob(
     const renderPolicy = {
       converter: "gotenberg-chromium",
       layoutKey: CERTIFICATE_LAYOUT_KEY,
-      layoutVersion: CERTIFICATE_LAYOUT_VERSION,
+      layoutVersion: renderedLayoutVersion,
     };
     const renderMetadata = {
       signature: signed.signatureMetadata
@@ -422,7 +430,7 @@ export async function processJob(
             pdf.key,
             sha256Hex(pdfBuffer),
             CERTIFICATE_LAYOUT_KEY,
-            CERTIFICATE_LAYOUT_VERSION,
+            renderedLayoutVersion,
             WORKER_RENDERER_VERSION,
             JSON.stringify(renderPolicy),
             JSON.stringify(renderMetadata),

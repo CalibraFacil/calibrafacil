@@ -364,6 +364,24 @@ export function CalibrationCertificateHtml({
             />
             {/* §7.8.2.1(j) — printed even when equal to the calibration date */}
             <FieldRow label="Emissão" value={data.dates.issuedAtText} mono />
+            {/* §7.8.2.1(a) — the legal entity that performed the calibration:
+                the unit's own when it is a distinct establishment. Absent on
+                certificates frozen before it was modelled. */}
+            <FieldRow
+              label="Laboratório calibrador"
+              value={data.calibratingBody?.legalName}
+              wide
+            />
+            <FieldRow
+              label="CNPJ do laboratório"
+              value={data.calibratingBody?.cnpj}
+              mono
+            />
+            <FieldRow
+              label="Endereço do laboratório"
+              value={data.calibratingBody?.addressText}
+              wide
+            />
             {/* §7.8.2.1(c) */}
             <FieldRow label="Local" value={data.locationText} wide />
           </div>
