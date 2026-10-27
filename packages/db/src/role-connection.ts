@@ -44,7 +44,11 @@ export function createRoleDatabase(
         onNotice(notice.message);
       }
     },
-    ...(role === null ? {} : { connection: { options: `-c role=${role}` } }),
+    // Naive `timestamp` columns are written for a UTC session (roadmap 2 C5).
+    connection: {
+      TimeZone: "UTC",
+      ...(role === null ? {} : { options: `-c role=${role}` }),
+    },
   });
   return {
     db: drizzle(client, {
