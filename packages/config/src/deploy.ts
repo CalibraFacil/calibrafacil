@@ -195,6 +195,12 @@ export const DEPLOY_SECTIONS: readonly DeploySection[] = [
         example: example.commented("127.0.0.1:8025"),
       },
       {
+        name: "METRICS_TOKEN",
+        description:
+          "Bearer token of GET /api/metrics (Prometheus). Unset: the endpoint answers 404.",
+        example: example.commented("a-long-random-token"),
+      },
+      {
         name: "TRUSTED_PROXY_HOPS",
         description:
           "Reverse proxies in front of the API that append the client's address to X-Forwarded-For (1: the Caddy of this setup; 2 with a load balancer in front of it).",
