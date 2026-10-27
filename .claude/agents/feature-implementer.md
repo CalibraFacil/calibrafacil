@@ -23,8 +23,12 @@ not push, do not open a PR, do not merge. Leave the worktree for a human/verifie
 
 - The mini-spec: Intent, Constraints, and the EARS Acceptance Criteria (REQ IDs).
 - Its cut-line class. **If the mini-spec is `pair-don't-loop` or touches a
-  pair-don't-loop surface (calibration approval, ICP-Brasil signing, RBAC/tenancy
-  — see the domain skill), STOP and report; do not implement.**
+  pair-don't-loop surface (calibration approval, ICP-Brasil signing, RBAC/tenancy,
+  accreditation vigência / seal decision — see the domain skill), STOP and report; do
+  not implement — unless the mini-spec states that the owner explicitly authorized a
+  loop over that surface.** In that case the safeguards are mandatory: tests first,
+  legacy compatibility, an independent `spec-verifier` pass, and the PR flagged for
+  owner review.
 
 ## How you work (test-first)
 
@@ -53,8 +57,12 @@ not push, do not open a PR, do not merge. Leave the worktree for a human/verifie
    and roles in `packages/auth/src/access.ts`. Preserve `organizationId` + `unitId`
    scoping (`resolveMemberUnitScope`). If a needed permission/role does not exist,
    STOP and report — do not add or weaken one.
-5. **Respect the conventions** (from the domain skill): forward-only Drizzle
-   migrations via `pnpm db:generate` (never hand-edit applied SQL); no `useEffect`
+5. **Respect the conventions** (from the domain skill): hand-written forward-only
+   migrations (`packages/db/drizzle/NNNN_name.sql` + a `_journal.json` entry with the
+   next `idx` and a strictly greater `when`; extras in `sql/schema-extras.sql`; never
+   `pnpm db:generate`, never edit applied SQL); tenant statements run through
+   `orgDb(...)` under RLS (`calibra_app`), `systemDb` only for reviewed system-path
+   work; no `useEffect`
    import; no `as` assertions (use `satisfies`/type guards/schema parse);
    uncertainty results carry value + expanded uncertainty + `k`, never value-only.
 
@@ -64,7 +72,8 @@ not push, do not open a PR, do not merge. Leave the worktree for a human/verifie
   `.skip`, not a relaxed tolerance, not a broadened matcher, not deleting an
   assertion. If an existing test legitimately must change, STOP and report it as
   a finding for the human; do not change it yourself.
-- **Never touch a pair-don't-loop or doesn't-exist-yet surface.** Report instead.
+- **Never touch a pair-don't-loop or doesn't-exist-yet surface** unless the mini-spec
+  records the owner's explicit authorization (see above). Report instead.
 - **Never push or open a PR.**
 
 ## Gates before you report done

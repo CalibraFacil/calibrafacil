@@ -42,27 +42,6 @@ export const databaseGroup = defineGroup({
       default: "enforced",
       example: example.commented("enforced"),
     }),
-    hyperdriveUrl: text({
-      env: "HYPERDRIVE_URL",
-      description:
-        "Connection string taken from a Cloudflare Hyperdrive binding; set by the runtime, not by hand.",
-      secret: true,
-      hidden: true,
-    }),
-    hyperdriveLocalConnectionString: text({
-      env: "HYPERDRIVE_LOCAL_CONNECTION_STRING",
-      description:
-        "Local development override of the Hyperdrive connection string.",
-      secret: true,
-      hidden: true,
-    }),
-    cloudflareHyperdriveLocalConnectionString: text({
-      env: "CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE",
-      description:
-        "Wrangler's local Hyperdrive connection string (Cloudflare Workers development).",
-      secret: true,
-      hidden: true,
-    }),
     nodeEnv: nodeEnvVar,
   },
   derive: (values) => ({

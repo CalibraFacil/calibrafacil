@@ -56,12 +56,25 @@ and judge each EARS criterion.
   ICP-Brasil signing / credential custody, or the RBAC/tenancy layer
   (`packages/auth/src/access.ts`, `apps/api/src/middleware/permission.ts`,
   `packages/signing/**`) — these are **pair-don't-loop** and must not arrive via
-  an unattended maker run. Flag for human review even if tests are green.
+  an unattended maker run. Flag for human review even if tests are green. The
+  accreditation vigência / seal decision (`packages/shared/src/accreditation.ts`) is
+  on the same list. If the mini-spec records the owner's explicit authorization to
+  loop over the surface, do not auto-REJECT for the touch alone, but still flag it for
+  owner review and require: tests written first, legacy compatibility (existing
+  records, frozen certificate inputs and approved calibrations unchanged), and your
+  own independent pass.
 - A change to the **math engine** (`packages/math-engine`) without a
   corresponding numeric-oracle test update **and** dossier note
-  (`validation/math-engine/v0.3.0/dossier.tex`).
-- A new/edited **Drizzle migration that was hand-modified** or renumbers an
-  existing one (forward-only is the rule).
+  (`validation/math-engine/v<ENGINE_VERSION>/`, with `ENGINE_VERSION` bumped and
+  `pnpm --filter @calibra-facil/math-engine run engine:pin` re-run; the source pin
+  fails on any byte change).
+- A migration that **edits an already-applied** `packages/db/drizzle/NNNN_*.sql`,
+  renumbers one, or breaks the journal (`drizzle/meta/_journal.json`: contiguous `idx`,
+  strictly increasing `when`, `tag` equal to the file name). Migrations are
+  hand-written, so hand-written is expected; a generated one (`pnpm db:generate`) is
+  not. Something `schema.ts` cannot express must also be in `sql/schema-extras.sql`.
+- A tenant statement that bypasses the org-bound handle (`orgDb`/`forOrg`) or a new
+  `systemDb` use without a reviewed reason (RLS is enforced for `calibra_app`).
 - Use of banned constructs: `useEffect` import, `as` assertions.
 
 ## Output (one verdict per criterion)

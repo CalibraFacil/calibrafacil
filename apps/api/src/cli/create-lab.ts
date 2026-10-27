@@ -5,8 +5,8 @@
  *   pnpm --dir apps/api create-lab --name "Laboratório Exemplo" \
  *     --email ana@laboratorio.example [--owner "Ana Souza"] [--cnpj ...]
  *
- * In Docker: docker compose -f docker-compose.prod.yml run --rm init \
- *   create-lab --name ... --email ...
+ * In Docker: docker compose exec api bun src/cli/create-lab.ts \
+ *   --name ... --email ...
  *
  * The claim page lets the administrator create a passkey right away, so the
  * printed link works even before e-mail is set up; when it is, the link is
