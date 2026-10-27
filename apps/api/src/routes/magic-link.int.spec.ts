@@ -23,7 +23,7 @@ import { truncateAll } from "../../test/integration/db";
 //   - Route: GET /preview?token=<raw>&surface=<lab|portal>  (magic-link.ts).
 //   - Better Auth (auth.ts → magicLink({ storeToken: "hashed" })) stores the
 //     verification row as:
-//         identifier = base64url(SHA-256(rawToken))    (unpadded)
+//         identifier = "magic-link:" + base64url(SHA-256(rawToken)) (unpadded; Better Auth >= 1.7)
 //         value      = JSON.stringify({ email, name })
 //         expiresAt  = now + 10min
 //     (verified against better-auth@1.6.14 magic-link/index.mjs + utils.mjs
@@ -72,11 +72,17 @@ async function seedMagicToken(params: {
   identifierOverride?: string;
 }): Promise<string> {
   const rawToken = rawMagicToken();
-  const identifier = params.identifierOverride ?? hashToken(rawToken);
+  // Better Auth >= 1.7: the identifier is `magic-link:` + the hashed token.
+  const identifier =
+    params.identifierOverride ?? `magic-link:${hashToken(rawToken)}`;
   await db.insert(verification).values({
     id: `ver-${randomBytes(6).toString("hex")}`,
     identifier,
-    value: JSON.stringify({ email: params.email, name: params.name ?? null }),
+    value: JSON.stringify({
+      type: "magic-link",
+      email: params.email,
+      ...(params.name ? { name: params.name } : {}),
+    }),
     expiresAt: params.expiresAt ?? new Date(Date.now() + 10 * 60 * 1000), // +10min
   });
   return rawToken;
@@ -147,7 +153,7 @@ describe("magicLinkRouter (GET /preview) — real DB security boundary", () => {
     const before = await db
       .select()
       .from(verification)
-      .where(eq(verification.identifier, hashToken(rawToken)));
+      .where(eq(verification.identifier, `magic-link:${hashToken(rawToken)}`));
     expect(before).toHaveLength(1);
 
     const res = await magicLinkRouter.request(
@@ -169,7 +175,7 @@ describe("magicLinkRouter (GET /preview) — real DB security boundary", () => {
     const after = await db
       .select()
       .from(verification)
-      .where(eq(verification.identifier, hashToken(rawToken)));
+      .where(eq(verification.identifier, `magic-link:${hashToken(rawToken)}`));
     expect(after).toHaveLength(1);
     expect(after[0]?.value).toBe(before[0]?.value);
     expect(after[0]?.expiresAt.getTime()).toBe(before[0]?.expiresAt.getTime());
@@ -313,7 +319,7 @@ describe("magicLinkRouter (GET /preview) — real DB security boundary", () => {
     const refreshed = await seedMagicToken({
       email: "expired@lab.test",
       name: "Expired User",
-      identifierOverride: hashToken(expiredToken),
+      identifierOverride: `magic-link:${hashToken(expiredToken)}`,
       expiresAt: new Date(Date.now() + 10 * 60 * 1000),
     });
     expect(refreshed).toBeTypeOf("string");
