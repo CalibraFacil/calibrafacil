@@ -12,6 +12,8 @@ import {
 import { avatarKey } from "@calibra-facil/shared/storage-keys";
 import { requireAuth, type AuthVariables } from "../middleware/permission";
 
+import { sniffRasterImage } from "../lib/image-sniff";
+import { domainErrorResponse, invalid } from "../lib/domain-errors";
 const MAX_AVATAR_FILE_SIZE = 2 * 1024 * 1024;
 const ALLOWED_AVATAR_CONTENT_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const AVATAR_URL_EXPIRY = 300;
@@ -53,6 +55,14 @@ export const profileMediaRouter = new Hono<{
       }
 
       const buffer = await file.arrayBuffer();
+      // The stored type is what the bytes are, not what the client declared.
+      const contentType = sniffRasterImage(buffer);
+      if (!contentType) {
+        return domainErrorResponse(
+          c,
+          invalid("invalid_request", "Formato inválido. Use PNG, JPG ou WebP."),
+        );
+      }
       const r2Client = createR2Client(env);
       const avatar = avatarKey(session.user.id);
 
@@ -61,7 +71,7 @@ export const profileMediaRouter = new Hono<{
         resolveBucketName(env, avatar.bucket),
         avatar.key,
         buffer,
-        file.type,
+        contentType,
       );
 
       return c.json({

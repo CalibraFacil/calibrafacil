@@ -1,7 +1,17 @@
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
 import { db, systemDb } from "@calibra-facil/db";
-import { organization, organizationApiKey } from "@calibra-facil/db/schema";
+import {
+  member,
+  organization,
+  organizationApiKey,
+} from "@calibra-facil/db/schema";
+import {
+  isIpInCidr,
+  parseCidr,
+  parseIp,
+  unwrapIpv4,
+} from "@calibra-facil/shared/ip-range";
 import {
   type PublicApiScope,
   extractApiKeyFromRequest,
@@ -40,6 +50,38 @@ function forbiddenOrganization(
       status: 403,
       headers: { "Content-Type": "application/json" },
     }),
+  });
+}
+
+/** The roles that may create an API key (routes/api-keys.ts), and so use one. */
+const KEY_CREATOR_ROLES = new Set(["owner", "admin"]);
+
+const LAST_USED_REFRESH_MS = 5 * 60 * 1000;
+
+function lastUseIsStale(
+  key: { lastUsedAt: Date | null; lastUsedIp: string | null },
+  now: Date,
+  ip: string | null,
+) {
+  if (!key.lastUsedAt) return true;
+  if (key.lastUsedIp !== ip) return true;
+  return now.getTime() - key.lastUsedAt.getTime() >= LAST_USED_REFRESH_MS;
+}
+
+/** Whether the client address may use a key bound to `allowed` (none: any). */
+export function ipAllowed(
+  address: string | null,
+  allowed: readonly string[] | null,
+): boolean {
+  if (!allowed || allowed.length === 0) return true;
+  const parsed = address ? parseIp(address) : null;
+  if (!parsed) return false;
+  const candidates = [parsed, unwrapIpv4(parsed)].filter(
+    (ip): ip is NonNullable<typeof ip> => ip !== null,
+  );
+  return allowed.some((entry) => {
+    const cidr = parseCidr(entry.trim());
+    return cidr !== null && candidates.some((ip) => isIpInCidr(ip, cidr));
   });
 }
 
@@ -97,6 +139,42 @@ export const requireApiKeyAuth = createMiddleware<{
     );
   }
 
+  const now = new Date();
+  if (keyRecord.expiresAt && keyRecord.expiresAt <= now) {
+    throw new HTTPException(401, {
+      message: "API key expirada: gere uma nova chave",
+    });
+  }
+
+  const requestIp = clientIp(c);
+  if (!ipAllowed(requestIp, keyRecord.allowedIps)) {
+    throw new HTTPException(403, {
+      message: "Esta chave de API não aceita requisições deste endereço",
+    });
+  }
+
+  // A key acts for the person who made it, so it can never do more than that
+  // person may do NOW: only an owner or admin may make a key, and a creator who
+  // left the laboratory or lost that role takes the key's access with them.
+  const [creator] = await orgDb(keyRecord.organizationId).transaction((o) =>
+    o
+      .select({ role: member.role })
+      .from(member)
+      .where(
+        and(
+          eq(member.organizationId, keyRecord.organizationId),
+          eq(member.userId, keyRecord.createdBy),
+        ),
+      )
+      .limit(1),
+  );
+  if (!creator || !KEY_CREATOR_ROLES.has(creator.role)) {
+    throw new HTTPException(401, {
+      message:
+        "API key inválida: quem a criou não tem mais acesso de administrador a este laboratório",
+    });
+  }
+
   c.set("apiKey", {
     id: keyRecord.id,
     organizationId: keyRecord.organizationId,
@@ -106,15 +184,16 @@ export const requireApiKeyAuth = createMiddleware<{
     createdBy: keyRecord.createdBy,
   });
 
-  await orgDb(keyRecord.organizationId).transaction(async (o) => {
-    await o
-      .update(organizationApiKey)
-      .set({
-        lastUsedAt: new Date(),
-        lastUsedIp: clientIp(c),
-      })
-      .where(eq(organizationApiKey.id, keyRecord.id));
-  });
+  // One write per key every few minutes (or when the address changes), not one
+  // per request.
+  if (lastUseIsStale(keyRecord, now, requestIp)) {
+    await orgDb(keyRecord.organizationId).transaction(async (o) => {
+      await o
+        .update(organizationApiKey)
+        .set({ lastUsedAt: now, lastUsedIp: requestIp })
+        .where(eq(organizationApiKey.id, keyRecord.id));
+    });
+  }
 
   await next();
 });

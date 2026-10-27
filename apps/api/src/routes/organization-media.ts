@@ -25,13 +25,11 @@ import {
   withLabPermission,
 } from "../middleware/permission";
 
+import { sniffRasterImage } from "../lib/image-sniff";
+import { domainErrorResponse, invalid } from "../lib/domain-errors";
 const MAX_LOGO_FILE_SIZE = 2 * 1024 * 1024;
-const ALLOWED_LOGO_CONTENT_TYPES = [
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "image/svg+xml",
-];
+// Raster only: an SVG can carry script, and the logo is embedded in certificates.
+const ALLOWED_LOGO_CONTENT_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const LOGO_URL_EXPIRY = 900;
 export const organizationMediaRouter = new Hono<{
   Variables: AuthVariables;
@@ -56,7 +54,7 @@ export const organizationMediaRouter = new Hono<{
 
         if (!ALLOWED_LOGO_CONTENT_TYPES.includes(file.type)) {
           return c.json(
-            { error: "Formato inválido. Use PNG, JPG, WebP ou SVG." },
+            { error: "Formato inválido. Use PNG, JPG ou WebP." },
             400,
           );
         }
@@ -87,13 +85,24 @@ export const organizationMediaRouter = new Hono<{
           uniqueId: randomUUID(),
         });
         const buffer = await file.arrayBuffer();
+        // The stored type is what the bytes are, not what the client declared.
+        const contentType = sniffRasterImage(buffer);
+        if (!contentType) {
+          return domainErrorResponse(
+            c,
+            invalid(
+              "invalid_request",
+              "Formato inválido. Use PNG, JPG ou WebP.",
+            ),
+          );
+        }
         const r2Client = createR2Client(env);
         await uploadToR2(
           r2Client,
           resolveBucketName(env, bucket),
           key,
           buffer,
-          file.type,
+          contentType,
         );
 
         const logoUrl = buildOrganizationLogoUrl(
@@ -117,7 +126,7 @@ export const organizationMediaRouter = new Hono<{
               entityId: member.organizationId,
               details: {
                 key,
-                contentType: file.type,
+                contentType,
                 size: file.size,
               },
             },

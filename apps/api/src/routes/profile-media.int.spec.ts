@@ -90,7 +90,10 @@ async function imageOf(userId: string): Promise<string | null> {
 /** Build a multipart FormData body with file field "avatar". */
 function makeAvatarFormData(contentType = "image/png"): FormData {
   const form = new FormData();
-  const file = new File([Buffer.alloc(64, 1)], "avatar.png", {
+  // A PNG signature (the handler sniffs it; roadmap 2 D3), then filler.
+  const bytes = Buffer.alloc(64, 1);
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const file = new File([bytes], "avatar.png", {
     type: contentType,
   });
   form.append("avatar", file);

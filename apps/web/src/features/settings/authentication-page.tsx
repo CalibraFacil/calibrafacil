@@ -255,6 +255,17 @@ function ApiKeysCard() {
                       ? formatInstant(key.lastUsedAt, 'date-time')
                       : 'Nunca utilizada'}
                   </p>
+                  <p className="text-xs text-muted-foreground">
+                    Validade:{' '}
+                    {key.expiresAt
+                      ? `até ${formatInstant(key.expiresAt, 'date')}`
+                      : 'sem validade (chave antiga: rotacione para definir uma)'}
+                  </p>
+                  {key.allowedIps && key.allowedIps.length > 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Aceita apenas: {key.allowedIps.join(', ')}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {key.revokedAt ? (

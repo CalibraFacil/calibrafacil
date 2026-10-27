@@ -491,8 +491,9 @@ describe("verifyRouter — real DB, public certificate verification", () => {
     expect(body.verdict.overall).toBe("VALID");
     expect(body.verdict.hashMatch).toBe(true);
     expect(body.verdict.signerChainsToIcpRoot).toBe(true);
+    // The signer's CPF is shown masked on the public page (roadmap 2 D3, LGPD).
     expect(isRecord(body.verdict.signer) && body.verdict.signer.cpfCnpj).toBe(
-      "12345678900",
+      "***.456.789-**",
     );
     expect(body.verdict.computedAt).toBeUndefined();
   });
@@ -692,7 +693,8 @@ describe("verifyRouter — real DB, public certificate verification", () => {
     if (!isRecord(body.digitalSignature)) throw new Error("unreachable");
     expect(body.digitalSignature.signed).toBe(true);
     expect(body.digitalSignature.signerName).toBe("SIGNER NAME");
-    expect(body.digitalSignature.signerCpfCnpj).toBe("98765432100");
+    // Masked on the public page (roadmap 2 D3, LGPD): middle six digits only.
+    expect(body.digitalSignature.signerCpfCnpj).toBe("***.654.321-**");
 
     // Amendment fields are present and null for an original certificate.
     expect(body.isSuperseded).toBe(false);

@@ -22,7 +22,9 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { writeOrganizationAuditEvent } from "../lib/audit";
 import { orgDb } from "../lib/org-db";
 import { clientIp } from "../lib/client-ip";
+import { parseCidr } from "@calibra-facil/shared/ip-range";
 
+import { requireFreshSession } from "../middleware/fresh-session";
 const ScopeSchema = z.enum([
   "customers:read",
   "customers:write",
@@ -39,10 +41,33 @@ const ScopeSchema = z.enum([
   "webhooks:manage",
 ]);
 
+/** A key lives a year unless the laboratory asks for less (at most two years). */
+const DEFAULT_KEY_LIFETIME_DAYS = 365;
+const MAX_KEY_LIFETIME_DAYS = 730;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const AllowedIpSchema = z
+  .string()
+  .trim()
+  .refine((entry) => parseCidr(entry) !== null, {
+    message: "Endereço IP ou faixa CIDR inválido",
+  });
+
 const CreateApiKeySchema = z.object({
   name: z.string().trim().min(3).max(80),
   scopes: z.array(ScopeSchema).min(1).max(12).optional(),
+  expiresInDays: z
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_KEY_LIFETIME_DAYS)
+    .default(DEFAULT_KEY_LIFETIME_DAYS),
+  allowedIps: z.array(AllowedIpSchema).max(20).optional(),
 });
+
+function expiryFrom(now: Date, days: number) {
+  return new Date(now.getTime() + days * DAY_MS);
+}
 
 function getRequestIp(c: Context<{ Variables: AuthVariables }>) {
   return clientIp(c);
@@ -86,6 +111,8 @@ export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
             keyPrefix: organizationApiKey.keyPrefix,
             scopes: organizationApiKey.scopes,
             lastUsedAt: organizationApiKey.lastUsedAt,
+            expiresAt: organizationApiKey.expiresAt,
+            allowedIps: organizationApiKey.allowedIps,
             createdAt: organizationApiKey.createdAt,
             revokedAt: organizationApiKey.revokedAt,
           })
@@ -100,6 +127,7 @@ export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/",
     ...withLabPermission({ organization: ["update"] }),
+    requireFreshSession,
     requireRole(["admin", "owner"]),
     zValidator("json", CreateApiKeySchema),
     async (c) => {
@@ -111,6 +139,11 @@ export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
         ...(input.scopes ?? DEFAULT_PUBLIC_API_SCOPES),
       ];
       const keyId = crypto.randomUUID();
+      const expiresAt = expiryFrom(new Date(), input.expiresInDays);
+      const allowedIps =
+        input.allowedIps && input.allowedIps.length > 0
+          ? input.allowedIps
+          : null;
 
       // The key and both audit entries commit together.
       await orgDb(member.organizationId).transaction(async (o) => {
@@ -121,6 +154,8 @@ export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
           keyPrefix: generated.keyPrefix,
           keyHash: generated.keyHash,
           scopes,
+          expiresAt,
+          allowedIps,
           createdBy: session.user.id,
         });
 
@@ -130,7 +165,12 @@ export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
           action: "create",
           performedBy: session.user.id,
           ipAddress: getRequestIp(c),
-          details: { name: input.name, scopes },
+          details: {
+            name: input.name,
+            scopes,
+            expiresAt: expiresAt.toISOString(),
+            allowedIps,
+          },
         });
 
         await writeOrganizationAuditEvent(
@@ -160,6 +200,8 @@ export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
             name: input.name,
             keyPrefix: generated.keyPrefix,
             scopes,
+            expiresAt,
+            allowedIps,
           },
         },
         201,
@@ -169,6 +211,7 @@ export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/rotate",
     ...withLabPermission({ organization: ["update"] }),
+    requireFreshSession,
     requireRole(["admin", "owner"]),
     async (c) => {
       const member = c.get("member");
@@ -176,6 +219,8 @@ export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
       const id = c.req.param("id");
 
       const generated = createApiKeySecret();
+      // Rotating renews the key: the new secret lives a fresh year.
+      const expiresAt = expiryFrom(new Date(), DEFAULT_KEY_LIFETIME_DAYS);
 
       // Look-up, rotation and audit entries are one transaction.
       const existing = await orgDb(member.organizationId).transaction(
@@ -198,6 +243,7 @@ export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
             .set({
               keyPrefix: generated.keyPrefix,
               keyHash: generated.keyHash,
+              expiresAt,
               updatedAt: new Date(),
             })
             .where(eq(organizationApiKey.id, row.id));
@@ -243,6 +289,8 @@ export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
           name: existing.name,
           keyPrefix: generated.keyPrefix,
           scopes: existing.scopes,
+          expiresAt,
+          allowedIps: existing.allowedIps,
         },
       });
     },
@@ -250,6 +298,7 @@ export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
   .post(
     "/:id/revoke",
     ...withLabPermission({ organization: ["update"] }),
+    requireFreshSession,
     requireRole(["admin", "owner"]),
     async (c) => {
       const member = c.get("member");

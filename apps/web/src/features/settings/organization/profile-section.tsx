@@ -451,7 +451,7 @@ export function OrganizationProfileSection({
                         {organizationLogo ? 'Logo configurado' : 'Sem logo'}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        PNG, JPG, WebP ou SVG até 2MB.
+                        PNG, JPG ou WebP até 2MB.
                       </p>
                     </div>
                   </div>
@@ -459,7 +459,7 @@ export function OrganizationProfileSection({
                     <input
                       ref={logoInputRef}
                       type="file"
-                      accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                      accept="image/png,image/jpeg,image/webp"
                       className="hidden"
                       onChange={handleLogoFileChange}
                     />

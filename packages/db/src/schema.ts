@@ -1157,6 +1157,10 @@ export const organizationApiKey = pgTable(
     scopes: jsonb("scopes").$type<string[]>().default([]).notNull(),
     lastUsedAt: timestamp("last_used_at"),
     lastUsedIp: text("last_used_ip"),
+    /** After this instant the key no longer authenticates (null: no expiry, keys made before 0137). */
+    expiresAt: timestamp("expires_at"),
+    /** Client addresses or CIDR ranges the key is accepted from; null or empty: any. */
+    allowedIps: jsonb("allowed_ips").$type<string[]>(),
     createdBy: text("created_by")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
