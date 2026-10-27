@@ -803,6 +803,7 @@ REVOKE UPDATE, DELETE, TRUNCATE ON public."job_audit_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."method_audit_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."non_conformance_audit_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."organization_api_key_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."organization_compliance_audit_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."organization_event_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."personnel_competence_audit_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."proficiency_test_audit_log" FROM calibra_app;

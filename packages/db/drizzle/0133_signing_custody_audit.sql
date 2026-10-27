@@ -14,8 +14,8 @@
 --    reference, so the row outlives its organization), plus:
 --      * the calibra_append_only trigger (UPDATE/DELETE raise);
 --      * ROW LEVEL SECURITY with the tenant_isolation policy (the generated block below);
---      * REVOKE UPDATE, DELETE from calibra_app: the trigger yields to a GUC any session
---        can set, the revoke does not. The owner path keeps its privileges.
+--      * REVOKE UPDATE, DELETE, TRUNCATE from calibra_app (the generated evidence-grants
+--        block of evidence-tables.ts, repeated whole after the blanket grant).
 --
 -- The generated block below is the full tenant_isolation block (it is repeated in every
 -- migration that adds a tenant table; rls-sql.test.ts keeps it equal to schema.ts), and
@@ -737,5 +737,36 @@ CREATE POLICY tenant_isolation ON public."visit_reschedule_request" AS PERMISSIV
   WITH CHECK ("organization_id" = NULLIF(current_setting('calibra.organization_id', true), '')::text);
 -- END generated: calibra_rls_tenant_isolation
 --> statement-breakpoint
--- Append-only for the application role (after the blanket grant above).
-REVOKE UPDATE, DELETE ON TABLE public."organization_compliance_audit_log" FROM calibra_app;
+-- What the application role may not do to the evidence tables, now including
+-- organization_compliance_audit_log (evidence-tables.ts; after the blanket grant above,
+-- which would otherwise give UPDATE and DELETE back).
+-- BEGIN generated: calibra_evidence_grants
+REVOKE UPDATE, DELETE, TRUNCATE ON public."accredited_scope_line_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."asset_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."asset_oot_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."authorized_signatory_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."automatic_send_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."calibration_request_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."certificate_numbering_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."certificate_release_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."control_chart_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."corrective_action_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."customer_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."financial_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."integration_event_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."issued_certificate_snapshot" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."job_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."method_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."non_conformance_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."organization_api_key_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."organization_compliance_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."organization_event_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."personnel_competence_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."proficiency_test_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."reference_standard_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."service_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."service_order_event_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."training_record_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."visit_audit_log" FROM calibra_app;
+REVOKE UPDATE, TRUNCATE ON public."certificate_input" FROM calibra_app;
+-- END generated: calibra_evidence_grants
