@@ -15,17 +15,21 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { writeOrganizationAuditEvent } from "../lib/audit";
+import { writeComplianceAuditEvent } from "../lib/compliance-audit";
 import {
   conflict,
   domainErrorResponse,
   invalid,
   notFound,
+  unprocessable,
 } from "../lib/domain-errors";
 import { orgDb } from "../lib/org-db";
 import {
-  getCertificateInfo,
-  encryptBinary,
-  encryptPassword,
+  parsePkcs12,
+  resolveSigningTrustAnchors,
+  sealSigningCredential,
+  signingKeyringFromEnv,
+  validateSigningCredential,
   SigningError,
 } from "@calibra-facil/signing";
 import {
@@ -49,7 +53,10 @@ const UploadCertificateSchema = z.object({
 // =============================================================================
 
 interface SigningEnv {
-  SIGNING_MASTER_KEY: string; // 256-bit AES key for encrypting passwords
+  SIGNING_MASTER_KEY: string; // The current KEK (256-bit AES key) wrapping the credentials' data keys
+  SIGNING_MASTER_KEY_ID?: string; // Id of the current KEK (unset: k1)
+  SIGNING_MASTER_KEY_PREVIOUS?: string; // Previous KEKs, `id:base64key,...`
+  SIGNING_TRUST_STORE_FILE?: string; // PEM bundle replacing the bundled ICP-Brasil roots
 }
 
 // =============================================================================
@@ -233,6 +240,29 @@ export const signingRouter = new Hono<{
           )
           .where(scope);
 
+        await writeComplianceAuditEvent(
+          {
+            organizationId: memberData.organizationId,
+            unitId: unit.unitId,
+            action: "signing_policy.unsigned_issuance_changed",
+            entityType: "organization_unit",
+            entityId: String(unit.unitId),
+            changes: {
+              before: {
+                enabled: Boolean(before.reason),
+                reason: before.reason,
+              },
+              after: {
+                enabled: input.enabled,
+                reason: input.enabled ? input.reason : null,
+              },
+            },
+            performedBy: session.user.id,
+            ipAddress: c.req.header("x-forwarded-for") ?? null,
+          },
+          o,
+        );
+
         await writeOrganizationAuditEvent(
           {
             organizationId: memberData.organizationId,
@@ -277,6 +307,7 @@ export const signingRouter = new Hono<{
     async (c) => {
       return orgDb(c.get("member").organizationId).transaction(async (o) => {
         const memberData = c.get("member");
+        const session = c.get("session");
         requireUnitOperationalSettingsManager(memberData);
         const unit = resolveAccessibleUnitContext(memberData);
         const { requireSignature } = c.req.valid("json");
@@ -285,7 +316,10 @@ export const signingRouter = new Hono<{
         // PATCH /unsigned-issuance: the exclusion with "emitir sem assinatura"
         // is checked and written under it, so a race cannot set both.
         const [current] = await o
-          .select({ reason: organizationUnit.unsignedIssuanceReason })
+          .select({
+            reason: organizationUnit.unsignedIssuanceReason,
+            requireSignature: organizationUnit.requireSignature,
+          })
           .from(organizationUnit)
           .where(
             and(
@@ -320,6 +354,26 @@ export const signingRouter = new Hono<{
         if (!row) {
           return c.json({ error: "Unidade não encontrada" }, 404);
         }
+        if ((current?.requireSignature ?? false) !== row.requireSignature) {
+          await writeComplianceAuditEvent(
+            {
+              organizationId: memberData.organizationId,
+              unitId: unit.unitId,
+              action: "signing_policy.require_signature_changed",
+              entityType: "organization_unit",
+              entityId: String(unit.unitId),
+              changes: {
+                before: {
+                  requireSignature: current?.requireSignature ?? false,
+                },
+                after: { requireSignature: row.requireSignature },
+              },
+              performedBy: session.user.id,
+              ipAddress: c.req.header("x-forwarded-for") ?? null,
+            },
+            o,
+          );
+        }
         return c.json({ requireSignature: row.requireSignature });
       });
     },
@@ -350,12 +404,22 @@ export const signingRouter = new Hono<{
       }
 
       try {
+        // The key ring (current KEK + previous ones). A malformed setting is a
+        // server misconfiguration, not the caller's mistake.
+        const keyring = signingKeyringFromEnv(env);
+        if (!keyring) {
+          return c.json(
+            { error: "Assinatura digital não configurada no servidor" },
+            500,
+          );
+        }
+
         // 1. Decode and validate certificate
         const p12Buffer = Buffer.from(input.p12Base64, "base64");
 
         let certInfo;
         try {
-          certInfo = getCertificateInfo(p12Buffer, input.password);
+          certInfo = parsePkcs12(p12Buffer, input.password);
         } catch (error) {
           if (error instanceof SigningError) {
             if (error.code === "WRONG_PASSWORD") {
@@ -366,14 +430,18 @@ export const signingRouter = new Hono<{
           throw error;
         }
 
-        // 2. Check if certificate is expired
-        const now = new Date();
-        if (certInfo.validUntil < now) {
-          return c.json(
-            {
-              error: `Certificado expirado em ${certInfo.validUntil.toLocaleDateString("pt-BR")}`,
-            },
-            400,
+        // 2. REQ-B4A-3: validity window, key usage and the chain to the
+        // configured trust store (the bundled ICP-Brasil roots by default).
+        // Rejected with 422 and a pt-BR reason before anything is stored.
+        const verdict = await validateSigningCredential(certInfo, {
+          trustAnchors: resolveSigningTrustAnchors(env),
+        });
+        if (!verdict.ok) {
+          return domainErrorResponse(
+            c,
+            unprocessable("unprocessable", verdict.message, {
+              details: { reason: verdict.code },
+            }),
           );
         }
 
@@ -402,18 +470,39 @@ export const signingRouter = new Hono<{
 
             if (existing) return { duplicate: true as const };
 
-            // 4. Encrypt password
-            const { encryptedPassword, iv } = encryptPassword(
-              input.password,
-              env.SIGNING_MASTER_KEY,
-            );
-            const encryptedP12 = encryptBinary(
-              p12Buffer,
-              env.SIGNING_MASTER_KEY,
+            // 4. Seal the P12 and its password: a data key per field, wrapped
+            // by the current KEK, AAD = organization + unit + serial.
+            const sealed = sealSigningCredential(
+              { p12: p12Buffer, password: input.password },
+              {
+                organizationId: memberData.organizationId,
+                unitId: unit.unitId,
+                serialNumber: certInfo.serialNumber,
+              },
+              keyring,
             );
 
             // Unset current default if setting this as default
+            let displaced: { id: number; serialNumber: string } | null = null;
             if (input.setAsDefault) {
+              const [previous] = await o
+                .select({
+                  id: organizationSigningCertificate.id,
+                  serialNumber: organizationSigningCertificate.serialNumber,
+                })
+                .from(organizationSigningCertificate)
+                .where(
+                  and(
+                    eq(
+                      organizationSigningCertificate.organizationId,
+                      memberData.organizationId,
+                    ),
+                    eq(organizationSigningCertificate.unitId, unit.unitId),
+                    eq(organizationSigningCertificate.isDefault, true),
+                  ),
+                )
+                .limit(1);
+              displaced = previous ?? null;
               await o
                 .update(organizationSigningCertificate)
                 .set({ isDefault: false })
@@ -441,14 +530,70 @@ export const signingRouter = new Hono<{
                 subjectCpfCnpj: certInfo.subjectCpfCnpj,
                 validFrom: certInfo.validFrom,
                 validUntil: certInfo.validUntil,
-                encryptedP12,
-                encryptedPassword,
-                passwordIv: iv,
+                encryptedP12: sealed.encryptedP12,
+                encryptedPassword: sealed.encryptedPassword,
+                passwordIv: sealed.passwordIv,
+                kekId: sealed.kekId,
+                custodyFormatVersion: sealed.formatVersion,
                 isActive: true,
                 isDefault: input.setAsDefault,
                 createdBy: session.user.id,
               })
               .returning();
+
+            if (inserted) {
+              const ipAddress = c.req.header("x-forwarded-for") ?? null;
+              await writeComplianceAuditEvent(
+                {
+                  organizationId: memberData.organizationId,
+                  unitId: unit.unitId,
+                  action: "signing_credential.created",
+                  entityType: "organization_signing_certificate",
+                  entityId: String(inserted.id),
+                  changes: {
+                    before: null,
+                    after: {
+                      name: inserted.name,
+                      serialNumber: inserted.serialNumber,
+                      issuerCn: inserted.issuerCn,
+                      subjectCn: inserted.subjectCn,
+                      validFrom: inserted.validFrom.toISOString(),
+                      validUntil: inserted.validUntil.toISOString(),
+                      isDefault: inserted.isDefault,
+                      kekId: sealed.kekId,
+                      custodyFormatVersion: sealed.formatVersion,
+                    },
+                  },
+                  performedBy: session.user.id,
+                  ipAddress,
+                },
+                o,
+              );
+              if (displaced) {
+                await writeComplianceAuditEvent(
+                  {
+                    organizationId: memberData.organizationId,
+                    unitId: unit.unitId,
+                    action: "signing_credential.default_replaced",
+                    entityType: "organization_signing_certificate",
+                    entityId: String(inserted.id),
+                    changes: {
+                      before: {
+                        defaultCertificateId: displaced.id,
+                        serialNumber: displaced.serialNumber,
+                      },
+                      after: {
+                        defaultCertificateId: inserted.id,
+                        serialNumber: inserted.serialNumber,
+                      },
+                    },
+                    performedBy: session.user.id,
+                    ipAddress,
+                  },
+                  o,
+                );
+              }
+            }
 
             return { duplicate: false as const, inserted };
           },
@@ -498,6 +643,7 @@ export const signingRouter = new Hono<{
       return orgDb(c.get("member").organizationId).transaction(async (o) => {
         const id = parseInt(c.req.param("id"));
         const memberData = c.get("member");
+        const session = c.get("session");
         requireUnitOperationalSettingsManager(memberData);
         const unit = resolveAccessibleUnitContext(memberData);
 
@@ -510,6 +656,7 @@ export const signingRouter = new Hono<{
           .select({
             id: organizationSigningCertificate.id,
             isActive: organizationSigningCertificate.isActive,
+            serialNumber: organizationSigningCertificate.serialNumber,
           })
           .from(organizationSigningCertificate)
           .where(
@@ -534,6 +681,24 @@ export const signingRouter = new Hono<{
             400,
           );
         }
+
+        const [previousDefault] = await o
+          .select({
+            id: organizationSigningCertificate.id,
+            serialNumber: organizationSigningCertificate.serialNumber,
+          })
+          .from(organizationSigningCertificate)
+          .where(
+            and(
+              eq(
+                organizationSigningCertificate.organizationId,
+                memberData.organizationId,
+              ),
+              eq(organizationSigningCertificate.unitId, unit.unitId),
+              eq(organizationSigningCertificate.isDefault, true),
+            ),
+          )
+          .limit(1);
 
         // Unset current default and set new default (one organization-bound
         // transaction with the read above)
@@ -567,6 +732,33 @@ export const signingRouter = new Hono<{
               eq(organizationSigningCertificate.unitId, unit.unitId),
             ),
           );
+
+        if (previousDefault?.id !== id) {
+          await writeComplianceAuditEvent(
+            {
+              organizationId: memberData.organizationId,
+              unitId: unit.unitId,
+              action: "signing_credential.default_replaced",
+              entityType: "organization_signing_certificate",
+              entityId: String(id),
+              changes: {
+                before: previousDefault
+                  ? {
+                      defaultCertificateId: previousDefault.id,
+                      serialNumber: previousDefault.serialNumber,
+                    }
+                  : null,
+                after: {
+                  defaultCertificateId: id,
+                  serialNumber: cert.serialNumber,
+                },
+              },
+              performedBy: session.user.id,
+              ipAddress: c.req.header("x-forwarded-for") ?? null,
+            },
+            o,
+          );
+        }
 
         return c.json({ message: "Certificado definido como padrão" });
       });
@@ -605,6 +797,8 @@ export const signingRouter = new Hono<{
             id: organizationSigningCertificate.id,
             isActive: organizationSigningCertificate.isActive,
             isDefault: organizationSigningCertificate.isDefault,
+            serialNumber: organizationSigningCertificate.serialNumber,
+            validUntil: organizationSigningCertificate.validUntil,
           })
           .from(organizationSigningCertificate)
           .where(
@@ -650,6 +844,28 @@ export const signingRouter = new Hono<{
               eq(organizationSigningCertificate.unitId, unit.unitId),
             ),
           );
+
+        await writeComplianceAuditEvent(
+          {
+            organizationId: memberData.organizationId,
+            unitId: unit.unitId,
+            action: "signing_credential.deleted",
+            entityType: "organization_signing_certificate",
+            entityId: String(id),
+            changes: {
+              before: {
+                serialNumber: cert.serialNumber,
+                validUntil: cert.validUntil.toISOString(),
+                isActive: true,
+                isDefault: cert.isDefault,
+              },
+              after: { isActive: false, isDefault: false, reason },
+            },
+            performedBy: session.user.id,
+            ipAddress: c.req.header("x-forwarded-for") ?? null,
+          },
+          o,
+        );
 
         return c.json({ message: "Certificado revogado com sucesso" });
       });

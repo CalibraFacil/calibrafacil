@@ -33,6 +33,53 @@ function storageIssues(storage: StorageSettings): ConfigIssue[] {
       ];
 }
 
+type SigningSettings = {
+  readonly masterKeyId: string | undefined;
+  readonly masterKeyPrevious: string | undefined;
+};
+
+const KEK_ID = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
+const BASE64_KEY = /^[A-Za-z0-9+/]+={0,2}$/;
+
+/**
+ * The key ring of the signing credentials (envelope encryption, roadmap 2 B4a):
+ * a bad id or a malformed previous key would only surface when a certificate has
+ * to be signed, so it stops the start instead. The shapes mirror
+ * `createSigningKeyring` in @calibra-facil/signing, which is what parses them.
+ */
+export function signingIssues(signing: SigningSettings): ConfigIssue[] {
+  const issues: ConfigIssue[] = [];
+  const currentId = signing.masterKeyId ?? "k1";
+  if (signing.masterKeyId !== undefined && !KEK_ID.test(signing.masterKeyId)) {
+    issues.push({
+      variable: "SIGNING_MASTER_KEY_ID",
+      message:
+        "must be 1-64 letters, digits, `_`, `.` or `-` (it is stored with every sealed credential)",
+    });
+  }
+  const seen = new Set<string>([currentId]);
+  for (const raw of (signing.masterKeyPrevious ?? "").split(",")) {
+    const entry = raw.trim();
+    if (entry === "") continue;
+    const separator = entry.indexOf(":");
+    const id = separator === -1 ? "" : entry.slice(0, separator).trim();
+    const key = separator === -1 ? "" : entry.slice(separator + 1).trim();
+    const wellFormed =
+      KEK_ID.test(id) && BASE64_KEY.test(key) && atob(key).length === 32;
+    if (!wellFormed || seen.has(id)) {
+      // Never echo the entry: it holds key material.
+      issues.push({
+        variable: "SIGNING_MASTER_KEY_PREVIOUS",
+        message:
+          "must be comma-separated `id:base64key` entries (32 random bytes each) with ids that are unique and differ from SIGNING_MASTER_KEY_ID",
+      });
+      break;
+    }
+    seen.add(id);
+  }
+  return issues;
+}
+
 /**
  * The API (apps/api): the Bun server and the CLI.
  * Production refuses to start without its database, storage, keys and e-mail.
@@ -57,8 +104,9 @@ export const apiRuntime = defineRuntime({
   },
   rules: (config, { isProduction }) => {
     const minimum = config.sync.minDesktopVersion;
-    const versionIssues: ConfigIssue[] =
-      minimum === undefined || SYNC_MIN_DESKTOP_VERSION_PATTERN.test(minimum)
+    const versionIssues: ConfigIssue[] = [
+      ...(minimum === undefined ||
+      SYNC_MIN_DESKTOP_VERSION_PATTERN.test(minimum)
         ? []
         : [
             {
@@ -66,7 +114,9 @@ export const apiRuntime = defineRuntime({
               message:
                 "must be a version such as 1.4.0 (MAJOR.MINOR.PATCH): an unreadable minimum would leave the legacy calibration-record exemption open",
             },
-          ];
+          ]),
+      ...signingIssues(config.signing),
+    ];
     if (!isProduction) return versionIssues;
     const issues = [...versionIssues, ...storageIssues(config.storage)];
     // Sign-in is passwordless, so production cannot run without e-mail.
@@ -109,7 +159,10 @@ export const workerRuntime = defineRuntime({
     "SIGNING_MASTER_KEY",
     "INTEGRATIONS_MASTER_KEY",
   ],
-  rules: (config) => storageIssues(config.storage),
+  rules: (config) => [
+    ...storageIssues(config.storage),
+    ...signingIssues(config.signing),
+  ],
 });
 
 /** The offline desktop server (apps/local-server). */

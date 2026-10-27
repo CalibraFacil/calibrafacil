@@ -57,6 +57,8 @@ wrangler secret put R2_SECRET_ACCESS_KEY
 wrangler secret put GOTENBERG_URL             # https://calibrafacil-gotenberg.<...>.workers.dev
 wrangler secret put GOTENBERG_TOKEN
 wrangler secret put SIGNING_MASTER_KEY
+wrangler secret put SIGNING_MASTER_KEY_ID       # optional: id of the current key (default k1); set when the key is rotated
+wrangler secret put SIGNING_MASTER_KEY_PREVIOUS # optional: previous keys as id:base64key,... while credentials are still sealed under them
 wrangler secret put SIGNING_TSA_URL           # optional: RFC 3161 time-stamp authority; unset = no time-stamp
 wrangler secret put SIGNING_TSA_AUTH          # optional: full Authorization header value of a contracted authority
 wrangler secret put SIGNING_TSA_ICP_CONFORMANT # optional: "true" only for a credentialed ICP-Brasil authority

@@ -36,6 +36,41 @@ describe("REQ-TSA-1 the shared worker signing environment", () => {
     });
   });
 
+  it("REQ-B4A-1: carries the KEK id and the previous keys, and refuses malformed ones at start", () => {
+    const previous = `k0:${Buffer.alloc(32, 3).toString("base64")}`;
+    const config = loadWorkerConfig({
+      ...BASE,
+      SIGNING_MASTER_KEY_ID: "k1",
+      SIGNING_MASTER_KEY_PREVIOUS: previous,
+    });
+    expect(workerSigningEnv(config.signing)).toMatchObject({
+      SIGNING_MASTER_KEY_ID: "k1",
+      SIGNING_MASTER_KEY_PREVIOUS: previous,
+    });
+
+    for (const bad of [
+      { SIGNING_MASTER_KEY_ID: "bad:id" },
+      { SIGNING_MASTER_KEY_PREVIOUS: "no-separator" },
+      { SIGNING_MASTER_KEY_PREVIOUS: "k0:c2hvcnQ=" },
+      // the previous id must differ from the current one
+      { SIGNING_MASTER_KEY_ID: "k0", SIGNING_MASTER_KEY_PREVIOUS: previous },
+    ]) {
+      expect(
+        () => loadWorkerConfig({ ...BASE, ...bad }),
+        JSON.stringify(bad),
+      ).toThrow(/SIGNING_MASTER_KEY/);
+    }
+    // The error never echoes key material.
+    try {
+      loadWorkerConfig({
+        ...BASE,
+        SIGNING_MASTER_KEY_PREVIOUS: "k0:c2hvcnQ=",
+      });
+    } catch (error) {
+      expect(String(error)).not.toContain("c2hvcnQ=");
+    }
+  });
+
   it("REQ-TSA-3: with no TSA configured no TSA variable is set", () => {
     const config = loadWorkerConfig(BASE);
     const env = workerSigningEnv(config.signing);
@@ -73,6 +108,8 @@ describe("REQ-TSA-1 the Cloudflare document-worker forwards what the builder ret
   const everySigningKey = Object.keys(
     workerSigningEnv({
       masterKey: KEY,
+      masterKeyId: "k2",
+      masterKeyPrevious: undefined,
       tsaUrl: "https://act.example/tsa",
       tsaAuth: "Basic abc123",
       tsaIcpConformant: true,

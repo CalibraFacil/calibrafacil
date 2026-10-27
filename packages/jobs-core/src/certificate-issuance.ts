@@ -13,8 +13,9 @@ import {
   signAndTimestampPdf,
   verifyPdf,
   getIcpBrasilTrustAnchors,
-  decryptPassword,
-  decryptBinary,
+  openSigningCredential,
+  signingKeyringFromEnv,
+  type StoredSigningCredential,
   type SignatureMetadata,
   type VerifyPdfResult,
   createCrlFetcher,
@@ -100,10 +101,11 @@ export function parseSignatureMetadata(
   };
 }
 
-interface SigningCertificateData {
-  encryptedP12: string;
-  encryptedPassword: string;
-  passwordIv: string;
+interface SigningCertificateData extends StoredSigningCredential {
+  /** What the credential is bound to (the AAD of its envelope encryption). */
+  organizationId: string;
+  unitId: number;
+  serialNumber: string;
   subjectCn: string;
 }
 
@@ -193,7 +195,9 @@ async function fetchSigningCertificate(
 ): Promise<SigningCertificateData | null> {
   const result = await client.query(
     `
-        SELECT encrypted_p12, encrypted_password, password_iv, subject_cn
+        SELECT organization_id, unit_id, serial_number, kek_id,
+               custody_format_version,
+               encrypted_p12, encrypted_password, password_iv, subject_cn
         FROM organization_signing_certificate
         WHERE organization_id = $1
           AND unit_id = $2
@@ -209,6 +213,11 @@ async function fetchSigningCertificate(
 
   const row = result.rows[0];
   return {
+    organizationId: row.organization_id,
+    unitId: row.unit_id,
+    serialNumber: row.serial_number,
+    kekId: row.kek_id ?? null,
+    formatVersion: row.custody_format_version,
     encryptedP12: row.encrypted_p12,
     encryptedPassword: row.encrypted_password,
     passwordIv: row.password_iv,
@@ -712,20 +721,31 @@ export async function signPdfWithUnitCertificate(
     };
   }
 
-  // Narrowing only: the certificate fetch above is gated on the master key,
-  // so a non-null signingCert implies the key is present.
-  const masterKey = env.SIGNING_MASTER_KEY;
-  if (!masterKey) {
-    return { pdfBuffer };
-  }
-
   try {
-    const password = decryptPassword(
-      signingCert.encryptedPassword,
-      signingCert.passwordIv,
-      masterKey,
+    // The certificate fetch above is gated on the master key, so a non-null
+    // signingCert implies a keyring. Envelope credentials open under the KEK
+    // named in their record (current or previous), bound to their organization,
+    // unit and serial; legacy rows open under any configured key. A failure
+    // here (an unknown KEK, an altered record) is a signing failure and rejects
+    // the job like any other: it never falls through to an unsigned PDF.
+    const keyring = signingKeyringFromEnv(env);
+    if (!keyring) {
+      // Unreachable while the fetch above is gated on the key, but never an
+      // unsigned return: a credential is configured, so signing must succeed.
+      throw new SigningPolicyError(
+        "Assinatura digital não configurada no servidor: chave de custódia ausente",
+        { permanent: false },
+      );
+    }
+    const { p12: p12Buffer, password } = openSigningCredential(
+      signingCert,
+      {
+        organizationId: signingCert.organizationId,
+        unitId: signingCert.unitId,
+        serialNumber: signingCert.serialNumber,
+      },
+      keyring,
     );
-    const p12Buffer = decryptBinary(signingCert.encryptedP12, masterKey);
     // #646 / CMP-03: with a TSA configured this embeds an RFC 3161 carimbo do
     // tempo (PAdES-T / AD-RT) and FAILS CLOSED on TSA errors; without one it is
     // byte-identical to the pre-#646 AD-RB signature.

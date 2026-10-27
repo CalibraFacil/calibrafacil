@@ -37,6 +37,8 @@ export interface Env {
   GOTENBERG_URL?: string;
   GOTENBERG_TOKEN?: string;
   SIGNING_MASTER_KEY?: string; // Optional - if not set, PDFs won't be signed
+  SIGNING_MASTER_KEY_ID?: string; // Id of the current KEK (unset: k1)
+  SIGNING_MASTER_KEY_PREVIOUS?: string; // Previous KEKs, `id:base64key,...`
   // RFC 3161 TSA (#646 / CMP-03, PAdES-T). Unset => plain AD-RB signing.
   SIGNING_TSA_URL?: string;
   SIGNING_TSA_AUTH?: string; // Full Authorization header value for a contracted ACT (secret)

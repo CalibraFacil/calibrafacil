@@ -137,6 +137,26 @@ export const DEPLOY_SECTIONS: readonly DeploySection[] = [
     ],
   },
   {
+    title: "Signing key rotation and trust store (optional)",
+    intro: [
+      "SIGNING_MASTER_KEY (below) is the key encryption key that protects the",
+      "laboratories' signing certificates. To rotate it, give the new key a new id,",
+      "keep the old one in SIGNING_MASTER_KEY_PREVIOUS and run",
+      "reencrypt-signing-credentials (see DEPLOYMENT.md, Signing certificate custody).",
+    ],
+    variables: [
+      { name: "SIGNING_MASTER_KEY_ID", example: example.commented("k1") },
+      {
+        name: "SIGNING_MASTER_KEY_PREVIOUS",
+        example: example.commented("k1:<base64 key>"),
+      },
+      {
+        name: "SIGNING_TRUST_STORE_FILE",
+        example: example.commented(""),
+      },
+    ],
+  },
+  {
     title: "Outbound requests to customer-configured URLs (optional)",
     intro: [
       "Webhooks and the generic HTTP ERP integration call URLs a laboratory",

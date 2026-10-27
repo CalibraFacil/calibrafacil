@@ -90,7 +90,7 @@ under "Nulled".
 
 ## Evidence tables
 
-74 evidence tables out of 138; 402 foreign keys in schema.ts, 116 of them ON DELETE CASCADE.
+75 evidence tables out of 139; 404 foreign keys in schema.ts, 116 of them ON DELETE CASCADE.
 Each entry lists the foreign keys the table itself carries, which are the only way a parent's deletion reaches it.
 
 ### Technical records (calibration, SPC, OOT) (10)
@@ -179,7 +179,7 @@ Each entry lists the foreign keys the table itself carries, which are the only w
   - `superseded_by_job_id` to `calibration_job`: RESTRICT. blocks the delete of the parent.
   - `actor_user_id` to `user`: SET NULL. actor column: the row stays, the actor reference is cleared.
 
-### Audit logs (22)
+### Audit logs (23)
 
 - `accredited_scope_line_audit_log`
   - `performed_by` to `user`: NO ACTION. blocks the delete of the parent.
@@ -225,6 +225,9 @@ Each entry lists the foreign keys the table itself carries, which are the only w
   - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
   - `performed_by` to `user`: NO ACTION. blocks the delete of the parent.
 - `organization_api_key_audit_log`
+  - `performed_by` to `user`: SET NULL. actor column: the row stays, the actor reference is cleared.
+- `organization_compliance_audit_log`
+  - `unit_id` to `organization_unit`: SET NULL. pointer column: the row stays, the pointer is cleared.
   - `performed_by` to `user`: SET NULL. actor column: the row stays, the actor reference is cleared.
 - `personnel_competence_audit_log`
   - `organization_id` to `organization`: RESTRICT. blocks the delete of the parent.
@@ -463,7 +466,7 @@ For each root, the CASCADE closure is followed (what Postgres removes with the r
 Rows Postgres deletes along with it (47 tables by CASCADE): `accredited_scope_line`, `asset`, `automatic_send_rule`, `calibration_method`, `certificate_numbering_profile`, `certificate_release_policy`, `commercial_agreement_service_term`, `commercial_agreement_unit_scope`, `customer`, `customer_group`, `environmental_limits`, `integration_connection`, `integration_oauth_app`, `integration_object_link`, `integration_sync_cursor`, `integration_sync_item`, `integration_sync_run`, `invitation`, `lab_account_setup_token`, `mass_composition_profile`, `material`, `member`, `member_unit_assignment`, `member_visual_signature`, `notification`, `oot_email_outbox`, `organization_api_key`, `organization_custom_domain`, `organization_email_domain`, `organization_integration`, `organization_signing_certificate`, `organization_unit`, `portal_export_job`, `public_api_idempotency_key`, `public_api_resource_ref`, `public_api_webhook_delivery`, `public_api_webhook_subscription`, `scheduled_notification`, `service`, `service_order_email_outbox`, `service_order_public_access_token`, `service_order_settings`, `sso_provider`, `supplier`, `sync_applied_event`, `sync_change_log`, `sync_change_log_purge`.
 
 - Evidence deleted by CASCADE: **0**.
-- Evidence columns nulled by SET NULL: **9**.
+- Evidence columns nulled by SET NULL: **10**.
 - Evidence tables that make Postgres refuse the delete (RESTRICT / NO ACTION): **96**.
 
 Nulled:
@@ -473,6 +476,7 @@ Nulled:
 - `organization` → `certificate_numbering_profile` (`organization_id`) ⇒ `certificate_numbering_audit_log.profile_id` (`certificate_numbering_audit_log`)
 - `organization` → `certificate_release_policy` (`organization_id`) ⇒ `certificate_release.applied_policy_id` (`certificate_release`)
 - `organization` → `certificate_release_policy` (`organization_id`) ⇒ `certificate_release_audit_log.applied_policy_id` (`certificate_release_audit_log`)
+- `organization` → `organization_unit` (`organization_id`) ⇒ `organization_compliance_audit_log.unit_id` (`organization_compliance_audit_log`)
 - `organization` → `member` (`organization_id`) ⇒ `organization_event_log.actor_member_id` (`organization_event_log`)
 - `organization` → `organization_unit` (`organization_id`) ⇒ `organization_event_log.unit_id` (`organization_event_log`)
 - `organization` → `material` (`organization_id`) ⇒ `service_order_execution_item.material_id` (`service_order_execution_item`)
@@ -630,7 +634,7 @@ Refused by:
 Rows Postgres deletes along with it (12 tables by CASCADE): `account`, `invitation`, `lab_account_setup_token`, `member`, `member_unit_assignment`, `member_visual_signature`, `notification`, `notification_preference`, `passkey`, `portal_export_job`, `session`, `sso_provider`.
 
 - Evidence deleted by CASCADE: **0**.
-- Evidence columns nulled by SET NULL: **42**.
+- Evidence columns nulled by SET NULL: **43**.
 - Evidence tables that make Postgres refuse the delete (RESTRICT / NO ACTION): **55**.
 
 Nulled:
@@ -658,6 +662,7 @@ Nulled:
 - `user` ⇒ `issued_certificate_snapshot.voided_by` (`issued_certificate_snapshot`)
 - `user` ⇒ `issued_certificate_status_event.actor_user_id` (`issued_certificate_status_event`)
 - `user` ⇒ `organization_api_key_audit_log.performed_by` (`organization_api_key_audit_log`)
+- `user` ⇒ `organization_compliance_audit_log.performed_by` (`organization_compliance_audit_log`)
 - `user` → `member` (`user_id`) ⇒ `organization_event_log.actor_member_id` (`organization_event_log`)
 - `user` ⇒ `organization_event_log.actor_user_id` (`organization_event_log`)
 - `user` ⇒ `personnel_competence.user_id` (`personnel_competence`)

@@ -104,6 +104,14 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "cron-queue",
+    file: "apps/api/src/lib/reencrypt-signing-credentials.ts",
+    tables: ["organization_signing_certificate"],
+    kinds: ["select"],
+    reason:
+      "System path (systemDb, owner connection), operator CLI reencrypt-signing-credentials (roadmap 2 B4a): moving every laboratory's signing credential to the current key encryption key is a platform sweep across all laboratories by design. Each row is then updated in its own transaction with an explicit organization_id predicate, and its audit row is written with that organization.",
+  },
+  {
+    category: "cron-queue",
     file: "apps/api/src/lib/sync-change-log-purge.ts",
     tables: ["sync_change_log"],
     kinds: ["select"],

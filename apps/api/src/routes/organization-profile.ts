@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { organization } from "@calibra-facil/db/schema";
 import { UpdateOrganizationProfileSchema } from "@calibra-facil/schemas";
 import { writeOrganizationAuditEvent } from "../lib/audit";
+import { writeComplianceAuditEvent } from "../lib/compliance-audit";
 import { domainErrorResponse, invalid, notFound } from "../lib/domain-errors";
 import { orgDb } from "../lib/org-db";
 import {
@@ -181,6 +182,41 @@ export const organizationProfileRouter = new Hono<{
           },
           tx,
         );
+
+        // B4a: the append-only compliance trail records the accreditation claim
+        // (number, body, active toggle, vigência window = the seal's settings)
+        // with before and after, in this same transaction.
+        const changedClaims = CLAIM_FIELDS.filter((field) =>
+          fields.includes(field),
+        );
+        if (changedClaims.length > 0) {
+          await writeComplianceAuditEvent(
+            {
+              organizationId: member.organizationId,
+              action: "accreditation.profile_changed",
+              entityType: "organization",
+              entityId: member.organizationId,
+              changes: {
+                fields: changedClaims,
+                before: Object.fromEntries(
+                  changedClaims.map((field) => [
+                    field,
+                    auditValue(before[field]),
+                  ]),
+                ),
+                after: Object.fromEntries(
+                  changedClaims.map((field) => [
+                    field,
+                    auditValue(after[field]),
+                  ]),
+                ),
+              },
+              performedBy: session.user.id,
+              ipAddress: c.req.header("x-forwarded-for") ?? null,
+            },
+            tx,
+          );
+        }
         return after;
       },
     );

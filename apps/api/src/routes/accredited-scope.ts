@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { orgDb } from "../lib/org-db";
+import { writeComplianceAuditEvent } from "../lib/compliance-audit";
 import {
   accreditedScopeLine,
   accreditedScopeLineAuditLog,
@@ -178,6 +179,25 @@ export const accreditedScopeRouter = new Hono<{
             performedBy: session.user.id,
             ipAddress: c.req.header("x-forwarded-for") || null,
           });
+          // B4a: also on the compliance trail the accreditation profile uses.
+          await writeComplianceAuditEvent(
+            {
+              organizationId: memberData.organizationId,
+              action: "accreditation.scope_enforcement_changed",
+              entityType: "organization",
+              entityId: memberData.organizationId,
+              changes: {
+                before: {
+                  scopeEnforcementMode: effectiveBefore,
+                  wasDefault: !before.scopeEnforcementMode,
+                },
+                after: { scopeEnforcementMode: input.mode },
+              },
+              performedBy: session.user.id,
+              ipAddress: c.req.header("x-forwarded-for") || null,
+            },
+            tx,
+          );
         }
 
         return c.json({
