@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { applyBodyLimit } from "./server/body-limit";
 import { applyCors } from "./server/cors";
+import { applyRequestObservability } from "./server/observability";
 import { applyValidationErrorShape } from "./server/validation-error-shape";
 import { applyOriginGuard } from "./server/origin-guard";
 import { applyRateLimit } from "./server/rate-limit";
@@ -14,6 +15,9 @@ import type { Env } from "./server/env";
 export function createApiApp() {
   const app = new Hono<{ Bindings: Env }>();
 
+  // First, so the request id, the access log and the counters see every answer
+  // (including a CORS preflight, a 403 of the origin guard or a 429).
+  applyRequestObservability(app);
   applyCors(app);
   applySecurityHeaders(app);
   applyOriginGuard(app);
