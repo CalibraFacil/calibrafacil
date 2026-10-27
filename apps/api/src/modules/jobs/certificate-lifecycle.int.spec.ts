@@ -563,16 +563,75 @@ describe("certificate lifecycle (real Postgres)", () => {
       expect(await events(jobId)).toHaveLength(2);
     });
 
-    it("REQ-B3-W1: concurrent withdrawals write exactly one event", async () => {
-      const { jobId } = await seedApprovedOriginal();
+    it("REQ-B3-W1 [HIGH RISK]: a withdrawal queued behind another transaction's lock on the job re-reads the lifecycle after it and writes no second event", async () => {
+      const { jobId, certificateId } = await seedApprovedOriginal();
+      let lockTaken: () => void = () => undefined;
+      const taken = new Promise<void>((resolve) => {
+        lockTaken = resolve;
+      });
+      let releaseLock: () => void = () => undefined;
+      const released = new Promise<void>((resolve) => {
+        releaseLock = resolve;
+      });
+      // Another withdrawal, mid-flight: it holds the job's row lock and has not
+      // committed its WITHDRAWN event yet.
+      const holder = db.transaction(async (tx) => {
+        await tx
+          .select({ id: calibrationJob.id })
+          .from(calibrationJob)
+          .where(eq(calibrationJob.id, jobId))
+          .for("update");
+        lockTaken();
+        await released;
+        await tx.insert(issuedCertificateStatusEvent).values({
+          organizationId: ORG,
+          certificateId,
+          jobId,
+          event: "WITHDRAWN",
+          reason: "Retirada concorrente",
+          actorUserId: OWNER,
+          source: "api",
+        });
+      });
+      await taken;
 
-      const results = await Promise.all([withdraw(jobId), withdraw(jobId)]);
+      const pending = withdraw(jobId);
+      // The command must be BLOCKED on the row lock, not racing past it: wait
+      // until Postgres shows a backend waiting on a lock of this database.
+      const blockedBackends = async (): Promise<number> => {
+        const rows = await db.execute(
+          sql`SELECT count(*)::int AS n FROM pg_stat_activity
+               WHERE datname = current_database()
+                 AND wait_event_type = 'Lock'
+                 AND query ILIKE '%calibration_job%'`,
+        );
+        const first: unknown = rows[0];
+        const n =
+          typeof first === "object" && first !== null
+            ? Reflect.get(first, "n")
+            : 0;
+        return typeof n === "number" ? n : 0;
+      };
+      const waitUntilBlocked = async (attemptsLeft: number): Promise<void> => {
+        if ((await blockedBackends()) > 0) return;
+        if (attemptsLeft === 0) {
+          throw new Error("the withdrawal never waited on the job's row lock");
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        return waitUntilBlocked(attemptsLeft - 1);
+      };
+      try {
+        await waitUntilBlocked(200);
+      } finally {
+        releaseLock();
+        await holder;
+      }
 
-      expect(results.map((r) => r.status).toSorted()).toEqual([
-        "already_withdrawn",
-        "ok",
+      expect((await pending).status).toBe("already_withdrawn");
+      expect((await events(jobId)).map((e) => e.event)).toEqual([
+        "ISSUED",
+        "WITHDRAWN",
       ]);
-      expect(await events(jobId)).toHaveLength(2);
     });
 
     it("REQ-B3-W1: only an issued certificate can be withdrawn (a draft, or an approved job with no issued certificate, is refused)", async () => {

@@ -42,9 +42,9 @@ v2 GET /reports/consolidated/comparison zValidator(query:period|unitIds)
 v2 GET /reports/consolidated/comparison <anonymous> #d5c4d6e4af
 v2 GET /certificates requireApiScope(certificates:read)
 v2 GET /certificates zValidator(query:page|limit|query|unitId)
-v2 GET /certificates <anonymous> #a674a52dfd
+v2 GET /certificates <anonymous> #ba9cd85988
 v2 GET /certificates/:jobId requireApiScope(certificates:read)
-v2 GET /certificates/:jobId <anonymous> #6b47e7ea1d
+v2 GET /certificates/:jobId <anonymous> #f7e537f928
 v2 GET /certificates/:jobId/download requireApiScope(certificates:read)
 v2 GET /certificates/:jobId/download <anonymous> #6a84f7e08e
 v2 GET /requests requireApiScope(requests:read)
