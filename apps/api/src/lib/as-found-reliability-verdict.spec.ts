@@ -83,3 +83,65 @@ describe("buildAsFoundReliabilityVerdict", () => {
     expect(verdict.margins).toEqual([2, 0, -1, 5]);
   });
 });
+
+// Roadmap 2 C4: the method's declared decision rule (ISO/IEC 17025 7.8.6,
+// ILAC-G8) decides the as-found verdict and so the out-of-tolerance alert.
+// Points: margins [0.5, 0.1, -0.1] with U = 0.2 each.
+describe("buildAsFoundReliabilityVerdict under a declared decision rule (roadmap 2 C4)", () => {
+  const results = {
+    margem_conformidade_antes: [0.5, 0.1, -0.1],
+    incerteza_expandida_antes: [0.2, 0.2, 0.2],
+  };
+  const inside = {
+    margem_conformidade_antes: [0.5, 0.1],
+    incerteza_expandida_antes: [0.2, 0.2],
+  };
+
+  it("undeclared: simple acceptance, and it says so", () => {
+    const verdict = buildAsFoundReliabilityVerdict({ results: inside });
+    expect(verdict).toMatchObject({
+      conformity: "CONFORMING",
+      decisionRule: "undeclared",
+      decisions: ["pass", "pass"],
+    });
+  });
+
+  it("guarded acceptance: a point inside the tolerance by less than U does not conform", () => {
+    const verdict = buildAsFoundReliabilityVerdict({
+      results: inside,
+      decisionRule: "guarded_acceptance",
+    });
+    expect(verdict).toMatchObject({
+      conformity: "NON_CONFORMING",
+      decisionRule: "guarded_acceptance",
+      decisions: ["pass", "fail"],
+    });
+  });
+
+  it("non-binary: a conditional pass conforms, a conditional fail does not", () => {
+    expect(
+      buildAsFoundReliabilityVerdict({
+        results: inside,
+        decisionRule: "non_binary",
+      }),
+    ).toMatchObject({
+      conformity: "CONFORMING",
+      decisions: ["pass", "conditional_pass"],
+    });
+    expect(
+      buildAsFoundReliabilityVerdict({ results, decisionRule: "non_binary" }),
+    ).toMatchObject({
+      conformity: "NON_CONFORMING",
+      decisions: ["pass", "conditional_pass", "conditional_fail"],
+    });
+  });
+
+  it("a guard-band rule without a U per point leaves the verdict UNKNOWN (no alert), never CONFORMING", () => {
+    const verdict = buildAsFoundReliabilityVerdict({
+      results: { margem_conformidade_antes: [0.5, 0.4] },
+      decisionRule: "guarded_acceptance",
+    });
+    expect(verdict.conformity).toBe("UNKNOWN");
+    expect(verdict.decisions).toEqual(["undetermined", "undetermined"]);
+  });
+});

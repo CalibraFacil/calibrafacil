@@ -15,6 +15,12 @@ import { Separator } from '@calibra-facil/ui/separator'
 import { Textarea } from '@calibra-facil/ui/textarea'
 import { Field } from '@calibra-facil/ui/field'
 
+import {
+  DECISION_RULE_KINDS,
+  DECISION_RULE_LABELS,
+  type DecisionRuleKind,
+  isDecisionRuleKind,
+} from '@calibra-facil/shared/decision-rule'
 import type { MethodDraftCertificateContent } from './types'
 
 type CertificateSection = NonNullable<
@@ -67,6 +73,12 @@ export function CertificateContentSection({
             }
           />
         </div>
+        <DecisionRuleSelect
+          value={certificate?.decisionRuleKind}
+          onChange={(decisionRuleKind) =>
+            onCertificateChange({ decisionRuleKind })
+          }
+        />
         <Field label="Padrões de referência">
           <Textarea
             value={(certificate?.referenceStandards ?? []).join('\n')}
@@ -106,6 +118,53 @@ export function CertificateContentSection({
         </div>
       </div>
     </Panel>
+  )
+}
+
+const UNDECLARED = 'undeclared'
+
+/**
+ * The decision rule of the method (ISO/IEC 17025 7.8.6, ILAC-G8; roadmap 2 C4):
+ * the as-found verdict and the customer's out-of-tolerance alert follow it.
+ * The guard-band rules use the per-point `incerteza_expandida_antes`.
+ */
+function DecisionRuleSelect({
+  value,
+  onChange,
+}: {
+  value: DecisionRuleKind | undefined
+  onChange: (value: DecisionRuleKind | undefined) => void
+}) {
+  const current = value ?? UNDECLARED
+  return (
+    <Field
+      label="Regra de decisão"
+      description={
+        value
+          ? 'Usada no veredito como encontrado e no alerta de fora de tolerância ao cliente.'
+          : 'Não declarada: a conformidade é julgada por aceitação simples. Declare a regra do laboratório (ISO/IEC 17025 7.8.6).'
+      }
+    >
+      <Select
+        value={current}
+        onValueChange={(nextValue) => {
+          if (nextValue === UNDECLARED) onChange(undefined)
+          else if (isDecisionRuleKind(nextValue)) onChange(nextValue)
+        }}
+      >
+        <SelectTrigger>
+          <span>{value ? DECISION_RULE_LABELS[value] : 'Não declarada'}</span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={UNDECLARED}>Não declarada</SelectItem>
+          {DECISION_RULE_KINDS.map((kind) => (
+            <SelectItem key={kind} value={kind}>
+              {DECISION_RULE_LABELS[kind]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </Field>
   )
 }
 

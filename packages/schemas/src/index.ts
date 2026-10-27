@@ -1361,6 +1361,14 @@ export const MethodCertificateContentSchema = z.object({
   massCompositionDisplay: z.enum(["full", "hidden"]).optional(),
   uncertaintyBudgetDisplay: z.enum(["full", "hidden"]).optional(),
   decisionRuleStatement: z.string().max(2000).optional(),
+  /**
+   * The decision rule the method's conformity is judged by (ISO/IEC 17025
+   * 7.8.6, ILAC-G8; roadmap 2 C4): the as-found verdict and the
+   * out-of-tolerance alert follow it. Absent: undeclared (simple acceptance).
+   */
+  decisionRuleKind: z
+    .enum(["simple_acceptance", "guarded_acceptance", "non_binary"])
+    .optional(),
   sections: z.array(MethodCertificateContentSectionSchema).default([]),
 });
 
