@@ -36,5 +36,8 @@ WORKDIR /app
 COPY --from=build /repo/scripts/static-server.ts ./static-server.ts
 COPY --from=build /repo/apps/${APP_NAME}/dist ./dist
 
+# Run as the image's unprivileged user (uid 1000). The application is read-only
+# on disk: everything it keeps goes to the database and the object store.
+USER bun
 EXPOSE 8080
 CMD ["bun", "static-server.ts"]
