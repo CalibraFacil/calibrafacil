@@ -13,12 +13,14 @@ import { Input } from "@calibra-facil/ui/input";
 import { cn } from "@/lib/utils";
 import { redeemAccessCode } from "./queries";
 
-type EntryError = "invalid" | "throttled" | null;
+type EntryError = "invalid" | "throttled" | "unavailable" | null;
 
 const ERROR_COPY: Record<Exclude<EntryError, null>, string> = {
   invalid:
     "Código inválido ou expirado. Verifique o código no e-mail recebido.",
   throttled: "Muitas tentativas. Aguarde alguns minutos e tente novamente.",
+  unavailable:
+    "Não foi possível verificar o código agora. Tente novamente em instantes.",
 };
 
 /**
@@ -46,7 +48,7 @@ export function CodeEntryPage() {
       setError(result.kind);
     },
     onError: () => {
-      setError("invalid");
+      setError("unavailable");
     },
   });
 
