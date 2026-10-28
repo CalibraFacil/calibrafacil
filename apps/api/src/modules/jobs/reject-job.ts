@@ -17,7 +17,8 @@ import {
 } from "./job-actor";
 
 /**
- * Reject a job under review (REVIEW -> REJECTED): the ONE implementation behind
+ * Reject a job under review (REVIEW -> REJECTED), or one whose certificate render
+ * failed (RENDER_FAILED -> REJECTED, roadmap 2 C5): the ONE implementation behind
  * the cloud route and the public API. A reject sends the job back to the
  * technician with a written reason, so the reason is part of the command.
  *
@@ -81,7 +82,7 @@ async function rejectJobIn(
       currentStatus: existing.status,
       error: invalid(
         "job_not_rejectable",
-        `Nao e possivel rejeitar um job com status ${existing.status}. O job deve estar em REVIEW.`,
+        `Nao e possivel rejeitar um job com status ${existing.status}. O job deve estar em REVIEW ou RENDER_FAILED.`,
       ),
     };
   }

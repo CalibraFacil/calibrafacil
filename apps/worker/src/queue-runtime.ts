@@ -350,8 +350,8 @@ async function processClaimedJob(
 // Reclaim expired PROCESSING leases. A row whose lease expired on its final
 // attempt is dead-lettered (FAILED) instead of re-queued — a job that crashes the
 // worker process must not be re-claimed forever — and the certificate it left in
-// GENERATING_PDF is rejected here, since no worker will ever finish it. The
-// rejection is best-effort: the queue-backstop cron's stuck-render sweep is the
+// GENERATING_PDF is marked RENDER_FAILED here, since no worker will ever finish it.
+// The move is best-effort: the queue-backstop cron's stuck-render sweep is the
 // safety net, so a failure must never stop the drain.
 async function reclaimStaleJobs(staleAfterMs: number): Promise<void> {
   const { deadLettered } = await releaseStaleQueueJobs(staleAfterMs);

@@ -8,6 +8,7 @@ const reviewForSubmitter = {
   assign: { allowed: true as const },
   amend: { allowed: false as const, reason: 'status' as const },
   withdraw: { allowed: false as const, reason: 'status' as const },
+  retry_render: { allowed: false as const, reason: 'status' as const },
 }
 
 describe('allowed actions from the server (roadmap 2 F1)', () => {

@@ -209,6 +209,7 @@ export interface JobsApi {
     },
   ): Promise<JobMutationResponse>;
   reject(jobId: string | number, reason: string): Promise<JobMutationResponse>;
+  retryRender(jobId: string | number): Promise<JobMutationResponse>;
   cancel(jobId: string | number, reason: string): Promise<JobMutationResponse>;
   assign(
     jobId: string | number,
@@ -1993,6 +1994,7 @@ export type DashboardJobStatus =
   | "IN_PROGRESS"
   | "REVIEW"
   | "GENERATING_PDF"
+  | "RENDER_FAILED"
   | "APPROVED"
   | "REJECTED"
   | "CANCELED"

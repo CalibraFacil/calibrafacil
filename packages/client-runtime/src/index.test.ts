@@ -943,6 +943,11 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
+          "method": "retryRender",
+          "namespace": "jobs",
+          "policy": "cloud-only",
+        },
+        {
           "method": "cancel",
           "namespace": "jobs",
           "policy": "cloud-only",

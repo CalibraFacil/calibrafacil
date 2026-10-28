@@ -468,7 +468,7 @@ describe("REQ-CIN-2: the worker renders from the frozen certificate input", () =
 
     // Nothing was issued from it, and the job is rejected with the reason
     // recorded rather than stranded in GENERATING_PDF.
-    expect(await jobStatus(job.jobId)).toBe("REJECTED");
+    expect(await jobStatus(job.jobId)).toBe("RENDER_FAILED");
     expect(await snapshots(job.jobId)).toHaveLength(0);
   });
 });
@@ -497,7 +497,7 @@ describe("REQ-CIN-2: a post-0120 approval is never rendered through the live pat
     ).rejects.toThrow(/certificate_input missing for a post-0120 approval/);
 
     expect(rendered).toHaveLength(0);
-    expect(await jobStatus(job.jobId)).toBe("REJECTED");
+    expect(await jobStatus(job.jobId)).toBe("RENDER_FAILED");
     expect(await snapshots(job.jobId)).toHaveLength(0);
   });
 

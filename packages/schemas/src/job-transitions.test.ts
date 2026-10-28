@@ -32,13 +32,17 @@ const DOCUMENTED_MACHINE: Record<
     ["IN_PROGRESS", "REVIEW"],
     ["REJECTED", "REVIEW"],
   ],
-  reject: [["REVIEW", "REJECTED"]],
+  reject: [
+    ["REVIEW", "REJECTED"],
+    ["RENDER_FAILED", "REJECTED"],
+  ],
   approve: [["REVIEW", "GENERATING_PDF"]],
   complete_render: [
     ["GENERATING_PDF", "APPROVED"],
     ["SUPERSEDED", "SUPERSEDED"],
   ],
-  fail_render: [["GENERATING_PDF", "REJECTED"]],
+  fail_render: [["GENERATING_PDF", "RENDER_FAILED"]],
+  retry_render: [["RENDER_FAILED", "GENERATING_PDF"]],
   revert_approval: [["GENERATING_PDF", "REVIEW"]],
   cancel: [
     ["DRAFT", "CANCELED"],

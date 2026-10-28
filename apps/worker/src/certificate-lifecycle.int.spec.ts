@@ -288,7 +288,7 @@ describe("certificate lifecycle written by the worker (real DB)", () => {
       ),
     ).rejects.toThrow();
 
-    expect((await jobState(amendment.id)).status).toBe("REJECTED");
+    expect((await jobState(amendment.id)).status).toBe("RENDER_FAILED");
     expect(await jobState(original.jobId)).toMatchObject({
       status: "APPROVED",
       supersededById: null,

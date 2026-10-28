@@ -160,13 +160,13 @@ describe("certificate worker as calibra_app (P2-18f)", () => {
       processBackgroundJob(
         envAsApplicationRole({ withOwnerUrl: true }),
         { type: "CERTIFICATE", jobId: job.jobId, userId: org.userId },
-        // The last delivery: the failure is final, the job is REJECTED.
+        // The last delivery: the failure is final, the job is RENDER_FAILED.
         { attempt: 1, maxAttempts: 1 },
       ),
     ).rejects.toThrow();
 
     const after = await jobColumns(job.jobId);
-    expect(after.status).toBe("REJECTED");
+    expect(after.status).toBe("RENDER_FAILED");
     expect(String(after.rejectionReason)).toContain(
       "Erro ao gerar certificado",
     );

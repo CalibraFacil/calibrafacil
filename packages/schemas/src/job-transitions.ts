@@ -8,8 +8,9 @@
 //   DRAFT ──execute──▶ IN_PROGRESS ──submit──▶ REVIEW ──approve──▶ GENERATING_PDF
 //     │ └──────────────submit──────────────────▶ │  ▲ reject          │ │
 //     │                                  REJECTED ◀┘  └─ revert ───────┘ │ render ok
-//     │                                     │  ▲ render failed ─────────┘ ▼
-//     │                                     └──submit──▶ REVIEW        APPROVED ──amend──▶ SUPERSEDED
+//     │                                   │   ▲                  render  ▼ │ ▲ retry
+//     │                                   │   └───── reject ──── RENDER_FAILED
+//     │                                   └──submit──▶ REVIEW        APPROVED ──amend──▶ SUPERSEDED
 //     └─ cancel (DRAFT, IN_PROGRESS, REVIEW, REJECTED) ─▶ CANCELED
 //
 // Every row below was derived from the code path that performs it (file:line
@@ -35,6 +36,9 @@
 //                      status while the watermarked PDF is regenerated)
 //   fail_render      packages/jobs-core/src/index.ts:727,732 (setJobError)
 //                    packages/db/src/queue-render-recovery.ts:80,90 (backstop)
+//   retry_render     apps/api/src/modules/jobs/retry-render.ts (`retryRender`: a
+//                      manager re-dispatches the certificate of a failed render,
+//                      roadmap 2 C5; the approval and its frozen input stand)
 //   revert_approval  apps/api/src/modules/jobs/approve-job.ts:532,549 (dispatch
 //                      failed after the approval: back to the status approved from)
 //   cancel           apps/api/src/modules/jobs/cancel-job.ts (`cancelJob`, for the
@@ -53,6 +57,9 @@
 //   Q19  assign is allowed only for DRAFT, IN_PROGRESS, REVIEW and REJECTED. It
 //        used to be accepted for CANCELED and GENERATING_PDF jobs too, which
 //        read as an accident. APPROVED and SUPERSEDED were always refused.
+//   C5   a failed render lands in RENDER_FAILED (it used to land in REJECTED,
+//        indistinguishable from a review rejection). From there a manager
+//        retries the render or rejects the job back to rework.
 //   Q18  a save keeps a REJECTED job REJECTED (`execute`). The public API
 //        results route used to move it to IN_PROGRESS through a separate
 //        `record_results` command; that command is gone with the unification.
@@ -67,6 +74,7 @@ export const JOB_COMMANDS = [
   "approve",
   "complete_render",
   "fail_render",
+  "retry_render",
   "revert_approval",
   "cancel",
   "amend",
@@ -95,13 +103,15 @@ export const JOB_TRANSITIONS: readonly JobTransition[] = [
   { from: "REJECTED", command: "submit", to: "REVIEW" },
 
   { from: "REVIEW", command: "reject", to: "REJECTED" },
+  { from: "RENDER_FAILED", command: "reject", to: "REJECTED" },
 
   { from: "REVIEW", command: "approve", to: "GENERATING_PDF" },
 
   { from: "GENERATING_PDF", command: "complete_render", to: "APPROVED" },
   { from: "SUPERSEDED", command: "complete_render", to: "SUPERSEDED" },
 
-  { from: "GENERATING_PDF", command: "fail_render", to: "REJECTED" },
+  { from: "GENERATING_PDF", command: "fail_render", to: "RENDER_FAILED" },
+  { from: "RENDER_FAILED", command: "retry_render", to: "GENERATING_PDF" },
 
   { from: "GENERATING_PDF", command: "revert_approval", to: "REVIEW" },
 

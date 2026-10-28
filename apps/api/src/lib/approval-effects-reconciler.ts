@@ -74,9 +74,14 @@ const RECONCILE_GRACE_MINUTES = 15;
 const RECONCILE_LOOKBACK_DAYS = 30;
 const DEFAULT_BATCH_SIZE = 200;
 
-/** The statuses of a job that was approved (REVIEW has not, REJECTED/CANCELED are not released). */
+/**
+ * The statuses of a job that was approved (REVIEW has not, REJECTED/CANCELED are
+ * not released). RENDER_FAILED is an approval whose PDF failed: the approval
+ * stands until a manager retries the render or rejects the job.
+ */
 const APPROVED_STATUSES: JobStatus[] = [
   "GENERATING_PDF",
+  "RENDER_FAILED",
   "APPROVED",
   "SUPERSEDED",
 ];
@@ -87,7 +92,11 @@ const APPROVED_STATUSES: JobStatus[] = [
  * reconciler never creates an event, nor alerts a customer, for one: the
  * amendment's own approval carries the effect.
  */
-const CURRENT_VERDICT_STATUSES: JobStatus[] = ["GENERATING_PDF", "APPROVED"];
+const CURRENT_VERDICT_STATUSES: JobStatus[] = [
+  "GENERATING_PDF",
+  "RENDER_FAILED",
+  "APPROVED",
+];
 
 export type ApprovalEffectsReconcileResult = {
   /** Out-of-tolerance events written for approvals that lacked one. */

@@ -22,6 +22,7 @@ const ACTION_PERMISSION: Record<JobAction, PermissionCheck> = {
   assign: { calibration: ["assign_technician"] },
   amend: { calibration: ["approve"] },
   withdraw: { calibration: ["approve"] },
+  retry_render: { calibration: ["approve"] },
 };
 
 const ADMIN_ONLY: ReadonlySet<JobAction> = new Set(["amend", "withdraw"]);
@@ -89,5 +90,6 @@ export function allowedJobActions(
     assign: verdict("assign"),
     amend: verdict("amend"),
     withdraw: verdict("withdraw"),
+    retry_render: verdict("retry_render"),
   };
 }

@@ -26,13 +26,13 @@ import { wakeDocumentWorker } from "./background-jobs";
 //   1. reclaim expired PROCESSING leases -> PENDING (or FAILED when the lease
 //      expired on the row's final attempt: a job that crashes the worker process
 //      must not be re-claimed forever),
-//   2. reject the GENERATING_PDF certificate of every row dead-lettered in (1),
-//   3. reject certificates stuck in GENERATING_PDF past STUCK_RENDER_AFTER_MS
+//   2. mark RENDER_FAILED the GENERATING_PDF certificate of every row dead-lettered in (1),
+//   3. mark RENDER_FAILED certificates stuck in GENERATING_PDF past STUCK_RENDER_AFTER_MS
 //      with no live queue row (a job that ran out of its retries),
 //   4. count what is now claimable (reclaimed + any stranded PENDING),
 //   5. if anything is claimable and the container is configured, wake it to drain.
 //
-// Steps 2-3 only ever move a job GENERATING_PDF -> REJECTED (compare-and-set,
+// Steps 2-3 only ever move a job GENERATING_PDF -> RENDER_FAILED (compare-and-set,
 // with an audit row): the same transition the worker makes when it is alive to.
 // The backstop NEVER enqueues and NEVER touches certificate numbering. The
 // container re-claims the SAME app_queue_job row (same payload / jobId) and the

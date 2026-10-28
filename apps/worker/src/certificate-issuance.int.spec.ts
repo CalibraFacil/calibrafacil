@@ -383,12 +383,12 @@ describe("fixed-layout certificate issuance (worker real-DB integration)", () =>
       }),
     ).rejects.toThrow();
 
-    // Nothing was issued, and the job is REJECTED with the reason recorded —
+    // Nothing was issued, and the job is RENDER_FAILED with the reason recorded —
     // not left stranded in GENERATING_PDF, which is the state this whole guard
     // exists to avoid. The operator has to be able to read WHY.
     expect(await issuedSnapshotRows(job.jobId)).toHaveLength(0);
     const after = await jobRow(job.jobId);
-    expect(after.status).toBe("REJECTED");
+    expect(after.status).toBe("RENDER_FAILED");
     expect(asString(after.rejection_reason)).toContain("expanded_uncertainty");
   });
 
@@ -546,7 +546,7 @@ describe("fixed-layout certificate issuance (worker real-DB integration)", () =>
       ).rejects.toThrow();
 
       const after = await jobRow(job.jobId);
-      expect(after.status).toBe("REJECTED");
+      expect(after.status).toBe("RENDER_FAILED");
       expect(asString(after.rejection_reason)).toContain(
         "Erro ao gerar certificado",
       );
@@ -572,7 +572,7 @@ describe("fixed-layout certificate issuance (worker real-DB integration)", () =>
       ).rejects.toThrow();
 
       const after = await jobRow(job.jobId);
-      expect(after.status).toBe("REJECTED");
+      expect(after.status).toBe("RENDER_FAILED");
       expect(asString(after.rejection_reason)).toContain(
         "expanded_uncertainty",
       );

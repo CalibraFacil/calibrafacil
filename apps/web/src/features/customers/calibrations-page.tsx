@@ -53,6 +53,7 @@ const statusLabels: Record<CustomerJobStatus, string> = {
   IN_PROGRESS: 'Em Execução',
   REVIEW: 'Em Revisão',
   GENERATING_PDF: 'Gerando PDF',
+  RENDER_FAILED: 'Falha na emissão',
   APPROVED: 'Aprovado',
   REJECTED: 'Rejeitado',
   CANCELED: 'Cancelado',
@@ -67,6 +68,7 @@ const statusVariants: Record<
   IN_PROGRESS: 'default',
   REVIEW: 'outline',
   GENERATING_PDF: 'outline',
+  RENDER_FAILED: 'destructive',
   APPROVED: 'default',
   REJECTED: 'destructive',
   CANCELED: 'secondary',
@@ -324,6 +326,7 @@ export function ClientCalibrationsTab({ id }: { id: string }) {
                 <SelectItem value="IN_PROGRESS">Em Execução</SelectItem>
                 <SelectItem value="REVIEW">Em Revisão</SelectItem>
                 <SelectItem value="GENERATING_PDF">Gerando PDF</SelectItem>
+                <SelectItem value="RENDER_FAILED">Falha na emissão</SelectItem>
                 <SelectItem value="APPROVED">Aprovado</SelectItem>
                 <SelectItem value="REJECTED">Rejeitado</SelectItem>
                 <SelectItem value="CANCELED">Cancelado</SelectItem>

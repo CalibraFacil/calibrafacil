@@ -71,7 +71,7 @@ async function jobRow(id: number) {
 }
 
 describe("drainQueue dead-letters a worker crash on the final attempt", () => {
-  it("REQ-QDL-001 REQ-QDL-002 the row becomes FAILED (never re-claimed) and its GENERATING_PDF job is REJECTED with an audit row", async () => {
+  it("REQ-QDL-001 REQ-QDL-002 the row becomes FAILED (never re-claimed) and its GENERATING_PDF job is RENDER_FAILED with an audit row", async () => {
     const org = await seedOrg({ orgId: "org-1", userId: "user-org-1" });
     const job = await seedIssuableJob({
       organizationId: org.orgId,
@@ -99,7 +99,7 @@ describe("drainQueue dead-letters a worker crash on the final attempt", () => {
     expect(queueRow?.lockedAt).toBeNull();
 
     const rejected = await jobRow(job.jobId);
-    expect(rejected.status).toBe("REJECTED");
+    expect(rejected.status).toBe("RENDER_FAILED");
     expect(rejected.rejectionReason).toMatch(/^Erro ao gerar certificado: /);
     expect(rejected.rejectedBy).toBe(org.userId);
     expect(rejected.rejectedAt).toBeInstanceOf(Date);
@@ -112,7 +112,7 @@ describe("drainQueue dead-letters a worker crash on the final attempt", () => {
     expect(audit[0]).toMatchObject({
       action: "certificate_error",
       performedBy: org.userId,
-      changes: { status: { old: "GENERATING_PDF", new: "REJECTED" } },
+      changes: { status: { old: "GENERATING_PDF", new: "RENDER_FAILED" } },
     });
 
     // A second drain finds nothing to do: no loop, no second audit row.

@@ -36,6 +36,7 @@ export function toJobStatus(value: unknown): JobStatus {
     case 'REJECTED':
     case 'CANCELED':
     case 'GENERATING_PDF':
+    case 'RENDER_FAILED':
     case 'SUPERSEDED':
       return value
     default:

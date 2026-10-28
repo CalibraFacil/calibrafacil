@@ -361,6 +361,7 @@ const IN_FLIGHT_STATUS_LABELS: Record<string, string> = {
   IN_PROGRESS: 'Em execução',
   REVIEW: 'Em revisão',
   GENERATING_PDF: 'Gerando certificado',
+  RENDER_FAILED: 'Falha na emissão',
 }
 
 /**

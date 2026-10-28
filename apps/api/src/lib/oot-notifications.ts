@@ -221,11 +221,13 @@ async function flagJobOutOfToleranceIn(
   }
 
   // The as-found verdict only exists after approval; GENERATING_PDF is the
-  // post-approval window while the certificate renders.
+  // post-approval window while the certificate renders (RENDER_FAILED: the
+  // render failed and waits for a retry, the approved verdict stands).
   if (
     job.status !== "APPROVED" &&
     job.status !== "SUPERSEDED" &&
-    job.status !== "GENERATING_PDF"
+    job.status !== "GENERATING_PDF" &&
+    job.status !== "RENDER_FAILED"
   ) {
     return {
       ok: false,

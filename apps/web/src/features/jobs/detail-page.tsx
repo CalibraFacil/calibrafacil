@@ -110,6 +110,11 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
     'reject',
     jobTarget,
   )
+  const retryRenderAvailability = useOperationAvailability(
+    'jobs',
+    'retryRender',
+    jobTarget,
+  )
   const cancelAvailability = useOperationAvailability(
     'jobs',
     'cancel',
@@ -185,6 +190,22 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
       )
       setRejectDialogOpen(false)
       setRejectReason('')
+    },
+    onError: (error) => {
+      toast.error(error.message)
+    },
+  })
+
+  // Retry the render of a certificate whose render failed (roadmap 2 C5)
+  const retryRenderMutation = useMutation({
+    mutationFn: async () => {
+      return calibraApi.jobs.retryRender(apiJobId)
+    },
+    onSuccess: async () => {
+      await settleAfterCloudCommand(
+        'Emissão do certificado reenviada',
+        jobEventQueryKeys('approved'),
+      )
     },
     onError: (error) => {
       toast.error(error.message)
@@ -268,11 +289,23 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
   // The server says what this member may do (roadmap 2 F1: status machine,
   // role, separation of duties); the desktop falls back to the status rules.
   const canApprove = serverAllows(job.allowedActions, 'approve', inReview)
-  const canReject = serverAllows(job.allowedActions, 'reject', inReview)
+  // A failed render (roadmap 2 C5): the approval stands; a manager renders the
+  // certificate again or rejects the job back to rework.
+  const renderFailed = job.status === 'RENDER_FAILED'
+  const canReject = serverAllows(
+    job.allowedActions,
+    'reject',
+    inReview || renderFailed,
+  )
+  const canRetryRender = serverAllows(
+    job.allowedActions,
+    'retry_render',
+    renderFailed,
+  )
   const approvalBlocked = inReview
     ? approvalBlockedMessage(job.allowedActions)
     : null
-  const canShowReviewEvidence = inReview || isGeneratingPdf
+  const canShowReviewEvidence = inReview || isGeneratingPdf || renderFailed
   const canCancel = serverAllows(
     job.allowedActions,
     'cancel',
@@ -348,6 +381,17 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
         canApprove={canApprove}
         canReject={canReject}
         inReview={inReview}
+        renderFailure={
+          renderFailed
+            ? {
+                error: job.rejectionReason ?? null,
+                canRetry: canRetryRender,
+                retrying: retryRenderMutation.isPending,
+                availability: retryRenderAvailability,
+                onRetry: () => retryRenderMutation.mutate(),
+              }
+            : null
+        }
         approvalBlocked={approvalBlocked}
         canExecute={canExecute}
         canCancel={canCancel}

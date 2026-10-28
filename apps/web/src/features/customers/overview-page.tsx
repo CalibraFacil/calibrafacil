@@ -64,6 +64,7 @@ const JOB_STATUS: Record<
   IN_PROGRESS: { label: 'Em execução', variant: 'default' },
   REVIEW: { label: 'Em revisão', variant: 'outline' },
   GENERATING_PDF: { label: 'Gerando PDF', variant: 'outline' },
+  RENDER_FAILED: { label: 'Falha na emissão', variant: 'destructive' },
   APPROVED: { label: 'Aprovado', variant: 'default' },
   REJECTED: { label: 'Rejeitado', variant: 'destructive' },
   CANCELED: { label: 'Cancelado', variant: 'secondary' },

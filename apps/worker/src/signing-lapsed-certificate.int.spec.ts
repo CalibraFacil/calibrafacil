@@ -18,7 +18,7 @@ import { setJobStatus } from "../test/integration/job-fixtures";
  * looked like "no certificate": the unit's certificates were silently issued
  * UNSIGNED. Now a unit that has ever had a signing certificate (any row,
  * expired and revoked included) and has none valid gets a failed render
- * (existing render-failure path: the job is REJECTED with the reason, nothing
+ * (existing render-failure path: the job is RENDER_FAILED with the reason, nothing
  * is stored) and its admins are notified. A unit that never had one keeps
  * issuing unsigned.
  *
@@ -209,7 +209,7 @@ describe("an expired signing certificate fails closed (P0-8)", () => {
     );
 
     const after = await jobRow(job.jobId);
-    expect(after.status).toBe("REJECTED");
+    expect(after.status).toBe("RENDER_FAILED");
     expect(String(after.rejectionReason)).toMatch(/expirado\/ausente/);
     expect(String(after.rejectionReason)).toMatch(/expirou em 01\/01\/2024/);
     expect(after.certificateUrl).toBeNull();
@@ -246,7 +246,7 @@ describe("an expired signing certificate fails closed (P0-8)", () => {
 
     await expect(issue(env, org, job.jobId)).rejects.toThrow(/revogado/);
 
-    expect((await jobRow(job.jobId)).status).toBe("REJECTED");
+    expect((await jobRow(job.jobId)).status).toBe("RENDER_FAILED");
     expect(stored.size).toBe(0);
     expect(await snapshotCount(job.jobId)).toBe(0);
   });
@@ -263,7 +263,7 @@ describe("an expired signing certificate fails closed (P0-8)", () => {
     await expect(issue(env, org, job.jobId)).rejects.toThrow(
       /expirado\/ausente/,
     );
-    expect((await jobRow(job.jobId)).status).toBe("REJECTED");
+    expect((await jobRow(job.jobId)).status).toBe("RENDER_FAILED");
   });
 
   // Q51: the unit's explicit "emitir sem assinatura digital" lifts the failure.
@@ -339,7 +339,7 @@ describe("an expired signing certificate fails closed (P0-8)", () => {
       /expirado\/ausente/,
     );
 
-    expect((await jobRow(job.jobId)).status).toBe("REJECTED");
+    expect((await jobRow(job.jobId)).status).toBe("RENDER_FAILED");
     expect(stored.size).toBe(0);
   });
 
@@ -380,7 +380,7 @@ describe("an expired signing certificate fails closed (P0-8)", () => {
       /chave de assinatura da plataforma/,
     );
 
-    expect((await jobRow(job.jobId)).status).toBe("REJECTED");
+    expect((await jobRow(job.jobId)).status).toBe("RENDER_FAILED");
     expect(stored.size).toBe(0);
     expect(mocks.lapsed).toHaveBeenCalledTimes(1);
   });
@@ -412,7 +412,7 @@ describe("an expired signing certificate fails closed (P0-8)", () => {
       /Assinatura obrigatória/,
     );
 
-    expect((await jobRow(job.jobId)).status).toBe("REJECTED");
+    expect((await jobRow(job.jobId)).status).toBe("RENDER_FAILED");
     expect(mocks.lapsed).not.toHaveBeenCalled();
   });
 

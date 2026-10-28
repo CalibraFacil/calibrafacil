@@ -59,13 +59,14 @@ const job = (
 })
 
 describe('buildPipeline', () => {
-  it('always yields the four open stages, even with no data', () => {
+  it('always yields the five open stages, even with no data', () => {
     const { stages, open } = buildPipeline(undefined)
     expect(stages.map((stage) => stage.status)).toEqual([
       'DRAFT',
       'IN_PROGRESS',
       'REVIEW',
       'GENERATING_PDF',
+      'RENDER_FAILED',
     ])
     expect(open).toBe(0)
     expect(

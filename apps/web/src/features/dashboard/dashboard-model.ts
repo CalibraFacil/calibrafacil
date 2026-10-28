@@ -21,6 +21,7 @@ export const STATUS_LABEL: Record<DashboardJobStatus, string> = {
   IN_PROGRESS: 'Em execução',
   REVIEW: 'Revisão',
   GENERATING_PDF: 'Emitindo',
+  RENDER_FAILED: 'Falha na emissão',
   APPROVED: 'Aprovada',
   REJECTED: 'Rejeitada',
   CANCELED: 'Cancelada',
@@ -34,6 +35,7 @@ export type PipelineStageStatus =
   | 'IN_PROGRESS'
   | 'REVIEW'
   | 'GENERATING_PDF'
+  | 'RENDER_FAILED'
 
 export type PipelineStage = {
   status: PipelineStageStatus
@@ -51,6 +53,7 @@ export const PIPELINE_STAGES: ReadonlyArray<{
   { status: 'IN_PROGRESS', label: 'Em execução' },
   { status: 'REVIEW', label: 'Revisão' },
   { status: 'GENERATING_PDF', label: 'Emitindo' },
+  { status: 'RENDER_FAILED', label: 'Falha na emissão' },
 ]
 
 export function buildPipeline(

@@ -285,7 +285,7 @@ describe("RFC 3161 time-stamping reaches the certificate render (P2-16)", () => 
       ).rejects.toThrow(/carimbo do tempo/);
 
       const after = await jobRow(job.jobId);
-      expect(after.status).toBe("REJECTED");
+      expect(after.status).toBe("RENDER_FAILED");
       expect(String(after.rejectionReason)).toMatch(/carimbo do tempo/);
       expect(after.certificateUrl).toBeNull();
       expect(stored.size).toBe(0);

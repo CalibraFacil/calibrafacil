@@ -151,7 +151,7 @@ describe("worker job events through appendJobEvent (real DB)", () => {
     expect(field(row, "organization_id")).toBe(org.orgId);
     expect(field(row, "performed_by")).toBe(USER_ID);
     expect(field(row, "changes")).toEqual({
-      status: { old: "GENERATING_PDF", new: "REJECTED" },
+      status: { old: "GENERATING_PDF", new: "RENDER_FAILED" },
     });
     expect(typeof field(row, "reason")).toBe("string");
     expect(field(row, "reason")).not.toBe("");

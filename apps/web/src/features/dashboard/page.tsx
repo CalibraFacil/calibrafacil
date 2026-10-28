@@ -83,6 +83,7 @@ const STAGE_BAR_TONE: Record<PipelineStage['status'], string> = {
   IN_PROGRESS: 'bg-primary/55',
   REVIEW: 'bg-primary',
   GENERATING_PDF: 'bg-emerald-500',
+  RENDER_FAILED: 'bg-destructive',
 }
 
 const STATUS_DOT: Record<DashboardJobStatus, string> = {
@@ -90,6 +91,7 @@ const STATUS_DOT: Record<DashboardJobStatus, string> = {
   IN_PROGRESS: 'bg-primary/60',
   REVIEW: 'bg-primary',
   GENERATING_PDF: 'bg-emerald-500',
+  RENDER_FAILED: 'bg-destructive',
   APPROVED: 'bg-emerald-500',
   REJECTED: 'bg-destructive',
   CANCELED: 'bg-foreground/15',
