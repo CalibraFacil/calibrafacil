@@ -26,6 +26,7 @@ import {
   getDisplayedFormulaResults,
   getOfficialCompiledExecution,
   previewFormulaErrorMessage,
+  type ExecutionResultsSource,
 } from '@/features/jobs/execution'
 import { formatContextValue } from '../execute-page-helpers'
 import type { useAssetUnitConversion } from '../use-asset-unit-conversion'
@@ -81,18 +82,25 @@ export function ExecuteOfficialExecutionCard({
   )
 }
 
+/** What the results badge says about where the numbers come from (F1). */
+const RESULTS_SOURCE_LABEL: Record<ExecutionResultsSource, string> = {
+  official: 'Oficial',
+  unsaved_preview: 'Prévia (não salva)',
+  preview: 'Prévia local',
+}
+
 export function ExecuteResultsCard({
   open,
   onOpenChange,
   activeCalculationFormulas,
-  hasOfficialResults,
+  resultsSource,
   displayedFormulaResults,
   displayUnitFor,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   activeCalculationFormulas: MethodFormula[]
-  hasOfficialResults: boolean
+  resultsSource: ExecutionResultsSource
   displayedFormulaResults: ReturnType<typeof getDisplayedFormulaResults>
   displayUnitFor: ReturnType<typeof useAssetUnitConversion>['displayUnitFor']
 }) {
@@ -106,8 +114,12 @@ export function ExecuteResultsCard({
                 <CardTitle className="text-balance text-base">
                   Resultados ({activeCalculationFormulas.length})
                 </CardTitle>
-                <Badge variant={hasOfficialResults ? 'secondary' : 'outline'}>
-                  {hasOfficialResults ? 'Oficial' : 'Prévia local'}
+                <Badge
+                  variant={
+                    resultsSource === 'official' ? 'secondary' : 'outline'
+                  }
+                >
+                  {RESULTS_SOURCE_LABEL[resultsSource]}
                 </Badge>
               </div>
               <HugeiconsIcon

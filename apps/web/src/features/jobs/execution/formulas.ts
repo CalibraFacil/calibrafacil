@@ -284,18 +284,44 @@ export function evaluateExecutionFormulaResults({
   return results
 }
 
+/**
+ * Where the results the execute screen shows come from (roadmap 2 F1, review
+ * 3.5): the server's official computation of the SAVED readings, or the local
+ * recompute of what is on screen. With unsaved edits the official numbers no
+ * longer belong to the readings shown, so the local preview is shown instead
+ * (and labelled as unsaved), never the stale server values under "Oficial".
+ */
+export type ExecutionResultsSource = 'official' | 'unsaved_preview' | 'preview'
+
+export function executionResultsSource({
+  jobResults,
+  unsavedEdits,
+}: {
+  jobResults: Record<string, unknown> | null
+  unsavedEdits: boolean
+}): ExecutionResultsSource {
+  if (!getOfficialCompiledExecution(jobResults)) return 'preview'
+  return unsavedEdits ? 'unsaved_preview' : 'official'
+}
+
 export function getDisplayedFormulaResults({
   activeCalculationFormulas,
   assetBaseMeasurementUnit,
   formulaResults,
   jobResults,
+  unsavedEdits = false,
 }: {
   activeCalculationFormulas: MethodFormula[]
   assetBaseMeasurementUnit: MeasurementUnit | null | undefined
   formulaResults: Record<string, FormulaResult>
   jobResults: Record<string, unknown> | null
+  /** The readings on screen differ from the saved ones. */
+  unsavedEdits?: boolean
 }) {
-  if (!getOfficialCompiledExecution(jobResults) || !jobResults) {
+  if (
+    executionResultsSource({ jobResults, unsavedEdits }) !== 'official' ||
+    !jobResults
+  ) {
     return formulaResults
   }
 

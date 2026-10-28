@@ -284,7 +284,7 @@ export function ExecuteJobForm({
     context,
     officialExecution,
     officialDiagnosticCount,
-    hasOfficialResults,
+    resultsSource,
     activeCalculationFormulas,
     formulaResults,
     displayedFormulaResults,
@@ -307,6 +307,7 @@ export function ExecuteJobForm({
     displayAssetSpecifications,
     convertValueToDisplayUnit,
     displayUnitFor,
+    unsavedEdits: isDirty,
   })
 
   // Update field
@@ -571,7 +572,7 @@ export function ExecuteJobForm({
             open={sectionsOpen.results}
             onOpenChange={setSectionOpen('results')}
             activeCalculationFormulas={activeCalculationFormulas}
-            hasOfficialResults={hasOfficialResults}
+            resultsSource={resultsSource}
             displayedFormulaResults={displayedFormulaResults}
             displayUnitFor={displayUnitFor}
           />

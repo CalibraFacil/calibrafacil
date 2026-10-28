@@ -19,6 +19,7 @@ import {
   filterActiveCalculationItems,
   getCalculationFormulas,
   getCalculationValidations,
+  executionResultsSource,
   getDisplayedFormulaResults,
   getOfficialCompiledExecution,
   normalizeExecutionFormData,
@@ -55,6 +56,7 @@ export function useExecutionCalculation({
   displayAssetSpecifications,
   convertValueToDisplayUnit,
   displayUnitFor,
+  unsavedEdits,
 }: {
   job: JobData
   engine: ReturnType<typeof createMethodCalculationEngine>
@@ -72,6 +74,8 @@ export function useExecutionCalculation({
   >['displayAssetSpecifications']
   convertValueToDisplayUnit: UnitConversion['convertValueToDisplayUnit']
   displayUnitFor: UnitConversion['displayUnitFor']
+  /** The readings on screen differ from the saved ones (the form is dirty). */
+  unsavedEdits: boolean
 }) {
   // Normalize form data before building formula context or sending payloads.
   const normalizeFormData = useCallback(
@@ -145,6 +149,10 @@ export function useExecutionCalculation({
     ? officialExecution.diagnostics.length
     : 0
   const hasOfficialResults = officialExecution !== null
+  const resultsSource = executionResultsSource({
+    jobResults: job.results,
+    unsavedEdits,
+  })
   const calculationFormulas = useMemo<MethodFormula[]>(
     () => getCalculationFormulas(job),
     [job],
@@ -194,12 +202,14 @@ export function useExecutionCalculation({
         assetBaseMeasurementUnit,
         formulaResults,
         jobResults: job.results,
+        unsavedEdits,
       }),
     [
       activeCalculationFormulas,
       assetBaseMeasurementUnit,
       formulaResults,
       job.results,
+      unsavedEdits,
     ],
   )
 
@@ -255,6 +265,7 @@ export function useExecutionCalculation({
     officialExecution,
     officialDiagnosticCount,
     hasOfficialResults,
+    resultsSource,
     activeCalculationFormulas,
     formulaResults,
     displayedFormulaResults,

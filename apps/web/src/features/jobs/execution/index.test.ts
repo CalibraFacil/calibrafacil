@@ -34,6 +34,7 @@ const SURFACE = [
   'getCalculationFormulas',
   'getCalculationValidations',
   'getCircularEccentricityLoadPositions',
+  'executionResultsSource',
   'getDisplayedFormulaResults',
   'getEccentricityIndicatorVariant',
   'getOfficialCompiledExecution',
