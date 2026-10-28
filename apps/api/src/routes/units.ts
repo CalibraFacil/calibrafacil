@@ -20,6 +20,7 @@ import {
   withLabPermission,
 } from "../middleware/permission";
 import { orgDb } from "../lib/org-db";
+import { isValidCnpj, normalizeCnpj } from "@calibra-facil/shared/cnpj";
 import { calibrationWorkflowPermissions } from "@calibra-facil/auth/access";
 import type { RoleName } from "@calibra-facil/auth/access";
 
@@ -49,9 +50,55 @@ const CreateUnitSchema = z.object({
   name: z.string().trim().min(2, "Nome da unidade é obrigatório"),
 });
 
+/** A calibrating-body text field: blank clears it, null clears it, absent leaves it. */
+const bodyText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .transform((value) => value || null)
+    .nullable()
+    .optional();
+
+/**
+ * Roadmap 2 C2: the unit as a distinct calibrating body (legal name, CNPJ,
+ * address). A unit that declares a CNPJ is a distinct establishment: its block
+ * is what the certificates it issues print as the calibrating body.
+ */
+const CalibratingBodySchema = z.object({
+  legalName: bodyText(200),
+  // Stored normalised (digits, or the alphanumeric CNPJ's characters, no
+  // punctuation); the certificate formats it on print.
+  cnpj: bodyText(32)
+    .refine((value) => !value || isValidCnpj(value), {
+      message: "CNPJ inválido",
+    })
+    .transform((value) => (value ? normalizeCnpj(value) : value)),
+  street: bodyText(200),
+  number: bodyText(30),
+  complement: bodyText(120),
+  neighbourhood: bodyText(120),
+  city: bodyText(120),
+  state: bodyText(2),
+  cep: bodyText(20),
+});
+
+const CALIBRATING_BODY_FIELDS = [
+  "legalName",
+  "cnpj",
+  "street",
+  "number",
+  "complement",
+  "neighbourhood",
+  "city",
+  "state",
+  "cep",
+] as const;
+
 const UpdateUnitSchema = z.object({
   name: z.string().trim().min(2).optional(),
   status: z.enum(["ACTIVE", "ARCHIVED"]).optional(),
+  calibratingBody: CalibratingBodySchema.optional(),
 });
 
 const UpdateAssignmentsSchema = z.object({
@@ -221,6 +268,15 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
             isDefault: organizationUnit.isDefault,
             createdAt: organizationUnit.createdAt,
             archivedAt: organizationUnit.archivedAt,
+            legalName: organizationUnit.legalName,
+            cnpj: organizationUnit.cnpj,
+            street: organizationUnit.street,
+            number: organizationUnit.number,
+            complement: organizationUnit.complement,
+            neighbourhood: organizationUnit.neighbourhood,
+            city: organizationUnit.city,
+            state: organizationUnit.state,
+            cep: organizationUnit.cep,
           })
           .from(organizationUnit)
           .where(
@@ -371,6 +427,17 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
         updateData.archivedAt = input.status === "ARCHIVED" ? new Date() : null;
       }
 
+      // C2: the calibrating-body fields that actually change.
+      const bodyBefore: Record<string, string | null> = {};
+      const bodyAfter: Record<string, string | null> = {};
+      for (const field of CALIBRATING_BODY_FIELDS) {
+        const next = input.calibratingBody?.[field];
+        if (next === undefined || next === existing[field]) continue;
+        bodyBefore[field] = existing[field];
+        bodyAfter[field] = next;
+        updateData[field] = next;
+      }
+
       if (Object.keys(updateData).length === 0) {
         return c.json(existing);
       }
@@ -416,6 +483,7 @@ export const unitsRouter = new Hono<{ Variables: AuthVariables }>()
                     name: existing.name,
                     slug: existing.slug,
                     status: existing.status,
+                    ...bodyBefore,
                   },
                   after: updateData,
                 },

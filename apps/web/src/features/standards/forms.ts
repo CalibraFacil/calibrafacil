@@ -81,6 +81,10 @@ export type StandardFormData = {
   model: string
   certificateNumber: string
   calibratedBy: string
+  /** C2: the provider's accreditation number (evidence for the SI-traceability sentence). */
+  calibrationProviderAccreditationNumber: string
+  /** C2: the provider's accreditation body signed the ILAC MRA (Cgcre/RBC in Brazil). */
+  calibrationProviderMraRecognized: boolean
   calibrationDate: string
   nextCalibrationDate: string
   referenceValue: string
@@ -183,6 +187,8 @@ export const INITIAL_STANDARD_FORM_DATA: StandardFormData = {
   model: '',
   certificateNumber: '',
   calibratedBy: '',
+  calibrationProviderAccreditationNumber: '',
+  calibrationProviderMraRecognized: false,
   calibrationDate: '',
   nextCalibrationDate: '',
   referenceValue: '',
@@ -348,6 +354,10 @@ export function createStandardFormData(
     model: standard.model || '',
     certificateNumber: standard.certificateNumber,
     calibratedBy: standard.calibratedBy || '',
+    calibrationProviderAccreditationNumber:
+      standard.calibrationProviderAccreditationNumber || '',
+    calibrationProviderMraRecognized:
+      standard.calibrationProviderMraRecognized ?? false,
     calibrationDate: dateInputValue(standard.calibrationDate),
     nextCalibrationDate: dateInputValue(standard.nextCalibrationDate),
     referenceValue: standard.referenceValue?.toString() || '',
@@ -706,6 +716,11 @@ function parseStandardPayload<TData>(
       data.calibratedBy,
       payloadOptions.emptyOptionalValue,
     ),
+    calibrationProviderAccreditationNumber: optionalTextOr(
+      data.calibrationProviderAccreditationNumber,
+      payloadOptions.emptyOptionalValue,
+    ),
+    calibrationProviderMraRecognized: data.calibrationProviderMraRecognized,
     calibrationDate: data.calibrationDate,
     nextCalibrationDate: data.nextCalibrationDate,
     coverageFactor: optionalNumber(data.coverageFactor, 2.0),
@@ -736,6 +751,8 @@ function parseStandardPayload<TData>(
       'model',
       'certificateNumber',
       'calibratedBy',
+      'calibrationProviderAccreditationNumber',
+      'calibrationProviderMraRecognized',
       'calibrationDate',
       'nextCalibrationDate',
       'referenceValue',

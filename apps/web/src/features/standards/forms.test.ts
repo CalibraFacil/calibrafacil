@@ -53,6 +53,35 @@ describe('standard feature forms', () => {
     })
   })
 
+  it('C2: sends the calibration provider accreditation, and refuses the MRA flag without a number', () => {
+    const accredited = parseStandardForm(
+      {
+        ...validStandardForm(),
+        calibratedBy: 'Laboratório RBC',
+        calibrationProviderAccreditationNumber: ' CAL 0123 ',
+        calibrationProviderMraRecognized: true,
+      },
+      { isMultiValue: false },
+    )
+    expect(accredited).toMatchObject({
+      success: true,
+      data: {
+        calibrationProviderAccreditationNumber: 'CAL 0123',
+        calibrationProviderMraRecognized: true,
+      },
+    })
+
+    const withoutNumber = parseStandardForm(
+      {
+        ...validStandardForm(),
+        calibratedBy: 'Laboratório RBC',
+        calibrationProviderMraRecognized: true,
+      },
+      { isMultiValue: false },
+    )
+    expect(withoutNumber.success).toBe(false)
+  })
+
   it('builds multi-value update payloads and clears single-value fields', () => {
     const result = parseStandardEditForm(
       {
@@ -270,6 +299,8 @@ function validStandardForm(): StandardFormData {
     model: '',
     certificateNumber: 'CERT-001',
     calibratedBy: '',
+    calibrationProviderAccreditationNumber: '',
+    calibrationProviderMraRecognized: false,
     calibrationDate: '2026-05-20',
     nextCalibrationDate: '2027-05-20',
     referenceValue: '10',
@@ -313,6 +344,8 @@ function validStandardDetail(): StandardDetail {
     model: null,
     certificateNumber: 'CERT-001',
     calibratedBy: 'RBC',
+    calibrationProviderAccreditationNumber: 'CAL 0123',
+    calibrationProviderMraRecognized: true,
     calibrationDate: '2026-05-20',
     nextCalibrationDate: '2027-05-20',
     referenceValue: 10,

@@ -64,6 +64,7 @@ type ApiRoutePath =
   | "/api/capa/:id/verify"
   | "/api/capa/summary"
   | "/api/authorized-signatories"
+  | "/api/authorized-signatories/:id"
   | "/api/authorized-signatories/:id/revoke"
   | "/api/certificate-numbering"
   | "/api/competences"

@@ -255,4 +255,25 @@ describe("CalibrationCertificateHtml", () => {
     expect(html).not.toContain("<img src=x");
     expect(html).toContain("&lt;script&gt;");
   });
+  describe("REQ-C2-1: the calibrating body", () => {
+    it("prints the legal name, CNPJ and address of the laboratory that calibrated", () => {
+      const data = massCertificateFixture();
+      data.calibratingBody = {
+        legalName: "Lab Filial Ltda",
+        cnpj: "22.222.222/0001-22",
+        addressText: "Av. da Filial, 200 — Pelotas/RS",
+      };
+      const html = body(data);
+      expect(html).toContain("Laboratório calibrador");
+      expect(html).toContain("Lab Filial Ltda");
+      expect(html).toContain("22.222.222/0001-22");
+      expect(html).toContain("Av. da Filial, 200 — Pelotas/RS");
+    });
+
+    it("prints nothing for a certificate frozen before it was modelled", () => {
+      const html = body(massCertificateFixture());
+      expect(html).not.toContain("Laboratório calibrador");
+      expect(html).not.toContain("CNPJ do laboratório");
+    });
+  });
 });

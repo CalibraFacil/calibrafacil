@@ -20,12 +20,14 @@
  */
 
 import {
+  calibratingBodyAddressText,
   formatAtDecimals,
   formatDecimalPtBr,
   fractionDigitsOf,
   renderEccentricityIndicatorSvgMarkup,
   roundMeasurementForReport,
   certificateImageContextFromJob,
+  type CertificateContentRules,
   type CertificateJobData,
   type MethodFormula,
 } from "@calibra-facil/certificate-data";
@@ -45,6 +47,11 @@ import {
   type CertificateStandard,
 } from "@calibra-facil/documents";
 import { certificateVerificationUrl } from "@calibra-facil/shared/public-urls";
+import { formatCnpj } from "@calibra-facil/shared/cnpj";
+import {
+  buildCoverageStatement,
+  frozenCoverageProbability,
+} from "./coverage-statement";
 
 /** Either the layout prop, or the reasons it could not be built. */
 export type LayoutDataResult =
@@ -482,6 +489,35 @@ function buildTraceabilityStatement(job: CertificateJobData): string | null {
 }
 
 /**
+ * C2 (ILAC P10, ISO/IEC 17025 §6.5.1): the SI-traceability sentence is printed
+ * only when the approval FROZE a verified decision (`job.traceability`): every
+ * standard with a valid certificate from a provider recorded as accredited by an
+ * ILAC-MRA signatory. Never from free text, never re-decided at render time;
+ * otherwise nothing is asserted and the sentence is omitted.
+ */
+function buildVerifiedTraceabilityStatement(
+  job: CertificateJobData,
+): string | null {
+  const traceability = job.traceability;
+  if (!traceability?.verified || traceability.providers.length === 0) {
+    return null;
+  }
+  const entries = traceability.providers.map(
+    (provider) =>
+      `${provider.name} (acreditação ${provider.accreditationNumber})`,
+  );
+  const list =
+    entries.length === 1
+      ? entries[0]
+      : `${entries.slice(0, -1).join(", ")} e ${entries[entries.length - 1]}`;
+  return (
+    "As medições realizadas são metrologicamente rastreáveis ao Sistema " +
+    "Internacional de Unidades (SI) por meio dos padrões relacionados neste " +
+    `certificado, calibrados por laboratórios acreditados: ${list}.`
+  );
+}
+
+/**
  * NIT-DICLA-021 A.6.1.1 / A.6.2 — the canonical sentence. Written once, here,
  * rather than left to each lab to phrase: it is the statement that gives the
  * numbers in the table their meaning, and a wrong one invalidates them.
@@ -554,6 +590,24 @@ export type BuildLayoutDataOptions = {
   accredited?: boolean;
   /** The verification URL frozen at approval; derived from the token when absent (legacy). */
   verificationUrl?: string;
+  /**
+   * Which statement rules apply (`certificateContentRulesFor(layout.version)` of
+   * the frozen input). "legacy" (the default, and every input frozen before
+   * roadmap 2 C1/C2) re-renders byte-identically to what was issued; "current"
+   * builds the coverage sentence from the frozen result, prints the signatory's
+   * authorized-signatory title and the calibrating body, and asserts SI
+   * traceability only when it was verified.
+   */
+  contentRules?: CertificateContentRules;
+  /**
+   * True for the FIRST issuance of a certificate. Under the legacy rules it
+   * then takes the verified statements instead of reproducing the old ones: the
+   * coverage sentence from the frozen result, no SI-traceability sentence unless
+   * a verified decision was frozen (an input frozen before C2 has none), and no
+   * title borrowed from the lab profile. False (the default) is the RE-render of
+   * an already-issued certificate, which reproduces what was issued.
+   */
+  firstIssuance?: boolean;
 };
 
 /**
@@ -646,6 +700,12 @@ export function buildCertificateLayoutData(
       atDate: new Date(),
     });
 
+  const current = options.contentRules === "current";
+  // The statements built from the frozen decisions: always under the current
+  // rules, and for the first issuance of an input frozen under the legacy ones.
+  const verified = current || options.firstIssuance === true;
+  const calibratingBody = current ? (job.calibratingBody ?? null) : null;
+
   const indicatorSvg = renderEccentricityIndicatorSvgMarkup(
     certificateImageContextFromJob(job),
     job.data ?? {},
@@ -658,10 +718,30 @@ export function buildCertificateLayoutData(
       options.verificationUrl ??
       certificateVerificationUrl(job.verificationToken),
 
+    ...(calibratingBody
+      ? {
+          calibratingBody: {
+            legalName: calibratingBody.legalName,
+            cnpj: calibratingBody.cnpj
+              ? formatCnpj(calibratingBody.cnpj)
+              : null,
+            addressText: calibratingBodyAddressText(calibratingBody),
+          },
+        }
+      : {}),
+
     lab: {
       name: job.lab.name,
-      cnpj: job.lab.cnpj,
-      addressText: joinAddress(job),
+      // The establishment that performed the calibration (a unit's own, when it
+      // is a distinct one) is what the header identifies.
+      cnpj: calibratingBody
+        ? calibratingBody.cnpj
+          ? formatCnpj(calibratingBody.cnpj)
+          : null
+        : job.lab.cnpj,
+      addressText: calibratingBody
+        ? calibratingBodyAddressText(calibratingBody)
+        : joinAddress(job),
       phone: job.lab.phone,
       email: job.lab.email,
       website: job.lab.website,
@@ -722,10 +802,17 @@ export function buildCertificateLayoutData(
 
     accredited,
     resultTables: tables,
-    uncertaintyStatement: buildUncertaintyStatement(tables),
+    uncertaintyStatement: verified
+      ? buildCoverageStatement({
+          rows: tables.flatMap((table) => table.rows),
+          probability: frozenCoverageProbability(job.results),
+        })
+      : buildUncertaintyStatement(tables),
 
     standards: buildStandards(job),
-    traceabilityStatementText: buildTraceabilityStatement(job),
+    traceabilityStatementText: verified
+      ? buildVerifiedTraceabilityStatement(job)
+      : buildTraceabilityStatement(job),
 
     methodDeviations: job.methodDeviations?.trim() || null,
     // §7.8.6.2 needs all three of: what it applies to, the specification, and
@@ -740,8 +827,13 @@ export function buildCertificateLayoutData(
       : null,
 
     signatory: {
-      name: job.approverName ?? "",
-      role: job.lab.technicalManagerTitle,
+      // C1: from the approver's authorized-signatory record, frozen at
+      // approval. The lab profile's technical-manager title belongs to the
+      // manager, not to whoever approved; the legacy rules still print it.
+      name: (current ? job.signatory?.name : null) ?? job.approverName ?? "",
+      role: verified
+        ? (job.signatory?.title ?? null)
+        : job.lab.technicalManagerTitle,
       placeAndDateText: buildPlaceAndDate(job),
       // fetchCertificateJobData resolves this from member_visual_signature and
       // has always carried it; the layout simply had nowhere to put it, so it

@@ -9,6 +9,7 @@ import {
 } from '@/features/standards/paste'
 import { describeStandardWarnings } from '@/features/standards/warnings'
 import { Button } from '@calibra-facil/ui/button'
+import { Checkbox } from '@calibra-facil/ui/checkbox'
 import {
   Field,
   FieldDescription,
@@ -341,10 +342,52 @@ export function StandardFormSections({
             id="standard-calibrated-by"
             label="Calibrado por"
             value={formData.calibratedBy}
-            onChange={(value) => updateField('calibratedBy', value)}
+            onChange={(value) =>
+              // The accreditation below describes THIS provider: naming another
+              // one drops it until it is confirmed again.
+              onChange({
+                ...formData,
+                calibratedBy: value,
+                calibrationProviderAccreditationNumber: '',
+                calibrationProviderMraRecognized: false,
+              })
+            }
             disabled={disabled}
           />
         </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <TextField
+            id="standard-provider-accreditation"
+            label="Acreditação do laboratório (nº)"
+            value={formData.calibrationProviderAccreditationNumber}
+            onChange={(value) =>
+              updateField('calibrationProviderAccreditationNumber', value)
+            }
+            error={errors.calibrationProviderAccreditationNumber}
+            disabled={disabled}
+          />
+          <Field orientation="horizontal">
+            <Checkbox
+              id="standard-provider-mra"
+              checked={formData.calibrationProviderMraRecognized}
+              onCheckedChange={(checked) =>
+                updateField(
+                  'calibrationProviderMraRecognized',
+                  checked === true,
+                )
+              }
+              disabled={disabled}
+            />
+            <FieldLabel htmlFor="standard-provider-mra">
+              Acreditado por organismo signatário do ILAC MRA (Cgcre/RBC)
+            </FieldLabel>
+          </Field>
+        </div>
+        <FieldDescription>
+          A frase de rastreabilidade ao SI só é impressa no certificado quando
+          todos os padrões usados têm o laboratório acreditado informado aqui e
+          certificado válido na data da calibração.
+        </FieldDescription>
         <div className="grid gap-4 md:grid-cols-2">
           <DateField
             id="standard-calibration-date"

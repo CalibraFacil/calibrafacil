@@ -461,6 +461,22 @@ export const organizationUnit = pgTable(
       { onDelete: "set null" },
     ),
     unsignedIssuanceSetAt: timestamp("unsigned_issuance_set_at"),
+    /**
+     * Roadmap 2 C2 (migration 0135): the unit as a distinct calibrating body
+     * (ISO/IEC 17025 §7.8.2.1(a)): its own legal name, CNPJ and address. A unit
+     * that declares a CNPJ is a distinct establishment and its block is printed
+     * on the certificates it issues; otherwise the organization's profile is
+     * the calibrating body. Frozen with the certificate input at approval.
+     */
+    legalName: text("legal_name"),
+    cnpj: text("cnpj"),
+    street: text("street"),
+    number: text("number"),
+    complement: text("complement"),
+    neighbourhood: text("neighbourhood"),
+    city: text("city"),
+    state: text("state"),
+    cep: text("cep"),
     createdBy: text("created_by").references(() => user.id, {
       onDelete: "set null",
     }),
@@ -3413,6 +3429,20 @@ export const referenceStandard = pgTable(
     // Certificate traceability
     certificateNumber: text("certificate_number").notNull(),
     calibratedBy: text("calibrated_by"), // Calibration lab name (traceability)
+    /**
+     * Roadmap 2 C2 (migration 0135): the provider's accreditation number and
+     * whether the accreditation body is an ILAC-MRA signatory (Cgcre/RBC in
+     * Brazil). The certificate asserts SI traceability only when every standard
+     * used records both, with a certificate valid on the calibration day.
+     */
+    calibrationProviderAccreditationNumber: text(
+      "calibration_provider_accreditation_number",
+    ),
+    calibrationProviderMraRecognized: boolean(
+      "calibration_provider_mra_recognized",
+    )
+      .default(false)
+      .notNull(),
     calibrationDate: calendarDate("calibration_date").notNull(),
     nextCalibrationDate: calendarDate("next_calibration_date").notNull(),
     // Single-value metrology data
@@ -3735,6 +3765,11 @@ export type StandardSnapshot = {
   kind?: ReferenceStandardKind;
   certificateNumber: string;
   calibratedBy?: string | null;
+  /** Roadmap 2 C2: absent on snapshots frozen before it (not verified). */
+  calibrationProvider?: {
+    accreditationNumber: string | null;
+    mraRecognized: boolean;
+  } | null;
   calibrationDate: Date;
   nextCalibrationDate: Date | null;
   uncertainty: number | null;
@@ -8722,6 +8757,12 @@ export const authorizedSignatory = pgTable(
       onDelete: "set null",
     }),
     scopeDescription: text("scope_description"),
+    /**
+     * Roadmap 2 C1 (migration 0135): the title printed under the signature of
+     * the certificates this person approves under this authorization (e.g.
+     * "Signatário Autorizado — Massa"). Frozen with the certificate input.
+     */
+    title: text("title"),
     status: text("status")
       .$type<SignatoryAuthorizationStatus>()
       .default("ACTIVE")

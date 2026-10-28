@@ -13,6 +13,7 @@ import {
   canonicalJson,
   CERTIFICATE_LAYOUT_KEY,
   CERTIFICATE_LAYOUT_VERSION,
+  certificateContentRulesFor,
   type CertificateJobData,
 } from "@calibra-facil/certificate-data";
 import { buildCertificateLayoutData } from "./certificate/layout-data.js";
@@ -74,6 +75,29 @@ const WORKER_RENDERER_VERSION = "worker/1";
  * therefore re-uses the stored PDF instead of minting a second certificate
  * number, however many times it runs.
  */
+/**
+ * Whether a certificate was already issued for the job: an issued snapshot, or
+ * the `certificate_generated` / `certificate_watermarked` event of an issuance
+ * whose snapshot is gone.
+ */
+async function certificateAlreadyIssued(
+  client: Parameters<typeof loadCertificateRenderSource>[0],
+  jobId: number,
+  organizationId: string,
+): Promise<boolean> {
+  const result = await client.query(
+    `SELECT (
+       EXISTS (SELECT 1 FROM issued_certificate_snapshot
+                WHERE job_id = $1 AND organization_id = $2)
+       OR EXISTS (SELECT 1 FROM job_audit_log
+                   WHERE job_id = $1 AND organization_id = $2
+                     AND action IN ('certificate_generated', 'certificate_watermarked'))
+     ) AS issued`,
+    [jobId, organizationId],
+  );
+  return result.rows[0]?.issued === true;
+}
+
 export async function processJob(
   env: Env,
   jobId: number,
@@ -219,15 +243,28 @@ export async function processJob(
         return `data:${contentType};base64,${base64}`;
       },
     };
-    const loaded = organizationId
-      ? await withOrgDbClient(env, organizationId, (client) =>
-          loadCertificateRenderSource(
+    const read = organizationId
+      ? await withOrgDbClient(env, organizationId, async (client) => ({
+          source: await loadCertificateRenderSource(
             client,
             { jobId, organizationId: existing?.organization_id ?? null },
             () => readCertificateJobRows(client, jobId),
           ),
-        )
-      : ({ status: "legacy", job: null } as const);
+          // Roadmap 2 C2: has a certificate for this job ALREADY been issued?
+          // Only then may its old statements be reproduced as they were. A
+          // first issuance never asserts what was not verified.
+          alreadyIssued: await certificateAlreadyIssued(
+            client,
+            jobId,
+            organizationId,
+          ),
+        }))
+      : {
+          source: { status: "legacy", job: null } as const,
+          alreadyIssued: false,
+        };
+    const loaded = read.source;
+    const firstIssuance = !read.alreadyIssued;
     const source =
       loaded.status === "legacy"
         ? ({
@@ -258,6 +295,21 @@ export async function processJob(
         permanent: true,
       };
     }
+    // Roadmap 2 C1/C2: an input frozen under an earlier layout RE-renders a
+    // certificate that was already issued under the statement rules it was
+    // issued with (byte-identical); so does the live legacy read (approved
+    // before the input existed). A FIRST issuance, even of such an input, takes
+    // the verified statements: the old free-text SI-traceability sentence is
+    // never asserted for the first time, and no title is borrowed from the lab
+    // profile (the layout applies `firstIssuance`).
+    const contentRules =
+      source.status === "ok"
+        ? certificateContentRulesFor(source.input.layout.version)
+        : "legacy";
+    const renderedLayoutVersion =
+      contentRules === "current" || firstIssuance
+        ? CERTIFICATE_LAYOUT_VERSION
+        : "1.0.0";
     const certificateInputSource =
       source.status === "ok"
         ? { source: "frozen", sha256: source.sha256 }
@@ -266,12 +318,9 @@ export async function processJob(
       console.log(
         `[JOB ${jobId}] Rendering from the frozen certificate input (sha256 ${source.sha256})`,
       );
-      if (
-        source.input.layout.key !== CERTIFICATE_LAYOUT_KEY ||
-        source.input.layout.version !== CERTIFICATE_LAYOUT_VERSION
-      ) {
+      if (source.input.layout.key !== CERTIFICATE_LAYOUT_KEY) {
         console.warn(
-          `[JOB ${jobId}] The input was frozen for layout ${source.input.layout.key}@${source.input.layout.version}; rendering with ${CERTIFICATE_LAYOUT_KEY}@${CERTIFICATE_LAYOUT_VERSION}`,
+          `[JOB ${jobId}] The input was frozen for layout ${source.input.layout.key}@${source.input.layout.version}; rendering with ${CERTIFICATE_LAYOUT_KEY}@${renderedLayoutVersion}`,
         );
       }
     } else {
@@ -288,6 +337,8 @@ export async function processJob(
         ? source.input.verificationUrl
         : certificateVerificationUrl(job.verificationToken);
     const layout = buildCertificateLayoutData(job, {
+      contentRules,
+      firstIssuance,
       qrCodeDataUrl: await QRCode.toDataURL(verificationUrl, {
         margin: 0,
         width: 240,
@@ -352,7 +403,7 @@ export async function processJob(
     const renderPolicy = {
       converter: "gotenberg-chromium",
       layoutKey: CERTIFICATE_LAYOUT_KEY,
-      layoutVersion: CERTIFICATE_LAYOUT_VERSION,
+      layoutVersion: renderedLayoutVersion,
     };
     const renderMetadata = {
       signature: signed.signatureMetadata
@@ -422,7 +473,7 @@ export async function processJob(
             pdf.key,
             sha256Hex(pdfBuffer),
             CERTIFICATE_LAYOUT_KEY,
-            CERTIFICATE_LAYOUT_VERSION,
+            renderedLayoutVersion,
             WORKER_RENDERER_VERSION,
             JSON.stringify(renderPolicy),
             JSON.stringify(renderMetadata),

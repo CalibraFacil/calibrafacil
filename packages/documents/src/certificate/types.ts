@@ -27,6 +27,17 @@ export type CertificateLabIdentity = {
   accreditationNumber?: string | null;
 };
 
+/**
+ * §7.8.2.1(a) and (c): the legal entity that performed the calibration. Frozen
+ * with the certificate input (roadmap 2 C2); absent on certificates issued
+ * before it was modelled, which then print as they always did.
+ */
+export type CertificateCalibratingBody = {
+  legalName: string;
+  cnpj?: string | null;
+  addressText?: string | null;
+};
+
 export type CertificateCustomer = {
   name: string;
   taxId?: string | null;
@@ -184,6 +195,8 @@ export type CalibrationCertificateData = {
   verificationUrl?: string | null;
 
   lab: CertificateLabIdentity;
+  /** The calibrating body; omitted on certificates frozen before C2. */
+  calibratingBody?: CertificateCalibratingBody | null;
   customer: CertificateCustomer;
   item: CertificateItem;
   dates: CertificateDates;

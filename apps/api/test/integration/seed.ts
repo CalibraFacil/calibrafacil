@@ -79,13 +79,20 @@ export async function seedOrg(params?: {
  * a technician/member who administers one unit but is not an org admin.
  */
 export async function grantUnitAdmin(org: SeededOrg): Promise<void> {
-  await db.insert(memberUnitAssignment).values({
-    organizationId: org.orgId,
-    memberId: org.memberId,
-    unitId: org.unitId,
-    role: "unit_admin",
-    createdBy: org.userId,
-  });
+  // An assignment to the unit may already exist (as a plain member): promote it.
+  await db
+    .insert(memberUnitAssignment)
+    .values({
+      organizationId: org.orgId,
+      memberId: org.memberId,
+      unitId: org.unitId,
+      role: "unit_admin",
+      createdBy: org.userId,
+    })
+    .onConflictDoUpdate({
+      target: [memberUnitAssignment.memberId, memberUnitAssignment.unitId],
+      set: { role: "unit_admin" },
+    });
 }
 
 export type SeededPortalContext = {

@@ -29,6 +29,11 @@ import {
   type AccreditationSealWithheldReason,
 } from "@calibra-facil/shared";
 import { certificateVerificationUrl } from "@calibra-facil/shared/public-urls";
+import {
+  evaluateTraceability,
+  type FrozenCalibratingBody,
+  type FrozenSignatory,
+} from "./frozen-content.js";
 import type {
   AssetSnapshot,
   CalibrationLocationSnapshot,
@@ -50,7 +55,27 @@ import type {
  * while nothing else does, and only the layout affects the bytes.
  */
 export const CERTIFICATE_LAYOUT_KEY = "calibration-certificate-fixed";
-export const CERTIFICATE_LAYOUT_VERSION = "1.0.0";
+export const CERTIFICATE_LAYOUT_VERSION = "1.1.0";
+
+/**
+ * Which statement rules a frozen input is rendered under. 1.0.0 inputs predate
+ * roadmap 2 C1/C2 and must re-render byte-identically, so they keep the
+ * statements they were issued with ("legacy": traceability from the free-text
+ * `calibratedBy`, the fixed coverage sentence, the lab profile's title for the
+ * signatory, no calibrating body). From 1.1.0 the statements are built from the
+ * decisions frozen with the input ("current").
+ */
+export type CertificateContentRules = "legacy" | "current";
+
+export function certificateContentRulesFor(
+  layoutVersion: string | null | undefined,
+): CertificateContentRules {
+  const match = /^(\d+)\.(\d+)(?:\.\d+)?$/.exec(layoutVersion ?? "");
+  if (!match) return "legacy";
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  return major > 1 || (major === 1 && minor >= 1) ? "current" : "legacy";
+}
 
 /** Bump when the shape of `CertificateInput` changes. */
 export const CERTIFICATE_INPUT_SCHEMA_VERSION = 1;
@@ -178,6 +203,14 @@ export type CertificateJobSource = {
     /** The drawn signature as a data URI, when the approver has one. */
     signatureDataUrl: string | null;
   };
+  /**
+   * C1: the approver's authorized-signatory record, resolved at approval;
+   * null = the approver has none (the gate was not enforced for the org).
+   * Left undefined by the legacy worker read, which predates it.
+   */
+  signatory?: FrozenSignatory | null;
+  /** C2: the calibrating body, resolved at approval. */
+  calibratingBody?: FrozenCalibratingBody;
   /** The certificate this job amends. */
   original: { jobId: string; approvedAt: Date | string | null } | null;
   /** The service order the job is linked to (latest link), §7.8.2.1(g)/(h). */
@@ -266,6 +299,10 @@ export function assembleCertificateJobData(
     results: source.results,
     approverName: source.approver.name,
     approverSignatureUrl: source.approver.signatureDataUrl,
+    ...(source.signatory !== undefined ? { signatory: source.signatory } : {}),
+    ...(source.calibratingBody
+      ? { calibratingBody: source.calibratingBody }
+      : {}),
     supersedesId: source.supersedesId,
     supersededById: source.supersededById,
     amendmentNumber: source.amendmentNumber,
@@ -306,6 +343,17 @@ export function buildCertificateInput(
     atDate: approvedAt,
   });
 
+  // C2: SI traceability is decided here, from the standards snapshot as of the
+  // approval instant, and frozen: a re-render never re-decides it.
+  const frozenJob: CertificateJobData = {
+    ...job,
+    traceability: evaluateTraceability({
+      standards: job.standardsSnapshot,
+      performedAt: job.performedAt,
+      evaluatedAt: approvedAt,
+    }),
+  };
+
   const input: CertificateInput = {
     schemaVersion: CERTIFICATE_INPUT_SCHEMA_VERSION,
     layout: {
@@ -320,7 +368,7 @@ export function buildCertificateInput(
       withheldReason: seal.withheldReason,
       scopeEvaluation,
     },
-    job,
+    job: frozenJob,
   };
   return normalizeCertificateInput(input);
 }

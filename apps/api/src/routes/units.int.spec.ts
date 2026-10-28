@@ -10,7 +10,7 @@ import {
 import { and, eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
-import { seedOrg } from "../../test/integration/seed";
+import { grantUnitAdmin, seedOrg } from "../../test/integration/seed";
 
 // Real-DB + real-RBAC integration tests for the unitsRouter.
 // Only the better-auth session is mocked (see test/integration/setup.ts);
@@ -232,6 +232,94 @@ describe("unitsRouter — real DB + real middleware", () => {
       .from(organizationUnit)
       .where(eq(organizationUnit.id, targetUnitId));
     expect(row?.name).toBe("Sede Principal");
+  });
+
+  // REQ-C2-1: the unit as a calibrating body (legal name, CNPJ, address)
+  it("REQ-C2-1: PATCH /admin/units/:id stores the calibrating body, audits the change and rejects an invalid CNPJ", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "admin" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const patch = (body: unknown) =>
+      unitsRouter.request(`/admin/units/${org.unitId}`, {
+        method: "PATCH",
+        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+        body: JSON.stringify(body),
+      });
+
+    const bad = await patch({
+      calibratingBody: { cnpj: "11.222.333/0001-82" },
+    });
+    expect(bad.status).toBe(400);
+
+    const ok = await patch({
+      calibratingBody: {
+        legalName: "  Lab Filial Ltda ",
+        cnpj: "11.222.333/0001-81",
+        street: "Av. da Filial",
+        number: "200",
+        city: "Pelotas",
+        state: "RS",
+        complement: "",
+      },
+    });
+    expect(ok.status).toBe(200);
+
+    const [row] = await db
+      .select()
+      .from(organizationUnit)
+      .where(eq(organizationUnit.id, org.unitId));
+    expect(row).toMatchObject({
+      legalName: "Lab Filial Ltda",
+      // stored normalised (no punctuation); the certificate formats it on print
+      cnpj: "11222333000181",
+      street: "Av. da Filial",
+      number: "200",
+      city: "Pelotas",
+      state: "RS",
+      complement: null,
+    });
+
+    // Clearing a field is explicit (null); an absent one is left alone.
+    const cleared = await patch({ calibratingBody: { cnpj: null } });
+    expect(cleared.status).toBe(200);
+    const [after] = await db
+      .select({ cnpj: organizationUnit.cnpj, city: organizationUnit.city })
+      .from(organizationUnit)
+      .where(eq(organizationUnit.id, org.unitId));
+    expect(after).toEqual({ cnpj: null, city: "Pelotas" });
+
+    const list = await unitsRouter.request("/admin/units", {
+      headers: { "x-active-unit-id": String(org.unitId) },
+    });
+    const listed: { data: Array<{ id: number; city: string | null }> } =
+      await list.json();
+    expect(listed.data.find((unit) => unit.id === org.unitId)?.city).toBe(
+      "Pelotas",
+    );
+  });
+
+  it("REQ-C2-1: neither a member nor a unit_admin can change the calibrating body (global managers only)", async () => {
+    const org = await seedOrg({ orgId: "org-a", role: "member" });
+    const patch = () =>
+      unitsRouter.request(`/admin/units/${org.unitId}`, {
+        method: "PATCH",
+        headers: { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) },
+        body: JSON.stringify({ calibratingBody: { legalName: "Falsa Ltda" } }),
+      });
+    const legalName = async () => {
+      const [row] = await db
+        .select({ legalName: organizationUnit.legalName })
+        .from(organizationUnit)
+        .where(eq(organizationUnit.id, org.unitId));
+      return row?.legalName;
+    };
+
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    expect((await patch()).status).toBe(403);
+    expect(await legalName()).toBeNull();
+
+    await grantUnitAdmin(org);
+    expect((await patch()).status).toBe(403);
+    expect(await legalName()).toBeNull();
   });
 
   // REQ-UNIT-006: Cross-tenant read — GET /admin/units shows ONLY own org's units with exact count

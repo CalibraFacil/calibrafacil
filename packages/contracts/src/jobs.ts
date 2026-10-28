@@ -459,6 +459,13 @@ export const jobStandardSnapshotSchema = z.object({
   kind: ReferenceStandardKindSchema.optional(),
   certificateNumber: z.string(),
   calibratedBy: nullableString.optional(),
+  calibrationProvider: z
+    .object({
+      accreditationNumber: nullableString,
+      mraRecognized: z.boolean(),
+    })
+    .nullable()
+    .optional(),
   calibrationDate: isoTimestamp,
   nextCalibrationDate: nullableTimestamp,
   uncertainty: nullableNumber,

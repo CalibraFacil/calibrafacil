@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { orgDb } from "../lib/org-db";
+import { domainErrorResponse, invalid, notFound } from "../lib/domain-errors";
 import {
   authorizedSignatory,
   authorizedSignatoryAuditLog,
@@ -32,8 +33,20 @@ const GrantSignatorySchema = z.object({
   userId: z.string().min(1),
   assetTypeId: z.number().int().positive().nullable().optional(),
   scopeDescription: z.string().max(500).optional(),
+  /** The title printed under the signature of the certificates this person approves (C1). */
+  title: z.string().trim().max(160).optional(),
   expiresAt: z.string().datetime().optional(),
   notes: z.string().max(1000).optional(),
+});
+
+const UpdateSignatoryTitleSchema = z.object({
+  /** Blank or null clears it: the certificate then prints no title (never the manager's). */
+  title: z
+    .string()
+    .trim()
+    .max(160)
+    .transform((value) => value || null)
+    .nullable(),
 });
 
 const RevokeSignatorySchema = z.object({
@@ -57,6 +70,7 @@ export const authorizedSignatoriesRouter = new Hono<{
           assetTypeId: authorizedSignatory.assetTypeId,
           assetTypeName: assetType.name,
           scopeDescription: authorizedSignatory.scopeDescription,
+          title: authorizedSignatory.title,
           status: authorizedSignatory.status,
           authorizedAt: authorizedSignatory.authorizedAt,
           expiresAt: authorizedSignatory.expiresAt,
@@ -114,6 +128,7 @@ export const authorizedSignatoriesRouter = new Hono<{
             userId: input.userId,
             assetTypeId: input.assetTypeId ?? null,
             scopeDescription: input.scopeDescription ?? null,
+            title: input.title || null,
             status: "ACTIVE",
             authorizedBy: session.user.id,
             expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
@@ -133,6 +148,73 @@ export const authorizedSignatoriesRouter = new Hono<{
         }
 
         return c.json({ signatory: created }, 201);
+      });
+    },
+  )
+
+  // =========================================================================
+  // PATCH /:id - Set or clear the title printed under the signature (C1)
+  // =========================================================================
+  .patch(
+    "/:id",
+    ...withLabPermission({ competence: ["approve"] }),
+    zValidator("json", UpdateSignatoryTitleSchema),
+    async (c) => {
+      const memberData = c.get("member");
+      const session = c.get("session");
+      const id = Number(c.req.param("id"));
+      if (!Number.isInteger(id)) {
+        return domainErrorResponse(
+          c,
+          invalid("invalid_request", "ID invalido"),
+        );
+      }
+      const input = c.req.valid("json");
+
+      return await orgDb(memberData.organizationId).transaction(async (tx) => {
+        const [existing] = await tx
+          .select()
+          .from(authorizedSignatory)
+          .where(
+            and(
+              eq(authorizedSignatory.id, id),
+              eq(authorizedSignatory.organizationId, memberData.organizationId),
+              isNull(authorizedSignatory.deletedAt),
+            ),
+          )
+          .limit(1);
+
+        if (!existing) {
+          return domainErrorResponse(
+            c,
+            notFound("not_found", "Signatário não encontrado"),
+          );
+        }
+        if (existing.title === input.title) {
+          return c.json({ signatory: existing });
+        }
+
+        const [updated] = await tx
+          .update(authorizedSignatory)
+          .set({ title: input.title })
+          .where(
+            and(
+              eq(authorizedSignatory.id, id),
+              eq(authorizedSignatory.organizationId, memberData.organizationId),
+            ),
+          )
+          .returning();
+
+        await tx.insert(authorizedSignatoryAuditLog).values({
+          organizationId: memberData.organizationId,
+          signatoryId: id,
+          action: "update",
+          changes: { title: { old: existing.title, new: input.title } },
+          performedBy: session.user.id,
+          ipAddress: c.req.header("x-forwarded-for") || null,
+        });
+
+        return c.json({ signatory: updated });
       });
     },
   )
