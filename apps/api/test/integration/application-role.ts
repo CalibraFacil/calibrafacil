@@ -1,7 +1,7 @@
 import { getDb, getSystemDb } from "@calibra-facil/db";
 import { assertHarnessWorkerDb } from "./guard";
 
-// The API as it runs after the role split (DEPLOYMENT.md, "Row-level security"):
+// The API as it runs after the role split (docs/operations/row-level-security.md):
 // `DATABASE_URL` is a session of `calibra_app` (bound by the `tenant_isolation`
 // policies) and `DATABASE_OWNER_URL` is the table owner, which only the named
 // system path (`systemDb` / `getSystemDb()`) uses. A spec seeds and asserts as the

@@ -253,7 +253,7 @@ it too, and keep the mirror as a second line.
 **Recommendation:** enable versioning (an overwrite or delete keeps the previous version) and, where
 the store supports it, object lock in compliance or governance mode with a retention at least as
 long as your records-retention period (for most accredited laboratories, 5 to 10 years). Retention
-locks and the `records-purge` job (DEPLOYMENT.md, "Records retention") interact: a locked object
+locks and the `records-purge` job ([runbook](./records-purge.md)) interact: a locked object
 cannot be purged before its retention ends, so set the retention to what you must keep, not longer.
 Use a separate key for the application with no permission to change versioning, lock or lifecycle
 configuration.

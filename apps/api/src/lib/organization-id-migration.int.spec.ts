@@ -58,13 +58,19 @@ const workerUrl = process.env.DATABASE_URL;
 const workerDatabase = new URL(workerUrl ?? "postgres://x/").pathname.slice(1);
 const scratchName = `calibra_mig_${process.env.VITEST_POOL_ID ?? "0"}`;
 
-/** A statement block of DEPLOYMENT.md, verbatim (the list-item indentation removed). */
+/** A statement block of the migration 0118 runbook, verbatim (the list-item indentation removed). */
 function documentedSql(pattern: RegExp): string {
   const block = readFileSync(
-    new URL("../../../../DEPLOYMENT.md", import.meta.url),
+    new URL(
+      "../../../../docs/operations/migration-0118-organization.md",
+      import.meta.url,
+    ),
     "utf8",
   ).match(pattern)?.[0];
-  if (!block) throw new Error(`DEPLOYMENT.md has no block matching ${pattern}`);
+  if (!block)
+    throw new Error(
+      `The migration 0118 runbook has no block matching ${pattern}`,
+    );
   return block.replace(/^ {2}/gm, "");
 }
 

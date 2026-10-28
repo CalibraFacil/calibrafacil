@@ -77,7 +77,7 @@ await loadLocalEnv();
 failFast(() => loadWorkerConfig());
 // Row-level security start-up check: enforced (the default) refuses a DATABASE_URL
 // that RLS does not bind and a missing or bound DATABASE_OWNER_URL; shadow refuses a
-// role RLS binds (migration 0123; DEPLOYMENT.md, "Row-level security").
+// role RLS binds (migration 0123; docs/operations/row-level-security.md).
 await failFastAsync(() => assertRlsStartup());
 
 const config = readQueueConfig();
