@@ -5,6 +5,15 @@ Every release of Calibra Fácil, newest first. Entries are written by
 [Conventional Commits](https://www.conventionalcommits.org/) merged to `main`; see
 [`DEPLOYMENT.md`](./DEPLOYMENT.md#updating) before updating an instance.
 
+## [0.4.1](https://github.com/CalibraFacil/calibrafacil/compare/v0.4.0...v0.4.1) (2026-10-28)
+
+
+### Bug fixes
+
+* **ci:** cosign-installer has no floating v4 tag; pin v4.1.2 ([#174](https://github.com/CalibraFacil/calibrafacil/issues/174)) ([fa4813f](https://github.com/CalibraFacil/calibrafacil/commit/fa4813fb460b280da5068c5e8d6cda82111caf2b))
+* **deps:** esbuild 0.28.2 (Go 1.26) clears CVE-2025-68121 from the api and worker images ([#175](https://github.com/CalibraFacil/calibrafacil/issues/175)) ([cbdab0e](https://github.com/CalibraFacil/calibrafacil/commit/cbdab0e70387435d022347f4035761ffc12d82a7))
+* **desktop:** the fuse check finds the Windows binary under its executableName (calibrafacil.exe) ([#172](https://github.com/CalibraFacil/calibrafacil/issues/172)) ([9ee42a6](https://github.com/CalibraFacil/calibrafacil/commit/9ee42a6158659674523e6f5f2568e6e24b7f29fb))
+
 ## [0.4.0](https://github.com/CalibraFacil/calibrafacil/compare/v0.3.0...v0.4.0) (2026-10-28)
 
 
