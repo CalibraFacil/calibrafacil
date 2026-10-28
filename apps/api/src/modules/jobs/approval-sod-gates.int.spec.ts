@@ -390,6 +390,30 @@ describe("approval separation of duties and mandatory gates (roadmap 2 B5)", () 
       await expectNotReleased(jobId);
     });
 
+    it("REQ-F1-1 (roadmap 2 F1): GET /jobs/:id tells the submitter approval is not theirs to give, and another admin that it is", async () => {
+      const jobId = await seedReviewJob(world);
+      const allowedFor = async (userId: string) => {
+        loginPerRequestHeader(ORG);
+        const res = await jobsRouter.request(`/${jobId}`, {
+          headers: { "x-test-user-id": userId },
+        });
+        expect(res.status).toBe(200);
+        const body: { allowedActions?: Record<string, unknown> } =
+          await res.json();
+        return body.allowedActions;
+      };
+
+      expect(await allowedFor(SUBMITTER)).toMatchObject({
+        approve: { allowed: false, reason: "self_approval" },
+        reject: { allowed: true },
+      });
+      expect(await allowedFor(CHECKER)).toMatchObject({
+        approve: { allowed: true },
+        reject: { allowed: true },
+        amend: { allowed: false, reason: "status" },
+      });
+    });
+
     it("REQ-B5-1: a different admin approves the same job and is the recorded approver", async () => {
       const jobId = await seedReviewJob(world);
 

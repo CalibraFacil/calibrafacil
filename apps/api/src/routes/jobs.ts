@@ -136,6 +136,11 @@ import { jobStatusConflict } from "../modules/jobs/job-status-transitions";
 import { certificateVerificationUrl } from "@calibra-facil/shared/public-urls";
 import { clientIp } from "../lib/client-ip";
 
+import {
+  laboratoryIsAccredited,
+  selfApprovalBlocked,
+} from "../modules/jobs/approval-gates";
+import { allowedJobActions } from "../modules/jobs/allowed-actions";
 // Aliases for multiple user joins
 const approverUser = alias(user, "approverUser");
 const rejectorUser = alias(user, "rejectorUser");
@@ -571,6 +576,7 @@ export const jobsRouter = new Hono<{
             methodSnapshot: calibrationJob.methodSnapshot,
             createdAt: calibrationJob.createdAt,
             createdBy: calibrationJob.createdBy,
+            submittedBy: calibrationJob.submittedBy,
             updatedAt: calibrationJob.updatedAt,
             approvedBy: calibrationJob.approvedBy,
             approvedAt: calibrationJob.approvedAt,
@@ -679,11 +685,29 @@ export const jobsRouter = new Hono<{
                 )
                 .limit(1)
             : [];
+        // Separation of duties (B5), for the allowed actions (F1): would this
+        // member's approval be refused as approving their own work?
+        const approvalBlockedForMember =
+          job.status === "REVIEW"
+            ? await selfApprovalBlocked(
+                {
+                  job,
+                  organizationId: memberData.organizationId,
+                  approverId: memberData.userId,
+                  accredited: await laboratoryIsAccredited(
+                    memberData.organizationId,
+                    o,
+                  ),
+                },
+                o,
+              )
+            : false;
         return {
           job,
           financialContextMap,
           certificateLifecycle,
           amendmentInProgress: amendmentInProgress ?? null,
+          approvalBlockedForMember,
         };
       },
     );
@@ -695,8 +719,9 @@ export const jobsRouter = new Hono<{
       financialContextMap,
       certificateLifecycle,
       amendmentInProgress,
+      approvalBlockedForMember,
     } = loaded;
-    const { frozenSeal, ...job } = loadedJob;
+    const { frozenSeal, submittedBy: _submittedBy, ...job } = loadedJob;
     const derivedAssetSnapshot =
       job.assetSnapshot ??
       (["DRAFT", "IN_PROGRESS", "REVIEW", "REJECTED"].includes(job.status)
@@ -732,6 +757,13 @@ export const jobsRouter = new Hono<{
           }
         : null,
       amendmentInProgress,
+      allowedActions: allowedJobActions({
+        status: job.status,
+        member: memberData,
+        selfApprovalBlocked: approvalBlockedForMember,
+        certificateStatus: certificateLifecycle?.status ?? null,
+        amendmentInProgress: amendmentInProgress !== null,
+      }),
       isOverdue: job.dueDate
         ? isCalendarDatePast(job.dueDate, now) &&
           ["DRAFT", "IN_PROGRESS", "REVIEW"].includes(job.status)

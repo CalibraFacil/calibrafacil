@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { useCallback, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { jobEventQueryKeys } from '@/lib/query-effects'
+import { serverAllows } from '@/features/jobs/allowed-actions'
 import {
   getJobCertificateDownloadUrl,
   getJobLabelDownloadUrl,
@@ -65,9 +66,12 @@ export function useApprovedRecordActions({
   // amendment may be open; a withdrawn certificate is not amended.
   const isWithdrawn = job.certificateLifecycle?.status === 'WITHDRAWN'
   const hasAmendmentInProgress = Boolean(job.amendmentInProgress)
-  const canAmend =
-    job.status !== 'SUPERSEDED' && !isWithdrawn && !hasAmendmentInProgress
-  const canWithdraw = !isWithdrawn
+  const canAmend = serverAllows(
+    job.allowedActions,
+    'amend',
+    job.status !== 'SUPERSEDED' && !isWithdrawn && !hasAmendmentInProgress,
+  )
+  const canWithdraw = serverAllows(job.allowedActions, 'withdraw', !isWithdrawn)
   // Withdrawal state - ISO 17025 Clause 7.10
   const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false)
   const [withdrawalReason, setWithdrawalReason] = useState('')
