@@ -635,23 +635,19 @@ describe("roadmap 2 C1/C2: the content decisions are frozen at approval", () => 
   it("REQ-C1-2 [HIGH RISK] the signatory is the approver's authorized-signatory record, with ITS title, not the lab profile's technical-manager title", async () => {
     const fixture = await seedFixture();
     const assetTypeId = await assetTypeIdOf(fixture);
-    // An org-wide record and a record for this asset type: the scope's wins.
-    await db.insert(authorizedSignatory).values([
-      {
-        organizationId: ORG,
-        userId: CHECKER,
-        assetTypeId: null,
-        title: "Signatário Autorizado (geral)",
-        authorizedBy: MAKER,
-      },
-      {
-        organizationId: ORG,
-        userId: CHECKER,
-        assetTypeId,
-        title: "Signatária Autorizada — Massa",
-        authorizedBy: MAKER,
-      },
-    ]);
+    // An org-wide record (the fixture's roster entry) and a record for this
+    // asset type: the scope's wins.
+    await db
+      .update(authorizedSignatory)
+      .set({ title: "Signatário Autorizado (geral)" })
+      .where(eq(authorizedSignatory.userId, CHECKER));
+    await db.insert(authorizedSignatory).values({
+      organizationId: ORG,
+      userId: CHECKER,
+      assetTypeId,
+      title: "Signatária Autorizada — Massa",
+      authorizedBy: MAKER,
+    });
     const jobId = await seedReviewJob(fixture);
 
     expect((await approve(jobId)).status).toBe(200);
@@ -672,13 +668,10 @@ describe("roadmap 2 C1/C2: the content decisions are frozen at approval", () => 
 
   it("REQ-C1-2 the frozen title does not follow a later edit of the record", async () => {
     const fixture = await seedFixture();
-    await db.insert(authorizedSignatory).values({
-      organizationId: ORG,
-      userId: CHECKER,
-      assetTypeId: null,
-      title: "Título na aprovação",
-      authorizedBy: MAKER,
-    });
+    await db
+      .update(authorizedSignatory)
+      .set({ title: "Título na aprovação" })
+      .where(eq(authorizedSignatory.userId, CHECKER));
     const jobId = await seedReviewJob(fixture);
     expect((await approve(jobId)).status).toBe(200);
 
@@ -694,6 +687,14 @@ describe("roadmap 2 C1/C2: the content decisions are frozen at approval", () => 
 
   it("REQ-C1-2 an org with no signatory roster freezes no signatory (name only on the certificate, never the manager's title)", async () => {
     const fixture = await seedFixture();
+    // No roster: only a non-accredited laboratory may approve without one (B5).
+    await db
+      .delete(authorizedSignatory)
+      .where(eq(authorizedSignatory.organizationId, ORG));
+    await db
+      .update(organization)
+      .set({ accreditationActive: false })
+      .where(eq(organization.id, ORG));
     const jobId = await seedReviewJob(fixture);
     expect((await approve(jobId)).status).toBe(200);
     expect(field(await frozenJob(jobId), "signatory")).toBeNull();
@@ -701,6 +702,10 @@ describe("roadmap 2 C1/C2: the content decisions are frozen at approval", () => 
 
   it("REQ-C1-2 an approver without a record is refused when the org keeps a roster (existing gate)", async () => {
     const fixture = await seedFixture();
+    // The roster names someone else, not the approver.
+    await db
+      .delete(authorizedSignatory)
+      .where(eq(authorizedSignatory.userId, CHECKER));
     await db.insert(authorizedSignatory).values({
       organizationId: ORG,
       userId: MAKER,
