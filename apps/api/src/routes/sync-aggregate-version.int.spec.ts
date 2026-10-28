@@ -11,6 +11,9 @@
  *   REQ-E1-2  inside one push, once an event of a record was not applied, the later
  *             events of the same record are not applied either
  *             (SYNC_PRECEDING_EVENT_NOT_APPLIED), while other records go through.
+ *   REQ-E2-3  a push that says when it was sent is answered with the server time
+ *             and the device clock's skew, and a skew beyond the tolerance is
+ *             recorded in the audit row of the job change it carries (roadmap 2 E2).
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -19,6 +22,7 @@ import { db } from "@calibra-facil/db";
 import {
   asset,
   calibrationJob,
+  jobAuditLog,
   syncAppliedEvent,
 } from "@calibra-facil/db/schema";
 import { loginAs } from "../../test/integration/setup";
@@ -111,6 +115,8 @@ async function seedWorld() {
 type World = Awaited<ReturnType<typeof seedWorld>>;
 
 type PushBody = {
+  serverTime?: string;
+  clockSkewMs?: number;
   accepted: Array<{ eventId: string; aggregateVersion?: number }>;
   rejected: Array<{ eventId: string; code: string; reason: string }>;
   conflicts: Array<{
@@ -152,7 +158,12 @@ function saveEvent(
   };
 }
 
-async function push(world: World, events: unknown[], batch: string) {
+async function push(
+  world: World,
+  events: unknown[],
+  batch: string,
+  sentAt?: string,
+) {
   loginAs({ userId: world.org.userId, organizationId: world.org.orgId });
   const res = await syncRouter.request("/push", {
     method: "POST",
@@ -161,6 +172,7 @@ async function push(world: World, events: unknown[], batch: string) {
       deviceId: "device-e1",
       clientBatchId: batch,
       baseCursor: null,
+      ...(sentAt === undefined ? {} : { sentAt }),
       events,
     }),
   });
@@ -398,5 +410,85 @@ describe("desktop sync expected version (roadmap 2 E1)", () => {
     ]);
     expect(await readingsMarker(world.firstJob)).toBe("e-1");
     expect(await readingsMarker(world.secondJob)).toBe("e-other");
+  });
+});
+
+describe("device clock skew on push (roadmap 2 E2)", () => {
+  let world: World;
+
+  beforeEach(async () => {
+    await truncateAll();
+    world = await seedWorld();
+  });
+
+  async function lastAuditChanges(jobId: number) {
+    const rows = await db
+      .select({ changes: jobAuditLog.changes })
+      .from(jobAuditLog)
+      .where(eq(jobAuditLog.jobId, jobId))
+      .orderBy(jobAuditLog.id);
+    const changes = rows.at(-1)?.changes;
+    return changes !== null && typeof changes === "object" ? changes : {};
+  }
+
+  it("REQ-E2-3: a device ten minutes ahead is answered with the skew and recorded in the job audit row", async () => {
+    const ahead = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    const body = await push(
+      world,
+      [
+        saveEvent(world, {
+          eventId: "skew-1",
+          jobId: world.firstJob,
+          entityId: "L1",
+        }),
+      ],
+      "b-skew-1",
+      ahead,
+    );
+
+    expect(body.accepted).toHaveLength(1);
+    expect(typeof body.serverTime).toBe("string");
+    expect(body.clockSkewMs).toBeGreaterThan(9 * 60 * 1000);
+    expect(body.clockSkewMs).toBeLessThan(11 * 60 * 1000);
+    const changes = await lastAuditChanges(world.firstJob);
+    expect(Reflect.get(changes, "source")).toBe("desktop_sync");
+    const recorded = Reflect.get(changes, "deviceClockSkewMs");
+    expect(typeof recorded).toBe("number");
+    expect(Math.abs(Number(recorded) - 10 * 60 * 1000)).toBeLessThan(60_000);
+  });
+
+  it("REQ-E2-3: a clock within the tolerance, or a push without sentAt, records no skew", async () => {
+    const onTime = await push(
+      world,
+      [
+        saveEvent(world, {
+          eventId: "skew-2",
+          jobId: world.firstJob,
+          entityId: "L1",
+        }),
+      ],
+      "b-skew-2",
+      new Date().toISOString(),
+    );
+    expect(Math.abs(onTime.clockSkewMs ?? 0)).toBeLessThan(60_000);
+    expect(
+      Reflect.has(await lastAuditChanges(world.firstJob), "deviceClockSkewMs"),
+    ).toBe(false);
+
+    const legacy = await push(
+      world,
+      [
+        saveEvent(world, {
+          eventId: "skew-3",
+          jobId: world.secondJob,
+          entityId: "L2",
+        }),
+      ],
+      "b-skew-3",
+    );
+    expect(legacy.clockSkewMs).toBeUndefined();
+    expect(
+      Reflect.has(await lastAuditChanges(world.secondJob), "deviceClockSkewMs"),
+    ).toBe(false);
   });
 });

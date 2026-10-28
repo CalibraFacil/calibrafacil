@@ -29,6 +29,12 @@ export type Change<T = unknown> = { old: T; new: T };
  */
 export type JobActorAuditFields = {
   source?: "desktop_sync" | "public_api";
+  /**
+   * Desktop sync only: the pushing device's clock minus the server's, in ms
+   * (roadmap 2 E2), recorded when it exceeds the tolerance. The instants the
+   * device reported (performedAt, the backdate base) came from that clock.
+   */
+  deviceClockSkewMs?: number;
   channel?: "api_key";
   apiKeyId?: string;
   apiKeyName?: string;

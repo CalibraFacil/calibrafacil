@@ -16,7 +16,31 @@ import { asRecord } from "./helpers";
 export type PushBatchState = {
   /** Cloud job id -> the `updatedAt` (epoch ms) this request's last event left it at. */
   jobUpdatedAtMs: Map<number, number>;
+  /**
+   * The pushing device's clock minus the server's (ms), when the push carried
+   * `sentAt` and the difference exceeds CLOCK_SKEW_TOLERANCE_MS (roadmap 2 E2).
+   */
+  deviceClockSkewMs?: number;
 };
+
+/** A device clock within this of the server's is not worth recording. */
+export const CLOCK_SKEW_TOLERANCE_MS = 120_000;
+
+/**
+ * The device clock minus the server clock (ms) for a push that says when it
+ * was sent, or undefined when it does not say, says nonsense, or is within the
+ * tolerance. Network latency makes a small positive server lead normal.
+ */
+export function deviceClockSkewOf(
+  sentAt: string | undefined,
+  receivedAt: Date,
+): number | undefined {
+  if (!sentAt) return undefined;
+  const sentMs = Date.parse(sentAt);
+  if (Number.isNaN(sentMs)) return undefined;
+  const skew = sentMs - receivedAt.getTime();
+  return Math.abs(skew) > CLOCK_SKEW_TOLERANCE_MS ? skew : undefined;
+}
 
 export type ApplyDesktopSyncEventInput = {
   event: SyncCommand;

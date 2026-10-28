@@ -25,6 +25,7 @@ import { type SyncRouterEnv, getMemberData } from "./env";
 import {
   type PreparedDesktopEventSideEffects,
   type PushBatchState,
+  deviceClockSkewOf,
   noteAppliedJobVersion,
   rejectedEventId,
 } from "../../modules/sync/desktop-event-support";
@@ -121,7 +122,14 @@ export const pushRoutes = new Hono<SyncRouterEnv>().post(
     }> = [];
 
     const actorMembershipCache = new Map<string, boolean>();
-    const batch: PushBatchState = { jobUpdatedAtMs: new Map() };
+    // Roadmap 2 E2: the device says when it sent the push; the skew of its clock
+    // is answered to it and recorded with the job changes it carries.
+    const receivedAt = new Date();
+    const deviceClockSkewMs = deviceClockSkewOf(body.sentAt, receivedAt);
+    const batch: PushBatchState = {
+      jobUpdatedAtMs: new Map(),
+      ...(deviceClockSkewMs === undefined ? {} : { deviceClockSkewMs }),
+    };
     // Per-aggregate head-of-line inside the batch (roadmap 2 E1): once an event of a record
     // was not applied (refused, in conflict, failed), the later events of the same record in
     // this push are not looked at. They were made on top of it (the desktop sends them in
@@ -388,6 +396,10 @@ export const pushRoutes = new Hono<SyncRouterEnv>().post(
                 conflicts.length,
               )
             : (body.baseCursor ?? undefined),
+        serverTime: receivedAt.toISOString(),
+        ...(body.sentAt && !Number.isNaN(Date.parse(body.sentAt))
+          ? { clockSkewMs: Date.parse(body.sentAt) - receivedAt.getTime() }
+          : {}),
       }),
     );
   },

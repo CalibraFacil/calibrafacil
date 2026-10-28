@@ -751,6 +751,9 @@ async function pushEventBatch(
       // answers "update required" to a build below its minimum.
       protocolVersion,
       desktopVersion: config.appVersion,
+      // The device clock at send time: the cloud records how far it is from its
+      // own with the changes of this push (roadmap 2 E2).
+      sentAt: new Date().toISOString(),
       events: sent
         .filter(
           (event) =>
@@ -841,9 +844,24 @@ async function pushEventBatch(
     throw new Error(`Cloud push failed with HTTP ${response.status}`);
   }
 
-  applySyncPushResult(
-    database,
-    syncPushResponseSchema.parse(await response.json()),
+  const result = syncPushResponseSchema.parse(await response.json());
+  warnOnClockSkew(result.clockSkewMs);
+  applySyncPushResult(database, result);
+}
+
+/** Beyond this, the device clock is reported (the cloud records it too). */
+const CLOCK_SKEW_WARNING_MS = 120_000;
+
+/**
+ * Roadmap 2 E2: the instants this device stamps (when a calibration was
+ * performed, when it was recorded) come from its clock. The cloud never lets
+ * one pass its own and records the skew in the audit trail; the log says it here.
+ */
+function warnOnClockSkew(clockSkewMs: number | undefined): void {
+  if (clockSkewMs === undefined) return;
+  if (Math.abs(clockSkewMs) <= CLOCK_SKEW_WARNING_MS) return;
+  console.warn(
+    `[Sync] The device clock is ${Math.round(clockSkewMs / 1000)} s ${clockSkewMs > 0 ? "ahead of" : "behind"} the cloud's. Fix the system clock: the times recorded offline come from it.`,
   );
 }
 
