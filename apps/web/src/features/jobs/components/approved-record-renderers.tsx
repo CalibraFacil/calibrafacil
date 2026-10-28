@@ -17,6 +17,7 @@ import {
   reviewColumnDisplayLabel,
   type ApprovedJobRecordData,
 } from '@/features/jobs/detail-model'
+import { findValidationFor } from '@/features/jobs/detail-model/validation-targets'
 
 type ApprovedRecordModel = ReturnType<typeof buildApprovedJobRecordModel>
 
@@ -118,9 +119,7 @@ export function renderApprovedResult(
   >,
 ) {
   const value = displayResults?.[formula.outputKey]
-  const validation = validations.find((v) =>
-    `${v.leftExpression} ${v.rightExpression}`.includes(formula.outputKey),
-  )
+  const validation = findValidationFor(validations, formula.outputKey)
   // Check if value passes (simple heuristic - in real impl would store pass/fail)
   const isPassed = value !== undefined && value !== null
 

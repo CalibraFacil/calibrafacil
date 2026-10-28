@@ -19,6 +19,7 @@ import {
 } from '@/features/jobs/detail-model'
 import { cn } from '@/lib/utils'
 import { toRecordArray } from '../record-guards'
+import { findValidationFor } from '@/features/jobs/detail-model/validation-targets'
 
 export type JobReviewModel = ReturnType<typeof buildJobReviewModel>
 
@@ -121,11 +122,7 @@ export function renderReviewResult(
   }: ReviewResultContext,
 ) {
   const value = displayReviewResults?.[formula.outputKey]
-  const validation = reviewValidations.find((candidate) =>
-    `${candidate.leftExpression} ${candidate.rightExpression}`.includes(
-      formula.outputKey,
-    ),
-  )
+  const validation = findValidationFor(reviewValidations, formula.outputKey)
   const hasValue = value !== undefined && value !== null
 
   return (
