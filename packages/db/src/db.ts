@@ -193,7 +193,7 @@ export function getDb(): Database {
  * `DATABASE_OWNER_URL` names that connection. Unset, the system path IS the
  * application connection: while `DATABASE_RLS_MODE=shadow` the application
  * connects as the owner, so there is nothing to split yet. Set it together with
- * the role split (DEPLOYMENT.md, "Row-level security").
+ * the role split (docs/operations/row-level-security.md).
  *
  * Every use is named (`systemDb`) and carries a comment saying why; routes may
  * not import it (the `no-raw-db-in-routes` rule), only lib modules may, and each

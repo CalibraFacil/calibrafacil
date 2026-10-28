@@ -63,7 +63,7 @@ fan-out, cron and queue sweeps. They run on the named **system path**: `systemDb
 
 - It connects with `DATABASE_OWNER_URL`, which `DATABASE_RLS_MODE=enforced` (the default) requires: start-up
   refuses to run without it, or with one whose role RLS binds. Only in `shadow` mode (diagnosis) may it be
-  unset, and then it IS the application connection, which is the owner (DEPLOYMENT.md, "Row-level security").
+  unset, and then it IS the application connection, which is the owner ([runbook](../operations/row-level-security.md)).
 - It lives in lib modules, each with a comment saying why the statement cannot name an organization yet
   and an entry in `apps/api/test/integration/tenant-sql-allowlist.ts`; `calibra/no-raw-db-in-routes`
   forbids `systemDb` / `getSystemDb` in `apps/api/src/routes/**` exactly like `db`, so a route reaches it
@@ -103,8 +103,7 @@ role `calibra_app`: `USING` / `WITH CHECK` `<org column> = NULLIF(current_settin
 The application connects as `calibra_app` (`DATABASE_URL`) and, since the cutover, that is the normal setup
 everywhere: `DATABASE_RLS_MODE` defaults to `enforced`, the compose files, `pnpm setup:dev`, the integration
 tiers and CI all run the application as that role. The table owner (`DATABASE_OWNER_URL`) is exempt and is only
-used by the named system path, the migrations and the CLI; see [DEPLOYMENT.md](../../DEPLOYMENT.md) ("Row-level
-security") for the role split, the upgrade of an existing installation and the rollback. The SQL is generated from
+used by the named system path, the migrations and the CLI; see the [row-level security runbook](../operations/row-level-security.md) for the role split, the upgrade of an existing installation and the rollback. The SQL is generated from
 `tenancy.ts` (`pnpm --filter @calibra-facil/db gen:rls-sql`) and `rls-sql.test.ts` fails when a tenant table is
 added or removed without a migration.
 
