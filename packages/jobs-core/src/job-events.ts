@@ -86,9 +86,10 @@ export function jobOrganizationOf(
 }
 
 /**
- * Records a failed emission: GENERATING_PDF -> REJECTED. Compare-and-set on
- * GENERATING_PDF, so a job that was cancelled, already approved or amended in the
- * meantime is never flipped to REJECTED by a late failure.
+ * Records a failed emission: GENERATING_PDF -> RENDER_FAILED (roadmap 2 C5; the
+ * approval stands, a manager retries the render or rejects the job). Compare-and-set
+ * on GENERATING_PDF, so a job that was cancelled, already approved or amended in the
+ * meantime is never flipped by a late failure.
  */
 export async function setJobError(
   client: Client,
@@ -125,7 +126,7 @@ export async function setJobError(
     );
     if (updated.rows.length === 0) {
       console.warn(
-        `[JOB ${jobId}] Not marking REJECTED: job is no longer GENERATING_PDF (error was: ${error})`,
+        `[JOB ${jobId}] Not marking ${failedStatus}: job is no longer GENERATING_PDF (error was: ${error})`,
       );
       return;
     }

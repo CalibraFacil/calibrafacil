@@ -693,6 +693,7 @@ export function createDesktopApiClient(
         actionByMethod: {
           approve: "Aprovação de job",
           reject: "Rejeição de job",
+          retryRender: "Reemissão de certificado",
           cancel: "Cancelamento de job",
           assign: "Atribuição de técnico",
           getCertificateDownloadUrl: "Download de certificado publicado",

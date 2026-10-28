@@ -277,6 +277,15 @@ export type JobEvent =
         queueJobId?: number;
       };
     })
+  // A manager re-dispatched the render of a failed certificate (RENDER_FAILED ->
+  // GENERATING_PDF, roadmap 2 C5); the approval and its frozen input stand.
+  | (JobEventBase & {
+      action: "render_retried";
+      changes: JobActorAuditFields & {
+        status: Change<string>;
+        previousError: string | null;
+      };
+    })
   | (JobEventBase & {
       action: "label_generated";
       changes: { labelUrl: Change<string | null> };

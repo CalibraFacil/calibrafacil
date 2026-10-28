@@ -181,6 +181,7 @@ type ApiRoutePath =
   | "/api/jobs/:id/generate-label"
   | "/api/jobs/:id/label-commands"
   | "/api/jobs/:id/reject"
+  | "/api/jobs/:id/retry-render"
   | "/api/jobs/:id/submit"
   | "/api/jobs/technicians/list"
   | "/api/materials"

@@ -4,6 +4,7 @@ import {
   Calendar03Icon,
   Cancel01Icon,
   MultiplicationSignIcon,
+  RefreshIcon,
 } from '@hugeicons/core-free-icons'
 import { Button } from '@calibra-facil/ui/button'
 import { Badge } from '@calibra-facil/ui/badge'
@@ -52,6 +53,7 @@ export function JobVerdictBand({
   canApprove,
   canReject,
   inReview,
+  renderFailure,
   approvalBlocked,
   canExecute,
   canCancel,
@@ -73,6 +75,14 @@ export function JobVerdictBand({
   canReject: boolean
   /** The job is in review (the approve/reject area is shown). */
   inReview: boolean
+  /** The certificate render failed (RENDER_FAILED): retry it or reject the job. */
+  renderFailure: {
+    error: string | null
+    canRetry: boolean
+    retrying: boolean
+    availability: Availability
+    onRetry: () => void
+  } | null
   /** Why this member may not approve (separation of duties, role), if so. */
   approvalBlocked: string | null
   canExecute: boolean
@@ -160,6 +170,49 @@ export function JobVerdictBand({
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:justify-end">
             {isGeneratingPdf ? (
               <CertificateProgressButton status="running" />
+            ) : renderFailure ? (
+              <>
+                <p className="max-w-sm text-pretty text-sm text-destructive">
+                  {renderFailure.error ?? 'A emissão do certificado falhou.'}
+                </p>
+                {renderFailure.canRetry ? (
+                  <ActionAvailabilityGate
+                    availability={renderFailure.availability}
+                  >
+                    {({ disabled }) => (
+                      <Button
+                        disabled={disabled || renderFailure.retrying}
+                        className={ACTION_BUTTON_CLASS}
+                        onClick={() => renderFailure.onRetry()}
+                      >
+                        <HugeiconsIcon
+                          icon={RefreshIcon}
+                          className="mr-2 h-4 w-4"
+                        />
+                        Reemitir certificado
+                      </Button>
+                    )}
+                  </ActionAvailabilityGate>
+                ) : null}
+                {canReject ? (
+                  <ActionAvailabilityGate availability={rejectAvailability}>
+                    {({ disabled }) => (
+                      <Button
+                        variant="destructive"
+                        disabled={disabled}
+                        className={ACTION_BUTTON_CLASS}
+                        onClick={() => onOpenReject()}
+                      >
+                        <HugeiconsIcon
+                          icon={MultiplicationSignIcon}
+                          className="mr-2 h-4 w-4"
+                        />
+                        Rejeitar
+                      </Button>
+                    )}
+                  </ActionAvailabilityGate>
+                ) : null}
+              </>
             ) : inReview ? (
               <>
                 {canApprove ? (

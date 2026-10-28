@@ -32,6 +32,7 @@ export const API_ERROR_CODES = [
   "job_not_cancelable",
   "job_not_submittable",
   "job_not_rejectable",
+  "job_render_not_retryable",
   "job_not_executable",
   "job_not_editable",
   "job_not_assignable",

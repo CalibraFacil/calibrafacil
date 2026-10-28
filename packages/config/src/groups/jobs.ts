@@ -52,7 +52,7 @@ export const jobsGroup = defineGroup({
     stuckRenderAfterMs: integer({
       env: "STUCK_RENDER_AFTER_MS",
       description:
-        "A GENERATING_PDF certificate older than this with no live queue row is rejected (default 60 minutes). An unusable value means the default.",
+        "A GENERATING_PDF certificate older than this with no live queue row is marked RENDER_FAILED (default 60 minutes). An unusable value means the default.",
       min: 1,
       default: 3_600_000,
       tolerant: true,

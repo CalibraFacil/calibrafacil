@@ -127,6 +127,7 @@ import { assignJob } from "../modules/jobs/assign-job";
 import { cancelJob } from "../modules/jobs/cancel-job";
 import { editJob } from "../modules/jobs/edit-job";
 import { rejectJob } from "../modules/jobs/reject-job";
+import { retryRender } from "../modules/jobs/retry-render";
 import {
   executeJob,
   submitJob,
@@ -263,6 +264,7 @@ async function jobExecutionRefusalResponse(
  * - POST /:id/submit: calibration:submit (LAB only)
  * - POST /:id/approve: calibration:approve (admin, owner only)
  * - POST /:id/reject: calibration:reject (admin, owner only)
+ * - POST /:id/retry-render: calibration:approve (admin, owner only)
  */
 export const jobsRouter = new Hono<{
   Variables: AuthVariables;
@@ -1275,6 +1277,51 @@ export const jobsRouter = new Hono<{
 
           return c.json({
             message: "Job rejeitado",
+            data: result.job,
+          } satisfies ServerShape<JobMutationResponse>);
+      }
+    },
+  )
+
+  // =========================================================================
+  // POST /:id/retry-render - Render again the certificate of an approved job
+  // whose render failed (RENDER_FAILED -> GENERATING_PDF, roadmap 2 C5)
+  // =========================================================================
+  .post(
+    "/:id/retry-render",
+    ...withLabPermission({ calibration: ["approve"] }),
+    async (c) => {
+      const memberData = c.get("member");
+      const session = c.get("session");
+      const id = await resolveJobRouteId(c.req.param("id"), memberData);
+
+      if (id === null) {
+        return c.json({ error: "Job nao encontrado" }, 404);
+      }
+
+      const result = await retryRender({
+        actor: {
+          kind: "user",
+          userId: session.user.id,
+          ipAddress: clientIp(c),
+        },
+        jobId: id,
+        organizationId: memberData.organizationId,
+        unitScope: memberData,
+      });
+      switch (result.status) {
+        case "not_found":
+          return c.json({ error: "Job nao encontrado" }, 404);
+        case "illegal_transition":
+          return domainErrorResponse(c, result.error);
+        case "concurrent_update":
+          return domainErrorResponse(
+            c,
+            await statusConflictFor(id, memberData.organizationId),
+          );
+        case "ok":
+          return c.json({
+            message: "Emissão do certificado reenviada",
             data: result.job,
           } satisfies ServerShape<JobMutationResponse>);
       }

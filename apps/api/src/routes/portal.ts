@@ -244,6 +244,7 @@ function assetInLabSql(o: Pick<OrgDb, "select">) {
           "IN_PROGRESS",
           "REVIEW",
           "GENERATING_PDF",
+          "RENDER_FAILED",
         ]),
       ),
     );

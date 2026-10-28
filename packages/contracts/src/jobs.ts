@@ -660,6 +660,7 @@ export const JOB_ACTIONS = [
   "assign",
   "amend",
   "withdraw",
+  "retry_render",
 ] as const;
 export type JobAction = (typeof JOB_ACTIONS)[number];
 
@@ -686,6 +687,8 @@ export const jobAllowedActionsSchema = z.object({
   assign: jobActionVerdictSchema,
   amend: jobActionVerdictSchema,
   withdraw: jobActionVerdictSchema,
+  /** Render again a certificate whose render failed (RENDER_FAILED, roadmap 2 C5). */
+  retry_render: jobActionVerdictSchema,
 });
 export type JobAllowedActions = z.infer<typeof jobAllowedActionsSchema>;
 

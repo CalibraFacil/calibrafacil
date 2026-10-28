@@ -261,7 +261,7 @@ async function refuseAuditInserts() {
 }
 
 /**
- * Makes the COMMIT of any calibration_job -> REJECTED update fail (a deferred
+ * Makes the COMMIT of any calibration_job -> RENDER_FAILED update fail (a deferred
  * constraint trigger fires at commit). The audit row is written before that, so
  * it is only rolled back if it shares the status change's transaction.
  */
@@ -273,7 +273,7 @@ async function refuseRejectionCommit() {
   await db.execute(sql`
     create constraint trigger qdl_refuse_commit after update on calibration_job
     deferrable initially deferred for each row
-    when (new.status = 'REJECTED')
+    when (new.status = 'RENDER_FAILED')
     execute function qdl_refuse_commit()
   `);
   return async () => {
@@ -349,7 +349,7 @@ describe("releaseStaleQueueJobs (real Postgres)", () => {
 });
 
 describe("runStaleJobBackstop dead-letter handling (real Postgres)", () => {
-  it("REQ-QDL-002 a dead-lettered certificate job goes GENERATING_PDF -> REJECTED with an audit row", async () => {
+  it("REQ-QDL-002 a dead-lettered certificate job goes GENERATING_PDF -> RENDER_FAILED with an audit row", async () => {
     const org = await seedOrg();
     const job = await seedJob(org, { jobNumber: "CAL-QDL-0001" });
     await seedSnapshot(org, job.id);
@@ -370,7 +370,7 @@ describe("runStaleJobBackstop dead-letter handling (real Postgres)", () => {
     expect(await evidenceState()).toEqual(evidenceBefore);
 
     const rejected = await jobRow(job.id);
-    expect(rejected.status).toBe("REJECTED");
+    expect(rejected.status).toBe("RENDER_FAILED");
     expect(rejected.rejectionReason).toMatch(/^Erro ao gerar certificado: .+/);
     expect(rejected.rejectedBy).toBe(org.userId);
     expect(rejected.rejectedAt).toBeInstanceOf(Date);
@@ -382,7 +382,7 @@ describe("runStaleJobBackstop dead-letter handling (real Postgres)", () => {
       performedBy: org.userId,
       // The marker tells an automatic rejection from the approver's own action.
       changes: {
-        status: { old: "GENERATING_PDF", new: "REJECTED" },
+        status: { old: "GENERATING_PDF", new: "RENDER_FAILED" },
         source: "queue-backstop",
         reason: "dead-lettered",
         queueJobId: queued.id,
@@ -482,7 +482,7 @@ describe("runStaleJobBackstop stuck-render sweep (real Postgres)", () => {
     expect(result.stuckRendersRejected).toBe(1);
     expect(await evidenceState()).toEqual(evidenceBefore);
     const rejected = await jobRow(job.id);
-    expect(rejected.status).toBe("REJECTED");
+    expect(rejected.status).toBe("RENDER_FAILED");
     expect(rejected.rejectionReason).toMatch(/^Erro ao gerar certificado: .+/);
     expect(rejected.rejectedBy).toBe(org.userId);
     expect(rejected.rejectedAt).toBeInstanceOf(Date);
@@ -492,7 +492,7 @@ describe("runStaleJobBackstop stuck-render sweep (real Postgres)", () => {
       action: "certificate_error",
       performedBy: org.userId,
       changes: {
-        status: { old: "GENERATING_PDF", new: "REJECTED" },
+        status: { old: "GENERATING_PDF", new: "RENDER_FAILED" },
         source: "queue-backstop",
         reason: "stuck-render",
       },
@@ -517,7 +517,7 @@ describe("runStaleJobBackstop stuck-render sweep (real Postgres)", () => {
 
     expect(result.stuckRendersRejected).toBe(1);
     const rejected = await jobRow(job.id);
-    expect(rejected.status).toBe("REJECTED");
+    expect(rejected.status).toBe("RENDER_FAILED");
     expect(rejected.rejectedBy).toBe("creator-1");
     const audit = await auditRows(job.id);
     expect(audit).toHaveLength(1);
@@ -612,9 +612,9 @@ describe("runStaleJobBackstop stuck-render sweep (real Postgres)", () => {
     expect(await auditRows(approved.id)).toHaveLength(0);
     const rejectedA = await jobRow(stuckA.id);
     const rejectedB = await jobRow(stuckB.id);
-    expect(rejectedA.status).toBe("REJECTED");
+    expect(rejectedA.status).toBe("RENDER_FAILED");
     expect(rejectedA.rejectedBy).toBe("user-a");
-    expect(rejectedB.status).toBe("REJECTED");
+    expect(rejectedB.status).toBe("RENDER_FAILED");
     expect(rejectedB.rejectedBy).toBe("user-b");
   });
 });
@@ -626,6 +626,7 @@ const NOT_GENERATING = [
   "REVIEW",
   "CANCELED",
   "REJECTED",
+  "RENDER_FAILED",
   "SUPERSEDED",
 ] as const;
 
@@ -717,7 +718,7 @@ describe("rejectCertificateRender guards (real Postgres)", () => {
     await expect(rejectCertificateRender(request(org, job.id))).resolves.toBe(
       true,
     );
-    expect((await jobRow(job.id)).status).toBe("REJECTED");
+    expect((await jobRow(job.id)).status).toBe("RENDER_FAILED");
   });
 
   it("REQ-QDL-002 another organization's id never rejects the job", async () => {

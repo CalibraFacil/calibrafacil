@@ -7,6 +7,7 @@ export type JobStatus =
   | 'IN_PROGRESS'
   | 'REVIEW'
   | 'GENERATING_PDF'
+  | 'RENDER_FAILED'
   | 'APPROVED'
   | 'REJECTED'
   | 'CANCELED'

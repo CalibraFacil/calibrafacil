@@ -308,6 +308,7 @@ export const calibraApiPolicyRegistry = {
     listTechnicians: "cloud-only",
     approve: "cloud-only",
     reject: "cloud-only",
+    retryRender: "cloud-only",
     cancel: "cloud-only",
     assign: "cloud-only",
     listStandards: "local-first-read-through-sync",

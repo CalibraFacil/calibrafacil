@@ -57,6 +57,7 @@ export type JobsRawCloudClient = {
           }
         >;
         reject: JobPostRoute<JobIdParam & { json: { reason: string } }>;
+        "retry-render": JobPostRoute<JobIdParam>;
         "flag-oot": JobPostRoute<
           JobIdParam & {
             json: {
@@ -181,6 +182,16 @@ export function createJobsApi(
         jobMutationResponseSchema,
         "POST /api/jobs/:id/reject",
         "Erro ao rejeitar",
+      );
+    },
+    async retryRender(jobId: string | number) {
+      return validated(
+        await rawCloudClient.api.jobs[":id"]["retry-render"].$post({
+          param: { id: apiRouteParam(jobId) },
+        }),
+        jobMutationResponseSchema,
+        "POST /api/jobs/:id/retry-render",
+        "Erro ao reemitir o certificado",
       );
     },
     async flagOutOfTolerance(

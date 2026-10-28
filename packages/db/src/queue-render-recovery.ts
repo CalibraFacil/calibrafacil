@@ -12,11 +12,11 @@ import type { DeadLetteredQueueJob } from "./queue.js";
 // Recovery for certificate renders that a hard crash (or a dropped queue message)
 // left in GENERATING_PDF with nothing left to move them.
 //
-// The worker REJECTS a certificate job itself (apps/worker/src/index.ts,
+// The worker marks a failed certificate job RENDER_FAILED itself (apps/worker/src/index.ts,
 // `setJobError`) when it is alive to do so. When it is not — the process was
 // killed on the last attempt, or the job ran out of its
 // retries — the calibration_job would sit in GENERATING_PDF forever. These
-// helpers apply the SAME transition (GENERATING_PDF -> REJECTED, compare-and-set
+// helpers apply the SAME transition (GENERATING_PDF -> RENDER_FAILED, compare-and-set
 // on status, with a job_audit_log row in the same transaction) from the queue
 // backstop.
 //
@@ -64,7 +64,7 @@ function liveRenderRowFor(jobId: number) {
 }
 
 /**
- * GENERATING_PDF -> REJECTED for one job, with its audit row in the same
+ * GENERATING_PDF -> RENDER_FAILED for one job, with its audit row in the same
  * transaction. Compare-and-set on the status (and organization), so a job that
  * was approved, cancelled or re-released in the meantime is never flipped by a
  * late recovery. Returns whether this call rejected the job.

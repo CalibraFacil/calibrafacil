@@ -3763,6 +3763,7 @@ export const referenceStandardAuditLogRelations = relations(
  * - IN_PROGRESS: Technician is executing the calibration
  * - REVIEW: Submitted for manager review
  * - GENERATING_PDF: Approved, certificate being generated async
+ * - RENDER_FAILED: The certificate render failed; retried or rejected by a manager
  * - APPROVED: Certificate generated and ready
  * - REJECTED: Manager rejected, needs rework
  * - CANCELED: Job was canceled (soft delete equivalent)
@@ -3773,6 +3774,7 @@ export type JobStatus =
   | "IN_PROGRESS"
   | "REVIEW"
   | "GENERATING_PDF"
+  | "RENDER_FAILED"
   | "APPROVED"
   | "REJECTED"
   | "CANCELED"

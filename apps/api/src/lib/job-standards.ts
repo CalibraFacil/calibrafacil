@@ -207,13 +207,14 @@ export async function findImpactedCertificates(
  * standard on any of them reaches a NEW certificate unless somebody acts.
  * GENERATING_PDF is already approved (the worker is rendering it): it is
  * listed so the laboratory can stop or amend it, not because approval can still
- * refuse it.
+ * refuse it; RENDER_FAILED likewise (its render is retried or the job rejected).
  */
 export const IN_FLIGHT_JOB_STATUSES = [
   "DRAFT",
   "IN_PROGRESS",
   "REVIEW",
   "GENERATING_PDF",
+  "RENDER_FAILED",
 ] as const satisfies readonly JobStatus[];
 
 export type InFlightJob = {

@@ -1213,6 +1213,7 @@ function parseJobStatus(status: string | undefined) {
     status === "IN_PROGRESS" ||
     status === "REVIEW" ||
     status === "GENERATING_PDF" ||
+    status === "RENDER_FAILED" ||
     status === "APPROVED" ||
     status === "REJECTED" ||
     status === "CANCELED" ||

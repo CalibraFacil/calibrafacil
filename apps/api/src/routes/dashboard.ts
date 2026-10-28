@@ -245,6 +245,7 @@ export const dashboardRouter = new Hono<{ Variables: AuthVariables }>()
                   "IN_PROGRESS",
                   "REVIEW",
                   "GENERATING_PDF",
+                  "RENDER_FAILED",
                 ]),
               ),
             )

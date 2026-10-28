@@ -321,6 +321,8 @@ const actionLabels: Record<string, string> = {
   amendment_started: 'Retificação iniciada (o certificado segue válido)',
   amendment_canceled: 'Retificação cancelada (o certificado segue válido)',
   certificate_withdrawn: 'Certificado retirado',
+  certificate_error: 'Falha na emissão do certificado',
+  render_retried: 'Emissão do certificado reenviada',
 }
 
 /**
@@ -357,6 +359,8 @@ function mapActionToEventType(action: string): TimelineEvent['type'] {
     amendment_started: 'amendment_created',
     amendment_canceled: 'canceled',
     certificate_withdrawn: 'canceled',
+    certificate_error: 'status_change',
+    render_retried: 'status_change',
   }
   return actionMap[action] || 'custom'
 }
