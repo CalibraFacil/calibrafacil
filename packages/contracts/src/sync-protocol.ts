@@ -377,6 +377,12 @@ const pushRequestHeaderShape = {
   protocolVersion: z.number().int().positive().optional(),
   /** The desktop app version (`app.getVersion()`), compared with the cloud's minimum. */
   desktopVersion: z.string().min(1).optional(),
+  /**
+   * The device clock when the push was sent (roadmap 2 E2). The cloud compares
+   * it with its own clock and records the skew with what the push changes; the
+   * device clock still never moves an instant past the server's.
+   */
+  sentAt: z.string().datetime().optional(),
 };
 
 /** The push request as a producer builds it: every event is a wire event. */

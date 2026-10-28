@@ -36,7 +36,13 @@ export type JobActor =
       apiKey: { id: string; name: string; keyPrefix: string };
       ipAddress?: string | null;
     }
-  | { kind: "desktop_session"; userId: string; ipAddress?: string | null };
+  | {
+      kind: "desktop_session";
+      userId: string;
+      ipAddress?: string | null;
+      /** Device clock minus server clock (ms), when beyond the tolerance (E2). */
+      deviceClockSkewMs?: number;
+    };
 
 /**
  * The actors the job lifecycle commands (reject, cancel, assign, edit, amend)
@@ -55,7 +61,12 @@ export function jobActorAuditFields(actor: JobActor): JobActorAuditFields {
     case "user":
       return {};
     case "desktop_session":
-      return { source: "desktop_sync" };
+      return {
+        source: "desktop_sync",
+        ...(actor.deviceClockSkewMs === undefined
+          ? {}
+          : { deviceClockSkewMs: actor.deviceClockSkewMs }),
+      };
     case "api_key":
       return {
         source: "public_api",

@@ -112,7 +112,13 @@ export async function applyLocalJobExecution(
   } = { conflict: null, read: null };
 
   const execution: JobExecutionCommand = {
-    actor: { kind: "desktop_session", userId: actorUserId },
+    actor: {
+      kind: "desktop_session",
+      userId: actorUserId,
+      ...(input.batch.deviceClockSkewMs === undefined
+        ? {}
+        : { deviceClockSkewMs: input.batch.deviceClockSkewMs }),
+    },
     jobId: remoteEntityId,
     organizationId: input.memberData.organizationId,
     unitScope: input.memberData,
