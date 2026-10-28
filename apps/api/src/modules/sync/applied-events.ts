@@ -19,6 +19,8 @@ export type DesktopSyncClaim =
       state: "applied";
       remoteEntityId?: number | string;
       remoteEntity?: unknown;
+      /** The aggregate version this event produced; absent on rows from before versions. */
+      aggregateVersion?: number;
     }
   | { state: "in_progress" };
 
@@ -52,6 +54,7 @@ export async function claimDesktopSyncEvent(
         id: syncAppliedEvent.id,
         appliedAt: syncAppliedEvent.appliedAt,
         result: syncAppliedEvent.result,
+        aggregateVersion: syncAppliedEvent.aggregateVersion,
       })
       .from(syncAppliedEvent)
       .where(
@@ -73,6 +76,7 @@ export async function claimDesktopSyncEvent(
             ? remoteEntityId
             : undefined,
         remoteEntity: result.remoteEntity,
+        aggregateVersion: existing.aggregateVersion ?? undefined,
       };
     }
 
@@ -132,11 +136,13 @@ export async function completeDesktopSyncClaim(
   organizationId: string,
   claimId: number,
   result: { remoteEntityId?: number | string; remoteEntity?: unknown },
+  aggregateVersion?: number,
 ) {
   await o
     .update(syncAppliedEvent)
     .set({
       appliedAt: sql`now()`,
+      ...(aggregateVersion === undefined ? {} : { aggregateVersion }),
       result: {
         remoteEntityId: result.remoteEntityId,
         remoteEntity: result.remoteEntity,

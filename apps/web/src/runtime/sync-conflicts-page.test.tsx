@@ -189,18 +189,77 @@ describe('SyncConflictsPage', () => {
       }),
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Manter nuvem' }))
+    // REQ-E1-3: giving the local change up is a discard, asked for in pt-BR and recorded.
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Descartar minha alteração' }),
+    )
+    expect(screen.getByText('Descartar sua alteração local?')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Descartar alteração' }))
 
     await waitFor(() => {
       expect(mocks.resolveConflict).toHaveBeenCalledWith(
         'conflict:customer:local-1:event-1',
-        'ignored',
+        'discarded_by_user',
+        undefined,
       )
     })
     expect(mocks.refreshSyncStatus).toHaveBeenCalled()
     expect(
       await screen.findByText('Nenhum conflito aberto no banco local.'),
     ).toBeTruthy()
+  })
+
+  it('REQ-E1-3: discarding calibration readings needs a written reason, which is sent with the discard', async () => {
+    mocks.listConflicts
+      .mockResolvedValueOnce({
+        data: [
+          {
+            id: 'conflict:calibration_job:job-1:event-9',
+            eventId: 'event-9',
+            entityType: 'calibration_job',
+            entityId: 'job:local-1',
+            conflictType: 'stale_version',
+            status: 'open',
+            regulated: true,
+            createdAt: '2026-05-10T12:00:00.000Z',
+            localPayload: { status: 'REVIEW' },
+            remotePayload: { aggregateVersion: 3 },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ data: [] })
+    mocks.resolveConflict.mockResolvedValue({
+      data: {
+        id: 'conflict:calibration_job:job-1:event-9',
+        status: 'discarded_by_user',
+      },
+    })
+
+    renderConflictsPage()
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Descartar minha alteração' }),
+    )
+    expect(
+      screen.getByText('Descartar as leituras desta calibração?'),
+    ).toBeTruthy()
+
+    const confirm = screen.getByRole('button', { name: 'Descartar leituras' })
+    expect(confirm.hasAttribute('disabled')).toBe(true)
+
+    fireEvent.change(screen.getByRole('textbox'), {
+      target: { value: 'Padrão trocado após a leitura' },
+    })
+    expect(confirm.hasAttribute('disabled')).toBe(false)
+    fireEvent.click(confirm)
+
+    await waitFor(() => {
+      expect(mocks.resolveConflict).toHaveBeenCalledWith(
+        'conflict:calibration_job:job-1:event-9',
+        'discarded_by_user',
+        'Padrão trocado após a leitura',
+      )
+    })
   })
 })
 

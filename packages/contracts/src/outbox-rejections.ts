@@ -74,6 +74,12 @@ export const OUTBOX_REJECTION_CLASSES = {
   // Answered as a reviewable conflict, never as a refusal; listed so that every
   // code the route emits has a decision.
   STALE_BASE_VERSION: "transient",
+  // The aggregate moved past the version this event expected (another device, or an
+  // earlier edit of this one): answered as a reviewable `stale_version` conflict.
+  STALE_EXPECTED_VERSION: "transient",
+  // An earlier event of the same record, in the same push, was not applied: this one
+  // was not looked at. The desktop holds it behind that event (`blocked_by`).
+  SYNC_PRECEDING_EVENT_NOT_APPLIED: "transient",
 } as const satisfies Record<string, OutboxRejectionClass>;
 
 /**
@@ -87,6 +93,9 @@ export const LOCAL_OUTBOX_FAILURE_CLASSES = {
   ATTACHMENT_FILE_MISSING: "permanent",
   ATTACHMENT_FILE_CHANGED: "permanent",
   ATTACHMENT_UPLOAD_REJECTED: "permanent",
+  // The cloud answered the push request that carried this event, alone, with a 4xx
+  // (413 too large, 400 malformed, ...): the same bytes will be refused every time.
+  PUSH_REQUEST_REJECTED: "permanent",
 } as const satisfies Record<string, OutboxRejectionClass>;
 
 /**

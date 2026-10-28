@@ -80,8 +80,15 @@ test.describe('sync conflicts', () => {
       /\/dashboard\/clients\/customer%3Alocal-1\/info.*syncConflictId=/,
     )
 
-    await page.getByRole('button', { name: 'Manter nuvem' }).click()
+    // Discarding the local change is a recorded decision (roadmap 2 E1): the
+    // user confirms it (with a reason, optional for a non-regulated record).
+    await page
+      .getByRole('button', { name: 'Descartar minha alteração' })
+      .click()
+    await page.getByRole('button', { name: 'Descartar alteração' }).click()
 
-    await expectRequestPayload(resolveRequests, { status: 'ignored' })
+    await expectRequestPayload(resolveRequests, {
+      status: 'discarded_by_user',
+    })
   })
 })

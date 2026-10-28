@@ -158,6 +158,14 @@ vi.mock("../modules/sync/applied-events", () => ({
   completeDesktopSyncClaim: async () => undefined,
 }));
 
+// The aggregate version (roadmap 2 E1) is exercised against a real database in
+// sync-aggregate-version.int.spec.ts. Here no desktop event was applied before (version
+// 0) and the lock is a no-op, so the mocked select queue is consumed exactly as before.
+vi.mock("../modules/sync/aggregate-version", () => ({
+  lockSyncAggregate: async () => undefined,
+  readSyncAggregateVersion: async () => 0,
+}));
+
 // The real permission helpers (the per-operation push check reads them); only the
 // middleware that would authenticate a request is replaced by the one that sets
 // the session and the member.
@@ -713,6 +721,8 @@ describe("syncRouter", () => {
           data: { readings: [] },
         },
         remotePayload: {
+          // The aggregate version the conflict names (roadmap 2 E1).
+          aggregateVersion: 0,
           id: 42,
           jobId: "CAL-2026-0042",
           status: "APPROVED",
@@ -1146,6 +1156,7 @@ describe("syncRouter", () => {
     expect(body.accepted).toEqual([
       {
         eventId: "evt-valid-execution",
+        aggregateVersion: 1,
         remoteEntityId: 42,
         remoteEntity: {
           id: 42,

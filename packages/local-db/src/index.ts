@@ -41,13 +41,24 @@ export {
   requeueDeadOutboxEvent,
   setSyncCursor,
   type DeadOutboxEvent,
+  type DiscardOutboxEventOptions,
   type PendingOutboxEvent,
 } from "./outbox";
+export {
+  baseExpectedVersion,
+  countBlockedOutbox,
+  getStoredAggregateVersion,
+  listBlockedOutboxEvents,
+  recomputeBlockedOutbox,
+  recordAggregateVersion,
+} from "./outbox-ordering";
 export {
   getSyncConflict,
   listSyncConflicts,
   resolveSyncConflict,
+  SyncConflictReasonRequiredError,
   type ListSyncConflictsInput,
+  type ResolveSyncConflictOptions,
 } from "./conflicts";
 export {
   createLocalAsset,

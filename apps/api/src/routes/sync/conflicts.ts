@@ -32,6 +32,9 @@ export const conflictRoutes = new Hono<SyncRouterEnv>().post(
             conflictId,
             status: body.status,
             resolvedAt,
+            // Who: the audit event's actor. Why: given by the user when the local change
+            // was discarded (required for calibration readings, enforced on the desktop).
+            ...(body.reason ? { reason: body.reason } : {}),
           },
         },
         o,

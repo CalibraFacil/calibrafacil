@@ -1,4 +1,7 @@
-import type { LocalDeadOutboxEvent } from '@calibra-facil/contracts'
+import type {
+  LocalBlockedOutboxEvent,
+  LocalDeadOutboxEvent,
+} from '@calibra-facil/contracts'
 
 /**
  * How the desktop presents an event the cloud refused for good.
@@ -100,6 +103,10 @@ const REASONS: ReadonlyArray<readonly [string, string]> = [
   [
     'ATTACHMENT_UPLOAD_REJECTED',
     'A nuvem recusou o envio do arquivo deste anexo.',
+  ],
+  [
+    'PUSH_REQUEST_REJECTED',
+    'A nuvem recusou o envio desta alteração mesmo sozinha (por exemplo, por ser grande demais ou estar malformada). As demais alterações seguiram normalmente. Atualize o aplicativo e, se persistir, descarte-a.',
   ],
   [
     'INVALID_STATUS_TRANSITION',
@@ -225,6 +232,53 @@ export function getDeadEventDiscardWarning(
     confirmLabel: 'Descartar',
     regulated: false,
   }
+}
+
+const BLOCKER_STATUS_REASONS: ReadonlyArray<readonly [string, string]> = [
+  ['dead', 'foi recusada pela nuvem e precisa de uma decisão'],
+  ['conflict', 'está em conflito e precisa de uma decisão'],
+  [
+    'discarded',
+    'foi descartada e o registro nunca chegou à nuvem, então esta alteração não pode ser aplicada',
+  ],
+]
+
+export type BlockedEventDescription = {
+  title: string
+  /** Why it is not being sent, in pt-BR. */
+  reason: string
+}
+
+/**
+ * An event that is not sent because another one it depends on (an earlier edit of the same
+ * record, or the record's parent) was refused or is in conflict. It leaves the queue by itself
+ * once that one is resolved; it can also be discarded here.
+ */
+export function describeBlockedEvent(
+  event: LocalBlockedOutboxEvent,
+): BlockedEventDescription {
+  const entity = lookup(ENTITY_LABELS, event.entityType) ?? event.entityType
+  const operation = lookup(OPERATION_LABELS, event.operation) ?? event.operation
+  const blockerOperation =
+    lookup(OPERATION_LABELS, event.blockedByOperation) ?? 'Uma alteração'
+  const blockerEntity =
+    lookup(ENTITY_LABELS, event.blockedByEntityType) ?? 'registro'
+  const blockerStatus =
+    lookup(BLOCKER_STATUS_REASONS, event.blockedByStatus) ??
+    'precisa de uma decisão'
+
+  return {
+    title: `${entity} · ${operation}`,
+    reason: `Aguardando outra alteração: ${blockerOperation} (${blockerEntity}) ${blockerStatus}. Esta alteração será enviada assim que ela for resolvida.`,
+  }
+}
+
+export function getBlockedEventsBannerLabel(count: number | undefined) {
+  if (count === undefined || count <= 0) return null
+
+  return count === 1
+    ? '1 alteração aguarda outra que precisa de decisão.'
+    : `${count} alterações aguardam outra que precisa de decisão.`
 }
 
 export function getDeadEventsBannerLabel(count: number | undefined) {

@@ -350,6 +350,7 @@ export const calibraApiPolicyRegistry = {
     listConflicts: "local-only",
     resolveConflict: "local-only",
     listDeadEvents: "local-only",
+    listBlockedEvents: "local-only",
     discardDeadEvent: "local-only",
     requeueDeadEvent: "local-only",
   },

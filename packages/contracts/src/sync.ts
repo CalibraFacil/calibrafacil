@@ -17,6 +17,19 @@ export const syncEventSchema = z.object({
   // never emit it) stay valid; nullable for rows that were never pulled. The
   // server treats a missing/null base as "cannot check" (current behavior).
   baseUpdatedAt: z.string().nullable().optional(),
+  /**
+   * The version of this aggregate (`entityType` + `entityId`) the desktop expects
+   * the cloud to be at when it applies this event: the `aggregateVersion` the
+   * cloud answered for the aggregate's previous event, counted forward over the
+   * earlier events of the same aggregate in this very batch. The cloud refuses a
+   * write whose expected version is not the current one as a `stale_version`
+   * conflict instead of overwriting.
+   *
+   * Absent or null means "no expectation" (a legacy build, or the first write to
+   * a row this desktop only ever pulled): the cloud applies it with the
+   * `baseUpdatedAt` check alone, as before this field existed.
+   */
+  expectedVersion: z.number().int().nonnegative().nullable().optional(),
 });
 
 export const syncPushResponseSchema = z.object({
@@ -26,6 +39,13 @@ export const syncPushResponseSchema = z.object({
       remoteEntityId: z.union([z.number(), z.string()]).optional(),
       remoteEntity: z.unknown().optional(),
       remoteVersion: z.number().int().nonnegative(),
+      /**
+       * The aggregate's version after this event: the next event of the same
+       * aggregate sends it as `expectedVersion`. Absent from a cloud that predates
+       * versions (its `remoteVersion` is only `localVersion + 1`, not a version
+       * the desktop may chain on).
+       */
+      aggregateVersion: z.number().int().nonnegative().optional(),
       cloudEventId: z.string(),
     }),
   ),
@@ -187,9 +207,20 @@ export const syncAttachmentDownloadResponseSchema = z.object({
   expiresInSeconds: z.number().int().positive(),
 });
 
+/**
+ * - `open`: waiting for a decision.
+ * - `resolved`: the user kept the local change; it is sent again.
+ * - `discarded_by_user`: the user gave the local change up. It is never sent, and
+ *   the row records who decided, when and why. A regulated change (calibration
+ *   readings) needs a reason.
+ * - `ignored`: what older builds called the same action. Those builds marked the
+ *   change `synced` although the cloud never received it. Rows with this status are
+ *   kept as history and never written by this build.
+ */
 export const localSyncConflictStatusSchema = z.enum([
   "open",
   "resolved",
+  "discarded_by_user",
   "ignored",
 ]);
 
@@ -204,6 +235,12 @@ export const localSyncConflictSchema = z.object({
   remotePayload: z.unknown(),
   createdAt: z.string().datetime(),
   resolvedAt: z.string().datetime().nullable(),
+  /** The signed-in user who resolved or discarded it (null while open, and for older rows). */
+  resolvedBy: z.string().nullable().default(null),
+  /** Why it was discarded (required for a regulated change). */
+  resolutionReason: z.string().nullable().default(null),
+  /** The queued change carries calibration readings: discarding it needs a reason. */
+  regulated: z.boolean().default(false),
 });
 
 export const localSyncConflictsResponseSchema = z.object({
@@ -211,8 +248,16 @@ export const localSyncConflictsResponseSchema = z.object({
   total: z.number().int().nonnegative(),
 });
 
+/**
+ * What the user decides on a conflict. `ignored` is the name an older web build
+ * sends for `discarded_by_user`; it is accepted and treated the same way.
+ */
 export const localSyncConflictResolutionSchema = z.object({
-  status: z.enum(["resolved", "ignored"]).default("resolved"),
+  status: z
+    .enum(["resolved", "discarded_by_user", "ignored"])
+    .default("resolved"),
+  /** Required to discard a regulated change (calibration readings). */
+  reason: z.string().trim().max(2000).optional(),
 });
 
 /**
@@ -234,6 +279,34 @@ export const localDeadOutboxEventSchema = z.object({
   regulated: z.boolean(),
 });
 
+/**
+ * A queued change that is not sent because the change it depends on (an earlier
+ * edit of the same record, or the record's parent) was refused or is in
+ * conflict. It leaves the queue on its own once that change is resolved.
+ */
+export const localBlockedOutboxEventSchema = z.object({
+  eventId: z.string(),
+  entityType: z.string(),
+  entityId: z.string(),
+  operation: z.string(),
+  occurredAt: z.string(),
+  /** The event it waits for. */
+  blockedByEventId: z.string(),
+  blockedByOperation: z.string().nullable(),
+  blockedByEntityType: z.string().nullable(),
+  /** The code the blocking event was refused with, when it was refused. */
+  blockedByErrorCode: z.string().nullable(),
+  /** The blocking event is dead (`dead`), in conflict (`conflict`) or was discarded (`discarded`). */
+  blockedByStatus: z.string().nullable(),
+  /** Carries calibration readings: discarding it leaves them only on this computer. */
+  regulated: z.boolean(),
+});
+
+export const localBlockedOutboxEventsResponseSchema = z.object({
+  data: z.array(localBlockedOutboxEventSchema),
+  total: z.number().int().nonnegative(),
+});
+
 export const localDeadOutboxEventsResponseSchema = z.object({
   data: z.array(localDeadOutboxEventSchema),
   total: z.number().int().nonnegative(),
@@ -245,7 +318,7 @@ export const syncConflictResolutionRequestSchema =
 export const syncConflictResolutionResponseSchema = z.object({
   data: z.object({
     id: z.string(),
-    status: z.enum(["resolved", "ignored"]),
+    status: z.enum(["resolved", "discarded_by_user", "ignored"]),
     resolvedAt: z.string().datetime(),
   }),
 });
@@ -274,6 +347,12 @@ export type SyncAttachmentCompleteUploadResponse = z.infer<
 >;
 export type SyncAttachmentDownloadResponse = z.infer<
   typeof syncAttachmentDownloadResponseSchema
+>;
+export type LocalBlockedOutboxEvent = z.infer<
+  typeof localBlockedOutboxEventSchema
+>;
+export type LocalBlockedOutboxEventsResponse = z.infer<
+  typeof localBlockedOutboxEventsResponseSchema
 >;
 export type LocalSyncConflict = z.infer<typeof localSyncConflictSchema>;
 export type LocalSyncConflictsResponse = z.infer<

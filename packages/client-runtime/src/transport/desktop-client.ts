@@ -21,6 +21,7 @@ import type {
   LocalAttachment,
   LocalAttachmentsResponse,
   LocalDeadOutboxEvent,
+  LocalBlockedOutboxEventsResponse,
   LocalDeadOutboxEventsResponse,
   LocalSessionSnapshotResponse,
   LocalSyncConflict,
@@ -996,7 +997,7 @@ export function createDesktopApiClient(
 
         return readDesktopJson<LocalSyncConflictsResponse>(response);
       },
-      async resolveConflict(id, status = "resolved") {
+      async resolveConflict(id, status = "resolved", reason) {
         const response = await fetchImpl(
           new URL(
             `/api/local/sync/conflicts/${encodeURIComponent(id)}/resolve`,
@@ -1008,9 +1009,24 @@ export function createDesktopApiClient(
             headers: await createDesktopHeaders(options.tokenProvider, {
               "Content-Type": "application/json",
             }),
-            body: JSON.stringify({ status }),
+            body: JSON.stringify({ status, ...(reason ? { reason } : {}) }),
           },
         );
+
+        if (response.status === 422) {
+          // The desktop asks for the reason (readings are being discarded): say so.
+          const answer: unknown = await response.json().catch(() => null);
+          const message =
+            answer !== null &&
+            typeof answer === "object" &&
+            "error" in answer &&
+            typeof answer.error === "string"
+              ? answer.error
+              : null;
+          throw new Error(
+            message ?? "Informe o motivo para descartar esta alteração.",
+          );
+        }
 
         if (!response.ok) {
           throw new Error("Falha ao resolver conflito de sincronização");
@@ -1033,7 +1049,22 @@ export function createDesktopApiClient(
 
         return readDesktopJson<LocalDeadOutboxEventsResponse>(response);
       },
-      async discardDeadEvent(eventId) {
+      async listBlockedEvents() {
+        const response = await fetchImpl(
+          new URL("/api/local/sync/blocked-events", options.baseUrl),
+          {
+            credentials: "include",
+            headers: await createDesktopHeaders(options.tokenProvider),
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error("Falha ao carregar alterações aguardando envio");
+        }
+
+        return readDesktopJson<LocalBlockedOutboxEventsResponse>(response);
+      },
+      async discardDeadEvent(eventId, reason) {
         const response = await fetchImpl(
           new URL(
             `/api/local/sync/dead-events/${encodeURIComponent(eventId)}/discard`,
@@ -1042,7 +1073,10 @@ export function createDesktopApiClient(
           {
             method: "POST",
             credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider),
+            headers: await createDesktopHeaders(options.tokenProvider, {
+              "Content-Type": "application/json",
+            }),
+            body: JSON.stringify(reason ? { reason } : {}),
           },
         );
 
