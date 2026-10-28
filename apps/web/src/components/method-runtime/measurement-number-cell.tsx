@@ -2,6 +2,11 @@ import { useState } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ArrowDown01Icon } from '@hugeicons/core-free-icons'
 
+import {
+  isPartialMeasurementInput,
+  parseMeasurementInput,
+  withDecimalComma,
+} from '@calibra-facil/shared/calibration-format'
 import { convertUnitValue, unitKind } from '@calibra-facil/shared/units'
 
 import { Button } from '@calibra-facil/ui/button'
@@ -41,21 +46,20 @@ interface MeasurementNumberCellProps {
 function parseCanonical(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
   if (typeof value === 'string' && value.trim() !== '') {
-    const parsed = Number(value.replace(',', '.'))
-    return Number.isFinite(parsed) ? parsed : null
+    return parseMeasurementInput(value)
   }
   return null
 }
 
 function trimNumber(value: number, maxDecimals: number | null): string {
   if (maxDecimals != null) {
-    return String(Number(value.toFixed(maxDecimals)))
+    return withDecimalComma(String(Number(value.toFixed(maxDecimals))))
   }
-  return String(Number(value.toPrecision(12)))
+  return withDecimalComma(String(Number(value.toPrecision(12))))
 }
 
 function fractionalDigits(text: string): number {
-  const fractional = text.split('.')[1]
+  const fractional = text.split(/[.,]/)[1]
   return fractional ? fractional.length : 0
 }
 
@@ -110,14 +114,15 @@ export function MeasurementNumberCell({
   const inputValue = focused ? draft : formatCanonicalForDisplay(canonicalValue)
 
   const handleChange = (raw: string) => {
-    if (raw !== '' && !/^-?\d*[.,]?\d*$/.test(raw)) return
+    if (raw !== '' && !isPartialMeasurementInput(raw)) return
 
+    // The text stays as typed (pt-BR comma, roadmap 2 F3); parsing is shared.
     const normalized = raw.replace(',', '.')
     if (maxDecimals != null && fractionalDigits(normalized) > maxDecimals) {
       return
     }
 
-    setDraft(normalized)
+    setDraft(raw)
 
     if (normalized === '' || normalized === '-' || normalized === '.') {
       onCommit(null)

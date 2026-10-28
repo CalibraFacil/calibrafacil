@@ -1,3 +1,4 @@
+import { parseMeasurementInput } from '@calibra-facil/shared/calibration-format'
 /**
  * UI-to-payload parsing for the accredited-scope (CMC) settings — the
  * schema-first `forms.ts` layer for this regulated workflow (#427): every
@@ -46,12 +47,9 @@ export const emptyScopeLineForm: ScopeLineFormState = {
   validUntil: undefined,
 }
 
-/** Numeric parse tolerating pt-BR comma decimals; null for anything else. */
+/** Numeric parse of a typed value (pt-BR comma or point); null for anything else. */
 function numberFromForm(value: string): number | null {
-  const trimmed = value.trim()
-  if (!trimmed) return null
-  const parsed = Number(trimmed.replace(',', '.'))
-  return Number.isFinite(parsed) ? parsed : null
+  return parseMeasurementInput(value)
 }
 
 /**

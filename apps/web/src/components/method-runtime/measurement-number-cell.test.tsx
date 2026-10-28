@@ -139,7 +139,7 @@ describe('MeasurementNumberCell', () => {
         />,
       )
       const input = getInput()
-      expect(input.value).toBe('1234.57')
+      expect(input.value).toBe('1234,57')
       focusAndBlur(input)
       expect(onCommit).not.toHaveBeenCalled()
     })
@@ -156,7 +156,7 @@ describe('MeasurementNumberCell', () => {
         />,
       )
       const input = getInput()
-      expect(input.value).toBe('500.1')
+      expect(input.value).toBe('500,1')
       focusAndBlur(input)
       expect(onCommit).not.toHaveBeenCalled()
     })

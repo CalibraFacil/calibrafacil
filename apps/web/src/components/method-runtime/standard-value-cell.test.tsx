@@ -120,7 +120,7 @@ describe('TableInputRenderer standard_value branch', () => {
 
     const input = screen.getAllByRole('textbox')[1]
     // The field shows 12 significant digits; the stored value has more.
-    expect(input).toHaveProperty('value', '100.123456789')
+    expect(input).toHaveProperty('value', '100,123456789')
     fireEvent.focus(input)
     fireEvent.blur(input)
     expect(calls).toEqual([])
