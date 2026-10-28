@@ -1,3 +1,4 @@
+import type { JobAllowedActions } from '@calibra-facil/contracts'
 import { type MeasurementUnit } from '@calibra-facil/shared/units'
 import type { MethodInputType } from '@/components/method-runtime/types'
 
@@ -120,6 +121,8 @@ export type ApprovedJobRecordData = {
   } | null
   /** The open amendment of this certificate: it stays valid until that one is issued. */
   amendmentInProgress?: { id: number; jobId: string; status: string } | null
+  /** What the signed-in member may do (roadmap 2 F1); absent on the desktop. */
+  allowedActions?: JobAllowedActions
   asFoundConformity?: AsFoundConformity | null
   asFoundMargins?: number[] | null
   scopeOverrideJustification?: string | null

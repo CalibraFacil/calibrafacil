@@ -50,6 +50,9 @@ export function JobVerdictBand({
   normalizedJobStatus,
   normalizedFinancialStatus,
   canApprove,
+  canReject,
+  inReview,
+  approvalBlocked,
   canExecute,
   canCancel,
   approveAvailability,
@@ -67,6 +70,11 @@ export function JobVerdictBand({
   normalizedJobStatus: JobStatus
   normalizedFinancialStatus: FinancialStatus
   canApprove: boolean
+  canReject: boolean
+  /** The job is in review (the approve/reject area is shown). */
+  inReview: boolean
+  /** Why this member may not approve (separation of duties, role), if so. */
+  approvalBlocked: string | null
   canExecute: boolean
   canCancel: boolean
   approveAvailability: Availability
@@ -152,33 +160,41 @@ export function JobVerdictBand({
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:justify-end">
             {isGeneratingPdf ? (
               <CertificateProgressButton status="running" />
-            ) : canApprove ? (
+            ) : inReview ? (
               <>
-                <ActionAvailabilityGate availability={approveAvailability}>
-                  {({ disabled }) => (
-                    <CertificateProgressButton
-                      status="idle"
-                      disabled={disabled}
-                      onApprove={() => onOpenApprove()}
-                    />
-                  )}
-                </ActionAvailabilityGate>
-                <ActionAvailabilityGate availability={rejectAvailability}>
-                  {({ disabled }) => (
-                    <Button
-                      variant="destructive"
-                      disabled={disabled}
-                      className={ACTION_BUTTON_CLASS}
-                      onClick={() => onOpenReject()}
-                    >
-                      <HugeiconsIcon
-                        icon={MultiplicationSignIcon}
-                        className="mr-2 h-4 w-4"
+                {canApprove ? (
+                  <ActionAvailabilityGate availability={approveAvailability}>
+                    {({ disabled }) => (
+                      <CertificateProgressButton
+                        status="idle"
+                        disabled={disabled}
+                        onApprove={() => onOpenApprove()}
                       />
-                      Rejeitar
-                    </Button>
-                  )}
-                </ActionAvailabilityGate>
+                    )}
+                  </ActionAvailabilityGate>
+                ) : approvalBlocked ? (
+                  <p className="max-w-sm text-pretty text-sm text-muted-foreground">
+                    {approvalBlocked}
+                  </p>
+                ) : null}
+                {canReject ? (
+                  <ActionAvailabilityGate availability={rejectAvailability}>
+                    {({ disabled }) => (
+                      <Button
+                        variant="destructive"
+                        disabled={disabled}
+                        className={ACTION_BUTTON_CLASS}
+                        onClick={() => onOpenReject()}
+                      >
+                        <HugeiconsIcon
+                          icon={MultiplicationSignIcon}
+                          className="mr-2 h-4 w-4"
+                        />
+                        Rejeitar
+                      </Button>
+                    )}
+                  </ActionAvailabilityGate>
+                ) : null}
                 {assignAction}
               </>
             ) : canExecute ? (

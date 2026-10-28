@@ -646,6 +646,42 @@ export type JobsListResponse = z.infer<typeof jobsListResponseSchema>;
 // GET /api/jobs/:id
 // ---------------------------------------------------------------------------
 
+export const JOB_ACTIONS = [
+  "approve",
+  "reject",
+  "cancel",
+  "assign",
+  "amend",
+  "withdraw",
+] as const;
+export type JobAction = (typeof JOB_ACTIONS)[number];
+
+export const jobActionVerdictSchema = z.union([
+  z.object({ allowed: z.literal(true) }),
+  z.object({
+    allowed: z.literal(false),
+    /** Why not: the status machine, the role, separation of duties, the certificate. */
+    reason: z.enum([
+      "status",
+      "permission",
+      "self_approval",
+      "certificate_withdrawn",
+      "amendment_in_progress",
+    ]),
+  }),
+]);
+export type JobActionVerdict = z.infer<typeof jobActionVerdictSchema>;
+
+export const jobAllowedActionsSchema = z.object({
+  approve: jobActionVerdictSchema,
+  reject: jobActionVerdictSchema,
+  cancel: jobActionVerdictSchema,
+  assign: jobActionVerdictSchema,
+  amend: jobActionVerdictSchema,
+  withdraw: jobActionVerdictSchema,
+});
+export type JobAllowedActions = z.infer<typeof jobAllowedActionsSchema>;
+
 export const certificateLifecycleStatusSchema = z.enum([
   "ISSUED",
   "SUPERSEDED",
@@ -704,6 +740,10 @@ export const jobDetailSchema = z.object({
   // The open amendment of this certificate, when there is one: the original
   // stays APPROVED (the valid certificate) until the replacement is issued.
   amendmentInProgress: jobAmendmentInProgressSchema.nullable().optional(),
+  // What the signed-in member may do with the job now (roadmap 2 F1): decided by
+  // the server (status machine, RBAC, separation of duties, certificate
+  // lifecycle). Absent from the desktop local server: it keeps its own rules.
+  allowedActions: jobAllowedActionsSchema.optional(),
   methodDeviations: nullableString,
   // Frozen snapshot, or (for jobs still open) one derived from the live asset.
   assetSnapshot: jobAssetSnapshotSchema.nullable(),

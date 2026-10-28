@@ -1,4 +1,8 @@
 import { jobEventQueryKeys } from '@/lib/query-effects'
+import {
+  approvalBlockedMessage,
+  serverAllows,
+} from '@/features/jobs/allowed-actions'
 import { useNavigate } from '@tanstack/react-router'
 import { canTransition } from '@calibra-facil/schemas/job-transitions'
 import {
@@ -260,14 +264,27 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
   // availability decides whether it can run right now. Keeping them apart is
   // what lets the desktop show the review evidence — and the reason — instead
   // of an empty panel.
-  const canApprove = job.status === 'REVIEW'
-  const canShowReviewEvidence = canApprove || isGeneratingPdf
-  const canCancel = ['DRAFT', 'IN_PROGRESS', 'REVIEW', 'REJECTED'].includes(
-    job.status,
+  const inReview = job.status === 'REVIEW'
+  // The server says what this member may do (roadmap 2 F1: status machine,
+  // role, separation of duties); the desktop falls back to the status rules.
+  const canApprove = serverAllows(job.allowedActions, 'approve', inReview)
+  const canReject = serverAllows(job.allowedActions, 'reject', inReview)
+  const approvalBlocked = inReview
+    ? approvalBlockedMessage(job.allowedActions)
+    : null
+  const canShowReviewEvidence = inReview || isGeneratingPdf
+  const canCancel = serverAllows(
+    job.allowedActions,
+    'cancel',
+    ['DRAFT', 'IN_PROGRESS', 'REVIEW', 'REJECTED'].includes(job.status),
   )
   // The transition table decides, not a list kept here: a technician can be
   // assigned while the job is open (DRAFT, IN_PROGRESS, REVIEW, REJECTED).
-  const canAssign = canTransition(job.status, 'assign')
+  const canAssign = serverAllows(
+    job.allowedActions,
+    'assign',
+    canTransition(job.status, 'assign'),
+  )
   const assignAction = canAssign ? (
     <ActionAvailabilityGate availability={assignAvailability}>
       {({ disabled }) => (
@@ -329,6 +346,9 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
         normalizedJobStatus={normalizedJobStatus}
         normalizedFinancialStatus={normalizedFinancialStatus}
         canApprove={canApprove}
+        canReject={canReject}
+        inReview={inReview}
+        approvalBlocked={approvalBlocked}
         canExecute={canExecute}
         canCancel={canCancel}
         approveAvailability={approveAvailability}
