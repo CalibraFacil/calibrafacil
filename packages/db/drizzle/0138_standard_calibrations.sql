@@ -20,7 +20,7 @@ ALTER TABLE "reference_standard"
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "reference_standard_calibration" (
   "id" serial PRIMARY KEY NOT NULL,
-  "organization_id" text NOT NULL REFERENCES "organization"("id") ON DELETE restrict,
+  "organization_id" text NOT NULL CONSTRAINT "reference_standard_calibration_organization_id_organization_id_" REFERENCES "organization"("id") ON DELETE restrict,
   "standard_id" integer NOT NULL,
   "certificate_number" text NOT NULL,
   "calibrated_by" text,
@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS "reference_standard_calibration" (
   "certified_values" jsonb,
   "metrology_data" jsonb,
   "source" text NOT NULL,
-  "recorded_by" text REFERENCES "user"("id") ON DELETE set null,
+  "recorded_by" text CONSTRAINT "reference_standard_calibration_recorded_by_user_id_fk" REFERENCES "user"("id") ON DELETE set null,
   "recorded_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
