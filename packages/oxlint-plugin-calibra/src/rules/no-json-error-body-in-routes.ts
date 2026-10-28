@@ -28,7 +28,7 @@ const LEGACY_BASELINE: Baseline = new Map<string, number>([
   ["apps/api/src/routes/calibration-requests.ts", 11],
   ["apps/api/src/routes/capa.ts", 20],
   ["apps/api/src/routes/certificate-numbering.ts", 2],
-  ["apps/api/src/routes/competences.ts", 35],
+  ["apps/api/src/routes/competences.ts", 34],
   ["apps/api/src/routes/customer-groups.ts", 42],
   ["apps/api/src/routes/customers.ts", 57],
   ["apps/api/src/routes/dashboard.ts", 1],

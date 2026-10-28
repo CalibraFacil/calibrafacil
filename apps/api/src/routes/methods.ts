@@ -1532,18 +1532,18 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   // =========================================================================
   .get("/:id", ...withLabPermission({ template: ["read"] }), async (c) => {
     const member = c.get("member");
-    return await orgDb(member.organizationId).transaction(async (tx) => {
-      const id = await resolveMethodRouteId(
-        c.req.param("id"),
-        member.organizationId,
-        tx,
-      );
+    try {
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const id = await resolveMethodRouteId(
+          c.req.param("id"),
+          member.organizationId,
+          tx,
+        );
 
-      if (id === null) {
-        return c.json({ error: "Método nao encontrado" }, 404);
-      }
+        if (id === null) {
+          return c.json({ error: "Método nao encontrado" }, 404);
+        }
 
-      try {
         const [method] = await tx
           .select({
             id: calibrationMethod.id,
@@ -1603,11 +1603,11 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json(
           normalizeMethodRecord(method) satisfies ServerShape<MethodDetail>,
         );
-      } catch (error) {
-        console.error("Error getting method:", error);
-        return c.json({ error: "Erro ao buscar método" }, 500);
-      }
-    });
+      });
+    } catch (error) {
+      console.error("Error getting method:", error);
+      return c.json({ error: "Erro ao buscar método" }, 500);
+    }
   })
 
   // =========================================================================
@@ -1851,19 +1851,19 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const id = await resolveMethodRouteId(
-          c.req.param("id"),
-          member.organizationId,
-          tx,
-        );
-        const input = c.req.valid("json");
+      try {
+        return await orgDb(member.organizationId).transaction(async (tx) => {
+          const id = await resolveMethodRouteId(
+            c.req.param("id"),
+            member.organizationId,
+            tx,
+          );
+          const input = c.req.valid("json");
 
-        if (id === null) {
-          return c.json({ error: "Método nao encontrado" }, 404);
-        }
+          if (id === null) {
+            return c.json({ error: "Método nao encontrado" }, 404);
+          }
 
-        try {
           // Get existing method
           const [existing] = await tx
             .select()
@@ -2033,11 +2033,11 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           });
 
           return c.json(updated);
-        } catch (error) {
-          console.error("Error updating method:", error);
-          return c.json({ error: "Erro ao atualizar método" }, 500);
-        }
-      });
+        });
+      } catch (error) {
+        console.error("Error updating method:", error);
+        return c.json({ error: "Erro ao atualizar método" }, 500);
+      }
     },
   )
 
@@ -2050,18 +2050,18 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const id = await resolveMethodRouteId(
-          c.req.param("id"),
-          member.organizationId,
-          tx,
-        );
+      try {
+        return await orgDb(member.organizationId).transaction(async (tx) => {
+          const id = await resolveMethodRouteId(
+            c.req.param("id"),
+            member.organizationId,
+            tx,
+          );
 
-        if (id === null) {
-          return c.json({ error: "Método nao encontrado" }, 404);
-        }
+          if (id === null) {
+            return c.json({ error: "Método nao encontrado" }, 404);
+          }
 
-        try {
           const [existing] = await tx
             .select()
             .from(calibrationMethod)
@@ -2173,11 +2173,11 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           });
 
           return c.json(updated);
-        } catch (error) {
-          console.error("Error requesting method approval:", error);
-          return c.json({ error: "Erro ao solicitar aprovacao" }, 500);
-        }
-      });
+        });
+      } catch (error) {
+        console.error("Error requesting method approval:", error);
+        return c.json({ error: "Erro ao solicitar aprovacao" }, 500);
+      }
     },
   )
 
@@ -2191,18 +2191,18 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const id = await resolveMethodRouteId(
-          c.req.param("id"),
-          member.organizationId,
-          tx,
-        );
+      try {
+        return await orgDb(member.organizationId).transaction(async (tx) => {
+          const id = await resolveMethodRouteId(
+            c.req.param("id"),
+            member.organizationId,
+            tx,
+          );
 
-        if (id === null) {
-          return c.json({ error: "Método nao encontrado" }, 404);
-        }
+          if (id === null) {
+            return c.json({ error: "Método nao encontrado" }, 404);
+          }
 
-        try {
           const [existing] = await tx
             .select()
             .from(calibrationMethod)
@@ -2247,11 +2247,11 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           });
 
           return c.json(updated);
-        } catch (error) {
-          console.error("Error technical reviewing method:", error);
-          return c.json({ error: "Erro ao revisar tecnicamente" }, 500);
-        }
-      });
+        });
+      } catch (error) {
+        console.error("Error technical reviewing method:", error);
+        return c.json({ error: "Erro ao revisar tecnicamente" }, 500);
+      }
     },
   )
 
@@ -2265,18 +2265,18 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const id = await resolveMethodRouteId(
-          c.req.param("id"),
-          member.organizationId,
-          tx,
-        );
+      try {
+        return await orgDb(member.organizationId).transaction(async (tx) => {
+          const id = await resolveMethodRouteId(
+            c.req.param("id"),
+            member.organizationId,
+            tx,
+          );
 
-        if (id === null) {
-          return c.json({ error: "Método nao encontrado" }, 404);
-        }
+          if (id === null) {
+            return c.json({ error: "Método nao encontrado" }, 404);
+          }
 
-        try {
           const [existing] = await tx
             .select()
             .from(calibrationMethod)
@@ -2433,11 +2433,11 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           });
 
           return c.json(published);
-        } catch (error) {
-          console.error("Error quality approving method:", error);
-          return c.json({ error: "Erro ao aprovar qualidade" }, 500);
-        }
-      });
+        });
+      } catch (error) {
+        console.error("Error quality approving method:", error);
+        return c.json({ error: "Erro ao aprovar qualidade" }, 500);
+      }
     },
   )
 
@@ -2452,19 +2452,19 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const id = await resolveMethodRouteId(
-          c.req.param("id"),
-          member.organizationId,
-          tx,
-        );
-        const { reason } = c.req.valid("json");
+      try {
+        return await orgDb(member.organizationId).transaction(async (tx) => {
+          const id = await resolveMethodRouteId(
+            c.req.param("id"),
+            member.organizationId,
+            tx,
+          );
+          const { reason } = c.req.valid("json");
 
-        if (id === null) {
-          return c.json({ error: "Método nao encontrado" }, 404);
-        }
+          if (id === null) {
+            return c.json({ error: "Método nao encontrado" }, 404);
+          }
 
-        try {
           const [existing] = await tx
             .select()
             .from(calibrationMethod)
@@ -2520,11 +2520,11 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           });
 
           return c.json(updated);
-        } catch (error) {
-          console.error("Error returning method to draft:", error);
-          return c.json({ error: "Erro ao retornar para rascunho" }, 500);
-        }
-      });
+        });
+      } catch (error) {
+        console.error("Error returning method to draft:", error);
+        return c.json({ error: "Erro ao retornar para rascunho" }, 500);
+      }
     },
   )
 
@@ -2538,18 +2538,18 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const id = await resolveMethodRouteId(
-          c.req.param("id"),
-          member.organizationId,
-          tx,
-        );
+      try {
+        return await orgDb(member.organizationId).transaction(async (tx) => {
+          const id = await resolveMethodRouteId(
+            c.req.param("id"),
+            member.organizationId,
+            tx,
+          );
 
-        if (id === null) {
-          return c.json({ error: "Método nao encontrado" }, 404);
-        }
+          if (id === null) {
+            return c.json({ error: "Método nao encontrado" }, 404);
+          }
 
-        try {
           const [existing] = await tx
             .select()
             .from(calibrationMethod)
@@ -2708,11 +2708,11 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           });
 
           return c.json(published);
-        } catch (error) {
-          console.error("Error publishing method:", error);
-          return c.json({ error: "Erro ao publicar método" }, 500);
-        }
-      });
+        });
+      } catch (error) {
+        console.error("Error publishing method:", error);
+        return c.json({ error: "Erro ao publicar método" }, 500);
+      }
     },
   )
 
@@ -2725,18 +2725,18 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const id = await resolveMethodRouteId(
-          c.req.param("id"),
-          member.organizationId,
-          tx,
-        );
+      try {
+        return await orgDb(member.organizationId).transaction(async (tx) => {
+          const id = await resolveMethodRouteId(
+            c.req.param("id"),
+            member.organizationId,
+            tx,
+          );
 
-        if (id === null) {
-          return c.json({ error: "Método nao encontrado" }, 404);
-        }
+          if (id === null) {
+            return c.json({ error: "Método nao encontrado" }, 404);
+          }
 
-        try {
           const [existing] = await tx
             .select()
             .from(calibrationMethod)
@@ -2779,11 +2779,11 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           });
 
           return c.json(archived);
-        } catch (error) {
-          console.error("Error archiving method:", error);
-          return c.json({ error: "Erro ao arquivar método" }, 500);
-        }
-      });
+        });
+      } catch (error) {
+        console.error("Error archiving method:", error);
+        return c.json({ error: "Erro ao arquivar método" }, 500);
+      }
     },
   )
 
@@ -2796,18 +2796,18 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     async (c) => {
       const member = c.get("member");
       const session = c.get("session");
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const id = await resolveMethodRouteId(
-          c.req.param("id"),
-          member.organizationId,
-          tx,
-        );
+      try {
+        return await orgDb(member.organizationId).transaction(async (tx) => {
+          const id = await resolveMethodRouteId(
+            c.req.param("id"),
+            member.organizationId,
+            tx,
+          );
 
-        if (id === null) {
-          return c.json({ error: "Método nao encontrado" }, 404);
-        }
+          if (id === null) {
+            return c.json({ error: "Método nao encontrado" }, 404);
+          }
 
-        try {
           const [existing] = await tx
             .select()
             .from(calibrationMethod)
@@ -2916,11 +2916,11 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
           });
 
           return c.json(normalizeMethodRecord(newMethod), 201);
-        } catch (error) {
-          console.error("Error creating new version:", error);
-          return c.json({ error: "Erro ao criar nova versão" }, 500);
-        }
-      });
+        });
+      } catch (error) {
+        console.error("Error creating new version:", error);
+        return c.json({ error: "Erro ao criar nova versão" }, 500);
+      }
     },
   )
 
@@ -2930,18 +2930,18 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
   .delete("/:id", ...withLabPermission({ template: ["delete"] }), async (c) => {
     const session = c.get("session");
     const member = c.get("member");
-    return await orgDb(member.organizationId).transaction(async (tx) => {
-      const id = await resolveMethodRouteId(
-        c.req.param("id"),
-        member.organizationId,
-        tx,
-      );
+    try {
+      return await orgDb(member.organizationId).transaction(async (tx) => {
+        const id = await resolveMethodRouteId(
+          c.req.param("id"),
+          member.organizationId,
+          tx,
+        );
 
-      if (id === null) {
-        return c.json({ error: "Método nao encontrado" }, 404);
-      }
+        if (id === null) {
+          return c.json({ error: "Método nao encontrado" }, 404);
+        }
 
-      try {
         const [existing] = await tx
           .select()
           .from(calibrationMethod)
@@ -2982,11 +2982,11 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
         await tx.delete(calibrationMethod).where(eq(calibrationMethod.id, id));
 
         return c.json({ success: true });
-      } catch (error) {
-        console.error("Error deleting method:", error);
-        return c.json({ error: "Erro ao excluir método" }, 500);
-      }
-    });
+      });
+    } catch (error) {
+      console.error("Error deleting method:", error);
+      return c.json({ error: "Erro ao excluir método" }, 500);
+    }
   })
 
   // =========================================================================
@@ -2997,18 +2997,18 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ template: ["read"] }),
     async (c) => {
       const member = c.get("member");
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const id = await resolveMethodRouteId(
-          c.req.param("id"),
-          member.organizationId,
-          tx,
-        );
+      try {
+        return await orgDb(member.organizationId).transaction(async (tx) => {
+          const id = await resolveMethodRouteId(
+            c.req.param("id"),
+            member.organizationId,
+            tx,
+          );
 
-        if (id === null) {
-          return c.json({ error: "Método nao encontrado" }, 404);
-        }
+          if (id === null) {
+            return c.json({ error: "Método nao encontrado" }, 404);
+          }
 
-        try {
           // Get the method to find its name
           const [method] = await tx
             .select({ name: calibrationMethod.name })
@@ -3045,11 +3045,11 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             .orderBy(desc(calibrationMethod.version));
 
           return c.json({ data: versions });
-        } catch (error) {
-          console.error("Error getting versions:", error);
-          return c.json({ error: "Erro ao buscar versoes" }, 500);
-        }
-      });
+        });
+      } catch (error) {
+        console.error("Error getting versions:", error);
+        return c.json({ error: "Erro ao buscar versoes" }, 500);
+      }
     },
   )
 
@@ -3061,18 +3061,18 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
     ...withLabPermission({ template: ["read"] }),
     async (c) => {
       const member = c.get("member");
-      return await orgDb(member.organizationId).transaction(async (tx) => {
-        const id = await resolveMethodRouteId(
-          c.req.param("id"),
-          member.organizationId,
-          tx,
-        );
+      try {
+        return await orgDb(member.organizationId).transaction(async (tx) => {
+          const id = await resolveMethodRouteId(
+            c.req.param("id"),
+            member.organizationId,
+            tx,
+          );
 
-        if (id === null) {
-          return c.json({ error: "Método nao encontrado" }, 404);
-        }
+          if (id === null) {
+            return c.json({ error: "Método nao encontrado" }, 404);
+          }
 
-        try {
           // Verify method belongs to org
           const [method] = await tx
             .select({ id: calibrationMethod.id })
@@ -3104,10 +3104,10 @@ export const methodsRouter = new Hono<{ Variables: AuthVariables }>()
             .orderBy(desc(methodAuditLog.performedAt));
 
           return c.json({ data: logs });
-        } catch (error) {
-          console.error("Error getting audit log:", error);
-          return c.json({ error: "Erro ao buscar historico" }, 500);
-        }
-      });
+        });
+      } catch (error) {
+        console.error("Error getting audit log:", error);
+        return c.json({ error: "Erro ao buscar historico" }, 500);
+      }
     },
   );

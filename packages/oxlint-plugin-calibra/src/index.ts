@@ -6,9 +6,10 @@
 // Each rule carries a LEGACY_BASELINE ratchet: existing violations can be
 // grandfathered with exact per-file counts while net-new ones fail. Only
 // no-json-error-body-in-routes, no-calibration-job-update-outside-owner,
-// no-process-env, no-raw-palette-color-classes and no-raw-db-in-routes carry a
-// non-empty baseline (legacy writers, remaining reads, raw palette colours in
-// feature code, routes still on the raw db). no-raw-db-in-routes also fails a
+// no-process-env, no-raw-palette-color-classes, no-raw-db-in-routes and
+// no-error-response-in-transaction carry a non-empty baseline (legacy writers,
+// remaining reads, raw palette colours in feature code, routes still on the raw
+// db, error responses returned before any write inside a transaction). no-raw-db-in-routes also fails a
 // count that is higher than the file's real number of uses (stale).
 import noApiImportInFrontend from "./rules/no-api-import-in-frontend.ts";
 import noHonoClientOutsideClientRuntime from "./rules/no-hono-client-outside-client-runtime.ts";
@@ -22,6 +23,7 @@ import noUnparsedPortalFetch from "./rules/no-unparsed-portal-fetch.ts";
 import noRouterCouplingInFeatures from "./rules/no-router-coupling-in-features.ts";
 import noRawPaletteColorClasses from "./rules/no-raw-palette-color-classes.ts";
 import noAppUiPrimitiveRecreation from "./rules/no-app-ui-primitive-recreation.ts";
+import noErrorResponseInTransaction from "./rules/no-error-response-in-transaction.ts";
 
 export default {
   meta: {
@@ -41,5 +43,6 @@ export default {
     "no-unparsed-portal-fetch": noUnparsedPortalFetch,
     "no-raw-palette-color-classes": noRawPaletteColorClasses,
     "no-app-ui-primitive-recreation": noAppUiPrimitiveRecreation,
+    "no-error-response-in-transaction": noErrorResponseInTransaction,
   },
 };

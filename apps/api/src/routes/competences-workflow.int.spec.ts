@@ -10,6 +10,7 @@
  *
  *   REQ-18D-COMP-1  Each transition moves the status exactly as the state machine
  *                   says and writes its audit row (DB-verified).
+ *   REQ-D4-1        a refused record rolls the whole assign-training back (roadmap 2 D4)
  *   REQ-18D-COMP-2  assign-training links only training records of the same lab AND
  *                   the same technician; lab B's training record id from lab A is a
  *                   400 and nothing is linked.
@@ -193,6 +194,40 @@ describe("competences router: workflow handlers (P2-18d)", () => {
       .from(trainingRecord)
       .where(eq(trainingRecord.id, foreignTrainingId));
     expect(untouched?.competenceId).toBeNull();
+  });
+
+  it("REQ-D4-1: a refused record rolls back the records linked before it (no partial commit)", async () => {
+    const { a, b } = await twoLabs();
+    const compId = await seedCompetence({
+      organizationId: a.orgId,
+      userId: a.userId,
+      status: "REQUESTED",
+    });
+    const ownTrainingId = await seedTraining({
+      organizationId: a.orgId,
+      userId: a.userId,
+    });
+    const foreignTrainingId = await seedTraining({
+      organizationId: b.orgId,
+      userId: b.userId,
+    });
+
+    // The first id links, the second is refused: the first must not stay linked.
+    const refused = await post(`/${compId}/assign-training`, {
+      trainingRecordIds: [ownTrainingId, foreignTrainingId],
+    });
+
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toMatchObject({
+      code: "training_record_mismatch",
+    });
+    expect((await competenceRow(compId)).status).toBe("REQUESTED");
+    const [own] = await db
+      .select({ competenceId: trainingRecord.competenceId })
+      .from(trainingRecord)
+      .where(eq(trainingRecord.id, ownTrainingId));
+    expect(own?.competenceId).toBeNull();
+    expect(await auditActions(compId)).not.toContain("assign_training");
   });
 
   it("REQ-18D-COMP-1: start-training then complete-training walk TRAINING_ASSIGNED to PENDING_EVALUATION", async () => {

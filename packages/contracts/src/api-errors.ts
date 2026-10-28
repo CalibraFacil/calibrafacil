@@ -62,6 +62,7 @@ export const API_ERROR_CODES = [
   "calibration_record_incomplete",
   "official_execution_failed",
   "technician_competence_missing",
+  "training_record_mismatch",
   "certificate_not_found",
   "certificate_not_ready",
 

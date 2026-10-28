@@ -2,7 +2,12 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { orgDb } from "../lib/org-db";
 import { afterCommitQueue } from "../lib/after-commit";
-import { domainErrorResponse, forbidden } from "../lib/domain-errors";
+import {
+  DomainError,
+  domainErrorResponse,
+  forbidden,
+  invalid,
+} from "../lib/domain-errors";
 import {
   personnelCompetence,
   personnelCompetenceAuditLog,
@@ -507,90 +512,106 @@ export const competencesRouter = new Hono<{ Variables: AuthVariables }>()
         return c.json({ error: "ID inválido" }, 400);
       }
 
-      return await orgDb(memberData.organizationId).transaction(async (tx) => {
-        const [existing] = await tx
-          .select()
-          .from(personnelCompetence)
-          .where(
-            and(
-              eq(personnelCompetence.id, id),
-              eq(personnelCompetence.organizationId, memberData.organizationId),
-              isNull(personnelCompetence.deletedAt),
-            ),
-          )
-          .limit(1);
+      try {
+        return await orgDb(memberData.organizationId).transaction(
+          async (tx) => {
+            const [existing] = await tx
+              .select()
+              .from(personnelCompetence)
+              .where(
+                and(
+                  eq(personnelCompetence.id, id),
+                  eq(
+                    personnelCompetence.organizationId,
+                    memberData.organizationId,
+                  ),
+                  isNull(personnelCompetence.deletedAt),
+                ),
+              )
+              .limit(1);
 
-        if (!existing) {
-          return c.json({ error: "Competência não encontrada" }, 404);
-        }
+            if (!existing) {
+              return c.json({ error: "Competência não encontrada" }, 404);
+            }
 
-        if (
-          existing.status !== "REQUESTED" &&
-          existing.status !== "PENDING_EVALUATION"
-        ) {
-          return c.json(
-            {
-              error:
-                "Treinamento só pode ser atribuído no status REQUESTED ou PENDING_EVALUATION",
-            },
-            400,
-          );
-        }
+            if (
+              existing.status !== "REQUESTED" &&
+              existing.status !== "PENDING_EVALUATION"
+            ) {
+              return c.json(
+                {
+                  error:
+                    "Treinamento só pode ser atribuído no status REQUESTED ou PENDING_EVALUATION",
+                },
+                400,
+              );
+            }
 
-        // userId is nullable since migration 0083. A live (non-soft-deleted)
-        // competence always has an owning user, but guard the type: a competence
-        // whose user was deleted cannot receive training assignments.
-        if (!existing.userId) {
-          return c.json({ error: "Competência sem usuário associado" }, 400);
-        }
+            // userId is nullable since migration 0083. A live (non-soft-deleted)
+            // competence always has an owning user, but guard the type: a competence
+            // whose user was deleted cannot receive training assignments.
+            if (!existing.userId) {
+              return c.json(
+                { error: "Competência sem usuário associado" },
+                400,
+              );
+            }
 
-        const existingUserId = existing.userId;
+            const existingUserId = existing.userId;
 
-        // Link training records to this competence (must be same org + same user)
-        for (const trId of input.trainingRecordIds) {
-          const result = await tx
-            .update(trainingRecord)
-            .set({ competenceId: id })
-            .where(
-              and(
-                eq(trainingRecord.id, trId),
-                eq(trainingRecord.organizationId, memberData.organizationId),
-                eq(trainingRecord.userId, existingUserId),
-                isNull(trainingRecord.deletedAt),
-              ),
-            )
-            .returning();
+            // Link training records to this competence (must be same org + same user)
+            for (const trId of input.trainingRecordIds) {
+              const result = await tx
+                .update(trainingRecord)
+                .set({ competenceId: id })
+                .where(
+                  and(
+                    eq(trainingRecord.id, trId),
+                    eq(
+                      trainingRecord.organizationId,
+                      memberData.organizationId,
+                    ),
+                    eq(trainingRecord.userId, existingUserId),
+                    isNull(trainingRecord.deletedAt),
+                  ),
+                )
+                .returning();
 
-          if (result.length === 0) {
-            return c.json(
-              {
-                error: `Registro de treinamento ${trId} não encontrado ou não pertence ao mesmo técnico`,
+              if (result.length === 0) {
+                // Thrown, not returned: a return would commit the records linked
+                // in the earlier iterations (roadmap 2 D4).
+                throw invalid(
+                  "training_record_mismatch",
+                  `Registro de treinamento ${trId} não encontrado ou não pertence ao mesmo técnico`,
+                );
+              }
+            }
+
+            const [updated] = await tx
+              .update(personnelCompetence)
+              .set({ status: "TRAINING_ASSIGNED" })
+              .where(eq(personnelCompetence.id, id))
+              .returning();
+
+            await tx.insert(personnelCompetenceAuditLog).values({
+              organizationId: memberData.organizationId,
+              competenceId: id,
+              action: "assign_training",
+              changes: {
+                status: { old: existing.status, new: "TRAINING_ASSIGNED" },
+                trainingRecordIds: input.trainingRecordIds,
               },
-              400,
-            );
-          }
-        }
+              performedBy: session.user.id,
+              ipAddress: clientIp(c),
+            });
 
-        const [updated] = await tx
-          .update(personnelCompetence)
-          .set({ status: "TRAINING_ASSIGNED" })
-          .where(eq(personnelCompetence.id, id))
-          .returning();
-
-        await tx.insert(personnelCompetenceAuditLog).values({
-          organizationId: memberData.organizationId,
-          competenceId: id,
-          action: "assign_training",
-          changes: {
-            status: { old: existing.status, new: "TRAINING_ASSIGNED" },
-            trainingRecordIds: input.trainingRecordIds,
+            return c.json(updated);
           },
-          performedBy: session.user.id,
-          ipAddress: clientIp(c),
-        });
-
-        return c.json(updated);
-      });
+        );
+      } catch (error) {
+        if (error instanceof DomainError) return domainErrorResponse(c, error);
+        throw error;
+      }
     },
   )
 
