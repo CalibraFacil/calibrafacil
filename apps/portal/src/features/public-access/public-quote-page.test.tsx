@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 
 import type { ReactNode } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -222,5 +228,32 @@ describe("PublicQuotePage (REQ-QPUB-042/043/044/045)", () => {
     renderPage();
 
     expect(await screen.findByText("Link indisponível")).toBeTruthy();
+  });
+
+  it("REQ-F4-1: a 503 or a network failure is a retryable error, never 'link expired', and the retry loads the quote", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ error: "down" }, { status: 503 }))
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce(jsonResponse(orderPayload()));
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderPage();
+
+    expect(
+      await screen.findByText("Não foi possível carregar o orçamento"),
+    ).toBeTruthy();
+    expect(screen.queryByText("Link indisponível")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Tentar novamente" }));
+    expect(
+      await screen.findByText("Não foi possível carregar o orçamento"),
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Tentar novamente" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(
+      await screen.findByRole("button", { name: "Aprovar orçamento" }),
+    ).toBeTruthy();
   });
 });

@@ -27,15 +27,39 @@ export type PublicOrderResult =
   /** 410 — the quote was already approved/rejected; the link answered its purpose. */
   | { kind: "responded" }
   /** 404 or malformed body — expired, revoked, or plain wrong link. */
-  | { kind: "invalid" };
+  | { kind: "invalid" }
+  /**
+   * The server or the network failed (5xx, 429, offline): the link may well be
+   * good, so the page offers a retry instead of calling it expired (roadmap 2 F4).
+   */
+  | { kind: "unavailable" };
+
+/** A status that says nothing about the link: try again later. */
+function isTransientStatus(status: number): boolean {
+  return status >= 500 || status === 429 || status === 408;
+}
+
+/** The response, or null when the request never got one (offline, DNS, CORS). */
+async function fetchOrNull(
+  path: string,
+  init?: RequestInit,
+): Promise<Response | null> {
+  try {
+    return await fetchPortalResponse(path, { credentials: "omit", init });
+  } catch {
+    return null;
+  }
+}
 
 export async function fetchPublicServiceOrder(
   token: string,
 ): Promise<PublicOrderResult> {
-  const response = await fetchPortalResponse(
+  const response = await fetchOrNull(
     `/api/public/service-order-access/${token}`,
-    { credentials: "omit" },
   );
+  if (!response || isTransientStatus(response.status)) {
+    return { kind: "unavailable" };
+  }
   if (response.status === 410) return { kind: "responded" };
   if (!response.ok) return { kind: "invalid" };
   const parsed = await readPortalJsonResult(
@@ -62,14 +86,18 @@ export function usePublicServiceOrder(token: string) {
 export type RedeemResult =
   | { kind: "ok"; token: string }
   | { kind: "invalid" }
-  | { kind: "throttled" };
+  | { kind: "throttled" }
+  /** The server or the network failed: the code was not judged. */
+  | { kind: "unavailable" };
 
 export async function redeemAccessCode(code: string): Promise<RedeemResult> {
-  const response = await fetchPortalResponse(
+  const response = await fetchOrNull(
     "/api/public/service-order-access/redeem-code",
-    { credentials: "omit", init: jsonInit("POST", { code }) },
+    jsonInit("POST", { code }),
   );
+  if (!response) return { kind: "unavailable" };
   if (response.status === 429) return { kind: "throttled" };
+  if (isTransientStatus(response.status)) return { kind: "unavailable" };
   if (!response.ok) return { kind: "invalid" };
   const parsed = await readPortalJsonResult(
     response,

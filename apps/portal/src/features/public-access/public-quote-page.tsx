@@ -88,6 +88,28 @@ export function PublicQuotePage({ token }: { token: string }) {
 
   const result = orderQuery.data;
 
+  if (result?.kind === "unavailable") {
+    return (
+      <PageShell>
+        <Panel className="relative overflow-hidden p-6 sm:p-8">
+          <BlueprintOverlay />
+          <div className="relative space-y-4">
+            <PanelHeader
+              title="Não foi possível carregar o orçamento"
+              description="O servidor não respondeu agora. O link continua válido: tente novamente em instantes."
+            />
+            <Button
+              onClick={() => void orderQuery.refetch()}
+              disabled={orderQuery.isFetching}
+            >
+              Tentar novamente
+            </Button>
+          </div>
+        </Panel>
+      </PageShell>
+    );
+  }
+
   if (!result || result.kind === "invalid") {
     return (
       <PageShell>

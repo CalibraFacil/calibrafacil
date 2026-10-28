@@ -74,6 +74,31 @@ describe("CodeEntryPage (REQ-QPUB-040/041)", () => {
     });
   });
 
+  it("REQ-F4-1: a 503 or a network failure says to try again, not that the code is invalid", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(jsonResponse({ error: "down" }, { status: 503 }))
+        .mockRejectedValueOnce(new TypeError("Failed to fetch")),
+    );
+
+    renderPage();
+    await typeAndSubmit("AAAA2222");
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Tente novamente em instantes",
+    );
+
+    await typeAndSubmit("AAAA2223");
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Tente novamente em instantes",
+    );
+    expect(screen.getByRole("alert").textContent).not.toContain(
+      "Código inválido",
+    );
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
   it("REQ-QPUB-041: a 404 shows the persistent 'código inválido' state", async () => {
     vi.stubGlobal(
       "fetch",
