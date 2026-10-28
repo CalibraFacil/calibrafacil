@@ -13,11 +13,16 @@ on:
     branches: [main]
     paths:
       - "packages/db/**"
+      # drizzle-kit and esbuild versions (bootstrap pushes the schema with them)
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
       - ".github/workflows/schema-upgrade.yml"
   push:
     branches: [main]
     paths:
       - "packages/db/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
   workflow_dispatch:
 
 permissions:
