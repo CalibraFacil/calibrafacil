@@ -22,18 +22,30 @@ export const SYNC_CHANGE_SEQ_PROTOCOL_VERSION = 3;
 /** Query parameter by which a desktop states the protocol it pulls with. */
 export const SYNC_PULL_PROTOCOL_PARAM = "protocolVersion";
 
-const CURSOR_PATTERN = /^v3\|(\d{1,20})\|(\d{1,19})$/;
+// An optional 4th part is the fingerprint of the scope the cursor was handed out
+// for (roadmap 2 E2): a pull under another scope must start over.
+const CURSOR_PATTERN = /^v3\|(\d{1,20})\|(\d{1,19})(?:\|([0-9a-z]{1,16}))?$/;
 const MAX_XID = 18_446_744_073_709_551_615n; // 2^64 - 1 (xid8)
 const MAX_SEQ = 9_223_372_036_854_775_807n; // 2^63 - 1 (bigserial)
 
 export type SyncChangePosition = { xid: bigint; seq: bigint };
 
-export function formatSyncChangeCursor(position: SyncChangePosition): string {
-  return `v3|${position.xid}|${position.seq}`;
+export function formatSyncChangeCursor(
+  position: SyncChangePosition,
+  /** The fingerprint of the caller's sync scope (units), when known. */
+  scope?: string,
+): string {
+  const base = `v3|${position.xid}|${position.seq}`;
+  return scope ? `${base}|${scope}` : base;
 }
 
 export type ParsedSyncChangeCursor =
-  | { kind: "position"; position: SyncChangePosition }
+  | {
+      kind: "position";
+      position: SyncChangePosition;
+      /** The scope fingerprint it was handed out for; absent on older cursors. */
+      scope?: string;
+    }
   /** Nothing stored: a desktop that never completed a bootstrap. */
   | { kind: "absent" }
   /** A cursor of another protocol (the `updatedAt` cursors of protocol 1 and 2). */
@@ -47,12 +59,14 @@ export function parseSyncChangeCursor(
   }
   const match = CURSOR_PATTERN.exec(cursor);
   if (!match) return { kind: "foreign" };
-  const [, rawXid, rawSeq] = match;
+  const [, rawXid, rawSeq, scope] = match;
   if (rawXid === undefined || rawSeq === undefined) return { kind: "foreign" };
   const xid = BigInt(rawXid);
   const seq = BigInt(rawSeq);
   if (xid > MAX_XID || seq > MAX_SEQ) return { kind: "foreign" };
-  return { kind: "position", position: { xid, seq } };
+  return scope
+    ? { kind: "position", position: { xid, seq }, scope }
+    : { kind: "position", position: { xid, seq } };
 }
 
 export function compareSyncChangePositions(
@@ -89,6 +103,11 @@ export const syncResyncReasonSchema = z.enum([
   "cursor_format",
   /** The entries after the cursor were purged (retention): the cursor is too old. */
   "cursor_purged",
+  /**
+   * The cursor was handed out for another scope (a unit gained or lost, another
+   * active unit): the rows of the new scope before the cursor were never sent.
+   */
+  "scope_changed",
 ]);
 
 /**
@@ -115,7 +134,9 @@ export function buildSyncResyncRequiredResponse(
     message:
       reason === "cursor_purged"
         ? "The desktop has been offline longer than the change log is kept: bootstrap again."
-        : "The desktop has no usable change cursor: bootstrap again.",
+        : reason === "scope_changed"
+          ? "The units this user may sync changed since the last pull: bootstrap again."
+          : "The desktop has no usable change cursor: bootstrap again.",
   };
 }
 

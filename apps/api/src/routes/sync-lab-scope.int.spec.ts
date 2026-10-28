@@ -670,8 +670,18 @@ describe("REQ-18I-PULL: a device reads only its own laboratory", () => {
       ),
     ).toBe(false);
 
-    // B's cursor is a position in the shared transaction order, not a key to B's rows.
-    const withForeignCursor = await pullAll(a, bStart);
+    // B's cursor now names B's scope (roadmap 2 E2), so A pulling with it is
+    // told to bootstrap again...
+    loginAs({ userId: a.userId, organizationId: a.orgId });
+    const refused = await syncRouter.request(
+      `/pull?protocolVersion=3&cursor=${encodeURIComponent(bStart)}`,
+      { headers: { "x-active-unit-id": String(a.unitId) } },
+    );
+    expect(refused.status).toBe(409);
+    // ...and without the scope part (an older cursor) it is a position in the
+    // shared transaction order, not a key to B's rows.
+    const bPosition = bStart.split("|").slice(0, 3).join("|");
+    const withForeignCursor = await pullAll(a, bPosition);
     const foreign = withForeignCursor.events.filter(
       (e) => e.entityType === "customer",
     );

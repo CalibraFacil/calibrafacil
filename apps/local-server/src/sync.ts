@@ -42,6 +42,21 @@ import { randomUUID } from "node:crypto";
 import { uploadAttachmentsBeforePush } from "./attachment-upload";
 import type { LocalServerConfig } from "./bootstrap";
 
+/**
+ * The cloud refused the desktop's session (HTTP 401): it expired or was revoked
+ * (roadmap 2 E2). The sync stops in `auth_required` until the user signs in
+ * again; queued changes are not marked failed (they are not the problem).
+ */
+export class CloudAuthRequiredError extends Error {
+  constructor() {
+    super("Sessão expirada: entre novamente para sincronizar.");
+    this.name = "CloudAuthRequiredError";
+  }
+}
+
+function throwIfAuthRequired(response: Response) {
+  if (response.status === 401) throw new CloudAuthRequiredError();
+}
 export type LocalSyncRuntime = {
   getStatus(): SyncStatusSnapshot;
   runInitialSync(): Promise<SyncStatusSnapshot>;
@@ -192,7 +207,8 @@ export function createLocalSyncRuntime(
     } catch (error) {
       status = {
         ...withLocalCounts(config, database, status),
-        state: "error",
+        state:
+          error instanceof CloudAuthRequiredError ? "auth_required" : "error",
         activeRunId: null,
         lastRunId: runId,
         lastError: error instanceof Error ? error.message : "Sync failed",
@@ -275,7 +291,8 @@ export function createLocalSyncRuntime(
     } catch (error) {
       status = {
         ...withLocalCounts(config, database, status),
-        state: "error",
+        state:
+          error instanceof CloudAuthRequiredError ? "auth_required" : "error",
         activeRunId: null,
         lastRunId: runId,
         lastError: error instanceof Error ? error.message : "Sync failed",
@@ -384,6 +401,7 @@ export async function notifyCloudConflictResolution(
       body: JSON.stringify({ status, ...(reason ? { reason } : {}) }),
     });
 
+    throwIfAuthRequired(response);
     if (!response.ok) {
       return {
         state: "failed",
@@ -445,6 +463,7 @@ async function bootstrapFromCloud(
       discardedStaleToken = true;
       continue;
     }
+    throwIfAuthRequired(response);
     if (!response.ok) {
       throw new Error(`Cloud bootstrap failed with HTTP ${response.status}`);
     }
@@ -548,6 +567,7 @@ async function pullCloudChanges(
       if (answer.success) throw new ResyncRequiredError(answer.data.reason);
     }
 
+    throwIfAuthRequired(response);
     if (!response.ok) {
       throw new Error(`Cloud pull failed with HTTP ${response.status}`);
     }
@@ -799,6 +819,7 @@ async function pushEventBatch(
     }
   }
 
+  throwIfAuthRequired(response);
   if (!response.ok) {
     if (POISON_PUSH_STATUSES.includes(response.status)) {
       await isolatePoisonEvents(

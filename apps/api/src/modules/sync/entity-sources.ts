@@ -464,3 +464,26 @@ export function syncEntitySource(
   if (!source) throw new Error(`no sync source for ${entityType}`);
   return source;
 }
+
+/**
+ * A short fingerprint of what a sync scope covers (roadmap 2 E2): the
+ * organization, the unit selection and the units it may reach. It rides on the
+ * pull cursor, so a cursor handed out under another scope (a unit gained or
+ * lost, another active unit) is refused and the desktop bootstraps again
+ * instead of never receiving the rows it newly may see.
+ */
+export function syncScopeFingerprint(scope: SyncScope): string {
+  const units = [...scope.accessibleUnitIds].sort((a, b) => a - b).join(",");
+  const text = [
+    scope.organizationId,
+    scope.selectedUnitScope,
+    scope.selectedUnitScope === "unit" ? String(scope.activeUnitId ?? "") : "",
+    units,
+  ].join("|");
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
+}

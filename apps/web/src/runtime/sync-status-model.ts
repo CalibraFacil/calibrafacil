@@ -80,6 +80,18 @@ export function getDataSourceIndicatorModel(
     }
   }
 
+  // The cloud refused the session (roadmap 2 E2): retrying will not help.
+  if (sync.state === 'auth_required') {
+    return {
+      label: 'Entre novamente',
+      title: 'Sessão expirada',
+      description:
+        'A nuvem recusou a sessão deste computador. Entre novamente para voltar a sincronizar; as alterações locais continuam guardadas.',
+      variant: 'destructive',
+      dotClassName: 'bg-destructive',
+    }
+  }
+
   if (sync.conflictCount > 0 || sync.state === 'conflict') {
     return {
       label: 'Conflitos',

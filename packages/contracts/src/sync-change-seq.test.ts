@@ -150,3 +150,21 @@ describe("the commit-ordered pull cursor (protocol 3)", () => {
     ).toBe(true);
   });
 });
+
+describe("the scope part of the cursor (roadmap 2 E2)", () => {
+  it("round-trips a scope fingerprint and still reads a cursor without one", () => {
+    const position = { xid: 42n, seq: 7n };
+    const scoped = formatSyncChangeCursor(position, "k3x9");
+    expect(scoped).toBe("v3|42|7|k3x9");
+    expect(parseSyncChangeCursor(scoped)).toEqual({
+      kind: "position",
+      position,
+      scope: "k3x9",
+    });
+    expect(parseSyncChangeCursor("v3|42|7")).toEqual({
+      kind: "position",
+      position,
+    });
+    expect(parseSyncChangeCursor("v3|42|7|NOT-A-HASH").kind).toBe("foreign");
+  });
+});

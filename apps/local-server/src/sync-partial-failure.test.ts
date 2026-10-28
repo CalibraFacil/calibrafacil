@@ -356,6 +356,40 @@ describe("local sync partial-failure / conflict reconciliation", () => {
     database.close();
   });
 
+  it("REQ-E2-2 (roadmap 2 E2): a 401 from the cloud stops the sync in auth_required and leaves the queued change pending", async () => {
+    const dbPath = createTempDatabasePath();
+    const database = openLocalDatabase({ filePath: dbPath });
+    seedTenant(database);
+    const queued = seedCustomer(database, "Cliente Pendente");
+
+    const app = createLocalServer(createConfig(dbPath), database, {
+      fetch: async (input) => {
+        const url = String(input);
+        if (url === "https://api.example.test/api/sync/push") {
+          return new Response("Unauthorized", { status: 401 });
+        }
+        if (url === "https://api.example.test/api/sync/bootstrap") {
+          return bootstrapResponse();
+        }
+        if (url.startsWith("https://api.example.test/api/sync/pull")) {
+          return emptyPullResponse();
+        }
+        throw new Error(`Unexpected URL ${url}`);
+      },
+    });
+
+    await app.request("/api/local/sync/retry", { method: "POST" });
+
+    const statusBody: unknown = await (
+      await app.request("/api/local/sync/status")
+    ).json();
+    expect(statusBody).toMatchObject({ state: "auth_required" });
+    // Not the change's fault: it is not marked failed and keeps its attempts.
+    expect(readOutboxStatus(database, queued.eventId)).toBe("pending");
+
+    database.close();
+  });
+
   // GAP 2 [HIGH RISK]: resolve -> re-push round trip. resolved => retried & synced.
   it("re-pushes a resolved conflict so the retried event converges to synced", async () => {
     const dbPath = createTempDatabasePath();

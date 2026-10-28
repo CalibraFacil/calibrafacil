@@ -12,6 +12,7 @@ import {
   type LocalServerBootstrapConfig,
 } from "@calibra-facil/contracts";
 
+import { installDeviceId } from "./device-id";
 const DEFAULT_LOCAL_HOST = "127.0.0.1";
 const DEFAULT_LOCAL_PORT = 4317;
 const LOCAL_PORT_ATTEMPTS = 20;
@@ -312,7 +313,9 @@ export class LocalServerManager {
       localServerVersion: app.getVersion(),
       dbPath: process.env.CALIBRA_LOCAL_DB_PATH ?? command.dbPath,
       storageRoot: process.env.CALIBRA_LOCAL_STORAGE_DIR ?? command.storageRoot,
-      deviceId: process.env.CALIBRA_DEVICE_ID ?? "local-dev-device",
+      deviceId:
+        process.env.CALIBRA_DEVICE_ID ??
+        installDeviceId(app.getPath("userData")),
       tenantId: process.env.CALIBRA_TENANT_ID ?? null,
       dataRoot: command.dataRoot,
       legacyDbPath: command.dbPath,
