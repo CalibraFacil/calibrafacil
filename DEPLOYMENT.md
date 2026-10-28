@@ -224,6 +224,74 @@ SMTP: set `RESEND_API_KEY` and leave `SMTP_HOST` empty.
 
 ## Upgrading to this release
 
+### From 0.3.x to 0.4.0
+
+Take a backup first (`docs/operations/backup-restore.md`). The API's start-up (`init` with Docker
+Compose, `db:bootstrap` elsewhere) applies migrations 0125 to 0139 by itself. They are short, except
+0138, which rewrites the `reference_standard` value columns from `real` to `double precision` (a brief
+lock on a small table). None needs a manual step; what they change is below.
+
+**Check before you deploy.**
+
+- **Session time zone.** Every connection now runs in UTC, and the API and worker refuse to start
+  when the database or the role sets another `TimeZone` (`ALTER DATABASE/ROLE ... SET TimeZone`).
+  Remove that setting or set it to `UTC`.
+- **Customer-configured URLs** (public-API webhooks, the generic HTTP ERP integration) must be
+  `https://` in production and must not resolve to private, loopback or link-local addresses.
+  `OUTBOUND_ALLOW_INSECURE_HTTP=true` allows plain http, and `OUTBOUND_ALLOW_PRIVATE_HOSTS` lists the
+  private hosts or CIDR ranges an integration on your own network may reach. Webhooks are now delivered by the worker, with retries.
+- **Evidence is append-only by privilege (migration 0130).** `calibra_app` can no longer `UPDATE`,
+  `DELETE` or `TRUNCATE` the audit and event logs, the issued-certificate snapshots or
+  `certificate_input`. A script of yours that edits them as the application role now fails; the
+  owner-only procedure is [`docs/operations/evidence-immutability.md`](./docs/operations/evidence-immutability.md).
+- **Database timeouts.** The application connections get `statement_timeout` and
+  `idle_in_transaction_session_timeout`. With Docker Compose they are the `DB_APP_*_TIMEOUT_MS` you
+  already have (2 minutes and 1 minute by default). Elsewhere set `DATABASE_STATEMENT_TIMEOUT_MS` and
+  `DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS` (default 60000 each; `0` turns one off).
+- **Signing credentials** are now stored as envelopes under a key id. The ones stored before keep
+  working; `reencrypt-signing-credentials` moves them to the new format (optional, see
+  _Signing certificate custody_). `SIGNING_MASTER_KEY_ID` defaults to `k1`; set it only when you
+  rotate the key.
+- **Metrics.** `/api/metrics` (Prometheus text) answers only with `Authorization: Bearer
+$METRICS_TOKEN`; without `METRICS_TOKEN` it is off. `/api/health` now reports stale or failing
+  scheduled jobs and dead-lettered queue rows.
+
+**What laboratories and integrations will notice.**
+
+- **Approval and separation of duties.** Whoever executed, created or submitted a calibration may no
+  longer approve it. Laboratories that are not accredited keep the exemption for a one-person team;
+  accredited laboratories do not (an external authorized reviewer approves). The standards are judged
+  again at approval, and an accredited laboratory's accreditation seal is enforced from the scope
+  check by default.
+- **Failed certificate renders** now land in the new job status `RENDER_FAILED` instead of
+  `REJECTED`: the approval stands, and a manager clicks "Reemitir certificado" or rejects the job back
+  to rework. **Integrations that read job statuses** (public API v1/v2, webhooks) must accept
+  `RENDER_FAILED`. Jobs that failed before the upgrade stay `REJECTED`.
+- **Certificate lifecycle.** An amendment supersedes the original when it is issued, and a certificate
+  can be withdrawn; the public API v2, the portal and the verification page report `ISSUED`,
+  `SUPERSEDED` or `WITHDRAWN`.
+- **API keys.** New keys expire (365 days by default, at most 730) and can be restricted to client
+  addresses. Existing keys keep no expiry. **A key now acts with its creator's current role in the
+  laboratory: a key created by someone who left the laboratory, or lost the role, stops
+  authenticating (401).** Create a replacement under an active administrator before you upgrade.
+- **Error bodies.** Validation failures and other errors answer `{ error, code }` (a stable `code`);
+  integrations that parsed the old validation-error shape must read this one.
+- **Sensitive actions** (approving a certificate, managing signing certificates and API keys) ask
+  for a recent sign-in.
+- **Uploaded logos and signatures** must be PNG, JPEG or WebP, checked by their bytes; an SVG is
+  refused.
+- **Public verification** masks the signer's CPF.
+- **Magic links** sent before the upgrade no longer work (Better Auth 1.7.13, a critical advisory):
+  users ask for a new one.
+- **Measurement values** are shown with the decimal comma in the app and the portal. Certificates
+  already issued are not touched.
+- **Desktop.** Update the desktop app. Older builds keep syncing, but this cloud orders their changes
+  per record with an expected version, makes a desktop bootstrap again when the units its user may
+  sync change, asks the user to sign in again on a 401 instead of retrying, and records the device's
+  clock skew in the audit trail.
+
+The API edge and Docker Compose changes below (D1, G1, G3) are part of 0.4.0 too.
+
 **API edges (roadmap 2, D1).**
 
 - **Custom portal domains** no longer get credentialed CORS. Serve the portal on its own domain
@@ -254,6 +322,8 @@ add its origin to `deploy/Caddyfile`) and answers 404 for `/api/cron/*`; `init` 
 `statement_timeout` and a 1-minute `idle_in_transaction_session_timeout` on the `calibra_app` role
 (`DB_APP_*_TIMEOUT_MS` in `.env` change or disable them). Scheduled backups are opt-in:
 [`docs/operations/backup-restore.md`](./docs/operations/backup-restore.md).
+
+### From before 0.3.0
 
 Configuration is now validated when each process starts (see [Configuration](#configuration)):
 **the API, the worker and the local server refuse to start, with one message listing every
@@ -336,7 +406,7 @@ configured. They now take effect on every worker path (and the new optional
 `SIGNING_TSA_TIMEOUT_MS` with them). **If `SIGNING_TSA_URL` is set in your environment, the
 certificates issued after this upgrade are time-stamped, and a certificate is not issued while the
 authority is unreachable** (the job stays `GENERATING_PDF` while the queue retries, then is
-`REJECTED`; see _Certificate time-stamping_). Check that the authority and its credentials work, or
+`RENDER_FAILED`, from 0.4.0 on; see _Certificate time-stamping_). Check that the authority and its credentials work, or
 unset `SIGNING_TSA_URL`, **before** you deploy. With it unset nothing changes. Docker Compose now
 passes these variables from `deploy/.env` to the API and the worker (all optional).
 

@@ -51,6 +51,10 @@ x-app-env: &app-env
   DATABASE_URL: postgres://calibra_app:${CALIBRA_APP_PASSWORD:?run ./setup.sh first (or add CALIBRA_APP_PASSWORD to .env, see DEPLOYMENT.md)}@postgres:5432/calibra
   DATABASE_OWNER_URL: postgres://calibra:${POSTGRES_PASSWORD:?run ./setup.sh first}@postgres:5432/calibra
   DATABASE_RLS_MODE: enforced
+  # The application connections' timeouts: the same values `init` sets on the
+  # calibra_app role (a connection setting would otherwise override the role's).
+  DATABASE_STATEMENT_TIMEOUT_MS: ${DB_APP_STATEMENT_TIMEOUT_MS:-120000}
+  DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS: ${DB_APP_IDLE_IN_TRANSACTION_TIMEOUT_MS:-60000}
   API_URL: ${APP_URL:?set APP_URL in .env}
   APP_URL: ${APP_URL}
   PORTAL_APP_URL: ${PORTAL_URL:?set PORTAL_URL in .env}
