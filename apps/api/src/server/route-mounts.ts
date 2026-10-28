@@ -68,6 +68,12 @@ import { verifyRouter } from "../routes/verify";
 import { webhooksRouter } from "../routes/webhooks";
 import type { Env } from "./env";
 
+import { readCronSuccesses, readHealthAlerts } from "../lib/health-alerts";
+import {
+  metricsAuthorized,
+  readQueueForMetrics,
+  renderMetrics,
+} from "./observability";
 export function mountApiRoutes(
   app: Hono<{ Bindings: Env }>,
 ): Hono<{ Bindings: Env }> {
@@ -91,7 +97,30 @@ export function mountApiRoutes(
       // static liveness response.
       .get("/api/health", async (c) => {
         const report = await runApiHealthCheck({ ...c.env });
-        return c.json(report, report.status === "ok" ? 200 : 503);
+        if (report.status !== "ok") return c.json(report, 503);
+        // Readiness holds; what needs an operator (a stale or failing cron,
+        // dead letters) is reported here and does not take the API out of
+        // service. /api/health/alerts is the 503 an uptime monitor watches.
+        const alerts = await readHealthAlerts().catch(() => null);
+        return c.json({
+          ...report,
+          status: alerts && !alerts.ok ? "degraded" : "ok",
+          alerts,
+        });
+      })
+      .get("/api/health/alerts", async (c) => {
+        const alerts = await readHealthAlerts();
+        return c.json(alerts, alerts.ok ? 200 : 503);
+      })
+      .get("/api/metrics", async (c) => {
+        if (!metricsAuthorized(c)) return c.notFound();
+        const [queue, crons] = await Promise.all([
+          readQueueForMetrics(),
+          readCronSuccesses(),
+        ]);
+        return c.text(renderMetrics({ queue, crons, now: new Date() }), 200, {
+          "Content-Type": "text/plain; version=0.0.4",
+        });
       })
       .route("/api/customers", customersRouter)
       .route("/api/customer-groups", customerGroupsRouter)

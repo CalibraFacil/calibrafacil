@@ -190,6 +190,29 @@ setup, set `max-size`/`max-file` on the `json-file` driver (or use the `local` d
 cannot fill the disk. The browser apps send nothing off the device: a route error is written to
 the browser console only.
 
+### Health, alerts and metrics
+
+- **`GET /api/health`** is the readiness probe. It answers 503 when Postgres, the object store
+  or the queue can't be reached. When it is ready but something needs an operator, its
+  `status` is `degraded` and `alerts` lists the problems:
+  - a scheduled job that stopped succeeding (`staleCrons`: last success older than twice its
+    interval plus ten minutes);
+  - a job that failed three times in a row (`failingCrons`);
+  - background jobs that ran out of attempts (`deadLetters`).
+- **`GET /api/health/alerts`** answers 503 while any alert is open. Point an uptime monitor at
+  it.
+- **`GET /api/metrics`** serves Prometheus text to a scraper sending
+  `Authorization: Bearer $METRICS_TOKEN`, and answers 404 when `METRICS_TOKEN` is unset. It
+  exposes:
+  - requests by method and status class;
+  - a latency histogram;
+  - queue jobs by status;
+  - seconds since each scheduled job last succeeded.
+- **Access log.** Every API response carries `X-Request-Id`: the caller's own, when it is a
+  plain token, otherwise a new one. The API writes one access-log line per request on stdout:
+  `{"level":"info","event":"http_request","requestId":...,"method":...,"path":...,"status":...,"durationMs":...}`.
+  The path is logged without its query string.
+
 ### Using hosted services instead
 
 Each dependency can move out of the compose file: delete its service and point the variables

@@ -73,6 +73,8 @@ x-app-env: &app-env
   # the client's address for the audit trail and the rate limits is the entry it
   # appended. Raise it if another proxy (a load balancer) stands in front of Caddy.
   TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-1}
+  # Bearer token of GET /api/metrics (Prometheus); unset: the endpoint answers 404.
+  METRICS_TOKEN: ${METRICS_TOKEN:-}
   CRON_SECRET: ${CRON_SECRET:?run ./setup.sh first}
   SIGNING_MASTER_KEY: ${SIGNING_MASTER_KEY:?run ./setup.sh first}
   SIGNING_MASTER_KEY_ID: ${SIGNING_MASTER_KEY_ID:-}

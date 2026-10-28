@@ -45,6 +45,13 @@ export const observabilityGroup = defineGroup({
         "Release label of the error log lines (the commit or the image tag).",
       hidden: true,
     }),
+    metricsToken: text({
+      env: "METRICS_TOKEN",
+      description:
+        "Bearer token of GET /api/metrics (Prometheus text format: requests, latency, queue depth, dead letters, cron age). Unset: the endpoint answers 404.",
+      secret: true,
+      example: example.commented("a-long-random-token"),
+    }),
   },
   derive: (values) => ({
     /** `environment` label of the error log lines: NODE_ENV. */
