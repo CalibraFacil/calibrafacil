@@ -291,7 +291,7 @@ describe("signing with enveloped and legacy credentials (REQ-B4A-1)", () => {
     }
   }, 120_000);
 
-  it("fails closed when the credential's KEK was dropped from the ring: the job is REJECTED naming the key, nothing issued unsigned", async () => {
+  it("fails closed when the credential's KEK was dropped from the ring: the job is RENDER_FAILED naming the key, nothing issued unsigned", async () => {
     const { env, stored } = makeEnv({
       SIGNING_MASTER_KEY: KEY_K2,
       SIGNING_MASTER_KEY_ID: "k2",
@@ -308,7 +308,7 @@ describe("signing with enveloped and legacy credentials (REQ-B4A-1)", () => {
     ).rejects.toThrow(/assinatura digital/);
 
     const after = await jobRow(job.jobId);
-    expect(after.status).toBe("REJECTED");
+    expect(after.status).toBe("RENDER_FAILED");
     expect(String(after.rejectionReason)).toMatch(
       /Falha na assinatura digital/,
     );
@@ -317,7 +317,7 @@ describe("signing with enveloped and legacy credentials (REQ-B4A-1)", () => {
     expect(stored.size).toBe(0);
   }, 60_000);
 
-  it("fails closed when the record is bound to another unit (AAD mismatch): REJECTED, nothing issued unsigned", async () => {
+  it("fails closed when the record is bound to another unit (AAD mismatch): RENDER_FAILED, nothing issued unsigned", async () => {
     const { env, stored } = makeEnv({
       SIGNING_MASTER_KEY: KEY_K1,
       SIGNING_MASTER_KEY_ID: "k1",
@@ -334,7 +334,7 @@ describe("signing with enveloped and legacy credentials (REQ-B4A-1)", () => {
     ).rejects.toThrow(/assinatura digital/);
 
     const after = await jobRow(job.jobId);
-    expect(after.status).toBe("REJECTED");
+    expect(after.status).toBe("RENDER_FAILED");
     expect(after.certificateUrl).toBeNull();
     expect(stored.size).toBe(0);
   }, 60_000);
