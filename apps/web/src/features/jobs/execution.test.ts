@@ -61,6 +61,7 @@ import {
   getAssetIndicatorPosition,
   getCircularEccentricityLoadPositions,
   getEccentricityIndicatorVariant,
+  executionResultsSource,
   getDisplayedFormulaResults,
   getOfficialCompiledExecution,
   isExecutionEditable,
@@ -607,6 +608,42 @@ describe('job execution feature model', () => {
         jobResults: job.results,
       }).double_load?.value,
     ).toBe(20)
+  })
+
+  it('REQ-F1-4: with unsaved edits the screen shows the local preview, never the stale official result', () => {
+    const results = {
+      __compiledExecution: { diagnostics: [] },
+      double_load: 20,
+    }
+    const formulas = [
+      { outputKey: 'double_load', expression: 'load * 2', label: 'Dobro' },
+    ] as const satisfies ReadonlyArray<{
+      outputKey: string
+      expression: string
+      label: string
+    }>
+    const localPreview = { double_load: { value: 30, displayValue: '30' } }
+    const input = {
+      activeCalculationFormulas: formulas.map((formula) => ({ ...formula })),
+      assetBaseMeasurementUnit: null,
+      formulaResults: localPreview,
+      jobResults: results,
+    }
+
+    expect(getDisplayedFormulaResults(input).double_load?.value).toBe(20)
+    expect(
+      getDisplayedFormulaResults({ ...input, unsavedEdits: true }).double_load
+        ?.value,
+    ).toBe(30)
+    expect(
+      executionResultsSource({ jobResults: results, unsavedEdits: false }),
+    ).toBe('official')
+    expect(
+      executionResultsSource({ jobResults: results, unsavedEdits: true }),
+    ).toBe('unsaved_preview')
+    expect(
+      executionResultsSource({ jobResults: null, unsavedEdits: true }),
+    ).toBe('preview')
   })
 
   it('builds certified value and mass composition options outside the route', () => {

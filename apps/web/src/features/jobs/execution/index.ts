@@ -20,7 +20,9 @@ export {
   filterActiveCalculationItems,
   getCalculationFormulas,
   getCalculationValidations,
+  executionResultsSource,
   getDisplayedFormulaResults,
+  type ExecutionResultsSource,
 } from './formulas'
 export { getOfficialCompiledExecution } from './official-execution'
 export {
