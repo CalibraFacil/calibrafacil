@@ -77,7 +77,9 @@ function findBuiltBinary() {
   const out = path.join(root, "apps/desktop/out");
   const candidates = [
     path.join(out, "linux-unpacked/calibrafacil"),
-    path.join(out, "win-unpacked/CalibraFácil.exe"),
+    // electron-builder names the Windows binary after `executableName`
+    // (apps/desktop/electron-builder.yml), not the accented productName.
+    path.join(out, "win-unpacked/calibrafacil.exe"),
     path.join(out, "mac-arm64/CalibraFácil.app/Contents/MacOS/CalibraFácil"),
     path.join(out, "mac/CalibraFácil.app/Contents/MacOS/CalibraFácil"),
   ];
