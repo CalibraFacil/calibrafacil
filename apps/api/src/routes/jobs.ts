@@ -141,6 +141,7 @@ import {
   selfApprovalBlocked,
 } from "../modules/jobs/approval-gates";
 import { allowedJobActions } from "../modules/jobs/allowed-actions";
+import { requireFreshSession } from "../middleware/fresh-session";
 // Aliases for multiple user joins
 const approverUser = alias(user, "approverUser");
 const rejectorUser = alias(user, "rejectorUser");
@@ -1095,6 +1096,7 @@ export const jobsRouter = new Hono<{
   .post(
     "/:id/approve",
     ...withLabPermission({ calibration: ["approve"] }),
+    requireFreshSession,
     zValidator("json", ApproveJobSchema),
     async (c) => {
       const memberData = c.get("member");

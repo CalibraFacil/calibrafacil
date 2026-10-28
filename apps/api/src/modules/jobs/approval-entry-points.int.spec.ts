@@ -1076,7 +1076,7 @@ describe("approval policy — public API (key creator is the approver)", () => {
     });
   });
 
-  it("REQ-APPROVAL-008: a key created by a user without calibration:approve (technician) is refused 403 approval_requires_signatory", async () => {
+  it("REQ-APPROVAL-008: a key whose creator is (now) a technician is refused before it can approve", async () => {
     await addMember("user-tech", "technician");
     const jobId = await seedReviewJob(fixture);
     const key = await seedKeyFor("user-tech");
@@ -1088,9 +1088,10 @@ describe("approval policy — public API (key creator is the approver)", () => {
       {},
     );
 
-    expect(res.status).toBe(403);
-    const body: { error: { code: string } } = await res.json();
-    expect(body.error.code).toBe("approval_requires_signatory");
+    // Roadmap 2 D3: a key acts for its creator's LIVE role, and only an owner or
+    // admin may hold one, so the key is refused at authentication (401), before
+    // the approval rule (which would answer 403 approval_requires_signatory).
+    expect(res.status).toBe(401);
     expect(await readJob(jobId)).toMatchObject({
       status: "REVIEW",
       approvedBy: null,
@@ -1111,7 +1112,8 @@ describe("approval policy — public API (key creator is the approver)", () => {
       {},
     );
 
-    expect(res.status).toBe(403);
+    // Refused at authentication since roadmap 2 D3 (the creator's live role).
+    expect(res.status).toBe(401);
     expect((await readJob(jobId)).status).toBe("REVIEW");
   });
 

@@ -60,11 +60,20 @@ vi.mock("../lib/storage", () => ({
 
 // ---------------------------------------------------------------------------
 // Multipart helper: a tiny PNG-typed file for the logo field.
-// The handler only validates content-type + size, never decodes pixels.
+// The handler checks the declared type, the size and the file's signature (the
+// PNG magic bytes; roadmap 2 D3), never decodes pixels.
 // ---------------------------------------------------------------------------
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+function pngBytes(length: number) {
+  const bytes = new Uint8Array(Math.max(length, PNG_SIGNATURE.length));
+  bytes.set(PNG_SIGNATURE);
+  return bytes;
+}
+
 function makeLogoFormData(contentType = "image/png", bytes = 64): FormData {
   const form = new FormData();
-  const file = new File([new Uint8Array(bytes)], "logo.png", {
+  const file = new File([pngBytes(bytes)], "logo.png", {
     type: contentType,
   });
   form.append("logo", file);
@@ -204,6 +213,35 @@ describe("organizationMediaRouter -- real DB + real RBAC middleware", () => {
   // =========================================================================
   // REQ-OM-003: unauthenticated upload -> 401 (requireLabAuth fires first)
   // =========================================================================
+  it("REQ-OM-005 (roadmap 2 D3): an SVG, even declared as image/png, is refused and nothing is stored", async () => {
+    const org = await seedOrg({ orgId: "org-om-005", role: "admin" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const form = new FormData();
+    form.append(
+      "logo",
+      new File(
+        [
+          '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
+        ],
+        "logo.png",
+        { type: "image/png" },
+      ),
+    );
+
+    const res = await organizationMediaRouter.request("/logo", {
+      method: "POST",
+      headers: unitHeader(org.unitId),
+      body: form,
+    });
+
+    expect(res.status).toBe(400);
+    const [row] = await db
+      .select({ logo: organization.logo })
+      .from(organization)
+      .where(eq(organization.id, org.orgId));
+    expect(row?.logo ?? null).toBeNull();
+  });
+
   it("REQ-OM-003: POST /logo without authentication -> 401", async () => {
     logout();
     const res = await organizationMediaRouter.request("/logo", {

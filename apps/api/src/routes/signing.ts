@@ -38,6 +38,7 @@ import {
 } from "../lib/unit-operational-settings";
 import { clientIp } from "../lib/client-ip";
 
+import { requireFreshSession } from "../middleware/fresh-session";
 // =============================================================================
 // VALIDATION SCHEMAS
 // =============================================================================
@@ -172,6 +173,7 @@ export const signingRouter = new Hono<{
   .patch(
     "/unsigned-issuance",
     ...requireLabProtected,
+    requireFreshSession,
     requireOrgType("LAB"),
     requirePermission({ settings: ["update"] }),
     zValidator("json", UnsignedIssuanceSettingSchema),
@@ -303,6 +305,7 @@ export const signingRouter = new Hono<{
   .patch(
     "/policy",
     ...requireLabProtected,
+    requireFreshSession,
     requireOrgType("LAB"),
     zValidator("json", z.object({ requireSignature: z.boolean() })),
     async (c) => {
@@ -386,6 +389,7 @@ export const signingRouter = new Hono<{
   .post(
     "/certificates",
     ...requireLabProtected,
+    requireFreshSession,
     requireOrgType("LAB"),
     zValidator("json", UploadCertificateSchema),
     async (c) => {
@@ -639,6 +643,7 @@ export const signingRouter = new Hono<{
   .post(
     "/certificates/:id/set-default",
     ...requireLabProtected,
+    requireFreshSession,
     requireOrgType("LAB"),
     async (c) => {
       return orgDb(c.get("member").organizationId).transaction(async (o) => {
@@ -772,6 +777,7 @@ export const signingRouter = new Hono<{
   .delete(
     "/certificates/:id",
     ...requireLabProtected,
+    requireFreshSession,
     requireOrgType("LAB"),
     zValidator(
       "json",

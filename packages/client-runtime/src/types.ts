@@ -2335,6 +2335,10 @@ export type ApiKeySummary = {
   keyPrefix: string;
   scopes: string[];
   lastUsedAt: string | Date | null;
+  /** After this instant the key no longer works (null: a key made before expiry existed). */
+  expiresAt: string | Date | null;
+  /** Client addresses or CIDR ranges the key is accepted from (null: any). */
+  allowedIps: string[] | null;
   createdAt: string | Date;
   revokedAt: string | Date | null;
 };
@@ -2346,11 +2350,17 @@ export type ApiKeysListResponse = {
 export type CreateApiKeyInput = {
   name: string;
   scopes?: string[];
+  /** 1 to 730; default 365. */
+  expiresInDays?: number;
+  allowedIps?: string[];
 };
 
 export type ApiKeySecretResponse = {
   secret: string;
-  key: Pick<ApiKeySummary, "id" | "name" | "keyPrefix" | "scopes">;
+  key: Pick<
+    ApiKeySummary,
+    "id" | "name" | "keyPrefix" | "scopes" | "expiresAt" | "allowedIps"
+  >;
 };
 
 export interface ApiKeysApi {

@@ -24,6 +24,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { insertJobs } from "../../test/integration/job-fixtures";
 import { truncateAll } from "../../test/integration/db";
+import { seedExtraMember } from "../../test/integration/tenant-refs";
 import { openAppRoleDb } from "../../test/integration/rls";
 import {
   seedOrg,
@@ -218,6 +219,13 @@ function lifecycleByNumber(rows: Record<string, unknown>[]) {
 
 async function seedApiKey(world: Seeded) {
   const { key, keyPrefix, keyHash } = createApiKeySecret();
+  // A key acts with its creator's live role in the laboratory (roadmap 2 D3):
+  // the creator is a lab admin, not the portal user.
+  const { userId: labAdminId } = await seedExtraMember({
+    orgId: world.ctx.labOrgId,
+    userId: "user-b3-lab-admin",
+    role: "admin",
+  });
   await db.insert(organizationApiKey).values({
     id: "key-b3",
     organizationId: world.ctx.labOrgId,
@@ -225,7 +233,7 @@ async function seedApiKey(world: Seeded) {
     keyPrefix,
     keyHash,
     scopes: ["certificates:read"],
-    createdBy: world.ctx.portalUserId,
+    createdBy: labAdminId,
   });
   return key;
 }

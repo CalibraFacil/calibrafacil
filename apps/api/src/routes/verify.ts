@@ -28,6 +28,7 @@ import {
   findPublicAmendmentLink,
 } from "../lib/public-certificate-verification";
 
+import { publicTaxId, withPublicSigner } from "../lib/public-tax-id";
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -187,7 +188,7 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
             signed: true,
             signedAt: job.signatureMetadata.signedAt,
             signerName: job.signatureMetadata.signerName,
-            signerCpfCnpj: job.signatureMetadata.signerCpfCnpj,
+            signerCpfCnpj: publicTaxId(job.signatureMetadata.signerCpfCnpj),
             certificateSerial: job.signatureMetadata.signerCertificateSerial,
             pdfHash: job.signatureMetadata.pdfHash,
             ltvEnabled: job.signatureMetadata.ltvEnabled,
@@ -239,7 +240,12 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
     // Fast path: the at-issue verdict, with no R2 round-trip.
     if (job.signatureVerdict && !recheck) {
       const { computedAt, ...verdict } = job.signatureVerdict;
-      return c.json({ signed: true, source: "issue", computedAt, verdict });
+      return c.json({
+        signed: true,
+        source: "issue",
+        computedAt,
+        verdict: withPublicSigner(verdict),
+      });
     }
 
     // Live recheck (legacy certs without a stored verdict, or ?recheck=1).
@@ -252,7 +258,7 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
         signed: true,
         source: "live",
         computedAt: new Date(nowMs).toISOString(),
-        verdict: cached.verdict,
+        verdict: withPublicSigner(cached.verdict),
       });
     }
 
@@ -282,14 +288,19 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
         signed: true,
         source: "live",
         computedAt: new Date(nowMs).toISOString(),
-        verdict,
+        verdict: withPublicSigner(verdict),
       });
     } catch {
       // Fall back to a stored verdict if present, else a minimal "couldn't
       // verify right now" result built from the signature metadata.
       if (job.signatureVerdict) {
         const { computedAt, ...verdict } = job.signatureVerdict;
-        return c.json({ signed: true, source: "issue", computedAt, verdict });
+        return c.json({
+          signed: true,
+          source: "issue",
+          computedAt,
+          verdict: withPublicSigner(verdict),
+        });
       }
       const verdict: VerifyPdfResult = {
         hashMatch: null,
@@ -307,13 +318,18 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
         revocationTime: null,
         signer: {
           commonName: job.signatureMetadata.signerName,
-          cpfCnpj: job.signatureMetadata.signerCpfCnpj,
+          cpfCnpj: publicTaxId(job.signatureMetadata.signerCpfCnpj),
           certificateSerial: job.signatureMetadata.signerCertificateSerial,
         },
         overall: "UNVERIFIABLE",
         details: ["Não foi possível verificar a assinatura no momento."],
       };
-      return c.json({ signed: true, source: null, computedAt: null, verdict });
+      return c.json({
+        signed: true,
+        source: null,
+        computedAt: null,
+        verdict: withPublicSigner(verdict),
+      });
     }
   })
 
@@ -373,7 +389,12 @@ export const verifyRouter = new Hono<{ Bindings: R2Env }>()
       fetchCrl: crlFetcher,
     });
 
-    return c.json({ match, expectedSha256, uploadedSha256, uploadedVerdict });
+    return c.json({
+      match,
+      expectedSha256,
+      uploadedSha256,
+      uploadedVerdict: withPublicSigner(uploadedVerdict),
+    });
   })
 
   // =========================================================================
