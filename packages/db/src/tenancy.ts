@@ -76,6 +76,7 @@ export const GLOBAL_TABLES: Readonly<Record<string, string>> = {
 export const CREATED_AFTER_0118: readonly string[] = [
   "certificate_input",
   "issued_certificate_status_event",
+  "reference_standard_calibration",
 ];
 
 /**

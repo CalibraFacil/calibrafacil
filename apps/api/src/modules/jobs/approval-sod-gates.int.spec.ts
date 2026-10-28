@@ -33,6 +33,7 @@ import {
   organization,
   organizationApiKey,
   referenceStandard,
+  referenceStandardCalibration,
   user,
   type StandardSnapshot,
 } from "@calibra-facil/db/schema";
@@ -716,6 +717,62 @@ describe("approval separation of duties and mandatory gates (roadmap 2 B5)", () 
         code: "standard_expired",
       });
       await expectNotReleased(jobId);
+    });
+
+    it("REQ-C3-2 (roadmap 2 C3): the standard is judged by the certificate valid on the performed date, from its history", async () => {
+      // Current certificate (renewed): 2026-07-01 .. +1 year. History: the
+      // created certificate 2026-01-10 .. 2026-06-30, then the renewal.
+      const standard = await seedStandard(world, {
+        certificateNumber: "CERT-2",
+        calibrationDate: new Date("2026-07-01T15:00:00.000Z"),
+      });
+      const history = (
+        certificateNumber: string,
+        source: "create" | "renew",
+        from: string,
+        until: Date,
+      ) => ({
+        organizationId: ORG,
+        standardId: standard.id,
+        certificateNumber,
+        calibrationDate: new Date(`${from}T15:00:00.000Z`),
+        nextCalibrationDate: until,
+        source,
+      });
+      await db
+        .insert(referenceStandardCalibration)
+        .values([
+          history(
+            "CERT-1",
+            "create",
+            "2026-01-10",
+            new Date("2026-06-30T15:00:00.000Z"),
+          ),
+          history(
+            "CERT-2",
+            "renew",
+            "2026-07-01",
+            standard.nextCalibrationDate,
+          ),
+        ]);
+
+      // Done under CERT-1 (before the renewal): released.
+      const underFirst = await seedReviewJobWithStandard(world, standard, {
+        performedAt: new Date("2026-06-10T15:00:00.000Z"),
+      });
+      await expect(approveCloud(underFirst, CHECKER)).resolves.toEqual({
+        approved: true,
+      });
+
+      // Done before the first calibration: no certificate covered it.
+      const beforeAny = await seedReviewJobWithStandard(world, standard, {
+        performedAt: new Date("2025-12-01T15:00:00.000Z"),
+      });
+      await expect(approveCloud(beforeAny, CHECKER)).resolves.toMatchObject({
+        approved: false,
+        code: "standard_expired",
+      });
+      await expectNotReleased(beforeAny);
     });
 
     it("REQ-B5-3: a deleted standard is refused whatever its status", async () => {

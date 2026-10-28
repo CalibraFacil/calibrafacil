@@ -1,6 +1,7 @@
 import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import {
   referenceStandard,
+  referenceStandardCalibration,
   type StandardSnapshot,
 } from "@calibra-facil/db/schema";
 import {
@@ -56,6 +57,8 @@ async function loadStandardFacts(
         name: referenceStandard.name,
         status: referenceStandard.status,
         deletedAt: referenceStandard.deletedAt,
+        certificateNumber: referenceStandard.certificateNumber,
+        calibrationDate: referenceStandard.calibrationDate,
         nextCalibrationDate: referenceStandard.nextCalibrationDate,
       })
       .from(referenceStandard)
@@ -67,7 +70,80 @@ async function loadStandardFacts(
         ),
       ),
   );
-  return rows.map((row) => ({ ...row, inScope: true }));
+  if (rows.length === 0) return [];
+  // Roadmap 2 C3: the certificates each standard has had, so work is judged by
+  // the one valid on the day it was performed, not by the latest renewal.
+  const history = await withOrgReader(
+    input.organizationId,
+    executor,
+    (reader) =>
+      reader
+        .select({
+          standardId: referenceStandardCalibration.standardId,
+          certificateNumber: referenceStandardCalibration.certificateNumber,
+          source: referenceStandardCalibration.source,
+          calibrationDate: referenceStandardCalibration.calibrationDate,
+          nextCalibrationDate: referenceStandardCalibration.nextCalibrationDate,
+        })
+        .from(referenceStandardCalibration)
+        .where(
+          and(
+            eq(
+              referenceStandardCalibration.organizationId,
+              input.organizationId,
+            ),
+            inArray(
+              referenceStandardCalibration.standardId,
+              rows.map((row) => row.id),
+            ),
+          ),
+        ),
+  );
+  const byStandard = new Map<
+    number,
+    Array<{
+      certificateNumber: string;
+      source: string;
+      calibrationDate: Date;
+      nextCalibrationDate: Date;
+    }>
+  >();
+  for (const entry of history) {
+    const list = byStandard.get(entry.standardId) ?? [];
+    list.push(entry);
+    byStandard.set(entry.standardId, list);
+  }
+  return rows.map(({ certificateNumber, calibrationDate, ...row }) => {
+    const entries = byStandard.get(row.id) ?? [];
+    // The current certificate bounds work from its calibration day only when
+    // it was recorded by a create or a renewal; one the backfill carried over
+    // may have replaced an earlier certificate that was overwritten before the
+    // history existed, and work done under that one must not be refused now.
+    const currentRecorded = entries.some(
+      (entry) =>
+        entry.certificateNumber === certificateNumber &&
+        entry.source !== "backfill",
+    );
+    return {
+      ...row,
+      inScope: true,
+      // Every EARLIER certificate from the history, and the current one as the
+      // standard holds it now (an edit corrects it in place).
+      calibrations: [
+        ...entries
+          .filter((entry) => entry.certificateNumber !== certificateNumber)
+          .map((entry) => ({
+            calibrationDate:
+              entry.source === "backfill" ? null : entry.calibrationDate,
+            nextCalibrationDate: entry.nextCalibrationDate,
+          })),
+        {
+          calibrationDate: currentRecorded ? calibrationDate : null,
+          nextCalibrationDate: row.nextCalibrationDate,
+        },
+      ],
+    };
+  });
 }
 
 /**

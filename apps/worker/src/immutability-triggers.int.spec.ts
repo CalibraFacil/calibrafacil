@@ -50,8 +50,9 @@ describe("worker real-DB tier runs against the immutability triggers", () => {
     );
 
     expect(guard?.n).toBe(1);
-    // 28 + organization_compliance_audit_log (roadmap 2 B4a, migration 0133).
-    expect(appendOnly?.n).toBe(29);
+    // 28 + organization_compliance_audit_log (roadmap 2 B4a, migration 0133)
+    // + reference_standard_calibration (roadmap 2 C3, migration 0138).
+    expect(appendOnly?.n).toBe(30);
   });
 
   it("REQ-DBIMM-002 the worker's label write (label_url + updated_at) on an APPROVED job is allowed", async () => {

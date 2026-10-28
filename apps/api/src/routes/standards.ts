@@ -14,6 +14,7 @@ import {
   organization,
   referenceStandard,
   referenceStandardAuditLog,
+  referenceStandardCalibration,
   referenceStandardCertificateDocument,
   standardRecall,
   user,
@@ -351,6 +352,33 @@ async function currentCertificateDocumentsByStandardId(
  * - DELETE /:id: standard:delete (admin, owner - LAB only) - soft delete
  * - POST /:id/renew: standard:renew (admin, owner - LAB only) - certificate renewal
  */
+/** The calibration-history row of a standard's current certificate (roadmap 2 C3). */
+function calibrationRecordOf(
+  standard: typeof referenceStandard.$inferSelect,
+  source: "create" | "renew",
+  recordedBy: string,
+): typeof referenceStandardCalibration.$inferInsert {
+  return {
+    organizationId: standard.organizationId,
+    standardId: standard.id,
+    certificateNumber: standard.certificateNumber,
+    calibratedBy: standard.calibratedBy,
+    calibrationProviderAccreditationNumber:
+      standard.calibrationProviderAccreditationNumber,
+    calibrationProviderMraRecognized: standard.calibrationProviderMraRecognized,
+    calibrationDate: standard.calibrationDate,
+    nextCalibrationDate: standard.nextCalibrationDate,
+    referenceValue: standard.referenceValue,
+    uncertainty: standard.uncertainty,
+    uncertaintyUnit: standard.uncertaintyUnit,
+    coverageFactor: standard.coverageFactor,
+    certifiedValues: standard.certifiedValues,
+    metrologyData: standard.metrologyData,
+    source,
+    recordedBy,
+  };
+}
+
 export const standardsRouter = new Hono<{
   Variables: AuthVariables;
   Bindings: R2Env;
@@ -1166,6 +1194,11 @@ export const standardsRouter = new Hono<{
         if (!newStandard) {
           return c.json({ error: "Falha ao criar padrão" }, 500);
         }
+
+        // The standard's first certificate (roadmap 2 C3).
+        await tx
+          .insert(referenceStandardCalibration)
+          .values(calibrationRecordOf(newStandard, "create", session.user.id));
 
         // Audit log
         await tx.insert(referenceStandardAuditLog).values({
@@ -2084,6 +2117,14 @@ export const standardsRouter = new Hono<{
           .set(updateData)
           .where(eq(referenceStandard.id, id))
           .returning();
+
+        // The new certificate is appended to the history; the one it replaces
+        // stays, for the work it covered (roadmap 2 C3).
+        if (updated) {
+          await tx
+            .insert(referenceStandardCalibration)
+            .values(calibrationRecordOf(updated, "renew", session.user.id));
+        }
 
         // Audit log with reason (required for ISO 17025)
         await tx.insert(referenceStandardAuditLog).values({

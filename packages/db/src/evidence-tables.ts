@@ -52,6 +52,7 @@ export const APPEND_ONLY_EVIDENCE_TABLES: readonly string[] = [
   "personnel_competence_audit_log",
   "proficiency_test_audit_log",
   "reference_standard_audit_log",
+  "reference_standard_calibration",
   "service_audit_log",
   "service_order_event_log",
   "training_record_audit_log",

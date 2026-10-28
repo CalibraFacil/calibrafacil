@@ -109,8 +109,18 @@ describe("schema.ts and migration 0116 name the same calendar-date columns (REQ-
     ).sort();
   }
 
+  /** Columns created as `date` by a later migration (nothing to convert). */
+  const CREATED_AS_DATE_AFTER_0116 = [
+    "reference_standard_calibration.calibration_date",
+    "reference_standard_calibration.next_calibration_date",
+  ];
+
   it("converts every date column schema.ts declares, with the display rule, and nothing else", () => {
-    expect(migratedColumns()).toEqual(declaredCalendarColumns());
+    expect(migratedColumns()).toEqual(
+      declaredCalendarColumns().filter(
+        (column) => !CREATED_AS_DATE_AFTER_0116.includes(column),
+      ),
+    );
     expect(migratedColumns()).toHaveLength(13);
   });
 

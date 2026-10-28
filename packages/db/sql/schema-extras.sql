@@ -809,6 +809,7 @@ REVOKE UPDATE, DELETE, TRUNCATE ON public."organization_event_log" FROM calibra_
 REVOKE UPDATE, DELETE, TRUNCATE ON public."personnel_competence_audit_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."proficiency_test_audit_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."reference_standard_audit_log" FROM calibra_app;
+REVOKE UPDATE, DELETE, TRUNCATE ON public."reference_standard_calibration" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."service_audit_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."service_order_event_log" FROM calibra_app;
 REVOKE UPDATE, DELETE, TRUNCATE ON public."training_record_audit_log" FROM calibra_app;
@@ -1265,6 +1266,11 @@ CREATE POLICY tenant_isolation ON public."reference_standard" AS PERMISSIVE FOR 
 ALTER TABLE public."reference_standard_audit_log" ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON public."reference_standard_audit_log";
 CREATE POLICY tenant_isolation ON public."reference_standard_audit_log" AS PERMISSIVE FOR ALL TO calibra_app
+  USING ("organization_id" = NULLIF(current_setting('calibra.organization_id', true), '')::text)
+  WITH CHECK ("organization_id" = NULLIF(current_setting('calibra.organization_id', true), '')::text);
+ALTER TABLE public."reference_standard_calibration" ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON public."reference_standard_calibration";
+CREATE POLICY tenant_isolation ON public."reference_standard_calibration" AS PERMISSIVE FOR ALL TO calibra_app
   USING ("organization_id" = NULLIF(current_setting('calibra.organization_id', true), '')::text)
   WITH CHECK ("organization_id" = NULLIF(current_setting('calibra.organization_id', true), '')::text);
 ALTER TABLE public."reference_standard_certificate_document" ENABLE ROW LEVEL SECURITY;
@@ -1766,3 +1772,18 @@ DROP TRIGGER IF EXISTS issued_certificate_status_event_append_only ON public.iss
 CREATE TRIGGER issued_certificate_status_event_append_only
   BEFORE UPDATE OR DELETE ON public.issued_certificate_status_event
   FOR EACH ROW EXECUTE FUNCTION calibra_append_only();
+
+-- The calibration history of the reference standards (migration 0138, roadmap 2 C3):
+-- append-only evidence, a valid interval, a known source.
+DROP TRIGGER IF EXISTS reference_standard_calibration_append_only ON public.reference_standard_calibration;
+CREATE TRIGGER reference_standard_calibration_append_only
+  BEFORE UPDATE OR DELETE ON public.reference_standard_calibration
+  FOR EACH ROW EXECUTE FUNCTION calibra_append_only();
+ALTER TABLE reference_standard_calibration DROP CONSTRAINT IF EXISTS reference_standard_calibration_interval_check;
+ALTER TABLE reference_standard_calibration
+  ADD CONSTRAINT reference_standard_calibration_interval_check
+  CHECK (next_calibration_date >= calibration_date);
+ALTER TABLE reference_standard_calibration DROP CONSTRAINT IF EXISTS reference_standard_calibration_source_check;
+ALTER TABLE reference_standard_calibration
+  ADD CONSTRAINT reference_standard_calibration_source_check
+  CHECK (source IN ('create', 'renew', 'backfill'));

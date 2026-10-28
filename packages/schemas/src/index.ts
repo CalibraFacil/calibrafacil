@@ -1921,7 +1921,44 @@ export const RenewCertificateSchema = z
     message:
       "Informe o número de acreditação do laboratório que calibrou o padrão",
     path: ["calibrationProviderAccreditationNumber"],
-  });
+  })
+  // Roadmap 2 C3: a renewal is a new certificate, so it brings its own values;
+  // keeping the previous certificate's values under a new number is refused.
+  .refine((data) => renewalCarriesValues(data), {
+    message:
+      "Informe os valores do novo certificado (incerteza, valores certificados ou canais)",
+    path: ["uncertainty"],
+  })
+  .refine(
+    (data) =>
+      !data.calibrationDate ||
+      !data.nextCalibrationDate ||
+      data.nextCalibrationDate.slice(0, 10) >=
+        data.calibrationDate.slice(0, 10),
+    {
+      message:
+        "A próxima calibração não pode ser anterior à data de calibração",
+      path: ["nextCalibrationDate"],
+    },
+  );
+
+function renewalCarriesValues(data: {
+  uncertainty?: number | null;
+  certifiedValues?: ReadonlyArray<unknown> | null;
+  metrologyData?: {
+    channels?: ReadonlyArray<unknown>;
+    massValues?: ReadonlyArray<unknown>;
+    compositionProfiles?: ReadonlyArray<unknown>;
+  } | null;
+}): boolean {
+  return (
+    (data.uncertainty !== undefined && data.uncertainty !== null) ||
+    (data.certifiedValues?.length ?? 0) > 0 ||
+    (data.metrologyData?.channels?.length ?? 0) > 0 ||
+    (data.metrologyData?.massValues?.length ?? 0) > 0 ||
+    (data.metrologyData?.compositionProfiles?.length ?? 0) > 0
+  );
+}
 
 export type RenewCertificateInput = z.infer<typeof RenewCertificateSchema>;
 
