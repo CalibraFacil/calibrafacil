@@ -356,7 +356,8 @@ export function createStandardFormData(
     calibratedBy: standard.calibratedBy || '',
     calibrationProviderAccreditationNumber:
       standard.calibrationProviderAccreditationNumber || '',
-    calibrationProviderMraRecognized: standard.calibrationProviderMraRecognized,
+    calibrationProviderMraRecognized:
+      standard.calibrationProviderMraRecognized ?? false,
     calibrationDate: dateInputValue(standard.calibrationDate),
     nextCalibrationDate: dateInputValue(standard.nextCalibrationDate),
     referenceValue: standard.referenceValue?.toString() || '',
