@@ -292,7 +292,9 @@ export const DEPLOY_SECTIONS: readonly DeploySection[] = [
   {
     title: "Database timeouts of the application role (optional)",
     intro: [
-      "`init` sets these on the calibra_app role only (ALTER ROLE ... SET), so a",
+      "`init` sets these on the calibra_app role (ALTER ROLE ... SET), and the API",
+      "and the worker set the same values on each of their connections",
+      "(DATABASE_STATEMENT_TIMEOUT_MS / DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS), so a",
       "runaway statement or a forgotten open transaction is ended by the server.",
       "The owner role, migrations and the system sweeps are not affected. 0 turns",
       "a timeout off. They apply to new connections: restart the API and worker.",
