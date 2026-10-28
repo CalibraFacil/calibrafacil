@@ -32,6 +32,7 @@ import {
   ootNotification,
   referenceStandard,
   referenceStandardAuditLog,
+  referenceStandardCalibration,
   referenceStandardCertificateDocument,
   standardRecall,
 } from "@calibra-facil/db/schema";
@@ -172,6 +173,7 @@ describe("standards router: search, profiles, renew, audit and recall (P2-18d)",
       certificateNumber: "RBC-NEW-1",
       calibrationDate: "2026-06-01",
       nextCalibrationDate: "2027-06-01",
+      uncertainty: 0.001,
       reason: "Renovação anual",
     });
     expect(renew.status).toBe(200);
@@ -266,6 +268,7 @@ describe("standards router: search, profiles, renew, audit and recall (P2-18d)",
       certificateNumber: "RBC-RENEWED-9",
       calibrationDate: "2026-06-01",
       nextCalibrationDate: "2027-06-01",
+      uncertainty: 0.001,
       reason: "Recalibrado após desvio",
     });
     expect(res.status).toBe(200);
@@ -291,10 +294,60 @@ describe("standards router: search, profiles, renew, audit and recall (P2-18d)",
       certificateNumber: "X",
       calibrationDate: "2026-06-01",
       nextCalibrationDate: "2027-06-01",
+      uncertainty: 0.001,
       reason: "cruzado",
     });
     expect(foreign.status).toBe(404);
     expect(await auditActions(standardB)).toEqual([]);
+  });
+
+  it("REQ-C3-1 (roadmap 2 C3): a renewal appends the new certificate to the history, keeps the previous one, and must bring values", async () => {
+    const { standardA } = await twoLabs();
+    const noValues = await request(`/${standardA}/renew`, "POST", {
+      certificateNumber: "RBC-SEM-VALORES",
+      calibrationDate: "2026-06-01",
+      nextCalibrationDate: "2027-06-01",
+      reason: "Renovação sem valores",
+    });
+    expect(noValues.status).toBe(400);
+
+    const inverted = await request(`/${standardA}/renew`, "POST", {
+      certificateNumber: "RBC-INVERTIDO",
+      calibrationDate: "2026-06-01",
+      nextCalibrationDate: "2026-05-01",
+      uncertainty: 0.001,
+      reason: "Datas invertidas",
+    });
+    expect(inverted.status).toBe(400);
+
+    const before = await db
+      .select({ id: referenceStandardCalibration.id })
+      .from(referenceStandardCalibration)
+      .where(eq(referenceStandardCalibration.standardId, standardA));
+    const renewed = await request(`/${standardA}/renew`, "POST", {
+      certificateNumber: "RBC-HIST-2",
+      calibrationDate: "2026-06-01",
+      nextCalibrationDate: "2027-06-01",
+      uncertainty: 0.0021,
+      reason: "Renovação anual",
+    });
+    expect(renewed.status).toBe(200);
+
+    const history = await db
+      .select({
+        certificateNumber: referenceStandardCalibration.certificateNumber,
+        uncertainty: referenceStandardCalibration.uncertainty,
+        source: referenceStandardCalibration.source,
+      })
+      .from(referenceStandardCalibration)
+      .where(eq(referenceStandardCalibration.standardId, standardA))
+      .orderBy(referenceStandardCalibration.id);
+    expect(history).toHaveLength(before.length + 1);
+    expect(history.at(-1)).toEqual({
+      certificateNumber: "RBC-HIST-2",
+      uncertainty: 0.0021,
+      source: "renew",
+    });
   });
 
   it("REQ-18D-STD-4: out-of-tolerance opens one NC and a DRAFT recall; recall/send notifies each certificate once, after the commit", async () => {

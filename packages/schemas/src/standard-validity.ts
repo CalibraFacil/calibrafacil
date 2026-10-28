@@ -65,3 +65,30 @@ export function standardDaysUntilExpiry(
   if (!validThrough) return null;
   return calendarDaysBetween(labToday(now), validThrough);
 }
+
+/**
+ * Whether a calibration certificate covered `performedAt` (roadmap 2 C3): the
+ * work was done on or after the calibration day and on or before the last
+ * valid day, in laboratory days. A certificate issued after the work does not
+ * make it valid.
+ */
+export function isCalibrationValidOn(
+  calibration: {
+    /**
+     * Null when the start of the certificate is not known to bound it: a
+     * certificate carried over by the history backfill may have replaced an
+     * earlier one that was overwritten before the history existed.
+     */
+    calibrationDate: Date | string | null;
+    nextCalibrationDate: Date | string;
+  },
+  performedAt: Date,
+): boolean {
+  if (!isStandardValidOn(calibration.nextCalibrationDate, performedAt)) {
+    return false;
+  }
+  if (calibration.calibrationDate === null) return true;
+  const from = readValidityDay(calibration.calibrationDate);
+  if (!from) return false;
+  return calendarDateKey(from) <= labCalendarDayKey(performedAt);
+}

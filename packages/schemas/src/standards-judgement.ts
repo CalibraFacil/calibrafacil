@@ -38,7 +38,7 @@
  * accepted and reported back as a warning. A standard the draft ADDS is judged
  * strictly. The submit never takes this exception.
  */
-import { isStandardValidOn } from "./standard-validity";
+import { isCalibrationValidOn, isStandardValidOn } from "./standard-validity";
 
 export type StandardsJudgementMode =
   | "cloud"
@@ -72,6 +72,16 @@ export type JudgedStandardFacts = {
   deletedAt: Date | string | null;
   /** The certificate's last valid day; null/unreadable is never valid. */
   nextCalibrationDate: Date | string | null;
+  /**
+   * The standard's calibration history (roadmap 2 C3), when the store keeps it:
+   * the standard is valid on a day one of these certificates covered. Absent
+   * (the desktop's local store), the current certificate alone decides.
+   */
+  calibrations?: ReadonlyArray<{
+    /** Null: no lower bound (see `isCalibrationValidOn`). */
+    calibrationDate: Date | string | null;
+    nextCalibrationDate: Date | string;
+  }>;
   /**
    * The standard belongs to the caller's organization (and, where the caller
    * scopes by unit, to a unit it may use). False reads as not found.
@@ -162,8 +172,12 @@ export function judgeExecutionStandards(
   if (inactive.length > 0) return refuse("standard_inactive", inactive);
 
   const validAt = (fact: JudgedStandardFacts, at: Date) =>
-    fact.nextCalibrationDate !== null &&
-    isStandardValidOn(fact.nextCalibrationDate, at);
+    fact.calibrations && fact.calibrations.length > 0
+      ? fact.calibrations.some((calibration) =>
+          isCalibrationValidOn(calibration, at),
+        )
+      : fact.nextCalibrationDate !== null &&
+        isStandardValidOn(fact.nextCalibrationDate, at);
 
   const expired = judged.filter((fact) => !validAt(fact, judgedAt));
   if (expired.length > 0) return refuse("standard_expired", expired);

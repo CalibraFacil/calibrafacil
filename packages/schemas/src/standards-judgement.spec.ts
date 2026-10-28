@@ -276,3 +276,93 @@ describe("judgeDraftExecutionStandards: a draft save keeps a standard already in
     });
   });
 });
+
+describe("judgement by the certificate valid on the day of the work (roadmap 2 C3)", () => {
+  // Two certificates: [2026-01-10, 2026-06-30] and, after a renewal,
+  // [2026-07-01, 2027-06-30]. Today is 2026-10-21 (JUDGEMENT_TODAY).
+  const renewed: JudgedStandardFacts = {
+    id: 7,
+    name: "Massa E2",
+    status: "ACTIVE",
+    deletedAt: null,
+    nextCalibrationDate: "2027-06-30",
+    inScope: true,
+    calibrations: [
+      { calibrationDate: "2026-01-10", nextCalibrationDate: "2026-06-30" },
+      { calibrationDate: "2026-07-01", nextCalibrationDate: "2027-06-30" },
+    ],
+  };
+  const judge = (performedAt: string, facts: JudgedStandardFacts) =>
+    judgeExecutionStandards(
+      {
+        standardIds: [facts.id],
+        performedAt: new Date(performedAt),
+        today: JUDGEMENT_TODAY,
+        mode: "cloud",
+        backdateReason: "Registro feito depois da execução",
+      },
+      [facts],
+    );
+
+  it("work done under the earlier certificate is valid (it covered that day)", () => {
+    expect(judge("2026-03-02T15:00:00.000Z", renewed)).toMatchObject({
+      ok: true,
+    });
+  });
+
+  it("work done before the first calibration is not made valid by a later certificate", () => {
+    expect(judge("2025-12-01T15:00:00.000Z", renewed)).toMatchObject({
+      ok: false,
+      code: "standard_expired",
+    });
+    // Without the history, the current certificate alone would have passed it.
+    expect(
+      judge("2025-12-01T15:00:00.000Z", {
+        ...renewed,
+        calibrations: undefined,
+      }),
+    ).toMatchObject({ ok: true });
+  });
+
+  it("a gap between two certificates is not covered", () => {
+    const withGap: JudgedStandardFacts = {
+      ...renewed,
+      calibrations: [
+        { calibrationDate: "2026-01-10", nextCalibrationDate: "2026-05-31" },
+        { calibrationDate: "2026-07-01", nextCalibrationDate: "2027-06-30" },
+      ],
+    };
+    expect(judge("2026-06-15T15:00:00.000Z", withGap)).toMatchObject({
+      ok: false,
+      code: "standard_expired",
+    });
+  });
+});
+
+describe("certificates carried over by the history backfill (roadmap 2 C3)", () => {
+  it("bound work only by their last valid day (an earlier, overwritten certificate may have covered it)", () => {
+    const backfilled: JudgedStandardFacts = {
+      id: 9,
+      name: "Termômetro",
+      status: "ACTIVE",
+      deletedAt: null,
+      nextCalibrationDate: "2027-06-30",
+      inScope: true,
+      calibrations: [
+        { calibrationDate: null, nextCalibrationDate: "2027-06-30" },
+      ],
+    };
+    expect(
+      judgeExecutionStandards(
+        {
+          standardIds: [9],
+          performedAt: new Date("2025-12-01T15:00:00.000Z"),
+          today: JUDGEMENT_TODAY,
+          mode: "cloud",
+          backdateReason: "Registro tardio",
+        },
+        [backfilled],
+      ),
+    ).toMatchObject({ ok: true });
+  });
+});

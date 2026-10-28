@@ -3460,15 +3460,15 @@ export const referenceStandard = pgTable(
     calibrationDate: calendarDate("calibration_date").notNull(),
     nextCalibrationDate: calendarDate("next_calibration_date").notNull(),
     // Single-value metrology data
-    referenceValue: real("reference_value"), // For single-value standards
-    uncertainty: real("uncertainty"),
+    referenceValue: doublePrecision("reference_value"), // For single-value standards
+    uncertainty: doublePrecision("uncertainty"),
     uncertaintyUnit: text("uncertainty_unit"),
-    coverageFactor: real("coverage_factor").default(2.0).notNull(),
+    coverageFactor: doublePrecision("coverage_factor").default(2.0).notNull(),
     distribution: text("distribution")
       .$type<UncertaintyDistribution>()
       .default("normal")
       .notNull(),
-    drift: real("drift"),
+    drift: doublePrecision("drift"),
     // Multi-value metrology data (for sets like weight sets, gauge blocks)
     certifiedValues: jsonb("certified_values").$type<CertifiedValue[]>(),
     metrologyData:
@@ -3606,6 +3606,60 @@ export const referenceStandardCertificateDocument = pgTable(
  * Tracks all modifications for compliance and traceability.
  * Critical for ISO 17025 equipment management audits.
  */
+/**
+ * The calibrations of a reference standard, one row per certificate (roadmap 2
+ * C3, review 3.1 H): the values and the validity interval each certificate gave
+ * the standard. A renewal appends a row instead of overwriting the standard, so
+ * work done on a given day is judged by, and can be traced to, the certificate
+ * that was valid that day. The standard's own columns keep the current one.
+ *
+ * Append-only evidence (trigger + REVOKE, evidence-tables.ts). `standard_id` is
+ * a soft reference on purpose, like the audit log: the history outlives the
+ * standard.
+ */
+export const referenceStandardCalibration = pgTable(
+  "reference_standard_calibration",
+  {
+    id: serial("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "restrict" }),
+    standardId: integer("standard_id").notNull(),
+    certificateNumber: text("certificate_number").notNull(),
+    calibratedBy: text("calibrated_by"),
+    calibrationProviderAccreditationNumber: text(
+      "calibration_provider_accreditation_number",
+    ),
+    calibrationProviderMraRecognized: boolean(
+      "calibration_provider_mra_recognized",
+    )
+      .default(false)
+      .notNull(),
+    calibrationDate: calendarDate("calibration_date").notNull(),
+    nextCalibrationDate: calendarDate("next_calibration_date").notNull(),
+    referenceValue: doublePrecision("reference_value"),
+    uncertainty: doublePrecision("uncertainty"),
+    uncertaintyUnit: text("uncertainty_unit"),
+    coverageFactor: doublePrecision("coverage_factor"),
+    certifiedValues: jsonb("certified_values").$type<CertifiedValue[]>(),
+    metrologyData:
+      jsonb("metrology_data").$type<ReferenceStandardMetrologyData>(),
+    /** 'create', 'renew' or 'backfill' (migration 0138, from the standard's row). */
+    source: text("source").notNull(),
+    recordedBy: text("recorded_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    recordedAt: timestamp("recorded_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("reference_standard_calibration_standard_idx").on(
+      table.organizationId,
+      table.standardId,
+      table.calibrationDate,
+    ),
+  ],
+);
+
 export const referenceStandardAuditLog = pgTable(
   "reference_standard_audit_log",
   {
