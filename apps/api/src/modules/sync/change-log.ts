@@ -41,7 +41,11 @@ import {
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import { orgDb } from "../../lib/org-db";
 import { buildUnitScopeCondition } from "../../lib/units";
-import { type SyncScope, syncEntitySource } from "./entity-sources";
+import {
+  type SyncScope,
+  syncEntitySource,
+  syncScopeFingerprint,
+} from "./entity-sources";
 
 export type ChangeLogPull =
   | {
@@ -75,6 +79,10 @@ export async function pullChangeLog(input: {
   if (parsed.kind === "foreign") {
     return { kind: "resync", reason: "cursor_format" };
   }
+  const fingerprint = syncScopeFingerprint(input.scope);
+  if (parsed.scope !== undefined && parsed.scope !== fingerprint) {
+    return { kind: "resync", reason: "scope_changed" };
+  }
   const since = parsed.position;
   // One transaction that names the laboratory (row-level security), READ
   // COMMITTED as before: every statement still takes its own snapshot, and the
@@ -93,6 +101,7 @@ async function pullChangeLogIn(
   since: SyncChangePosition,
   limit: number,
 ): Promise<ChangeLogPull> {
+  const fingerprint = syncScopeFingerprint(scope);
   // A cursor below what the retention purge removed may have missed entries.
   const [purged] = await o
     .select({
@@ -144,7 +153,7 @@ async function pullChangeLogIn(
     // Not even the organization row: nothing to serve, nothing to advance.
     return {
       kind: "page",
-      cursor: formatSyncChangeCursor(since),
+      cursor: formatSyncChangeCursor(since, fingerprint),
       hasMore: false,
       events: [],
     };
@@ -183,7 +192,7 @@ async function pullChangeLogIn(
   }
   return {
     kind: "page",
-    cursor: formatSyncChangeCursor(next),
+    cursor: formatSyncChangeCursor(next, fingerprint),
     hasMore,
     events,
   };

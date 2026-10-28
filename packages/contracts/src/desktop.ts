@@ -6,6 +6,11 @@ export const syncStateSchema = z.enum([
   "syncing",
   "error",
   "conflict",
+  /**
+   * The cloud answered 401: the desktop's session expired or was revoked. Not a
+   * failure to retry: the user signs in again (roadmap 2 E2).
+   */
+  "auth_required",
 ]);
 
 export const localEnvironmentBootstrapSchema = z.object({

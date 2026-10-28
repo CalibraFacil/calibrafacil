@@ -861,6 +861,42 @@ describe("sync change sequence (protocol 3)", () => {
     expect(body.events).toEqual([]);
   });
 
+  it("REQ-E2-1 (roadmap 2 E2): a cursor handed out under another scope is refused as scope_changed; an older cursor without a scope is still served", async () => {
+    const org = await seedOrg({ orgId: ORG, role: "admin" });
+    const [second] = await db
+      .insert(organizationUnit)
+      .values({
+        organizationId: org.orgId,
+        name: "Filial",
+        slug: "filial",
+        status: "ACTIVE",
+        isDefault: false,
+        createdBy: org.userId,
+      })
+      .returning({ id: organizationUnit.id });
+    if (!second) throw new Error("unit seed failed");
+    const cursor = await bootstrapCursor(org);
+    expect(cursor.split("|")).toHaveLength(4);
+
+    // Same scope: served.
+    await waitUntilServable(org.orgId);
+    expect((await pull(org, { cursor })).status).toBe(200);
+
+    // Another active unit: the rows of that unit before the cursor were never
+    // sent, so the desktop must bootstrap again.
+    const other = await pull(org, { cursor, unitId: second.id });
+    expect(other.status).toBe(409);
+    expect(
+      syncResyncRequiredResponseSchema.parse(await other.json()).reason,
+    ).toBe("scope_changed");
+
+    // A cursor of an older server (no scope part) keeps working.
+    const legacy = cursor.split("|").slice(0, 3).join("|");
+    expect(
+      (await pull(org, { cursor: legacy, unitId: second.id })).status,
+    ).toBe(200);
+  });
+
   it("REQ-CS-5: a purge with nothing old removes nothing and leaves every cursor valid", async () => {
     const org = await seedOrg({ orgId: ORG, role: "admin" });
     const cursor = await bootstrapCursor(org);

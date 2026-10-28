@@ -34,6 +34,7 @@ import {
   SYNC_ENTITY_SOURCES,
   type SyncEntityRow,
   type SyncScope,
+  syncScopeFingerprint,
 } from "./entity-sources";
 
 /** Row ids are Postgres `serial` (int4). */
@@ -204,7 +205,10 @@ async function loadBootstrapPageIn(
       : null;
   return {
     kind: "page",
-    syncCursor: formatSyncChangeCursor({ xid: walk.xmin, seq: 0n }),
+    syncCursor: formatSyncChangeCursor(
+      { xid: walk.xmin, seq: 0n },
+      syncScopeFingerprint(input.scope),
+    ),
     nextToken,
     rowCount,
     arrays,

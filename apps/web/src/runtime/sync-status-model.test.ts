@@ -214,6 +214,20 @@ describe('getDataSourceIndicatorModel', () => {
   })
 })
 
+describe('auth_required (roadmap 2 E2)', () => {
+  it('asks the user to sign in again instead of showing a generic error', () => {
+    expect(
+      getDataSourceIndicatorModel({
+        isDesktop: true,
+        state: 'auth_required',
+        lastSyncedAt: '2026-05-09T22:00:00.000Z',
+        pendingOutboxCount: 2,
+        conflictCount: 0,
+      }),
+    ).toMatchObject({ label: 'Entre novamente', variant: 'destructive' })
+  })
+})
+
 describe('runDesktopManualSync', () => {
   it('starts sync through the desktop bridge and refreshes status', async () => {
     const bridge = { startSync: vi.fn(async () => ({ ok: true })) }
