@@ -130,13 +130,37 @@ function cacheSystemDatabase(
   return database;
 }
 
-function createPostgresJsDatabase(connectionString: string, poolMax: number) {
+/** Server-side limits of a session, in milliseconds (0 or absent: none). */
+type SessionTimeouts = {
+  statementTimeoutMs?: number;
+  idleInTransactionTimeoutMs?: number;
+};
+
+function createPostgresJsDatabase(
+  connectionString: string,
+  poolMax: number,
+  timeouts: SessionTimeouts = {},
+) {
   const sql = postgres(connectionString, {
     max: poolMax,
     fetch_types: false,
-    // Naive `timestamp` columns and the date arithmetic in SQL are written for a
-    // UTC session (roadmap 2 C5); assertRlsStartup checks it took.
-    connection: { TimeZone: "UTC" },
+    connection: {
+      // Naive `timestamp` columns and the date arithmetic in SQL are written for a
+      // UTC session (roadmap 2 C5); assertRlsStartup checks it took.
+      TimeZone: "UTC",
+      // Roadmap 2 D4: a runaway statement or a transaction left open cannot hold
+      // a connection of the (small) pool indefinitely. Per connection rather than
+      // on the role, so no CREATEROLE is needed on a managed database.
+      ...(timeouts.statementTimeoutMs
+        ? { statement_timeout: timeouts.statementTimeoutMs }
+        : {}),
+      ...(timeouts.idleInTransactionTimeoutMs
+        ? {
+            idle_in_transaction_session_timeout:
+              timeouts.idleInTransactionTimeoutMs,
+          }
+        : {}),
+    },
   });
   return drizzlePostgres(sql, { schema, logger: observingLogger });
 }
@@ -172,10 +196,16 @@ export function getDb(): Database {
 
   const databaseUrl = config.url;
   if (databaseUrl) {
-    return cacheDatabase(`database:${databaseUrl}:${config.poolMax}`, () => {
-      if (isCloudflare) return createNeonServerlessDatabase(databaseUrl);
-      return createPostgresJsDatabase(databaseUrl, config.poolMax);
-    });
+    return cacheDatabase(
+      `database:${databaseUrl}:${config.poolMax}:${config.statementTimeoutMs}:${config.idleInTransactionTimeoutMs}`,
+      () => {
+        if (isCloudflare) return createNeonServerlessDatabase(databaseUrl);
+        return createPostgresJsDatabase(databaseUrl, config.poolMax, {
+          statementTimeoutMs: config.statementTimeoutMs,
+          idleInTransactionTimeoutMs: config.idleInTransactionTimeoutMs,
+        });
+      },
+    );
   }
 
   throw new Error("No database connection configured. Set DATABASE_URL.");

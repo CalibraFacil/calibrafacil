@@ -2,6 +2,8 @@ import { choice, defineGroup, example, integer, text } from "../define";
 import { nodeEnvVar } from "./runtime";
 
 const DEFAULT_POOL_MAX = 5;
+const DEFAULT_STATEMENT_TIMEOUT_MS = 60_000;
+const DEFAULT_IDLE_IN_TRANSACTION_TIMEOUT_MS = 60_000;
 
 export const databaseGroup = defineGroup({
   name: "database",
@@ -24,6 +26,24 @@ export const databaseGroup = defineGroup({
       min: 1,
       tolerant: true,
       example: example.commented("5"),
+    }),
+    statementTimeoutMs: integer({
+      env: "DATABASE_STATEMENT_TIMEOUT_MS",
+      description: `\`statement_timeout\` of the application connections (DATABASE_URL), in milliseconds (default ${DEFAULT_STATEMENT_TIMEOUT_MS}; 0 turns it off). A runaway query is cancelled instead of holding a connection of the pool. The owner connection (sweeps, migrations) has none. An unusable value means the default.`,
+      min: 0,
+      default: DEFAULT_STATEMENT_TIMEOUT_MS,
+      tolerant: true,
+      example: example.commented(String(DEFAULT_STATEMENT_TIMEOUT_MS)),
+    }),
+    idleInTransactionTimeoutMs: integer({
+      env: "DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS",
+      description: `\`idle_in_transaction_session_timeout\` of the application connections, in milliseconds (default ${DEFAULT_IDLE_IN_TRANSACTION_TIMEOUT_MS}; 0 turns it off). A transaction left open (a request that awaits something slow while holding row locks) is ended by the server. An unusable value means the default.`,
+      min: 0,
+      default: DEFAULT_IDLE_IN_TRANSACTION_TIMEOUT_MS,
+      tolerant: true,
+      example: example.commented(
+        String(DEFAULT_IDLE_IN_TRANSACTION_TIMEOUT_MS),
+      ),
     }),
     ownerUrl: text({
       env: "DATABASE_OWNER_URL",
