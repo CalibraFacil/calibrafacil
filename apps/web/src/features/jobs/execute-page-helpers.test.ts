@@ -331,7 +331,7 @@ describe('REQ-SPLIT-2 execute-page helpers moved out of the page', () => {
       })
 
       expect(items).toEqual([
-        { key: 'capacity', label: 'capacity', unit: 'kg', value: '1.5' },
+        { key: 'capacity', label: 'capacity', unit: 'kg', value: '1,5' },
         { key: 'resolution', label: 'resolution', unit: 'g', value: '-' },
         { key: 'missing', label: 'missing', unit: undefined, value: '-' },
         { key: 'noKey', label: 'noKey', unit: undefined, value: '-' },

@@ -47,7 +47,7 @@ describe("buildPortalCertificateVerdict", () => {
       formulas: UNCERTAINTY_FORMULAS,
     });
 
-    expect(verdict.expandedUncertainty).toBe("±0.12 g");
+    expect(verdict.expandedUncertainty).toBe("±0,12 g");
   });
 
   it("falls back to the pre-adjustment uncertainty when post is absent", () => {
@@ -56,7 +56,7 @@ describe("buildPortalCertificateVerdict", () => {
       formulas: UNCERTAINTY_FORMULAS,
     });
 
-    expect(verdict.expandedUncertainty).toBe("±0.2 g");
+    expect(verdict.expandedUncertainty).toBe("±0,2 g");
   });
 
   it("tolerates comma decimals and null results", () => {

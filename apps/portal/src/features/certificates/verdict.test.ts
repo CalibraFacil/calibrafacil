@@ -106,8 +106,8 @@ describe("buildScalarResults", () => {
     });
 
     expect(rows).toEqual([
-      { key: "erro_maximo", label: "Erro máximo", value: "0.05 g" },
-      { key: "tendencia", label: "Tendência", value: "-0.01" },
+      { key: "erro_maximo", label: "Erro máximo", value: "0,05 g" },
+      { key: "tendencia", label: "Tendência", value: "-0,01" },
     ]);
   });
 

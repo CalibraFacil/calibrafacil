@@ -2,6 +2,11 @@ import { useState } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ArrowDown01Icon } from '@hugeicons/core-free-icons'
 
+import {
+  isPartialMeasurementInput,
+  parseMeasurementInput,
+  withDecimalComma,
+} from '@calibra-facil/shared/calibration-format'
 import { convertUnitValue, unitKind } from '@calibra-facil/shared/units'
 
 import { Button } from '@calibra-facil/ui/button'
@@ -36,8 +41,7 @@ interface StandardValueCellProps {
 function parseCanonical(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
   if (typeof value === 'string' && value.trim() !== '') {
-    const parsed = Number(value.replace(',', '.'))
-    return Number.isFinite(parsed) ? parsed : null
+    return parseMeasurementInput(value)
   }
   return null
 }
@@ -80,16 +84,19 @@ export function StandardValueCell({
 
   const formatForDisplay = (canonical: number | null): string => {
     if (canonical == null) return ''
-    return String(Number(toDisplay(canonical).toPrecision(12)))
+    return withDecimalComma(
+      String(Number(toDisplay(canonical).toPrecision(12))),
+    )
   }
 
   const canonicalValue = parseCanonical(value)
   const inputValue = focused ? draft : formatForDisplay(canonicalValue)
 
   const handleChange = (raw: string) => {
-    if (raw !== '' && !/^-?\d*[.,]?\d*$/.test(raw)) return
+    if (raw !== '' && !isPartialMeasurementInput(raw)) return
+    // The text stays as typed (pt-BR comma, roadmap 2 F3); parsing is shared.
     const normalized = raw.replace(',', '.')
-    setDraft(normalized)
+    setDraft(raw)
     if (normalized === '' || normalized === '-' || normalized === '.') {
       onCommit(null)
       return
