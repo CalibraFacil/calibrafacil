@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
+  ArrowDown01Icon,
   CheckmarkCircle02Icon,
   Delete02Icon,
   File02Icon,
@@ -81,6 +82,16 @@ import { EventTimeline } from '@/components/event-timeline'
 import { moneyFieldError } from '@/lib/finance-formatters'
 import { cn } from '@/lib/utils'
 import { Button } from '@calibra-facil/ui/button'
+import type { OperationAvailability } from '@calibra-facil/client-runtime'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@calibra-facil/ui/dropdown-menu'
 import { Badge } from '@calibra-facil/ui/badge'
 import { Textarea } from '@calibra-facil/ui/textarea'
 import { Input } from '@calibra-facil/ui/input'
@@ -1144,67 +1155,43 @@ function ServiceOrderDetailContent({
                   Abrir calibração
                 </Button>
               )}
-              <Button
-                variant="outline"
-                size="sm"
-                className={ACTION_BUTTON_CLASS}
-                onClick={() => openServiceOrderIntakePreview(order)}
-              >
-                <HugeiconsIcon icon={File02Icon} className="mr-2 size-4" />
-                Pré-visualizar
-              </Button>
-              <ActionAvailabilityGate availability={generateIntakeAvailability}>
-                {({ disabled }) => (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={ACTION_BUTTON_CLASS}
-                    onClick={() => generateIntakeDocument.mutate()}
-                    disabled={disabled || generateIntakeDocument.isPending}
-                  >
-                    Gerar comprovante
-                  </Button>
-                )}
-              </ActionAvailabilityGate>
-              <ActionAvailabilityGate availability={openIntakeAvailability}>
-                {({ disabled }) => (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={ACTION_BUTTON_CLASS}
-                    onClick={() => openIntakeDocument.mutate()}
-                    disabled={disabled || openIntakeDocument.isPending}
-                  >
-                    Abrir comprovante
-                  </Button>
-                )}
-              </ActionAvailabilityGate>
-              <ActionAvailabilityGate availability={generateTagAvailability}>
-                {({ disabled }) => (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={ACTION_BUTTON_CLASS}
-                    onClick={() => generateTag.mutate()}
-                    disabled={disabled || generateTag.isPending}
-                  >
-                    Gerar etiqueta
-                  </Button>
-                )}
-              </ActionAvailabilityGate>
-              <ActionAvailabilityGate availability={openTagAvailability}>
-                {({ disabled }) => (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={ACTION_BUTTON_CLASS}
-                    onClick={() => openTag.mutate()}
-                    disabled={disabled || openTag.isPending}
-                  >
-                    Abrir etiqueta
-                  </Button>
-                )}
-              </ActionAvailabilityGate>
+              <ServiceOrderDocumentsMenu
+                actions={[
+                  {
+                    group: 'Comprovante de recebimento',
+                    label: 'Pré-visualizar',
+                    onSelect: () => openServiceOrderIntakePreview(order),
+                  },
+                  {
+                    group: 'Comprovante de recebimento',
+                    label: 'Gerar comprovante',
+                    availability: generateIntakeAvailability,
+                    pending: generateIntakeDocument.isPending,
+                    onSelect: () => generateIntakeDocument.mutate(),
+                  },
+                  {
+                    group: 'Comprovante de recebimento',
+                    label: 'Abrir comprovante',
+                    availability: openIntakeAvailability,
+                    pending: openIntakeDocument.isPending,
+                    onSelect: () => openIntakeDocument.mutate(),
+                  },
+                  {
+                    group: 'Etiqueta do instrumento',
+                    label: 'Gerar etiqueta',
+                    availability: generateTagAvailability,
+                    pending: generateTag.isPending,
+                    onSelect: () => generateTag.mutate(),
+                  },
+                  {
+                    group: 'Etiqueta do instrumento',
+                    label: 'Abrir etiqueta',
+                    availability: openTagAvailability,
+                    pending: openTag.isPending,
+                    onSelect: () => openTag.mutate(),
+                  },
+                ]}
+              />
             </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
@@ -2420,5 +2407,72 @@ function ServiceOrderDetailContent({
         </div>
       </div>
     </div>
+  )
+}
+
+type ServiceOrderDocumentAction = {
+  group: string
+  label: string
+  availability?: OperationAvailability
+  pending?: boolean
+  onSelect: () => void
+}
+
+/**
+ * The intake receipt and the instrument tag, behind one "Documentos" menu: the
+ * page header keeps the workflow action (if any) and the status, instead of
+ * five secondary buttons wrapping over two rows. An unavailable action stays
+ * listed with the reason under it.
+ */
+function ServiceOrderDocumentsMenu({
+  actions,
+}: {
+  actions: ServiceOrderDocumentAction[]
+}) {
+  const groups = [...new Set(actions.map((action) => action.group))]
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button variant="outline" size="sm" className={ACTION_BUTTON_CLASS} />
+        }
+      >
+        <HugeiconsIcon icon={File02Icon} className="mr-2 size-4" />
+        Documentos
+        <HugeiconsIcon icon={ArrowDown01Icon} className="ml-1 size-4" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-64">
+        {groups.map((group, index) => (
+          <DropdownMenuGroup key={group}>
+            {index > 0 ? <DropdownMenuSeparator /> : null}
+            <DropdownMenuLabel>{group}</DropdownMenuLabel>
+            {actions
+              .filter((action) => action.group === group)
+              .map((action) => {
+                const unavailable =
+                  action.availability && !action.availability.available
+                    ? action.availability.message
+                    : null
+                return (
+                  <DropdownMenuItem
+                    key={action.label}
+                    disabled={Boolean(unavailable) || action.pending}
+                    onClick={action.onSelect}
+                  >
+                    <span className="flex flex-col">
+                      <span>{action.label}</span>
+                      {unavailable ? (
+                        <span className="text-xs text-muted-foreground">
+                          {unavailable}
+                        </span>
+                      ) : null}
+                    </span>
+                  </DropdownMenuItem>
+                )
+              })}
+          </DropdownMenuGroup>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

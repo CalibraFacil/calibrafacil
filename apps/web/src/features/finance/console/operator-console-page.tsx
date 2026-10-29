@@ -165,6 +165,26 @@ export function FinanceOperatorConsolePage() {
 
   const data = overviewQuery.data
   const recentDocuments = data?.recentDocuments ?? []
+  // No document was ever issued and nothing is owed: the aging grid and the
+  // empty table would only repeat "R$ 0,00", so the page says how billing
+  // starts instead.
+  const hasNoActivity =
+    data !== undefined &&
+    recentDocuments.length === 0 &&
+    AGING_BUCKETS.every((bucket) => (data.aging[bucket.key] ?? 0) === 0)
+
+  if (hasNoActivity) {
+    return (
+      <StaggerGroup className="space-y-6">
+        <StaggerItem>
+          <ConsoleVitals data={data} />
+        </StaggerItem>
+        <StaggerItem>
+          <FinanceGettingStarted />
+        </StaggerItem>
+      </StaggerGroup>
+    )
+  }
 
   return (
     <StaggerGroup className="space-y-6">
@@ -236,5 +256,64 @@ export function FinanceOperatorConsolePage() {
         </Panel>
       </StaggerItem>
     </StaggerGroup>
+  )
+}
+
+const GETTING_STARTED_STEPS = [
+  {
+    title: 'Dê preço aos serviços',
+    description:
+      'Uma calibração só pode ser faturada quando o serviço tem preço ou um contrato que o cubra.',
+    to: '/dashboard/services',
+    action: 'Abrir serviços',
+  },
+  {
+    title: 'Fature o que foi aprovado',
+    description:
+      'Calibrações aprovadas aparecem em "Pronto para faturar", agrupadas por cliente.',
+    to: '/dashboard/finance/billing-readiness',
+    action: 'Ver pronto para faturar',
+  },
+  {
+    title: 'Conecte o ERP (opcional)',
+    description:
+      'As cobranças emitidas podem seguir para o seu ERP sem redigitação.',
+    to: '/dashboard/finance/erp',
+    action: 'Configurar ERP',
+  },
+] as const
+
+function FinanceGettingStarted() {
+  return (
+    <Panel className="p-5 sm:p-6">
+      <PanelHeader
+        title="Nenhuma cobrança ainda"
+        description="O painel se preenche quando a primeira cobrança é emitida. Três passos levam até lá."
+      />
+      <ol className="mt-5 grid gap-3 md:grid-cols-3">
+        {GETTING_STARTED_STEPS.map((step, index) => (
+          <li
+            key={step.to}
+            className="flex flex-col gap-2 rounded-xl border bg-muted/30 p-4"
+          >
+            <span className="font-mono text-xs text-muted-foreground">
+              Passo {index + 1}
+            </span>
+            <span className="text-sm font-medium">{step.title}</span>
+            <span className="text-pretty text-sm text-muted-foreground">
+              {step.description}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-auto self-start"
+              render={<Link to={step.to} />}
+            >
+              {step.action}
+            </Button>
+          </li>
+        ))}
+      </ol>
+    </Panel>
   )
 }

@@ -1,4 +1,4 @@
-import { type ClipboardEvent } from 'react'
+import { type ClipboardEvent, useState } from 'react'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Add01Icon, Delete02Icon } from '@hugeicons/core-free-icons'
 import { toast } from 'sonner'
@@ -584,6 +584,17 @@ export function TableInputRenderer({
   const shouldUsePanelRows =
     columns.length > 5 ||
     columns.some((col) => col.role === 'mass_standard_composition')
+  // A wide method table can be filled as a worksheet grid (one row per
+  // quantity, one column per point, like the paper sheet) or as one card per
+  // point. The grid is the default on a wide screen; a phone keeps the cards.
+  const [panelLayout, setPanelLayout] = useState<'grid' | 'cards'>(() =>
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(min-width: 1024px)').matches
+      ? 'grid'
+      : 'cards',
+  )
+  const usesWorksheetGrid = shouldUsePanelRows && panelLayout === 'grid'
   const panelColumnGroups = {
     primary: columns.filter(
       (column) => getMeasurementColumnGroup(column) === 'other',
@@ -908,7 +919,9 @@ export function TableInputRenderer({
           options={massCompositionOptions}
           config={col.massComposition}
           disabled={disabled || isInactivePhaseColumn}
-          presentation={shouldUsePanelRows ? 'field' : 'cell'}
+          presentation={
+            shouldUsePanelRows && !usesWorksheetGrid ? 'field' : 'cell'
+          }
           target={resolveMassCompositionTarget(field, row)}
           previousComposition={previousComposition}
           displayUnit={resolveDisplayUnit(
@@ -1048,9 +1061,171 @@ export function TableInputRenderer({
     )
   }
 
+  const layoutToggle = shouldUsePanelRows ? (
+    <div
+      role="group"
+      aria-label="Forma de preenchimento"
+      className="inline-flex rounded-lg bg-muted p-0.5 text-xs"
+    >
+      {(
+        [
+          ['grid', 'Grade'],
+          ['cards', 'Cartões'],
+        ] as const
+      ).map(([value, label]) => (
+        <button
+          key={value}
+          type="button"
+          aria-pressed={panelLayout === value}
+          onClick={() => setPanelLayout(value)}
+          className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
+            panelLayout === value
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  ) : null
+
+  const addRowFooter = !hasFixedLoadPoints ? (
+    <div className="flex flex-wrap items-center gap-2">
+      <Button variant="outline" size="sm" onClick={addRow} disabled={disabled}>
+        <HugeiconsIcon icon={Add01Icon} className="mr-2 h-4 w-4" />
+        Adicionar ponto
+      </Button>
+      <span className="text-xs text-muted-foreground">
+        Dica: cole (Ctrl+V) uma matriz da planilha, uma linha por ponto, para
+        preencher vários pontos de uma vez.
+      </span>
+    </div>
+  ) : null
+
+  if (usesWorksheetGrid) {
+    const pointLabel = (row: Record<string, unknown>, rowIndex: number) => {
+      const loadPoint = eccentricityLoadPointConfig
+        ? String(row[eccentricityLoadPointConfig.pointColumn] ?? '')
+        : ''
+      return loadPoint ? `Ponto ${loadPoint}` : `Ponto ${rowIndex + 1}`
+    }
+    const calculatedTargetsByRow = rows.map((row) => getCalculatedTargets(row))
+    const gridSections: Array<{
+      title: string | null
+      columns: TableColumn[]
+    }> = shouldGroupReadings
+      ? [
+          { title: null, columns: panelColumnGroups.primary },
+          { title: 'Antes do ajuste', columns: panelColumnGroups.before },
+          { title: 'Após o ajuste', columns: panelColumnGroups.after },
+        ]
+      : [{ title: null, columns }]
+
+    return (
+      <div className="space-y-2">
+        <div className="flex justify-end">{layoutToggle}</div>
+        {rows.length === 0 ? (
+          <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
+            Nenhum ponto adicionado
+          </div>
+        ) : (
+          <div className="rounded-md border">
+            <Table className="min-w-max">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="sticky left-0 z-10 min-w-44 bg-background">
+                    Grandeza
+                  </TableHead>
+                  {rows.map((row, rowIndex) => (
+                    <TableHead key={rowIndex} className="min-w-32 text-center">
+                      <span className="inline-flex items-center gap-1">
+                        {pointLabel(row, rowIndex)}
+                        {!hasFixedLoadPoints && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Remover ${pointLabel(row, rowIndex)}`}
+                            onClick={() => removeRow(rowIndex)}
+                            disabled={disabled}
+                            className="h-7 w-7"
+                          >
+                            <HugeiconsIcon
+                              icon={Delete02Icon}
+                              className="h-3.5 w-3.5"
+                            />
+                          </Button>
+                        )}
+                      </span>
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {gridSections.map((section) =>
+                  section.columns.filter(isPanelVisibleColumn).length === 0
+                    ? null
+                    : [
+                        section.title ? (
+                          <TableRow key={`section-${section.title}`}>
+                            <TableCell
+                              colSpan={rows.length + 1}
+                              className="bg-muted/40 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                            >
+                              {section.title}
+                            </TableCell>
+                          </TableRow>
+                        ) : null,
+                        ...section.columns
+                          .filter(isPanelVisibleColumn)
+                          .map((col) => (
+                            <TableRow key={col.key}>
+                              <TableHead
+                                scope="row"
+                                className="sticky left-0 z-10 h-auto min-w-44 max-w-56 whitespace-normal bg-background py-1.5 text-xs font-medium"
+                              >
+                                {col.label}
+                                {col.unit ? (
+                                  <span className="font-normal">
+                                    {' '}
+                                    ({col.unit})
+                                  </span>
+                                ) : null}
+                              </TableHead>
+                              {rows.map((row, rowIndex) => (
+                                <TableCell
+                                  key={rowIndex}
+                                  className="min-w-32 p-1"
+                                  onPaste={(event) =>
+                                    handleCellPaste(event, rowIndex, col.key)
+                                  }
+                                >
+                                  {renderCellInput(
+                                    row,
+                                    rowIndex,
+                                    col,
+                                    calculatedTargetsByRow[rowIndex] ??
+                                      new Set<string>(),
+                                  )}
+                                </TableCell>
+                              ))}
+                            </TableRow>
+                          )),
+                      ],
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+        {addRowFooter}
+      </div>
+    )
+  }
+
   if (shouldUsePanelRows) {
     return (
       <div className="space-y-2">
+        <div className="flex justify-end">{layoutToggle}</div>
         {rows.length === 0 ? (
           <div className="rounded-md border border-dashed p-4 text-center text-sm text-muted-foreground">
             Nenhuma linha adicionada

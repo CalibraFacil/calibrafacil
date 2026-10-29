@@ -560,14 +560,7 @@ export function ExecuteJobForm({
 
         {/* Right Column: Results & Validations */}
         <div className="min-w-0 space-y-5 xl:sticky xl:top-4 xl:self-start">
-          {officialExecution ? (
-            <ExecuteOfficialExecutionCard
-              officialExecution={officialExecution}
-              officialDiagnosticCount={officialDiagnosticCount}
-            />
-          ) : null}
-
-          {/* Formula Results */}
+          {/* Formula Results: what the technician checks first */}
           <ExecuteResultsCard
             open={sectionsOpen.results}
             onOpenChange={setSectionOpen('results')}
@@ -583,6 +576,14 @@ export function ExecuteJobForm({
             onOpenChange={setSectionOpen('validations')}
             validationResults={validationResults}
           />
+
+          {/* Audit trail of the persisted calculation, closed by default */}
+          {officialExecution ? (
+            <ExecuteOfficialExecutionCard
+              officialExecution={officialExecution}
+              officialDiagnosticCount={officialDiagnosticCount}
+            />
+          ) : null}
 
           {/* Debug Context */}
           <ExecuteCalculationContextCard

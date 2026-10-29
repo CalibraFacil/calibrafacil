@@ -160,14 +160,26 @@ export function buildJobReviewModel(
     reviewFormulas.length > 0 &&
     !!displayReviewResults &&
     Object.keys(displayReviewResults).length > 0
-  const criticalReviewFields = reviewDataFields.filter((field) =>
-    PRIORITY_REVIEW_FIELD_KEYS.includes(field.key),
-  )
+  // The readings the reviewer approves: the known priority tables first, then
+  // every other table this method recorded. A table is never flattened into
+  // the support context (it rendered as "[object Object]; ...").
+  const criticalReviewFields = [
+    ...reviewDataFields.filter((field) =>
+      PRIORITY_REVIEW_FIELD_KEYS.includes(field.key),
+    ),
+    ...reviewDataFields.filter(
+      (field) =>
+        field.type === 'table' &&
+        !PRIORITY_REVIEW_FIELD_KEYS.includes(field.key) &&
+        hasTableRows(displayReviewData?.[field.key]),
+    ),
+  ]
   const supportContextItems = buildReviewSupportContextItems({
     dataFields: reviewDataFields,
     displayData: displayReviewData,
     displayUnitFor: displayUnitForReview,
     excludePriorityFields: true,
+    excludeTableFields: true,
   })
   const reviewContextItems = [...equipmentSpecItems, ...supportContextItems]
   const priorityReviewFormulas = reviewFormulas
@@ -255,4 +267,8 @@ export function buildJobReviewModel(
     expandedUncertainty,
     verdict,
   }
+}
+
+function hasTableRows(value: unknown): boolean {
+  return Array.isArray(value) && value.length > 0
 }

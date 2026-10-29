@@ -44,6 +44,13 @@ export const VERDICT_PRESENTATION: Record<
     tone: 'warning',
     icon: Alert02Icon,
   },
+  nao_avaliado: {
+    label: 'Conformidade não avaliada',
+    description:
+      'Nenhum ponto com tolerância e nenhum critério de aceitação foram avaliados. Confira as leituras antes de aprovar.',
+    tone: 'warning',
+    icon: Alert02Icon,
+  },
   incompleto: {
     label: 'Evidência incompleta',
     description: 'Faltam leituras ou resultados calculados.',

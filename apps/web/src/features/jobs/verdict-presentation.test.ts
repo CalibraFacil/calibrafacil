@@ -40,6 +40,7 @@ describe('REQ-SPLIT-2 verdict presentation', () => {
       'nao_conforme',
       'atencao',
       'incompleto',
+      'nao_avaliado',
     ]
     expect(Object.keys(VERDICT_PRESENTATION)).toHaveLength(levels.length)
     expect(Object.keys(VERDICT_PRESENTATION)).toEqual(

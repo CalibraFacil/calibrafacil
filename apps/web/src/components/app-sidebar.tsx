@@ -26,8 +26,7 @@ import { Link } from '@tanstack/react-router'
 import { useActiveOrganization } from '@calibra-facil/auth/client'
 
 import {
-  dashboardManagementNavItems,
-  dashboardPrimaryNavItems,
+  dashboardNavSections,
   dashboardSecondaryNavItems,
   filterDashboardNavItems,
   type DashboardIconId,
@@ -103,12 +102,12 @@ export function AppSidebar() {
   const canAccessFinance = canAccessAdminOrOwner && !isDesktopRuntime()
 
   const navAccess = { canAccessFinance, canAccessAdminOrOwner }
-  const navMain = toNavMainItems(
-    filterDashboardNavItems(dashboardPrimaryNavItems, navAccess),
-  )
-  const managementItems = toNavMainItems(
-    filterDashboardNavItems(dashboardManagementNavItems, navAccess),
-  )
+  const sections = dashboardNavSections
+    .map((section) => ({
+      label: section.label,
+      items: toNavMainItems(filterDashboardNavItems(section.items, navAccess)),
+    }))
+    .filter((section) => section.items.length > 0)
   const secondaryItems = toNavMainItems(
     filterDashboardNavItems(dashboardSecondaryNavItems, navAccess),
   )
@@ -120,8 +119,13 @@ export function AppSidebar() {
         <SidebarSearch />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={navMain} />
-        <NavMain items={managementItems} label="Gestão" />
+        {sections.map((section) => (
+          <NavMain
+            key={section.label ?? 'home'}
+            items={section.items}
+            label={section.label}
+          />
+        ))}
         <SidebarGroup className="mt-auto">
           <SidebarGroupContent>
             <SidebarMenu>

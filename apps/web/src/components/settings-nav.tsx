@@ -88,7 +88,7 @@ const settingsNavGroups: Array<SettingsNavGroup> = [
     ],
   },
   {
-    label: 'Organização',
+    label: 'Laboratório',
     items: [
       {
         value: 'organization',
@@ -123,6 +123,8 @@ const settingsNavGroups: Array<SettingsNavGroup> = [
     ],
   },
   {
+    // Everything about the certificate, from its number to its delivery:
+    // release and automatic send used to be reachable only from Finance.
     label: 'Certificados',
     items: [
       {
@@ -131,11 +133,6 @@ const settingsNavGroups: Array<SettingsNavGroup> = [
         href: '/dashboard/settings/certificate-numbering',
         icon: <HugeiconsIcon icon={Certificate01Icon} className="size-4" />,
       },
-    ],
-  },
-  {
-    label: 'Assinatura',
-    items: [
       {
         value: 'signature',
         label: 'Assinatura digital',
@@ -148,10 +145,22 @@ const settingsNavGroups: Array<SettingsNavGroup> = [
         href: '/dashboard/settings/certificates',
         icon: <HugeiconsIcon icon={Certificate01Icon} className="size-4" />,
       },
+      {
+        value: 'certificate-release',
+        label: 'Liberação ao cliente',
+        href: '/dashboard/settings/certificate-release',
+        icon: <HugeiconsIcon icon={SecurityCheckIcon} className="size-4" />,
+      },
+      {
+        value: 'automatic-send',
+        label: 'Envio automático',
+        href: '/dashboard/settings/automatic-send',
+        icon: <HugeiconsIcon icon={Mail01Icon} className="size-4" />,
+      },
     ],
   },
   {
-    label: 'Plataforma',
+    label: 'Portal e integrações',
     items: [
       {
         value: 'portal-domain',

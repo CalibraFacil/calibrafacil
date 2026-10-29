@@ -18,7 +18,7 @@ export const INTERFACE_TOUR: TourStep[] = [
       'Cada cliente com seus equipamentos, contatos e o acesso ao portal, onde ele acompanha prazos e baixa os certificados.',
   },
   {
-    target: 'nav-building',
+    target: 'nav-methods',
     title: 'Laboratório',
     description:
       'Métodos de calibração, padrões de referência e competências do pessoal: a base técnica que a ISO/IEC 17025 pede.',

@@ -38,7 +38,7 @@ type NavMainProps = {
   label?: string
 }
 
-export function NavMain({ items, label = 'Dashboard' }: NavMainProps) {
+export function NavMain({ items, label }: NavMainProps) {
   const location = useLocation()
 
   const matchesPath = (targetUrl: string) => {
@@ -58,7 +58,7 @@ export function NavMain({ items, label = 'Dashboard' }: NavMainProps) {
 
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>{label}</SidebarGroupLabel>
+      {label ? <SidebarGroupLabel>{label}</SidebarGroupLabel> : null}
 
       <SidebarMenu>
         {items.map((item) => {
