@@ -13,7 +13,10 @@ overrides:
   "@tanstack/start-server-core": 1.167.2
   # GHSA-p6vx-979v-rg4c (critical, <=1.6.0) and GHSA-jp82-f5mq-hwhp (high,
   # <=1.6.2): seroval's JSON deserialization; reached through TanStack Router.
-  seroval: ^1.6.3
+  # GHSA-9wx9-5pv9-3349 (<1.6.10) and GHSA-f86p-h4j2-7qgj (<1.6.11), both
+  # moderate, move the floor to 1.6.11; held on the 1.6 line TanStack Router
+  # resolved before (seroval-plugins 1.5.x).
+  seroval: ~1.6.11
   # GHSA-vcvr-r3jv-pc5j: next >=16.2.0 <16.3.6 remote code execution in
   # next/og ImageResponse. GHSA-2464-fhr4-w9xw and GHSA-673q-mjm6-r5xr
   # (critical, unauthenticated RCE) and GHSA-p3m5-59mp-jv5r (high, DoS):
