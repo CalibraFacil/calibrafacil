@@ -32,9 +32,7 @@ describe('dashboard route metadata', () => {
   })
 
   it('groups Serviços and Materiais under the Catálogo nav section', () => {
-    const catalogo = allTopItems.find(
-      (item) => item.title === 'Catálogo',
-    )
+    const catalogo = allTopItems.find((item) => item.title === 'Catálogo')
     expect(catalogo).toBeDefined()
     const childTitles = (catalogo?.items ?? []).map((item) => item.title)
     expect(childTitles).toEqual(['Serviços', 'Materiais'])
