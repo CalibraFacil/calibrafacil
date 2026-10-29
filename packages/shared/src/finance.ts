@@ -727,7 +727,7 @@ export function resolveIssuedDueDate(
 export function getFinancialStatusLabel(status: FinancialStatus) {
   switch (status) {
     case "UNBILLED":
-      return "Nao faturado";
+      return "Não faturado";
     case "DRAFT":
       return "Rascunho";
     case "ISSUED":

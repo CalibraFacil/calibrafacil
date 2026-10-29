@@ -150,6 +150,7 @@ export function FromTemplatePage({ search }: { search: FromTemplateSearch }) {
     <div className="space-y-6">
       <Panel className="p-5 sm:p-6">
         <PanelHeader
+          level={1}
           title="Novo método a partir de modelo"
           description="Modelos curados, fundamentados em guias publicados. Cada modelo entra como RASCUNHO e exige a verificação do seu laboratório antes do uso."
         />

@@ -258,7 +258,10 @@ export function AutomaticSendSettingsPage() {
                       }}
                       disabled={rule.archivedAt !== null}
                     >
-                      <SelectTrigger className="sm:w-64">
+                      <SelectTrigger
+                        aria-label="Momento do envio"
+                        className="sm:w-64"
+                      >
                         {MILESTONE_LABEL[rule.milestone]}
                       </SelectTrigger>
                       <SelectContent

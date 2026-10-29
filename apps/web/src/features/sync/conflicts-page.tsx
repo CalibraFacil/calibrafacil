@@ -70,7 +70,9 @@ export function SyncConflictsPage() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Conflitos de sincronização</CardTitle>
+          <CardTitle role="heading" aria-level={1}>
+            Conflitos de sincronização
+          </CardTitle>
           <CardDescription>
             Esta fila existe apenas no aplicativo desktop.
           </CardDescription>
@@ -93,7 +95,9 @@ export function SyncConflictsPage() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Conflitos de sincronização</CardTitle>
+          <CardTitle role="heading" aria-level={1}>
+            Conflitos de sincronização
+          </CardTitle>
           <CardDescription>
             Não foi possível carregar os conflitos locais.
           </CardDescription>

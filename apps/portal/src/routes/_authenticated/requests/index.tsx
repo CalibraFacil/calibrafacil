@@ -314,7 +314,10 @@ function RequestsPage() {
               );
             }}
           >
-            <SelectTrigger className="w-full sm:w-48">
+            <SelectTrigger
+              aria-label="Filtrar por status"
+              className="w-full sm:w-48"
+            >
               <span>
                 {statusFilter ? REQUEST_STATUS[statusFilter].label : "Status"}
               </span>

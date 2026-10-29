@@ -274,7 +274,9 @@ export function ClaimAccountPage({ token, error }: ClaimAccountPageProps) {
       <ClaimShell>
         <Card>
           <CardHeader>
-            <CardTitle>Carregando acesso</CardTitle>
+            <CardTitle role="heading" aria-level={1}>
+              Carregando acesso
+            </CardTitle>
             <CardDescription>
               Verificando o link de configuração.
             </CardDescription>
@@ -302,7 +304,9 @@ export function ClaimAccountPage({ token, error }: ClaimAccountPageProps) {
     <ClaimShell>
       <Card>
         <CardHeader>
-          <CardTitle>Configurar acesso</CardTitle>
+          <CardTitle role="heading" aria-level={1}>
+            Configurar acesso
+          </CardTitle>
           <CardDescription>
             {metadata.organizationName} preparou uma conta para {metadata.email}
             .
@@ -459,7 +463,9 @@ function ClaimUnavailable({
     <ClaimShell>
       <Card>
         <CardHeader>
-          <CardTitle>Acesso indisponível</CardTitle>
+          <CardTitle role="heading" aria-level={1}>
+            Acesso indisponível
+          </CardTitle>
           <CardDescription>{message}</CardDescription>
         </CardHeader>
         {detail ? (

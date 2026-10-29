@@ -50,7 +50,7 @@ export function ReviewEvidenceMain({
   } = review
 
   return (
-    <main className="min-w-0 space-y-6">
+    <div className="min-w-0 space-y-6">
       <section className={`${REVIEW_SURFACE_CLASS} p-4`}>
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
@@ -394,6 +394,6 @@ export function ReviewEvidenceMain({
           </div>
         </section>
       )}
-    </main>
+    </div>
   )
 }

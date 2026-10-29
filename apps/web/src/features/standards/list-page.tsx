@@ -174,7 +174,7 @@ export function StandardsListPage({
                 setPage(1)
               }}
             >
-              <SelectTrigger className="w-48">
+              <SelectTrigger aria-label="Filtrar por status" className="w-48">
                 <span>
                   {statusFilter === 'ACTIVE'
                     ? 'Ativos'

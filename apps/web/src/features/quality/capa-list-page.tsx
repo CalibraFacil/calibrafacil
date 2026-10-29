@@ -275,7 +275,7 @@ export function CAPAListPage() {
                 setPage(1)
               }}
             >
-              <SelectTrigger className="w-48">
+              <SelectTrigger aria-label="Filtrar por status" className="w-48">
                 <span>
                   {statusFilter
                     ? STATUS_LABELS[statusFilter]
@@ -298,7 +298,10 @@ export function CAPAListPage() {
                 setPage(1)
               }}
             >
-              <SelectTrigger className="w-40">
+              <SelectTrigger
+                aria-label="Filtrar por severidade"
+                className="w-40"
+              >
                 <span>
                   {severityFilter
                     ? SEVERITY_LABELS[severityFilter]
@@ -319,7 +322,10 @@ export function CAPAListPage() {
                 setPage(1)
               }}
             >
-              <SelectTrigger className="w-40">
+              <SelectTrigger
+                aria-label="Filtrar por categoria"
+                className="w-40"
+              >
                 <span>
                   {categoryFilter
                     ? CATEGORY_LABELS[categoryFilter]

@@ -205,8 +205,7 @@ function stringProperty(value: unknown, key: string) {
   return typeof property === 'string' ? property : undefined
 }
 
-// Extract entity IDs from pathname
-function extractEntityIds(pathname: string): {
+type EntityIds = {
   customerId?: string
   assetId?: string
   methodId?: string
@@ -217,94 +216,39 @@ function extractEntityIds(pathname: string): {
   ncId?: string
   capaId?: string
   competenceId?: string
-} {
-  const parts = pathname.split('/')
-  const result: {
-    customerId?: string
-    assetId?: string
-    methodId?: string
-    jobId?: string
-    serviceId?: string
-    serviceOrderId?: string
-    standardId?: string
-    ncId?: string
-    capaId?: string
-    competenceId?: string
-  } = {}
+}
 
-  // /dashboard/clients/:id/...
-  const clientsIndex = parts.indexOf('clients')
-  if (clientsIndex !== -1 && parts[clientsIndex + 1]) {
-    const id = parts[clientsIndex + 1]
-    if (id !== 'new') result.customerId = id
-  }
+// The dashboard section whose second segment is an entity id, and the static
+// child routes that share that position (so `/dashboard/clients/groups` is the
+// groups page, not a customer called "groups").
+const ENTITY_SECTIONS: Record<
+  string,
+  { key: keyof EntityIds; staticSegments: readonly string[] }
+> = {
+  clients: { key: 'customerId', staticSegments: ['new', 'groups'] },
+  assets: { key: 'assetId', staticSegments: ['new'] },
+  methods: { key: 'methodId', staticSegments: ['new', 'from-template'] },
+  jobs: { key: 'jobId', staticSegments: ['new'] },
+  services: { key: 'serviceId', staticSegments: ['new'] },
+  // The segment is the opaque public id, which is also the detail query's
+  // cache key, so the crumb still resolves to the human OS number.
+  'service-orders': { key: 'serviceOrderId', staticSegments: ['new'] },
+  standards: {
+    key: 'standardId',
+    staticSegments: ['new', 'composition-profiles'],
+  },
+  nc: { key: 'ncId', staticSegments: ['new'] },
+  capa: { key: 'capaId', staticSegments: ['new'] },
+  personnel: { key: 'competenceId', staticSegments: ['new'] },
+}
 
-  // /dashboard/assets/:id/...
-  const assetsIndex = parts.indexOf('assets')
-  if (assetsIndex !== -1 && parts[assetsIndex + 1]) {
-    const id = parts[assetsIndex + 1]
-    if (id !== 'new') result.assetId = id
-  }
-
-  // /dashboard/methods/:id/...
-  const methodsIndex = parts.indexOf('methods')
-  if (methodsIndex !== -1 && parts[methodsIndex + 1]) {
-    const id = parts[methodsIndex + 1]
-    if (id !== 'new') result.methodId = id
-  }
-
-  // /dashboard/jobs/:id/...
-  const jobsIndex = parts.indexOf('jobs')
-  if (jobsIndex !== -1 && parts[jobsIndex + 1]) {
-    const id = parts[jobsIndex + 1]
-    if (id !== 'new') result.jobId = id
-  }
-
-  // /dashboard/services/:id/...
-  const servicesIndex = parts.indexOf('services')
-  if (servicesIndex !== -1 && parts[servicesIndex + 1]) {
-    const id = parts[servicesIndex + 1]
-    if (id !== 'new') result.serviceId = id
-  }
-
-  // /dashboard/service-orders/:publicId/... — the segment is the opaque id,
-  // which is also the detail query's cache key, so the crumb still resolves to
-  // the human OS number rather than rendering the uuid.
-  const serviceOrdersIndex = parts.indexOf('service-orders')
-  if (serviceOrdersIndex !== -1 && parts[serviceOrdersIndex + 1]) {
-    const id = parts[serviceOrdersIndex + 1]
-    if (id !== 'new') result.serviceOrderId = id
-  }
-
-  // /dashboard/standards/:id/...
-  const standardsIndex = parts.indexOf('standards')
-  if (standardsIndex !== -1 && parts[standardsIndex + 1]) {
-    const id = parts[standardsIndex + 1]
-    if (id !== 'new') result.standardId = id
-  }
-
-  // /dashboard/nc/:id/...
-  const ncIndex = parts.indexOf('nc')
-  if (ncIndex !== -1 && parts[ncIndex + 1]) {
-    const id = parts[ncIndex + 1]
-    if (id !== 'new') result.ncId = id
-  }
-
-  // /dashboard/capa/:id/...
-  const capaIndex = parts.indexOf('capa')
-  if (capaIndex !== -1 && parts[capaIndex + 1]) {
-    const id = parts[capaIndex + 1]
-    if (id !== 'new') result.capaId = id
-  }
-
-  // /dashboard/personnel/:id/...
-  const personnelIndex = parts.indexOf('personnel')
-  if (personnelIndex !== -1 && parts[personnelIndex + 1]) {
-    const id = parts[personnelIndex + 1]
-    if (id !== 'new') result.competenceId = id
-  }
-
-  return result
+// Extract the entity id of a /dashboard/<section>/<id>/... pathname.
+export function extractEntityIds(pathname: string): EntityIds {
+  const [, root, section, id] = pathname.split('/')
+  if (root !== 'dashboard' || !section || !id) return {}
+  const entry = ENTITY_SECTIONS[section]
+  if (!entry || entry.staticSegments.includes(id)) return {}
+  return { [entry.key]: id }
 }
 
 type DashboardHeaderProps = {

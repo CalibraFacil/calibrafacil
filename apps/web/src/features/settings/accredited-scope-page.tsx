@@ -209,6 +209,7 @@ export function AccreditedScopeSettingsPage() {
                 }}
               >
                 <SelectTrigger
+                  aria-label="Reação a violação do escopo"
                   disabled={!canSetEnforcement || enforcementMutation.isPending}
                 >
                   {scopeData?.enforcementMode === 'enforce'

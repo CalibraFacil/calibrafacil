@@ -132,7 +132,7 @@ function PortalLayout() {
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl">Acesso Nao Disponivel</CardTitle>
+            <CardTitle className="text-2xl">Acesso não disponível</CardTitle>
             <CardDescription>
               Você não possui acesso a nenhuma organização de cliente. Se você é
               um usuário do laboratório, acesse o painel principal.
@@ -170,10 +170,20 @@ function PortalLayout() {
       organizationId={activeOrg?.id ?? startup?.organizationId ?? null}
     >
       <SidebarProvider>
+        <a
+          href="#conteudo"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:shadow-md focus:ring-2 focus:ring-ring"
+        >
+          Pular para o conteúdo
+        </a>
         <PortalSidebar />
         <SidebarInset>
           <PortalHeader />
-          <main className="flex-1 space-y-4 p-4 2xl:p-6 3xl:px-8">
+          <main
+            id="conteudo"
+            tabIndex={-1}
+            className="flex-1 space-y-4 p-4 outline-none 2xl:p-6 3xl:px-8"
+          >
             {session.user.name?.trim() ? null : <CompleteProfilePrompt />}
             <Outlet />
           </main>

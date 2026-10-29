@@ -328,7 +328,7 @@ export function ServiceOrdersPage() {
               setPage(1)
             }}
           >
-            <SelectTrigger className="w-56">
+            <SelectTrigger aria-label="Filtrar por status" className="w-56">
               <span>{statusFilter ? statusLabels[statusFilter] : 'Todos'}</span>
             </SelectTrigger>
             <SelectContent>

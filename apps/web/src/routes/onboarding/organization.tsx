@@ -130,7 +130,9 @@ function OrganizationOnboardingPage() {
         <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <Card>
             <CardHeader>
-              <CardTitle>Complete o laboratório</CardTitle>
+              <CardTitle role="heading" aria-level={1}>
+                Complete o laboratório
+              </CardTitle>
               <CardDescription>
                 Revise os dados iniciais da organização provisionada pela equipe
                 CalibraFácil.

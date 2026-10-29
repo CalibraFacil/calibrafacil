@@ -275,13 +275,16 @@ function Sidebar({
         )}
         {...props}
       >
-        <div
+        {/* The navigation landmark: everything in the sidebar is reachable
+            from the screen reader's landmark list. */}
+        <nav
+          aria-label="Navegação principal"
           data-sidebar="sidebar"
           data-slot="sidebar-inner"
           className="bg-sidebar group-data-[variant=floating]:ring-sidebar-border group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:shadow-sm group-data-[variant=floating]:ring-1 flex size-full flex-col"
         >
           {children}
-        </div>
+        </nav>
       </div>
     </div>
   );
@@ -342,9 +345,11 @@ function SidebarRail({ className, ...props }: ComponentProps<"button">) {
   );
 }
 
-function SidebarInset({ className, ...props }: ComponentProps<"main">) {
+// A plain container: the app puts the page's single <main> inside it, after its
+// header, so the inset itself is not a second main landmark.
+function SidebarInset({ className, ...props }: ComponentProps<"div">) {
   return (
-    <main
+    <div
       data-slot="sidebar-inset"
       className={cn(
         "bg-background md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2 relative flex w-full min-w-0 flex-1 flex-col overflow-x-hidden",

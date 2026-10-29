@@ -106,7 +106,7 @@ function mapJobSchemaError(error: { field: JobFormField; message: string }) {
   }
 
   if (error.field === 'serviceId') {
-    return { ...error, message: 'Selecione um servico' }
+    return { ...error, message: 'Selecione um serviço' }
   }
 
   return error

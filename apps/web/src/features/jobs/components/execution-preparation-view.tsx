@@ -27,7 +27,7 @@ export function ExecutionPreparationView({
 
   return (
     <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-      <main className="min-w-0 space-y-6">
+      <div className="min-w-0 space-y-6">
         <section className={`${REVIEW_SURFACE_CLASS} p-4`}>
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
@@ -229,7 +229,7 @@ export function ExecutionPreparationView({
             )}
           </section>
         )}
-      </main>
+      </div>
 
       <aside className="min-w-0 space-y-6 xl:sticky xl:top-6">
         <section className={`${REVIEW_SURFACE_CLASS} p-4`}>

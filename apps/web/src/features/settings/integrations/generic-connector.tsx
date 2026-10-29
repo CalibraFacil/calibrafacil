@@ -514,7 +514,7 @@ function MappingEditor({
                       )
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger aria-label="Campo de origem">
                       <SelectValue>{field.sourceField ?? ''}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>

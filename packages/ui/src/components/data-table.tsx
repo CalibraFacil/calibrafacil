@@ -115,18 +115,30 @@ export function DataTable<TData, TValue>({
   return (
     <div className="space-y-4">
       <div className="rounded-md border">
-        <Table>
+        {/* On a phone the table keeps a readable width and scrolls sideways,
+            instead of squeezing every column to a word per line. */}
+        <Table
+          className={
+            table.getVisibleLeafColumns().length > 4
+              ? "min-w-[48rem] lg:min-w-0"
+              : undefined
+          }
+        >
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
                   <TableHead key={header.id}>
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext(),
-                        )}
+                    {header.isPlaceholder ? null : header.column.columnDef
+                        .header ? (
+                      flexRender(
+                        header.column.columnDef.header,
+                        header.getContext(),
+                      )
+                    ) : header.column.id === "actions" ? (
+                      // A row-actions column still needs a header name.
+                      <span className="sr-only">Ações</span>
+                    ) : null}
                   </TableHead>
                 ))}
               </TableRow>

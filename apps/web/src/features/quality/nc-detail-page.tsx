@@ -188,7 +188,7 @@ export function NCDetailPage({ id }: { id: string }) {
         <CardContent className="pt-6">
           <p className="text-red-500">
             Erro ao carregar nao conformidade:{' '}
-            {error?.message || 'NC nao encontrada'}
+            {error?.message || 'NC não encontrada'}
           </p>
         </CardContent>
       </Card>
@@ -889,7 +889,7 @@ function CapaForm({
         <Textarea
           value={actionPlan}
           onChange={(e) => setActionPlan(e.target.value)}
-          placeholder="Descreva o plano de acao corretiva/preventiva..."
+          placeholder="Descreva o plano de ação corretiva/preventiva..."
           rows={3}
         />
       </div>

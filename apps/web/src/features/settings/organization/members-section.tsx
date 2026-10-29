@@ -295,7 +295,11 @@ export function OrganizationMembersSection({
                             }
                             disabled={updatingRoleFor === member.id}
                           >
-                            <SelectTrigger size="sm" className="w-35">
+                            <SelectTrigger
+                              aria-label="Papel do membro"
+                              size="sm"
+                              className="w-35"
+                            >
                               <SelectValue>
                                 {updatingRoleFor === member.id
                                   ? 'Atualizando...'
@@ -359,7 +363,10 @@ export function OrganizationMembersSection({
                         }}
                         disabled={isInviting}
                       >
-                        <SelectTrigger className="w-35">
+                        <SelectTrigger
+                          aria-label="Papel do convidado"
+                          className="w-35"
+                        >
                           <SelectValue>
                             {availableRoles.find((r) => r.value === inviteRole)
                               ?.label || 'Membro'}

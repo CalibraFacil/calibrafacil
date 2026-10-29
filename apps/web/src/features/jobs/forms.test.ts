@@ -58,7 +58,7 @@ describe('job feature forms', () => {
       fieldErrors: [
         { field: 'customerId', message: 'Selecione um cliente' },
         { field: 'assetId', message: 'Selecione um ativo' },
-        { field: 'serviceId', message: 'Selecione um servico' },
+        { field: 'serviceId', message: 'Selecione um serviço' },
       ],
     })
   })
