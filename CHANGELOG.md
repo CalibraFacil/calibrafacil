@@ -5,6 +5,15 @@ Every release of Calibra Fácil, newest first. Entries are written by
 [Conventional Commits](https://www.conventionalcommits.org/) merged to `main`; see
 [`DEPLOYMENT.md`](./DEPLOYMENT.md#updating) before updating an instance.
 
+## [0.4.2](https://github.com/CalibraFacil/calibrafacil/compare/v0.4.1...v0.4.2) (2026-10-30)
+
+
+### Bug fixes
+
+* **deps:** seroval 1.6.12 and @hono/node-server 2.1.5 for four moderate advisories ([#177](https://github.com/CalibraFacil/calibrafacil/issues/177)) ([0629462](https://github.com/CalibraFacil/calibrafacil/commit/06294620353a43a874d00743674a68c339795394))
+* **lint:** drop the stale palette baseline for jobs columns; hash app features into the plugin test ([#180](https://github.com/CalibraFacil/calibrafacil/issues/180)) ([7660384](https://github.com/CalibraFacil/calibrafacil/commit/76603842d4158f55190aab5d0b9edc568c7bc91d))
+* **ui:** UX sweep of every lab-app and portal screen (Design with Intent /evaluate) ([#179](https://github.com/CalibraFacil/calibrafacil/issues/179)) ([e5974ca](https://github.com/CalibraFacil/calibrafacil/commit/e5974cade36a72f8634aaf011fdf222a334698da))
+
 ## [0.4.1](https://github.com/CalibraFacil/calibrafacil/compare/v0.4.0...v0.4.1) (2026-10-28)
 
 
