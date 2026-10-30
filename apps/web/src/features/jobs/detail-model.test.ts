@@ -404,6 +404,11 @@ describe('job detail model', () => {
     expect(
       buildJobVerdictModel({ ...base, environmentWithinLimits: false }).level,
     ).toBe('atencao')
+    // Data and results, but no point tolerance and no criterion evaluated:
+    // nothing supports "Conforme".
+    expect(
+      buildJobVerdictModel({ ...base, adjustmentSummaryRows: [] }).level,
+    ).toBe('nao_avaliado')
   })
 
   it('blocks cloud commands while the job still has local readings queued', () => {

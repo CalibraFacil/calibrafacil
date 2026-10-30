@@ -31,6 +31,20 @@ import {
 import { formatContextValue } from '../execute-page-helpers'
 import type { useAssetUnitConversion } from '../use-asset-unit-conversion'
 
+const FINGERPRINT_LABELS = [
+  ['Método', 'methodFingerprint'],
+  ['Entradas', 'inputFingerprint'],
+  ['Cálculo', 'calculationFingerprint'],
+  ['Resultado', 'resultFingerprint'],
+  ['Versão do motor', 'engineVersion'],
+  ['Opções do motor', 'engineOptionsFingerprint'],
+] as const
+
+/**
+ * The fingerprints that pin the persisted calculation (method, inputs,
+ * result, engine). They matter to an audit, not to the technician filling the
+ * worksheet, so they sit closed at the end of the side column.
+ */
 export function ExecuteOfficialExecutionCard({
   officialExecution,
   officialDiagnosticCount,
@@ -41,44 +55,104 @@ export function ExecuteOfficialExecutionCard({
   officialDiagnosticCount: number
 }) {
   return (
-    <Card className="rounded-2xl border-0 bg-card text-card-foreground shadow-[0_1px_2px_rgba(15,23,42,0.05),0_16px_40px_rgba(15,23,42,0.05)] ring-1 ring-foreground/10">
-      <CardHeader className="px-5 py-4">
-        <div className="flex items-center justify-between gap-3">
-          <CardTitle className="text-balance text-base">
-            Execução oficial
-          </CardTitle>
-          <Badge
-            variant={officialDiagnosticCount > 0 ? 'outline' : 'secondary'}
-          >
-            {officialDiagnosticCount} diagnóstico
-            {officialDiagnosticCount === 1 ? '' : 's'}
-          </Badge>
-        </div>
-        <CardDescription>
-          Resultado persistido pelo backend para o método compilado.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-2 px-5 pb-5 pt-0 text-xs">
-        {[
-          ['Method', officialExecution.methodFingerprint],
-          ['Input', officialExecution.inputFingerprint],
-          ['Calculation', officialExecution.calculationFingerprint],
-          ['Result', officialExecution.resultFingerprint],
-          ['Engine', officialExecution.engineVersion],
-          ['Engine options', officialExecution.engineOptionsFingerprint],
-        ].map(([label, value]) => (
-          <div
-            key={label}
-            className="grid grid-cols-[110px_minmax(0,1fr)] gap-2 rounded-lg bg-muted/40 px-2 py-1.5"
-          >
-            <span className="font-medium text-muted-foreground">{label}</span>
-            <span className="min-w-0 overflow-hidden font-mono [overflow-wrap:anywhere]">
-              {value || '-'}
-            </span>
-          </div>
-        ))}
-      </CardContent>
+    <Card className="rounded-2xl border-0 py-0 bg-card text-card-foreground shadow-[0_1px_2px_rgba(15,23,42,0.05),0_16px_40px_rgba(15,23,42,0.05)] ring-1 ring-foreground/10">
+      <Collapsible>
+        <CollapsibleTrigger className="group w-full text-left outline-none">
+          <CardHeader className="min-h-14 cursor-pointer rounded-t-2xl px-5 py-4 transition-[background-color] group-hover:bg-muted/40">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <CardTitle className="text-balance text-base">
+                  Rastreabilidade do cálculo
+                </CardTitle>
+                {officialDiagnosticCount > 0 ? (
+                  <Badge variant="outline">
+                    {officialDiagnosticCount} diagnóstico
+                    {officialDiagnosticCount === 1 ? '' : 's'}
+                  </Badge>
+                ) : null}
+              </div>
+              <HugeiconsIcon
+                icon={ArrowDown01Icon}
+                className="h-4 w-4 transition-transform duration-200 group-data-[panel-open]:rotate-180"
+              />
+            </div>
+            <CardDescription className="text-pretty">
+              Identificadores do método, das entradas e do resultado salvos,
+              usados na auditoria do cálculo.
+            </CardDescription>
+          </CardHeader>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <CardContent className="space-y-2 px-5 pb-5 pt-0 text-xs">
+            {FINGERPRINT_LABELS.map(([label, key]) => (
+              <div
+                key={key}
+                className="grid grid-cols-[110px_minmax(0,1fr)] gap-2 rounded-lg bg-muted/40 px-2 py-1.5"
+              >
+                <span className="font-medium text-muted-foreground">
+                  {label}
+                </span>
+                <span className="min-w-0 overflow-hidden font-mono [overflow-wrap:anywhere]">
+                  {officialExecution[key] || '-'}
+                </span>
+              </div>
+            ))}
+          </CardContent>
+        </CollapsibleContent>
+      </Collapsible>
     </Card>
+  )
+}
+
+/**
+ * A per-point result ("[200,002; 500,014; ...]") as one row per point,
+ * instead of a bracketed vector the technician has to count through.
+ */
+function perPointValues(displayValue: string): string[] | null {
+  const trimmed = displayValue.trim()
+  if (!trimmed.startsWith('[') || !trimmed.endsWith(']')) return null
+  const values = trimmed
+    .slice(1, -1)
+    .split(';')
+    .map((value) => value.trim())
+    .filter(Boolean)
+  return values.length > 1 ? values : null
+}
+
+function FormulaResultValue({
+  displayValue,
+  unit,
+}: {
+  displayValue: string
+  unit: string | null | undefined
+}) {
+  const points = perPointValues(displayValue)
+  if (!points) {
+    return (
+      <span className="block max-w-full overflow-hidden rounded-lg bg-background/80 px-2 py-1 font-mono text-sm leading-relaxed tabular-nums [overflow-wrap:anywhere]">
+        {displayValue}
+        {unit ? (
+          <span className="ml-1 text-xs text-muted-foreground">{unit}</span>
+        ) : null}
+      </span>
+    )
+  }
+  return (
+    <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 rounded-lg bg-background/80 px-2 py-1.5 text-sm">
+      {points.map((value, index) => (
+        <div key={index} className="contents">
+          <dt className="font-mono text-xs leading-6 text-muted-foreground">
+            Ponto {index + 1}
+          </dt>
+          <dd className="text-right font-mono leading-6 tabular-nums">
+            {value}
+            {unit ? (
+              <span className="ml-1 text-xs text-muted-foreground">{unit}</span>
+            ) : null}
+          </dd>
+        </div>
+      ))}
+    </dl>
   )
 }
 
@@ -156,14 +230,10 @@ export function ExecuteResultsCard({
                         {previewFormulaErrorMessage(result)}
                       </p>
                     ) : result?.value !== undefined ? (
-                      <span className="block max-w-full overflow-hidden rounded-lg bg-background/80 px-2 py-1 font-mono text-sm leading-relaxed tabular-nums [overflow-wrap:anywhere]">
-                        {result.displayValue}
-                        {displayUnitFor(formula.unit) && (
-                          <span className="text-xs text-muted-foreground ml-1">
-                            {displayUnitFor(formula.unit)}
-                          </span>
-                        )}
-                      </span>
+                      <FormulaResultValue
+                        displayValue={String(result.displayValue)}
+                        unit={displayUnitFor(formula.unit)}
+                      />
                     ) : (
                       <span className="text-sm text-muted-foreground">-</span>
                     )}

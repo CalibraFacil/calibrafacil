@@ -369,7 +369,7 @@ function PipelinePanel({
 
       <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_17rem]">
         <div className="min-w-0">
-          <div className="grid gap-px overflow-hidden rounded-xl bg-foreground/10 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)] sm:grid-cols-4">
+          <div className="grid gap-px overflow-hidden rounded-xl bg-foreground/10 shadow-[inset_0_0_0_1px_rgba(15,23,42,0.07)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.09)] sm:grid-cols-5">
             {stages.map((stage) => (
               <Link
                 key={stage.status}
@@ -399,7 +399,7 @@ function PipelinePanel({
                     <span
                       className={cn(
                         'font-mono text-2xl font-semibold leading-none tabular-nums',
-                        stage.count === 0 && 'text-muted-foreground/60',
+                        stage.count === 0 && 'text-muted-foreground',
                       )}
                     >
                       {stage.count}

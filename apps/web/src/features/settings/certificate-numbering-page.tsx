@@ -44,7 +44,7 @@ type FormState = {
 }
 
 const fallbackForm: FormState = {
-  name: 'Padrao',
+  name: 'Padrão',
   labCode: 'CAL',
   projectCode: '',
   numberTemplate: '{labCode}-{yyyy}-{seq}',
@@ -66,7 +66,7 @@ function formFromConfig(
 ): FormState {
   const config = response.profile.config
   return {
-    name: response.profile.name || 'Padrao',
+    name: response.profile.name || 'Padrão',
     labCode: config.labCode,
     projectCode: config.projectCode ?? '',
     numberTemplate: config.numberTemplate,
@@ -80,7 +80,7 @@ function formFromConfig(
 
 function buildPayload(form: FormState) {
   return {
-    name: form.name.trim() || 'Padrao',
+    name: form.name.trim() || 'Padrão',
     config: {
       labCode: form.labCode.trim() || 'CAL',
       projectCode: form.projectCode.trim() || null,

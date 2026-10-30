@@ -485,7 +485,10 @@ export function OrganizationUnitsSection({
                                     savingAssignmentsFor === member.id
                                   }
                                 >
-                                  <SelectTrigger className="w-full md:w-52">
+                                  <SelectTrigger
+                                    aria-label="Papel na unidade"
+                                    className="w-full md:w-52"
+                                  >
                                     <SelectValue>
                                       {getUnitAssignmentRoleLabel(
                                         assignmentDraftOverrides[member.id]?.[

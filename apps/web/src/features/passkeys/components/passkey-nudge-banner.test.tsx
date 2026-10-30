@@ -62,7 +62,7 @@ function resetState() {
 
 beforeEach(() => {
   resetState()
-  window.sessionStorage.clear()
+  window.localStorage.clear()
   vi.clearAllMocks()
 })
 
@@ -103,8 +103,8 @@ describe('PasskeyNudgeBanner visibility', () => {
     expect(screen.queryByText('Criar passkey')).toBeNull()
   })
 
-  it('renders nothing when previously dismissed this session', () => {
-    window.sessionStorage.setItem(DISMISS_KEY, '1')
+  it('renders nothing within 30 days of a dismissal', () => {
+    window.localStorage.setItem(DISMISS_KEY, String(Date.now()))
     render(<PasskeyNudgeBanner />)
     expect(screen.queryByText('Criar passkey')).toBeNull()
   })
@@ -123,12 +123,21 @@ describe('PasskeyNudgeBanner actions', () => {
     expect(state.toastSuccess).toHaveBeenCalled()
   })
 
-  it('dismisses for the session and hides when the close button is clicked', () => {
+  it('shows again once the 30-day snooze has passed', () => {
+    window.localStorage.setItem(
+      DISMISS_KEY,
+      String(Date.now() - 31 * 24 * 60 * 60 * 1000),
+    )
+    render(<PasskeyNudgeBanner />)
+    expect(screen.getByText('Criar passkey')).toBeTruthy()
+  })
+
+  it('snoozes and hides when "Agora não" is clicked', () => {
     render(<PasskeyNudgeBanner />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Agora não' }))
 
-    expect(window.sessionStorage.getItem(DISMISS_KEY)).toBe('1')
+    expect(Number(window.localStorage.getItem(DISMISS_KEY))).toBeGreaterThan(0)
     expect(screen.queryByText('Criar passkey')).toBeNull()
   })
 })

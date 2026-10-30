@@ -124,7 +124,7 @@ function makeErpColumns({
     },
     {
       id: 'action',
-      header: '',
+      header: () => <span className="sr-only">Ações</span>,
       enableSorting: false,
       enableHiding: false,
       cell: ({ row }) => {

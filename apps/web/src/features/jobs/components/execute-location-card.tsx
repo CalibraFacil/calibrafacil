@@ -90,7 +90,10 @@ export function ExecuteLocationCard({
                   }))
                 }}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger
+                  aria-label="Local da calibração"
+                  className="w-full"
+                >
                   <span>
                     {calibrationLocation.type === 'customer_site'
                       ? 'No cliente'

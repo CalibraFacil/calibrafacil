@@ -50,7 +50,7 @@ export function ReviewEvidenceMain({
   } = review
 
   return (
-    <main className="min-w-0 space-y-6">
+    <div className="min-w-0 space-y-6">
       <section className={`${REVIEW_SURFACE_CLASS} p-4`}>
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
@@ -130,136 +130,148 @@ export function ReviewEvidenceMain({
         )}
       </section>
 
-      <section className={`${REVIEW_SURFACE_CLASS} p-4`}>
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Primeiro olhar
-            </p>
-            <h2 className="text-balance text-base font-semibold">
-              Ajuste antes vs. depois por ponto
-            </h2>
-            <p className="text-pretty text-sm text-muted-foreground">
-              Mostra rapidamente o erro e a margem de conformidade antes e após
-              o ajuste.
-            </p>
+      {/* Only for methods with indication points: an empty "before vs after"
+          panel says nothing the readings below do not. */}
+      {adjustmentSummaryRows.length > 0 ? (
+        <section className={`${REVIEW_SURFACE_CLASS} p-4`}>
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Primeiro olhar
+              </p>
+              <h2 className="text-balance text-base font-semibold">
+                Ajuste antes vs. depois por ponto
+              </h2>
+              <p className="text-pretty text-sm text-muted-foreground">
+                Mostra rapidamente o erro e a margem de conformidade antes e
+                após o ajuste.
+              </p>
+            </div>
+            <Badge variant="outline" className="w-fit">
+              {adjustmentSummaryRows.length} pontos
+            </Badge>
           </div>
-          <Badge variant="outline" className="w-fit">
-            {adjustmentSummaryRows.length} pontos
-          </Badge>
-        </div>
-        {adjustmentSummaryRows.length > 0 ? (
-          <div className="max-w-full overflow-x-auto rounded-lg bg-background shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]">
-            <Table className="min-w-max text-[13px]">
-              <TableHeader className="bg-muted/50">
-                <TableRow className="hover:bg-transparent">
-                  <TableHead
-                    rowSpan={2}
-                    className="h-9 whitespace-nowrap border-r border-foreground/10 px-3 align-bottom text-[11px] font-semibold uppercase tracking-wider"
-                  >
-                    Ponto
-                  </TableHead>
-                  <TableHead
-                    colSpan={3}
-                    className="h-9 whitespace-nowrap px-3 text-center text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground"
-                  >
-                    Antes do ajuste
-                  </TableHead>
-                  <TableHead
-                    colSpan={3}
-                    className="h-9 whitespace-nowrap border-l border-foreground/10 px-3 text-center text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground"
-                  >
-                    Após o ajuste
-                  </TableHead>
-                </TableRow>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="h-9 whitespace-nowrap px-3 text-xs">
-                    Leituras
-                  </TableHead>
-                  <TableHead className="h-9 whitespace-nowrap px-3 text-xs">
-                    Erro
-                  </TableHead>
-                  <TableHead className="h-9 whitespace-nowrap px-3 text-xs">
-                    Margem
-                  </TableHead>
-                  <TableHead className="h-9 whitespace-nowrap border-l border-foreground/10 px-3 text-xs">
-                    Leituras
-                  </TableHead>
-                  <TableHead className="h-9 whitespace-nowrap px-3 text-xs">
-                    Erro
-                  </TableHead>
-                  <TableHead className="h-9 whitespace-nowrap px-3 text-xs">
-                    Margem
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {adjustmentSummaryRows.map((row) => (
-                  <TableRow
-                    key={row.key}
-                    className="even:bg-muted/20 hover:bg-muted/40"
-                  >
-                    <TableCell className="whitespace-nowrap border-r border-foreground/10 px-3 font-mono font-medium tabular-nums">
-                      {formatReviewValue(row.point, displayUnitForReview('g'))}
-                    </TableCell>
-                    <TableCell className="min-w-36 px-3 font-mono text-xs tabular-nums text-muted-foreground">
-                      {row.beforeReadings
-                        .map((reading) =>
-                          formatReviewValue(reading, displayUnitForReview('g')),
-                        )
-                        .join(' / ')}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap px-3 font-mono tabular-nums">
-                      {formatReviewValue(
-                        row.beforeError,
-                        displayUnitForReview('g'),
-                      )}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap px-3">
-                      {renderMarginBadge(
-                        row.beforeMargin,
-                        displayUnitForReview('g'),
-                      )}
-                    </TableCell>
-                    <TableCell className="min-w-36 border-l border-foreground/10 px-3 font-mono text-xs tabular-nums text-muted-foreground">
-                      {row.afterReadings
-                        .map((reading) =>
-                          formatReviewValue(reading, displayUnitForReview('g')),
-                        )
-                        .join(' / ')}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap px-3 font-mono tabular-nums">
-                      {formatReviewValue(
-                        row.afterError,
-                        displayUnitForReview('g'),
-                      )}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap px-3">
-                      {renderMarginBadge(
-                        row.afterMargin,
-                        displayUnitForReview('g'),
-                      )}
-                    </TableCell>
+          {adjustmentSummaryRows.length > 0 ? (
+            <div className="max-w-full overflow-x-auto rounded-lg bg-background shadow-[inset_0_0_0_1px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]">
+              <Table className="min-w-max text-[13px]">
+                <TableHeader className="bg-muted/50">
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead
+                      rowSpan={2}
+                      className="h-9 whitespace-nowrap border-r border-foreground/10 px-3 align-bottom text-[11px] font-semibold uppercase tracking-wider"
+                    >
+                      Ponto
+                    </TableHead>
+                    <TableHead
+                      colSpan={3}
+                      className="h-9 whitespace-nowrap px-3 text-center text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground"
+                    >
+                      Antes do ajuste
+                    </TableHead>
+                    <TableHead
+                      colSpan={3}
+                      className="h-9 whitespace-nowrap border-l border-foreground/10 px-3 text-center text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground"
+                    >
+                      Após o ajuste
+                    </TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        ) : (
-          <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-            Não há pontos de indicação para resumir.
-          </div>
-        )}
-      </section>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="h-9 whitespace-nowrap px-3 text-xs">
+                      Leituras
+                    </TableHead>
+                    <TableHead className="h-9 whitespace-nowrap px-3 text-xs">
+                      Erro
+                    </TableHead>
+                    <TableHead className="h-9 whitespace-nowrap px-3 text-xs">
+                      Margem
+                    </TableHead>
+                    <TableHead className="h-9 whitespace-nowrap border-l border-foreground/10 px-3 text-xs">
+                      Leituras
+                    </TableHead>
+                    <TableHead className="h-9 whitespace-nowrap px-3 text-xs">
+                      Erro
+                    </TableHead>
+                    <TableHead className="h-9 whitespace-nowrap px-3 text-xs">
+                      Margem
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {adjustmentSummaryRows.map((row) => (
+                    <TableRow
+                      key={row.key}
+                      className="even:bg-muted/20 hover:bg-muted/40"
+                    >
+                      <TableCell className="whitespace-nowrap border-r border-foreground/10 px-3 font-mono font-medium tabular-nums">
+                        {formatReviewValue(
+                          row.point,
+                          displayUnitForReview('g'),
+                        )}
+                      </TableCell>
+                      <TableCell className="min-w-36 px-3 font-mono text-xs tabular-nums text-muted-foreground">
+                        {row.beforeReadings
+                          .map((reading) =>
+                            formatReviewValue(
+                              reading,
+                              displayUnitForReview('g'),
+                            ),
+                          )
+                          .join(' / ')}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap px-3 font-mono tabular-nums">
+                        {formatReviewValue(
+                          row.beforeError,
+                          displayUnitForReview('g'),
+                        )}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap px-3">
+                        {renderMarginBadge(
+                          row.beforeMargin,
+                          displayUnitForReview('g'),
+                        )}
+                      </TableCell>
+                      <TableCell className="min-w-36 border-l border-foreground/10 px-3 font-mono text-xs tabular-nums text-muted-foreground">
+                        {row.afterReadings
+                          .map((reading) =>
+                            formatReviewValue(
+                              reading,
+                              displayUnitForReview('g'),
+                            ),
+                          )
+                          .join(' / ')}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap px-3 font-mono tabular-nums">
+                        {formatReviewValue(
+                          row.afterError,
+                          displayUnitForReview('g'),
+                        )}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap px-3">
+                        {renderMarginBadge(
+                          row.afterMargin,
+                          displayUnitForReview('g'),
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+              Não há pontos de indicação para resumir.
+            </div>
+          )}
+        </section>
+      ) : null}
 
       <section className={`${REVIEW_SURFACE_CLASS} p-4`}>
         <div className="mb-4">
           <h2 className="text-balance text-base font-semibold">
-            Ensaios principais
+            Leituras registradas
           </h2>
           <p className="text-pretty text-sm text-muted-foreground">
-            Indicação, excentricidade e repetibilidade aparecem antes dos dados
-            de apoio.
+            As tabelas de leitura do método, como foram capturadas na execução.
           </p>
         </div>
         {criticalReviewFields.length > 0 ? (
@@ -282,7 +294,7 @@ export function ReviewEvidenceMain({
           </div>
         ) : (
           <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-            Nenhum ensaio principal foi registrado para este job.
+            Nenhuma leitura foi registrada para esta calibração.
           </div>
         )}
       </section>
@@ -394,6 +406,6 @@ export function ReviewEvidenceMain({
           </div>
         </section>
       )}
-    </main>
+    </div>
   )
 }

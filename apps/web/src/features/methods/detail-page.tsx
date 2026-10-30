@@ -266,9 +266,9 @@ export function MethodDetailPage({ id }: { id: string }) {
       </Panel>
 
       <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <main className="min-w-0 space-y-6">
+        <div className="min-w-0 space-y-6">
           <MethodSpecPreview method={method} />
-        </main>
+        </div>
 
         <aside className="min-w-0 space-y-6">
           <Panel className="p-4 sm:p-5">

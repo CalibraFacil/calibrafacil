@@ -58,7 +58,7 @@ export function ApprovedRecordMain({
   } = model
 
   return (
-    <main className="min-w-0 space-y-6">
+    <div className="min-w-0 space-y-6">
       <Panel className="p-4 sm:p-5">
         <div className="flex items-start justify-between gap-4">
           <PanelHeader
@@ -276,6 +276,6 @@ export function ApprovedRecordMain({
           </div>
         </Panel>
       )}
-    </main>
+    </div>
   )
 }

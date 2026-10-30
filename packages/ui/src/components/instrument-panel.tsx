@@ -56,12 +56,16 @@ export function PanelHeader({
   description,
   action,
   className,
+  level = 2,
 }: {
   title: ReactNode;
   description?: ReactNode;
   action?: ReactNode;
   className?: string;
+  /** 1 when the panel header is the page's title. */
+  level?: 1 | 2;
 }) {
+  const Heading = level === 1 ? "h1" : "h2";
   return (
     <div
       className={cn(
@@ -70,9 +74,9 @@ export function PanelHeader({
       )}
     >
       <div className="min-w-0">
-        <h2 className="text-balance text-base font-semibold sm:text-lg">
+        <Heading className="text-balance text-base font-semibold sm:text-lg">
           {title}
-        </h2>
+        </Heading>
         {description ? (
           <p className="mt-1 text-pretty text-sm text-muted-foreground">
             {description}

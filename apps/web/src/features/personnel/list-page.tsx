@@ -159,7 +159,10 @@ export function PersonnelPage() {
                     setPage(1)
                   }}
                 >
-                  <SelectTrigger className="w-56">
+                  <SelectTrigger
+                    aria-label="Filtrar por status"
+                    className="w-56"
+                  >
                     <span>
                       {statusFilter
                         ? STATUS_LABELS[statusFilter]

@@ -315,7 +315,7 @@ export function ClientCalibrationsTab({ id }: { id: string }) {
                 setPage(1)
               }}
             >
-              <SelectTrigger className="w-44">
+              <SelectTrigger aria-label="Filtrar por status" className="w-44">
                 <span>
                   {statusFilter ? statusLabels[statusFilter] : 'Todos'}
                 </span>

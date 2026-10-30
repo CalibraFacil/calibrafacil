@@ -148,7 +148,7 @@ export function MaterialsListPage() {
                 setPage(1)
               }}
             >
-              <SelectTrigger className="w-40">
+              <SelectTrigger aria-label="Filtrar por status" className="w-40">
                 <span>
                   {statusFilter === 'active'
                     ? 'Ativos'

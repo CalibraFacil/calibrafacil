@@ -129,7 +129,11 @@ export function ChartCalibrations({ data, isLoading }: ChartCalibrationsProps) {
             // oxlint-disable-next-line typescript/consistent-type-assertions -- Select options are limited to TimeRange values.
             onValueChange={(v) => setTimeRange(v as TimeRange)}
           >
-            <SelectTrigger size="sm" className="w-24">
+            <SelectTrigger
+              aria-label="Período do gráfico"
+              size="sm"
+              className="w-24"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

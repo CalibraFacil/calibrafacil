@@ -12,14 +12,10 @@ import {
 import type { DateRange } from "react-day-picker";
 
 import { Badge } from "@calibra-facil/ui/badge";
+import { toast } from "sonner";
+import { PageHeader } from "@/components/page-header";
 import { StatusPill } from "@/components/status-pill";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@calibra-facil/ui/card";
+import { Card, CardContent } from "@calibra-facil/ui/card";
 import {
   Empty,
   EmptyContent,
@@ -125,15 +121,21 @@ function DownloadButton({ certificate }: { certificate: Certificate }) {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    } catch (error) {
-      console.error("Download error:", error);
+    } catch {
+      toast.error("Não foi possível baixar o certificado.", {
+        description: "Tente novamente em instantes.",
+      });
     } finally {
       setIsDownloading(false);
     }
   };
 
   if (!certificate.certificateUrl) {
-    return <Badge variant="outline">Gerando</Badge>;
+    return (
+      <Badge variant="outline" className="whitespace-nowrap">
+        PDF em geração
+      </Badge>
+    );
   }
 
   return (
@@ -149,7 +151,9 @@ function DownloadButton({ certificate }: { certificate: Certificate }) {
       ) : (
         <HugeiconsIcon icon={Download04Icon} className="size-4" />
       )}
-      <span className="sr-only">Baixar PDF</span>
+      <span className="sr-only">
+        Baixar PDF do certificado {certificate.jobId}
+      </span>
     </Button>
   );
 }
@@ -167,7 +171,9 @@ const columns: ColumnDef<Certificate>[] = [
         <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10">
           <HugeiconsIcon icon={File01Icon} className="size-4 text-primary" />
         </div>
-        <span className="font-medium">{row.original.jobId}</span>
+        <span className="font-medium whitespace-nowrap">
+          {row.original.jobId}
+        </span>
       </div>
     ),
   },
@@ -229,7 +235,7 @@ const columns: ColumnDef<Certificate>[] = [
   },
   {
     id: "actions",
-    header: "",
+    header: () => <span className="sr-only">Ações</span>,
     cell: ({ row }) => <DownloadButton certificate={row.original} />,
   },
 ];
@@ -317,13 +323,11 @@ function CertificatesPage() {
 
   return (
     <div className="portal-shell space-y-6">
+      <PageHeader
+        title="Certificados"
+        description="Acesse e baixe seus certificados de calibração."
+      />
       <Card>
-        <CardHeader>
-          <CardTitle>Certificados</CardTitle>
-          <CardDescription>
-            Acesse e baixe seus certificados de calibração.
-          </CardDescription>
-        </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap">
             <div className="relative min-w-50 flex-1 sm:max-w-sm">

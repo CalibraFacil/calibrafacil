@@ -353,7 +353,7 @@ function ImpactAssessmentForm({
                       })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger aria-label="Destinação do item">
                       <SelectValue placeholder="Disposição" />
                     </SelectTrigger>
                     <SelectContent>

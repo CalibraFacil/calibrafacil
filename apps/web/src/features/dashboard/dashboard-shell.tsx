@@ -130,11 +130,21 @@ export function DashboardLayout() {
       {!isContextSwitching ? <DashboardReadyMarker /> : null}
       <CommandPaletteProvider>
         <SidebarProvider>
+          <a
+            href="#conteudo"
+            className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:shadow-md focus:ring-2 focus:ring-ring"
+          >
+            Pular para o conteúdo
+          </a>
           <AppSidebar />
           <SidebarMobileAutoClose />
           <SidebarInset>
             <DashboardHeader suspendEntityQueries={isContextSwitching} />
-            <main className="flex-1 space-y-4 p-4">
+            <main
+              id="conteudo"
+              tabIndex={-1}
+              className="flex-1 space-y-4 p-4 outline-none"
+            >
               {shouldBlockChildRoutes || partitionGate.state === 'pending' ? (
                 <div className="space-y-4">
                   <div className="h-10 w-56 rounded-md border bg-card/60 animate-pulse" />
@@ -144,7 +154,11 @@ export function DashboardLayout() {
                 <CloudOnlyOfflineState title="Disponível apenas online" />
               ) : (
                 <>
-                  <PasskeyNudgeBanner />
+                  {/* Only on the home page: the floating card would sit over
+                      forms and tables everywhere else. */}
+                  {pathname === '/dashboard' || pathname === '/dashboard/' ? (
+                    <PasskeyNudgeBanner />
+                  ) : null}
                   <Outlet />
                 </>
               )}

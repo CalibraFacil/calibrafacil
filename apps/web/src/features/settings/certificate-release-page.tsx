@@ -243,7 +243,10 @@ export function CertificateReleasePolicyPage() {
                       }
                       disabled={policy.archivedAt !== null}
                     >
-                      <SelectTrigger className="sm:w-64">
+                      <SelectTrigger
+                        aria-label="Modo de liberação"
+                        className="sm:w-64"
+                      >
                         {MODE_LABEL[policy.mode]}
                       </SelectTrigger>
                       <SelectContent

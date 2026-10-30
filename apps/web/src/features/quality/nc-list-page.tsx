@@ -223,7 +223,7 @@ export function NCListPage() {
                 setPage(1)
               }}
             >
-              <SelectTrigger className="w-48">
+              <SelectTrigger aria-label="Filtrar por status" className="w-48">
                 <span>
                   {statusFilter === 'open'
                     ? 'Abertas'
@@ -248,7 +248,7 @@ export function NCListPage() {
                 setPage(1)
               }}
             >
-              <SelectTrigger className="w-48">
+              <SelectTrigger aria-label="Filtrar por tipo" className="w-48">
                 <span>
                   {typeFilter === 'work'
                     ? 'Trabalho'

@@ -288,7 +288,7 @@ export function SpcOverviewPage() {
                 setPage(1)
               }}
             >
-              <SelectTrigger className="w-52">
+              <SelectTrigger aria-label="Filtrar por status" className="w-52">
                 <span>
                   {statusFilter
                     ? SPC_STATUS_LABELS[statusFilter]

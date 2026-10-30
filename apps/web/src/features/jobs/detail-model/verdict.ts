@@ -11,6 +11,9 @@ export type JobVerdictLevel =
   | 'nao_conforme'
   | 'atencao'
   | 'incompleto'
+  /** Data and results exist, but no point tolerance and no acceptance
+   * criterion was evaluated: nothing supports a conformity statement. */
+  | 'nao_avaliado'
 
 export type JobVerdict = {
   level: JobVerdictLevel
@@ -102,6 +105,8 @@ export function buildJobVerdictModel(input: {
     level = 'incompleto'
   } else if (criteriaFailed > 0 || pointsOutOfTolerance > 0) {
     level = 'nao_conforme'
+  } else if (pointsTotal === 0 && input.acceptanceItems.length === 0) {
+    level = 'nao_avaliado'
   } else if (criteriaWarning > 0 || environment === 'out') {
     level = 'atencao'
   } else {

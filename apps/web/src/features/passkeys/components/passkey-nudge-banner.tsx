@@ -19,12 +19,15 @@ function dismissKey(userId: string): string {
   return `${DISMISS_KEY_PREFIX}${userId}`
 }
 
-// Dismissal is scoped to the browser session and to the user id, so the nudge
-// reappears on a new login session (and never leaks across users) until a
-// passkey actually exists.
-function readDismissed(userId: string): boolean {
+// "Agora não" snoozes the nudge for this user in this browser for 30 days:
+// asking again on every login would be nagging. It still never leaks across
+// users, and the passkeys settings page is always there.
+const SNOOZE_MS = 30 * 24 * 60 * 60 * 1000
+
+function readDismissed(userId: string, now = Date.now()): boolean {
   try {
-    return window.sessionStorage.getItem(dismissKey(userId)) === '1'
+    const at = Number(window.localStorage.getItem(dismissKey(userId)))
+    return Number.isFinite(at) && at > 0 && now - at < SNOOZE_MS
   } catch {
     return false
   }
@@ -32,7 +35,7 @@ function readDismissed(userId: string): boolean {
 
 function writeDismissed(userId: string): void {
   try {
-    window.sessionStorage.setItem(dismissKey(userId), '1')
+    window.localStorage.setItem(dismissKey(userId), String(Date.now()))
   } catch {
     // Best-effort; if storage is unavailable the banner simply reappears.
   }
@@ -113,7 +116,7 @@ export function PasskeyNudgeBanner() {
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label="Agora não"
+            aria-label="Fechar"
             onClick={handleDismiss}
             disabled={addPasskey.isPending}
             className="-mr-1 -mt-1 shrink-0"
@@ -121,7 +124,16 @@ export function PasskeyNudgeBanner() {
             <HugeiconsIcon icon={Cancel01Icon} className="size-4" />
           </Button>
         </div>
-        <div className="mt-3 flex justify-end">
+        <div className="mt-3 flex justify-end gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={handleDismiss}
+            disabled={addPasskey.isPending}
+          >
+            Agora não
+          </Button>
           <Button
             type="button"
             size="sm"

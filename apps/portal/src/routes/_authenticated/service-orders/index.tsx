@@ -12,13 +12,8 @@ import {
 
 import { Button } from "@calibra-facil/ui/button";
 import { Badge } from "@calibra-facil/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@calibra-facil/ui/card";
+import { Card, CardContent } from "@calibra-facil/ui/card";
+import { PageHeader } from "@/components/page-header";
 import { DataTable } from "@calibra-facil/ui/data-table";
 import { DataTableColumnHeader } from "@calibra-facil/ui/data-table-column-header";
 import {
@@ -250,13 +245,11 @@ function ServiceOrdersPage() {
 
   return (
     <div className="portal-shell space-y-6">
+      <PageHeader
+        title="Ordens de serviço"
+        description="Acompanhe instrumentos recebidos, orçamentos e documentos."
+      />
       <Card>
-        <CardHeader>
-          <CardTitle>Ordens de Serviço</CardTitle>
-          <CardDescription>
-            Acompanhe instrumentos recebidos, orçamentos e documentos.
-          </CardDescription>
-        </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap">
@@ -285,7 +278,10 @@ function ServiceOrdersPage() {
                   setPage(1);
                 }}
               >
-                <SelectTrigger className="w-full sm:w-56">
+                <SelectTrigger
+                  aria-label="Filtrar por status"
+                  className="w-full sm:w-56"
+                >
                   <span>
                     {statusFilter ? statusLabels[statusFilter] : "Status"}
                   </span>

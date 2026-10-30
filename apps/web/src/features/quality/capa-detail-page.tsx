@@ -370,7 +370,7 @@ export function CAPADetailPage({ id }: { id: string }) {
                       : 'bg-red-100 text-red-800'
                   }
                 >
-                  {capa.effectivenessConfirmed ? 'Sim' : 'Nao'}
+                  {capa.effectivenessConfirmed ? 'Sim' : 'Não'}
                 </Badge>
               </div>
               {capa.verificationNotes && (

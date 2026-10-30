@@ -10,6 +10,7 @@ import {
 } from '@hugeicons/core-free-icons'
 
 import { Badge } from '@calibra-facil/ui/badge'
+import { STATUS_TONE, type SignalTone } from '@calibra-facil/ui/status-tone'
 import { Button } from '@calibra-facil/ui/button'
 import { SyncStateBadge } from '@/components/sync-state-badge'
 import {
@@ -63,19 +64,17 @@ const statusLabels: Record<JobStatus, string> = {
   SUPERSEDED: 'Retificado',
 }
 
-const statusVariants: Record<
-  JobStatus,
-  'default' | 'secondary' | 'destructive' | 'outline'
-> = {
-  DRAFT: 'secondary',
-  IN_PROGRESS: 'default',
-  REVIEW: 'outline',
-  GENERATING_PDF: 'outline',
-  RENDER_FAILED: 'destructive',
-  APPROVED: 'default',
-  REJECTED: 'destructive',
-  CANCELED: 'secondary',
-  SUPERSEDED: 'outline',
+// One tone per stage, so "in execution" and "approved" never look alike.
+const STATUS_TONES: Record<JobStatus, SignalTone> = {
+  DRAFT: 'neutral',
+  IN_PROGRESS: 'info',
+  REVIEW: 'warning',
+  GENERATING_PDF: 'info',
+  RENDER_FAILED: 'critical',
+  APPROVED: 'ok',
+  REJECTED: 'critical',
+  CANCELED: 'neutral',
+  SUPERSEDED: 'neutral',
 }
 
 // A due date is a calendar date (a Postgres date): show the day it names.
@@ -111,7 +110,7 @@ function JobDetailLink({ job }: { job: Job }) {
     <Link
       to="/dashboard/jobs/$id"
       params={{ id: routeId }}
-      className="font-mono font-medium hover:underline"
+      className="whitespace-nowrap font-mono font-medium hover:underline"
       preload="intent"
       {...prewarmIntentHandlers}
     >
@@ -184,7 +183,10 @@ export const jobsColumns: ColumnDef<Job>[] = [
       <div>
         {row.original.serviceName || '-'}
         {row.original.methodName && (
-          <span className="block text-xs text-muted-foreground">
+          <span
+            className="line-clamp-1 text-xs text-muted-foreground"
+            title={`${row.original.methodName} v${row.original.methodVersion}`}
+          >
             {row.original.methodName} v{row.original.methodVersion}
           </span>
         )}
@@ -259,12 +261,12 @@ export const jobsColumns: ColumnDef<Job>[] = [
       return (
         <div className="flex flex-wrap items-center gap-2">
           <Badge
-            variant={statusVariants[status]}
-            className={
-              isGenerating
-                ? 'bg-amber-100 text-amber-700 border-amber-300 animate-pulse dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700'
-                : ''
-            }
+            variant="outline"
+            className={cn(
+              'whitespace-nowrap border-transparent',
+              STATUS_TONE[STATUS_TONES[status]].surface,
+              isGenerating && 'animate-pulse',
+            )}
           >
             {isGenerating && (
               <span className="inline-flex">

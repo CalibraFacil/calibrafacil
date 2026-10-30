@@ -52,179 +52,177 @@ export const dashboardRedirectRouteMeta = [
   },
 ] satisfies DashboardRedirectRouteMeta[]
 
-export const dashboardPrimaryNavItems = [
+export type DashboardNavSection = {
+  /** No label for the home entry at the top. */
+  label?: string
+  items: DashboardNavItem[]
+}
+
+// The sidebar follows the laboratory's work, not the data model: the daily
+// flow first (request -> service order -> calibration -> visit), then the
+// records it uses, the technical and quality base ISO/IEC 17025 asks for, and
+// the management areas.
+export const dashboardNavSections = [
   {
-    title: 'Painel',
-    url: '/dashboard',
-    icon: 'home',
+    items: [{ title: 'Painel', url: '/dashboard', icon: 'home' }],
   },
   {
-    title: 'Clientes',
-    url: '/dashboard/clients',
-    icon: 'customers',
+    label: 'Operação',
     items: [
       {
-        title: 'Todos os clientes',
-        url: '/dashboard/clients',
-        icon: 'customers',
+        title: 'Solicitações',
+        url: '/dashboard/requests',
+        icon: 'requests',
       },
       {
-        title: 'Grupos',
-        url: '/dashboard/clients/groups',
-        icon: 'building',
+        title: 'Ordens de serviço',
+        url: '/dashboard/service-orders',
+        icon: 'serviceOrders',
+      },
+      { title: 'Calibrações', url: '/dashboard/jobs', icon: 'jobs' },
+      { title: 'Visitas', url: '/dashboard/visits', icon: 'visits' },
+    ],
+  },
+  {
+    label: 'Cadastros',
+    items: [
+      {
+        title: 'Clientes',
+        url: '/dashboard/clients',
+        icon: 'customers',
+        items: [
+          {
+            title: 'Todos os clientes',
+            url: '/dashboard/clients',
+            icon: 'customers',
+          },
+          {
+            title: 'Grupos',
+            url: '/dashboard/clients/groups',
+            icon: 'building',
+          },
+        ],
+      },
+      { title: 'Ativos', url: '/dashboard/assets', icon: 'assets' },
+      {
+        title: 'Catálogo',
+        url: '#',
+        icon: 'services',
+        items: [
+          {
+            title: 'Serviços',
+            url: '/dashboard/services',
+            icon: 'services',
+          },
+          {
+            title: 'Materiais',
+            url: '/dashboard/materials',
+            icon: 'materials',
+          },
+        ],
       },
     ],
   },
   {
-    title: 'Ativos',
-    url: '/dashboard/assets',
-    icon: 'assets',
-  },
-  {
-    title: 'Laboratório',
-    url: '#',
-    icon: 'building',
+    label: 'Laboratório',
     items: [
+      { title: 'Métodos', url: '/dashboard/methods', icon: 'methods' },
+      { title: 'Padrões', url: '/dashboard/standards', icon: 'ruler' },
       {
-        title: 'Métodos de Calibração',
-        url: '/dashboard/methods',
-        icon: 'methods',
-      },
-      {
-        title: 'Padrões de Referência',
-        url: '/dashboard/standards',
-        icon: 'ruler',
-      },
-      {
-        title: 'Competências do Pessoal',
+        title: 'Pessoal e competências',
         url: '/dashboard/personnel',
         icon: 'personnel',
       },
-    ],
-  },
-  {
-    title: 'Catálogo',
-    url: '#',
-    icon: 'services',
-    items: [
       {
-        title: 'Serviços',
-        url: '/dashboard/services',
-        icon: 'services',
-      },
-      {
-        title: 'Materiais',
-        url: '/dashboard/materials',
-        icon: 'materials',
-      },
-    ],
-  },
-  {
-    title: 'Calibrações',
-    url: '/dashboard/jobs',
-    icon: 'jobs',
-  },
-  {
-    title: 'Ordens de Serviço',
-    url: '/dashboard/service-orders',
-    icon: 'serviceOrders',
-  },
-  {
-    title: 'Solicitações',
-    url: '/dashboard/requests',
-    icon: 'requests',
-  },
-  {
-    title: 'Visitas',
-    url: '/dashboard/visits',
-    icon: 'visits',
-  },
-  {
-    title: 'Qualidade',
-    url: '#',
-    icon: 'quality',
-    items: [
-      {
-        title: 'Não Conformidades',
-        url: '/dashboard/nc',
+        title: 'Qualidade',
+        url: '#',
         icon: 'quality',
-      },
-      {
-        title: 'Ações Corretivas (CAPA)',
-        url: '/dashboard/capa',
-        icon: 'services',
-      },
-      {
-        title: 'Ensaios de Proficiência',
-        url: '/dashboard/proficiency-tests',
-        icon: 'quality',
-      },
-      {
-        title: 'Cartas de Controle (CEP)',
-        url: '/dashboard/spc',
-        icon: 'analytics',
+        items: [
+          {
+            title: 'Não conformidades',
+            url: '/dashboard/nc',
+            icon: 'quality',
+          },
+          {
+            title: 'Ações corretivas (CAPA)',
+            url: '/dashboard/capa',
+            icon: 'services',
+          },
+          {
+            title: 'Ensaios de proficiência',
+            url: '/dashboard/proficiency-tests',
+            icon: 'clipboard',
+          },
+          {
+            title: 'Cartas de controle (CEP)',
+            url: '/dashboard/spc',
+            icon: 'analytics',
+          },
+        ],
       },
     ],
   },
   {
-    title: 'Financeiro',
-    url: '#',
-    icon: 'wallet',
-    requiredModule: 'finance',
-    requiredRole: 'admin-or-owner',
+    label: 'Gestão',
     items: [
       {
-        title: 'Painel',
-        url: '/dashboard/finance',
-        icon: 'analytics',
-      },
-      {
-        title: 'Pronto para faturar',
-        url: '/dashboard/finance/billing-readiness',
+        title: 'Financeiro',
+        url: '#',
         icon: 'wallet',
+        requiredModule: 'finance',
+        requiredRole: 'admin-or-owner',
+        items: [
+          {
+            title: 'Painel financeiro',
+            url: '/dashboard/finance',
+            icon: 'analytics',
+          },
+          {
+            title: 'Pronto para faturar',
+            url: '/dashboard/finance/billing-readiness',
+            icon: 'wallet',
+          },
+          {
+            title: 'Recebíveis',
+            url: '/dashboard/finance/receivables',
+            icon: 'creditCard',
+          },
+          {
+            title: 'Contratos',
+            url: '/dashboard/finance/contracts',
+            icon: 'clipboard',
+          },
+          {
+            title: 'Análises',
+            url: '/dashboard/finance/analytics',
+            icon: 'analytics',
+          },
+          {
+            title: 'Automação',
+            url: '/dashboard/finance/automation',
+            icon: 'ruler',
+          },
+          {
+            title: 'ERP',
+            url: '/dashboard/finance/erp',
+            icon: 'settings',
+          },
+        ],
       },
       {
-        title: 'Recebíveis',
-        url: '/dashboard/finance/receivables',
-        icon: 'creditCard',
-      },
-      {
-        title: 'Contratos',
-        url: '/dashboard/finance/contracts',
-        icon: 'clipboard',
-      },
-      {
-        title: 'Análises',
-        url: '/dashboard/finance/analytics',
+        title: 'Relatórios',
+        url: '/dashboard/reports',
         icon: 'analytics',
+        requiredRole: 'admin-or-owner',
       },
       {
-        title: 'Automação',
-        url: '/dashboard/finance/automation',
-        icon: 'ruler',
-      },
-      {
-        title: 'ERP',
-        url: '/dashboard/finance/erp',
+        title: 'Configurações',
+        url: '/dashboard/settings',
         icon: 'settings',
       },
     ],
   },
-] satisfies DashboardNavItem[]
-
-export const dashboardManagementNavItems = [
-  {
-    title: 'Relatórios',
-    url: '/dashboard/reports',
-    icon: 'analytics',
-    requiredRole: 'admin-or-owner',
-  },
-  {
-    title: 'Configurações',
-    url: '/dashboard/settings',
-    icon: 'settings',
-  },
-] satisfies DashboardNavItem[]
+] satisfies DashboardNavSection[]
 
 export const dashboardSecondaryNavItems = [
   {
