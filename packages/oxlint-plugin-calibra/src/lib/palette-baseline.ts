@@ -26,7 +26,6 @@ export const PALETTE_BASELINE: Baseline = new Map<string, number>([
   ["apps/web/src/features/jobs/components/approved-record-hero.tsx", 14],
   ["apps/web/src/features/jobs/components/approved-record-renderers.tsx", 1],
   ["apps/web/src/features/jobs/components/certificate-progress-button.tsx", 3],
-  ["apps/web/src/features/jobs/components/columns.tsx", 6],
   ["apps/web/src/features/jobs/components/execute-environment-card.tsx", 7],
   ["apps/web/src/features/jobs/components/execute-header.tsx", 6],
   ["apps/web/src/features/jobs/components/execute-method-field.tsx", 5],
