@@ -5,7 +5,7 @@
 #   docker compose --profile backup build backup
 #
 # Only plain, well-known packages: no service of ours and nothing that phones home.
-FROM postgres:17-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b
+FROM postgres:18-alpine@sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5
 
 RUN apk add --no-cache aws-cli age tzdata
 
