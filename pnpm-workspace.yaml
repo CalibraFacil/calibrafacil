@@ -37,7 +37,11 @@ overrides:
   lodash: ^4.18.1
   defu: ^6.1.7
   drizzle-orm: ^0.45.2
-  node-forge: ^1.4.0
+  # GHSA-7wch-p9px-956x, -jc66-7q78-782g, -8hrf-8g6f-7xwp, -hqq3-7jhf-c5jx,
+  # -5x38-2vff-x55p (high) and GHSA-86w9-cpqp-85rv, with six lower ones: TLS
+  # DoS, X.509 basicConstraints and PKCS#1 v1.5 verification flaws in
+  # node-forge <=1.4.0. 1.4.2 is the first patched line.
+  node-forge: ^1.4.2
   # GHSA-2v37-7h3g-55p8: nanoid <3.3.18 loops indefinitely when a custom
   # generator is called with size zero. Pulled transitively through postcss
   # under vite (48 paths, all build tooling). postcss declares nanoid ^3.3.17,
@@ -227,18 +231,6 @@ overrides:
   # inside a try/catch, solely for GLOBAL_AGENT_* proxy support that our desktop
   # builds don't use, so the optional dependency is dropped instead.
   "@electron/get>global-agent": "-"
-
-auditConfig:
-  ignoreGhsas:
-    # GHSA-86w9-cpqp-85rv: node-forge <=1.4.0 RSA PKCS#1 v1.5 signature
-    # verification accepts extra nested DigestAlgorithm elements. There is NO
-    # patched release: the advisory names >=1.4.1, but npm's latest is 1.4.0
-    # (re-checked 2026-10-01). Not reachable here: packages/signing uses
-    # node-forge only to parse A1 (P12) certificates and, through
-    # @signpdf/signer-p12, to create signatures; certificate-chain and CRL
-    # verification go through pkijs/WebCrypto. Replace with an override the
-    # moment a patched node-forge ships.
-    - GHSA-86w9-cpqp-85rv
 
 onlyBuiltDependencies:
   - "@serialport/bindings-cpp"
