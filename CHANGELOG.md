@@ -5,6 +5,14 @@ Every release of Calibra Fácil, newest first. Entries are written by
 [Conventional Commits](https://www.conventionalcommits.org/) merged to `main`; see
 [`DEPLOYMENT.md`](./DEPLOYMENT.md#updating) before updating an instance.
 
+## [0.4.3](https://github.com/CalibraFacil/calibrafacil/compare/v0.4.2...v0.4.3) (2026-11-04)
+
+
+### Bug fixes
+
+* **deps:** glob 14 and minimatch 11 for the build tooling (two moderate advisories) ([#185](https://github.com/CalibraFacil/calibrafacil/issues/185)) ([7354672](https://github.com/CalibraFacil/calibrafacil/commit/73546722ebcde297ea949763e209f03eda781f1b))
+* **security:** CodeQL first pass, linear-time regexes for input the server parses ([#187](https://github.com/CalibraFacil/calibrafacil/issues/187)) ([36886e2](https://github.com/CalibraFacil/calibrafacil/commit/36886e2d2d219defc3017cbdc68af1478cb9b0a2))
+
 ## [0.4.2](https://github.com/CalibraFacil/calibrafacil/compare/v0.4.1...v0.4.2) (2026-11-04)
 
 
