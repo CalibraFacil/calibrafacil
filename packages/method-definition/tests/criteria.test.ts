@@ -297,17 +297,22 @@ describe("REQ-CRIT-004: compileCriterionExpression throws without boolean compar
     }
   });
 
-  it("rejects a long comparator-free expression in linear time (CodeQL js/polynomial-redos)", () => {
-    const started = performance.now();
-    expect(() =>
-      compileCriterionExpression(
-        criterion(`error${" ".repeat(50_000)}x`),
-        fakeEngine,
-        ["error"],
-        fp,
-      ),
-    ).toThrow("must be a boolean comparison");
-    expect(performance.now() - started).toBeLessThan(500);
+  it("rejects long adversarial expressions in linear time (CodeQL js/polynomial-redos)", () => {
+    for (const expression of [
+      `error${" ".repeat(50_000)}x`,
+      `${"a<".repeat(25_000)}\nb`,
+    ]) {
+      const started = performance.now();
+      expect(() =>
+        compileCriterionExpression(
+          criterion(expression),
+          fakeEngine,
+          ["error"],
+          fp,
+        ),
+      ).toThrow("must be a boolean comparison");
+      expect(performance.now() - started).toBeLessThan(500);
+    }
   });
 
   it("does NOT throw when a valid comparator is present", () => {
