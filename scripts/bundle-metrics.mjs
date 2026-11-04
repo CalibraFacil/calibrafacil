@@ -11,7 +11,7 @@ import path from "node:path";
 import { gzipSync } from "node:zlib";
 
 export function detectBundleEntryAssets(html) {
-  const scriptTags = html.match(/<script\b[^>]*>/g) ?? [];
+  const scriptTags = html.match(/<script\b[^>]*>/gi) ?? [];
   const moduleScript = scriptTags.find(
     (tag) => hasAttributeValue(tag, "type", "module") && jsSrc(tag),
   );
@@ -38,7 +38,7 @@ export function detectInitialGraphAssets(html) {
   const js = [];
   const css = [];
 
-  for (const tag of html.match(/<script\b[^>]*>/g) ?? []) {
+  for (const tag of html.match(/<script\b[^>]*>/gi) ?? []) {
     const src = jsSrc(tag);
     if (src && isLocal(src)) js.push(src);
   }

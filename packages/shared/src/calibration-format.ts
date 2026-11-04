@@ -17,7 +17,7 @@ export interface CalibrationValueFormatOptions {
  */
 export function parseMeasurementInput(text: string): number | null {
   const trimmed = text.trim();
-  if (!/^[+-]?(?:\d+[.,]?\d*|[.,]\d+)(?:e[+-]?\d+)?$/i.test(trimmed)) {
+  if (!/^[+-]?(?:\d+(?:[.,]\d*)?|[.,]\d+)(?:e[+-]?\d+)?$/i.test(trimmed)) {
     return null;
   }
   const parsed = Number(trimmed.replace(",", "."));
@@ -26,7 +26,7 @@ export function parseMeasurementInput(text: string): number | null {
 
 /** Whether `text` can still become a measurement while it is being typed. */
 export function isPartialMeasurementInput(text: string): boolean {
-  return /^-?\d*[.,]?\d*$/.test(text);
+  return /^-?\d*(?:[.,]\d*)?$/.test(text);
 }
 
 /** A machine-formatted number ("12.5", "-0.003") with the pt-BR decimal comma. */
@@ -34,8 +34,7 @@ export function withDecimalComma(text: string): string {
   return text.replace(".", ",");
 }
 
-const NUMERIC_STRING_PATTERN =
-  /^[+-]?(?:(?:\d+\.?\d*)|(?:\.\d+))(?:e[+-]?\d+)?$/i;
+const NUMERIC_STRING_PATTERN = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i;
 
 function isNumericValue(value: unknown): value is number | string {
   if (typeof value === "number") return Number.isFinite(value);

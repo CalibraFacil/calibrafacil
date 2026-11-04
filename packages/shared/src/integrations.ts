@@ -1,4 +1,5 @@
 import { classifyParsedIp, parseIp } from "./net/ip-range";
+import { trimTrailingSlashes } from "./public-urls";
 
 export type IntegrationType = "financial_erp";
 
@@ -1084,7 +1085,7 @@ function defaultMappingRules(
 }
 
 function normalizePath(path: string, fallback: string): string {
-  const trimmed = path.trim().replace(/\/+$/, "");
+  const trimmed = trimTrailingSlashes(path.trim());
   if (!trimmed) return fallback;
   return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
 }

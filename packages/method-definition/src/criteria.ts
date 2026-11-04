@@ -5,7 +5,33 @@ import type {
   NumericInput,
 } from "./types";
 
-const COMPARATOR_PATTERN = /^\s*(.+?)\s*(<=|>=|==|!=|<|>)\s*(.+?)\s*$/;
+const COMPARATORS = ["<=", ">=", "==", "!=", "<", ">"] as const;
+const LINE_TERMINATOR = /[\n\r\u2028\u2029]/;
+
+/**
+ * Splits "left <op> right" at the first comparator that has a non-empty left
+ * side. A scan rather than a regex: every lazy-group pattern for this shape
+ * backtracks quadratically on input like "a<a<a<...\n" (CodeQL
+ * js/polynomial-redos), and method definitions are compiled on the server.
+ */
+function splitComparison(
+  expression: string,
+): { left: string; operator: string; right: string } | null {
+  for (let index = 1; index < expression.length; index += 1) {
+    const operator = COMPARATORS.find((candidate) =>
+      expression.startsWith(candidate, index),
+    );
+    if (!operator) continue;
+    const left = expression.slice(0, index).trim();
+    if (!left) continue;
+    const right = expression.slice(index + operator.length).trim();
+    if (!right || LINE_TERMINATOR.test(left) || LINE_TERMINATOR.test(right)) {
+      return null;
+    }
+    return { left, operator, right };
+  }
+  return null;
+}
 
 export type CompiledCriterion = {
   criterion: MethodAcceptanceCriterion;
@@ -27,15 +53,15 @@ export function compileCriterionExpression(
   allowedVariables: readonly string[],
   fingerprint: (value: unknown) => string,
 ): CompiledCriterion {
-  const match = criterion.expression.match(COMPARATOR_PATTERN);
-  if (!match?.[1] || !match[2] || !match[3]) {
+  const comparison = splitComparison(criterion.expression);
+  if (!comparison) {
     throw new Error(
       "Acceptance criterion expression must be a boolean comparison",
     );
   }
+  const leftOriginalExpression = comparison.left;
+  const rightOriginalExpression = comparison.right;
 
-  const leftOriginalExpression = match[1].trim();
-  const rightOriginalExpression = match[3].trim();
   const leftRewrite = rewriteAggregatesForCompile(
     leftOriginalExpression,
     allowedVariables,
@@ -57,7 +83,7 @@ export function compileCriterionExpression(
   const right = engine.compileFormula(rightRewrite.expression, {
     allowedVariables: allowedWithSyntheticVariables,
   });
-  const operator = parseCriterionOperator(match[2]);
+  const operator = parseCriterionOperator(comparison.operator);
   const variables = [
     ...new Set(
       [...left.variables, ...right.variables]
@@ -148,7 +174,7 @@ function rewriteAggregatesForCompile(
   const reserved = new Set(reservedVariables);
   let index = 0;
   const rewritten = expression.replace(
-    /\b(mean|std|min|max)\s*\(\s*(\[[^\]]*\]|[A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*(\d+))?\s*\)/g,
+    /\b(mean|std|min|max)\s*\(\s*(\[[^\]]*\]|[A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*(\d+)\s*)?\)/g,
     (match, _functionName: string, argument: string) => {
       const tokens = [
         ...new Set(argument.match(/[A-Za-z][A-Za-z0-9_]*/g) ?? []),
@@ -242,7 +268,7 @@ function rewriteArrayAggregates(
   const reserved = new Set(Object.keys(context));
   let index = Object.keys(aggregateInputs).length;
   expression.replace(
-    /\b(mean|std|min|max)\s*\(\s*(\[[^\]]*\]|[A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*(\d+))?\s*\)/g,
+    /\b(mean|std|min|max)\s*\(\s*(\[[^\]]*\]|[A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*(\d+)\s*)?\)/g,
     (match, functionName: string, argument: string, correction?: string) => {
       const values = resolveInlineNumericArguments(argument, context);
       if (!values.length) return match;

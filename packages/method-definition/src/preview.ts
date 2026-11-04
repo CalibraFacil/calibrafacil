@@ -1246,7 +1246,7 @@ function isVariableUsedOnlyInAggregateMatching(
   if (allOccurrences.length === 0) return true;
 
   const aggregatePattern =
-    /\b(?:mean|std|min|max)\s*\(\s*(\[[^\]]*\]|[A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*\d+)?\s*\)/g;
+    /\b(?:mean|std|min|max)\s*\(\s*(\[[^\]]*\]|[A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*\d+\s*)?\)/g;
   const coveredRanges = [...expression.matchAll(aggregatePattern)]
     .filter(
       (match) =>
@@ -1287,7 +1287,7 @@ function rewriteArrayAggregates(
   const reserved = new Set(Object.keys(context));
   let index = Object.keys(aggregateInputs).length;
   return expression.replace(
-    /\b(mean|std|min|max)\s*\(\s*(\[[^\]]*\]|[A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*(\d+))?\s*\)/g,
+    /\b(mean|std|min|max)\s*\(\s*(\[[^\]]*\]|[A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*(\d+)\s*)?\)/g,
     (match, functionName: string, argument: string, correction?: string) => {
       const trimmedArgument = argument.trim();
       const argumentContext =

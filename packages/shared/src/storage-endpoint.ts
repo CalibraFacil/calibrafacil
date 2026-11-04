@@ -1,3 +1,4 @@
+import { trimTrailingSlashes } from "./public-urls";
 /**
  * S3 connection settings for the object store.
  *
@@ -28,7 +29,7 @@ export function resolveS3EndpointConfig(env: S3EndpointEnv): S3EndpointConfig {
   const customEndpoint = clean(env.R2_ENDPOINT);
   if (customEndpoint) {
     return {
-      endpoint: customEndpoint.replace(/\/+$/, ""),
+      endpoint: trimTrailingSlashes(customEndpoint),
       region: clean(env.R2_REGION) ?? "us-east-1",
       forcePathStyle: true,
     };

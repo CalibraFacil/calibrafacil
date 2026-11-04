@@ -414,8 +414,15 @@ export function stringifySyncConflictPayload(value: unknown) {
   return JSON.stringify(value ?? {});
 }
 
+/** Strips leading/trailing dashes without `/^-+|-+$/`, which backtracks quadratically. */
+function trimDashes(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value.charCodeAt(start) === 45) start += 1;
+  while (end > start && value.charCodeAt(end - 1) === 45) end -= 1;
+  return value.slice(start, end);
+}
+
 function safeSyncIdSegment(value: string) {
-  return (
-    value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "local"
-  );
+  return trimDashes(value.replace(/[^a-zA-Z0-9._-]+/g, "-")) || "local";
 }
