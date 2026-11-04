@@ -62,6 +62,10 @@ updates:
     ignore:
       - dependency-name: node
         update-types: ["version-update:semver-major"]
+      # deploy/backup runs pg_dump/pg_restore of the database's own major
+      # (PostgreSQL 17 in both compose files): it moves with them, not alone.
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: chore
       include: scope
