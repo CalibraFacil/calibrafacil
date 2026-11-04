@@ -24,7 +24,7 @@ overrides:
   lodash: ^4.18.1
   defu: ^6.1.7
   drizzle-orm: ^0.45.2
-  node-forge: ^1.4.0
+  node-forge: ^1.4.2
   nanoid@<3.3.18: ^3.3.18
   source-map-js@<1.2.2: ^1.2.2
   picomatch@<2.3.2: ^2.3.2
@@ -787,8 +787,8 @@ importers:
         specifier: ^3.0.10
         version: 3.0.10
       node-forge:
-        specifier: ^1.4.0
-        version: 1.4.0
+        specifier: ^1.4.2
+        version: 1.4.2
       pkijs:
         specifier: ^3.4.0
         version: 3.4.0
@@ -1392,7 +1392,7 @@ importers:
         version: 3.3.0(pdf-lib@1.17.1)
       '@signpdf/signer-p12':
         specifier: ^3.2.5
-        version: 3.3.0(node-forge@1.4.0)
+        version: 3.3.0(node-forge@1.4.2)
       '@signpdf/signpdf':
         specifier: ^3.2.5
         version: 3.3.0
@@ -1400,8 +1400,8 @@ importers:
         specifier: ^3.0.10
         version: 3.0.10
       node-forge:
-        specifier: ^1.4.0
-        version: 1.4.0
+        specifier: ^1.4.2
+        version: 1.4.2
       pdf-lib:
         specifier: ^1.17.1
         version: 1.17.1
@@ -4541,7 +4541,7 @@ packages:
     resolution: {integrity: sha512-MLynYKgUBu29ojIueIDV34sIOFDFpP0s1gQORxCc0zhs1jfy0juqU2xQpjUayMbhzB4L0zS9dPwgHtok1f89Cg==}
     engines: {node: '>=12', yarn: '>=1.22.18'}
     peerDependencies:
-      node-forge: ^1.4.0
+      node-forge: ^1.4.2
 
   '@signpdf/signpdf@3.3.0':
     resolution: {integrity: sha512-/vy3dPTsTbLHdsKRarPQw8++UqN8GXxjEVnl4ZRl+o/zMWFqVb861RM5bxoRMGGMuPSvb1Rgt2lmVobEc0YUpw==}
@@ -7378,8 +7378,8 @@ packages:
   node-api-version@0.2.1:
     resolution: {integrity: sha512-2xP/IGGMmmSQpI1+O/k72jF/ykvZ89JeuKX3TLJAYPDVLUalrshrLHkeVcCCZqG/eEa635cr8IBYzgnDvM2O8Q==}
 
-  node-forge@1.4.0:
-    resolution: {integrity: sha512-LarFH0+6VfriEhqMMcLX2F7SwSXeWwnEAJEsYm5QKWchiVYVvJyV9v7UDvUv+w5HO23ZpQTXDv/GxdDdMyOuoQ==}
+  node-forge@1.4.2:
+    resolution: {integrity: sha512-rRtAR5XLJ8gCKd9du4qrKAsgCG1ObGP4gLeNJMa4vYSeq4bmBMOJk5IHkrviBV0q7uoAJlVd8HEQYQSVUb4FGQ==}
     engines: {node: '>= 6.13.0'}
 
   node-gyp-build@4.8.4:
@@ -11936,10 +11936,10 @@ snapshots:
       '@signpdf/utils': 3.3.0
       pdf-lib: 1.17.1
 
-  '@signpdf/signer-p12@3.3.0(node-forge@1.4.0)':
+  '@signpdf/signer-p12@3.3.0(node-forge@1.4.2)':
     dependencies:
       '@signpdf/utils': 3.3.0
-      node-forge: 1.4.0
+      node-forge: 1.4.2
 
   '@signpdf/signpdf@3.3.0':
     dependencies:
@@ -15115,7 +15115,7 @@ snapshots:
     dependencies:
       semver: 7.8.5
 
-  node-forge@1.4.0: {}
+  node-forge@1.4.2: {}
 
   node-gyp-build@4.8.4: {}
 
