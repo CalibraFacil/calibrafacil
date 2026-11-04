@@ -51,7 +51,7 @@ function forgeCertificateToPkijs(
  */
 export function parsePemCertificates(pem: string): pkijs.Certificate[] {
   const blocks = pem.match(
-    /-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g,
+    /-----BEGIN CERTIFICATE-----[A-Za-z0-9+/=\s]+-----END CERTIFICATE-----/g,
   );
   if (!blocks) return [];
   return blocks.map((block) => {

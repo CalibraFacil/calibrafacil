@@ -85,15 +85,22 @@ export function encodeKeyPart(label: string, value: string): string {
   return encodeURIComponent(trimmed);
 }
 
+/** Strips leading/trailing dashes without `/^-+|-+$/`, which backtracks quadratically. */
+function trimDashes(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value.charCodeAt(start) === 45) start += 1;
+  while (end > start && value.charCodeAt(end - 1) === 45) end -= 1;
+  return value.slice(start, end);
+}
+
 /**
  * Sanitize a free-form path segment (sync entity ids, file identities). Mirrors
  * the previous `safeR2Segment` in sync.ts: keeps alphanumerics/`._-`, collapses
  * the rest to `-`, and falls back to "local" when nothing survives.
  */
 export function safeR2Segment(value: string): string {
-  return (
-    value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "local"
-  );
+  return trimDashes(value.replace(/[^a-zA-Z0-9._-]+/g, "-")) || "local";
 }
 
 /**
@@ -106,9 +113,9 @@ export function slugify(value: string, maxLength = 40): string {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
+    .replace(/^-|-$/g, "")
     .slice(0, maxLength)
-    .replace(/-+$/g, "");
+    .replace(/-$/, "");
 }
 
 type Dateish = Date | string | null | undefined;

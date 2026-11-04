@@ -39,6 +39,14 @@ describe("measurement values in pt-BR (roadmap 2 F3, Q47)", () => {
     expect(isPartialMeasurementInput("1a")).toBe(false);
   });
 
+  it("answers in linear time on long digit runs (CodeQL js/polynomial-redos)", () => {
+    const long = `${"0".repeat(50_000)}x`;
+    const started = performance.now();
+    expect(parseMeasurementInput(long)).toBeNull();
+    expect(isPartialMeasurementInput(long)).toBe(false);
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+
   it("puts the comma into a machine-formatted number", () => {
     expect(withDecimalComma("12.5")).toBe("12,5");
     expect(withDecimalComma("1e-7")).toBe("1e-7");

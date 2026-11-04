@@ -5,7 +5,7 @@ import type {
   NumericInput,
 } from "./types";
 
-const COMPARATOR_PATTERN = /^\s*(.+?)\s*(<=|>=|==|!=|<|>)\s*(.+?)\s*$/;
+const COMPARATOR_PATTERN = /^(.+?)(<=|>=|==|!=|<|>)(.+)$/;
 
 export type CompiledCriterion = {
   criterion: MethodAcceptanceCriterion;
@@ -27,15 +27,15 @@ export function compileCriterionExpression(
   allowedVariables: readonly string[],
   fingerprint: (value: unknown) => string,
 ): CompiledCriterion {
-  const match = criterion.expression.match(COMPARATOR_PATTERN);
-  if (!match?.[1] || !match[2] || !match[3]) {
+  const match = criterion.expression.trim().match(COMPARATOR_PATTERN);
+  const leftOriginalExpression = match?.[1]?.trim();
+  const rightOriginalExpression = match?.[3]?.trim();
+  if (!leftOriginalExpression || !match?.[2] || !rightOriginalExpression) {
     throw new Error(
       "Acceptance criterion expression must be a boolean comparison",
     );
   }
 
-  const leftOriginalExpression = match[1].trim();
-  const rightOriginalExpression = match[3].trim();
   const leftRewrite = rewriteAggregatesForCompile(
     leftOriginalExpression,
     allowedVariables,
@@ -148,7 +148,7 @@ function rewriteAggregatesForCompile(
   const reserved = new Set(reservedVariables);
   let index = 0;
   const rewritten = expression.replace(
-    /\b(mean|std|min|max)\s*\(\s*(\[[^\]]*\]|[A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*(\d+))?\s*\)/g,
+    /\b(mean|std|min|max)\s*\(\s*(\[[^\]]*\]|[A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*(\d+)\s*)?\)/g,
     (match, _functionName: string, argument: string) => {
       const tokens = [
         ...new Set(argument.match(/[A-Za-z][A-Za-z0-9_]*/g) ?? []),
@@ -242,7 +242,7 @@ function rewriteArrayAggregates(
   const reserved = new Set(Object.keys(context));
   let index = Object.keys(aggregateInputs).length;
   expression.replace(
-    /\b(mean|std|min|max)\s*\(\s*(\[[^\]]*\]|[A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*(\d+))?\s*\)/g,
+    /\b(mean|std|min|max)\s*\(\s*(\[[^\]]*\]|[A-Za-z][A-Za-z0-9_]*)\s*(?:,\s*(\d+)\s*)?\)/g,
     (match, functionName: string, argument: string, correction?: string) => {
       const values = resolveInlineNumericArguments(argument, context);
       if (!values.length) return match;

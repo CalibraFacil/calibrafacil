@@ -40,9 +40,16 @@ function processEnv(): PublicUrlEnv {
   return result;
 }
 
+/** Drops trailing slashes without a `/\/+$/` regex, which backtracks quadratically. */
+export function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) end -= 1;
+  return value.slice(0, end);
+}
+
 function baseUrl(value: string | undefined, fallback: string): string {
   const trimmed = value?.trim();
-  return (trimmed ? trimmed : fallback).replace(/\/+$/, "");
+  return trimTrailingSlashes(trimmed ? trimmed : fallback);
 }
 
 export function appBaseUrl(env: PublicUrlEnv = processEnv()): string {
