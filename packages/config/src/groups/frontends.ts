@@ -36,31 +36,6 @@ export const webGroup = defineGroup({
       description:
         "`warn` logs API responses that do not match their contract.",
     }),
-    operatorLegalName: text({
-      env: "VITE_OPERATOR_LEGAL_NAME",
-      description: "Operator identity on the legal pages: legal name.",
-    }),
-    operatorCnpj: text({
-      env: "VITE_OPERATOR_CNPJ",
-      description: "Operator identity on the legal pages: CNPJ.",
-    }),
-    operatorAddress: text({
-      env: "VITE_OPERATOR_ADDRESS",
-      description: "Operator identity on the legal pages: address.",
-    }),
-    operatorEmail: text({
-      env: "VITE_OPERATOR_EMAIL",
-      description: "Operator identity on the legal pages: contact e-mail.",
-    }),
-    operatorDpoName: text({
-      env: "VITE_OPERATOR_DPO_NAME",
-      description:
-        "Operator identity on the legal pages: data protection officer.",
-    }),
-    operatorDpoEmail: text({
-      env: "VITE_OPERATOR_DPO_EMAIL",
-      description: "Operator identity on the legal pages: DPO e-mail.",
-    }),
   },
 });
 

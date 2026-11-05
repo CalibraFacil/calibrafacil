@@ -90,35 +90,6 @@ export const DEPLOY_SECTIONS: readonly DeploySection[] = [
     ],
   },
   {
-    title: "Laboratory identity (legal pages)",
-    intro: [
-      "Whoever runs this instance is the data controller under the LGPD; these",
-      "appear on the terms of use and privacy pages.",
-    ],
-    variables: [
-      {
-        name: "OPERATOR_LEGAL_NAME",
-        description: "Legal name of the operator.",
-        example: example.active(""),
-      },
-      {
-        name: "OPERATOR_CNPJ",
-        description: "CNPJ of the operator.",
-        example: example.active(""),
-      },
-      {
-        name: "OPERATOR_ADDRESS",
-        description: "Address of the operator.",
-        example: example.active(""),
-      },
-      {
-        name: "OPERATOR_EMAIL",
-        description: "Contact e-mail of the operator.",
-        example: example.active(""),
-      },
-    ],
-  },
-  {
     title: "Certificate time-stamping (optional)",
     intro: [
       "RFC 3161 carimbo do tempo on signed certificates. Leave SIGNING_TSA_URL",
