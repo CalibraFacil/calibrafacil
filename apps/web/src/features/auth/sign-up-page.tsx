@@ -260,23 +260,6 @@ export function SignUpPage() {
                         'Criar conta'
                       )}
                     </Button>
-                    <FieldDescription className="text-center">
-                      Ao criar a conta você concorda com os{' '}
-                      <Link
-                        to="/termos-de-uso"
-                        className="underline underline-offset-4"
-                      >
-                        Termos de uso
-                      </Link>{' '}
-                      e a{' '}
-                      <Link
-                        to="/privacidade"
-                        className="underline underline-offset-4"
-                      >
-                        Política de privacidade
-                      </Link>
-                      .
-                    </FieldDescription>
                   </Field>
                 </FieldGroup>
               </motion.form>

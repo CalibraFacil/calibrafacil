@@ -4,8 +4,8 @@ This guide covers running your own production instance. For local development, s
 [Quick start](./README.md#quick-start) instead.
 
 > Whoever operates an instance is responsible for it: infrastructure, backups, updates,
-> data protection (LGPD) and the legal pages shown to its users. The software comes without
-> warranty (see [`LICENSE`](./LICENSE)).
+> data protection (LGPD) and any terms or privacy notice owed to its users. The software
+> comes without warranty (see [`LICENSE`](./LICENSE)).
 
 ## One server with Docker
 
@@ -645,19 +645,19 @@ application role cannot UPDATE or DELETE it.
 
 ### Frontends
 
-| App            | Variables                                                                                                                                                       |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web`     | `VITE_API_URL`, `VITE_PORTAL_APP_URL`, `VITE_OPERATOR_*` (identity shown on the legal pages: `LEGAL_NAME`, `CNPJ`, `ADDRESS`, `EMAIL`, `DPO_NAME`, `DPO_EMAIL`) |
-| `apps/portal`  | `VITE_API_URL`, `VITE_WEB_URL`                                                                                                                                  |
-| `apps/desktop` | `VITE_DESKTOP_AUTH_API_URL`, `VITE_DESKTOP_AUTH_ORIGIN` (see [`docs/desktop-auto-update.md`](./docs/desktop-auto-update.md))                                    |
+| App            | Variables                                                                                                                    |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web`     | `VITE_API_URL`, `VITE_PORTAL_APP_URL`                                                                                        |
+| `apps/portal`  | `VITE_API_URL`, `VITE_WEB_URL`                                                                                               |
+| `apps/desktop` | `VITE_DESKTOP_AUTH_API_URL`, `VITE_DESKTOP_AUTH_ORIGIN` (see [`docs/desktop-auto-update.md`](./docs/desktop-auto-update.md)) |
 
 Vite bakes these in at build time. The Docker images also read them when the container starts
 (the static server answers `/runtime-env.js` with the container's `VITE_*` variables), so one
 image serves any domain; `VITE_API_URL` is the exception and stays a build argument.
 
-Review the legal pages (`/termos-de-uso`, `/privacidade`) and the content-security policy in
-`apps/web/public/_headers` before going live. (The Docker setup's Caddy sends the same policy,
-widened for the file-storage address: `deploy/Caddyfile`.)
+Review the content-security policy in `apps/web/public/_headers` before going live. (The
+Docker setup's Caddy sends the same policy, widened for the file-storage address:
+`deploy/Caddyfile`.)
 
 ### Database and first laboratory
 

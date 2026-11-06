@@ -229,10 +229,6 @@ services:
     # Read by the browser at startup (public values only).
     environment:
       VITE_PORTAL_APP_URL: ${PORTAL_URL}
-      VITE_OPERATOR_LEGAL_NAME: ${OPERATOR_LEGAL_NAME:-}
-      VITE_OPERATOR_CNPJ: ${OPERATOR_CNPJ:-}
-      VITE_OPERATOR_ADDRESS: ${OPERATOR_ADDRESS:-}
-      VITE_OPERATOR_EMAIL: ${OPERATOR_EMAIL:-}
 
   portal:
     image: ghcr.io/calibrafacil/calibrafacil-portal:${CALIBRA_VERSION:-latest}

@@ -9,8 +9,6 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as TermosDeUsoRouteImport } from './routes/termos-de-uso'
-import { Route as PrivacidadeRouteImport } from './routes/privacidade'
 import { Route as MagicLinkRouteImport } from './routes/magic-link'
 import { Route as ClaimAccountRouteImport } from './routes/claim-account'
 import { Route as DashboardRouteRouteImport } from './routes/dashboard/route'
@@ -147,16 +145,6 @@ import { Route as DashboardClientsGroupsGroupIdUnidadesRouteImport } from './rou
 import { Route as DashboardClientsGroupsGroupIdOverviewRouteImport } from './routes/dashboard/clients/groups/$groupId/overview'
 import { Route as DashboardClientsGroupsGroupIdGestorRouteImport } from './routes/dashboard/clients/groups/$groupId/gestor'
 
-const TermosDeUsoRoute = TermosDeUsoRouteImport.update({
-  id: '/termos-de-uso',
-  path: '/termos-de-uso',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PrivacidadeRoute = PrivacidadeRouteImport.update({
-  id: '/privacidade',
-  path: '/privacidade',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const MagicLinkRoute = MagicLinkRouteImport.update({
   id: '/magic-link',
   path: '/magic-link',
@@ -905,8 +893,6 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRouteRouteWithChildren
   '/claim-account': typeof ClaimAccountRoute
   '/magic-link': typeof MagicLinkRoute
-  '/privacidade': typeof PrivacidadeRoute
-  '/termos-de-uso': typeof TermosDeUsoRoute
   '/dashboard/assets': typeof DashboardAssetsRouteRouteWithChildren
   '/dashboard/capa': typeof DashboardCapaRouteRouteWithChildren
   '/dashboard/clients': typeof DashboardClientsRouteRouteWithChildren
@@ -1043,8 +1029,6 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/claim-account': typeof ClaimAccountRoute
   '/magic-link': typeof MagicLinkRoute
-  '/privacidade': typeof PrivacidadeRoute
-  '/termos-de-uso': typeof TermosDeUsoRoute
   '/dashboard/settings': typeof DashboardSettingsRouteRouteWithChildren
   '/accept-invitation/$id': typeof AcceptInvitationIdRoute
   '/dashboard/reports': typeof DashboardReportsRoute
@@ -1162,8 +1146,6 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRouteRouteWithChildren
   '/claim-account': typeof ClaimAccountRoute
   '/magic-link': typeof MagicLinkRoute
-  '/privacidade': typeof PrivacidadeRoute
-  '/termos-de-uso': typeof TermosDeUsoRoute
   '/dashboard/assets': typeof DashboardAssetsRouteRouteWithChildren
   '/dashboard/capa': typeof DashboardCapaRouteRouteWithChildren
   '/dashboard/clients': typeof DashboardClientsRouteRouteWithChildren
@@ -1303,8 +1285,6 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/claim-account'
     | '/magic-link'
-    | '/privacidade'
-    | '/termos-de-uso'
     | '/dashboard/assets'
     | '/dashboard/capa'
     | '/dashboard/clients'
@@ -1441,8 +1421,6 @@ export interface FileRouteTypes {
     | '/'
     | '/claim-account'
     | '/magic-link'
-    | '/privacidade'
-    | '/termos-de-uso'
     | '/dashboard/settings'
     | '/accept-invitation/$id'
     | '/dashboard/reports'
@@ -1559,8 +1537,6 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/claim-account'
     | '/magic-link'
-    | '/privacidade'
-    | '/termos-de-uso'
     | '/dashboard/assets'
     | '/dashboard/capa'
     | '/dashboard/clients'
@@ -1699,8 +1675,6 @@ export interface RootRouteChildren {
   DashboardRouteRoute: typeof DashboardRouteRouteWithChildren
   ClaimAccountRoute: typeof ClaimAccountRoute
   MagicLinkRoute: typeof MagicLinkRoute
-  PrivacidadeRoute: typeof PrivacidadeRoute
-  TermosDeUsoRoute: typeof TermosDeUsoRoute
   AcceptInvitationIdRoute: typeof AcceptInvitationIdRoute
   OnboardingOrganizationRoute: typeof OnboardingOrganizationRoute
   SignInIndexRoute: typeof SignInIndexRoute
@@ -1709,20 +1683,6 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/termos-de-uso': {
-      id: '/termos-de-uso'
-      path: '/termos-de-uso'
-      fullPath: '/termos-de-uso'
-      preLoaderRoute: typeof TermosDeUsoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/privacidade': {
-      id: '/privacidade'
-      path: '/privacidade'
-      fullPath: '/privacidade'
-      preLoaderRoute: typeof PrivacidadeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/magic-link': {
       id: '/magic-link'
       path: '/magic-link'
@@ -3214,8 +3174,6 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRouteRoute: DashboardRouteRouteWithChildren,
   ClaimAccountRoute: ClaimAccountRoute,
   MagicLinkRoute: MagicLinkRoute,
-  PrivacidadeRoute: PrivacidadeRoute,
-  TermosDeUsoRoute: TermosDeUsoRoute,
   AcceptInvitationIdRoute: AcceptInvitationIdRoute,
   OnboardingOrganizationRoute: OnboardingOrganizationRoute,
   SignInIndexRoute: SignInIndexRoute,
