@@ -359,8 +359,10 @@ export function toClientVisibleServiceOrderDetail(
       evaluatedAt: evaluation.evaluatedAt,
     })),
     quotes: detail.quotes
-      .filter((quote) =>
-        ["sent", "approved", "rejected", "expired"].includes(quote.status),
+      .filter(
+        (quote) =>
+          // Every quote that has left the lab (all but drafts).
+          quote.status !== "draft",
       )
       .map((quote) => ({
         id: quote.id,

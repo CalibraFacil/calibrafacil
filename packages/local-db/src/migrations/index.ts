@@ -13,6 +13,7 @@ import { migration0022AssetTypeSlug } from "./0022_asset_type_slug";
 import { migration0023SyncChangeSeq } from "./0023_sync_change_seq";
 import { migration0024AttachmentUploadLeg } from "./0024_attachment_upload_leg";
 import { migration0025OutboxOrderingAndDiscard } from "./0025_outbox_ordering_and_discard";
+import { migration0026StatusGuards } from "./0026_status_guards";
 import { migration0012ServiceOrderItemMaterial } from "./0012_service_order_item_material";
 import { migration0013OfficialSealingMarkTerminology } from "./0013_official_sealing_mark_terminology";
 import { migration0014SyncBaseVersionAnchor } from "./0014_sync_base_version_anchor";
@@ -57,6 +58,7 @@ export const localDbMigrations: LocalDbMigration[] = [
   migration0023SyncChangeSeq,
   migration0024AttachmentUploadLeg,
   migration0025OutboxOrderingAndDiscard,
+  migration0026StatusGuards,
 ];
 
 export const currentLocalDbSchemaVersion =

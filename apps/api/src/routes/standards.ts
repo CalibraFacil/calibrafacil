@@ -67,6 +67,11 @@ import {
   gte,
   inArray,
 } from "drizzle-orm";
+import {
+  MASS_PROFILE_MACHINE,
+  REFERENCE_STANDARD_MACHINE,
+  STANDARD_RECALL_MACHINE,
+} from "@calibra-facil/schemas/machines";
 import { buildUnitScopeCondition } from "../lib/units";
 import { domainErrorResponse, invalid, notFound } from "../lib/domain-errors";
 import {
@@ -603,6 +608,7 @@ export const standardsRouter = new Hono<{
         const [existing] = await tx
           .select({
             id: massCompositionProfile.id,
+            status: massCompositionProfile.status,
             deletedAt: massCompositionProfile.deletedAt,
           })
           .from(massCompositionProfile)
@@ -640,7 +646,10 @@ export const standardsRouter = new Hono<{
               .update(massCompositionProfile)
               .set({
                 ...writableValues,
-                status: "ACTIVE",
+                status: MASS_PROFILE_MACHINE.requireTargetOf(
+                  existing.status,
+                  "reactivate",
+                ),
                 deletedAt: null,
                 updatedAt: new Date(),
               })
@@ -759,7 +768,7 @@ export const standardsRouter = new Hono<{
         const [row] = await tx
           .update(massCompositionProfile)
           .set({
-            status: "INACTIVE",
+            status: MASS_PROFILE_MACHINE.requireTargetOf("ACTIVE", "retire"),
             deletedAt: new Date(),
             updatedAt: new Date(),
           })
@@ -1462,7 +1471,11 @@ export const standardsRouter = new Hono<{
           }
           if (input.status !== undefined && input.status !== existing.status) {
             changes.status = { old: existing.status, new: input.status };
-            updateData.status = input.status;
+            updateData.status = REFERENCE_STANDARD_MACHINE.requireTransition(
+              existing.status,
+              "set_status",
+              input.status,
+            );
           }
 
           // If no changes, return existing
@@ -1847,7 +1860,10 @@ export const standardsRouter = new Hono<{
         const [approvedRecall] = await tx
           .update(standardRecall)
           .set({
-            status: "SENT",
+            status: STANDARD_RECALL_MACHINE.requireTargetOf(
+              recall.status,
+              "send",
+            ),
             fromDate: input.from ? new Date(input.from) : recall.fromDate,
             toDate: input.to ? new Date(input.to) : new Date(),
             approvedBy: session.user.id,
@@ -1857,6 +1873,7 @@ export const standardsRouter = new Hono<{
             and(
               eq(standardRecall.id, recall.id),
               eq(standardRecall.organizationId, member.organizationId),
+              eq(standardRecall.status, recall.status),
             ),
           )
           .returning();
@@ -1947,7 +1964,13 @@ export const standardsRouter = new Hono<{
       // Soft delete
       const [updated] = await tx
         .update(referenceStandard)
-        .set({ deletedAt: new Date(), status: "INACTIVE" })
+        .set({
+          deletedAt: new Date(),
+          status: REFERENCE_STANDARD_MACHINE.requireTargetOf(
+            existing.status,
+            "retire",
+          ),
+        })
         .where(eq(referenceStandard.id, id))
         .returning();
 
@@ -2102,13 +2125,17 @@ export const standardsRouter = new Hono<{
           updateData.metrologyData = input.metrologyData;
         }
 
-        // If standard was OUT_OF_TOLERANCE or SENT_FOR_CALIBRATION, set back to ACTIVE
+        // `renew` (REFERENCE_STANDARD_MACHINE): a new certificate brings an
+        // out-of-tolerance or sent standard back to ACTIVE.
         if (
-          existing.status === "OUT_OF_TOLERANCE" ||
-          existing.status === "SENT_FOR_CALIBRATION"
+          REFERENCE_STANDARD_MACHINE.canTransition(existing.status, "renew")
         ) {
-          changes.status = { old: existing.status, new: "ACTIVE" };
-          updateData.status = "ACTIVE";
+          const renewed = REFERENCE_STANDARD_MACHINE.requireTargetOf(
+            existing.status,
+            "renew",
+          );
+          changes.status = { old: existing.status, new: renewed };
+          updateData.status = renewed;
         }
 
         // Update the standard

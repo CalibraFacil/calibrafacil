@@ -29,6 +29,7 @@ import {
   standardsRefusalApiCode,
   standardsRefusalDomainError,
 } from "./standards-judgement";
+import { withStatusRepair } from "../../../test/integration/state-fixtures";
 
 type World = {
   mine: Awaited<ReturnType<typeof seedOrg>>;
@@ -60,27 +61,29 @@ async function insertStandard(input: {
   nextCalibrationDate: string | null;
   unitId?: number;
 }) {
-  await db.insert(referenceStandard).values({
-    id: input.id,
-    organizationId: input.org.orgId,
-    unitId: input.unitId ?? input.org.unitId,
-    createdBy: input.org.userId,
-    name: input.key,
-    kind: "generic_scalar",
-    serialNumber: `SN-${input.id}`,
-    certificateNumber: `CERT-${input.id}`,
-    calibrationDate: new Date("2025-01-10T15:00:00.000Z"),
-    // The column is a calendar date; "no readable date" is stored as the epoch.
-    nextCalibrationDate: input.nextCalibrationDate
-      ? new Date(`${input.nextCalibrationDate}T00:00:00.000Z`)
-      : new Date("1970-01-01T00:00:00.000Z"),
-    coverageFactor: 2,
-    distribution: "normal",
-    status: input.status,
-    referenceValue: 1,
-    uncertainty: 0.01,
-    deletedAt: input.deleted ? new Date("2026-10-01T00:00:00.000Z") : null,
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(referenceStandard).values({
+      id: input.id,
+      organizationId: input.org.orgId,
+      unitId: input.unitId ?? input.org.unitId,
+      createdBy: input.org.userId,
+      name: input.key,
+      kind: "generic_scalar",
+      serialNumber: `SN-${input.id}`,
+      certificateNumber: `CERT-${input.id}`,
+      calibrationDate: new Date("2025-01-10T15:00:00.000Z"),
+      // The column is a calendar date; "no readable date" is stored as the epoch.
+      nextCalibrationDate: input.nextCalibrationDate
+        ? new Date(`${input.nextCalibrationDate}T00:00:00.000Z`)
+        : new Date("1970-01-01T00:00:00.000Z"),
+      coverageFactor: 2,
+      distribution: "normal",
+      status: input.status,
+      referenceValue: 1,
+      uncertainty: 0.01,
+      deletedAt: input.deleted ? new Date("2026-10-01T00:00:00.000Z") : null,
+    }),
+  );
 }
 
 describe("cloud standards judgement parity (REQ-SJ-3, REQ-SJ-4)", () => {
@@ -144,17 +147,19 @@ describe("cloud standards judgement parity (REQ-SJ-3, REQ-SJ-4)", () => {
   });
 
   it("REQ-SJ-3: a standard of the organization outside the caller's unit scope is not found", async () => {
-    const [otherUnit] = await db
-      .insert(organizationUnit)
-      .values({
-        organizationId: world.mine.orgId,
-        name: "Filial",
-        slug: "filial",
-        status: "ACTIVE",
-        isDefault: false,
-        createdBy: world.mine.userId,
-      })
-      .returning({ id: organizationUnit.id });
+    const [otherUnit] = await withStatusRepair((tx) =>
+      tx
+        .insert(organizationUnit)
+        .values({
+          organizationId: world.mine.orgId,
+          name: "Filial",
+          slug: "filial",
+          status: "ACTIVE",
+          isDefault: false,
+          createdBy: world.mine.userId,
+        })
+        .returning({ id: organizationUnit.id }),
+    );
     await insertStandard({
       id: 901,
       key: "FILIAL",

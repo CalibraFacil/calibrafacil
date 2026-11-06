@@ -28,6 +28,7 @@ import {
   approveServiceOrderQuoteByPortalUser,
   rejectServiceOrderQuoteByPortalUser,
 } from "../modules/service-orders/service-order.quotes";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Public quote-access token lifecycle — spec quote-approval-public-access
 // (issue #785), mini-spec A. Real DB, real routers, no session mock for the
@@ -54,14 +55,16 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 async function seedClientOrg(clientOrgId: string): Promise<void> {
   const now = new Date("2026-01-01T00:00:00.000Z");
-  await db.insert(organization).values({
-    id: clientOrgId,
-    name: `Client Org ${clientOrgId}`,
-    slug: clientOrgId,
-    createdAt: now,
-    type: "CLIENT",
-    status: "ACTIVE",
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: clientOrgId,
+      name: `Client Org ${clientOrgId}`,
+      slug: clientOrgId,
+      createdAt: now,
+      type: "CLIENT",
+      status: "ACTIVE",
+    }),
+  );
 }
 
 async function seedCustomer(params: {
@@ -97,20 +100,22 @@ async function seedAsset(params: {
   assetTypeId: number;
   tag: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(asset)
-    .values({
-      unitId: params.unitId,
-      customerId: params.customerId,
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
-      assetTypeId: params.assetTypeId,
-      name: "Test Asset",
-      serialNumber: `SN-${params.tag}`,
-      tag: params.tag,
-      status: "ACTIVE",
-      metrologyRegime: "INDUSTRIAL",
-    })
-    .returning({ id: asset.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: params.unitId,
+        customerId: params.customerId,
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
+        assetTypeId: params.assetTypeId,
+        name: "Test Asset",
+        serialNumber: `SN-${params.tag}`,
+        tag: params.tag,
+        status: "ACTIVE",
+        metrologyRegime: "INDUSTRIAL",
+      })
+      .returning({ id: asset.id }),
+  );
   if (!row) throw new Error("seedAsset: insert failed");
   return row.id;
 }
@@ -124,28 +129,30 @@ async function seedServiceOrder(params: {
   serviceOrderNumber: string;
   status?: (typeof serviceOrder.$inferInsert)["status"];
 }): Promise<number> {
-  const [row] = await db
-    .insert(serviceOrder)
-    .values({
-      organizationId: params.organizationId,
-      unitId: params.unitId,
-      customerId: params.customerId,
-      assetId: params.assetId,
-      openedByUserId: params.openedByUserId,
-      serviceOrderNumber: params.serviceOrderNumber,
-      status: params.status ?? "awaiting_quote_approval",
-      claimedDefect: "Test defect",
-      intakeCondition: "Test condition",
-      intakeType: "counter",
-      deliveryMethod: "pickup_at_lab",
-      priority: "normal",
-      totalQuotedCents: 0,
-      totalApprovedCents: 0,
-      evaluationFeeCents: 0,
-      evaluationFeeApplied: false,
-      isExternalService: false,
-    })
-    .returning({ id: serviceOrder.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(serviceOrder)
+      .values({
+        organizationId: params.organizationId,
+        unitId: params.unitId,
+        customerId: params.customerId,
+        assetId: params.assetId,
+        openedByUserId: params.openedByUserId,
+        serviceOrderNumber: params.serviceOrderNumber,
+        status: params.status ?? "awaiting_quote_approval",
+        claimedDefect: "Test defect",
+        intakeCondition: "Test condition",
+        intakeType: "counter",
+        deliveryMethod: "pickup_at_lab",
+        priority: "normal",
+        totalQuotedCents: 0,
+        totalApprovedCents: 0,
+        evaluationFeeCents: 0,
+        evaluationFeeApplied: false,
+        isExternalService: false,
+      })
+      .returning({ id: serviceOrder.id }),
+  );
   if (!row) throw new Error("seedServiceOrder: insert failed");
   return row.id;
 }
@@ -159,19 +166,21 @@ async function seedQuote(params: {
   totalCents?: number;
   validUntil?: Date | null;
 }): Promise<number> {
-  const [row] = await db
-    .insert(serviceOrderQuote)
-    .values({
-      organizationId: organizationOf("service_order", params.serviceOrderId),
-      serviceOrderId: params.serviceOrderId,
-      quoteNumber: `${params.serviceOrderNumber}/ORC`,
-      version: params.version ?? 1,
-      status: params.status ?? "sent",
-      totalCents: params.totalCents ?? 10000,
-      validUntil: params.validUntil ?? null,
-      createdByUserId: params.createdByUserId,
-    })
-    .returning({ id: serviceOrderQuote.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(serviceOrderQuote)
+      .values({
+        organizationId: organizationOf("service_order", params.serviceOrderId),
+        serviceOrderId: params.serviceOrderId,
+        quoteNumber: `${params.serviceOrderNumber}/ORC`,
+        version: params.version ?? 1,
+        status: params.status ?? "sent",
+        totalCents: params.totalCents ?? 10000,
+        validUntil: params.validUntil ?? null,
+        createdByUserId: params.createdByUserId,
+      })
+      .returning({ id: serviceOrderQuote.id }),
+  );
   if (!row) throw new Error("seedQuote: insert failed");
   return row.id;
 }

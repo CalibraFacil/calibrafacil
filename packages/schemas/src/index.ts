@@ -1,4 +1,17 @@
 import { z } from "zod";
+import { VISIT_STATUSES } from "./machines/visits";
+import { NOTIFICATION_STATUSES } from "./machines/tenancy";
+import { COMPETENCE_STATUSES, TRAINING_STATUSES } from "./machines/people";
+import {
+  CORRECTIVE_ACTION_STATUSES,
+  NON_CONFORMANCE_STATUSES,
+} from "./machines/quality";
+import {
+  ASSET_STATUSES,
+  REFERENCE_STANDARD_STATUSES,
+} from "./machines/inventory";
+import { METHOD_STATUSES } from "./machines/calibration-method";
+import { CALIBRATION_REQUEST_STATUSES } from "./machines/calibration-request";
 import { JobStatusSchema } from "./job-status";
 import { ReferenceStandardKindSchema } from "./reference-standard-kind";
 export * from "./background-jobs";
@@ -318,12 +331,7 @@ export type ListAssetTypesQuery = z.infer<typeof ListAssetTypesQuerySchema>;
 /**
  * Asset status values
  */
-export const AssetStatusSchema = z.enum([
-  "ACTIVE",
-  "INACTIVE",
-  "MAINTENANCE",
-  "SCRAPPED",
-]);
+export const AssetStatusSchema = z.enum(ASSET_STATUSES);
 
 export type AssetStatus = z.infer<typeof AssetStatusSchema>;
 export const MassUnitSchema = z.enum(["mg", "g", "kg"]);
@@ -560,13 +568,9 @@ export type RegulatedInterval = z.infer<typeof RegulatedIntervalSchema>;
 // CALIBRATION REQUEST SCHEMAS - Portal Intake Queue
 // =============================================================================
 
-export const CalibrationRequestStatusSchema = z.enum([
-  "PENDING",
-  "UNDER_REVIEW",
-  "APPROVED",
-  "REJECTED",
-  "CONVERTED",
-]);
+export const CalibrationRequestStatusSchema = z.enum(
+  CALIBRATION_REQUEST_STATUSES,
+);
 
 export type CalibrationRequestStatus = z.infer<
   typeof CalibrationRequestStatusSchema
@@ -726,13 +730,7 @@ export type ConvertCalibrationRequestInput = z.infer<
 // CALIBRATION VISIT SCHEMAS (on-site / calibração in loco)
 // =============================================================================
 
-export const VisitStatusSchema = z.enum([
-  "PROPOSED",
-  "CONFIRMED",
-  "IN_PROGRESS",
-  "COMPLETED",
-  "CANCELLED",
-]);
+export const VisitStatusSchema = z.enum(VISIT_STATUSES);
 export type VisitStatusValue = z.infer<typeof VisitStatusSchema>;
 
 const isValidDateString = (value: string) =>
@@ -846,13 +844,7 @@ export const AddVisitJobSchema = z.object({
 /**
  * Method status values
  */
-export const MethodStatusSchema = z.enum([
-  "DRAFT",
-  "PENDING_APPROVAL",
-  "TECHNICAL_REVIEWED",
-  "PUBLISHED",
-  "ARCHIVED",
-]);
+export const MethodStatusSchema = z.enum(METHOD_STATUSES);
 export type MethodStatus = z.infer<typeof MethodStatusSchema>;
 
 /**
@@ -1611,12 +1603,9 @@ export type AdjustMaterialStockInput = z.infer<
 /**
  * Reference Standard status values
  */
-export const ReferenceStandardStatusSchema = z.enum([
-  "ACTIVE",
-  "INACTIVE",
-  "OUT_OF_TOLERANCE",
-  "SENT_FOR_CALIBRATION",
-]);
+export const ReferenceStandardStatusSchema = z.enum(
+  REFERENCE_STANDARD_STATUSES,
+);
 
 export type ReferenceStandardStatus = z.infer<
   typeof ReferenceStandardStatusSchema
@@ -2383,7 +2372,7 @@ export type NotificationType = z.infer<typeof NotificationTypeSchema>;
 /**
  * Notification status values
  */
-export const NotificationStatusSchema = z.enum(["UNREAD", "READ", "ARCHIVED"]);
+export const NotificationStatusSchema = z.enum(NOTIFICATION_STATUSES);
 
 export type NotificationStatus = z.infer<typeof NotificationStatusSchema>;
 
@@ -2574,11 +2563,7 @@ export type NonConformanceDisposition = z.infer<
 /**
  * NC status values
  */
-export const NonConformanceStatusSchema = z.enum([
-  "open",
-  "under_review",
-  "resolved",
-]);
+export const NonConformanceStatusSchema = z.enum(NON_CONFORMANCE_STATUSES);
 
 export type NonConformanceStatus = z.infer<typeof NonConformanceStatusSchema>;
 
@@ -2676,13 +2661,7 @@ export type ListNonConformancesQuery = z.infer<
 /**
  * CAPA status values
  */
-export const CorrectiveActionStatusSchema = z.enum([
-  "OPEN",
-  "INVESTIGATION",
-  "IMPLEMENTATION",
-  "VERIFICATION",
-  "CLOSED",
-]);
+export const CorrectiveActionStatusSchema = z.enum(CORRECTIVE_ACTION_STATUSES);
 
 export type CorrectiveActionStatus = z.infer<
   typeof CorrectiveActionStatusSchema
@@ -2888,16 +2867,7 @@ export type ListCorrectiveActionsQuery = z.infer<
 /**
  * Competence workflow status values
  */
-export const CompetenceStatusSchema = z.enum([
-  "REQUESTED",
-  "TRAINING_ASSIGNED",
-  "IN_TRAINING",
-  "PENDING_EVALUATION",
-  "ACTIVE",
-  "SUSPENDED",
-  "EXPIRED",
-  "CANCELLED",
-]);
+export const CompetenceStatusSchema = z.enum(COMPETENCE_STATUSES);
 
 export type CompetenceStatus = z.infer<typeof CompetenceStatusSchema>;
 
@@ -2916,12 +2886,7 @@ export type TrainingType = z.infer<typeof TrainingTypeSchema>;
 /**
  * Training status values
  */
-export const TrainingStatusSchema = z.enum([
-  "planned",
-  "in_progress",
-  "completed",
-  "failed",
-]);
+export const TrainingStatusSchema = z.enum(TRAINING_STATUSES);
 
 export type TrainingStatus = z.infer<typeof TrainingStatusSchema>;
 

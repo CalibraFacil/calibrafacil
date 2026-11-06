@@ -23,6 +23,7 @@ import {
   seedExtraMember,
   seedJobForOrg,
 } from "../../test/integration/tenant-refs";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB integration test for the public API v2 router.
 // No session mock is needed — auth is entirely via API key, handled by
@@ -74,14 +75,16 @@ async function seedCustomer(params: {
   clientOrgId: string;
   name: string;
 }): Promise<number> {
-  await db.insert(organization).values({
-    id: params.clientOrgId,
-    name: `Client Org ${params.clientOrgId}`,
-    slug: params.clientOrgId,
-    type: "CLIENT",
-    status: "ACTIVE",
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: params.clientOrgId,
+      name: `Client Org ${params.clientOrgId}`,
+      slug: params.clientOrgId,
+      type: "CLIENT",
+      status: "ACTIVE",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    }),
+  );
 
   const [row] = await db
     .insert(customer)
@@ -117,22 +120,24 @@ async function seedAssetRow(params: {
   assetTypeId: number;
   tag: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(asset)
-    .values({
-      unitId: params.unitId,
-      customerId: params.customerId,
-      // SEC-03b (#638): derive the lab org from the seeded customer so
-      // UNIQUE(lab_organization_id, tag) is per org (invariant asset.lab_org ==
-      // customer.lab_org).
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
-      assetTypeId: params.assetTypeId,
-      name: `Asset ${params.tag}`,
-      serialNumber: `SN-${params.tag}`,
-      tag: params.tag,
-      status: "ACTIVE",
-    })
-    .returning({ id: asset.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: params.unitId,
+        customerId: params.customerId,
+        // SEC-03b (#638): derive the lab org from the seeded customer so
+        // UNIQUE(lab_organization_id, tag) is per org (invariant asset.lab_org ==
+        // customer.lab_org).
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
+        assetTypeId: params.assetTypeId,
+        name: `Asset ${params.tag}`,
+        serialNumber: `SN-${params.tag}`,
+        tag: params.tag,
+        status: "ACTIVE",
+      })
+      .returning({ id: asset.id }),
+  );
   if (!row) throw new Error("seedAssetRow: insert failed");
   return row.id;
 }
@@ -154,20 +159,22 @@ async function seedAsset(params: {
   assetTypeId: number;
   tag: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(asset)
-    .values({
-      unitId: params.unitId,
-      customerId: params.customerId,
-      // SEC-03b: lab_organization_id is NOT NULL — derive it from the owning
-      // customer (invariant asset.lab_org == customer.lab_org).
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
-      assetTypeId: params.assetTypeId,
-      name: `Instrumento ${params.tag}`,
-      serialNumber: `SN-${params.tag}`,
-      tag: params.tag,
-    })
-    .returning({ id: asset.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: params.unitId,
+        customerId: params.customerId,
+        // SEC-03b: lab_organization_id is NOT NULL — derive it from the owning
+        // customer (invariant asset.lab_org == customer.lab_org).
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
+        assetTypeId: params.assetTypeId,
+        name: `Instrumento ${params.tag}`,
+        serialNumber: `SN-${params.tag}`,
+        tag: params.tag,
+      })
+      .returning({ id: asset.id }),
+  );
   if (!row) throw new Error("seedAsset: insert failed");
   return row.id;
 }
@@ -377,23 +384,25 @@ describe("publicApiV2Router — real DB, API-key auth cut-line invariants", () =
       .insert(assetType)
       .values({ name: "Balança", slug: "balanca", definition: [] })
       .returning({ id: assetType.id });
-    const [seeded] = await db
-      .insert(asset)
-      .values({
-        unitId: orgA.unitId,
-        customerId,
-        labOrganizationId: orgA.orgId, // SEC-03b (#638): per-org tag uniqueness
-        assetTypeId: type!.id,
-        name: "Balança 01",
-        serialNumber: "SN-01",
-        tag: "TAG-01",
-        status: "ACTIVE",
-        lastCalibrationDate: new Date("2025-06-01T00:00:00.000Z"),
-        nextCalibrationDate: new Date("2026-06-01T00:00:00.000Z"),
-        // Customer-owned interval, set via the portal.
-        calibrationIntervalMonths: 12,
-      })
-      .returning({ id: asset.id });
+    const [seeded] = await withStatusRepair((tx) =>
+      tx
+        .insert(asset)
+        .values({
+          unitId: orgA.unitId,
+          customerId,
+          labOrganizationId: orgA.orgId, // SEC-03b (#638): per-org tag uniqueness
+          assetTypeId: type!.id,
+          name: "Balança 01",
+          serialNumber: "SN-01",
+          tag: "TAG-01",
+          status: "ACTIVE",
+          lastCalibrationDate: new Date("2025-06-01T00:00:00.000Z"),
+          nextCalibrationDate: new Date("2026-06-01T00:00:00.000Z"),
+          // Customer-owned interval, set via the portal.
+          calibrationIntervalMonths: 12,
+        })
+        .returning({ id: asset.id }),
+    );
 
     const res = await publicApiV2Router.request(`/assets/${seeded!.id}`, {
       method: "PUT",

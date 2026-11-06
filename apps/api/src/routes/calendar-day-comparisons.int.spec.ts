@@ -36,6 +36,7 @@ import { dashboardRouter } from "./dashboard";
 import { jobsRouter } from "./jobs";
 import { portalRouter } from "./portal";
 import { standardsRouter } from "./standards";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 const JSON_HEADERS = { "content-type": "application/json" };
 // The portal resolves the host lab from the request Origin; a local host is the
@@ -67,18 +68,20 @@ async function seedFixture() {
     .insert(assetType)
     .values({ name: "AT", slug: "at-cal", definition: [] })
     .returning({ id: assetType.id });
-  const [instrument] = await db
-    .insert(asset)
-    .values({
-      labOrganizationId: org.orgId,
-      unitId: org.unitId,
-      customerId,
-      assetTypeId: type?.id ?? 0,
-      name: "Instrumento",
-      serialNumber: "SN-CAL",
-      tag: "TAG-CAL",
-    })
-    .returning({ id: asset.id });
+  const [instrument] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        labOrganizationId: org.orgId,
+        unitId: org.unitId,
+        customerId,
+        assetTypeId: type?.id ?? 0,
+        name: "Instrumento",
+        serialNumber: "SN-CAL",
+        tag: "TAG-CAL",
+      })
+      .returning({ id: asset.id }),
+  );
   const [svc] = await db
     .insert(service)
     .values({
@@ -240,22 +243,24 @@ describe("calendar-day comparisons (REQ-CAL-003)", () => {
       fixture: Fixture,
       nextCalibrationDate: Date,
     ) {
-      await db.insert(referenceStandard).values({
-        organizationId: fixture.orgId,
-        unitId: fixture.unitId,
-        createdBy: fixture.userId,
-        name: "Padrao",
-        kind: "generic_scalar",
-        serialNumber: "SN-STD",
-        certificateNumber: "CERT-STD",
-        calibrationDate: new Date("2026-01-10T15:00:00.000Z"),
-        nextCalibrationDate,
-        coverageFactor: 2,
-        distribution: "normal",
-        status: "ACTIVE",
-        referenceValue: 1,
-        uncertainty: 0.01,
-      });
+      await withStatusRepair((tx) =>
+        tx.insert(referenceStandard).values({
+          organizationId: fixture.orgId,
+          unitId: fixture.unitId,
+          createdBy: fixture.userId,
+          name: "Padrao",
+          kind: "generic_scalar",
+          serialNumber: "SN-STD",
+          certificateNumber: "CERT-STD",
+          calibrationDate: new Date("2026-01-10T15:00:00.000Z"),
+          nextCalibrationDate,
+          coverageFactor: 2,
+          distribution: "normal",
+          status: "ACTIVE",
+          referenceValue: 1,
+          uncertainty: 0.01,
+        }),
+      );
     }
 
     async function listStandards() {
@@ -347,17 +352,19 @@ describe("calendar-day comparisons (REQ-CAL-003)", () => {
         .returning({ id: assetType.id });
       const today = labToday();
       for (const [index, offset] of [-1, 0, 30, 31].entries()) {
-        await db.insert(asset).values({
-          unitId: ctx.labUnitId,
-          customerId: ctx.customerId,
-          labOrganizationId: ctx.labOrgId,
-          assetTypeId: type?.id ?? 0,
-          name: `Instrumento ${offset}`,
-          serialNumber: `SN-P-${index}`,
-          tag: `TAG-P-${index}`,
-          status: "ACTIVE",
-          nextCalibrationDate: addCalendarDays(today, offset),
-        });
+        await withStatusRepair((tx) =>
+          tx.insert(asset).values({
+            unitId: ctx.labUnitId,
+            customerId: ctx.customerId,
+            labOrganizationId: ctx.labOrgId,
+            assetTypeId: type?.id ?? 0,
+            name: `Instrumento ${offset}`,
+            serialNumber: `SN-P-${index}`,
+            tag: `TAG-P-${index}`,
+            status: "ACTIVE",
+            nextCalibrationDate: addCalendarDays(today, offset),
+          }),
+        );
       }
       loginAsPortal({
         userId: ctx.portalUserId,

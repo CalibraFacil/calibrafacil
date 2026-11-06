@@ -11,6 +11,7 @@ import {
 import { insertJobs } from "./job-fixtures";
 import { organizationOf } from "./organization-of";
 import { seedOrg } from "./seed";
+import { withStatusRepair } from "./state-fixtures";
 
 // Harness code: a laboratory with everything the service-order and finance
 // endpoints read (a customer with complete billing data, an asset, a priced
@@ -35,14 +36,16 @@ export async function seedBillingLab(
 ) {
   const org = await seedOrg({ orgId, role });
   const clientOrgId = `client-${orgId}`;
-  await db.insert(organization).values({
-    id: clientOrgId,
-    name: `Client ${clientOrgId}`,
-    slug: clientOrgId,
-    type: "CLIENT",
-    status: "ACTIVE",
-    createdAt: NOW,
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: clientOrgId,
+      name: `Client ${clientOrgId}`,
+      slug: clientOrgId,
+      type: "CLIENT",
+      status: "ACTIVE",
+      createdAt: NOW,
+    }),
+  );
   const [customerRow] = await db
     .insert(customer)
     .values({
@@ -60,18 +63,20 @@ export async function seedBillingLab(
     .returning({ id: assetType.id });
   if (!customerRow || !typeRow)
     throw new Error("seedBillingLab: insert failed");
-  const [assetRow] = await db
-    .insert(asset)
-    .values({
-      unitId: org.unitId,
-      customerId: customerRow.id,
-      labOrganizationId: orgId,
-      assetTypeId: typeRow.id,
-      name: `Instrument ${orgId}`,
-      serialNumber: `SN-${orgId}`,
-      tag: `TAG-${orgId}`,
-    })
-    .returning({ id: asset.id });
+  const [assetRow] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: org.unitId,
+        customerId: customerRow.id,
+        labOrganizationId: orgId,
+        assetTypeId: typeRow.id,
+        name: `Instrument ${orgId}`,
+        serialNumber: `SN-${orgId}`,
+        tag: `TAG-${orgId}`,
+      })
+      .returning({ id: asset.id }),
+  );
   const [serviceRow] = await db
     .insert(service)
     .values({
@@ -140,29 +145,31 @@ export async function seedBillableOrder(
     linkedJobId?: number;
   },
 ): Promise<number> {
-  const [row] = await db
-    .insert(serviceOrder)
-    .values({
-      organizationId: lab.orgId,
-      unitId: lab.unitId,
-      customerId: lab.customerId,
-      assetId: lab.assetId,
-      openedByUserId: lab.userId,
-      serviceOrderNumber: params.number,
-      status: params.status ?? "closed",
-      claimedDefect: "Defeito de teste",
-      intakeCondition: "Bom estado",
-      intakeType: "counter",
-      deliveryMethod: "pickup_at_lab",
-      priority: "normal",
-      totalQuotedCents: params.totalQuotedCents ?? 0,
-      totalApprovedCents: params.totalApprovedCents ?? 20_000,
-      evaluationFeeCents: 0,
-      evaluationFeeApplied: false,
-      isExternalService: false,
-      billingDocumentId: params.billingDocumentId ?? null,
-    })
-    .returning({ id: serviceOrder.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(serviceOrder)
+      .values({
+        organizationId: lab.orgId,
+        unitId: lab.unitId,
+        customerId: lab.customerId,
+        assetId: lab.assetId,
+        openedByUserId: lab.userId,
+        serviceOrderNumber: params.number,
+        status: params.status ?? "closed",
+        claimedDefect: "Defeito de teste",
+        intakeCondition: "Bom estado",
+        intakeType: "counter",
+        deliveryMethod: "pickup_at_lab",
+        priority: "normal",
+        totalQuotedCents: params.totalQuotedCents ?? 0,
+        totalApprovedCents: params.totalApprovedCents ?? 20_000,
+        evaluationFeeCents: 0,
+        evaluationFeeApplied: false,
+        isExternalService: false,
+        billingDocumentId: params.billingDocumentId ?? null,
+      })
+      .returning({ id: serviceOrder.id }),
+  );
   if (!row) throw new Error("seedBillableOrder: insert failed");
   if (params.linkedJobId !== undefined) {
     await db.insert(serviceOrderCertificateLink).values({

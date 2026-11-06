@@ -45,6 +45,7 @@ import { seedJobForOrg } from "../../test/integration/tenant-refs";
 import { getExecuteRows } from "../lib/db";
 import { purgeSyncChangeLog } from "../lib/sync-change-log-purge";
 import { syncRouter } from "./sync";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 const JSON_HEADERS = { "content-type": "application/json" };
 
@@ -215,14 +216,16 @@ function holdTransaction(
 const openHolds: Array<{ rollback(): Promise<void> }> = [];
 
 async function newClientOrg(id: string) {
-  await db.insert(organization).values({
-    id,
-    name: id,
-    slug: id,
-    type: "CLIENT",
-    status: "ACTIVE",
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id,
+      name: id,
+      slug: id,
+      type: "CLIENT",
+      status: "ACTIVE",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    }),
+  );
   return id;
 }
 
@@ -483,17 +486,19 @@ describe("sync change sequence (protocol 3)", () => {
 
   it("REQ-CS-2: a job moved to another unit is a delete for the desktop of the old unit and an upsert for the new one", async () => {
     const org = await seedOrg({ orgId: ORG, role: "admin" });
-    const [second] = await db
-      .insert(organizationUnit)
-      .values({
-        organizationId: org.orgId,
-        name: "Filial",
-        slug: "filial",
-        status: "ACTIVE",
-        isDefault: false,
-        createdBy: org.userId,
-      })
-      .returning({ id: organizationUnit.id });
+    const [second] = await withStatusRepair((tx) =>
+      tx
+        .insert(organizationUnit)
+        .values({
+          organizationId: org.orgId,
+          name: "Filial",
+          slug: "filial",
+          status: "ACTIVE",
+          isDefault: false,
+          createdBy: org.userId,
+        })
+        .returning({ id: organizationUnit.id }),
+    );
     if (!second) throw new Error("unit seed failed");
     const { jobId } = await seedJobForOrg({
       orgId: org.orgId,
@@ -863,17 +868,19 @@ describe("sync change sequence (protocol 3)", () => {
 
   it("REQ-E2-1 (roadmap 2 E2): a cursor handed out under another scope is refused as scope_changed; an older cursor without a scope is still served", async () => {
     const org = await seedOrg({ orgId: ORG, role: "admin" });
-    const [second] = await db
-      .insert(organizationUnit)
-      .values({
-        organizationId: org.orgId,
-        name: "Filial",
-        slug: "filial",
-        status: "ACTIVE",
-        isDefault: false,
-        createdBy: org.userId,
-      })
-      .returning({ id: organizationUnit.id });
+    const [second] = await withStatusRepair((tx) =>
+      tx
+        .insert(organizationUnit)
+        .values({
+          organizationId: org.orgId,
+          name: "Filial",
+          slug: "filial",
+          status: "ACTIVE",
+          isDefault: false,
+          createdBy: org.userId,
+        })
+        .returning({ id: organizationUnit.id }),
+    );
     if (!second) throw new Error("unit seed failed");
     const cursor = await bootstrapCursor(org);
     expect(cursor.split("|")).toHaveLength(4);

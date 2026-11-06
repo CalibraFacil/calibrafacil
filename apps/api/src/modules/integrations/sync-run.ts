@@ -13,6 +13,10 @@ import {
   type IntegrationSyncTrigger,
 } from "@calibra-facil/shared";
 import { and, count, eq, inArray } from "drizzle-orm";
+import {
+  INTEGRATION_SYNC_ITEM_MACHINE,
+  INTEGRATION_SYNC_RUN_MACHINE,
+} from "@calibra-facil/schemas/machines";
 import type { IntegrationsEnv } from "../../lib/integrations-env";
 import { inOrgTransaction } from "../../lib/org-transaction";
 import {
@@ -145,7 +149,15 @@ async function markSyncItemSucceeded(params: {
         lastErrorMessage: null,
         updatedAt: new Date(),
       })
-      .where(eq(integrationSyncItem.id, params.itemId));
+      .where(
+        and(
+          eq(integrationSyncItem.id, params.itemId),
+          inArray(
+            integrationSyncItem.status,
+            INTEGRATION_SYNC_ITEM_MACHINE.allowedFrom("succeed"),
+          ),
+        ),
+      );
   });
 }
 
@@ -167,7 +179,15 @@ async function markSyncItemFailed(params: {
         lastErrorMessage: message.slice(0, 1000),
         updatedAt: new Date(),
       })
-      .where(eq(integrationSyncItem.id, params.itemId));
+      .where(
+        and(
+          eq(integrationSyncItem.id, params.itemId),
+          inArray(
+            integrationSyncItem.status,
+            INTEGRATION_SYNC_ITEM_MACHINE.allowedFrom("fail"),
+          ),
+        ),
+      );
   });
 }
 
@@ -200,7 +220,15 @@ export async function runIntegrationSync(params: {
         }),
         updatedAt: new Date(),
       })
-      .where(eq(integrationSyncRun.id, params.runId));
+      .where(
+        and(
+          eq(integrationSyncRun.id, params.runId),
+          inArray(
+            integrationSyncRun.status,
+            INTEGRATION_SYNC_RUN_MACHINE.allowedFrom("start"),
+          ),
+        ),
+      );
   });
 
   try {
@@ -336,7 +364,15 @@ export async function runIntegrationSync(params: {
           finishedAt: new Date(),
           updatedAt: new Date(),
         })
-        .where(eq(integrationSyncRun.id, params.runId));
+        .where(
+          and(
+            eq(integrationSyncRun.id, params.runId),
+            inArray(
+              integrationSyncRun.status,
+              INTEGRATION_SYNC_RUN_MACHINE.allowedFrom("finish"),
+            ),
+          ),
+        );
 
       await writeIntegrationEvent(
         {
@@ -449,7 +485,15 @@ export async function failSyncRunAsBlocked(
         }),
         updatedAt: new Date(),
       })
-      .where(eq(integrationSyncRun.id, params.runId));
+      .where(
+        and(
+          eq(integrationSyncRun.id, params.runId),
+          inArray(
+            integrationSyncRun.status,
+            INTEGRATION_SYNC_RUN_MACHINE.allowedFrom("fail"),
+          ),
+        ),
+      );
 
     await writeIntegrationEvent(
       {

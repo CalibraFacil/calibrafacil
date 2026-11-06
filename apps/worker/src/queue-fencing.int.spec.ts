@@ -28,6 +28,7 @@ vi.mock("@calibra-facil/jobs-core", () => ({
 }));
 
 import { drainQueue } from "./queue-runtime";
+import { withStatusRepair } from "../test/integration/state-fixtures";
 
 const CONFIG = {
   workerId: "int-test-worker",
@@ -200,11 +201,15 @@ describe("queue receipts default mode (real Postgres)", () => {
     expect(workerQueue).toHaveBeenCalledTimes(1);
 
     // At-least-once re-delivery: the SAME row reappears as PENDING.
-    await db.execute(sql`
-      update app_queue_job
-      set status = 'PENDING', locked_by = null, locked_at = null, available_at = now()
-      where id = ${jobId}
-    `);
+    // COMPLETED -> PENDING is not a move of APP_QUEUE_JOB_MACHINE: staging it
+    // is an audited repair (the status guard refuses it otherwise).
+    await withStatusRepair((tx) =>
+      tx.execute(sql`
+        update app_queue_job
+        set status = 'PENDING', locked_by = null, locked_at = null, available_at = now()
+        where id = ${jobId}
+      `),
+    );
     vi.spyOn(console, "warn").mockImplementation(() => {});
 
     expect(await drainQueue(env, CONFIG)).toBe(1);
@@ -227,11 +232,15 @@ describe("queue receipts default mode (real Postgres)", () => {
     );
 
     await drainQueue(env, CONFIG);
-    await db.execute(sql`
-      update app_queue_job
-      set status = 'PENDING', locked_by = null, locked_at = null, available_at = now()
-      where id = ${jobId}
-    `);
+    // COMPLETED -> PENDING is not a move of APP_QUEUE_JOB_MACHINE: staging it
+    // is an audited repair (the status guard refuses it otherwise).
+    await withStatusRepair((tx) =>
+      tx.execute(sql`
+        update app_queue_job
+        set status = 'PENDING', locked_by = null, locked_at = null, available_at = now()
+        where id = ${jobId}
+      `),
+    );
     vi.spyOn(console, "warn").mockImplementation(() => {});
     await drainQueue(env, CONFIG);
 

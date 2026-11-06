@@ -18,6 +18,7 @@ import type {
   NotificationType,
   ScheduledNotificationEntityType,
 } from "@calibra-facil/db/schema";
+import { withStatusRepair } from "./state-fixtures";
 
 // Seed helpers for the processScheduledNotifications integration spec. Kept in a
 // SEPARATE file from the shared `seed.ts` (which serves the integrations spec) so
@@ -68,26 +69,30 @@ export async function seedScheduledOrg(params?: {
     email: `${ownerUserId}@lab.test`,
   });
 
-  await db.insert(organization).values({
-    id: orgId,
-    name: `Lab ${orgId}`,
-    slug: orgId,
-    createdAt: EPOCH,
-    type: "LAB",
-    status: "ACTIVE",
-  });
-
-  const [unit] = await db
-    .insert(organizationUnit)
-    .values({
-      organizationId: orgId,
-      name: "Matriz",
-      slug: "matriz",
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: orgId,
+      name: `Lab ${orgId}`,
+      slug: orgId,
+      createdAt: EPOCH,
+      type: "LAB",
       status: "ACTIVE",
-      isDefault: true,
-      createdBy: ownerUserId,
-    })
-    .returning();
+    }),
+  );
+
+  const [unit] = await withStatusRepair((tx) =>
+    tx
+      .insert(organizationUnit)
+      .values({
+        organizationId: orgId,
+        name: "Matriz",
+        slug: "matriz",
+        status: "ACTIVE",
+        isDefault: true,
+        createdBy: ownerUserId,
+      })
+      .returning(),
+  );
 
   if (!unit) throw new Error("seedScheduledOrg: failed to create default unit");
   return { orgId, ownerUserId, unitId: unit.id };
@@ -137,21 +142,23 @@ export async function seedCompetence(params: {
   expiresAt?: Date | null;
   deletedAt?: Date | null;
 }): Promise<number> {
-  const [row] = await db
-    .insert(personnelCompetence)
-    .values({
-      organizationId: params.organizationId,
-      userId: params.userId,
-      scopeDescription: params.scopeDescription ?? "Calibração de massa",
-      status: params.status ?? "ACTIVE",
-      expiresAt:
-        params.expiresAt === undefined ? daysFromNow(-3) : params.expiresAt,
-      deletedAt: params.deletedAt ?? null,
-      requestedBy: params.userId,
-      createdBy: params.userId,
-      createdAt: EPOCH,
-    })
-    .returning();
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(personnelCompetence)
+      .values({
+        organizationId: params.organizationId,
+        userId: params.userId,
+        scopeDescription: params.scopeDescription ?? "Calibração de massa",
+        status: params.status ?? "ACTIVE",
+        expiresAt:
+          params.expiresAt === undefined ? daysFromNow(-3) : params.expiresAt,
+        deletedAt: params.deletedAt ?? null,
+        requestedBy: params.userId,
+        createdBy: params.userId,
+        createdAt: EPOCH,
+      })
+      .returning(),
+  );
   if (!row) throw new Error("seedCompetence: insert failed");
   return row.id;
 }
@@ -172,21 +179,23 @@ export async function seedReferenceStandard(params: {
   nextCalibrationDate?: Date;
   status?: "ACTIVE" | "INACTIVE";
 }): Promise<number> {
-  const [row] = await db
-    .insert(referenceStandard)
-    .values({
-      organizationId: params.organizationId,
-      unitId: params.unitId,
-      name: params.name ?? "Conjunto de Pesos E2",
-      serialNumber: params.serialNumber ?? "SN-STD-1",
-      certificateNumber: params.certificateNumber ?? "CERT-STD-1",
-      calibrationDate: daysFromNow(-400),
-      nextCalibrationDate: params.nextCalibrationDate ?? daysFromNow(-5),
-      status: params.status ?? "ACTIVE",
-      createdBy: params.createdBy,
-      createdAt: EPOCH,
-    })
-    .returning();
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(referenceStandard)
+      .values({
+        organizationId: params.organizationId,
+        unitId: params.unitId,
+        name: params.name ?? "Conjunto de Pesos E2",
+        serialNumber: params.serialNumber ?? "SN-STD-1",
+        certificateNumber: params.certificateNumber ?? "CERT-STD-1",
+        calibrationDate: daysFromNow(-400),
+        nextCalibrationDate: params.nextCalibrationDate ?? daysFromNow(-5),
+        status: params.status ?? "ACTIVE",
+        createdBy: params.createdBy,
+        createdAt: EPOCH,
+      })
+      .returning(),
+  );
   if (!row) throw new Error("seedReferenceStandard: insert failed");
   return row.id;
 }
@@ -244,25 +253,27 @@ export async function seedScheduledAsset(params: {
     .returning();
   if (!type) throw new Error("seedScheduledAsset: asset_type insert failed");
 
-  const [row] = await db
-    .insert(asset)
-    .values({
-      unitId: params.unitId,
-      customerId: cust.id,
-      // SEC-03b (#638): asset carries its lab org (== the seeded customer's).
-      labOrganizationId: params.organizationId,
-      assetTypeId: type.id,
-      name: params.name ?? "Balança de Bancada",
-      serialNumber: params.serialNumber ?? `SN-${params.tag}`,
-      tag: params.tag,
-      status: params.status ?? "ACTIVE",
-      metrologyRegime: params.metrologyRegime ?? "INDUSTRIAL",
-      nextLegalVerificationDate: params.nextLegalVerificationDate ?? null,
-      nextCalibrationDate: params.nextCalibrationDate ?? null,
-      regulatedInterval: params.regulatedInterval ?? null,
-      createdAt: EPOCH,
-    })
-    .returning();
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: params.unitId,
+        customerId: cust.id,
+        // SEC-03b (#638): asset carries its lab org (== the seeded customer's).
+        labOrganizationId: params.organizationId,
+        assetTypeId: type.id,
+        name: params.name ?? "Balança de Bancada",
+        serialNumber: params.serialNumber ?? `SN-${params.tag}`,
+        tag: params.tag,
+        status: params.status ?? "ACTIVE",
+        metrologyRegime: params.metrologyRegime ?? "INDUSTRIAL",
+        nextLegalVerificationDate: params.nextLegalVerificationDate ?? null,
+        nextCalibrationDate: params.nextCalibrationDate ?? null,
+        regulatedInterval: params.regulatedInterval ?? null,
+        createdAt: EPOCH,
+      })
+      .returning(),
+  );
   if (!row) throw new Error("seedScheduledAsset: asset insert failed");
 
   return { assetId: row.id, customerId: cust.id, assetTypeId: type.id };

@@ -25,6 +25,10 @@ export const API_ERROR_CODES = [
   "idempotency_conflict",
   "idempotency_in_progress",
   "missing_idempotency_key",
+  // Lifecycle state machines (packages/schemas machines): the record left the
+  // state the command was checked from (a lost compare-and-set), or the database
+  // guard refused a move its machine does not list.
+  "status_transition_conflict",
 
   // Job status machine.
   "job_status_conflict",

@@ -53,6 +53,7 @@ import {
 import { eq } from "drizzle-orm";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 /**
  * postgres-js surfaces a duplicate insert as a Drizzle `DrizzleQueryError`
@@ -103,44 +104,50 @@ async function seedSubjectWithRecords(params: {
     email: SUBJECT_EMAIL,
   });
 
-  const [competence] = await db
-    .insert(personnelCompetence)
-    .values({
-      organizationId: params.orgId,
-      userId: params.subjectUserId,
-      scopeDescription: "Calibração de massa até 10 kg",
-      status: "ACTIVE",
-      certificateR2Key: COMPETENCE_R2_KEY,
-      requestedBy: params.adminUserId,
-      createdBy: params.adminUserId,
-    })
-    .returning({ id: personnelCompetence.id });
+  const [competence] = await withStatusRepair((tx) =>
+    tx
+      .insert(personnelCompetence)
+      .values({
+        organizationId: params.orgId,
+        userId: params.subjectUserId,
+        scopeDescription: "Calibração de massa até 10 kg",
+        status: "ACTIVE",
+        certificateR2Key: COMPETENCE_R2_KEY,
+        requestedBy: params.adminUserId,
+        createdBy: params.adminUserId,
+      })
+      .returning({ id: personnelCompetence.id }),
+  );
   if (!competence) throw new Error("seed competence failed");
 
-  const [training] = await db
-    .insert(trainingRecord)
-    .values({
-      organizationId: params.orgId,
-      userId: params.subjectUserId,
-      title: "GUM — expressão da incerteza",
-      type: "external",
-      status: "completed",
-      startDate: new Date("2026-02-01T00:00:00.000Z"),
-      certificateR2Key: TRAINING_R2_KEY,
-      createdBy: params.adminUserId,
-    })
-    .returning({ id: trainingRecord.id });
+  const [training] = await withStatusRepair((tx) =>
+    tx
+      .insert(trainingRecord)
+      .values({
+        organizationId: params.orgId,
+        userId: params.subjectUserId,
+        title: "GUM — expressão da incerteza",
+        type: "external",
+        status: "completed",
+        startDate: new Date("2026-02-01T00:00:00.000Z"),
+        certificateR2Key: TRAINING_R2_KEY,
+        createdBy: params.adminUserId,
+      })
+      .returning({ id: trainingRecord.id }),
+  );
   if (!training) throw new Error("seed training failed");
 
-  const [signatory] = await db
-    .insert(authorizedSignatory)
-    .values({
-      organizationId: params.orgId,
-      userId: params.subjectUserId,
-      authorizedBy: params.adminUserId,
-      status: "ACTIVE",
-    })
-    .returning({ id: authorizedSignatory.id });
+  const [signatory] = await withStatusRepair((tx) =>
+    tx
+      .insert(authorizedSignatory)
+      .values({
+        organizationId: params.orgId,
+        userId: params.subjectUserId,
+        authorizedBy: params.adminUserId,
+        status: "ACTIVE",
+      })
+      .returning({ id: authorizedSignatory.id }),
+  );
   if (!signatory) throw new Error("seed signatory failed");
 
   // Pre-existing audit rows (the "create"/"grant" trail) that must ALSO survive.
@@ -356,46 +363,54 @@ describe("Better Auth deleteUser — regulated-record preservation (CMP-07 #692)
     // Both users: an org-wide (asset_type_id NULL) competence AND an org-wide
     // signatory — the exact "two org-wide signatories" shape the verifier
     // flagged as the NORM, colliding at (org, NULL, NULL) once tombstoned.
-    const [competenceA] = await db
-      .insert(personnelCompetence)
-      .values({
-        organizationId: orgId,
-        userId: userA,
-        scopeDescription: "Escopo geral",
-        status: "ACTIVE",
-        requestedBy: adminUserId,
-        createdBy: adminUserId,
-      })
-      .returning({ id: personnelCompetence.id });
-    const [competenceB] = await db
-      .insert(personnelCompetence)
-      .values({
-        organizationId: orgId,
-        userId: userB,
-        scopeDescription: "Escopo geral",
-        status: "ACTIVE",
-        requestedBy: adminUserId,
-        createdBy: adminUserId,
-      })
-      .returning({ id: personnelCompetence.id });
-    const [signatoryA] = await db
-      .insert(authorizedSignatory)
-      .values({
-        organizationId: orgId,
-        userId: userA,
-        authorizedBy: adminUserId,
-        status: "ACTIVE",
-      })
-      .returning({ id: authorizedSignatory.id });
-    const [signatoryB] = await db
-      .insert(authorizedSignatory)
-      .values({
-        organizationId: orgId,
-        userId: userB,
-        authorizedBy: adminUserId,
-        status: "ACTIVE",
-      })
-      .returning({ id: authorizedSignatory.id });
+    const [competenceA] = await withStatusRepair((tx) =>
+      tx
+        .insert(personnelCompetence)
+        .values({
+          organizationId: orgId,
+          userId: userA,
+          scopeDescription: "Escopo geral",
+          status: "ACTIVE",
+          requestedBy: adminUserId,
+          createdBy: adminUserId,
+        })
+        .returning({ id: personnelCompetence.id }),
+    );
+    const [competenceB] = await withStatusRepair((tx) =>
+      tx
+        .insert(personnelCompetence)
+        .values({
+          organizationId: orgId,
+          userId: userB,
+          scopeDescription: "Escopo geral",
+          status: "ACTIVE",
+          requestedBy: adminUserId,
+          createdBy: adminUserId,
+        })
+        .returning({ id: personnelCompetence.id }),
+    );
+    const [signatoryA] = await withStatusRepair((tx) =>
+      tx
+        .insert(authorizedSignatory)
+        .values({
+          organizationId: orgId,
+          userId: userA,
+          authorizedBy: adminUserId,
+          status: "ACTIVE",
+        })
+        .returning({ id: authorizedSignatory.id }),
+    );
+    const [signatoryB] = await withStatusRepair((tx) =>
+      tx
+        .insert(authorizedSignatory)
+        .values({
+          organizationId: orgId,
+          userId: userB,
+          authorizedBy: adminUserId,
+          status: "ACTIVE",
+        })
+        .returning({ id: authorizedSignatory.id }),
+    );
     if (!competenceA || !competenceB || !signatoryA || !signatoryB) {
       throw new Error("seed failed");
     }
@@ -480,45 +495,53 @@ describe("Better Auth deleteUser — regulated-record preservation (CMP-07 #692)
       email: "dupe@lab.test",
     });
 
-    await db.insert(authorizedSignatory).values({
-      organizationId: orgId,
-      userId: subjectUserId,
-      authorizedBy: adminUserId,
-      status: "ACTIVE",
-    });
-
-    let signatoryError: unknown;
-    try {
-      await db.insert(authorizedSignatory).values({
+    await withStatusRepair((tx) =>
+      tx.insert(authorizedSignatory).values({
         organizationId: orgId,
         userId: subjectUserId,
         authorizedBy: adminUserId,
         status: "ACTIVE",
-      });
+      }),
+    );
+
+    let signatoryError: unknown;
+    try {
+      await withStatusRepair((tx) =>
+        tx.insert(authorizedSignatory).values({
+          organizationId: orgId,
+          userId: subjectUserId,
+          authorizedBy: adminUserId,
+          status: "ACTIVE",
+        }),
+      );
     } catch (error) {
       signatoryError = error;
     }
     expect(isUniqueViolation(signatoryError)).toBe(true);
 
-    await db.insert(personnelCompetence).values({
-      organizationId: orgId,
-      userId: subjectUserId,
-      scopeDescription: "Escopo geral",
-      status: "ACTIVE",
-      requestedBy: adminUserId,
-      createdBy: adminUserId,
-    });
-
-    let competenceError: unknown;
-    try {
-      await db.insert(personnelCompetence).values({
+    await withStatusRepair((tx) =>
+      tx.insert(personnelCompetence).values({
         organizationId: orgId,
         userId: subjectUserId,
-        scopeDescription: "Escopo geral (duplicado)",
+        scopeDescription: "Escopo geral",
         status: "ACTIVE",
         requestedBy: adminUserId,
         createdBy: adminUserId,
-      });
+      }),
+    );
+
+    let competenceError: unknown;
+    try {
+      await withStatusRepair((tx) =>
+        tx.insert(personnelCompetence).values({
+          organizationId: orgId,
+          userId: subjectUserId,
+          scopeDescription: "Escopo geral (duplicado)",
+          status: "ACTIVE",
+          requestedBy: adminUserId,
+          createdBy: adminUserId,
+        }),
+      );
     } catch (error) {
       competenceError = error;
     }

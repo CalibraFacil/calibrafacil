@@ -48,6 +48,7 @@ import {
 } from "../../../test/integration/job-fixtures";
 import { seedOrg } from "../../../test/integration/seed";
 import { jobsRouter } from "../../routes/jobs";
+import { withStatusRepair } from "../../../test/integration/state-fixtures";
 
 const mocks = vi.hoisted(() => ({
   enqueue: vi.fn(),
@@ -134,32 +135,36 @@ async function seedFixture() {
   });
   // The standard the jobs below name in their snapshot: the approval re-judges it
   // (roadmap 2 B5), so it exists in this laboratory and is valid on the performed date.
-  await db.insert(referenceStandard).values({
-    id: 11,
-    organizationId: ORG,
-    unitId: org.unitId,
-    createdBy: MAKER,
-    name: "Massa padrão 1 kg",
-    kind: "generic_scalar",
-    serialNumber: "SN-STD-11",
-    certificateNumber: "RBC-777",
-    calibrationDate: new Date("2025-12-01T00:00:00.000Z"),
-    nextCalibrationDate: new Date("2027-12-01T00:00:00.000Z"),
-    coverageFactor: 2,
-    distribution: "normal",
-    status: "ACTIVE",
-    referenceValue: 1,
-    uncertainty: 0.001,
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(referenceStandard).values({
+      id: 11,
+      organizationId: ORG,
+      unitId: org.unitId,
+      createdBy: MAKER,
+      name: "Massa padrão 1 kg",
+      kind: "generic_scalar",
+      serialNumber: "SN-STD-11",
+      certificateNumber: "RBC-777",
+      calibrationDate: new Date("2025-12-01T00:00:00.000Z"),
+      nextCalibrationDate: new Date("2027-12-01T00:00:00.000Z"),
+      coverageFactor: 2,
+      distribution: "normal",
+      status: "ACTIVE",
+      referenceValue: 1,
+      uncertainty: 0.001,
+    }),
+  );
   // An accredited laboratory keeps an authorized-signatory roster (roadmap 2 B5):
   // the approver is on it.
-  await db.insert(authorizedSignatory).values({
-    organizationId: ORG,
-    userId: CHECKER,
-    assetTypeId: null,
-    status: "ACTIVE",
-    authorizedBy: MAKER,
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(authorizedSignatory).values({
+      organizationId: ORG,
+      userId: CHECKER,
+      assetTypeId: null,
+      status: "ACTIVE",
+      authorizedBy: MAKER,
+    }),
+  );
   await db.insert(memberVisualSignature).values({
     memberId: `member-${CHECKER}`,
     organizationId: ORG,
@@ -187,14 +192,16 @@ async function seedFixture() {
     })
     .where(eq(organization.id, ORG));
 
-  await db.insert(organization).values({
-    id: "client-a",
-    name: "Client A",
-    slug: "client-a",
-    type: "CLIENT",
-    status: "ACTIVE",
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: "client-a",
+      name: "Client A",
+      slug: "client-a",
+      type: "CLIENT",
+      status: "ACTIVE",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    }),
+  );
   const [cust] = await db
     .insert(customer)
     .values({
@@ -209,20 +216,22 @@ async function seedFixture() {
     .values({ name: "AT", slug: "at-a", definition: [] })
     .returning({ id: assetType.id });
   if (!cust || !type) throw new Error("seed failed");
-  const [ast] = await db
-    .insert(asset)
-    .values({
-      unitId: org.unitId,
-      customerId: cust.id,
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${cust.id})`,
-      assetTypeId: type.id,
-      name: "Balança Analítica",
-      serialNumber: "SN-1",
-      tag: "TAG-1",
-      manufacturer: "Fabricante",
-      model: "MOD-100",
-    })
-    .returning({ id: asset.id });
+  const [ast] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: org.unitId,
+        customerId: cust.id,
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${cust.id})`,
+        assetTypeId: type.id,
+        name: "Balança Analítica",
+        serialNumber: "SN-1",
+        tag: "TAG-1",
+        manufacturer: "Fabricante",
+        model: "MOD-100",
+      })
+      .returning({ id: asset.id }),
+  );
   const [svc] = await db
     .insert(service)
     .values({
@@ -641,13 +650,15 @@ describe("roadmap 2 C1/C2: the content decisions are frozen at approval", () => 
       .update(authorizedSignatory)
       .set({ title: "Signatário Autorizado (geral)" })
       .where(eq(authorizedSignatory.userId, CHECKER));
-    await db.insert(authorizedSignatory).values({
-      organizationId: ORG,
-      userId: CHECKER,
-      assetTypeId,
-      title: "Signatária Autorizada — Massa",
-      authorizedBy: MAKER,
-    });
+    await withStatusRepair((tx) =>
+      tx.insert(authorizedSignatory).values({
+        organizationId: ORG,
+        userId: CHECKER,
+        assetTypeId,
+        title: "Signatária Autorizada — Massa",
+        authorizedBy: MAKER,
+      }),
+    );
     const jobId = await seedReviewJob(fixture);
 
     expect((await approve(jobId)).status).toBe(200);
@@ -706,12 +717,14 @@ describe("roadmap 2 C1/C2: the content decisions are frozen at approval", () => 
     await db
       .delete(authorizedSignatory)
       .where(eq(authorizedSignatory.userId, CHECKER));
-    await db.insert(authorizedSignatory).values({
-      organizationId: ORG,
-      userId: MAKER,
-      assetTypeId: null,
-      authorizedBy: MAKER,
-    });
+    await withStatusRepair((tx) =>
+      tx.insert(authorizedSignatory).values({
+        organizationId: ORG,
+        userId: MAKER,
+        assetTypeId: null,
+        authorizedBy: MAKER,
+      }),
+    );
     const jobId = await seedReviewJob(fixture);
     const response = await approve(jobId);
     expect(response.status).not.toBe(200);

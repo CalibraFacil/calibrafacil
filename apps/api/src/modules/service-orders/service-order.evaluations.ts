@@ -4,6 +4,7 @@ import {
   serviceOrderEvaluation,
   serviceOrderQuote,
 } from "@calibra-facil/db/schema";
+import { SERVICE_ORDER_MACHINE } from "@calibra-facil/schemas/machines";
 import { and, eq, ne } from "drizzle-orm";
 import type { AuthVariables } from "../../middleware/permission";
 import { orgDb } from "../../lib/org-db";
@@ -52,6 +53,12 @@ export async function createServiceOrderEvaluation(input: {
       .where(eq(serviceOrderEvaluation.serviceOrderId, input.serviceOrderId))
       .limit(1);
     if (existingEvaluation) return { status: "already_exists" as const };
+    // `evaluate` in SERVICE_ORDER_MACHINE: an evaluation is recorded while the
+    // order is still at intake (opened, awaiting or under evaluation, warranty
+    // return). Recording one later used to rewind a delivered or closed order.
+    if (!SERVICE_ORDER_MACHINE.canTransition(order.status, "evaluate")) {
+      return { status: "invalid_transition" as const };
+    }
 
     // The evaluating technician may be named in the body: it must be a member of
     // this organization (the caller themself is, by construction).
@@ -74,6 +81,28 @@ export async function createServiceOrderEvaluation(input: {
         ? "awaiting_calibration"
         : "ready_for_pickup";
 
+    // The status moves first, as a compare-and-set, so a lost race records no
+    // evaluation.
+    const [moved] = await o
+      .update(serviceOrder)
+      .set({
+        status: SERVICE_ORDER_MACHINE.requireTransition(
+          order.status,
+          "evaluate",
+          nextStatus,
+        ),
+        evaluatedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(serviceOrder.id, input.serviceOrderId),
+          eq(serviceOrder.status, order.status),
+        ),
+      )
+      .returning({ id: serviceOrder.id });
+    if (!moved) return { status: "invalid_transition" as const };
+
     const [created] = await o
       .insert(serviceOrderEvaluation)
       .values({
@@ -91,14 +120,6 @@ export async function createServiceOrderEvaluation(input: {
         clientVisibleNotes: input.values.clientVisibleNotes ?? null,
       })
       .returning();
-    await o
-      .update(serviceOrder)
-      .set({
-        status: nextStatus,
-        evaluatedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(serviceOrder.id, input.serviceOrderId));
     await recordServiceOrderEvent(
       {
         organizationId: order.organizationId,

@@ -12,6 +12,7 @@ import {
 } from "@calibra-facil/db/schema";
 import type { CertificateReleaseStatus } from "@calibra-facil/shared";
 import { storedObjectUrl } from "@calibra-facil/shared/public-urls";
+import { withStatusRepair } from "./state-fixtures";
 
 // Seed helpers SPECIFIC to the worker's AUDIT_PACK handler (#738,
 // processAuditPackJob). The handler reads: a portal_export_job row (whose
@@ -93,24 +94,26 @@ export async function seedApprovedCertificate(params: {
   if (!assetTypeRow)
     throw new Error("seedApprovedCertificate: assetType failed");
 
-  const [assetRow] = await db
-    .insert(asset)
-    .values({
-      unitId: params.unitId,
-      customerId: params.customerId,
-      labOrganizationId: params.organizationId,
-      assetTypeId: assetTypeRow.id,
-      name: "Balança Analítica",
-      serialNumber: `SN-${params.jobNumber}`,
-      tag: `TAG-${params.jobNumber}`,
-      manufacturer: "Fabricante Teste",
-      model: "MOD-100",
-      nextCalibrationDate: new Date("2027-03-10T12:00:00.000Z"),
-      lastCalibrationDate: approvedAt,
-      calibrationIntervalMonths: 12,
-      createdAt: EPOCH,
-    })
-    .returning();
+  const [assetRow] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: params.unitId,
+        customerId: params.customerId,
+        labOrganizationId: params.organizationId,
+        assetTypeId: assetTypeRow.id,
+        name: "Balança Analítica",
+        serialNumber: `SN-${params.jobNumber}`,
+        tag: `TAG-${params.jobNumber}`,
+        manufacturer: "Fabricante Teste",
+        model: "MOD-100",
+        nextCalibrationDate: new Date("2027-03-10T12:00:00.000Z"),
+        lastCalibrationDate: approvedAt,
+        calibrationIntervalMonths: 12,
+        createdAt: EPOCH,
+      })
+      .returning(),
+  );
   if (!assetRow) throw new Error("seedApprovedCertificate: asset failed");
 
   const [serviceRow] = await db
@@ -143,12 +146,15 @@ export async function seedApprovedCertificate(params: {
   });
   if (!jobRow) throw new Error("seedApprovedCertificate: job failed");
 
-  if (params.releaseStatus) {
-    await db.insert(certificateRelease).values({
-      organizationId: params.organizationId,
-      calibrationJobId: jobRow.id,
-      status: params.releaseStatus,
-    });
+  const releaseStatus = params.releaseStatus;
+  if (releaseStatus) {
+    await withStatusRepair((tx) =>
+      tx.insert(certificateRelease).values({
+        organizationId: params.organizationId,
+        calibrationJobId: jobRow.id,
+        status: releaseStatus,
+      }),
+    );
   }
 
   return {
@@ -168,27 +174,29 @@ export async function seedAuditPackExport(params: {
   dateTo?: string;
   include?: PortalAuditPackParams["include"];
 }): Promise<{ exportId: number }> {
-  const [exportRow] = await db
-    .insert(portalExportJob)
-    .values({
-      kind: "AUDIT_PACK",
-      labOrganizationId: params.organizationId,
-      authOrganizationId: params.organizationId,
-      requestedByUserId: params.userId,
-      params: {
-        dateFrom: params.dateFrom ?? "2026-01-01",
-        dateTo: params.dateTo ?? "2026-12-31",
-        unitId: null,
-        include: params.include ?? {
-          certificates: true,
-          fleetReport: false,
-          verificationIndex: true,
+  const [exportRow] = await withStatusRepair((tx) =>
+    tx
+      .insert(portalExportJob)
+      .values({
+        kind: "AUDIT_PACK",
+        labOrganizationId: params.organizationId,
+        authOrganizationId: params.organizationId,
+        requestedByUserId: params.userId,
+        params: {
+          dateFrom: params.dateFrom ?? "2026-01-01",
+          dateTo: params.dateTo ?? "2026-12-31",
+          unitId: null,
+          include: params.include ?? {
+            certificates: true,
+            fleetReport: false,
+            verificationIndex: true,
+          },
+          customerIds: params.customerIds,
         },
-        customerIds: params.customerIds,
-      },
-      status: "PENDING",
-    })
-    .returning();
+        status: "PENDING",
+      })
+      .returning(),
+  );
   if (!exportRow) throw new Error("seedAuditPackExport: insert failed");
   return { exportId: exportRow.id };
 }

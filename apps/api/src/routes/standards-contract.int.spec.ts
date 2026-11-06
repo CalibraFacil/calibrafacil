@@ -27,6 +27,7 @@ import { standardsRouter } from "./standards";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg, seedStandard } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 vi.mock("../lib/storage", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/storage")>();
@@ -205,18 +206,20 @@ describe("standards endpoints: real responses honor the contract schemas (P2-15 
 
   it("REQ-TC-1: GET /composition-profiles parses", async () => {
     const org = await seedOrg({ orgId: "org-std-contract", role: "admin" });
-    await db.insert(massCompositionProfile).values({
-      organizationId: org.orgId,
-      profileKey: "M1:1g",
-      profileClass: "M1",
-      nominal: "1 g",
-      nominalG: 1,
-      value: 1,
-      uncertainty: 0.001,
-      unit: "g",
-      coverageFactor: 2,
-      quantityAvailable: 1,
-    });
+    await withStatusRepair((tx) =>
+      tx.insert(massCompositionProfile).values({
+        organizationId: org.orgId,
+        profileKey: "M1:1g",
+        profileClass: "M1",
+        nominal: "1 g",
+        nominalG: 1,
+        value: 1,
+        uncertainty: 0.001,
+        unit: "g",
+        coverageFactor: 2,
+        quantityAvailable: 1,
+      }),
+    );
     loginAs({ userId: org.userId, organizationId: org.orgId });
 
     const catalog = await parsedBody(

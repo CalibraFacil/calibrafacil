@@ -51,6 +51,7 @@ import { insertJobs } from "../../test/integration/job-fixtures";
 import { loginAsPortal } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedPortalContext } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
@@ -121,21 +122,23 @@ async function seedFleet() {
       definition: [],
     })
     .returning({ id: assetType.id });
-  const [assetRow] = await db
-    .insert(asset)
-    .values({
-      unitId: ctx.labUnitId,
-      customerId: ctx.customerId,
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${ctx.customerId})`,
-      assetTypeId: type?.id ?? 0,
-      name: "Balança A",
-      serialNumber: "SN-A1",
-      tag: "EQ-A1",
-      status: "ACTIVE",
-      lastCalibrationDate: new Date("2026-01-10T00:00:00.000Z"),
-      nextCalibrationDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000),
-    })
-    .returning({ id: asset.id });
+  const [assetRow] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: ctx.labUnitId,
+        customerId: ctx.customerId,
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${ctx.customerId})`,
+        assetTypeId: type?.id ?? 0,
+        name: "Balança A",
+        serialNumber: "SN-A1",
+        tag: "EQ-A1",
+        status: "ACTIVE",
+        lastCalibrationDate: new Date("2026-01-10T00:00:00.000Z"),
+        nextCalibrationDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000),
+      })
+      .returning({ id: asset.id }),
+  );
   const [serviceRow] = await db
     .insert(service)
     .values({

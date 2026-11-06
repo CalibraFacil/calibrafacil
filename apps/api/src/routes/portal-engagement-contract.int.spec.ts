@@ -39,6 +39,7 @@ import { insertJobs } from "../../test/integration/job-fixtures";
 import { loginAsPortal } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedPortalContext } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
@@ -99,19 +100,21 @@ async function seedLab() {
     .insert(assetType)
     .values({ name: "Balança", slug: "balanca-engagement", definition: [] })
     .returning({ id: assetType.id });
-  const [assetRow] = await db
-    .insert(asset)
-    .values({
-      unitId: ctx.labUnitId,
-      customerId: ctx.customerId,
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${ctx.customerId})`,
-      assetTypeId: type?.id ?? 0,
-      name: "Balança A",
-      serialNumber: "SN-A1",
-      tag: "EQ-A1",
-      status: "ACTIVE",
-    })
-    .returning({ id: asset.id });
+  const [assetRow] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: ctx.labUnitId,
+        customerId: ctx.customerId,
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${ctx.customerId})`,
+        assetTypeId: type?.id ?? 0,
+        name: "Balança A",
+        serialNumber: "SN-A1",
+        tag: "EQ-A1",
+        status: "ACTIVE",
+      })
+      .returning({ id: asset.id }),
+  );
   return { ctx, assetId: assetRow?.id ?? 0 };
 }
 
@@ -122,14 +125,16 @@ describe("portal engagement endpoints: real responses honor the contract schemas
 
   it("REQ-TC-3: the notification feed, the unread count and the read marks parse", async () => {
     const { ctx } = await seedLab();
-    await db.insert(notification).values({
-      recipientUserId: ctx.portalUserId,
-      organizationId: ctx.clientOrgId,
-      type: "CERTIFICATE_READY",
-      title: "Certificado disponível",
-      message: "O certificado está disponível.",
-      status: "UNREAD",
-    });
+    await withStatusRepair((tx) =>
+      tx.insert(notification).values({
+        recipientUserId: ctx.portalUserId,
+        organizationId: ctx.clientOrgId,
+        type: "CERTIFICATE_READY",
+        title: "Certificado disponível",
+        message: "O certificado está disponível.",
+        status: "UNREAD",
+      }),
+    );
 
     const feed = await parsedBody(
       await get(portalNotificationsRouter, "/?limit=20"),
@@ -157,17 +162,19 @@ describe("portal engagement endpoints: real responses honor the contract schemas
 
   it("REQ-TC-3: the visit list, the confirmation and the reschedule request parse", async () => {
     const { ctx } = await seedLab();
-    const [visit] = await db
-      .insert(calibrationVisit)
-      .values({
-        organizationId: ctx.labOrgId,
-        unitId: ctx.labUnitId,
-        customerId: ctx.customerId,
-        createdBy: ctx.portalUserId,
-        status: "PROPOSED",
-        scheduledAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      })
-      .returning({ id: calibrationVisit.id });
+    const [visit] = await withStatusRepair((tx) =>
+      tx
+        .insert(calibrationVisit)
+        .values({
+          organizationId: ctx.labOrgId,
+          unitId: ctx.labUnitId,
+          customerId: ctx.customerId,
+          createdBy: ctx.portalUserId,
+          status: "PROPOSED",
+          scheduledAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        })
+        .returning({ id: calibrationVisit.id }),
+    );
 
     const list = await parsedBody(
       await get(portalVisitsRouter, "/"),
@@ -199,18 +206,20 @@ describe("portal engagement endpoints: real responses honor the contract schemas
 
   it("REQ-TC-3: the request list parses", async () => {
     const { ctx, assetId } = await seedLab();
-    const [request] = await db
-      .insert(calibrationRequest)
-      .values({
-        organizationId: ctx.labOrgId,
-        unitId: ctx.labUnitId,
-        customerId: ctx.customerId,
-        authOrganizationId: ctx.clientOrgId,
-        submittedBy: ctx.portalUserId,
-        status: "PENDING",
-        observations: "Calibração anual",
-      })
-      .returning({ id: calibrationRequest.id });
+    const [request] = await withStatusRepair((tx) =>
+      tx
+        .insert(calibrationRequest)
+        .values({
+          organizationId: ctx.labOrgId,
+          unitId: ctx.labUnitId,
+          customerId: ctx.customerId,
+          authOrganizationId: ctx.clientOrgId,
+          submittedBy: ctx.portalUserId,
+          status: "PENDING",
+          observations: "Calibração anual",
+        })
+        .returning({ id: calibrationRequest.id }),
+    );
     await db.insert(calibrationRequestItem).values({
       organizationId: ctx.labOrgId,
       requestId: request?.id ?? 0,
@@ -260,31 +269,35 @@ describe("portal engagement endpoints: real responses honor the contract schemas
         uncertaintyParams: [],
       },
     });
-    const [nc] = await db
-      .insert(nonConformance)
-      .values({
-        ncNumber: "NC-2026-0001",
-        organizationId: ctx.labOrgId,
-        jobId: job?.id ?? null,
-        type: "out_of_tolerance",
-        description: "Fora de tolerância",
-        detectedBy: ctx.portalUserId,
-        detectedAt: new Date(),
-        createdBy: ctx.portalUserId,
-      })
-      .returning({ id: nonConformance.id });
-    const [notice] = await db
-      .insert(ootNotification)
-      .values({
-        organizationId: ctx.labOrgId,
-        ncId: nc?.id ?? 0,
-        jobId: job?.id ?? 0,
-        certificateNumber: "CAL-OOT-1",
-        status: "SENT",
-        approvedBy: ctx.portalUserId,
-        sentAt: new Date(),
-      })
-      .returning({ ackToken: ootNotification.ackToken });
+    const [nc] = await withStatusRepair((tx) =>
+      tx
+        .insert(nonConformance)
+        .values({
+          ncNumber: "NC-2026-0001",
+          organizationId: ctx.labOrgId,
+          jobId: job?.id ?? null,
+          type: "out_of_tolerance",
+          description: "Fora de tolerância",
+          detectedBy: ctx.portalUserId,
+          detectedAt: new Date(),
+          createdBy: ctx.portalUserId,
+        })
+        .returning({ id: nonConformance.id }),
+    );
+    const [notice] = await withStatusRepair((tx) =>
+      tx
+        .insert(ootNotification)
+        .values({
+          organizationId: ctx.labOrgId,
+          ncId: nc?.id ?? 0,
+          jobId: job?.id ?? 0,
+          certificateNumber: "CAL-OOT-1",
+          status: "SENT",
+          approvedBy: ctx.portalUserId,
+          sentAt: new Date(),
+        })
+        .returning({ ackToken: ootNotification.ackToken }),
+    );
 
     const list = await parsedBody(
       await get(portalRouter, "/oot-notifications"),

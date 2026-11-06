@@ -454,7 +454,16 @@ export function ExecuteJobForm({
       />
       <ExecutionNavigationGuard
         Gate={UnsavedChangesGate}
-        shouldBlock={() => isDirty && !leaveAllowed.current}
+        shouldBlock={() => {
+          // The permission a save/submit grants is for ONE navigation, the one
+          // it starts: consumed here, so a later navigation (after that one
+          // was cancelled, or the next edit) is guarded again.
+          if (leaveAllowed.current) {
+            leaveAllowed.current = false
+            return false
+          }
+          return isDirty
+        }}
         draftKept={scope !== null}
         onBeforeLeave={flushDraftBeforeLeaving}
       />

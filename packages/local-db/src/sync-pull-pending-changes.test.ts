@@ -635,10 +635,10 @@ describe("pull does not clobber queued local changes", () => {
 
   it("refreshes an order header but keeps it dirty while a child event is queued", () => {
     const database = openLocalDatabase({ filePath: createTempDatabasePath() });
+    // An approved quote: saving the execution starts the repair
+    // (SERVICE_ORDER_MACHINE `start_repair`), a local change of the header.
     pull(database, {
-      serviceOrders: [
-        serviceOrderRow("awaiting_tech_evaluation", BASE_UPDATED_AT),
-      ],
+      serviceOrders: [serviceOrderRow("quote_approved", BASE_UPDATED_AT)],
     });
     saveLocalServiceOrderExecutionNotes(database, {
       routeId: "987",
@@ -670,6 +670,26 @@ describe("pull does not clobber queued local changes", () => {
     expect(row.status).toBe("in_progress");
     expect(row.sync_state).toBe("local");
     expect(summary.skipped).toEqual([]);
+
+    database.close();
+  });
+
+  it("saving execution notes on an order at another stage does not move it", () => {
+    const database = openLocalDatabase({ filePath: createTempDatabasePath() });
+    pull(database, {
+      serviceOrders: [
+        serviceOrderRow("awaiting_final_review", BASE_UPDATED_AT),
+      ],
+    });
+    saveLocalServiceOrderExecutionNotes(database, {
+      routeId: "987",
+      actorUserId: "user-1",
+      deviceId: "device-1",
+      servicePerformed: "Ajuste de nota",
+    });
+    const row = readRow(database, "service_orders", "service-order:987");
+    expect(row.status).toBe("awaiting_final_review");
+    expect(row.sync_state).toBe("synced");
 
     database.close();
   });

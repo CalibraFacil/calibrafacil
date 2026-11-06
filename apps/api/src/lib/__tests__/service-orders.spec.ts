@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  canEditServiceOrderQuote,
-  canTransitionServiceOrderStatus,
-  isServiceOrderFinalStatus,
-} from "@calibra-facil/shared";
+import { isServiceOrderFinalStatus } from "@calibra-facil/shared";
 
 import {
   calculatePricedItems,
@@ -11,21 +7,11 @@ import {
 } from "../service-order-workflow";
 
 describe("service order workflow helpers", () => {
-  it("allows only supported status transitions", () => {
-    expect(
-      canTransitionServiceOrderStatus("opened", "awaiting_tech_evaluation"),
-    ).toBe(true);
-    expect(
-      canTransitionServiceOrderStatus("closed", "repair_in_progress"),
-    ).toBe(false);
+  it("knows the final statuses", () => {
+    // The transition rules are SERVICE_ORDER_MACHINE's, tested beside it in
+    // @calibra-facil/schemas.
     expect(isServiceOrderFinalStatus("closed")).toBe(true);
     expect(isServiceOrderFinalStatus("ready_for_pickup")).toBe(false);
-  });
-
-  it("locks sent and approved quotes against draft edits", () => {
-    expect(canEditServiceOrderQuote("draft")).toBe(true);
-    expect(canEditServiceOrderQuote("sent")).toBe(false);
-    expect(canEditServiceOrderQuote("approved")).toBe(false);
   });
 
   it("calculates service order line item totals in cents", () => {

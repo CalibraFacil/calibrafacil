@@ -23,6 +23,7 @@ import { portalRouter } from "./portal";
 import { loginAsPortal } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedPortalContext } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 const LOCAL_ORIGIN = { origin: "http://localhost" };
 
@@ -48,50 +49,56 @@ describe("portal overview: the real response honors the contract schema (REQ-TC-
       .insert(assetType)
       .values({ name: "Balança", slug: "balanca-portal", definition: [] })
       .returning({ id: assetType.id });
-    const [assetRow] = await db
-      .insert(asset)
-      .values({
-        unitId: ctx.labUnitId,
-        customerId: ctx.customerId,
-        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${ctx.customerId})`,
-        assetTypeId: type?.id ?? 0,
-        name: "Balança A",
-        serialNumber: "SN-A1",
-        tag: "EQ-A1",
-        status: "ACTIVE",
-        nextCalibrationDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
-      })
-      .returning({ id: asset.id });
+    const [assetRow] = await withStatusRepair((tx) =>
+      tx
+        .insert(asset)
+        .values({
+          unitId: ctx.labUnitId,
+          customerId: ctx.customerId,
+          labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${ctx.customerId})`,
+          assetTypeId: type?.id ?? 0,
+          name: "Balança A",
+          serialNumber: "SN-A1",
+          tag: "EQ-A1",
+          status: "ACTIVE",
+          nextCalibrationDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
+        })
+        .returning({ id: asset.id }),
+    );
     const assetId = assetRow?.id ?? 0;
 
-    await db.insert(calibrationRequest).values({
-      organizationId: ctx.labOrgId,
-      unitId: ctx.labUnitId,
-      customerId: ctx.customerId,
-      authOrganizationId: ctx.clientOrgId,
-      submittedBy: ctx.portalUserId,
-      status: "PENDING",
-    });
+    await withStatusRepair((tx) =>
+      tx.insert(calibrationRequest).values({
+        organizationId: ctx.labOrgId,
+        unitId: ctx.labUnitId,
+        customerId: ctx.customerId,
+        authOrganizationId: ctx.clientOrgId,
+        submittedBy: ctx.portalUserId,
+        status: "PENDING",
+      }),
+    );
 
-    await db.insert(serviceOrder).values({
-      organizationId: ctx.labOrgId,
-      unitId: ctx.labUnitId,
-      customerId: ctx.customerId,
-      assetId,
-      openedByUserId: ctx.portalUserId,
-      serviceOrderNumber: "OS-0001",
-      status: "awaiting_quote_approval",
-      claimedDefect: "Não liga",
-      intakeCondition: "Sem avarias",
-      intakeType: "counter",
-      deliveryMethod: "pickup_at_lab",
-      priority: "normal",
-      totalQuotedCents: 0,
-      totalApprovedCents: 0,
-      evaluationFeeCents: 0,
-      evaluationFeeApplied: false,
-      isExternalService: false,
-    });
+    await withStatusRepair((tx) =>
+      tx.insert(serviceOrder).values({
+        organizationId: ctx.labOrgId,
+        unitId: ctx.labUnitId,
+        customerId: ctx.customerId,
+        assetId,
+        openedByUserId: ctx.portalUserId,
+        serviceOrderNumber: "OS-0001",
+        status: "awaiting_quote_approval",
+        claimedDefect: "Não liga",
+        intakeCondition: "Sem avarias",
+        intakeType: "counter",
+        deliveryMethod: "pickup_at_lab",
+        priority: "normal",
+        totalQuotedCents: 0,
+        totalApprovedCents: 0,
+        evaluationFeeCents: 0,
+        evaluationFeeApplied: false,
+        isExternalService: false,
+      }),
+    );
 
     const [serviceRow] = await db
       .insert(service)

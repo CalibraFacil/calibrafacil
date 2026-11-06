@@ -33,6 +33,7 @@ import {
   seedOrg,
   seedService,
 } from "../../../test/integration/seed";
+import { withStatusRepair } from "../../../test/integration/state-fixtures";
 
 const JSON_HEADERS = { "content-type": "application/json" } as const;
 
@@ -57,17 +58,19 @@ async function seedFixture() {
     unitId: orgB.unitId,
     name: "Calibração B",
   });
-  const [agreementB] = await db
-    .insert(commercialAgreement)
-    .values({
-      organizationId: orgB.orgId,
-      customerId: customerB,
-      title: "Contrato B",
-      effectiveFrom: new Date("2026-01-01T00:00:00.000Z"),
-      createdBy: orgB.userId,
-      updatedBy: orgB.userId,
-    })
-    .returning({ id: commercialAgreement.id });
+  const [agreementB] = await withStatusRepair((tx) =>
+    tx
+      .insert(commercialAgreement)
+      .values({
+        organizationId: orgB.orgId,
+        customerId: customerB,
+        title: "Contrato B",
+        effectiveFrom: new Date("2026-01-01T00:00:00.000Z"),
+        createdBy: orgB.userId,
+        updatedBy: orgB.userId,
+      })
+      .returning({ id: commercialAgreement.id }),
+  );
   if (!agreementB) throw new Error("seed agreement B failed");
   return {
     orgA,

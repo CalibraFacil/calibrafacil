@@ -21,6 +21,7 @@ import {
   makeTestEnv,
 } from "../test/integration/env";
 import { seedOrg } from "../test/integration/seed";
+import { withStatusRepair } from "../test/integration/state-fixtures";
 
 // Real-DB integration tier for the WEBHOOK_DELIVERY handler: a real HTTP
 // listener on 127.0.0.1 plays the subscriber (the operator allow list names it,
@@ -84,29 +85,33 @@ async function seedDelivery(params: {
     SECRET,
     TEST_INTEGRATIONS_MASTER_KEY,
   );
-  await db.insert(publicApiWebhookSubscription).values({
-    id: "sub-1",
-    organizationId: org.orgId,
-    name: "ERP",
-    targetUrl: params.targetUrl,
-    events: ["customer.created"],
-    status: params.subscriptionStatus ?? "ACTIVE",
-    secretPrefix: SECRET.slice(0, 12),
-    encryptedSecret: encryptedPassword,
-    secretIv: iv,
-    consecutiveFailures: params.consecutiveFailures ?? 0,
-    createdBy: org.userId,
-  });
-  await db.insert(publicApiWebhookDelivery).values({
-    id: "del-1",
-    subscriptionId: "sub-1",
-    organizationId: org.orgId,
-    eventId: EVENT_BODY.id,
-    eventType: "customer.created",
-    requestUrl: params.targetUrl,
-    requestBody: EVENT_BODY,
-    replayOfDeliveryId: params.replayOf ? "del-0" : null,
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(publicApiWebhookSubscription).values({
+      id: "sub-1",
+      organizationId: org.orgId,
+      name: "ERP",
+      targetUrl: params.targetUrl,
+      events: ["customer.created"],
+      status: params.subscriptionStatus ?? "ACTIVE",
+      secretPrefix: SECRET.slice(0, 12),
+      encryptedSecret: encryptedPassword,
+      secretIv: iv,
+      consecutiveFailures: params.consecutiveFailures ?? 0,
+      createdBy: org.userId,
+    }),
+  );
+  await withStatusRepair((tx) =>
+    tx.insert(publicApiWebhookDelivery).values({
+      id: "del-1",
+      subscriptionId: "sub-1",
+      organizationId: org.orgId,
+      eventId: EVENT_BODY.id,
+      eventType: "customer.created",
+      requestUrl: params.targetUrl,
+      requestBody: EVENT_BODY,
+      replayOfDeliveryId: params.replayOf ? "del-0" : null,
+    }),
+  );
   return org;
 }
 
@@ -356,9 +361,11 @@ describe("WEBHOOK_DELIVERY (worker real-DB integration)", () => {
     expect(stored.length).toBeGreaterThan(0);
 
     for (const expected of ["€", "😀"]) {
-      await db
-        .update(publicApiWebhookDelivery)
-        .set({ status: "PENDING", attemptCount: 0, attempts: [] });
+      await withStatusRepair((tx) =>
+        tx
+          .update(publicApiWebhookDelivery)
+          .set({ status: "PENDING", attemptCount: 0, attempts: [] }),
+      );
       await deliver(org.orgId);
       stored = (await deliveryRow()).responseBody ?? "";
       expect(Buffer.byteLength(stored)).toBeLessThanOrEqual(512);
@@ -396,9 +403,11 @@ describe("WEBHOOK_DELIVERY (worker real-DB integration)", () => {
   it("does not send again a delivery that already gave up (a redelivered message)", async () => {
     const url = await listen((response) => response.end("ok"));
     const org = await seedDelivery({ targetUrl: url });
-    await db
-      .update(publicApiWebhookDelivery)
-      .set({ status: "FAILED", lastError: "HTTP 500", attemptCount: 5 });
+    await withStatusRepair((tx) =>
+      tx
+        .update(publicApiWebhookDelivery)
+        .set({ status: "FAILED", lastError: "HTTP 500", attemptCount: 5 }),
+    );
 
     await deliver(org.orgId, { attempt: 1, maxAttempts: 5 });
 

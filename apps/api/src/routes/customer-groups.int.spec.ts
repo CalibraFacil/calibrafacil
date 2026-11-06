@@ -11,6 +11,7 @@ import { and, eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration test for customer-groups (redes/grupos). Only
 // the better-auth session is mocked (see test/integration/setup.ts); the real
@@ -52,14 +53,16 @@ async function seedGroup(params: {
   clientOrgId: string;
   name: string;
 }): Promise<number> {
-  await db.insert(organization).values({
-    id: params.clientOrgId,
-    name: `Group Client Org ${params.clientOrgId}`,
-    slug: params.clientOrgId,
-    type: "CLIENT",
-    status: "ACTIVE",
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: params.clientOrgId,
+      name: `Group Client Org ${params.clientOrgId}`,
+      slug: params.clientOrgId,
+      type: "CLIENT",
+      status: "ACTIVE",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    }),
+  );
 
   const [row] = await db
     .insert(customerGroup)
@@ -80,14 +83,16 @@ async function seedCustomer(params: {
   clientOrgId: string;
   name: string;
 }): Promise<number> {
-  await db.insert(organization).values({
-    id: params.clientOrgId,
-    name: `Customer Client Org ${params.clientOrgId}`,
-    slug: params.clientOrgId,
-    type: "CLIENT",
-    status: "ACTIVE",
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: params.clientOrgId,
+      name: `Customer Client Org ${params.clientOrgId}`,
+      slug: params.clientOrgId,
+      type: "CLIENT",
+      status: "ACTIVE",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    }),
+  );
 
   const [row] = await db
     .insert(customer)

@@ -52,6 +52,7 @@ import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { seedExtraMember } from "../../test/integration/tenant-refs";
 import { inSequence } from "../../test/integration/in-sequence";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -101,21 +102,33 @@ async function seedCapa(params: {
     | "VERIFICATION"
     | "CLOSED";
 }): Promise<number> {
-  const [row] = await db
-    .insert(correctiveAction)
-    .values({
-      capaNumber: params.capaNumber,
-      organizationId: params.organizationId,
-      source: "nc_detection",
-      title: "Test CAPA for integration",
-      description: "Inserted directly to set any lifecycle status.",
-      type: "corrective",
-      severity: "minor",
-      category: "procedure",
-      status: params.status ?? "OPEN",
-      createdBy: params.createdBy,
-    })
-    .returning({ id: correctiveAction.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(correctiveAction)
+      .values({
+        capaNumber: params.capaNumber,
+        organizationId: params.organizationId,
+        source: "nc_detection",
+        title: "Test CAPA for integration",
+        description: "Inserted directly to set any lifecycle status.",
+        type: "corrective",
+        severity: "minor",
+        category: "procedure",
+        status: params.status ?? "OPEN",
+        // Past OPEN/INVESTIGATION a CAPA has an implementation on record, as
+        // the implement route leaves it.
+        ...(params.status === "IMPLEMENTATION" ||
+        params.status === "VERIFICATION" ||
+        params.status === "CLOSED"
+          ? {
+              implementedAt: new Date(),
+              implementationEvidence: "Ações implementadas (fixture).",
+            }
+          : {}),
+        createdBy: params.createdBy,
+      })
+      .returning({ id: correctiveAction.id }),
+  );
   if (!row) throw new Error("seedCapa: insert failed");
   return row.id;
 }
@@ -766,22 +779,24 @@ describe("capaRouter — responsibleId is tenant-scoped", () => {
       role: "admin",
     });
 
-    const [row] = await db
-      .insert(correctiveAction)
-      .values({
-        capaNumber: "CAPA-SOD-1",
-        organizationId: org.orgId,
-        source: "nc_detection",
-        title: "CAPA com responsável",
-        description: "Responsável definido para o teste de segregação.",
-        type: "corrective",
-        severity: "minor",
-        category: "procedure",
-        status: "OPEN",
-        responsibleId: owner.userId,
-        createdBy: org.userId,
-      })
-      .returning({ id: correctiveAction.id });
+    const [row] = await withStatusRepair((tx) =>
+      tx
+        .insert(correctiveAction)
+        .values({
+          capaNumber: "CAPA-SOD-1",
+          organizationId: org.orgId,
+          source: "nc_detection",
+          title: "CAPA com responsável",
+          description: "Responsável definido para o teste de segregação.",
+          type: "corrective",
+          severity: "minor",
+          category: "procedure",
+          status: "OPEN",
+          responsibleId: owner.userId,
+          createdBy: org.userId,
+        })
+        .returning({ id: correctiveAction.id }),
+    );
     if (!row) throw new Error("seed failed");
     const id = row.id;
 
@@ -1126,5 +1141,65 @@ describe("capaRouter — responsibleId is tenant-scoped", () => {
       independence: "independent",
       justification: null,
     });
+  });
+});
+
+describe("capaRouter — an ineffective verification (decision Q61)", () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  it("returns the CAPA to implementation, clears the implementation, and it cannot close", async () => {
+    const lab = await seedOrg({ orgId: "org-q61", role: "owner" });
+    const verifier = await seedExtraMember({
+      orgId: lab.orgId,
+      userId: "user-q61-verifier",
+      role: "admin",
+    });
+    const capaId = await seedCapa({
+      capaNumber: "CAPA-Q61",
+      organizationId: lab.orgId,
+      createdBy: lab.userId,
+      status: "IMPLEMENTATION",
+    });
+
+    loginAs({ userId: verifier.userId, organizationId: lab.orgId });
+    const res = await capaRouter.request(`/${capaId}/verify`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        effectivenessConfirmed: false,
+        verificationNotes: "A falha voltou a ocorrer na verificação seguinte.",
+      }),
+    });
+    expect(res.status).toBe(200);
+
+    const [row] = await db
+      .select({
+        status: correctiveAction.status,
+        implementedAt: correctiveAction.implementedAt,
+        effectivenessConfirmed: correctiveAction.effectivenessConfirmed,
+      })
+      .from(correctiveAction)
+      .where(eq(correctiveAction.id, capaId));
+    expect(row).toEqual({
+      status: "IMPLEMENTATION",
+      implementedAt: null,
+      effectivenessConfirmed: false,
+    });
+
+    const close = await capaRouter.request(`/${capaId}/close`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ reason: "tentativa" }),
+    });
+    expect(close.status).toBe(400);
+
+    const reverify = await capaRouter.request(`/${capaId}/verify`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ effectivenessConfirmed: true }),
+    });
+    expect(reverify.status).toBe(400);
   });
 });

@@ -10,6 +10,7 @@ import { eq, and } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration tests for the environmental-limits router.
 // Only the better-auth session is mocked (see test/integration/setup.ts);
@@ -97,17 +98,19 @@ async function seedExtraUnit(params: {
   slug: string;
   createdBy: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(organizationUnit)
-    .values({
-      organizationId: params.organizationId,
-      name: params.name,
-      slug: params.slug,
-      status: "ACTIVE",
-      isDefault: false,
-      createdBy: params.createdBy,
-    })
-    .returning({ id: organizationUnit.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(organizationUnit)
+      .values({
+        organizationId: params.organizationId,
+        name: params.name,
+        slug: params.slug,
+        status: "ACTIVE",
+        isDefault: false,
+        createdBy: params.createdBy,
+      })
+      .returning({ id: organizationUnit.id }),
+  );
 
   if (!row) throw new Error("seedExtraUnit: insert failed");
   return row.id;

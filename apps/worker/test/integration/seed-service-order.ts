@@ -14,6 +14,7 @@ import {
   serviceOrderTag,
 } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
+import { withStatusRepair } from "./state-fixtures";
 
 // Seed helpers SPECIFIC to the worker's SERVICE_ORDER document handlers
 // (processServiceOrderIntakeDocument / Tag / Quote / DeliveryReceipt). These read
@@ -78,39 +79,43 @@ export async function seedServiceOrder(params: {
   if (!assetTypeRow)
     throw new Error("seedServiceOrder: assetType insert failed");
 
-  const [assetRow] = await db
-    .insert(asset)
-    .values({
-      unitId: params.unitId,
-      customerId: customerRow.id,
-      // SEC-03b (#638): asset carries its lab org (== the seeded customer's).
-      labOrganizationId: params.organizationId,
-      assetTypeId: assetTypeRow.id,
-      name: params.assetName,
-      serialNumber: `SN-${params.serviceOrderNumber}`,
-      tag: `TAG-${params.serviceOrderNumber}`,
-      manufacturer: "Fabricante Teste",
-      model: "MOD-200",
-      createdAt: EPOCH,
-    })
-    .returning();
+  const [assetRow] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: params.unitId,
+        customerId: customerRow.id,
+        // SEC-03b (#638): asset carries its lab org (== the seeded customer's).
+        labOrganizationId: params.organizationId,
+        assetTypeId: assetTypeRow.id,
+        name: params.assetName,
+        serialNumber: `SN-${params.serviceOrderNumber}`,
+        tag: `TAG-${params.serviceOrderNumber}`,
+        manufacturer: "Fabricante Teste",
+        model: "MOD-200",
+        createdAt: EPOCH,
+      })
+      .returning(),
+  );
   if (!assetRow) throw new Error("seedServiceOrder: asset insert failed");
 
-  const [orderRow] = await db
-    .insert(serviceOrder)
-    .values({
-      organizationId: params.organizationId,
-      unitId: params.unitId,
-      serviceOrderNumber: params.serviceOrderNumber,
-      customerId: customerRow.id,
-      assetId: assetRow.id,
-      openedByUserId: params.userId,
-      claimedDefect: "Não liga",
-      intakeCondition: "Riscos na carcaça",
-      openedAt: EPOCH,
-      createdAt: EPOCH,
-    })
-    .returning();
+  const [orderRow] = await withStatusRepair((tx) =>
+    tx
+      .insert(serviceOrder)
+      .values({
+        organizationId: params.organizationId,
+        unitId: params.unitId,
+        serviceOrderNumber: params.serviceOrderNumber,
+        customerId: customerRow.id,
+        assetId: assetRow.id,
+        openedByUserId: params.userId,
+        claimedDefect: "Não liga",
+        intakeCondition: "Riscos na carcaça",
+        openedAt: EPOCH,
+        createdAt: EPOCH,
+      })
+      .returning(),
+  );
   if (!orderRow)
     throw new Error("seedServiceOrder: service_order insert failed");
 
@@ -215,22 +220,24 @@ export async function seedQuote(params: {
   const organizationId = await organizationOfServiceOrder(
     params.serviceOrderId,
   );
-  const [row] = await db
-    .insert(serviceOrderQuote)
-    .values({
-      organizationId,
-      serviceOrderId: params.serviceOrderId,
-      quoteNumber,
-      version: 1,
-      status: "draft",
-      subtotalServicesCents: 10000,
-      subtotalPartsCents: 5000,
-      totalCents: 15000,
-      paymentTerms: "À vista",
-      createdByUserId: params.userId,
-      createdAt: EPOCH,
-    })
-    .returning();
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(serviceOrderQuote)
+      .values({
+        organizationId,
+        serviceOrderId: params.serviceOrderId,
+        quoteNumber,
+        version: 1,
+        status: "draft",
+        subtotalServicesCents: 10000,
+        subtotalPartsCents: 5000,
+        totalCents: 15000,
+        paymentTerms: "À vista",
+        createdByUserId: params.userId,
+        createdAt: EPOCH,
+      })
+      .returning(),
+  );
   if (!row) throw new Error("seedQuote: insert failed");
 
   await db.insert(serviceOrderQuoteItem).values([

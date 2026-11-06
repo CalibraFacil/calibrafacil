@@ -5,6 +5,7 @@ import {
   type RemoteStatusPollResult,
 } from "@calibra-facil/shared";
 import { and, desc, eq, inArray } from "drizzle-orm";
+import { INTEGRATION_SYNC_RUN_MACHINE } from "@calibra-facil/schemas/machines";
 import type { IntegrationsEnv } from "../../lib/integrations-env";
 import { inOrgTransaction } from "../../lib/org-transaction";
 import { listActiveContaAzulConnections } from "./active-connections";
@@ -151,7 +152,15 @@ export async function runContaAzulScheduledPoll(params: {
           startedAt: new Date(),
           updatedAt: new Date(),
         })
-        .where(eq(integrationSyncRun.id, runId));
+        .where(
+          and(
+            eq(integrationSyncRun.id, runId),
+            inArray(
+              integrationSyncRun.status,
+              INTEGRATION_SYNC_RUN_MACHINE.allowedFrom("start"),
+            ),
+          ),
+        );
       return runId;
     },
   );
@@ -181,7 +190,15 @@ export async function runContaAzulScheduledPoll(params: {
           finishedAt: new Date(),
           updatedAt: new Date(),
         })
-        .where(eq(integrationSyncRun.id, runId));
+        .where(
+          and(
+            eq(integrationSyncRun.id, runId),
+            inArray(
+              integrationSyncRun.status,
+              INTEGRATION_SYNC_RUN_MACHINE.allowedFrom("finish"),
+            ),
+          ),
+        );
 
       await writeIntegrationEvent(
         {

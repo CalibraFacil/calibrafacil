@@ -32,17 +32,23 @@ import { userIsOrganizationMember } from "../lib/tenant-refs";
 import { afterCommitQueue } from "../lib/after-commit";
 import { orgDb } from "../lib/org-db";
 import {
-  eq,
   and,
-  or,
-  ilike,
-  desc,
   count,
+  desc,
+  eq,
   gte,
-  lte,
-  sql,
+  ilike,
+  inArray,
   isNull,
+  lte,
+  or,
+  sql,
 } from "drizzle-orm";
+import { conflict } from "../lib/domain-errors";
+import {
+  NON_CONFORMANCE_MACHINE,
+  OOT_NOTIFICATION_MACHINE,
+} from "@calibra-facil/schemas/machines";
 import { clientIp } from "../lib/client-ip";
 
 /**
@@ -487,7 +493,12 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: "Nao conformidade nao encontrada" }, 404);
         }
 
-        if (existing.status === "resolved") {
+        if (
+          !NON_CONFORMANCE_MACHINE.canTransition(
+            existing.status,
+            "set_disposition",
+          )
+        ) {
           return c.json({ error: "Nao conformidade ja foi resolvida" }, 400);
         }
 
@@ -514,7 +525,10 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
         const updateData: Record<string, unknown> = {
           disposition: input.disposition,
           dispositionJustification: input.justification || null,
-          status: "under_review" as const,
+          status: NON_CONFORMANCE_MACHINE.requireTargetOf(
+            existing.status,
+            "set_disposition",
+          ),
         };
 
         // If requires approval and user is admin/owner, auto-approve
@@ -533,9 +547,16 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
             and(
               eq(nonConformance.id, id),
               eq(nonConformance.organizationId, member.organizationId),
+              eq(nonConformance.status, existing.status),
             ),
           )
           .returning();
+        if (!updated) {
+          throw conflict(
+            "status_transition_conflict",
+            "A nao conformidade mudou de status durante a operacao. Recarregue e tente novamente.",
+          );
+        }
 
         // Audit log
         await o.insert(nonConformanceAuditLog).values({
@@ -592,7 +613,9 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
           return c.json({ error: "Nao conformidade nao encontrada" }, 404);
         }
 
-        if (existing.status === "resolved") {
+        if (
+          !NON_CONFORMANCE_MACHINE.canTransition(existing.status, "resolve")
+        ) {
           return c.json({ error: "Nao conformidade ja foi resolvida" }, 400);
         }
 
@@ -611,7 +634,10 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
             correctionTaken: input.correctionTaken,
             resolvedAt: new Date(),
             resolvedBy: session.user.id,
-            status: "resolved",
+            status: NON_CONFORMANCE_MACHINE.requireTargetOf(
+              existing.status,
+              "resolve",
+            ),
           })
           // Defense-in-depth (SEC-08): repeat the tenant scope proven by the SELECT
           // above so the UPDATE stays org-scoped even if the guarding read is
@@ -620,9 +646,18 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
             and(
               eq(nonConformance.id, id),
               eq(nonConformance.organizationId, member.organizationId),
+              eq(nonConformance.status, existing.status),
             ),
           )
           .returning();
+        if (!updated) {
+          // The compare-and-set on the status matched no row: the record moved
+          // under the caller.
+          throw conflict(
+            "status_transition_conflict",
+            "A nao conformidade mudou de status durante a operacao. Recarregue e tente novamente.",
+          );
+        }
 
         // Audit log
         await o.insert(nonConformanceAuditLog).values({
@@ -988,6 +1023,10 @@ export const nonConformancesRouter = new Hono<{ Variables: AuthVariables }>()
                 eq(ootNotification.id, notification.id),
                 eq(ootNotification.organizationId, member.organizationId),
                 isNull(ootNotification.acknowledgedAt),
+                inArray(
+                  ootNotification.status,
+                  OOT_NOTIFICATION_MACHINE.allowedFrom("acknowledge"),
+                ),
               ),
             )
             .returning();

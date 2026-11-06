@@ -29,6 +29,7 @@ import { truncateAll } from "../../test/integration/db";
 import { seedCustomer, seedOrg } from "../../test/integration/seed";
 import { executableMethodSnapshot } from "../../test/integration/executable-method";
 import { syncRouter } from "./sync";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
@@ -64,18 +65,20 @@ async function seedWorld(options: { validThrough?: Date } = {}) {
     .insert(assetType)
     .values({ name: "AT", slug: "at-sv", definition: [] })
     .returning({ id: assetType.id });
-  const [instrument] = await db
-    .insert(asset)
-    .values({
-      labOrganizationId: org.orgId,
-      unitId: org.unitId,
-      customerId,
-      assetTypeId: type?.id ?? 0,
-      name: "Instrumento",
-      serialNumber: "SN-SV",
-      tag: "TAG-SV",
-    })
-    .returning({ id: asset.id });
+  const [instrument] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        labOrganizationId: org.orgId,
+        unitId: org.unitId,
+        customerId,
+        assetTypeId: type?.id ?? 0,
+        name: "Instrumento",
+        serialNumber: "SN-SV",
+        tag: "TAG-SV",
+      })
+      .returning({ id: asset.id }),
+  );
   const [svc] = await db
     .insert(service)
     .values({
@@ -112,25 +115,27 @@ async function seedWorld(options: { validThrough?: Date } = {}) {
     },
     certificateName: "CAL-SV-1",
   });
-  const [standard] = await db
-    .insert(referenceStandard)
-    .values({
-      organizationId: org.orgId,
-      unitId: org.unitId,
-      createdBy: org.userId,
-      name: "Massa Padrao",
-      kind: "generic_scalar",
-      serialNumber: "SN-STD-SV",
-      certificateNumber: "CERT-SV",
-      calibrationDate: new Date("2025-01-10T15:00:00.000Z"),
-      nextCalibrationDate: options.validThrough ?? VALID_THROUGH,
-      coverageFactor: 2,
-      distribution: "normal",
-      status: "ACTIVE",
-      referenceValue: 1,
-      uncertainty: 0.01,
-    })
-    .returning({ id: referenceStandard.id });
+  const [standard] = await withStatusRepair((tx) =>
+    tx
+      .insert(referenceStandard)
+      .values({
+        organizationId: org.orgId,
+        unitId: org.unitId,
+        createdBy: org.userId,
+        name: "Massa Padrao",
+        kind: "generic_scalar",
+        serialNumber: "SN-STD-SV",
+        certificateNumber: "CERT-SV",
+        calibrationDate: new Date("2025-01-10T15:00:00.000Z"),
+        nextCalibrationDate: options.validThrough ?? VALID_THROUGH,
+        coverageFactor: 2,
+        distribution: "normal",
+        status: "ACTIVE",
+        referenceValue: 1,
+        uncertainty: 0.01,
+      })
+      .returning({ id: referenceStandard.id }),
+  );
   return {
     org,
     jobId: job?.id ?? 0,
@@ -372,10 +377,12 @@ describe("syncRouter — the one standards judgement's refusals keep their sync 
     const world = await seedWorld({
       validThrough: addCalendarDays(labToday(), 60),
     });
-    await db
-      .update(referenceStandard)
-      .set({ status: "INACTIVE" })
-      .where(eq(referenceStandard.id, world.standardId));
+    await withStatusRepair((tx) =>
+      tx
+        .update(referenceStandard)
+        .set({ status: "INACTIVE" })
+        .where(eq(referenceStandard.id, world.standardId)),
+    );
 
     const body = await pushValidSubmit(world, "evt-inactive");
 

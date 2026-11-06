@@ -1,4 +1,5 @@
 import { jobEventQueryKeys } from '@/lib/query-effects'
+import { useJobDialogs } from './job-dialog-state'
 import {
   approvalBlockedMessage,
   serverAllows,
@@ -10,7 +11,7 @@ import {
   useMutation,
   useQueryClient,
 } from '@tanstack/react-query'
-import { useState, useCallback, useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { ArrowLeft01Icon, UserAdd01Icon } from '@hugeicons/core-free-icons'
@@ -65,20 +66,30 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
-  // Dialog states
-  const [approveDialogOpen, setApproveDialogOpen] = useState(false)
-  const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
-  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
-  const [assignDialogOpen, setAssignDialogOpen] = useState(false)
-  const [rejectReason, setRejectReason] = useState('')
-  const [cancelReason, setCancelReason] = useState('')
-  const [selectedTechnician, setSelectedTechnician] = useState<string>('')
-  const [envJustification, setEnvJustification] = useState('')
-  // #427 Phase 1: server blocked the approval with SCOPE_VIOLATION; the
-  // dialog then offers the documented-override path (issues without seal).
-  const [scopeViolationBlocked, setScopeViolationBlocked] = useState(false)
-  const [scopeOverrideJustification, setScopeOverrideJustification] =
-    useState('')
+  // The action dialogs: one state, one dialog open at a time, each opened
+  // fresh (job-dialog-state.ts).
+  const {
+    approveDialogOpen,
+    setApproveDialogOpen,
+    rejectDialogOpen,
+    setRejectDialogOpen,
+    cancelDialogOpen,
+    setCancelDialogOpen,
+    assignDialogOpen,
+    setAssignDialogOpen,
+    rejectReason,
+    setRejectReason,
+    cancelReason,
+    setCancelReason,
+    selectedTechnician,
+    setSelectedTechnician,
+    envJustification,
+    setEnvJustification,
+    scopeViolationBlocked,
+    setScopeViolationBlocked,
+    scopeOverrideJustification,
+    setScopeOverrideJustification,
+  } = useJobDialogs()
 
   // Stable callback for refreshing job data (used by ApprovedJobRecord for label polling)
   const refreshJob = useCallback(() => {
@@ -166,9 +177,6 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
         jobEventQueryKeys('approved'),
       )
       setApproveDialogOpen(false)
-      setEnvJustification('')
-      setScopeViolationBlocked(false)
-      setScopeOverrideJustification('')
     },
     onError: (error) => {
       if (isScopeViolationError(error)) {
@@ -189,7 +197,6 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
         jobEventQueryKeys('rejected'),
       )
       setRejectDialogOpen(false)
-      setRejectReason('')
     },
     onError: (error) => {
       toast.error(error.message)
@@ -223,7 +230,6 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
         jobEventQueryKeys('cancelled'),
       )
       setCancelDialogOpen(false)
-      setCancelReason('')
       navigate({ to: '/dashboard/jobs' })
     },
     onError: (error) => {
@@ -242,7 +248,6 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
         jobEventQueryKeys('assigned'),
       )
       setAssignDialogOpen(false)
-      setSelectedTechnician('')
     },
     onError: (error) => {
       toast.error(error.message)
@@ -430,7 +435,6 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
         envJustification={envJustification}
         setEnvJustification={setEnvJustification}
         scopeViolationBlocked={scopeViolationBlocked}
-        setScopeViolationBlocked={setScopeViolationBlocked}
         scopeOverrideJustification={scopeOverrideJustification}
         setScopeOverrideJustification={setScopeOverrideJustification}
         approveMutation={approveMutation}

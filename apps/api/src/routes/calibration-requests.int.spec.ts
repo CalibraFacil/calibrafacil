@@ -63,6 +63,7 @@ import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { seedExtraMember } from "../../test/integration/tenant-refs";
 import { ENGINE_VERSION } from "@calibra-facil/math-engine";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // ---------------------------------------------------------------------------
 // Mock notification side-effects — no email/SMS during workflow tests.
@@ -95,14 +96,16 @@ type CalibrationRequestStatus =
 
 /** Insert a minimal CLIENT org (required for customer.authOrganizationId FK). */
 async function seedClientOrg(clientOrgId: string): Promise<void> {
-  await db.insert(organization).values({
-    id: clientOrgId,
-    name: `Client ${clientOrgId}`,
-    slug: clientOrgId,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    type: "CLIENT",
-    status: "ACTIVE",
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: clientOrgId,
+      name: `Client ${clientOrgId}`,
+      slug: clientOrgId,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      type: "CLIENT",
+      status: "ACTIVE",
+    }),
+  );
 }
 
 /**
@@ -143,19 +146,21 @@ async function seedAsset(params: {
   assetTypeId: number;
   tag: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(asset)
-    .values({
-      unitId: params.unitId,
-      customerId: params.customerId,
-      // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
-      assetTypeId: params.assetTypeId,
-      name: "Test Instrument",
-      serialNumber: `SN-${params.tag}`,
-      tag: params.tag,
-    })
-    .returning({ id: asset.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: params.unitId,
+        customerId: params.customerId,
+        // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
+        assetTypeId: params.assetTypeId,
+        name: "Test Instrument",
+        serialNumber: `SN-${params.tag}`,
+        tag: params.tag,
+      })
+      .returning({ id: asset.id }),
+  );
   if (!row) throw new Error("seedAsset: insert failed");
   return row.id;
 }
@@ -181,37 +186,39 @@ async function seedPublishedMethod(params: {
   const engineVersion = ENGINE_VERSION;
   const optionsFingerprint = "test-opts-fp-00000001";
 
-  const [row] = await db
-    .insert(calibrationMethod)
-    .values({
-      organizationId: params.organizationId,
-      assetTypeId: params.assetTypeId,
-      name: `Test Method ${params.organizationId}`,
-      version: 1,
-      status: "PUBLISHED",
-      dataFields: [],
-      variableBindings: [],
-      formulas: [],
-      measurementModels: [],
-      validations: [],
-      uncertaintyParams: [],
-      methodFingerprint: fingerprint,
-      compiledMethod: {
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(calibrationMethod)
+      .values({
+        organizationId: params.organizationId,
+        assetTypeId: params.assetTypeId,
+        name: `Test Method ${params.organizationId}`,
+        version: 1,
+        status: "PUBLISHED",
+        dataFields: [],
+        variableBindings: [],
+        formulas: [],
+        measurementModels: [],
+        validations: [],
+        uncertaintyParams: [],
         methodFingerprint: fingerprint,
-        normalizedMethodJson: "{}",
-        engine: {
+        compiledMethod: {
+          methodFingerprint: fingerprint,
+          normalizedMethodJson: "{}",
+          engine: {
+            version: engineVersion,
+            optionsFingerprint,
+          },
+        },
+        methodEngine: {
           version: engineVersion,
           optionsFingerprint,
         },
-      },
-      methodEngine: {
-        version: engineVersion,
-        optionsFingerprint,
-      },
-      publicationEvidence: { publishedAt: "2026-01-01T00:00:00.000Z" },
-      createdBy: params.createdBy,
-    })
-    .returning({ id: calibrationMethod.id });
+        publicationEvidence: { publishedAt: "2026-01-01T00:00:00.000Z" },
+        createdBy: params.createdBy,
+      })
+      .returning({ id: calibrationMethod.id }),
+  );
   if (!row) throw new Error("seedPublishedMethod: insert failed");
   return row.id;
 }
@@ -254,19 +261,21 @@ async function seedRequest(params: {
 }): Promise<{ requestId: number; itemId: number }> {
   const status = params.status ?? "PENDING";
 
-  const [reqRow] = await db
-    .insert(calibrationRequest)
-    .values({
-      organizationId: params.organizationId,
-      unitId: params.unitId,
-      customerId: params.customerId,
-      authOrganizationId: params.authOrganizationId,
-      status,
-      deliveryMethod: "dropoff",
-      submittedBy: params.submittedBy,
-      submittedAt: new Date("2026-01-15T10:00:00.000Z"),
-    })
-    .returning({ id: calibrationRequest.id });
+  const [reqRow] = await withStatusRepair((tx) =>
+    tx
+      .insert(calibrationRequest)
+      .values({
+        organizationId: params.organizationId,
+        unitId: params.unitId,
+        customerId: params.customerId,
+        authOrganizationId: params.authOrganizationId,
+        status,
+        deliveryMethod: "dropoff",
+        submittedBy: params.submittedBy,
+        submittedAt: new Date("2026-01-15T10:00:00.000Z"),
+      })
+      .returning({ id: calibrationRequest.id }),
+  );
   if (!reqRow) throw new Error("seedRequest: request insert failed");
 
   const [itemRow] = await db
@@ -911,19 +920,21 @@ describe("calibrationRequestsRouter — convert: visit.technicianId is tenant-sc
       userId: "user-a",
       tagSuffix: "a",
     });
-    const [reqRow] = await db
-      .insert(calibrationRequest)
-      .values({
-        organizationId: "org-a",
-        unitId: fixture.unitId,
-        customerId: fixture.customerId,
-        authOrganizationId: fixture.clientOrgId,
-        status: "APPROVED",
-        deliveryMethod: "onsite",
-        submittedBy: "user-a",
-        submittedAt: new Date("2026-01-15T10:00:00.000Z"),
-      })
-      .returning({ id: calibrationRequest.id });
+    const [reqRow] = await withStatusRepair((tx) =>
+      tx
+        .insert(calibrationRequest)
+        .values({
+          organizationId: "org-a",
+          unitId: fixture.unitId,
+          customerId: fixture.customerId,
+          authOrganizationId: fixture.clientOrgId,
+          status: "APPROVED",
+          deliveryMethod: "onsite",
+          submittedBy: "user-a",
+          submittedAt: new Date("2026-01-15T10:00:00.000Z"),
+        })
+        .returning({ id: calibrationRequest.id }),
+    );
     if (!reqRow) throw new Error("seed onsite request failed");
     const [itemRow] = await db
       .insert(calibrationRequestItem)

@@ -27,6 +27,7 @@ const expectedBridgeKeys = [
   "deleteSecret",
   "downloadUpdate",
   "exportSupportBundle",
+  "forgetOfflineAccess",
   "getAppInfo",
   "getLocalEnvironmentBootstrap",
   "getSecretStatuses",
@@ -113,6 +114,12 @@ describe("preload bridge", () => {
         headers: [],
         body: null,
       },
+    );
+
+    await bridge.forgetOfflineAccess?.();
+    expect(mocks.invoke).toHaveBeenNthCalledWith(
+      4,
+      desktopIpcChannels.forgetOfflineAccess,
     );
   });
 

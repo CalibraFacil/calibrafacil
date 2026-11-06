@@ -54,6 +54,7 @@ import { jobsRouter } from "../../routes/jobs";
 import { publicApiV2Router } from "../../routes/public-api-v2";
 import { syncRouter } from "../../routes/sync";
 import { executeOfficialCompiledSnapshot } from "./official-execution";
+import { withStatusRepair } from "../../../test/integration/state-fixtures";
 
 const mocks = vi.hoisted(() => {
   const scope: { status: "OUT_OF_SCOPE" | null } = { status: null };
@@ -122,25 +123,27 @@ async function seedWorld(options: { status: JobStatus }) {
 type World = Awaited<ReturnType<typeof seedWorld>>;
 
 async function addStandard(world: World, validThrough: Date) {
-  const [standard] = await db
-    .insert(referenceStandard)
-    .values({
-      organizationId: ORG,
-      unitId: world.org.unitId,
-      createdBy: TECHNICIAN,
-      name: "Massa Padrao",
-      kind: "generic_scalar",
-      serialNumber: "SN-STD-SUB",
-      certificateNumber: "CERT-SUB",
-      calibrationDate: new Date("2025-01-10T15:00:00.000Z"),
-      nextCalibrationDate: validThrough,
-      coverageFactor: 2,
-      distribution: "normal",
-      status: "ACTIVE",
-      referenceValue: 1,
-      uncertainty: 0.01,
-    })
-    .returning({ id: referenceStandard.id });
+  const [standard] = await withStatusRepair((tx) =>
+    tx
+      .insert(referenceStandard)
+      .values({
+        organizationId: ORG,
+        unitId: world.org.unitId,
+        createdBy: TECHNICIAN,
+        name: "Massa Padrao",
+        kind: "generic_scalar",
+        serialNumber: "SN-STD-SUB",
+        certificateNumber: "CERT-SUB",
+        calibrationDate: new Date("2025-01-10T15:00:00.000Z"),
+        nextCalibrationDate: validThrough,
+        coverageFactor: 2,
+        distribution: "normal",
+        status: "ACTIVE",
+        referenceValue: 1,
+        uncertainty: 0.01,
+      })
+      .returning({ id: referenceStandard.id }),
+  );
   if (!standard) throw new Error("addStandard failed");
   return { id: standard.id, validThrough };
 }
@@ -443,15 +446,17 @@ describe.each(ENTRY_POINTS)("submit and execute policy [$name]", (entry) => {
         name: "Other",
         email: "other@lab.test",
       });
-      await db.insert(personnelCompetence).values({
-        organizationId: ORG,
-        userId: "user-sub-other",
-        assetTypeId: world.assetTypeId,
-        scopeDescription: "Outro tecnico",
-        status: "ACTIVE",
-        requestedBy: TECHNICIAN,
-        createdBy: TECHNICIAN,
-      });
+      await withStatusRepair((tx) =>
+        tx.insert(personnelCompetence).values({
+          organizationId: ORG,
+          userId: "user-sub-other",
+          assetTypeId: world.assetTypeId,
+          scopeDescription: "Outro tecnico",
+          status: "ACTIVE",
+          requestedBy: TECHNICIAN,
+          createdBy: TECHNICIAN,
+        }),
+      );
     }
 
     it("REQ-SUB-5c [HIGH RISK]: a technician with no competence for the instrument type cannot submit; nothing is written", async () => {
@@ -469,16 +474,18 @@ describe.each(ENTRY_POINTS)("submit and execute policy [$name]", (entry) => {
 
     it("REQ-SUB-5c [HIGH RISK]: a competence that expired before the work was performed does not count", async () => {
       const world = await seedWorld({ status: "IN_PROGRESS" });
-      await db.insert(personnelCompetence).values({
-        organizationId: ORG,
-        userId: TECHNICIAN,
-        assetTypeId: world.assetTypeId,
-        scopeDescription: "Vencida",
-        status: "ACTIVE",
-        expiresAt: new Date(Date.now() - 30 * DAY_MS),
-        requestedBy: TECHNICIAN,
-        createdBy: TECHNICIAN,
-      });
+      await withStatusRepair((tx) =>
+        tx.insert(personnelCompetence).values({
+          organizationId: ORG,
+          userId: TECHNICIAN,
+          assetTypeId: world.assetTypeId,
+          scopeDescription: "Vencida",
+          status: "ACTIVE",
+          expiresAt: new Date(Date.now() - 30 * DAY_MS),
+          requestedBy: TECHNICIAN,
+          createdBy: TECHNICIAN,
+        }),
+      );
       const before = await jobRow(world.jobId);
 
       await expect(entry.run(world, { command: "submit" })).resolves.toEqual({
@@ -491,15 +498,17 @@ describe.each(ENTRY_POINTS)("submit and execute policy [$name]", (entry) => {
 
     it("REQ-SUB-5c: control: an active competence for the instrument type submits", async () => {
       const world = await seedWorld({ status: "IN_PROGRESS" });
-      await db.insert(personnelCompetence).values({
-        organizationId: ORG,
-        userId: TECHNICIAN,
-        assetTypeId: world.assetTypeId,
-        scopeDescription: "Ativa",
-        status: "ACTIVE",
-        requestedBy: TECHNICIAN,
-        createdBy: TECHNICIAN,
-      });
+      await withStatusRepair((tx) =>
+        tx.insert(personnelCompetence).values({
+          organizationId: ORG,
+          userId: TECHNICIAN,
+          assetTypeId: world.assetTypeId,
+          scopeDescription: "Ativa",
+          status: "ACTIVE",
+          requestedBy: TECHNICIAN,
+          createdBy: TECHNICIAN,
+        }),
+      );
 
       await expect(entry.run(world, { command: "submit" })).resolves.toEqual({
         ok: true,
@@ -733,17 +742,19 @@ describe("desktop sync: a job outside the session's unit scope is out of reach (
       userId: TECHNICIAN,
       role: "admin",
     });
-    const [other] = await db
-      .insert(organizationUnit)
-      .values({
-        organizationId: ORG,
-        name: "Filial",
-        slug: "filial",
-        status: "ACTIVE",
-        isDefault: false,
-        createdBy: TECHNICIAN,
-      })
-      .returning({ id: organizationUnit.id });
+    const [other] = await withStatusRepair((tx) =>
+      tx
+        .insert(organizationUnit)
+        .values({
+          organizationId: ORG,
+          name: "Filial",
+          slug: "filial",
+          status: "ACTIVE",
+          isDefault: false,
+          createdBy: TECHNICIAN,
+        })
+        .returning({ id: organizationUnit.id }),
+    );
     if (!other) throw new Error("unit insert failed");
     // The job lives in the OTHER unit; the pushing technician is assigned only
     // to the default one.

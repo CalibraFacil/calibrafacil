@@ -30,6 +30,7 @@ import { seedOrg } from "../../test/integration/seed";
 import { failEventAuditInsert } from "../../test/integration/sync-faults";
 import { ensurePortalServiceUser } from "../lib/portal-service-account";
 import { desktopCustomerSlug, syncRouter } from "./sync";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 vi.mock("@calibra-facil/auth", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@calibra-facil/auth")>();
@@ -200,16 +201,18 @@ describe("an event's transaction opens no second connection (D1)", () => {
       type: "CLIENT" | "LAB";
       metadata: unknown;
     }) {
-      await db.insert(organization).values({
-        id: "org-victim-client",
-        name: "Cliente da Vitima",
-        slug: params.slug,
-        type: params.type,
-        status: "ACTIVE",
-        metadata:
-          params.metadata === null ? null : JSON.stringify(params.metadata),
-        createdAt: new Date("2026-01-01T00:00:00.000Z"),
-      });
+      await withStatusRepair((tx) =>
+        tx.insert(organization).values({
+          id: "org-victim-client",
+          name: "Cliente da Vitima",
+          slug: params.slug,
+          type: params.type,
+          status: "ACTIVE",
+          metadata:
+            params.metadata === null ? null : JSON.stringify(params.metadata),
+          createdAt: new Date("2026-01-01T00:00:00.000Z"),
+        }),
+      );
     }
 
     async function pushSquatted(org: Org) {

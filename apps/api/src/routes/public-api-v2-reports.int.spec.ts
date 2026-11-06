@@ -36,6 +36,7 @@ import {
 import { insertJob, setJobStatus } from "../../test/integration/job-fixtures";
 import { seedApiKey, seedStandard } from "../../test/integration/seed";
 import { publicApiV2Router } from "./public-api-v2";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 const ENV = { PUBLIC_API_MASTER_KEY: Buffer.alloc(32).toString("base64") };
 
@@ -96,16 +97,18 @@ async function seedJob(
 }
 
 async function seedSecondUnit(lab: BillingLab, name: string) {
-  const [unit] = await db
-    .insert(organizationUnit)
-    .values({
-      organizationId: lab.orgId,
-      name,
-      slug: name.toLowerCase(),
-      status: "ACTIVE",
-      createdBy: lab.userId,
-    })
-    .returning({ id: organizationUnit.id });
+  const [unit] = await withStatusRepair((tx) =>
+    tx
+      .insert(organizationUnit)
+      .values({
+        organizationId: lab.orgId,
+        name,
+        slug: name.toLowerCase(),
+        status: "ACTIVE",
+        createdBy: lab.userId,
+      })
+      .returning({ id: organizationUnit.id }),
+  );
   if (!unit) throw new Error("seedSecondUnit: insert failed");
   return unit.id;
 }

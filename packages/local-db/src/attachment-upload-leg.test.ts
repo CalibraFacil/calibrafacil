@@ -219,8 +219,17 @@ describe("REQ-ATT-5: attachment upload state", () => {
 describe("migration 24: files an older build called synced but never uploaded", () => {
   function databaseBefore24() {
     const database = openDatabase();
-    // Roll the schema back to what an install of the previous build has.
-    database.exec("DELETE FROM local_schema_migrations WHERE id = 24");
+    // Roll the schema back to what an install of the previous build has: no
+    // migration 24, nor the status guards of 26, which would refuse the old
+    // behaviour this test stages (both run again below, in order).
+    database.exec("DELETE FROM local_schema_migrations WHERE id IN (24, 26)");
+    const triggers = database
+      .prepare<
+        [],
+        { name: string }
+      >("SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE '%_guard'")
+      .all();
+    for (const { name } of triggers) database.exec(`DROP TRIGGER ${name}`);
     return database;
   }
 

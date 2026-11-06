@@ -5,9 +5,9 @@ import {
   serviceOrderQuote,
 } from "@calibra-facil/db/schema";
 import {
+  SERVICE_ORDER_MACHINE,
   canApproveServiceOrderQuote,
-  isServiceOrderDecidingQuoteStatus,
-} from "@calibra-facil/shared";
+} from "@calibra-facil/schemas/machines";
 import { and, eq } from "drizzle-orm";
 import { orgDb } from "../../lib/org-db";
 import {
@@ -289,17 +289,21 @@ export async function approveQuoteWithPublicServiceOrderAccess(
 
   return orgDb(access.organizationId).transaction(
     async (o): Promise<PublicTokenResult<{ ok: true }>> => {
+      // Both rows are locked (quote first, as every quote decision does) so the
+      // status checks below hold until the writes commit.
       const quote = await getQuoteForAction(
         access.serviceOrderId,
         quoteId,
         access.organizationId,
         o,
+        { lock: true },
       );
       const [order] = await o
         .select()
         .from(serviceOrder)
         .where(eq(serviceOrder.id, access.serviceOrderId))
-        .limit(1);
+        .limit(1)
+        .for("update");
 
       if (!quote || !order || !canApproveServiceOrderQuote(quote.status)) {
         return {
@@ -329,8 +333,13 @@ export async function approveQuoteWithPublicServiceOrderAccess(
           // Same mid-job rule as the manual/portal paths: a customer approving a
           // re-quote through the emailed public link must not rewind an OS whose
           // instrument is already on the bench.
-          ...(isServiceOrderDecidingQuoteStatus(order.status)
-            ? { status: "quote_approved" }
+          ...(SERVICE_ORDER_MACHINE.canTransition(order.status, "approve_quote")
+            ? {
+                status: SERVICE_ORDER_MACHINE.requireTargetOf(
+                  order.status,
+                  "approve_quote",
+                ),
+              }
             : {}),
           approvedAt: new Date(),
           totalApprovedCents: quote.totalCents,
@@ -375,17 +384,21 @@ export async function rejectQuoteWithPublicServiceOrderAccess(
 
   return orgDb(access.organizationId).transaction(
     async (o): Promise<PublicTokenResult<{ ok: true }>> => {
+      // Both rows are locked (quote first, as every quote decision does) so the
+      // status checks below hold until the writes commit.
       const quote = await getQuoteForAction(
         access.serviceOrderId,
         quoteId,
         access.organizationId,
         o,
+        { lock: true },
       );
       const [order] = await o
         .select()
         .from(serviceOrder)
         .where(eq(serviceOrder.id, access.serviceOrderId))
-        .limit(1);
+        .limit(1)
+        .for("update");
 
       if (!quote || !order) {
         return { status: "not_found", error: "Orcamento nao encontrado" };
@@ -420,8 +433,13 @@ export async function rejectQuoteWithPublicServiceOrderAccess(
       await o
         .update(serviceOrder)
         .set({
-          ...(isServiceOrderDecidingQuoteStatus(order.status)
-            ? { status: "quote_rejected" }
+          ...(SERVICE_ORDER_MACHINE.canTransition(order.status, "reject_quote")
+            ? {
+                status: SERVICE_ORDER_MACHINE.requireTargetOf(
+                  order.status,
+                  "reject_quote",
+                ),
+              }
             : {}),
           rejectedAt: new Date(),
         })

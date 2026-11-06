@@ -23,6 +23,7 @@ vi.mock("@calibra-facil/jobs-core", () => ({
 
 import { drainQueue } from "./queue-runtime";
 import { makeTestEnv } from "../test/integration/env";
+import { withStatusRepair } from "../test/integration/state-fixtures";
 
 const CONFIG = {
   workerId: "int-test-worker",
@@ -43,22 +44,24 @@ async function seedCrashedRow(params: {
   userId: string;
   attempts: number;
 }) {
-  const [row] = await db
-    .insert(appQueueJob)
-    .values({
-      type: "CERTIFICATE",
-      payload: {
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(appQueueJob)
+      .values({
         type: "CERTIFICATE",
-        jobId: params.jobId,
-        userId: params.userId,
-      },
-      status: "PROCESSING",
-      attempts: params.attempts,
-      maxAttempts: 3,
-      lockedBy: "crashed-worker",
-      lockedAt: EXPIRED_LEASE(),
-    })
-    .returning();
+        payload: {
+          type: "CERTIFICATE",
+          jobId: params.jobId,
+          userId: params.userId,
+        },
+        status: "PROCESSING",
+        attempts: params.attempts,
+        maxAttempts: 3,
+        lockedBy: "crashed-worker",
+        lockedAt: EXPIRED_LEASE(),
+      })
+      .returning(),
+  );
   return row!;
 }
 
@@ -193,16 +196,18 @@ async function seedPending(
   userId: string,
   attempts = 0,
 ): Promise<{ id: number }> {
-  const [row] = await db
-    .insert(appQueueJob)
-    .values({
-      type: "CERTIFICATE",
-      payload: { type: "CERTIFICATE", jobId, userId },
-      status: "PENDING",
-      attempts,
-      maxAttempts: 3,
-    })
-    .returning();
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(appQueueJob)
+      .values({
+        type: "CERTIFICATE",
+        payload: { type: "CERTIFICATE", jobId, userId },
+        status: "PENDING",
+        attempts,
+        maxAttempts: 3,
+      })
+      .returning(),
+  );
   return row!;
 }
 

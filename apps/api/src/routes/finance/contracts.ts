@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { and, desc, eq, ilike, sql } from "drizzle-orm";
+import { COMMERCIAL_AGREEMENT_MACHINE } from "@calibra-facil/schemas/machines";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   commercialAgreement,
@@ -417,7 +418,14 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
             .update(commercialAgreement)
             .set({
               customerId: input.customerId,
-              status: input.status ?? existing.status,
+              status:
+                input.status && input.status !== existing.status
+                  ? COMMERCIAL_AGREEMENT_MACHINE.requireTransition(
+                      existing.status,
+                      "set_status",
+                      input.status,
+                    )
+                  : existing.status,
               agreementCode: input.agreementCode?.trim() || null,
               title: input.title,
               externalReference: input.externalReference?.trim() || null,
@@ -526,7 +534,10 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
           const [updated] = await o
             .update(commercialAgreement)
             .set({
-              status: "ACTIVE",
+              status: COMMERCIAL_AGREEMENT_MACHINE.requireTargetOf(
+                existing.status,
+                "activate",
+              ),
               updatedAt: new Date(),
               updatedBy: session.user.id,
             })
@@ -577,6 +588,7 @@ export const financeContractsRouter = new Hono<{ Variables: AuthVariables }>()
           const [agreement] = await o
             .update(commercialAgreement)
             .set({
+              // `cancel` of COMMERCIAL_AGREEMENT_MACHINE (from any status).
               status: "CANCELED",
               updatedAt: new Date(),
               updatedBy: session.user.id,

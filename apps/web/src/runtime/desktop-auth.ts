@@ -32,6 +32,21 @@ export function markDesktopSignedOut() {
   window.localStorage.setItem(DESKTOP_SIGNED_OUT_KEY, '1')
 }
 
+/**
+ * Sign-out on the desktop also ends the offline access this device remembers
+ * for the account: on a shared bench PC, the next person starting the app
+ * offline must not land in the previous account's database. The queued work
+ * stays on disk for that account's next online sign-in.
+ */
+export async function forgetDesktopOfflineAccess() {
+  if (!isDesktopRuntime() || typeof window === 'undefined') return
+  try {
+    await window.calibraBridge?.forgetOfflineAccess?.()
+  } catch (error) {
+    console.error('[desktop] could not forget the offline access', error)
+  }
+}
+
 export function clearDesktopSignedOut() {
   if (!isDesktopRuntime() || typeof window === 'undefined') return
   resetDesktopSessionCheck()

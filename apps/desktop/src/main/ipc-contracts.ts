@@ -178,6 +178,10 @@ export const desktopIpcInvokeContracts = {
     args: oneArg(localPartitionActivationRequestSchema),
     response: localPartitionActivationResultSchema,
   },
+  [desktopIpcChannels.forgetOfflineAccess]: {
+    args: noArgs(),
+    response: booleanResponse(),
+  },
   [desktopIpcChannels.retrySync]: {
     args: noArgs(),
     response: syncActionResultSchema,

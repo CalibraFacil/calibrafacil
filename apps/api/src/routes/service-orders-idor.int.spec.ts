@@ -20,6 +20,7 @@ import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg, seedService } from "../../test/integration/seed";
 import { seedExtraMember } from "../../test/integration/tenant-refs";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // SEC-01 — cross-tenant IDOR regression suite for the lab serviceOrdersRouter.
 //
@@ -48,14 +49,16 @@ const JSON_HEADERS = { "content-type": "application/json" };
 /** Seed a CLIENT org (required as customer.authOrganizationId FK). */
 async function seedClientOrg(clientOrgId: string): Promise<void> {
   const now = new Date("2026-01-01T00:00:00.000Z");
-  await db.insert(organization).values({
-    id: clientOrgId,
-    name: `Client Org ${clientOrgId}`,
-    slug: clientOrgId,
-    createdAt: now,
-    type: "CLIENT",
-    status: "ACTIVE",
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: clientOrgId,
+      name: `Client Org ${clientOrgId}`,
+      slug: clientOrgId,
+      createdAt: now,
+      type: "CLIENT",
+      status: "ACTIVE",
+    }),
+  );
 }
 
 /** Seed a customer owned by a LAB org. Returns the customer.id. */
@@ -94,21 +97,23 @@ async function seedAsset(params: {
   assetTypeId: number;
   tag: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(asset)
-    .values({
-      unitId: params.unitId,
-      customerId: params.customerId,
-      // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
-      assetTypeId: params.assetTypeId,
-      name: "Test Asset",
-      serialNumber: `SN-${params.tag}`,
-      tag: params.tag,
-      status: "ACTIVE",
-      metrologyRegime: "INDUSTRIAL",
-    })
-    .returning({ id: asset.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: params.unitId,
+        customerId: params.customerId,
+        // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
+        assetTypeId: params.assetTypeId,
+        name: "Test Asset",
+        serialNumber: `SN-${params.tag}`,
+        tag: params.tag,
+        status: "ACTIVE",
+        metrologyRegime: "INDUSTRIAL",
+      })
+      .returning({ id: asset.id }),
+  );
   if (!row) throw new Error("seedAsset: insert failed");
   return row.id;
 }
@@ -123,28 +128,30 @@ async function seedServiceOrder(params: {
   serviceOrderNumber: string;
   status?: (typeof serviceOrder.$inferInsert)["status"];
 }): Promise<number> {
-  const [row] = await db
-    .insert(serviceOrder)
-    .values({
-      organizationId: params.organizationId,
-      unitId: params.unitId,
-      customerId: params.customerId,
-      assetId: params.assetId,
-      openedByUserId: params.openedByUserId,
-      serviceOrderNumber: params.serviceOrderNumber,
-      status: params.status ?? "awaiting_quote_approval",
-      claimedDefect: "Test defect",
-      intakeCondition: "Test condition",
-      intakeType: "counter",
-      deliveryMethod: "pickup_at_lab",
-      priority: "normal",
-      totalQuotedCents: 0,
-      totalApprovedCents: 0,
-      evaluationFeeCents: 0,
-      evaluationFeeApplied: false,
-      isExternalService: false,
-    })
-    .returning({ id: serviceOrder.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(serviceOrder)
+      .values({
+        organizationId: params.organizationId,
+        unitId: params.unitId,
+        customerId: params.customerId,
+        assetId: params.assetId,
+        openedByUserId: params.openedByUserId,
+        serviceOrderNumber: params.serviceOrderNumber,
+        status: params.status ?? "awaiting_quote_approval",
+        claimedDefect: "Test defect",
+        intakeCondition: "Test condition",
+        intakeType: "counter",
+        deliveryMethod: "pickup_at_lab",
+        priority: "normal",
+        totalQuotedCents: 0,
+        totalApprovedCents: 0,
+        evaluationFeeCents: 0,
+        evaluationFeeApplied: false,
+        isExternalService: false,
+      })
+      .returning({ id: serviceOrder.id }),
+  );
   if (!row) throw new Error("seedServiceOrder: insert failed");
   return row.id;
 }
@@ -157,18 +164,20 @@ async function seedQuote(params: {
   status?: ServiceOrderQuoteStatus;
   totalCents?: number;
 }): Promise<number> {
-  const [row] = await db
-    .insert(serviceOrderQuote)
-    .values({
-      organizationId: organizationOf("service_order", params.serviceOrderId),
-      serviceOrderId: params.serviceOrderId,
-      quoteNumber: `${params.serviceOrderNumber}/ORC`,
-      version: 1,
-      status: params.status ?? "sent",
-      totalCents: params.totalCents ?? 10000,
-      createdByUserId: params.createdByUserId,
-    })
-    .returning({ id: serviceOrderQuote.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(serviceOrderQuote)
+      .values({
+        organizationId: organizationOf("service_order", params.serviceOrderId),
+        serviceOrderId: params.serviceOrderId,
+        quoteNumber: `${params.serviceOrderNumber}/ORC`,
+        version: 1,
+        status: params.status ?? "sent",
+        totalCents: params.totalCents ?? 10000,
+        createdByUserId: params.createdByUserId,
+      })
+      .returning({ id: serviceOrderQuote.id }),
+  );
   if (!row) throw new Error("seedQuote: insert failed");
   return row.id;
 }
@@ -868,16 +877,18 @@ describe("serviceOrdersRouter — request-supplied foreign ids are tenant-scoped
 
   it("REQ-TENANT-SO-009: POST / for an asset in a unit the member cannot access → 400 (no asset-snapshot read across units)", async () => {
     const fx = await seedFixture();
-    const [otherUnit] = await db
-      .insert(organizationUnit)
-      .values({
-        organizationId: fx.orgA.orgId,
-        name: "Filial",
-        slug: "filial",
-        status: "ACTIVE",
-        isDefault: false,
-      })
-      .returning({ id: organizationUnit.id });
+    const [otherUnit] = await withStatusRepair((tx) =>
+      tx
+        .insert(organizationUnit)
+        .values({
+          organizationId: fx.orgA.orgId,
+          name: "Filial",
+          slug: "filial",
+          status: "ACTIVE",
+          isDefault: false,
+        })
+        .returning({ id: organizationUnit.id }),
+    );
     if (!otherUnit) throw new Error("seed unit failed");
     const typeId = await seedAssetType("type-foreign-unit");
     const assetOtherUnit = await seedAsset({

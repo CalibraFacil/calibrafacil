@@ -21,6 +21,7 @@ import {
 import { db, truncateAll } from "../../test/integration/db";
 import { seedOrg, type SeededOrg } from "../../test/integration/seed";
 import { runStaleJobBackstop } from "./stale-job-backstop";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-Postgres tier for the crash/dead-letter backstop. The tenant SQL guard
 // runs in enforce mode here (test/integration/setup.ts), so every statement the
@@ -74,19 +75,21 @@ async function seedJob(
       createdAt: EPOCH,
     })
     .returning();
-  const [assetRow] = await db
-    .insert(asset)
-    .values({
-      unitId: org.unitId,
-      customerId: customerRow!.id,
-      labOrganizationId: org.orgId,
-      assetTypeId: assetTypeRow!.id,
-      name: "Balança",
-      serialNumber: `SN-${params.jobNumber}`,
-      tag: `TAG-${params.jobNumber}`,
-      createdAt: EPOCH,
-    })
-    .returning();
+  const [assetRow] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: org.unitId,
+        customerId: customerRow!.id,
+        labOrganizationId: org.orgId,
+        assetTypeId: assetTypeRow!.id,
+        name: "Balança",
+        serialNumber: `SN-${params.jobNumber}`,
+        tag: `TAG-${params.jobNumber}`,
+        createdAt: EPOCH,
+      })
+      .returning(),
+  );
   const [serviceRow] = await db
     .insert(service)
     .values({
@@ -136,27 +139,29 @@ async function seedQueueRow(params: {
   maxAttempts?: number;
   lockedAt?: Date | null;
 }) {
-  const [row] = await db
-    .insert(appQueueJob)
-    .values({
-      type: "CERTIFICATE",
-      payload: {
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(appQueueJob)
+      .values({
         type: "CERTIFICATE",
-        jobId: params.jobId,
-        userId: params.userId,
-      },
-      status: params.status,
-      attempts: params.attempts,
-      maxAttempts: params.maxAttempts ?? 3,
-      lockedBy: params.status === "PROCESSING" ? "dead-worker" : null,
-      lockedAt:
-        params.lockedAt === undefined
-          ? params.status === "PROCESSING"
-            ? new Date(Date.now() - HOUR_MS)
-            : null
-          : params.lockedAt,
-    })
-    .returning();
+        payload: {
+          type: "CERTIFICATE",
+          jobId: params.jobId,
+          userId: params.userId,
+        },
+        status: params.status,
+        attempts: params.attempts,
+        maxAttempts: params.maxAttempts ?? 3,
+        lockedBy: params.status === "PROCESSING" ? "dead-worker" : null,
+        lockedAt:
+          params.lockedAt === undefined
+            ? params.status === "PROCESSING"
+              ? new Date(Date.now() - HOUR_MS)
+              : null
+            : params.lockedAt,
+      })
+      .returning(),
+  );
   return row!;
 }
 

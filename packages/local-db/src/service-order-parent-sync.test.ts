@@ -99,9 +99,16 @@ function seedOutboxEvent(
     .prepare(
       `INSERT INTO outbox (
          id, event_id, operation, payload_json, idempotency_key, status, created_at
-       ) VALUES (@eventId, @eventId, 'op', '{}', @eventId, @status, '2026-01-01')`,
+       ) VALUES (@eventId, @eventId, 'op', '{}', @eventId, 'pending', '2026-01-01')`,
     )
-    .run({ eventId, status });
+    .run({ eventId });
+  // An event is created pending (OUTBOX_MACHINE); every status the fixtures use
+  // is one move away.
+  if (status !== "pending") {
+    database
+      .prepare("UPDATE outbox SET status = @status WHERE event_id = @eventId")
+      .run({ eventId, status });
+  }
 }
 
 function syncStateOf(database: Db) {

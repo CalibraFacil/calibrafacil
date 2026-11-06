@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router'
+import { METHOD_MACHINE } from '@calibra-facil/schemas/machines'
 import { Fragment, type ReactNode } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { HugeiconsIcon } from '@hugeicons/react'
@@ -400,7 +401,7 @@ function MethodActions({
 
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-2">
-      {method.status === 'DRAFT' && (
+      {METHOD_MACHINE.canTransition(method.status, 'request_approval') && (
         <Button
           variant="outline"
           render={<Link to="/dashboard/methods/$id/edit" params={{ id }} />}
@@ -411,7 +412,7 @@ function MethodActions({
         </Button>
       )}
 
-      {method.status === 'PENDING_APPROVAL' && (
+      {METHOD_MACHINE.canTransition(method.status, 'technical_review') && (
         <RoleGate
           roles={['admin']}
           fallback={
@@ -443,7 +444,7 @@ function MethodActions({
         </RoleGate>
       )}
 
-      {method.status === 'TECHNICAL_REVIEWED' && (
+      {METHOD_MACHINE.canTransition(method.status, 'publish') && (
         <RoleGate
           roles={['owner']}
           fallback={
@@ -474,8 +475,7 @@ function MethodActions({
       )}
 
       <RoleGate roles={['admin', 'owner']}>
-        {(method.status === 'PENDING_APPROVAL' ||
-          method.status === 'TECHNICAL_REVIEWED') && (
+        {METHOD_MACHINE.canTransition(method.status, 'return_to_draft') && (
           <ActionAvailabilityGate availability={returnToDraftAvailability}>
             {({ disabled }) => (
               <Button

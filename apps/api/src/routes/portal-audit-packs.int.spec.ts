@@ -31,6 +31,7 @@ vi.mock("../lib/background-jobs", () => ({
 
 import { portalRouter } from "./portal";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 const LOCAL_ORIGIN = { origin: "http://localhost" };
 const JSON_HEADERS = {
@@ -97,19 +98,21 @@ async function seedApprovedCertificate(params: {
     .returning({ id: assetType.id });
   if (!assetTypeRow) throw new Error("assetType insert failed");
 
-  const [assetRow] = await db
-    .insert(asset)
-    .values({
-      unitId: params.labUnitId,
-      customerId: params.customerId,
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
-      assetTypeId: assetTypeRow.id,
-      name: `Instrumento ${params.jobNumber}`,
-      serialNumber: `SN-${params.jobNumber}`,
-      tag: `TAG-${params.jobNumber}`,
-      status: "ACTIVE",
-    })
-    .returning({ id: asset.id });
+  const [assetRow] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: params.labUnitId,
+        customerId: params.customerId,
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
+        assetTypeId: assetTypeRow.id,
+        name: `Instrumento ${params.jobNumber}`,
+        serialNumber: `SN-${params.jobNumber}`,
+        tag: `TAG-${params.jobNumber}`,
+        status: "ACTIVE",
+      })
+      .returning({ id: asset.id }),
+  );
   if (!assetRow) throw new Error("asset insert failed");
 
   const [serviceRow] = await db
@@ -141,11 +144,13 @@ async function seedApprovedCertificate(params: {
   if (!jobRow) throw new Error("calibration_job insert failed");
 
   if (params.releaseStatus) {
-    await db.insert(certificateRelease).values({
-      organizationId: params.labOrgId,
-      calibrationJobId: jobRow.id,
-      status: params.releaseStatus,
-    });
+    await withStatusRepair((tx) =>
+      tx.insert(certificateRelease).values({
+        organizationId: params.labOrgId,
+        calibrationJobId: jobRow.id,
+        status: params.releaseStatus,
+      }),
+    );
   }
   return jobRow.id;
 }
@@ -313,24 +318,26 @@ describe("portalRouter /audit-packs — real DB + real portal middleware", () =>
         verificationIndex: true,
       },
     };
-    await db.insert(portalExportJob).values([
-      {
-        kind: "AUDIT_PACK",
-        labOrganizationId: ctx.labOrgId,
-        authOrganizationId: ctx.clientOrgId,
-        requestedByUserId: ctx.portalUserId,
-        params: { ...baseParams, customerIds: [ctx.customerId] },
-        status: "COMPLETED",
-      },
-      {
-        kind: "AUDIT_PACK",
-        labOrganizationId: ctx.labOrgId,
-        authOrganizationId: "portal-client-b",
-        requestedByUserId: "portal-user-b",
-        params: { ...baseParams, customerIds: [999] },
-        status: "COMPLETED",
-      },
-    ]);
+    await withStatusRepair((tx) =>
+      tx.insert(portalExportJob).values([
+        {
+          kind: "AUDIT_PACK",
+          labOrganizationId: ctx.labOrgId,
+          authOrganizationId: ctx.clientOrgId,
+          requestedByUserId: ctx.portalUserId,
+          params: { ...baseParams, customerIds: [ctx.customerId] },
+          status: "COMPLETED",
+        },
+        {
+          kind: "AUDIT_PACK",
+          labOrganizationId: ctx.labOrgId,
+          authOrganizationId: "portal-client-b",
+          requestedByUserId: "portal-user-b",
+          params: { ...baseParams, customerIds: [999] },
+          status: "COMPLETED",
+        },
+      ]),
+    );
 
     loginAsPortal({
       userId: ctx.portalUserId,
@@ -373,26 +380,28 @@ describe("portalRouter /audit-packs — real DB + real portal middleware", () =>
         customerIds: [ctx.customerId],
       },
     };
-    const inserted = await db
-      .insert(portalExportJob)
-      .values([
-        { ...baseRow, status: "PENDING" },
-        {
-          ...baseRow,
-          status: "COMPLETED",
-          r2Key: "org/test/portal-exports/2/pacote.zip",
-          includedJobIds: [jobId],
-          expiresAt: new Date(Date.now() - 60_000),
-        },
-        {
-          ...baseRow,
-          status: "COMPLETED",
-          r2Key: "org/test/portal-exports/3/pacote.zip",
-          includedJobIds: [jobId],
-          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        },
-      ])
-      .returning();
+    const inserted = await withStatusRepair((tx) =>
+      tx
+        .insert(portalExportJob)
+        .values([
+          { ...baseRow, status: "PENDING" },
+          {
+            ...baseRow,
+            status: "COMPLETED",
+            r2Key: "org/test/portal-exports/2/pacote.zip",
+            includedJobIds: [jobId],
+            expiresAt: new Date(Date.now() - 60_000),
+          },
+          {
+            ...baseRow,
+            status: "COMPLETED",
+            r2Key: "org/test/portal-exports/3/pacote.zip",
+            includedJobIds: [jobId],
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          },
+        ])
+        .returning(),
+    );
     const pendingRow = inserted[0];
     const expiredRow = inserted[1];
     const readyRow = inserted[2];
@@ -421,10 +430,12 @@ describe("portalRouter /audit-packs — real DB + real portal middleware", () =>
 
     // The pack was generated while released; the certificate is then HELD —
     // the download re-check must refuse to hand out the ZIP.
-    await db
-      .update(certificateRelease)
-      .set({ status: "HELD_FOR_PAYMENT" })
-      .where(sql`${certificateRelease.calibrationJobId} = ${jobId}`);
+    await withStatusRepair((tx) =>
+      tx
+        .update(certificateRelease)
+        .set({ status: "HELD_FOR_PAYMENT" })
+        .where(sql`${certificateRelease.calibrationJobId} = ${jobId}`),
+    );
     const held = await portalRouter.request(
       `/audit-packs/${readyRow.id}/download`,
       { headers: LOCAL_ORIGIN },
@@ -433,10 +444,12 @@ describe("portalRouter /audit-packs — real DB + real portal middleware", () =>
     expect(held.status).toBe(409);
 
     // Released again -> presigned URL issued.
-    await db
-      .update(certificateRelease)
-      .set({ status: "RELEASED" })
-      .where(sql`${certificateRelease.calibrationJobId} = ${jobId}`);
+    await withStatusRepair((tx) =>
+      tx
+        .update(certificateRelease)
+        .set({ status: "RELEASED" })
+        .where(sql`${certificateRelease.calibrationJobId} = ${jobId}`),
+    );
     const ready = await portalRouter.request(
       `/audit-packs/${readyRow.id}/download`,
       { headers: LOCAL_ORIGIN },
@@ -458,29 +471,31 @@ describe("portalRouter /audit-packs — real DB + real portal middleware", () =>
       portalUserId: "portal-user-b",
       customerName: "Customer B",
     });
-    const [foreign] = await db
-      .insert(portalExportJob)
-      .values({
-        kind: "AUDIT_PACK",
-        labOrganizationId: ctx.labOrgId,
-        authOrganizationId: "portal-client-b",
-        requestedByUserId: "portal-user-b",
-        params: {
-          dateFrom: "2026-01-01",
-          dateTo: "2026-12-31",
-          unitId: null,
-          include: {
-            certificates: true,
-            fleetReport: true,
-            verificationIndex: true,
+    const [foreign] = await withStatusRepair((tx) =>
+      tx
+        .insert(portalExportJob)
+        .values({
+          kind: "AUDIT_PACK",
+          labOrganizationId: ctx.labOrgId,
+          authOrganizationId: "portal-client-b",
+          requestedByUserId: "portal-user-b",
+          params: {
+            dateFrom: "2026-01-01",
+            dateTo: "2026-12-31",
+            unitId: null,
+            include: {
+              certificates: true,
+              fleetReport: true,
+              verificationIndex: true,
+            },
+            customerIds: [999],
           },
-          customerIds: [999],
-        },
-        status: "COMPLETED",
-        r2Key: "org/test/portal-exports/9/pacote.zip",
-        expiresAt: new Date(Date.now() + 60_000),
-      })
-      .returning();
+          status: "COMPLETED",
+          r2Key: "org/test/portal-exports/9/pacote.zip",
+          expiresAt: new Date(Date.now() + 60_000),
+        })
+        .returning(),
+    );
     if (!foreign) throw new Error("foreign export row missing");
 
     loginAsPortal({

@@ -1,4 +1,5 @@
 import { useActiveOrganization } from '@calibra-facil/auth/client'
+import { COMPETENCE_MACHINE } from '@calibra-facil/schemas/machines'
 import { useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
@@ -62,10 +63,23 @@ export function CompetenceDetailPage({ id }: { id: string }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { data: activeOrg } = useActiveOrganization()
-  const [evaluateDialogOpen, setEvaluateDialogOpen] = useState(false)
-  const [renewDialogOpen, setRenewDialogOpen] = useState(false)
-  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  // One competence dialog at a time: which one is open, or none.
+  const [openDialog, setOpenDialog] = useState<
+    'evaluate' | 'renew' | 'cancel' | 'delete' | null
+  >(null)
+  const dialogSetter =
+    (dialog: 'evaluate' | 'renew' | 'cancel' | 'delete') => (open: boolean) =>
+      setOpenDialog((current) =>
+        open ? dialog : current === dialog ? null : current,
+      )
+  const evaluateDialogOpen = openDialog === 'evaluate'
+  const setEvaluateDialogOpen = dialogSetter('evaluate')
+  const renewDialogOpen = openDialog === 'renew'
+  const setRenewDialogOpen = dialogSetter('renew')
+  const cancelDialogOpen = openDialog === 'cancel'
+  const setCancelDialogOpen = dialogSetter('cancel')
+  const deleteDialogOpen = openDialog === 'delete'
+  const setDeleteDialogOpen = dialogSetter('delete')
   const [cancelNotes, setCancelNotes] = useState('')
 
   const { data: comp, isLoading, error } = useCompetenceDetailData(id)
@@ -376,16 +390,23 @@ export function CompetenceDetailPage({ id }: { id: string }) {
                 </Dialog>
               )}
 
-              {comp.status === 'REQUESTED' && (
-                <AssignTrainingDialog
-                  competenceId={id}
-                  userId={comp.userId}
-                  userName={comp.userName ?? 'Técnico'}
-                  onAssigned={invalidateAll}
-                />
-              )}
+              {COMPETENCE_MACHINE.canTransition(
+                comp.status,
+                'assign_training',
+              ) &&
+                comp.status === 'REQUESTED' && (
+                  <AssignTrainingDialog
+                    competenceId={id}
+                    userId={comp.userId}
+                    userName={comp.userName ?? 'Técnico'}
+                    onAssigned={invalidateAll}
+                  />
+                )}
 
-              {comp.status === 'TRAINING_ASSIGNED' && (
+              {COMPETENCE_MACHINE.canTransition(
+                comp.status,
+                'start_training',
+              ) && (
                 <Button
                   onClick={() =>
                     transitionMutation.mutate({ action: 'start-training' })
@@ -398,7 +419,10 @@ export function CompetenceDetailPage({ id }: { id: string }) {
                 </Button>
               )}
 
-              {comp.status === 'IN_TRAINING' && (
+              {COMPETENCE_MACHINE.canTransition(
+                comp.status,
+                'complete_training',
+              ) && (
                 <Button
                   onClick={() =>
                     transitionMutation.mutate({ action: 'complete-training' })
@@ -411,7 +435,7 @@ export function CompetenceDetailPage({ id }: { id: string }) {
                 </Button>
               )}
 
-              {comp.status === 'PENDING_EVALUATION' && (
+              {COMPETENCE_MACHINE.canTransition(comp.status, 'evaluate') && (
                 <Dialog
                   open={evaluateDialogOpen}
                   onOpenChange={setEvaluateDialogOpen}
@@ -433,7 +457,7 @@ export function CompetenceDetailPage({ id }: { id: string }) {
                 </Dialog>
               )}
 
-              {comp.status === 'ACTIVE' && (
+              {COMPETENCE_MACHINE.canTransition(comp.status, 'suspend') && (
                 <Button
                   variant="outline"
                   onClick={() =>

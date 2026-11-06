@@ -27,6 +27,7 @@ import { executableMethodSnapshot } from "../../test/integration/executable-meth
 import { ENGINE_VERSION } from "@calibra-facil/math-engine";
 import { getExecuteRows } from "../lib/db";
 import { syncRouter } from "./sync";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // The CLIENT organization of a new customer is created through Better Auth (not
 // available here): replace only that call with a plain organization row.
@@ -84,31 +85,33 @@ async function seedPublishedMethod(params: {
 }): Promise<number> {
   const fingerprint = "test-fp-0000000000000001";
   const optionsFingerprint = "test-opts-fp-00000001";
-  const [row] = await db
-    .insert(calibrationMethod)
-    .values({
-      organizationId: params.organizationId,
-      assetTypeId: params.assetTypeId,
-      name: `Metodo ${params.organizationId}`,
-      version: 1,
-      status: "PUBLISHED",
-      dataFields: [],
-      variableBindings: [],
-      formulas: [],
-      measurementModels: [],
-      validations: [],
-      uncertaintyParams: [],
-      methodFingerprint: fingerprint,
-      compiledMethod: {
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(calibrationMethod)
+      .values({
+        organizationId: params.organizationId,
+        assetTypeId: params.assetTypeId,
+        name: `Metodo ${params.organizationId}`,
+        version: 1,
+        status: "PUBLISHED",
+        dataFields: [],
+        variableBindings: [],
+        formulas: [],
+        measurementModels: [],
+        validations: [],
+        uncertaintyParams: [],
         methodFingerprint: fingerprint,
-        normalizedMethodJson: "{}",
-        engine: { version: ENGINE_VERSION, optionsFingerprint },
-      },
-      methodEngine: { version: ENGINE_VERSION, optionsFingerprint },
-      publicationEvidence: { publishedAt: "2026-01-01T00:00:00.000Z" },
-      createdBy: params.createdBy,
-    })
-    .returning({ id: calibrationMethod.id });
+        compiledMethod: {
+          methodFingerprint: fingerprint,
+          normalizedMethodJson: "{}",
+          engine: { version: ENGINE_VERSION, optionsFingerprint },
+        },
+        methodEngine: { version: ENGINE_VERSION, optionsFingerprint },
+        publicationEvidence: { publishedAt: "2026-01-01T00:00:00.000Z" },
+        createdBy: params.createdBy,
+      })
+      .returning({ id: calibrationMethod.id }),
+  );
   if (!row) throw new Error("seedPublishedMethod: insert failed");
   return row.id;
 }
@@ -123,18 +126,20 @@ async function seedLab(orgId: string, userId: string, tag: string) {
     .insert(assetType)
     .values({ name: `Tipo ${tag}`, slug: `tipo-${tag}`, definition: [] })
     .returning({ id: assetType.id });
-  const [instrument] = await db
-    .insert(asset)
-    .values({
-      labOrganizationId: org.orgId,
-      unitId: org.unitId,
-      customerId,
-      assetTypeId: type?.id ?? 0,
-      name: `Instrumento ${tag}`,
-      serialNumber: `SN-${tag}`,
-      tag: `TAG-${tag}`,
-    })
-    .returning({ id: asset.id });
+  const [instrument] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        labOrganizationId: org.orgId,
+        unitId: org.unitId,
+        customerId,
+        assetTypeId: type?.id ?? 0,
+        name: `Instrumento ${tag}`,
+        serialNumber: `SN-${tag}`,
+        tag: `TAG-${tag}`,
+      })
+      .returning({ id: asset.id }),
+  );
   const methodId = await seedPublishedMethod({
     organizationId: org.orgId,
     assetTypeId: type?.id ?? 0,
@@ -190,25 +195,27 @@ async function seedWorld() {
     },
     certificateName: "CAL-SYNC-1",
   });
-  const [standard] = await db
-    .insert(referenceStandard)
-    .values({
-      organizationId: lab.org.orgId,
-      unitId: lab.org.unitId,
-      createdBy: lab.org.userId,
-      name: "Massa Padrao",
-      kind: "generic_scalar",
-      serialNumber: "SN-STD-SYNC",
-      certificateNumber: "CERT-SYNC",
-      calibrationDate: new Date("2026-01-10T15:00:00.000Z"),
-      nextCalibrationDate: new Date("2030-01-10T00:00:00.000Z"),
-      coverageFactor: 2,
-      distribution: "normal",
-      status: "ACTIVE",
-      referenceValue: 1,
-      uncertainty: 0.01,
-    })
-    .returning({ id: referenceStandard.id });
+  const [standard] = await withStatusRepair((tx) =>
+    tx
+      .insert(referenceStandard)
+      .values({
+        organizationId: lab.org.orgId,
+        unitId: lab.org.unitId,
+        createdBy: lab.org.userId,
+        name: "Massa Padrao",
+        kind: "generic_scalar",
+        serialNumber: "SN-STD-SYNC",
+        certificateNumber: "CERT-SYNC",
+        calibrationDate: new Date("2026-01-10T15:00:00.000Z"),
+        nextCalibrationDate: new Date("2030-01-10T00:00:00.000Z"),
+        coverageFactor: 2,
+        distribution: "normal",
+        status: "ACTIVE",
+        referenceValue: 1,
+        uncertainty: 0.01,
+      })
+      .returning({ id: referenceStandard.id }),
+  );
   return { ...lab, jobId: job?.id ?? 0, standardId: standard?.id ?? 0 };
 }
 

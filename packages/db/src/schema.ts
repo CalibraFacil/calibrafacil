@@ -1,4 +1,58 @@
 import { relations, sql } from "drizzle-orm";
+// State-machine state types (owned by @calibra-facil/schemas/machines).
+import type {
+  PortalExportJobStatus,
+  QueueJobReceiptStatus,
+  AppQueueJobStatus,
+  NotificationStatus,
+  OrganizationEmailDomainKeyStatus,
+  OrganizationEmailDomainStatus,
+  OrganizationUnitStatus,
+  OrganizationStatus,
+  SpcStatus,
+  PtOverallStatus,
+  SignatoryAuthorizationStatus,
+  TrainingStatus,
+  CompetenceStatus,
+  AssetOotEventStatus,
+  OotNotificationStatus,
+  StandardRecallStatus,
+  NonConformanceStatus,
+  CorrectiveActionStatus,
+  MassProfileStatus,
+  ReferenceStandardStatus,
+  AssetStatus,
+  MethodStatus,
+  CalibrationRequestStatus,
+  VisitRescheduleRequestStatus,
+  VisitStatus,
+} from "@calibra-facil/schemas/machines";
+export type {
+  PortalExportJobStatus,
+  QueueJobReceiptStatus,
+  AppQueueJobStatus,
+  NotificationStatus,
+  OrganizationEmailDomainKeyStatus,
+  OrganizationEmailDomainStatus,
+  OrganizationUnitStatus,
+  OrganizationStatus,
+  SpcStatus,
+  PtOverallStatus,
+  SignatoryAuthorizationStatus,
+  TrainingStatus,
+  CompetenceStatus,
+  AssetOotEventStatus,
+  OotNotificationStatus,
+  StandardRecallStatus,
+  NonConformanceStatus,
+  CorrectiveActionStatus,
+  ReferenceStandardStatus,
+  AssetStatus,
+  MethodStatus,
+  CalibrationRequestStatus,
+  VisitRescheduleRequestStatus,
+  VisitStatus,
+} from "@calibra-facil/schemas/machines";
 import type { MethodMeasurementModel } from "@calibra-facil/schemas";
 import {
   pgTable,
@@ -207,7 +261,6 @@ export const passkey = pgTable(
 );
 
 /** Tenant lifecycle state, set by the instance operator. */
-export type OrganizationStatus = "ACTIVE" | "SUSPENDED" | "OFFBOARDING";
 
 export const organization = pgTable(
   "organization",
@@ -424,7 +477,6 @@ export const member = pgTable(
   ],
 );
 
-export type OrganizationUnitStatus = "ACTIVE" | "ARCHIVED";
 export type MemberUnitRole = "member" | "technician" | "unit_admin";
 
 export const organizationUnit = pgTable(
@@ -820,18 +872,6 @@ export const organizationCustomDomain = pgTable(
 export type OrganizationEmailDomainMode = "byok" | "managed";
 
 /** Mirrors Resend's domain status vocabulary. */
-export type OrganizationEmailDomainStatus =
-  | "pending"
-  | "verified"
-  | "failed"
-  | "not_started"
-  | "partially_verified"
-  | "partially_failed";
-
-export type OrganizationEmailDomainKeyStatus =
-  | "ok"
-  | "invalid"
-  | "rate_limited";
 
 /**
  * Lab-owned email sending domain (issue #584). One per lab org. The lab brings
@@ -1632,7 +1672,7 @@ export const integrationSyncItem = pgTable(
       .notNull(),
     status: text("status")
       .$type<IntegrationSyncItemStatus>()
-      .default("PENDING")
+      .default("RUNNING")
       .notNull(),
     attemptCount: integer("attempt_count").default(0).notNull(),
     lastErrorCode: text("last_error_code"),
@@ -2367,7 +2407,6 @@ export const customerAuditLogRelations = relations(
 /**
  * Asset status values for equipment lifecycle tracking
  */
-export type AssetStatus = "ACTIVE" | "INACTIVE" | "MAINTENANCE" | "SCRAPPED";
 
 /**
  * Provenance of an asset's customer-owned calibration interval (Track 1). The interval is
@@ -2657,12 +2696,6 @@ export const legalMetrologyRegulation = pgTable(
  * - PUBLISHED: Active and immutable, used for calibrations
  * - ARCHIVED: No longer active, kept for historical reference
  */
-export type MethodStatus =
-  | "DRAFT"
-  | "PENDING_APPROVAL"
-  | "TECHNICAL_REVIEWED"
-  | "PUBLISHED"
-  | "ARCHIVED";
 
 export type MethodInputSource = "manual" | "asset_spec";
 export type EccentricityIndicatorVariant = "circular_platform" | "road_scale";
@@ -3309,11 +3342,6 @@ export type CertifiedValue = {
 /**
  * Reference Standard status for lifecycle tracking
  */
-export type ReferenceStandardStatus =
-  | "ACTIVE"
-  | "INACTIVE"
-  | "OUT_OF_TOLERANCE"
-  | "SENT_FOR_CALIBRATION";
 
 /**
  * Uncertainty distribution types
@@ -3534,7 +3562,10 @@ export const massCompositionProfile = pgTable(
       { onDelete: "set null" },
     ),
     sourceCertificate: text("source_certificate"),
-    status: text("status").default("ACTIVE").notNull(),
+    status: text("status")
+      .$type<MassProfileStatus>()
+      .default("ACTIVE")
+      .notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -3896,13 +3927,6 @@ export type CalibrationPhaseSnapshot = {
   recordedAt: string;
   recordedBy: string;
 };
-
-export type CalibrationRequestStatus =
-  | "PENDING"
-  | "UNDER_REVIEW"
-  | "APPROVED"
-  | "REJECTED"
-  | "CONVERTED";
 
 /**
  * Calibration Job table - The Work Order / Operational Record
@@ -6231,12 +6255,6 @@ export const calibrationRequestAuditLog = pgTable(
 // The customer proposes a date on the request; the lab confirms + assigns the
 // technician here. Lifecycle: PROPOSED → CONFIRMED → IN_PROGRESS → COMPLETED
 // (or CANCELLED at any point).
-export type VisitStatus =
-  | "PROPOSED"
-  | "CONFIRMED"
-  | "IN_PROGRESS"
-  | "COMPLETED"
-  | "CANCELLED";
 
 export const calibrationVisit = pgTable(
   "calibration_visit",
@@ -6314,11 +6332,6 @@ export const calibrationVisit = pgTable(
 // visit: the visit only moves when the lab accepts and reschedules. At most
 // one PENDING request per visit (partial unique index). A lab-side reschedule
 // while a request is pending marks it SUPERSEDED.
-export type VisitRescheduleRequestStatus =
-  | "PENDING"
-  | "ACCEPTED"
-  | "DECLINED"
-  | "SUPERSEDED";
 
 export type VisitReschedulePreferredPeriod = "MORNING" | "AFTERNOON" | "ANY";
 
@@ -7076,7 +7089,6 @@ export type NotificationPriority = "HIGH" | "MEDIUM" | "LOW";
 /**
  * Notification status values
  */
-export type NotificationStatus = "UNREAD" | "READ" | "ARCHIVED";
 
 /**
  * Notification delivery channel
@@ -7303,12 +7315,6 @@ export type AppQueueJobType =
   | "JOB_APPROVED_NOTIFICATION"
   | "ASSET_OOT_NOTIFICATION";
 
-export type AppQueueJobStatus =
-  | "PENDING"
-  | "PROCESSING"
-  | "COMPLETED"
-  | "FAILED";
-
 export const appQueueJob = pgTable(
   "app_queue_job",
   {
@@ -7337,8 +7343,6 @@ export const appQueueJob = pgTable(
     index("app_queue_job_type_idx").on(table.type),
   ],
 );
-
-export type QueueJobReceiptStatus = "RUNNING" | "COMPLETED";
 
 /**
  * Idempotency ledger for queue consumers.
@@ -7384,12 +7388,6 @@ export const queueJobReceipt = pgTable(
 // =============================================================================
 // PORTAL EXPORT JOBS - customer-requested bulk exports (audit packs)
 // =============================================================================
-
-export type PortalExportJobStatus =
-  | "PENDING"
-  | "PROCESSING"
-  | "COMPLETED"
-  | "FAILED";
 
 export type PortalExportJobKind = "AUDIT_PACK";
 
@@ -7667,12 +7665,6 @@ export type CapaVerificationIndependence =
 /**
  * CAPA status values for lifecycle tracking
  */
-export type CorrectiveActionStatus =
-  | "OPEN"
-  | "INVESTIGATION"
-  | "IMPLEMENTATION"
-  | "VERIFICATION"
-  | "CLOSED";
 
 /**
  * CAPA source - where the CAPA originated from
@@ -7910,7 +7902,6 @@ export type NonConformanceDisposition =
 /**
  * NC status values
  */
-export type NonConformanceStatus = "open" | "under_review" | "resolved";
 
 /**
  * Non-Conformance table - ISO 17025:2017 Clause 8.7
@@ -8193,7 +8184,6 @@ export const jobStandardRelations = relations(jobStandard, ({ one }) => ({
  * DRAFT → SENT. A recall stays DRAFT while the quality manager reviews the
  * impacted-certificate list; SENT is stamped by the approval-gated batch send.
  */
-export type StandardRecallStatus = "DRAFT" | "SENT";
 
 /**
  * One recall campaign for a reference standard found out-of-tolerance.
@@ -8351,11 +8341,6 @@ export const ootImpactAssessmentRelations = relations(
  * Lifecycle of a §7.10 customer notification.
  * PENDING → GENERATED (PDF on R2) → SENT (email dispatched) → ACKNOWLEDGED.
  */
-export type OotNotificationStatus =
-  | "PENDING"
-  | "GENERATED"
-  | "SENT"
-  | "ACKNOWLEDGED";
 
 /**
  * How the customer's acknowledgement was registered. `portal_link` is reserved
@@ -8556,15 +8541,6 @@ export const ootEmailOutboxRelations = relations(ootEmailOutbox, ({ one }) => ({
 /**
  * Competence workflow status values
  */
-export type CompetenceStatus =
-  | "REQUESTED"
-  | "TRAINING_ASSIGNED"
-  | "IN_TRAINING"
-  | "PENDING_EVALUATION"
-  | "ACTIVE"
-  | "SUSPENDED"
-  | "EXPIRED"
-  | "CANCELLED";
 
 /**
  * Training type values
@@ -8574,7 +8550,6 @@ export type TrainingType = "internal" | "external" | "ojt" | "proficiency_test";
 /**
  * Training status values
  */
-export type TrainingStatus = "planned" | "in_progress" | "completed" | "failed";
 
 /**
  * Personnel Competence table - Tracks technician qualifications per asset type
@@ -8791,11 +8766,6 @@ export const trainingRecordAuditLog = pgTable(
 /**
  * Signatory authorization status.
  */
-export type SignatoryAuthorizationStatus =
-  | "ACTIVE"
-  | "SUSPENDED"
-  | "REVOKED"
-  | "EXPIRED";
 
 /**
  * Authorized Signatory table - who may APPROVE / sign off calibration
@@ -9041,12 +9011,6 @@ export type PtScoreType = "en" | "z" | "z_prime" | "zeta";
 
 export type PtScoreVerdict = "satisfactory" | "questionable" | "unsatisfactory";
 
-export type PtOverallStatus =
-  | "pending"
-  | "satisfactory"
-  | "questionable"
-  | "unsatisfactory";
-
 /**
  * One measured point of a PT round: the lab's reported value against the
  * provider's assigned value, with the computed performance score.
@@ -9248,12 +9212,6 @@ export const checkStandardReading = pgTable(
  * per run (n=1), which X-bar/R cannot chart (NIST/SEMATECH §6.3.2).
  */
 export type SpcChartType = "i_mr" | "xbar_r" | "cusum" | "ewma";
-
-export type SpcStatus =
-  | "insufficient_data"
-  | "in_control"
-  | "trending"
-  | "out_of_control";
 
 /**
  * Chart configuration. Limits are recomputed from the baseline window unless
@@ -9516,8 +9474,6 @@ export const controlChartAuditLogRelations = relations(
 // IATF 16949 §7.1.5.2.1 (risk assessment + customer notification records).
 // The assessment is the CUSTOMER'S obligation; the portal is the workspace.
 // ============================================================================
-
-export type AssetOotEventStatus = "OPEN" | "ASSESSED";
 
 export type AssetOotImpactDecision =
   | "NO_IMPACT"

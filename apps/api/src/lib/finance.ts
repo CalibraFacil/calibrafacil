@@ -50,6 +50,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import { BILLING_DOCUMENT_MACHINE } from "@calibra-facil/schemas/machines";
 import {
   REMOTE_API_OUTBOUND_OPTIONS,
   createOutboundFetch,
@@ -1244,7 +1245,7 @@ export async function exportBillingDocumentToPrimaryIntegration(params: {
         o
           .update(billingDocument)
           .set({
-            exportStatus: "FAILED",
+            exportStatus: "FAILED", // `fail` of BILLING_EXPORT_MACHINE (from any export status)
             updatedAt: new Date(),
           })
           .where(eq(billingDocument.id, params.documentId)),
@@ -1420,7 +1421,7 @@ export async function exportBillingDocumentToPrimaryIntegration(params: {
         o
           .update(billingDocument)
           .set({
-            exportStatus: "FAILED",
+            exportStatus: "FAILED", // `fail` of BILLING_EXPORT_MACHINE (from any export status)
             updatedAt: new Date(),
           })
           .where(eq(billingDocument.id, params.documentId)),
@@ -1483,7 +1484,7 @@ export async function exportBillingDocumentToPrimaryIntegration(params: {
     o
       .update(billingDocument)
       .set({
-        exportStatus: "EXPORTED",
+        exportStatus: "EXPORTED", // `export` of BILLING_EXPORT_MACHINE (from any export status)
         exportedAt: new Date(),
         updatedAt: new Date(),
       })
@@ -1807,16 +1808,23 @@ async function issueDraftBillingDocument(
   const { organizationId, documentId, actorUserId } = params;
   const [existing] = await o
     .select({
+      status: billingDocument.status,
       dueDate: billingDocument.dueDate,
       totalCents: billingDocument.totalCents,
       currency: billingDocument.currency,
     })
     .from(billingDocument)
     .where(eq(billingDocument.id, documentId))
-    .limit(1);
+    .limit(1)
+    // Locked: a number is allocated only for a document that stays a draft.
+    .for("update");
   if (!existing) {
     throw new Error("Documento financeiro não encontrado");
   }
+  const issuedStatus = BILLING_DOCUMENT_MACHINE.requireTargetOf(
+    existing.status,
+    "issue",
+  );
 
   const issueDate = new Date();
   const documentNumber = await generateBillingDocumentNumber(
@@ -1833,7 +1841,7 @@ async function issueDraftBillingDocument(
     .update(billingDocument)
     .set({
       documentNumber,
-      status: "ISSUED",
+      status: issuedStatus,
       issueDate,
       dueDate: effectiveDueDate,
       issuedBy: actorUserId,

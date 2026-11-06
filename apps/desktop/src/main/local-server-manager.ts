@@ -75,6 +75,33 @@ export type LocalServerManagerState =
   | "crashed"
   | "restarting";
 
+/**
+ * The manager's lifecycle as data: the states each state may move to. Every
+ * assignment of the state goes through `#moveTo`, which checks this table.
+ *
+ *   stopped ──start──▶ starting ──ready──▶ ready
+ *      ▲                  │ failed            │ process exited
+ *      │ stop (any)       ▼                   ▼
+ *   stopping ◀────── crashed ──backoff──▶ restarting ──spawn──▶ starting
+ */
+export const LOCAL_SERVER_TRANSITIONS: Readonly<
+  Record<LocalServerManagerState, readonly LocalServerManagerState[]>
+> = {
+  stopped: ["starting", "stopping"],
+  starting: ["ready", "crashed", "stopped", "stopping"],
+  ready: ["crashed", "stopping"],
+  stopping: ["stopped"],
+  crashed: ["restarting", "starting", "stopping", "stopped"],
+  restarting: ["starting", "crashed", "stopping", "stopped"],
+};
+
+export function canMoveLocalServer(
+  from: LocalServerManagerState,
+  to: LocalServerManagerState,
+): boolean {
+  return from === to || LOCAL_SERVER_TRANSITIONS[from].includes(to);
+}
+
 export class LocalServerManager {
   #process: ChildProcessWithoutNullStreams | null = null;
   #bootstrap: LocalEnvironmentBootstrap | null = null;
@@ -94,6 +121,16 @@ export class LocalServerManager {
 
   get state() {
     return this.#state;
+  }
+
+  /** The one place the state changes; a move off the table is a defect, logged. */
+  #moveTo(next: LocalServerManagerState) {
+    if (!canMoveLocalServer(this.#state, next)) {
+      const message = `illegal local-server state move ${this.#state} -> ${next}`;
+      console.error(`[local-server] ${message}`);
+      this.#appendLog("state", message);
+    }
+    this.#state = next;
   }
 
   get port() {
@@ -140,7 +177,7 @@ export class LocalServerManager {
   async #start(options: LocalServerStartOptions = {}) {
     this.#lastStartOptions = options;
     this.#stopping = false;
-    this.#state = "starting";
+    this.#moveTo("starting");
     const startAttemptId = ++this.#startAttemptId;
 
     if (!process.env.CALIBRA_DESKTOP_SKIP_LOCAL_SERVER) {
@@ -151,13 +188,13 @@ export class LocalServerManager {
     try {
       this.#bootstrap = await this.#waitForReadiness(startAttemptId);
       this.#restartAttempts = 0;
-      this.#state = "ready";
+      this.#moveTo("ready");
       return this.#bootstrap;
     } catch (error) {
       if (this.#stopping || startAttemptId !== this.#startAttemptId) {
-        this.#state = "stopped";
+        this.#moveTo("stopped");
       } else {
-        this.#state = "crashed";
+        this.#moveTo("crashed");
       }
       throw error;
     }
@@ -166,7 +203,7 @@ export class LocalServerManager {
   stop() {
     this.#stopping = true;
     this.#startAttemptId += 1;
-    this.#state = "stopping";
+    this.#moveTo("stopping");
     if (this.#restartTimer) {
       clearTimeout(this.#restartTimer);
       this.#restartTimer = null;
@@ -174,14 +211,14 @@ export class LocalServerManager {
 
     if (!this.#process || this.#process.killed) {
       this.#bootstrap = null;
-      this.#state = "stopped";
+      this.#moveTo("stopped");
       return;
     }
 
     this.#process.kill();
     this.#process = null;
     this.#bootstrap = null;
-    this.#state = "stopped";
+    this.#moveTo("stopped");
   }
 
   #spawn(options: LocalServerStartOptions) {
@@ -214,16 +251,20 @@ export class LocalServerManager {
       this.#appendLog("stderr", message);
     });
 
-    this.#process.once("exit", (code, signal) => {
+    const child = this.#process;
+    child.once("exit", (code, signal) => {
       const message = `local-server exited with code=${code} signal=${signal}`;
       console.error(message);
       this.#appendLog("exit", message);
+      // A process stopped earlier can exit after a new one was spawned: it is
+      // not the current server, so neither its handle nor the state is touched.
+      if (this.#process !== child) return;
       this.#process = null;
       if (!this.#stopping) {
-        this.#state = "crashed";
+        this.#moveTo("crashed");
         this.#scheduleRestart();
       } else {
-        this.#state = "stopped";
+        this.#moveTo("stopped");
       }
     });
   }
@@ -235,25 +276,25 @@ export class LocalServerManager {
 
     const delayMs = Math.min(10_000, 500 * 2 ** this.#restartAttempts);
     this.#restartAttempts += 1;
-    this.#state = "restarting";
+    this.#moveTo("restarting");
     this.#restartTimer = setTimeout(() => {
       this.#restartTimer = null;
       try {
-        this.#state = "starting";
+        this.#moveTo("starting");
         const startAttemptId = ++this.#startAttemptId;
         this.#spawn(this.#lastStartOptions);
         void this.#waitForReadiness(startAttemptId)
           .then((bootstrap) => {
             this.#bootstrap = bootstrap;
             this.#restartAttempts = 0;
-            this.#state = "ready";
+            this.#moveTo("ready");
           })
           .catch((error) => {
             if (this.#stopping || startAttemptId !== this.#startAttemptId) {
-              this.#state = "stopped";
+              this.#moveTo("stopped");
               return;
             }
-            this.#state = "crashed";
+            this.#moveTo("crashed");
             console.error(
               error instanceof Error
                 ? error.message
@@ -262,7 +303,7 @@ export class LocalServerManager {
             this.#scheduleRestart();
           });
       } catch (error) {
-        this.#state = "crashed";
+        this.#moveTo("crashed");
         console.error(
           error instanceof Error
             ? error.message
@@ -346,7 +387,7 @@ export class LocalServerManager {
     });
   }
 
-  #appendLog(stream: "stdout" | "stderr" | "exit", message: string) {
+  #appendLog(stream: "stdout" | "stderr" | "exit" | "state", message: string) {
     if (!message) return;
 
     const line = `${new Date().toISOString()} [desktop:${this.#desktopRunId}] [local-server:${this.#localServerRunId}] [${stream}] ${message}\n`;

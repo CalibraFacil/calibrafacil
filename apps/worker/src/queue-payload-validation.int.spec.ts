@@ -16,6 +16,7 @@ vi.mock("@calibra-facil/jobs-core", () => ({
 }));
 
 import { drainQueue } from "./queue-runtime";
+import { withStatusRepair } from "../test/integration/state-fixtures";
 
 const CONFIG = {
   workerId: "int-test-worker",
@@ -39,15 +40,17 @@ beforeEach(async () => {
 // Bypasses the typed enqueue on purpose: it refuses exactly the payloads these
 // tests need (rows written by an older producer, a manual fix, a bad deploy).
 async function seedRawRow(payload: unknown): Promise<number> {
-  const [row] = await db
-    .insert(appQueueJob)
-    .values({
-      type: "CERTIFICATE",
-      payload: sql`${JSON.stringify(payload)}::jsonb`,
-      status: "PENDING",
-      maxAttempts: 3,
-    })
-    .returning();
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(appQueueJob)
+      .values({
+        type: "CERTIFICATE",
+        payload: sql`${JSON.stringify(payload)}::jsonb`,
+        status: "PENDING",
+        maxAttempts: 3,
+      })
+      .returning(),
+  );
   if (!row) throw new Error("seed insert returned no row");
   return row.id;
 }

@@ -91,7 +91,13 @@ export async function processAuditPackJob(
     });
 
     if (!exportRow) {
-      throw new Error("Audit pack export not found");
+      // `claim` of PORTAL_EXPORT_JOB_MACHINE leaves PENDING/PROCESSING only: a
+      // redelivery after the export finished (or failed) has nothing to do,
+      // and must not overwrite the recorded outcome.
+      console.warn(
+        `[AUDIT PACK ${exportId}] Not claimable (finished or missing); skipped`,
+      );
+      return;
     }
 
     const params = parseAuditPackParams(exportRow.params);
@@ -384,7 +390,7 @@ export async function processAuditPackJob(
               expires_at = now() + ($5 || ' days')::interval,
               completed_at = now(),
               updated_at = now()
-          where id = $6
+          where id = $6 and status = 'PROCESSING'
         `,
         [
           includedJobIds.length,
@@ -421,7 +427,7 @@ export async function processAuditPackJob(
           `
           update portal_export_job
           set status = 'FAILED', failure_reason = $1, updated_at = now()
-          where id = $2
+          where id = $2 and status in ('PENDING', 'PROCESSING')
         `,
           [errorMessage, exportId],
         ),

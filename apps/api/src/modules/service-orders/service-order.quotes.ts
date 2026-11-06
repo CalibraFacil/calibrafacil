@@ -1,5 +1,3 @@
-import { db } from "@calibra-facil/db";
-import { setTransactionOrganization } from "@calibra-facil/db/for-org";
 import {
   serviceOrder,
   serviceOrderQuote,
@@ -7,13 +5,14 @@ import {
   serviceOrderAssetSnapshot,
   customer,
 } from "@calibra-facil/db/schema";
+import { isServiceOrderFinalStatus } from "@calibra-facil/shared";
 import {
+  SERVICE_ORDER_MACHINE,
   canApproveServiceOrderQuote,
-  isServiceOrderDecidingQuoteStatus,
+  SERVICE_ORDER_QUOTE_MACHINE,
   canEditServiceOrderQuote,
-  isServiceOrderFinalStatus,
-  isServiceOrderWorkInProgressStatus,
-} from "@calibra-facil/shared";
+  type ServiceOrderCommand,
+} from "@calibra-facil/schemas/machines";
 import type {
   ApproveServiceOrderQuoteManuallySchema,
   CreateServiceOrderQuoteSchema,
@@ -36,7 +35,10 @@ import {
 import { orgDb } from "../../lib/org-db";
 import { buildUnitScopeCondition } from "../../lib/units";
 import { enqueueServiceOrderDocumentJob } from "./service-order.documents";
-import { getQuoteForAction } from "./service-order.queries";
+import {
+  getQuoteForAction,
+  lockServiceOrderStatus,
+} from "./service-order.queries";
 import { getServiceOrderDetail } from "./service-order.read-model";
 import { getPortalCustomerForAuthOrganization } from "./service-order.list-queries";
 import { enqueueServiceOrderEmail } from "./email-outbox-payloads";
@@ -46,6 +48,24 @@ import type {
   QuoteRejectedOutboxPayload,
 } from "./email-outbox-payloads";
 import { portalBaseUrl } from "@calibra-facil/shared/public-urls";
+
+type ServiceOrderRowStatus = (typeof serviceOrder.$inferSelect)["status"];
+
+/**
+ * The order's side of a quote decision. The order advances only while it waits
+ * on the decision (`approve_quote` / `reject_quote` in SERVICE_ORDER_MACHINE);
+ * anywhere else the decision is late or out of band (a mid-job re-quote, a
+ * public link answered after delivery) and moving the status would rewind real
+ * progress, so only the decision's own fields are written.
+ */
+function orderStatusOnDecision(
+  status: ServiceOrderRowStatus,
+  command: Extract<ServiceOrderCommand, "approve_quote" | "reject_quote">,
+) {
+  return SERVICE_ORDER_MACHINE.canTransition(status, command)
+    ? { status: SERVICE_ORDER_MACHINE.requireTargetOf(status, command) }
+    : {};
+}
 
 type ServiceOrderMember = AuthVariables["member"];
 
@@ -198,6 +218,7 @@ export async function updateServiceOrderQuoteDraft(input: {
       input.quoteId,
       input.member.organizationId,
       o,
+      { lock: true },
     );
     if (!quote) return { status: "not_found" as const };
     if (!canEditServiceOrderQuote(quote.status)) {
@@ -275,21 +296,26 @@ export async function sendServiceOrderQuote(input: {
         input.quoteId,
         input.member.organizationId,
         o,
+        { lock: true },
       );
       if (!quote) return { status: "quote_not_found" as const };
-      if (!canEditServiceOrderQuote(quote.status)) {
+      if (!SERVICE_ORDER_QUOTE_MACHINE.canTransition(quote.status, "send")) {
         return { status: "conflict" as const };
       }
-      // Sending drives the OS to awaiting_quote_approval. Only the clearly-wrong
-      // case is blocked here: a closed or canceled OS must not be rewound and the
-      // customer must not be mailed a fresh approval link for finished work.
-      //
-      // Deliberately NOT a full canTransitionServiceOrderStatus check: the graph has
-      // no quote_rejected/quote_approved → awaiting_quote_approval edge, so that
-      // would also block re-sending a revised version during a renegotiation. Which
-      // revision edges are legal is an open product decision (stage-gating proposal),
-      // not something to settle inside a bug fix.
-      if (isServiceOrderFinalStatus(detail.status)) {
+      // `send_quote` in SERVICE_ORDER_MACHINE: any open order, never a closed or
+      // canceled one (it must not be rewound, nor the customer mailed a fresh
+      // approval link for finished work). Off the bench the order then waits on
+      // the customer; on the bench it keeps its stage (mid-job re-quote). The
+      // order row is locked so its status holds until the writes commit.
+      const lockedStatus = await lockServiceOrderStatus(
+        o,
+        input.serviceOrderId,
+        input.member.organizationId,
+      );
+      const orderStatusAfterSend = lockedStatus
+        ? SERVICE_ORDER_MACHINE.targetOf(lockedStatus, "send_quote")
+        : null;
+      if (!orderStatusAfterSend) {
         return { status: "invalid_transition" as const };
       }
 
@@ -339,15 +365,10 @@ export async function sendServiceOrderQuote(input: {
         )
         .returning();
 
-      // Mid-job re-quote: the instrument is on the bench, so the order keeps saying
-      // so and only the quote awaits a decision.
-      const keepStatusOnSend = isServiceOrderWorkInProgressStatus(
-        detail.status,
-      );
       await o
         .update(serviceOrder)
         .set({
-          ...(keepStatusOnSend ? {} : { status: "awaiting_quote_approval" }),
+          status: orderStatusAfterSend,
           quotedAt: new Date(),
           totalQuotedCents: quote.totalCents,
           updatedAt: new Date(),
@@ -528,6 +549,7 @@ export async function approveServiceOrderQuoteManually(input: {
       input.quoteId,
       input.organizationId,
       o,
+      { lock: true },
     );
     if (!quote || !canApproveServiceOrderQuote(quote.status)) {
       return { status: "conflict" as const };
@@ -546,7 +568,8 @@ export async function approveServiceOrderQuoteManually(input: {
           eq(serviceOrder.organizationId, input.organizationId),
         ),
       )
-      .limit(1);
+      .limit(1)
+      .for("update");
     if (!order) return { status: "order_not_found" as const };
 
     // Look up customer for the email payload
@@ -586,9 +609,7 @@ export async function approveServiceOrderQuoteManually(input: {
     await o
       .update(serviceOrder)
       .set({
-        ...(isServiceOrderDecidingQuoteStatus(order.status)
-          ? { status: "quote_approved" }
-          : {}),
+        ...orderStatusOnDecision(order.status, "approve_quote"),
         approvedAt: new Date(),
         totalApprovedCents: quote.totalCents,
       })
@@ -651,6 +672,7 @@ export async function rejectServiceOrderQuoteManually(input: {
       input.quoteId,
       input.organizationId,
       o,
+      { lock: true },
     );
     if (!quote || !canApproveServiceOrderQuote(quote.status)) {
       return { status: "conflict" as const };
@@ -669,7 +691,8 @@ export async function rejectServiceOrderQuoteManually(input: {
           eq(serviceOrder.organizationId, input.organizationId),
         ),
       )
-      .limit(1);
+      .limit(1)
+      .for("update");
     if (!order) return { status: "order_not_found" as const };
 
     // Look up customer for the email payload
@@ -706,9 +729,7 @@ export async function rejectServiceOrderQuoteManually(input: {
     await o
       .update(serviceOrder)
       .set({
-        ...(isServiceOrderDecidingQuoteStatus(order.status)
-          ? { status: "quote_rejected" }
-          : {}),
+        ...orderStatusOnDecision(order.status, "reject_quote"),
         rejectedAt: new Date(),
       })
       .where(eq(serviceOrder.id, input.serviceOrderId));
@@ -798,86 +819,112 @@ export async function approveServiceOrderQuoteByPortalUser(input: {
     return { status: "conflict" as const };
   }
 
-  await db.transaction(async (tx) => {
-    // Row-level security: the writes below belong to the customer's laboratory.
-    await setTransactionOrganization(tx, linkedCustomer.labOrganizationId);
-    await tx
-      .update(serviceOrderQuote)
-      .set({
-        status: "approved",
-        approvedAt: new Date(),
-        approvedByPortalUserId: input.actorUserId,
-      })
-      .where(
-        and(
-          eq(serviceOrderQuote.id, input.quoteId),
-          eq(
-            serviceOrderQuote.organizationId,
-            linkedCustomer.labOrganizationId,
+  // Row-level security: the writes below belong to the customer's laboratory.
+  const decided = await orgDb(linkedCustomer.labOrganizationId).transaction(
+    async (tx) => {
+      // The check above ran outside this transaction: repeat it on the locked rows
+      // (quote first, as every quote decision does), so a concurrent decision
+      // cannot be overwritten.
+      const lockedQuote = await getQuoteForAction(
+        input.serviceOrderId,
+        input.quoteId,
+        linkedCustomer.labOrganizationId,
+        tx,
+        { lock: true },
+      );
+      const lockedOrderStatus = await lockServiceOrderStatus(
+        tx,
+        input.serviceOrderId,
+        linkedCustomer.labOrganizationId,
+      );
+      if (
+        !lockedQuote ||
+        !lockedOrderStatus ||
+        !SERVICE_ORDER_QUOTE_MACHINE.canTransition(
+          lockedQuote.status,
+          "approve",
+        )
+      ) {
+        return false;
+      }
+      await tx
+        .update(serviceOrderQuote)
+        .set({
+          status: "approved",
+          approvedAt: new Date(),
+          approvedByPortalUserId: input.actorUserId,
+        })
+        .where(
+          and(
+            eq(serviceOrderQuote.id, input.quoteId),
+            eq(
+              serviceOrderQuote.organizationId,
+              linkedCustomer.labOrganizationId,
+            ),
           ),
-        ),
+        );
+      // REQ-QPUB-003 [HIGH RISK]: a decided quote's public links stop working.
+      await revokeActiveTokensForQuote(tx, {
+        organizationId: order.organizationId,
+        quoteId: input.quoteId,
+        reason: "decided",
+      });
+      await tx
+        .update(serviceOrder)
+        .set({
+          ...orderStatusOnDecision(lockedOrderStatus, "approve_quote"),
+          approvedAt: new Date(),
+          totalApprovedCents: quote.totalCents,
+        })
+        .where(
+          and(
+            eq(serviceOrder.id, input.serviceOrderId),
+            eq(serviceOrder.organizationId, linkedCustomer.labOrganizationId),
+          ),
+        );
+      await recordServiceOrderEvent(
+        {
+          organizationId: order.organizationId,
+          unitId: order.unitId,
+          serviceOrderId: input.serviceOrderId,
+          actorType: "portal_user",
+          actorId: input.actorUserId,
+          eventType: "service_order.quote_approved_by_client",
+          metadata: { quoteId: input.quoteId },
+          ipAddress: input.metadata.ipAddress ?? null,
+          userAgent: input.metadata.userAgent ?? null,
+        },
+        tx,
       );
-    // REQ-QPUB-003 [HIGH RISK]: a decided quote's public links stop working.
-    await revokeActiveTokensForQuote(tx, {
-      organizationId: order.organizationId,
-      quoteId: input.quoteId,
-      reason: "decided",
-    });
-    await tx
-      .update(serviceOrder)
-      .set({
-        ...(isServiceOrderDecidingQuoteStatus(order.status)
-          ? { status: "quote_approved" }
-          : {}),
-        approvedAt: new Date(),
+      // REQ-SOEMAIL-071/072: enqueue inside the transaction for atomicity
+      // linkedCustomer is already tenant-scoped by the portal guard (REQ-075)
+      const portalApprovedPayload = {
+        serviceOrderId: input.serviceOrderId,
+        quoteId: input.quoteId,
+        serviceOrderNumber: order.serviceOrderNumber,
+        organizationId: order.organizationId,
+        publicId: order.publicId,
+        customerId: order.customerId,
+        clientContactSnapshot: order.clientContactSnapshot,
+        customerName: linkedCustomer.name,
+        customerEmail: linkedCustomer.email,
         totalApprovedCents: quote.totalCents,
-      })
-      .where(
-        and(
-          eq(serviceOrder.id, input.serviceOrderId),
-          eq(serviceOrder.organizationId, linkedCustomer.labOrganizationId),
-        ),
+      } satisfies QuoteApprovedOutboxPayload;
+      await enqueueServiceOrderEmail(
+        {
+          organizationId: order.organizationId,
+          unitId: order.unitId,
+          serviceOrderId: input.serviceOrderId,
+          eventKey: `quote_approved:${input.quoteId}`,
+          targetStatus: "quote_approved",
+          payload: portalApprovedPayload,
+        },
+        tx,
       );
-    await recordServiceOrderEvent(
-      {
-        organizationId: order.organizationId,
-        unitId: order.unitId,
-        serviceOrderId: input.serviceOrderId,
-        actorType: "portal_user",
-        actorId: input.actorUserId,
-        eventType: "service_order.quote_approved_by_client",
-        metadata: { quoteId: input.quoteId },
-        ipAddress: input.metadata.ipAddress ?? null,
-        userAgent: input.metadata.userAgent ?? null,
-      },
-      tx,
-    );
-    // REQ-SOEMAIL-071/072: enqueue inside the transaction for atomicity
-    // linkedCustomer is already tenant-scoped by the portal guard (REQ-075)
-    const portalApprovedPayload = {
-      serviceOrderId: input.serviceOrderId,
-      quoteId: input.quoteId,
-      serviceOrderNumber: order.serviceOrderNumber,
-      organizationId: order.organizationId,
-      publicId: order.publicId,
-      customerId: order.customerId,
-      clientContactSnapshot: order.clientContactSnapshot,
-      customerName: linkedCustomer.name,
-      customerEmail: linkedCustomer.email,
-      totalApprovedCents: quote.totalCents,
-    } satisfies QuoteApprovedOutboxPayload;
-    await enqueueServiceOrderEmail(
-      {
-        organizationId: order.organizationId,
-        unitId: order.unitId,
-        serviceOrderId: input.serviceOrderId,
-        eventKey: `quote_approved:${input.quoteId}`,
-        targetStatus: "quote_approved",
-        payload: portalApprovedPayload,
-      },
-      tx,
-    );
-  });
+      return true;
+    },
+  );
+  if (!decided) return { status: "conflict" as const };
 
   return { status: "ok" as const };
 }
@@ -929,88 +976,111 @@ export async function rejectServiceOrderQuoteByPortalUser(input: {
     return { status: "conflict" as const };
   }
 
-  await db.transaction(async (tx) => {
-    // Row-level security: the writes below belong to the customer's laboratory.
-    await setTransactionOrganization(tx, linkedCustomer.labOrganizationId);
-    await tx
-      .update(serviceOrderQuote)
-      .set({
-        status: "rejected",
-        rejectedAt: new Date(),
-        rejectionReason: input.values.rejectionReason ?? null,
-      })
-      .where(
-        and(
-          eq(serviceOrderQuote.id, input.quoteId),
-          eq(
-            serviceOrderQuote.organizationId,
-            linkedCustomer.labOrganizationId,
+  // Row-level security: the writes below belong to the customer's laboratory.
+  const decided = await orgDb(linkedCustomer.labOrganizationId).transaction(
+    async (tx) => {
+      // The check above ran outside this transaction: repeat it on the locked rows
+      // (quote first, as every quote decision does), so a concurrent decision
+      // cannot be overwritten.
+      const lockedQuote = await getQuoteForAction(
+        input.serviceOrderId,
+        input.quoteId,
+        linkedCustomer.labOrganizationId,
+        tx,
+        { lock: true },
+      );
+      const lockedOrderStatus = await lockServiceOrderStatus(
+        tx,
+        input.serviceOrderId,
+        linkedCustomer.labOrganizationId,
+      );
+      if (
+        !lockedQuote ||
+        !lockedOrderStatus ||
+        !SERVICE_ORDER_QUOTE_MACHINE.canTransition(lockedQuote.status, "reject")
+      ) {
+        return false;
+      }
+      await tx
+        .update(serviceOrderQuote)
+        .set({
+          status: "rejected",
+          rejectedAt: new Date(),
+          rejectionReason: input.values.rejectionReason ?? null,
+        })
+        .where(
+          and(
+            eq(serviceOrderQuote.id, input.quoteId),
+            eq(
+              serviceOrderQuote.organizationId,
+              linkedCustomer.labOrganizationId,
+            ),
           ),
-        ),
-      );
-    // REQ-QPUB-003 [HIGH RISK]: a decided quote's public links stop working.
-    await revokeActiveTokensForQuote(tx, {
-      organizationId: order.organizationId,
-      quoteId: input.quoteId,
-      reason: "decided",
-    });
-    await tx
-      .update(serviceOrder)
-      .set({
-        ...(isServiceOrderDecidingQuoteStatus(order.status)
-          ? { status: "quote_rejected" }
-          : {}),
-        rejectedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(serviceOrder.id, input.serviceOrderId),
-          eq(serviceOrder.organizationId, linkedCustomer.labOrganizationId),
-        ),
-      );
-    await recordServiceOrderEvent(
-      {
+        );
+      // REQ-QPUB-003 [HIGH RISK]: a decided quote's public links stop working.
+      await revokeActiveTokensForQuote(tx, {
         organizationId: order.organizationId,
-        unitId: order.unitId,
-        serviceOrderId: input.serviceOrderId,
-        actorType: "portal_user",
-        actorId: input.actorUserId,
-        eventType: "service_order.quote_rejected_by_client",
-        metadata: {
-          quoteId: input.quoteId,
-          reason: input.values.rejectionReason,
+        quoteId: input.quoteId,
+        reason: "decided",
+      });
+      await tx
+        .update(serviceOrder)
+        .set({
+          ...orderStatusOnDecision(lockedOrderStatus, "reject_quote"),
+          rejectedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(serviceOrder.id, input.serviceOrderId),
+            eq(serviceOrder.organizationId, linkedCustomer.labOrganizationId),
+          ),
+        );
+      await recordServiceOrderEvent(
+        {
+          organizationId: order.organizationId,
+          unitId: order.unitId,
+          serviceOrderId: input.serviceOrderId,
+          actorType: "portal_user",
+          actorId: input.actorUserId,
+          eventType: "service_order.quote_rejected_by_client",
+          metadata: {
+            quoteId: input.quoteId,
+            reason: input.values.rejectionReason,
+          },
+          ipAddress: input.metadata.ipAddress ?? null,
+          userAgent: input.metadata.userAgent ?? null,
         },
-        ipAddress: input.metadata.ipAddress ?? null,
-        userAgent: input.metadata.userAgent ?? null,
-      },
-      tx,
-    );
-    // REQ-SOEMAIL-071/072: enqueue inside the transaction for atomicity
-    // linkedCustomer is already tenant-scoped by the portal guard (REQ-075)
-    const portalRejectedPayload = {
-      serviceOrderId: input.serviceOrderId,
-      quoteId: input.quoteId,
-      serviceOrderNumber: order.serviceOrderNumber,
-      organizationId: order.organizationId,
-      publicId: order.publicId,
-      customerId: order.customerId,
-      clientContactSnapshot: order.clientContactSnapshot,
-      customerName: linkedCustomer.name,
-      customerEmail: linkedCustomer.email,
-      rejectionReason: input.values.rejectionReason ?? null,
-    } satisfies QuoteRejectedOutboxPayload;
-    await enqueueServiceOrderEmail(
-      {
-        organizationId: order.organizationId,
-        unitId: order.unitId,
+        tx,
+      );
+      // REQ-SOEMAIL-071/072: enqueue inside the transaction for atomicity
+      // linkedCustomer is already tenant-scoped by the portal guard (REQ-075)
+      const portalRejectedPayload = {
         serviceOrderId: input.serviceOrderId,
-        eventKey: `quote_rejected:${input.quoteId}`,
-        targetStatus: "quote_rejected",
-        payload: portalRejectedPayload,
-      },
-      tx,
-    );
-  });
+        quoteId: input.quoteId,
+        serviceOrderNumber: order.serviceOrderNumber,
+        organizationId: order.organizationId,
+        publicId: order.publicId,
+        customerId: order.customerId,
+        clientContactSnapshot: order.clientContactSnapshot,
+        customerName: linkedCustomer.name,
+        customerEmail: linkedCustomer.email,
+        rejectionReason: input.values.rejectionReason ?? null,
+      } satisfies QuoteRejectedOutboxPayload;
+      await enqueueServiceOrderEmail(
+        {
+          organizationId: order.organizationId,
+          unitId: order.unitId,
+          serviceOrderId: input.serviceOrderId,
+          eventKey: `quote_rejected:${input.quoteId}`,
+          targetStatus: "quote_rejected",
+          payload: portalRejectedPayload,
+        },
+        tx,
+      );
+      return true;
+    },
+  );
+  if (!decided) return { status: "conflict" as const };
 
   return { status: "ok" as const };
 }

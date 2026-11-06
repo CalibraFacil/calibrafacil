@@ -60,6 +60,7 @@ import { seedExtraMember } from "../../test/integration/tenant-refs";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
 import { getQuoteDocumentDownloadUrl } from "../modules/service-orders/service-order.documents";
 import { serviceOrdersRouter } from "./service-orders";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // The document and quote-PDF jobs read what the request wrote and render PDFs;
 // they are not under test here (the enqueue itself is asserted).
@@ -856,18 +857,20 @@ describe("service orders (lab routes) — success paths and cross-laboratory neg
     }
 
     // The quote PDF link.
-    const [quote] = await db
-      .insert(serviceOrderQuote)
-      .values({
-        organizationId: a.orgId,
-        serviceOrderId: opened.id,
-        quoteNumber: `${opened.number}/ORC`,
-        version: 1,
-        status: "sent",
-        pdfR2Key: "docs/quote.pdf",
-        createdByUserId: a.userId,
-      })
-      .returning({ id: serviceOrderQuote.id });
+    const [quote] = await withStatusRepair((tx) =>
+      tx
+        .insert(serviceOrderQuote)
+        .values({
+          organizationId: a.orgId,
+          serviceOrderId: opened.id,
+          quoteNumber: `${opened.number}/ORC`,
+          version: 1,
+          status: "sent",
+          pdfR2Key: "docs/quote.pdf",
+          createdByUserId: a.userId,
+        })
+        .returning({ id: serviceOrderQuote.id }),
+    );
     const quoteId = quote?.id ?? 0;
     const quotePdf = await call({
       path: `/${opened.id}/quotes/${quoteId}.pdf`,
@@ -879,18 +882,20 @@ describe("service orders (lab routes) — success paths and cross-laboratory neg
       (await call({ path: `/${opened.id}/quotes/${quoteId + 1000}.pdf` }))
         .status,
     ).toBe(404);
-    const [quoteB] = await db
-      .insert(serviceOrderQuote)
-      .values({
-        organizationId: b.orgId,
-        serviceOrderId: orderB,
-        quoteNumber: "OS-B-1/ORC",
-        version: 1,
-        status: "sent",
-        pdfR2Key: "docs/quote-b.pdf",
-        createdByUserId: b.userId,
-      })
-      .returning({ id: serviceOrderQuote.id });
+    const [quoteB] = await withStatusRepair((tx) =>
+      tx
+        .insert(serviceOrderQuote)
+        .values({
+          organizationId: b.orgId,
+          serviceOrderId: orderB,
+          quoteNumber: "OS-B-1/ORC",
+          version: 1,
+          status: "sent",
+          pdfR2Key: "docs/quote-b.pdf",
+          createdByUserId: b.userId,
+        })
+        .returning({ id: serviceOrderQuote.id }),
+    );
     // Laboratory B's quote, by B's order id or through A's order id: 404.
     for (const path of [
       `/${orderB}/quotes/${quoteB?.id ?? 0}.pdf`,
@@ -985,18 +990,20 @@ describe("service orders (lab routes) — success paths and cross-laboratory neg
       .returning({ id: serviceOrderEvaluation.id });
     const [draftB, sentB] = await Promise.all(
       (["draft", "sent"] as const).map(async (status, index) => {
-        const [row] = await db
-          .insert(serviceOrderQuote)
-          .values({
-            organizationId: b.orgId,
-            serviceOrderId: orderB,
-            quoteNumber: `OS-B-1/ORC${index}`,
-            version: index + 1,
-            status,
-            totalCents: 10_000,
-            createdByUserId: b.userId,
-          })
-          .returning({ id: serviceOrderQuote.id });
+        const [row] = await withStatusRepair((tx) =>
+          tx
+            .insert(serviceOrderQuote)
+            .values({
+              organizationId: b.orgId,
+              serviceOrderId: orderB,
+              quoteNumber: `OS-B-1/ORC${index}`,
+              version: index + 1,
+              status,
+              totalCents: 10_000,
+              createdByUserId: b.userId,
+            })
+            .returning({ id: serviceOrderQuote.id }),
+        );
         return row;
       }),
     );

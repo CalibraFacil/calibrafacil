@@ -59,6 +59,7 @@ import { and, eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // ---------------------------------------------------------------------------
 // No notifications or background-jobs imports in methods.ts — no mocks needed.
@@ -122,25 +123,27 @@ async function seedMethod(params: {
   formulas?: MethodFormula[];
 }): Promise<number> {
   const name = `Método Teste ${params.nameSuffix ?? params.orgId}`;
-  const [row] = await db
-    .insert(calibrationMethod)
-    .values({
-      organizationId: params.orgId,
-      assetTypeId: params.assetTypeId ?? null,
-      name,
-      description: "",
-      version: params.version ?? 1,
-      status: params.status,
-      dataFields: params.dataFields ?? MINIMAL_DATA_FIELDS,
-      formulas: params.formulas ?? [],
-      validations: [],
-      accreditedScope: false,
-      createdBy: params.createdBy,
-      technicalReviewedBy: params.technicalReviewedBy ?? null,
-      // compiledMethod / methodFingerprint intentionally null for DRAFT/PENDING seeds;
-      // the handler sets them on transitions that compile.
-    })
-    .returning({ id: calibrationMethod.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(calibrationMethod)
+      .values({
+        organizationId: params.orgId,
+        assetTypeId: params.assetTypeId ?? null,
+        name,
+        description: "",
+        version: params.version ?? 1,
+        status: params.status,
+        dataFields: params.dataFields ?? MINIMAL_DATA_FIELDS,
+        formulas: params.formulas ?? [],
+        validations: [],
+        accreditedScope: false,
+        createdBy: params.createdBy,
+        technicalReviewedBy: params.technicalReviewedBy ?? null,
+        // compiledMethod / methodFingerprint intentionally null for DRAFT/PENDING seeds;
+        // the handler sets them on transitions that compile.
+      })
+      .returning({ id: calibrationMethod.id }),
+  );
   if (!row) throw new Error("seedMethod: insert failed");
   return row.id;
 }

@@ -1,5 +1,6 @@
 import { Client } from "pg";
 import { normalizeGenericFinancialErpConfig } from "@calibra-facil/shared";
+import { INTEGRATION_SYNC_RUN_MACHINE } from "@calibra-facil/schemas/machines";
 import type {
   GenericFinancialErpConnectionConfig,
   IntegrationSyncStatus,
@@ -36,10 +37,16 @@ export async function insertEvent(
   );
 }
 
+/**
+ * Moves a run by a command of INTEGRATION_SYNC_RUN_MACHINE, as a compare-and-set
+ * on the states the command leaves: a redelivered message never revives a run
+ * that already finished. Returns whether the run moved.
+ */
 export async function updateRun(
   client: Client,
   params: {
     runId: string;
+    command: "start" | "finish" | "fail";
     status: IntegrationSyncStatus;
     processedCount?: number;
     successCount?: number;
@@ -50,7 +57,21 @@ export async function updateRun(
     finishedAt?: Date;
   },
 ) {
-  await client.query(
+  const from = INTEGRATION_SYNC_RUN_MACHINE.allowedFrom(params.command);
+  if (
+    !from.some((state) =>
+      INTEGRATION_SYNC_RUN_MACHINE.canTransition(
+        state,
+        params.command,
+        params.status,
+      ),
+    )
+  ) {
+    throw new Error(
+      `integration sync run: ${params.command} never lands in ${params.status}`,
+    );
+  }
+  const result = await client.query(
     `
         UPDATE integration_sync_run
         SET
@@ -63,7 +84,7 @@ export async function updateRun(
           started_at = COALESCE($8, started_at),
           finished_at = COALESCE($9, finished_at),
           updated_at = NOW()
-        WHERE id = $1
+        WHERE id = $1 AND status = ANY($10::text[])
         `,
     [
       params.runId,
@@ -75,8 +96,10 @@ export async function updateRun(
       params.summary ? JSON.stringify(params.summary) : null,
       params.startedAt ?? null,
       params.finishedAt ?? null,
+      from,
     ],
   );
+  return (result.rowCount ?? 0) > 0;
 }
 
 export async function updateIntegrationConfig(

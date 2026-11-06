@@ -56,6 +56,7 @@ import { jobsRouter } from "../../routes/jobs";
 import { syncRouter } from "../../routes/sync";
 import { publicApiV2Router } from "../../routes/public-api-v2";
 import { approveJob } from "./approve-job";
+import { withStatusRepair } from "../../../test/integration/state-fixtures";
 
 const mocks = vi.hoisted(() => {
   const scope: {
@@ -172,14 +173,16 @@ async function seedFixture() {
   const org = await seedOrg({ orgId: ORG, userId: MAKER, role: "admin" });
   await addMember(CHECKER, "admin");
 
-  await db.insert(organization).values({
-    id: "client-a",
-    name: "Client A",
-    slug: "client-a",
-    type: "CLIENT",
-    status: "ACTIVE",
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: "client-a",
+      name: "Client A",
+      slug: "client-a",
+      type: "CLIENT",
+      status: "ACTIVE",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    }),
+  );
   const [cust] = await db
     .insert(customer)
     .values({
@@ -193,18 +196,20 @@ async function seedFixture() {
     .values({ name: "AT", slug: "at-a", definition: [] })
     .returning({ id: assetType.id });
   if (!cust || !type) throw new Error("seed failed");
-  const [ast] = await db
-    .insert(asset)
-    .values({
-      unitId: org.unitId,
-      customerId: cust.id,
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${cust.id})`,
-      assetTypeId: type.id,
-      name: "Instrument",
-      serialNumber: "SN-1",
-      tag: "TAG-1",
-    })
-    .returning({ id: asset.id });
+  const [ast] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: org.unitId,
+        customerId: cust.id,
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${cust.id})`,
+        assetTypeId: type.id,
+        name: "Instrument",
+        serialNumber: "SN-1",
+        tag: "TAG-1",
+      })
+      .returning({ id: asset.id }),
+  );
   const [svc] = await db
     .insert(service)
     .values({
@@ -478,13 +483,15 @@ describe("approval policy — one policy across every entry point", () => {
     "REQ-APPROVAL-002: an approver outside the signatory roster is refused",
     async (entry) => {
       // The org keeps a roster, and only MAKER is on it.
-      await db.insert(authorizedSignatory).values({
-        organizationId: ORG,
-        userId: MAKER,
-        assetTypeId: null,
-        status: "ACTIVE",
-        authorizedBy: MAKER,
-      });
+      await withStatusRepair((tx) =>
+        tx.insert(authorizedSignatory).values({
+          organizationId: ORG,
+          userId: MAKER,
+          assetTypeId: null,
+          status: "ACTIVE",
+          authorizedBy: MAKER,
+        }),
+      );
       const jobId = await seedReviewJob(fixture);
 
       await expect(entry.approve(jobId, CHECKER)).resolves.toEqual({

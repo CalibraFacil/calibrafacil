@@ -9,6 +9,7 @@ import { eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg, seedStandard } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration test for the standardsRouter.
 // Only the better-auth session is mocked (see test/integration/setup.ts).
@@ -304,17 +305,19 @@ describe("standardsRouter — real DB + real middleware", () => {
 
     // Seed a second unit for the same org
     const { organizationUnit } = await import("@calibra-facil/db/schema");
-    const [unitB] = await db
-      .insert(organizationUnit)
-      .values({
-        organizationId: orgA.orgId,
-        name: "Unidade B",
-        slug: "unidade-b",
-        status: "ACTIVE",
-        isDefault: false,
-        createdBy: orgA.userId,
-      })
-      .returning({ id: organizationUnit.id });
+    const [unitB] = await withStatusRepair((tx) =>
+      tx
+        .insert(organizationUnit)
+        .values({
+          organizationId: orgA.orgId,
+          name: "Unidade B",
+          slug: "unidade-b",
+          status: "ACTIVE",
+          isDefault: false,
+          createdBy: orgA.userId,
+        })
+        .returning({ id: organizationUnit.id }),
+    );
 
     if (!unitB) throw new Error("failed to create unit B");
 

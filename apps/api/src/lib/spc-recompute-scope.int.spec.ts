@@ -26,6 +26,7 @@ import { processSpcRecompute } from "@calibra-facil/jobs-core/spc-recompute";
 import { truncateAll } from "../../test/integration/db";
 import { openAppRoleDb } from "../../test/integration/rls";
 import { seedOrg, seedStandard } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 /** Stable in-control series (same fixture as the SPC engine spec). */
 const STABLE = [
@@ -41,18 +42,20 @@ async function seedLabWithChart(tag: "a" | "b", values: number[]) {
     unitId: org.unitId,
     createdBy: org.userId,
   });
-  const [chart] = await db
-    .insert(controlChart)
-    .values({
-      organizationId: org.orgId,
-      standardId,
-      parameter: "100 g",
-      chartType: "i_mr",
-      params: { baselineWindow: STABLE.length },
-      createdBy: org.userId,
-      updatedAt: STALE_UPDATED_AT,
-    })
-    .returning({ id: controlChart.id });
+  const [chart] = await withStatusRepair((tx) =>
+    tx
+      .insert(controlChart)
+      .values({
+        organizationId: org.orgId,
+        standardId,
+        parameter: "100 g",
+        chartType: "i_mr",
+        params: { baselineWindow: STABLE.length },
+        createdBy: org.userId,
+        updatedAt: STALE_UPDATED_AT,
+      })
+      .returning({ id: controlChart.id }),
+  );
   if (!chart) throw new Error("control chart not seeded");
   await db.insert(checkStandardReading).values(
     values.map((value, index) => ({

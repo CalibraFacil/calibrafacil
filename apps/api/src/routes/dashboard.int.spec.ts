@@ -51,6 +51,7 @@ import { sql } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 const JSON_HEADERS = { "content-type": "application/json" };
 const NOW = new Date("2026-01-01T00:00:00.000Z");
@@ -62,14 +63,16 @@ const NOW = new Date("2026-01-01T00:00:00.000Z");
 
 /** Insert a minimal CLIENT org (required for customer.authOrganizationId FK). */
 async function seedClientOrg(clientOrgId: string): Promise<void> {
-  await db.insert(organization).values({
-    id: clientOrgId,
-    name: `Client ${clientOrgId}`,
-    slug: clientOrgId,
-    createdAt: NOW,
-    type: "CLIENT",
-    status: "ACTIVE",
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: clientOrgId,
+      name: `Client ${clientOrgId}`,
+      slug: clientOrgId,
+      createdAt: NOW,
+      type: "CLIENT",
+      status: "ACTIVE",
+    }),
+  );
 }
 
 /** Seed a customer owned by a LAB org. Returns customer.id. */
@@ -107,19 +110,21 @@ async function seedAsset(params: {
   assetTypeId: number;
   tag: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(asset)
-    .values({
-      unitId: params.unitId,
-      customerId: params.customerId,
-      // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
-      assetTypeId: params.assetTypeId,
-      name: "Test Instrument",
-      serialNumber: `SN-${params.tag}`,
-      tag: params.tag,
-    })
-    .returning({ id: asset.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: params.unitId,
+        customerId: params.customerId,
+        // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
+        assetTypeId: params.assetTypeId,
+        name: "Test Instrument",
+        serialNumber: `SN-${params.tag}`,
+        tag: params.tag,
+      })
+      .returning({ id: asset.id }),
+  );
   if (!row) throw new Error("seedAsset: insert failed");
   return row.id;
 }
@@ -199,19 +204,21 @@ async function seedNC(params: {
   detectedByUserId: string;
   suffix: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(nonConformance)
-    .values({
-      ncNumber: `NC-2026-${params.suffix}`,
-      organizationId: params.orgId,
-      type: "work",
-      description: "Medicao fora de tolerancia",
-      detectedBy: params.detectedByUserId,
-      detectedAt: NOW,
-      status: "open",
-      createdBy: params.detectedByUserId,
-    })
-    .returning({ id: nonConformance.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(nonConformance)
+      .values({
+        ncNumber: `NC-2026-${params.suffix}`,
+        organizationId: params.orgId,
+        type: "work",
+        description: "Medicao fora de tolerancia",
+        detectedBy: params.detectedByUserId,
+        detectedAt: NOW,
+        status: "open",
+        createdBy: params.detectedByUserId,
+      })
+      .returning({ id: nonConformance.id }),
+  );
   if (!row) throw new Error("seedNC: insert failed");
   return row.id;
 }
@@ -223,17 +230,19 @@ async function seedUnit(params: {
   slug: string;
   createdBy: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(organizationUnit)
-    .values({
-      organizationId: params.organizationId,
-      name: params.name,
-      slug: params.slug,
-      status: "ACTIVE",
-      isDefault: false,
-      createdBy: params.createdBy,
-    })
-    .returning({ id: organizationUnit.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(organizationUnit)
+      .values({
+        organizationId: params.organizationId,
+        name: params.name,
+        slug: params.slug,
+        status: "ACTIVE",
+        isDefault: false,
+        createdBy: params.createdBy,
+      })
+      .returning({ id: organizationUnit.id }),
+  );
   if (!row) throw new Error("seedUnit: insert failed");
   return row.id;
 }

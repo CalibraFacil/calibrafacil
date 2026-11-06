@@ -1,4 +1,5 @@
 import { type ColumnDef } from '@tanstack/react-table'
+import { METHOD_MACHINE } from '@calibra-facil/schemas/machines'
 import { Link } from '@tanstack/react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -138,7 +139,7 @@ export const methodsColumns: ColumnDef<Method>[] = [
                 </Link>
               )}
             />
-            {row.original.status === 'DRAFT' && (
+            {METHOD_MACHINE.canTransition(row.original.status, 'edit') && (
               <DropdownMenuItem
                 render={(props) => (
                   <Link
@@ -153,7 +154,7 @@ export const methodsColumns: ColumnDef<Method>[] = [
                 )}
               />
             )}
-            {row.original.status === 'PUBLISHED' && (
+            {METHOD_MACHINE.canTransition(row.original.status, 'archive') && (
               <>
                 <DropdownMenuItem
                   onClick={() => meta?.onNewVersion?.(row.original.id)}

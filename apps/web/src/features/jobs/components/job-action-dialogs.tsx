@@ -31,7 +31,6 @@ export function ApproveJobDialog({
   envJustification,
   setEnvJustification,
   scopeViolationBlocked,
-  setScopeViolationBlocked,
   scopeOverrideJustification,
   setScopeOverrideJustification,
   approveMutation,
@@ -42,7 +41,6 @@ export function ApproveJobDialog({
   envJustification: string
   setEnvJustification: StateSetter<string>
   scopeViolationBlocked: boolean
-  setScopeViolationBlocked: StateSetter<boolean>
   scopeOverrideJustification: string
   setScopeOverrideJustification: StateSetter<string>
   approveMutation: MutationHandle
@@ -50,13 +48,9 @@ export function ApproveJobDialog({
   return (
     <Dialog
       open={approveDialogOpen}
-      onOpenChange={(open) => {
-        setApproveDialogOpen(open)
-        if (!open) {
-          setScopeViolationBlocked(false)
-          setScopeOverrideJustification('')
-        }
-      }}
+      // Closing (the X, Esc, or "Cancelar") forgets the dialog's fields and any
+      // scope block: the next opening starts fresh (job-dialog-state.ts).
+      onOpenChange={setApproveDialogOpen}
     >
       <DialogContent>
         <DialogHeader>

@@ -3,6 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { and, desc, eq, gt, ne, sql } from "drizzle-orm";
+import { INTEGRATION_MACHINE } from "@calibra-facil/schemas/machines";
 import { enqueueBackgroundJob } from "../lib/background-jobs";
 import { orgDb } from "../lib/org-db";
 import { orgTransactionWithExecutor } from "../lib/org-transaction";
@@ -1373,10 +1374,17 @@ export const integrationsRouter = new Hono<{
           await o
             .update(organizationIntegration)
             .set({
-              status:
-                record.integration.status === "ACTION_REQUIRED"
-                  ? "ACTIVE"
-                  : record.integration.status,
+              // `recover` (INTEGRATION_MACHINE): an integration that needed
+              // the lab is active again; any other status is kept.
+              status: INTEGRATION_MACHINE.canTransition(
+                record.integration.status,
+                "recover",
+              )
+                ? INTEGRATION_MACHINE.requireTargetOf(
+                    record.integration.status,
+                    "recover",
+                  )
+                : record.integration.status,
               lastValidationError: null,
               updatedBy: session.user.id,
               updatedAt: new Date(),
@@ -2185,10 +2193,17 @@ export const integrationsRouter = new Hono<{
           await o
             .update(organizationIntegration)
             .set({
-              status:
-                record.integration.status === "ACTION_REQUIRED"
-                  ? "ACTIVE"
-                  : record.integration.status,
+              // `recover` (INTEGRATION_MACHINE): an integration that needed
+              // the lab is active again; any other status is kept.
+              status: INTEGRATION_MACHINE.canTransition(
+                record.integration.status,
+                "recover",
+              )
+                ? INTEGRATION_MACHINE.requireTargetOf(
+                    record.integration.status,
+                    "recover",
+                  )
+                : record.integration.status,
               lastValidatedAt: new Date(),
               lastValidationError: null,
               updatedBy: session.user.id,
@@ -2522,7 +2537,15 @@ export const integrationsRouter = new Hono<{
         return c.json({ error: "Integração não encontrada" }, 404);
       }
 
-      if (input.enabled && record.integration.status === "ACTION_REQUIRED") {
+      // `enable` leaves DISABLED only; ACTION_REQUIRED must reconnect first.
+      if (
+        input.enabled &&
+        !INTEGRATION_MACHINE.canTransition(
+          record.integration.status,
+          "enable",
+        ) &&
+        record.integration.status !== "ACTIVE"
+      ) {
         return c.json(
           { error: "Reconecte a integração antes de ativá-la" },
           409,
@@ -2538,7 +2561,14 @@ export const integrationsRouter = new Hono<{
             updatedBy: session.user.id,
             updatedAt: new Date(),
           })
-          .where(eq(organizationIntegration.id, id));
+          // Compare-and-set on the status the toggle was checked against: a
+          // concurrent refresh failure (ACTION_REQUIRED) is not overwritten.
+          .where(
+            and(
+              eq(organizationIntegration.id, id),
+              eq(organizationIntegration.status, record.integration.status),
+            ),
+          );
 
         await writeIntegrationEvent(
           {

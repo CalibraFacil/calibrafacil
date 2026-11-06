@@ -37,7 +37,7 @@
  *
  * REQ-072 atomicity: the D commands pass tx to enqueueServiceOrderEmail.
  * Assertion: capturedTxExecutors[0] is the transaction handle (mockOrgTx for the
- * lab decisions, mockTxProxy for the portal ones), not the module db.
+ * lab and the portal decisions alike), not the module db.
  *
  * Deleting or neutralizing the enqueue call in any command turns at least
  * one test here RED.
@@ -109,7 +109,11 @@ vi.mock("@calibra-facil/db", () => {
     }
     b.select = () => b;
     b.orderBy = () => b;
-    b.limit = async () => (dbQueue.length ? dbQueue.shift() : []);
+    // `.limit(1).for("update")` (a locked read) resolves the same row.
+    b.limit = () => {
+      const p = Promise.resolve(dbQueue.length ? dbQueue.shift() : []);
+      return Object.assign(p, { for: () => p });
+    };
     b.update = () => b;
     b.set = () => b;
     b.insert = () => b;
@@ -177,6 +181,8 @@ vi.mock("./service-order.queries", () => ({
     freightCents: 0,
     discountCents: 0,
   }),
+  // The order waits on the decision: approving/rejecting advances it.
+  lockServiceOrderStatus: vi.fn().mockResolvedValue("awaiting_quote_approval"),
 }));
 
 vi.mock("./service-order.read-model", () => ({
@@ -230,16 +236,11 @@ vi.mock("../../lib/units", () => ({
   buildUnitScopeCondition: vi.fn().mockReturnValue(undefined),
 }));
 
-vi.mock("@calibra-facil/shared", () => ({
-  canApproveServiceOrderQuote: vi.fn().mockReturnValue(true),
-  canEditServiceOrderQuote: vi.fn().mockReturnValue(false),
-  isServiceOrderFinalStatus: vi.fn().mockReturnValue(false),
-  // These specs cover the ordinary path: the order IS awaiting a decision, so
-  // approving/rejecting still advances its status. (The mid-job and late-
-  // decision cases are covered in packages/shared and the integration tier.)
-  isServiceOrderDecidingQuoteStatus: vi.fn().mockReturnValue(true),
-  isServiceOrderWorkInProgressStatus: vi.fn().mockReturnValue(false),
-}));
+// The lifecycle predicates are the real machines (@calibra-facil/schemas): the
+// fixture quote is "sent" and the order waits on the decision
+// (lockServiceOrderStatus above), the ordinary path these specs cover. The
+// mid-job and late-decision cases are covered beside the machine and in the
+// integration tier.
 
 vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => ({ and: args }),
@@ -551,7 +552,7 @@ describe("approveServiceOrderQuoteByPortalUser — email wiring (outbox)", () =>
     });
 
     expect(capturedTxExecutors).toHaveLength(1);
-    expect(capturedTxExecutors[0]).toBe(mockTxProxy);
+    expect(capturedTxExecutors[0]).toBe(mockOrgTx);
   });
 
   it("does NOT dispatch using old helper or sendServiceOrderEmailOnce", async () => {
@@ -682,7 +683,7 @@ describe("rejectServiceOrderQuoteByPortalUser — email wiring (outbox)", () => 
     });
 
     expect(capturedTxExecutors).toHaveLength(1);
-    expect(capturedTxExecutors[0]).toBe(mockTxProxy);
+    expect(capturedTxExecutors[0]).toBe(mockOrgTx);
   });
 
   it("does NOT call enqueueServiceOrderEmail with approved eventKey on portal rejection", async () => {

@@ -32,6 +32,7 @@ import {
   lt,
   sql,
 } from "drizzle-orm";
+import { CALIBRATION_REQUEST_MACHINE } from "@calibra-facil/schemas/machines";
 import {
   withLabPermission,
   type AuthVariables,
@@ -413,7 +414,9 @@ export const calibrationRequestsRouter = new Hono<{
           };
         }
 
-        if (!["PENDING", "UNDER_REVIEW"].includes(existing.status)) {
+        if (
+          !CALIBRATION_REQUEST_MACHINE.canTransition(existing.status, "review")
+        ) {
           return {
             error: {
               status: 400 as const,
@@ -427,7 +430,10 @@ export const calibrationRequestsRouter = new Hono<{
         const [updated] = await tx
           .update(calibrationRequest)
           .set({
-            status: "UNDER_REVIEW",
+            status: CALIBRATION_REQUEST_MACHINE.requireTargetOf(
+              existing.status,
+              "review",
+            ),
             internalNotes: input.internalNotes || null,
             reviewedBy:
               existing.status === "UNDER_REVIEW"
@@ -538,7 +544,9 @@ export const calibrationRequestsRouter = new Hono<{
           };
         }
 
-        if (!["PENDING", "UNDER_REVIEW"].includes(existing.status)) {
+        if (
+          !CALIBRATION_REQUEST_MACHINE.canTransition(existing.status, "approve")
+        ) {
           return {
             error: {
               status: 400 as const,
@@ -552,7 +560,10 @@ export const calibrationRequestsRouter = new Hono<{
         const [updated] = await tx
           .update(calibrationRequest)
           .set({
-            status: "APPROVED",
+            status: CALIBRATION_REQUEST_MACHINE.requireTargetOf(
+              existing.status,
+              "approve",
+            ),
             internalNotes: input.internalNotes || null,
             reviewedBy: existing.reviewedBy ?? session.user.id,
             reviewedAt: existing.reviewedAt ?? now,
@@ -674,13 +685,18 @@ export const calibrationRequestsRouter = new Hono<{
             },
           };
         }
+        // Every other status rejects (CALIBRATION_REQUEST_MACHINE `reject`).
+        CALIBRATION_REQUEST_MACHINE.requireTargetOf(existing.status, "reject");
 
         const now = new Date();
 
         const [updated] = await tx
           .update(calibrationRequest)
           .set({
-            status: "REJECTED",
+            status: CALIBRATION_REQUEST_MACHINE.requireTargetOf(
+              existing.status,
+              "reject",
+            ),
             internalNotes: input.internalNotes || null,
             reviewedBy: existing.reviewedBy ?? session.user.id,
             reviewedAt: existing.reviewedAt ?? now,
@@ -798,7 +814,12 @@ export const calibrationRequestsRouter = new Hono<{
               };
             }
 
-            if (request.status !== "APPROVED") {
+            if (
+              !CALIBRATION_REQUEST_MACHINE.canTransition(
+                request.status,
+                "convert",
+              )
+            ) {
               return {
                 error: {
                   status: 400 as const,
@@ -982,11 +1003,21 @@ export const calibrationRequestsRouter = new Hono<{
             await tx
               .update(calibrationRequest)
               .set({
-                status: "CONVERTED",
+                status: CALIBRATION_REQUEST_MACHINE.requireTargetOf(
+                  request.status,
+                  "convert",
+                ),
                 convertedBy: session.user.id,
                 convertedAt: new Date(),
               })
-              .where(eq(calibrationRequest.id, request.id));
+              // The row is locked (FOR UPDATE above); the status predicate
+              // repeats the check the lock made safe.
+              .where(
+                and(
+                  eq(calibrationRequest.id, request.id),
+                  eq(calibrationRequest.status, request.status),
+                ),
+              );
 
             await tx.insert(calibrationRequestAuditLog).values({
               organizationId: member.organizationId,

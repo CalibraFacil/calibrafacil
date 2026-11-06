@@ -3,6 +3,7 @@ import type {
   CompetenceStatus,
   TrainingType,
 } from './types'
+import { COMPETENCE_MACHINE } from '@calibra-facil/schemas/machines'
 import { formatInstant } from '@calibra-facil/shared/format'
 
 export const COMPETENCE_WORKFLOW_STEPS: CompetenceStatus[] = [
@@ -75,16 +76,11 @@ export function isTerminalInactiveStatus(status: CompetenceStatus) {
 }
 
 export function canCancelCompetenceStatus(status: CompetenceStatus) {
-  return (
-    status === 'REQUESTED' ||
-    status === 'TRAINING_ASSIGNED' ||
-    status === 'IN_TRAINING' ||
-    status === 'PENDING_EVALUATION'
-  )
+  return COMPETENCE_MACHINE.canTransition(status, 'cancel')
 }
 
 export function canRenewCompetenceStatus(status: CompetenceStatus) {
-  return status === 'EXPIRED' || status === 'SUSPENDED'
+  return COMPETENCE_MACHINE.canTransition(status, 'renew')
 }
 
 export function getCompetenceWorkflowStepIndex(status: CompetenceStatus) {

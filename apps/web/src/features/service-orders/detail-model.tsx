@@ -26,10 +26,10 @@ import type {
 } from '@calibra-facil/client-runtime'
 import type { EventTimelineItem } from '@/components/event-timeline'
 import {
-  canTransitionServiceOrderStatus,
   isServiceOrderFinalStatus,
   SERVICE_ORDER_EVENT_TYPES,
 } from '@calibra-facil/shared'
+import { SERVICE_ORDER_MACHINE } from '@calibra-facil/schemas/machines'
 import type {
   FinancialContinuityStatus,
   ServiceOrderEventType,
@@ -255,9 +255,10 @@ export function buildServiceOrderStageAffordances(
       ? 'record-revisable'
       : 'editable'
 
-  const canStartExecution =
-    order.status === 'repair_in_progress' ||
-    canTransitionServiceOrderStatus(order.status, 'repair_in_progress')
+  const canStartExecution = SERVICE_ORDER_MACHINE.canTransition(
+    order.status,
+    'start_repair',
+  )
   const execStage: StageAffordance = execution
     ? execution.finishedAt
       ? 'record'
@@ -268,7 +269,7 @@ export function buildServiceOrderStageAffordances(
 
   const canDeliver =
     order.status === 'delivered' ||
-    canTransitionServiceOrderStatus(order.status, 'delivered')
+    SERVICE_ORDER_MACHINE.canTransition(order.status, 'deliver')
   const delivery: StageAffordance = order.deliveredAt
     ? 'record'
     : canDeliver

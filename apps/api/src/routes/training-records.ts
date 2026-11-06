@@ -9,6 +9,7 @@ import {
   user,
 } from "@calibra-facil/db/schema";
 import { isNull } from "drizzle-orm";
+import { TRAINING_MACHINE } from "@calibra-facil/schemas/machines";
 import {
   CreateTrainingRecordSchema,
   UpdateTrainingRecordSchema,
@@ -302,7 +303,13 @@ export const trainingRecordsRouter = new Hono<{ Variables: AuthVariables }>()
         const updateData: Record<string, unknown> = {};
         if (input.title !== undefined) updateData.title = input.title;
         if (input.type !== undefined) updateData.type = input.type;
-        if (input.status !== undefined) updateData.status = input.status;
+        if (input.status !== undefined && input.status !== existing.status) {
+          updateData.status = TRAINING_MACHINE.requireTransition(
+            existing.status,
+            "set_status",
+            input.status,
+          );
+        }
         if (input.provider !== undefined) updateData.provider = input.provider;
         if (input.description !== undefined)
           updateData.description = input.description;
@@ -382,7 +389,10 @@ export const trainingRecordsRouter = new Hono<{ Variables: AuthVariables }>()
         const [updated] = await tx
           .update(trainingRecord)
           .set({
-            status: "completed",
+            status: TRAINING_MACHINE.requireTargetOf(
+              existing.status,
+              "complete",
+            ),
             endDate: existing.endDate ?? new Date(),
           })
           .where(eq(trainingRecord.id, id))

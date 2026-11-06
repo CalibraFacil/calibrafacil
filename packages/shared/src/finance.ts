@@ -1,30 +1,48 @@
 import { calendarDateKey, labCalendarDayKey } from "./calendar-date";
 
+// The lifecycles of these statuses (which command moves a row where) are the
+// billing machines of @calibra-facil/schemas/machines.
+export const COMMERCIAL_AGREEMENT_STATUSES = [
+  "DRAFT",
+  "ACTIVE",
+  "EXPIRED",
+  "CANCELED",
+] as const;
 export type CommercialAgreementStatus =
-  | "DRAFT"
-  | "ACTIVE"
-  | "EXPIRED"
-  | "CANCELED";
+  (typeof COMMERCIAL_AGREEMENT_STATUSES)[number];
 
 export type JobCommercialSnapshotSource =
   | "AGREEMENT"
   | "SERVICE_CATALOG"
   | "LEGACY_BACKFILL";
 
-export type BillingDocumentStatus =
-  | "DRAFT"
-  | "ISSUED"
-  | "PAID"
-  | "OVERDUE"
-  | "VOID";
+export const BILLING_DOCUMENT_STATUSES = [
+  "DRAFT",
+  "ISSUED",
+  "PAID",
+  "OVERDUE",
+  "VOID",
+] as const;
+export type BillingDocumentStatus = (typeof BILLING_DOCUMENT_STATUSES)[number];
 
+// `PENDING` was declared once and never written: an export is attempted inline
+// and lands in EXPORTED or FAILED.
+export const BILLING_DOCUMENT_EXPORT_STATUSES = [
+  "NOT_EXPORTED",
+  "EXPORTED",
+  "FAILED",
+] as const;
 export type BillingDocumentExportStatus =
-  | "NOT_EXPORTED"
-  | "PENDING"
-  | "EXPORTED"
-  | "FAILED";
+  (typeof BILLING_DOCUMENT_EXPORT_STATUSES)[number];
 
-export type ReceivableInstallmentStatus = "OPEN" | "PAID" | "OVERDUE" | "VOID";
+export const RECEIVABLE_INSTALLMENT_STATUSES = [
+  "OPEN",
+  "PAID",
+  "OVERDUE",
+  "VOID",
+] as const;
+export type ReceivableInstallmentStatus =
+  (typeof RECEIVABLE_INSTALLMENT_STATUSES)[number];
 
 // =============================================================================
 // CERTIFICATE RELEASE — Phase 2 slice 1. Separates technical certificate
@@ -43,11 +61,16 @@ export type ReceivableInstallmentStatus = "OPEN" | "PAID" | "OVERDUE" | "VOID";
  *                       `trusted_customer`); customer portal can download.
  * - RELEASED_BY_EXCEPTION: human override; recorded actor + reason.
  */
+// Which status follows which is CERTIFICATE_RELEASE_MACHINE in
+// @calibra-facil/schemas/machines.
+export const CERTIFICATE_RELEASE_STATUSES = [
+  "HELD_FOR_BILLING",
+  "HELD_FOR_PAYMENT",
+  "RELEASED",
+  "RELEASED_BY_EXCEPTION",
+] as const;
 export type CertificateReleaseStatus =
-  | "HELD_FOR_BILLING"
-  | "HELD_FOR_PAYMENT"
-  | "RELEASED"
-  | "RELEASED_BY_EXCEPTION";
+  (typeof CERTIFICATE_RELEASE_STATUSES)[number];
 
 /**
  * Release policy modes. The strategy's

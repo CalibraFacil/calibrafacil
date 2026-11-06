@@ -10,6 +10,7 @@ import {
   verification,
 } from "@calibra-facil/db/schema";
 import { truncateAll } from "../../test/integration/db";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB integration tests for the magic-link PREVIEW endpoint.
 //
@@ -107,15 +108,17 @@ async function seedUserWithOrg(params: {
     email: params.email,
     image: `https://cdn.test/${params.userId}.png`,
   });
-  await db.insert(organization).values({
-    id: params.orgId,
-    name: params.orgName,
-    slug: params.orgId,
-    createdAt: NOW,
-    type: params.orgType,
-    status: "ACTIVE",
-    logo: params.orgLogo ?? null,
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: params.orgId,
+      name: params.orgName,
+      slug: params.orgId,
+      createdAt: NOW,
+      type: params.orgType,
+      status: "ACTIVE",
+      logo: params.orgLogo ?? null,
+    }),
+  );
   await db.insert(member).values({
     id: `member-${params.orgId}-${params.userId}`,
     organizationId: params.orgId,

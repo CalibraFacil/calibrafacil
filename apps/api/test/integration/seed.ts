@@ -9,6 +9,7 @@ import {
   customer,
 } from "@calibra-facil/db/schema";
 import { createApiKeySecret } from "../../src/lib/api-keys";
+import { withStatusRepair } from "./state-fixtures";
 
 export type SeededOrg = {
   orgId: string;
@@ -40,26 +41,30 @@ export async function seedOrg(params?: {
     email: `${userId}@lab.test`,
   });
 
-  await db.insert(organization).values({
-    id: orgId,
-    name: `Lab ${orgId}`,
-    slug: orgId,
-    createdAt: now,
-    type: "LAB",
-    status: "ACTIVE",
-  });
-
-  const [unit] = await db
-    .insert(organizationUnit)
-    .values({
-      organizationId: orgId,
-      name: "Matriz",
-      slug: "matriz",
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: orgId,
+      name: `Lab ${orgId}`,
+      slug: orgId,
+      createdAt: now,
+      type: "LAB",
       status: "ACTIVE",
-      isDefault: true,
-      createdBy: userId,
-    })
-    .returning({ id: organizationUnit.id });
+    }),
+  );
+
+  const [unit] = await withStatusRepair((tx) =>
+    tx
+      .insert(organizationUnit)
+      .values({
+        organizationId: orgId,
+        name: "Matriz",
+        slug: "matriz",
+        status: "ACTIVE",
+        isDefault: true,
+        createdBy: userId,
+      })
+      .returning({ id: organizationUnit.id }),
+  );
 
   await db.insert(member).values({
     id: memberId,
@@ -135,25 +140,29 @@ export async function seedPortalContext(params?: {
   const now = new Date("2026-01-01T00:00:00.000Z");
 
   // The LAB org + default unit that owns the customers' assets/requests.
-  await db.insert(organization).values({
-    id: labOrgId,
-    name: `Lab ${labOrgId}`,
-    slug: labOrgId,
-    createdAt: now,
-    type: "LAB",
-    status: "ACTIVE",
-  });
-
-  const [unit] = await db
-    .insert(organizationUnit)
-    .values({
-      organizationId: labOrgId,
-      name: "Matriz",
-      slug: `matriz-${labOrgId}`,
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: labOrgId,
+      name: `Lab ${labOrgId}`,
+      slug: labOrgId,
+      createdAt: now,
+      type: "LAB",
       status: "ACTIVE",
-      isDefault: true,
-    })
-    .returning({ id: organizationUnit.id });
+    }),
+  );
+
+  const [unit] = await withStatusRepair((tx) =>
+    tx
+      .insert(organizationUnit)
+      .values({
+        organizationId: labOrgId,
+        name: "Matriz",
+        slug: `matriz-${labOrgId}`,
+        status: "ACTIVE",
+        isDefault: true,
+      })
+      .returning({ id: organizationUnit.id }),
+  );
   if (!unit) throw new Error("seedPortalContext: failed to create lab unit");
 
   const customerId = await seedPortalCustomer({
@@ -187,14 +196,16 @@ export async function seedPortalCustomer(params: {
   const now = new Date("2026-01-01T00:00:00.000Z");
 
   // The CLIENT auth-org = the portal's active organization for this customer.
-  await db.insert(organization).values({
-    id: params.clientOrgId,
-    name: `Client ${params.clientOrgId}`,
-    slug: params.clientOrgId,
-    createdAt: now,
-    type: "CLIENT",
-    status: "ACTIVE",
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: params.clientOrgId,
+      name: `Client ${params.clientOrgId}`,
+      slug: params.clientOrgId,
+      createdAt: now,
+      type: "CLIENT",
+      status: "ACTIVE",
+    }),
+  );
 
   // The portal user + member (external portal role) for this CLIENT org.
   await db.insert(user).values({
@@ -255,25 +266,27 @@ export async function seedStandard(params: {
   const { referenceStandard } = await import("@calibra-facil/db/schema");
   const now = new Date("2026-01-01T00:00:00.000Z");
   const nextYear = new Date("2027-01-01T00:00:00.000Z");
-  const [row] = await db
-    .insert(referenceStandard)
-    .values({
-      organizationId: params.organizationId,
-      unitId: params.unitId,
-      createdBy: params.createdBy,
-      name: params.name ?? "Padrão de Teste",
-      kind: "generic_scalar",
-      serialNumber: `SN-${params.organizationId}-${params.unitId}`,
-      certificateNumber: `CERT-${params.organizationId}`,
-      calibrationDate: now,
-      nextCalibrationDate: nextYear,
-      coverageFactor: 2.0,
-      distribution: "normal",
-      status: "ACTIVE",
-      referenceValue: 100.0,
-      uncertainty: 0.05,
-    })
-    .returning({ id: referenceStandard.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(referenceStandard)
+      .values({
+        organizationId: params.organizationId,
+        unitId: params.unitId,
+        createdBy: params.createdBy,
+        name: params.name ?? "Padrão de Teste",
+        kind: "generic_scalar",
+        serialNumber: `SN-${params.organizationId}-${params.unitId}`,
+        certificateNumber: `CERT-${params.organizationId}`,
+        calibrationDate: now,
+        nextCalibrationDate: nextYear,
+        coverageFactor: 2.0,
+        distribution: "normal",
+        status: "ACTIVE",
+        referenceValue: 100.0,
+        uncertainty: 0.05,
+      })
+      .returning({ id: referenceStandard.id }),
+  );
   if (!row) throw new Error("seedStandard: insert failed");
   return row.id;
 }
@@ -344,14 +357,16 @@ export async function seedCustomer(params: {
     params.authOrganizationId ??
     `client-${params.labOrganizationId}-${Math.random().toString(36).slice(2, 8)}`;
 
-  await db.insert(organization).values({
-    id: clientOrgId,
-    name: `Client ${clientOrgId}`,
-    slug: clientOrgId,
-    type: "CLIENT",
-    status: "ACTIVE",
-    createdAt: now,
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: clientOrgId,
+      name: `Client ${clientOrgId}`,
+      slug: clientOrgId,
+      type: "CLIENT",
+      status: "ACTIVE",
+      createdAt: now,
+    }),
+  );
 
   const [row] = await db
     .insert(customer)

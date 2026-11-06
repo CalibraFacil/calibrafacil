@@ -31,6 +31,7 @@ import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedCustomer, seedOrg } from "../../test/integration/seed";
 import { syncRouter } from "./sync";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
@@ -120,18 +121,20 @@ async function seedWorld(role: Role) {
     .insert(assetType)
     .values({ name: "Tipo RBAC", slug: "tipo-rbac", definition: [] })
     .returning({ id: assetType.id });
-  const [instrument] = await db
-    .insert(asset)
-    .values({
-      labOrganizationId: org.orgId,
-      unitId: org.unitId,
-      customerId,
-      assetTypeId: type?.id ?? 0,
-      name: "Instrumento RBAC",
-      serialNumber: "SN-RBAC",
-      tag: "TAG-RBAC",
-    })
-    .returning({ id: asset.id });
+  const [instrument] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        labOrganizationId: org.orgId,
+        unitId: org.unitId,
+        customerId,
+        assetTypeId: type?.id ?? 0,
+        name: "Instrumento RBAC",
+        serialNumber: "SN-RBAC",
+        tag: "TAG-RBAC",
+      })
+      .returning({ id: asset.id }),
+  );
   return {
     org,
     userId: `user-${role}`,

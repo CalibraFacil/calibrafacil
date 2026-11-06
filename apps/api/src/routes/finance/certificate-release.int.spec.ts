@@ -58,6 +58,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { loginAs, logout } from "../../../test/integration/setup";
 import { truncateAll } from "../../../test/integration/db";
 import { seedOrg } from "../../../test/integration/seed";
+import { withStatusRepair } from "../../../test/integration/state-fixtures";
 
 // ---------------------------------------------------------------------------
 // No notifications or background-jobs imported by certificate-release route or
@@ -72,14 +73,16 @@ const JSON_HEADERS = { "content-type": "application/json" };
 
 /** Insert a minimal CLIENT org (required for customer.authOrganizationId FK). */
 async function seedClientOrg(clientOrgId: string): Promise<void> {
-  await db.insert(organization).values({
-    id: clientOrgId,
-    name: `Client ${clientOrgId}`,
-    slug: clientOrgId,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    type: "CLIENT",
-    status: "ACTIVE",
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: clientOrgId,
+      name: `Client ${clientOrgId}`,
+      slug: clientOrgId,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      type: "CLIENT",
+      status: "ACTIVE",
+    }),
+  );
 }
 
 /** Seed a customer owned by a LAB org. Returns customer.id. */
@@ -117,19 +120,21 @@ async function seedAsset(params: {
   assetTypeId: number;
   tag: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(asset)
-    .values({
-      unitId: params.unitId,
-      customerId: params.customerId,
-      // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
-      assetTypeId: params.assetTypeId,
-      name: "Test Instrument",
-      serialNumber: `SN-${params.tag}`,
-      tag: params.tag,
-    })
-    .returning({ id: asset.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: params.unitId,
+        customerId: params.customerId,
+        // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
+        assetTypeId: params.assetTypeId,
+        name: "Test Instrument",
+        serialNumber: `SN-${params.tag}`,
+        tag: params.tag,
+      })
+      .returning({ id: asset.id }),
+  );
   if (!row) throw new Error("seedAsset: insert failed");
   return row.id;
 }
@@ -224,21 +229,23 @@ async function seedServiceOrderWithLink(params: {
   jobId: number;
   billingDocumentId?: number;
 }): Promise<number> {
-  const [soRow] = await db
-    .insert(serviceOrder)
-    .values({
-      organizationId: params.organizationId,
-      unitId: params.unitId,
-      serviceOrderNumber: `SO-${params.jobId}`,
-      customerId: params.customerId,
-      assetId: params.assetId,
-      openedByUserId: params.openedByUserId,
-      claimedDefect: "Calibração periódica",
-      intakeCondition: "Bom estado",
-      status: "opened",
-      billingDocumentId: params.billingDocumentId ?? null,
-    })
-    .returning({ id: serviceOrder.id });
+  const [soRow] = await withStatusRepair((tx) =>
+    tx
+      .insert(serviceOrder)
+      .values({
+        organizationId: params.organizationId,
+        unitId: params.unitId,
+        serviceOrderNumber: `SO-${params.jobId}`,
+        customerId: params.customerId,
+        assetId: params.assetId,
+        openedByUserId: params.openedByUserId,
+        claimedDefect: "Calibração periódica",
+        intakeCondition: "Bom estado",
+        status: "opened",
+        billingDocumentId: params.billingDocumentId ?? null,
+      })
+      .returning({ id: serviceOrder.id }),
+  );
   if (!soRow) throw new Error("seedServiceOrderWithLink: SO insert failed");
 
   await db.insert(serviceOrderCertificateLink).values({
@@ -259,22 +266,24 @@ async function seedBillingDocument(params: {
   createdBy: string;
   status?: "DRAFT" | "ISSUED" | "PAID" | "OVERDUE";
 }): Promise<number> {
-  const [row] = await db
-    .insert(billingDocument)
-    .values({
-      organizationId: params.orgId,
-      unitId: params.unitId,
-      customerId: params.customerId,
-      status: params.status ?? "DRAFT",
-      dueDate: new Date("2026-12-31T00:00:00.000Z"),
-      currency: "BRL",
-      subtotalCents: 100_00,
-      discountCents: 0,
-      totalCents: 100_00,
-      createdBy: params.createdBy,
-      updatedBy: params.createdBy,
-    })
-    .returning({ id: billingDocument.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(billingDocument)
+      .values({
+        organizationId: params.orgId,
+        unitId: params.unitId,
+        customerId: params.customerId,
+        status: params.status ?? "DRAFT",
+        dueDate: new Date("2026-12-31T00:00:00.000Z"),
+        currency: "BRL",
+        subtotalCents: 100_00,
+        discountCents: 0,
+        totalCents: 100_00,
+        createdBy: params.createdBy,
+        updatedBy: params.createdBy,
+      })
+      .returning({ id: billingDocument.id }),
+  );
   if (!row) throw new Error("seedBillingDocument: insert failed");
   return row.id;
 }
@@ -284,15 +293,17 @@ async function seedInstallment(params: {
   documentId: number;
   status?: "OPEN" | "PAID" | "OVERDUE" | "VOID";
 }): Promise<void> {
-  await db.insert(receivableInstallment).values({
-    organizationId: organizationOf("billing_document", params.documentId),
-    documentId: params.documentId,
-    installmentNumber: 1,
-    status: params.status ?? "OPEN",
-    dueDate: new Date("2026-12-31T00:00:00.000Z"),
-    amountCents: 100_00,
-    currency: "BRL",
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(receivableInstallment).values({
+      organizationId: organizationOf("billing_document", params.documentId),
+      documentId: params.documentId,
+      installmentNumber: 1,
+      status: params.status ?? "OPEN",
+      dueDate: new Date("2026-12-31T00:00:00.000Z"),
+      amountCents: 100_00,
+      currency: "BRL",
+    }),
+  );
 }
 
 /** Seed a certificate_release_policy (org-level default). Returns id. */

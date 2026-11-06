@@ -397,6 +397,13 @@ export interface CalibraBridge {
   activateLocalPartition(
     request: LocalPartitionActivationRequest,
   ): Promise<LocalPartitionActivationResult>;
+  /**
+   * Forget the offline-access grant (sign-out): the next offline start opens no
+   * account's database until someone signs in online again. The database and
+   * its queued field work stay on disk for that sign-in. Optional: an older
+   * desktop build does not have it.
+   */
+  forgetOfflineAccess?(): Promise<boolean>;
   pickFile(): Promise<string | null>;
   pickFolder(): Promise<string | null>;
   saveFile(): Promise<string | null>;

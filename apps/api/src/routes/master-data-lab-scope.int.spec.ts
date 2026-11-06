@@ -59,6 +59,7 @@ import { materialsRouter } from "./materials";
 import { servicesRouter } from "./services";
 import { unitsRouter } from "./units";
 import { visitJobsRouter } from "./visits";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // The request-state notifications read what the transaction wrote and send
 // e-mail; they are not under test here.
@@ -99,14 +100,16 @@ async function seedLab(
 ) {
   const org = await seedOrg({ orgId, role });
   const clientOrgId = `client-${orgId}`;
-  await db.insert(organization).values({
-    id: clientOrgId,
-    name: `Client ${clientOrgId}`,
-    slug: clientOrgId,
-    type: "CLIENT",
-    status: "ACTIVE",
-    createdAt: NOW,
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: clientOrgId,
+      name: `Client ${clientOrgId}`,
+      slug: clientOrgId,
+      type: "CLIENT",
+      status: "ACTIVE",
+      createdAt: NOW,
+    }),
+  );
   const [customerRow] = await db
     .insert(customer)
     .values({
@@ -120,18 +123,20 @@ async function seedLab(
     .values({ name: `Type ${orgId}`, slug: `type-${orgId}`, definition: [] })
     .returning({ id: assetType.id });
   if (!customerRow || !typeRow) throw new Error("seedLab: insert failed");
-  const [assetRow] = await db
-    .insert(asset)
-    .values({
-      unitId: org.unitId,
-      customerId: customerRow.id,
-      labOrganizationId: orgId,
-      assetTypeId: typeRow.id,
-      name: `Instrument ${orgId}`,
-      serialNumber: `SN-${orgId}`,
-      tag: `TAG-${orgId}`,
-    })
-    .returning({ id: asset.id });
+  const [assetRow] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: org.unitId,
+        customerId: customerRow.id,
+        labOrganizationId: orgId,
+        assetTypeId: typeRow.id,
+        name: `Instrument ${orgId}`,
+        serialNumber: `SN-${orgId}`,
+        tag: `TAG-${orgId}`,
+      })
+      .returning({ id: asset.id }),
+  );
   const [serviceRow] = await db
     .insert(service)
     .values({
@@ -173,19 +178,21 @@ async function seedMaterial(lab: Lab, name: string): Promise<number> {
 }
 
 async function seedRequest(lab: Lab) {
-  const [request] = await db
-    .insert(calibrationRequest)
-    .values({
-      organizationId: lab.orgId,
-      unitId: lab.unitId,
-      customerId: lab.customerId,
-      authOrganizationId: lab.clientOrgId,
-      status: "PENDING",
-      deliveryMethod: "dropoff",
-      submittedBy: lab.userId,
-      submittedAt: new Date("2026-01-15T10:00:00.000Z"),
-    })
-    .returning({ id: calibrationRequest.id });
+  const [request] = await withStatusRepair((tx) =>
+    tx
+      .insert(calibrationRequest)
+      .values({
+        organizationId: lab.orgId,
+        unitId: lab.unitId,
+        customerId: lab.customerId,
+        authOrganizationId: lab.clientOrgId,
+        status: "PENDING",
+        deliveryMethod: "dropoff",
+        submittedBy: lab.userId,
+        submittedAt: new Date("2026-01-15T10:00:00.000Z"),
+      })
+      .returning({ id: calibrationRequest.id }),
+  );
   if (!request) throw new Error("seedRequest: insert failed");
   await db.insert(calibrationRequestItem).values({
     organizationId: organizationOf("calibration_request", request.id),
@@ -196,37 +203,39 @@ async function seedRequest(lab: Lab) {
 }
 
 async function seedPublishedService(lab: Lab): Promise<number> {
-  const [method] = await db
-    .insert(calibrationMethod)
-    .values({
-      organizationId: lab.orgId,
-      assetTypeId: lab.assetTypeId,
-      name: `Method ${lab.orgId}`,
-      version: 1,
-      status: "PUBLISHED",
-      dataFields: [],
-      variableBindings: [],
-      formulas: [],
-      measurementModels: [],
-      validations: [],
-      uncertaintyParams: [],
-      methodFingerprint: "test-fp-0000000000000001",
-      compiledMethod: {
+  const [method] = await withStatusRepair((tx) =>
+    tx
+      .insert(calibrationMethod)
+      .values({
+        organizationId: lab.orgId,
+        assetTypeId: lab.assetTypeId,
+        name: `Method ${lab.orgId}`,
+        version: 1,
+        status: "PUBLISHED",
+        dataFields: [],
+        variableBindings: [],
+        formulas: [],
+        measurementModels: [],
+        validations: [],
+        uncertaintyParams: [],
         methodFingerprint: "test-fp-0000000000000001",
-        normalizedMethodJson: "{}",
-        engine: {
+        compiledMethod: {
+          methodFingerprint: "test-fp-0000000000000001",
+          normalizedMethodJson: "{}",
+          engine: {
+            version: ENGINE_VERSION,
+            optionsFingerprint: "test-opts-fp-00000001",
+          },
+        },
+        methodEngine: {
           version: ENGINE_VERSION,
           optionsFingerprint: "test-opts-fp-00000001",
         },
-      },
-      methodEngine: {
-        version: ENGINE_VERSION,
-        optionsFingerprint: "test-opts-fp-00000001",
-      },
-      publicationEvidence: { publishedAt: "2026-01-01T00:00:00.000Z" },
-      createdBy: lab.userId,
-    })
-    .returning({ id: calibrationMethod.id });
+        publicationEvidence: { publishedAt: "2026-01-01T00:00:00.000Z" },
+        createdBy: lab.userId,
+      })
+      .returning({ id: calibrationMethod.id }),
+  );
   if (!method) throw new Error("seedPublishedService: method failed");
   const [row] = await db
     .update(service)
@@ -238,16 +247,18 @@ async function seedPublishedService(lab: Lab): Promise<number> {
 }
 
 async function seedVisit(lab: Lab): Promise<number> {
-  const [row] = await db
-    .insert(calibrationVisit)
-    .values({
-      organizationId: lab.orgId,
-      unitId: lab.unitId,
-      customerId: lab.customerId,
-      createdBy: lab.userId,
-      status: "PROPOSED",
-    })
-    .returning({ id: calibrationVisit.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(calibrationVisit)
+      .values({
+        organizationId: lab.orgId,
+        unitId: lab.unitId,
+        customerId: lab.customerId,
+        createdBy: lab.userId,
+        status: "PROPOSED",
+      })
+      .returning({ id: calibrationVisit.id }),
+  );
   if (!row) throw new Error("seedVisit: insert failed");
   return row.id;
 }
@@ -651,14 +662,16 @@ describe("master data — success paths and the laboratory boundary (P2-18c)", (
   describe("customer groups", () => {
     async function seedGroup(lab: Lab) {
       const groupOrgId = `group-${lab.orgId}`;
-      await db.insert(organization).values({
-        id: groupOrgId,
-        name: `Group ${groupOrgId}`,
-        slug: groupOrgId,
-        type: "CLIENT",
-        status: "ACTIVE",
-        createdAt: NOW,
-      });
+      await withStatusRepair((tx) =>
+        tx.insert(organization).values({
+          id: groupOrgId,
+          name: `Group ${groupOrgId}`,
+          slug: groupOrgId,
+          type: "CLIENT",
+          status: "ACTIVE",
+          createdAt: NOW,
+        }),
+      );
       const [group] = await db
         .insert(customerGroup)
         .values({

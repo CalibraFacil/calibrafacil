@@ -78,7 +78,8 @@ export function CertificatesSettingsPage({
   const queryClient = useQueryClient()
   const [isUploadOpen, setIsUploadOpen] = useState(false)
   const [selectedCert, setSelectedCert] = useState<Certificate | null>(null)
-  const [revokeDialogOpen, setRevokeDialogOpen] = useState(false)
+  // The revoke dialog is open exactly when a certificate is chosen for it: one
+  // state, so "open with nothing to revoke" cannot happen.
   const [certToRevoke, setCertToRevoke] = useState<Certificate | null>(null)
   // Q51: the justification being typed to issue unsigned on purpose (null = form closed)
   const [unsignedReasonDraft, setUnsignedReasonDraft] = useState<string | null>(
@@ -158,7 +159,6 @@ export function CertificatesSettingsPage({
       queryClient.invalidateQueries({
         queryKey: ['signing-certificates', selectedUnit?.id ?? 'no-unit'],
       })
-      setRevokeDialogOpen(false)
       setCertToRevoke(null)
       toast.success('Certificado revogado')
     },
@@ -391,7 +391,6 @@ export function CertificatesSettingsPage({
                       onSetDefault={() => setDefaultMutation.mutate(cert.id)}
                       onRevoke={() => {
                         setCertToRevoke(cert)
-                        setRevokeDialogOpen(true)
                       }}
                       isSettingDefault={setDefaultMutation.isPending}
                     />
@@ -414,8 +413,10 @@ export function CertificatesSettingsPage({
           {/* Revoke confirmation dialog */}
           <RevokeDialog
             certificate={certToRevoke}
-            open={revokeDialogOpen}
-            onOpenChange={setRevokeDialogOpen}
+            open={certToRevoke !== null}
+            onOpenChange={(open) => {
+              if (!open) setCertToRevoke(null)
+            }}
             onConfirm={(reason) => {
               if (certToRevoke) {
                 revokeMutation.mutate({ id: certToRevoke.id, reason })

@@ -47,6 +47,7 @@ import {
   getOrganizationCustomDomain,
   resolveLabOrganizationIdByPortalHostname,
 } from "./portal-domains";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 type Lab = Awaited<ReturnType<typeof seedLab>>;
 
@@ -60,50 +61,56 @@ async function seedLab(tag: "a" | "b", assetTypeId: number) {
     portalUserId: `user-${tag}`,
     customerName: `Customer ${tag}`,
   });
-  const [assetRow] = await db
-    .insert(asset)
-    .values({
-      unitId: ctx.labUnitId,
-      customerId: ctx.customerId,
-      labOrganizationId: ctx.labOrgId,
-      assetTypeId,
-      name: `Ativo ${tag}`,
-      serialNumber: `SN-${tag}`,
-      tag: `TAG-${tag}`,
-      status: "ACTIVE",
-    })
-    .returning({ id: asset.id });
+  const [assetRow] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: ctx.labUnitId,
+        customerId: ctx.customerId,
+        labOrganizationId: ctx.labOrgId,
+        assetTypeId,
+        name: `Ativo ${tag}`,
+        serialNumber: `SN-${tag}`,
+        tag: `TAG-${tag}`,
+        status: "ACTIVE",
+      })
+      .returning({ id: asset.id }),
+  );
   if (!assetRow) throw new Error("asset not seeded");
 
-  const [bell] = await db
-    .insert(notification)
-    .values({
-      recipientUserId: ctx.portalUserId,
-      organizationId: ctx.clientOrgId,
-      type: "CERTIFICATE_READY",
-      title: `Aviso ${tag}`,
-      message: `Mensagem ${tag}`,
-    })
-    .returning({ id: notification.id });
+  const [bell] = await withStatusRepair((tx) =>
+    tx
+      .insert(notification)
+      .values({
+        recipientUserId: ctx.portalUserId,
+        organizationId: ctx.clientOrgId,
+        type: "CERTIFICATE_READY",
+        title: `Aviso ${tag}`,
+        message: `Mensagem ${tag}`,
+      })
+      .returning({ id: notification.id }),
+  );
   if (!bell) throw new Error("notification not seeded");
 
-  const [pack] = await db
-    .insert(portalExportJob)
-    .values({
-      kind: "AUDIT_PACK",
-      labOrganizationId: ctx.labOrgId,
-      authOrganizationId: ctx.clientOrgId,
-      requestedByUserId: ctx.portalUserId,
-      params: {
-        dateFrom: "2026-01-01",
-        dateTo: "2026-12-31",
-        unitId: null,
-        include: { certificates: true },
-        customerIds: [ctx.customerId],
-      },
-      status: "COMPLETED",
-    })
-    .returning({ id: portalExportJob.id });
+  const [pack] = await withStatusRepair((tx) =>
+    tx
+      .insert(portalExportJob)
+      .values({
+        kind: "AUDIT_PACK",
+        labOrganizationId: ctx.labOrgId,
+        authOrganizationId: ctx.clientOrgId,
+        requestedByUserId: ctx.portalUserId,
+        params: {
+          dateFrom: "2026-01-01",
+          dateTo: "2026-12-31",
+          unitId: null,
+          include: { certificates: true },
+          customerIds: [ctx.customerId],
+        },
+        status: "COMPLETED",
+      })
+      .returning({ id: portalExportJob.id }),
+  );
   if (!pack) throw new Error("pack not seeded");
 
   await db.insert(organizationCustomDomain).values({

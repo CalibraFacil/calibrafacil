@@ -16,6 +16,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { sql } from "drizzle-orm";
 import { truncateAll } from "../../test/integration/db";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // ---------------------------------------------------------------------------
 // Real-DB integration test for the PUBLIC certificate-verification router.
@@ -101,40 +102,46 @@ async function seedVerifiableLab(params: {
     email: `${userId}@lab.test`,
   });
 
-  await db.insert(organization).values({
-    id: orgId,
-    name: labName,
-    slug: orgId,
-    type: "LAB",
-    status: "ACTIVE",
-    accreditationActive,
-    accreditationNumber,
-    accreditationValidUntil: params.accreditationValidUntil ?? null,
-    createdAt: NOW,
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: orgId,
+      name: labName,
+      slug: orgId,
+      type: "LAB",
+      status: "ACTIVE",
+      accreditationActive,
+      accreditationNumber,
+      accreditationValidUntil: params.accreditationValidUntil ?? null,
+      createdAt: NOW,
+    }),
+  );
 
   // CLIENT org backing the customer's portal access (FK target).
   const clientOrgId = `client-${orgId}`;
-  await db.insert(organization).values({
-    id: clientOrgId,
-    name: `Client ${clientOrgId}`,
-    slug: clientOrgId,
-    type: "CLIENT",
-    status: "ACTIVE",
-    createdAt: NOW,
-  });
-
-  const [unit] = await db
-    .insert(organizationUnit)
-    .values({
-      organizationId: orgId,
-      name: "Matriz",
-      slug: `matriz-${orgId}`,
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: clientOrgId,
+      name: `Client ${clientOrgId}`,
+      slug: clientOrgId,
+      type: "CLIENT",
       status: "ACTIVE",
-      isDefault: true,
-      createdBy: userId,
-    })
-    .returning({ id: organizationUnit.id });
+      createdAt: NOW,
+    }),
+  );
+
+  const [unit] = await withStatusRepair((tx) =>
+    tx
+      .insert(organizationUnit)
+      .values({
+        organizationId: orgId,
+        name: "Matriz",
+        slug: `matriz-${orgId}`,
+        status: "ACTIVE",
+        isDefault: true,
+        createdBy: userId,
+      })
+      .returning({ id: organizationUnit.id }),
+  );
   if (!unit) throw new Error("seedVerifiableCert: unit insert failed");
 
   const [customerRow] = await db
@@ -159,19 +166,21 @@ async function seedVerifiableLab(params: {
   if (!assetTypeRow)
     throw new Error("seedVerifiableCert: assetType insert failed");
 
-  const [assetRow] = await db
-    .insert(asset)
-    .values({
-      unitId: unit.id,
-      customerId: customerRow.id,
-      // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${customerRow.id})`,
-      assetTypeId: assetTypeRow.id,
-      name: assetName,
-      serialNumber: `SN-${orgId}`,
-      tag: assetTag,
-    })
-    .returning({ id: asset.id });
+  const [assetRow] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: unit.id,
+        customerId: customerRow.id,
+        // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${customerRow.id})`,
+        assetTypeId: assetTypeRow.id,
+        name: assetName,
+        serialNumber: `SN-${orgId}`,
+        tag: assetTag,
+      })
+      .returning({ id: asset.id }),
+  );
   if (!assetRow) throw new Error("seedVerifiableCert: asset insert failed");
 
   // No methodId on the service: the GET join is a leftJoin against

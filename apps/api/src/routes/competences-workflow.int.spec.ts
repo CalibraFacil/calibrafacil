@@ -31,6 +31,7 @@ import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { seedExtraMember } from "../../test/integration/tenant-refs";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 const JSON_HEADERS = { "content-type": "application/json" } as const;
 
@@ -54,18 +55,20 @@ async function seedCompetence(params: {
     })
     .returning({ id: assetType.id });
   if (!type) throw new Error("seedCompetence: asset type insert failed");
-  const [row] = await db
-    .insert(personnelCompetence)
-    .values({
-      organizationId: params.organizationId,
-      userId: params.userId,
-      assetTypeId: type.id,
-      requestedBy: params.userId,
-      createdBy: params.userId,
-      scopeDescription: "Calibração de manômetros",
-      status: params.status,
-    })
-    .returning({ id: personnelCompetence.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(personnelCompetence)
+      .values({
+        organizationId: params.organizationId,
+        userId: params.userId,
+        assetTypeId: type.id,
+        requestedBy: params.userId,
+        createdBy: params.userId,
+        scopeDescription: "Calibração de manômetros",
+        status: params.status,
+      })
+      .returning({ id: personnelCompetence.id }),
+  );
   if (!row) throw new Error("seedCompetence: insert failed");
   return row.id;
 }
@@ -74,18 +77,20 @@ async function seedTraining(params: {
   organizationId: string;
   userId: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(trainingRecord)
-    .values({
-      organizationId: params.organizationId,
-      userId: params.userId,
-      createdBy: params.userId,
-      title: "Treinamento GUM",
-      type: "internal",
-      status: "planned",
-      startDate: new Date("2026-01-01T00:00:00.000Z"),
-    })
-    .returning({ id: trainingRecord.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(trainingRecord)
+      .values({
+        organizationId: params.organizationId,
+        userId: params.userId,
+        createdBy: params.userId,
+        title: "Treinamento GUM",
+        type: "internal",
+        status: "planned",
+        startDate: new Date("2026-01-01T00:00:00.000Z"),
+      })
+      .returning({ id: trainingRecord.id }),
+  );
   if (!row) throw new Error("seedTraining: insert failed");
   return row.id;
 }

@@ -1,5 +1,6 @@
 import type { OotNotificationData } from '@calibra-facil/client-runtime'
 
+import { NON_CONFORMANCE_MACHINE } from '@calibra-facil/schemas/machines'
 import type {
   NonConformanceDisposition,
   NonConformanceStatus,
@@ -18,13 +19,17 @@ export function ncAvailableActions(nc: {
   disposition: NonConformanceDisposition
   capaId: number | null
 }): NcAction[] {
-  if (nc.status === 'resolved') {
+  // NON_CONFORMANCE_MACHINE says what the status allows; the disposition
+  // orders it (no resolution before a disposition, as the server checks).
+  if (!NON_CONFORMANCE_MACHINE.canTransition(nc.status, 'resolve')) {
     return []
   }
 
   const actions: NcAction[] = []
   if (!nc.disposition) {
-    actions.push('setDisposition')
+    if (NON_CONFORMANCE_MACHINE.canTransition(nc.status, 'set_disposition')) {
+      actions.push('setDisposition')
+    }
   } else {
     actions.push('resolve')
   }

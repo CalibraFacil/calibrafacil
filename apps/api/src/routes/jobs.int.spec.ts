@@ -59,6 +59,7 @@ import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { seedExtraMember } from "../../test/integration/tenant-refs";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // ---------------------------------------------------------------------------
 // Mock background jobs and notifications — these are side-effects we don't want
@@ -88,14 +89,16 @@ const JSON_HEADERS = { "content-type": "application/json" };
 
 /** Insert a minimal CLIENT org (required for customer.authOrganizationId FK). */
 async function seedClientOrg(clientOrgId: string): Promise<void> {
-  await db.insert(organization).values({
-    id: clientOrgId,
-    name: `Client ${clientOrgId}`,
-    slug: clientOrgId,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    type: "CLIENT",
-    status: "ACTIVE",
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: clientOrgId,
+      name: `Client ${clientOrgId}`,
+      slug: clientOrgId,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      type: "CLIENT",
+      status: "ACTIVE",
+    }),
+  );
 }
 
 /**
@@ -140,19 +143,21 @@ async function seedAsset(params: {
   assetTypeId: number;
   tag: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(asset)
-    .values({
-      unitId: params.unitId,
-      customerId: params.customerId,
-      // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
-      assetTypeId: params.assetTypeId,
-      name: "Test Instrument",
-      serialNumber: `SN-${params.tag}`,
-      tag: params.tag,
-    })
-    .returning({ id: asset.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: params.unitId,
+        customerId: params.customerId,
+        // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
+        assetTypeId: params.assetTypeId,
+        name: "Test Instrument",
+        serialNumber: `SN-${params.tag}`,
+        tag: params.tag,
+      })
+      .returning({ id: asset.id }),
+  );
   if (!row) throw new Error("seedAsset: insert failed");
   return row.id;
 }
@@ -1118,13 +1123,15 @@ async function seedScopeGuardWorld(params: {
     unitRole: "technician",
   });
   if (params.accreditationActive !== false) {
-    await db.insert(authorizedSignatory).values({
-      organizationId: params.orgId,
-      userId: params.userId,
-      assetTypeId: null,
-      status: "ACTIVE",
-      authorizedBy: params.userId,
-    });
+    await withStatusRepair((tx) =>
+      tx.insert(authorizedSignatory).values({
+        organizationId: params.orgId,
+        userId: params.userId,
+        assetTypeId: null,
+        status: "ACTIVE",
+        authorizedBy: params.userId,
+      }),
+    );
   }
   if (params.withScopeLines !== false) {
     await db.insert(accreditedScopeLine).values({
@@ -2088,25 +2095,27 @@ describe("jobsRouter — reference standard validity at the performed date (REQ-
       status,
       methodSnapshot: executableMethodSnapshot(),
     });
-    const [standard] = await db
-      .insert(referenceStandard)
-      .values({
-        organizationId: "org-q12",
-        unitId: fixture.unitId,
-        createdBy: fixture.userId,
-        name: "Massa Padrao",
-        kind: "generic_scalar",
-        serialNumber: "SN-Q12",
-        certificateNumber: "CERT-Q12",
-        calibrationDate: new Date("2025-01-10T15:00:00.000Z"),
-        nextCalibrationDate: validThrough,
-        coverageFactor: 2,
-        distribution: "normal",
-        status: "ACTIVE",
-        referenceValue: 1,
-        uncertainty: 0.01,
-      })
-      .returning({ id: referenceStandard.id });
+    const [standard] = await withStatusRepair((tx) =>
+      tx
+        .insert(referenceStandard)
+        .values({
+          organizationId: "org-q12",
+          unitId: fixture.unitId,
+          createdBy: fixture.userId,
+          name: "Massa Padrao",
+          kind: "generic_scalar",
+          serialNumber: "SN-Q12",
+          certificateNumber: "CERT-Q12",
+          calibrationDate: new Date("2025-01-10T15:00:00.000Z"),
+          nextCalibrationDate: validThrough,
+          coverageFactor: 2,
+          distribution: "normal",
+          status: "ACTIVE",
+          referenceValue: 1,
+          uncertainty: 0.01,
+        })
+        .returning({ id: referenceStandard.id }),
+    );
     return { id, standardId: standard?.id ?? 0 };
   }
 

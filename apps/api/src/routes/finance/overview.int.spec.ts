@@ -10,6 +10,7 @@ import { inArray } from "drizzle-orm";
 import { loginAs, logout } from "../../../test/integration/setup";
 import { truncateAll } from "../../../test/integration/db";
 import { seedOrg } from "../../../test/integration/seed";
+import { withStatusRepair } from "../../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration test for financeOverviewRouter (GET /finance/overview).
 //
@@ -40,14 +41,16 @@ const JSON_HEADERS = { "content-type": "application/json" };
 
 /** Insert a minimal CLIENT org (required for customer.authOrganizationId FK). */
 async function seedClientOrg(clientOrgId: string): Promise<void> {
-  await db.insert(organization).values({
-    id: clientOrgId,
-    name: `Client ${clientOrgId}`,
-    slug: clientOrgId,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    type: "CLIENT",
-    status: "ACTIVE",
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: clientOrgId,
+      name: `Client ${clientOrgId}`,
+      slug: clientOrgId,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      type: "CLIENT",
+      status: "ACTIVE",
+    }),
+  );
 }
 
 /**
@@ -86,22 +89,27 @@ async function seedBillingDocument(params: {
   status?: "DRAFT" | "ISSUED" | "PAID" | "OVERDUE";
   totalCents?: number;
 }): Promise<{ id: number; publicId: string }> {
-  const [row] = await db
-    .insert(billingDocument)
-    .values({
-      organizationId: params.orgId,
-      unitId: params.unitId,
-      customerId: params.customerId,
-      status: params.status ?? "DRAFT",
-      dueDate: new Date("2026-12-31T00:00:00.000Z"),
-      currency: "BRL",
-      subtotalCents: params.totalCents ?? 100_00,
-      discountCents: 0,
-      totalCents: params.totalCents ?? 100_00,
-      createdBy: params.createdBy,
-      updatedBy: params.createdBy,
-    })
-    .returning({ id: billingDocument.id, publicId: billingDocument.publicId });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(billingDocument)
+      .values({
+        organizationId: params.orgId,
+        unitId: params.unitId,
+        customerId: params.customerId,
+        status: params.status ?? "DRAFT",
+        dueDate: new Date("2026-12-31T00:00:00.000Z"),
+        currency: "BRL",
+        subtotalCents: params.totalCents ?? 100_00,
+        discountCents: 0,
+        totalCents: params.totalCents ?? 100_00,
+        createdBy: params.createdBy,
+        updatedBy: params.createdBy,
+      })
+      .returning({
+        id: billingDocument.id,
+        publicId: billingDocument.publicId,
+      }),
+  );
 
   if (!row) throw new Error("seedBillingDocument: insert failed");
   return { id: row.id, publicId: row.publicId };

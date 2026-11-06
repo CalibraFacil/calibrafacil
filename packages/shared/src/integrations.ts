@@ -111,7 +111,13 @@ export function providerSupports(
   return INTEGRATION_PROVIDER_CAPABILITIES[provider][flag];
 }
 
-export type IntegrationStatus = "ACTIVE" | "DISABLED" | "ACTION_REQUIRED";
+// Lifecycles: the integration machines of @calibra-facil/schemas/machines.
+export const INTEGRATION_STATUSES = [
+  "ACTIVE",
+  "DISABLED",
+  "ACTION_REQUIRED",
+] as const;
+export type IntegrationStatus = (typeof INTEGRATION_STATUSES)[number];
 
 export type IntegrationSetupStatus =
   | "NOT_CONFIGURED"
@@ -182,12 +188,14 @@ export type IntegrationScheduleStatus =
   | "blocked"
   | "failing";
 
-export type IntegrationSyncStatus =
-  | "PENDING"
-  | "RUNNING"
-  | "COMPLETED"
-  | "FAILED"
-  | "PARTIAL";
+export const INTEGRATION_SYNC_STATUSES = [
+  "PENDING",
+  "RUNNING",
+  "COMPLETED",
+  "FAILED",
+  "PARTIAL",
+] as const;
+export type IntegrationSyncStatus = (typeof INTEGRATION_SYNC_STATUSES)[number];
 
 export type IntegrationSyncItemOperation =
   | "create"
@@ -199,12 +207,16 @@ export type IntegrationSyncItemOperation =
   | "validate"
   | "delete";
 
+// An item is recorded when its push starts (RUNNING); `PENDING` was declared
+// once and never written.
+export const INTEGRATION_SYNC_ITEM_STATUSES = [
+  "RUNNING",
+  "SUCCEEDED",
+  "FAILED",
+  "DEAD_LETTER",
+] as const;
 export type IntegrationSyncItemStatus =
-  | "PENDING"
-  | "RUNNING"
-  | "SUCCEEDED"
-  | "FAILED"
-  | "DEAD_LETTER";
+  (typeof INTEGRATION_SYNC_ITEM_STATUSES)[number];
 
 export type IntegrationEventLevel = "info" | "warning" | "error";
 

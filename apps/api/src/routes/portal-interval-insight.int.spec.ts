@@ -13,6 +13,7 @@ import {
   seedPortalCustomer,
   seedService,
 } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB integration test for GET /api/portal/assets/:id/interval-insight (Phase C2):
 // the engine runs on the asset's approved as-found history, tenant-scoped, with the
@@ -37,22 +38,24 @@ async function seedAsset(params: {
   model?: string;
   metrologyRegime?: "INDUSTRIAL" | "LEGAL" | "UNKNOWN";
 }): Promise<number> {
-  const [row] = await db
-    .insert(asset)
-    .values({
-      unitId: params.labUnitId,
-      customerId: params.customerId,
-      // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
-      assetTypeId: params.assetTypeId,
-      name: `Ativo ${params.tag}`,
-      serialNumber: `SN-${params.tag}`,
-      tag: params.tag,
-      model: params.model ?? null,
-      status: "ACTIVE",
-      metrologyRegime: params.metrologyRegime ?? "INDUSTRIAL",
-    })
-    .returning({ id: asset.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: params.labUnitId,
+        customerId: params.customerId,
+        // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
+        assetTypeId: params.assetTypeId,
+        name: `Ativo ${params.tag}`,
+        serialNumber: `SN-${params.tag}`,
+        tag: params.tag,
+        model: params.model ?? null,
+        status: "ACTIVE",
+        metrologyRegime: params.metrologyRegime ?? "INDUSTRIAL",
+      })
+      .returning({ id: asset.id }),
+  );
   if (!row) throw new Error("seedAsset failed");
   return row.id;
 }

@@ -13,6 +13,7 @@ import {
   seedPortalContext,
   seedPortalCustomer,
 } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration test for the CLIENT PORTAL on-site VISITS feed
 // (GET /api/portal/visits). This is a customer-facing tenant boundary, so only the
@@ -48,18 +49,20 @@ async function seedVisit(params: {
   scheduledAt?: Date;
   technicianId?: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(calibrationVisit)
-    .values({
-      organizationId: params.labOrgId,
-      unitId: params.labUnitId,
-      customerId: params.customerId,
-      createdBy: params.createdBy,
-      status: params.status ?? "CONFIRMED",
-      scheduledAt: params.scheduledAt ?? null,
-      technicianId: params.technicianId ?? null,
-    })
-    .returning({ id: calibrationVisit.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(calibrationVisit)
+      .values({
+        organizationId: params.labOrgId,
+        unitId: params.labUnitId,
+        customerId: params.customerId,
+        createdBy: params.createdBy,
+        status: params.status ?? "CONFIRMED",
+        scheduledAt: params.scheduledAt ?? null,
+        technicianId: params.technicianId ?? null,
+      })
+      .returning({ id: calibrationVisit.id }),
+  );
   if (!row) throw new Error("seedVisit: insert failed");
   return row.id;
 }

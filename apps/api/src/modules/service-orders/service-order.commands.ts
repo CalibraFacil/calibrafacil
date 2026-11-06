@@ -7,11 +7,11 @@ import {
   serviceOrderEventLog,
   serviceOrderSettings,
 } from "@calibra-facil/db/schema";
+import { isServiceOrderStatus } from "@calibra-facil/shared";
 import {
-  canTransitionServiceOrderStatus,
-  isServiceOrderFinalStatus,
-  isServiceOrderStatus,
-} from "@calibra-facil/shared";
+  SERVICE_ORDER_MACHINE,
+  canSetServiceOrderStatus,
+} from "@calibra-facil/schemas/machines";
 import type {
   CreateServiceOrderSchema,
   UpdateServiceOrderSchema,
@@ -347,10 +347,13 @@ export async function updateServiceOrder(input: {
     });
     if (refs) return refs;
 
+    const statusChange =
+      input.values.status && input.values.status !== existing.status
+        ? input.values.status
+        : null;
     if (
-      input.values.status &&
-      input.values.status !== existing.status &&
-      !canTransitionServiceOrderStatus(existing.status, input.values.status)
+      statusChange &&
+      !canSetServiceOrderStatus(existing.status, statusChange)
     ) {
       return { status: "invalid_transition" as const };
     }
@@ -378,16 +381,20 @@ export async function updateServiceOrder(input: {
       // Defense-in-depth (SEC-08): repeat the tenant scope already proven by the
       // SELECT above so the final UPDATE stays org/unit-scoped even if a future
       // refactor drops the guarding read. Reuses the same in-scope member values.
+      // A status change is a compare-and-set on the status it was checked from.
       .where(
         and(
           eq(serviceOrder.id, input.serviceOrderId),
           eq(serviceOrder.organizationId, input.member.organizationId),
           buildUnitScopeCondition(serviceOrder.unitId, input.member),
+          statusChange ? eq(serviceOrder.status, existing.status) : undefined,
         ),
       )
       .returning();
 
-    if (input.values.status && input.values.status !== existing.status) {
+    if (!updated) return { status: "invalid_transition" as const };
+
+    if (statusChange) {
       await recordServiceOrderEvent(
         {
           organizationId: existing.organizationId,
@@ -542,11 +549,9 @@ export async function deliverServiceOrder(input: {
   };
 }) {
   return orgDb(input.member.organizationId).transaction(async (o) => {
-    // SERVICE_ORDER_ALLOWED_TRANSITIONS is the declared truth for the lifecycle,
-    // but this path used to write `delivered` unconditionally — an OS still under
-    // evaluation could be marked delivered. Same guard as
-    // startServiceOrderExecution; re-delivering an already-delivered OS stays a
-    // no-op rather than an error.
+    // `deliver` in SERVICE_ORDER_MACHINE: only an order ready for pickup is
+    // delivered. Re-delivering an already-delivered OS stays a no-op rather than
+    // an error.
     const order = await getScopedServiceOrder(
       input.serviceOrderId,
       input.member,
@@ -555,7 +560,7 @@ export async function deliverServiceOrder(input: {
     if (!order) return { status: "not_found" as const };
     if (
       order.status !== "delivered" &&
-      !canTransitionServiceOrderStatus(order.status, "delivered")
+      !SERVICE_ORDER_MACHINE.canTransition(order.status, "deliver")
     ) {
       return { status: "invalid_transition" as const };
     }
@@ -577,11 +582,12 @@ export async function deliverServiceOrder(input: {
           eq(serviceOrder.id, input.serviceOrderId),
           eq(serviceOrder.organizationId, input.member.organizationId),
           buildUnitScopeCondition(serviceOrder.unitId, input.member),
+          eq(serviceOrder.status, order.status),
         ),
       )
       .returning();
 
-    if (!updated) return { status: "not_found" as const };
+    if (!updated) return { status: "invalid_transition" as const };
 
     await recordServiceOrderEvent(
       {
@@ -631,7 +637,7 @@ export async function closeServiceOrder(input: {
       if (order.status === "closed") {
         return { status: "ok" as const, data: order };
       }
-      if (!canTransitionServiceOrderStatus(order.status, "closed")) {
+      if (!SERVICE_ORDER_MACHINE.canTransition(order.status, "close")) {
         return { status: "invalid_transition" as const };
       }
 
@@ -650,11 +656,12 @@ export async function closeServiceOrder(input: {
             // Was missing here while deliver/cancel had it: without the unit scope
             // a member scoped to one unit could close another unit's OS.
             buildUnitScopeCondition(serviceOrder.unitId, input.member),
+            eq(serviceOrder.status, order.status),
           ),
         )
         .returning();
 
-      if (!updated) return { status: "not_found" as const };
+      if (!updated) return { status: "invalid_transition" as const };
 
       return {
         status: "closed_now" as const,
@@ -715,7 +722,7 @@ export async function cancelServiceOrder(input: {
     if (order.status === "canceled") {
       return { status: "ok" as const, data: order };
     }
-    if (!canTransitionServiceOrderStatus(order.status, "canceled")) {
+    if (!SERVICE_ORDER_MACHINE.canTransition(order.status, "cancel")) {
       return { status: "invalid_transition" as const };
     }
 
@@ -731,11 +738,12 @@ export async function cancelServiceOrder(input: {
           eq(serviceOrder.id, input.serviceOrderId),
           eq(serviceOrder.organizationId, input.member.organizationId),
           buildUnitScopeCondition(serviceOrder.unitId, input.member),
+          eq(serviceOrder.status, order.status),
         ),
       )
       .returning();
 
-    if (!updated) return { status: "not_found" as const };
+    if (!updated) return { status: "invalid_transition" as const };
 
     await recordServiceOrderEvent(
       {
@@ -809,18 +817,23 @@ export async function reopenServiceOrder(input: {
     // Reopening only makes sense for an order that is actually finished. Without
     // this the endpoint reset ANY order — including one mid-repair — back to
     // awaiting_tech_evaluation.
-    if (!isServiceOrderFinalStatus(order.status)) {
+    if (!SERVICE_ORDER_MACHINE.canTransition(order.status, "reopen")) {
       return { status: "invalid_transition" as const };
     }
 
-    // Back to where it was; awaiting_tech_evaluation only when nothing was
-    // recorded (orders closed before this was tracked).
+    // Back to where it was; awaiting_tech_evaluation when nothing was recorded
+    // (orders closed before this was tracked) or the recorded stage is not one
+    // `reopen` returns to from here.
+    const remembered = await readStatusBeforeClose(
+      o,
+      input.serviceOrderId,
+      order.organizationId,
+    );
     const restoredStatus =
-      (await readStatusBeforeClose(
-        o,
-        input.serviceOrderId,
-        order.organizationId,
-      )) ?? "awaiting_tech_evaluation";
+      remembered &&
+      SERVICE_ORDER_MACHINE.canTransition(order.status, "reopen", remembered)
+        ? remembered
+        : "awaiting_tech_evaluation";
 
     const [updated] = await o
       .update(serviceOrder)
@@ -834,11 +847,12 @@ export async function reopenServiceOrder(input: {
           eq(serviceOrder.id, input.serviceOrderId),
           eq(serviceOrder.organizationId, input.member.organizationId),
           buildUnitScopeCondition(serviceOrder.unitId, input.member),
+          eq(serviceOrder.status, order.status),
         ),
       )
       .returning();
 
-    if (!updated) return { status: "not_found" as const };
+    if (!updated) return { status: "invalid_transition" as const };
 
     await recordServiceOrderEvent(
       {

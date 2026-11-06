@@ -17,6 +17,7 @@ import { truncateAll } from "../../../test/integration/db";
 import { seedOrg } from "../../../test/integration/seed";
 import { createBillingDocumentFromServiceOrder } from "../service-order-workflow";
 import { loadBillingDocumentExportPayload } from "../finance";
+import { withStatusRepair } from "../../../test/integration/state-fixtures";
 
 // Real-DB integration test for Phase 2 of the estoque/inventory epic (#580):
 // billing lines remember their material, and the ERP export payload turns
@@ -35,14 +36,16 @@ import { loadBillingDocumentExportPayload } from "../finance";
 //                  item holds its own copy, not a join)
 
 async function seedClientOrg(clientOrgId: string): Promise<void> {
-  await db.insert(organization).values({
-    id: clientOrgId,
-    name: `Client ${clientOrgId}`,
-    slug: clientOrgId,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    type: "CLIENT",
-    status: "ACTIVE",
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: clientOrgId,
+      name: `Client ${clientOrgId}`,
+      slug: clientOrgId,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      type: "CLIENT",
+      status: "ACTIVE",
+    }),
+  );
 }
 
 async function seedBillingContext(tag: string) {
@@ -63,45 +66,49 @@ async function seedBillingContext(tag: string) {
     .values({ name: `Type ${tag}`, slug: `type-${tag}`, definition: [] })
     .returning({ id: assetType.id });
   if (!type) throw new Error("seed: asset type insert failed");
-  const [assetRow] = await db
-    .insert(asset)
-    .values({
-      unitId: org.unitId,
-      customerId: customerRow.id,
-      // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${customerRow.id})`,
-      assetTypeId: type.id,
-      name: `Asset ${tag}`,
-      serialNumber: `SN-${tag}`,
-      tag,
-      status: "ACTIVE",
-      metrologyRegime: "INDUSTRIAL",
-    })
-    .returning({ id: asset.id });
+  const [assetRow] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: org.unitId,
+        customerId: customerRow.id,
+        // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${customerRow.id})`,
+        assetTypeId: type.id,
+        name: `Asset ${tag}`,
+        serialNumber: `SN-${tag}`,
+        tag,
+        status: "ACTIVE",
+        metrologyRegime: "INDUSTRIAL",
+      })
+      .returning({ id: asset.id }),
+  );
   if (!assetRow) throw new Error("seed: asset insert failed");
 
-  const [order] = await db
-    .insert(serviceOrder)
-    .values({
-      organizationId: org.orgId,
-      unitId: org.unitId,
-      customerId: customerRow.id,
-      assetId: assetRow.id,
-      openedByUserId: org.userId,
-      serviceOrderNumber: `OS-${tag}`,
-      status: "ready_for_delivery",
-      claimedDefect: "Defeito de teste",
-      intakeCondition: "Condição de teste",
-      intakeType: "counter",
-      deliveryMethod: "pickup_at_lab",
-      priority: "normal",
-      totalQuotedCents: 90_000,
-      totalApprovedCents: 90_000,
-      evaluationFeeCents: 0,
-      evaluationFeeApplied: false,
-      isExternalService: false,
-    })
-    .returning({ id: serviceOrder.id });
+  const [order] = await withStatusRepair((tx) =>
+    tx
+      .insert(serviceOrder)
+      .values({
+        organizationId: org.orgId,
+        unitId: org.unitId,
+        customerId: customerRow.id,
+        assetId: assetRow.id,
+        openedByUserId: org.userId,
+        serviceOrderNumber: `OS-${tag}`,
+        status: "ready_for_delivery",
+        claimedDefect: "Defeito de teste",
+        intakeCondition: "Condição de teste",
+        intakeType: "counter",
+        deliveryMethod: "pickup_at_lab",
+        priority: "normal",
+        totalQuotedCents: 90_000,
+        totalApprovedCents: 90_000,
+        evaluationFeeCents: 0,
+        evaluationFeeApplied: false,
+        isExternalService: false,
+      })
+      .returning({ id: serviceOrder.id }),
+  );
   if (!order) throw new Error("seed: service order insert failed");
 
   const [materialRow] = await db
@@ -117,18 +124,20 @@ async function seedBillingContext(tag: string) {
     .returning({ id: material.id });
   if (!materialRow) throw new Error("seed: material insert failed");
 
-  const [quote] = await db
-    .insert(serviceOrderQuote)
-    .values({
-      organizationId: organizationOf("service_order", order.id),
-      serviceOrderId: order.id,
-      quoteNumber: `OS-${tag}/ORC`,
-      version: 1,
-      status: "approved",
-      totalCents: 90_000,
-      createdByUserId: org.userId,
-    })
-    .returning({ id: serviceOrderQuote.id });
+  const [quote] = await withStatusRepair((tx) =>
+    tx
+      .insert(serviceOrderQuote)
+      .values({
+        organizationId: organizationOf("service_order", order.id),
+        serviceOrderId: order.id,
+        quoteNumber: `OS-${tag}/ORC`,
+        version: 1,
+        status: "approved",
+        totalCents: 90_000,
+        createdByUserId: org.userId,
+      })
+      .returning({ id: serviceOrderQuote.id }),
+  );
   if (!quote) throw new Error("seed: quote insert failed");
 
   await db.insert(serviceOrderQuoteItem).values([

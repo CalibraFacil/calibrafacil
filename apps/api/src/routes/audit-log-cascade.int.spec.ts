@@ -49,20 +49,23 @@ import { eq, sql } from "drizzle-orm";
 import { truncateAll } from "../../test/integration/db";
 import { seedApiKey, seedOrg } from "../../test/integration/seed";
 import { hardDeleteOrganizationAsPurge } from "../../test/integration/records-retention";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // ---------------------------------------------------------------------------
 // Inline domain seed helpers
 // ---------------------------------------------------------------------------
 
 async function seedClientOrg(clientOrgId: string): Promise<void> {
-  await db.insert(organization).values({
-    id: clientOrgId,
-    name: `Client ${clientOrgId}`,
-    slug: clientOrgId,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    type: "CLIENT",
-    status: "ACTIVE",
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: clientOrgId,
+      name: `Client ${clientOrgId}`,
+      slug: clientOrgId,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      type: "CLIENT",
+      status: "ACTIVE",
+    }),
+  );
 }
 
 async function seedCustomer(params: {
@@ -97,19 +100,21 @@ async function seedAsset(params: {
   assetTypeId: number;
   tag: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(asset)
-    .values({
-      // #638b made lab_organization_id NOT NULL — derive it from the owning customer.
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
-      unitId: params.unitId,
-      customerId: params.customerId,
-      assetTypeId: params.assetTypeId,
-      name: "Instrumento",
-      serialNumber: `SN-${params.tag}`,
-      tag: params.tag,
-    })
-    .returning({ id: asset.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        // #638b made lab_organization_id NOT NULL — derive it from the owning customer.
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
+        unitId: params.unitId,
+        customerId: params.customerId,
+        assetTypeId: params.assetTypeId,
+        name: "Instrumento",
+        serialNumber: `SN-${params.tag}`,
+        tag: params.tag,
+      })
+      .returning({ id: asset.id }),
+  );
   if (!row) throw new Error("seedAsset: insert failed");
   return row.id;
 }
@@ -199,14 +204,16 @@ async function seedCertificateReleaseWithAudit(org: {
     createdBy: org.userId,
   });
 
-  const [release] = await db
-    .insert(certificateRelease)
-    .values({
-      organizationId: org.orgId,
-      calibrationJobId: jobId,
-      status: "RELEASED",
-    })
-    .returning({ id: certificateRelease.id });
+  const [release] = await withStatusRepair((tx) =>
+    tx
+      .insert(certificateRelease)
+      .values({
+        organizationId: org.orgId,
+        calibrationJobId: jobId,
+        status: "RELEASED",
+      })
+      .returning({ id: certificateRelease.id }),
+  );
   if (!release) throw new Error("seedCertificateRelease: insert failed");
 
   const [auditRow] = await db
@@ -350,16 +357,18 @@ describe("audit-log subject FKs no longer self-delete the trail (CMP-07 #692)", 
   it("REQ-CMP-AUD-010b: personnelCompetenceAuditLog survives deletion of the competence subject", async () => {
     const org = await seedOrg({ orgId: "org-comp", role: "admin" });
 
-    const [pc] = await db
-      .insert(personnelCompetence)
-      .values({
-        organizationId: org.orgId,
-        userId: org.userId,
-        scopeDescription: "Calibração de massa",
-        requestedBy: org.userId,
-        createdBy: org.userId,
-      })
-      .returning({ id: personnelCompetence.id });
+    const [pc] = await withStatusRepair((tx) =>
+      tx
+        .insert(personnelCompetence)
+        .values({
+          organizationId: org.orgId,
+          userId: org.userId,
+          scopeDescription: "Calibração de massa",
+          requestedBy: org.userId,
+          createdBy: org.userId,
+        })
+        .returning({ id: personnelCompetence.id }),
+    );
     if (!pc) throw new Error("seed personnelCompetence: insert failed");
 
     const [auditRow] = await db
@@ -399,14 +408,16 @@ describe("audit-log subject FKs no longer self-delete the trail (CMP-07 #692)", 
   it("REQ-CMP-AUD-010b: authorizedSignatoryAuditLog survives deletion of the signatory subject", async () => {
     const org = await seedOrg({ orgId: "org-sig", role: "admin" });
 
-    const [sig] = await db
-      .insert(authorizedSignatory)
-      .values({
-        organizationId: org.orgId,
-        userId: org.userId,
-        authorizedBy: org.userId,
-      })
-      .returning({ id: authorizedSignatory.id });
+    const [sig] = await withStatusRepair((tx) =>
+      tx
+        .insert(authorizedSignatory)
+        .values({
+          organizationId: org.orgId,
+          userId: org.userId,
+          authorizedBy: org.userId,
+        })
+        .returning({ id: authorizedSignatory.id }),
+    );
     if (!sig) throw new Error("seed authorizedSignatory: insert failed");
 
     const [auditRow] = await db

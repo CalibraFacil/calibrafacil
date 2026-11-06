@@ -60,6 +60,7 @@ vi.mock("@calibra-facil/notifications", () => ({
 }));
 
 import { processBackgroundJob } from "@calibra-facil/jobs-core";
+import { withStatusRepair } from "../test/integration/state-fixtures";
 
 const GOTENBERG_URL = "http://gotenberg.test";
 const FAKE_PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]);
@@ -188,13 +189,15 @@ async function seedApprovedJob(
     .where(eq(user.id, USER_ID));
   // C1: the title under the signature is the approver's authorized-signatory
   // record's, not the lab profile's technical-manager title.
-  await db.insert(authorizedSignatory).values({
-    organizationId: org.orgId,
-    userId: USER_ID,
-    assetTypeId: null,
-    title: "Signatária Autorizada Original",
-    authorizedBy: USER_ID,
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(authorizedSignatory).values({
+      organizationId: org.orgId,
+      userId: USER_ID,
+      assetTypeId: null,
+      title: "Signatária Autorizada Original",
+      authorizedBy: USER_ID,
+    }),
+  );
   if (freeze) await freezeJob(job.jobId, org.orgId);
   // Released after the fact: a superseded job is frozen content, so it is moved last.
   if (options.status) await setJobStatus(job.jobId, options.status);

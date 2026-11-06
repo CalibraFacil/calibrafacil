@@ -36,6 +36,7 @@ import { createApiKeySecret } from "../lib/api-keys";
 import { jobsRouter } from "./jobs";
 import { portalRouter } from "./portal";
 import { publicApiV2Router } from "./public-api-v2";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
@@ -67,19 +68,21 @@ async function seedWorld() {
     .values({ name: "Balança", slug: "balanca", definition: [] })
     .returning({ id: assetType.id });
   if (!type) throw new Error("asset type seed failed");
-  const [ast] = await db
-    .insert(asset)
-    .values({
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${ctx.customerId})`,
-      unitId: ctx.labUnitId,
-      customerId: ctx.customerId,
-      assetTypeId: type.id,
-      name: "Balança EQ-1",
-      serialNumber: "SN-EQ-1",
-      tag: "EQ-1",
-      status: "ACTIVE",
-    })
-    .returning({ id: asset.id });
+  const [ast] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${ctx.customerId})`,
+        unitId: ctx.labUnitId,
+        customerId: ctx.customerId,
+        assetTypeId: type.id,
+        name: "Balança EQ-1",
+        serialNumber: "SN-EQ-1",
+        tag: "EQ-1",
+        status: "ACTIVE",
+      })
+      .returning({ id: asset.id }),
+  );
   if (!ast) throw new Error("asset seed failed");
   const serviceId = await seedService({
     organizationId: ctx.labOrgId,

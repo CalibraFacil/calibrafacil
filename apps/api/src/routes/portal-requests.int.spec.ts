@@ -15,6 +15,7 @@ import {
   seedPortalContext,
   seedPortalCustomer,
 } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration test for the CLIENT PORTAL calibration-request
 // endpoints (portal-requests.ts) — the customer-facing tenant boundary. Only the
@@ -65,20 +66,22 @@ async function seedAsset(params: {
   name: string;
   tag: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(asset)
-    .values({
-      unitId: params.labUnitId,
-      customerId: params.customerId,
-      // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
-      assetTypeId: params.assetTypeId,
-      name: params.name,
-      serialNumber: `SN-${params.tag}`,
-      tag: params.tag,
-      status: "ACTIVE",
-    })
-    .returning({ id: asset.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: params.labUnitId,
+        customerId: params.customerId,
+        // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
+        assetTypeId: params.assetTypeId,
+        name: params.name,
+        serialNumber: `SN-${params.tag}`,
+        tag: params.tag,
+        status: "ACTIVE",
+      })
+      .returning({ id: asset.id }),
+  );
   if (!row) throw new Error("seedAsset: insert failed");
   return row.id;
 }
@@ -92,18 +95,20 @@ async function seedRequest(params: {
   submittedBy: string;
   observations?: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(calibrationRequest)
-    .values({
-      organizationId: params.labOrgId,
-      unitId: params.labUnitId,
-      customerId: params.customerId,
-      authOrganizationId: params.clientOrgId,
-      submittedBy: params.submittedBy,
-      status: "PENDING",
-      observations: params.observations ?? null,
-    })
-    .returning({ id: calibrationRequest.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(calibrationRequest)
+      .values({
+        organizationId: params.labOrgId,
+        unitId: params.labUnitId,
+        customerId: params.customerId,
+        authOrganizationId: params.clientOrgId,
+        submittedBy: params.submittedBy,
+        status: "PENDING",
+        observations: params.observations ?? null,
+      })
+      .returning({ id: calibrationRequest.id }),
+  );
   if (!row) throw new Error("seedRequest: insert failed");
   return row.id;
 }

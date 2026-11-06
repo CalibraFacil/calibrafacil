@@ -40,6 +40,7 @@ import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { ENGINE_VERSION } from "@calibra-facil/math-engine";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 vi.mock("@calibra-facil/notifications", () => ({
   notifyJobAssigned: vi.fn().mockResolvedValue(undefined),
@@ -53,14 +54,16 @@ const JSON_HEADERS = { "content-type": "application/json" };
 // ---------------------------------------------------------------------------
 
 async function seedClientOrg(clientOrgId: string): Promise<void> {
-  await db.insert(organization).values({
-    id: clientOrgId,
-    name: `Client ${clientOrgId}`,
-    slug: clientOrgId,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    type: "CLIENT",
-    status: "ACTIVE",
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: clientOrgId,
+      name: `Client ${clientOrgId}`,
+      slug: clientOrgId,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      type: "CLIENT",
+      status: "ACTIVE",
+    }),
+  );
 }
 
 async function seedCustomer(params: {
@@ -95,21 +98,23 @@ async function seedAsset(params: {
   assetTypeId: number;
   tag: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(asset)
-    .values({
-      unitId: params.unitId,
-      customerId: params.customerId,
-      // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
-      assetTypeId: params.assetTypeId,
-      name: "Test Instrument",
-      serialNumber: `SN-${params.tag}`,
-      tag: params.tag,
-      status: "ACTIVE",
-      metrologyRegime: "INDUSTRIAL",
-    })
-    .returning({ id: asset.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: params.unitId,
+        customerId: params.customerId,
+        // SEC-03b (#638): per-org tag uniqueness — derive lab org from the customer.
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
+        assetTypeId: params.assetTypeId,
+        name: "Test Instrument",
+        serialNumber: `SN-${params.tag}`,
+        tag: params.tag,
+        status: "ACTIVE",
+        metrologyRegime: "INDUSTRIAL",
+      })
+      .returning({ id: asset.id }),
+  );
   if (!row) throw new Error("seedAsset: insert failed");
   return row.id;
 }
@@ -126,31 +131,33 @@ async function seedPublishedMethod(params: {
   const fingerprint = "test-fp-0000000000000001";
   const engineVersion = ENGINE_VERSION;
   const optionsFingerprint = "test-opts-fp-00000001";
-  const [row] = await db
-    .insert(calibrationMethod)
-    .values({
-      organizationId: params.organizationId,
-      assetTypeId: params.assetTypeId,
-      name: `Test Method ${params.organizationId}`,
-      version: 1,
-      status: "PUBLISHED",
-      dataFields: [],
-      variableBindings: [],
-      formulas: [],
-      measurementModels: [],
-      validations: [],
-      uncertaintyParams: [],
-      methodFingerprint: fingerprint,
-      compiledMethod: {
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(calibrationMethod)
+      .values({
+        organizationId: params.organizationId,
+        assetTypeId: params.assetTypeId,
+        name: `Test Method ${params.organizationId}`,
+        version: 1,
+        status: "PUBLISHED",
+        dataFields: [],
+        variableBindings: [],
+        formulas: [],
+        measurementModels: [],
+        validations: [],
+        uncertaintyParams: [],
         methodFingerprint: fingerprint,
-        normalizedMethodJson: "{}",
-        engine: { version: engineVersion, optionsFingerprint },
-      },
-      methodEngine: { version: engineVersion, optionsFingerprint },
-      publicationEvidence: { publishedAt: "2026-01-01T00:00:00.000Z" },
-      createdBy: params.createdBy,
-    })
-    .returning({ id: calibrationMethod.id });
+        compiledMethod: {
+          methodFingerprint: fingerprint,
+          normalizedMethodJson: "{}",
+          engine: { version: engineVersion, optionsFingerprint },
+        },
+        methodEngine: { version: engineVersion, optionsFingerprint },
+        publicationEvidence: { publishedAt: "2026-01-01T00:00:00.000Z" },
+        createdBy: params.createdBy,
+      })
+      .returning({ id: calibrationMethod.id }),
+  );
   if (!row) throw new Error("seedPublishedMethod: insert failed");
   return row.id;
 }
@@ -219,20 +226,22 @@ async function seedServiceOrder(params: {
   openedByUserId: string;
   serviceOrderNumber: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(serviceOrder)
-    .values({
-      organizationId: params.organizationId,
-      unitId: params.unitId,
-      customerId: params.customerId,
-      assetId: params.assetId,
-      openedByUserId: params.openedByUserId,
-      serviceOrderNumber: params.serviceOrderNumber,
-      status: "awaiting_calibration",
-      claimedDefect: "Fora de calibração",
-      intakeCondition: "Recebido",
-    })
-    .returning({ id: serviceOrder.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(serviceOrder)
+      .values({
+        organizationId: params.organizationId,
+        unitId: params.unitId,
+        customerId: params.customerId,
+        assetId: params.assetId,
+        openedByUserId: params.openedByUserId,
+        serviceOrderNumber: params.serviceOrderNumber,
+        status: "awaiting_calibration",
+        claimedDefect: "Fora de calibração",
+        intakeCondition: "Recebido",
+      })
+      .returning({ id: serviceOrder.id }),
+  );
   if (!row) throw new Error("seedServiceOrder: insert failed");
   return row.id;
 }

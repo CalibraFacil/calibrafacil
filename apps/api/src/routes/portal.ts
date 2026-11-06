@@ -78,6 +78,10 @@ import {
   sql,
 } from "drizzle-orm";
 import {
+  ASSET_OOT_EVENT_MACHINE,
+  OOT_NOTIFICATION_MACHINE,
+} from "@calibra-facil/schemas/machines";
+import {
   ListAssetsQuerySchema,
   SetCalibrationIntervalSchema,
   FleetAnalyticsQuerySchema,
@@ -2878,6 +2882,10 @@ export const portalRouter = new Hono<{
                   and(
                     eq(ootNotification.id, notification.id),
                     isNull(ootNotification.acknowledgedAt),
+                    inArray(
+                      ootNotification.status,
+                      OOT_NOTIFICATION_MACHINE.allowedFrom("acknowledge"),
+                    ),
                   ),
                 )
                 .returning();
@@ -3376,11 +3384,17 @@ export const portalRouter = new Hono<{
 
           await o
             .update(assetOotEvent)
-            .set({ status: "ASSESSED" })
+            .set({
+              status: ASSET_OOT_EVENT_MACHINE.requireTargetOf("OPEN", "assess"),
+            })
             .where(
               and(
                 eq(assetOotEvent.id, id),
                 inArray(assetOotEvent.customerId, scope.customerIds),
+                inArray(
+                  assetOotEvent.status,
+                  ASSET_OOT_EVENT_MACHINE.allowedFrom("assess"),
+                ),
               ),
             );
 

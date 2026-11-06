@@ -974,6 +974,20 @@
       "when": 1794100000000,
       "tag": "0139_render_failed_state",
       "breakpoints": true
+    },
+    {
+      "idx": 140,
+      "version": "7",
+      "when": 1794200000000,
+      "tag": "0140_status_transition_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 141,
+      "version": "7",
+      "when": 1794300000000,
+      "tag": "0141_lifecycle_invariants",
+      "breakpoints": true
     }
   ]
 }

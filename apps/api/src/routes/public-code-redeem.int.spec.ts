@@ -25,6 +25,7 @@ import { eq, sql } from "drizzle-orm";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { createPublicServiceOrderAccessToken } from "../lib/service-order-workflow";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // The requests below arrive as from behind one trusted reverse proxy (the Caddy of
 // deploy/compose.yaml), which writes X-Forwarded-For: lib/client-ip.ts.
@@ -58,14 +59,16 @@ function redeemRequest(code: string, ip = "203.0.113.7") {
 // ---------------------------------------------------------------------------
 
 async function seedClientOrg(clientOrgId: string): Promise<void> {
-  await db.insert(organization).values({
-    id: clientOrgId,
-    name: `Client Org ${clientOrgId}`,
-    slug: clientOrgId,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    type: "CLIENT",
-    status: "ACTIVE",
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: clientOrgId,
+      name: `Client Org ${clientOrgId}`,
+      slug: clientOrgId,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      type: "CLIENT",
+      status: "ACTIVE",
+    }),
+  );
 }
 
 async function seedCustomer(params: {
@@ -96,55 +99,61 @@ async function seedWorld(tag: string) {
     labOrganizationId: org.orgId,
     clientOrgId: `client-${tag}`,
   });
-  const [assetRow] = await db
-    .insert(asset)
-    .values({
-      unitId: org.unitId,
-      customerId,
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${customerId})`,
-      assetTypeId: type?.id ?? 0,
-      name: "Test Asset",
-      serialNumber: `SN-${tag}`,
-      tag: `tag-${tag}`,
-      status: "ACTIVE",
-      metrologyRegime: "INDUSTRIAL",
-    })
-    .returning({ id: asset.id });
-  const [so] = await db
-    .insert(serviceOrder)
-    .values({
-      organizationId: org.orgId,
-      unitId: org.unitId,
-      customerId,
-      assetId: assetRow?.id ?? 0,
-      openedByUserId: org.userId,
-      serviceOrderNumber: `OS-${tag}`,
-      status: "awaiting_quote_approval",
-      claimedDefect: "Test defect",
-      intakeCondition: "Test condition",
-      intakeType: "counter",
-      deliveryMethod: "pickup_at_lab",
-      priority: "normal",
-      totalQuotedCents: 0,
-      totalApprovedCents: 0,
-      evaluationFeeCents: 0,
-      evaluationFeeApplied: false,
-      isExternalService: false,
-    })
-    .returning({ id: serviceOrder.id });
+  const [assetRow] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: org.unitId,
+        customerId,
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${customerId})`,
+        assetTypeId: type?.id ?? 0,
+        name: "Test Asset",
+        serialNumber: `SN-${tag}`,
+        tag: `tag-${tag}`,
+        status: "ACTIVE",
+        metrologyRegime: "INDUSTRIAL",
+      })
+      .returning({ id: asset.id }),
+  );
+  const [so] = await withStatusRepair((tx) =>
+    tx
+      .insert(serviceOrder)
+      .values({
+        organizationId: org.orgId,
+        unitId: org.unitId,
+        customerId,
+        assetId: assetRow?.id ?? 0,
+        openedByUserId: org.userId,
+        serviceOrderNumber: `OS-${tag}`,
+        status: "awaiting_quote_approval",
+        claimedDefect: "Test defect",
+        intakeCondition: "Test condition",
+        intakeType: "counter",
+        deliveryMethod: "pickup_at_lab",
+        priority: "normal",
+        totalQuotedCents: 0,
+        totalApprovedCents: 0,
+        evaluationFeeCents: 0,
+        evaluationFeeApplied: false,
+        isExternalService: false,
+      })
+      .returning({ id: serviceOrder.id }),
+  );
   const serviceOrderId = so?.id ?? 0;
-  const [quote] = await db
-    .insert(serviceOrderQuote)
-    .values({
-      organizationId: organizationOf("service_order", serviceOrderId),
-      serviceOrderId,
-      quoteNumber: `OS-${tag}/ORC`,
-      version: 1,
-      status: "sent",
-      totalCents: 10000,
-      createdByUserId: org.userId,
-    })
-    .returning({ id: serviceOrderQuote.id });
+  const [quote] = await withStatusRepair((tx) =>
+    tx
+      .insert(serviceOrderQuote)
+      .values({
+        organizationId: organizationOf("service_order", serviceOrderId),
+        serviceOrderId,
+        quoteNumber: `OS-${tag}/ORC`,
+        version: 1,
+        status: "sent",
+        totalCents: 10000,
+        createdByUserId: org.userId,
+      })
+      .returning({ id: serviceOrderQuote.id }),
+  );
   return { org, customerId, serviceOrderId, quoteId: quote?.id ?? 0 };
 }
 

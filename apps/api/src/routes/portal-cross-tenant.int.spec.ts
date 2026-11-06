@@ -50,6 +50,7 @@ import {
   seedService,
   seedStandard,
 } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 const ORIGIN = { origin: "http://localhost" };
 const JSON_HEADERS = { ...ORIGIN, "content-type": "application/json" };
@@ -94,20 +95,22 @@ async function seedLab(params: {
     unitId: ctx.labUnitId,
     name: `Servico ${label}`,
   });
-  const [assetRow] = await db
-    .insert(asset)
-    .values({
-      unitId: ctx.labUnitId,
-      customerId: ctx.customerId,
-      labOrganizationId: ctx.labOrgId,
-      assetTypeId,
-      name: `Ativo ${label}`,
-      serialNumber: `SN-${label}`,
-      tag: `TAG-${label}`,
-      status: "ACTIVE",
-      nextCalibrationDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
-    })
-    .returning({ id: asset.id, publicId: asset.publicId });
+  const [assetRow] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: ctx.labUnitId,
+        customerId: ctx.customerId,
+        labOrganizationId: ctx.labOrgId,
+        assetTypeId,
+        name: `Ativo ${label}`,
+        serialNumber: `SN-${label}`,
+        tag: `TAG-${label}`,
+        status: "ACTIVE",
+        nextCalibrationDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
+      })
+      .returning({ id: asset.id, publicId: asset.publicId }),
+  );
   if (!assetRow) throw new Error("asset not seeded");
 
   const certificateCode = `CERT-${label}`;
@@ -147,18 +150,20 @@ async function seedLab(params: {
     createdBy: ctx.portalUserId,
   });
 
-  const [request] = await db
-    .insert(calibrationRequest)
-    .values({
-      organizationId: ctx.labOrgId,
-      unitId: ctx.labUnitId,
-      customerId: ctx.customerId,
-      authOrganizationId: ctx.clientOrgId,
-      submittedBy: ctx.portalUserId,
-      status: "PENDING",
-      observations: `Pedido ${label}`,
-    })
-    .returning({ id: calibrationRequest.id });
+  const [request] = await withStatusRepair((tx) =>
+    tx
+      .insert(calibrationRequest)
+      .values({
+        organizationId: ctx.labOrgId,
+        unitId: ctx.labUnitId,
+        customerId: ctx.customerId,
+        authOrganizationId: ctx.clientOrgId,
+        submittedBy: ctx.portalUserId,
+        status: "PENDING",
+        observations: `Pedido ${label}`,
+      })
+      .returning({ id: calibrationRequest.id }),
+  );
   if (!request) throw new Error("request not seeded");
   await db.insert(calibrationRequestItem).values({
     organizationId: ctx.labOrgId,
@@ -166,47 +171,53 @@ async function seedLab(params: {
     assetId: assetRow.id,
   });
 
-  const [visit] = await db
-    .insert(calibrationVisit)
-    .values({
-      organizationId: ctx.labOrgId,
-      unitId: ctx.labUnitId,
-      customerId: ctx.customerId,
-      createdBy: ctx.portalUserId,
-      status: "PROPOSED",
-      scheduledAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
-      sourceRequestId: request.id,
-      address: `Rua ${label}`,
-    })
-    .returning({ id: calibrationVisit.id });
+  const [visit] = await withStatusRepair((tx) =>
+    tx
+      .insert(calibrationVisit)
+      .values({
+        organizationId: ctx.labOrgId,
+        unitId: ctx.labUnitId,
+        customerId: ctx.customerId,
+        createdBy: ctx.portalUserId,
+        status: "PROPOSED",
+        scheduledAt: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+        sourceRequestId: request.id,
+        address: `Rua ${label}`,
+      })
+      .returning({ id: calibrationVisit.id }),
+  );
   if (!visit) throw new Error("visit not seeded");
 
-  const [nc] = await db
-    .insert(nonConformance)
-    .values({
-      ncNumber: `NC-${label}`,
-      organizationId: ctx.labOrgId,
-      jobId: job.id,
-      type: "calibration",
-      description: `Desvio ${label}`,
-      detectedBy: ctx.portalUserId,
-      detectedAt: new Date("2026-03-11T12:00:00.000Z"),
-      createdBy: ctx.portalUserId,
-    })
-    .returning({ id: nonConformance.id });
+  const [nc] = await withStatusRepair((tx) =>
+    tx
+      .insert(nonConformance)
+      .values({
+        ncNumber: `NC-${label}`,
+        organizationId: ctx.labOrgId,
+        jobId: job.id,
+        type: "calibration",
+        description: `Desvio ${label}`,
+        detectedBy: ctx.portalUserId,
+        detectedAt: new Date("2026-03-11T12:00:00.000Z"),
+        createdBy: ctx.portalUserId,
+      })
+      .returning({ id: nonConformance.id }),
+  );
   if (!nc) throw new Error("nc not seeded");
-  const [ootNotice] = await db
-    .insert(ootNotification)
-    .values({
-      organizationId: ctx.labOrgId,
-      ncId: nc.id,
-      jobId: job.id,
-      certificateNumber: certificateCode,
-      status: "SENT",
-      sentAt: new Date("2026-03-12T12:00:00.000Z"),
-      approvedBy: ctx.portalUserId,
-    })
-    .returning({ id: ootNotification.id, token: ootNotification.ackToken });
+  const [ootNotice] = await withStatusRepair((tx) =>
+    tx
+      .insert(ootNotification)
+      .values({
+        organizationId: ctx.labOrgId,
+        ncId: nc.id,
+        jobId: job.id,
+        certificateNumber: certificateCode,
+        status: "SENT",
+        sentAt: new Date("2026-03-12T12:00:00.000Z"),
+        approvedBy: ctx.portalUserId,
+      })
+      .returning({ id: ootNotification.id, token: ootNotification.ackToken }),
+  );
   if (!ootNotice) throw new Error("oot notification not seeded");
 
   const { eventId } = await seedAssetOotEvent({
@@ -218,42 +229,46 @@ async function seedLab(params: {
     actorUserId: ctx.portalUserId,
   });
 
-  const [pack] = await db
-    .insert(portalExportJob)
-    .values({
-      kind: "AUDIT_PACK",
-      labOrganizationId: ctx.labOrgId,
-      authOrganizationId: ctx.clientOrgId,
-      requestedByUserId: ctx.portalUserId,
-      params: {
-        dateFrom: "2026-01-01",
-        dateTo: "2026-12-31",
-        unitId: null,
-        include: {
-          certificates: true,
-          fleetReport: true,
-          verificationIndex: true,
+  const [pack] = await withStatusRepair((tx) =>
+    tx
+      .insert(portalExportJob)
+      .values({
+        kind: "AUDIT_PACK",
+        labOrganizationId: ctx.labOrgId,
+        authOrganizationId: ctx.clientOrgId,
+        requestedByUserId: ctx.portalUserId,
+        params: {
+          dateFrom: "2026-01-01",
+          dateTo: "2026-12-31",
+          unitId: null,
+          include: {
+            certificates: true,
+            fleetReport: true,
+            verificationIndex: true,
+          },
+          customerIds: [ctx.customerId],
         },
-        customerIds: [ctx.customerId],
-      },
-      status: "COMPLETED",
-      r2Key: `packs/${label}.zip`,
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      includedJobIds: [job.id],
-    })
-    .returning({ id: portalExportJob.id });
+        status: "COMPLETED",
+        r2Key: `packs/${label}.zip`,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        includedJobIds: [job.id],
+      })
+      .returning({ id: portalExportJob.id }),
+  );
   if (!pack) throw new Error("pack not seeded");
 
-  const [bell] = await db
-    .insert(notification)
-    .values({
-      recipientUserId: ctx.portalUserId,
-      organizationId: ctx.clientOrgId,
-      type: "CERTIFICATE_READY",
-      title: `Aviso ${label}`,
-      message: `Mensagem ${label}`,
-    })
-    .returning({ id: notification.id });
+  const [bell] = await withStatusRepair((tx) =>
+    tx
+      .insert(notification)
+      .values({
+        recipientUserId: ctx.portalUserId,
+        organizationId: ctx.clientOrgId,
+        type: "CERTIFICATE_READY",
+        title: `Aviso ${label}`,
+        message: `Mensagem ${label}`,
+      })
+      .returning({ id: notification.id }),
+  );
   if (!bell) throw new Error("notification not seeded");
 
   await db.insert(notificationPreference).values({
@@ -262,31 +277,35 @@ async function seedLab(params: {
     digestFrequency: tag === "b" ? "WEEKLY" : "NONE",
   });
 
-  const [order] = await db
-    .insert(serviceOrder)
-    .values({
-      organizationId: ctx.labOrgId,
-      unitId: ctx.labUnitId,
-      serviceOrderNumber: `OS-${label}`,
-      customerId: ctx.customerId,
-      assetId: assetRow.id,
-      openedByUserId: ctx.portalUserId,
-      claimedDefect: "Nao liga",
-      intakeCondition: "Riscos",
-      status: "awaiting_quote_approval",
-    })
-    .returning({ id: serviceOrder.id, publicId: serviceOrder.publicId });
+  const [order] = await withStatusRepair((tx) =>
+    tx
+      .insert(serviceOrder)
+      .values({
+        organizationId: ctx.labOrgId,
+        unitId: ctx.labUnitId,
+        serviceOrderNumber: `OS-${label}`,
+        customerId: ctx.customerId,
+        assetId: assetRow.id,
+        openedByUserId: ctx.portalUserId,
+        claimedDefect: "Nao liga",
+        intakeCondition: "Riscos",
+        status: "awaiting_quote_approval",
+      })
+      .returning({ id: serviceOrder.id, publicId: serviceOrder.publicId }),
+  );
   if (!order) throw new Error("service order not seeded");
-  const [quote] = await db
-    .insert(serviceOrderQuote)
-    .values({
-      organizationId: ctx.labOrgId,
-      serviceOrderId: order.id,
-      quoteNumber: `ORC-${label}`,
-      version: 1,
-      createdByUserId: ctx.portalUserId,
-    })
-    .returning({ id: serviceOrderQuote.id });
+  const [quote] = await withStatusRepair((tx) =>
+    tx
+      .insert(serviceOrderQuote)
+      .values({
+        organizationId: ctx.labOrgId,
+        serviceOrderId: order.id,
+        quoteNumber: `ORC-${label}`,
+        version: 1,
+        createdByUserId: ctx.portalUserId,
+      })
+      .returning({ id: serviceOrderQuote.id }),
+  );
   if (!quote) throw new Error("quote not seeded");
 
   return {

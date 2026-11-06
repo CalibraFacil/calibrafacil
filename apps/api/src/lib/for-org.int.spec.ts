@@ -9,6 +9,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { truncateAll } from "../../test/integration/db";
 import { seedCustomer, seedOrg } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-database proof of the org-bound handle (REQ-ORGDB-1): two laboratories
 // own customers; a handle bound to lab A never sees, changes or removes lab B's
@@ -99,14 +100,16 @@ describe("forOrg on a real database", () => {
 
   it("REQ-ORGDB-1: insert stores the bound organization and refuses another one", async () => {
     await seedTwoLabs();
-    await db.insert(organization).values({
-      id: "client-x",
-      name: "Client X",
-      slug: "client-x",
-      type: "CLIENT",
-      status: "ACTIVE",
-      createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    });
+    await withStatusRepair((tx) =>
+      tx.insert(organization).values({
+        id: "client-x",
+        name: "Client X",
+        slug: "client-x",
+        type: "CLIENT",
+        status: "ACTIVE",
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      }),
+    );
     const o = forOrg(db, "lab-a");
 
     const [row] = await o

@@ -53,6 +53,7 @@ import { insertJobs } from "../../../test/integration/job-fixtures";
 import { createApiKeySecret } from "../../lib/api-keys";
 import { jobsRouter } from "../../routes/jobs";
 import { publicApiV2Router } from "../../routes/public-api-v2";
+import { withStatusRepair } from "../../../test/integration/state-fixtures";
 
 const mocks = vi.hoisted(() => ({
   enqueue: vi.fn(),
@@ -148,14 +149,16 @@ async function addSignatory(
   userId: string,
   overrides: Partial<typeof authorizedSignatory.$inferInsert> = {},
 ) {
-  await db.insert(authorizedSignatory).values({
-    organizationId: ORG,
-    userId,
-    assetTypeId: null,
-    status: "ACTIVE",
-    authorizedBy: SUBMITTER,
-    ...overrides,
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(authorizedSignatory).values({
+      organizationId: ORG,
+      userId,
+      assetTypeId: null,
+      status: "ACTIVE",
+      authorizedBy: SUBMITTER,
+      ...overrides,
+    }),
+  );
 }
 
 let sequence = 0;
@@ -277,26 +280,28 @@ async function seedStandard(
   world: World,
   overrides: Partial<typeof referenceStandard.$inferInsert> = {},
 ) {
-  const [row] = await db
-    .insert(referenceStandard)
-    .values({
-      organizationId: ORG,
-      unitId: world.org.unitId,
-      createdBy: SUBMITTER,
-      name: "Massa Padrao",
-      kind: "generic_scalar",
-      serialNumber: `SN-STD-${Math.random().toString(36).slice(2)}`,
-      certificateNumber: "CERT-SOD",
-      calibrationDate: new Date("2026-01-10T15:00:00.000Z"),
-      nextCalibrationDate: addCalendarDays(labToday(), 90),
-      coverageFactor: 2,
-      distribution: "normal",
-      status: "ACTIVE",
-      referenceValue: 1,
-      uncertainty: 0.01,
-      ...overrides,
-    })
-    .returning();
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(referenceStandard)
+      .values({
+        organizationId: ORG,
+        unitId: world.org.unitId,
+        createdBy: SUBMITTER,
+        name: "Massa Padrao",
+        kind: "generic_scalar",
+        serialNumber: `SN-STD-${Math.random().toString(36).slice(2)}`,
+        certificateNumber: "CERT-SOD",
+        calibrationDate: new Date("2026-01-10T15:00:00.000Z"),
+        nextCalibrationDate: addCalendarDays(labToday(), 90),
+        coverageFactor: 2,
+        distribution: "normal",
+        status: "ACTIVE",
+        referenceValue: 1,
+        uncertainty: 0.01,
+        ...overrides,
+      })
+      .returning(),
+  );
   if (!row) throw new Error("seedStandard failed");
   return row;
 }
@@ -555,7 +560,7 @@ describe("approval separation of duties and mandatory gates (roadmap 2 B5)", () 
     it("REQ-B5-2 [HIGH RISK]: a roster whose only records are expired-out (soft-deleted or inactive) is empty: still refused", async () => {
       await makeAccredited();
       await addSignatory(CHECKER, { deletedAt: new Date() });
-      await addSignatory(SUBMITTER, { status: "SUSPENDED" });
+      await addSignatory(SUBMITTER, { status: "REVOKED" });
       const jobId = await seedReviewJob(world);
 
       await expect(approveCloud(jobId, CHECKER)).resolves.toMatchObject({
@@ -673,10 +678,12 @@ describe("approval separation of duties and mandatory gates (roadmap 2 B5)", () 
     it("REQ-B5-3 [HIGH RISK]: a standard recalled (flagged out of tolerance) after the submit refuses the approval", async () => {
       const standard = await seedStandard(world);
       const jobId = await seedReviewJobWithStandard(world, standard);
-      await db
-        .update(referenceStandard)
-        .set({ status: "OUT_OF_TOLERANCE" })
-        .where(eq(referenceStandard.id, standard.id));
+      await withStatusRepair((tx) =>
+        tx
+          .update(referenceStandard)
+          .set({ status: "OUT_OF_TOLERANCE" })
+          .where(eq(referenceStandard.id, standard.id)),
+      );
 
       await expect(approveCloud(jobId, CHECKER)).resolves.toMatchObject({
         approved: false,
@@ -691,10 +698,12 @@ describe("approval separation of duties and mandatory gates (roadmap 2 B5)", () 
       async (status) => {
         const standard = await seedStandard(world);
         const jobId = await seedReviewJobWithStandard(world, standard);
-        await db
-          .update(referenceStandard)
-          .set({ status })
-          .where(eq(referenceStandard.id, standard.id));
+        await withStatusRepair((tx) =>
+          tx
+            .update(referenceStandard)
+            .set({ status })
+            .where(eq(referenceStandard.id, standard.id)),
+        );
 
         await expect(approveCloud(jobId, CHECKER)).resolves.toEqual({
           approved: true,
@@ -855,25 +864,27 @@ describe("approval separation of duties and mandatory gates (roadmap 2 B5)", () 
         userId: "user-sod-other-admin",
         role: "admin",
       });
-      const [foreign] = await db
-        .insert(referenceStandard)
-        .values({
-          organizationId: OTHER_ORG,
-          unitId: other.unitId,
-          createdBy: other.userId,
-          name: "Padrao Do Outro Laboratorio",
-          kind: "generic_scalar",
-          serialNumber: "SN-OTHER",
-          certificateNumber: "CERT-OTHER",
-          calibrationDate: new Date("2026-01-10T15:00:00.000Z"),
-          nextCalibrationDate: addCalendarDays(labToday(), 90),
-          coverageFactor: 2,
-          distribution: "normal",
-          status: "ACTIVE",
-          referenceValue: 1,
-          uncertainty: 0.01,
-        })
-        .returning();
+      const [foreign] = await withStatusRepair((tx) =>
+        tx
+          .insert(referenceStandard)
+          .values({
+            organizationId: OTHER_ORG,
+            unitId: other.unitId,
+            createdBy: other.userId,
+            name: "Padrao Do Outro Laboratorio",
+            kind: "generic_scalar",
+            serialNumber: "SN-OTHER",
+            certificateNumber: "CERT-OTHER",
+            calibrationDate: new Date("2026-01-10T15:00:00.000Z"),
+            nextCalibrationDate: addCalendarDays(labToday(), 90),
+            coverageFactor: 2,
+            distribution: "normal",
+            status: "ACTIVE",
+            referenceValue: 1,
+            uncertainty: 0.01,
+          })
+          .returning(),
+      );
       if (!foreign) throw new Error("foreign standard missing");
       const jobId = await seedReviewJob(world, {
         standardsSnapshot: [snapshotOf(foreign)],

@@ -102,6 +102,7 @@ import {
   reserveSignupSlot,
 } from "./public-signup-store";
 import { getActivationChecklist } from "../services/activation-checklist";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // This file runs the REAL Better Auth lab instance: the harness's fake
 // `createLabAuth` (only `getSession`) is replaced by the real module.
@@ -532,20 +533,24 @@ describe("identity as calibra_app (P2-18j)", () => {
     const labA = await seedOrg({ orgId: "lab-a", userId: "user-lab-a" });
     const labB = await seedOrg({ orgId: "lab-b", userId: "user-lab-b" });
     for (const lab of [labA, labB]) {
-      await db.insert(personnelCompetence).values({
-        organizationId: lab.orgId,
-        userId: person.id,
-        scopeDescription: "Massa",
-        status: "ACTIVE",
-        requestedBy: lab.userId,
-        createdBy: lab.userId,
-      });
-      await db.insert(authorizedSignatory).values({
-        organizationId: lab.orgId,
-        userId: person.id,
-        authorizedBy: lab.userId,
-        status: "ACTIVE",
-      });
+      await withStatusRepair((tx) =>
+        tx.insert(personnelCompetence).values({
+          organizationId: lab.orgId,
+          userId: person.id,
+          scopeDescription: "Massa",
+          status: "ACTIVE",
+          requestedBy: lab.userId,
+          createdBy: lab.userId,
+        }),
+      );
+      await withStatusRepair((tx) =>
+        tx.insert(authorizedSignatory).values({
+          organizationId: lab.orgId,
+          userId: person.id,
+          authorizedBy: lab.userId,
+          status: "ACTIVE",
+        }),
+      );
     }
 
     await asApplicationRole(() =>

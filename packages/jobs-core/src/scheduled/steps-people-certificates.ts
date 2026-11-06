@@ -114,6 +114,8 @@ export async function processCompetencesExpired(
         // the audit log: one transaction, so the audit row commits with its change.
         await lab.transaction(async (client) => {
           await client.query(
+            // `expire` in COMPETENCE_MACHINE (@calibra-facil/schemas/machines):
+            // ACTIVE → EXPIRED, a compare-and-set on the status.
             `UPDATE personnel_competence SET status = 'EXPIRED' WHERE id = $1 AND status = 'ACTIVE'`,
             [comp.id],
           );

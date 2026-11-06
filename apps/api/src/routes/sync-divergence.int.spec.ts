@@ -15,6 +15,7 @@ import { eq, sql } from "drizzle-orm";
 import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration tests for REL-01 slice 2 — server-side
 // divergence detection in the three blind desktop applies (asset / customer /
@@ -44,14 +45,16 @@ const SERVER_ADVANCED_AT = new Date("2026-06-02T00:00:00.000Z");
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function seedClientOrg(clientOrgId: string): Promise<void> {
-  await db.insert(organization).values({
-    id: clientOrgId,
-    name: `Client ${clientOrgId}`,
-    slug: clientOrgId,
-    type: "CLIENT",
-    status: "ACTIVE",
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: clientOrgId,
+      name: `Client ${clientOrgId}`,
+      slug: clientOrgId,
+      type: "CLIENT",
+      status: "ACTIVE",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    }),
+  );
 }
 
 async function seedCustomerRow(params: {
@@ -91,24 +94,26 @@ async function seedAssetRow(params: {
   name: string;
   updatedAt: Date;
 }): Promise<number> {
-  const [row] = await db
-    .insert(asset)
-    .values({
-      unitId: params.unitId,
-      customerId: params.customerId,
-      // SEC-03b (#638): lab_organization_id is NOT NULL — derive it from the
-      // owning customer (invariant asset.lab_org == customer.lab_org). This seed
-      // predates the denormalization; without it the insert violates NOT NULL.
-      labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
-      assetTypeId: params.assetTypeId,
-      name: params.name,
-      serialNumber: `SN-${params.tag}`,
-      tag: params.tag,
-      status: "ACTIVE",
-      metrologyRegime: "INDUSTRIAL",
-      updatedAt: params.updatedAt,
-    })
-    .returning({ id: asset.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: params.unitId,
+        customerId: params.customerId,
+        // SEC-03b (#638): lab_organization_id is NOT NULL — derive it from the
+        // owning customer (invariant asset.lab_org == customer.lab_org). This seed
+        // predates the denormalization; without it the insert violates NOT NULL.
+        labOrganizationId: sql`(select "lab_organization_id" from "customer" where "id" = ${params.customerId})`,
+        assetTypeId: params.assetTypeId,
+        name: params.name,
+        serialNumber: `SN-${params.tag}`,
+        tag: params.tag,
+        status: "ACTIVE",
+        metrologyRegime: "INDUSTRIAL",
+        updatedAt: params.updatedAt,
+      })
+      .returning({ id: asset.id }),
+  );
   if (!row) throw new Error("seedAssetRow: insert failed");
   return row.id;
 }
@@ -121,28 +126,30 @@ async function seedServiceOrderRow(params: {
   openedByUserId: string;
   serviceOrderNumber: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(serviceOrder)
-    .values({
-      organizationId: params.organizationId,
-      unitId: params.unitId,
-      customerId: params.customerId,
-      assetId: params.assetId,
-      openedByUserId: params.openedByUserId,
-      serviceOrderNumber: params.serviceOrderNumber,
-      status: "awaiting_quote_approval",
-      claimedDefect: "Defeito informado",
-      intakeCondition: "Condição de entrada",
-      intakeType: "counter",
-      deliveryMethod: "pickup_at_lab",
-      priority: "normal",
-      totalQuotedCents: 0,
-      totalApprovedCents: 0,
-      evaluationFeeCents: 0,
-      evaluationFeeApplied: false,
-      isExternalService: false,
-    })
-    .returning({ id: serviceOrder.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(serviceOrder)
+      .values({
+        organizationId: params.organizationId,
+        unitId: params.unitId,
+        customerId: params.customerId,
+        assetId: params.assetId,
+        openedByUserId: params.openedByUserId,
+        serviceOrderNumber: params.serviceOrderNumber,
+        status: "awaiting_quote_approval",
+        claimedDefect: "Defeito informado",
+        intakeCondition: "Condição de entrada",
+        intakeType: "counter",
+        deliveryMethod: "pickup_at_lab",
+        priority: "normal",
+        totalQuotedCents: 0,
+        totalApprovedCents: 0,
+        evaluationFeeCents: 0,
+        evaluationFeeApplied: false,
+        isExternalService: false,
+      })
+      .returning({ id: serviceOrder.id }),
+  );
   if (!row) throw new Error("seedServiceOrderRow: insert failed");
   return row.id;
 }

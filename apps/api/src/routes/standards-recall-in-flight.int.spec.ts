@@ -34,6 +34,7 @@ import {
 } from "../../test/integration/tenant-refs";
 import { executableMethodSnapshot } from "../../test/integration/executable-method";
 import { insertJobs } from "../../test/integration/job-fixtures";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 vi.mock("../lib/background-jobs", () => ({
   enqueueBackgroundJob: vi.fn().mockResolvedValue({ messageId: "test-noop" }),
@@ -243,25 +244,27 @@ describe("standard recall covers in-flight jobs (roadmap 2 B5)", () => {
 
   it("REQ-B5-4: a standard no job uses has an empty in-flight list", async () => {
     await jobUsing(world, "a", world.standardA, "REVIEW");
-    const [unused] = await db
-      .insert(referenceStandard)
-      .values({
-        organizationId: world.a.orgId,
-        unitId: world.a.unitId,
-        createdBy: world.a.userId,
-        name: "Padrão sem uso",
-        kind: "generic_scalar",
-        serialNumber: "SN-UNUSED",
-        certificateNumber: "CERT-UNUSED",
-        calibrationDate: new Date("2026-01-01T00:00:00.000Z"),
-        nextCalibrationDate: new Date("2027-01-01T00:00:00.000Z"),
-        coverageFactor: 2,
-        distribution: "normal",
-        status: "ACTIVE",
-        referenceValue: 1,
-        uncertainty: 0.01,
-      })
-      .returning({ id: referenceStandard.id });
+    const [unused] = await withStatusRepair((tx) =>
+      tx
+        .insert(referenceStandard)
+        .values({
+          organizationId: world.a.orgId,
+          unitId: world.a.unitId,
+          createdBy: world.a.userId,
+          name: "Padrão sem uso",
+          kind: "generic_scalar",
+          serialNumber: "SN-UNUSED",
+          certificateNumber: "CERT-UNUSED",
+          calibrationDate: new Date("2026-01-01T00:00:00.000Z"),
+          nextCalibrationDate: new Date("2027-01-01T00:00:00.000Z"),
+          coverageFactor: 2,
+          distribution: "normal",
+          status: "ACTIVE",
+          referenceValue: 1,
+          uncertainty: 0.01,
+        })
+        .returning({ id: referenceStandard.id }),
+    );
     if (!unused) throw new Error("standard insert failed");
 
     const res = await standards(`/${unused.id}/impacted-certificates`, "GET");

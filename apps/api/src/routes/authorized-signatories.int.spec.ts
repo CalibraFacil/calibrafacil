@@ -44,6 +44,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -66,16 +67,18 @@ async function seedSignatory(params: {
   status?: "ACTIVE" | "REVOKED";
   assetTypeId?: number | null;
 }): Promise<number> {
-  const [row] = await db
-    .insert(authorizedSignatory)
-    .values({
-      organizationId: params.organizationId,
-      userId: params.userId,
-      authorizedBy: params.authorizedBy,
-      assetTypeId: params.assetTypeId ?? null,
-      status: params.status ?? "ACTIVE",
-    })
-    .returning({ id: authorizedSignatory.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(authorizedSignatory)
+      .values({
+        organizationId: params.organizationId,
+        userId: params.userId,
+        authorizedBy: params.authorizedBy,
+        assetTypeId: params.assetTypeId ?? null,
+        status: params.status ?? "ACTIVE",
+      })
+      .returning({ id: authorizedSignatory.id }),
+  );
   if (!row) throw new Error("seedSignatory: insert failed");
   return row.id;
 }

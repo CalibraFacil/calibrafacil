@@ -18,6 +18,10 @@
       "types": "./src/job-transitions.ts",
       "default": "./src/job-transitions.ts"
     },
+    "./machines": {
+      "types": "./src/machines/index.ts",
+      "default": "./src/machines/index.ts"
+    },
     "./quality": {
       "types": "./src/quality.ts",
       "default": "./src/quality.ts"
@@ -25,6 +29,10 @@
     "./standards-judgement-fixtures": {
       "types": "./src/standards-judgement.fixtures.ts",
       "default": "./src/standards-judgement.fixtures.ts"
+    },
+    "./state-machine": {
+      "types": "./src/state-machine.ts",
+      "default": "./src/state-machine.ts"
     }
   },
   "scripts": {

@@ -68,6 +68,7 @@ import {
 import { jobsRouter } from "../../routes/jobs";
 import { publicApiV2Router } from "../../routes/public-api-v2";
 import { visitJobsRouter } from "../../routes/visits";
+import { withStatusRepair } from "../../../test/integration/state-fixtures";
 
 // The requests below arrive as from behind one trusted reverse proxy (the Caddy of
 // deploy/compose.yaml), which writes X-Forwarded-For: lib/client-ip.ts.
@@ -138,16 +139,18 @@ async function seedWorld(status: JobStatus) {
   // A PROPOSED visit that holds the job, for the visit's remove-job. Linked and
   // moved to `status` in one update: an approved job is frozen.
   const job = await jobRow(jobId);
-  const [visit] = await db
-    .insert(calibrationVisit)
-    .values({
-      organizationId: ORG,
-      unitId: org.unitId,
-      customerId: job.customerId,
-      createdBy: ADMIN,
-      status: "PROPOSED",
-    })
-    .returning({ id: calibrationVisit.id });
+  const [visit] = await withStatusRepair((tx) =>
+    tx
+      .insert(calibrationVisit)
+      .values({
+        organizationId: ORG,
+        unitId: org.unitId,
+        customerId: job.customerId,
+        createdBy: ADMIN,
+        status: "PROPOSED",
+      })
+      .returning({ id: calibrationVisit.id }),
+  );
   if (!visit) throw new Error("seedWorld: visit insert failed");
   await setJobStatus(jobId, status, { visitId: visit.id });
 

@@ -9,6 +9,7 @@ import { eq, and, isNull } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration test for the training-records router.
 // Only the better-auth session is mocked (see test/integration/setup.ts):
@@ -57,18 +58,20 @@ async function seedTrainingRecord(params: {
   createdBy: string;
   title?: string;
 }): Promise<number> {
-  const [row] = await db
-    .insert(trainingRecord)
-    .values({
-      organizationId: params.organizationId,
-      userId: params.userId,
-      createdBy: params.createdBy,
-      title: params.title ?? "Treinamento GUM",
-      type: "internal",
-      status: "planned",
-      startDate: new Date("2026-01-01T00:00:00.000Z"),
-    })
-    .returning({ id: trainingRecord.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(trainingRecord)
+      .values({
+        organizationId: params.organizationId,
+        userId: params.userId,
+        createdBy: params.createdBy,
+        title: params.title ?? "Treinamento GUM",
+        type: "internal",
+        status: "planned",
+        startDate: new Date("2026-01-01T00:00:00.000Z"),
+      })
+      .returning({ id: trainingRecord.id }),
+  );
   if (!row) throw new Error("seedTrainingRecord: insert failed");
   return row.id;
 }

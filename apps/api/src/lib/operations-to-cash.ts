@@ -110,7 +110,6 @@ export function classifyServiceOrder(
     stage = "INVOICED";
   } else if (
     docStatus === "DRAFT" ||
-    input.billingDocumentExportStatus === "PENDING" ||
     input.billingDocumentExportStatus === "FAILED"
   ) {
     stage = "SENT_TO_FINANCE";
@@ -326,7 +325,7 @@ async function readOperationsToCash(
     number,
     {
       status: BillingDocumentStatus;
-      exportStatus: "NOT_EXPORTED" | "PENDING" | "EXPORTED" | "FAILED" | null;
+      exportStatus: "NOT_EXPORTED" | "EXPORTED" | "FAILED" | null;
     }
   >();
   if (billingDocumentIds.length) {

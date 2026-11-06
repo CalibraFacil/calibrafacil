@@ -39,9 +39,24 @@ export function useApprovedRecordActions({
     [queryClient],
   )
   const [isDownloading, setIsDownloading] = useState(false)
-  const [isGeneratingLabel, setIsGeneratingLabel] = useState(false)
+  // The label request as one state: requesting it, then waiting for the
+  // worker. "Ready" is the job's label URL differing from the one it had when
+  // the request was made, so a regeneration (same storage key) is not announced
+  // as done the moment it is requested; the poller gives up after a while
+  // instead of polling forever.
+  const [labelFlow, setLabelFlow] = useState<
+    | { kind: 'idle' }
+    | { kind: 'requesting' }
+    | { kind: 'waiting'; baselineLabelUrl: string | null }
+  >({ kind: 'idle' })
+  const isGeneratingLabel = labelFlow.kind === 'requesting'
+  const labelPending = labelFlow.kind === 'waiting'
+  const labelReady =
+    labelFlow.kind === 'waiting' &&
+    Boolean(job.labelUrl) &&
+    job.labelUrl !== labelFlow.baselineLabelUrl
+  const finishLabelFlow = useCallback(() => setLabelFlow({ kind: 'idle' }), [])
   const [isDownloadingLabel, setIsDownloadingLabel] = useState(false)
-  const [labelPending, setLabelPending] = useState(false)
   // Amendment state - ISO 17025 Clause 7.8.4.1
   const [isAmendDialogOpen, setIsAmendDialogOpen] = useState(false)
   const [amendmentReason, setAmendmentReason] = useState('')
@@ -110,18 +125,17 @@ export function useApprovedRecordActions({
   }
 
   const handleGenerateLabel = async () => {
-    setIsGeneratingLabel(true)
+    setLabelFlow({ kind: 'requesting' })
     try {
       await calibraApi.jobs.generateLabel(job.id)
-      // Start polling for label completion
-      setLabelPending(true)
+      // Wait for the worker (PendingLabelPoller refreshes the job).
+      setLabelFlow({ kind: 'waiting', baselineLabelUrl: job.labelUrl ?? null })
       toast.info('Gerando etiqueta... Aguarde.')
     } catch (error) {
+      setLabelFlow({ kind: 'idle' })
       toast.error(
         error instanceof Error ? error.message : 'Erro ao gerar etiqueta',
       )
-    } finally {
-      setIsGeneratingLabel(false)
     }
   }
 
@@ -229,7 +243,8 @@ export function useApprovedRecordActions({
     isGeneratingLabel,
     isDownloadingLabel,
     labelPending,
-    setLabelPending,
+    labelReady,
+    finishLabelFlow,
     isAmendDialogOpen,
     setIsAmendDialogOpen,
     amendmentReason,

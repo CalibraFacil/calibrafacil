@@ -25,6 +25,7 @@ import { portalServiceOrdersRouter } from "./service-orders";
 import { loginAsPortal } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedPortalContext } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 const ORIGIN = { origin: "http://localhost" };
 const JSON_HEADERS = { ...ORIGIN, "content-type": "application/json" };
@@ -41,60 +42,68 @@ async function seedWorld() {
     .values({ name: "Balanca", slug: "balanca-sa", definition: [] })
     .returning({ id: assetType.id });
   if (!type) throw new Error("asset type not seeded");
-  const [assetRow] = await db
-    .insert(asset)
-    .values({
-      unitId: ctx.labUnitId,
-      customerId: ctx.customerId,
-      labOrganizationId: ctx.labOrgId,
-      assetTypeId: type.id,
-      name: "Ativo SA",
-      serialNumber: "SN-SA",
-      tag: "TAG-SA",
-      status: "ACTIVE",
-    })
-    .returning({ id: asset.id });
+  const [assetRow] = await withStatusRepair((tx) =>
+    tx
+      .insert(asset)
+      .values({
+        unitId: ctx.labUnitId,
+        customerId: ctx.customerId,
+        labOrganizationId: ctx.labOrgId,
+        assetTypeId: type.id,
+        name: "Ativo SA",
+        serialNumber: "SN-SA",
+        tag: "TAG-SA",
+        status: "ACTIVE",
+      })
+      .returning({ id: asset.id }),
+  );
   if (!assetRow) throw new Error("asset not seeded");
 
-  const [document] = await db
-    .insert(billingDocument)
-    .values({
-      organizationId: ctx.labOrgId,
-      unitId: ctx.labUnitId,
-      customerId: ctx.customerId,
-      status: "ISSUED",
-      exportStatus: "EXPORTED",
-      issuedAt: new Date("2026-05-01T12:00:00.000Z"),
-      dueDate: new Date("2099-12-31T00:00:00.000Z"),
-      currency: "BRL",
-      subtotalCents: 25_000,
-      discountCents: 0,
-      totalCents: 25_000,
-      createdBy: ctx.portalUserId,
-      updatedBy: ctx.portalUserId,
-    })
-    .returning({ id: billingDocument.id });
+  const [document] = await withStatusRepair((tx) =>
+    tx
+      .insert(billingDocument)
+      .values({
+        organizationId: ctx.labOrgId,
+        unitId: ctx.labUnitId,
+        customerId: ctx.customerId,
+        status: "ISSUED",
+        exportStatus: "EXPORTED",
+        issuedAt: new Date("2026-05-01T12:00:00.000Z"),
+        dueDate: new Date("2099-12-31T00:00:00.000Z"),
+        currency: "BRL",
+        subtotalCents: 25_000,
+        discountCents: 0,
+        totalCents: 25_000,
+        createdBy: ctx.portalUserId,
+        updatedBy: ctx.portalUserId,
+      })
+      .returning({ id: billingDocument.id }),
+  );
   if (!document) throw new Error("billing document not seeded");
-  await db.insert(receivableInstallment).values({
-    organizationId: ctx.labOrgId,
-    documentId: document.id,
-    installmentNumber: 1,
-    status: "OPEN",
-    dueDate: new Date("2099-12-31T00:00:00.000Z"),
-    amountCents: 25_000,
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(receivableInstallment).values({
+      organizationId: ctx.labOrgId,
+      documentId: document.id,
+      installmentNumber: 1,
+      status: "OPEN",
+      dueDate: new Date("2099-12-31T00:00:00.000Z"),
+      amountCents: 25_000,
+    }),
+  );
 
   // A connected, freshly synced financial provider: without it the portal
   // shows nothing about money (the summary is "hidden").
-  await db.insert(organizationIntegration).values({
-    id: "integration-sa",
-    organizationId: ctx.labOrgId,
-    type: "financial_erp",
-    provider: "conta_azul",
-    name: "Conta Azul",
-    status: "ACTIVE",
-    createdBy: ctx.portalUserId,
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organizationIntegration).values({
+      id: "integration-sa",
+      organizationId: ctx.labOrgId,
+      type: "financial_erp",
+      provider: "conta_azul",
+      name: "Conta Azul",
+      status: "ACTIVE",
+      createdBy: ctx.portalUserId,
+    }),
+  );
   await db.insert(integrationObjectLink).values({
     id: "link-sa",
     integrationId: "integration-sa",
@@ -105,35 +114,39 @@ async function seedWorld() {
     lastSyncedAt: new Date(),
   });
 
-  const [order] = await db
-    .insert(serviceOrder)
-    .values({
-      organizationId: ctx.labOrgId,
-      unitId: ctx.labUnitId,
-      serviceOrderNumber: "OS-SA-1",
-      customerId: ctx.customerId,
-      assetId: assetRow.id,
-      openedByUserId: ctx.portalUserId,
-      claimedDefect: "Nao liga",
-      intakeCondition: "Riscos",
-      status: "awaiting_quote_approval",
-      billingDocumentId: document.id,
-    })
-    .returning({ id: serviceOrder.id, publicId: serviceOrder.publicId });
+  const [order] = await withStatusRepair((tx) =>
+    tx
+      .insert(serviceOrder)
+      .values({
+        organizationId: ctx.labOrgId,
+        unitId: ctx.labUnitId,
+        serviceOrderNumber: "OS-SA-1",
+        customerId: ctx.customerId,
+        assetId: assetRow.id,
+        openedByUserId: ctx.portalUserId,
+        claimedDefect: "Nao liga",
+        intakeCondition: "Riscos",
+        status: "awaiting_quote_approval",
+        billingDocumentId: document.id,
+      })
+      .returning({ id: serviceOrder.id, publicId: serviceOrder.publicId }),
+  );
   if (!order) throw new Error("service order not seeded");
 
-  const [quote] = await db
-    .insert(serviceOrderQuote)
-    .values({
-      organizationId: ctx.labOrgId,
-      serviceOrderId: order.id,
-      quoteNumber: "ORC-SA-1",
-      version: 1,
-      status: "sent",
-      totalCents: 25_000,
-      createdByUserId: ctx.portalUserId,
-    })
-    .returning({ id: serviceOrderQuote.id });
+  const [quote] = await withStatusRepair((tx) =>
+    tx
+      .insert(serviceOrderQuote)
+      .values({
+        organizationId: ctx.labOrgId,
+        serviceOrderId: order.id,
+        quoteNumber: "ORC-SA-1",
+        version: 1,
+        status: "sent",
+        totalCents: 25_000,
+        createdByUserId: ctx.portalUserId,
+      })
+      .returning({ id: serviceOrderQuote.id }),
+  );
   if (!quote) throw new Error("quote not seeded");
 
   return { ctx, order, quoteId: quote.id };

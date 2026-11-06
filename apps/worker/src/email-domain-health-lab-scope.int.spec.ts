@@ -11,6 +11,7 @@ import {
   toRows,
 } from "../test/integration/application-role";
 import { seedOrg } from "../test/integration/seed";
+import { withStatusRepair } from "../test/integration/state-fixtures";
 
 /**
  * The e-mail sender-domain health sweep as `calibra_app` (P2-18j). The sweep
@@ -33,17 +34,19 @@ async function seedDomain(params: {
   resendDomainId: string;
   verified: boolean;
 }) {
-  await db.insert(organizationEmailDomain).values({
-    id: `dom-${params.orgId}`,
-    organizationId: params.orgId,
-    mode: "managed",
-    hostname: `${params.orgId}.example.test`,
-    resendDomainId: params.resendDomainId,
-    fromAddress: `os@${params.orgId}.example.test`,
-    status: params.verified ? "verified" : "pending",
-    verifiedAt: params.verified ? new Date("2026-01-01T00:00:00.000Z") : null,
-    createdBy: params.userId,
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organizationEmailDomain).values({
+      id: `dom-${params.orgId}`,
+      organizationId: params.orgId,
+      mode: "managed",
+      hostname: `${params.orgId}.example.test`,
+      resendDomainId: params.resendDomainId,
+      fromAddress: `os@${params.orgId}.example.test`,
+      status: params.verified ? "verified" : "pending",
+      verifiedAt: params.verified ? new Date("2026-01-01T00:00:00.000Z") : null,
+      createdBy: params.userId,
+    }),
+  );
 }
 
 async function domainRow(orgId: string) {

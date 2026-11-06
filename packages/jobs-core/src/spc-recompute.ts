@@ -22,10 +22,11 @@ import {
   type SpcChartType,
 } from "@calibra-facil/interval-analysis";
 import { and, asc, eq, sql } from "drizzle-orm";
+import { SPC_MACHINE } from "@calibra-facil/schemas/machines";
 
 type ChartRow = Pick<
   typeof controlChart.$inferSelect,
-  "id" | "standardId" | "parameter" | "chartType" | "params"
+  "id" | "standardId" | "parameter" | "chartType" | "params" | "status"
 >;
 
 const CHART_TYPES: readonly SpcChartType[] = [
@@ -120,6 +121,7 @@ export async function processSpcRecompute(
               parameter: controlChart.parameter,
               chartType: controlChart.chartType,
               params: controlChart.params,
+              status: controlChart.status,
             })
             .from(controlChart)
             .orderBy(asc(controlChart.id))
@@ -156,7 +158,11 @@ export async function processSpcRecompute(
               await tx
                 .update(controlChart)
                 .set({
-                  status: evaluated.status,
+                  status: SPC_MACHINE.requireTransition(
+                    chart.status,
+                    "recompute",
+                    evaluated.status,
+                  ),
                   lastEvaluation: evaluated,
                   lastEvaluatedAt: new Date(),
                   // The sweep is not an edit of the chart: keep the list order

@@ -48,6 +48,7 @@ import {
 import { capaRouter } from "./capa";
 import { competencesRouter } from "./competences";
 import { nonConformancesRouter } from "./non-conformances";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 vi.mock("@calibra-facil/notifications", () => ({
   notifyNCCreated: vi.fn().mockResolvedValue(undefined),
@@ -282,45 +283,51 @@ describe("unit_admin does not elevate on organization-wide resources (P0-11)", (
       unitRole: "unit_admin",
     });
 
-    const [capa] = await db
-      .insert(correctiveAction)
-      .values({
-        capaNumber: "CAPA-P011-1",
-        organizationId: org.orgId,
-        source: "nc_detection",
-        title: "CAPA em implementação",
-        description: "Seed direto para o teste de elevação.",
-        type: "corrective",
-        severity: "minor",
-        category: "procedure",
-        status: "IMPLEMENTATION",
-        createdBy: org.userId,
-      })
-      .returning({ id: correctiveAction.id });
-    const [competence] = await db
-      .insert(personnelCompetence)
-      .values({
-        organizationId: org.orgId,
-        userId: subject.userId,
-        requestedBy: subject.userId,
-        createdBy: subject.userId,
-        scopeDescription: "Calibração de manômetros",
-        status: "PENDING_EVALUATION",
-      })
-      .returning({ id: personnelCompetence.id });
-    const [nc] = await db
-      .insert(nonConformance)
-      .values({
-        ncNumber: "NC-2026-P011",
-        organizationId: org.orgId,
-        type: "work",
-        description: "Medição fora de tolerância no ensaio",
-        detectedBy: org.userId,
-        detectedAt: new Date("2026-01-15T10:00:00.000Z"),
-        status: "open",
-        createdBy: org.userId,
-      })
-      .returning({ id: nonConformance.id });
+    const [capa] = await withStatusRepair((tx) =>
+      tx
+        .insert(correctiveAction)
+        .values({
+          capaNumber: "CAPA-P011-1",
+          organizationId: org.orgId,
+          source: "nc_detection",
+          title: "CAPA em implementação",
+          description: "Seed direto para o teste de elevação.",
+          type: "corrective",
+          severity: "minor",
+          category: "procedure",
+          status: "IMPLEMENTATION",
+          createdBy: org.userId,
+        })
+        .returning({ id: correctiveAction.id }),
+    );
+    const [competence] = await withStatusRepair((tx) =>
+      tx
+        .insert(personnelCompetence)
+        .values({
+          organizationId: org.orgId,
+          userId: subject.userId,
+          requestedBy: subject.userId,
+          createdBy: subject.userId,
+          scopeDescription: "Calibração de manômetros",
+          status: "PENDING_EVALUATION",
+        })
+        .returning({ id: personnelCompetence.id }),
+    );
+    const [nc] = await withStatusRepair((tx) =>
+      tx
+        .insert(nonConformance)
+        .values({
+          ncNumber: "NC-2026-P011",
+          organizationId: org.orgId,
+          type: "work",
+          description: "Medição fora de tolerância no ensaio",
+          detectedBy: org.userId,
+          detectedAt: new Date("2026-01-15T10:00:00.000Z"),
+          status: "open",
+          createdBy: org.userId,
+        })
+        .returning({ id: nonConformance.id }),
+    );
     if (!capa || !competence || !nc) throw new Error("seed failed");
 
     const verifyBody = JSON.stringify({

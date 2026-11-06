@@ -34,6 +34,7 @@ import { and, eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // ---------------------------------------------------------------------------
 // Notification side-effects: no-op in workflow correctness tests
@@ -67,20 +68,22 @@ async function seedNC(params: {
     params.ncNumberSuffix ?? Math.random().toString(36).slice(2, 7);
   const ncNumber = `NC-${year}-${suffix}`;
 
-  const [row] = await db
-    .insert(nonConformance)
-    .values({
-      ncNumber,
-      organizationId: params.orgId,
-      type: "work",
-      description: "Medicao fora de tolerancia no ensaio de balanca",
-      detectedBy: params.detectedByUserId,
-      detectedAt: new Date(DETECTED_AT),
-      status: params.status ?? "open",
-      disposition: params.disposition ?? null,
-      createdBy: params.detectedByUserId,
-    })
-    .returning({ id: nonConformance.id });
+  const [row] = await withStatusRepair((tx) =>
+    tx
+      .insert(nonConformance)
+      .values({
+        ncNumber,
+        organizationId: params.orgId,
+        type: "work",
+        description: "Medicao fora de tolerancia no ensaio de balanca",
+        detectedBy: params.detectedByUserId,
+        detectedAt: new Date(DETECTED_AT),
+        status: params.status ?? "open",
+        disposition: params.disposition ?? null,
+        createdBy: params.detectedByUserId,
+      })
+      .returning({ id: nonConformance.id }),
+  );
 
   if (!row) throw new Error("seedNC: insert failed");
   return row.id;

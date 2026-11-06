@@ -45,6 +45,7 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { buildUnitScopeCondition } from "../lib/units";
+import { conflict } from "../lib/domain-errors";
 import {
   buildPortalBaseUrl,
   getLatestDeliveryDocumentDownloadUrl,
@@ -540,6 +541,12 @@ export const serviceOrdersRouter = new Hono<{
         return c.json(
           { error: "Avaliacao ja registrada. Edite a avaliacao existente." },
           409,
+        );
+      }
+      if (result.status === "invalid_transition") {
+        throw conflict(
+          "status_transition_conflict",
+          "A OS nao esta em uma etapa que aceite avaliacao",
         );
       }
       if (result.status === "invalid_technician") {

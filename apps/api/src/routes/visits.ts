@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { alias } from "drizzle-orm/pg-core";
 import {
@@ -13,7 +13,17 @@ import {
   sql,
 } from "drizzle-orm";
 import type { OrgDb } from "@calibra-facil/db/for-org";
-import { conflict, domainErrorResponse, notFound } from "../lib/domain-errors";
+import {
+  VISIT_MACHINE,
+  VISIT_RESCHEDULE_REQUEST_MACHINE,
+  isVisitTerminal,
+} from "@calibra-facil/schemas/machines";
+import {
+  conflict,
+  DomainError,
+  domainErrorResponse,
+  notFound,
+} from "../lib/domain-errors";
 import {
   asset,
   calibrationJob,
@@ -69,10 +79,28 @@ const technicianUser = alias(user, "calibrationVisitTechnician");
  * execute flow (each job links back via visit_id, location pre-frozen).
  */
 
-const VISIT_TERMINAL = new Set(["COMPLETED", "CANCELLED"]);
+/** A visit the lab can no longer edit (VISIT_MACHINE: no `edit` from it). */
+const isTerminal = isVisitTerminal;
 
 /** Thrown inside the job-creation transaction to roll it back with a pt-BR 400. */
 class VisitJobRefusal extends Error {}
+
+/**
+ * A domain failure thrown inside a route's transaction (it rolled back) answered
+ * as its response: `{ error, code }` with its status.
+ */
+function answerDomainError(c: Context) {
+  return (error: unknown): { response: Response } => {
+    if (error instanceof DomainError) {
+      return { response: domainErrorResponse(c, error) };
+    }
+    throw error;
+  };
+}
+
+/** A compare-and-set on the visit's status matched no row: it moved under the caller. */
+const VISIT_STATUS_CHANGED =
+  "A visita mudou durante a operacao. Recarregue e tente novamente.";
 
 /**
  * The technician named in the body must be a member of the caller's
@@ -133,7 +161,10 @@ async function supersedePendingRescheduleRequests(
     .where(
       and(
         eq(visitRescheduleRequest.visitId, visitId),
-        eq(visitRescheduleRequest.status, "PENDING"),
+        inArray(
+          visitRescheduleRequest.status,
+          VISIT_RESCHEDULE_REQUEST_MACHINE.allowedFrom("supersede"),
+        ),
       ),
     );
 }
@@ -378,15 +409,15 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
       if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
       const { technicianId } = c.req.valid("json");
 
-      const outcome = await orgDb(member.organizationId).transaction(
-        async (o) => {
+      const outcome = await orgDb(member.organizationId)
+        .transaction(async (o) => {
           const visit = await getScopedVisit(id, member, o);
           if (!visit) {
             return {
               response: c.json({ error: "Visita nao encontrada" }, 404),
             };
           }
-          if (VISIT_TERMINAL.has(visit.status)) {
+          if (isTerminal(visit.status)) {
             return {
               response: c.json(
                 { error: "Visita ja finalizada ou cancelada" },
@@ -411,11 +442,19 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
           const [updated] = await o
             .update(calibrationVisit)
             .set({ technicianId })
-            .where(eq(calibrationVisit.id, id))
+            .where(
+              and(
+                eq(calibrationVisit.id, id),
+                eq(calibrationVisit.status, visit.status),
+              ),
+            )
             .returning();
+          if (!updated) {
+            throw conflict("status_transition_conflict", VISIT_STATUS_CHANGED);
+          }
           return { visit, updated };
-        },
-      );
+        })
+        .catch(answerDomainError(c));
       if ("response" in outcome) return outcome.response;
       const { visit, updated } = outcome;
 
@@ -444,15 +483,15 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
       if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
       const input = c.req.valid("json");
 
-      const outcome = await orgDb(member.organizationId).transaction(
-        async (o) => {
+      const outcome = await orgDb(member.organizationId)
+        .transaction(async (o) => {
           const visit = await getScopedVisit(id, member, o);
           if (!visit) {
             return {
               response: c.json({ error: "Visita nao encontrada" }, 404),
             };
           }
-          if (VISIT_TERMINAL.has(visit.status)) {
+          if (isTerminal(visit.status)) {
             return {
               response: c.json(
                 { error: "Visita ja finalizada ou cancelada" },
@@ -493,22 +532,32 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
           const [updated] = await o
             .update(calibrationVisit)
             .set({
-              status: "CONFIRMED",
+              // `confirm`: a proposed visit becomes CONFIRMED; a confirmed or
+              // started one keeps its status (only the date/technician change).
+              status: VISIT_MACHINE.requireTargetOf(visit.status, "confirm"),
               scheduledAt,
               technicianId,
               confirmedBy: session.user.id,
               confirmedAt: new Date(),
               ...(confirmDateChanged ? RESET_CUSTOMER_CONFIRMATION : {}),
             })
-            .where(eq(calibrationVisit.id, id))
+            .where(
+              and(
+                eq(calibrationVisit.id, id),
+                eq(calibrationVisit.status, visit.status),
+              ),
+            )
             .returning();
+          if (!updated) {
+            throw conflict("status_transition_conflict", VISIT_STATUS_CHANGED);
+          }
 
           if (confirmDateChanged) {
             await supersedePendingRescheduleRequests(o, id, session.user.id);
           }
           return { visit, technicianId, updated };
-        },
-      );
+        })
+        .catch(answerDomainError(c));
       if ("response" in outcome) return outcome.response;
       const { visit, technicianId, updated } = outcome;
 
@@ -538,15 +587,15 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
       if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
       const input = c.req.valid("json");
 
-      const outcome = await orgDb(member.organizationId).transaction(
-        async (o) => {
+      const outcome = await orgDb(member.organizationId)
+        .transaction(async (o) => {
           const visit = await getScopedVisit(id, member, o);
           if (!visit) {
             return {
               response: c.json({ error: "Visita nao encontrada" }, 404),
             };
           }
-          if (VISIT_TERMINAL.has(visit.status)) {
+          if (isTerminal(visit.status)) {
             return {
               response: c.json(
                 { error: "Visita ja finalizada ou cancelada" },
@@ -572,15 +621,23 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
               notes: input.notes ?? visit.notes,
               ...(dateChanged ? RESET_CUSTOMER_CONFIRMATION : {}),
             })
-            .where(eq(calibrationVisit.id, id))
+            .where(
+              and(
+                eq(calibrationVisit.id, id),
+                eq(calibrationVisit.status, visit.status),
+              ),
+            )
             .returning();
+          if (!updated) {
+            throw conflict("status_transition_conflict", VISIT_STATUS_CHANGED);
+          }
 
           if (dateChanged) {
             await supersedePendingRescheduleRequests(o, id, session.user.id);
           }
           return { dateChanged, updated };
-        },
-      );
+        })
+        .catch(answerDomainError(c));
       if ("response" in outcome) return outcome.response;
       const { dateChanged, updated } = outcome;
 
@@ -609,15 +666,15 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
       if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
       const { reason } = c.req.valid("json");
 
-      const outcome = await orgDb(member.organizationId).transaction(
-        async (o) => {
+      const outcome = await orgDb(member.organizationId)
+        .transaction(async (o) => {
           const visit = await getScopedVisit(id, member, o);
           if (!visit) {
             return {
               response: c.json({ error: "Visita nao encontrada" }, 404),
             };
           }
-          if (VISIT_TERMINAL.has(visit.status)) {
+          if (isTerminal(visit.status)) {
             return {
               response: c.json(
                 { error: "Visita ja finalizada ou cancelada" },
@@ -629,16 +686,27 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
           const [updated] = await o
             .update(calibrationVisit)
             .set({
-              status: "CANCELLED",
+              status: VISIT_MACHINE.requireTargetOf(visit.status, "cancel"),
               cancelledBy: session.user.id,
               cancelledAt: new Date(),
               cancelReason: reason ?? null,
             })
-            .where(eq(calibrationVisit.id, id))
+            .where(
+              and(
+                eq(calibrationVisit.id, id),
+                eq(calibrationVisit.status, visit.status),
+              ),
+            )
             .returning();
+          if (!updated) {
+            throw conflict("status_transition_conflict", VISIT_STATUS_CHANGED);
+          }
+          // A cancelled trip has no date to move: its pending customer request
+          // is superseded with it.
+          await supersedePendingRescheduleRequests(o, id, session.user.id);
           return { updated };
-        },
-      );
+        })
+        .catch(answerDomainError(c));
       if ("response" in outcome) return outcome.response;
       const { updated } = outcome;
 
@@ -662,27 +730,47 @@ export const visitsRouter = new Hono<{ Variables: AuthVariables }>()
       const id = parseInt(c.req.param("id"), 10);
       if (isNaN(id)) return c.json({ error: "ID invalido" }, 400);
 
-      return await orgDb(member.organizationId).transaction(async (o) => {
-        const visit = await getScopedVisit(id, member, o);
-        if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
-        if (visit.status === "PROPOSED") {
-          return c.json(
-            { error: "Confirme a visita antes de concluí-la" },
-            409,
+      return await orgDb(member.organizationId)
+        .transaction(async (o) => {
+          const visit = await getScopedVisit(id, member, o);
+          if (!visit) return c.json({ error: "Visita nao encontrada" }, 404);
+          if (isTerminal(visit.status)) {
+            return c.json({ error: "Visita ja finalizada ou cancelada" }, 409);
+          }
+          if (!VISIT_MACHINE.canTransition(visit.status, "complete")) {
+            return c.json(
+              { error: "Confirme a visita antes de concluí-la" },
+              409,
+            );
+          }
+
+          const [updated] = await o
+            .update(calibrationVisit)
+            .set({
+              status: VISIT_MACHINE.requireTargetOf(visit.status, "complete"),
+            })
+            .where(
+              and(
+                eq(calibrationVisit.id, id),
+                eq(calibrationVisit.status, visit.status),
+              ),
+            )
+            .returning();
+          if (!updated)
+            throw conflict("status_transition_conflict", VISIT_STATUS_CHANGED);
+          await supersedePendingRescheduleRequests(
+            o,
+            id,
+            c.get("session").user.id,
           );
-        }
-        if (VISIT_TERMINAL.has(visit.status)) {
-          return c.json({ error: "Visita ja finalizada ou cancelada" }, 409);
-        }
 
-        const [updated] = await o
-          .update(calibrationVisit)
-          .set({ status: "COMPLETED" })
-          .where(eq(calibrationVisit.id, id))
-          .returning();
-
-        return c.json(updated);
-      });
+          return c.json(updated);
+        })
+        .catch((error: unknown) => {
+          if (error instanceof DomainError)
+            return domainErrorResponse(c, error);
+          throw error;
+        });
     },
   );
 
@@ -963,15 +1051,15 @@ export const visitRescheduleRequestsRouter = new Hono<{
       }
       const input = c.req.valid("json");
 
-      const outcome = await orgDb(member.organizationId).transaction(
-        async (o) => {
+      const outcome = await orgDb(member.organizationId)
+        .transaction(async (o) => {
           const visit = await getScopedVisit(id, member, o);
           if (!visit) {
             return {
               response: c.json({ error: "Visita nao encontrada" }, 404),
             };
           }
-          if (VISIT_TERMINAL.has(visit.status)) {
+          if (isTerminal(visit.status)) {
             return {
               response: c.json(
                 { error: "Visita ja finalizada ou cancelada" },
@@ -986,10 +1074,16 @@ export const visitRescheduleRequestsRouter = new Hono<{
               response: c.json({ error: "Solicitacao nao encontrada" }, 404),
             };
           }
-          if (request.status !== "PENDING") {
-            return {
-              response: c.json({ error: "Solicitacao ja resolvida" }, 409),
-            };
+          if (
+            !VISIT_RESCHEDULE_REQUEST_MACHINE.canTransition(
+              request.status,
+              "accept",
+            )
+          ) {
+            throw conflict(
+              "status_transition_conflict",
+              "Solicitacao ja resolvida",
+            );
           }
 
           const nextScheduledAt = new Date(input.scheduledAt);
@@ -1002,18 +1096,43 @@ export const visitRescheduleRequestsRouter = new Hono<{
                 : null,
               ...RESET_CUSTOMER_CONFIRMATION,
             })
-            .where(eq(calibrationVisit.id, id))
+            .where(
+              and(
+                eq(calibrationVisit.id, id),
+                eq(calibrationVisit.status, visit.status),
+              ),
+            )
             .returning();
+          if (!row) {
+            throw conflict("status_transition_conflict", VISIT_STATUS_CHANGED);
+          }
 
-          await o
+          const [accepted] = await o
             .update(visitRescheduleRequest)
             .set({
-              status: "ACCEPTED",
+              status: VISIT_RESCHEDULE_REQUEST_MACHINE.requireTargetOf(
+                request.status,
+                "accept",
+              ),
               resolvedBy: session.user.id,
               resolvedAt: new Date(),
               resolutionNote: input.resolutionNote ?? null,
             })
-            .where(eq(visitRescheduleRequest.id, requestId));
+            .where(
+              and(
+                eq(visitRescheduleRequest.id, requestId),
+                eq(visitRescheduleRequest.status, request.status),
+              ),
+            )
+            .returning({ id: visitRescheduleRequest.id });
+          // The request was resolved under the caller: throwing rolls the
+          // visit's new date back too.
+          if (!accepted) {
+            throw conflict(
+              "status_transition_conflict",
+              "Solicitacao ja resolvida",
+            );
+          }
 
           await o.insert(visitAuditLog).values({
             organizationId: member.organizationId,
@@ -1029,8 +1148,8 @@ export const visitRescheduleRequestsRouter = new Hono<{
           });
 
           return { updated: row };
-        },
-      );
+        })
+        .catch(answerDomainError(c));
       if ("response" in outcome) return outcome.response;
       const { updated } = outcome;
 
@@ -1064,8 +1183,8 @@ export const visitRescheduleRequestsRouter = new Hono<{
       }
       const input = c.req.valid("json");
 
-      const outcome = await orgDb(member.organizationId).transaction(
-        async (o) => {
+      const outcome = await orgDb(member.organizationId)
+        .transaction(async (o) => {
           const visit = await getScopedVisit(id, member, o);
           if (!visit) {
             return {
@@ -1079,22 +1198,42 @@ export const visitRescheduleRequestsRouter = new Hono<{
               response: c.json({ error: "Solicitacao nao encontrada" }, 404),
             };
           }
-          if (request.status !== "PENDING") {
-            return {
-              response: c.json({ error: "Solicitacao ja resolvida" }, 409),
-            };
+          if (
+            !VISIT_RESCHEDULE_REQUEST_MACHINE.canTransition(
+              request.status,
+              "decline",
+            )
+          ) {
+            throw conflict(
+              "status_transition_conflict",
+              "Solicitacao ja resolvida",
+            );
           }
 
           const rows = await o
             .update(visitRescheduleRequest)
             .set({
-              status: "DECLINED",
+              status: VISIT_RESCHEDULE_REQUEST_MACHINE.requireTargetOf(
+                request.status,
+                "decline",
+              ),
               resolvedBy: session.user.id,
               resolvedAt: new Date(),
               resolutionNote: input.resolutionNote ?? null,
             })
-            .where(eq(visitRescheduleRequest.id, requestId))
+            .where(
+              and(
+                eq(visitRescheduleRequest.id, requestId),
+                eq(visitRescheduleRequest.status, request.status),
+              ),
+            )
             .returning();
+          if (rows.length === 0) {
+            throw conflict(
+              "status_transition_conflict",
+              "Solicitacao ja resolvida",
+            );
+          }
 
           await o.insert(visitAuditLog).values({
             organizationId: member.organizationId,
@@ -1107,8 +1246,8 @@ export const visitRescheduleRequestsRouter = new Hono<{
           });
 
           return { updated: rows };
-        },
-      );
+        })
+        .catch(answerDomainError(c));
       if ("response" in outcome) return outcome.response;
       const { updated } = outcome;
 

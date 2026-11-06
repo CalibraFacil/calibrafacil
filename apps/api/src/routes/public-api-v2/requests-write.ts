@@ -8,6 +8,7 @@ import {
   customer,
 } from "@calibra-facil/db/schema";
 import { and, eq, inArray, isNull } from "drizzle-orm";
+import { CALIBRATION_REQUEST_MACHINE } from "@calibra-facil/schemas/machines";
 import {
   buildPublicApiError,
   getPublicApiRequestIp,
@@ -286,7 +287,9 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
 
           if (!existing) return { kind: "missing" as const };
 
-          if (!["PENDING", "UNDER_REVIEW"].includes(existing.status)) {
+          if (
+            !CALIBRATION_REQUEST_MACHINE.canTransition(existing.status, "edit")
+          ) {
             return { kind: "not_editable" as const };
           }
 
@@ -301,8 +304,15 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
                     ? new Date(input.requestedDueDate)
                     : null,
             })
-            .where(eq(calibrationRequest.id, existing.id))
+            // Only while the request is still editable (CAS on the status read).
+            .where(
+              and(
+                eq(calibrationRequest.id, existing.id),
+                eq(calibrationRequest.status, existing.status),
+              ),
+            )
             .returning();
+          if (!updated) return { kind: "not_editable" as const };
 
           await o.insert(calibrationRequestAuditLog).values({
             organizationId: apiKey.organizationId,
@@ -416,7 +426,10 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
           }
 
           if (
-            !["PENDING", "UNDER_REVIEW", "APPROVED"].includes(existing.status)
+            !CALIBRATION_REQUEST_MACHINE.canTransition(
+              existing.status,
+              "reject",
+            )
           ) {
             return {
               status: 409,
@@ -430,13 +443,33 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
           const [updated] = await o
             .update(calibrationRequest)
             .set({
-              status: "REJECTED",
+              status: CALIBRATION_REQUEST_MACHINE.requireTargetOf(
+                existing.status,
+                "reject",
+              ),
               rejectedBy: apiKey.createdBy,
               rejectedAt: new Date(),
               rejectionReason: input.reason,
+              // As the lab's reject: a rejected request carries no approval.
+              approvedBy: null,
+              approvedAt: null,
             })
-            .where(eq(calibrationRequest.id, existing.id))
+            .where(
+              and(
+                eq(calibrationRequest.id, existing.id),
+                eq(calibrationRequest.status, existing.status),
+              ),
+            )
             .returning();
+          if (!updated) {
+            return {
+              status: 409,
+              body: buildPublicApiError({
+                code: "request_not_cancelable",
+                message: "A solicitação mudou de status durante a operação",
+              }),
+            };
+          }
 
           await o.insert(calibrationRequestAuditLog).values({
             organizationId: apiKey.organizationId,
@@ -448,7 +481,7 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
             reason: input.reason,
           });
 
-          const body = { data: updated! };
+          const body = { data: updated };
 
           await stagePublicApiWebhookEvent(
             { o, tx, afterCommit },
@@ -456,9 +489,9 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
               organizationId: apiKey.organizationId,
               eventType: "request.canceled",
               payload: {
-                id: updated!.id,
-                status: updated!.status,
-                rejectionReason: updated!.rejectionReason,
+                id: updated.id,
+                status: updated.status,
+                rejectionReason: updated.rejectionReason,
               },
             },
           );
@@ -467,7 +500,7 @@ export const requestWriteRoutes = new Hono<PublicApiV2Env>()
             status: 200,
             body,
             resourceType: "request" as const,
-            resourceId: updated!.id,
+            resourceId: updated.id,
           };
         },
       );

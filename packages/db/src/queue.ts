@@ -1,3 +1,7 @@
+// The transitions of app_queue_job.status are APP_QUEUE_JOB_MACHINE
+// (@calibra-facil/schemas/machines): every write below is one of its commands
+// (create, claim, complete, fail, dead_letter, reclaim_stale, settle_inline), and
+// the database guard generated from it (migration 0140) refuses any other move.
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "./db.js";
 import {

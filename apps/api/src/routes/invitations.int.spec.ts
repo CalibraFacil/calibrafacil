@@ -13,6 +13,7 @@ import {
 import { and, eq } from "drizzle-orm";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withStatusRepair } from "../../test/integration/state-fixtures";
 
 // Real-DB integration test for the PUBLIC invitations router
 // (apps/api/src/routes/invitations.ts). Unlike the authed routers, this one is
@@ -64,14 +65,16 @@ async function seedInvitation(params: {
 
 /** Seed a non-LAB (CLIENT) organization to contest the LAB-only gate. */
 async function seedClientOrg(orgId: string): Promise<void> {
-  await db.insert(organization).values({
-    id: orgId,
-    name: `Client ${orgId}`,
-    slug: orgId,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    type: "CLIENT",
-    status: "ACTIVE",
-  });
+  await withStatusRepair((tx) =>
+    tx.insert(organization).values({
+      id: orgId,
+      name: `Client ${orgId}`,
+      slug: orgId,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      type: "CLIENT",
+      status: "ACTIVE",
+    }),
+  );
 }
 
 /** Seed a plain user (e.g. the not-yet-member invitee) without a membership. */

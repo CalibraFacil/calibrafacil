@@ -1,4 +1,5 @@
 import { type ColumnDef } from '@tanstack/react-table'
+import { REFERENCE_STANDARD_MACHINE } from '@calibra-facil/schemas/machines'
 import { Link } from '@tanstack/react-router'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
@@ -262,7 +263,13 @@ export const standardsColumns: ColumnDef<ReferenceStandard>[] = [
                 </DropdownMenuItem>
               </>
             )}
-            {row.original.status !== 'ACTIVE' &&
+            {/* Out of tolerance or sent for calibration: back to use only by
+                renewing the certificate (the menu item above), never here. */}
+            {REFERENCE_STANDARD_MACHINE.canTransition(
+              row.original.status,
+              'set_status',
+              'ACTIVE',
+            ) &&
               row.original.status !== 'INACTIVE' && (
                 <DropdownMenuItem
                   onClick={() =>
