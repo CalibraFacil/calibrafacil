@@ -1,7 +1,7 @@
 // service_order.status as data. Every writer names a command; the database
 // guard (calibra_service_order_status_guard) is generated from this table.
 //
-//   create        apps/api/src/lib/service-order-workflow.ts (counter intake →
+//   create        apps/api/src/domains/service-orders/service-order-workflow.ts (counter intake →
 //                   awaiting_tech_evaluation, warranty intake → warranty_return);
 //                   `opened` is the column default, kept for rows created
 //                   without a status

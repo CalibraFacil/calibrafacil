@@ -31,7 +31,7 @@ import { endpoint, routeId, type EndpointGroup } from "./define";
 /**
  * The laboratory's service orders (repair / evaluation / intake). Response
  * schemas are wire schemas written from what the handlers in
- * `apps/api/src/routes/service-orders.ts` return; the desktop local-server
+ * `apps/api/src/domains/service-orders/routes/service-orders.ts` return; the desktop local-server
  * answers `list`, `get` and `create` with the same ones
  * (`apps/local-server/src/contract.test.ts`), so what only the cloud keeps is
  * optional here.

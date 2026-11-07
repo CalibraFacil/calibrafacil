@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono, type Context, type Next } from "hono";
 import type { Env } from "../../../../server/env";
 import { applyErrorHandling } from "../../../../server/error-handling";
-import { portalServiceOrdersRouter } from "../../../../routes/service-orders";
+import { portalServiceOrdersRouter } from "../../../service-orders/routes/service-orders";
 
 const mocks = vi.hoisted(() => ({
   getPortalCustomerForAuthOrganization: vi.fn(),
@@ -59,20 +59,17 @@ vi.mock("../../../../middleware/permission", () => {
   };
 });
 
-vi.mock(
-  "../../../../modules/service-orders/service-order.list-queries",
-  () => ({
-    getPortalCustomerForAuthOrganization:
-      mocks.getPortalCustomerForAuthOrganization,
-    resolvePortalServiceOrderIdByPublicId:
-      mocks.resolvePortalServiceOrderIdByPublicId,
-    getServiceOrderSummaryReport: vi.fn(),
-    listServiceOrdersForLab: vi.fn(),
-    listServiceOrdersForPortalCustomer: vi.fn(),
-  }),
-);
+vi.mock("../../../service-orders/service-order.list-queries", () => ({
+  getPortalCustomerForAuthOrganization:
+    mocks.getPortalCustomerForAuthOrganization,
+  resolvePortalServiceOrderIdByPublicId:
+    mocks.resolvePortalServiceOrderIdByPublicId,
+  getServiceOrderSummaryReport: vi.fn(),
+  listServiceOrdersForLab: vi.fn(),
+  listServiceOrdersForPortalCustomer: vi.fn(),
+}));
 
-vi.mock("../../../../modules/service-orders/service-order.read-model", () => ({
+vi.mock("../../../service-orders/service-order.read-model", () => ({
   getServiceOrderDetail: mocks.getServiceOrderDetail,
   toClientVisibleServiceOrderDetail: vi.fn(),
 }));
@@ -86,7 +83,7 @@ vi.mock("../../../../lib/org-db", () => ({
   }),
 }));
 
-vi.mock("../../../../lib/portal-financial-summary", () => ({
+vi.mock("../../../service-orders/portal-financial-summary", () => ({
   buildPortalServiceOrderFinancialSummary:
     mocks.buildPortalServiceOrderFinancialSummary,
 }));

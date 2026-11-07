@@ -52,7 +52,7 @@ import {
   portalServiceOrdersRouter,
   publicServiceOrderAccessRouter,
   serviceOrdersRouter,
-} from "../routes/service-orders";
+} from "../domains/service-orders/routes";
 import { materialsRouter } from "../domains/catalog/routes";
 import { servicesRouter } from "../domains/catalog/routes";
 import { sessionsRouter } from "../routes/sessions";

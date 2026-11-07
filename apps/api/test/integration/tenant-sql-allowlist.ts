@@ -125,7 +125,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   // -------------------------------------------------------------------------
   {
     category: "public-token",
-    file: "apps/api/src/modules/service-orders/service-order.tokens.ts",
+    file: "apps/api/src/domains/service-orders/service-order.tokens.ts",
     tables: ["service_order_public_access_token"],
     kinds: ["select"],
     reason:
@@ -291,7 +291,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "cron-queue",
-    file: "apps/api/src/lib/service-order-email-drain.ts",
+    file: "apps/api/src/domains/service-orders/email/service-order-email-drain.ts",
     tables: ["service_order_email_outbox"],
     kinds: ["select"],
     sql: /from "service_order_email_outbox" where/,
@@ -364,7 +364,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "portal-cross-org",
-    file: "apps/api/src/modules/service-orders/service-order.list-queries.ts",
+    file: "apps/api/src/domains/service-orders/service-order.list-queries.ts",
     tables: ["customer"],
     kinds: ["select"],
     sql: /from "customer" where .*"auth_organization_id" = \$\d+/,

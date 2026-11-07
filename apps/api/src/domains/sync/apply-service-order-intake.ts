@@ -7,7 +7,7 @@ import {
   serviceOrderBelongsToOrganization,
 } from "../../lib/tenant-refs";
 import { getNumber } from "./helpers";
-import { createInitialServiceOrderRecords } from "../../lib/service-order-workflow";
+import { createInitialServiceOrderRecords } from "../service-orders";
 import {
   type ApplyDesktopSyncEventInput,
   type ApplyDesktopSyncEventResult,

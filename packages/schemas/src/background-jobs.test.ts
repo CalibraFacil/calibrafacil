@@ -26,7 +26,7 @@ const PRODUCER_FIXTURES = {
   },
   // apps/api/src/routes/jobs.ts (POST /:id/label)
   label: { type: "LABEL", jobId: 42, userId: "user_1" },
-  // apps/api/src/modules/service-orders/service-order.documents.ts
+  // apps/api/src/domains/service-orders/service-order.documents.ts
   "service order intake document": {
     type: "SERVICE_ORDER_INTAKE_DOCUMENT",
     serviceOrderId: 7,

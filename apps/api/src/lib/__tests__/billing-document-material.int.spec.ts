@@ -17,7 +17,7 @@ import { eq, sql } from "drizzle-orm";
 import { truncateAll } from "../../../test/integration/db";
 import { seedOrg } from "../../../test/integration/seed";
 import { withOrg } from "../org-context";
-import { createBillingDocumentFromServiceOrder } from "../service-order-workflow";
+import { createBillingDocumentFromServiceOrder } from "../../domains/service-orders/service-order-workflow";
 import { loadBillingDocumentExportPayload } from "../finance";
 import { withStatusRepair } from "../../../test/integration/state-fixtures";
 

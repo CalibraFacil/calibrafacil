@@ -33,15 +33,15 @@ credential dies with the decision or its expiry — proven by tests.
 Works today — reuse, do not rebuild:
 
 - Token mint on quote send: `sendServiceOrderQuote`
-  (`apps/api/src/modules/service-orders/service-order.quotes.ts`) →
+  (`apps/api/src/domains/service-orders/service-order.quotes.ts`) →
   `createPublicServiceOrderAccessToken`
-  (`apps/api/src/lib/service-order-workflow.ts`): 32 CSPRNG bytes (256-bit),
+  (`apps/api/src/domains/service-orders/service-order-workflow.ts`): 32 CSPRNG bytes (256-bit),
   stored only as SHA-256 in `service_order_public_access_token`
   (`packages/db/src/schema.ts`), scoped to org + service order + quote.
 - Public API mounted unauthenticated at `/api/public/service-order-access`
   (`apps/api/src/server/route-mounts.ts`): `GET /:token`,
   `POST /:token/approve-quote`, `POST /:token/reject-quote`
-  (`apps/api/src/routes/service-orders.ts`, `service-order.tokens.ts`), with
+  (`apps/api/src/domains/service-orders/routes/service-orders.ts`, `service-order.tokens.ts`), with
   audit events (`actorType: "public_token"`, IP, user-agent) and the
   `canApproveServiceOrderQuote` status guard making the decision one-shot.
 - Durable "novo orçamento" email (outbox + drain, idempotent per quote version)
@@ -235,10 +235,10 @@ Gaps this spec closes:
 
 ## Decomposition
 
-| Mini-spec                                                                           | Layer (real path)                                                                                                                        | Depends on | Risk                                                            | Mode                   |
-| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------- | ---------------------- |
-| A. Token lifecycle (expiry default, revoke-on-decision/supersede, outbox redaction) | `packages/db` migration + `apps/api/src/lib/service-order-workflow.ts` + `modules/service-orders/*` + `lib/service-order-email-drain.ts` | —          | **high + critical** (binding financial action, confidentiality) | **pair-don't-loop**    |
-| B. Short code mint + redeem endpoint + throttle                                     | `packages/db` (same migration) + `apps/api/src/routes/service-orders.ts` + new throttle store                                            | A          | **high + critical** (public low-entropy credential)             | **pair-don't-loop**    |
-| C. Email template + outbox payload carries code                                     | `packages/email` + `apps/api/src/modules/service-orders/email-outbox-payloads.ts`, `novo-orcamento-email-dispatch.ts`                    | B          | med                                                             | loopable-with-verifier |
-| D. Public view correctness (pinned quote, projections)                              | `apps/api/src/modules/service-orders/service-order.tokens.ts`, `service-order.read-model.ts`                                             | A          | med                                                             | loopable-with-verifier |
-| E. Portal `/access-code` page + instrument-panel rework + terminal states           | `apps/portal/src/routes/` + `apps/portal/src/features/`                                                                                  | B, D       | low                                                             | loopable-with-verifier |
+| Mini-spec                                                                           | Layer (real path)                                                                                                                                           | Depends on | Risk                                                            | Mode                   |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------- | ---------------------- |
+| A. Token lifecycle (expiry default, revoke-on-decision/supersede, outbox redaction) | `packages/db` migration + `apps/api/src/domains/service-orders/service-order-workflow.ts` + `modules/service-orders/*` + `lib/service-order-email-drain.ts` | —          | **high + critical** (binding financial action, confidentiality) | **pair-don't-loop**    |
+| B. Short code mint + redeem endpoint + throttle                                     | `packages/db` (same migration) + `apps/api/src/domains/service-orders/routes/service-orders.ts` + new throttle store                                        | A          | **high + critical** (public low-entropy credential)             | **pair-don't-loop**    |
+| C. Email template + outbox payload carries code                                     | `packages/email` + `apps/api/src/domains/service-orders/email/email-outbox-payloads.ts`, `novo-orcamento-email-dispatch.ts`                                 | B          | med                                                             | loopable-with-verifier |
+| D. Public view correctness (pinned quote, projections)                              | `apps/api/src/domains/service-orders/service-order.tokens.ts`, `service-order.read-model.ts`                                                                | A          | med                                                             | loopable-with-verifier |
+| E. Portal `/access-code` page + instrument-panel rework + terminal states           | `apps/portal/src/routes/` + `apps/portal/src/features/`                                                                                                     | B, D       | low                                                             | loopable-with-verifier |

@@ -42,7 +42,7 @@ vi.mock("@calibra-facil/jobs-core/integrations", () => ({
   processScheduledIntegrationSyncs: mocks.processScheduledIntegrationSyncs,
 }));
 
-vi.mock("../../lib/service-order-email-drain", () => ({
+vi.mock("../../domains/service-orders/email/service-order-email-drain", () => ({
   drainServiceOrderEmailOutbox: mocks.drainServiceOrderEmailOutbox,
 }));
 
