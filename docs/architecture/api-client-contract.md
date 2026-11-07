@@ -109,14 +109,14 @@ export const customerEndpoints = {
 
 What derives from it:
 
-| Consumer        | How                                                                                                                                                                                                                                                                                                                  |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| API route       | `mount(router, "/api/customers", def, middleware, handler)` (`apps/api/src/lib/endpoint-mount.ts`): method + path, `zValidator` for `query`/`body`, the handler gets `{ params, query, body }` typed and returns the response (checked at compile time against `response`; parsed with it in development and tests). |
-| SDK method      | `endpointClient(group, transport, options)` (`client-runtime/src/transport/endpoint-client.ts`): `(input) => Promise<z.infer<response>>`, input `{ params, query, body }` (each key only when the endpoint has it). Non-2xx is a `CalibraApiError`; a 2xx body is parsed with `response`.                            |
-| Data policy     | `calibraApiPolicyRegistry.<ns> = endpointPolicies(ENDPOINT_GROUPS.<ns>)`.                                                                                                                                                                                                                                            |
-| Desktop stubs   | `desktopEndpointStubs("<ns>")` throws for every `cloud-only` endpoint with its `desktopLabel`; local-first methods are the group's own client over `createDesktopEndpointTransport` (the local server answers the same `response`).                                                                                  |
-| `AppType` paths | `ENDPOINT_GROUPS` paths join the hand list in `api-app.ts`; delete the domain's paths from the hand list when you convert it.                                                                                                                                                                                        |
-| Route drift     | `apps/api/src/server/api-app-routes.spec.ts` checks every definition is served at its method + path.                                                                                                                                                                                                                 |
+| Consumer        | How                                                                                                                                                                                                                                                                                                                           |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| API route       | `mount(router, "/api/customers", def, middleware, handler)` (`apps/api/src/lib/endpoint-mount.ts`): method + path, `zValidator` for `params`/`query`/`body`, the handler gets `{ params, query, body }` typed and returns the response (checked at compile time against `response`; parsed with it in development and tests). |
+| SDK method      | `endpointClient(group, transport, options)` (`client-runtime/src/transport/endpoint-client.ts`): `(input) => Promise<z.infer<response>>`, input `{ params, query, body }` (each key only when the endpoint has it). Non-2xx is a `CalibraApiError`; a 2xx body is parsed with `response`.                                     |
+| Data policy     | `calibraApiPolicyRegistry.<ns> = endpointPolicies(ENDPOINT_GROUPS.<ns>)`.                                                                                                                                                                                                                                                     |
+| Desktop stubs   | `desktopEndpointStubs("<ns>")` throws for every `cloud-only` endpoint with its `desktopLabel`; local-first methods are the group's own client over `createDesktopEndpointTransport` (the local server answers the same `response`).                                                                                           |
+| `AppType` paths | `ENDPOINT_GROUPS` paths join the hand list in `api-app.ts`; delete the domain's paths from the hand list when you convert it.                                                                                                                                                                                                 |
+| Route drift     | `apps/api/src/server/api-app-routes.spec.ts` checks every definition is served at its method + path.                                                                                                                                                                                                                          |
 
 To convert a domain:
 
@@ -149,6 +149,11 @@ To convert a domain:
 6. Keep `apps/local-server/src/contract.test.ts` parsing the offline reads with
    `<domain>Endpoints.<name>.response`, and add an integration spec that parses
    the real route's body (as `reference-data-contract.int.spec.ts` does).
+
+Path parameters: give the definition a `params` schema when the handler needs
+more than a string (`params: z.object({ id: routeId })` for a numeric id): the
+request is refused with 400 before the handler runs and the handler gets the
+parsed value. Do not `parseInt(params.id)` in a handler.
 
 Not yet in the definition: the route's permission (stays the `middleware`
 argument of `mount`), and a response check in the SDK for domains that are not

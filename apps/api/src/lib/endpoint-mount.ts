@@ -27,11 +27,11 @@ type EndpointHandler<TEnv extends Env, TDef extends EndpointDef> = (
 
 /**
  * Registers `def` on `router` (mounted at `prefix`, so `def.path` must start
- * with it): the method and path come from the definition, the query and the
- * body are validated with the definition's schemas (`zValidator`, so a failure
+ * with it): the method and path come from the definition, the path params
+ * (when the definition has a `params` schema), the query and the body are
+ * validated with the definition's schemas (`zValidator`, so a failure
  * answers exactly as every other validated route and the app-wide shape hook
- * rewrites it), and the handler receives them typed together with the path
- * params. `middleware` runs first (authentication, permission).
+ * rewrites it), and the handler receives them typed. `middleware` runs first (authentication, permission).
  *
  * In development and tests (see {@link checkEndpointResponses}) the success body is also parsed with the response
  * schema (after a JSON round trip, so it is the wire value): drift fails the
@@ -52,6 +52,7 @@ export function mount<TEnv extends Env, TDef extends EndpointDef>(
   const path = def.path.slice(prefix.length) || "/";
 
   const validators: MiddlewareHandler[] = [];
+  if (def.params) validators.push(zValidator("param", def.params));
   if (def.query) validators.push(zValidator("query", def.query));
   if (def.body) validators.push(zValidator("json", def.body));
 
@@ -79,6 +80,7 @@ function handlerInput<TDef extends EndpointDef>(
   const input: Record<string, unknown> = { params: c.req.param() };
   const request: unknown = c.req;
   if (hasValidatedData(request)) {
+    if (def.params) input.params = request.valid("param");
     if (def.query) input.query = request.valid("query");
     if (def.body) input.body = request.valid("json");
   }
@@ -98,7 +100,7 @@ function hasValidatedData(
 function typedInput<TDef extends EndpointDef>(
   input: Record<string, unknown>,
 ): EndpointHandlerInput<TDef> {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- the single trust point of the mount helper: `input` is built above from the definition's own parts (params always, query/body exactly when the definition declares them, validated by its schemas), which is what `EndpointHandlerInput` computes from the definition.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- the single trust point of the mount helper: `input` is built above from the definition's own parts (params always, parsed when the definition has a `params` schema; query/body exactly when the definition declares them; all validated by its schemas), which is what `EndpointHandlerInput` computes from the definition.
   return input as EndpointHandlerInput<TDef>;
 }
 

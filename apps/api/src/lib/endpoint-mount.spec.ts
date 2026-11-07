@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { createMiddleware } from "hono/factory";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { endpoint } from "@calibra-facil/contracts";
+import { endpoint, routeId } from "@calibra-facil/contracts";
 
 import { mount } from "./endpoint-mount";
 
@@ -33,6 +33,15 @@ const endpoints = {
   get: endpoint({
     method: "get",
     path: "/api/things/:id",
+    response: itemSchema,
+    failure: "Falha ao carregar",
+    policy: "cloud-only",
+    desktopLabel: "Coisas",
+  }),
+  getTyped: endpoint({
+    method: "get",
+    path: "/api/things/typed/:id",
+    params: z.object({ id: routeId }),
     response: itemSchema,
     failure: "Falha ao carregar",
     policy: "cloud-only",
@@ -78,6 +87,11 @@ function buildRouter() {
       name: input.body.name,
     }),
   );
+  mount(router, "/api/things", endpoints.getTyped, [], async (_c, input) => ({
+    // A number already: the definition's `params` schema parsed it.
+    id: input.params.id,
+    name: "typed",
+  }));
   mount(router, "/api/things", endpoints.get, [guard], async (_c, input) => ({
     id: Number(input.params.id),
     name: "thing",
@@ -134,6 +148,14 @@ describe("mount", () => {
     const body = await (await router.request("/api/things/42")).json();
 
     expect(body).toEqual({ id: 42, name: "thing" });
+  });
+
+  it("parses the path params with the definition's params schema", async () => {
+    const { router } = buildRouter();
+
+    const ok = await router.request("/api/things/typed/42");
+    expect(await ok.json()).toEqual({ id: 42, name: "typed" });
+    expect((await router.request("/api/things/typed/abc")).status).toBe(400);
   });
 
   it("rejects an invalid query or body with 400 before the handler runs", async () => {
