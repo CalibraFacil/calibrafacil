@@ -54,8 +54,8 @@ import {
   hasPendingLabInvitation,
 } from "@calibra-facil/auth/lab-access";
 import { magicLinkRouter } from "../routes/magic-link";
-import { publicApiRouter } from "../routes/public-api";
-import { publicApiV2Router } from "../routes/public-api-v2";
+import { publicApiRouter } from "../domains/public-api/routes/public-api";
+import { publicApiV2Router } from "../domains/public-api/routes/public-api-v2";
 import { verifyRouter } from "../domains/verify/routes/verify";
 import { customersRouter } from "../routes/customers";
 import { loginAs } from "../../test/integration/setup";

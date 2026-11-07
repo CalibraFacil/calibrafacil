@@ -41,11 +41,11 @@ import { portalRequestsRouter } from "../routes/portal-requests";
 import { portalVisitsRouter } from "../routes/portal-visits";
 import { portalRouter } from "../routes/portal";
 import { profileMediaRouter } from "../routes/profile-media";
-import { publicApiRouter } from "../routes/public-api";
+import { publicApiRouter } from "../domains/public-api/routes";
 import {
   publicApiV2DocsRouter,
   publicApiV2Router,
-} from "../routes/public-api-v2";
+} from "../domains/public-api/routes";
 import { publicSignupRouter } from "../routes/public-signup";
 import { reportsRouter } from "../domains/reports/routes";
 import {

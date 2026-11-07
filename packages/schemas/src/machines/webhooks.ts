@@ -24,7 +24,7 @@ export const WEBHOOK_SUBSCRIPTION_MACHINE = defineStateMachine({
 });
 
 // public_api_webhook_delivery.status: one event to one subscriber.
-//   create   apps/api/src/lib/public-api-webhooks.ts (an event, or a replay)
+//   create   apps/api/src/domains/public-api/public-api-webhooks.ts (an event, or a replay)
 //   retry    the worker: a failed attempt with attempts left (stays PENDING)
 //   succeed  the subscriber answered 2xx
 //   fail     attempts exhausted, or the subscription was switched off
