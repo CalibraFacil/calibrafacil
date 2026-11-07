@@ -10,7 +10,7 @@ import { defineStateMachine } from "../state-machine";
 //   investigate  the same PUT, when a root cause is recorded on an OPEN CAPA
 //   implement  routes/capa.ts POST /:id/implement (repeatable while implementing)
 //   verify     routes/capa.ts POST /:id/verify: the effectiveness check, by an
-//                independent verifier (Q50). Effective → VERIFICATION; not
+//                independent verifier. Effective → VERIFICATION; not
 //                effective → back to IMPLEMENTATION (the previous implementation
 //                stays in the audit log)
 //   close      routes/capa.ts POST /:id/close
@@ -50,7 +50,7 @@ export const CORRECTIVE_ACTION_MACHINE = defineStateMachine({
     { from: "INVESTIGATION", command: "implement", to: "IMPLEMENTATION" },
     { from: "IMPLEMENTATION", command: "implement", to: "IMPLEMENTATION" },
     // Effective: ready to close. Not effective: the actions go back to
-    // implementation for a new cycle (§8.7.1 e; decision Q61); a CAPA is never
+    // implementation for a new cycle (§8.7.1 e); a CAPA is never
     // closed on a failed effectiveness check.
     { from: "IMPLEMENTATION", command: "verify", to: "VERIFICATION" },
     { from: "IMPLEMENTATION", command: "verify", to: "IMPLEMENTATION" },
@@ -129,8 +129,8 @@ export const STANDARD_RECALL_MACHINE = defineStateMachine({
 //   send         apps/api/src/domains/jobs/oot/oot-email-drain.ts: e-mailed
 //   acknowledge  the e-mailed link (lib/oot-acknowledgement.ts), the portal
 //                  (routes/portal.ts) and a manual registration
-//                  (routes/non-conformances.ts); first acknowledgement wins
-//                  (Q34), from any state before it
+//                  (routes/non-conformances.ts); first acknowledgement wins,
+//                  from any state before it
 export const OOT_NOTIFICATION_STATUSES = [
   "PENDING",
   "GENERATED",

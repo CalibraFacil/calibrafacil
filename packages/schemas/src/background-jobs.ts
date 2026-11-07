@@ -71,7 +71,7 @@ const ServiceOrderDeliveryReceiptJobMessageSchema = z.object({
 });
 
 /**
- * §7.10 out-of-tolerance customer notification PDF (#426 Phase 0).
+ * §7.10 out-of-tolerance customer notification PDF.
  * All context lives on the `oot_notification` row; the message points at it.
  */
 const OotNotificationJobMessageSchema = z.object({
@@ -95,7 +95,7 @@ const JobApprovedNotificationJobMessageSchema = z.object({
 
 /**
  * Customer-facing out-of-tolerance alert of an as-found NON_CONFORMING approval
- * (ISO/IEC 17025 7.10, #740 Track B). The event row itself is written in the
+ * (ISO/IEC 17025 7.10). The event row itself is written in the
  * approval's transaction; this message only delivers the in-app notification
  * and the e-mail and records the `notify` audit entry. Idempotent per event.
  */
@@ -153,7 +153,7 @@ const WebhookDeliveryJobMessageSchema = z.object({
 });
 
 /**
- * Portal audit pack (issue #738): bulk export of released certificates +
+ * Portal audit pack: bulk export of released certificates +
  * fleet-status report requested by a portal user. All request parameters live
  * on the `portal_export_job` row; the message only points at it.
  */
@@ -165,15 +165,15 @@ const AuditPackJobMessageSchema = z.object({
 
 /**
  * Nightly timer that re-evaluates every SPC control chart against its stored
- * check-standard readings (ISO/IEC 17025 §7.7.1, issue #60). No payload.
+ * check-standard readings (ISO/IEC 17025 §7.7.1). No payload.
  */
 const SpcRecomputeJobMessageSchema = z.object({
   type: z.literal("SPC_RECOMPUTE"),
 });
 
 /**
- * Daily timer that re-polls Resend for every lab-owned email sending domain
- * (issue #584). No payload — the worker sweeps all organization_email_domain rows.
+ * Daily timer that re-polls Resend for every lab-owned email sending domain.
+ * No payload — the worker sweeps all organization_email_domain rows.
  */
 const EmailDomainHealthJobMessageSchema = z.object({
   type: z.literal("EMAIL_DOMAIN_HEALTH"),

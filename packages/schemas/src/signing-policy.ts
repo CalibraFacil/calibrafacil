@@ -1,11 +1,11 @@
 import { z } from "zod";
 
-/** Shortest justification accepted for issuing unsigned on purpose (Q51). */
+/** Shortest justification accepted for issuing unsigned on purpose. */
 export const UNSIGNED_ISSUANCE_REASON_MIN_LENGTH = 15;
 export const UNSIGNED_ISSUANCE_REASON_MAX_LENGTH = 500;
 
 /**
- * Per-unit "emitir sem assinatura digital" setting (decision Q51): once a unit
+ * Per-unit "emitir sem assinatura digital" setting: once a unit
  * has had a signing certificate, issuance fails closed when none is valid, and
  * this explicit, audited choice is the only way to issue unsigned again. It is
  * never set implicitly. Enabling needs a justification; disabling needs none.

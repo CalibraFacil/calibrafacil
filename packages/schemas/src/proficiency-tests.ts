@@ -2,7 +2,7 @@ import { z } from "zod";
 import { PT_OVERALL_STATUSES, SPC_STATUSES } from "./machines/derived";
 
 /**
- * Proficiency testing & SPC schemas — ISO/IEC 17025 §7.7 (issue #60).
+ * Proficiency testing & SPC schemas — ISO/IEC 17025 §7.7.
  * Regulated workflow → schema-first; web forms parse through these schemas.
  */
 

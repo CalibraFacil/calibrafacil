@@ -5,7 +5,7 @@ import { z } from "zod";
 import { nullableNumber, nullableString } from "./common";
 
 /**
- * Response contracts for the portal's reliability surface (#740): fleet
+ * Response contracts for the portal's reliability surface: fleet
  * as-found analytics, per-asset drift series and out-of-tolerance events
  * (`/api/portal/analytics/fleet`, `/assets/:id/drift-series`, `/oot-events`).
  * Wire schemas (see `jobs.ts`); the portal never recomputes verdicts.

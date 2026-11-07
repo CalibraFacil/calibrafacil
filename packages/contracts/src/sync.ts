@@ -71,7 +71,7 @@ export const syncPushResponseSchema = z.object({
     }),
   ),
   newCursor: z.string().optional(),
-  /** The cloud clock when it answered (roadmap 2 E2); absent from older clouds. */
+  /** The cloud clock when it answered; absent from older clouds. */
   serverTime: z.string().datetime().optional(),
   /** The push's `sentAt` minus `serverTime`, in ms (positive: the device clock is ahead). */
   clockSkewMs: z.number().int().optional(),

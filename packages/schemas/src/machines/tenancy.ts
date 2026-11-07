@@ -13,8 +13,8 @@ function everyMove<S extends string, C extends string>(
 
 // organization.status: a laboratory's tenancy.
 //   create   sign-up / the operator CLI: ACTIVE
-//   suspend  the soft delete (apps/api/src/domains/org/records-retention.ts, decision
-//              Q16); a CHECK keeps a deleted lab SUSPENDED
+//   suspend  the soft delete (apps/api/src/domains/org/records-retention.ts);
+//              a CHECK keeps a deleted lab SUSPENDED
 // There is no reactivation in the product; an operator's audited repair is the
 // way back. `OFFBOARDING` was declared once and never written: not a state.
 const ORGANIZATION_STATUSES = ["ACTIVE", "SUSPENDED"] as const;

@@ -172,7 +172,7 @@ export const API_ERROR_CODES = [
   "public_code_invalid",
   "public_code_throttled",
 
-  // Records retention (decision Q16): organization lifecycle and the
+  // Records retention: organization lifecycle and the
   // customers / API keys that depend on it.
   "organization_confirmation_mismatch",
   "organization_already_deleted",

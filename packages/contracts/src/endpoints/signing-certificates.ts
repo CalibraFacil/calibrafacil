@@ -48,7 +48,7 @@ const signingCertificateSchema = z.object({
   status: z.enum(["valid", "expired", "not_yet_valid", "revoked"]),
 });
 
-/** Q51: the unit's explicit "emitir sem assinatura digital" setting; `reason` is mandatory while enabled. */
+/** The unit's explicit "emitir sem assinatura digital" setting; `reason` is mandatory while enabled. */
 const unsignedIssuanceSchema = z.object({
   enabled: z.boolean(),
   reason: nullableString,
@@ -61,7 +61,7 @@ export type UnsignedIssuanceSetting = z.infer<typeof unsignedIssuanceSchema>;
 export const signingCertificatesListResponseSchema = z.object({
   certificates: z.array(signingCertificateSchema),
   unit: unitContextSchema,
-  /** #644: the unit's "assinatura obrigatória" policy flag. */
+  /** The unit's "assinatura obrigatória" policy flag. */
   requireSignature: z.boolean(),
   unsignedIssuance: unsignedIssuanceSchema,
 });
@@ -130,7 +130,7 @@ export const signingCertificateEndpoints = {
     desktopLabel: DESKTOP_LABEL,
     desktopFlavor: "cloud-sync",
   }),
-  /** #644: the unit's "assinatura obrigatória" policy. */
+  /** The unit's "assinatura obrigatória" policy. */
   setPolicy: endpoint({
     method: "patch",
     path: "/api/signing/policy",
@@ -141,7 +141,7 @@ export const signingCertificateEndpoints = {
     desktopLabel: "Política de assinatura",
     desktopFlavor: "cloud-sync",
   }),
-  /** Q51: admin and owner only; enabling needs a reason. */
+  /** Admin and owner only; enabling needs a reason. */
   setUnsignedIssuance: endpoint({
     method: "patch",
     path: "/api/signing/unsigned-issuance",

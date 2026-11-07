@@ -1,5 +1,5 @@
 /**
- * The offline attachment upload leg (roadmap P0-5): what the desktop may upload.
+ * The offline attachment upload leg: what the desktop may upload.
  *
  * An attachment travels in two parts. The bytes go to the object store through
  * `POST /api/sync/attachments/init-upload` (a presigned PUT bound to the declared

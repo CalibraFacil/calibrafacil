@@ -37,8 +37,8 @@
 //   fail_render      packages/jobs-core/src/index.ts:727,732 (setJobError)
 //                    packages/db/src/queue-render-recovery.ts:80,90 (backstop)
 //   retry_render     apps/api/src/domains/jobs/commands/retry-render.ts (`retryRender`: a
-//                      manager re-dispatches the certificate of a failed render,
-//                      roadmap 2 C5; the approval and its frozen input stand)
+//                      manager re-dispatches the certificate of a failed render;
+//                      the approval and its frozen input stand)
 //   revert_approval  apps/api/src/domains/jobs/commands/approve-job.ts:532,549 (dispatch
 //                      failed after the approval: back to the status approved from)
 //   cancel           apps/api/src/domains/jobs/commands/cancel-job.ts (`cancelJob`, for the
@@ -51,18 +51,16 @@
 //   assign           apps/api/src/domains/jobs/commands/assign-job.ts (`assignJob`: technician,
 //                      with the competence gate)
 //
-// The rules are the ones the code paths had, except where an owner decision
-// changed them, in one place and with the tests beside it:
+// Rules that are decisions rather than copies of a code path, in one place with
+// the tests beside them:
 //
-//   Q19  assign is allowed only for DRAFT, IN_PROGRESS, REVIEW and REJECTED. It
-//        used to be accepted for CANCELED and GENERATING_PDF jobs too, which
-//        read as an accident. APPROVED and SUPERSEDED were always refused.
-//   C5   a failed render lands in RENDER_FAILED (it used to land in REJECTED,
-//        indistinguishable from a review rejection). From there a manager
-//        retries the render or rejects the job back to rework.
-//   Q18  a save keeps a REJECTED job REJECTED (`execute`). The public API
-//        results route used to move it to IN_PROGRESS through a separate
-//        `record_results` command; that command is gone with the unification.
+//   assign   is allowed only for DRAFT, IN_PROGRESS, REVIEW and REJECTED;
+//            CANCELED, GENERATING_PDF, APPROVED and SUPERSEDED refuse it.
+//   render   a failed render lands in RENDER_FAILED, not REJECTED (which would
+//            be indistinguishable from a review rejection). From there a manager
+//            retries the render or rejects the job back to rework.
+//   execute  a save keeps a REJECTED job REJECTED, through every entry point
+//            (the public API results route included).
 
 import type { JobStatus } from "./job-status";
 

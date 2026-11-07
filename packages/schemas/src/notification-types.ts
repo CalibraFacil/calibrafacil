@@ -15,11 +15,11 @@ export const NOTIFICATION_TYPES = [
   "ASSET_DUE_FOR_LEGAL_VERIFICATION", // Legal-metrology TRACK 2 — regulation-fixed verification periodicity (Inmetro/RBMLQ-I), independent of recalibration
   "STANDARD_EXPIRING",
   "STANDARD_EXPIRED", // ISO 17025 Clause 6.4.6 - Standard expired, jobs blocked
-  "SIGNING_CERTIFICATE_EXPIRING", // CMP-02 - ICP-Brasil A1 signing certificate nearing validUntil (emission is BLOCKED once it lapses, P0-8)
-  "SIGNING_CERTIFICATE_LAPSED", // P0-8 - a certificate was NOT issued because the unit's signing certificate expired/was revoked/is missing
-  "AUDIT_CHAIN_BROKEN", // Roadmap 2 B1 - the daily verifier found a break in the audit-trail hash chain (possible tampering)
-  "ACCREDITATION_EXPIRING", // #647 - Cgcre/RBC accreditation vigência nearing validUntil (seal stops rendering once expired)
-  "ACCREDITED_SCOPE_LINE_EXPIRING", // #427 Phase 2 - a scope line's vigência nearing validUntil (points stop matching once expired)
+  "SIGNING_CERTIFICATE_EXPIRING", // ICP-Brasil A1 signing certificate nearing validUntil (emission is BLOCKED once it lapses)
+  "SIGNING_CERTIFICATE_LAPSED", // A certificate was NOT issued because the unit's signing certificate expired/was revoked/is missing
+  "AUDIT_CHAIN_BROKEN", // The daily verifier found a break in the audit-trail hash chain (possible tampering)
+  "ACCREDITATION_EXPIRING", // Cgcre/RBC accreditation vigência nearing validUntil (seal stops rendering once expired)
+  "ACCREDITED_SCOPE_LINE_EXPIRING", // A scope line's vigência nearing validUntil (points stop matching once expired)
   "JOB_OVERDUE",
   "NC_CREATED", // ISO 17025 Clause 8.7 - New non-conformance registered
   "NC_ESCALATED_TO_CAPA", // ISO 17025 Clause 8.7 - NC escalated to CAPA
@@ -28,8 +28,8 @@ export const NOTIFICATION_TYPES = [
   "COMPETENCE_EXPIRED", // ISO 17025 Clause 6.2.3 - Competence expired, blocks assignment
   "COMPETENCE_REQUESTED", // ISO 17025 Clause 6.2.3 - New qualification request
   "COMPETENCE_APPROVED", // ISO 17025 Clause 6.2.3 - Qualification approved
-  "PT_PLAN_DUE", // ISO 17025 Clause 7.7.2 - Proficiency-test participation due for a scope part (#60)
-  "ASSET_FOUND_OUT_OF_TOLERANCE", // ISO 9001 7.1.5.2 / #740 - Customer's instrument reproved as-found; impact assessment required
+  "PT_PLAN_DUE", // ISO 17025 Clause 7.7.2 - Proficiency-test participation due for a scope part
+  "ASSET_FOUND_OUT_OF_TOLERANCE", // ISO 9001 7.1.5.2 - Customer's instrument reproved as-found; impact assessment required
   "CALIBRATION_REQUEST_SUBMITTED",
   "CALIBRATION_REQUEST_UNDER_REVIEW",
   "CALIBRATION_REQUEST_APPROVED",
@@ -40,9 +40,9 @@ export const NOTIFICATION_TYPES = [
   "VISIT_RESCHEDULED", // On-site visit date changed
   "VISIT_CANCELLED", // On-site visit cancelled
   "VISIT_REMINDER", // On-site visit coming up soon (scheduled reminder)
-  "VISIT_CUSTOMER_CONFIRMED", // Lab-bound (#739): portal customer confirmed attendance for a visit
-  "VISIT_RESCHEDULE_REQUESTED", // Lab-bound (#739): portal customer asked to reschedule a visit
-  "VISIT_RESCHEDULE_DECLINED", // Customer-bound (#739): lab declined the customer's reschedule request
+  "VISIT_CUSTOMER_CONFIRMED", // Lab-bound: portal customer confirmed attendance for a visit
+  "VISIT_RESCHEDULE_REQUESTED", // Lab-bound: portal customer asked to reschedule a visit
+  "VISIT_RESCHEDULE_DECLINED", // Customer-bound: lab declined the customer's reschedule request
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];

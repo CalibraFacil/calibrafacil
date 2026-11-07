@@ -125,7 +125,7 @@ describe("job transition table", () => {
     ]);
     expect(allowedFrom("approve")).toEqual(["REVIEW"]);
     expect(allowedFrom("amend")).toEqual(["APPROVED"]);
-    // Q19: a technician is assigned only while the job is still open.
+    // A technician is assigned only while the job is still open.
     expect(allowedFrom("assign")).toEqual([
       "DRAFT",
       "IN_PROGRESS",
