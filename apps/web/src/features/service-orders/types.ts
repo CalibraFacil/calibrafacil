@@ -12,13 +12,6 @@ export type ServiceOrderListItem = Omit<
   syncState?: string | null
 }
 
-export type ServiceOrdersListData = Omit<
-  ClientRuntimeServiceOrdersListData,
-  'data'
-> & {
-  data: ServiceOrderListItem[]
-}
-
 export type ServiceOrdersListQueryInput = {
   organizationId: string
   page: number

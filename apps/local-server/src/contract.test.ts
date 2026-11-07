@@ -32,9 +32,7 @@ import {
   massCompositionProfilesResponseSchema,
   methodDetailSchema,
   methodsListResponseSchema,
-  serviceOrderCreateResponseSchema,
-  serviceOrderDetailResponseSchema,
-  serviceOrdersListResponseSchema,
+  serviceOrderEndpoints,
   standardSchema,
   standardsListResponseSchema,
   syncStatusSnapshotSchema,
@@ -621,22 +619,22 @@ describe("local-server answers with the cloud's contract schemas (P2-15 REQ-TC-4
         claimedDefect: "Display apagado",
         intakeCondition: "Sem avarias aparentes",
       }),
-      serviceOrderCreateResponseSchema,
+      serviceOrderEndpoints.create.response,
       201,
     );
 
     const list = await parsedBody(
       await app.request("/api/service-orders?page=1&limit=20"),
-      serviceOrdersListResponseSchema,
+      serviceOrderEndpoints.list.response,
     );
     expect(list.data).toHaveLength(2);
     await parsedBody(
       await app.request("/api/service-orders/50"),
-      serviceOrderDetailResponseSchema,
+      serviceOrderEndpoints.get.response,
     );
     await parsedBody(
       await app.request(`/api/service-orders/${created.data.id}`),
-      serviceOrderDetailResponseSchema,
+      serviceOrderEndpoints.get.response,
     );
     database.close();
   });

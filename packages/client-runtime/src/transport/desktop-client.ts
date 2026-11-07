@@ -16,7 +16,6 @@ import type {
   CalibraApi,
   CertificateNumberingConfig,
   CertificateNumberingProfileResponse,
-  CreateServiceOrderResult,
   DashboardUnitsResponse,
   EffectiveEnvironmentalLimitsResponse,
   EnvironmentalLimit,
@@ -34,8 +33,6 @@ import type {
   NotificationPreferencesResponse,
   EmailDomainResponse,
   PortalDomainResponse,
-  ServiceOrderDetail,
-  ServiceOrdersListData,
   SsoSettingsResponse,
   MassCompositionProfilesData,
   StandardData,
@@ -53,6 +50,7 @@ import {
   createDesktopEndpointTransport,
   endpointClient,
 } from "./endpoint-client";
+import { createServiceOrdersApi } from "../modules/service-orders";
 import { readApiError } from "./response";
 import { apiRouteParam } from "./url";
 import {
@@ -172,6 +170,10 @@ export function createDesktopApiClient(
   options: CreateDesktopApiClientOptions,
 ): CalibraApi {
   const fetchImpl = options.fetch ?? fetch;
+  const localServiceOrders = createServiceOrdersApi(
+    createDesktopEndpointTransport(options),
+    options,
+  );
   const localAssets = endpointClient(
     assetEndpoints,
     createDesktopEndpointTransport(options),
@@ -761,115 +763,20 @@ export function createDesktopApiClient(
       },
     },
     serviceOrders: {
-      ...desktopCloudOnlyStubs("serviceOrders", {
-        action: "Ordens de serviço",
-        actionByMethod: {
-          listCommunications: "Comunicações da OS",
-          update: "Atualização da OS",
-          createQuote: "Orçamento da OS",
-          saveExecution: "Execução da OS",
-          issueDeliveryDocument: "Documento de entrega",
-          saveEvaluation: "Avaliação técnica",
-          sendQuote: "Emissão de orçamento",
-          generateIntakeDocument: "Geração de comprovante",
-          getIntakeDocumentPdf: "Abertura de comprovante",
-          generateTag: "Geração de etiqueta",
-          getTagPdf: "Abertura de etiqueta",
-          updateRepairMark: "Marca de Reparo",
-          deliver: "Registro de entrega",
-          getDeliveryDocumentPdf: "Abertura do comprovante de entrega",
-        },
-      }),
-      async list(input) {
-        const url = new URL("/api/service-orders", options.baseUrl);
-        url.searchParams.set("page", String(input.page));
-        url.searchParams.set("limit", String(input.limit));
-
-        if (input.query) {
-          url.searchParams.set("query", input.query);
-        }
-
-        if (input.status) {
-          url.searchParams.set("status", input.status);
-        }
-
-        const response = await fetchImpl(url, {
-          credentials: "include",
-          headers: await createDesktopHeaders(options.tokenProvider),
-        });
-
-        if (!response.ok) {
-          throw new Error("Erro ao carregar ordens de serviço");
-        }
-
-        return readDesktopJson<ServiceOrdersListData>(response);
-      },
-      async get(id) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/service-orders/${encodeURIComponent(String(id))}`,
-            options.baseUrl,
-          ),
-          {
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error("Erro ao carregar OS");
-        }
-
-        const result = await readDesktopJson<{ data: ServiceOrderDetail }>(
-          response,
-        );
-        return result.data;
-      },
+      ...desktopEndpointStubs("serviceOrders"),
+      // The offline reads and the intake command go to the local server, which
+      // answers the definitions' own response schemas
+      // (`apps/local-server/src/contract.test.ts`).
+      list: localServiceOrders.list,
+      get: localServiceOrders.get,
       /**
        * Desktop resolves the route id against the local store. The local id is
        * already opaque, so an offline-created OS — which has no cloud publicId
        * until it syncs — stays reachable by the same URL shape.
        */
-      async getByPublicId(publicId) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/service-orders/${encodeURIComponent(publicId)}`,
-            options.baseUrl,
-          ),
-          {
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error("Erro ao carregar OS");
-        }
-
-        const result = await readDesktopJson<{ data: ServiceOrderDetail }>(
-          response,
-        );
-        return result.data;
-      },
-      async create(input) {
-        const response = await fetchImpl(
-          new URL("/api/service-orders", options.baseUrl),
-          {
-            method: "POST",
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider, {
-              "Content-Type": "application/json",
-            }),
-            body: JSON.stringify(input),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(await readApiError(response, "Erro ao criar OS"));
-        }
-
-        return readDesktopJson<CreateServiceOrderResult>(response);
-      },
+      getByPublicId: ({ params }) =>
+        localServiceOrders.get({ params: { id: params.publicId } }),
+      create: localServiceOrders.create,
     },
     sync: {
       async getSession() {

@@ -210,7 +210,7 @@ export function NewServiceOrderPage() {
 
   const createMutation = useMutation({
     mutationFn: async (data: ServiceOrderCreatePayload) =>
-      calibraApi.serviceOrders.create(data),
+      calibraApi.serviceOrders.create({ body: data }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['service-orders'] })
       toast.success('OS criada com comprovante e etiqueta em processamento')

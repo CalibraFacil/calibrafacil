@@ -9,6 +9,10 @@ import {
 } from "@calibra-facil/contracts/customers-fixtures";
 import { buildDashboardStats } from "@calibra-facil/contracts/dashboard-fixtures";
 import { buildNonConformanceRecord } from "@calibra-facil/contracts/non-conformances-fixtures";
+import {
+  buildServiceOrderCreateResponse,
+  buildServiceOrderDetail,
+} from "@calibra-facil/contracts/service-orders-fixtures";
 import { buildStandard } from "@calibra-facil/contracts/standards-fixtures";
 import { describe, expect, it } from "vitest";
 
@@ -1029,12 +1033,12 @@ describe("client runtime data policy registry", () => {
           "policy": "local-first-read-through-sync",
         },
         {
-          "method": "get",
+          "method": "getByPublicId",
           "namespace": "serviceOrders",
           "policy": "local-first-read-through-sync",
         },
         {
-          "method": "getByPublicId",
+          "method": "get",
           "namespace": "serviceOrders",
           "policy": "local-first-read-through-sync",
         },
@@ -1059,12 +1063,22 @@ describe("client runtime data policy registry", () => {
           "policy": "cloud-only",
         },
         {
-          "method": "saveEvaluation",
+          "method": "createEvaluation",
+          "namespace": "serviceOrders",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "updateEvaluation",
           "namespace": "serviceOrders",
           "policy": "cloud-only",
         },
         {
           "method": "sendQuote",
+          "namespace": "serviceOrders",
+          "policy": "cloud-only",
+        },
+        {
+          "method": "startExecution",
           "namespace": "serviceOrders",
           "policy": "cloud-only",
         },
@@ -2841,6 +2855,10 @@ describe("desktop hybrid runtime adapter", () => {
       if (url.pathname === "/api/assets") {
         return Response.json(buildAssetRecord(), { status: 201 });
       }
+      // The service-order intake answers the endpoint contract.
+      if (url.pathname === "/api/service-orders") {
+        return Response.json(buildServiceOrderCreateResponse());
+      }
 
       return Response.json({ ok: true, data: { id: "local-1" } });
     };
@@ -2881,14 +2899,14 @@ describe("desktop hybrid runtime adapter", () => {
         measurements: [],
       }),
     );
-    await client.serviceOrders.create(
-      testPayload<CreateServiceOrderInput>({
+    await client.serviceOrders.create({
+      body: testPayload<CreateServiceOrderInput>({
         customerId: 1,
         priority: "normal",
         intakeType: "dropoff",
         items: [],
       }),
-    );
+    });
 
     expect(fetchCalls.map(([input]) => String(input))).toEqual([
       "http://127.0.0.1:4317/api/assets",
@@ -2960,9 +2978,13 @@ describe("desktop hybrid runtime adapter", () => {
       params: { id: 1 },
       body: { name: "Ativo atualizado" },
     });
-    await client.serviceOrders.createQuote("service-order-1", { items: [] });
-    await client.serviceOrders.saveExecution("service-order-1", {
-      technicalNotes: "Execução",
+    await client.serviceOrders.createQuote({
+      params: { id: "service-order-1" },
+      body: { items: [] },
+    });
+    await client.serviceOrders.saveExecution({
+      params: { id: "service-order-1" },
+      body: { servicePerformed: "Execução", result: "repaired" },
     });
     await client.dashboard.getStats();
     await client.services.list({ page: 1, limit: 20 });
@@ -3048,7 +3070,7 @@ describe("desktop hybrid runtime adapter", () => {
     await client.standards.list({ page: 1, limit: 20 });
     await client.environmentalLimits.list();
     await client.jobs.list({ page: 1, limit: 20 });
-    await client.serviceOrders.list({ page: 1, limit: 20 });
+    await client.serviceOrders.list({ query: { page: 1, limit: 20 } });
 
     expect(fetchCalls.map(([input]) => String(input))).toEqual([
       "http://127.0.0.1:4317/api/local/session",
@@ -3116,7 +3138,7 @@ describe("desktop hybrid runtime adapter", () => {
       }
 
       if (url.pathname === "/api/service-orders/service-order-1") {
-        return Response.json({ data: { id: "service-order-1" } });
+        return Response.json({ data: buildServiceOrderDetail() });
       }
       if (url.pathname === "/api/customers/1") {
         return Response.json(buildCustomerDetail());
@@ -3159,8 +3181,8 @@ describe("desktop hybrid runtime adapter", () => {
     await client.jobs.get("job-1");
     await client.jobs.listStandards();
     await client.jobs.getEffectiveEnvironmentalLimits(1, { unitId: 10 });
-    await client.serviceOrders.list({ page: 1, limit: 20 });
-    await client.serviceOrders.get("service-order-1");
+    await client.serviceOrders.list({ query: { page: 1, limit: 20 } });
+    await client.serviceOrders.get({ params: { id: "service-order-1" } });
 
     await new Promise((resolve) => setTimeout(resolve, 0));
 

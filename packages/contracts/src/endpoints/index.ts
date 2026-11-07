@@ -15,6 +15,7 @@ import { environmentalLimitEndpoints } from "./environmental-limits";
 import { materialEndpoints } from "./materials";
 import type { EndpointGroup, EndpointPaths } from "./define";
 import { reportEndpoints } from "./reports";
+import { serviceOrderEndpoints } from "./service-orders";
 import { signatureEndpoints } from "./signatures";
 import { visitEndpoints } from "./visits";
 
@@ -25,6 +26,7 @@ export * from "./capa";
 export * from "./non-conformances";
 export * from "./spc";
 export * from "./finance";
+export * from "./service-orders";
 export * from "./dashboard";
 export * from "./reports";
 export * from "./certificate-numbering";
@@ -50,6 +52,7 @@ export const ENDPOINT_GROUPS = {
   capas: capaEndpoints,
   spc: spcEndpoints,
   finance: financeEndpoints,
+  serviceOrders: serviceOrderEndpoints,
   dashboard: dashboardEndpoints,
   reports: reportEndpoints,
   certificateNumbering: certificateNumberingEndpoints,

@@ -19,9 +19,7 @@ import {
   customersListResponseSchema,
   methodDetailSchema,
   methodsListResponseSchema,
-  serviceOrderCreateResponseSchema,
-  serviceOrderDetailResponseSchema,
-  serviceOrdersListResponseSchema,
+  serviceOrderEndpoints,
 } from "@calibra-facil/contracts";
 import { db } from "@calibra-facil/db";
 import { asset, assetType, calibrationMethod } from "@calibra-facil/db/schema";
@@ -224,20 +222,20 @@ describe("reference-data endpoints: real responses honor the contract schemas (P
           intakeCondition: "Sem avarias aparentes",
         }),
       }),
-      serviceOrderCreateResponseSchema,
+      serviceOrderEndpoints.create.response,
       201,
     );
 
     const list = await parsedBody(
       await serviceOrdersRouter.request("/?page=1&limit=20"),
-      serviceOrdersListResponseSchema,
+      serviceOrderEndpoints.list.response,
     );
     expect(list.data.map((order) => order.publicId)).toEqual([
       created.data.publicId,
     ]);
     const detail = await parsedBody(
       await serviceOrdersRouter.request(`/${created.data.id}`),
-      serviceOrderDetailResponseSchema,
+      serviceOrderEndpoints.get.response,
     );
     expect(detail.data.claimedDefect).toBe("Display apagado");
   });

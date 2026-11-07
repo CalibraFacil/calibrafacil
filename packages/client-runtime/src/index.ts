@@ -2,24 +2,15 @@ import type {
   CalibraApi,
   CreateApiKeyInput,
   CreateServiceInput,
-  CreateServiceOrderInput,
-  CreateServiceOrderQuoteInput,
   CreateSsoProviderInput,
   SoftDeleteOrganizationRequest,
   UpdateOrganizationProfileRequest,
-  DeliverServiceOrderInput,
-  IssueServiceOrderDeliveryDocumentInput,
   MethodCompileDraftInput,
   MethodFromTemplateInput,
   MethodPreviewDraftInput,
   MethodPublishDraftInput,
   MethodRequestApprovalInput,
   MethodWriteInput,
-  SaveServiceOrderEvaluationInput,
-  SaveServiceOrderExecutionInput,
-  SendServiceOrderQuoteInput,
-  ServiceOrderRepairMarkInput,
-  UpdateServiceOrderInput,
   StandardWriteInput,
   StartSsoInput,
   UpdateNotificationPreferencesInput,
@@ -469,92 +460,6 @@ export function createCloudApiClient(
           };
         };
       };
-
-      "service-orders": {
-        $get(input: {
-          query: {
-            page: string;
-            limit: string;
-            query?: string;
-            status?: string;
-          };
-        }): Promise<Response>;
-        $post(input: { json: CreateServiceOrderInput }): Promise<Response>;
-        ":id": {
-          $get(input: { param: { id: string } }): Promise<Response>;
-          $patch(input: {
-            param: { id: string };
-            json: UpdateServiceOrderInput;
-          }): Promise<Response>;
-          evaluations: {
-            $post(input: {
-              param: { id: string };
-              json: SaveServiceOrderEvaluationInput;
-            }): Promise<Response>;
-            ":evaluationId": {
-              $patch(input: {
-                param: { id: string; evaluationId: string };
-                json: SaveServiceOrderEvaluationInput;
-              }): Promise<Response>;
-            };
-          };
-          quotes: {
-            $post(input: {
-              param: { id: string };
-              json: CreateServiceOrderQuoteInput;
-            }): Promise<Response>;
-            ":quoteId": {
-              send: {
-                $post(input: {
-                  param: { id: string; quoteId: string };
-                  json: SendServiceOrderQuoteInput;
-                }): Promise<Response>;
-              };
-            };
-          };
-          execution: {
-            finish: {
-              $post(input: {
-                param: { id: string };
-                json: SaveServiceOrderExecutionInput;
-              }): Promise<Response>;
-            };
-          };
-          "intake-document": {
-            $post(input: { param: { id: string } }): Promise<Response>;
-          };
-          "intake-document.pdf": {
-            $get(input: { param: { id: string } }): Promise<Response>;
-          };
-          tag: {
-            $post(input: { param: { id: string } }): Promise<Response>;
-          };
-          "tag.pdf": {
-            $get(input: { param: { id: string } }): Promise<Response>;
-          };
-          "repair-mark": {
-            $patch(input: {
-              param: { id: string };
-              json: ServiceOrderRepairMarkInput;
-            }): Promise<Response>;
-          };
-          deliver: {
-            $post(input: {
-              param: { id: string };
-              json: DeliverServiceOrderInput;
-            }): Promise<Response>;
-          };
-          "delivery-document": {
-            $post(input: {
-              param: { id: string };
-              json: IssueServiceOrderDeliveryDocumentInput;
-            }): Promise<Response>;
-          };
-          "delivery-document.pdf": {
-            $get(input: { param: { id: string } }): Promise<Response>;
-          };
-        };
-      };
     };
   };
 
@@ -596,7 +501,7 @@ export function createCloudApiClient(
     methods: createMethodsApi(rawCloudClient),
     standards: createStandardsApi(rawCloudClient, options),
     jobs: createJobsApi(rawCloudClient, options),
-    serviceOrders: createServiceOrdersApi(rawCloudClient),
+    serviceOrders: createServiceOrdersApi(endpointTransport, options),
     sync: createCloudSyncApi(),
     attachments: createCloudAttachmentsApi(),
     reports: createReportsApi(endpointTransport, options),
