@@ -1,0 +1,22 @@
+{
+  "name": "@calibra-facil/accreditation-seal",
+  "version": "1.0.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "description": "The RBC/CGCRE accreditation seal artwork, one SVG shared by the issued certificate (documents) and the apps (ui)",
+  "exports": {
+    ".": "./src/index.tsx"
+  },
+  "dependencies": {
+    "@calibra-facil/shared": "workspace:^",
+    "react": "^19.2.7"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.16"
+  },
+  "scripts": {
+    "check-types": "node ../../scripts/typecheck.mjs --noEmit",
+    "lint": "oxlint"
+  }
+}

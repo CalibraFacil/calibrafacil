@@ -6,7 +6,7 @@ export {
   FLEET_DUE_SOON_DAYS,
   type FleetStatusAsset,
 } from "./FleetStatusReportHtml.js";
-export { AccreditationSealSvg } from "./AccreditationSeal.js";
+export { AccreditationSealSvg } from "@calibra-facil/accreditation-seal";
 export {
   ServiceOrderIntakeDocumentHtml,
   ServiceOrderDeliveryReceiptHtml,

@@ -250,7 +250,7 @@ export async function processJob(
             { jobId, organizationId: existing?.organization_id ?? null },
             () => readCertificateJobRows(client, jobId),
           ),
-          // Roadmap 2 C2: has a certificate for this job ALREADY been issued?
+          // Has a certificate for this job ALREADY been issued?
           // Only then may its old statements be reproduced as they were. A
           // first issuance never asserts what was not verified.
           alreadyIssued: await certificateAlreadyIssued(
@@ -295,7 +295,7 @@ export async function processJob(
         permanent: true,
       };
     }
-    // Roadmap 2 C1/C2: an input frozen under an earlier layout RE-renders a
+    // An input frozen under an earlier layout RE-renders a
     // certificate that was already issued under the statement rules it was
     // issued with (byte-identical); so does the live legacy read (approved
     // before the input existed). A FIRST issuance, even of such an input, takes

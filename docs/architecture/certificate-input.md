@@ -57,7 +57,7 @@ records it as `changes.certificateInputSha256`.
 `assembleCertificateJobData` (pure) turns the already-read rows into the
 `CertificateJobData` the layout consumes. Its callers read the rows:
 
-- `@calibra-facil/db/certificate-input` (drizzle, on the approval transaction,
+- `@calibra-facil/jobs-core/certificate-input` (drizzle, on the approval transaction,
   every read scoped by the job's organization) — the **frozen** path;
 - `packages/jobs-core/src/certificate/fetch-job-data.ts` (SQL) — the **legacy** path,
   for jobs approved before migration 0120.

@@ -1,10 +1,6 @@
 /**
- * Envelope encryption of the laboratories' signing credentials (roadmap 2 B4a,
- * Q44; review 3.1 "key custody").
- *
- * The P12 and its password used to be encrypted directly with one static master
- * key for every tenant: no key id, no rotation, nothing tying a ciphertext to the
- * row it belongs to. Now:
+ * Envelope encryption of the laboratories' signing credentials (key custody):
+ * a key id, rotation, and a ciphertext tied to the row it belongs to.
  *
  *   - each credential field (P12, password) gets its OWN random AES-256-GCM data
  *     key (DEK); the data is encrypted under it, and the DEK is wrapped by a key

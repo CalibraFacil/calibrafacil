@@ -1,5 +1,5 @@
 import { readRuntimeConfig } from "@calibra-facil/config";
-import type { CertificateImageReader } from "@calibra-facil/db/certificate-input";
+import type { CertificateImageReader } from "@calibra-facil/jobs-core/certificate-input";
 import type { StorageBucket } from "@calibra-facil/shared/storage-keys";
 import {
   createR2Client,

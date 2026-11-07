@@ -86,7 +86,7 @@ export function jobOrganizationOf(
 }
 
 /**
- * Records a failed emission: GENERATING_PDF -> RENDER_FAILED (roadmap 2 C5; the
+ * Records a failed emission: GENERATING_PDF -> RENDER_FAILED (the
  * approval stands, a manager retries the render or rejects the job). Compare-and-set
  * on GENERATING_PDF, so a job that was cancelled, already approved or amended in the
  * meantime is never flipped by a late failure.

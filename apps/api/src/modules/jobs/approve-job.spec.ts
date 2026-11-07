@@ -183,7 +183,7 @@ vi.mock("../../lib/automatic-send", () => ({
 vi.mock("../../lib/units", () => ({
   buildUnitScopeCondition: () => undefined,
 }));
-vi.mock("@calibra-facil/db/certificate-input", () => ({
+vi.mock("@calibra-facil/jobs-core/certificate-input", () => ({
   lockJobForApproval: mockLockJob,
   freezeCertificateInput: mockFreezeInput,
   discardUnreleasedCertificateInput: mockDiscardInput,

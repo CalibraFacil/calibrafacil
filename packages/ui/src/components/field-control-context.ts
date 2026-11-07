@@ -1,7 +1,7 @@
 import { createContext, useContext } from "react";
 
 /**
- * The id a composable Field gives its control (roadmap 2 F4, review 3.5): a
+ * The id a composable Field gives its control: a
  * text `FieldLabel` points at it and `Input`, `Textarea`, `NativeSelect` and
  * `SelectTrigger` take it when they carry no id of their own, so the label is
  * associated without wiring `htmlFor`/`id` by hand. An explicit `htmlFor` or
