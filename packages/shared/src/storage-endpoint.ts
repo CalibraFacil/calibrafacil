@@ -2,10 +2,10 @@ import { trimTrailingSlashes } from "./public-urls";
 /**
  * S3 connection settings for the object store.
  *
- * Production targets Cloudflare R2, whose S3 endpoint is derived from the
- * account id. Any other S3-compatible store (the local dev container from
- * docker-compose.yml, MinIO, AWS S3, …) is selected by setting R2_ENDPOINT;
- * path-style addressing is then used, since most self-hosted stores do not
+ * A Cloudflare R2 account id derives the R2 S3 endpoint. Any other
+ * S3-compatible store (the Versity gateway of deploy/compose.yaml, the local dev
+ * container from docker-compose.yml, MinIO, AWS S3, …) is selected by setting
+ * R2_ENDPOINT; path-style addressing is then used, since most self-hosted stores do not
  * serve virtual-hosted buckets.
  */
 export type S3EndpointEnv = {

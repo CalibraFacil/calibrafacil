@@ -111,9 +111,9 @@ function createR2Bucket(storage: StorageSettings, bucketName: string) {
 }
 
 /**
- * The worker's environment (cron handlers, the inline dev
- * runner). The worker cannot do any work without its database, storage and
- * keys, so a missing one throws one aggregated error.
+ * The worker's environment for the work that runs in the API process (the cron
+ * handlers, the development `local` runner). It cannot do any work without its
+ * database, storage and keys, so a missing one throws one aggregated error.
  */
 export function createWorkerRuntimeEnv(): WorkerRuntimeEnv {
   const config = loadWorkerConfig();
@@ -125,7 +125,7 @@ export function createWorkerRuntimeEnv(): WorkerRuntimeEnv {
     DATABASE_RLS_MODE: config.database.rlsMode,
     CERTIFICATES_BUCKET: createR2Bucket(storage, storage.bucketName ?? ""),
     MEDIA_BUCKET: createR2Bucket(storage, storage.mediaBucketName ?? ""),
-    // Gotenberg HTML/XLSX->PDF service (services/gotenberg on Cloudflare Containers).
+    // Gotenberg HTML->PDF service.
     GOTENBERG_URL: config.rendering.gotenbergUrl,
     GOTENBERG_TOKEN: config.rendering.gotenbergToken,
     // The master key and every SIGNING_TSA_* variable, shared with createWorkerEnv.

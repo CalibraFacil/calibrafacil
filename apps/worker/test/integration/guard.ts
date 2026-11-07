@@ -5,7 +5,7 @@
 // ONLY ever point at an ephemeral/local Postgres (the per-run Docker container,
 // or a disposable CI service container). On 2026-06-22 a broken Docker setup led
 // a run to fall back to the dev DATABASE_URL from packages/db/.env and TRUNCATE
-// the shared Neon DEV database. This guard makes that impossible: it refuses any
+// the shared DEV database. This guard makes that impossible: it refuses any
 // non-local host, and ALWAYS refuses a Neon host, no matter what.
 //
 // Wired into the three places that can touch a database destructively:

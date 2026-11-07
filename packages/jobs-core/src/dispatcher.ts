@@ -19,10 +19,10 @@ import {
   processJobApprovedNotification,
 } from "./approval-notifications.js";
 
-// one capture site covering every run mode (container drain, local poller, inline/local dev): a failing job is
-// reported with structural tags before the error continues into the caller's
-// retry path. Flush is bounded so a serverless caller doesn't freeze with the
-// event still in flight.
+// one capture site covering every run mode (the always-on worker, the API's
+// in-process `local` runner): a failing job is reported with structural tags
+// before the error continues into the caller's retry path. Flush is bounded so
+// a shutting-down process doesn't wait on an event still in flight.
 export async function processBackgroundJob(
   env: Env,
   message: BackgroundJobMessage,

@@ -215,8 +215,6 @@ async function queueRow(id: number) {
   return row!;
 }
 
-type MessageBatchLike = { messages: Array<{ ack: () => void }> };
-
 describe("drainQueue claims one row at a time", () => {
   it("REQ-QDL-001 a slow first job leaves the second row PENDING and unclaimed while it runs", async () => {
     const org = await seedOrg({ orgId: "org-1", userId: "user-org-1" });
