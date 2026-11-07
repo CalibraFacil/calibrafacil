@@ -40,7 +40,7 @@
 # The portal's index.html has one inline script (the theme, applied before first
 # paint); its hash is pinned here.
 (csp_portal) {
-	header Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'sha256-AP/p830QixSXZbJAuCvcDPeTBEXlFS7ctMz5fNolRpg='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: {$FILES_URL}; font-src 'self' data:; connect-src 'self' {$FILES_URL}; frame-src 'none'"
+	header Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'sha256-118SS2s8NjE8iiR1MpULSL9wCFCjV0guMca+5ADrqQg='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: {$FILES_URL}; font-src 'self' data:; connect-src 'self' {$FILES_URL}; frame-src 'none'"
 }
 
 # Lab app. Its API calls go to /api on the same address.
