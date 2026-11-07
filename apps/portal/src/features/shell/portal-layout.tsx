@@ -11,6 +11,7 @@ import { translateAuthErrorMessage } from "@calibra-facil/auth/error-messages";
 import { toast } from "sonner";
 import { PortalSidebar } from "@/features/shell/portal-sidebar";
 import { PortalHeader } from "@/features/shell/portal-header";
+import { CrossTabOrgSync } from "@/features/shell/cross-tab-org-sync";
 import { SidebarInset, SidebarProvider } from "@calibra-facil/ui/sidebar";
 import { Spinner } from "@calibra-facil/ui/spinner";
 import { getWebAppUrl } from "@/lib/runtime-env";
@@ -214,6 +215,7 @@ export function PortalLayout({
     <PortalOrgProvider
       organizationId={activeOrg?.id ?? startup?.organizationId ?? null}
     >
+      <CrossTabOrgSync />
       <SidebarProvider>
         <a
           href="#conteudo"

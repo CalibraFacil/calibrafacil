@@ -183,9 +183,13 @@ imports `client-runtime` or `@calibra-facil/api`. Only business data under
   signs in (`loadPortalStartup`). The org in the key keeps an entry fetched for
   one org from being read under another's key and scopes `placeholderData`. The
   lab app has the same rule with a different mechanism (a full reset on switch,
-  `apps/web/src/lib/switch-scope.ts`, see `web-frontend-architecture.md`), and the
-  same known gap: a second tab does not hear that another tab changed the
-  session's organization. Keys are built only by the factory in `lib/portal-keys.ts` (`usePortalKeys()`:
+  `apps/web/src/lib/switch-scope.ts`, see `web-frontend-architecture.md`). A
+  second portal tab follows a switch made in another one: the switcher stores
+  `portal-active-org`, the `storage` event reaches only the other tabs, and
+  `watchOtherTabOrganization` (`lib/portal-org-sync.ts`, mounted by
+  `CrossTabOrgSync` in the layout) cancels the portal queries, re-applies the
+  organization to its own session atom and removes the other organizations'
+  entries. Keys are built only by the factory in `lib/portal-keys.ts` (`usePortalKeys()`:
   `keys.asset(id)`, `keys.requests`, ...), which prepends the org through
   `portalQueryKey` (`lib/portal-query-keys.ts`) — for `useQuery`,
   `invalidateQueries`, `setQueryData` and placeholder scopes alike; never a
