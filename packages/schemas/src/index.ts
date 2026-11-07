@@ -45,6 +45,7 @@ export * from "./reference-standard-kind";
 export * from "./reference-standard-kind-map";
 export * from "./service-orders";
 export * from "./query-flag";
+export * from "./units";
 
 // =============================================================================
 // CUSTOMER SCHEMAS

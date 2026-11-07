@@ -1,3 +1,4 @@
+import { buildOrganizationUnit } from '@calibra-facil/contracts/units-fixtures'
 import { describe, expect, it } from 'vitest'
 
 import type {
@@ -38,24 +39,13 @@ import {
 } from './organization-model'
 
 const units: OrganizationUnit[] = [
-  {
+  buildOrganizationUnit({
     id: 2,
     name: 'Laboratório Sul',
     slug: 'lab-sul',
-    status: 'ACTIVE',
     isDefault: false,
-    createdAt: '2026-01-01T00:00:00.000Z',
-    archivedAt: null,
-  },
-  {
-    id: 1,
-    name: 'Matriz',
-    slug: 'matriz',
-    status: 'ACTIVE',
-    isDefault: true,
-    createdAt: '2026-01-01T00:00:00.000Z',
-    archivedAt: null,
-  },
+  }),
+  buildOrganizationUnit({ id: 1, name: 'Matriz', slug: 'matriz' }),
 ]
 
 function createGovernanceMember(): GovernanceMember {

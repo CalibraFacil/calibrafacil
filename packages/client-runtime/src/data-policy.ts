@@ -80,16 +80,7 @@ const desktopDataPolicyUnavailableMessages = {
 export const calibraApiPolicyRegistry = {
   // Derived from the endpoint definitions (`policy`), not listed here.
   dashboard: endpointPolicies(ENDPOINT_GROUPS.dashboard),
-  units: {
-    getDashboardUnits: "cloud-only",
-    listAdminUnits: "cloud-only",
-    listAdminMembers: "cloud-only",
-    listAdminActivity: "cloud-only",
-    createAdminUnit: "cloud-only",
-    updateAdminUnit: "cloud-only",
-    updateMemberAssignments: "cloud-only",
-    updateMemberRole: "cloud-only",
-  },
+  units: endpointPolicies(ENDPOINT_GROUPS.units),
   access: {
     getFinanceAccess: "cloud-only",
   },
@@ -144,23 +135,9 @@ export const calibraApiPolicyRegistry = {
   signingCertificates: endpointPolicies(ENDPOINT_GROUPS.signingCertificates),
   // Derived from the endpoint definitions (`policy`), not listed here.
   customers: endpointPolicies(ENDPOINT_GROUPS.customers),
-  customerGroups: {
-    list: "cloud-only",
-    get: "cloud-only",
-    create: "cloud-only",
-    addBranch: "cloud-only",
-    removeBranch: "cloud-only",
-    listMembers: "cloud-only",
-    listInvitations: "cloud-only",
-    createInvitation: "cloud-only",
-    resendInvitation: "cloud-only",
-    cancelInvitation: "cloud-only",
-    removeMember: "cloud-only",
-  },
+  customerGroups: endpointPolicies(ENDPOINT_GROUPS.customerGroups),
   assets: endpointPolicies(ENDPOINT_GROUPS.assets),
-  assetTypes: {
-    list: "local-first-read-through-sync",
-  },
+  assetTypes: endpointPolicies(ENDPOINT_GROUPS.assetTypes),
   services: endpointPolicies(ENDPOINT_GROUPS.services),
   // Material catalog is cloud-only in v1 (see the endpoint definitions).
   materials: endpointPolicies(ENDPOINT_GROUPS.materials),

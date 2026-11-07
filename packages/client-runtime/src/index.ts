@@ -202,46 +202,6 @@ export function createCloudApiClient(
           }): Promise<Response>;
         };
       };
-      units: {
-        $get(): Promise<Response>;
-        admin: {
-          units: {
-            $get(): Promise<Response>;
-            $post(input: { json: { name: string } }): Promise<Response>;
-            ":id": {
-              $patch(input: {
-                param: { id: string };
-                json: { name?: string; status?: "ACTIVE" | "ARCHIVED" };
-              }): Promise<Response>;
-            };
-          };
-          members: {
-            $get(): Promise<Response>;
-            ":memberId": {
-              assignments: {
-                $put(input: {
-                  param: { memberId: string };
-                  json: {
-                    assignments: Array<{
-                      unitId: number;
-                      role: "member" | "technician" | "unit_admin";
-                    }>;
-                  };
-                }): Promise<Response>;
-              };
-              role: {
-                $patch(input: {
-                  param: { memberId: string };
-                  json: { role: string };
-                }): Promise<Response>;
-              };
-            };
-          };
-          activity: {
-            $get(): Promise<Response>;
-          };
-        };
-      };
       jobs: JobsRawCloudClient["api"]["jobs"];
       // Only `jobs.listStandards` (the jobs domain, not converted yet) reads
       // the standards list through the raw client; `standards` itself is an
@@ -268,7 +228,7 @@ export function createCloudApiClient(
 
   return {
     dashboard: createDashboardApi(endpointTransport, options),
-    units: createUnitsApi(rawCloudClient),
+    units: createUnitsApi(endpointTransport, options),
     access: createAccessApi(rawCloudClient),
     onboarding: createOnboardingApi(rawCloudClient),
     sessions: createSessionsApi(rawCloudClient),
@@ -293,9 +253,9 @@ export function createCloudApiClient(
       options,
     ),
     customers: createCustomersApi(endpointTransport, options),
-    customerGroups: createCustomerGroupsApi(rawCloudClient),
+    customerGroups: createCustomerGroupsApi(endpointTransport, options),
     assets: createAssetsApi(endpointTransport, options),
-    assetTypes: createAssetTypesApi(rawCloudClient),
+    assetTypes: createAssetTypesApi(endpointTransport, options),
     environmentalLimits: createEnvironmentalLimitsApi(
       endpointTransport,
       options,

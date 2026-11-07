@@ -28,11 +28,13 @@ import type {
 import type { AccreditedScopeApi } from "./modules/accredited-scope";
 import type { PublicInvitationsApi } from "./modules/public-invitations";
 import type { PublicSignupApi } from "./modules/public-signup";
+import type { AssetTypesApi } from "./modules/asset-types";
 import type { AssetsApi } from "./modules/assets";
 import type { CalibrationRequestsApi } from "./modules/calibration-requests";
 import type { CapasApi } from "./modules/capa";
 import type { CertificateNumberingApi } from "./modules/certificate-numbering";
 import type { CompetencesApi } from "./modules/competences";
+import type { CustomerGroupsApi } from "./modules/customer-groups";
 import type { CustomersApi } from "./modules/customers";
 import type { EntityLabelsApi } from "./modules/entity-labels";
 import type { ServicesApi } from "./modules/services";
@@ -52,6 +54,7 @@ import type { SpcApi } from "./modules/spc";
 import type { SsoApi } from "./modules/sso";
 import type { StandardsApi } from "./modules/standards";
 import type { TrainingRecordsApi } from "./modules/training-records";
+import type { UnitsApi } from "./modules/units";
 import type { VisitsApi } from "./modules/visits";
 
 export type AdjustMaterialStockInput = z.input<
@@ -94,6 +97,8 @@ import type {
   ServiceOrdersListResponse,
   CertificateNumberingConfig,
   CertificateNumberingProfileResponse,
+  AssetTypeListItem,
+  AssetTypesResponse,
   CnpjLookupResult,
   DashboardJob,
   DashboardStats,
@@ -101,6 +106,8 @@ import type {
   SignatureUploadResponse,
   UpdateCertificateNumberingProfileResponse,
   CustomerDetail,
+  CustomerGroupDetailData,
+  CustomerGroupsListData,
   CustomersListResponse,
   MethodDetail,
   MethodGovernance,
@@ -142,6 +149,7 @@ import type {
   Standard,
   StandardsListResponse,
   SyncStatusSnapshot,
+  UnitsContext,
 } from "@calibra-facil/contracts";
 import type { JobExecutionPayload } from "./jobs";
 export type { JobExecutionPayload } from "./jobs";
@@ -370,63 +378,13 @@ export type CustomerDetailData = CustomerDetail;
 export type { CustomersApi };
 
 // =============================================================================
-// CUSTOMER GROUPS (multi-unit client networks)
+// CUSTOMER GROUPS (multi-unit client networks): the DTOs are the contract
+// schemas' types (`endpoints/customer-groups.ts`); the client is generated from
+// the endpoint definitions (`modules/customer-groups.ts`).
 // =============================================================================
 
-type CustomerGroupListItem = {
-  id: number;
-  name: string;
-  authOrganizationId: string;
-  createdAt: string | Date;
-  branchCount: number;
-};
-
-export type CustomerGroupsListData = { data: Array<CustomerGroupListItem> };
-
-type CustomerGroupBranch = {
-  id: number;
-  name: string;
-  taxId: string | null;
-  /** Active-instrument counts for the branch (overview KPIs). */
-  total: number;
-  overdue: number;
-  dueSoon: number;
-};
-
-export type CustomerGroupDetailData = {
-  id: number;
-  name: string;
-  authOrganizationId: string;
-  createdAt: string | Date;
-  branches: Array<CustomerGroupBranch>;
-};
-
-export interface CustomerGroupsApi {
-  list(): Promise<CustomerGroupsListData>;
-  get(id: string | number): Promise<CustomerGroupDetailData>;
-  create(
-    input: CreateCustomerGroupInput,
-  ): Promise<CustomerGroupDetailData & { invitationId: string | null }>;
-  addBranch(
-    groupId: string | number,
-    customerId: number,
-  ): Promise<{ success: boolean }>;
-  removeBranch(
-    groupId: string | number,
-    customerId: string | number,
-  ): Promise<{ success: boolean }>;
-  listMembers<TMember = unknown>(id: string | number): Promise<TMember[]>;
-  listInvitations<TInvitation = unknown>(
-    id: string | number,
-  ): Promise<TInvitation[]>;
-  createInvitation<TInvitation = unknown>(
-    id: string | number,
-    input: { email: string; role: string },
-  ): Promise<TInvitation>;
-  resendInvitation(id: string | number, invitationId: string): Promise<unknown>;
-  cancelInvitation(id: string | number, invitationId: string): Promise<unknown>;
-  removeMember(id: string | number, memberId: string): Promise<unknown>;
-}
+export type { CustomerGroupDetailData, CustomerGroupsListData };
+export type { CustomerGroupsApi };
 
 // ASSETS: the DTOs are the contract schemas' types (`endpoints/assets.ts`);
 // the client is generated from the endpoint definitions (`modules/assets.ts`).
@@ -435,21 +393,8 @@ export type AssetsListData = AssetsListResponse;
 export type AssetDetailData = AssetDetail;
 export type { AssetAuditLogEntry, AssetsApi };
 
-export type AssetTypeListItem = {
-  id: number;
-  name: string;
-  slug?: string | null;
-  description: string | null;
-  definition: unknown;
-};
-
-export type AssetTypesListData = {
-  data: AssetTypeListItem[];
-};
-
-export interface AssetTypesApi {
-  list(): Promise<AssetTypesListData>;
-}
+export type AssetTypesListData = AssetTypesResponse;
+export type { AssetTypeListItem, AssetTypesApi };
 
 export type { EnvironmentalLimitsApi };
 
@@ -595,63 +540,9 @@ export type DashboardJobStatus = JobStatus;
 export type { DashboardJob, DashboardStats };
 export type { DashboardApi };
 
-type DashboardUnitSummary = {
-  id: number;
-  name: string;
-  slug: string;
-  role: string;
-};
-
-export type DashboardUnitsResponse = {
-  activeUnitId: number | null;
-  activeUnitName: string | null;
-  selectedUnitScope: "all" | "unit";
-  canAccessAllUnits: boolean;
-  data: DashboardUnitSummary[];
-  viewer?: {
-    isGlobalManager: boolean;
-    canManageOrganizationUnits: boolean;
-    canManageAssignments: boolean;
-    canManageGlobalRoles: boolean;
-    canViewGovernance: boolean;
-    canAccessConsolidatedView: boolean;
-    managedUnitIds: number[];
-  };
-  scopeSummary?: {
-    isConsolidated: boolean;
-    activeUnitId: number | null;
-    activeUnitName: string | null;
-    accessibleUnitsCount: number;
-    managedUnitsCount: number;
-    effectiveRole: string;
-    effectiveRoleLabel: string;
-    label: string;
-    description: string;
-  };
-};
-
-export interface UnitsApi {
-  getDashboardUnits(): Promise<DashboardUnitsResponse | null>;
-  listAdminUnits<TResponse = unknown>(): Promise<TResponse>;
-  listAdminMembers<TResponse = unknown>(): Promise<TResponse>;
-  listAdminActivity<TResponse = unknown>(): Promise<TResponse>;
-  createAdminUnit<TResponse = unknown>(name: string): Promise<TResponse>;
-  updateAdminUnit<TResponse = unknown>(
-    unitId: number,
-    payload: { name?: string; status?: "ACTIVE" | "ARCHIVED" },
-  ): Promise<TResponse>;
-  updateMemberAssignments<TResponse = unknown>(
-    memberId: string,
-    assignments: Array<{
-      unitId: number;
-      role: "member" | "technician" | "unit_admin";
-    }>,
-  ): Promise<TResponse>;
-  updateMemberRole<TResponse = unknown>(
-    memberId: string,
-    role: string,
-  ): Promise<TResponse>;
-}
+/** GET /api/units: the unit context of the session. */
+export type DashboardUnitsResponse = UnitsContext;
+export type { UnitsApi };
 
 export type FinanceAccessResponse = {
   canReadFinancial: boolean;
