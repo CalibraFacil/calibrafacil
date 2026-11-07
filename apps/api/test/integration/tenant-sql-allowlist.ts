@@ -133,7 +133,7 @@ export const TENANT_SQL_ALLOWLIST: readonly AllowEntry[] = [
   },
   {
     category: "public-token",
-    file: "apps/api/src/lib/public-certificate-verification.ts",
+    file: "apps/api/src/domains/verify/public-certificate-verification.ts",
     tables: [
       "calibration_job",
       "asset",

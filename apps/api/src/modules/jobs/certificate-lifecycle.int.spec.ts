@@ -43,7 +43,7 @@ import {
   seedJobForOrg,
 } from "../../../test/integration/tenant-refs";
 import { jobsRouter } from "../../routes/jobs";
-import { verifyRouter } from "../../routes/verify";
+import { verifyRouter } from "../../domains/verify/routes/verify";
 import type { JobLifecycleActor } from "./job-actor";
 import { withdrawCertificate } from "./withdraw-certificate";
 

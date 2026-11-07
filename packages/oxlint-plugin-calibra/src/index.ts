@@ -8,7 +8,8 @@
 // net-new ones fail. Only no-json-error-body-in-routes,
 // no-calibration-job-update-outside-owner, no-process-env, no-raw-locale-formatting
 // and no-raw-palette-color-classes have a non-empty baseline (the rest, including
-// no-features-import-from-low-layers and no-literal-query-keys, report every
+// no-features-import-from-low-layers, no-literal-query-keys and
+// no-api-domain-boundary-violations, report every
 // occurrence; no-raw-db-in-routes and no-error-response-in-transaction keep a
 // `baseline` rule option for their own tests only). no-raw-db-in-routes also fails
 // a count that is higher than the file's real number of uses (stale).
@@ -27,6 +28,7 @@ import noAppUiPrimitiveRecreation from "./rules/no-app-ui-primitive-recreation.t
 import noErrorResponseInTransaction from "./rules/no-error-response-in-transaction.ts";
 import noFeaturesImportFromLowLayers from "./rules/no-features-import-from-low-layers.ts";
 import noLiteralQueryKeys from "./rules/no-literal-query-keys.ts";
+import noApiDomainBoundaryViolations from "./rules/no-api-domain-boundary-violations.ts";
 
 export default {
   meta: {
@@ -49,5 +51,6 @@ export default {
     "no-error-response-in-transaction": noErrorResponseInTransaction,
     "no-features-import-from-low-layers": noFeaturesImportFromLowLayers,
     "no-literal-query-keys": noLiteralQueryKeys,
+    "no-api-domain-boundary-violations": noApiDomainBoundaryViolations,
   },
 };

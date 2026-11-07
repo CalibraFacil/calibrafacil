@@ -41,7 +41,7 @@ const LEGACY_BASELINE: Baseline = new Map<string, number>([
   ["apps/api/src/routes/profile-media.ts", 1],
   ["apps/api/src/routes/public-signup.ts", 1],
   ["apps/api/src/routes/sso.ts", 4],
-  ["apps/api/src/routes/webhooks.ts", 1],
+  ["apps/api/src/domains/notifications/routes/webhooks.ts", 1],
   ["apps/docs/lib/site.ts", 2],
   ["apps/portal/scripts/check-bundle-size.mjs", 5],
   ["apps/site/scripts/build-docs.mjs", 1],

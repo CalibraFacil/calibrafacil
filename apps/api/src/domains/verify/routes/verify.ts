@@ -1,13 +1,13 @@
-import { createRouter } from "../server/router";
+import { createRouter } from "../../../server/router";
 import { createHash } from "node:crypto";
 import { normalizeAccreditationNumber } from "@calibra-facil/shared";
-import { issuedSealOf } from "../lib/frozen-seal";
+import { issuedSealOf } from "../../../lib/frozen-seal";
 import {
   loadCertificateLifecycles,
   withdrawalOf,
-} from "../lib/certificate-lifecycle";
-import { orgDb } from "../lib/org-db";
-import { conflict, invalid, notFound } from "../lib/domain-errors";
+} from "../../../lib/certificate-lifecycle";
+import { orgDb } from "../../../lib/org-db";
+import { conflict, invalid, notFound } from "../../../lib/domain-errors";
 import {
   verifyPdf,
   getIcpBrasilTrustAnchors,
@@ -20,16 +20,16 @@ import {
   extractKeyFromUrl,
   downloadFromR2,
   type R2Env,
-} from "../lib/storage";
+} from "../../../lib/storage";
 import {
   findCertificateByVerificationToken,
   findCertificateDownloadByToken,
   findCertificateIntegrityByToken,
   findCertificateSignatureByToken,
   findPublicAmendmentLink,
-} from "../lib/public-certificate-verification";
+} from "../public-certificate-verification";
 
-import { publicTaxId, withPublicSigner } from "../lib/public-tax-id";
+import { publicTaxId, withPublicSigner } from "../public-tax-id";
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

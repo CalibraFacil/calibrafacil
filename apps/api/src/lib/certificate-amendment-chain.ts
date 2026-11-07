@@ -5,7 +5,7 @@ import { orgSetDb } from "./org-db";
 /**
  * Portal-facing amendment-chain resolution — ISO/IEC 17025:2017 §7.8.8
  * ("Amendments to reports"). Mirrors the public verification endpoint's
- * semantics (apps/api/src/routes/verify.ts):
+ * semantics (apps/api/src/domains/verify/routes/verify.ts):
  *
  * - A certificate reads as superseded as soon as `supersededById` is set —
  *   the customer must stop using it even while the replacement is still

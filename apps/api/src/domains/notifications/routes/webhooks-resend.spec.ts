@@ -24,7 +24,7 @@ vi.mock("@calibra-facil/notifications", () => ({
   suppressEmail: suppressEmailMock,
 }));
 
-import { DomainError, domainErrorBody } from "../lib/domain-errors";
+import { DomainError, domainErrorBody } from "../../../lib/domain-errors";
 import { webhooksRouter } from "./webhooks";
 
 const SECRET = "whsec_dGVzdHNlY3JldA=="; // base64("testsecret")
