@@ -1,53 +1,38 @@
-import { choice, defineGroup, example, integer, text, url } from "../define";
+import { choice, defineGroup, example, integer, text } from "../define";
+
+const WORKER_REMOVED =
+  "the document-worker container (and its wake-up ping) no longer exists: the always-on apps/worker polls the database queue. Unset it";
 
 export const jobsGroup = defineGroup({
   name: "jobs",
   title: "Background jobs",
   intro: [
     "BACKGROUND_JOBS_MODE: local = the API runs PDF/integration jobs in-process",
-    "(development); queue = jobs wait in the database for apps/worker (polling, or",
-    "woken through DOCUMENT_WORKER_URL); inline = run inside the request (tests).",
+    "(development); queue = jobs wait in the database for the always-on apps/worker,",
+    "which polls for them.",
+  ],
+  retired: [
+    {
+      env: "BACKGROUND_JOBS_MODE",
+      value: "inline",
+      message:
+        "`inline` (run a job inside the request) was removed: use `local` (in the API process, development) or `queue` (the always-on worker)",
+    },
+    ...[
+      "DOCUMENT_WORKER_URL",
+      "DOCUMENT_WORKER_TOKEN",
+      "DOCUMENT_WORKER_WAKE_TIMEOUT_MS",
+      "DOCUMENT_WORKER_WAKE_ATTEMPTS",
+      "DOCUMENT_WORKER_WAKE_RETRY_DELAY_MS",
+    ].map((env) => ({ env, message: WORKER_REMOVED })),
   ],
   vars: {
     mode: choice({
       env: "BACKGROUND_JOBS_MODE",
-      description: "Where background jobs run: local, queue or inline.",
-      values: ["local", "queue", "inline"],
+      description: "Where background jobs run: local or queue.",
+      values: ["local", "queue"],
       default: "local",
       example: example.active("local"),
-    }),
-    documentWorkerUrl: url({
-      env: "DOCUMENT_WORKER_URL",
-      description:
-        "queue only: the document worker's drain server, woken after each enqueue.",
-      example: example.commented("http://document-worker:8080"),
-    }),
-    documentWorkerToken: text({
-      env: "DOCUMENT_WORKER_TOKEN",
-      description: "Shared secret sent to the document worker's drain server.",
-      secret: true,
-    }),
-    documentWorkerWakeTimeoutMs: integer({
-      env: "DOCUMENT_WORKER_WAKE_TIMEOUT_MS",
-      description:
-        "Per-attempt timeout of the wake-up ping to the document worker.",
-      min: 1,
-      default: 12_000,
-      hidden: true,
-    }),
-    documentWorkerWakeAttempts: integer({
-      env: "DOCUMENT_WORKER_WAKE_ATTEMPTS",
-      description: "Attempts of the wake-up ping to the document worker.",
-      min: 1,
-      default: 2,
-      hidden: true,
-    }),
-    documentWorkerWakeRetryDelayMs: integer({
-      env: "DOCUMENT_WORKER_WAKE_RETRY_DELAY_MS",
-      description: "Pause between wake-up attempts.",
-      min: 0,
-      default: 500,
-      hidden: true,
     }),
     stuckRenderAfterMs: integer({
       env: "STUCK_RENDER_AFTER_MS",

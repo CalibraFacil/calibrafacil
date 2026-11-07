@@ -1,13 +1,7 @@
-// Shared DB-queue runtime used by both worker entrypoints:
-//   - `bun.ts`   — the legacy always-on poller (local `pnpm dev:worker`)
-//   - `serve.ts` — the HTTP drain server that runs inside the
-//                  `services/document-worker` Cloudflare Container
-//
-// Both build the worker `Env` from process env, claim `app_queue_job` rows
-// (`FOR UPDATE SKIP LOCKED`), run them through `processBackgroundJob`, then
-// complete/fail with backoff. Keeping the runtime in one place means the
-// container and the local poller stay byte-for-byte identical in how they
-// process a job.
+// The DB-queue runtime of the always-on worker (`bun.ts`, also `pnpm dev:worker`
+// locally): builds the worker `Env` from the validated configuration, claims
+// `app_queue_job` rows (`FOR UPDATE SKIP LOCKED`), runs them through
+// `processBackgroundJob`, then completes/fails them with backoff.
 import { randomBytes } from "node:crypto";
 import { hostname } from "node:os";
 import {
@@ -321,8 +315,8 @@ async function reclaimStaleJobs(staleAfterMs: number): Promise<void> {
   });
 }
 
-// Release stale jobs, then claim + process one batch. Used by the legacy
-// poller (`bun.ts`) on each tick.
+// Release stale jobs, then claim + process one batch. Used by the poller
+// (`bun.ts`) on each tick.
 export async function processQueueBatch(
   env: WorkerEnv,
   config: QueueRuntimeConfig,
@@ -338,9 +332,8 @@ export async function processQueueBatch(
 }
 
 // Release stale jobs, then keep claiming + processing batches until the queue
-// is empty. Used by the container's `/drain` endpoint (`serve.ts`) so the
-// container can wake on a request, fully drain, and scale back to zero —
-// without polling the database while idle. `maxBatches` is a runaway guard.
+// is empty. The poller claims one batch per tick; this is the "run to empty"
+// form the integration specs use. `maxBatches` is a runaway guard.
 export async function drainQueue(
   env: WorkerEnv,
   config: QueueRuntimeConfig,

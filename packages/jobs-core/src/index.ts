@@ -5,5 +5,5 @@ export {
   isFinalDelivery,
   type DeliveryAttempt,
   type Env,
-  type R2BucketBinding,
+  type ObjectBucket,
 } from "./runtime-types.js";

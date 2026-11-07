@@ -5,13 +5,10 @@ import {
   type OrgRef,
   type StorageBucket,
 } from "@calibra-facil/shared/storage-keys";
-import { type Env, type R2BucketBinding } from "./runtime-types.js";
+import { type Env, type ObjectBucket } from "./runtime-types.js";
 
-/** Pick the concrete R2 binding for a logical storage bucket. */
-export function bucketBinding(
-  env: Env,
-  bucket: StorageBucket,
-): R2BucketBinding {
+/** Pick the object-store bucket for a logical storage bucket. */
+export function bucketBinding(env: Env, bucket: StorageBucket): ObjectBucket {
   return bucket === "media" ? env.MEDIA_BUCKET : env.CERTIFICATES_BUCKET;
 }
 

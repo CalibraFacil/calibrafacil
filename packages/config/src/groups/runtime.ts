@@ -19,8 +19,7 @@ export const runtimeGroup = defineGroup({
     nodeEnv: nodeEnvVar,
     port: integer({
       env: "PORT",
-      description:
-        "HTTP port of the API (and of the document-worker drain server). Falls back to API_PORT, then 3000 (8080 for the worker).",
+      description: "HTTP port of the API. Falls back to API_PORT, then 3000.",
       min: 1,
       max: 65_535,
       example: example.commented("3000"),

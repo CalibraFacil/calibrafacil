@@ -7407,7 +7407,7 @@ export const portalExportJob = pgTable(
 
 /**
  * Stores ICP-Brasil A1 certificates (PKCS#12) per organization.
- * Password is encrypted with AES-256-GCM using a master key from Cloudflare secrets.
+ * Password is encrypted with AES-256-GCM using a master key from the environment (SIGNING_MASTER_KEY).
  * Enables PDF signing for calibration certificates (ICP-Brasil, MP 2.200-2 /
  * DOC-ICP-15.03 — the prior NIT-DICLA-083 citation was incorrect, see #646).
  */

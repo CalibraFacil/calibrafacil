@@ -13,8 +13,8 @@ import { flushErrorReporter, reportServerError } from "../lib/observability";
 //    silently-broken cron (the kind that 404'd unnoticed) becomes detectable.
 //  - Overlap protection: a short row-lease (`locked_until`) prevents a slow run
 //    from overlapping the next trigger. A row-lease — not pg_advisory_lock — is
-//    used because Neon's pooled endpoint is PgBouncer transaction-mode, where
-//    session-scoped advisory locks are unreliable.
+//    used because a pooled endpoint (PgBouncer in transaction mode) makes
+//    session-scoped advisory locks unreliable.
 //
 // The whole mechanism is FAIL-OPEN: if `cron_run` is missing (migration not yet
 // applied) or the DB hiccups while leasing, the task still runs without a lease

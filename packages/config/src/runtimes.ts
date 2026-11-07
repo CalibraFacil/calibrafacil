@@ -133,9 +133,9 @@ export const apiRuntime = defineRuntime({
 });
 
 /**
- * The background worker (apps/worker): the queue poller, the document-worker
- * drain server and the always-on Bun worker. It cannot do any work without
- * its database, storage and keys, so those are required in development too.
+ * The background worker (apps/worker): the always-on Bun process that polls
+ * the database queue. It cannot do any work without its database, storage and
+ * keys, so those are required in development too.
  */
 export const workerRuntime = defineRuntime({
   name: "worker",

@@ -1,6 +1,6 @@
 // Postgres error-code detection for route handlers.
 //
-// postgres-js (Neon prod + the integration Docker harness) surfaces a duplicate
+// postgres-js (the API's driver, and the integration Docker harness's) surfaces a duplicate
 // insert/update as a Drizzle `DrizzleQueryError` wrapper whose OWN `code` is
 // undefined — the real SQLSTATE (`23505` for unique_violation) lives on
 // `error.cause`. Unwrap recursively so both the bare `PostgresError` and the

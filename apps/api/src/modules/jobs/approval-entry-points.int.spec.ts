@@ -717,7 +717,6 @@ describe("approval policy — one policy across every entry point", () => {
   describe("with the database queue (BACKGROUND_JOBS_MODE=queue)", () => {
     beforeEach(() => {
       vi.stubEnv("BACKGROUND_JOBS_MODE", "queue");
-      vi.stubEnv("DOCUMENT_WORKER_URL", "");
     });
 
     afterEach(() => {
@@ -1351,7 +1350,6 @@ describe("post-approval effects are atomic with the approval (roadmap 2 B2, Q39)
       const jobId = await nonConformingJob(fixture);
       const errors = vi.spyOn(console, "error").mockImplementation(() => {});
       vi.stubEnv("BACKGROUND_JOBS_MODE", "queue");
-      vi.stubEnv("DOCUMENT_WORKER_URL", "");
       const restore = await failInsertsInto(table, 1_000_000);
       try {
         // The forced failure is a P0001 (RAISE EXCEPTION): the app's error
@@ -1432,7 +1430,6 @@ describe("post-approval effects are atomic with the approval (roadmap 2 B2, Q39)
   describe("with the database queue (BACKGROUND_JOBS_MODE=queue)", () => {
     beforeEach(() => {
       vi.stubEnv("BACKGROUND_JOBS_MODE", "queue");
-      vi.stubEnv("DOCUMENT_WORKER_URL", "");
     });
 
     afterEach(() => {

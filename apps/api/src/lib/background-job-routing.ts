@@ -22,10 +22,6 @@ export function isContaAzulSyncMessage(
   );
 }
 
-export function getDocumentWorkerUrl(): string | null {
-  return readJobsConfig().documentWorkerUrl ?? null;
-}
-
 /**
  * Whether `enqueueBackgroundJob` writes this message to `app_queue_job` (the
  * same Postgres), as opposed to running it in-process: every queue job in

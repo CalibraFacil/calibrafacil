@@ -6,7 +6,6 @@ import {
   createLabAccountSetupToken,
 } from "@calibra-facil/auth/lab-access";
 import { userCreateErrorWasDuplicate } from "../lib/auth-user-errors";
-import { withDbWakeRetry } from "../lib/db-retry";
 import { invalid, notFound } from "../lib/domain-errors";
 import {
   findLabInvitationForSetupLink,
@@ -132,9 +131,8 @@ export const invitationsRouter = createRouter()
 
     // Fetch invitation with organization + inviter details. This endpoint is
     // public so a not-yet-signed-up invitee can render the accept page; keep
-    // the projection limited to what that page needs. Wrap the first DB touch
-    // in withDbWakeRetry so a Neon cold start is a brief delay, not a 500.
-    const inv = await withDbWakeRetry(() => findPublicInvitation(id));
+    // the projection limited to what that page needs.
+    const inv = await findPublicInvitation(id);
     if (!inv) {
       throw notFound("invitation_not_found", "Convite não encontrado");
     }
@@ -158,9 +156,7 @@ export const invitationsRouter = createRouter()
       throw invalid("invalid_request", "ID de convite não fornecido");
     }
 
-    // First DB touch — retry through a Neon cold start so the invitee's
-    // "Enviar link" click doesn't 500 on a freshly-woken compute.
-    const inv = await withDbWakeRetry(() => findLabInvitationForSetupLink(id));
+    const inv = await findLabInvitationForSetupLink(id);
     if (!inv) {
       throw notFound("invitation_not_found", "Convite não encontrado");
     }

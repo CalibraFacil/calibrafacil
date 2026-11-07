@@ -46,7 +46,7 @@ Hono RPC examples often export a server app type and import it in the client.
 That is fine for small apps, but in this monorepo it breaks the desired package
 boundary. A type-only import from `apps/api` still makes TypeScript resolve API
 route modules and their dependencies. That can drag in server-only concepts such
-as Cloudflare bindings, database modules, email JSX configuration, worker code,
+as runtime bindings, database modules, email JSX configuration, worker code,
 and deployment-specific runtime assumptions.
 
 For this codebase, `contracts -> apps/api` is the wrong dependency direction.

@@ -56,12 +56,27 @@ describe("worker start-up configuration (REQ-CFG-2)", () => {
     expect(env.DATABASE_URL).toBe("postgres://calibra:pw@db:5432/calibra");
     expect(env.SIGNING_MASTER_KEY).toBe(key);
   });
+
+  it("REQ-CFG-2: a variable of the removed document-worker topology refuses to start, naming it", () => {
+    const key = Buffer.alloc(32, 3).toString("base64");
+    vi.stubEnv("DATABASE_URL", "postgres://calibra:pw@db:5432/calibra");
+    vi.stubEnv("R2_ENDPOINT", "http://s3:7070");
+    vi.stubEnv("R2_ACCESS_KEY_ID", "calibra");
+    vi.stubEnv("R2_SECRET_ACCESS_KEY", "secret");
+    vi.stubEnv("R2_BUCKET_NAME", "docs");
+    vi.stubEnv("R2_MEDIA_BUCKET_NAME", "media");
+    vi.stubEnv("SIGNING_MASTER_KEY", key);
+    vi.stubEnv("INTEGRATIONS_MASTER_KEY", key);
+    vi.stubEnv("DOCUMENT_WORKER_URL", "http://document-worker:8080");
+
+    expect(() => createWorkerEnv()).toThrow(/DOCUMENT_WORKER_URL/);
+  });
 });
 
 const bun = spawnSync("bun", ["--version"], { encoding: "utf8" });
 
 describe.skipIf(bun.status !== 0)("the worker entries", () => {
-  for (const entry of ["src/bun.ts", "src/serve.ts"]) {
+  for (const entry of ["src/bun.ts"]) {
     it(`REQ-CFG-2: ${entry} exits non-zero with the aggregated message when required variables are missing`, () => {
       const run = spawnSync("bun", [entry], {
         cwd: workerRoot,

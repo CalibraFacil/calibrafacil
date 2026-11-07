@@ -2,9 +2,9 @@
 
 > The job handlers (certificate render, labels, documents, integration sync, audit packs,
 > scheduled notifications, ...) live in `packages/jobs-core`. This app is the runtime that
-> drives them: `src/bun.ts` (polling worker + schedulers), `src/serve.ts` (HTTP drain server)
-> and `src/queue-runtime.ts` (claim / complete / fail with backoff). It also owns the real-database
-> integration tier (`pnpm test:integration`) for both.
+> drives them: `src/bun.ts` (the always-on polling worker) and `src/queue-runtime.ts` (claim /
+> complete / fail with backoff). It also owns the real-database integration tier
+> (`pnpm test:integration`) for both.
 
 Background job processor for XLSX certificate rendering, PDF generation, and scheduled compliance checks.
 

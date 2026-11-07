@@ -61,7 +61,7 @@ for memory: raise its limit. On a host with more RAM, raise PostgreSQL's first (
 
 ## Unprivileged containers
 
-The four application images (`Dockerfile.api`, `.worker`, `.document-worker`, `.static`) end with
+The three application images (`Dockerfile.api`, `.worker`, `.static`) end with
 `USER bun` (uid 1000, built into the Bun base image). The code is owned by root and read-only to
 that user, the ports are above 1024, and nothing writes to disk except `/tmp` (the worker's
 heartbeat file): files live in the database and the object store. Compose also drops every Linux

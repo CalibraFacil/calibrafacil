@@ -11,7 +11,6 @@ describe("routesToDatabaseQueue", () => {
   it.each([
     ["queue", true],
     ["local", false],
-    ["inline", false],
   ])("mode %s -> %s", (mode, expected) => {
     vi.stubEnv("BACKGROUND_JOBS_MODE", mode);
     expect(routesToDatabaseQueue(certificate)).toBe(expected);
@@ -20,14 +19,6 @@ describe("routesToDatabaseQueue", () => {
   it("defaults to the in-process mode", () => {
     vi.stubEnv("BACKGROUND_JOBS_MODE", "");
     expect(routesToDatabaseQueue(certificate)).toBe(false);
-  });
-
-  it("does not depend on a document worker or a job-type allowlist", () => {
-    vi.stubEnv("BACKGROUND_JOBS_MODE", "queue");
-    vi.stubEnv("DOCUMENT_WORKER_URL", "");
-    expect(routesToDatabaseQueue(certificate)).toBe(true);
-    vi.stubEnv("DOCUMENT_WORKER_URL", "https://worker.test");
-    expect(routesToDatabaseQueue(certificate)).toBe(true);
   });
 
   it("keeps the cron-only messages and Conta Azul syncs in this process", () => {

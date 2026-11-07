@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "bun --watch src/bun.ts",
     "start": "bun src/bun.ts",
-    "serve": "bun src/serve.ts",
     "test": "vitest",
     "test:run": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",

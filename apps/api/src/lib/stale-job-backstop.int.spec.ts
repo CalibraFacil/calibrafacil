@@ -288,7 +288,6 @@ async function refuseRejectionCommit() {
 }
 
 const backstopOverrides = {
-  resolveDocumentWorkerUrl: () => null,
   stuckRenderAfterMs: STUCK_AFTER_MS,
 };
 

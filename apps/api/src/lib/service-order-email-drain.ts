@@ -86,9 +86,8 @@ import { isReleaseExhausting } from "./outbox-release";
 // chance of being killed mid-batch. If that does happen, the claimed_at lease
 // (see below) lets the in-flight row recover on a later drain, and the
 // at-most-once ledger keeps a recovered-but-already-sent row from being
-// re-emailed. At the */30min cadence (kept sparse so the Neon compute can
-// suspend between runs), 20 rows/run keeps the backlog draining with margin
-// to spare.
+// re-emailed. At the */30min cadence, 20 rows/run keeps the backlog
+// draining with margin to spare.
 const DEFAULT_BATCH_SIZE = 20;
 const DEFAULT_MAX_ATTEMPTS = 3;
 // How long a claim lease is held before another drain may reclaim the row. Must

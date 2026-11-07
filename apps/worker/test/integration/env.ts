@@ -1,4 +1,4 @@
-import type { Env, R2BucketBinding } from "@calibra-facil/jobs-core";
+import type { Env, ObjectBucket } from "@calibra-facil/jobs-core";
 
 // Test-env factory for the worker integration tier. The worker handlers take
 // their entire outside world via an injected `env` object (no CF runtime,
@@ -22,7 +22,7 @@ export const TEST_INTEGRATIONS_MASTER_KEY = Buffer.alloc(32, 7).toString(
 );
 
 /** Minimal in-memory R2 bucket: a Map keyed by object key. */
-export function createFakeBucket(): R2BucketBinding {
+export function createFakeBucket(): ObjectBucket {
   const store = new Map<string, { body: Uint8Array; contentType?: string }>();
   return {
     async get(key) {

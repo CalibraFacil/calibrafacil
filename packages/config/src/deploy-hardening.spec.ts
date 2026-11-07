@@ -142,21 +142,19 @@ describe("deploy/compose.yaml hardening", () => {
 });
 
 describe("the app images run as an unprivileged user", () => {
-  it.each([
-    "Dockerfile.api",
-    "Dockerfile.worker",
-    "Dockerfile.document-worker",
-    "Dockerfile.static",
-  ])("%s ends with USER bun before its command", (file) => {
-    const stages = read(file).split(/^FROM /m);
-    const last = stages[stages.length - 1] ?? "";
-    const user = last.lastIndexOf("\nUSER bun\n");
-    expect(
-      user,
-      `${file} switches to USER bun in its final stage`,
-    ).toBeGreaterThan(-1);
-    expect(user).toBeLessThan(last.indexOf("\nCMD "));
-  });
+  it.each(["Dockerfile.api", "Dockerfile.worker", "Dockerfile.static"])(
+    "%s ends with USER bun before its command",
+    (file) => {
+      const stages = read(file).split(/^FROM /m);
+      const last = stages[stages.length - 1] ?? "";
+      const user = last.lastIndexOf("\nUSER bun\n");
+      expect(
+        user,
+        `${file} switches to USER bun in its final stage`,
+      ).toBeGreaterThan(-1);
+      expect(user).toBeLessThan(last.indexOf("\nCMD "));
+    },
+  );
 });
 
 describe("deploy/Caddyfile", () => {

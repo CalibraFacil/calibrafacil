@@ -1,4 +1,9 @@
-export interface R2BucketBinding {
+/**
+ * A bucket of the S3-compatible object store, reduced to the two calls the
+ * handlers make. (`httpMetadata.contentType` keeps the name of the put option
+ * the call sites already use; the builders map it to S3's `ContentType`.)
+ */
+export interface ObjectBucket {
   get(key: string): Promise<{
     arrayBuffer(): Promise<ArrayBuffer>;
     httpMetadata?: { contentType?: string };
@@ -11,8 +16,8 @@ export interface R2BucketBinding {
 }
 
 export interface Env {
-  CERTIFICATES_BUCKET: R2BucketBinding;
-  MEDIA_BUCKET: R2BucketBinding;
+  CERTIFICATES_BUCKET: ObjectBucket;
+  MEDIA_BUCKET: ObjectBucket;
   DATABASE_URL: string;
   /**
    * Connection string of the table OWNER: the system path, used only by the
@@ -30,8 +35,7 @@ export interface Env {
    * system path is a misconfiguration to retry, not a job that does not exist.
    */
   DATABASE_RLS_MODE?: "shadow" | "enforced";
-  // HTML/XLSX -> PDF conversion runs on the hosted Gotenberg service
-  // (services/gotenberg on Cloudflare Containers); no in-function Chromium.
+  // HTML -> PDF conversion runs on the Gotenberg service; no in-process Chromium.
   GOTENBERG_URL?: string;
   GOTENBERG_TOKEN?: string;
   SIGNING_MASTER_KEY?: string; // Optional - if not set, PDFs won't be signed
@@ -56,7 +60,7 @@ export interface Env {
 /**
  * Which delivery of a queue message this is. Runtimes that redeliver a failed
  * message (the DB queue) supply it; runtimes that never redeliver
- * (in-process local/inline dev) leave it out, which means "this is the only
+ * (the in-process `local` runner) leave it out, which means "this is the only
  * attempt", so a failure is final.
  */
 export interface DeliveryAttempt {

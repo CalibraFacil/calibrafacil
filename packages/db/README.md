@@ -1,6 +1,6 @@
 # @calibra-facil/db
 
-Database schema and ORM layer using Drizzle ORM with PostgreSQL (Neon).
+Database schema and ORM layer using Drizzle ORM with PostgreSQL.
 
 ## Overview
 

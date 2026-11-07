@@ -1,5 +1,5 @@
 /**
- * Centralized Cloudflare R2 object-storage key + bucket logic.
+ * Centralized object-storage key + bucket logic (S3-compatible; R2_* names).
  *
  * This is the single source of truth for how object keys are built and which
  * logical bucket each kind of object lives in. Both `apps/api` and `apps/worker`

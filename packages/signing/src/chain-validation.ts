@@ -21,7 +21,7 @@ import { SigningError } from "./types.js";
 import { ICP_BRASIL_TRUST_STORE_PEM } from "./trust-store.generated.js";
 
 // pkijs resolves its crypto engine from globalThis.crypto (WebCrypto), which is
-// present in Node 18+, Bun, and Cloudflare Workers — so no explicit setEngine is
+// present in Node 18+ and Bun — so no explicit setEngine is
 // needed and we avoid the Node-webcrypto vs DOM-Crypto type mismatch.
 
 function binaryStringToArrayBuffer(binary: string): ArrayBuffer {
