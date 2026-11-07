@@ -45,7 +45,13 @@ import {
   type AuthVariables,
 } from "../middleware/permission";
 import { buildUnitScopeCondition } from "../lib/units";
-import { conflict } from "../lib/domain-errors";
+import { withOrg } from "../lib/org-context";
+import { requestActor } from "../middleware/request-actor";
+import {
+  serviceOrderNotFound,
+  serviceOrderPdfUnavailable,
+  serviceOrderQuoteNotFound,
+} from "../modules/service-orders/service-order-errors";
 import {
   buildPortalBaseUrl,
   getLatestDeliveryDocumentDownloadUrl,
@@ -122,10 +128,6 @@ type ServiceOrderEnv = ServiceOrderDocumentEnv;
 
 const IdParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
-// One generic refusal for "unknown" and "belongs to another tenant" ids.
-const SERVICE_ORDER_TECHNICIAN_REFUSED =
-  "Tecnico nao encontrado ou sem permissao";
-const SERVICE_ORDER_SOURCE_REFUSED = "OS de origem nao encontrada";
 const QuoteParamSchema = z.object({
   id: z.coerce.number().int().positive(),
   quoteId: z.coerce.number().int().positive(),
@@ -146,6 +148,8 @@ const PortalQuoteParamSchema = z.object({
   quoteId: z.coerce.number().int().positive(),
 });
 
+// The public (token) routes have no signed-in actor: the visitor's address and
+// browser go to the event log.
 function requestIp(c: ClientIpContext) {
   return clientIp(c);
 }
@@ -191,31 +195,14 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("json", CreateServiceOrderSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const input = c.req.valid("json");
-      const result = await createServiceOrder({
-        member,
-        actorUserId: session.user.id,
-        values: input,
-        metadata: {
-          ipAddress: requestIp(c),
-          userAgent: requestUserAgent(c),
-        },
-      });
-      if (result.status === "no_unit") {
-        return c.json({ error: "Nenhuma unidade ativa" }, 400);
-      }
-      if (result.status === "invalid_asset") {
-        return c.json({ error: "Ativo ou cliente invalido para esta OS" }, 400);
-      }
-      if (result.status === "invalid_technician") {
-        return c.json({ error: SERVICE_ORDER_TECHNICIAN_REFUSED }, 400);
-      }
-      if (result.status === "invalid_source_order") {
-        return c.json({ error: SERVICE_ORDER_SOURCE_REFUSED }, 400);
-      }
+      const data = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        (ctx) => createServiceOrder(ctx, member, input),
+      );
       return c.json(
-        { data: result.data } satisfies ServerShape<ServiceOrderCreateResponse>,
+        { data } satisfies ServerShape<ServiceOrderCreateResponse>,
         201,
       );
     },
@@ -236,10 +223,11 @@ export const serviceOrdersRouter = new Hono<{
     async (c) => {
       const member = c.get("member");
       const input = c.req.valid("json");
-      const updated = await updateServiceOrderSettings({
-        organizationId: member.organizationId,
-        values: input,
-      });
+      const updated = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        (ctx) => updateServiceOrderSettings(ctx, input),
+      );
       return c.json({ data: updated });
     },
   )
@@ -271,14 +259,14 @@ export const serviceOrdersRouter = new Hono<{
       const member = c.get("member");
       const { publicId } = c.req.valid("param");
       const id = await resolveServiceOrderIdByPublicId(publicId, member);
-      if (id === null) return c.json({ error: "OS nao encontrada" }, 404);
+      if (id === null) throw serviceOrderNotFound();
 
       const detail = await getServiceOrderDetail(
         id,
         member.organizationId,
         buildUnitScopeCondition(serviceOrder.unitId, member),
       );
-      if (!detail) return c.json({ error: "OS nao encontrada" }, 404);
+      if (!detail) throw serviceOrderNotFound();
       return c.json({ data: detail });
     },
   )
@@ -294,7 +282,7 @@ export const serviceOrdersRouter = new Hono<{
         member.organizationId,
         buildUnitScopeCondition(serviceOrder.unitId, member),
       );
-      if (!detail) return c.json({ error: "OS nao encontrada" }, 404);
+      if (!detail) throw serviceOrderNotFound();
       return c.json({
         data: detail,
       } satisfies ServerShape<ServiceOrderDetailResponse>);
@@ -315,7 +303,7 @@ export const serviceOrdersRouter = new Hono<{
         member.organizationId,
         buildUnitScopeCondition(serviceOrder.unitId, member),
       );
-      if (!result) return c.json({ error: "OS nao encontrada" }, 404);
+      if (!result) throw serviceOrderNotFound();
       return c.json(result);
     },
   )
@@ -326,32 +314,14 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("json", UpdateServiceOrderSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const { id } = c.req.valid("param");
       const input = c.req.valid("json");
-      const result = await updateServiceOrder({
-        serviceOrderId: id,
-        member,
-        actorUserId: session.user.id,
-        values: input,
-        metadata: {
-          ipAddress: requestIp(c),
-          userAgent: requestUserAgent(c),
-        },
-      });
-      if (result.status === "not_found") {
-        return c.json({ error: "OS nao encontrada" }, 404);
-      }
-      if (result.status === "invalid_transition") {
-        return c.json({ error: "Transicao de status invalida" }, 400);
-      }
-      if (result.status === "invalid_technician") {
-        return c.json({ error: SERVICE_ORDER_TECHNICIAN_REFUSED }, 400);
-      }
-      if (result.status === "invalid_source_order") {
-        return c.json({ error: SERVICE_ORDER_SOURCE_REFUSED }, 400);
-      }
-      return c.json({ data: result.data });
+      const data = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        (ctx) => updateServiceOrder(ctx, member, id, input),
+      );
+      return c.json({ data });
     },
   )
   .post(
@@ -360,16 +330,13 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("param", IdParamSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const { id } = c.req.valid("param");
-      const document = await issueIntakeDocument({
-        env: c.env,
-        serviceOrderId: id,
-        organizationId: member.organizationId,
-        unitCondition: buildUnitScopeCondition(serviceOrder.unitId, member),
-        actorUserId: session.user.id,
-      });
-      if (!document) return c.json({ error: "OS nao encontrada" }, 404);
+      const document = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        (ctx) =>
+          issueIntakeDocument(ctx, member, { env: c.env, serviceOrderId: id }),
+      );
       return c.json({ data: document });
     },
   )
@@ -379,15 +346,10 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("param", IdParamSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const { id } = c.req.valid("param");
-      const tag = await issueTag({
-        serviceOrderId: id,
-        organizationId: member.organizationId,
-        unitCondition: buildUnitScopeCondition(serviceOrder.unitId, member),
-        actorUserId: session.user.id,
-      });
-      if (!tag) return c.json({ error: "OS nao encontrada" }, 404);
+      const tag = await withOrg(member.organizationId, requestActor(c), (ctx) =>
+        issueTag(ctx, member, id),
+      );
       return c.json({ data: tag });
     },
   )
@@ -399,13 +361,13 @@ export const serviceOrdersRouter = new Hono<{
       const member = c.get("member");
       const { id } = c.req.valid("param");
       const order = await getScopedServiceOrder(id, member);
-      if (!order) return c.json({ error: "OS nao encontrada" }, 404);
+      if (!order) throw serviceOrderNotFound();
       const url = await getLatestIntakeDocumentDownloadUrl(
         c.env,
         id,
         member.organizationId,
       );
-      if (!url) return c.json({ error: "PDF indisponivel" }, 404);
+      if (!url) throw serviceOrderPdfUnavailable();
       return c.json({ url });
     },
   )
@@ -417,13 +379,13 @@ export const serviceOrdersRouter = new Hono<{
       const member = c.get("member");
       const { id } = c.req.valid("param");
       const order = await getScopedServiceOrder(id, member);
-      if (!order) return c.json({ error: "OS nao encontrada" }, 404);
+      if (!order) throw serviceOrderNotFound();
       const url = await getLatestTagDownloadUrl(
         c.env,
         id,
         member.organizationId,
       );
-      if (!url) return c.json({ error: "PDF indisponivel" }, 404);
+      if (!url) throw serviceOrderPdfUnavailable();
       return c.json({ url });
     },
   )
@@ -434,20 +396,17 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("json", IssueServiceOrderDeliveryDocumentSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const { id } = c.req.valid("param");
       const input = c.req.valid("json");
-      const document = await issueDeliveryDocument({
-        serviceOrderId: id,
-        organizationId: member.organizationId,
-        unitCondition: buildUnitScopeCondition(serviceOrder.unitId, member),
-        actorUserId: session.user.id,
-        signatures: {
-          technicianSignatureData: input.technicianSignatureData,
-          clientSignatureData: input.clientSignatureData,
-        },
-      });
-      if (!document) return c.json({ error: "OS nao encontrada" }, 404);
+      const document = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        (ctx) =>
+          issueDeliveryDocument(ctx, member, id, {
+            technicianSignatureData: input.technicianSignatureData,
+            clientSignatureData: input.clientSignatureData,
+          }),
+      );
       return c.json({ data: document });
     },
   )
@@ -463,13 +422,13 @@ export const serviceOrdersRouter = new Hono<{
         member.organizationId,
         buildUnitScopeCondition(serviceOrder.unitId, member),
       );
-      if (!detail) return c.json({ error: "OS nao encontrada" }, 404);
+      if (!detail) throw serviceOrderNotFound();
       const url = await getLatestDeliveryDocumentDownloadUrl(
         c.env,
         id,
         member.organizationId,
       );
-      if (!url) return c.json({ error: "PDF indisponivel" }, 404);
+      if (!url) throw serviceOrderPdfUnavailable();
       return c.json({ url });
     },
   )
@@ -480,16 +439,13 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("json", UpdateServiceOrderRepairMarkSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const { id } = c.req.valid("param");
       const input = c.req.valid("json");
-      const updated = await updateServiceOrderRepairMark({
-        serviceOrderId: id,
-        member,
-        actorUserId: session.user.id,
-        values: input,
-      });
-      if (!updated) return c.json({ error: "OS nao encontrada" }, 404);
+      const updated = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        (ctx) => updateServiceOrderRepairMark(ctx, member, id, input),
+      );
       return c.json({ data: updated });
     },
   )
@@ -500,22 +456,14 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("json", AssignServiceOrderTechnicianSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const { id } = c.req.valid("param");
       const { technicianId } = c.req.valid("json");
-      const result = await assignServiceOrderTechnician({
-        serviceOrderId: id,
-        member,
-        actorUserId: session.user.id,
-        technicianId,
-      });
-      if (result.status === "not_found") {
-        return c.json({ error: "OS nao encontrada" }, 404);
-      }
-      if (result.status === "invalid_technician") {
-        return c.json({ error: SERVICE_ORDER_TECHNICIAN_REFUSED }, 400);
-      }
-      return c.json({ data: result.data });
+      const data = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        (ctx) => assignServiceOrderTechnician(ctx, member, id, technicianId),
+      );
+      return c.json({ data });
     },
   )
   .post(
@@ -525,34 +473,14 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("json", CreateServiceOrderEvaluationSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const { id } = c.req.valid("param");
       const input = c.req.valid("json");
-      const result = await createServiceOrderEvaluation({
-        serviceOrderId: id,
-        member,
-        actorUserId: session.user.id,
-        values: input,
-      });
-      if (result.status === "not_found") {
-        return c.json({ error: "OS nao encontrada" }, 404);
-      }
-      if (result.status === "already_exists") {
-        return c.json(
-          { error: "Avaliacao ja registrada. Edite a avaliacao existente." },
-          409,
-        );
-      }
-      if (result.status === "invalid_transition") {
-        throw conflict(
-          "status_transition_conflict",
-          "A OS nao esta em uma etapa que aceite avaliacao",
-        );
-      }
-      if (result.status === "invalid_technician") {
-        return c.json({ error: SERVICE_ORDER_TECHNICIAN_REFUSED }, 400);
-      }
-      return c.json({ data: result.data });
+      const data = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        (ctx) => createServiceOrderEvaluation(ctx, member, id, input),
+      );
+      return c.json({ data });
     },
   )
   .patch(
@@ -570,33 +498,22 @@ export const serviceOrdersRouter = new Hono<{
       const member = c.get("member");
       const { id, evaluationId } = c.req.valid("param");
       const input = c.req.valid("json");
-      const session = c.get("session");
       // revisionReason is metadata about the edit, not a column on the row.
       const { revisionReason, ...values } = input;
-      const result = await updateServiceOrderEvaluation({
-        serviceOrderId: id,
-        evaluationId,
-        member,
-        actorUserId: session.user.id,
-        values,
-        revisionReason,
-      });
-      if (result.status === "not_found") {
-        return c.json({ error: "Avaliacao nao encontrada" }, 404);
-      }
-      if (result.status === "invalid_technician") {
-        return c.json({ error: SERVICE_ORDER_TECHNICIAN_REFUSED }, 400);
-      }
-      if (result.status === "reason_required") {
-        return c.json(
-          {
-            error:
-              "Informe o motivo da revisao: o orcamento enviado ao cliente se baseia nesta avaliacao",
-          },
-          409,
-        );
-      }
-      return c.json({ data: result.data });
+      const data = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        (ctx) =>
+          updateServiceOrderEvaluation(
+            ctx,
+            member,
+            id,
+            evaluationId,
+            values,
+            revisionReason,
+          ),
+      );
+      return c.json({ data });
     },
   )
   .post(
@@ -606,25 +523,14 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("json", CreateServiceOrderQuoteSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const { id } = c.req.valid("param");
       const input = c.req.valid("json");
-      const result = await createServiceOrderQuote({
-        serviceOrderId: id,
-        member,
-        actorUserId: session.user.id,
-        values: input,
-      });
-      if (result.status === "not_found") {
-        return c.json({ error: "OS nao encontrada" }, 404);
-      }
-      if (result.status === "invalid_transition") {
-        return c.json(
-          { error: "OS encerrada ou cancelada nao aceita novo orcamento" },
-          409,
-        );
-      }
-      return c.json({ data: result.data }, 201);
+      const data = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        (ctx) => createServiceOrderQuote(ctx, member, id, input),
+      );
+      return c.json({ data }, 201);
     },
   )
   .patch(
@@ -636,19 +542,12 @@ export const serviceOrdersRouter = new Hono<{
       const member = c.get("member");
       const { id, quoteId } = c.req.valid("param");
       const input = c.req.valid("json");
-      const result = await updateServiceOrderQuoteDraft({
-        serviceOrderId: id,
-        quoteId,
-        member,
-        values: input,
-      });
-      if (result.status === "not_found") {
-        return c.json({ error: "Orcamento nao encontrado" }, 404);
-      }
-      if (result.status === "conflict") {
-        return c.json({ error: "Orcamento enviado/aprovado e imutavel" }, 409);
-      }
-      return c.json({ data: result.data });
+      const data = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        (ctx) => updateServiceOrderQuoteDraft(ctx, member, id, quoteId, input),
+      );
+      return c.json({ data });
     },
   )
   .post(
@@ -658,31 +557,16 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("json", SendServiceOrderQuoteSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const { id, quoteId } = c.req.valid("param");
       const input = c.req.valid("json");
-      const result = await sendServiceOrderQuote({
-        serviceOrderId: id,
-        quoteId,
-        member,
-        actorUserId: session.user.id,
-        values: input,
-      });
-      if (result.status === "quote_not_found") {
-        return c.json({ error: "Orcamento nao encontrado" }, 404);
-      }
-      if (result.status === "conflict") {
-        return c.json({ error: "Apenas rascunhos podem ser enviados" }, 409);
-      }
-      if (result.status === "order_not_found") {
-        return c.json({ error: "OS nao encontrada" }, 404);
-      }
-      if (result.status === "invalid_transition") {
-        return c.json({ error: "Transicao de status invalida" }, 400);
-      }
+      const sent = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        (ctx) => sendServiceOrderQuote(ctx, member, id, quoteId, input),
+      );
       return c.json({
-        data: result.data,
-        publicUrl: `${buildPortalBaseUrl(c.env)}/service-order-access/${result.publicToken}`,
+        data: sent.data,
+        publicUrl: `${buildPortalBaseUrl(c.env)}/service-order-access/${sent.publicToken}`,
       });
     },
   )
@@ -692,27 +576,12 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("param", QuoteParamSchema),
     zValidator("json", ApproveServiceOrderQuoteManuallySchema),
     async (c) => {
-      const session = c.get("session");
       const member = c.get("member");
       const { id, quoteId } = c.req.valid("param");
-      // SEC-01: resolve the OS within the caller's org+unit scope first, so a
-      // cross-tenant :id is rejected with 404 (mirrors the .pdf route below).
-      const scoped = await getScopedServiceOrder(id, member);
-      if (!scoped) return c.json({ error: "OS nao encontrada" }, 404);
       const input = c.req.valid("json");
-      const result = await approveServiceOrderQuoteManually({
-        serviceOrderId: id,
-        quoteId,
-        organizationId: member.organizationId,
-        actorUserId: session.user.id,
-        values: input,
-      });
-      if (result.status === "conflict") {
-        return c.json({ error: "Orcamento nao pode ser aprovado" }, 409);
-      }
-      if (result.status === "order_not_found") {
-        return c.json({ error: "OS nao encontrada" }, 404);
-      }
+      await withOrg(member.organizationId, requestActor(c), (ctx) =>
+        approveServiceOrderQuoteManually(ctx, member, id, quoteId, input),
+      );
       return c.json({ ok: true });
     },
   )
@@ -722,27 +591,12 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("param", QuoteParamSchema),
     zValidator("json", RejectServiceOrderQuoteManuallySchema),
     async (c) => {
-      const session = c.get("session");
       const member = c.get("member");
       const { id, quoteId } = c.req.valid("param");
-      // SEC-01: resolve the OS within the caller's org+unit scope first, so a
-      // cross-tenant :id is rejected with 404 (mirrors the .pdf route below).
-      const scoped = await getScopedServiceOrder(id, member);
-      if (!scoped) return c.json({ error: "OS nao encontrada" }, 404);
       const input = c.req.valid("json");
-      const result = await rejectServiceOrderQuoteManually({
-        serviceOrderId: id,
-        quoteId,
-        organizationId: member.organizationId,
-        actorUserId: session.user.id,
-        values: input,
-      });
-      if (result.status === "conflict") {
-        return c.json({ error: "Orcamento nao pode ser recusado" }, 409);
-      }
-      if (result.status === "order_not_found") {
-        return c.json({ error: "OS nao encontrada" }, 404);
-      }
+      await withOrg(member.organizationId, requestActor(c), (ctx) =>
+        rejectServiceOrderQuoteManually(ctx, member, id, quoteId, input),
+      );
       return c.json({ ok: true });
     },
   )
@@ -756,14 +610,14 @@ export const serviceOrdersRouter = new Hono<{
       const member = c.get("member");
       const { id, quoteFile: quoteId } = c.req.valid("param");
       const order = await getScopedServiceOrder(id, member);
-      if (!order) return c.json({ error: "OS nao encontrada" }, 404);
+      if (!order) throw serviceOrderNotFound();
       const url = await getQuoteDocumentDownloadUrl(
         c.env,
         id,
         quoteId,
         member.organizationId,
       );
-      if (!url) return c.json({ error: "PDF indisponivel" }, 404);
+      if (!url) throw serviceOrderPdfUnavailable();
       return c.json({ url });
     },
   )
@@ -774,21 +628,14 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("json", StartServiceOrderExecutionSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const { id } = c.req.valid("param");
-      const result = await startServiceOrderExecution({
-        serviceOrderId: id,
-        member,
-        actorUserId: session.user.id,
-        values: c.req.valid("json"),
-      });
-      if (result.status === "not_found") {
-        return c.json({ error: "OS nao encontrada" }, 404);
-      }
-      if (result.status === "invalid_transition") {
-        return c.json({ error: "Transicao de status invalida" }, 400);
-      }
-      return c.json({ data: result.data });
+      const input = c.req.valid("json");
+      const data = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        (ctx) => startServiceOrderExecution(ctx, member, id, input),
+      );
+      return c.json({ data });
     },
   )
   .patch(
@@ -800,18 +647,12 @@ export const serviceOrdersRouter = new Hono<{
       const member = c.get("member");
       const { id } = c.req.valid("param");
       const input = c.req.valid("json");
-      const result = await updateServiceOrderExecution({
-        serviceOrderId: id,
-        member,
-        values: input,
-      });
-      if (result.status === "not_started") {
-        return c.json({ error: "Execucao nao iniciada" }, 404);
-      }
-      if (result.status === "invalid_transition") {
-        return c.json({ error: "OS encerrada ou cancelada" }, 409);
-      }
-      return c.json({ data: result.data });
+      const data = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        (ctx) => updateServiceOrderExecution(ctx, member, id, input),
+      );
+      return c.json({ data });
     },
   )
   .post(
@@ -821,24 +662,11 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("json", FinishServiceOrderExecutionSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const { id } = c.req.valid("param");
       const input = c.req.valid("json");
-      const result = await finishServiceOrderExecution({
-        serviceOrderId: id,
-        member,
-        actorUserId: session.user.id,
-        values: input,
-      });
-      if (result.status === "not_started") {
-        return c.json({ error: "Execucao nao iniciada" }, 404);
-      }
-      if (result.status === "not_found") {
-        return c.json({ error: "OS nao encontrada" }, 404);
-      }
-      if (result.status === "invalid_transition") {
-        return c.json({ error: "Transicao de status invalida" }, 400);
-      }
+      await withOrg(member.organizationId, requestActor(c), (ctx) =>
+        finishServiceOrderExecution(ctx, member, id, input),
+      );
       return c.json({ ok: true });
     },
   )
@@ -849,22 +677,14 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("json", DeliverServiceOrderSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const { id } = c.req.valid("param");
       const input = c.req.valid("json");
-      const result = await deliverServiceOrder({
-        serviceOrderId: id,
-        member,
-        actorUserId: session.user.id,
-        values: input,
-      });
-      if (result.status === "not_found") {
-        return c.json({ error: "OS nao encontrada" }, 404);
-      }
-      if (result.status === "invalid_transition") {
-        return c.json({ error: "Transicao de status invalida" }, 400);
-      }
-      return c.json({ data: result.data });
+      const data = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        (ctx) => deliverServiceOrder(ctx, member, id, input),
+      );
+      return c.json({ data });
     },
   )
   .post(
@@ -873,23 +693,15 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("param", IdParamSchema),
     zValidator("json", CloseServiceOrderSchema),
     async (c) => {
-      const session = c.get("session");
       const member = c.get("member");
       const { id } = c.req.valid("param");
       const input = c.req.valid("json");
-      const result = await closeServiceOrder({
-        serviceOrderId: id,
-        member,
-        actorUserId: session.user.id,
-        values: input,
-      });
-      if (result.status === "not_found") {
-        return c.json({ error: "OS nao encontrada" }, 404);
-      }
-      if (result.status === "invalid_transition") {
-        return c.json({ error: "Transicao de status invalida" }, 400);
-      }
-      return c.json({ data: result.data });
+      const data = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        (ctx) => closeServiceOrder(ctx, member, id, input),
+      );
+      return c.json({ data });
     },
   )
   .post(
@@ -899,22 +711,14 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("json", CancelServiceOrderSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const { id } = c.req.valid("param");
       const input = c.req.valid("json");
-      const result = await cancelServiceOrder({
-        serviceOrderId: id,
-        member,
-        actorUserId: session.user.id,
-        values: input,
-      });
-      if (result.status === "not_found") {
-        return c.json({ error: "OS nao encontrada" }, 404);
-      }
-      if (result.status === "invalid_transition") {
-        return c.json({ error: "Transicao de status invalida" }, 400);
-      }
-      return c.json({ data: result.data });
+      const data = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        (ctx) => cancelServiceOrder(ctx, member, id, input),
+      );
+      return c.json({ data });
     },
   )
   .post(
@@ -924,25 +728,14 @@ export const serviceOrdersRouter = new Hono<{
     zValidator("json", ReopenServiceOrderSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const { id } = c.req.valid("param");
       const input = c.req.valid("json");
-      const result = await reopenServiceOrder({
-        serviceOrderId: id,
-        member,
-        actorUserId: session.user.id,
-        values: input,
-      });
-      if (result.status === "not_found") {
-        return c.json({ error: "OS nao encontrada" }, 404);
-      }
-      if (result.status === "invalid_transition") {
-        return c.json(
-          { error: "Apenas uma OS encerrada ou cancelada pode ser reaberta" },
-          409,
-        );
-      }
-      return c.json({ data: result.data });
+      const data = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        (ctx) => reopenServiceOrder(ctx, member, id, input),
+      );
+      return c.json({ data });
     },
   )
   .post(
@@ -956,22 +749,14 @@ export const serviceOrdersRouter = new Hono<{
       }),
     ),
     async (c) => {
-      const session = c.get("session");
       const member = c.get("member");
       const { id, certificateJobId } = c.req.valid("param");
-      const result = await linkServiceOrderCertificate({
-        serviceOrderId: id,
-        certificateJobId,
-        organizationId: member.organizationId,
-        actorUserId: session.user.id,
-      });
-      if (result.status === "not_found") {
-        return c.json({ error: "OS ou certificado nao encontrado" }, 404);
-      }
-      if (result.status === "incompatible") {
-        return c.json({ error: "Certificado incompativel com a OS" }, 400);
-      }
-      return c.json({ data: result.data });
+      const data = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        (ctx) => linkServiceOrderCertificate(ctx, id, certificateJobId),
+      );
+      return c.json({ data });
     },
   )
   .delete(
@@ -985,18 +770,11 @@ export const serviceOrdersRouter = new Hono<{
       }),
     ),
     async (c) => {
-      const session = c.get("session");
       const member = c.get("member");
       const { id, certificateJobId } = c.req.valid("param");
-      const result = await unlinkServiceOrderCertificate({
-        serviceOrderId: id,
-        certificateJobId,
-        organizationId: member.organizationId,
-        actorUserId: session.user.id,
-      });
-      if (result.status === "not_found") {
-        return c.json({ error: "OS ou certificado nao encontrado" }, 404);
-      }
+      await withOrg(member.organizationId, requestActor(c), (ctx) =>
+        unlinkServiceOrderCertificate(ctx, id, certificateJobId),
+      );
       return c.json({ ok: true });
     },
   );
@@ -1036,32 +814,28 @@ export const portalServiceOrdersRouter = new Hono<{
     requirePermission({ service_order: ["read"] }),
     zValidator("param", PortalIdParamSchema),
     async (c) => {
-      if (c.get("authSource") !== "portal") {
-        return c.json({ error: "OS nao encontrada" }, 404);
-      }
+      if (c.get("authSource") !== "portal") throw serviceOrderNotFound();
 
       const member = c.get("member");
       const linkedCustomer = await getPortalCustomerForAuthOrganization(
         member.organizationId,
       );
-      if (!linkedCustomer) return c.json({ error: "OS nao encontrada" }, 404);
+      if (!linkedCustomer) throw serviceOrderNotFound();
 
       const id = await resolvePortalServiceOrderIdByPublicId(
         c.req.valid("param").id,
         linkedCustomer.id,
         linkedCustomer.labOrganizationId,
       );
-      if (id === null) return c.json({ error: "OS nao encontrada" }, 404);
+      if (id === null) throw serviceOrderNotFound();
       const detail = await getServiceOrderDetail(
         id,
         linkedCustomer.labOrganizationId,
       );
       if (!detail || detail.customerId !== linkedCustomer.id) {
-        return c.json({ error: "OS nao encontrada" }, 404);
+        throw serviceOrderNotFound();
       }
-      if (detail.unitId == null) {
-        return c.json({ error: "OS nao encontrada" }, 404);
-      }
+      if (detail.unitId == null) throw serviceOrderNotFound();
 
       let r2Client: ReturnType<typeof createR2Client> | null = null;
 
@@ -1083,7 +857,7 @@ export const portalServiceOrdersRouter = new Hono<{
         },
       });
 
-      if (!summary) return c.json({ error: "OS nao encontrada" }, 404);
+      if (!summary) throw serviceOrderNotFound();
       return c.json({
         data: summary,
       } satisfies ServerShape<PortalFinancialSummaryResponse>);
@@ -1099,19 +873,19 @@ export const portalServiceOrdersRouter = new Hono<{
       const linkedCustomer = await getPortalCustomerForAuthOrganization(
         member.organizationId,
       );
-      if (!linkedCustomer) return c.json({ error: "OS nao encontrada" }, 404);
+      if (!linkedCustomer) throw serviceOrderNotFound();
       const orderId = await resolvePortalServiceOrderIdByPublicId(
         c.req.valid("param").id,
         linkedCustomer.id,
         linkedCustomer.labOrganizationId,
       );
-      if (orderId === null) return c.json({ error: "OS nao encontrada" }, 404);
+      if (orderId === null) throw serviceOrderNotFound();
       const detail = await getServiceOrderDetail(
         orderId,
         linkedCustomer.labOrganizationId,
       );
       if (!detail || detail.customerId !== linkedCustomer.id) {
-        return c.json({ error: "OS nao encontrada" }, 404);
+        throw serviceOrderNotFound();
       }
       return c.json({
         data: toClientVisibleServiceOrderDetail(detail),
@@ -1126,38 +900,20 @@ export const portalServiceOrdersRouter = new Hono<{
     zValidator("json", ApproveServiceOrderQuotePortalSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const { id: publicId, quoteId } = c.req.valid("param");
       const linkedCustomer = await getPortalCustomerForAuthOrganization(
         member.organizationId,
       );
-      if (!linkedCustomer) {
-        return c.json({ error: "Orcamento nao encontrado" }, 404);
-      }
+      if (!linkedCustomer) throw serviceOrderQuoteNotFound();
       const id = await resolvePortalServiceOrderIdByPublicId(
         publicId,
         linkedCustomer.id,
         linkedCustomer.labOrganizationId,
       );
-      if (id === null) {
-        return c.json({ error: "Orcamento nao encontrado" }, 404);
-      }
-      const result = await approveServiceOrderQuoteByPortalUser({
-        serviceOrderId: id,
-        quoteId,
-        authOrganizationId: member.organizationId,
-        actorUserId: session.user.id,
-        metadata: {
-          ipAddress: requestIp(c),
-          userAgent: requestUserAgent(c),
-        },
-      });
-      if (result.status === "not_found") {
-        return c.json({ error: "Orcamento nao encontrado" }, 404);
-      }
-      if (result.status === "conflict") {
-        return c.json({ error: "Orcamento nao pode ser aprovado" }, 409);
-      }
+      if (id === null) throw serviceOrderQuoteNotFound();
+      await withOrg(linkedCustomer.labOrganizationId, requestActor(c), (ctx) =>
+        approveServiceOrderQuoteByPortalUser(ctx, linkedCustomer, id, quoteId),
+      );
       return c.json({
         ok: true,
       } satisfies ServerShape<PortalQuoteDecisionResponse>);
@@ -1171,40 +927,27 @@ export const portalServiceOrdersRouter = new Hono<{
     zValidator("json", RejectServiceOrderQuotePortalSchema),
     async (c) => {
       const member = c.get("member");
-      const session = c.get("session");
       const { id: publicId, quoteId } = c.req.valid("param");
       const input = c.req.valid("json");
       const linkedCustomer = await getPortalCustomerForAuthOrganization(
         member.organizationId,
       );
-      if (!linkedCustomer) {
-        return c.json({ error: "Orcamento nao encontrado" }, 404);
-      }
+      if (!linkedCustomer) throw serviceOrderQuoteNotFound();
       const id = await resolvePortalServiceOrderIdByPublicId(
         publicId,
         linkedCustomer.id,
         linkedCustomer.labOrganizationId,
       );
-      if (id === null) {
-        return c.json({ error: "Orcamento nao encontrado" }, 404);
-      }
-      const result = await rejectServiceOrderQuoteByPortalUser({
-        serviceOrderId: id,
-        quoteId,
-        authOrganizationId: member.organizationId,
-        actorUserId: session.user.id,
-        values: input,
-        metadata: {
-          ipAddress: requestIp(c),
-          userAgent: requestUserAgent(c),
-        },
-      });
-      if (result.status === "not_found") {
-        return c.json({ error: "Orcamento nao encontrado" }, 404);
-      }
-      if (result.status === "conflict") {
-        return c.json({ error: "Este orcamento ja foi respondido" }, 409);
-      }
+      if (id === null) throw serviceOrderQuoteNotFound();
+      await withOrg(linkedCustomer.labOrganizationId, requestActor(c), (ctx) =>
+        rejectServiceOrderQuoteByPortalUser(
+          ctx,
+          linkedCustomer,
+          id,
+          quoteId,
+          input,
+        ),
+      );
       return c.json({
         ok: true,
       } satisfies ServerShape<PortalQuoteDecisionResponse>);
@@ -1219,41 +962,31 @@ export const publicServiceOrderAccessRouter = new Hono<{
     zValidator("json", RedeemServiceOrderAccessCodeSchema),
     async (c) => {
       withPublicNoStoreHeaders(c);
-      const result = await redeemServiceOrderAccessCode(
+      // REQ-QPUB-014: throttled callers get 429 until the window elapses.
+      // REQ-QPUB-013: one generic 404 for every miss — no existence oracle.
+      const data = await redeemServiceOrderAccessCode(
         c.req.valid("json").code,
         {
           ipAddress: requestIp(c),
           userAgent: requestUserAgent(c),
         },
       );
-
-      // REQ-QPUB-014: throttled callers get 429 until the window elapses.
-      if (result.status === "throttled") {
-        return c.json({ error: result.error }, 429);
-      }
-      // REQ-QPUB-013: one generic 404 for every miss — no existence oracle.
-      if (result.status === "not_found") {
-        return c.json({ error: result.error }, 404);
-      }
-      return c.json({ data: result.data });
+      return c.json({ data });
     },
   )
   .get("/:token", zValidator("param", TokenParamSchema), async (c) => {
     withPublicNoStoreHeaders(c);
-    const result = await viewPublicServiceOrderAccess(
+    // REQ-QPUB-006: decided grants answer 410 with a stable reason code and
+    // no order/quote data; every other dead link stays a generic 404
+    // (REQ-QPUB-005).
+    const data = await viewPublicServiceOrderAccess(
       c.req.valid("param").token,
       {
         ipAddress: requestIp(c),
         userAgent: requestUserAgent(c),
       },
     );
-
-    // REQ-QPUB-006: decided grants answer 410 with a stable reason code and
-    // no order/quote data; every other dead link stays a generic 404
-    // (REQ-QPUB-005).
-    if (result.status === "gone") return c.json({ error: result.error }, 410);
-    if (result.status !== "ok") return c.json({ error: result.error }, 404);
-    return c.json({ data: result.data });
+    return c.json({ data });
   })
   .post(
     "/:token/approve-quote",
@@ -1261,22 +994,15 @@ export const publicServiceOrderAccessRouter = new Hono<{
     zValidator("json", ApproveServiceOrderQuotePortalSchema),
     async (c) => {
       withPublicNoStoreHeaders(c);
-      const result = await approveQuoteWithPublicServiceOrderAccess(
-        c.req.valid("param").token,
-        {
-          ipAddress: requestIp(c),
-          userAgent: requestUserAgent(c),
-        },
+      return c.json(
+        await approveQuoteWithPublicServiceOrderAccess(
+          c.req.valid("param").token,
+          {
+            ipAddress: requestIp(c),
+            userAgent: requestUserAgent(c),
+          },
+        ),
       );
-
-      if (result.status === "not_found" || result.status === "gone") {
-        return c.json({ error: result.error }, 404);
-      }
-      if (result.status === "conflict") {
-        return c.json({ error: result.error }, 409);
-      }
-
-      return c.json(result.data);
     },
   )
   .post(
@@ -1286,22 +1012,15 @@ export const publicServiceOrderAccessRouter = new Hono<{
     async (c) => {
       withPublicNoStoreHeaders(c);
       const input = c.req.valid("json");
-      const result = await rejectQuoteWithPublicServiceOrderAccess(
-        c.req.valid("param").token,
-        { rejectionReason: input.rejectionReason },
-        {
-          ipAddress: requestIp(c),
-          userAgent: requestUserAgent(c),
-        },
+      return c.json(
+        await rejectQuoteWithPublicServiceOrderAccess(
+          c.req.valid("param").token,
+          { rejectionReason: input.rejectionReason },
+          {
+            ipAddress: requestIp(c),
+            userAgent: requestUserAgent(c),
+          },
+        ),
       );
-
-      if (result.status === "not_found" || result.status === "gone") {
-        return c.json({ error: result.error }, 404);
-      }
-      if (result.status === "conflict") {
-        return c.json({ error: result.error }, 409);
-      }
-
-      return c.json(result.data);
     },
   );

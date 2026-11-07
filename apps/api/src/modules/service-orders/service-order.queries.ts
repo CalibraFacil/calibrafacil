@@ -1,10 +1,11 @@
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import { serviceOrder, serviceOrderQuote } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
-import type { AuthVariables } from "../../middleware/permission";
 import { orgDb } from "../../lib/org-db";
 import { inOrgTransaction } from "../../lib/org-transaction";
 import { buildUnitScopeCondition } from "../../lib/units";
+import { serviceOrderNotFound } from "./service-order-errors";
+import type { ServiceOrderScope } from "./service-order-scope";
 
 export async function getQuoteForAction(
   serviceOrderId: number,
@@ -61,7 +62,7 @@ export async function lockServiceOrderStatus(
 
 export async function getScopedServiceOrder(
   id: number,
-  member: AuthVariables["member"],
+  member: ServiceOrderScope,
   // The caller's org-bound handle, when it is inside a transaction already.
   executor?: OrgDb,
   // Lock the row for the caller's transaction (see getQuoteForAction).
@@ -90,6 +91,22 @@ export async function getScopedServiceOrder(
 }
 
 /**
+ * The order inside the caller's organization and unit scope, read through the
+ * command's own handle; throws 404 when it does not exist or is out of scope
+ * (the same answer for both: no existence oracle).
+ */
+export async function requireScopedServiceOrder(
+  id: number,
+  scope: ServiceOrderScope,
+  o: OrgDb,
+  options: { lock?: boolean } = {},
+) {
+  const order = await getScopedServiceOrder(id, scope, o, options);
+  if (!order) throw serviceOrderNotFound();
+  return order;
+}
+
+/**
  * Resolve a service order's opaque public id to its numeric id inside the
  * caller's org and unit scope. The lab dashboard routes by publicId so its URLs
  * never carry the enumerable serial; every other endpoint keeps taking the
@@ -100,7 +117,7 @@ export async function getScopedServiceOrder(
  */
 export async function resolveServiceOrderIdByPublicId(
   publicId: string,
-  member: AuthVariables["member"],
+  member: ServiceOrderScope,
 ): Promise<number | null> {
   const [row] = await orgDb(member.organizationId).transaction((o) =>
     o

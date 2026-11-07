@@ -6,20 +6,24 @@ import {
 } from "@calibra-facil/db/schema";
 import { SERVICE_ORDER_MACHINE } from "@calibra-facil/schemas/machines";
 import { and, eq, ne } from "drizzle-orm";
-import type { AuthVariables } from "../../middleware/permission";
-import { orgDb } from "../../lib/org-db";
+import { conflict, notFound } from "../../lib/domain-errors";
+import type { OrgContext } from "../../lib/org-context";
 import { recordServiceOrderEvent } from "../../lib/service-order-workflow";
 import { buildUnitScopeCondition } from "../../lib/units";
 import { userIsOrganizationMember } from "../../lib/tenant-refs";
+import {
+  serviceOrderNotFound,
+  serviceOrderTechnicianRefused,
+} from "./service-order-errors";
+import type { ServiceOrderScope } from "./service-order-scope";
 
-type ServiceOrderMember = AuthVariables["member"];
 type EvaluationRow = typeof serviceOrderEvaluation.$inferSelect;
 type EvaluationInsert = typeof serviceOrderEvaluation.$inferInsert;
 
-export async function createServiceOrderEvaluation(input: {
-  serviceOrderId: number;
-  member: ServiceOrderMember;
-  actorUserId: string;
+export async function createServiceOrderEvaluation(
+  ctx: OrgContext,
+  scope: ServiceOrderScope,
+  serviceOrderId: number,
   values: {
     technicianId?: string | null;
     diagnosis: string;
@@ -31,112 +35,119 @@ export async function createServiceOrderEvaluation(input: {
     photos: EvaluationInsert["photos"];
     internalNotes?: string | null;
     clientVisibleNotes?: string | null;
-  };
-}) {
-  return orgDb(input.member.organizationId).transaction(async (o) => {
-    const [order] = await o
-      .select()
-      .from(serviceOrder)
-      .where(
-        and(
-          eq(serviceOrder.id, input.serviceOrderId),
-          eq(serviceOrder.organizationId, input.member.organizationId),
-          buildUnitScopeCondition(serviceOrder.unitId, input.member),
-        ),
-      )
-      .limit(1);
-    if (!order) return { status: "not_found" as const };
+  },
+) {
+  const [order] = await ctx.o
+    .select()
+    .from(serviceOrder)
+    .where(
+      and(
+        eq(serviceOrder.id, serviceOrderId),
+        eq(serviceOrder.organizationId, ctx.org),
+        buildUnitScopeCondition(serviceOrder.unitId, scope),
+      ),
+    )
+    .limit(1);
+  if (!order) throw serviceOrderNotFound();
 
-    const [existingEvaluation] = await o
-      .select({ id: serviceOrderEvaluation.id })
-      .from(serviceOrderEvaluation)
-      .where(eq(serviceOrderEvaluation.serviceOrderId, input.serviceOrderId))
-      .limit(1);
-    if (existingEvaluation) return { status: "already_exists" as const };
-    // `evaluate` in SERVICE_ORDER_MACHINE: an evaluation is recorded while the
-    // order is still at intake (opened, awaiting or under evaluation, warranty
-    // return). Recording one later used to rewind a delivered or closed order.
-    if (!SERVICE_ORDER_MACHINE.canTransition(order.status, "evaluate")) {
-      return { status: "invalid_transition" as const };
-    }
-
-    // The evaluating technician may be named in the body: it must be a member of
-    // this organization (the caller themself is, by construction).
-    if (
-      input.values.technicianId &&
-      input.values.technicianId !== input.actorUserId &&
-      !(await userIsOrganizationMember(
-        input.member.organizationId,
-        input.values.technicianId,
-        o,
-      ))
-    ) {
-      return { status: "invalid_technician" as const };
-    }
-
-    const technicianId = input.values.technicianId ?? input.actorUserId;
-    const nextStatus = input.values.requiresQuote
-      ? "awaiting_quote_approval"
-      : input.values.calibrationRecommended
-        ? "awaiting_calibration"
-        : "ready_for_pickup";
-
-    // The status moves first, as a compare-and-set, so a lost race records no
-    // evaluation.
-    const [moved] = await o
-      .update(serviceOrder)
-      .set({
-        status: SERVICE_ORDER_MACHINE.requireTransition(
-          order.status,
-          "evaluate",
-          nextStatus,
-        ),
-        evaluatedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(serviceOrder.id, input.serviceOrderId),
-          eq(serviceOrder.status, order.status),
-        ),
-      )
-      .returning({ id: serviceOrder.id });
-    if (!moved) return { status: "invalid_transition" as const };
-
-    const [created] = await o
-      .insert(serviceOrderEvaluation)
-      .values({
-        organizationId: input.member.organizationId,
-        serviceOrderId: input.serviceOrderId,
-        technicianId,
-        diagnosis: input.values.diagnosis,
-        detectedIssues: input.values.detectedIssues ?? null,
-        recommendedAction: input.values.recommendedAction,
-        requiresQuote: input.values.requiresQuote,
-        requiresClientApproval: input.values.requiresClientApproval,
-        calibrationRecommended: input.values.calibrationRecommended,
-        photos: input.values.photos,
-        internalNotes: input.values.internalNotes ?? null,
-        clientVisibleNotes: input.values.clientVisibleNotes ?? null,
-      })
-      .returning();
-    await recordServiceOrderEvent(
-      {
-        organizationId: order.organizationId,
-        unitId: order.unitId,
-        serviceOrderId: input.serviceOrderId,
-        actorType: "lab_user",
-        actorId: input.actorUserId,
-        eventType: "service_order.evaluation_completed",
-        metadata: { evaluationId: created?.id },
-        oldValue: { status: order.status },
-        newValue: { status: nextStatus },
-      },
-      o,
+  const [existingEvaluation] = await ctx.o
+    .select({ id: serviceOrderEvaluation.id })
+    .from(serviceOrderEvaluation)
+    .where(eq(serviceOrderEvaluation.serviceOrderId, serviceOrderId))
+    .limit(1);
+  if (existingEvaluation) {
+    throw conflict(
+      "service_order_evaluation_exists",
+      "Avaliacao ja registrada. Edite a avaliacao existente.",
     );
+  }
+  // `evaluate` in SERVICE_ORDER_MACHINE: an evaluation is recorded while the
+  // order is still at intake (opened, awaiting or under evaluation, warranty
+  // return). Recording one later used to rewind a delivered or closed order.
+  if (!SERVICE_ORDER_MACHINE.canTransition(order.status, "evaluate")) {
+    throw conflict(
+      "status_transition_conflict",
+      "A OS nao esta em uma etapa que aceite avaliacao",
+    );
+  }
 
-    return { status: "ok" as const, data: created };
-  });
+  // The evaluating technician may be named in the body: it must be a member of
+  // this organization (the caller themself is, by construction).
+  if (
+    values.technicianId &&
+    values.technicianId !== ctx.actor.userId &&
+    !(await userIsOrganizationMember(ctx.org, values.technicianId, ctx.o))
+  ) {
+    throw serviceOrderTechnicianRefused();
+  }
+
+  const technicianId = values.technicianId ?? ctx.actor.userId;
+  const nextStatus = values.requiresQuote
+    ? "awaiting_quote_approval"
+    : values.calibrationRecommended
+      ? "awaiting_calibration"
+      : "ready_for_pickup";
+
+  // The status moves first, as a compare-and-set, so a lost race records no
+  // evaluation.
+  const [moved] = await ctx.o
+    .update(serviceOrder)
+    .set({
+      status: SERVICE_ORDER_MACHINE.requireTransition(
+        order.status,
+        "evaluate",
+        nextStatus,
+      ),
+      evaluatedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(serviceOrder.id, serviceOrderId),
+        eq(serviceOrder.status, order.status),
+      ),
+    )
+    .returning({ id: serviceOrder.id });
+  if (!moved) {
+    throw conflict(
+      "status_transition_conflict",
+      "A OS nao esta em uma etapa que aceite avaliacao",
+    );
+  }
+
+  const [created] = await ctx.o
+    .insert(serviceOrderEvaluation)
+    .values({
+      organizationId: ctx.org,
+      serviceOrderId,
+      technicianId,
+      diagnosis: values.diagnosis,
+      detectedIssues: values.detectedIssues ?? null,
+      recommendedAction: values.recommendedAction,
+      requiresQuote: values.requiresQuote,
+      requiresClientApproval: values.requiresClientApproval,
+      calibrationRecommended: values.calibrationRecommended,
+      photos: values.photos,
+      internalNotes: values.internalNotes ?? null,
+      clientVisibleNotes: values.clientVisibleNotes ?? null,
+    })
+    .returning();
+  await recordServiceOrderEvent(
+    {
+      organizationId: order.organizationId,
+      unitId: order.unitId,
+      serviceOrderId,
+      actorType: "lab_user",
+      actorId: ctx.actor.userId,
+      eventType: "service_order.evaluation_completed",
+      metadata: { evaluationId: created?.id },
+      oldValue: { status: order.status },
+      newValue: { status: nextStatus },
+    },
+    ctx.o,
+  );
+
+  return created;
 }
 
 /**
@@ -171,97 +182,97 @@ async function hasQuoteLeftTheLab(o: OrgDb, serviceOrderId: number) {
  * roles, or a stricter one) is an open decision for the lab, and inventing a
  * new permission here would pre-empt it.
  */
-export async function updateServiceOrderEvaluation(input: {
-  serviceOrderId: number;
-  evaluationId: number;
-  member: ServiceOrderMember;
-  actorUserId: string;
-  values: Partial<EvaluationRow>;
-  revisionReason?: string | null;
-}) {
-  return orgDb(input.member.organizationId).transaction(async (o) => {
-    const [existingEvaluation] = await o
-      .select({
-        id: serviceOrderEvaluation.id,
-        diagnosis: serviceOrderEvaluation.diagnosis,
-        recommendedAction: serviceOrderEvaluation.recommendedAction,
-        organizationId: serviceOrder.organizationId,
-        unitId: serviceOrder.unitId,
-        orderStatus: serviceOrder.status,
-      })
-      .from(serviceOrderEvaluation)
-      .innerJoin(
-        serviceOrder,
-        eq(serviceOrderEvaluation.serviceOrderId, serviceOrder.id),
-      )
-      .where(
-        and(
-          eq(serviceOrder.id, input.serviceOrderId),
-          eq(serviceOrder.organizationId, input.member.organizationId),
-          buildUnitScopeCondition(serviceOrder.unitId, input.member),
-          eq(serviceOrderEvaluation.id, input.evaluationId),
-        ),
-      )
-      .limit(1);
-    if (!existingEvaluation) return { status: "not_found" as const };
+export async function updateServiceOrderEvaluation(
+  ctx: OrgContext,
+  scope: ServiceOrderScope,
+  serviceOrderId: number,
+  evaluationId: number,
+  values: Partial<EvaluationRow>,
+  revisionReason?: string | null,
+) {
+  const evaluationNotFound = () =>
+    notFound("service_order_evaluation_not_found", "Avaliacao nao encontrada");
 
-    if (
-      input.values.technicianId &&
-      input.values.technicianId !== input.actorUserId &&
-      !(await userIsOrganizationMember(
-        input.member.organizationId,
-        input.values.technicianId,
-        o,
-      ))
-    ) {
-      return { status: "invalid_technician" as const };
-    }
+  const [existingEvaluation] = await ctx.o
+    .select({
+      id: serviceOrderEvaluation.id,
+      diagnosis: serviceOrderEvaluation.diagnosis,
+      recommendedAction: serviceOrderEvaluation.recommendedAction,
+      organizationId: serviceOrder.organizationId,
+      unitId: serviceOrder.unitId,
+      orderStatus: serviceOrder.status,
+    })
+    .from(serviceOrderEvaluation)
+    .innerJoin(
+      serviceOrder,
+      eq(serviceOrderEvaluation.serviceOrderId, serviceOrder.id),
+    )
+    .where(
+      and(
+        eq(serviceOrder.id, serviceOrderId),
+        eq(serviceOrder.organizationId, ctx.org),
+        buildUnitScopeCondition(serviceOrder.unitId, scope),
+        eq(serviceOrderEvaluation.id, evaluationId),
+      ),
+    )
+    .limit(1);
+  if (!existingEvaluation) throw evaluationNotFound();
 
-    const reason = input.revisionReason?.trim();
-    const locked = await hasQuoteLeftTheLab(o, input.serviceOrderId);
-    if (locked && !reason) {
-      return { status: "reason_required" as const };
-    }
+  if (
+    values.technicianId &&
+    values.technicianId !== ctx.actor.userId &&
+    !(await userIsOrganizationMember(ctx.org, values.technicianId, ctx.o))
+  ) {
+    throw serviceOrderTechnicianRefused();
+  }
 
-    // The row change and its audit event commit together, like the creation path.
-    // Split, a failed event write would leave a communicated diagnosis silently
-    // altered with no reason and no recoverable prior value.
-    const [row] = await o
-      .update(serviceOrderEvaluation)
-      .set({ ...input.values, updatedAt: new Date() })
-      .where(eq(serviceOrderEvaluation.id, input.evaluationId))
-      .returning();
-
-    if (!row) return { status: "not_found" as const };
-
-    await recordServiceOrderEvent(
-      {
-        organizationId: existingEvaluation.organizationId,
-        unitId: existingEvaluation.unitId,
-        serviceOrderId: input.serviceOrderId,
-        actorType: "lab_user",
-        actorId: input.actorUserId,
-        eventType: "service_order.evaluation_updated",
-        oldValue: {
-          diagnosis: existingEvaluation.diagnosis,
-          recommendedAction: existingEvaluation.recommendedAction,
-        },
-        newValue: {
-          diagnosis: row.diagnosis,
-          recommendedAction: row.recommendedAction,
-        },
-        // `locked` records whether this was a revision of a communicated
-        // diagnosis or an ordinary edit — the two read very differently in an
-        // audit.
-        metadata: {
-          orderStatus: existingEvaluation.orderStatus,
-          locked,
-          ...(reason ? { revisionReason: reason } : {}),
-        },
-      },
-      o,
+  const reason = revisionReason?.trim();
+  const locked = await hasQuoteLeftTheLab(ctx.o, serviceOrderId);
+  if (locked && !reason) {
+    throw conflict(
+      "service_order_evaluation_reason_required",
+      "Informe o motivo da revisao: o orcamento enviado ao cliente se baseia nesta avaliacao",
     );
+  }
 
-    return { status: "ok" as const, data: row };
-  });
+  // The row change and its audit event commit together, like the creation path.
+  // Split, a failed event write would leave a communicated diagnosis silently
+  // altered with no reason and no recoverable prior value.
+  const [row] = await ctx.o
+    .update(serviceOrderEvaluation)
+    .set({ ...values, updatedAt: new Date() })
+    .where(eq(serviceOrderEvaluation.id, evaluationId))
+    .returning();
+
+  if (!row) throw evaluationNotFound();
+
+  await recordServiceOrderEvent(
+    {
+      organizationId: existingEvaluation.organizationId,
+      unitId: existingEvaluation.unitId,
+      serviceOrderId,
+      actorType: "lab_user",
+      actorId: ctx.actor.userId,
+      eventType: "service_order.evaluation_updated",
+      oldValue: {
+        diagnosis: existingEvaluation.diagnosis,
+        recommendedAction: existingEvaluation.recommendedAction,
+      },
+      newValue: {
+        diagnosis: row.diagnosis,
+        recommendedAction: row.recommendedAction,
+      },
+      // `locked` records whether this was a revision of a communicated
+      // diagnosis or an ordinary edit — the two read very differently in an
+      // audit.
+      metadata: {
+        orderStatus: existingEvaluation.orderStatus,
+        locked,
+        ...(reason ? { revisionReason: reason } : {}),
+      },
+    },
+    ctx.o,
+  );
+
+  return row;
 }

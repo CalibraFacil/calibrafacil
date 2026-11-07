@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Hono, type Context, type Next } from "hono";
+import type { Env } from "../../server/env";
+import { applyErrorHandling } from "../../server/error-handling";
 import { portalServiceOrdersRouter } from "../service-orders";
 
 const mocks = vi.hoisted(() => ({
@@ -83,10 +85,10 @@ vi.mock("../../lib/storage", () => ({
 }));
 
 function createTestApp() {
-  return new Hono().route(
-    "/api/portal/service-orders",
-    portalServiceOrdersRouter,
-  );
+  // Behind the app's error handler, as in production: the route throws its 404.
+  const app = new Hono<{ Bindings: Env }>();
+  applyErrorHandling(app);
+  return app.route("/api/portal/service-orders", portalServiceOrdersRouter);
 }
 
 const visibleSummary = {
@@ -222,6 +224,7 @@ describe("portal service-order financial summary route", () => {
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toEqual({
       error: "OS nao encontrada",
+      code: "service_order_not_found",
     });
     expect(
       mocks.buildPortalServiceOrderFinancialSummary,
@@ -237,6 +240,7 @@ describe("portal service-order financial summary route", () => {
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toEqual({
       error: "OS nao encontrada",
+      code: "service_order_not_found",
     });
     expect(mocks.getPortalCustomerForAuthOrganization).not.toHaveBeenCalled();
     expect(
@@ -282,6 +286,7 @@ describe("portal service-order financial summary route", () => {
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toEqual({
       error: "OS nao encontrada",
+      code: "service_order_not_found",
     });
     expect(
       mocks.buildPortalServiceOrderFinancialSummary,

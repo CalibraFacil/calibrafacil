@@ -152,6 +152,26 @@ export const API_ERROR_CODES = [
   "visit_reschedule_pending",
   "visit_reschedule_request_not_found",
 
+  // Service orders (OS), their quotes and the public approval links.
+  "service_order_not_found",
+  "service_order_invalid_asset",
+  "service_order_source_not_found",
+  "service_order_invalid_transition",
+  "service_order_certificate_not_found",
+  "service_order_certificate_incompatible",
+  "service_order_evaluation_not_found",
+  "service_order_evaluation_exists",
+  "service_order_evaluation_reason_required",
+  "service_order_execution_not_started",
+  "service_order_pdf_unavailable",
+  "service_order_quote_not_found",
+  "service_order_quote_not_sendable",
+  "service_order_quote_not_decidable",
+  "public_link_invalid",
+  "public_link_answered",
+  "public_code_invalid",
+  "public_code_throttled",
+
   // Records retention (decision Q16): organization lifecycle and the
   // customers / API keys that depend on it.
   "organization_confirmation_mismatch",
@@ -194,8 +214,12 @@ export function isApiErrorCode(value: unknown): value is ApiErrorCode {
   return typeof value === "string" && API_ERROR_CODE_SET.has(value);
 }
 
-/** HTTP statuses a `DomainError` may carry. 5xx stays a defect, not a domain error. */
-export type ApiErrorStatus = 400 | 401 | 403 | 404 | 409 | 422;
+/**
+ * HTTP statuses a `DomainError` may carry. 5xx stays a defect, not a domain
+ * error. 410 and 429 are the public approval links' answers (a decided link,
+ * a throttled code).
+ */
+export type ApiErrorStatus = 400 | 401 | 403 | 404 | 409 | 410 | 422 | 429;
 
 export type ApiErrorJsonValue =
   | string

@@ -185,6 +185,24 @@ export function unprocessable(
   return new UnprocessableError(code, message, options);
 }
 
+/** 410 — the resource existed and is permanently gone (a link already used). */
+export function gone(
+  code: ApiErrorCode,
+  message: string,
+  options?: DomainErrorOptions,
+) {
+  return new DomainError({ code, status: 410, message, ...options });
+}
+
+/** 429 — too many attempts; the caller must wait for the window to elapse. */
+export function tooManyRequests(
+  code: ApiErrorCode,
+  message: string,
+  options?: DomainErrorOptions,
+) {
+  return new DomainError({ code, status: 429, message, ...options });
+}
+
 /** The JSON body a `DomainError` serialises to. */
 export function domainErrorBody(
   error: DomainError,

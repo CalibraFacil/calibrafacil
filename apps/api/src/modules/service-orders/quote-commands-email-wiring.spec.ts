@@ -171,6 +171,7 @@ vi.mock("@calibra-facil/db/for-org", () => ({
 }));
 
 vi.mock("./service-order.queries", () => ({
+  requireScopedServiceOrder: vi.fn().mockResolvedValue({ id: 1 }),
   getQuoteForAction: vi.fn().mockResolvedValue({
     id: 42,
     serviceOrderId: 1,
@@ -187,10 +188,6 @@ vi.mock("./service-order.queries", () => ({
 
 vi.mock("./service-order.read-model", () => ({
   getServiceOrderDetail: vi.fn(),
-}));
-
-vi.mock("./service-order.documents", () => ({
-  enqueueServiceOrderDocumentJob: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("./service-order.list-queries", () => ({
@@ -275,6 +272,48 @@ import {
 // Shared fixture: a service order row that satisfies the commands
 // ---------------------------------------------------------------------------
 
+// The org-bound handle of the context is the canned database's own object (the
+// builders above), so the atomicity tests can tell it from the module-level `db`.
+const { db: cannedDb } = await import("@calibra-facil/db");
+Object.assign(mockOrgTx, cannedDb);
+
+// The command's context, as `withOrg` hands it.
+function makeCtx(userId = "user-1") {
+  return {
+    org: "org-1",
+    actor: { userId, ipAddress: null, userAgent: null },
+    o: mockOrgTx,
+    tx: mockOrgTx,
+    audit: vi.fn().mockResolvedValue(undefined),
+    emit: vi.fn().mockResolvedValue(undefined),
+    afterCommit: vi.fn(),
+  };
+}
+
+// The portal customer of the order's customer (id 101).
+const PORTAL_CUSTOMER = {
+  id: 101,
+  name: "Portal Cliente SA",
+  email: "portal@cliente.com",
+  authOrganizationId: "auth-org-portal-1",
+  labOrganizationId: "org-1",
+  taxId: null,
+  phone: null,
+  address: null,
+  groupId: null,
+  compliance: null,
+  internalNotes: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
+
+const MEMBER = {
+  organizationId: "org-1",
+  activeUnitId: 10,
+  accessibleUnitIds: [10],
+  selectedUnitScope: "unit" as const,
+};
+
 const SAMPLE_ORDER = {
   id: 1,
   organizationId: "org-1",
@@ -317,19 +356,12 @@ describe("approveServiceOrderQuoteManually — email wiring (outbox)", () => {
       [SAMPLE_CUSTOMER], // customer SELECT for email payload
     );
 
-    const result = await approveServiceOrderQuoteManually({
-      serviceOrderId: 1,
-      quoteId: 42,
-      actorUserId: "user-1",
-      values: {
-        approvedByName: "João Silva",
-        manualApprovalEvidenceType: "email",
-        manualApprovalEvidenceText: "Aprovado por email",
-        approvedAt: null,
-      },
+    await approveServiceOrderQuoteManually(makeCtx(), MEMBER, 1, 42, {
+      approvedByName: "João Silva",
+      manualApprovalEvidenceType: "email",
+      manualApprovalEvidenceText: "Aprovado por email",
+      approvedAt: null,
     });
-
-    expect(result.status).toBe("ok");
     expect(mockEnqueueServiceOrderEmail).toHaveBeenCalledTimes(1);
     const call = vi.mocked(mockEnqueueServiceOrderEmail).mock.calls[0];
     expect(call[0].eventKey).toBe("quote_approved:42");
@@ -339,16 +371,11 @@ describe("approveServiceOrderQuoteManually — email wiring (outbox)", () => {
   it("payload contains serviceOrderId, quoteId, organizationId, totalApprovedCents", async () => {
     dbQueue.push([SAMPLE_ORDER], [SAMPLE_CUSTOMER]);
 
-    await approveServiceOrderQuoteManually({
-      serviceOrderId: 1,
-      quoteId: 42,
-      actorUserId: "user-1",
-      values: {
-        approvedByName: "João",
-        manualApprovalEvidenceType: "email",
-        manualApprovalEvidenceText: null,
-        approvedAt: null,
-      },
+    await approveServiceOrderQuoteManually(makeCtx(), MEMBER, 1, 42, {
+      approvedByName: "João",
+      manualApprovalEvidenceType: "email",
+      manualApprovalEvidenceText: null,
+      approvedAt: null,
     });
 
     const call = vi.mocked(mockEnqueueServiceOrderEmail).mock.calls[0];
@@ -363,16 +390,11 @@ describe("approveServiceOrderQuoteManually — email wiring (outbox)", () => {
   it("REQ-072: enqueue uses the tx executor, not module db (atomicity)", async () => {
     dbQueue.push([SAMPLE_ORDER], [SAMPLE_CUSTOMER]);
 
-    await approveServiceOrderQuoteManually({
-      serviceOrderId: 1,
-      quoteId: 42,
-      actorUserId: "user-1",
-      values: {
-        approvedByName: "João",
-        manualApprovalEvidenceType: "email",
-        manualApprovalEvidenceText: null,
-        approvedAt: null,
-      },
+    await approveServiceOrderQuoteManually(makeCtx(), MEMBER, 1, 42, {
+      approvedByName: "João",
+      manualApprovalEvidenceType: "email",
+      manualApprovalEvidenceText: null,
+      approvedAt: null,
     });
 
     expect(capturedTxExecutors).toHaveLength(1);
@@ -381,16 +403,11 @@ describe("approveServiceOrderQuoteManually — email wiring (outbox)", () => {
 
   it("does NOT call old dispatch helpers or sendServiceOrderEmailOnce", async () => {
     dbQueue.push([SAMPLE_ORDER], [SAMPLE_CUSTOMER]);
-    await approveServiceOrderQuoteManually({
-      serviceOrderId: 1,
-      quoteId: 42,
-      actorUserId: "user-1",
-      values: {
-        approvedByName: "João",
-        manualApprovalEvidenceType: "email",
-        manualApprovalEvidenceText: null,
-        approvedAt: null,
-      },
+    await approveServiceOrderQuoteManually(makeCtx(), MEMBER, 1, 42, {
+      approvedByName: "João",
+      manualApprovalEvidenceType: "email",
+      manualApprovalEvidenceText: null,
+      approvedAt: null,
     });
     // Ensure old fire-and-forget pattern is gone
     const { sendServiceOrderEmailOnce } =
@@ -416,14 +433,9 @@ describe("rejectServiceOrderQuoteManually — email wiring (outbox)", () => {
       [SAMPLE_CUSTOMER], // customer SELECT for email payload
     );
 
-    const result = await rejectServiceOrderQuoteManually({
-      serviceOrderId: 1,
-      quoteId: 42,
-      actorUserId: "user-1",
-      values: { rejectionReason: "Preço elevado" },
+    await rejectServiceOrderQuoteManually(makeCtx(), MEMBER, 1, 42, {
+      rejectionReason: "Preço elevado",
     });
-
-    expect(result.status).toBe("ok");
     expect(mockEnqueueServiceOrderEmail).toHaveBeenCalledTimes(1);
     const call = vi.mocked(mockEnqueueServiceOrderEmail).mock.calls[0];
     expect(call[0].eventKey).toBe("quote_rejected:42");
@@ -433,11 +445,8 @@ describe("rejectServiceOrderQuoteManually — email wiring (outbox)", () => {
   it("payload contains rejectionReason when present", async () => {
     dbQueue.push([SAMPLE_ORDER], [SAMPLE_CUSTOMER]);
 
-    await rejectServiceOrderQuoteManually({
-      serviceOrderId: 1,
-      quoteId: 42,
-      actorUserId: "user-1",
-      values: { rejectionReason: "Preço elevado" },
+    await rejectServiceOrderQuoteManually(makeCtx(), MEMBER, 1, 42, {
+      rejectionReason: "Preço elevado",
     });
 
     const call = vi.mocked(mockEnqueueServiceOrderEmail).mock.calls[0];
@@ -450,11 +459,8 @@ describe("rejectServiceOrderQuoteManually — email wiring (outbox)", () => {
   it("passes null rejectionReason when not provided", async () => {
     dbQueue.push([SAMPLE_ORDER], [SAMPLE_CUSTOMER]);
 
-    await rejectServiceOrderQuoteManually({
-      serviceOrderId: 1,
-      quoteId: 42,
-      actorUserId: "user-1",
-      values: { rejectionReason: undefined },
+    await rejectServiceOrderQuoteManually(makeCtx(), MEMBER, 1, 42, {
+      rejectionReason: undefined,
     });
 
     const call = vi.mocked(mockEnqueueServiceOrderEmail).mock.calls[0];
@@ -465,11 +471,8 @@ describe("rejectServiceOrderQuoteManually — email wiring (outbox)", () => {
   it("REQ-072: enqueue uses the tx executor (atomicity)", async () => {
     dbQueue.push([SAMPLE_ORDER], [SAMPLE_CUSTOMER]);
 
-    await rejectServiceOrderQuoteManually({
-      serviceOrderId: 1,
-      quoteId: 42,
-      actorUserId: "user-1",
-      values: { rejectionReason: null },
+    await rejectServiceOrderQuoteManually(makeCtx(), MEMBER, 1, 42, {
+      rejectionReason: null,
     });
 
     expect(capturedTxExecutors).toHaveLength(1);
@@ -478,11 +481,8 @@ describe("rejectServiceOrderQuoteManually — email wiring (outbox)", () => {
 
   it("does NOT call enqueueServiceOrderEmail with approved eventKey on rejection", async () => {
     dbQueue.push([SAMPLE_ORDER], [SAMPLE_CUSTOMER]);
-    await rejectServiceOrderQuoteManually({
-      serviceOrderId: 1,
-      quoteId: 42,
-      actorUserId: "user-1",
-      values: { rejectionReason: null },
+    await rejectServiceOrderQuoteManually(makeCtx(), MEMBER, 1, 42, {
+      rejectionReason: null,
     });
     const calls = vi.mocked(mockEnqueueServiceOrderEmail).mock.calls;
     // Must have been called, but eventKey must be rejected not approved
@@ -505,15 +505,12 @@ describe("approveServiceOrderQuoteByPortalUser — email wiring (outbox)", () =>
   it("calls enqueueServiceOrderEmail with eventKey='quote_approved:42' after portal approval", async () => {
     dbQueue.push([SAMPLE_ORDER]); // serviceOrder SELECT
 
-    const result = await approveServiceOrderQuoteByPortalUser({
-      serviceOrderId: 1,
-      quoteId: 42,
-      authOrganizationId: "auth-org-portal-1",
-      actorUserId: "portal-user-1",
-      metadata: { ipAddress: null, userAgent: null },
-    });
-
-    expect(result.status).toBe("ok");
+    await approveServiceOrderQuoteByPortalUser(
+      makeCtx("portal-user-1"),
+      PORTAL_CUSTOMER,
+      1,
+      42,
+    );
     expect(mockEnqueueServiceOrderEmail).toHaveBeenCalledTimes(1);
     const call = vi.mocked(mockEnqueueServiceOrderEmail).mock.calls[0];
     expect(call[0].eventKey).toBe("quote_approved:42");
@@ -523,13 +520,12 @@ describe("approveServiceOrderQuoteByPortalUser — email wiring (outbox)", () =>
   it("payload contains customerName/customerEmail from linkedCustomer (tenant scope)", async () => {
     dbQueue.push([SAMPLE_ORDER]);
 
-    await approveServiceOrderQuoteByPortalUser({
-      serviceOrderId: 1,
-      quoteId: 42,
-      authOrganizationId: "auth-org-portal-1",
-      actorUserId: "portal-user-1",
-      metadata: {},
-    });
+    await approveServiceOrderQuoteByPortalUser(
+      makeCtx("portal-user-1"),
+      PORTAL_CUSTOMER,
+      1,
+      42,
+    );
 
     const call = vi.mocked(mockEnqueueServiceOrderEmail).mock.calls[0];
     const payload = call[0].payload;
@@ -543,13 +539,12 @@ describe("approveServiceOrderQuoteByPortalUser — email wiring (outbox)", () =>
   it("REQ-072: enqueue uses the tx executor (atomicity)", async () => {
     dbQueue.push([SAMPLE_ORDER]);
 
-    await approveServiceOrderQuoteByPortalUser({
-      serviceOrderId: 1,
-      quoteId: 42,
-      authOrganizationId: "auth-org-portal-1",
-      actorUserId: "portal-user-1",
-      metadata: {},
-    });
+    await approveServiceOrderQuoteByPortalUser(
+      makeCtx("portal-user-1"),
+      PORTAL_CUSTOMER,
+      1,
+      42,
+    );
 
     expect(capturedTxExecutors).toHaveLength(1);
     expect(capturedTxExecutors[0]).toBe(mockOrgTx);
@@ -557,47 +552,31 @@ describe("approveServiceOrderQuoteByPortalUser — email wiring (outbox)", () =>
 
   it("does NOT dispatch using old helper or sendServiceOrderEmailOnce", async () => {
     dbQueue.push([SAMPLE_ORDER], [], [], []);
-    await approveServiceOrderQuoteByPortalUser({
-      serviceOrderId: 1,
-      quoteId: 42,
-      authOrganizationId: "auth-org-portal-1",
-      actorUserId: "portal-user-1",
-      metadata: {},
-    });
+    await approveServiceOrderQuoteByPortalUser(
+      makeCtx("portal-user-1"),
+      PORTAL_CUSTOMER,
+      1,
+      42,
+    );
     const { sendServiceOrderEmailOnce } =
       await import("./service-order-email-once");
     expect(vi.mocked(sendServiceOrderEmailOnce)).not.toHaveBeenCalled();
   });
 
-  it("returns not_found and does not enqueue when tenancy guard fails (customerId mismatch)", async () => {
-    const { getPortalCustomerForAuthOrganization } =
-      await import("./service-order.list-queries");
-    vi.mocked(getPortalCustomerForAuthOrganization).mockResolvedValueOnce({
-      id: 999, // does NOT match SAMPLE_ORDER.customerId (101)
-      name: "Wrong Customer",
-      email: null,
-      authOrganizationId: "auth-org-portal-1",
-      labOrganizationId: "org-1",
-      taxId: null,
-      phone: null,
-      address: null,
-      groupId: null,
-      compliance: null,
-      internalNotes: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+  it("answers 404 and does not enqueue when tenancy guard fails (customerId mismatch)", async () => {
     dbQueue.push([SAMPLE_ORDER]);
 
-    const result = await approveServiceOrderQuoteByPortalUser({
-      serviceOrderId: 1,
-      quoteId: 42,
-      authOrganizationId: "auth-org-portal-1",
-      actorUserId: "portal-user-1",
-      metadata: {},
+    await expect(
+      approveServiceOrderQuoteByPortalUser(
+        makeCtx("portal-user-1"),
+        { ...PORTAL_CUSTOMER, id: 999 }, // does NOT match SAMPLE_ORDER.customerId (101)
+        1,
+        42,
+      ),
+    ).rejects.toMatchObject({
+      status: 404,
+      code: "service_order_quote_not_found",
     });
-
-    expect(result.status).toBe("not_found");
     expect(mockEnqueueServiceOrderEmail).not.toHaveBeenCalled();
   });
 });
@@ -616,16 +595,13 @@ describe("rejectServiceOrderQuoteByPortalUser — email wiring (outbox)", () => 
   it("calls enqueueServiceOrderEmail with eventKey='quote_rejected:42' after portal rejection", async () => {
     dbQueue.push([SAMPLE_ORDER]);
 
-    const result = await rejectServiceOrderQuoteByPortalUser({
-      serviceOrderId: 1,
-      quoteId: 42,
-      authOrganizationId: "auth-org-portal-1",
-      actorUserId: "portal-user-1",
-      values: { rejectionReason: "Fora do orçamento" },
-      metadata: { ipAddress: "1.2.3.4", userAgent: "Mozilla" },
-    });
-
-    expect(result.status).toBe("ok");
+    await rejectServiceOrderQuoteByPortalUser(
+      makeCtx("portal-user-1"),
+      PORTAL_CUSTOMER,
+      1,
+      42,
+      { rejectionReason: "Fora do orçamento" },
+    );
     expect(mockEnqueueServiceOrderEmail).toHaveBeenCalledTimes(1);
     const call = vi.mocked(mockEnqueueServiceOrderEmail).mock.calls[0];
     expect(call[0].eventKey).toBe("quote_rejected:42");
@@ -635,14 +611,13 @@ describe("rejectServiceOrderQuoteByPortalUser — email wiring (outbox)", () => 
   it("payload contains rejectionReason and customerName from linkedCustomer", async () => {
     dbQueue.push([SAMPLE_ORDER]);
 
-    await rejectServiceOrderQuoteByPortalUser({
-      serviceOrderId: 1,
-      quoteId: 42,
-      authOrganizationId: "auth-org-portal-1",
-      actorUserId: "portal-user-1",
-      values: { rejectionReason: "Fora do orçamento" },
-      metadata: {},
-    });
+    await rejectServiceOrderQuoteByPortalUser(
+      makeCtx("portal-user-1"),
+      PORTAL_CUSTOMER,
+      1,
+      42,
+      { rejectionReason: "Fora do orçamento" },
+    );
 
     const call = vi.mocked(mockEnqueueServiceOrderEmail).mock.calls[0];
     const payload = call[0].payload;
@@ -656,14 +631,13 @@ describe("rejectServiceOrderQuoteByPortalUser — email wiring (outbox)", () => 
   it("passes null rejectionReason when portal rejection has no reason", async () => {
     dbQueue.push([SAMPLE_ORDER]);
 
-    await rejectServiceOrderQuoteByPortalUser({
-      serviceOrderId: 1,
-      quoteId: 42,
-      authOrganizationId: "auth-org-portal-1",
-      actorUserId: "portal-user-1",
-      values: { rejectionReason: undefined },
-      metadata: {},
-    });
+    await rejectServiceOrderQuoteByPortalUser(
+      makeCtx("portal-user-1"),
+      PORTAL_CUSTOMER,
+      1,
+      42,
+      { rejectionReason: undefined },
+    );
 
     const call = vi.mocked(mockEnqueueServiceOrderEmail).mock.calls[0];
     const payload = call[0].payload;
@@ -673,14 +647,13 @@ describe("rejectServiceOrderQuoteByPortalUser — email wiring (outbox)", () => 
   it("REQ-072: enqueue uses the tx executor (atomicity)", async () => {
     dbQueue.push([SAMPLE_ORDER]);
 
-    await rejectServiceOrderQuoteByPortalUser({
-      serviceOrderId: 1,
-      quoteId: 42,
-      authOrganizationId: "auth-org-portal-1",
-      actorUserId: "portal-user-1",
-      values: { rejectionReason: null },
-      metadata: {},
-    });
+    await rejectServiceOrderQuoteByPortalUser(
+      makeCtx("portal-user-1"),
+      PORTAL_CUSTOMER,
+      1,
+      42,
+      { rejectionReason: null },
+    );
 
     expect(capturedTxExecutors).toHaveLength(1);
     expect(capturedTxExecutors[0]).toBe(mockOrgTx);
@@ -688,49 +661,33 @@ describe("rejectServiceOrderQuoteByPortalUser — email wiring (outbox)", () => 
 
   it("does NOT call enqueueServiceOrderEmail with approved eventKey on portal rejection", async () => {
     dbQueue.push([SAMPLE_ORDER]);
-    await rejectServiceOrderQuoteByPortalUser({
-      serviceOrderId: 1,
-      quoteId: 42,
-      authOrganizationId: "auth-org-portal-1",
-      actorUserId: "portal-user-1",
-      values: { rejectionReason: null },
-      metadata: {},
-    });
+    await rejectServiceOrderQuoteByPortalUser(
+      makeCtx("portal-user-1"),
+      PORTAL_CUSTOMER,
+      1,
+      42,
+      { rejectionReason: null },
+    );
     const calls = vi.mocked(mockEnqueueServiceOrderEmail).mock.calls;
     expect(calls).toHaveLength(1);
     expect(calls[0][0].eventKey).not.toContain("approved");
   });
 
-  it("returns not_found and does not enqueue when tenancy guard fails", async () => {
-    const { getPortalCustomerForAuthOrganization } =
-      await import("./service-order.list-queries");
-    vi.mocked(getPortalCustomerForAuthOrganization).mockResolvedValueOnce({
-      id: 999, // mismatch
-      name: "Wrong Customer",
-      email: null,
-      authOrganizationId: "auth-org-portal-1",
-      labOrganizationId: "org-1",
-      taxId: null,
-      phone: null,
-      address: null,
-      groupId: null,
-      compliance: null,
-      internalNotes: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+  it("answers 404 and does not enqueue when tenancy guard fails (customerId mismatch)", async () => {
     dbQueue.push([SAMPLE_ORDER]);
 
-    const result = await rejectServiceOrderQuoteByPortalUser({
-      serviceOrderId: 1,
-      quoteId: 42,
-      authOrganizationId: "auth-org-portal-1",
-      actorUserId: "portal-user-1",
-      values: { rejectionReason: null },
-      metadata: {},
+    await expect(
+      rejectServiceOrderQuoteByPortalUser(
+        makeCtx("portal-user-1"),
+        { ...PORTAL_CUSTOMER, id: 999 }, // does NOT match SAMPLE_ORDER.customerId (101)
+        1,
+        42,
+        { rejectionReason: null },
+      ),
+    ).rejects.toMatchObject({
+      status: 404,
+      code: "service_order_quote_not_found",
     });
-
-    expect(result.status).toBe("not_found");
     expect(mockEnqueueServiceOrderEmail).not.toHaveBeenCalled();
   });
 });

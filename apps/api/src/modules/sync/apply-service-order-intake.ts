@@ -134,47 +134,50 @@ export async function applyCreateLocalServiceOrderIntake(
     };
   }
 
-  const created = await createInitialServiceOrderRecords({
-    organizationId: input.memberData.organizationId,
-    unitId,
-    customerId: values.customerId,
-    assetId: values.assetId,
-    userId: actorUserId,
-    // Desktop payloads send an absent snapshot as explicit null; the intake
-    // creator expects undefined for "none".
-    assetSnapshot: values.assetSnapshot ?? undefined,
-    signatureData: values.signatureData ?? null,
-    values: {
-      clientContactId: values.clientContactId ?? null,
-      clientContactSnapshot: values.clientContactSnapshot ?? null,
-      intakeType: values.intakeType,
-      sourceServiceOrderId: values.sourceServiceOrderId ?? null,
-      priority: values.priority,
-      responsibleTechnicianId: values.responsibleTechnicianId ?? null,
-      claimedDefect: values.claimedDefect,
-      intakeCondition: values.intakeCondition,
-      accessories: values.accessories ?? null,
-      removedSealingMarkNumber: values.removedSealingMarkNumber ?? null,
-      affixedSealingMarkNumber: values.affixedSealingMarkNumber ?? null,
-      inmetroRepairMarkNumber: values.inmetroRepairMarkNumber ?? null,
-      invoiceRemittanceNumber: values.invoiceRemittanceNumber ?? null,
-      invoiceRemittanceKey: values.invoiceRemittanceKey ?? null,
-      invoiceRemittanceIssuedAt: parseSyncDate(
-        values.invoiceRemittanceIssuedAt,
-      ),
-      carrierName: values.carrierName ?? null,
-      carrierDocument: values.carrierDocument ?? null,
-      thirdPartyName: values.thirdPartyName ?? null,
-      thirdPartyDocument: values.thirdPartyDocument ?? null,
-      thirdPartyPhone: values.thirdPartyPhone ?? null,
-      deliveryMethod: values.deliveryMethod,
-      internalNotes: values.internalNotes ?? null,
-      clientVisibleNotes: values.clientVisibleNotes ?? null,
-      evaluationFeeCents: values.evaluationFeeCents,
-      warrantyUntil: parseSyncDate(values.warrantyUntil),
-      warrantyTerms: values.warrantyTerms ?? null,
+  const created = await createInitialServiceOrderRecords(
+    {
+      organizationId: input.memberData.organizationId,
+      unitId,
+      customerId: values.customerId,
+      assetId: values.assetId,
+      userId: actorUserId,
+      // Desktop payloads send an absent snapshot as explicit null; the intake
+      // creator expects undefined for "none".
+      assetSnapshot: values.assetSnapshot ?? undefined,
+      signatureData: values.signatureData ?? null,
+      values: {
+        clientContactId: values.clientContactId ?? null,
+        clientContactSnapshot: values.clientContactSnapshot ?? null,
+        intakeType: values.intakeType,
+        sourceServiceOrderId: values.sourceServiceOrderId ?? null,
+        priority: values.priority,
+        responsibleTechnicianId: values.responsibleTechnicianId ?? null,
+        claimedDefect: values.claimedDefect,
+        intakeCondition: values.intakeCondition,
+        accessories: values.accessories ?? null,
+        removedSealingMarkNumber: values.removedSealingMarkNumber ?? null,
+        affixedSealingMarkNumber: values.affixedSealingMarkNumber ?? null,
+        inmetroRepairMarkNumber: values.inmetroRepairMarkNumber ?? null,
+        invoiceRemittanceNumber: values.invoiceRemittanceNumber ?? null,
+        invoiceRemittanceKey: values.invoiceRemittanceKey ?? null,
+        invoiceRemittanceIssuedAt: parseSyncDate(
+          values.invoiceRemittanceIssuedAt,
+        ),
+        carrierName: values.carrierName ?? null,
+        carrierDocument: values.carrierDocument ?? null,
+        thirdPartyName: values.thirdPartyName ?? null,
+        thirdPartyDocument: values.thirdPartyDocument ?? null,
+        thirdPartyPhone: values.thirdPartyPhone ?? null,
+        deliveryMethod: values.deliveryMethod,
+        internalNotes: values.internalNotes ?? null,
+        clientVisibleNotes: values.clientVisibleNotes ?? null,
+        evaluationFeeCents: values.evaluationFeeCents,
+        warrantyUntil: parseSyncDate(values.warrantyUntil),
+        warrantyTerms: values.warrantyTerms ?? null,
+      },
     },
-  });
+    input.o,
+  );
 
   await writeDesktopSyncAudit(input, actorUserId, {
     remoteEntityId: created.id,

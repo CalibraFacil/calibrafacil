@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { organizationOf } from "../../test/integration/organization-of";
-import { serviceOrdersRouter } from "./service-orders";
+import { serviceOrdersRouter as serviceOrdersRouterBare } from "./service-orders";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
 import { db } from "@calibra-facil/db";
 import {
   asset,
@@ -22,6 +23,10 @@ import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+
+// The routers behind the app's error handler, as in production: a route throws
+// a `DomainError` and `app.onError` renders it.
+const serviceOrdersRouter = withErrorHandling(serviceOrdersRouterBare);
 
 // Real-DB + real-RBAC integration tests for the serviceOrdersRouter.
 // Only the better-auth session is mocked (see test/integration/setup.ts);

@@ -8,7 +8,8 @@ import {
   vi,
 } from "vitest";
 import { organizationOf } from "../../test/integration/organization-of";
-import { publicServiceOrderAccessRouter } from "./service-orders";
+import { publicServiceOrderAccessRouter as publicServiceOrderAccessRouterBare } from "./service-orders";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
 import { db } from "@calibra-facil/db";
 import {
   asset,
@@ -24,8 +25,15 @@ import {
 import { eq, sql } from "drizzle-orm";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { orgDb } from "../lib/org-db";
 import { createPublicServiceOrderAccessToken } from "../lib/service-order-workflow";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+
+// The routers behind the app's error handler, as in production: a route throws
+// a `DomainError` and `app.onError` renders it.
+const publicServiceOrderAccessRouter = withErrorHandling(
+  publicServiceOrderAccessRouterBare,
+);
 
 // The requests below arrive as from behind one trusted reverse proxy (the Caddy of
 // deploy/compose.yaml), which writes X-Forwarded-For: lib/client-ip.ts.
@@ -163,12 +171,15 @@ async function mintCodedGrant(world: {
   serviceOrderId: number;
   quoteId: number;
 }) {
-  const grant = await createPublicServiceOrderAccessToken({
-    organizationId: world.org.orgId,
-    serviceOrderId: world.serviceOrderId,
-    quoteId: world.quoteId,
-    withApprovalCode: true,
-  });
+  const grant = await orgDb(world.org.orgId).transaction((o) =>
+    createPublicServiceOrderAccessToken({
+      organizationId: world.org.orgId,
+      serviceOrderId: world.serviceOrderId,
+      quoteId: world.quoteId,
+      withApprovalCode: true,
+      executor: o,
+    }),
+  );
   if (!grant.code) throw new Error("mintCodedGrant: no code minted");
   return { token: grant.token, code: grant.code };
 }
@@ -223,7 +234,10 @@ describe("public approval-code redemption (real DB)", () => {
       bodies.push(await res.json());
     }
     expect(statuses).toEqual([404, 404, 404]);
-    expect(bodies[0]).toEqual({ error: "codigo_invalido" });
+    expect(bodies[0]).toEqual({
+      error: "codigo_invalido",
+      code: "public_code_invalid",
+    });
     expect(bodies[1]).toEqual(bodies[0]);
     expect(bodies[2]).toEqual(bodies[0]);
   });
@@ -238,7 +252,10 @@ describe("public approval-code redemption (real DB)", () => {
     }
     const throttled = await redeemRequest(grant.code, "198.51.100.9");
     expect(throttled.status).toBe(429);
-    expect(await throttled.json()).toEqual({ error: "muitas_tentativas" });
+    expect(await throttled.json()).toEqual({
+      error: "muitas_tentativas",
+      code: "public_code_throttled",
+    });
 
     // A different IP is not throttled and the valid code still redeems.
     const otherIp = await redeemRequest(grant.code, "198.51.100.10");

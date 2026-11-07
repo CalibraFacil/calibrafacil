@@ -23,7 +23,6 @@
 
 import { z } from "zod";
 import type { OrgExecutor } from "@calibra-facil/db/for-org";
-import { orgDb } from "../../lib/org-db";
 import { serviceOrderEmailOutbox } from "@calibra-facil/db/schema";
 
 // =============================================================================
@@ -318,8 +317,8 @@ export function parseOutboxPayloadByNamespace(
 
 /**
  * The executor type accepted by enqueueServiceOrderEmail — matches the
- * `ServiceOrderDbExecutor` used throughout service-order-workflow.ts so PART 2
- * can pass a transaction executor directly.
+ * `ServiceOrderDbExecutor` used throughout service-order-workflow.ts, so a
+ * command passes its `ctx.o`.
  */
 type DbExecutor = Pick<OrgExecutor, "insert" | "select" | "update" | "delete">;
 
@@ -355,44 +354,35 @@ export interface EnqueueServiceOrderEmailParams {
 }
 
 /**
- * Insert ONE `serviceOrderEmailOutbox` row using the provided executor.
- *
- * The `executor` parameter MUST be passed by PART 2 (command wiring) so that
- * when the triggering command runs inside a database transaction, the outbox
- * row commits atomically with the command's effect (REQ-SOEMAIL-072).
+ * Insert ONE `serviceOrderEmailOutbox` row through the caller's executor, so the
+ * row commits atomically with the triggering command (REQ-SOEMAIL-072): the
+ * executor is the command's `ctx.o`, never a transaction of its own.
  *
  * `onConflictDoNothing` on UNIQUE(serviceOrderId, eventKey) deduplicates
  * concurrent enqueues (REQ-SOEMAIL-074).
  *
- * Does NOT validate the payload — the caller (PART 2) is responsible for
- * constructing a valid payload that matches the eventKey namespace schema.
+ * Does NOT validate the payload — the caller is responsible for constructing a
+ * valid payload that matches the eventKey namespace schema.
  */
 export async function enqueueServiceOrderEmail(
   params: EnqueueServiceOrderEmailParams,
-  executor?: DbExecutor,
+  executor: DbExecutor,
 ): Promise<void> {
-  // Without a caller transaction the single insert runs in one of its own that
-  // names the laboratory (row-level security).
-  const insert = async (tx: DbExecutor) => {
-    await tx
-      .insert(serviceOrderEmailOutbox)
-      .values({
-        organizationId: params.organizationId,
-        unitId: params.unitId ?? null,
-        serviceOrderId: params.serviceOrderId,
-        eventKey: params.eventKey,
-        targetStatus: params.targetStatus,
-        payload: params.payload,
-        attempts: 0,
-      })
-      .onConflictDoNothing({
-        target: [
-          serviceOrderEmailOutbox.serviceOrderId,
-          serviceOrderEmailOutbox.eventKey,
-        ],
-      });
-  };
-  await (executor
-    ? insert(executor)
-    : orgDb(params.organizationId).transaction(insert));
+  await executor
+    .insert(serviceOrderEmailOutbox)
+    .values({
+      organizationId: params.organizationId,
+      unitId: params.unitId ?? null,
+      serviceOrderId: params.serviceOrderId,
+      eventKey: params.eventKey,
+      targetStatus: params.targetStatus,
+      payload: params.payload,
+      attempts: 0,
+    })
+    .onConflictDoNothing({
+      target: [
+        serviceOrderEmailOutbox.serviceOrderId,
+        serviceOrderEmailOutbox.eventKey,
+      ],
+    });
 }

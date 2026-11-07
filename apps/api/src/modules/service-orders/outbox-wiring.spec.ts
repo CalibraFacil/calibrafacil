@@ -205,6 +205,7 @@ const SENT_QUOTE_FIXTURE = vi.hoisted(() => ({
 }));
 
 vi.mock("./service-order.queries", () => ({
+  requireScopedServiceOrder: vi.fn().mockResolvedValue({ id: 1 }),
   getQuoteForAction: vi.fn().mockResolvedValue(SENT_QUOTE_FIXTURE),
   // The order waits on the decision: approving/rejecting advances it.
   lockServiceOrderStatus: vi.fn().mockResolvedValue("awaiting_quote_approval"),
@@ -223,10 +224,6 @@ vi.mock("./service-order.read-model", () => ({
     openedAt: new Date("2026-06-01T00:00:00.000Z"),
     claimedDefect: "Sensor fault",
   }),
-}));
-
-vi.mock("./service-order.documents", () => ({
-  enqueueServiceOrderDocumentJob: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("./service-order.list-queries", () => ({
@@ -340,8 +337,42 @@ const MEMBER = {
   organizationId: "org-1",
   activeUnitId: 10,
   accessibleUnitIds: [10],
-  userId: "user-1",
-  role: "admin" as const,
+  selectedUnitScope: "unit" as const,
+};
+
+// The org-bound handle of the context is the canned database's own object (the
+// builders above), so the atomicity tests can tell it from the module-level `db`.
+const { db: cannedDb } = await import("@calibra-facil/db");
+Object.assign(mockOrgTx, cannedDb);
+
+// The command's context, as `withOrg` hands it.
+function makeCtx(userId = "user-1") {
+  return {
+    org: "org-1",
+    actor: { userId, ipAddress: null, userAgent: null },
+    o: mockOrgTx,
+    tx: mockOrgTx,
+    audit: vi.fn().mockResolvedValue(undefined),
+    emit: vi.fn().mockResolvedValue(undefined),
+    afterCommit: vi.fn(),
+  };
+}
+
+// The portal customer of the order's customer (id 101).
+const PORTAL_CUSTOMER = {
+  id: 101,
+  name: "Portal Cliente SA",
+  email: "portal@cliente.com",
+  authOrganizationId: "auth-org-portal-1",
+  labOrganizationId: "org-1",
+  taxId: null,
+  phone: null,
+  address: null,
+  groupId: null,
+  compliance: null,
+  internalNotes: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
 };
 
 const SAMPLE_ORDER = {
@@ -386,29 +417,47 @@ describe("REQ-SOEMAIL-071 (B): createServiceOrder enqueues nova_os outbox row", 
   });
 
   it("REQ-SOEMAIL-071/B: enqueueServiceOrderEmail is called once with eventKey='nova_os'", async () => {
-    const result = await createServiceOrder({
-      member: MEMBER,
-      actorUserId: "user-1",
-      values: {
-        assetId: 10,
-        customerId: 101,
-        assetSnapshot: {},
-        claimedDefect: "Sensor fault",
-        intakeType: "drop_off",
-        priority: "normal",
-        deliveryMethod: "pickup",
-        evaluationFeeCents: 0,
-      },
-      metadata: {},
+    const result = await createServiceOrder(makeCtx(), MEMBER, {
+      assetId: 10,
+      customerId: 101,
+      assetSnapshot: {},
+      claimedDefect: "Sensor fault",
+      intakeType: "drop_off",
+      priority: "normal",
+      deliveryMethod: "pickup",
+      evaluationFeeCents: 0,
     });
 
     await flushAsync();
 
-    expect(result.status).toBe("ok");
+    expect(result).toBeDefined();
     expect(mockEnqueueServiceOrderEmail).toHaveBeenCalledTimes(1);
     const call = vi.mocked(mockEnqueueServiceOrderEmail).mock.calls[0];
     expect(call).toBeDefined();
     expect(call[0].eventKey).toBe("nova_os");
+  });
+
+  it("stages the intake document and tag jobs with the transaction (ctx.emit)", async () => {
+    const ctx = makeCtx();
+    await createServiceOrder(ctx, MEMBER, {
+      assetId: 10,
+      customerId: 101,
+      assetSnapshot: {},
+      claimedDefect: "Sensor fault",
+      intakeType: "drop_off",
+      priority: "normal",
+      deliveryMethod: "pickup",
+      evaluationFeeCents: 0,
+    });
+
+    expect(ctx.emit.mock.calls.map(([message]) => message)).toEqual([
+      {
+        type: "SERVICE_ORDER_INTAKE_DOCUMENT",
+        serviceOrderId: 1,
+        userId: "user-1",
+      },
+      { type: "SERVICE_ORDER_TAG", serviceOrderId: 1, userId: "user-1" },
+    ]);
   });
 
   it("REQ-SOEMAIL-071/B: wrong eventKey → test RED (mutation guard)", async () => {
@@ -420,20 +469,15 @@ describe("REQ-SOEMAIL-071 (B): createServiceOrder enqueues nova_os outbox row", 
       [{ manufacturer: "X", model: "Y", serialNumber: "Z" }],
     );
 
-    await createServiceOrder({
-      member: MEMBER,
-      actorUserId: "user-1",
-      values: {
-        assetId: 10,
-        customerId: 101,
-        assetSnapshot: {},
-        claimedDefect: "Sensor fault",
-        intakeType: "drop_off",
-        priority: "normal",
-        deliveryMethod: "pickup",
-        evaluationFeeCents: 0,
-      },
-      metadata: {},
+    await createServiceOrder(makeCtx(), MEMBER, {
+      assetId: 10,
+      customerId: 101,
+      assetSnapshot: {},
+      claimedDefect: "Sensor fault",
+      intakeType: "drop_off",
+      priority: "normal",
+      deliveryMethod: "pickup",
+      evaluationFeeCents: 0,
     });
 
     await flushAsync();
@@ -451,20 +495,15 @@ describe("REQ-SOEMAIL-071 (B): createServiceOrder enqueues nova_os outbox row", 
       [{ manufacturer: "Mettler", model: "XS105", serialNumber: "SN-1" }],
     );
 
-    await createServiceOrder({
-      member: MEMBER,
-      actorUserId: "user-1",
-      values: {
-        assetId: 10,
-        customerId: 101,
-        assetSnapshot: {},
-        claimedDefect: "Sensor fault",
-        intakeType: "drop_off",
-        priority: "normal",
-        deliveryMethod: "pickup",
-        evaluationFeeCents: 0,
-      },
-      metadata: {},
+    await createServiceOrder(makeCtx(), MEMBER, {
+      assetId: 10,
+      customerId: 101,
+      assetSnapshot: {},
+      claimedDefect: "Sensor fault",
+      intakeType: "drop_off",
+      priority: "normal",
+      deliveryMethod: "pickup",
+      evaluationFeeCents: 0,
     });
 
     await flushAsync();
@@ -489,20 +528,15 @@ describe("REQ-SOEMAIL-071 (B): createServiceOrder enqueues nova_os outbox row", 
       [{ manufacturer: "X", model: "Y", serialNumber: "Z" }],
     );
 
-    await createServiceOrder({
-      member: MEMBER,
-      actorUserId: "user-1",
-      values: {
-        assetId: 10,
-        customerId: 101,
-        assetSnapshot: {},
-        claimedDefect: "Sensor fault",
-        intakeType: "drop_off",
-        priority: "normal",
-        deliveryMethod: "pickup",
-        evaluationFeeCents: 0,
-      },
-      metadata: {},
+    await createServiceOrder(makeCtx(), MEMBER, {
+      assetId: 10,
+      customerId: 101,
+      assetSnapshot: {},
+      claimedDefect: "Sensor fault",
+      intakeType: "drop_off",
+      priority: "normal",
+      deliveryMethod: "pickup",
+      evaluationFeeCents: 0,
     });
 
     await flushAsync();
@@ -565,18 +599,28 @@ describe("REQ-SOEMAIL-071 (C): sendServiceOrderQuote enqueues orcamento_sent:<qu
   });
 
   it("REQ-SOEMAIL-071/C: enqueueServiceOrderEmail is called once with eventKey='orcamento_sent:42'", async () => {
-    const result = await sendServiceOrderQuote({
-      serviceOrderId: 1,
-      quoteId: 42,
-      member: MEMBER,
-      actorUserId: "user-1",
-      values: { expiresAt: null },
+    const result = await sendServiceOrderQuote(makeCtx(), MEMBER, 1, 42, {
+      expiresAt: null,
     });
 
-    expect(result.status).toBe("ok");
+    expect(result).toBeDefined();
     expect(mockEnqueueServiceOrderEmail).toHaveBeenCalledTimes(1);
     const call = vi.mocked(mockEnqueueServiceOrderEmail).mock.calls[0];
     expect(call[0].eventKey).toBe("orcamento_sent:42");
+  });
+
+  it("stages the quote PDF job with the transaction (ctx.emit)", async () => {
+    const ctx = makeCtx();
+    await sendServiceOrderQuote(ctx, MEMBER, 1, 42, { expiresAt: null });
+
+    expect(ctx.emit.mock.calls.map(([message]) => message)).toEqual([
+      {
+        type: "SERVICE_ORDER_QUOTE",
+        serviceOrderId: 1,
+        quoteId: 42,
+        userId: "user-1",
+      },
+    ]);
   });
 
   it("REQ-SOEMAIL-071/C: payload has serviceOrderId, quoteId, organizationId", async () => {
@@ -596,13 +640,7 @@ describe("REQ-SOEMAIL-071 (C): sendServiceOrderQuote enqueues orcamento_sent:<qu
       [{ name: "Empresa", email: "e@e.com", taxId: null }],
     );
 
-    await sendServiceOrderQuote({
-      serviceOrderId: 1,
-      quoteId: 42,
-      member: MEMBER,
-      actorUserId: "user-1",
-      values: { expiresAt: null },
-    });
+    await sendServiceOrderQuote(makeCtx(), MEMBER, 1, 42, { expiresAt: null });
 
     const call = vi.mocked(mockEnqueueServiceOrderEmail).mock.calls[0];
     const params = call[0];
@@ -635,13 +673,7 @@ describe("REQ-SOEMAIL-071 (C): sendServiceOrderQuote enqueues orcamento_sent:<qu
       [{ name: "Empresa", email: "e@e.com", taxId: null }],
     );
 
-    await sendServiceOrderQuote({
-      serviceOrderId: 1,
-      quoteId: 42,
-      member: MEMBER,
-      actorUserId: "user-1",
-      values: { expiresAt: null },
-    });
+    await sendServiceOrderQuote(makeCtx(), MEMBER, 1, 42, { expiresAt: null });
 
     expect(mockDispatchNovoOrcamentoEmail).not.toHaveBeenCalled();
     expect(mockSendServiceOrderEmailOnce).not.toHaveBeenCalled();
@@ -664,19 +696,12 @@ describe("REQ-SOEMAIL-071/072 (D): approveServiceOrderQuoteManually enqueues ins
   });
 
   it("REQ-SOEMAIL-071/D-approve-manual: enqueueServiceOrderEmail called with eventKey='quote_approved:42'", async () => {
-    const result = await approveServiceOrderQuoteManually({
-      serviceOrderId: 1,
-      quoteId: 42,
-      actorUserId: "user-1",
-      values: {
-        approvedByName: "João Silva",
-        manualApprovalEvidenceType: "email",
-        manualApprovalEvidenceText: "Aprovado por email",
-        approvedAt: null,
-      },
+    await approveServiceOrderQuoteManually(makeCtx(), MEMBER, 1, 42, {
+      approvedByName: "João Silva",
+      manualApprovalEvidenceType: "email",
+      manualApprovalEvidenceText: "Aprovado por email",
+      approvedAt: null,
     });
-
-    expect(result.status).toBe("ok");
     expect(mockEnqueueServiceOrderEmail).toHaveBeenCalledTimes(1);
     const call = vi.mocked(mockEnqueueServiceOrderEmail).mock.calls[0];
     expect(call[0].eventKey).toBe("quote_approved:42");
@@ -685,16 +710,11 @@ describe("REQ-SOEMAIL-071/072 (D): approveServiceOrderQuoteManually enqueues ins
   it("REQ-SOEMAIL-072/D-approve-manual: enqueue uses the tx executor (atomicity)", async () => {
     dbQueue.push([SAMPLE_ORDER]);
 
-    await approveServiceOrderQuoteManually({
-      serviceOrderId: 1,
-      quoteId: 42,
-      actorUserId: "user-1",
-      values: {
-        approvedByName: "João",
-        manualApprovalEvidenceType: "email",
-        manualApprovalEvidenceText: null,
-        approvedAt: null,
-      },
+    await approveServiceOrderQuoteManually(makeCtx(), MEMBER, 1, 42, {
+      approvedByName: "João",
+      manualApprovalEvidenceType: "email",
+      manualApprovalEvidenceText: null,
+      approvedAt: null,
     });
 
     // capturedTxExecutors[0] is the second argument to enqueueServiceOrderEmail
@@ -706,16 +726,11 @@ describe("REQ-SOEMAIL-071/072 (D): approveServiceOrderQuoteManually enqueues ins
   it("REQ-SOEMAIL-071/D-approve-manual: payload contains serviceOrderId, quoteId, organizationId", async () => {
     dbQueue.push([SAMPLE_ORDER]);
 
-    await approveServiceOrderQuoteManually({
-      serviceOrderId: 1,
-      quoteId: 42,
-      actorUserId: "user-1",
-      values: {
-        approvedByName: "João",
-        manualApprovalEvidenceType: "email",
-        manualApprovalEvidenceText: null,
-        approvedAt: null,
-      },
+    await approveServiceOrderQuoteManually(makeCtx(), MEMBER, 1, 42, {
+      approvedByName: "João",
+      manualApprovalEvidenceType: "email",
+      manualApprovalEvidenceText: null,
+      approvedAt: null,
     });
 
     const call = vi.mocked(mockEnqueueServiceOrderEmail).mock.calls[0];
@@ -732,16 +747,11 @@ describe("REQ-SOEMAIL-071/072 (D): approveServiceOrderQuoteManually enqueues ins
   it("REQ-SOEMAIL-071/D-approve-manual: old dispatch helpers NOT called", async () => {
     dbQueue.push([SAMPLE_ORDER]);
 
-    await approveServiceOrderQuoteManually({
-      serviceOrderId: 1,
-      quoteId: 42,
-      actorUserId: "user-1",
-      values: {
-        approvedByName: "João",
-        manualApprovalEvidenceType: "email",
-        manualApprovalEvidenceText: null,
-        approvedAt: null,
-      },
+    await approveServiceOrderQuoteManually(makeCtx(), MEMBER, 1, 42, {
+      approvedByName: "João",
+      manualApprovalEvidenceType: "email",
+      manualApprovalEvidenceText: null,
+      approvedAt: null,
     });
 
     expect(mockDispatchApprovedOnce).not.toHaveBeenCalled();
@@ -764,14 +774,9 @@ describe("REQ-SOEMAIL-071/072 (D): rejectServiceOrderQuoteManually enqueues insi
   });
 
   it("REQ-SOEMAIL-071/D-reject-manual: enqueueServiceOrderEmail called with eventKey='quote_rejected:42'", async () => {
-    const result = await rejectServiceOrderQuoteManually({
-      serviceOrderId: 1,
-      quoteId: 42,
-      actorUserId: "user-1",
-      values: { rejectionReason: "Preço elevado" },
+    await rejectServiceOrderQuoteManually(makeCtx(), MEMBER, 1, 42, {
+      rejectionReason: "Preço elevado",
     });
-
-    expect(result.status).toBe("ok");
     expect(mockEnqueueServiceOrderEmail).toHaveBeenCalledTimes(1);
     const call = vi.mocked(mockEnqueueServiceOrderEmail).mock.calls[0];
     expect(call[0].eventKey).toBe("quote_rejected:42");
@@ -780,11 +785,8 @@ describe("REQ-SOEMAIL-071/072 (D): rejectServiceOrderQuoteManually enqueues insi
   it("REQ-SOEMAIL-072/D-reject-manual: enqueue uses the tx executor (atomicity)", async () => {
     dbQueue.push([SAMPLE_ORDER]);
 
-    await rejectServiceOrderQuoteManually({
-      serviceOrderId: 1,
-      quoteId: 42,
-      actorUserId: "user-1",
-      values: { rejectionReason: "Preço elevado" },
+    await rejectServiceOrderQuoteManually(makeCtx(), MEMBER, 1, 42, {
+      rejectionReason: "Preço elevado",
     });
 
     expect(capturedTxExecutors).toHaveLength(1);
@@ -794,11 +796,8 @@ describe("REQ-SOEMAIL-071/072 (D): rejectServiceOrderQuoteManually enqueues insi
   it("REQ-SOEMAIL-071/D-reject-manual: payload contains rejectionReason and organizationId", async () => {
     dbQueue.push([SAMPLE_ORDER]);
 
-    await rejectServiceOrderQuoteManually({
-      serviceOrderId: 1,
-      quoteId: 42,
-      actorUserId: "user-1",
-      values: { rejectionReason: "Preço elevado" },
+    await rejectServiceOrderQuoteManually(makeCtx(), MEMBER, 1, 42, {
+      rejectionReason: "Preço elevado",
     });
 
     const call = vi.mocked(mockEnqueueServiceOrderEmail).mock.calls[0];
@@ -813,11 +812,8 @@ describe("REQ-SOEMAIL-071/072 (D): rejectServiceOrderQuoteManually enqueues insi
   it("REQ-SOEMAIL-071/D-reject-manual: old dispatch helpers NOT called", async () => {
     dbQueue.push([SAMPLE_ORDER]);
 
-    await rejectServiceOrderQuoteManually({
-      serviceOrderId: 1,
-      quoteId: 42,
-      actorUserId: "user-1",
-      values: { rejectionReason: null },
+    await rejectServiceOrderQuoteManually(makeCtx(), MEMBER, 1, 42, {
+      rejectionReason: null,
     });
 
     expect(mockDispatchApprovedOnce).not.toHaveBeenCalled();
@@ -843,15 +839,12 @@ describe("REQ-SOEMAIL-071/072 (D): approveServiceOrderQuoteByPortalUser enqueues
   });
 
   it("REQ-SOEMAIL-071/D-approve-portal: enqueueServiceOrderEmail called with eventKey='quote_approved:42'", async () => {
-    const result = await approveServiceOrderQuoteByPortalUser({
-      serviceOrderId: 1,
-      quoteId: 42,
-      authOrganizationId: "auth-org-portal-1",
-      actorUserId: "portal-user-1",
-      metadata: {},
-    });
-
-    expect(result.status).toBe("ok");
+    await approveServiceOrderQuoteByPortalUser(
+      makeCtx("portal-user-1"),
+      PORTAL_CUSTOMER,
+      1,
+      42,
+    );
     expect(mockEnqueueServiceOrderEmail).toHaveBeenCalledTimes(1);
     const call = vi.mocked(mockEnqueueServiceOrderEmail).mock.calls[0];
     expect(call[0].eventKey).toBe("quote_approved:42");
@@ -860,13 +853,12 @@ describe("REQ-SOEMAIL-071/072 (D): approveServiceOrderQuoteByPortalUser enqueues
   it("REQ-SOEMAIL-072/D-approve-portal: enqueue uses the tx executor (atomicity)", async () => {
     dbQueue.push([SAMPLE_ORDER]);
 
-    await approveServiceOrderQuoteByPortalUser({
-      serviceOrderId: 1,
-      quoteId: 42,
-      authOrganizationId: "auth-org-portal-1",
-      actorUserId: "portal-user-1",
-      metadata: {},
-    });
+    await approveServiceOrderQuoteByPortalUser(
+      makeCtx("portal-user-1"),
+      PORTAL_CUSTOMER,
+      1,
+      42,
+    );
 
     expect(capturedTxExecutors).toHaveLength(1);
     expect(capturedTxExecutors[0]).toBe(mockOrgTx);
@@ -875,13 +867,12 @@ describe("REQ-SOEMAIL-071/072 (D): approveServiceOrderQuoteByPortalUser enqueues
   it("REQ-SOEMAIL-071/D-approve-portal: payload contains customerName from linkedCustomer (REQ-075 tenant scope)", async () => {
     dbQueue.push([SAMPLE_ORDER]);
 
-    await approveServiceOrderQuoteByPortalUser({
-      serviceOrderId: 1,
-      quoteId: 42,
-      authOrganizationId: "auth-org-portal-1",
-      actorUserId: "portal-user-1",
-      metadata: {},
-    });
+    await approveServiceOrderQuoteByPortalUser(
+      makeCtx("portal-user-1"),
+      PORTAL_CUSTOMER,
+      1,
+      42,
+    );
 
     const call = vi.mocked(mockEnqueueServiceOrderEmail).mock.calls[0];
     const payload = call[0].payload;
@@ -896,13 +887,12 @@ describe("REQ-SOEMAIL-071/072 (D): approveServiceOrderQuoteByPortalUser enqueues
   it("REQ-SOEMAIL-071/D-approve-portal: old dispatch helpers NOT called", async () => {
     dbQueue.push([SAMPLE_ORDER]);
 
-    await approveServiceOrderQuoteByPortalUser({
-      serviceOrderId: 1,
-      quoteId: 42,
-      authOrganizationId: "auth-org-portal-1",
-      actorUserId: "portal-user-1",
-      metadata: {},
-    });
+    await approveServiceOrderQuoteByPortalUser(
+      makeCtx("portal-user-1"),
+      PORTAL_CUSTOMER,
+      1,
+      42,
+    );
 
     expect(mockDispatchApprovedOnce).not.toHaveBeenCalled();
     expect(mockDispatchApprovedOncePortal).not.toHaveBeenCalled();
@@ -924,16 +914,13 @@ describe("REQ-SOEMAIL-071/072 (D): rejectServiceOrderQuoteByPortalUser enqueues 
   });
 
   it("REQ-SOEMAIL-071/D-reject-portal: enqueueServiceOrderEmail called with eventKey='quote_rejected:42'", async () => {
-    const result = await rejectServiceOrderQuoteByPortalUser({
-      serviceOrderId: 1,
-      quoteId: 42,
-      authOrganizationId: "auth-org-portal-1",
-      actorUserId: "portal-user-1",
-      values: { rejectionReason: "Fora do orçamento" },
-      metadata: {},
-    });
-
-    expect(result.status).toBe("ok");
+    await rejectServiceOrderQuoteByPortalUser(
+      makeCtx("portal-user-1"),
+      PORTAL_CUSTOMER,
+      1,
+      42,
+      { rejectionReason: "Fora do orçamento" },
+    );
     expect(mockEnqueueServiceOrderEmail).toHaveBeenCalledTimes(1);
     const call = vi.mocked(mockEnqueueServiceOrderEmail).mock.calls[0];
     expect(call[0].eventKey).toBe("quote_rejected:42");
@@ -942,14 +929,13 @@ describe("REQ-SOEMAIL-071/072 (D): rejectServiceOrderQuoteByPortalUser enqueues 
   it("REQ-SOEMAIL-072/D-reject-portal: enqueue uses the tx executor (atomicity)", async () => {
     dbQueue.push([SAMPLE_ORDER]);
 
-    await rejectServiceOrderQuoteByPortalUser({
-      serviceOrderId: 1,
-      quoteId: 42,
-      authOrganizationId: "auth-org-portal-1",
-      actorUserId: "portal-user-1",
-      values: { rejectionReason: null },
-      metadata: {},
-    });
+    await rejectServiceOrderQuoteByPortalUser(
+      makeCtx("portal-user-1"),
+      PORTAL_CUSTOMER,
+      1,
+      42,
+      { rejectionReason: null },
+    );
 
     expect(capturedTxExecutors).toHaveLength(1);
     expect(capturedTxExecutors[0]).toBe(mockOrgTx);
@@ -958,14 +944,13 @@ describe("REQ-SOEMAIL-071/072 (D): rejectServiceOrderQuoteByPortalUser enqueues 
   it("REQ-SOEMAIL-071/D-reject-portal: payload contains rejectionReason and customerName from linkedCustomer", async () => {
     dbQueue.push([SAMPLE_ORDER]);
 
-    await rejectServiceOrderQuoteByPortalUser({
-      serviceOrderId: 1,
-      quoteId: 42,
-      authOrganizationId: "auth-org-portal-1",
-      actorUserId: "portal-user-1",
-      values: { rejectionReason: "Fora do orçamento" },
-      metadata: {},
-    });
+    await rejectServiceOrderQuoteByPortalUser(
+      makeCtx("portal-user-1"),
+      PORTAL_CUSTOMER,
+      1,
+      42,
+      { rejectionReason: "Fora do orçamento" },
+    );
 
     const call = vi.mocked(mockEnqueueServiceOrderEmail).mock.calls[0];
     const payload = call[0].payload;
@@ -979,14 +964,13 @@ describe("REQ-SOEMAIL-071/072 (D): rejectServiceOrderQuoteByPortalUser enqueues 
   it("REQ-SOEMAIL-071/D-reject-portal: old dispatch helpers NOT called", async () => {
     dbQueue.push([SAMPLE_ORDER]);
 
-    await rejectServiceOrderQuoteByPortalUser({
-      serviceOrderId: 1,
-      quoteId: 42,
-      authOrganizationId: "auth-org-portal-1",
-      actorUserId: "portal-user-1",
-      values: { rejectionReason: null },
-      metadata: {},
-    });
+    await rejectServiceOrderQuoteByPortalUser(
+      makeCtx("portal-user-1"),
+      PORTAL_CUSTOMER,
+      1,
+      42,
+      { rejectionReason: null },
+    );
 
     expect(mockDispatchRejectedOnce).not.toHaveBeenCalled();
     expect(mockDispatchRejectedOncePortal).not.toHaveBeenCalled();
