@@ -4,14 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Command } from "cmdk";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
-  Add01Icon,
-  Alert02Icon,
   ArrowRight01Icon,
   File01Icon,
-  Home01Icon,
-  Notebook01Icon,
   Search01Icon,
-  ToolsIcon,
   Wrench01Icon,
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
@@ -19,6 +14,8 @@ import type { IconSvgElement } from "@hugeicons/react";
 import { cn } from "@calibra-facil/ui/utils";
 import { usePortalKeys } from "@/lib/portal-keys";
 import { getCalibrationStatus } from "@/lib/calibration-status";
+import { PORTAL_ICONS } from "@/components/portal-icons";
+import { portalCommandRoutes } from "@/lib/route-registry";
 import { Dialog, DialogContent } from "@calibra-facil/ui/dialog";
 import { StatusPill } from "@/components/status-pill";
 import { portalApi } from "@/lib/portal-api";
@@ -38,6 +35,11 @@ type CertificateHit = {
   assetName: string;
   assetTag: string;
 };
+
+// The "Ir para" pages and the actions are the registry's `command` entries.
+const commandRoutes = portalCommandRoutes();
+const pageRoutes = commandRoutes.filter((route) => route.kind === "page");
+const actionRoutes = commandRoutes.filter((route) => route.kind === "action");
 
 /** The palette is best-effort: a failed or malformed search is an empty list. */
 async function searchAssets(query: string): Promise<Array<AssetHit>> {
@@ -136,51 +138,24 @@ export function CommandMenu({
             {!isSearching ? (
               <>
                 <Group heading="Ir para">
-                  <Item
-                    icon={Home01Icon}
-                    label="Painel"
-                    onSelect={() => run(() => navigate({ to: "/" }))}
-                  />
-                  <Item
-                    icon={Wrench01Icon}
-                    label="Equipamentos"
-                    onSelect={() => run(() => navigate({ to: "/assets" }))}
-                  />
-                  <Item
-                    icon={File01Icon}
-                    label="Certificados"
-                    onSelect={() =>
-                      run(() => navigate({ to: "/certificates" }))
-                    }
-                  />
-                  <Item
-                    icon={Notebook01Icon}
-                    label="Solicitações"
-                    onSelect={() => run(() => navigate({ to: "/requests" }))}
-                  />
-                  <Item
-                    icon={ToolsIcon}
-                    label="Manutenção"
-                    onSelect={() =>
-                      run(() => navigate({ to: "/service-orders" }))
-                    }
-                  />
-                  <Item
-                    icon={Alert02Icon}
-                    label="Fora de tolerância"
-                    onSelect={() =>
-                      run(() => navigate({ to: "/out-of-tolerance" }))
-                    }
-                  />
+                  {pageRoutes.map((route) => (
+                    <Item
+                      key={route.to}
+                      icon={PORTAL_ICONS[route.icon]}
+                      label={route.label}
+                      onSelect={() => run(() => navigate({ to: route.to }))}
+                    />
+                  ))}
                 </Group>
                 <Group heading="Ações">
-                  <Item
-                    icon={Add01Icon}
-                    label="Nova solicitação de calibração"
-                    onSelect={() =>
-                      run(() => navigate({ to: "/requests/new" }))
-                    }
-                  />
+                  {actionRoutes.map((route) => (
+                    <Item
+                      key={route.to}
+                      icon={PORTAL_ICONS[route.icon]}
+                      label={route.label}
+                      onSelect={() => run(() => navigate({ to: route.to }))}
+                    />
+                  ))}
                 </Group>
               </>
             ) : null}

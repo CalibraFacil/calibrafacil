@@ -20,40 +20,12 @@ import { NotificationBell } from "@/features/notifications/notification-bell";
 import { useMountEffect } from "@calibra-facil/ui/use-mount-effect";
 import { shortcutLabel } from "@/lib/platform";
 import { usePortalKeys } from "@/lib/portal-keys";
+import { routeCrumbs } from "@/lib/route-registry";
 
 // Breadcrumbs are built from the URL path (not route matches) so a crumb's
 // parent always appears even when a section has no layout route.tsx — e.g.
-// /certificates/$id still shows "Certificados" as its parent.
-
-// Label for a known static path segment.
-const SEGMENT_LABELS: Record<string, string> = {
-  assets: "Equipamentos",
-  certificates: "Certificados",
-  requests: "Solicitações",
-  "service-orders": "Manutenção",
-  settings: "Configurações",
-  profile: "Perfil",
-  appearance: "Aparência",
-  notifications: "Notificações",
-  "out-of-tolerance": "Fora de tolerância",
-  new: "Nova solicitação",
-};
-
-// Label for a dynamic detail segment (an id), keyed by its parent collection.
-const DETAIL_LABELS: Record<string, string> = {
-  assets: "Equipamento",
-  certificates: "Certificado",
-  requests: "Solicitação",
-  "service-orders": "Ordem de serviço",
-};
-
-function formatRouteSegment(segment: string) {
-  return segment
-    .split("-")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
+// /certificates/$id still shows "Certificados" as its parent. Each crumb is
+// titled by the route registry (`routeCrumbs`).
 
 export function PortalHeader() {
   const { pathname } = useLocation();
@@ -82,33 +54,16 @@ export function PortalHeader() {
     return () => document.removeEventListener("keydown", onKeyDown);
   });
 
-  const breadcrumbs = useMemo(() => {
-    const segments = pathname.replace(/\/+$/, "").split("/").filter(Boolean);
-    const crumbs: Array<{ label: string; path: string }> = [
-      { label: "Painel", path: "/" },
-    ];
-
-    let acc = "";
-    segments.forEach((segment, index) => {
-      acc += `/${segment}`;
-      const parent = index > 0 ? segments[index - 1] : "";
-
-      let label: string;
-      if (SEGMENT_LABELS[segment]) {
-        label = SEGMENT_LABELS[segment];
-      } else if (parent === "assets" && assetName) {
-        label = assetName;
-      } else if (parent && DETAIL_LABELS[parent]) {
-        label = DETAIL_LABELS[parent];
-      } else {
-        label = formatRouteSegment(segment);
-      }
-
-      crumbs.push({ label, path: acc });
-    });
-
-    return crumbs;
-  }, [pathname, assetName]);
+  const breadcrumbs = useMemo(
+    () =>
+      routeCrumbs(pathname).map((crumb) =>
+        // The trailing crumb of an asset page is the instrument's name.
+        assetName && crumb.path === `/assets/${assetParam}`
+          ? { ...crumb, title: assetName }
+          : crumb,
+      ),
+    [pathname, assetName, assetParam],
+  );
 
   return (
     <header className="bg-background/80 sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-2 border-b px-4 backdrop-blur-sm">
@@ -124,11 +79,11 @@ export function PortalHeader() {
                   <BreadcrumbItem>
                     {isLast ? (
                       <BreadcrumbPage className="max-w-[18rem] truncate">
-                        {crumb.label}
+                        {crumb.title}
                       </BreadcrumbPage>
                     ) : (
                       <BreadcrumbLink render={<Link to={crumb.path} />}>
-                        {crumb.label}
+                        {crumb.title}
                       </BreadcrumbLink>
                     )}
                   </BreadcrumbItem>
