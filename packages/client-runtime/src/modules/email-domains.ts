@@ -1,39 +1,18 @@
-import type { EmailDomainResponse, EmailDomainsApi } from "../types";
-import { readJsonResponse, readMutationResponse } from "../transport/response";
+import { emailDomainEndpoints } from "@calibra-facil/contracts";
+import type { ResponseValidationOptions } from "@calibra-facil/contracts";
 
-export function createEmailDomainsApi(rawCloudClient: any): EmailDomainsApi {
-  return {
-    async get() {
-      return readJsonResponse<EmailDomainResponse>(
-        await rawCloudClient.api["email-domains"].$get(),
-        "Falha ao carregar domínio de e-mail",
-      );
-    },
-    async create(input) {
-      return readJsonResponse<EmailDomainResponse>(
-        await rawCloudClient.api["email-domains"].$post({
-          json: input,
-        }),
-        "Falha ao salvar domínio de e-mail",
-      );
-    },
-    async verify() {
-      return readJsonResponse<EmailDomainResponse>(
-        await rawCloudClient.api["email-domains"].verify.$post(),
-        "Falha ao verificar domínio de e-mail",
-      );
-    },
-    async activate() {
-      return readJsonResponse<EmailDomainResponse>(
-        await rawCloudClient.api["email-domains"].activate.$post(),
-        "Falha ao ativar domínio de e-mail",
-      );
-    },
-    async delete() {
-      await readMutationResponse<unknown>(
-        await rawCloudClient.api["email-domains"].$delete(),
-        "Falha ao remover domínio de e-mail",
-      );
-    },
-  };
+import {
+  endpointClient,
+  type EndpointClient,
+  type EndpointTransport,
+} from "../transport/endpoint-client";
+
+/** The e-mail domains client is its endpoint group (`emailDomainEndpoints` in `@calibra-facil/contracts`). */
+export type EmailDomainsApi = EndpointClient<typeof emailDomainEndpoints>;
+
+export function createEmailDomainsApi(
+  transport: EndpointTransport,
+  options: ResponseValidationOptions,
+): EmailDomainsApi {
+  return endpointClient(emailDomainEndpoints, transport, options);
 }

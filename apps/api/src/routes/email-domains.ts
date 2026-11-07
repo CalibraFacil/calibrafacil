@@ -1,6 +1,8 @@
 /** Managed laboratory sending domains, with read support for legacy BYOK rows. */
 
 import { createRouter } from "../server/router";
+import { emailDomainEndpoints } from "@calibra-facil/contracts";
+import { mount } from "../lib/endpoint-mount";
 import { orgDb } from "../lib/org-db";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
@@ -122,8 +124,16 @@ function resolveRowApiKey(record: {
   }
 }
 
-export const emailDomainsRouter = createRouter<{ Variables: AuthVariables }>()
-  .get("/", ...requireLabProtected, requireOrgType("LAB"), async (c) => {
+const PREFIX = "/api/email-domains";
+
+export const emailDomainsRouter = createRouter<{ Variables: AuthVariables }>();
+
+mount(
+  emailDomainsRouter,
+  PREFIX,
+  emailDomainEndpoints.get,
+  [...requireLabProtected, requireOrgType("LAB")],
+  async (c) => {
     const member = c.get("member");
     const record = await orgDb(member.organizationId).transaction((o) =>
       getOrganizationEmailDomain(member.organizationId, o),
@@ -132,7 +142,7 @@ export const emailDomainsRouter = createRouter<{ Variables: AuthVariables }>()
       member.organizationId,
     );
 
-    return c.json({
+    return {
       domain: serializeEmailDomain(record ?? null),
       statusSummary: buildEmailDomainStatusSummary(record ?? null),
       // Replies are the point of the feature: customers answer OS/quote mail
@@ -141,221 +151,236 @@ export const emailDomainsRouter = createRouter<{ Variables: AuthVariables }>()
       // replies would go to the send-only subdomain and be lost — the UI
       // warns on null.
       replyToEmail,
-    });
-  })
-  .post(
-    "/",
+    };
+  },
+);
+
+mount(
+  emailDomainsRouter,
+  PREFIX,
+  emailDomainEndpoints.create,
+  [
     ...withLabPermission({ organization: ["update"] }),
     requireRole(["admin", "owner"]),
-    zValidator("json", CreateEmailDomainSchema),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-      const input = c.req.valid("json");
+  ],
+  async (c, { body: input }) => {
+    const member = c.get("member");
+    const session = c.get("session");
 
-      const fromLocalPart = sanitizeFromLocalPart(input.fromLocalPart);
-      if (!fromLocalPart) {
-        throw invalid(
-          "invalid_request",
-          "Parte local do remetente inválida (ex.: os, contato)",
-        );
-      }
-
-      const hostname = sanitizeEmailHostname(input.hostname);
-      if (!hostname) {
-        throw invalid(
-          "invalid_request",
-          "Domínio inválido para envio de e-mail",
-        );
-      }
-
-      const result = await saveManagedEmailDomain(
-        {
-          organizationId: member.organizationId,
-          userId: session.user.id,
-          memberId: member.id,
-        },
-        { hostname, fromLocalPart },
+    const fromLocalPart = sanitizeFromLocalPart(input.fromLocalPart);
+    if (!fromLocalPart) {
+      throw invalid(
+        "invalid_request",
+        "Parte local do remetente inválida (ex.: os, contato)",
       );
-      return c.json(
-        {
-          domain: serializeEmailDomain(result.domain),
-          statusSummary: buildEmailDomainStatusSummary(result.domain),
-        },
-        result.created ? 201 : 200,
-      );
-    },
-  )
-  .post(
-    "/verify",
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["admin", "owner"]),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
+    }
 
-      const record = await orgDb(member.organizationId).transaction((o) =>
-        getOrganizationEmailDomain(member.organizationId, o),
-      );
-      if (!record) {
-        throw noEmailDomain();
-      }
+    const hostname = sanitizeEmailHostname(input.hostname);
+    if (!hostname) {
+      throw invalid("invalid_request", "Domínio inválido para envio de e-mail");
+    }
 
-      const credential = resolveRowApiKey(record);
-      if (!credential.ok) {
-        throw new DomainError({
-          code: "email_domain_server_config",
-          status: 500,
-          message: credential.message,
-        });
-      }
-      const apiKey = credential.apiKey;
-
-      // Nudge Resend to re-check DNS, then read back the verdict. The trigger
-      // failing on an unverifiable state is fine; the GET is what we trust.
-      await verifyResendDomain(apiKey, record.resendDomainId);
-      const details = await getResendDomain(apiKey, record.resendDomainId);
-
-      if (!details.ok) {
-        if (details.failureClass === "invalid_key") {
-          await withOrg(member.organizationId, requestActor(c), (ctx) =>
-            ctx.o
-              .update(organizationEmailDomain)
-              .set({
-                keyStatus: "invalid",
-                keyLastError: `${details.errorName}: ${details.message}`,
-                updatedAt: new Date(),
-              })
-              .where(eq(organizationEmailDomain.id, record.id)),
-          );
-        }
-        throw resendFailure(details.failureClass);
-      }
-
-      const isVerified = details.data.status === "verified";
-      const becameVerified = isVerified && !record.verifiedAt;
-      const now = new Date();
-      // The verdict and its audit entry commit together; the provider calls
-      // above ran outside any transaction.
-      const updated = await withOrg(
-        member.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const [row] = await ctx.o
-            .update(organizationEmailDomain)
-            .set({
-              status: details.data.status,
-              dnsRecords: details.data.records,
-              verifiedAt: isVerified ? (record.verifiedAt ?? now) : null,
-              lastVerifiedAt: isVerified ? now : record.lastVerifiedAt,
-              // A successful round-trip proves the key is healthy again.
-              keyStatus: "ok",
-              keyLastError: null,
-              updatedAt: now,
-            })
-            .where(eq(organizationEmailDomain.id, record.id))
-            .returning();
-
-          if (row && becameVerified) {
-            await writeOrganizationAuditEvent(
-              {
-                organizationId: member.organizationId,
-                actorUserId: session.user.id,
-                actorMemberId: member.id,
-                action: "email_sender_domain.verified",
-                entityType: "email_sender_domain",
-                entityId: row.id,
-                details: { hostname: row.hostname },
-              },
-              ctx.o,
-            );
-          }
-          return row;
-        },
-      );
-
-      return c.json({
-        domain: serializeEmailDomain(updated ?? null),
-        statusSummary: buildEmailDomainStatusSummary(updated ?? null),
-      });
-    },
-  )
-  .post(
-    "/activate",
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["admin", "owner"]),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-
-      const record = await orgDb(member.organizationId).transaction((o) =>
-        getOrganizationEmailDomain(member.organizationId, o),
-      );
-      if (!record) {
-        throw noEmailDomain();
-      }
-
-      if (!record.verifiedAt) {
-        throw invalid(
-          "email_domain_not_verified",
-          "Publique os registros DNS e verifique o domínio antes de ativá-lo",
-        );
-      }
-
-      const updated = await withOrg(
-        member.organizationId,
-        requestActor(c),
-        async (ctx) => {
-          const [row] = await ctx.o
-            .update(organizationEmailDomain)
-            .set({
-              isActive: true,
-              activatedAt: record.activatedAt ?? new Date(),
-              updatedAt: new Date(),
-            })
-            .where(eq(organizationEmailDomain.id, record.id))
-            .returning();
-
-          if (row) {
-            await writeOrganizationAuditEvent(
-              {
-                organizationId: member.organizationId,
-                actorUserId: session.user.id,
-                actorMemberId: member.id,
-                action: "email_sender_domain.activated",
-                entityType: "email_sender_domain",
-                entityId: row.id,
-                details: {
-                  hostname: row.hostname,
-                  fromAddress: row.fromAddress,
-                },
-              },
-              ctx.o,
-            );
-          }
-          return row;
-        },
-      );
-
-      return c.json({
-        domain: serializeEmailDomain(updated ?? null),
-        statusSummary: buildEmailDomainStatusSummary(updated ?? null),
-      });
-    },
-  )
-  .delete(
-    "/",
-    ...withLabPermission({ organization: ["update"] }),
-    requireRole(["admin", "owner"]),
-    async (c) => {
-      const member = c.get("member");
-      const session = c.get("session");
-
-      await removeEmailDomain({
+    const result = await saveManagedEmailDomain(
+      {
         organizationId: member.organizationId,
         userId: session.user.id,
         memberId: member.id,
+      },
+      { hostname, fromLocalPart },
+    );
+    const body = {
+      domain: serializeEmailDomain(result.domain),
+      statusSummary: buildEmailDomainStatusSummary(result.domain),
+    };
+    // 201 when the domain is new: a status the definition (200) does not describe.
+    return result.created ? c.json(body, 201) : body;
+  },
+);
+
+mount(
+  emailDomainsRouter,
+  PREFIX,
+  emailDomainEndpoints.verify,
+  [
+    ...withLabPermission({ organization: ["update"] }),
+    requireRole(["admin", "owner"]),
+  ],
+  async (c) => {
+    const member = c.get("member");
+    const session = c.get("session");
+
+    const record = await orgDb(member.organizationId).transaction((o) =>
+      getOrganizationEmailDomain(member.organizationId, o),
+    );
+    if (!record) {
+      throw noEmailDomain();
+    }
+
+    const credential = resolveRowApiKey(record);
+    if (!credential.ok) {
+      throw new DomainError({
+        code: "email_domain_server_config",
+        status: 500,
+        message: credential.message,
       });
-      return c.json({ success: true });
-    },
-  );
+    }
+    const apiKey = credential.apiKey;
+
+    // Nudge Resend to re-check DNS, then read back the verdict. The trigger
+    // failing on an unverifiable state is fine; the GET is what we trust.
+    await verifyResendDomain(apiKey, record.resendDomainId);
+    const details = await getResendDomain(apiKey, record.resendDomainId);
+
+    if (!details.ok) {
+      if (details.failureClass === "invalid_key") {
+        await withOrg(member.organizationId, requestActor(c), (ctx) =>
+          ctx.o
+            .update(organizationEmailDomain)
+            .set({
+              keyStatus: "invalid",
+              keyLastError: `${details.errorName}: ${details.message}`,
+              updatedAt: new Date(),
+            })
+            .where(eq(organizationEmailDomain.id, record.id)),
+        );
+      }
+      throw resendFailure(details.failureClass);
+    }
+
+    const isVerified = details.data.status === "verified";
+    const becameVerified = isVerified && !record.verifiedAt;
+    const now = new Date();
+    // The verdict and its audit entry commit together; the provider calls
+    // above ran outside any transaction.
+    const updated = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const [row] = await ctx.o
+          .update(organizationEmailDomain)
+          .set({
+            status: details.data.status,
+            dnsRecords: details.data.records,
+            verifiedAt: isVerified ? (record.verifiedAt ?? now) : null,
+            lastVerifiedAt: isVerified ? now : record.lastVerifiedAt,
+            // A successful round-trip proves the key is healthy again.
+            keyStatus: "ok",
+            keyLastError: null,
+            updatedAt: now,
+          })
+          .where(eq(organizationEmailDomain.id, record.id))
+          .returning();
+
+        if (row && becameVerified) {
+          await writeOrganizationAuditEvent(
+            {
+              organizationId: member.organizationId,
+              actorUserId: session.user.id,
+              actorMemberId: member.id,
+              action: "email_sender_domain.verified",
+              entityType: "email_sender_domain",
+              entityId: row.id,
+              details: { hostname: row.hostname },
+            },
+            ctx.o,
+          );
+        }
+        return row;
+      },
+    );
+
+    return {
+      domain: serializeEmailDomain(updated ?? null),
+      statusSummary: buildEmailDomainStatusSummary(updated ?? null),
+    };
+  },
+);
+
+mount(
+  emailDomainsRouter,
+  PREFIX,
+  emailDomainEndpoints.activate,
+  [
+    ...withLabPermission({ organization: ["update"] }),
+    requireRole(["admin", "owner"]),
+  ],
+  async (c) => {
+    const member = c.get("member");
+    const session = c.get("session");
+
+    const record = await orgDb(member.organizationId).transaction((o) =>
+      getOrganizationEmailDomain(member.organizationId, o),
+    );
+    if (!record) {
+      throw noEmailDomain();
+    }
+
+    if (!record.verifiedAt) {
+      throw invalid(
+        "email_domain_not_verified",
+        "Publique os registros DNS e verifique o domínio antes de ativá-lo",
+      );
+    }
+
+    const updated = await withOrg(
+      member.organizationId,
+      requestActor(c),
+      async (ctx) => {
+        const [row] = await ctx.o
+          .update(organizationEmailDomain)
+          .set({
+            isActive: true,
+            activatedAt: record.activatedAt ?? new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(organizationEmailDomain.id, record.id))
+          .returning();
+
+        if (row) {
+          await writeOrganizationAuditEvent(
+            {
+              organizationId: member.organizationId,
+              actorUserId: session.user.id,
+              actorMemberId: member.id,
+              action: "email_sender_domain.activated",
+              entityType: "email_sender_domain",
+              entityId: row.id,
+              details: {
+                hostname: row.hostname,
+                fromAddress: row.fromAddress,
+              },
+            },
+            ctx.o,
+          );
+        }
+        return row;
+      },
+    );
+
+    return {
+      domain: serializeEmailDomain(updated ?? null),
+      statusSummary: buildEmailDomainStatusSummary(updated ?? null),
+    };
+  },
+);
+
+mount(
+  emailDomainsRouter,
+  PREFIX,
+  emailDomainEndpoints.delete,
+  [
+    ...withLabPermission({ organization: ["update"] }),
+    requireRole(["admin", "owner"]),
+  ],
+  async (c) => {
+    const member = c.get("member");
+    const session = c.get("session");
+
+    await removeEmailDomain({
+      organizationId: member.organizationId,
+      userId: session.user.id,
+      memberId: member.id,
+    });
+    return { success: true as const };
+  },
+);

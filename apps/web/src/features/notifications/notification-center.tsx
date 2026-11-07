@@ -91,7 +91,8 @@ function ScopedNotificationCenter({
       queryKey: ['notifications', organizationKey],
     })
   const markRead = useMutation({
-    mutationFn: (ids: number[]) => calibraApi.notifications.markRead(ids),
+    mutationFn: (ids: number[]) =>
+      calibraApi.notifications.markRead({ body: { notificationIds: ids } }),
     onSuccess: async () => {
       setPage(1)
       await refresh()

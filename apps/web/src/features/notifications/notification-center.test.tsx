@@ -69,14 +69,14 @@ it('loads on open, filters on the server and pages through history', async () =>
   await open()
   fireEvent.click(screen.getByRole('button', { name: 'Próxima' }))
   await waitFor(() =>
-    expect(mocks.listRecent).toHaveBeenCalledWith({ page: 2, limit: 15 }),
+    expect(mocks.listRecent).toHaveBeenCalledWith({
+      query: { page: 2, limit: 15 },
+    }),
   )
   fireEvent.click(screen.getByRole('tab', { name: /Não lidas/ }))
   await waitFor(() =>
     expect(mocks.listRecent).toHaveBeenCalledWith({
-      page: 1,
-      limit: 15,
-      status: 'UNREAD',
+      query: { page: 1, limit: 15, status: 'UNREAD' },
     }),
   )
 })
@@ -87,7 +87,11 @@ it('marks a notification read and refreshes the organization inbox', async () =>
   fireEvent.click(
     screen.getByRole('button', { name: /Certificado disponível/ }),
   )
-  await waitFor(() => expect(mocks.markRead).toHaveBeenCalledWith([1]))
+  await waitFor(() =>
+    expect(mocks.markRead).toHaveBeenCalledWith({
+      body: { notificationIds: [1] },
+    }),
+  )
   await waitFor(() =>
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: ['notifications', 'org-a'],

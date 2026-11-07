@@ -1,9 +1,7 @@
 import type {
   CalibraApi,
-  CreateApiKeyInput,
   SoftDeleteOrganizationRequest,
   UpdateOrganizationProfileRequest,
-  UpdateNotificationPreferencesInput,
 } from "./types";
 import {
   createRawCloudClient,
@@ -107,18 +105,6 @@ export function createCloudApiClient(
           };
         };
       };
-      "api-keys": {
-        $get(): Promise<Response>;
-        $post(input: { json: CreateApiKeyInput }): Promise<Response>;
-        ":id": {
-          rotate: {
-            $post(input: { param: { id: string } }): Promise<Response>;
-          };
-          revoke: {
-            $post(input: { param: { id: string } }): Promise<Response>;
-          };
-        };
-      };
       organization: {
         "soft-delete": {
           $post(input: {
@@ -177,31 +163,6 @@ export function createCloudApiClient(
           };
         };
       };
-      notifications: {
-        $get(input: {
-          query: {
-            page: string;
-            limit: string;
-          };
-        }): Promise<Response>;
-        "unread-count": {
-          $get(): Promise<Response>;
-        };
-        "mark-read": {
-          $post(input: {
-            json: { notificationIds: number[] };
-          }): Promise<Response>;
-        };
-        "mark-all-read": {
-          $post(): Promise<Response>;
-        };
-        preferences: {
-          $get(): Promise<Response>;
-          $put(input: {
-            json: UpdateNotificationPreferencesInput;
-          }): Promise<Response>;
-        };
-      };
       // Only `jobs.listStandards` (the jobs domain, not converted yet) reads
       // the standards list through the raw client; `standards` itself is an
       // endpoint group. Delete this when `listStandards` is converted.
@@ -233,7 +194,7 @@ export function createCloudApiClient(
     sessions: createSessionsApi(rawCloudClient),
     finance: createFinanceApi(endpointTransport, options),
     sso: createSsoApi(endpointTransport, options),
-    apiKeys: createApiKeysApi(rawCloudClient),
+    apiKeys: createApiKeysApi(endpointTransport, options),
     organizationLifecycle: createOrganizationLifecycleApi(rawCloudClient),
     organizationProfile: createOrganizationProfileApi(rawCloudClient),
     entityLabels: createEntityLabelsApi(endpointTransport, options),
@@ -242,8 +203,8 @@ export function createCloudApiClient(
       options,
     ),
     portalDomains: createPortalDomainsApi(endpointTransport, options),
-    emailDomains: createEmailDomainsApi(rawCloudClient),
-    notifications: createNotificationsApi(rawCloudClient),
+    emailDomains: createEmailDomainsApi(endpointTransport, options),
+    notifications: createNotificationsApi(endpointTransport, options),
     signatures: createSignaturesApi(endpointTransport, options),
     profileMedia: createProfileMediaApi(options),
     organizationMedia: createOrganizationMediaApi(options),

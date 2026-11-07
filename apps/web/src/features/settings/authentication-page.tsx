@@ -117,7 +117,7 @@ function ApiKeysCard() {
   const apiKeysQuery = useApiKeysData()
 
   const createMutation = useMutation({
-    mutationFn: () => calibraApi.apiKeys.create({ name }),
+    mutationFn: () => calibraApi.apiKeys.create({ body: { name } }),
     onSuccess: async (data) => {
       setLatestSecret(data.secret)
       setName('')
@@ -132,7 +132,8 @@ function ApiKeysCard() {
   })
 
   const rotateMutation = useMutation({
-    mutationFn: (id: string) => calibraApi.apiKeys.rotate(id),
+    mutationFn: (id: string) =>
+      calibraApi.apiKeys.rotate({ params: { id: id } }),
     onSuccess: async (data) => {
       setLatestSecret(data.secret)
       toast.success('API key rotacionada')
@@ -146,7 +147,8 @@ function ApiKeysCard() {
   })
 
   const revokeMutation = useMutation({
-    mutationFn: (id: string) => calibraApi.apiKeys.revoke(id),
+    mutationFn: (id: string) =>
+      calibraApi.apiKeys.revoke({ params: { id: id } }),
     onSuccess: async () => {
       toast.success('API key revogada')
       await queryClient.invalidateQueries({ queryKey: ['api-keys'] })

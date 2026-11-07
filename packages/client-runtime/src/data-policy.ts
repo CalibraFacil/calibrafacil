@@ -93,12 +93,7 @@ export const calibraApiPolicyRegistry = {
   },
   finance: endpointPolicies(ENDPOINT_GROUPS.finance),
   sso: endpointPolicies(ENDPOINT_GROUPS.sso),
-  apiKeys: {
-    list: "cloud-only",
-    create: "cloud-only",
-    rotate: "cloud-only",
-    revoke: "cloud-only",
-  },
+  apiKeys: endpointPolicies(ENDPOINT_GROUPS.apiKeys),
   organizationLifecycle: {
     softDelete: "cloud-only",
   },
@@ -108,21 +103,8 @@ export const calibraApiPolicyRegistry = {
   entityLabels: endpointPolicies(ENDPOINT_GROUPS.entityLabels),
   certificateNumbering: endpointPolicies(ENDPOINT_GROUPS.certificateNumbering),
   portalDomains: endpointPolicies(ENDPOINT_GROUPS.portalDomains),
-  emailDomains: {
-    get: "cloud-only",
-    create: "cloud-only",
-    verify: "cloud-only",
-    activate: "cloud-only",
-    delete: "cloud-only",
-  },
-  notifications: {
-    getUnreadCount: "cloud-only",
-    listRecent: "cloud-only",
-    markRead: "cloud-only",
-    markAllRead: "cloud-only",
-    getPreferences: "cloud-only",
-    updatePreferences: "cloud-only",
-  },
+  emailDomains: endpointPolicies(ENDPOINT_GROUPS.emailDomains),
+  notifications: endpointPolicies(ENDPOINT_GROUPS.notifications),
   signatures: endpointPolicies(ENDPOINT_GROUPS.signatures),
   profileMedia: {
     uploadAvatar: "cloud-only",

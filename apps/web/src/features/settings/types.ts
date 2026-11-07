@@ -1,10 +1,7 @@
 import type {
   AccreditedScopeResponse,
-  ApiKeysListResponse,
   CertificateNumberingProfileResponse,
-  EmailDomainResponse,
   EnvironmentalLimitsResponse,
-  NotificationPreferencesResponse,
 } from '@calibra-facil/client-runtime'
 import type {
   FinancialErpConnectionConfig,
@@ -20,19 +17,12 @@ import type {
 } from '@calibra-facil/shared'
 import type { UnitAssignmentRole } from '@calibra-facil/contracts'
 
-export type ApiKeysData = ApiKeysListResponse
-
 export type SettingsCertificateNumberingData =
   CertificateNumberingProfileResponse
-
-export type SettingsEmailDomainData = EmailDomainResponse
 
 export type SettingsEnvironmentalLimitsData = EnvironmentalLimitsResponse
 
 export type SettingsAccreditedScopeData = AccreditedScopeResponse
-
-export type SettingsNotificationPreferencesData =
-  NotificationPreferencesResponse
 
 export type OrganizationMember = {
   id: string

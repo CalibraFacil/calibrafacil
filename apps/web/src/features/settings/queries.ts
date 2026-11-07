@@ -4,7 +4,6 @@ import { authClient } from '@calibra-facil/auth/client'
 import { prewarmRouteQueries } from '@/lib/route-data'
 import { calibraApi } from '@/utils/api'
 import type {
-  ApiKeysData,
   SettingsAccreditedScopeData,
   OrganizationInvitation,
   OrganizationMember,
@@ -12,8 +11,6 @@ import type {
   SettingsIntegrationsData,
   ContaAzulAppSummary,
   ContaAzulCatalogResponse,
-  SettingsNotificationPreferencesData,
-  SettingsEmailDomainData,
   IntegrationRunItemsResponse,
   SyncPreviewResponse,
   SyncTarget,
@@ -50,7 +47,7 @@ function trustedApiValue<T>(value: unknown): T {
 export function apiKeysQueryOptions() {
   return queryOptions({
     queryKey: ['api-keys'],
-    queryFn: () => trustedApiResult<ApiKeysData>(calibraApi.apiKeys.list()),
+    queryFn: () => calibraApi.apiKeys.list(),
   })
 }
 
@@ -92,8 +89,7 @@ export function portalDomainQueryOptions() {
 function emailDomainQueryOptions() {
   return queryOptions({
     queryKey: ['email-domain'],
-    queryFn: () =>
-      trustedApiResult<SettingsEmailDomainData>(calibraApi.emailDomains.get()),
+    queryFn: () => calibraApi.emailDomains.get(),
   })
 }
 
@@ -128,10 +124,7 @@ export function settingsAssetTypesQueryOptions() {
 export function notificationPreferencesQueryOptions() {
   return queryOptions({
     queryKey: ['notification-preferences'],
-    queryFn: () =>
-      trustedApiResult<SettingsNotificationPreferencesData>(
-        calibraApi.notifications.getPreferences(),
-      ),
+    queryFn: () => calibraApi.notifications.getPreferences(),
   })
 }
 

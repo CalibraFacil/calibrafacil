@@ -29,6 +29,9 @@ import type { AccreditedScopeApi } from "./modules/accredited-scope";
 import type { PublicInvitationsApi } from "./modules/public-invitations";
 import type { PublicSignupApi } from "./modules/public-signup";
 import type { AssetTypesApi } from "./modules/asset-types";
+import type { ApiKeysApi } from "./modules/api-keys";
+import type { EmailDomainsApi } from "./modules/email-domains";
+import type { NotificationsApi } from "./modules/notifications";
 import type { AssetsApi } from "./modules/assets";
 import type { CalibrationRequestsApi } from "./modules/calibration-requests";
 import type { CapasApi } from "./modules/capa";
@@ -96,6 +99,13 @@ import type {
   ServiceOrderCommunicationStatus,
   ServiceOrderDetail,
   ServiceOrdersListResponse,
+  ApiKeySecretResponse,
+  ApiKeysListResponse,
+  EmailDomainResponse,
+  NotificationPreferencesResponse,
+  NotificationSummary,
+  NotificationsListResponse,
+  UnreadNotificationsResponse,
   CertificateNumberingConfig,
   CertificateNumberingProfileResponse,
   AssetTypeListItem,
@@ -504,46 +514,9 @@ export type { SelfServeSignupResponse };
 // is generated from the endpoint definitions (`modules/sso.ts`).
 export type { SsoApi, SsoSettingsResponse, SsoVerificationRecord };
 
-type ApiKeySummary = {
-  id: string;
-  name: string;
-  keyPrefix: string;
-  scopes: string[];
-  lastUsedAt: string | Date | null;
-  /** After this instant the key no longer works (null: a key made before expiry existed). */
-  expiresAt: string | Date | null;
-  /** Client addresses or CIDR ranges the key is accepted from (null: any). */
-  allowedIps: string[] | null;
-  createdAt: string | Date;
-  revokedAt: string | Date | null;
-};
-
-export type ApiKeysListResponse = {
-  data: ApiKeySummary[];
-};
-
-export type CreateApiKeyInput = {
-  name: string;
-  scopes?: string[];
-  /** 1 to 730; default 365. */
-  expiresInDays?: number;
-  allowedIps?: string[];
-};
-
-export type ApiKeySecretResponse = {
-  secret: string;
-  key: Pick<
-    ApiKeySummary,
-    "id" | "name" | "keyPrefix" | "scopes" | "expiresAt" | "allowedIps"
-  >;
-};
-
-export interface ApiKeysApi {
-  list(): Promise<ApiKeysListResponse>;
-  create(input: CreateApiKeyInput): Promise<ApiKeySecretResponse>;
-  rotate(id: string): Promise<ApiKeySecretResponse>;
-  revoke(id: string): Promise<{ success: boolean }>;
-}
+// API KEYS: the DTOs are the contract schemas' types (`endpoints/api-keys.ts`);
+// the client is generated from the endpoint definitions (`modules/api-keys.ts`).
+export type { ApiKeySecretResponse, ApiKeysApi, ApiKeysListResponse };
 
 export type SoftDeleteOrganizationResponse = {
   success: boolean;
@@ -615,116 +588,21 @@ export type {
 // definitions (`modules/portal-domains.ts`).
 export type { PortalDomainResponse, PortalDomainsApi };
 
-type EmailDomainStatus =
-  | "not_configured"
-  | "waiting_verification"
-  | "verified"
-  | "active";
+// EMAIL DOMAINS: the DTOs are the contract schemas' types
+// (`endpoints/email-domains.ts`); the client is generated from the endpoint
+// definitions (`modules/email-domains.ts`).
+export type { EmailDomainResponse, EmailDomainsApi };
 
-type EmailDomainKeyStatus = "ok" | "invalid" | "rate_limited";
-
-type EmailDomainRecord = {
-  id: string;
-  mode: "byok" | "managed";
-  hostname: string;
-  fromAddress: string;
-  status: string;
-  verifiedAt: string | Date | null;
-  lastVerifiedAt: string | Date | null;
-  activatedAt: string | Date | null;
-  isActive: boolean;
-  keyStatus: EmailDomainKeyStatus;
-  keyLastError: string | null;
-  /** Masked representation; the raw key never leaves the server. */
-  apiKeyMasked: string;
-  dnsRecords: Record<string, unknown>[];
-  createdAt: string | Date;
+// NOTIFICATIONS: the DTOs are the contract schemas' types
+// (`endpoints/notifications.ts`); the client is generated from the endpoint
+// definitions (`modules/notifications.ts`).
+export type {
+  NotificationPreferencesResponse,
+  NotificationSummary,
+  NotificationsApi,
+  NotificationsListResponse,
+  UnreadNotificationsResponse,
 };
-
-export type EmailDomainResponse = {
-  domain: EmailDomainRecord | null;
-  statusSummary: {
-    status: EmailDomainStatus;
-    canActivate: boolean;
-    message: string;
-    keyHealth: { status: EmailDomainKeyStatus; lastError: string | null };
-  };
-  /**
-   * Where customer replies land (Reply-To = organization.email). Present on
-   * GET only; null means replies would be lost — the settings page warns.
-   */
-  replyToEmail?: string | null;
-};
-
-export interface EmailDomainsApi {
-  get(): Promise<EmailDomainResponse>;
-  /**
-   * Creates the sending domain in our own provider account and returns the DNS
-   * records for the laboratory to publish. No API key is ever supplied by the
-   * client: the laboratory does not have one and never needs one.
-   */
-  create(input: {
-    hostname: string;
-    fromLocalPart: string;
-  }): Promise<EmailDomainResponse>;
-  verify(): Promise<EmailDomainResponse>;
-  activate(): Promise<EmailDomainResponse>;
-  delete(): Promise<void>;
-}
-
-export type NotificationSummary = {
-  id: number;
-  type: string;
-  priority: string;
-  status: string;
-  title: string;
-  message: string;
-  actionUrl?: string | null;
-  createdAt: string;
-};
-
-export type NotificationsListResponse = {
-  data: NotificationSummary[];
-  pagination?: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
-};
-
-export type UnreadNotificationsResponse = {
-  count: number;
-};
-
-type NotificationPreference = {
-  inApp: boolean;
-  email: boolean;
-};
-
-type NotificationPreferencesMap = Record<string, NotificationPreference>;
-
-export type NotificationPreferencesResponse = {
-  preferences: NotificationPreferencesMap;
-  emailEnabled: boolean;
-  notifySelfActions: boolean;
-  digestFrequency: "NONE" | "DAILY" | "WEEKLY";
-};
-
-export interface NotificationsApi {
-  getUnreadCount(): Promise<UnreadNotificationsResponse>;
-  listRecent(input?: {
-    page?: number;
-    limit?: number;
-    status?: "UNREAD";
-  }): Promise<NotificationsListResponse>;
-  markRead(notificationIds: number[]): Promise<unknown>;
-  markAllRead(): Promise<unknown>;
-  getPreferences(): Promise<NotificationPreferencesResponse>;
-  updatePreferences(
-    input: UpdateNotificationPreferencesInput,
-  ): Promise<NotificationPreferencesResponse>;
-}
 
 // SIGNATURES: the DTOs are the contract schemas' types
 // (`endpoints/signatures.ts`); the client is generated from the endpoint

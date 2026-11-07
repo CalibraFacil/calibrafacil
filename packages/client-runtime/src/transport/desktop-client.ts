@@ -283,7 +283,7 @@ export function createDesktopApiClient(
       },
     },
     apiKeys: {
-      ...desktopCloudOnlyStubs("apiKeys", { action: "API keys" }),
+      ...desktopEndpointStubs("apiKeys"),
       async list() {
         return { data: [] };
       },
@@ -321,9 +321,7 @@ export function createDesktopApiClient(
       },
     },
     emailDomains: {
-      ...desktopCloudOnlyStubs("emailDomains", {
-        action: "Domínio de e-mail",
-      }),
+      ...desktopEndpointStubs("emailDomains"),
       async get() {
         return desktopEmailDomain();
       },
@@ -339,22 +337,28 @@ export function createDesktopApiClient(
         };
       },
       async markRead() {
-        return { updatedIds: [] };
+        return {
+          message: "0 notificacao(oes) marcada(s) como lida(s)",
+          updatedIds: [],
+        };
       },
       async markAllRead() {
-        return { count: 0 };
+        return {
+          message: "0 notificacao(oes) marcada(s) como lida(s)",
+          count: 0,
+        };
       },
       async getPreferences() {
         return desktopNotificationPreferences();
       },
-      async updatePreferences(input) {
+      async updatePreferences({ body }) {
         return {
           ...desktopNotificationPreferences(),
-          ...input,
+          ...body,
           // Mirror the server-side schema defaults (inApp/email default true)
           // that zValidator would apply before echoing the preferences back.
           preferences: Object.fromEntries(
-            Object.entries(input.preferences ?? {}).map(([key, value]) => [
+            Object.entries(body.preferences ?? {}).map(([key, value]) => [
               key,
               { inApp: value.inApp ?? true, email: value.email ?? true },
             ]),
