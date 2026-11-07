@@ -9,7 +9,7 @@ import { toRouteTo, type DashboardRouteId } from '@/app/router/route-registry'
 /**
  * Which dashboard routes work without the cloud on the desktop.
  *
- * Offline mode is deliberately narrow (audit decision Q13): field capture,
+ * Offline mode is deliberately narrow: field capture,
  * intake and reference reads. The data-policy registry in
  * `@calibra-facil/client-runtime` is the single source of truth for what the
  * desktop can do offline, so this module does not keep a second list of

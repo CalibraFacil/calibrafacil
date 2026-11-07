@@ -95,7 +95,7 @@ export function standardAuditLogQueryOptions(id: string) {
   })
 }
 
-// §7.10 recall workflow (#426 Phase 1): current recall campaign (NC link,
+// §7.10 recall workflow: current recall campaign (NC link,
 // per-certificate notification status) for a reference standard.
 export function standardRecallQueryOptions(id: string) {
   return queryOptions({

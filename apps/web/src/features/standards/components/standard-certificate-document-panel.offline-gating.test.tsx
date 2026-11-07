@@ -12,7 +12,7 @@ import type { StandardDetail } from '@/features/standards/types'
 import { StandardCertificateDocumentPanel } from './standard-certificate-document-panel'
 
 // The standard's certificate PDF is stored in the cloud, so uploading,
-// replacing and downloading it are online-only since Q13. The standard detail
+// replacing and downloading it are online-only. The standard detail
 // page itself stays readable offline; on a disconnected desktop these buttons
 // must be disabled instead of failing with a network error.
 

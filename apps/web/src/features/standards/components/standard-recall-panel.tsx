@@ -70,7 +70,7 @@ function dateInputToIsoEnd(value: string): string | undefined {
 }
 
 /**
- * §7.10 recall panel (#426 Phase 1) for the standard detail page. Rendered
+ * §7.10 recall panel for the standard detail page. Rendered
  * when the standard is OUT_OF_TOLERANCE or a recall campaign already exists:
  * DRAFT shows the review-and-approve wizard; SENT shows the notification
  * dashboard with per-certificate acknowledgement status.

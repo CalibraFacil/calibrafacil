@@ -95,7 +95,6 @@ export function NCDetailPage({ id }: { id: string }) {
   })
   const impactAssessment = impactAssessmentResponse?.data ?? null
 
-  // Disposition mutation
   const dispositionMutation = useMutation({
     mutationFn: async (data: { disposition: string; justification?: string }) =>
       calibraApi.nonConformances.setDisposition({
@@ -119,7 +118,6 @@ export function NCDetailPage({ id }: { id: string }) {
     onError: (error) => toast.error(error.message),
   })
 
-  // Resolve mutation
   const resolveMutation = useMutation({
     mutationFn: async (data: { correctionTaken: string }) => {
       return calibraApi.nonConformances.resolve({ params: { id }, body: data })
@@ -135,7 +133,6 @@ export function NCDetailPage({ id }: { id: string }) {
     onError: (error) => toast.error(error.message),
   })
 
-  // §7.10 acknowledgement mutation
   const ootAckMutation = useMutation({
     mutationFn: async (data: { note: string }) =>
       calibraApi.nonConformances.registerOotAcknowledgement({
@@ -162,7 +159,6 @@ export function NCDetailPage({ id }: { id: string }) {
     },
   })
 
-  // Escalate to CAPA mutation
   const escalateMutation = useMutation({
     mutationFn: async (data: {
       rootCauseAnalysis?: string
@@ -823,7 +819,7 @@ function OotAcknowledgementForm({
   )
 }
 
-// §7.8.8 amended-certificate tie-in for out-of-tolerance NCs (#426 Phase 2).
+// §7.8.8 amended-certificate tie-in for out-of-tolerance NCs.
 function OotAmendCertificateDialog({
   job,
   ncNumber,

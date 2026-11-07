@@ -107,7 +107,7 @@ export function formatMassCompositionLabel(
  *     §4.2.2 require the linear sum. Conservative (≥ RSS); never under-states.
  *   - 'expanded_rss' (default) — root-sum-square √(Σ(qᵢ·Uᵢ)²). Only valid when
  *     the weights' uncertainties are genuinely independent. Default preserves the
- *     historical behavior; see issue #506.
+ *     historical behavior.
  */
 export function buildMassCompositionValue(
   items: MassCompositionItem[],

@@ -40,7 +40,7 @@ export function getSyncConflictEditTarget(
     case 'service_order':
       return { kind: 'service_order', id: conflict.entityId }
     case 'service_order_execution': {
-      // REL-01 slice 3 (REQ-REL-RES-003): execution notes are edited from the
+      // REQ-REL-RES-003: execution notes are edited from the
       // OWNING service order's detail page, so route the edit target to that
       // service order. The conflict's own id is the execution id, so the owning
       // service order id is read from the conflict payload.

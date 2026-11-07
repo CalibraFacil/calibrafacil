@@ -256,7 +256,7 @@ export function useDesktopCloudOnlyUnavailable() {
 }
 
 /**
- * What the desktop can do without a connection (audit decision Q13). The routes
+ * What the desktop can do without a connection. The routes
  * are the entries of `desktopOfflineRoutes`; this is the short list shown to a
  * user who landed on an online-only screen.
  */

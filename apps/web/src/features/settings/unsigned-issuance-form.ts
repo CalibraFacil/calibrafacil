@@ -1,6 +1,6 @@
 /**
- * UI-to-payload parsing for the "emitir sem assinatura digital" unit setting
- * (Q51): the reason typed by the admin is validated against
+ * UI-to-payload parsing for the "emitir sem assinatura digital" unit setting:
+ * the reason typed by the admin is validated against
  * `UnsignedIssuanceSettingSchema` before it leaves the client, so the regulated
  * workflow never depends on a JSX handler.
  */

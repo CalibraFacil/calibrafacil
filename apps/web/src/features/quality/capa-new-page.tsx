@@ -165,7 +165,6 @@ export function NewCAPAPage() {
   const rcaMethodValue = watch('rootCauseAnalysisMethod')
   const responsibleIdValue = watch('responsibleId')
 
-  // Fetch organization members (technicians) for responsible selection
   const { data: membersData } = useCapaResponsibleMembersData({
     enabled: !cloudOnlyUnavailable,
   })

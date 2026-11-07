@@ -202,7 +202,6 @@ export function NotificationsSettingsPage() {
 
   const { data: prefsData, isLoading } = useNotificationPreferencesData()
 
-  // Update preferences mutation with optimistic updates
   const updateMutation = useMutation({
     mutationFn: async (data: {
       preferences?: Partial<Record<NotificationType, NotificationChannels>>
@@ -210,17 +209,14 @@ export function NotificationsSettingsPage() {
       notifySelfActions?: boolean
     }) => calibraApi.notifications.updatePreferences({ body: data }),
     onMutate: async (newData) => {
-      // Cancel outgoing refetches
       await queryClient.cancelQueries({
         queryKey: settingsKeys.notificationPreferences,
       })
 
-      // Snapshot previous value
       const previousData = queryClient.getQueryData(
         settingsKeys.notificationPreferences,
       )
 
-      // Optimistically update
       queryClient.setQueryData(
         settingsKeys.notificationPreferences,
         (old: typeof prefsData) => {
@@ -240,7 +236,6 @@ export function NotificationsSettingsPage() {
       return { previousData }
     },
     onError: (_err, _newData, context) => {
-      // Rollback on error
       if (context?.previousData) {
         queryClient.setQueryData(
           settingsKeys.notificationPreferences,
@@ -250,7 +245,6 @@ export function NotificationsSettingsPage() {
       toast.error('Erro ao atualizar preferências')
     },
     onSettled: () => {
-      // Refetch to ensure consistency
       queryClient.invalidateQueries({
         queryKey: settingsKeys.notificationPreferences,
       })

@@ -1,7 +1,7 @@
 import { parseMeasurementInput } from '@calibra-facil/shared/calibration-format'
 /**
  * UI-to-payload parsing for the accredited-scope (CMC) settings — the
- * schema-first `forms.ts` layer for this regulated workflow (#427): every
+ * schema-first `forms.ts` layer for this regulated workflow: every
  * coercion the dialog needs lives here, testable, with the final payload
  * validated against `AccreditedScopeLineSchema` before it leaves the client.
  */
@@ -82,7 +82,7 @@ export type ScopeLinePayloadResult =
 
 /**
  * Parse the dialog state into the save payload. Vigência bounds anchor like
- * the org-level window (#647): validFrom at start-of-day, validUntil at
+ * the org-level window: validFrom at start-of-day, validUntil at
  * END-of-day so the stated last day stays inside the window. The result is
  * validated against `AccreditedScopeLineSchema`, so a payload the server
  * would reject never leaves the client silently.

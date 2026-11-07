@@ -1,7 +1,7 @@
 /**
  * UI-to-payload parsing for the "delete organization" dialog — the
- * schema-first `forms.ts` layer of this regulated action (records retention,
- * decision Q16). The payload is validated against `SoftDeleteOrganizationSchema`
+ * schema-first `forms.ts` layer of this regulated action (records retention).
+ * The payload is validated against `SoftDeleteOrganizationSchema`
  * (the same schema the API enforces) before it leaves the client.
  */
 import {

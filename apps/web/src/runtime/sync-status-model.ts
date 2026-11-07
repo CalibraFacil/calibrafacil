@@ -80,7 +80,7 @@ export function getDataSourceIndicatorModel(
     }
   }
 
-  // The cloud refused the session (roadmap 2 E2): retrying will not help.
+  // The cloud refused the session: retrying will not help.
   if (sync.state === 'auth_required') {
     return {
       label: 'Entre novamente',

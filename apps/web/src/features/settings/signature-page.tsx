@@ -58,13 +58,11 @@ export function SignatureSettingsPage() {
 
   const handleFileSelect = useCallback(
     (file: File) => {
-      // Validate file type
       if (file.type !== 'image/png') {
         toast.error('Apenas arquivos PNG são permitidos')
         return
       }
 
-      // Validate file size (500KB)
       if (file.size > 500 * 1024) {
         toast.error('Arquivo muito grande. Máximo 500KB.')
         return
@@ -79,13 +77,11 @@ export function SignatureSettingsPage() {
       }
       reader.readAsDataURL(file)
 
-      // Upload
       uploadMutation.mutate(file)
     },
     [uploadMutation],
   )
 
-  // Drag and drop handlers
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setIsDragOver(true)

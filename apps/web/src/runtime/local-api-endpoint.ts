@@ -3,8 +3,8 @@ import type { LocalEnvironmentBootstrap } from '@calibra-facil/contracts'
 /**
  * Where the local server actually is, and the token that gets in.
  *
- * Both were previously answered once and then trusted forever, which broke two
- * ordinary situations:
+ * Neither can be answered once and trusted forever, because of two ordinary
+ * situations:
  *
  * - **The port is not fixed.** `LocalServerManager` scans forward from the
  *   default when it is occupied — a second instance, a leftover process, a dev
@@ -13,9 +13,9 @@ import type { LocalEnvironmentBootstrap } from '@calibra-facil/contracts'
  *   session.
  * - **The token is per run.** The local server generates a fresh bootstrap
  *   token each time it starts, so any restart (crash, update, manual retry)
- *   invalidated the one the renderer had memoized. Worse, a lookup that failed
- *   because the server had not finished booting cached `null` *permanently*,
- *   so the local API never worked again until the window reloaded.
+ *   invalidates a memoized one. A lookup that fails because the server has not
+ *   finished booting must not cache `null` permanently, or the local API would
+ *   never work again until the window reloaded.
  *
  * The bootstrap is therefore cached with a short TTL, never cached when it
  * fails, and invalidated outright when the server rejects the token.

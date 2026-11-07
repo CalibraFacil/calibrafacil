@@ -31,7 +31,7 @@ import { Input } from '@calibra-facil/ui/input'
 import { Textarea } from '@calibra-facil/ui/textarea'
 
 /**
- * Danger zone of the organization settings. Records retention (decision Q16):
+ * Danger zone of the organization settings. Records retention:
  * "excluir" is a soft delete. The laboratory's regulated records are kept for
  * the retention period (10 years by default, never below 5), the laboratory is
  * locked and its API keys are revoked. Owner only (the API enforces it too).

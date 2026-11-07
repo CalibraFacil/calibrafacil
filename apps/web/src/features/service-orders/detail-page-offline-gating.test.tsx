@@ -14,7 +14,7 @@ import type { SyncStatusSnapshot } from '@calibra-facil/contracts'
 
 import type { ServiceOrderDetail } from './types'
 
-// Offline mode keeps the service-order detail page readable (Q13: reference
+// Offline mode keeps the service-order detail page readable (reference
 // reads), but saving a quote draft, recording the execution and issuing the
 // delivery document are online-only. Rendering the real page on a desktop with
 // no connection must show those actions disabled, not let them fail with a

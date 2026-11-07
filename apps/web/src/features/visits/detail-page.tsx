@@ -146,18 +146,15 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
   const isProposed = visit.status === 'PROPOSED'
   const isTerminal = isVisitTerminal(visit.status)
 
-  // Fetch customer assets when the visit is PROPOSED
   const { data: customerAssetsData } = useNewJobCustomerAssetsData({
     customerId: isProposed ? visit.customerId : null,
     enabled: isProposed,
   })
   const customerAssets = customerAssetsData?.data ?? []
 
-  // Find the selected asset's typeId for filtering services
   const selectedAsset = customerAssets.find((a) => String(a.id) === addAssetId)
   const selectedAssetTypeId = selectedAsset?.assetTypeId ?? null
 
-  // Fetch compatible services filtered by asset type
   const { data: servicesData } = useNewJobServicesData({
     assetTypeId: selectedAssetTypeId,
     enabled: isProposed && Boolean(addAssetId),
@@ -615,7 +612,7 @@ function VisitDetailContent({ visit }: { visit: VisitDetail }) {
 }
 
 /**
- * #739: pending customer reschedule request. Aceitar moves the visit to the
+ * Pending customer reschedule request. Aceitar moves the visit to the
  * chosen date (prefilled with the first preferred window) and closes the
  * request; Recusar keeps the date and sends the reason back to the customer.
  */
