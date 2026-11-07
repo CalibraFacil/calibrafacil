@@ -1,20 +1,20 @@
-import type {
-  OrganizationLifecycleApi,
-  SoftDeleteOrganizationResponse,
-} from "../types";
-import { readJsonResponse } from "../transport/response";
+import { organizationLifecycleEndpoints } from "@calibra-facil/contracts";
+import type { ResponseValidationOptions } from "@calibra-facil/contracts";
+
+import {
+  endpointClient,
+  type EndpointClient,
+  type EndpointTransport,
+} from "../transport/endpoint-client";
+
+/** The organization lifecycle client is its endpoint group (`organizationLifecycleEndpoints` in `@calibra-facil/contracts`). */
+export type OrganizationLifecycleApi = EndpointClient<
+  typeof organizationLifecycleEndpoints
+>;
 
 export function createOrganizationLifecycleApi(
-  rawCloudClient: any,
+  transport: EndpointTransport,
+  options: ResponseValidationOptions,
 ): OrganizationLifecycleApi {
-  return {
-    async softDelete(input) {
-      return readJsonResponse<SoftDeleteOrganizationResponse>(
-        await rawCloudClient.api.organization["soft-delete"].$post({
-          json: input,
-        }),
-        "Falha ao excluir a organização",
-      );
-    },
-  };
+  return endpointClient(organizationLifecycleEndpoints, transport, options);
 }

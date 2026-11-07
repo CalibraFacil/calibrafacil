@@ -1,4 +1,5 @@
 import { createRouter } from "../server/router";
+import { profileMediaEndpoints } from "@calibra-facil/contracts";
 import { findUserImage } from "../lib/identity";
 import {
   createR2Client,
@@ -14,6 +15,7 @@ import { requireAuth, type AuthVariables } from "../middleware/permission";
 
 import { sniffRasterImage } from "../lib/image-sniff";
 import { invalid, notFound } from "../lib/domain-errors";
+import { mount } from "../lib/endpoint-mount";
 const MAX_AVATAR_FILE_SIZE = 2 * 1024 * 1024;
 const ALLOWED_AVATAR_CONTENT_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const AVATAR_URL_EXPIRY = 300;
@@ -22,11 +24,19 @@ function getAvatarApiUrl(): string {
   return `${process.env.API_URL || "https://localhost:3000"}/api/profile-media/avatar`;
 }
 
+const PREFIX = "/api/profile-media";
+
 export const profileMediaRouter = createRouter<{
   Variables: AuthVariables;
   Bindings: R2Env;
-}>()
-  .post("/avatar", requireAuth, async (c) => {
+}>();
+
+mount(
+  profileMediaRouter,
+  PREFIX,
+  profileMediaEndpoints.uploadAvatar,
+  [requireAuth],
+  async (c) => {
     const session = c.get("session");
     const env = c.env;
 
@@ -71,38 +81,46 @@ export const profileMediaRouter = createRouter<{
       contentType,
     );
 
-    return c.json({
+    return {
       imageUrl: getAvatarApiUrl(),
-    });
-  })
-  .get("/avatar", requireAuth, async (c) => {
-    const session = c.get("session");
-    const env = c.env;
+    };
+  },
+);
 
-    const image = await findUserImage(session.user.id);
+profileMediaRouter.get("/avatar", requireAuth, async (c) => {
+  const session = c.get("session");
+  const env = c.env;
 
-    if (!image) {
-      throw notFound("not_found", "Avatar não configurado");
-    }
+  const image = await findUserImage(session.user.id);
 
-    const r2Client = createR2Client(env);
-    const avatar = avatarKey(session.user.id);
-    const bucketName = await resolveReadBucketName(
-      r2Client,
-      env,
-      avatar.bucket,
-      avatar.key,
-    );
-    const url = await generatePresignedUrl(
-      r2Client,
-      bucketName,
-      avatar.key,
-      AVATAR_URL_EXPIRY,
-    );
+  if (!image) {
+    throw notFound("not_found", "Avatar não configurado");
+  }
 
-    return c.redirect(url, 302);
-  })
-  .delete("/avatar", requireAuth, async (c) => {
+  const r2Client = createR2Client(env);
+  const avatar = avatarKey(session.user.id);
+  const bucketName = await resolveReadBucketName(
+    r2Client,
+    env,
+    avatar.bucket,
+    avatar.key,
+  );
+  const url = await generatePresignedUrl(
+    r2Client,
+    bucketName,
+    avatar.key,
+    AVATAR_URL_EXPIRY,
+  );
+
+  return c.redirect(url, 302);
+});
+
+mount(
+  profileMediaRouter,
+  PREFIX,
+  profileMediaEndpoints.deleteAvatar,
+  [requireAuth],
+  async (c) => {
     const session = c.get("session");
     const env = c.env;
 
@@ -116,5 +134,6 @@ export const profileMediaRouter = createRouter<{
     );
     await deleteFromR2(r2Client, bucketName, avatar.key).catch(() => undefined);
 
-    return c.json({ success: true });
-  });
+    return { success: true as const };
+  },
+);

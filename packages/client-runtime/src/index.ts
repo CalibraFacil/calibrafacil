@@ -1,8 +1,4 @@
-import type {
-  CalibraApi,
-  SoftDeleteOrganizationRequest,
-  UpdateOrganizationProfileRequest,
-} from "./types";
+import type { CalibraApi } from "./types";
 import {
   createRawCloudClient,
   type CreateCloudApiClientOptions,
@@ -105,18 +101,6 @@ export function createCloudApiClient(
           };
         };
       };
-      organization: {
-        "soft-delete": {
-          $post(input: {
-            json: SoftDeleteOrganizationRequest;
-          }): Promise<Response>;
-        };
-        profile: {
-          $patch(input: {
-            json: UpdateOrganizationProfileRequest;
-          }): Promise<Response>;
-        };
-      };
       integrations: {
         $get(): Promise<Response>;
         $post(input: { json: unknown }): Promise<Response>;
@@ -175,8 +159,14 @@ export function createCloudApiClient(
     finance: createFinanceApi(endpointTransport, options),
     sso: createSsoApi(endpointTransport, options),
     apiKeys: createApiKeysApi(endpointTransport, options),
-    organizationLifecycle: createOrganizationLifecycleApi(rawCloudClient),
-    organizationProfile: createOrganizationProfileApi(rawCloudClient),
+    organizationLifecycle: createOrganizationLifecycleApi(
+      endpointTransport,
+      options,
+    ),
+    organizationProfile: createOrganizationProfileApi(
+      endpointTransport,
+      options,
+    ),
     entityLabels: createEntityLabelsApi(endpointTransport, options),
     certificateNumbering: createCertificateNumberingApi(
       endpointTransport,
@@ -186,8 +176,8 @@ export function createCloudApiClient(
     emailDomains: createEmailDomainsApi(endpointTransport, options),
     notifications: createNotificationsApi(endpointTransport, options),
     signatures: createSignaturesApi(endpointTransport, options),
-    profileMedia: createProfileMediaApi(options),
-    organizationMedia: createOrganizationMediaApi(options),
+    profileMedia: createProfileMediaApi(endpointTransport, options),
+    organizationMedia: createOrganizationMediaApi(endpointTransport, options),
     signingCertificates: createSigningCertificatesApi(
       endpointTransport,
       options,

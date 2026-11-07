@@ -79,9 +79,11 @@ export function OrganizationOnboardingPage({
       }
 
       await calibraApi.organizationProfile.update({
-        cnpj: optionalFormText(formData.get('cnpj')),
-        phone: optionalFormText(formData.get('phone')),
-        email: optionalFormText(formData.get('email')),
+        body: {
+          cnpj: optionalFormText(formData.get('cnpj')),
+          phone: optionalFormText(formData.get('phone')),
+          email: optionalFormText(formData.get('email')),
+        },
       })
       authClient.$store.notify('$activeOrgSignal')
 

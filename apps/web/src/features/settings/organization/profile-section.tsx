@@ -240,8 +240,8 @@ export function OrganizationProfileSection({
     try {
       // The accreditation claim and the profile are written by the laboratory's
       // own route (Better Auth's organization.update no longer takes them).
-      await calibraApi.organizationProfile.update(
-        buildOrganizationIsoPayload({
+      await calibraApi.organizationProfile.update({
+        body: buildOrganizationIsoPayload({
           cnpj,
           accreditationNumber,
           accreditationBody,
@@ -263,7 +263,7 @@ export function OrganizationProfileSection({
           technicalManagerName,
           technicalManagerTitle,
         }),
-      )
+      })
       // The active organization is read through Better Auth: refetch it.
       authClient.$store.notify('$activeOrgSignal')
       toast.success('Informações ISO 17025 atualizadas com sucesso!')

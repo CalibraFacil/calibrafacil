@@ -1,8 +1,7 @@
 import { createRouter } from "../server/router";
-import { zValidator } from "@hono/zod-validator";
+import { organizationProfileEndpoints } from "@calibra-facil/contracts";
 import { eq } from "drizzle-orm";
 import { organization } from "@calibra-facil/db/schema";
-import { UpdateOrganizationProfileSchema } from "@calibra-facil/schemas";
 import { writeOrganizationAuditEvent } from "../lib/audit";
 import { writeComplianceAuditEvent } from "../lib/compliance-audit";
 import { invalid, notFound } from "../lib/domain-errors";
@@ -13,6 +12,7 @@ import {
   requireRole,
   withLabPermission,
 } from "../middleware/permission";
+import { mount } from "../lib/endpoint-mount";
 
 /**
  * The laboratory profile (architecture review P0-1).
@@ -101,16 +101,23 @@ function isoOrNull(value: Date | null) {
   return value ? value.toISOString() : null;
 }
 
+const PREFIX = "/api/organization";
+
 export const organizationProfileRouter = createRouter<{
   Variables: AuthVariables;
-}>().patch(
-  "/profile",
-  ...withLabPermission({ organization: ["update"] }),
-  requireRole(["admin", "owner"]),
-  zValidator("json", UpdateOrganizationProfileSchema),
-  async (c) => {
+}>();
+
+mount(
+  organizationProfileRouter,
+  PREFIX,
+  organizationProfileEndpoints.update,
+  [
+    ...withLabPermission({ organization: ["update"] }),
+    requireRole(["admin", "owner"]),
+  ],
+  async (c, { body }) => {
     const member = c.get("member");
-    const input = c.req.valid("json");
+    const input = body;
 
     const set: Partial<typeof organization.$inferInsert> = {};
     for (const key of TEXT_FIELDS) {
@@ -230,10 +237,10 @@ export const organizationProfileRouter = createRouter<{
       },
     );
 
-    return c.json({
+    return {
       ...outcome,
       accreditationValidFrom: isoOrNull(outcome.accreditationValidFrom),
       accreditationValidUntil: isoOrNull(outcome.accreditationValidUntil),
-    });
+    };
   },
 );

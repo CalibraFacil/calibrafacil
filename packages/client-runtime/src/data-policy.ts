@@ -94,26 +94,18 @@ export const calibraApiPolicyRegistry = {
   finance: endpointPolicies(ENDPOINT_GROUPS.finance),
   sso: endpointPolicies(ENDPOINT_GROUPS.sso),
   apiKeys: endpointPolicies(ENDPOINT_GROUPS.apiKeys),
-  organizationLifecycle: {
-    softDelete: "cloud-only",
-  },
-  organizationProfile: {
-    update: "cloud-only",
-  },
+  organizationLifecycle: endpointPolicies(
+    ENDPOINT_GROUPS.organizationLifecycle,
+  ),
+  organizationProfile: endpointPolicies(ENDPOINT_GROUPS.organizationProfile),
   entityLabels: endpointPolicies(ENDPOINT_GROUPS.entityLabels),
   certificateNumbering: endpointPolicies(ENDPOINT_GROUPS.certificateNumbering),
   portalDomains: endpointPolicies(ENDPOINT_GROUPS.portalDomains),
   emailDomains: endpointPolicies(ENDPOINT_GROUPS.emailDomains),
   notifications: endpointPolicies(ENDPOINT_GROUPS.notifications),
   signatures: endpointPolicies(ENDPOINT_GROUPS.signatures),
-  profileMedia: {
-    uploadAvatar: "cloud-only",
-    deleteAvatar: "cloud-only",
-  },
-  organizationMedia: {
-    uploadLogo: "cloud-only",
-    deleteLogo: "cloud-only",
-  },
+  profileMedia: endpointPolicies(ENDPOINT_GROUPS.profileMedia),
+  organizationMedia: endpointPolicies(ENDPOINT_GROUPS.organizationMedia),
   signingCertificates: endpointPolicies(ENDPOINT_GROUPS.signingCertificates),
   // Derived from the endpoint definitions (`policy`), not listed here.
   customers: endpointPolicies(ENDPOINT_GROUPS.customers),

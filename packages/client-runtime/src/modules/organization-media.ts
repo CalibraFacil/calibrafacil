@@ -1,17 +1,48 @@
-import type {
-  OrganizationLogoDeleteResponse,
-  OrganizationLogoUploadResponse,
-  OrganizationMediaApi,
-} from "../types";
+import {
+  endpointLabel,
+  organizationMediaEndpoints,
+  validateResponsePayload,
+  type ResponseValidationOptions,
+} from "@calibra-facil/contracts";
+
 import type { CreateCloudApiClientOptions } from "../transport/cloud";
 import { createCloudHeaders } from "../transport/cloud";
+import {
+  endpointClient,
+  type EndpointClient,
+  type EndpointTransport,
+} from "../transport/endpoint-client";
 import { appendNamedBlob } from "../transport/form-data";
 import { readJsonResponse } from "../transport/response";
 
+/**
+ * The organization-media client is its endpoint group
+ * (`organizationMediaEndpoints` in `@calibra-facil/contracts`) plus the one
+ * thing that is client-side logic: the upload is a multipart form, which the
+ * JSON endpoint client does not send.
+ */
+export type OrganizationMediaApi = Omit<
+  EndpointClient<typeof organizationMediaEndpoints>,
+  "uploadLogo"
+> & {
+  uploadLogo(
+    file: Blob,
+    input?: { fileName?: string },
+  ): Promise<{ logoUrl: string }>;
+};
+
 export function createOrganizationMediaApi(
-  options: CreateCloudApiClientOptions,
+  transport: EndpointTransport,
+  options: CreateCloudApiClientOptions & ResponseValidationOptions,
 ): OrganizationMediaApi {
+  const { uploadLogo: _jsonUpload, ...client } = endpointClient(
+    organizationMediaEndpoints,
+    transport,
+    options,
+  );
+
   return {
+    ...client,
     async uploadLogo(file, input) {
       const formData = new FormData();
       appendNamedBlob(formData, "logo", file, input?.fileName);
@@ -26,24 +57,12 @@ export function createOrganizationMediaApi(
         },
       );
 
-      return readJsonResponse<OrganizationLogoUploadResponse>(
-        response,
-        "Falha ao enviar logo",
-      );
-    },
-    async deleteLogo() {
-      const response = await (options.fetch ?? fetch)(
-        new URL("/api/organization-media/logo", options.baseUrl),
-        {
-          method: "DELETE",
-          credentials: "include",
-          headers: createCloudHeaders(options.activeUnitProvider),
-        },
-      );
-
-      return readJsonResponse<OrganizationLogoDeleteResponse>(
-        response,
-        "Falha ao remover logo",
+      const def = organizationMediaEndpoints.uploadLogo;
+      return validateResponsePayload(
+        def.response,
+        await readJsonResponse<unknown>(response, def.failure),
+        endpointLabel(def),
+        options,
       );
     },
   };
