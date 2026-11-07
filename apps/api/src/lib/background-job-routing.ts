@@ -26,30 +26,6 @@ export function getDocumentWorkerUrl(): string | null {
   return readJobsConfig().documentWorkerUrl ?? null;
 }
 
-// Mirror packages/db/src/queue.ts:getMessageType so a CERTIFICATE/LABEL job
-// dispatched with `type` omitted (the optional-type variant) still resolves to
-// its canonical app_queue_job type name (used to label log lines).
-export function resolveQueueJobType(message: BackgroundJobMessage): string {
-  switch (message.type) {
-    case "LABEL":
-    case "SERVICE_ORDER_INTAKE_DOCUMENT":
-    case "SERVICE_ORDER_TAG":
-    case "SERVICE_ORDER_QUOTE":
-    case "SERVICE_ORDER_DELIVERY_RECEIPT":
-    case "INTEGRATION_SYNC":
-    case "AUDIT_PACK":
-    case "OOT_NOTIFICATION":
-    case "JOB_APPROVED_NOTIFICATION":
-    case "ASSET_OOT_NOTIFICATION":
-    case "SCHEDULED_NOTIFICATIONS":
-    case "PORTAL_DIGEST":
-    case "WEBHOOK_DELIVERY":
-      return message.type;
-    default:
-      return "CERTIFICATE";
-  }
-}
-
 /**
  * Whether `enqueueBackgroundJob` writes this message to `app_queue_job` (the
  * same Postgres), as opposed to running it in-process: every queue job in

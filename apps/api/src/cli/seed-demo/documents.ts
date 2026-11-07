@@ -1,10 +1,7 @@
+import type { QueueJobType } from "@calibra-facil/schemas";
 import { systemDb as ownerDb } from "@calibra-facil/db";
 import { forceCompleteQueueJob } from "@calibra-facil/db/queue";
-import {
-  appQueueJob,
-  serviceOrder,
-  type AppQueueJobType,
-} from "@calibra-facil/db/schema";
+import { appQueueJob, serviceOrder } from "@calibra-facil/db/schema";
 import { parseQueueMessage } from "@calibra-facil/schemas";
 import { processBackgroundJob } from "@calibra-facil/jobs-core";
 import { and, asc, eq, inArray } from "drizzle-orm";
@@ -13,7 +10,7 @@ import { createWorkerRuntimeEnv } from "../../lib/runtime-env";
 import { LAB_ID } from "./api";
 import type { SeedContext } from "./context";
 
-const SERVICE_ORDER_DOCUMENTS: AppQueueJobType[] = [
+const SERVICE_ORDER_DOCUMENTS: QueueJobType[] = [
   "SERVICE_ORDER_INTAKE_DOCUMENT",
   "SERVICE_ORDER_TAG",
   "SERVICE_ORDER_QUOTE",

@@ -1,3 +1,4 @@
+import type { QueueJobType } from "@calibra-facil/schemas";
 import { relations, sql } from "drizzle-orm";
 // State-machine state types (owned by @calibra-facil/schemas/machines).
 import type {
@@ -7301,25 +7302,11 @@ export const scheduledNotificationRelations = relations(
 // APP QUEUE JOBS - Postgres-backed background queue
 // =============================================================================
 
-export type AppQueueJobType =
-  | "CERTIFICATE"
-  | "LABEL"
-  | "SERVICE_ORDER_INTAKE_DOCUMENT"
-  | "SERVICE_ORDER_TAG"
-  | "SERVICE_ORDER_QUOTE"
-  | "SERVICE_ORDER_DELIVERY_RECEIPT"
-  | "INTEGRATION_SYNC"
-  | "AUDIT_PACK"
-  | "OOT_NOTIFICATION"
-  | "WEBHOOK_DELIVERY"
-  | "JOB_APPROVED_NOTIFICATION"
-  | "ASSET_OOT_NOTIFICATION";
-
 export const appQueueJob = pgTable(
   "app_queue_job",
   {
     id: serial("id").primaryKey(),
-    type: text("type").$type<AppQueueJobType>().notNull(),
+    type: text("type").$type<QueueJobType>().notNull(),
     payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
     status: text("status")
       .$type<AppQueueJobStatus>()

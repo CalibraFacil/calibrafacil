@@ -1,8 +1,9 @@
 import { z } from "zod";
-import type {
-  IntegrationProvider,
-  IntegrationSyncTarget,
-  IntegrationSyncTrigger,
+import {
+  PUBLIC_API_WEBHOOK_MAX_ATTEMPTS,
+  type IntegrationProvider,
+  type IntegrationSyncTarget,
+  type IntegrationSyncTrigger,
 } from "@calibra-facil/shared";
 
 // The one job contract for background work: every message that travels through
@@ -239,6 +240,102 @@ export type WebhookDeliveryBackgroundJobMessage = z.infer<
 >;
 export type QueueMessage = z.infer<typeof QueueMessageSchema>;
 export type BackgroundJobMessage = z.infer<typeof BackgroundJobMessageSchema>;
+
+/** A job type; a certificate render may leave `type` out of its payload. */
+export type BackgroundJobType = NonNullable<BackgroundJobMessage["type"]>;
+export type QueueJobType = NonNullable<QueueMessage["type"]>;
+
+type RetryPolicy = {
+  maxAttempts: number;
+  firstDelayMs: number;
+  factor: number;
+  maxDelayMs: number;
+};
+
+/** Our own jobs: 5 s, 10 s, 20 s ... capped at five minutes. */
+const INTERNAL_RETRY: RetryPolicy = {
+  maxAttempts: 3,
+  firstDelayMs: 5_000,
+  factor: 2,
+  maxDelayMs: 5 * 60_000,
+};
+
+/**
+ * A call to an outside system that may need minutes to recover: 30 s, 2 min,
+ * 8 min, 32 min, capped at an hour.
+ */
+const OUTSIDE_SYSTEM_RETRY: RetryPolicy = {
+  maxAttempts: PUBLIC_API_WEBHOOK_MAX_ATTEMPTS,
+  firstDelayMs: 30_000,
+  factor: 4,
+  maxDelayMs: 60 * 60_000,
+};
+
+/**
+ * Every background job type: whether it travels through `app_queue_job` (a cron
+ * timer does not) and how a failed attempt is retried. Adding a message schema
+ * above without a row here fails type-checking.
+ */
+const BACKGROUND_JOB_TYPES = {
+  CERTIFICATE: { queue: true, retry: INTERNAL_RETRY },
+  LABEL: { queue: true, retry: INTERNAL_RETRY },
+  SERVICE_ORDER_INTAKE_DOCUMENT: { queue: true, retry: INTERNAL_RETRY },
+  SERVICE_ORDER_TAG: { queue: true, retry: INTERNAL_RETRY },
+  SERVICE_ORDER_QUOTE: { queue: true, retry: INTERNAL_RETRY },
+  SERVICE_ORDER_DELIVERY_RECEIPT: { queue: true, retry: INTERNAL_RETRY },
+  OOT_NOTIFICATION: { queue: true, retry: INTERNAL_RETRY },
+  JOB_APPROVED_NOTIFICATION: { queue: true, retry: INTERNAL_RETRY },
+  ASSET_OOT_NOTIFICATION: { queue: true, retry: INTERNAL_RETRY },
+  INTEGRATION_SYNC: { queue: true, retry: INTERNAL_RETRY },
+  AUDIT_PACK: { queue: true, retry: INTERNAL_RETRY },
+  WEBHOOK_DELIVERY: { queue: true, retry: OUTSIDE_SYSTEM_RETRY },
+  SPC_RECOMPUTE: { queue: true, retry: INTERNAL_RETRY },
+  EMAIL_DOMAIN_HEALTH: { queue: true, retry: INTERNAL_RETRY },
+  SCHEDULED_NOTIFICATIONS: { queue: false },
+  PORTAL_DIGEST: { queue: false },
+} as const satisfies Record<
+  BackgroundJobType,
+  { queue: true; retry: RetryPolicy } | { queue: false }
+>;
+
+/** The job type a message names (`CERTIFICATE` when the payload leaves it out). */
+export function backgroundJobType<T extends BackgroundJobType>(message: {
+  type?: T;
+}): T | "CERTIFICATE" {
+  return message.type ?? "CERTIFICATE";
+}
+
+export function isQueueJobType(value: unknown): value is QueueJobType {
+  return (
+    typeof value === "string" &&
+    Object.entries(BACKGROUND_JOB_TYPES).some(
+      ([type, entry]) => type === value && entry.queue,
+    )
+  );
+}
+
+/** A row whose type predates this table gets the policy of our own jobs. */
+function retryPolicy(type: string | undefined): RetryPolicy {
+  return isQueueJobType(type)
+    ? BACKGROUND_JOB_TYPES[type].retry
+    : INTERNAL_RETRY;
+}
+
+export function queueJobMaxAttempts(type: QueueJobType): number {
+  return retryPolicy(type).maxAttempts;
+}
+
+/** Wait before attempt `attempts + 1` of a job of this type. */
+export function queueJobRetryDelayMs(
+  type: string | undefined,
+  attempts: number,
+): number {
+  const { firstDelayMs, factor, maxDelayMs } = retryPolicy(type);
+  return Math.min(
+    maxDelayMs,
+    firstDelayMs * factor ** Math.max(0, attempts - 1),
+  );
+}
 
 export type BackgroundJobParseResult<TMessage> =
   | { ok: true; message: TMessage }
