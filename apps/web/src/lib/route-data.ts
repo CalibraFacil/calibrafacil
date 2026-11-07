@@ -34,6 +34,27 @@ export async function prewarmRouteQueries(
   )
 }
 
+type RouteQueryList = Array<unknown | null | undefined>
+
+/**
+ * One declaration of what a route needs from the cache, as the pair every route
+ * wants: `load` (the loader awaits it before the page renders) and `prewarm`
+ * (hover/focus fetches it ahead of the click). Both read the same list, so a
+ * query added for the page cannot be missed by the prewarm, nor the reverse.
+ */
+export function routeData<Args extends unknown[]>(
+  queries: (...args: Args) => RouteQueryList | Promise<RouteQueryList>,
+) {
+  return {
+    load: async (queryClient: QueryClient, ...args: Args) => {
+      await ensureRouteQueries(queryClient, await queries(...args))
+    },
+    prewarm: async (queryClient: QueryClient, ...args: Args) => {
+      await prewarmRouteQueries(queryClient, await queries(...args))
+    },
+  }
+}
+
 export async function getStableDashboardOrganizationIdForRouteData() {
   return getStoredDashboardOrganizationId()
 }

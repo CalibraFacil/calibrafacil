@@ -26,22 +26,6 @@ export const jobKeys = {
   /** Technicians of an organization (request conversion). */
   organizationTechnicians: (organizationId: string) =>
     ['jobs', organizationId, 'technicians'] as const,
-  forCustomer: (input: {
-    customerId: number | null | undefined
-    page: number
-    search: string
-    statusFilter: string
-  }) =>
-    [
-      'jobs',
-      'customer',
-      input.customerId,
-      input.page,
-      input.search,
-      input.statusFilter,
-    ] as const,
-  forCustomerScope: (customerId: number | null | undefined) =>
-    ['jobs', 'customer', customerId] as const,
   /** Jobs a non-conformance can be raised against. */
   forNonConformance: ['jobs-for-nc'] as const,
 }

@@ -2,9 +2,9 @@ import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 
 import { calibraApi } from '@/utils/api'
 import {
-  ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,
   prewarmRouteQueries,
+  routeData,
 } from '@/lib/route-data'
 import { keepPreviousDataInScope } from '@calibra-facil/shared/query-scope'
 import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
@@ -15,12 +15,11 @@ import {
   type JobsListQueryInput,
   type JobsListStatus,
   type NewJobAssetsData,
-  type NewJobCustomersData,
   type NewJobServicesData,
 } from './types'
 import { environmentalLimitKeys } from '@/features/settings/keys'
 import { jobKeys } from '@/features/jobs/keys'
-import { customerKeys } from '@/features/customers/keys'
+import { customerPickerQueryOptions } from '@/features/customers/queries'
 import { assetKeys } from '@/features/assets/keys'
 import { serviceKeys } from '@/features/services/keys'
 import { standardKeys } from '@/features/standards/keys'
@@ -70,18 +69,7 @@ export function jobTechniciansQueryOptions() {
 }
 
 export function newJobCustomersQueryOptions(search = '') {
-  return queryOptions({
-    queryKey: customerKeys.pickerSearch(search),
-    queryFn: (): Promise<NewJobCustomersData> =>
-      calibraApi.customers.list({
-        query: {
-          page: 1,
-          limit: 50,
-          query: search || undefined,
-        },
-      }),
-    staleTime: 30_000,
-  })
+  return customerPickerQueryOptions(search)
 }
 
 export function newJobCustomerAssetsQueryOptions(customerId: number | null) {
@@ -199,16 +187,11 @@ async function getJobsIndexEssentialQueries(url?: URL) {
   return [jobsListQueryOptions(jobsListQueryInputFromUrl(organizationId, url))]
 }
 
-export async function loadJobsIndexData(queryClient: QueryClient, url?: URL) {
-  await ensureRouteQueries(queryClient, await getJobsIndexEssentialQueries(url))
-}
-
-export async function prewarmJobsIndex(queryClient: QueryClient, url?: URL) {
-  await prewarmRouteQueries(
-    queryClient,
-    await getJobsIndexEssentialQueries(url),
-  )
-}
+const jobsIndexRouteData = routeData((url?: URL) =>
+  getJobsIndexEssentialQueries(url),
+)
+export const loadJobsIndexData = jobsIndexRouteData.load
+export const prewarmJobsIndex = jobsIndexRouteData.prewarm
 
 export async function prewarmNewJob(queryClient: QueryClient) {
   await prewarmRouteQueries(queryClient, [

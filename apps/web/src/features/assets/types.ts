@@ -48,14 +48,6 @@ export type AssetTypesData = Omit<ClientRuntimeAssetTypesListData, 'data'> & {
   data: AssetType[]
 }
 
-export type NewAssetCustomersData = {
-  data: Array<{
-    id: number
-    name: string
-    taxId?: string | null
-  }>
-}
-
 export type AssetAuditLogRecord = {
   id: number
   action: string

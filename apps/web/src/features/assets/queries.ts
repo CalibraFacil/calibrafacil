@@ -14,7 +14,7 @@ import {
 import {
   ensureRouteQueries,
   getStableDashboardOrganizationIdForRouteData,
-  prewarmRouteQueries,
+  routeData,
 } from '@/lib/route-data'
 import { optionFromUrl, pageFromUrl } from '@/lib/url-search'
 import { ASSET_STATUS } from '@calibra-facil/schemas/machines'
@@ -26,10 +26,9 @@ import {
   type AssetStatus,
   type AssetsListData,
   type AssetsListQueryInput,
-  type NewAssetCustomersData,
 } from './types'
 import { assetKeys } from '@/features/assets/keys'
-import { customerKeys } from '@/features/customers/keys'
+import { customerPickerQueryOptions } from '@/features/customers/queries'
 
 export const ASSETS_LIST_LIMIT = 20
 
@@ -184,18 +183,7 @@ export function useLegalMetrologyRegulationsData(enabled = true) {
 }
 
 export function newAssetCustomersQueryOptions(search = '') {
-  return queryOptions({
-    queryKey: customerKeys.pickerSearch(search),
-    queryFn: (): Promise<NewAssetCustomersData> =>
-      calibraApi.customers.list({
-        query: {
-          page: 1,
-          limit: 50,
-          query: search || undefined,
-        },
-      }),
-    staleTime: 30_000,
-  })
+  return customerPickerQueryOptions(search)
 }
 
 async function getAssetsIndexEssentialQueries(url?: URL) {
@@ -207,19 +195,11 @@ async function getAssetsIndexEssentialQueries(url?: URL) {
   ]
 }
 
-export async function loadAssetsIndexData(queryClient: QueryClient, url?: URL) {
-  await ensureRouteQueries(
-    queryClient,
-    await getAssetsIndexEssentialQueries(url),
-  )
-}
-
-export async function prewarmAssetsIndex(queryClient: QueryClient, url?: URL) {
-  await prewarmRouteQueries(
-    queryClient,
-    await getAssetsIndexEssentialQueries(url),
-  )
-}
+const assetsIndexRouteData = routeData((url?: URL) =>
+  getAssetsIndexEssentialQueries(url),
+)
+export const loadAssetsIndexData = assetsIndexRouteData.load
+export const prewarmAssetsIndex = assetsIndexRouteData.prewarm
 
 export async function loadAssetHeaderData(
   queryClient: QueryClient,
@@ -228,44 +208,25 @@ export async function loadAssetHeaderData(
   await ensureRouteQueries(queryClient, [assetDetailQueryOptions(id)])
 }
 
-export async function loadAssetDetailData(
-  queryClient: QueryClient,
-  id: string,
-) {
-  await ensureRouteQueries(queryClient, [
-    assetDetailQueryOptions(id),
-    assetAuditLogQueryOptions(id),
-  ])
-}
+const assetDetailRouteData = routeData((id: string) => [
+  assetDetailQueryOptions(id),
+  assetAuditLogQueryOptions(id),
+])
+export const loadAssetDetailData = assetDetailRouteData.load
+export const prewarmAssetDetail = assetDetailRouteData.prewarm
 
-export async function prewarmAssetDetail(queryClient: QueryClient, id: string) {
-  await prewarmRouteQueries(queryClient, [
-    assetDetailQueryOptions(id),
-    assetAuditLogQueryOptions(id),
-  ])
-}
+const assetEditRouteData = routeData((id: string) => [
+  assetDetailQueryOptions(id),
+])
+export const loadAssetEditData = assetEditRouteData.load
+export const prewarmAssetEdit = assetEditRouteData.prewarm
 
-export async function loadAssetEditData(queryClient: QueryClient, id: string) {
-  await ensureRouteQueries(queryClient, [assetDetailQueryOptions(id)])
-}
-
-export async function prewarmAssetEdit(queryClient: QueryClient, id: string) {
-  await prewarmRouteQueries(queryClient, [assetDetailQueryOptions(id)])
-}
-
-export async function loadNewAssetData(queryClient: QueryClient) {
-  await ensureRouteQueries(queryClient, [
-    newAssetCustomersQueryOptions(),
-    assetTypesQueryOptions(),
-  ])
-}
-
-export async function prewarmNewAsset(queryClient: QueryClient) {
-  await prewarmRouteQueries(queryClient, [
-    newAssetCustomersQueryOptions(),
-    assetTypesQueryOptions(),
-  ])
-}
+const newAssetRouteData = routeData(() => [
+  newAssetCustomersQueryOptions(),
+  assetTypesQueryOptions(),
+])
+export const loadNewAssetData = newAssetRouteData.load
+export const prewarmNewAsset = newAssetRouteData.prewarm
 
 export function useAssetsListData({
   activeOrganizationId,

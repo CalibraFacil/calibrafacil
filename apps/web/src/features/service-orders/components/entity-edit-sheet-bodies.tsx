@@ -9,8 +9,6 @@ import {
 } from '@/features/assets/components/asset-edit-form'
 import { useAssetDetailData } from '@/features/assets/queries'
 import { Skeleton } from '@calibra-facil/ui/skeleton'
-import { operation } from '@calibra-facil/client-runtime'
-import { useAvailability } from '@/runtime/use-operation-availability'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 import { useCustomerGroupsList } from '@/features/customer-groups/queries'
 
@@ -29,10 +27,6 @@ function SheetFormSkeleton() {
   )
 }
 
-const CUSTOMER_GROUPS_OPERATIONS = [
-  operation('customerGroups', 'list'),
-] as const
-
 /**
  * Loads the full customer detail (+ groups) by its route slug and
  * renders the reusable edit form inside the Service Order sheet.
@@ -48,12 +42,8 @@ export function CustomerEditSheetBody({
 }) {
   const { data: customer, isLoading } = useCustomerDetailData(customerSlug)
   const { activeOrganizationId } = useDashboardContextState()
-  // Customer groups are cloud-only: shown whenever the call can run.
-  const hasCustomerGroups = useAvailability(CUSTOMER_GROUPS_OPERATIONS)
-  const groupsQuery = useCustomerGroupsList(
-    activeOrganizationId,
-    hasCustomerGroups,
-  )
+  const { query: groupsQuery, available: hasCustomerGroups } =
+    useCustomerGroupsList(activeOrganizationId)
   const groups = groupsQuery.data?.data ?? []
 
   if (isLoading || !customer) {
