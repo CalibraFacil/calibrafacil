@@ -1,3 +1,4 @@
+import { CRON_ENTRIES } from "./cron/schedule";
 import {
   failFast,
   failFastAsync,
@@ -9,11 +10,7 @@ import { assertRlsStartup } from "@calibra-facil/db/rls-startup";
 import { installGracefulShutdown } from "@calibra-facil/shared/graceful-shutdown";
 import app from "./index";
 import { GET as dispatchCron } from "./cron/dispatch";
-import {
-  CRON_ENTRIES,
-  createInFlightRuns,
-  startCronScheduler,
-} from "./lib/cron-scheduler";
+import { createInFlightRuns, startCronScheduler } from "./lib/cron-scheduler";
 import { flushErrorReporter } from "./lib/observability";
 import { createApiShutdownPlan } from "./server/shutdown";
 import { buildApiBootEnv } from "./server/startup";

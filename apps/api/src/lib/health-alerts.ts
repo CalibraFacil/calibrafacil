@@ -2,7 +2,8 @@ import { Cron } from "croner";
 import { db } from "@calibra-facil/db";
 import { cronRun } from "@calibra-facil/db/schema";
 import { countQueueJobsByStatus } from "@calibra-facil/db/queue";
-import { CRON_ENTRIES, type CronEntry } from "./cron-scheduler";
+import type { CronEntry } from "./cron-scheduler";
+import { CRON_ENTRIES } from "../cron/schedule";
 
 /**
  * What an operator must look at, apart from whether the API can serve
