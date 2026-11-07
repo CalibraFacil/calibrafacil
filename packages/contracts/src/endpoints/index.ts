@@ -1,4 +1,6 @@
 import { accreditedScopeEndpoints } from "./accredited-scope";
+import { publicInvitationEndpoints } from "./public-invitations";
+import { publicSignupEndpoints } from "./public-signup";
 import { assetEndpoints } from "./assets";
 import { calibrationRequestEndpoints } from "./calibration-requests";
 import { capaEndpoints } from "./capa";
@@ -25,6 +27,8 @@ import { trainingRecordEndpoints } from "./training-records";
 import { visitEndpoints } from "./visits";
 
 export * from "./define";
+export * from "./public-invitations";
+export * from "./public-signup";
 export * from "./signing-certificates";
 export * from "./sso";
 export * from "./portal-domains";
@@ -80,6 +84,8 @@ export const ENDPOINT_GROUPS = {
   portalDomains: portalDomainEndpoints,
   sso: ssoEndpoints,
   signingCertificates: signingCertificateEndpoints,
+  publicSignup: publicSignupEndpoints,
+  publicInvitations: publicInvitationEndpoints,
 } as const satisfies Record<string, EndpointGroup>;
 
 export type EndpointGroups = typeof ENDPOINT_GROUPS;

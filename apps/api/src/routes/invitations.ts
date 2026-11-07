@@ -1,4 +1,5 @@
 import { createRouter } from "../server/router";
+import { publicInvitationEndpoints } from "@calibra-facil/contracts";
 import { randomBytes } from "node:crypto";
 import { createLabAuth, sendLabAccountSetupEmail } from "@calibra-facil/auth";
 import {
@@ -16,6 +17,7 @@ import {
 } from "../lib/identity";
 import { appBaseUrl } from "@calibra-facil/shared/public-urls";
 import { toRecord } from "@calibra-facil/shared/record";
+import { mount } from "../lib/endpoint-mount";
 
 function getEnvValue(c: { env?: unknown }, key: string) {
   return toRecord(c.env)[key];
@@ -119,12 +121,20 @@ async function ensureInvitationUser(email: string) {
  * These endpoints do NOT require authentication - they are used by the
  * accept-invite flow where users are not yet signed up.
  */
-export const invitationsRouter = createRouter()
-  // =========================================================================
-  // GET /:id - Get invitation details (public)
-  // =========================================================================
-  .get("/:id", async (c) => {
-    const id = c.req.param("id");
+const PREFIX = "/api/invitations";
+
+export const invitationsRouter = createRouter();
+
+// =========================================================================
+// GET /:id - Get invitation details (public)
+// =========================================================================
+mount(
+  invitationsRouter,
+  PREFIX,
+  publicInvitationEndpoints.get,
+  [],
+  async (c, { params }) => {
+    const id = params.id;
 
     if (!id) {
       throw invalid("invalid_request", "ID de convite não fornecido");
@@ -139,7 +149,7 @@ export const invitationsRouter = createRouter()
       throw notFound("invitation_not_found", "Convite não encontrado");
     }
 
-    return c.json({
+    return {
       id: inv.id,
       email: inv.email,
       role: inv.role,
@@ -149,10 +159,17 @@ export const invitationsRouter = createRouter()
       organizationName: inv.organizationName,
       organizationSlug: inv.organizationSlug,
       inviterEmail: inv.inviterEmail ?? "",
-    });
-  })
-  .post("/:id/request-setup-link", async (c) => {
-    const id = c.req.param("id");
+    };
+  },
+);
+
+mount(
+  invitationsRouter,
+  PREFIX,
+  publicInvitationEndpoints.requestSetupLink,
+  [],
+  async (c, { params }) => {
+    const id = params.id;
 
     if (!id) {
       throw invalid("invalid_request", "ID de convite não fornecido");
@@ -200,8 +217,9 @@ export const invitationsRouter = createRouter()
       },
     });
 
-    return c.json({
-      setupLinkRequested: true,
+    return {
+      setupLinkRequested: true as const,
       userCreated: invitedUser.created,
-    });
-  });
+    };
+  },
+);

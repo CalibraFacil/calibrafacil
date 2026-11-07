@@ -70,7 +70,7 @@ export function SignUpPage() {
 
     setPending(true)
     try {
-      const result = await calibraApi.publicSignup.start(parsed.data)
+      const result = await calibraApi.publicSignup.start({ body: parsed.data })
       // The API answers 202 when the account exists but the setup e-mail could
       // not be sent. Claiming "confira o seu e-mail" there strands someone
       // waiting for a message that never comes, and retrying finds the account

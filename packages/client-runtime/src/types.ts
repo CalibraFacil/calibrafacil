@@ -28,6 +28,8 @@ import type {
   UpdateServiceSchema,
 } from "@calibra-facil/schemas";
 import type { AccreditedScopeApi } from "./modules/accredited-scope";
+import type { PublicInvitationsApi } from "./modules/public-invitations";
+import type { PublicSignupApi } from "./modules/public-signup";
 import type { AssetsApi } from "./modules/assets";
 import type { CalibrationRequestsApi } from "./modules/calibration-requests";
 import type { CapasApi } from "./modules/capa";
@@ -83,6 +85,7 @@ export type ServiceAuditLogData<TRecord = unknown> = {
 };
 
 import type {
+  SelfServeSignupResponse,
   PortalDomainResponse,
   SigningCertificate,
   SigningCertificatesListResponse,
@@ -516,9 +519,10 @@ export type { AccreditedScopeApi };
 // (`endpoints/reports.ts`, `modules/reports.ts`).
 export type { ReportsApi };
 
-export interface PublicSignupApi {
-  start<TInput = unknown>(input: TInput): Promise<SelfServeSignupResponse>;
-}
+// PUBLIC SIGN-UP and PUBLIC INVITATIONS: the DTOs and the clients are the
+// endpoint definitions' own (`endpoints/public-signup.ts`,
+// `endpoints/public-invitations.ts`).
+export type { PublicInvitationsApi, PublicSignupApi };
 
 // Non-conformances and CAPA: the clients are generated from the endpoint
 // definitions (`modules/`); their DTOs are the contract's.
@@ -738,14 +742,7 @@ export interface SessionsApi {
   revoke(sessionId: string): Promise<unknown>;
 }
 
-export type SelfServeSignupResponse = {
-  ok: true;
-  email?: string;
-  /** False when the account exists but the setup e-mail could not be sent. */
-  emailDelivered?: boolean;
-  error?: string;
-  code?: string;
-};
+export type { SelfServeSignupResponse };
 
 // SSO: the DTOs are the contract schemas' types (`endpoints/sso.ts`); the client
 // is generated from the endpoint definitions (`modules/sso.ts`).
@@ -1023,11 +1020,6 @@ export type {
   SigningCertificatesListResponse,
   UnsignedIssuanceSetting,
 };
-
-export interface PublicInvitationsApi {
-  get<TResponse = unknown>(id: string): Promise<TResponse>;
-  requestSetupLink<TResponse = unknown>(id: string): Promise<TResponse>;
-}
 
 export type LabSetupMetadata = {
   status:

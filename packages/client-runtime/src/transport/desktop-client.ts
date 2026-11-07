@@ -443,13 +443,9 @@ export function createDesktopApiClient(
     },
     accreditedScope: desktopEndpointStubs("accreditedScope"),
     reports: desktopEndpointStubs("reports"),
-    publicInvitations: desktopCloudOnlyStubs("publicInvitations", {
-      action: "Convites",
-    }),
+    publicInvitations: desktopEndpointStubs("publicInvitations"),
     // Opening an account happens on the cloud, before any desktop shell exists.
-    publicSignup: desktopCloudOnlyStubs("publicSignup", {
-      action: "Cadastro de laboratório",
-    }),
+    publicSignup: desktopEndpointStubs("publicSignup"),
     labSetup: desktopCloudOnlyStubs("labSetup", {
       action: "Configuração de acesso",
     }),

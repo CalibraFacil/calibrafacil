@@ -92,7 +92,9 @@ function AcceptInvitationPage() {
     setIsRequestingSetupLink(true)
 
     try {
-      await calibraApi.publicInvitations.requestSetupLink(id)
+      await calibraApi.publicInvitations.requestSetupLink({
+        params: { id: id },
+      })
       toast.success('Enviamos um link de acesso para o email convidado.')
     } catch (err) {
       toast.error(

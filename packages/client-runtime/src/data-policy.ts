@@ -219,13 +219,8 @@ export const calibraApiPolicyRegistry = {
   // definitions).
   accreditedScope: endpointPolicies(ENDPOINT_GROUPS.accreditedScope),
   reports: endpointPolicies(ENDPOINT_GROUPS.reports),
-  publicSignup: {
-    start: "cloud-only",
-  },
-  publicInvitations: {
-    get: "cloud-only",
-    requestSetupLink: "cloud-only",
-  },
+  publicSignup: endpointPolicies(ENDPOINT_GROUPS.publicSignup),
+  publicInvitations: endpointPolicies(ENDPOINT_GROUPS.publicInvitations),
   labSetup: {
     get: "cloud-only",
     requestMagicLink: "cloud-only",

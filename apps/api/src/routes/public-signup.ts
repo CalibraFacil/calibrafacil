@@ -1,11 +1,10 @@
 import { createRouter } from "../server/router";
-import { zValidator } from "@hono/zod-validator";
+import { publicSignupEndpoints } from "@calibra-facil/contracts";
 import {
   buildLabClaimUrl,
   createLabAccountSetupToken,
 } from "@calibra-facil/auth/lab-access";
 import { sendLabAccountSetupEmail } from "@calibra-facil/auth";
-import { SelfServeSignupSchema } from "@calibra-facil/schemas";
 import {
   checkSignupEmail,
   SIGNUP_EMAIL_REJECTION_MESSAGES,
@@ -29,6 +28,7 @@ import {
   provisionLabAccount,
 } from "../services/lab-provisioning";
 import { appBaseUrl } from "@calibra-facil/shared/public-urls";
+import { mount } from "../lib/endpoint-mount";
 
 /**
  * Public, UNAUTHENTICATED self-serve sign-up for a laboratory.
@@ -91,13 +91,23 @@ async function hasExistingLabMembership(email: string) {
   return hasLabMembership(existing.id);
 }
 
-export const publicSignupRouter = createRouter()
-  .use("*", async (c, next) => {
-    await next();
-    c.header("Cache-Control", "private, no-store, max-age=0");
-    c.header("X-Robots-Tag", "noindex, nofollow");
-  })
-  .post("/", zValidator("json", SelfServeSignupSchema), async (c) => {
+const PREFIX = "/api/public/signup";
+
+export const publicSignupRouter = createRouter();
+
+// No cache and no indexing, whatever the answer.
+publicSignupRouter.use("*", async (c, next) => {
+  await next();
+  c.header("Cache-Control", "private, no-store, max-age=0");
+  c.header("X-Robots-Tag", "noindex, nofollow");
+});
+
+mount(
+  publicSignupRouter,
+  PREFIX,
+  publicSignupEndpoints.start,
+  [],
+  async (c, { body }) => {
     if (!publicSignupEnabled(c)) {
       throw notFound(
         "not_found",
@@ -105,11 +115,11 @@ export const publicSignupRouter = createRouter()
       );
     }
 
-    const input = c.req.valid("json");
+    const input = body;
 
     // Honeypot: answer exactly like a success so a bot cannot tell it failed.
     if (input.website.trim().length > 0) {
-      return c.json({ ok: true });
+      return { ok: true as const };
     }
 
     const emailCheck = checkSignupEmail(input.email);
@@ -206,9 +216,10 @@ export const publicSignupRouter = createRouter()
             error,
           });
 
+          // 202: a status the definition (200) does not describe.
           return c.json(
             {
-              ok: true,
+              ok: true as const,
               email: provisioned.owner.email,
               emailDelivered: false,
               error:
@@ -219,13 +230,14 @@ export const publicSignupRouter = createRouter()
           );
         }
 
-        return c.json({ ok: true, email: provisioned.owner.email });
+        return { ok: true as const, email: provisioned.owner.email };
       } catch (error) {
         await releaseSignupSlot(reservationId);
         throw error;
       }
     }
-  });
+  },
+);
 
 /**
  * Mint the claim token and mail it.
