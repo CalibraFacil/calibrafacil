@@ -36,7 +36,7 @@ vi.mock("../../../lib/storage", async (importOriginal) => {
   };
 });
 
-vi.mock("../../../lib/oot-notifications", () => ({
+vi.mock("../../jobs/oot/oot-notifications", () => ({
   ensureStandardRecall: vi.fn().mockResolvedValue(undefined),
   createStandardRecallNotifications: vi.fn().mockResolvedValue(undefined),
 }));

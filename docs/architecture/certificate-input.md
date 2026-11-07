@@ -8,7 +8,7 @@ certificate said.
 
 ## What is frozen
 
-The approval command (`apps/api/src/modules/jobs/approve-job.ts`) builds one
+The approval command (`apps/api/src/domains/jobs/commands/approve-job.ts`) builds one
 document, in the **same transaction** as the status change and its
 `job_audit_log` row, and stores it in `certificate_input` (1:1 with the job,
 `organization_id` + the composite `(job_id, organization_id)` tenant key of

@@ -18,10 +18,11 @@ import { requireApiScope } from "../../../../middleware/api-key-auth";
 import {
   createCalibrationJob,
   jobCreationClientErrors,
-} from "../../../../lib/jobs";
+  executeJob,
+  submitJob,
+  editJob,
+} from "../../../jobs";
 import { notifyJobAssigned } from "@calibra-facil/notifications";
-import { executeJob, submitJob } from "../../../../modules/jobs/submit-job";
-import { editJob } from "../../../../modules/jobs/edit-job";
 import { type PublicApiV2Env } from "./env";
 import { JobCreatePublicSchema, PublicUpdateJobSchema } from "./schemas";
 import { apiKeyActor } from "./actor";

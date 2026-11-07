@@ -17,38 +17,38 @@
 // at the commit this table was introduced; the pre-checks and the
 // compare-and-set WHERE clauses of those paths now read this table):
 //
-//   create           apps/api/src/lib/jobs.ts:444-457 (new job, status DRAFT)
-//                    apps/api/src/routes/jobs.ts:2871,2891 (the amendment clone, DRAFT)
-//   execute          apps/api/src/modules/jobs/submit-job.ts (`executeJob`: save
+//   create           apps/api/src/domains/jobs/jobs.ts:444-457 (new job, status DRAFT)
+//                    apps/api/src/domains/jobs/routes/jobs.ts:2871,2891 (the amendment clone, DRAFT)
+//   execute          apps/api/src/domains/jobs/commands/submit-job.ts (`executeJob`: save
 //                      worksheet / record results, for the cloud route, the
 //                      public API and the desktop sync apply alike:
 //                      DRAFT -> IN_PROGRESS, otherwise the status is kept)
 //                    packages/local-db/src/execution.ts:245,252-257 (offline save)
-//   submit           apps/api/src/modules/jobs/submit-job.ts (`submitJob`, for
+//   submit           apps/api/src/domains/jobs/commands/submit-job.ts (`submitJob`, for
 //                      the cloud route, the public API and the desktop sync)
 //                    packages/local-db/src/execution.ts:245,253
-//   reject           apps/api/src/modules/jobs/reject-job.ts (`rejectJob`, for the
+//   reject           apps/api/src/domains/jobs/commands/reject-job.ts (`rejectJob`, for the
 //                      cloud route and the public API)
-//   approve          apps/api/src/modules/jobs/approve-job.ts:274,385
+//   approve          apps/api/src/domains/jobs/commands/approve-job.ts:274,385
 //                      (REVIEW only: a REJECTED job must be resubmitted first)
 //   complete_render  packages/jobs-core/src/index.ts:488-489,529,1809,1959 (the render
 //                      worker: GENERATING_PDF -> APPROVED; SUPERSEDED keeps its
 //                      status while the watermarked PDF is regenerated)
 //   fail_render      packages/jobs-core/src/index.ts:727,732 (setJobError)
 //                    packages/db/src/queue-render-recovery.ts:80,90 (backstop)
-//   retry_render     apps/api/src/modules/jobs/retry-render.ts (`retryRender`: a
+//   retry_render     apps/api/src/domains/jobs/commands/retry-render.ts (`retryRender`: a
 //                      manager re-dispatches the certificate of a failed render,
 //                      roadmap 2 C5; the approval and its frozen input stand)
-//   revert_approval  apps/api/src/modules/jobs/approve-job.ts:532,549 (dispatch
+//   revert_approval  apps/api/src/domains/jobs/commands/approve-job.ts:532,549 (dispatch
 //                      failed after the approval: back to the status approved from)
-//   cancel           apps/api/src/modules/jobs/cancel-job.ts (`cancelJob`, for the
+//   cancel           apps/api/src/domains/jobs/commands/cancel-job.ts (`cancelJob`, for the
 //                      cloud route, the public API DELETE and the visit's
 //                      remove-job)
-//                    apps/api/src/modules/jobs/job-status-transitions.ts
-//   amend            apps/api/src/modules/jobs/amend-job.ts (`amendJob`)
-//   edit             apps/api/src/modules/jobs/edit-job.ts (`editJob`: technician /
+//                    apps/api/src/domains/jobs/commands/job-status-transitions.ts
+//   amend            apps/api/src/domains/jobs/commands/amend-job.ts (`amendJob`)
+//   edit             apps/api/src/domains/jobs/commands/edit-job.ts (`editJob`: technician /
 //                      due date, for the cloud PUT and the public PATCH)
-//   assign           apps/api/src/modules/jobs/assign-job.ts (`assignJob`: technician,
+//   assign           apps/api/src/domains/jobs/commands/assign-job.ts (`assignJob`: technician,
 //                      with the competence gate)
 //
 // The rules are the ones the code paths had, except where an owner decision

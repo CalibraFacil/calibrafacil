@@ -221,7 +221,7 @@ as `any`. Response contracts replace that, one domain at a time.
    `.json()` under `apps/portal/src` outside that module (empty baseline).
 4. **CI: contract test.** An int spec calls the real route (real middleware, real
    Postgres) and `safeParse`s the body with the same schema:
-   `apps/api/src/routes/jobs-contract.int.spec.ts`,
+   `apps/api/src/domains/jobs/routes/jobs-contract.int.spec.ts`,
    `portal-overview-contract.int.spec.ts`. Drift between the handler's runtime
    values (including the JSON snapshot columns) and the schema fails CI.
    `packages/contracts/src/jobs.fixtures.ts` has contract-valid payloads for unit

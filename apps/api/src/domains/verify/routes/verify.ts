@@ -1,11 +1,11 @@
 import { createRouter } from "../../../server/router";
 import { createHash } from "node:crypto";
 import { normalizeAccreditationNumber } from "@calibra-facil/shared";
-import { issuedSealOf } from "../../../lib/frozen-seal";
 import {
+  issuedSealOf,
   loadCertificateLifecycles,
   withdrawalOf,
-} from "../../../lib/certificate-lifecycle";
+} from "../../jobs";
 import { orgDb } from "../../../lib/org-db";
 import { conflict, invalid, notFound } from "../../../lib/domain-errors";
 import {

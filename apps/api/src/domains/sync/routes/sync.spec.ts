@@ -130,8 +130,8 @@ const mocks = vi.hoisted(() => {
 // The reverse-traceability index is written on the submit's own transaction;
 // its rewrite (a delete and an insert) would consume the select queue here, and
 // is covered against a real database (jobs-contract.int.spec.ts).
-vi.mock("../../../lib/job-standards", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../lib/job-standards")>()),
+vi.mock("../../jobs/job-standards", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../jobs/job-standards")>()),
   syncJobStandardLinks: vi.fn(async () => undefined),
 }));
 

@@ -29,10 +29,7 @@ import {
   withLabPermission,
   type AuthVariables,
 } from "../../../middleware/permission";
-import {
-  createCalibrationJob,
-  jobCreationClientErrors,
-} from "../../../lib/jobs";
+import { createCalibrationJob, jobCreationClientErrors } from "../../jobs";
 import {
   notifyCalibrationRequestApproved,
   notifyCalibrationRequestConverted,

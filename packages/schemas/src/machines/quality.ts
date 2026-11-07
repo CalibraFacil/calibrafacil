@@ -96,7 +96,7 @@ export const NON_CONFORMANCE_MACHINE = defineStateMachine({
 
 // standard_recall.status: the customer-notification campaign for a reference
 // standard found out of tolerance (§7.10).
-//   create  apps/api/src/lib/oot-notifications.ts `ensureStandardRecall` (a
+//   create  apps/api/src/domains/jobs/oot/oot-notifications.ts `ensureStandardRecall` (a
 //             draft per standard; a new OOT after a SENT recall starts a fresh
 //             campaign)
 //   send    routes/standards.ts POST /:id/recall/send: the approval and the
@@ -123,10 +123,10 @@ export const STANDARD_RECALL_MACHINE = defineStateMachine({
 });
 
 // oot_notification.status: one customer's notification of a recall.
-//   create       apps/api/src/lib/oot-notifications.ts (one per recall and job)
+//   create       apps/api/src/domains/jobs/oot/oot-notifications.ts (one per recall and job)
 //   generate     packages/jobs-core/src/oot-notifications.ts: the letter PDF
 //                  (re-rendering keeps the status it reached)
-//   send         apps/api/src/lib/oot-email-drain.ts: e-mailed
+//   send         apps/api/src/domains/jobs/oot/oot-email-drain.ts: e-mailed
 //   acknowledge  the e-mailed link (lib/oot-acknowledgement.ts), the portal
 //                  (routes/portal.ts) and a manual registration
 //                  (routes/non-conformances.ts); first acknowledgement wins
@@ -169,7 +169,7 @@ export const OOT_NOTIFICATION_MACHINE = defineStateMachine({
 
 // asset_oot_event.status: a customer's instrument found out of tolerance as
 // found; the customer records its impact assessment in the portal.
-//   create  apps/api/src/lib/asset-oot-events.ts (non-conforming as-found)
+//   create  apps/api/src/domains/jobs/oot/asset-oot-events.ts (non-conforming as-found)
 //   assess  routes/portal.ts POST /fleet/oot-events/:id/assessment (one per event)
 export const ASSET_OOT_EVENT_STATUSES = ["OPEN", "ASSESSED"] as const;
 export type AssetOotEventStatus = (typeof ASSET_OOT_EVENT_STATUSES)[number];

@@ -12,19 +12,19 @@ import {
 // production carry exactly these shapes, so each must keep parsing (and parse to
 // itself: no field is dropped or renamed).
 const PRODUCER_FIXTURES = {
-  // apps/api/src/modules/jobs/approve-job.ts (outbox stage + post-commit dispatch)
+  // apps/api/src/domains/jobs/commands/approve-job.ts (outbox stage + post-commit dispatch)
   "certificate render from approval (type omitted)": {
     jobId: 42,
     userId: "user_1",
   },
-  // apps/api/src/routes/jobs.ts (amendment re-render); rows read back from
+  // apps/api/src/domains/jobs/routes/jobs.ts (amendment re-render); rows read back from
   // the queue written by getMessageType-era code may carry the explicit type
   "certificate render with explicit type": {
     type: "CERTIFICATE",
     jobId: 42,
     userId: "user_1",
   },
-  // apps/api/src/routes/jobs.ts (POST /:id/label)
+  // apps/api/src/domains/jobs/routes/jobs.ts (POST /:id/label)
   label: { type: "LABEL", jobId: 42, userId: "user_1" },
   // apps/api/src/domains/service-orders/service-order.documents.ts
   "service order intake document": {
@@ -63,7 +63,7 @@ const PRODUCER_FIXTURES = {
     documentId: 3,
     userId: "user_1",
   },
-  // apps/api/src/lib/oot-notifications.ts
+  // apps/api/src/domains/jobs/oot/oot-notifications.ts
   "out-of-tolerance notification": {
     type: "OOT_NOTIFICATION",
     notificationId: 11,
@@ -75,7 +75,7 @@ const PRODUCER_FIXTURES = {
     deliveryId: "5c2f2c1e-0000-4000-8000-000000000001",
     organizationId: "org_1",
   },
-  // apps/api/src/modules/jobs/approve-job.ts (outbox, staged in the approval transaction)
+  // apps/api/src/domains/jobs/commands/approve-job.ts (outbox, staged in the approval transaction)
   "job approved notification": {
     type: "JOB_APPROVED_NOTIFICATION",
     jobId: 42,

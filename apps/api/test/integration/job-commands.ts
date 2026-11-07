@@ -2,11 +2,11 @@ import { withOrg } from "../../src/lib/org-context";
 import {
   amendJob,
   type AmendJobCommand,
-} from "../../src/modules/jobs/amend-job";
+} from "../../src/domains/jobs/commands/amend-job";
 import {
   cancelJob,
   type CancelJobCommand,
-} from "../../src/modules/jobs/cancel-job";
+} from "../../src/domains/jobs/commands/cancel-job";
 
 /**
  * The job lifecycle commands take the context of the caller's `withOrg`. These

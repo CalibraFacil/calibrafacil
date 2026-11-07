@@ -10,7 +10,7 @@ import { endpoint, type EndpointGroup } from "./define";
 /**
  * The laboratory's certificate-numbering profile (number format, name
  * convention, sequence). Response schemas are wire schemas written from what
- * `apps/api/src/routes/certificate-numbering.ts` returns.
+ * `apps/api/src/domains/jobs/routes/certificate-numbering.ts` returns.
  *
  * Not client-facing, so not defined here: `GET /audit-log` (no SDK method).
  * Cloud-only: the desktop shows a fixed default profile instead

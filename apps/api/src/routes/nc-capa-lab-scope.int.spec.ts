@@ -43,7 +43,7 @@ import {
 } from "@calibra-facil/db/schema";
 import { nonConformancesRouter } from "./non-conformances";
 import { capaRouter } from "./capa";
-import { ootAckRouter } from "./oot-ack";
+import { ootAckRouter } from "../domains/jobs/routes/oot-ack";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";

@@ -32,7 +32,7 @@ import {
  * Reads an image object (the lab logo, the approver's drawn signature) by its
  * storage key: the bytes, null when no object backs the key (or no storage is
  * configured), and a throw when storage failed. The caller owns the storage;
- * see apps/api/src/lib/certificate-input-images.ts.
+ * see apps/api/src/domains/jobs/certificates/certificate-input-images.ts.
  */
 export type CertificateImageReader = (
   key: string,

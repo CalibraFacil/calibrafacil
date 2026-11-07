@@ -169,8 +169,8 @@ binds the real portal scope; tenant isolation tested.
 
 | Mini-spec                    | Layer (real path)                                                                                     | Depends on | Risk                            | Mode                                      |
 | ---------------------------- | ----------------------------------------------------------------------------------------------------- | ---------- | ------------------------------- | ----------------------------------------- |
-| A1 as-found verdict (pure)   | `apps/api/src/lib/as-found-reliability-verdict.ts` (mirror `portal-certificate-verdict.ts`)           | —          | med (metrology rule)            | loopable-with-verifier (oracle)           |
-| A2 persist verdict on job    | `packages/db` schema + approval wiring (`apps/api/src/routes/jobs.ts`)                                | A1         | **high (approval-adjacent)**    | **pair-don't-loop**                       |
+| A1 as-found verdict (pure)   | `apps/api/src/domains/jobs/as-found-reliability-verdict.ts` (mirror `portal-certificate-verdict.ts`)  | —          | med (metrology rule)            | loopable-with-verifier (oracle)           |
+| A2 persist verdict on job    | `packages/db` schema + approval wiring (`apps/api/src/domains/jobs/routes/jobs.ts`)                   | A1         | **high (approval-adjacent)**    | **pair-don't-loop**                       |
 | B1 asset interval columns    | `packages/db/src/schema.ts` + hand migration                                                          | —          | med                             | pair-don't-loop (migration review)        |
 | B2 portal write endpoint     | `apps/api/src/domains/portal/routes/portal.ts` + portal scope                                         | B1, B3     | **high + critical (new authz)** | **pair-don't-loop**                       |
 | B3 interval payload Zod      | `packages/schemas`                                                                                    | —          | low                             | loopable-with-verifier                    |

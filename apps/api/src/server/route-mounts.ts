@@ -4,8 +4,8 @@ import { apiKeysRouter } from "../routes/api-keys";
 import { assetTypesRouter } from "../routes/asset-types";
 import { assetsRouter } from "../routes/assets";
 import { onboardingRouter } from "../routes/onboarding";
-import { calibrationRequestsRouter } from "../domains/visits/routes";
 import {
+  calibrationRequestsRouter,
   visitJobsRouter,
   visitRescheduleRequestsRouter,
   visitsRouter,
@@ -14,11 +14,17 @@ import { authorizedSignatoriesRouter } from "../routes/authorized-signatories";
 import { capaRouter } from "../routes/capa";
 import { proficiencyTestsRouter } from "../routes/proficiency-tests";
 import { spcRouter } from "../routes/spc";
-import { certificateNumberingRouter } from "../routes/certificate-numbering";
+import {
+  certificateNumberingRouter,
+  jobsRouter,
+  ootAckRouter,
+} from "../domains/jobs/routes";
 import { competencesRouter } from "../routes/competences";
-import { customerGroupsRouter } from "../domains/customers/routes";
-import { customersRouter } from "../domains/customers/routes";
-import { dashboardRouter } from "../domains/reports/routes";
+import {
+  customerGroupsRouter,
+  customersRouter,
+} from "../domains/customers/routes";
+import { dashboardRouter, reportsRouter } from "../domains/reports/routes";
 import { environmentalLimitsRouter } from "../routes/environmental-limits";
 import { financeRouter } from "../routes/finance";
 import { integrationsRouter } from "../routes/integrations";
@@ -26,35 +32,36 @@ import { invitationsRouter } from "../routes/invitations";
 import { labSetupRouter } from "../routes/lab-setup";
 import { legalMetrologyRegulationsRouter } from "../routes/legal-metrology-regulations";
 import { runApiHealthCheck } from "../lib/health";
-import { jobsRouter } from "../routes/jobs";
 import { methodsRouter } from "../domains/methods/routes";
-import { notificationsRouter } from "../domains/notifications/routes";
+import {
+  notificationsRouter,
+  webhooksRouter,
+} from "../domains/notifications/routes";
 import { nonConformancesRouter } from "../routes/non-conformances";
-import { ootAckRouter } from "../routes/oot-ack";
 import { organizationLifecycleRouter } from "../routes/organization-lifecycle";
 import { organizationProfileRouter } from "../routes/organization-profile";
 import { organizationMediaRouter } from "../routes/organization-media";
 import { emailDomainsRouter } from "../routes/email-domains";
 import { portalDomainsRouter } from "../routes/portal-domains";
-import { portalNotificationsRouter } from "../domains/portal/routes";
-import { portalRequestsRouter } from "../domains/portal/routes";
-import { portalVisitsRouter } from "../domains/portal/routes";
-import { portalRouter } from "../domains/portal/routes";
-import { profileMediaRouter } from "../routes/profile-media";
-import { publicApiRouter } from "../domains/public-api/routes";
 import {
+  portalNotificationsRouter,
+  portalRequestsRouter,
+  portalVisitsRouter,
+  portalRouter,
+} from "../domains/portal/routes";
+import { profileMediaRouter } from "../routes/profile-media";
+import {
+  publicApiRouter,
   publicApiV2DocsRouter,
   publicApiV2Router,
 } from "../domains/public-api/routes";
 import { publicSignupRouter } from "../routes/public-signup";
-import { reportsRouter } from "../domains/reports/routes";
 import {
   portalServiceOrdersRouter,
   publicServiceOrderAccessRouter,
   serviceOrdersRouter,
 } from "../domains/service-orders/routes";
-import { materialsRouter } from "../domains/catalog/routes";
-import { servicesRouter } from "../domains/catalog/routes";
+import { materialsRouter, servicesRouter } from "../domains/catalog/routes";
 import { sessionsRouter } from "../routes/sessions";
 import { signaturesRouter } from "../routes/signatures";
 import { signingRouter } from "../routes/signing";
@@ -65,7 +72,6 @@ import { trainingRecordsRouter } from "../routes/training-records";
 import { unitsRouter } from "../routes/units";
 import { magicLinkRouter } from "../routes/magic-link";
 import { verifyRouter } from "../domains/verify/routes";
-import { webhooksRouter } from "../domains/notifications/routes";
 import type { Env } from "./env";
 
 import { readCronSuccesses, readHealthAlerts } from "../lib/health-alerts";

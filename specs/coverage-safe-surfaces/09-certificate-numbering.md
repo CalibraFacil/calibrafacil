@@ -1,7 +1,7 @@
 # Mini-spec: certificate-numbering pure helpers coverage
 
-Target: `apps/api/src/lib/certificate-numbering.ts`
-Test file: `apps/api/src/lib/__tests__/certificate-numbering.spec.ts` (Vitest `.spec.ts`)
+Target: `apps/api/src/domains/jobs/certificates/certificate-numbering.ts`
+Test file: `apps/api/src/domains/jobs/certificates/__tests__/certificate-numbering.spec.ts` (Vitest `.spec.ts`)
 
 ## Context
 

@@ -30,7 +30,7 @@ import {
   seedOrg,
 } from "../../../../test/integration/seed";
 import { executableMethodSnapshot } from "../../../../test/integration/executable-method";
-import { jobsRouter } from "../../../routes/jobs";
+import { jobsRouter } from "../../jobs/routes/jobs";
 import { publicApiV2Router } from "./public-api-v2";
 import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 

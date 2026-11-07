@@ -23,7 +23,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { organizationOf } from "../../../../test/integration/organization-of";
 import { serviceOrdersRouter } from "./service-orders";
 import { withOrg } from "../../../lib/org-context";
-import { createCalibrationJob } from "../../../lib/jobs";
+import { createCalibrationJob } from "../../jobs/jobs";
 import { db } from "@calibra-facil/db";
 import {
   asset,
@@ -125,7 +125,7 @@ async function seedAsset(params: {
 
 /**
  * Seed a PUBLISHED method with a compiled artifact consistent enough to pass
- * validatePublishedMethodCompiledArtifact in apps/api/src/lib/jobs.ts.
+ * validatePublishedMethodCompiledArtifact in apps/api/src/domains/jobs/jobs.ts.
  */
 async function seedPublishedMethod(params: {
   organizationId: string;

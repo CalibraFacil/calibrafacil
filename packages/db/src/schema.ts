@@ -3991,7 +3991,7 @@ export const calibrationJob = pgTable(
     // As-found (pre-adjustment) conformity verdict — the reliability signal for
     // ILAC-G24 / NCSL RP-1 interval analysis. Derived ONCE at approval from the
     // frozen `results` (`margem_conformidade_antes`, NOT the as-left `_apos`) via
-    // `apps/api/src/lib/as-found-reliability-verdict.ts`. UNKNOWN when the method
+    // `apps/api/src/domains/jobs/as-found-reliability-verdict.ts`. UNKNOWN when the method
     // emits no as-found margin. Never feeds any certificate/approval logic.
     asFoundConformity: text("as_found_conformity").$type<
       "CONFORMING" | "NON_CONFORMING" | "UNKNOWN"

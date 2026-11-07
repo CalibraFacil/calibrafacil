@@ -167,7 +167,7 @@ async function seedAsset(params: {
 
 /**
  * Seed a PUBLISHED calibration method with a minimal compiled artifact that
- * satisfies validatePublishedMethodCompiledArtifact in apps/api/src/lib/jobs.ts.
+ * satisfies validatePublishedMethodCompiledArtifact in apps/api/src/domains/jobs/jobs.ts.
  * Returns method.id.
  *
  * Requires:

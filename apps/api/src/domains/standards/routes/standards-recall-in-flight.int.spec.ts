@@ -24,7 +24,7 @@ import {
   standardRecall,
 } from "@calibra-facil/db/schema";
 import { standardsRouter } from "./standards";
-import { jobsRouter } from "../../../routes/jobs";
+import { jobsRouter } from "../../jobs/routes/jobs";
 import { loginAs } from "../../../../test/integration/setup";
 import { truncateAll } from "../../../../test/integration/db";
 import { seedOrg, seedStandard } from "../../../../test/integration/seed";

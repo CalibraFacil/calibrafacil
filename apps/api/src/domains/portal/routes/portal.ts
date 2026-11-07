@@ -102,7 +102,12 @@ import {
   frozenSealColumn,
   frozenSealJoin,
   issuedSealOf,
-} from "../../../lib/frozen-seal";
+  createPortalAmendmentChainLoader,
+  resolvePortalAmendmentInfo,
+  PORTAL_TERMINAL_CERTIFICATE_STATUSES,
+  loadCertificateLifecycles,
+  withdrawalOf,
+} from "../../jobs";
 import { isRecord } from "@calibra-facil/shared/record";
 
 // Mirrors the portal frontend's DUE_SOON window (apps/portal calibration-status).
@@ -359,15 +364,6 @@ import { conflict, gone, invalid, notFound } from "../../../lib/domain-errors";
 import { withOrg } from "../../../lib/org-context";
 import { requestActor } from "../../../middleware/request-actor";
 import type { OrgDb } from "@calibra-facil/db/for-org";
-import {
-  createPortalAmendmentChainLoader,
-  resolvePortalAmendmentInfo,
-  PORTAL_TERMINAL_CERTIFICATE_STATUSES,
-} from "../../../lib/certificate-amendment-chain";
-import {
-  loadCertificateLifecycles,
-  withdrawalOf,
-} from "../../../lib/certificate-lifecycle";
 import { portalBaseUrl } from "@calibra-facil/shared/public-urls";
 
 /**

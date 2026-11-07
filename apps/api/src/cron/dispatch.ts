@@ -8,17 +8,19 @@ import {
 } from "../modules/integrations";
 import { processScheduledIntegrationSyncs } from "@calibra-facil/jobs-core/integrations";
 import { cleanupExpiredAuthRecords } from "../lib/auth-maintenance";
-import { drainOotEmailOutbox } from "../lib/oot-email-drain";
+import {
+  drainOotEmailOutbox,
+  runCertificateDriftCheck,
+  reconcileApprovalEffects,
+} from "../domains/jobs";
 import { drainServiceOrderEmailOutbox } from "../domains/service-orders";
 import { runStaleJobBackstop } from "../lib/stale-job-backstop";
 import { createWorkerRuntimeEnv } from "../lib/runtime-env";
 import { runCron } from "./cron-run";
 import { CRON_SCHEDULE, isCronJobName, type CronJobName } from "./schedule";
-import { runCertificateDriftCheck } from "../lib/certificate-drift";
 import { runRecordsPurge } from "../lib/records-purge";
 import { runAuditChainVerification } from "../lib/audit-chain";
 import { purgeSyncChangeLog } from "../domains/sync";
-import { reconcileApprovalEffects } from "../lib/approval-effects-reconciler";
 import {
   createR2Client,
   downloadFromR2,
