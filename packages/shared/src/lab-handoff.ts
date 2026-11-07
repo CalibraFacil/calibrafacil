@@ -11,10 +11,9 @@ export function labHandoffUrl(
   webAppUrl: string,
   organizationId: string,
 ): string {
-  const search = new URLSearchParams({
-    [LAB_HANDOFF_ORGANIZATION_PARAM]: organizationId,
-  });
-  return `${webAppUrl.replace(/\/+$/, "")}/dashboard?${search.toString()}`;
+  const url = new URL("/dashboard", webAppUrl);
+  url.searchParams.set(LAB_HANDOFF_ORGANIZATION_PARAM, organizationId);
+  return url.toString();
 }
 
 /** The organization a handoff link names, or null when the search has none. */
