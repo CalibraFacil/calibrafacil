@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 
+import { invalid, notFound } from "../lib/domain-errors";
 import { revokeOwnSession } from "../lib/identity";
 import { requireLabAuth, type AuthVariables } from "../middleware/permission";
 
@@ -11,7 +12,7 @@ export const sessionsRouter = new Hono<{ Variables: AuthVariables }>().post(
     try {
       body = await c.req.json();
     } catch {
-      return c.json({ error: "Invalid JSON body" }, 400);
+      throw invalid("invalid_request", "Invalid JSON body");
     }
 
     const bodyRecord =
@@ -24,14 +25,14 @@ export const sessionsRouter = new Hono<{ Variables: AuthVariables }>().post(
         : "";
 
     if (!sessionId) {
-      return c.json({ error: "sessionId is required" }, 400);
+      throw invalid("invalid_request", "sessionId is required");
     }
 
     const currentSession = c.get("session");
     const userId = currentSession.user.id;
 
     if (!(await revokeOwnSession(userId, sessionId))) {
-      return c.json({ error: "Session not found" }, 404);
+      throw notFound("session_not_found", "Session not found");
     }
 
     return c.json({ status: true });

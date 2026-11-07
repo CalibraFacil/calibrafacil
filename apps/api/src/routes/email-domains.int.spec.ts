@@ -11,7 +11,7 @@ vi.mock("@calibra-facil/email-sender", async (importOriginal) => ({
   ...provider,
 }));
 
-import { emailDomainsRouter } from "./email-domains";
+import { emailDomainsRouter as bareEmailDomainsRouter } from "./email-domains";
 import { db } from "@calibra-facil/db";
 import {
   organization,
@@ -32,6 +32,9 @@ import {
   removeEmailDomain,
 } from "../lib/email-domain-lifecycle";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const emailDomainsRouter = withErrorHandling(bareEmailDomainsRouter);
 
 const RAW_KEY = "re_legacy_test_key_1234";
 const PLATFORM_KEY = "re_platform_test_key_5678";

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { apiKeysRouter } from "./api-keys";
+import { apiKeysRouter as bareApiKeysRouter } from "./api-keys";
 import { db } from "@calibra-facil/db";
 import { organizationApiKey } from "@calibra-facil/db/schema";
 import { createApiKeySecret } from "../lib/api-keys";
@@ -7,6 +7,9 @@ import { eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const apiKeysRouter = withErrorHandling(bareApiKeysRouter);
 
 // Real-DB + real-RBAC integration test for the API-key custody router.
 // Only the better-auth lab session is mocked (test/integration/setup.ts); the

@@ -11,6 +11,12 @@ import {
   SIGNUP_EMAIL_REJECTION_MESSAGES,
 } from "@calibra-facil/shared";
 
+import {
+  DomainError,
+  conflict,
+  notFound,
+  unprocessable,
+} from "../lib/domain-errors";
 import { checkDomainHasMx } from "../lib/email-domain-mx";
 import {
   completeSignupReservation,
@@ -93,12 +99,9 @@ export const publicSignupRouter = new Hono()
   })
   .post("/", zValidator("json", SelfServeSignupSchema), async (c) => {
     if (!publicSignupEnabled(c)) {
-      return c.json(
-        {
-          error:
-            "O cadastro automático está indisponível. Fale com a nossa equipe.",
-        },
-        404,
+      throw notFound(
+        "not_found",
+        "O cadastro automático está indisponível. Fale com a nossa equipe.",
       );
     }
 
@@ -111,31 +114,25 @@ export const publicSignupRouter = new Hono()
 
     const emailCheck = checkSignupEmail(input.email);
     if (!emailCheck.ok) {
-      return c.json(
-        { error: SIGNUP_EMAIL_REJECTION_MESSAGES[emailCheck.reason] },
-        422,
+      throw unprocessable(
+        "unprocessable",
+        SIGNUP_EMAIL_REJECTION_MESSAGES[emailCheck.reason],
       );
     }
 
     const mx = await checkDomainHasMx(emailCheck.domain);
     if (mx === "no_mx") {
-      return c.json(
-        {
-          error: `O domínio ${emailCheck.domain} não recebe e-mails, então não conseguiríamos enviar o seu acesso. Confira o endereço.`,
-        },
-        422,
+      throw unprocessable(
+        "unprocessable",
+        `O domínio ${emailCheck.domain} não recebe e-mails, então não conseguiríamos enviar o seu acesso. Confira o endereço.`,
       );
     }
 
     {
       if (await hasExistingLabMembership(emailCheck.email)) {
-        return c.json(
-          {
-            error:
-              "Este e-mail já faz parte de um laboratório no CalibraFácil. Entre pela página de acesso.",
-            code: "ALREADY_REGISTERED",
-          },
-          409,
+        throw conflict(
+          "ALREADY_REGISTERED",
+          "Este e-mail já faz parte de um laboratório no CalibraFácil. Entre pela página de acesso.",
         );
       }
 
@@ -145,30 +142,27 @@ export const publicSignupRouter = new Hono()
       );
 
       if (reservation === "duplicate") {
-        return c.json(
-          {
-            error:
-              "Já existe um cadastro em andamento para este e-mail. Confira a sua caixa de entrada em alguns instantes.",
-          },
-          409,
+        throw conflict(
+          "conflict",
+          "Já existe um cadastro em andamento para este e-mail. Confira a sua caixa de entrada em alguns instantes.",
         );
       }
 
       if (reservation === "domain_cap") {
-        return c.json(
-          {
-            error:
-              "Já foram abertas contas demais para este domínio hoje. Fale com a nossa equipe para continuar.",
-          },
-          429,
-        );
+        throw new DomainError({
+          code: "signup_domain_cap_reached",
+          status: 429,
+          message:
+            "Já foram abertas contas demais para este domínio hoje. Fale com a nossa equipe para continuar.",
+        });
       }
 
       if (reservation === null) {
-        return c.json(
-          { error: "Não foi possível iniciar o cadastro. Tente novamente." },
-          500,
-        );
+        throw new DomainError({
+          code: "signup_unavailable",
+          status: 500,
+          message: "Não foi possível iniciar o cadastro. Tente novamente.",
+        });
       }
 
       const reservationId = reservation;

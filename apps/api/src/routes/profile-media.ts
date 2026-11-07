@@ -13,7 +13,7 @@ import { avatarKey } from "@calibra-facil/shared/storage-keys";
 import { requireAuth, type AuthVariables } from "../middleware/permission";
 
 import { sniffRasterImage } from "../lib/image-sniff";
-import { domainErrorResponse, invalid } from "../lib/domain-errors";
+import { invalid, notFound } from "../lib/domain-errors";
 const MAX_AVATAR_FILE_SIZE = 2 * 1024 * 1024;
 const ALLOWED_AVATAR_CONTENT_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const AVATAR_URL_EXPIRY = 300;
@@ -30,57 +30,50 @@ export const profileMediaRouter = new Hono<{
     const session = c.get("session");
     const env = c.env;
 
-    try {
-      const formData = await c.req.formData();
-      const file = formData.get("avatar");
+    const formData = await c.req.formData();
+    const file = formData.get("avatar");
 
-      if (!(file instanceof File)) {
-        return c.json({ error: "Nenhum arquivo enviado" }, 400);
-      }
-
-      if (!ALLOWED_AVATAR_CONTENT_TYPES.includes(file.type)) {
-        return c.json(
-          { error: "Formato inválido. Use PNG, JPG ou WebP." },
-          400,
-        );
-      }
-
-      if (file.size > MAX_AVATAR_FILE_SIZE) {
-        return c.json(
-          {
-            error: `Arquivo muito grande. Máximo ${MAX_AVATAR_FILE_SIZE / 1024 / 1024}MB.`,
-          },
-          400,
-        );
-      }
-
-      const buffer = await file.arrayBuffer();
-      // The stored type is what the bytes are, not what the client declared.
-      const contentType = sniffRasterImage(buffer);
-      if (!contentType) {
-        return domainErrorResponse(
-          c,
-          invalid("invalid_request", "Formato inválido. Use PNG, JPG ou WebP."),
-        );
-      }
-      const r2Client = createR2Client(env);
-      const avatar = avatarKey(session.user.id);
-
-      await uploadToR2(
-        r2Client,
-        resolveBucketName(env, avatar.bucket),
-        avatar.key,
-        buffer,
-        contentType,
-      );
-
-      return c.json({
-        imageUrl: getAvatarApiUrl(),
-      });
-    } catch (error) {
-      console.error("Error uploading avatar:", error);
-      return c.json({ error: "Erro ao enviar avatar" }, 500);
+    if (!(file instanceof File)) {
+      throw invalid("invalid_request", "Nenhum arquivo enviado");
     }
+
+    if (!ALLOWED_AVATAR_CONTENT_TYPES.includes(file.type)) {
+      throw invalid(
+        "invalid_request",
+        "Formato inválido. Use PNG, JPG ou WebP.",
+      );
+    }
+
+    if (file.size > MAX_AVATAR_FILE_SIZE) {
+      throw invalid(
+        "invalid_request",
+        `Arquivo muito grande. Máximo ${MAX_AVATAR_FILE_SIZE / 1024 / 1024}MB.`,
+      );
+    }
+
+    const buffer = await file.arrayBuffer();
+    // The stored type is what the bytes are, not what the client declared.
+    const contentType = sniffRasterImage(buffer);
+    if (!contentType) {
+      throw invalid(
+        "invalid_request",
+        "Formato inválido. Use PNG, JPG ou WebP.",
+      );
+    }
+    const r2Client = createR2Client(env);
+    const avatar = avatarKey(session.user.id);
+
+    await uploadToR2(
+      r2Client,
+      resolveBucketName(env, avatar.bucket),
+      avatar.key,
+      buffer,
+      contentType,
+    );
+
+    return c.json({
+      imageUrl: getAvatarApiUrl(),
+    });
   })
   .get("/avatar", requireAuth, async (c) => {
     const session = c.get("session");
@@ -89,51 +82,39 @@ export const profileMediaRouter = new Hono<{
     const image = await findUserImage(session.user.id);
 
     if (!image) {
-      return c.json({ error: "Avatar não configurado" }, 404);
+      throw notFound("not_found", "Avatar não configurado");
     }
 
-    try {
-      const r2Client = createR2Client(env);
-      const avatar = avatarKey(session.user.id);
-      const bucketName = await resolveReadBucketName(
-        r2Client,
-        env,
-        avatar.bucket,
-        avatar.key,
-      );
-      const url = await generatePresignedUrl(
-        r2Client,
-        bucketName,
-        avatar.key,
-        AVATAR_URL_EXPIRY,
-      );
+    const r2Client = createR2Client(env);
+    const avatar = avatarKey(session.user.id);
+    const bucketName = await resolveReadBucketName(
+      r2Client,
+      env,
+      avatar.bucket,
+      avatar.key,
+    );
+    const url = await generatePresignedUrl(
+      r2Client,
+      bucketName,
+      avatar.key,
+      AVATAR_URL_EXPIRY,
+    );
 
-      return c.redirect(url, 302);
-    } catch (error) {
-      console.error("Error fetching avatar:", error);
-      return c.json({ error: "Erro ao carregar avatar" }, 500);
-    }
+    return c.redirect(url, 302);
   })
   .delete("/avatar", requireAuth, async (c) => {
     const session = c.get("session");
     const env = c.env;
 
-    try {
-      const r2Client = createR2Client(env);
-      const avatar = avatarKey(session.user.id);
-      const bucketName = await resolveReadBucketName(
-        r2Client,
-        env,
-        avatar.bucket,
-        avatar.key,
-      );
-      await deleteFromR2(r2Client, bucketName, avatar.key).catch(
-        () => undefined,
-      );
+    const r2Client = createR2Client(env);
+    const avatar = avatarKey(session.user.id);
+    const bucketName = await resolveReadBucketName(
+      r2Client,
+      env,
+      avatar.bucket,
+      avatar.key,
+    );
+    await deleteFromR2(r2Client, bucketName, avatar.key).catch(() => undefined);
 
-      return c.json({ success: true });
-    } catch (error) {
-      console.error("Error deleting avatar:", error);
-      return c.json({ error: "Erro ao remover avatar" }, 500);
-    }
+    return c.json({ success: true });
   });

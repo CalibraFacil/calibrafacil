@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { profileMediaRouter } from "./profile-media";
+import { profileMediaRouter as bareProfileMediaRouter } from "./profile-media";
 import { db } from "@calibra-facil/db";
 import { user } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const profileMediaRouter = withErrorHandling(bareProfileMediaRouter);
 
 // Real-DB + real-RBAC integration tests for the profileMediaRouter.
 // Only the better-auth session is mocked (see test/integration/setup.ts):

@@ -20,7 +20,12 @@ import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedApiKey, seedOrg } from "../../test/integration/seed";
 import { getExecuteRows } from "../lib/db";
-import { organizationLifecycleRouter } from "./organization-lifecycle";
+import { organizationLifecycleRouter as bareOrganizationLifecycleRouter } from "./organization-lifecycle";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const organizationLifecycleRouter = withErrorHandling(
+  bareOrganizationLifecycleRouter,
+);
 
 const JSON_HEADERS = { "content-type": "application/json" };
 const REASON = "Encerramento das atividades do laboratório";

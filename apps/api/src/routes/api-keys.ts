@@ -1,7 +1,6 @@
-import { Hono, type Context } from "hono";
+import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   organizationApiKey,
   organizationApiKeyAuditLog,
@@ -21,7 +20,9 @@ import {
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { writeOrganizationAuditEvent } from "../lib/audit";
 import { orgDb } from "../lib/org-db";
-import { clientIp } from "../lib/client-ip";
+import { notFound } from "../lib/domain-errors";
+import { withOrg, type OrgContext } from "../lib/org-context";
+import { requestActor } from "../middleware/request-actor";
 import { parseCidr } from "@calibra-facil/shared/ip-range";
 
 import { requireFreshSession } from "../middleware/fresh-session";
@@ -69,29 +70,27 @@ function expiryFrom(now: Date, days: number) {
   return new Date(now.getTime() + days * DAY_MS);
 }
 
-function getRequestIp(c: Context<{ Variables: AuthVariables }>) {
-  return clientIp(c);
-}
-
+/** The key's own audit row (`organization_api_key_audit_log`), in the change's transaction. */
 async function writeAuditLog(
-  o: OrgDb,
+  ctx: OrgContext,
   params: {
     apiKeyId: string;
-    organizationId: string;
     action: string;
-    performedBy: string;
-    ipAddress: string | null;
     details?: Record<string, unknown>;
   },
 ) {
-  await o.insert(organizationApiKeyAuditLog).values({
+  await ctx.o.insert(organizationApiKeyAuditLog).values({
     apiKeyId: params.apiKeyId,
-    organizationId: params.organizationId,
+    organizationId: ctx.org,
     action: params.action,
-    performedBy: params.performedBy,
-    ipAddress: params.ipAddress,
+    performedBy: ctx.actor.userId,
+    ipAddress: ctx.actor.ipAddress,
     details: params.details ?? null,
   });
+}
+
+function apiKeyNotFound() {
+  return notFound("api_key_not_found", "Chave de API não encontrada");
 }
 
 export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
@@ -146,8 +145,8 @@ export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
           : null;
 
       // The key and both audit entries commit together.
-      await orgDb(member.organizationId).transaction(async (o) => {
-        await o.insert(organizationApiKey).values({
+      await withOrg(member.organizationId, requestActor(c), async (ctx) => {
+        await ctx.o.insert(organizationApiKey).values({
           id: keyId,
           organizationId: member.organizationId,
           name: input.name,
@@ -159,12 +158,9 @@ export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
           createdBy: session.user.id,
         });
 
-        await writeAuditLog(o, {
+        await writeAuditLog(ctx, {
           apiKeyId: keyId,
-          organizationId: member.organizationId,
           action: "create",
-          performedBy: session.user.id,
-          ipAddress: getRequestIp(c),
           details: {
             name: input.name,
             scopes,
@@ -185,10 +181,10 @@ export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
               name: input.name,
               keyPrefix: generated.keyPrefix,
               scopes,
-              ipAddress: getRequestIp(c),
+              ipAddress: ctx.actor.ipAddress,
             },
           },
-          o,
+          ctx.o,
         );
       });
 
@@ -223,9 +219,11 @@ export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
       const expiresAt = expiryFrom(new Date(), DEFAULT_KEY_LIFETIME_DAYS);
 
       // Look-up, rotation and audit entries are one transaction.
-      const existing = await orgDb(member.organizationId).transaction(
-        async (o) => {
-          const [row] = await o
+      const existing = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const [row] = await ctx.o
             .select()
             .from(organizationApiKey)
             .where(
@@ -236,9 +234,9 @@ export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
               ),
             )
             .limit(1);
-          if (!row) return null;
+          if (!row) throw apiKeyNotFound();
 
-          await o
+          await ctx.o
             .update(organizationApiKey)
             .set({
               keyPrefix: generated.keyPrefix,
@@ -248,13 +246,7 @@ export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
             })
             .where(eq(organizationApiKey.id, row.id));
 
-          await writeAuditLog(o, {
-            apiKeyId: row.id,
-            organizationId: member.organizationId,
-            action: "rotate",
-            performedBy: session.user.id,
-            ipAddress: getRequestIp(c),
-          });
+          await writeAuditLog(ctx, { apiKeyId: row.id, action: "rotate" });
 
           await writeOrganizationAuditEvent(
             {
@@ -269,18 +261,14 @@ export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
                 keyPrefix: generated.keyPrefix,
                 previousKeyPrefix: row.keyPrefix,
                 scopes: row.scopes,
-                ipAddress: getRequestIp(c),
+                ipAddress: ctx.actor.ipAddress,
               },
             },
-            o,
+            ctx.o,
           );
           return row;
         },
       );
-
-      if (!existing) {
-        return c.json({ error: "Chave de API não encontrada" }, 404);
-      }
 
       return c.json({
         secret: generated.key,
@@ -305,61 +293,48 @@ export const apiKeysRouter = new Hono<{ Variables: AuthVariables }>()
       const session = c.get("session");
       const id = c.req.param("id");
 
-      const existing = await orgDb(member.organizationId).transaction(
-        async (o) => {
-          const [row] = await o
-            .select()
-            .from(organizationApiKey)
-            .where(
-              and(
-                eq(organizationApiKey.id, id),
-                eq(organizationApiKey.organizationId, member.organizationId),
-              ),
-            )
-            .limit(1);
-          if (!row) return null;
+      await withOrg(member.organizationId, requestActor(c), async (ctx) => {
+        const [row] = await ctx.o
+          .select()
+          .from(organizationApiKey)
+          .where(
+            and(
+              eq(organizationApiKey.id, id),
+              eq(organizationApiKey.organizationId, member.organizationId),
+            ),
+          )
+          .limit(1);
+        if (!row) throw apiKeyNotFound();
 
-          await o
-            .update(organizationApiKey)
-            .set({
-              revokedAt: row.revokedAt ?? new Date(),
-              revokedBy: session.user.id,
-            })
-            .where(eq(organizationApiKey.id, row.id));
+        await ctx.o
+          .update(organizationApiKey)
+          .set({
+            revokedAt: row.revokedAt ?? new Date(),
+            revokedBy: session.user.id,
+          })
+          .where(eq(organizationApiKey.id, row.id));
 
-          await writeAuditLog(o, {
-            apiKeyId: row.id,
+        await writeAuditLog(ctx, { apiKeyId: row.id, action: "revoke" });
+
+        await writeOrganizationAuditEvent(
+          {
             organizationId: member.organizationId,
-            action: "revoke",
-            performedBy: session.user.id,
-            ipAddress: getRequestIp(c),
-          });
-
-          await writeOrganizationAuditEvent(
-            {
-              organizationId: member.organizationId,
-              actorUserId: session.user.id,
-              actorMemberId: member.id,
-              action: "api_key.revoked",
-              entityType: "api_key",
-              entityId: row.id,
-              details: {
-                name: row.name,
-                keyPrefix: row.keyPrefix,
-                scopes: row.scopes,
-                alreadyRevoked: Boolean(row.revokedAt),
-                ipAddress: getRequestIp(c),
-              },
+            actorUserId: session.user.id,
+            actorMemberId: member.id,
+            action: "api_key.revoked",
+            entityType: "api_key",
+            entityId: row.id,
+            details: {
+              name: row.name,
+              keyPrefix: row.keyPrefix,
+              scopes: row.scopes,
+              alreadyRevoked: Boolean(row.revokedAt),
+              ipAddress: ctx.actor.ipAddress,
             },
-            o,
-          );
-          return row;
-        },
-      );
-
-      if (!existing) {
-        return c.json({ error: "Chave de API não encontrada" }, 404);
-      }
+          },
+          ctx.o,
+        );
+      });
 
       return c.json({ success: true });
     },

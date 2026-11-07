@@ -20,7 +20,9 @@ import {
   serializeEmailDomain,
 } from "../lib/email-domains";
 import { writeOrganizationAuditEvent } from "../lib/audit";
-import { orgDb } from "../lib/org-db";
+import { DomainError, invalid, notFound } from "../lib/domain-errors";
+import { withOrg } from "../lib/org-context";
+import { requestActor } from "../middleware/request-actor";
 import {
   type AuthVariables,
   requireLabProtected,
@@ -54,8 +56,20 @@ function resendFailureMessage(failureClass: ResendFailureClass): string {
   }
 }
 
-function resendFailureStatus(failureClass: ResendFailureClass): 400 | 502 {
-  return failureClass === "transient" ? 502 : 400;
+/** The provider refused or was unreachable: 502 when it is worth retrying, 400 otherwise. */
+function resendFailure(failureClass: ResendFailureClass) {
+  return new DomainError({
+    code: "email_domain_provider_failed",
+    status: failureClass === "transient" ? 502 : 400,
+    message: resendFailureMessage(failureClass),
+  });
+}
+
+function noEmailDomain() {
+  return notFound(
+    "email_domain_not_found",
+    "Nenhum domínio de envio configurado",
+  );
 }
 
 const MASTER_KEY_MISSING_MESSAGE =
@@ -138,15 +152,18 @@ export const emailDomainsRouter = new Hono<{ Variables: AuthVariables }>()
 
       const fromLocalPart = sanitizeFromLocalPart(input.fromLocalPart);
       if (!fromLocalPart) {
-        return c.json(
-          { error: "Parte local do remetente inválida (ex.: os, contato)" },
-          400,
+        throw invalid(
+          "invalid_request",
+          "Parte local do remetente inválida (ex.: os, contato)",
         );
       }
 
       const hostname = sanitizeEmailHostname(input.hostname);
       if (!hostname) {
-        return c.json({ error: "Domínio inválido para envio de e-mail" }, 400);
+        throw invalid(
+          "invalid_request",
+          "Domínio inválido para envio de e-mail",
+        );
       }
 
       const result = await saveManagedEmailDomain(
@@ -176,12 +193,16 @@ export const emailDomainsRouter = new Hono<{ Variables: AuthVariables }>()
 
       const record = await getOrganizationEmailDomain(member.organizationId);
       if (!record) {
-        return c.json({ error: "Nenhum domínio de envio configurado" }, 404);
+        throw noEmailDomain();
       }
 
       const credential = resolveRowApiKey(record);
       if (!credential.ok) {
-        return c.json({ error: credential.message }, 500);
+        throw new DomainError({
+          code: "email_domain_server_config",
+          status: 500,
+          message: credential.message,
+        });
       }
       const apiKey = credential.apiKey;
 
@@ -192,8 +213,8 @@ export const emailDomainsRouter = new Hono<{ Variables: AuthVariables }>()
 
       if (!details.ok) {
         if (details.failureClass === "invalid_key") {
-          await orgDb(member.organizationId).transaction((tx) =>
-            tx
+          await withOrg(member.organizationId, requestActor(c), (ctx) =>
+            ctx.o
               .update(organizationEmailDomain)
               .set({
                 keyStatus: "invalid",
@@ -203,10 +224,7 @@ export const emailDomainsRouter = new Hono<{ Variables: AuthVariables }>()
               .where(eq(organizationEmailDomain.id, record.id)),
           );
         }
-        return c.json(
-          { error: resendFailureMessage(details.failureClass) },
-          resendFailureStatus(details.failureClass),
-        );
+        throw resendFailure(details.failureClass);
       }
 
       const isVerified = details.data.status === "verified";
@@ -214,9 +232,11 @@ export const emailDomainsRouter = new Hono<{ Variables: AuthVariables }>()
       const now = new Date();
       // The verdict and its audit entry commit together; the provider calls
       // above ran outside any transaction.
-      const updated = await orgDb(member.organizationId).transaction(
-        async (tx) => {
-          const [row] = await tx
+      const updated = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const [row] = await ctx.o
             .update(organizationEmailDomain)
             .set({
               status: details.data.status,
@@ -242,7 +262,7 @@ export const emailDomainsRouter = new Hono<{ Variables: AuthVariables }>()
                 entityId: row.id,
                 details: { hostname: row.hostname },
               },
-              tx,
+              ctx.o,
             );
           }
           return row;
@@ -265,22 +285,21 @@ export const emailDomainsRouter = new Hono<{ Variables: AuthVariables }>()
 
       const record = await getOrganizationEmailDomain(member.organizationId);
       if (!record) {
-        return c.json({ error: "Nenhum domínio de envio configurado" }, 404);
+        throw noEmailDomain();
       }
 
       if (!record.verifiedAt) {
-        return c.json(
-          {
-            error:
-              "Publique os registros DNS e verifique o domínio antes de ativá-lo",
-          },
-          400,
+        throw invalid(
+          "email_domain_not_verified",
+          "Publique os registros DNS e verifique o domínio antes de ativá-lo",
         );
       }
 
-      const updated = await orgDb(member.organizationId).transaction(
-        async (tx) => {
-          const [row] = await tx
+      const updated = await withOrg(
+        member.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const [row] = await ctx.o
             .update(organizationEmailDomain)
             .set({
               isActive: true,
@@ -304,7 +323,7 @@ export const emailDomainsRouter = new Hono<{ Variables: AuthVariables }>()
                   fromAddress: row.fromAddress,
                 },
               },
-              tx,
+              ctx.o,
             );
           }
           return row;

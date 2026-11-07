@@ -12,15 +12,7 @@ import { withPermission, type AuthVariables } from "../middleware/permission";
 export const legalMetrologyRegulationsRouter = new Hono<{
   Variables: AuthVariables;
 }>().get("/", ...withPermission({ equipment: ["read"] }), async (c) => {
-  try {
-    const rows = await listLegalMetrologyRegulations();
+  const rows = await listLegalMetrologyRegulations();
 
-    return c.json({ data: rows });
-  } catch (error) {
-    console.error("Error listing legal-metrology regulations:", error);
-    return c.json(
-      { error: "Erro ao listar regulamentos de metrologia legal" },
-      500,
-    );
-  }
+  return c.json({ data: rows });
 });

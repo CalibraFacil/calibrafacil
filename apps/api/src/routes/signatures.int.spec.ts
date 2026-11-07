@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { signaturesRouter } from "./signatures";
+import { signaturesRouter as bareSignaturesRouter } from "./signatures";
 import { db } from "@calibra-facil/db";
 import { memberVisualSignature, member, user } from "@calibra-facil/db/schema";
 import { and, eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const signaturesRouter = withErrorHandling(bareSignaturesRouter);
 
 // Real-DB + real-RBAC integration tests for the signaturesRouter.
 // Only the better-auth session is mocked (see test/integration/setup.ts).

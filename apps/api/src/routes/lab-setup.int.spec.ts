@@ -10,10 +10,13 @@ import {
   user,
 } from "@calibra-facil/db/schema";
 import { createLabAccountSetupToken } from "@calibra-facil/auth/lab-access";
-import { labSetupRouter } from "./lab-setup";
+import { labSetupRouter as bareLabSetupRouter } from "./lab-setup";
 import { loginAs, logout, sessionFor } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const labSetupRouter = withErrorHandling(bareLabSetupRouter);
 
 // Real-DB integration test for the lab ONBOARDING / account-claim surface.
 //
@@ -124,7 +127,10 @@ describe("labSetupRouter — real DB + token-bound authorization", () => {
 
     expect(res.status).toBe(401);
     const body = await res.json();
-    expect(body).toEqual({ error: "Sessão obrigatória" });
+    expect(body).toEqual({
+      error: "Sessão obrigatória",
+      code: "unauthenticated",
+    });
   });
 
   // REQ-LS-001 [HIGH RISK]: a setup READ returns only the data bound to THAT token's
@@ -191,7 +197,10 @@ describe("labSetupRouter — real DB + token-bound authorization", () => {
 
     expect(res.status).toBe(403);
     const body = await res.json();
-    expect(body).toEqual({ error: "Sessão não corresponde ao convite" });
+    expect(body).toEqual({
+      error: "Sessão não corresponde ao convite",
+      code: "forbidden",
+    });
 
     // The cross-tenant write was actually denied: org-A's token is unconsumed and
     // no member row was created for the attacker in org-A.

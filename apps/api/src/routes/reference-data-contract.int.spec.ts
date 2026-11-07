@@ -28,7 +28,7 @@ import {
 import { db } from "@calibra-facil/db";
 import { asset, assetType, calibrationMethod } from "@calibra-facil/db/schema";
 import { sql } from "drizzle-orm";
-import { assetTypesRouter } from "./asset-types";
+import { assetTypesRouter as bareAssetTypesRouter } from "./asset-types";
 import { assetsRouter as bareAssetsRouter } from "./assets";
 import { customersRouter as bareCustomersRouter } from "./customers";
 import { methodsRouter as bareMethodsRouter } from "./methods";
@@ -38,6 +38,8 @@ import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedCustomer, seedOrg } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+
+const assetTypesRouter = withErrorHandling(bareAssetTypesRouter);
 
 const assetsRouter = withErrorHandling(bareAssetsRouter);
 const customersRouter = withErrorHandling(bareCustomersRouter);

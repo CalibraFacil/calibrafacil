@@ -24,7 +24,9 @@ import {
   validateCertificateNumberingConfig,
 } from "../lib/certificate-numbering";
 import { orgDb } from "../lib/org-db";
-import { clientIp } from "../lib/client-ip";
+import { invalid } from "../lib/domain-errors";
+import { withOrg } from "../lib/org-context";
+import { requestActor } from "../middleware/request-actor";
 
 export const certificateNumberingRouter = new Hono<{
   Variables: AuthVariables;
@@ -114,20 +116,19 @@ export const certificateNumberingRouter = new Hono<{
       try {
         config = validateCertificateNumberingConfig(input.config);
       } catch (error) {
-        return c.json(
-          {
-            error:
-              error instanceof Error
-                ? error.message
-                : "Configuracao de numeracao invalida",
-          },
-          400,
+        throw invalid(
+          "invalid_request",
+          error instanceof Error
+            ? error.message
+            : "Configuracao de numeracao invalida",
         );
       }
 
-      const profile = await orgDb(memberData.organizationId).transaction(
-        async (tx) => {
-          const [existing] = await tx
+      const profile = await withOrg(
+        memberData.organizationId,
+        requestActor(c),
+        async (ctx) => {
+          const [existing] = await ctx.o
             .select()
             .from(certificateNumberingProfile)
             .where(
@@ -138,7 +139,7 @@ export const certificateNumberingRouter = new Hono<{
             )
             .limit(1);
 
-          const [saved] = await tx
+          const [saved] = await ctx.o
             .insert(certificateNumberingProfile)
             .values({
               organizationId: memberData.organizationId,
@@ -158,10 +159,10 @@ export const certificateNumberingRouter = new Hono<{
             })
             .returning();
 
-          if (!saved) return null;
+          if (!saved) throw new Error("Falha ao salvar perfil");
 
           // Audit row commits atomically with the change (ISO 17025 §7.5/§8.4).
-          await tx.insert(certificateNumberingAuditLog).values({
+          await ctx.o.insert(certificateNumberingAuditLog).values({
             organizationId: memberData.organizationId,
             profileId: saved.id,
             action: existing ? "update" : "create",
@@ -177,17 +178,13 @@ export const certificateNumberingRouter = new Hono<{
                 config: saved.config,
               },
             },
-            performedBy: session.user.id,
-            ipAddress: clientIp(c),
+            performedBy: ctx.actor.userId,
+            ipAddress: ctx.actor.ipAddress,
           });
 
           return saved;
         },
       );
-
-      if (!profile) {
-        return c.json({ error: "Falha ao salvar perfil" }, 500);
-      }
 
       return c.json({
         message: "Perfil de numeracao atualizado",

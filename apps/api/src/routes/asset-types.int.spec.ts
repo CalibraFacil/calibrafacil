@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { assetTypesRouter } from "./asset-types";
+import { assetTypesRouter as bareAssetTypesRouter } from "./asset-types";
 import { db } from "@calibra-facil/db";
 import { assetType, organization } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const assetTypesRouter = withErrorHandling(bareAssetTypesRouter);
 
 // Real-DB + real-RBAC integration tests for the asset-types router.
 // Only the better-auth session is mocked (see test/integration/setup.ts); the

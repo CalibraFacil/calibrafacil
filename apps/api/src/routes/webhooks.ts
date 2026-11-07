@@ -6,6 +6,7 @@ import {
   resendEventRecipients,
   verifyResendSignature,
 } from "../lib/resend-webhook";
+import { DomainError, invalid, unauthenticated } from "../lib/domain-errors";
 import { recordResendWebhookEvent } from "../lib/resend-webhook-ledger";
 import { isRecord } from "@calibra-facil/shared/record";
 
@@ -21,7 +22,11 @@ export const webhooksRouter = new Hono().post("/resend", async (c) => {
     Number.isFinite(contentLength) &&
     contentLength > MAX_WEBHOOK_BODY_BYTES
   ) {
-    return c.json({ error: "Payload too large" }, 413);
+    throw new DomainError({
+      code: "payload_too_large",
+      status: 413,
+      message: "Payload too large",
+    });
   }
 
   // Graceful degradation: with no secret configured we cannot verify the Svix
@@ -47,14 +52,14 @@ export const webhooksRouter = new Hono().post("/resend", async (c) => {
     body: rawBody,
   });
   if (!valid || !svixId) {
-    return c.json({ error: "Invalid signature" }, 401);
+    throw unauthenticated("unauthenticated", "Invalid signature");
   }
 
   let payload: unknown;
   try {
     payload = JSON.parse(rawBody);
   } catch {
-    return c.json({ error: "Invalid JSON payload" }, 400);
+    throw invalid("invalid_request", "Invalid JSON payload");
   }
 
   const event = parseResendEvent(payload);

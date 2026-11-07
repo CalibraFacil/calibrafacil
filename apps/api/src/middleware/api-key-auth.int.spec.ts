@@ -23,8 +23,11 @@ import { createApiKeySecret } from "../lib/api-keys";
 import { truncateAll } from "../../test/integration/db";
 import { loginAs } from "../../test/integration/setup";
 import { seedOrg } from "../../test/integration/seed";
-import { apiKeysRouter } from "../routes/api-keys";
+import { apiKeysRouter as bareApiKeysRouter } from "../routes/api-keys";
 import { requireApiKeyAuth } from "./api-key-auth";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const apiKeysRouter = withErrorHandling(bareApiKeysRouter);
 
 const app = new Hono()
   .use("*", requireApiKeyAuth)

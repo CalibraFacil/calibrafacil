@@ -1,4 +1,6 @@
 import {
+  BASELINE_OPTION_SCHEMA,
+  baselineInForce,
   createRatchet,
   isTestFile,
   normalizedFilename,
@@ -22,33 +24,11 @@ import {
 const ROUTES_PATTERN = /(^|\/)apps\/api\/src\/routes\//;
 
 const LEGACY_BASELINE: Baseline = new Map<string, number>([
-  ["apps/api/src/routes/api-keys.ts", 2],
-  ["apps/api/src/routes/asset-types.ts", 4],
-
-  ["apps/api/src/routes/certificate-numbering.ts", 2],
-
   ["apps/api/src/routes/customers.ts", 1],
-  ["apps/api/src/routes/dashboard.ts", 1],
-  ["apps/api/src/routes/email-domains.ts", 7],
   ["apps/api/src/routes/finance/erp.ts", 1],
-  ["apps/api/src/routes/invitations.ts", 6],
   ["apps/api/src/routes/jobs.ts", 79],
-  ["apps/api/src/routes/lab-setup.ts", 6],
-  ["apps/api/src/routes/legal-metrology-regulations.ts", 1],
-
-  ["apps/api/src/routes/notifications.ts", 4],
-  ["apps/api/src/routes/organization-media.ts", 9],
-  ["apps/api/src/routes/profile-media.ts", 7],
-  ["apps/api/src/routes/public-signup.ts", 8],
-  ["apps/api/src/routes/reports.ts", 9],
-
-  ["apps/api/src/routes/sessions.ts", 3],
-  ["apps/api/src/routes/signatures.ts", 12],
-  ["apps/api/src/routes/signing.ts", 16],
-  ["apps/api/src/routes/sso.ts", 11],
-  ["apps/api/src/routes/sync/attachments.ts", 3],
-
-  ["apps/api/src/routes/webhooks.ts", 3],
+  ["apps/api/src/routes/public-signup.ts", 1],
+  ["apps/api/src/routes/sso.ts", 1],
 ]);
 
 const MESSAGE =
@@ -92,12 +72,16 @@ const rule: RuleModule = {
       description:
         "Disallow c.json({ error }) domain-failure bodies in API routes; throw a DomainError instead.",
     },
+    schema: BASELINE_OPTION_SCHEMA,
   },
   create(context: RuleContext) {
     const filename = normalizedFilename(context);
     if (!ROUTES_PATTERN.test(filename) || isTestFile(filename)) return {};
 
-    const ratchet = createRatchet(LEGACY_BASELINE, filename);
+    const ratchet = createRatchet(
+      baselineInForce(context, LEGACY_BASELINE),
+      filename,
+    );
     return {
       CallExpression(node: unknown) {
         if (!isJsonErrorBodyCall(node)) return;

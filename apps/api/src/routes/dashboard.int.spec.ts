@@ -36,7 +36,7 @@
 
 import { insertJobs } from "../../test/integration/job-fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { dashboardRouter } from "./dashboard";
+import { dashboardRouter as bareDashboardRouter } from "./dashboard";
 import { db } from "@calibra-facil/db";
 import {
   organization,
@@ -52,6 +52,9 @@ import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const dashboardRouter = withErrorHandling(bareDashboardRouter);
 
 const JSON_HEADERS = { "content-type": "application/json" };
 const NOW = new Date("2026-01-01T00:00:00.000Z");

@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { sessionsRouter } from "./sessions";
+import { sessionsRouter as bareSessionsRouter } from "./sessions";
 import { db } from "@calibra-facil/db";
 import { session as sessionTable } from "@calibra-facil/db/schema";
 import { eq } from "drizzle-orm";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const sessionsRouter = withErrorHandling(bareSessionsRouter);
 
 // Real-DB + real-RBAC integration test for the session-revoke boundary.
 // Only better-auth's getSession is mocked (see test/integration/setup.ts);
@@ -75,7 +78,10 @@ describe("sessionsRouter — real DB + real middleware", () => {
     // does not exist and — crucially — it is NOT deleted.
     expect(res.status).toBe(404);
     const body: unknown = await res.json();
-    expect(body).toEqual({ error: "Session not found" });
+    expect(body).toEqual({
+      error: "Session not found",
+      code: "session_not_found",
+    });
     expect(await sessionExists(victimSessionId)).toBe(true);
   });
 
@@ -130,6 +136,9 @@ describe("sessionsRouter — real DB + real middleware", () => {
 
     expect(res.status).toBe(400);
     const body: unknown = await res.json();
-    expect(body).toEqual({ error: "sessionId is required" });
+    expect(body).toEqual({
+      error: "sessionId is required",
+      code: "invalid_request",
+    });
   });
 });

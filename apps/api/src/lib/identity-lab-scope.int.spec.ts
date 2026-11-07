@@ -83,8 +83,8 @@ import {
 } from "../../test/integration/identity-fixtures";
 import { cleanupExpiredAuthRecords } from "./auth-maintenance";
 import { purgeSyncChangeLog } from "./sync-change-log-purge";
-import { invitationsRouter } from "../routes/invitations";
-import { labSetupRouter } from "../routes/lab-setup";
+import { invitationsRouter as bareInvitationsRouter } from "../routes/invitations";
+import { labSetupRouter as bareLabSetupRouter } from "../routes/lab-setup";
 import {
   cleanupFailedLabProvisioning,
   createLabOrganizationWithUniqueSlug,
@@ -103,6 +103,10 @@ import {
 } from "./public-signup-store";
 import { getActivationChecklist } from "../services/activation-checklist";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const invitationsRouter = withErrorHandling(bareInvitationsRouter);
+const labSetupRouter = withErrorHandling(bareLabSetupRouter);
 
 // This file runs the REAL Better Auth lab instance: the harness's fake
 // `createLabAuth` (only `getSession`) is replaced by the real module.
