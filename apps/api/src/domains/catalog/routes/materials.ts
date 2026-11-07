@@ -1,24 +1,24 @@
-import { createRouter } from "../server/router";
+import { createRouter } from "../../../server/router";
 import { materialEndpoints } from "@calibra-facil/contracts";
 import { material } from "@calibra-facil/db/schema";
 import {
   adjustMaterialErpStock,
   type IntegrationsEnv,
-} from "../modules/integrations";
+} from "../../../modules/integrations";
 import {
   withLabPermission,
   type AuthVariables,
   type MemberData,
-} from "../middleware/permission";
+} from "../../../middleware/permission";
 import { eq, and, or, ilike, desc, count } from "drizzle-orm";
-import { buildUnitScopeCondition } from "../lib/units";
-import { mount } from "../lib/endpoint-mount";
-import { orgDb } from "../lib/org-db";
+import { buildUnitScopeCondition } from "../../../lib/units";
+import { mount } from "../../../lib/endpoint-mount";
+import { orgDb } from "../../../lib/org-db";
 import type { OrgExecutor } from "@calibra-facil/db/for-org";
-import { isUniqueViolation } from "../lib/db-errors";
-import { conflict, invalid, notFound } from "../lib/domain-errors";
-import { withOrg } from "../lib/org-context";
-import { requestActor } from "../middleware/request-actor";
+import { isUniqueViolation } from "../../../lib/db-errors";
+import { conflict, invalid, notFound } from "../../../lib/domain-errors";
+import { withOrg } from "../../../lib/org-context";
+import { requestActor } from "../../../middleware/request-actor";
 
 /**
  * Materials Router - Parts/Materials Catalog (Peças e materiais)

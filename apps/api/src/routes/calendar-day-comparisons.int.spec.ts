@@ -32,7 +32,7 @@ import {
   seedOrg,
   seedPortalContext,
 } from "../../test/integration/seed";
-import { dashboardRouter } from "./dashboard";
+import { dashboardRouter } from "../domains/reports/routes/dashboard";
 import { jobsRouter } from "./jobs";
 import { portalRouter } from "./portal";
 import { standardsRouter } from "./standards";

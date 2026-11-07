@@ -18,7 +18,7 @@ import { certificateNumberingRouter } from "../routes/certificate-numbering";
 import { competencesRouter } from "../routes/competences";
 import { customerGroupsRouter } from "../routes/customer-groups";
 import { customersRouter } from "../routes/customers";
-import { dashboardRouter } from "../routes/dashboard";
+import { dashboardRouter } from "../domains/reports/routes";
 import { environmentalLimitsRouter } from "../routes/environmental-limits";
 import { financeRouter } from "../routes/finance";
 import { integrationsRouter } from "../routes/integrations";
@@ -47,14 +47,14 @@ import {
   publicApiV2Router,
 } from "../routes/public-api-v2";
 import { publicSignupRouter } from "../routes/public-signup";
-import { reportsRouter } from "../routes/reports";
+import { reportsRouter } from "../domains/reports/routes";
 import {
   portalServiceOrdersRouter,
   publicServiceOrderAccessRouter,
   serviceOrdersRouter,
 } from "../routes/service-orders";
-import { materialsRouter } from "../routes/materials";
-import { servicesRouter } from "../routes/services";
+import { materialsRouter } from "../domains/catalog/routes";
+import { servicesRouter } from "../domains/catalog/routes";
 import { sessionsRouter } from "../routes/sessions";
 import { signaturesRouter } from "../routes/signatures";
 import { signingRouter } from "../routes/signing";

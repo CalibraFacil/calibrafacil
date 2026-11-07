@@ -45,7 +45,7 @@ const rule: RuleModule = {
     const ownPath = own[2] ?? "";
     const ownDomain = DOMAIN_PATH.exec(ownPath)?.[1] ?? null;
     const isPlatform = /^(lib|middleware)\//.test(ownPath);
-    const isServer = /^server\//.test(ownPath);
+    const isServer = ownPath.startsWith("server/");
 
     const check = (node: unknown) => {
       const source = importSourceOf(node);

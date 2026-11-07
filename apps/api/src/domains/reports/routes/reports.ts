@@ -1,4 +1,4 @@
-import { createRouter } from "../server/router";
+import { createRouter } from "../../../server/router";
 import { ReportQuerySchema, reportEndpoints } from "@calibra-facil/contracts";
 import { OPEN_JOB_STATUSES } from "@calibra-facil/schemas";
 import { createMiddleware } from "hono/factory";
@@ -27,12 +27,12 @@ import {
   getGovernanceAccess,
   requireLabProtected,
   requireOrgType,
-} from "../middleware/permission";
-import { forbidden, invalid } from "../lib/domain-errors";
-import { mount } from "../lib/endpoint-mount";
-import { orgDb } from "../lib/org-db";
+} from "../../../middleware/permission";
+import { forbidden, invalid } from "../../../lib/domain-errors";
+import { mount } from "../../../lib/endpoint-mount";
+import { orgDb } from "../../../lib/org-db";
 import type { OrgDb } from "@calibra-facil/db/for-org";
-import { resolvePeriodRange, type ReportPeriod } from "../lib/report-period";
+import { resolvePeriodRange, type ReportPeriod } from "../report-period";
 
 type HealthStatus = "healthy" | "attention" | "critical";
 

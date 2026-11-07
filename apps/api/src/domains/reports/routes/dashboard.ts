@@ -1,4 +1,4 @@
-import { createRouter } from "../server/router";
+import { createRouter } from "../../../server/router";
 import { dashboardEndpoints } from "@calibra-facil/contracts";
 import { OPEN_JOB_STATUSES } from "@calibra-facil/schemas";
 import { OPEN_CALIBRATION_REQUEST_STATUSES } from "@calibra-facil/schemas/machines";
@@ -25,7 +25,7 @@ import {
   withLabPermission,
   type AuthVariables,
   addServerTiming,
-} from "../middleware/permission";
+} from "../../../middleware/permission";
 import {
   eq,
   ne,
@@ -42,10 +42,10 @@ import {
   isNull,
   or,
 } from "drizzle-orm";
-import { getDashboardWindows } from "../lib/dashboard-windows";
-import { mount } from "../lib/endpoint-mount";
-import { orgDb } from "../lib/org-db";
-import { buildUnitScopeCondition } from "../lib/units";
+import { getDashboardWindows } from "../dashboard-windows";
+import { mount } from "../../../lib/endpoint-mount";
+import { orgDb } from "../../../lib/org-db";
+import { buildUnitScopeCondition } from "../../../lib/units";
 
 /**
  * Dashboard Router - Aggregated metrics for ISO 17025 lab dashboard

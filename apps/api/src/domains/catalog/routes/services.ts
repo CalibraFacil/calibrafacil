@@ -1,4 +1,4 @@
-import { createRouter } from "../server/router";
+import { createRouter } from "../../../server/router";
 import { serviceEndpoints } from "@calibra-facil/contracts";
 import {
   service,
@@ -10,18 +10,15 @@ import {
 import {
   withLabPermission,
   type AuthVariables,
-} from "../middleware/permission";
+} from "../../../middleware/permission";
 import { eq, and, or, ilike, desc, count } from "drizzle-orm";
-import { buildUnitScopeCondition } from "../lib/units";
-import { mount } from "../lib/endpoint-mount";
-import { orgDb } from "../lib/org-db";
-import { invalid, notFound } from "../lib/domain-errors";
-import { withOrg } from "../lib/org-context";
-import { requestActor } from "../middleware/request-actor";
-import {
-  requireLabService,
-  requireServiceRouteId,
-} from "../lib/service-access";
+import { buildUnitScopeCondition } from "../../../lib/units";
+import { mount } from "../../../lib/endpoint-mount";
+import { orgDb } from "../../../lib/org-db";
+import { invalid, notFound } from "../../../lib/domain-errors";
+import { withOrg } from "../../../lib/org-context";
+import { requestActor } from "../../../middleware/request-actor";
+import { requireLabService, requireServiceRouteId } from "../service-access";
 
 const PREFIX = "/api/services";
 

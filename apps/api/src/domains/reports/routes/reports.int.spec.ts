@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { insertJobs } from "../../test/integration/job-fixtures";
+import { insertJobs } from "../../../../test/integration/job-fixtures";
 import { reportsRouter } from "./reports";
 import { db } from "@calibra-facil/db";
 import {
@@ -10,10 +10,10 @@ import {
   service,
 } from "@calibra-facil/db/schema";
 import { sql } from "drizzle-orm";
-import { loginAs, logout } from "../../test/integration/setup";
-import { truncateAll } from "../../test/integration/db";
-import { seedOrg } from "../../test/integration/seed";
-import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { loginAs, logout } from "../../../../test/integration/setup";
+import { truncateAll } from "../../../../test/integration/db";
+import { seedOrg } from "../../../../test/integration/seed";
+import { withStatusRepair } from "../../../../test/integration/state-fixtures";
 
 // Real-DB + real-RBAC integration tests for the reportsRouter.
 // Only the better-auth session is mocked (see test/integration/setup.ts).

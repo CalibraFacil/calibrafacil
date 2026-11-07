@@ -25,7 +25,7 @@
 // `orgDb(...).transaction`). The statements are also grouped by the application
 // module that issued them (the innermost source file that obtained the database
 // handle, outside drizzle, packages/db, lib/org-db.ts and the harness) and by layer
-// (`routes`, `lib`, `middleware`, `modules/jobs`). The request path is recorded too
+// (`routes`, `lib`, `middleware`, `modules/jobs`, `domains/jobs`). The request path is recorded too
 // (`--json-full`), but specs mount a router at `/`, so it is no usable group. It
 // changes nothing: it only reads test output.
 //

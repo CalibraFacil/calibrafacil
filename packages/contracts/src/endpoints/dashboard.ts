@@ -5,7 +5,7 @@ import { endpoint, type EndpointGroup } from "./define";
 
 /**
  * The laboratory dashboard: one aggregated read. The response schema is the
- * wire body written from what `apps/api/src/routes/dashboard.ts` returns.
+ * wire body written from what `apps/api/src/domains/reports/routes/dashboard.ts` returns.
  * Cloud-only: the desktop shell has no dashboard offline.
  */
 
