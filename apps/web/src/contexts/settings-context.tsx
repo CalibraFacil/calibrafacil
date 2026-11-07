@@ -41,7 +41,6 @@ interface SettingsContextValue {
   // Session info
   session: SessionInfo | null
 
-  // Loading states
   isLoading: boolean
   isUpdating: boolean
 

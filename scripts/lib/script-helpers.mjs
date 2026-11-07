@@ -1,5 +1,4 @@
-// Helpers the desktop build and smoke scripts share. Each of them used to carry
-// its own copy of these.
+// Helpers the desktop build and smoke scripts share.
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import net from "node:net";

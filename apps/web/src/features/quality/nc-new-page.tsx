@@ -108,7 +108,6 @@ export function NewNCPage() {
   const typeValue = watch('type')
   const jobIdValue = watch('jobId')
 
-  // Fetch jobs for linking
   const { data: jobsData } = useNonConformanceJobsData()
 
   const selectedJob = jobsData?.data.find((j) => String(j.id) === jobIdValue)

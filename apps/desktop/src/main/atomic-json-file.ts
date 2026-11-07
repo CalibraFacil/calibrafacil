@@ -6,10 +6,10 @@ import path from "node:path";
  *
  * Write to a temporary sibling, then rename — rename is atomic within a
  * filesystem, so a crash or a power cut mid-write leaves the previous file
- * intact rather than a truncated one. Every store in the main process needs
- * this, and four of them had grown their own byte-identical copy; any future
- * hardening (fsync before rename, retrying Windows `EPERM`) now has one place
- * to land.
+ * intact rather than a truncated one. Every JSON store in the main process
+ * (settings, secrets, window state, the partition store) writes through here,
+ * so a hardening such as fsync before rename or retrying Windows `EPERM` is
+ * made once.
  *
  * The temp name carries the pid and a timestamp so two processes, or two
  * writes racing within one, cannot collide on it.

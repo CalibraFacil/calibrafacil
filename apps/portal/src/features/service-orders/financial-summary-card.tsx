@@ -30,32 +30,6 @@ export type PortalFinancialSummary = {
   }>;
 };
 
-export function isFinancialSummary(
-  value: unknown,
-): value is PortalFinancialSummary {
-  if (!value || typeof value !== "object") return false;
-  if (!("visible" in value) || typeof value.visible !== "boolean") {
-    return false;
-  }
-  if (!("state" in value)) return false;
-  if (!("documents" in value) || !Array.isArray(value.documents)) return false;
-  if (
-    !("freshness" in value) ||
-    (value.freshness !== "fresh" &&
-      value.freshness !== "stale" &&
-      value.freshness !== "unknown")
-  ) {
-    return false;
-  }
-  if (!value.visible) return value.state === null;
-  return (
-    value.state === "INVOICE_AVAILABLE" ||
-    value.state === "PAYMENT_PENDING" ||
-    value.state === "PAID" ||
-    value.state === "OVERDUE"
-  );
-}
-
 function financialSummaryLabel(state: PortalFinancialSummary["state"]) {
   switch (state) {
     case "INVOICE_AVAILABLE":

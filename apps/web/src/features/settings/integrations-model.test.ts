@@ -10,15 +10,10 @@ import {
 import type { IntegrationSummary } from '@/features/settings/types'
 import {
   appendIntegrationMappingRule,
-  buildIntegrationActiveSummaries,
   buildIntegrationChecklist,
-  clearIntegrationMappingDraft,
-  clearIntegrationPreviewsForIntegration,
   cloneIntegrationMappings,
-  createIntegrationPreviewKey,
   createEmptyIntegrationMappingRule,
   fallbackIntegrationTargetSummary,
-  formatIntegrationDuration,
   formatIntegrationPreviewPayload,
   getIntegrationMappingDraft,
   getIntegrationTargetSummary,
@@ -27,9 +22,7 @@ import {
   integrationReadinessBadgeVariant,
   integrationRunTriggerLabel,
   integrationScheduleStatusLabel,
-  integrationScheduleStatusVariant,
   removeIntegrationMappingRule,
-  updateIntegrationMappingDrafts,
   updateIntegrationMappingRule,
   validateIntegrationBaseUrl,
 } from './integrations-model'
@@ -91,29 +84,6 @@ function createIntegrationSummary(): IntegrationSummary {
 }
 
 describe('integrations-model', () => {
-  it('summarizes configured integrations for the settings header', () => {
-    const ready = createIntegrationSummary()
-    const degraded = createIntegrationSummary()
-    degraded.id = 'integration-2'
-    degraded.overview.readiness.readinessStatus = 'DEGRADED'
-    degraded.overview.targets = [
-      {
-        ...fallbackIntegrationTargetSummary('customer'),
-        schedule: {
-          ...fallbackIntegrationTargetSummary('customer').schedule,
-          mode: 'scheduled',
-          status: 'scheduled',
-        },
-      },
-    ]
-
-    expect(buildIntegrationActiveSummaries([ready, degraded])).toEqual({
-      total: 2,
-      atRisk: 1,
-      scheduledTargets: 1,
-    })
-  })
-
   it('clones mapping configs without sharing field objects', () => {
     const mappings = getDefaultIntegrationMappings()
     const cloned = cloneIntegrationMappings(mappings)
@@ -135,30 +105,29 @@ describe('integrations-model', () => {
     expect(rule.formatter).toBe('none')
   })
 
-  it('manages mapping drafts without mutating source configs', () => {
+  it('reads a mapping draft without mutating the source config', () => {
     const integration = createIntegrationSummary()
-    const firstDraft = getIntegrationMappingDraft({ drafts: {}, integration })
-    const updatedDrafts = updateIntegrationMappingDrafts({
-      drafts: {},
-      integration,
-      updater: (current) =>
-        updateIntegrationMappingRule(current, 'customer', 'customer:name', {
-          destinationField: 'erpName',
-        }),
-    })
+    const draft = getIntegrationMappingDraft({ drafts: {}, integration })
+    const edited = updateIntegrationMappingRule(
+      draft,
+      'customer',
+      'customer:name',
+      {
+        destinationField: 'erpName',
+      },
+    )
 
     expect(
-      firstDraft.customer.fields.find((field) => field.id === 'customer:name')
+      edited.customer.fields.find((field) => field.id === 'customer:name')
+        ?.destinationField,
+    ).toBe('erpName')
+    expect(
+      getIntegrationMappingDraft({
+        drafts: {},
+        integration,
+      }).customer.fields.find((field) => field.id === 'customer:name')
         ?.destinationField,
     ).toBe('name')
-    expect(
-      updatedDrafts[integration.id]?.customer.fields.find(
-        (field) => field.id === 'customer:name',
-      )?.destinationField,
-    ).toBe('erpName')
-    expect(clearIntegrationMappingDraft(updatedDrafts, integration.id)).toEqual(
-      {},
-    )
   })
 
   it('applies mapping rule additions and removals through immutable helpers', () => {
@@ -185,27 +154,10 @@ describe('integrations-model', () => {
     )
   })
 
-  it('builds preview keys and clears previews for an integration', () => {
-    const previews = {
-      [createIntegrationPreviewKey('integration-1', 'customer')]: { count: 1 },
-      [createIntegrationPreviewKey('integration-2', 'customer')]: { count: 2 },
-    }
-
-    expect(
-      clearIntegrationPreviewsForIntegration(previews, 'integration-1'),
-    ).toEqual({
-      'integration-2:customer': { count: 2 },
-    })
-  })
-
   it('formats compact integration values', () => {
     expect(formatIntegrationPreviewPayload({ id: 1 })).toBe(
       JSON.stringify({ id: 1 }, null, 2),
     )
-    expect(formatIntegrationDuration(null)).toBe('Sem duração')
-    expect(formatIntegrationDuration(850)).toBe('850 ms')
-    expect(formatIntegrationDuration(12_340)).toBe('12.3s')
-    expect(formatIntegrationDuration(120_000)).toBe('2 min')
   })
 
   it('maps status values to labels and badge variants', () => {
@@ -213,7 +165,6 @@ describe('integrations-model', () => {
     expect(integrationReadinessBadgeVariant('DEGRADED')).toBe('secondary')
     expect(integrationReadinessBadgeVariant('NOT_READY')).toBe('destructive')
     expect(integrationScheduleStatusLabel('running')).toBe('Executando')
-    expect(integrationScheduleStatusVariant('blocked')).toBe('destructive')
     expect(integrationRunTriggerLabel('retry')).toBe('Reprocessado')
   })
 

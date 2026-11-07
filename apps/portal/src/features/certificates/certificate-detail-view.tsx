@@ -166,7 +166,7 @@ function CheckItem({
 /**
  * Authenticity status strip — a slim, Vercel-style status bar for the ICP-Brasil
  * signature verdict, fetched from the public verification endpoint by token.
- * Collapses what used to be a half-page 2×2 tile grid into one line.
+ * One line, not a tile grid.
  */
 function SignatureStrip({ token }: { token: string }) {
   const query = useSignatureVerdict(token, true);

@@ -2,7 +2,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
   DUE_SOON_DAYS,
-  calibrationFilterToStatus,
   getCalibrationStatus,
   getInstrumentStatus,
   isCalibrationFilter,
@@ -118,11 +117,5 @@ describe("calibration filters", () => {
     expect(isCalibrationFilter("in_lab")).toBe(true);
     expect(isCalibrationFilter("nonsense")).toBe(false);
     expect(isCalibrationFilter(42)).toBe(false);
-  });
-
-  it("maps filters to statuses", () => {
-    expect(calibrationFilterToStatus("overdue")).toBe("OVERDUE");
-    expect(calibrationFilterToStatus("unscheduled")).toBe("UNSCHEDULED");
-    expect(calibrationFilterToStatus("in_lab")).toBe("IN_LAB");
   });
 });

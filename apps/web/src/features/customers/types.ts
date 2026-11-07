@@ -3,8 +3,6 @@ import type { AssetStatus } from '@calibra-facil/schemas/machines'
 import type { CustomersListData as ClientRuntimeCustomersListData } from '@calibra-facil/client-runtime'
 import type {
   CustomerAuditLogEntry,
-  CustomerPortalInvitation,
-  CustomerPortalMember,
   CustomerDetail as ContractCustomerDetail,
 } from '@calibra-facil/contracts'
 
@@ -86,7 +84,3 @@ export type CustomerAuditLogData = {
     totalPages: number
   }
 }
-
-export type PortalMember = CustomerPortalMember
-
-export type PortalInvitation = CustomerPortalInvitation

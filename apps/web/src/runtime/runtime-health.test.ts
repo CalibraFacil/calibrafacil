@@ -4,7 +4,6 @@ import {
   buildRuntimeHealthSnapshot,
   classifyCloudReachability,
   classifyLocalRuntimeHealth,
-  describeRuntimeHealth,
   isTransportFailureMessage,
   type RuntimeHealthInputs,
 } from './runtime-health'
@@ -238,86 +237,5 @@ describe('buildRuntimeHealthSnapshot', () => {
         }),
       ),
     ).toMatchObject({ pendingOutboxCount: 4, conflictCount: 2 })
-  })
-})
-
-describe('describeRuntimeHealth', () => {
-  it('says nothing in the browser', () => {
-    expect(
-      describeRuntimeHealth(
-        buildRuntimeHealthSnapshot(inputs({ isDesktop: false })),
-      ),
-    ).toBeNull()
-  })
-
-  it('says nothing when a connected desktop is fully in sync', () => {
-    expect(
-      describeRuntimeHealth(buildRuntimeHealthSnapshot(inputs())),
-    ).toBeNull()
-  })
-
-  it('reports the local runtime before anything else', () => {
-    // A dead local process explains every other symptom, so it leads.
-    expect(
-      describeRuntimeHealth(
-        buildRuntimeHealthSnapshot(
-          inputs({
-            hasBridge: false,
-            browserOnline: false,
-            sync: {
-              state: 'conflict',
-              lastSyncedAt: null,
-              conflictCount: 3,
-              pendingOutboxCount: 5,
-            },
-          }),
-        ),
-      ),
-    ).toMatchObject({ tone: 'error' })
-  })
-
-  it('distinguishes offline-with-cache from offline-without-cache', () => {
-    const withCache = describeRuntimeHealth(
-      buildRuntimeHealthSnapshot(inputs({ browserOnline: false })),
-    )
-    const withoutCache = describeRuntimeHealth(
-      buildRuntimeHealthSnapshot(
-        inputs({
-          browserOnline: false,
-          sync: { state: 'idle', lastSyncedAt: null },
-        }),
-      ),
-    )
-
-    expect(withCache?.summary).toContain('sincronizados neste computador')
-    expect(withoutCache?.summary).toContain('sem cache local')
-  })
-
-  it('reports pending work with singular and plural agreement', () => {
-    const one = describeRuntimeHealth(
-      buildRuntimeHealthSnapshot(
-        inputs({
-          sync: {
-            state: 'idle',
-            lastSyncedAt: '2026-09-09T12:00:00.000Z',
-            pendingOutboxCount: 1,
-          },
-        }),
-      ),
-    )
-    const many = describeRuntimeHealth(
-      buildRuntimeHealthSnapshot(
-        inputs({
-          sync: {
-            state: 'idle',
-            lastSyncedAt: '2026-09-09T12:00:00.000Z',
-            pendingOutboxCount: 3,
-          },
-        }),
-      ),
-    )
-
-    expect(one?.summary).toBe('1 alteração local aguardando envio.')
-    expect(many?.summary).toBe('3 alterações locais aguardando envio.')
   })
 })

@@ -32,9 +32,9 @@ export function useCurrentRole(): RoleName {
 }
 
 /**
- * Whether a role manages the whole laboratory: what the screens used to spell
- * "owner or admin". Read from the access table (the roles that may update
- * settings), so a role added or narrowed there changes the UI with it.
+ * Whether a role manages the whole laboratory ("owner or admin" today). Read
+ * from the access table (the roles that may update settings), so a role added
+ * or narrowed there changes the UI with it.
  */
 export function isLabManagerRole(role: string | null | undefined): boolean {
   return checkRolePermission(roleNameFromUnknown(role), {

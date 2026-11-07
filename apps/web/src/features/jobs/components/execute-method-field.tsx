@@ -52,7 +52,7 @@ export type ExecuteMethodFieldContext = {
 
 /**
  * One method input field as the form renders it. A plain function rather than a
- * component so the tree React sees is exactly the one the form used to inline.
+ * component, so the tree React sees is the one the form would have inlined.
  */
 export function renderExecuteMethodField(
   field: MethodInputField,

@@ -154,20 +154,3 @@ export function isCalibrationFilter(
     CALIBRATION_FILTERS.some((filter) => filter === value)
   );
 }
-
-export function calibrationFilterToStatus(
-  filter: CalibrationFilter,
-): CalibrationStatus {
-  switch (filter) {
-    case "overdue":
-      return "OVERDUE";
-    case "due_soon":
-      return "DUE_SOON";
-    case "scheduled":
-      return "SCHEDULED";
-    case "unscheduled":
-      return "UNSCHEDULED";
-    case "in_lab":
-      return "IN_LAB";
-  }
-}
