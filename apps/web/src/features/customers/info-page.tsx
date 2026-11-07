@@ -36,7 +36,8 @@ import {
   SyncConflictReturnNotice,
   type SyncConflictReturnSearch,
 } from '@/runtime/sync-conflict-return'
-import { isDesktopRuntime } from '@/runtime/desktop'
+import { operation } from '@calibra-facil/client-runtime'
+import { useAvailability } from '@/runtime/use-operation-availability'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
 import { useCustomerGroupsList } from '@/features/customer-groups/queries'
 
@@ -239,6 +240,13 @@ export function CustomerFinancialTimelineBlock({
   )
 }
 
+const FINANCIAL_TIMELINE_OPERATIONS = [
+  operation('finance', 'getCustomerTimeline'),
+] as const
+const CUSTOMER_GROUPS_OPERATIONS = [
+  operation('customerGroups', 'list'),
+] as const
+
 function ClientInfoForm({
   customer,
   customerId,
@@ -250,9 +258,9 @@ function ClientInfoForm({
 }) {
   const navigate = useNavigate()
   const { activeOrganizationId } = useDashboardContextState()
-  // Finance and customer groups are cloud-only; the desktop shell has neither.
-  const hasFinancial = !isDesktopRuntime()
-  const hasCustomerGroups = !isDesktopRuntime()
+  // Finance and customer groups are cloud-only: shown whenever their calls can run.
+  const hasFinancial = useAvailability(FINANCIAL_TIMELINE_OPERATIONS)
+  const hasCustomerGroups = useAvailability(CUSTOMER_GROUPS_OPERATIONS)
   const financialTimelineQuery = useCustomerFinancialTimelineData({
     enabled: hasFinancial,
     id: customerId,

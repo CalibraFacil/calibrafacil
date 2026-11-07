@@ -4,14 +4,16 @@ import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  OperationTargetState,
+import {
+  operation,
+  type OperationTargetState,
   RuntimeHealthSnapshot,
 } from '@calibra-facil/client-runtime'
 import type { SyncStatusSnapshot } from '@calibra-facil/contracts'
 
 import { SyncStatusProvider } from './sync-status'
 import {
+  useAvailability,
   useOperationAvailability,
   useRuntimeHealth,
 } from './use-operation-availability'
@@ -70,6 +72,23 @@ function ApproveProbe({ target }: { target?: OperationTargetState }) {
       {availability.available
         ? `available:${availability.source}`
         : `blocked:${availability.reason}`}
+    </output>
+  )
+}
+
+const FINANCE_SECTION = [operation('finance', 'getOverview')] as const
+const REFERENCE_SECTION = [operation('customers', 'get')] as const
+
+function SectionProbe({
+  operations,
+  target,
+}: {
+  operations: Parameters<typeof useAvailability>[0]
+  target?: OperationTargetState
+}) {
+  return (
+    <output data-testid="section">
+      {useAvailability(operations, target) ? 'shown' : 'hidden'}
     </output>
   )
 }
@@ -157,6 +176,75 @@ describe('useOperationAvailability', () => {
     )
 
     expect(screen.getByTestId('probe').textContent).toBe('available:cloud')
+  })
+})
+
+describe('useAvailability', () => {
+  beforeEach(() => {
+    isDesktopRuntimeMock.mockReturnValue(false)
+    Object.defineProperty(navigator, 'onLine', {
+      configurable: true,
+      value: true,
+    })
+  })
+
+  afterEach(() => {
+    cleanup()
+    Reflect.deleteProperty(window, 'calibraBridge')
+    vi.clearAllMocks()
+  })
+
+  it('shows a cloud-only section in the browser', () => {
+    renderProbe(<SectionProbe operations={FINANCE_SECTION} />, {
+      isDesktop: false,
+    })
+
+    expect(screen.getByTestId('section').textContent).toBe('shown')
+  })
+
+  it('shows a cloud-only section on a connected desktop', async () => {
+    // Finance used to be hidden by a bare `!isDesktopRuntime()` although its
+    // calls reach the cloud through the hybrid client.
+    renderProbe(<SectionProbe operations={FINANCE_SECTION} />, {
+      isDesktop: true,
+    })
+
+    expect(await screen.findByText('shown')).toBeTruthy()
+  })
+
+  it('hides a cloud-only section while the desktop has no network', async () => {
+    Object.defineProperty(navigator, 'onLine', {
+      configurable: true,
+      value: false,
+    })
+
+    renderProbe(<SectionProbe operations={FINANCE_SECTION} />, {
+      isDesktop: true,
+    })
+
+    expect(await screen.findByText('hidden')).toBeTruthy()
+  })
+
+  it('keeps a local-first reference section while the desktop has no network', async () => {
+    Object.defineProperty(navigator, 'onLine', {
+      configurable: true,
+      value: false,
+    })
+
+    renderProbe(<SectionProbe operations={REFERENCE_SECTION} />, {
+      isDesktop: true,
+    })
+
+    expect(await screen.findByText('shown')).toBeTruthy()
+  })
+
+  it('hides a cloud section for a record that was created offline', async () => {
+    renderProbe(
+      <SectionProbe operations={FINANCE_SECTION} target={{ synced: false }} />,
+      { isDesktop: true },
+    )
+
+    expect(await screen.findByText('hidden')).toBeTruthy()
   })
 })
 

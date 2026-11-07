@@ -1,9 +1,11 @@
 import { useMemo } from 'react'
 import {
   evaluateOperationAvailability,
+  evaluateOperationsAvailability,
   type CalibraApiMethod,
   type CalibraApiNamespace,
   type OperationAvailability,
+  type OperationRef,
   type OperationTargetState,
   type RuntimeHealthSnapshot,
 } from '@calibra-facil/client-runtime'
@@ -91,5 +93,37 @@ export function useOperationAvailability<
             : { synced: targetSynced, hasPendingLocalChanges: targetPending },
       }),
     [health, method, namespace, targetPending, targetSynced],
+  )
+}
+
+/**
+ * Whether a section can be shown: true when every method it renders from or
+ * acts through can run in this runtime right now (`operation('finance',
+ * 'getOverview')`). Use this instead of `!isDesktopRuntime()` to hide or show
+ * a feature: a section appears exactly when its calls can run, so a cloud-only
+ * module is listed on a connected desktop and hidden only while the cloud is
+ * unreachable, and a method that becomes local-first in the data-policy
+ * registry needs no edit here. `isDesktopRuntime()` stays for "which runtime"
+ * questions (transport, desktop auth, window chrome).
+ */
+export function useAvailability(
+  operations: readonly [OperationRef, ...OperationRef[]],
+  target?: OperationTargetState,
+): boolean {
+  const health = useRuntimeHealth()
+  const targetSynced = target?.synced
+  const targetPending = target?.hasPendingLocalChanges
+
+  return useMemo(
+    () =>
+      evaluateOperationsAvailability({
+        operations,
+        health,
+        target:
+          targetSynced === undefined && targetPending === undefined
+            ? undefined
+            : { synced: targetSynced, hasPendingLocalChanges: targetPending },
+      }).available,
+    [health, operations, targetPending, targetSynced],
   )
 }
