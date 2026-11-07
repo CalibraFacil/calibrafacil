@@ -33,8 +33,8 @@ to the right customer, proven by tests.
   - Transport via the existing Resend + `@react-email/render` path.
   - Email layout + primitives from `packages/email` (`emails/components/email-layout.tsx`:
     `EmailLayout`, `DetailBox`/`DetailRow`, `ActionButton`, `LinkFallback`, etc.).
-  - **Approval token already exists**: `sendServiceOrderQuote` (`apps/api/src/modules/service-orders/service-order.quotes.ts:205`)
-    calls `createPublicServiceOrderAccessToken` (`apps/api/src/lib/service-order-workflow.ts:338`).
+  - **Approval token already exists**: `sendServiceOrderQuote` (`apps/api/src/domains/service-orders/service-order.quotes.ts:205`)
+    calls `createPublicServiceOrderAccessToken` (`apps/api/src/domains/service-orders/service-order-workflow.ts:338`).
     The quote email MUST consume that token + `serviceOrder.publicId` to build the
     portal URL (base `PORTAL_APP_URL`). Do NOT mint a new token scheme.
 - **Tenant isolation (org + unit):** an email may only contain fields of its own
@@ -227,7 +227,7 @@ existing per-email payload is stored in the outbox `payload`.
 | Mini-spec                                  | Layer (real path)                                                                                                       | Depends on | Risk                                 | Mode                                           |
 | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------ | ---------------------------------------------- |
 | **A. Dispatch + shared SO email layout**   | `packages/notifications/src` (new customer dispatch), `packages/email` (layout/primitives)                              | —          | med (tenant isolation, transport)    | loopable-with-verifier                         |
-| **B. Nova OS**                             | `apps/api/src/modules/service-orders/service-order.commands.ts` + new template                                          | A          | low                                  | loopable-with-verifier                         |
+| **B. Nova OS**                             | `apps/api/src/domains/service-orders/service-order.commands.ts` + new template                                          | A          | low                                  | loopable-with-verifier                         |
 | **C. Novo orçamento**                      | `service-order.quotes.ts` (`sendServiceOrderQuote`) + new template; reuse token from `service-order-workflow.ts`        | A          | **HIGH (financial + approval link)** | loopable-with-verifier (max verifier scrutiny) |
 | **D. Aprovado / recusado**                 | `service-order.quotes.ts` (approve/reject handlers) + template                                                          | A, C       | med (financial total)                | loopable-with-verifier                         |
 | **E. Avaliação / execução / andamento**    | `service-order.execution.ts` + `service-order.evaluations.ts` (eval-state transitions) + templates                      | A, H       | low                                  | loopable-with-verifier                         |

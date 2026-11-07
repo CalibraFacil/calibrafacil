@@ -89,7 +89,7 @@ import {
   processScheduledContaAzulPolls,
   type IntegrationsEnv,
 } from "../modules/integrations";
-import { drainServiceOrderEmailOutbox } from "./service-order-email-drain";
+import { drainServiceOrderEmailOutbox } from "../domains/service-orders/email/service-order-email-drain";
 import { truncateAll } from "../../test/integration/db";
 import {
   seedApprovedJob,

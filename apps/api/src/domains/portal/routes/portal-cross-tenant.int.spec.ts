@@ -40,7 +40,7 @@ import { portalRouter } from "./portal";
 import { portalRequestsRouter } from "./portal-requests";
 import { portalVisitsRouter } from "./portal-visits";
 import { portalNotificationsRouter } from "./portal-notifications";
-import { portalServiceOrdersRouter } from "../../../routes/service-orders";
+import { portalServiceOrdersRouter } from "../../service-orders/routes/service-orders";
 import { seedAssetOotEvent } from "../../../../test/integration/oot-fixtures";
 import { loginAsPortal } from "../../../../test/integration/setup";
 import { truncateAll } from "../../../../test/integration/db";

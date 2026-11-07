@@ -143,7 +143,7 @@ describe("REQ-SYNC-RBAC-5: the unit role is the one of the event's unit", () => 
 const ROUTE_FILES: Record<string, string> = {
   "/api/jobs": "../../routes/jobs.ts",
   "/api/assets": "../../routes/assets.ts",
-  "/api/service-orders": "../../routes/service-orders.ts",
+  "/api/service-orders": "../service-orders/routes/service-orders.ts",
 };
 
 function squash(text: string) {

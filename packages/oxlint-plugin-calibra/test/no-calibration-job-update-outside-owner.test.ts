@@ -73,7 +73,7 @@ describe("calibra/no-calibration-job-update-outside-owner (real oxlint)", () => 
     for (const file of [
       "apps/api/src/routes/jobs.ts",
       "apps/api/src/routes/public-api-v2.ts",
-      "apps/api/src/routes/visits.ts",
+      "apps/api/src/domains/visits/routes/visits.ts",
     ]) {
       // eslint-disable-next-line no-await-in-loop -- sequential spawns keep the output readable
       await expectViolation(RULE, { [file]: UPDATE });

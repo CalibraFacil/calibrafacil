@@ -22,7 +22,7 @@ import { endpoint, routeId, type EndpointGroup } from "./define";
 
 /**
  * On-site (calibração in loco) visits. Response schemas are wire schemas
- * written from what the handlers in `apps/api/src/routes/visits.ts` return (the
+ * written from what the handlers in `apps/api/src/domains/visits/routes/visits.ts` return (the
  * three routers it exports are all mounted at `/api/visits`).
  */
 

@@ -11,7 +11,7 @@ import {
 } from "../../public-api";
 import { stagePublicApiWebhookEvent } from "../../public-api-webhooks";
 import { requireApiScope } from "../../../../middleware/api-key-auth";
-import { submitCalibrationRequest } from "../../../../lib/calibration-request-submission";
+import { submitCalibrationRequest } from "../../../visits";
 import { withOrg } from "../../../../lib/org-context";
 import { type PublicApiV2Env } from "./env";
 import { apiKeyActor } from "./actor";

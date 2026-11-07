@@ -21,7 +21,7 @@ import {
   serviceOrderEmailOutbox,
   serviceOrderQuote,
 } from "@calibra-facil/db/schema";
-import { portalServiceOrdersRouter } from "../../../routes/service-orders";
+import { portalServiceOrdersRouter } from "../../service-orders/routes/service-orders";
 import { loginAsPortal } from "../../../../test/integration/setup";
 import { truncateAll } from "../../../../test/integration/db";
 import { seedPortalContext } from "../../../../test/integration/seed";

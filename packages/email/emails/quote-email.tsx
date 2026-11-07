@@ -141,7 +141,7 @@ export interface QuoteEmailProps {
 
 // ---------------------------------------------------------------------------
 // Item type grouping
-// (mirrors calculatePricedItems in apps/api/src/lib/service-order-workflow.ts)
+// (mirrors calculatePricedItems in apps/api/src/domains/service-orders/service-order-workflow.ts)
 // ---------------------------------------------------------------------------
 
 /** Items that count as "Serviços". */
