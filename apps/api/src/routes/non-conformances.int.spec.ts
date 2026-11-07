@@ -22,7 +22,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { nonConformancesRouter } from "./non-conformances";
+import { nonConformancesRouter as bareNonConformancesRouter } from "./non-conformances";
 import { db } from "@calibra-facil/db";
 import {
   nonConformance,
@@ -35,6 +35,9 @@ import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const nonConformancesRouter = withErrorHandling(bareNonConformancesRouter);
 
 // ---------------------------------------------------------------------------
 // Notification side-effects: no-op in workflow correctness tests

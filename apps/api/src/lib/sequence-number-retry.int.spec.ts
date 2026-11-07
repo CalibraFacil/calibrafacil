@@ -5,12 +5,12 @@
  * read the same last number collide on the unique index. The retry loop must
  * recognise the violation Drizzle wraps (`Failed query: ...`, SQLSTATE 23505 in
  * `.cause`) and try again with the next number, on the org-scoped path (each
- * attempt a savepoint of the caller's transaction) and on the plain `db` path.
+ * attempt a savepoint of the caller's transaction).
  *
  *   REQ-18D-SEQ-1  n concurrent CAPA creators through orgDb(lab).transaction all
  *                  succeed with distinct numbers.
- *   REQ-18D-SEQ-2  Same for NC.
- *   REQ-18D-SEQ-3  Same on the plain `db` path (no handle), both libs.
+ *   REQ-18D-SEQ-2  Same for NC, through the write door (`withOrg`).
+ *   REQ-18D-SEQ-3  Same for both libs through `withOrg`, mixed.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
@@ -21,6 +21,7 @@ import { seedOrg } from "../../test/integration/seed";
 import { createCorrectiveActionRecord } from "./corrective-actions";
 import { createNonConformanceRecord } from "./non-conformances";
 import { orgDb } from "./org-db";
+import { withOrg } from "./org-context";
 
 vi.mock("@calibra-facil/notifications", () => ({
   notifyNCCreated: vi.fn().mockResolvedValue(undefined),
@@ -38,10 +39,8 @@ function capaParams(orgId: string, userId: string, index: number) {
   };
 }
 
-function ncParams(orgId: string, userId: string, index: number) {
+function ncParams(index: number) {
   return {
-    organizationId: orgId,
-    actorUserId: userId,
     type: "work" as const,
     description: `NC concorrente ${index}`,
     detectedAt: new Date(),
@@ -79,11 +78,8 @@ describe("sequential numbers under concurrent creators (P2-18d)", () => {
     const org = await seedOrg({ orgId: "org-a" });
     const created = await Promise.all(
       Array.from({ length: CONCURRENT }, (_, index) =>
-        orgDb(org.orgId).transaction((tx) =>
-          createNonConformanceRecord(ncParams(org.orgId, org.userId, index), {
-            executor: tx,
-            afterCommit: () => undefined,
-          }),
+        withOrg(org.orgId, { userId: org.userId, ipAddress: null }, (ctx) =>
+          createNonConformanceRecord(ncParams(index), ctx),
         ),
       ),
     );
@@ -97,16 +93,24 @@ describe("sequential numbers under concurrent creators (P2-18d)", () => {
     expect(stored).toHaveLength(CONCURRENT);
   });
 
-  it("REQ-18D-SEQ-3: the plain `db` path retries the same way, for both libs", async () => {
+  it("REQ-18D-SEQ-3: both libs retry the same way through the write door", async () => {
     const org = await seedOrg({ orgId: "org-a" });
+    const actor = { userId: org.userId, ipAddress: null };
     const capas = await Promise.all(
       Array.from({ length: CONCURRENT }, (_, index) =>
-        createCorrectiveActionRecord(capaParams(org.orgId, org.userId, index)),
+        withOrg(org.orgId, actor, (ctx) =>
+          createCorrectiveActionRecord(
+            capaParams(org.orgId, org.userId, index),
+            ctx.o,
+          ),
+        ),
       ),
     );
     const ncs = await Promise.all(
       Array.from({ length: CONCURRENT }, (_, index) =>
-        createNonConformanceRecord(ncParams(org.orgId, org.userId, index)),
+        withOrg(org.orgId, actor, (ctx) =>
+          createNonConformanceRecord(ncParams(index), ctx),
+        ),
       ),
     );
 

@@ -1,15 +1,14 @@
-import { afterTransactionCommit, db } from "@calibra-facil/db";
-import type { OrgExecutor } from "@calibra-facil/db/for-org";
+import type { OrgDb } from "@calibra-facil/db/for-org";
 import {
   nonConformance,
-  nonConformanceAuditLog,
   type NonConformanceTriggerSource,
   type NonConformanceType,
 } from "@calibra-facil/db/schema";
 import { notifyNCCreated } from "@calibra-facil/notifications";
-import { and, desc, eq, ilike } from "drizzle-orm";
-import type { OrgScope } from "./after-commit";
-import { isUniqueViolation } from "./db-errors";
+import { and, eq } from "drizzle-orm";
+import { invalid, notFound } from "./domain-errors";
+import type { OrgContext } from "./org-context";
+import { insertWithSequentialNumber } from "./sequential-number";
 
 /**
  * Shared non-conformance creator (ISO 17025 §8.7 / §7.10). Single code path
@@ -18,105 +17,60 @@ import { isUniqueViolation } from "./db-errors";
  * sequence, audit-log entry and admin/owner notification.
  */
 
-const MAX_SEQ_RETRIES = 3;
-
-async function generateNcNumber(
-  organizationId: string,
-  executor: Pick<OrgExecutor, "select"> = db,
-): Promise<string> {
-  const year = new Date().getFullYear();
-  const [lastNc] = await executor
-    .select({ ncNumber: nonConformance.ncNumber })
-    .from(nonConformance)
-    .where(
-      and(
-        eq(nonConformance.organizationId, organizationId),
-        ilike(nonConformance.ncNumber, `NC-${year}-%`),
-      ),
-    )
-    .orderBy(desc(nonConformance.ncNumber))
-    .limit(1);
-
-  let nextSeq = 1;
-  if (lastNc) {
-    const parts = lastNc.ncNumber.split("-");
-    nextSeq = parseInt(parts[2] ?? "0", 10) + 1;
-  }
-  return `NC-${year}-${String(nextSeq).padStart(4, "0")}`;
-}
+/**
+ * What the creator needs of a write context: the org-bound handle, the actor
+ * the audit row is recorded against, and where the notification waits for the
+ * commit. A full `OrgContext` fits; a lib still on an `OrgScope` builds one.
+ */
+export type NonConformanceWriteContext = Pick<
+  OrgContext,
+  "org" | "actor" | "o" | "audit" | "afterCommit"
+>;
 
 export type CreateNonConformanceRecordParams = {
-  organizationId: string;
-  actorUserId: string;
   type: NonConformanceType;
   description: string;
   detectedAt: Date;
   jobId?: number | null;
   triggerSource?: NonConformanceTriggerSource | null;
-  ipAddress?: string | null;
   /** Payload recorded in the audit-log "create" entry. */
   auditChanges?: Record<string, unknown>;
 };
 
 /**
  * Creates the NC (with the retry loop over the sequential-number unique
- * constraint), writes the audit-log entry and fires the admin/owner
- * notification. Throws when the insert cannot be completed.
- *
- * `scope` joins the caller's org-bound transaction
- * (`orgDb(org).transaction((tx) => ...)`): the number, the NC and its audit
- * entry are written in it, under the organization the caller named for
- * row-level security, and the notification is handed to `scope.afterCommit`
- * for the caller to run once the transaction has committed. Without it the NC
- * is written through the plain `db` and the notification waits for the
- * surrounding transaction scope, if any, as before.
+ * constraint), writes the audit-log entry and registers the admin/owner
+ * notification to run once the context's transaction has committed. Throws
+ * when the insert cannot be completed.
  */
 export async function createNonConformanceRecord(
   params: CreateNonConformanceRecordParams,
-  scope?: OrgScope,
+  ctx: NonConformanceWriteContext,
 ): Promise<typeof nonConformance.$inferSelect> {
-  let newNc: typeof nonConformance.$inferSelect | null = null;
-  const writer: Pick<OrgExecutor, "select" | "insert"> = scope?.executor ?? db;
-  const insertNc = (target: Pick<OrgExecutor, "insert">, ncNumber: string) =>
-    target
-      .insert(nonConformance)
-      .values({
-        ncNumber,
-        organizationId: params.organizationId,
-        jobId: params.jobId ?? null,
-        type: params.type,
-        triggerSource: params.triggerSource ?? null,
-        description: params.description,
-        detectedBy: params.actorUserId,
-        detectedAt: params.detectedAt,
-        status: "open",
-        createdBy: params.actorUserId,
-      })
-      .returning();
-  for (let attempt = 0; attempt < MAX_SEQ_RETRIES; attempt++) {
-    const ncNumber = await generateNcNumber(params.organizationId, writer);
-    try {
-      // Its own transaction (a savepoint when the caller already runs in one,
-      // as the desktop sync apply does): a unique violation on the sequential
-      // number aborts a Postgres transaction, and the retry below would fail
-      // with it unless only this attempt is rolled back.
-      const [inserted] = scope
-        ? await scope.executor.transaction((tx) => insertNc(tx, ncNumber))
-        : await db.transaction((tx) => insertNc(tx, ncNumber));
-      newNc = inserted ?? null;
-      break;
-    } catch (err) {
-      if (!isUniqueViolation(err) || attempt === MAX_SEQ_RETRIES - 1) throw err;
-    }
-  }
+  const newNc = await insertWithSequentialNumber(ctx.o, {
+    table: nonConformance,
+    organizationColumn: nonConformance.organizationId,
+    numberColumn: nonConformance.ncNumber,
+    prefix: "NC",
+    insert: (tx, ncNumber) =>
+      tx
+        .insert(nonConformance)
+        .values({
+          ncNumber,
+          organizationId: ctx.org,
+          jobId: params.jobId ?? null,
+          type: params.type,
+          triggerSource: params.triggerSource ?? null,
+          description: params.description,
+          detectedBy: ctx.actor.userId,
+          detectedAt: params.detectedAt,
+          status: "open",
+          createdBy: ctx.actor.userId,
+        })
+        .returning(),
+  });
 
-  if (!newNc) {
-    throw new Error("Falha ao criar nao conformidade");
-  }
-
-  await writer.insert(nonConformanceAuditLog).values({
-    organizationId: params.organizationId,
-    ncId: newNc.id,
+  await ctx.audit("nonConformance", newNc.id, {
     action: "create",
     changes: params.auditChanges ?? {
       initial: {
@@ -125,25 +79,49 @@ export async function createNonConformanceRecord(
         jobId: params.jobId ?? null,
       },
     },
-    performedBy: params.actorUserId,
-    ipAddress: params.ipAddress ?? null,
   });
 
-  // After the surrounding transaction commits, when there is one: the
-  // notification reads the NC back, and must not run on a rolled-back record.
-  const notify = () =>
+  // The notification reads the NC back: it waits for the commit and never
+  // runs on a rolled-back record.
+  ctx.afterCommit(() =>
     notifyNCCreated(
       newNc.id,
       newNc.ncNumber,
       newNc.type,
       newNc.description,
-      params.organizationId,
-      params.actorUserId,
-    ).catch((err) =>
-      console.error("[NC] Failed to send NC-created notification:", err),
-    );
-  if (scope) scope.afterCommit(notify);
-  else afterTransactionCommit(notify);
+      ctx.org,
+      ctx.actor.userId,
+    ),
+  );
 
   return newNc;
+}
+
+/**
+ * The laboratory's non-conformance a route parameter names. Throws 400 for an
+ * unreadable id and 404 when no NC of this laboratory matches.
+ */
+export async function requireLabNonConformance(
+  o: OrgDb,
+  routeId: string,
+): Promise<typeof nonConformance.$inferSelect> {
+  const id = parseInt(routeId, 10);
+  if (Number.isNaN(id)) throw invalid("invalid_request", "ID invalido");
+  const [found] = await o
+    .select()
+    .from(nonConformance)
+    .where(
+      and(
+        eq(nonConformance.id, id),
+        eq(nonConformance.organizationId, o.organizationId),
+      ),
+    )
+    .limit(1);
+  if (!found) {
+    throw notFound(
+      "non_conformance_not_found",
+      "Nao conformidade nao encontrada",
+    );
+  }
+  return found;
 }

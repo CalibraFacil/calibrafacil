@@ -268,10 +268,13 @@ describe("flagJobOutOfTolerance", () => {
         type: "out_of_tolerance",
         triggerSource: "as_found_verdict",
         jobId: 33,
-        organizationId: "org-1",
       }),
-      // Joins the workflow's own org-bound transaction.
-      expect.objectContaining({ executor: expect.anything() }),
+      // Joins the workflow's own org-bound transaction, as the actor.
+      expect.objectContaining({
+        org: "org-1",
+        actor: { userId: "user-1", ipAddress: null },
+        o: expect.anything(),
+      }),
     );
 
     // Notification insert snapshots recipient + certificate context.
@@ -387,9 +390,9 @@ describe("ensureStandardRecall", () => {
       expect.objectContaining({
         type: "out_of_tolerance",
         triggerSource: "standard_recall",
-        organizationId: "org-1",
       }),
-      undefined, // no org-bound scope: the plain `db`
+      // No caller scope: the recall runs in a transaction of its own.
+      expect.objectContaining({ org: "org-1", o: expect.anything() }),
     );
     const ncDescription = mockCreateNcRecord.mock.calls[0]?.[0]?.description;
     expect(ncDescription).toContain("Conjunto de Pesos E2");

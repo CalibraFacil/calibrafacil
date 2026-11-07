@@ -41,14 +41,18 @@ import {
   ootImpactAssessment,
   ootNotification,
 } from "@calibra-facil/db/schema";
-import { nonConformancesRouter } from "./non-conformances";
-import { capaRouter } from "./capa";
+import { nonConformancesRouter as bareNonConformancesRouter } from "./non-conformances";
+import { capaRouter as bareCapaRouter } from "./capa";
 import { ootAckRouter } from "./oot-ack";
 import { loginAs, logout } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg } from "../../test/integration/seed";
 import { seedJobForOrg } from "../../test/integration/tenant-refs";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const nonConformancesRouter = withErrorHandling(bareNonConformancesRouter);
+const capaRouter = withErrorHandling(bareCapaRouter);
 
 const notifications = vi.hoisted(() => ({
   notifyNCCreated: vi.fn().mockResolvedValue(undefined),
@@ -540,7 +544,7 @@ describe("non-conformances router: read and write handlers (P2-18e)", () => {
 
     await db.execute(
       sql.raw(`create or replace function p218e_fail_nc_audit() returns trigger
-        language plpgsql as $$ begin raise exception 'p218e: forced failure'; end $$`),
+        language plpgsql as $$ begin raise exception 'p218e: forced failure' using errcode = 'XX000'; end $$`),
     );
     await db.execute(
       sql.raw(

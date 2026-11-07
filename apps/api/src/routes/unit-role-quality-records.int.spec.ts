@@ -27,11 +27,15 @@ import { loginAs } from "../../test/integration/setup";
 import { truncateAll } from "../../test/integration/db";
 import { seedOrg, seedStandard } from "../../test/integration/seed";
 import { seedExtraMember } from "../../test/integration/tenant-refs";
-import { capaRouter } from "./capa";
-import { nonConformancesRouter } from "./non-conformances";
+import { capaRouter as bareCapaRouter } from "./capa";
+import { nonConformancesRouter as bareNonConformancesRouter } from "./non-conformances";
 import { proficiencyTestsRouter } from "./proficiency-tests";
 import { spcRouter } from "./spc";
 import { withStatusRepair } from "../../test/integration/state-fixtures";
+import { withErrorHandling } from "../../test/integration/with-error-handling";
+
+const nonConformancesRouter = withErrorHandling(bareNonConformancesRouter);
+const capaRouter = withErrorHandling(bareCapaRouter);
 
 vi.mock("@calibra-facil/notifications", () => ({
   notifyNCCreated: vi.fn().mockResolvedValue(undefined),

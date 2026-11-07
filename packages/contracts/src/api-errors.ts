@@ -84,6 +84,10 @@ export const API_ERROR_CODES = [
   "service_not_found",
   "technician_not_found",
 
+  // Quality records (non-conformances, CAPA).
+  "non_conformance_not_found",
+  "capa_not_found",
+
   // Service requests.
   "request_not_found",
   "request_not_editable",
@@ -113,6 +117,10 @@ export const API_ERROR_CODES = [
   // asserted by clients/tests of the job and visit routes. Kept verbatim so
   // existing clients keep working; new code must use `job_status_conflict`.
   "JOB_STATUS_CONFLICT",
+  // The out-of-tolerance (§7.10) notification and impact-assessment routes.
+  "ALREADY_ACKNOWLEDGED",
+  "ASSESSMENT_SIGNED",
+  "CONCLUSION_REQUIRED",
 ] as const;
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[number];
