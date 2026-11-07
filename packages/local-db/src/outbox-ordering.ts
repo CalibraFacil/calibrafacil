@@ -1,7 +1,19 @@
 import { LocalBlockedOutboxEvent } from "@calibra-facil/contracts/sync";
 import { isRegulatedOutboxOperation } from "@calibra-facil/contracts/outbox-rejections";
+import {
+  SYNC_CREATE_OPERATIONS,
+  isCreateSyncOperation,
+} from "@calibra-facil/contracts/sync-protocol";
 import type { LocalDatabase } from "./database";
 import { stableLocalNumericId } from "./ids";
+
+/**
+ * The operations that create a record, as a SQL `IN (...)` list: the `ordering: "create"`
+ * rows of the push-operation table (they are fixed names of the contract, never user input).
+ */
+const CREATE_OPERATIONS_SQL = SYNC_CREATE_OPERATIONS.map(
+  (operation) => `'${operation}'`,
+).join(", ");
 
 function aggregateKey(kind: string, id: string) {
   return `${kind}\u0000${id}`;
@@ -64,7 +76,7 @@ export function baseExpectedVersion(
 ): number | null {
   const stored = getStoredAggregateVersion(database, kind, id);
   if (stored !== null) return stored;
-  if (!firstOperation.startsWith("create_local_")) return null;
+  if (!isCreateSyncOperation(firstOperation)) return null;
 
   const synced = database
     .prepare<{ kind: string; id: string }, { found: number }>(
@@ -180,7 +192,7 @@ SELECT
 FROM outbox
 INNER JOIN domain_events ON domain_events.event_id = outbox.event_id
 WHERE outbox.status IN ('pending', 'failed', 'conflict', 'dead')
-  OR (outbox.status = 'discarded' AND domain_events.event_type LIKE 'create_local_%')
+  OR (outbox.status = 'discarded' AND domain_events.event_type IN (${CREATE_OPERATIONS_SQL}))
 ORDER BY domain_events.sequence ASC
 `,
     )
@@ -252,7 +264,7 @@ LIMIT 1
       [aggregateKey(root.aggregate_kind, root.aggregate_id), root.sequence],
     ]);
     const missing = new Set<string>();
-    if (root.event_type.startsWith("create_local_")) {
+    if (isCreateSyncOperation(root.event_type)) {
       missing.add(aggregateKey(root.aggregate_kind, root.aggregate_id));
     }
 
@@ -274,7 +286,7 @@ LIMIT 1
         if (from === undefined || row.sequence < from) {
           heldFrom.set(key, row.sequence);
         }
-        if (row.event_type.startsWith("create_local_")) missing.add(key);
+        if (isCreateSyncOperation(row.event_type)) missing.add(key);
       }
     }
   }

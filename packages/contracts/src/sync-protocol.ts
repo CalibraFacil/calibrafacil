@@ -76,8 +76,28 @@ const syncExecutionPayloadSchema = z.looseObject({
 
 const envelopeShape = syncEventSchema.shape;
 
+/**
+ * The entity types the push protocol's commands are written against (the
+ * `aggregate_kind` of the desktop's outbox events). The web's labels for them are typed
+ * against this list, so a new kind cannot ship without one.
+ */
+export const SYNC_COMMAND_ENTITY_TYPES = [
+  "asset",
+  "attachment",
+  "calibration_job",
+  "customer",
+  "non_conformance",
+  "service_order",
+  "service_order_execution",
+  "service_order_quote",
+  "service_order_delivery_document",
+  "certificate_draft",
+] as const;
+
+export type SyncCommandEntityType = (typeof SYNC_COMMAND_ENTITY_TYPES)[number];
+
 function command<
-  Entity extends string,
+  Entity extends SyncCommandEntityType,
   Operation extends string,
   Payload extends z.ZodType,
 >(entityType: Entity, operation: Operation, payload: Payload) {
@@ -257,43 +277,234 @@ export type SyncCommandOperation = SyncCommand["operation"];
 export type SyncCommandSupport = "current" | "legacy";
 
 /**
- * The membership table: which operations exist and whether a desktop of today
- * still produces them. A spec ties it to the union (every member listed, none
- * twice) and another to the writers of packages/local-db.
+ * The rights an operation needs, as the online route that does the same thing states
+ * them (`withLabPermission({...})`): resource -> actions. The API checks the names
+ * against its access-control statements when it loads the table.
  */
-export const SYNC_COMMAND_SUPPORT = {
-  create_local_asset: "current",
-  save_local_execution: "current",
-  submit_local_execution: "current",
-  create_local_service_order_intake: "current",
-  create_local_attachment: "current",
-  update_local_asset: "legacy",
-  create_local_customer: "legacy",
-  update_local_customer: "legacy",
-  update_local_customer_compliance: "legacy",
-  create_local_job_draft: "legacy",
-  create_local_non_conformance: "legacy",
-  create_local_service_order_quote_draft: "legacy",
-  save_local_service_order_execution_notes: "legacy",
-  create_local_service_order_delivery_document_draft: "legacy",
-  create_local_certificate_draft: "legacy",
-  generate_local_certificate_pdf: "legacy",
-} as const satisfies Record<SyncCommandOperation, SyncCommandSupport>;
+export type SyncOperationPermission = {
+  readonly [resource: string]: readonly string[];
+};
+
+/**
+ * - `create`: the event makes a record (or a record's child) that the cloud may not have
+ *   yet. A later event of the same record, or one that points at it, waits behind it
+ *   while it is in trouble, and a creation that was discarded before the cloud ever got
+ *   the record blocks what depended on it.
+ * - `follow`: the event acts on a record that already exists (an edit, an execution
+ *   save, an audit marker).
+ *
+ * This was the naming convention `create_local_*`; it is a field so a rename cannot
+ * change the ordering.
+ */
+export type SyncOperationOrdering = "create" | "follow";
+
+export type SyncOperationDefinition = {
+  /** Whether a desktop of today still produces it. */
+  readonly support: SyncCommandSupport;
+  /** What the person looking at the outbox reads (pt-BR). */
+  readonly label: string;
+  /** The event carries regulated calibration readings. */
+  readonly regulated: boolean;
+  readonly ordering: SyncOperationOrdering;
+  /** Who may push it. */
+  readonly permission: SyncOperationPermission;
+  /** The online route (or guard) the permission was taken from. */
+  readonly onlineRoute: string;
+};
+
+/**
+ * The one table of the push protocol's operations, exhaustive by type: adding a member to
+ * the union fails to compile here until someone says whether a desktop of today still
+ * writes it, what it is called, whether it carries regulated readings, how it is ordered
+ * and who may send it. The API's handler switch (`apply-event.ts`) is the other
+ * exhaustive place. A spec ties the table to the union (every member listed, none twice)
+ * and another to the writers of packages/local-db.
+ *
+ * Order is the documentation order: current members first.
+ */
+export const SYNC_OPERATIONS = {
+  create_local_asset: {
+    support: "current",
+    label: "Cadastro de instrumento",
+    regulated: false,
+    ordering: "create",
+    permission: { equipment: ["create"] },
+    onlineRoute: "POST /api/assets",
+  },
+  save_local_execution: {
+    support: "current",
+    label: "Rascunho da execução",
+    regulated: true,
+    ordering: "follow",
+    permission: { calibration: ["execute"] },
+    onlineRoute: "POST /api/jobs/:id/execute",
+  },
+  submit_local_execution: {
+    support: "current",
+    label: "Envio da execução para aprovação",
+    regulated: true,
+    ordering: "follow",
+    permission: { calibration: ["submit"] },
+    onlineRoute: "POST /api/jobs/:id/submit",
+  },
+  create_local_service_order_intake: {
+    support: "current",
+    label: "Recebimento de ordem de serviço",
+    regulated: false,
+    ordering: "create",
+    permission: { service_order: ["create"] },
+    onlineRoute: "POST /api/service-orders",
+  },
+  create_local_attachment: {
+    support: "current",
+    label: "Anexo",
+    regulated: false,
+    ordering: "create",
+    // The attachment endpoints (`/api/sync/attachments/*`) and the event share this
+    // permission: an attachment is field evidence captured by whoever may start work on
+    // the lab's records.
+    permission: { calibration: ["create"] },
+    onlineRoute: "POST /api/sync/attachments/init-upload",
+  },
+  update_local_asset: {
+    support: "legacy",
+    label: "Edição de instrumento",
+    regulated: false,
+    ordering: "follow",
+    permission: { equipment: ["update"] },
+    onlineRoute: "PUT /api/assets/:id",
+  },
+  create_local_customer: {
+    support: "legacy",
+    label: "Cadastro de cliente",
+    regulated: false,
+    ordering: "create",
+    permission: { client: ["create"] },
+    onlineRoute: "POST /api/customers",
+  },
+  update_local_customer: {
+    support: "legacy",
+    label: "Edição de cliente",
+    regulated: false,
+    ordering: "follow",
+    permission: { client: ["update"] },
+    onlineRoute: "PUT /api/customers/:id",
+  },
+  update_local_customer_compliance: {
+    support: "legacy",
+    label: "Conformidade do cliente",
+    regulated: false,
+    ordering: "follow",
+    permission: { client: ["update"] },
+    onlineRoute: "PUT /api/customers/:id/compliance",
+  },
+  create_local_job_draft: {
+    support: "legacy",
+    label: "Abertura de calibração",
+    regulated: false,
+    ordering: "create",
+    permission: { calibration: ["create"] },
+    onlineRoute: "POST /api/jobs",
+  },
+  create_local_non_conformance: {
+    support: "legacy",
+    label: "Registro de não conformidade",
+    regulated: false,
+    ordering: "create",
+    permission: { non_conformance: ["create"] },
+    onlineRoute: "POST /api/non-conformances",
+  },
+  create_local_service_order_quote_draft: {
+    support: "legacy",
+    label: "Orçamento da ordem de serviço",
+    regulated: false,
+    ordering: "create",
+    permission: { service_order: ["quote_create"] },
+    onlineRoute: "POST /api/service-orders/:id/quotes",
+  },
+  save_local_service_order_execution_notes: {
+    support: "legacy",
+    label: "Notas da execução da OS",
+    regulated: false,
+    ordering: "follow",
+    permission: { service_order: ["execute"] },
+    onlineRoute: "PATCH /api/service-orders/:id/execution",
+  },
+  create_local_service_order_delivery_document_draft: {
+    support: "legacy",
+    label: "Documento de entrega",
+    regulated: false,
+    ordering: "create",
+    permission: { service_order: ["deliver"] },
+    onlineRoute: "POST /api/service-orders/:id/delivery-document",
+  },
+  // An audit-only marker of an older build: it writes one audit row, so it needs what
+  // the push needed before the permission table existed.
+  create_local_certificate_draft: {
+    support: "legacy",
+    label: "Rascunho de certificado",
+    regulated: false,
+    ordering: "create",
+    permission: { calibration: ["create"] },
+    onlineRoute: "POST /api/sync/push (audit marker)",
+  },
+  // Certificates are issued online only, after the approval; an offline "publish PDF"
+  // is the approve decision, so it asks for the approve right (and is refused for good
+  // whoever sends it).
+  generate_local_certificate_pdf: {
+    support: "legacy",
+    label: "Publicação de certificado",
+    regulated: false,
+    ordering: "follow",
+    permission: { calibration: ["approve"] },
+    onlineRoute: "POST /api/jobs/:id/approve",
+  },
+} as const satisfies Record<SyncCommandOperation, SyncOperationDefinition>;
 
 export const SYNC_COMMAND_OPERATIONS: readonly SyncCommandOperation[] =
   syncCommandSchema.options.map((member) => member.shape.operation.value);
 
-function isSyncCommandOperation(value: string): value is SyncCommandOperation {
-  return Object.hasOwn(SYNC_COMMAND_SUPPORT, value);
+export function isSyncCommandOperation(
+  value: string,
+): value is SyncCommandOperation {
+  return Object.hasOwn(SYNC_OPERATIONS, value);
 }
 
 export function syncCommandSupport(
   operation: string,
 ): SyncCommandSupport | null {
   return isSyncCommandOperation(operation)
-    ? SYNC_COMMAND_SUPPORT[operation]
+    ? SYNC_OPERATIONS[operation].support
     : null;
 }
+
+/** The pt-BR label of an operation, or undefined for one this build does not know. */
+export function syncOperationLabel(
+  operation: string | null,
+): string | undefined {
+  return operation !== null && isSyncCommandOperation(operation)
+    ? SYNC_OPERATIONS[operation].label
+    : undefined;
+}
+
+/** Whether the operation's events carry regulated calibration readings. */
+export function isRegulatedSyncOperation(operation: string): boolean {
+  return (
+    isSyncCommandOperation(operation) && SYNC_OPERATIONS[operation].regulated
+  );
+}
+
+/** Whether the operation creates a record the cloud may not have yet (`SyncOperationOrdering`). */
+export function isCreateSyncOperation(operation: string): boolean {
+  return (
+    isSyncCommandOperation(operation) &&
+    SYNC_OPERATIONS[operation].ordering === "create"
+  );
+}
+
+/** The operations that create a record, for the places that need the list (SQL `IN (...)`). */
+export const SYNC_CREATE_OPERATIONS: readonly SyncCommandOperation[] =
+  SYNC_COMMAND_OPERATIONS.filter(isCreateSyncOperation);
 
 export type SyncCommandParseResult =
   | { ok: true; command: SyncCommand }

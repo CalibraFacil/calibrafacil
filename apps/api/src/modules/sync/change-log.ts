@@ -26,10 +26,6 @@ import {
   syncChangeLogPurge,
 } from "@calibra-facil/db/schema";
 import {
-  SYNC_CHANGE_ENTITY_ORDER,
-  type SyncChangeEntityType,
-} from "@calibra-facil/db/sync-change-log";
-import {
   type CloudSyncEvent,
   type SyncChangePosition,
   type SyncResyncRequiredResponse,
@@ -38,6 +34,10 @@ import {
   parseSyncChangeCursor,
   syncChangeCursorBefore,
 } from "@calibra-facil/contracts";
+import {
+  type SyncEntity,
+  isSyncEntity,
+} from "@calibra-facil/contracts/sync-entities";
 import type { OrgDb } from "@calibra-facil/db/for-org";
 import { orgDb } from "../../lib/org-db";
 import { buildUnitScopeCondition } from "../../lib/units";
@@ -58,16 +58,10 @@ export type ChangeLogPull =
 
 type LogEntry = {
   position: SyncChangePosition;
-  entityType: SyncChangeEntityType;
+  entityType: SyncEntity;
   entityId: number;
   changedAt: Date;
 };
-
-const ENTITY_TYPES = new Set<string>(SYNC_CHANGE_ENTITY_ORDER);
-
-function isEntityType(value: string): value is SyncChangeEntityType {
-  return ENTITY_TYPES.has(value);
-}
 
 export async function pullChangeLog(input: {
   scope: SyncScope;
@@ -166,7 +160,7 @@ async function pullChangeLogIn(
     row.entityType === null ||
     row.entityId === null ||
     row.changedAt === null ||
-    !isEntityType(row.entityType)
+    !isSyncEntity(row.entityType)
       ? []
       : [
           {
@@ -209,7 +203,7 @@ async function resolveEvents(
 ): Promise<CloudSyncEvent[]> {
   // The first entry of each entity in the page: the cursor that returns it again.
   const first = new Map<string, LogEntry>();
-  const idsByType = new Map<SyncChangeEntityType, number[]>();
+  const idsByType = new Map<SyncEntity, number[]>();
   for (const entry of page) {
     const key = `${entry.entityType}:${entry.entityId}`;
     if (first.has(key)) continue;

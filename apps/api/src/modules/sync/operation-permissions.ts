@@ -1,5 +1,9 @@
-import { type SyncCommandOperation } from "@calibra-facil/contracts";
-import type { PermissionCheck } from "@calibra-facil/auth/access";
+import {
+  SYNC_COMMAND_OPERATIONS,
+  SYNC_OPERATIONS,
+  type SyncCommandOperation,
+} from "@calibra-facil/contracts";
+import { ac, type PermissionCheck } from "@calibra-facil/auth/access";
 import {
   type MemberData,
   getEffectivePermissionRole,
@@ -17,98 +21,56 @@ import {
  * member with the helper the online guard uses (`requirePermission`:
  * `getEffectivePermissionRole` + `hasPermissionLocally`).
  *
- * The table is exhaustive by type (`satisfies Record<SyncCommandOperation, ...>`):
- * adding an operation to the push protocol fails to compile here until someone
- * says who may send it. `operation-permissions.spec.ts` also reads the online
- * route sources and fails when a route's guard and this table disagree.
+ * The permission lives in the push-operation table of the contract
+ * (`SYNC_OPERATIONS`, packages/contracts/src/sync-protocol.ts), which is exhaustive
+ * by type: adding an operation to the push protocol fails to compile there until
+ * someone says who may send it. The contract states resources and actions as plain
+ * strings (it cannot import the access-control statements), so
+ * {@link syncOperationPermission} checks the names against them.
+ * `operation-permissions.spec.ts` also reads the online route sources and fails when
+ * a route's guard and the table disagree.
  */
-export type SyncOperationPermission = {
-  /** The permission the member needs, as `withLabPermission(...)` states it. */
-  readonly permission: PermissionCheck;
-  /** The online route (or guard) the permission was taken from. */
-  readonly onlineRoute: string;
-};
+function isPermissionCheck(value: unknown): value is PermissionCheck {
+  if (typeof value !== "object" || value === null) return false;
+  const known = new Map<string, readonly string[]>(
+    Object.entries(ac.statements),
+  );
+  return Object.entries(value).every(([resource, actions]) => {
+    const allowed = known.get(resource);
+    return (
+      allowed !== undefined &&
+      Array.isArray(actions) &&
+      actions.every((action) => allowed.includes(action))
+    );
+  });
+}
+
+/** The permission an operation needs, as the access-control statements spell it. */
+export function syncOperationPermission(
+  operation: SyncCommandOperation,
+): PermissionCheck {
+  const { permission } = SYNC_OPERATIONS[operation];
+  if (!isPermissionCheck(permission)) {
+    throw new Error(
+      `The push-operation table gives ${operation} a permission that is not an access-control statement.`,
+    );
+  }
+  return permission;
+}
+
+// Fail at load, not on the first push of that operation, when the table names a
+// resource or action the access control does not have.
+for (const operation of SYNC_COMMAND_OPERATIONS) {
+  syncOperationPermission(operation);
+}
 
 /**
  * The attachment endpoints (`/api/sync/attachments/*`) and the
  * `create_local_attachment` event share one permission: an attachment is field
  * evidence captured by whoever may start work on the lab's records.
  */
-export const SYNC_ATTACHMENT_PERMISSION: PermissionCheck = {
-  calibration: ["create"],
-};
-
-export const SYNC_OPERATION_PERMISSIONS = {
-  create_local_job_draft: {
-    permission: { calibration: ["create"] },
-    onlineRoute: "POST /api/jobs",
-  },
-  create_local_asset: {
-    permission: { equipment: ["create"] },
-    onlineRoute: "POST /api/assets",
-  },
-  update_local_asset: {
-    permission: { equipment: ["update"] },
-    onlineRoute: "PUT /api/assets/:id",
-  },
-  create_local_customer: {
-    permission: { client: ["create"] },
-    onlineRoute: "POST /api/customers",
-  },
-  update_local_customer: {
-    permission: { client: ["update"] },
-    onlineRoute: "PUT /api/customers/:id",
-  },
-  update_local_customer_compliance: {
-    permission: { client: ["update"] },
-    onlineRoute: "PUT /api/customers/:id/compliance",
-  },
-  save_local_execution: {
-    permission: { calibration: ["execute"] },
-    onlineRoute: "POST /api/jobs/:id/execute",
-  },
-  submit_local_execution: {
-    permission: { calibration: ["submit"] },
-    onlineRoute: "POST /api/jobs/:id/submit",
-  },
-  create_local_service_order_intake: {
-    permission: { service_order: ["create"] },
-    onlineRoute: "POST /api/service-orders",
-  },
-  create_local_non_conformance: {
-    permission: { non_conformance: ["create"] },
-    onlineRoute: "POST /api/non-conformances",
-  },
-  create_local_service_order_quote_draft: {
-    permission: { service_order: ["quote_create"] },
-    onlineRoute: "POST /api/service-orders/:id/quotes",
-  },
-  save_local_service_order_execution_notes: {
-    permission: { service_order: ["execute"] },
-    onlineRoute: "PATCH /api/service-orders/:id/execution",
-  },
-  create_local_service_order_delivery_document_draft: {
-    permission: { service_order: ["deliver"] },
-    onlineRoute: "POST /api/service-orders/:id/delivery-document",
-  },
-  create_local_attachment: {
-    permission: SYNC_ATTACHMENT_PERMISSION,
-    onlineRoute: "POST /api/sync/attachments/init-upload",
-  },
-  // An audit-only marker of an older build: it writes one audit row, so it needs
-  // what the push needed before this table existed.
-  create_local_certificate_draft: {
-    permission: { calibration: ["create"] },
-    onlineRoute: "POST /api/sync/push (audit marker)",
-  },
-  // Certificates are issued online only, after the approval; an offline
-  // "publish PDF" is the approve decision, so it asks for the approve right
-  // (and is refused for good whoever sends it).
-  generate_local_certificate_pdf: {
-    permission: { calibration: ["approve"] },
-    onlineRoute: "POST /api/jobs/:id/approve",
-  },
-} satisfies Record<SyncCommandOperation, SyncOperationPermission>;
+export const SYNC_ATTACHMENT_PERMISSION: PermissionCheck =
+  syncOperationPermission("create_local_attachment");
 
 /**
  * The member as the event's own unit sees them. `memberData.unitRole` is the role
@@ -153,7 +115,7 @@ export function authorizeSyncOperation(
   member: Pick<MemberData, "role" | "unitRole">,
   operation: SyncCommandOperation,
 ): SyncPermissionDecision {
-  const { permission } = SYNC_OPERATION_PERMISSIONS[operation];
+  const permission = syncOperationPermission(operation);
   const role = getEffectivePermissionRole(member, permission);
   if (hasPermissionLocally(role, permission)) return { allowed: true };
 

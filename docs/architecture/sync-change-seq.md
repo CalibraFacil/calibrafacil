@@ -46,8 +46,11 @@ through `orgDb(organizationId)`.
 | `published_method`         | `calibration_method` (PUBLISHED only: leaving PUBLISHED is a delete) | the whole laboratory           |
 | `mass_composition_profile` | `mass_composition_profile` (in the bootstrap, not in the old pull)   | the whole laboratory           |
 
-`packages/db/src/sync-change-log.ts` is the one list; a drift test (`sync-change-log-sql.test.ts`)
-fails when a trigger and the list differ, and the API's entity sources are tested against the same list.
+`packages/contracts/src/sync-entities.ts` (`SYNC_ENTITIES`) is the one table: wire name, cloud table, local mirror table,
+id prefix, order, delete mode, bootstrap array, skipped-row kind and partition domain table, and every list in the db, API
+and local-db derives from it. The triggers stay SQL; a drift test (`sync-change-log-sql.test.ts`) fails when a trigger and
+the table differ, a local-db test fails when a mirror table lacks what the table says, and the API's entity sources are
+tested against the same table.
 The P2-10 narrowing of the offline scope changed what the desktop can _do_ offline, not what it mirrors:
 the pull and bootstrap entities are unchanged.
 

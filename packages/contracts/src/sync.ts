@@ -1,5 +1,6 @@
 import { RECORDED_SYNC_CONFLICT_STATUSES } from "@calibra-facil/schemas/sync-status";
 import { z } from "zod";
+import { SYNC_ENTITY_ORDER, type SyncBootstrapKey } from "./sync-entities";
 
 export const syncEventSchema = z.object({
   eventId: z.string(),
@@ -76,6 +77,24 @@ export const syncPushResponseSchema = z.object({
   clockSkewMs: z.number().int().optional(),
 });
 
+/**
+ * The entity arrays of a bootstrap, one per `SYNC_ENTITIES` row (`bootstrapKey`): the
+ * `satisfies` fails to compile when this and the table name different arrays. The two
+ * with a lenient shape are the ones an older cloud does not send.
+ */
+const bootstrapEntityArrays = {
+  publishedMethods: z.array(z.unknown()),
+  assetTypes: z.array(z.unknown()),
+  customers: z.array(z.unknown()),
+  assets: z.array(z.unknown()),
+  services: z.array(z.unknown()),
+  standards: z.array(z.unknown()),
+  massCompositionProfiles: z.array(z.unknown()).optional(),
+  environmentalLimits: z.array(z.unknown()),
+  jobs: z.array(z.unknown()),
+  serviceOrders: z.array(z.unknown()).default([]),
+} satisfies Record<SyncBootstrapKey, z.ZodType>;
+
 export const syncBootstrapResponseSchema = z.object({
   serverTime: z.string(),
   user: z.object({
@@ -106,34 +125,14 @@ export const syncBootstrapResponseSchema = z.object({
     offlineCertificatePublication: z.boolean(),
   }),
   syncCursor: z.string().nullable(),
-  publishedMethods: z.array(z.unknown()),
-  assetTypes: z.array(z.unknown()),
-  customers: z.array(z.unknown()),
-  assets: z.array(z.unknown()),
-  services: z.array(z.unknown()),
-  standards: z.array(z.unknown()),
-  massCompositionProfiles: z.array(z.unknown()).optional(),
-  environmentalLimits: z.array(z.unknown()),
-  jobs: z.array(z.unknown()),
-  serviceOrders: z.array(z.unknown()).default([]),
+  ...bootstrapEntityArrays,
 });
 
 export const localSessionSnapshotResponseSchema = z.object({
   data: syncBootstrapResponseSchema.nullable(),
 });
 
-const cloudSyncEntityTypeSchema = z.enum([
-  "asset_type",
-  "customer",
-  "asset",
-  "service",
-  "published_method",
-  "reference_standard",
-  "environmental_limit",
-  "calibration_job",
-  "service_order",
-  "mass_composition_profile",
-]);
+const cloudSyncEntityTypeSchema = z.enum(SYNC_ENTITY_ORDER);
 
 export const cloudSyncEventSchema = z.object({
   cloudEventId: z.string(),

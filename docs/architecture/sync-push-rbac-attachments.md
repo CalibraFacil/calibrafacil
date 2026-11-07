@@ -11,7 +11,8 @@ Operators: `DEPLOYMENT.md`, _Desktop push permissions and offline attachments_.
 operation, so a technician or operator could offline do what the online routes deny them (a quote, a delivery document,
 a non-conformance, a service order). The route now only requires authentication, membership and a LAB organization; each
 event is checked, after its schema and scope checks and before anything is prepared or applied, against
-`SYNC_OPERATION_PERMISSIONS`.
+the permission of its row in the push-operation table (`SYNC_OPERATIONS` in `packages/contracts/src/sync-protocol.ts`,
+which also holds each operation's label, regulated flag, support and ordering).
 
 The role is the member's role **in the event's unit** (`memberForEventUnit`: `event.unitId`, then a numeric `payload.unitId`, then the
 active unit; no assignment there means no unit elevation): the desktop sends no `x-active-unit-id`, so the request's own unit role is

@@ -1,19 +1,21 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { SYNC_COMMAND_OPERATIONS } from "@calibra-facil/contracts";
+import {
+  SYNC_COMMAND_OPERATIONS,
+  SYNC_OPERATIONS,
+  type SyncCommandOperation,
+} from "@calibra-facil/contracts";
 import type { RoleName } from "@calibra-facil/auth/access";
 import {
-  SYNC_OPERATION_PERMISSIONS,
   authorizeSyncOperation,
   memberForEventUnit,
+  syncOperationPermission,
 } from "./operation-permissions";
 
-type Operation = keyof typeof SYNC_OPERATION_PERMISSIONS;
+type Operation = SyncCommandOperation;
 
-const OPERATIONS = Object.keys(SYNC_OPERATION_PERMISSIONS).filter(
-  (key): key is Operation => key in SYNC_OPERATION_PERMISSIONS,
-);
+const OPERATIONS: readonly Operation[] = SYNC_COMMAND_OPERATIONS;
 
 const ROLES: readonly RoleName[] = [
   "owner",
@@ -59,7 +61,15 @@ const EXPECTED_ALLOWED: Record<Operation, readonly RoleName[]> = {
 
 describe("REQ-SYNC-RBAC-1: the push permission table", () => {
   it("covers exactly the operations of the push protocol", () => {
-    expect(OPERATIONS.toSorted()).toEqual(SYNC_COMMAND_OPERATIONS.toSorted());
+    expect(Object.keys(SYNC_OPERATIONS).toSorted()).toEqual(
+      SYNC_COMMAND_OPERATIONS.toSorted(),
+    );
+    for (const op of OPERATIONS) {
+      // Resource and action names are checked against the access-control statements.
+      expect(syncOperationPermission(op)).toEqual(
+        SYNC_OPERATIONS[op].permission,
+      );
+    }
     expect(Object.keys(EXPECTED_ALLOWED).toSorted()).toEqual(
       SYNC_COMMAND_OPERATIONS.toSorted(),
     );
@@ -161,8 +171,7 @@ function describeTable(permission: object) {
 
 describe("REQ-SYNC-RBAC-2: the table follows the online routes", () => {
   const derived = OPERATIONS.flatMap((op) => {
-    const [method, route] =
-      SYNC_OPERATION_PERMISSIONS[op].onlineRoute.split(" ");
+    const [method, route] = SYNC_OPERATIONS[op].onlineRoute.split(" ");
     const prefix = Object.keys(ROUTE_FILES).find((p) => route?.startsWith(p));
     return method && route && prefix ? [{ op, method, route, prefix }] : [];
   });
@@ -197,7 +206,7 @@ describe("REQ-SYNC-RBAC-2: the table follows the online routes", () => {
       const found = pattern.exec(source);
       expect(found, `${method} ${route} not found in ${file}`).not.toBeNull();
       expect(squash(found?.[1] ?? "")).toBe(
-        describeTable(SYNC_OPERATION_PERMISSIONS[op].permission),
+        describeTable(SYNC_OPERATIONS[op].permission),
       );
     },
   );

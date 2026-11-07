@@ -1,6 +1,6 @@
 import {
   SYNC_COMMAND_OPERATIONS,
-  SYNC_COMMAND_SUPPORT,
+  SYNC_OPERATIONS,
   parseSyncCommand,
 } from "@calibra-facil/contracts/sync-protocol";
 import { SyncBootstrapResponse } from "@calibra-facil/contracts/sync";
@@ -307,11 +307,11 @@ describe("the desktop's events are members of the typed push protocol (REQ-SP-1)
       });
       expect(parsed.ok, event.operation).toBe(true);
       expect(
-        SYNC_COMMAND_SUPPORT[
+        SYNC_OPERATIONS[
           event.operation === "submit_local_execution"
             ? "submit_local_execution"
             : "save_local_execution"
-        ],
+        ].support,
       ).toBe("current");
     }
     database.close();
@@ -335,8 +335,8 @@ describe("the desktop's events are members of the typed push protocol (REQ-SP-1)
 
     const members = new Set<string>(SYNC_COMMAND_OPERATIONS);
     expect([...named].filter((name) => !members.has(name))).toEqual([]);
-    const current = Object.entries(SYNC_COMMAND_SUPPORT)
-      .filter(([, support]) => support === "current")
+    const current = Object.entries(SYNC_OPERATIONS)
+      .filter(([, definition]) => definition.support === "current")
       .map(([operation]) => operation);
     expect(current.filter((operation) => !named.has(operation))).toEqual([]);
   });

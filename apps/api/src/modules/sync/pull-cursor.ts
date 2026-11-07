@@ -48,20 +48,20 @@
  * the same statement as the row) used as the cursor instead of the timestamp.
  */
 import { type AnyColumn, type SQL, and, gte, or, sql } from "drizzle-orm";
+import {
+  SYNC_LEGACY_PULL_ENTITIES,
+  type SyncLegacyPullEntity,
+} from "@calibra-facil/contracts/sync-entities";
 
-export const SYNC_PULL_ENTITY_ORDER = [
-  "asset_type",
-  "customer",
-  "asset",
-  "service",
-  "reference_standard",
-  "environmental_limit",
-  "calibration_job",
-  "service_order",
-  "published_method",
-] as const;
+/**
+ * The entities the deprecated pull reads, in rank order: the sync entity table's
+ * `legacyPull` rows. `mass_composition_profile` is not one: protocols 1 and 2 predate
+ * it and this pull has no reader for it, so a desktop that still speaks them never
+ * receives mass profiles (protocol 3 serves them from the change log).
+ */
+export const SYNC_PULL_ENTITY_ORDER = SYNC_LEGACY_PULL_ENTITIES;
 
-export type SyncPullEntityType = (typeof SYNC_PULL_ENTITY_ORDER)[number];
+export type SyncPullEntityType = SyncLegacyPullEntity;
 
 export type SyncPullPosition = {
   /** Epoch milliseconds. */

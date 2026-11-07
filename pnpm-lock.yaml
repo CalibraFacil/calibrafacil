@@ -976,6 +976,9 @@ importers:
         specifier: ^3.4.9
         version: 3.4.9
     devDependencies:
+      "@calibra-facil/contracts":
+        specifier: workspace:^
+        version: link:../contracts
       "@calibra-facil/method-definition":
         specifier: workspace:^
         version: link:../method-definition

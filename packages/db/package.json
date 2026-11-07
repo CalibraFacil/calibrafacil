@@ -17,7 +17,6 @@
     "./queue-render-recovery": "./src/queue-render-recovery.ts",
     "./records-retention": "./src/records-retention.ts",
     "./schema": "./src/schema.ts",
-    "./sync-change-log": "./src/sync-change-log.ts",
     "./tenancy": "./src/tenancy.ts",
     "./testing": "./src/testing.ts",
     "./seed-asset-types": "./src/seed-asset-types.ts",
@@ -61,6 +60,7 @@
     "postgres": "^3.4.9"
   },
   "devDependencies": {
+    "@calibra-facil/contracts": "workspace:^",
     "@calibra-facil/method-definition": "workspace:^",
     "@repo/typescript-config": "workspace:^",
     "@types/node": "^24.13.0",

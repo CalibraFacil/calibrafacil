@@ -462,16 +462,7 @@ function pullWindow(
 }
 
 function toCloudEvents(
-  entityType:
-    | "asset_type"
-    | "customer"
-    | "asset"
-    | "service"
-    | "published_method"
-    | "reference_standard"
-    | "environmental_limit"
-    | "calibration_job"
-    | "service_order",
+  entityType: SyncPullEntityType,
   rows: Array<Record<string, unknown>>,
   timestampKey: string,
 ) {

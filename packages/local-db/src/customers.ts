@@ -145,7 +145,7 @@ INSERT INTO customers (
 
     enqueueLocalCustomerEvent(database, {
       entityId: id,
-      // A LEGACY command of the push protocol (`SYNC_COMMAND_SUPPORT`): no
+      // A LEGACY command of the push protocol (`SYNC_OPERATIONS`): no
       // production route reaches this writer since Q13/Q27; it is kept for the
       // outbox of an upgraded database and for the sync conflict suites.
       operation: "create_local_customer",
