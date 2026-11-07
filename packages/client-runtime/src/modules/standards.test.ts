@@ -38,18 +38,30 @@ function clientReplying(
   return { client, requests };
 }
 
+/** The smallest body the standards create endpoint accepts. */
+const standardInput = {
+  name: "Massa padrão",
+  serialNumber: "SN-1",
+  certificateNumber: "CERT-001",
+  calibrationDate: "2026-01-10",
+  nextCalibrationDate: "2027-01-10",
+  referenceValue: 1,
+  uncertainty: 0.1,
+};
+
 describe("standards module response contracts", () => {
   it("REQ-TC-1: list, detail, create and update return the validated payload untouched", async () => {
     const list = buildStandardsList();
     expect(
       await clientReplying({ body: list }).client.standards.list({
-        page: 1,
-        limit: 20,
+        query: { page: 1, limit: 20 },
       }),
     ).toEqual(list);
 
     const detail = buildStandard({ isExpired: true, daysUntilExpiry: -3 });
-    const got = await clientReplying({ body: detail }).client.standards.get(1);
+    const got = await clientReplying({ body: detail }).client.standards.get({
+      params: { id: 1 },
+    });
     // Typed by the schema: no generic needed to read a field.
     expect(got.daysUntilExpiry).toBe(-3);
     expect(got).toEqual(detail);
@@ -57,11 +69,17 @@ describe("standards module response contracts", () => {
     const record = buildStandardRecord();
     // Create and update answer with the stored row (no validity verdict).
     expect(
-      (await clientReplying({ body: record }).client.standards.create({}))
-        .certificateNumber,
+      (
+        await clientReplying({ body: record }).client.standards.create({
+          body: standardInput,
+        })
+      ).certificateNumber,
     ).toBe("CERT-001");
     expect(
-      await clientReplying({ body: record }).client.standards.update(1, {}),
+      await clientReplying({ body: record }).client.standards.update({
+        params: { id: 1 },
+        body: {},
+      }),
     ).toEqual(record);
   });
 
@@ -96,13 +114,17 @@ describe("standards module response contracts", () => {
     expect(
       await clientReplying({
         body: link,
-      }).client.standards.getCertificateDocumentDownloadUrl(1),
+      }).client.standards.getCertificateDocumentDownloadUrl({
+        params: { id: 1 },
+      }),
     ).toEqual(link);
 
     await expect(
       clientReplying({
         body: { url: 42, filename: "x.pdf" },
-      }).client.standards.getCertificateDocumentDownloadUrl(1),
+      }).client.standards.getCertificateDocumentDownloadUrl({
+        params: { id: 1 },
+      }),
     ).rejects.toBeInstanceOf(ResponseContractError);
   });
 
@@ -110,7 +132,7 @@ describe("standards module response contracts", () => {
     const { client } = clientReplying({ body: { id: 1, name: "Sem datas" } });
 
     const failure = await client.standards
-      .get(1)
+      .get({ params: { id: 1 } })
       .catch((error: unknown) => error);
 
     expect(failure).toBeInstanceOf(ResponseContractError);
@@ -145,7 +167,7 @@ describe("standards module response contracts", () => {
       status: 404,
       body: { error: "Padrão não encontrado" },
     })
-      .client.standards.get(404)
+      .client.standards.get({ params: { id: 404 } })
       .catch((error: unknown) => error);
 
     expect(failure).toBeInstanceOf(CalibraApiError);

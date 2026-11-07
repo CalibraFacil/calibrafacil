@@ -45,12 +45,6 @@ import type {
 } from '@calibra-facil/schemas'
 import { cn } from '@calibra-facil/ui/utils'
 
-function toStandardWriteInput(
-  input: UpdateReferenceStandardInput | RenewCertificateInput,
-) {
-  return Object.fromEntries(Object.entries(input))
-}
-
 export function EditStandardPage({ id }: { id: string }) {
   const { data: standard, isLoading } = useStandardDetailData(id)
 
@@ -97,7 +91,10 @@ function EditStandardForm({ standard }: { standard: StandardDetail }) {
 
   const updateMutation = useMutation({
     mutationFn: async (data: UpdateReferenceStandardInput) =>
-      calibraApi.standards.update(standard.id, toStandardWriteInput(data)),
+      calibraApi.standards.update({
+        params: { id: standard.id },
+        body: data,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['standards'] })
       toast.success('Padrão atualizado com sucesso.')
@@ -110,7 +107,10 @@ function EditStandardForm({ standard }: { standard: StandardDetail }) {
 
   const renewMutation = useMutation({
     mutationFn: async (payload: RenewCertificateInput) =>
-      calibraApi.standards.renew(standard.id, toStandardWriteInput(payload)),
+      calibraApi.standards.renew({
+        params: { id: standard.id },
+        body: payload,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['standards'] })
       toast.success('Certificado renovado com sucesso.')

@@ -103,8 +103,10 @@ function ptStandardOptionsQueryOptions() {
     queryKey: ['pt-standard-options'],
     queryFn: (): Promise<PtStandardOptionsData> =>
       calibraApi.standards.list({
-        page: 1,
-        limit: 100,
+        query: {
+          page: 1,
+          limit: 100,
+        },
       }),
   })
 }

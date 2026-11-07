@@ -4,6 +4,7 @@ import {
   customerEndpoints,
   ENDPOINT_GROUPS,
   methodEndpoints,
+  standardEndpoints,
   type EndpointDef,
   type EndpointGroups,
 } from "@calibra-facil/contracts";
@@ -33,8 +34,6 @@ import type {
   EmailDomainResponse,
   PortalDomainResponse,
   SsoSettingsResponse,
-  MassCompositionProfilesData,
-  StandardData,
   StandardsListData,
 } from "../types";
 import {
@@ -174,6 +173,11 @@ export function createDesktopApiClient(
   const localAssets = endpointClient(assetEndpoints, desktopTransport, options);
   const localMethods = endpointClient(
     methodEndpoints,
+    desktopTransport,
+    options,
+  );
+  const localStandards = endpointClient(
+    standardEndpoints,
     desktopTransport,
     options,
   );
@@ -494,73 +498,12 @@ export function createDesktopApiClient(
       get: localMethods.get,
     },
     standards: {
-      ...desktopCloudOnlyStubs("standards", {
-        action: "Padrões",
-        actionByMethod: {
-          getImpactedCertificates: "Recall de padrão",
-          getRecall: "Recall de padrão",
-          sendRecall: "Recall de padrão",
-          uploadCertificateDocument: "Certificado de padrão",
-          getCertificateDocumentDownloadUrl: "Certificado de padrão",
-        },
-      }),
-      async list(input = {}) {
-        const url = new URL("/api/standards", options.baseUrl);
-        url.searchParams.set("page", String(input.page ?? 1));
-        url.searchParams.set("limit", String(input.limit ?? 20));
-
-        if (input.query) {
-          url.searchParams.set("query", input.query);
-        }
-
-        if (input.status) {
-          url.searchParams.set("status", input.status);
-        }
-
-        const response = await fetchImpl(url, {
-          credentials: "include",
-          headers: await createDesktopHeaders(options.tokenProvider),
-        });
-
-        if (!response.ok) {
-          throw new Error("Falha ao carregar padrões");
-        }
-
-        return readDesktopJson<StandardsListData>(response);
-      },
-      async get(id) {
-        const response = await fetchImpl(
-          new URL(
-            `/api/standards/${encodeURIComponent(String(id))}`,
-            options.baseUrl,
-          ),
-          {
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error("Falha ao carregar padrão");
-        }
-
-        return readDesktopJson<StandardData>(response);
-      },
-      async listCompositionProfiles() {
-        const response = await fetchImpl(
-          new URL("/api/standards/composition-profiles", options.baseUrl),
-          {
-            credentials: "include",
-            headers: await createDesktopHeaders(options.tokenProvider),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error("Falha ao carregar perfis de composição");
-        }
-
-        return readDesktopJson<MassCompositionProfilesData>(response);
-      },
+      ...desktopEndpointStubs("standards"),
+      // Read-through from the local mirror: the local server answers the
+      // definitions' own response schemas (`apps/local-server/src/contract.test.ts`).
+      list: localStandards.list,
+      get: localStandards.get,
+      listCompositionProfiles: localStandards.listCompositionProfiles,
     },
     jobs: {
       ...desktopCloudOnlyStubs("jobs", {

@@ -4,7 +4,6 @@ import type {
   CreateServiceInput,
   SoftDeleteOrganizationRequest,
   UpdateOrganizationProfileRequest,
-  StandardWriteInput,
   UpdateNotificationPreferencesInput,
   UpdateServiceInput,
 } from "./types";
@@ -291,33 +290,13 @@ export function createCloudApiClient(
           };
         };
       };
+      // Only `jobs.listStandards` (the jobs domain, not converted yet) reads
+      // the standards list through the raw client; `standards` itself is an
+      // endpoint group. Delete this when `listStandards` is converted.
       standards: {
         $get(input: {
-          query: {
-            page?: string;
-            status?: string;
-            query?: string;
-            limit?: string;
-          };
+          query: { status?: string; limit?: string };
         }): Promise<Response>;
-        $post(input: { json: StandardWriteInput }): Promise<Response>;
-        ":id": {
-          $get(input: { param: { id: string } }): Promise<Response>;
-          $put(input: {
-            param: { id: string };
-            json: StandardWriteInput;
-          }): Promise<Response>;
-          $delete(input: { param: { id: string } }): Promise<Response>;
-          "audit-log": {
-            $get(input: { param: { id: string } }): Promise<Response>;
-          };
-          renew: {
-            $post(input: {
-              param: { id: string };
-              json: StandardWriteInput;
-            }): Promise<Response>;
-          };
-        };
       };
       "environmental-limits": {
         // `effective` stays on the raw tree: `jobs.getEffectiveEnvironmentalLimits`
@@ -373,7 +352,7 @@ export function createCloudApiClient(
     services: createServicesApi(rawCloudClient),
     materials: createMaterialsApi(endpointTransport, options),
     methods: createMethodsApi(endpointTransport, options),
-    standards: createStandardsApi(rawCloudClient, options),
+    standards: createStandardsApi(endpointTransport, options),
     jobs: createJobsApi(rawCloudClient, options),
     serviceOrders: createServiceOrdersApi(endpointTransport, options),
     sync: createCloudSyncApi(),

@@ -14,7 +14,7 @@ import {
   standardRecordSchema,
   standardSchema,
   standardsListResponseSchema,
-} from "./standards";
+} from "./endpoints/standards";
 import * as fixtures from "./standards.fixtures";
 
 /**

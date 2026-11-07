@@ -6,21 +6,16 @@
  * changes the shape it returns fails here before a client sees it.
  *
  * Covered: GET /, GET /:id, POST /, PUT /:id (changed and unchanged),
- * GET /composition-profiles, POST /:id/certificate-document and
- * GET /:id/certificate-document/download (object storage is stubbed: the
- * handlers still `satisfies` the contract type).
+ * the composition-profile catalog (read and writes), the audit log, renew,
+ * delete, the recall and reverse-traceability reads, POST
+ * /:id/certificate-document and GET /:id/certificate-document/download (object
+ * storage is stubbed). Every body is parsed with the response schema of the
+ * endpoint definition (`packages/contracts/src/endpoints/standards.ts`).
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { z } from "zod";
-import {
-  massCompositionProfilesResponseSchema,
-  standardCertificateDocumentDownloadResponseSchema,
-  standardCertificateDocumentUploadResponseSchema,
-  standardRecordSchema,
-  standardSchema,
-  standardsListResponseSchema,
-} from "@calibra-facil/contracts";
+import { standardEndpoints } from "@calibra-facil/contracts";
 import { db } from "@calibra-facil/db";
 import { massCompositionProfile } from "@calibra-facil/db/schema";
 import { standardsRouter } from "./standards";
@@ -103,7 +98,7 @@ describe("standards endpoints: real responses honor the contract schemas (P2-15 
       await standardsRouter.request("/?page=1&limit=20", {
         headers: JSON_HEADERS,
       }),
-      standardsListResponseSchema,
+      standardEndpoints.list.response,
     );
     expect(list.data.map((standard) => standard.name)).toEqual([
       "Padrão de leitura",
@@ -113,7 +108,7 @@ describe("standards endpoints: real responses honor the contract schemas (P2-15 
 
     const detail = await parsedBody(
       await standardsRouter.request(`/${id}`, { headers: JSON_HEADERS }),
-      standardSchema,
+      standardEndpoints.get.response,
     );
     expect(detail.id).toBe(id);
     expect(typeof detail.isExpired).toBe("boolean");
@@ -131,7 +126,7 @@ describe("standards endpoints: real responses honor the contract schemas (P2-15 
         headers,
         body: JSON.stringify(NEW_STANDARD),
       }),
-      standardRecordSchema,
+      standardEndpoints.create.response,
       201,
     );
     expect(created.certificateNumber).toBe("RBC-2026-777");
@@ -143,7 +138,7 @@ describe("standards endpoints: real responses honor the contract schemas (P2-15 
         headers,
         body: JSON.stringify({ status: "INACTIVE" }),
       }),
-      standardRecordSchema,
+      standardEndpoints.update.response,
     );
     expect(updated.status).toBe("INACTIVE");
 
@@ -154,7 +149,7 @@ describe("standards endpoints: real responses honor the contract schemas (P2-15 
         headers,
         body: JSON.stringify({ status: "INACTIVE" }),
       }),
-      standardRecordSchema,
+      standardEndpoints.update.response,
     );
     expect(unchanged.id).toBe(created.id);
   });
@@ -181,7 +176,7 @@ describe("standards endpoints: real responses honor the contract schemas (P2-15 
         { method: "POST", body: form },
         ENV,
       ),
-      standardCertificateDocumentUploadResponseSchema,
+      standardEndpoints.uploadCertificateDocument.response,
     );
     expect(uploaded.document.fileName).toBe("certificado.pdf");
 
@@ -191,13 +186,13 @@ describe("standards endpoints: real responses honor the contract schemas (P2-15 
         { headers: JSON_HEADERS },
         ENV,
       ),
-      standardCertificateDocumentDownloadResponseSchema,
+      standardEndpoints.getCertificateDocumentDownloadUrl.response,
     );
     expect(link.filename).toBe("certificado.pdf");
 
     const detail = await parsedBody(
       await standardsRouter.request(`/${id}`, { headers: JSON_HEADERS }),
-      standardSchema,
+      standardEndpoints.get.response,
     );
     expect(detail.certificateDocument?.documentId).toBe(
       uploaded.document.documentId,
@@ -226,10 +221,117 @@ describe("standards endpoints: real responses honor the contract schemas (P2-15 
       await standardsRouter.request("/composition-profiles", {
         headers: JSON_HEADERS,
       }),
-      massCompositionProfilesResponseSchema,
+      standardEndpoints.listCompositionProfiles.response,
     );
     expect(catalog.data.map((profile) => profile.profileKey)).toEqual([
       "M1:1g",
     ]);
+  });
+
+  it("REQ-TC-1: the composition-profile writes, the audit log, renew and delete parse", async () => {
+    const org = await seedOrg({ orgId: "org-std-contract", role: "admin" });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+    const headers = { ...JSON_HEADERS, "x-active-unit-id": String(org.unitId) };
+
+    const profile = await parsedBody(
+      await standardsRouter.request("/composition-profiles", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          profileKey: "M1:2g",
+          profileClass: "M1",
+          nominal: "2 g",
+          nominalG: 2,
+          value: 2,
+          uncertainty: 0.001,
+        }),
+      }),
+      standardEndpoints.createCompositionProfile.response,
+      201,
+    );
+    expect(profile.profileKey).toBe("M1:2g");
+    const edited = await parsedBody(
+      await standardsRouter.request(`/composition-profiles/${profile.id}`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ uncertainty: 0.002 }),
+      }),
+      standardEndpoints.updateCompositionProfile.response,
+    );
+    expect(edited.uncertainty).toBe(0.002);
+    await parsedBody(
+      await standardsRouter.request(`/composition-profiles/${profile.id}`, {
+        method: "DELETE",
+        headers,
+      }),
+      standardEndpoints.deleteCompositionProfile.response,
+    );
+
+    const created = await parsedBody(
+      await standardsRouter.request("/", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(NEW_STANDARD),
+      }),
+      standardEndpoints.create.response,
+      201,
+    );
+    const renewed = await parsedBody(
+      await standardsRouter.request(`/${created.id}/renew`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          certificateNumber: "RBC-2026-778",
+          calibrationDate: "2026-06-01",
+          nextCalibrationDate: "2027-06-01",
+          uncertainty: 0.02,
+          reason: "Renovação anual",
+        }),
+      }),
+      standardEndpoints.renew.response,
+    );
+    expect(renewed.data.certificateNumber).toBe("RBC-2026-778");
+
+    const log = await parsedBody(
+      await standardsRouter.request(`/${created.id}/audit-log`, { headers }),
+      standardEndpoints.auditLog.response,
+    );
+    expect(log.data.map((entry) => entry.action)).toContain("renew");
+
+    const removed = await parsedBody(
+      await standardsRouter.request(`/${created.id}`, {
+        method: "DELETE",
+        headers,
+      }),
+      standardEndpoints.delete.response,
+    );
+    expect(removed.data.id).toBe(created.id);
+  });
+
+  it("REQ-TC-1: the impacted-certificates and recall reads parse (no certificate, no recall yet)", async () => {
+    const org = await seedOrg({ orgId: "org-std-contract", role: "admin" });
+    const id = await seedStandard({
+      organizationId: org.orgId,
+      unitId: org.unitId,
+      createdBy: org.userId,
+    });
+    loginAs({ userId: org.userId, organizationId: org.orgId });
+
+    const impacted = await parsedBody(
+      await standardsRouter.request(`/${id}/impacted-certificates`, {
+        headers: JSON_HEADERS,
+      }),
+      standardEndpoints.getImpactedCertificates.response,
+    );
+    expect(impacted.data).toEqual([]);
+    expect(impacted.inFlight).toEqual([]);
+
+    const recall = await parsedBody(
+      await standardsRouter.request(`/${id}/recall`, {
+        headers: JSON_HEADERS,
+      }),
+      standardEndpoints.getRecall.response,
+    );
+    expect(recall.data).toBeNull();
   });
 });

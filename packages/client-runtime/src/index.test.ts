@@ -2812,7 +2812,7 @@ describe("desktop hybrid runtime adapter", () => {
     });
 
     await expect(
-      client.standards.list({ page: 1, limit: 20 }),
+      client.standards.list({ query: { page: 1, limit: 20 } }),
     ).resolves.toMatchObject({
       data: [{ name: "Peso padrao 20 kg" }],
     });
@@ -3119,7 +3119,7 @@ describe("desktop hybrid runtime adapter", () => {
     await client.assets.list({ query: { page: 1, limit: 20 } });
     await client.assetTypes.list();
     await client.methods.list({ query: { page: 1, limit: 20 } });
-    await client.standards.list({ page: 1, limit: 20 });
+    await client.standards.list({ query: { page: 1, limit: 20 } });
     await client.environmentalLimits.list();
     await client.jobs.list({ page: 1, limit: 20 });
     await client.serviceOrders.list({ query: { page: 1, limit: 20 } });
@@ -3207,6 +3207,9 @@ describe("desktop hybrid runtime adapter", () => {
       if (url.pathname === "/api/assets/1") {
         return Response.json(buildAssetDetail());
       }
+      if (url.pathname === "/api/standards/1") {
+        return Response.json(buildStandard());
+      }
 
       return Response.json({
         id: url.pathname.split("/").at(-1),
@@ -3235,8 +3238,8 @@ describe("desktop hybrid runtime adapter", () => {
     await client.assetTypes.list();
     await client.methods.list({ query: { page: 1, limit: 20 } });
     await client.methods.get({ params: { id: 1 } });
-    await client.standards.list({ page: 1, limit: 20 });
-    await client.standards.get(1);
+    await client.standards.list({ query: { page: 1, limit: 20 } });
+    await client.standards.get({ params: { id: 1 } });
     await client.environmentalLimits.list();
     await client.jobs.list({ page: 1, limit: 20 });
     await client.jobs.get("job-1");
@@ -3315,7 +3318,7 @@ describe("desktop hybrid runtime adapter", () => {
       ) {
         return Response.json({
           data: [
-            {
+            buildStandard({
               id: 2,
               name: "Peso local 10 kg",
               serialNumber: "STD-10KG",
@@ -3323,7 +3326,7 @@ describe("desktop hybrid runtime adapter", () => {
               nextCalibrationDate: "2026-12-31",
               status: "ACTIVE",
               isExpired: false,
-            },
+            }),
           ],
           pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
         });
@@ -3351,7 +3354,7 @@ describe("desktop hybrid runtime adapter", () => {
     });
 
     await expect(
-      client.standards.list({ page: 1, limit: 20 }),
+      client.standards.list({ query: { page: 1, limit: 20 } }),
     ).resolves.toMatchObject({
       data: [{ name: "Peso local 10 kg" }],
     });
@@ -3428,9 +3431,9 @@ describe("desktop hybrid runtime adapter", () => {
       },
     });
 
-    await expect(client.standards.list({ page: 1, limit: 20 })).rejects.toThrow(
-      "cache local",
-    );
+    await expect(
+      client.standards.list({ query: { page: 1, limit: 20 } }),
+    ).rejects.toThrow("cache local");
 
     expect(fetchCalls.map(([input]) => String(input))).toEqual([
       "http://127.0.0.1:4317/api/local/session",
@@ -3500,9 +3503,9 @@ describe("desktop hybrid runtime adapter", () => {
       },
     });
 
-    await expect(client.standards.list({ page: 1, limit: 20 })).rejects.toThrow(
-      "Unauthorized",
-    );
+    await expect(
+      client.standards.list({ query: { page: 1, limit: 20 } }),
+    ).rejects.toThrow("Unauthorized");
 
     expect(fetchCalls.map(([input]) => String(input))).toEqual([
       "http://127.0.0.1:4317/api/local/session",

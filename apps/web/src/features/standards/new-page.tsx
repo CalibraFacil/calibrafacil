@@ -31,7 +31,7 @@ export function NewStandardPage() {
 
   const createMutation = useMutation({
     mutationFn: async (data: CreateReferenceStandardInput) =>
-      calibraApi.standards.create(Object.fromEntries(Object.entries(data))),
+      calibraApi.standards.create({ body: data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['standards'] })
       toast.success('Padrão criado com sucesso.')
