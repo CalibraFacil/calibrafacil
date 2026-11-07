@@ -2,7 +2,10 @@ import { useQueryClient } from '@tanstack/react-query'
 
 import { useMountEffect } from '@calibra-facil/ui/use-mount-effect'
 import { setStoredDashboardOrganizationId } from '@/lib/dashboard-scope-storage'
-import { switchActiveOrganization } from '@/lib/switch-scope'
+import {
+  switchActiveOrganization,
+  watchOtherTabScope,
+} from '@/lib/switch-scope'
 import {
   DASHBOARD_CONTEXT_END_MARK,
   DASHBOARD_CONTEXT_START_MARK,
@@ -59,6 +62,15 @@ export function PersistDashboardOrgSelection({
   useMountEffect(() => {
     setStoredDashboardOrganizationId(organizationId)
   })
+
+  return null
+}
+
+/** Resets this tab's cache when another tab switches organization or unit. */
+export function CrossTabScopeSync() {
+  const queryClient = useQueryClient()
+
+  useMountEffect(() => watchOtherTabScope(queryClient))
 
   return null
 }

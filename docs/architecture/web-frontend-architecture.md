@@ -165,15 +165,19 @@ queries, switches, and removes the other organizations' entries instead of
 resetting everything (`portal-frontend.md`). In both apps the guarantee is the
 switch, never the key.
 
-Known gap, left on purpose: a second tab of the lab app does not hear that
-another tab changed the session's organization or unit. The app has no
-cross-tab signal to hook the reset into (no `storage` or `BroadcastChannel`
-listener in `apps/web`, `refetchOnWindowFocus` is off for the session, and Better
-Auth's own `storage`-based broadcast carries `session` events for its session
-atom and is not connected to the query cache). The tab keeps the
-old organization's cached data until it refetches. Adding a `storage` listener on
-the stored dashboard organization/unit keys (written on every switch) and calling
-the same reset would close it; that is a new signal, so it is a product decision.
+A second tab of the lab app follows a switch made in another tab. Every switch
+writes `dashboard-active-org` or `dashboard-active-unit:<org>` to `localStorage`
+(after the session already names the new organization), the browser fires a
+`storage` event in the other tabs only, and `watchOtherTabScope`
+(`switch-scope.ts`, mounted by `CrossTabScopeSync` in the dashboard shell) turns
+it into the same cancel-and-reset: an organization change also re-applies
+`organization.setActive` for the stored id in the listening tab (the session
+already names it, so the API answer does not change, but the tab's own session
+atom refreshes and the shell shows the new laboratory). The tests
+(`cross-tab-scope.test.ts`) simulate the other tab's write. Better Auth's own
+`storage`-based broadcast stays separate: it feeds the session atom, not the
+query cache. The portal does the same for `portal-active-org`
+(`portal-org-sync.ts`, `portal-frontend.md`).
 
 ## Runtime Config and Dashboard Scope
 

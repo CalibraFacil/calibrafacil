@@ -19,6 +19,7 @@ import {
 } from '@/runtime/sync-status'
 import { isDesktopOfflineRoute } from '@/runtime/desktop-offline-routes'
 import {
+  CrossTabScopeSync,
   DashboardLayoutMountMarker,
   DashboardOrgSwitcher,
   DashboardReadyMarker,
@@ -115,6 +116,7 @@ export function DashboardLayout() {
   return (
     <DashboardContextStateContext.Provider value={dashboardContextValue}>
       <DashboardLayoutMountMarker />
+      <CrossTabScopeSync />
       {preferredDashboardOrganization ? (
         <PersistDashboardOrgSelection
           key={`persist-${preferredDashboardOrganization.id}`}
