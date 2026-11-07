@@ -1,4 +1,4 @@
-import type { z } from "zod";
+import { z } from "zod";
 
 /**
  * One client-facing endpoint, declared once. The API mounts its handler against
@@ -30,6 +30,11 @@ type EndpointBase = {
   method: EndpointMethod;
   /** The full path, `:name` for a path parameter (`/api/customers/:id`). */
   path: string;
+  /**
+   * Validated against the path parameters (an object keyed by the path's
+   * `:name`s, e.g. a numeric id). Without it the handler gets them as strings.
+   */
+  params?: z.ZodType;
   /** Validated against the query string (flat object of scalars). */
   query?: z.ZodType;
   /** Validated against the JSON request body. */
@@ -56,6 +61,13 @@ type EndpointPolicy =
     };
 
 export type EndpointDef = EndpointBase & EndpointPolicy;
+
+/**
+ * A numeric row id in the path (`/api/x/:id`): a positive integer, else the
+ * request is refused with 400 before the handler runs. Use it in a definition's
+ * `params`: `params: z.object({ id: routeId })`.
+ */
+export const routeId = z.coerce.number().int().positive();
 
 /** A domain's endpoints keyed by the SDK method name. */
 export type EndpointGroup = Record<string, EndpointDef>;
@@ -123,12 +135,17 @@ export type EndpointClientInput<TDef extends EndpointDef> = (HasParams<
     ? { body: z.input<TBody> }
     : unknown);
 
-/** What a handler receives, already validated: `params` (strings), `query` and `body` (schema output). */
-export type EndpointHandlerInput<TDef extends EndpointDef> = (HasParams<
-  TDef["path"]
-> extends true
-  ? { params: PathParams<TDef["path"]> }
-  : unknown) &
+/**
+ * What a handler receives, already validated: `params` (the `params` schema's
+ * output, else strings), `query` and `body` (schema output).
+ */
+export type EndpointHandlerInput<TDef extends EndpointDef> = (TDef extends {
+  params: infer TParams extends z.ZodType;
+}
+  ? { params: z.output<TParams> }
+  : HasParams<TDef["path"]> extends true
+    ? { params: PathParams<TDef["path"]> }
+    : unknown) &
   (TDef extends { query: infer TQuery extends z.ZodType }
     ? { query: z.output<TQuery> }
     : unknown) &
