@@ -258,7 +258,7 @@ export const jobRecipes = {
 
   /**
    * Tell the lab's admins/owners that a certificate was NOT issued because the
-   * unit's signing certificate expired, was revoked or is missing (P0-8, Q44):
+   * unit's signing certificate expired, was revoked or is missing:
    * issuance fails closed instead of producing an unsigned PDF, so someone has
    * to upload a new A1 certificate and re-approve. `reason` is the pt-BR
    * explanation the job was rejected with.

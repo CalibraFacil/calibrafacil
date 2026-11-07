@@ -160,11 +160,7 @@ export function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/**
- * Render HTML to PDF via the Gotenberg Chromium engine,
- * replacing the previous in-function headless Chromium so the worker no
- * longer bundles puppeteer or downloads a Chromium pack.
- */
+/** HTML to PDF runs on the Gotenberg Chromium engine; its URL is required. */
 function requireGotenbergUrl(env: Env): string {
   if (!env.GOTENBERG_URL) {
     throw new Error("GOTENBERG_URL is required for HTML to PDF conversion.");
@@ -223,8 +219,7 @@ export async function gotenbergHtmlToPdf(
 // A4 paper size in inches.
 const A4_PAPER = { paperWidth: "8.27", paperHeight: "11.69" } as const;
 
-// Footer with page numbers (Chromium fills pageNumber/totalPages), matching the
-// previous puppeteer footerTemplate.
+// Footer with page numbers (Chromium fills pageNumber/totalPages).
 const DOC_PAGE_FOOTER_HTML =
   '<!DOCTYPE html><html><head><meta charset="utf-8" /></head>' +
   '<body><div style="width:100%;font-size:9px;text-align:center;color:#666;">' +
@@ -237,7 +232,7 @@ const DOC_PAGE_FOOTER_HTML =
  *
  *   full-page   — CSS @page size, zero margins, no running furniture.
  *   certificate — CSS @page size AND margins, plus a running header and
- *                 footer on every page (#865).
+ *                 footer on every page.
  *   (default)   — fixed A4 with our margins and a "Página X de Y" footer.
  *
  * The certificate branch exists because it is the only document that needs
@@ -252,7 +247,7 @@ const DOC_PAGE_FOOTER_HTML =
  * `data-pdf-layout` attribute it sets on its own <html>.
  *
  *   certificate — CSS @page size AND margins, plus a running header and footer
- *                 on every page (#865). NIE-Cgcre-009 §11.5.2 carries the
+ *                 on every page. NIE-Cgcre-009 §11.5.2 carries the
  *                 accreditation sentence onto continuation pages, and
  *                 §7.8.2.1(d) wants every page identifiable on its own.
  *                 `preferCssPageSize` hands the margin box to the stylesheet,

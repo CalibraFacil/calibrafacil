@@ -96,7 +96,7 @@ interface CertificateEmailContext {
   portalUrl: string;
 }
 
-/** Context for the audit-pack ready email template (#738) */
+/** Context for the audit-pack ready email template */
 interface AuditPackEmailContext {
   customerName?: string;
   periodLabel: string;
@@ -500,7 +500,7 @@ export async function getLabEmailBrand(
   const brand = lab ? createLabEmailBrand(lab) : undefined;
   if (!brand) return undefined;
 
-  // Lab-owned sending domain (#584): when the org has a verified + active
+  // Lab-owned sending domain: when the org has a verified + active
   // email domain (and the entitlement), sends carry a first-party envelope.
   const sender = await resolveLabEmailSender(organizationId);
   if (sender) {
@@ -574,7 +574,7 @@ function renderEmailTemplate(
     });
   }
 
-  // Asset found out of tolerance as-found (#740, ISO 9001 7.1.5.2)
+  // Asset found out of tolerance as-found (ISO 9001 7.1.5.2)
   if (
     emailContext?.type === "assetOot" &&
     type === "ASSET_FOUND_OUT_OF_TOLERANCE"
@@ -591,7 +591,7 @@ function renderEmailTemplate(
     });
   }
 
-  // Audit pack ready notification (#738)
+  // Audit pack ready notification
   if (emailContext?.type === "auditPack" && type === "AUDIT_PACK_READY") {
     const {
       customerName,
@@ -845,7 +845,7 @@ async function sendNotificationEmail(options: {
     const logoSrc = getEmailLogoSrc();
     const emailActionUrl = resolveEmailActionUrl(actionUrl);
 
-    // Lab-sender first when the brand carries one (#584); the payload is
+    // Lab-sender first when the brand carries one; the payload is
     // (re-)rendered per variant so the HTML matches the actual envelope.
     const outcome = await sendEmailWithLabSender({
       organizationId: emailBrand?.sender?.organizationId,

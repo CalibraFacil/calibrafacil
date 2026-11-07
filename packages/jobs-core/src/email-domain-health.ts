@@ -1,5 +1,5 @@
 /**
- * Daily health sweep for lab-owned email sending domains (issue #584 P4).
+ * Daily health sweep for lab-owned email sending domains.
  *
  * DKIM records rotate and Resend API keys get revoked silently; without this
  * sweep those lapses are only discovered when a send fails over to the

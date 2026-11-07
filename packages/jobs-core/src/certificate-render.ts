@@ -372,7 +372,7 @@ export async function processJob(
     });
 
     // Signing FAILS the emission when a certificate is configured and cannot
-    // sign (#644 REQ-CMP-SIGN-001/002) — nothing below this line runs.
+    // sign (REQ-CMP-SIGN-001/002) — nothing below this line runs.
     const signed = await signPdfWithUnitCertificate(
       env,
       jobId,
@@ -414,7 +414,7 @@ export async function processJob(
           }
         : signed.unsignedByPolicy
           ? {
-              // Q51: the unit chose to issue unsigned, with this recorded reason.
+              // The unit chose to issue unsigned, with this recorded reason.
               signed: false,
               signing: "unsigned_by_policy",
               unsignedByPolicy: signed.unsignedByPolicy,

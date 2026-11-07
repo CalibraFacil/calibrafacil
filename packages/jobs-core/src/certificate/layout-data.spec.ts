@@ -49,8 +49,8 @@ function massJob(
       dataFields: [
         {
           // The real shape: a table field whose COLUMNS carry quantityKind.
-          // The adapter used to look for flattened `<table>_<column>` entries
-          // here, found none, and silently numbered every row "Ponto N".
+          // The adapter must read the table's COLUMNS, not look for flattened
+          // `<table>_<column>` entries (which would silently number every row "Ponto N").
           key: "pontos",
           label: "Pontos",
           type: "table",
@@ -264,7 +264,7 @@ describe("buildCertificateLayoutData", () => {
     expect(data.resultTables[0]?.title).toBe("Resultados da calibração");
   });
 
-  // The pre-#865 shape, still frozen into every snapshot taken before the
+  // An older shape, still frozen into every snapshot taken before the
   // method was re-seeded: media_indicacao and erro_indicacao BOTH declared
   // "primary_result" for the same phase. Taking the first would print the mean
   // indication under the "Erro" heading — a wrong number under a right label,
@@ -341,7 +341,7 @@ describe("buildCertificateLayoutData", () => {
 
   it("never invents a conformity verdict", () => {
     // §7.8.6.2 needs a decision rule the method must declare. None do, so no
-    // certificate may carry a verdict — PR #587 printed one anyway.
+    // certificate may carry a verdict.
     const data = unwrap(buildCertificateLayoutData(massJob()));
     expect(data.conformity).toBeNull();
   });

@@ -142,9 +142,9 @@ export async function checkVisitsDueSoon(
 }
 
 /**
- * Check for ICP-Brasil A1 signing certificates nearing `validUntil` — CMP-02
- * (issue #645). When a signing certificate expires, emission silently degrades
- * to unsigned (CMP-01), so admins are warned ahead of time.
+ * Check for ICP-Brasil A1 signing certificates nearing `validUntil`.
+ * When a signing certificate expires, emission silently degrades
+ * to unsigned, so admins are warned ahead of time.
  *
  * This scan is a COARSE candidate filter: still-valid, active, non-revoked
  * certificates whose validity ends within the widest lead window (30 days),
@@ -197,7 +197,7 @@ export async function checkSigningCertificatesExpiring(
 }
 
 /**
- * Accreditation vigência nearing its end (#647). Reuses the signing-cert
+ * Accreditation vigência nearing its end. Reuses the signing-cert
  * escalating-window decider (30/15/7) — same shape of problem: one validity
  * end date per entity + idempotency-per-window via scheduled_notification.
  * Only active accreditations with a filled validUntil are candidates.
@@ -253,7 +253,7 @@ export async function checkAccreditationsExpiring(
 }
 
 /**
- * Accredited-scope (CMC) line vigência nearing its end (#427 Phase 2). Same
+ * Accredited-scope (CMC) line vigência nearing its end. Same
  * escalating-window shape as the org-level accreditation above, but per line:
  * once a line expires, points it covered stop matching the scope and
  * accredited issuance in that range classifies OUT_OF_SCOPE (blocking under

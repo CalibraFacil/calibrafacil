@@ -18,7 +18,7 @@ import {
 } from "./storage-helpers.js";
 
 // =============================================================================
-// §7.10 OUT-OF-TOLERANCE CUSTOMER NOTIFICATION (#426 Phase 0)
+// §7.10 OUT-OF-TOLERANCE CUSTOMER NOTIFICATION
 // =============================================================================
 
 type OotNotificationRow = {
@@ -46,7 +46,7 @@ type OotNotificationRow = {
   asset_name: string | null;
   asset_tag: string | null;
   asset_serial: string | null;
-  // #426 Phase 1: set when the notification belongs to a standard recall —
+  // Set when the notification belongs to a standard recall —
   // switches the letter to the recall variant.
   recall_id: number | null;
   std_name: string | null;

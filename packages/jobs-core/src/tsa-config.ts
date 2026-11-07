@@ -1,8 +1,8 @@
 /**
- * RFC 3161 TSA configuration from worker env (#646 / CMP-03, PAdES-T).
+ * RFC 3161 TSA configuration from worker env (PAdES-T).
  *
  * - `SIGNING_TSA_URL` — the TSA endpoint. Unset => plain AD-RB signing
- *   (pre-#646 behavior, byte-identical).
+ *   (byte-identical to the signature without a TSA).
  * - `SIGNING_TSA_AUTH` — optional full `Authorization` header value for a
  *   contracted ACT (e.g. `Basic …` for BRy credentials, `Bearer …` for
  *   Serpro's OAuth2 wrapper). Secret.

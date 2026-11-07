@@ -1,5 +1,5 @@
 /**
- * #584 P2: white-label envelope for service-order customer emails.
+ * White-label envelope for service-order customer emails.
  *
  * Exercises sendServiceOrderCustomerEmail through the REAL
  * @calibra-facil/email-sender + @calibra-facil/lab-email-domain chain

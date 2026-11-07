@@ -72,7 +72,7 @@ export const portalRecipes = {
 
   /**
    * Notify client portal users when their instrument was reproved in the
-   * as-found ("como recebido") condition at certificate approval (#740 Track B).
+   * as-found ("como recebido") condition at certificate approval.
    * The impact assessment is the CUSTOMER'S obligation (ISO 9001:2015 §7.1.5.2);
    * this only alerts and points at the portal workspace. Recipients mirror
    * notifyCertificateReady: every member of the customer's CLIENT org.
@@ -124,7 +124,7 @@ export const portalRecipes = {
   },
 
   /**
-   * Notify client portal users when an audit pack finished generating (#738).
+   * Notify client portal users when an audit pack finished generating.
    * Recipients are every member of the requesting CLIENT org (branch customer
    * or customer group) — the same audience that can see and download the pack
    * on the portal certificates page.
@@ -216,7 +216,7 @@ export const portalRecipes = {
 
     const portalUserIds = await listMemberIds(customerData.authOrganizationId);
 
-    // Deep-link to the superseded certificate's detail page (#744): it renders
+    // Deep-link to the superseded certificate's detail page: it renders
     // the §7.8.8 supersession banner and links the retificação once issued —
     // the amendment itself is still DRAFT at this point.
     const { actionUrl, portalUrl } = buildCertificateAmendedLinks({

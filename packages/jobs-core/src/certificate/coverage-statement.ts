@@ -5,14 +5,14 @@
  * the coverage probability the frozen calculation recorded. Nothing here reads
  * the method definition, the lab or the clock.
  *
- * Forms (Q46):
+ * Forms:
  *   - k = 2 (about 95 %): the standard wording, "distribuição normal";
  *   - k ≠ 2 with a finite ν_eff: `k = XX` and `ν_eff = YY` are stated, "distribuição t";
  *   - k ≠ 2 with ν_eff = ∞: `k = XX`, "distribuição normal", ν_eff = ∞;
  *   - per-point values that differ: the sentence refers to the table, which
  *     carries k and ν_eff on every row.
  *
- * Numbers use the pt-BR decimal comma (Q47), formatted by the same functions as
+ * Numbers use the pt-BR decimal comma, formatted by the same functions as
  * the table so the sentence and the table cannot disagree.
  */
 

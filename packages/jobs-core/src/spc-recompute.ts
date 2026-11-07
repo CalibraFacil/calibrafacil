@@ -1,5 +1,5 @@
 /**
- * SPC nightly recompute (issue #60, ISO/IEC 17025 §7.7.1).
+ * SPC nightly recompute (ISO/IEC 17025 §7.7.1).
  *
  * Re-evaluates every control chart against its stored check-standard readings
  * so trending / out-of-control statuses stay current even when no new reading

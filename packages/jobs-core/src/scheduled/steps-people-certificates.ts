@@ -216,7 +216,7 @@ export async function processSigningCertificatesExpiring(
   let signingCertsProcessed = 0;
 
   // 8. Warn admins/owners that an ICP-Brasil A1 signing certificate is nearing
-  // validUntil — CMP-02 (issue #645). The escalating-window + idempotency
+  // validUntil. The escalating-window + idempotency
   // decision is delegated to the pure `decideSigningCertificateExpiryAlert`;
   // this loop only feeds it the candidate certificates and records the fired
   // window. Reads validity only — never touches signing crypto.
@@ -239,7 +239,7 @@ export async function processSigningCertificatesExpiring(
     for (const cert of signingCertBatch) {
       try {
         const decision = decideSigningCertificateExpiryAlert({
-          // P0-8: 30, 14 and 7 days before the unit's certificate expires.
+          // 30, 14 and 7 days before the unit's certificate expires.
           leadDays: SIGNING_CERTIFICATE_EXPIRY_LEAD_DAYS,
           validUntil: cert.valid_until,
           now,
@@ -287,7 +287,7 @@ export async function processAccreditationsExpiring(
   let accreditationsProcessed = 0;
 
   // 9. Warn admins/owners that the Cgcre/RBC accreditation vigência nears
-  // its end (#647). Same escalating-window decider as the signing certs —
+  // its end. Same escalating-window decider as the signing certs —
   // one validity end per org, idempotency-per-window via
   // scheduled_notification (entity_type organization_accreditation, id 0).
   let accreditationOffset = 0;
@@ -354,7 +354,7 @@ export async function processAccreditedScopeLinesExpiring(
   let scopeLinesProcessed = 0;
 
   // 10. Warn admins/owners that an accredited-scope (CMC) line's vigência
-  // nears its end (#427 Phase 2). Same escalating-window decider — one
+  // nears its end. Same escalating-window decider — one
   // validity end per line, idempotency-per-window via scheduled_notification
   // (entity_type accredited_scope_line, entity_id = line id).
   let scopeLineOffset = 0;
@@ -418,7 +418,7 @@ export async function processAccreditedScopeLinesExpiring(
 export async function processPtPlanDue(lab: OrgSession): Promise<number> {
   let ptPlanItemsProcessed = 0;
 
-  // 11. Process proficiency-test participation-plan due dates (issue #60)
+  // 11. Process proficiency-test participation-plan due dates
   let ptPlanOffset = 0;
   let ptPlanBatch: PtPlanDueRow[];
 

@@ -248,7 +248,7 @@ export const complianceRecipes = {
 
   /**
    * Notify lab admins/owners when a proficiency-test participation-plan item is
-   * due (or overdue) for its scope part — ISO/IEC 17025 §7.7.2 / issue #60.
+   * due (or overdue) for its scope part — ISO/IEC 17025 §7.7.2.
    * Called by the scheduled sweep off ptPlanItem.nextDueAt.
    */
   async *PT_PLAN_DUE({ planItemId, organizationId }) {
@@ -357,7 +357,7 @@ export const complianceRecipes = {
 
   /**
    * Notify a lab's admins/owners that an ICP-Brasil A1 signing certificate is
-   * nearing its `validUntil` (issue #645 · CMP-02). Called by the daily
+   * nearing its `validUntil`. Called by the daily
    * compliance cron when a certificate enters an escalating lead window
    * (30/15/7 days). Reads validity only — never touches signing crypto.
    *
@@ -455,7 +455,7 @@ export const complianceRecipes = {
 
   /**
    * Warn lab admins/owners that the Cgcre/RBC accreditation vigência is nearing
-   * its end (#647). Once expired, certificates of accredited-scope methods are
+   * its end. Once expired, certificates of accredited-scope methods are
    * emitted WITHOUT the accreditation seal (decided 2026-07-05) — so the lab
    * must renew (or update the window) ahead of time.
    */
@@ -488,7 +488,7 @@ export const complianceRecipes = {
 
   /**
    * Warn lab admins/owners that one accredited-scope (CMC) line's vigência is
-   * nearing its end (#427 Phase 2). Once the line expires, points it covered
+   * nearing its end. Once the line expires, points it covered
    * stop matching and accredited issuance in that range classifies as
    * OUT_OF_SCOPE — blocking approval when the org enforces the guard.
    */

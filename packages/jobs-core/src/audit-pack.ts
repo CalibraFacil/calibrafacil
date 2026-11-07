@@ -143,7 +143,7 @@ export async function processAuditPackJob(
 
           if (candidates.rows.length === 0) return [];
 
-          // RELEASE GATE (hard requirement, #738): re-evaluated here at
+          // RELEASE GATE (hard requirement): re-evaluated here at
           // generation time — a certificate held for billing/payment must
           // never reach the ZIP, even if it was released at enqueue time.
           const releases = await client.query<{

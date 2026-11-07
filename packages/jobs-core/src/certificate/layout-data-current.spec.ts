@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import { buildCertificateLayoutData } from "./layout-data";
 
 /**
- * Roadmap 2 C1/C2 at the layout: what a certificate frozen under the CURRENT
+ * The frozen content decisions at the layout: what a certificate frozen under the CURRENT
  * rules says (coverage sentence from the frozen result, the signatory's
  * authorized-signatory title, the calibrating body, SI traceability only when
  * verified), and that an input frozen under the earlier layout re-renders as it

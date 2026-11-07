@@ -62,7 +62,7 @@ export const ncRecipes = {
 
   /**
    * Notify admins/owners when a customer acknowledges a §7.10 out-of-tolerance
-   * notification (#426 Phase 0). Called from the public ack route and recorded
+   * notification. Called from the public ack route and recorded
    * against the owning NC.
    */
   async *OOT_NOTIFICATION_ACKNOWLEDGED({

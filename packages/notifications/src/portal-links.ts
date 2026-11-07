@@ -8,7 +8,7 @@
  */
 
 /**
- * CERTIFICATE_AMENDED (#744): point the customer at the SUPERSEDED
+ * CERTIFICATE_AMENDED: point the customer at the SUPERSEDED
  * certificate's portal detail page, which renders the ISO 17025 §7.8.8
  * supersession banner and, once the retificação is issued, the "versão
  * vigente" link. The amendment itself is still DRAFT when this notification
