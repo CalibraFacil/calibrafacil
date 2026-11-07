@@ -1,3 +1,4 @@
+import { roleNameFromUnknown } from "@calibra-facil/auth/access";
 import { and, eq } from "drizzle-orm";
 import type { OrgExecutor } from "@calibra-facil/db/for-org";
 import {
@@ -5,10 +6,7 @@ import {
   member,
   user,
 } from "@calibra-facil/db/schema";
-import {
-  hasPermissionLocally,
-  roleNameFromUnknown,
-} from "../middleware/permission";
+import { hasPermissionLocally } from "../middleware/permission";
 
 /**
  * Who may verify the effectiveness of a CAPA (ISO/IEC 17025 §8.7; decision Q50).

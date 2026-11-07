@@ -1,45 +1,11 @@
+import { useCurrentRole } from '@/hooks/use-current-role'
 import { ReactNode } from 'react'
-import {
-  checkRolePermission,
-  useActiveOrganization,
-} from '@calibra-facil/auth/client'
+import { checkRolePermission } from '@calibra-facil/auth/client'
 import type { PermissionCheck, RoleName } from '@calibra-facil/auth/access'
 
 // =============================================================================
 // HOOKS
 // =============================================================================
-
-/**
- * Hook to get the current user's role in the active organization.
- *
- * @returns The current user's role, defaults to "member" if not found
- *
- * @example
- * const role = useRole();
- * if (role === "admin") {
- *   // Show admin features
- * }
- */
-function useRole(): RoleName {
-  const { data: activeOrg } = useActiveOrganization()
-
-  // Get the current user's member record from the active organization
-  const currentMember = activeOrg?.members?.[0]
-  return parseRoleName(currentMember?.role)
-}
-
-function parseRoleName(role: string | null | undefined): RoleName {
-  switch (role) {
-    case 'owner':
-    case 'admin':
-    case 'technician':
-    case 'operator':
-    case 'client_user':
-      return role
-    default:
-      return 'member'
-  }
-}
 
 /**
  * Hook to check if the current user has specific permissions.
@@ -52,7 +18,7 @@ function parseRoleName(role: string | null | undefined): RoleName {
  * const canApproveAndReject = useHasPermission({ calibration: ["approve", "reject"] });
  */
 export function useHasPermission(permissions: PermissionCheck): boolean {
-  const role = useRole()
+  const role = useCurrentRole()
   return checkRolePermission(role, permissions)
 }
 
@@ -85,7 +51,7 @@ interface RoleGateProps {
  * </RoleGate>
  */
 export function RoleGate({ roles, children, fallback = null }: RoleGateProps) {
-  const currentRole = useRole()
+  const currentRole = useCurrentRole()
 
   if (!roles.includes(currentRole)) {
     return <>{fallback}</>
@@ -147,7 +113,7 @@ interface HideFromRoleProps {
  * </HideFromRole>
  */
 export function HideFromRole({ role, children }: HideFromRoleProps) {
-  const currentRole = useRole()
+  const currentRole = useCurrentRole()
   const rolesToHide = Array.isArray(role) ? role : [role]
 
   if (rolesToHide.includes(currentRole)) {

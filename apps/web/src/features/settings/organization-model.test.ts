@@ -18,7 +18,6 @@ import {
   createUnitNameDrafts,
   dateInputToIso,
   formatInvitationTimeRemaining,
-  getCurrentOrganizationRole,
   getGovernanceActivityDescription,
   getGovernanceActivityLabel,
   getInvitationStatusLabel,
@@ -174,10 +173,6 @@ describe('organization-model', () => {
   })
 
   it('builds organization profile and ISO drafts and payloads', () => {
-    expect(getCurrentOrganizationRole({ members: [{ role: 'admin' }] })).toBe(
-      'admin',
-    )
-    expect(getCurrentOrganizationRole({ members: [] })).toBe('member')
     expect(canManageOrganizationSettings('owner')).toBe(true)
     expect(canManageOrganizationSettings('member')).toBe(false)
 

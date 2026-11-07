@@ -1,3 +1,8 @@
+import {
+  roleNameFromUnknown,
+  PORTAL_ACCESS_ROLES,
+  roles,
+} from "@calibra-facil/auth/access";
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
 import { createLabAuth, createPortalAuth } from "@calibra-facil/auth";
@@ -8,7 +13,6 @@ import {
 } from "@calibra-facil/db/schema";
 import { eq, and } from "drizzle-orm";
 import type { PermissionCheck, RoleName } from "@calibra-facil/auth/access";
-import { PORTAL_ACCESS_ROLES, roles } from "@calibra-facil/auth/access";
 import {
   resolveMemberUnitScope,
   type ResolvedUnit,
@@ -164,21 +168,6 @@ function isOrgType(value: unknown): value is OrgType {
 
 function orgTypeFromUnknown(value: unknown): OrgType {
   return isOrgType(value) ? value : "LAB";
-}
-
-export function roleNameFromUnknown(value: unknown): RoleName {
-  if (
-    value === "owner" ||
-    value === "admin" ||
-    value === "technician" ||
-    value === "operator" ||
-    value === "member" ||
-    value === "client_user"
-  ) {
-    return value;
-  }
-
-  return "member";
 }
 
 function getRequestLabAuth(c: {

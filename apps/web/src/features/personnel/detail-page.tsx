@@ -1,4 +1,4 @@
-import { useActiveOrganization } from '@calibra-facil/auth/client'
+import { useCurrentRole } from '@/hooks/use-current-role'
 import { COMPETENCE_MACHINE } from '@calibra-facil/schemas/machines'
 import { useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -62,7 +62,7 @@ import { getStatusBadge } from '@/features/personnel/components/columns'
 export function CompetenceDetailPage({ id }: { id: string }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { data: activeOrg } = useActiveOrganization()
+  const currentRole = useCurrentRole()
   // One competence dialog at a time: which one is open, or none.
   const [openDialog, setOpenDialog] = useState<
     'evaluate' | 'renew' | 'cancel' | 'delete' | null
@@ -182,11 +182,7 @@ export function CompetenceDetailPage({ id }: { id: string }) {
   }
 
   const statusBadge = getStatusBadge(comp.status)
-  const userRole =
-    typeof activeOrg?.members?.[0]?.role === 'string'
-      ? activeOrg.members[0].role
-      : null
-  const canDelete = userRole === 'owner' || userRole === 'admin'
+  const canDelete = currentRole === 'owner' || currentRole === 'admin'
   const isTerminalInactive = isTerminalInactiveStatus(comp.status)
   const canCancel = canCancelCompetenceStatus(comp.status)
 

@@ -776,6 +776,15 @@ export const roles = {
  */
 export type RoleName = keyof typeof roles;
 
+export function isRoleName(value: unknown): value is RoleName {
+  return typeof value === "string" && Object.hasOwn(roles, value);
+}
+
+/** A missing or unknown role reads as `member`, the least privileged staff role. */
+export function roleNameFromUnknown(value: unknown): RoleName {
+  return isRoleName(value) ? value : "member";
+}
+
 /**
  * Default role for new members joining the organization via invitation.
  * New members start with minimal permissions until upgraded by an admin/owner.

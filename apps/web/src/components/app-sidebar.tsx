@@ -1,3 +1,4 @@
+import { useCurrentRole } from '@/hooks/use-current-role'
 import {
   Analytics01Icon,
   AlertCircleIcon,
@@ -23,7 +24,6 @@ import {
 } from '@hugeicons/core-free-icons'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Link } from '@tanstack/react-router'
-import { useActiveOrganization } from '@calibra-facil/auth/client'
 
 import {
   dashboardNavSections,
@@ -91,11 +91,7 @@ function toNavMainItems(items: DashboardNavItem[]) {
 }
 
 export function AppSidebar() {
-  const { data: activeOrg } = useActiveOrganization()
-  const currentRole =
-    typeof activeOrg?.members?.[0]?.role === 'string'
-      ? activeOrg.members[0].role
-      : 'member'
+  const currentRole = useCurrentRole()
   const canAccessAdminOrOwner =
     currentRole === 'owner' || currentRole === 'admin'
   // Finance is a cloud-only module; the desktop shell never lists it.
