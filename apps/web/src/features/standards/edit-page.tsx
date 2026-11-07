@@ -44,6 +44,7 @@ import type {
   UpdateReferenceStandardInput,
 } from '@calibra-facil/schemas'
 import { cn } from '@calibra-facil/ui/utils'
+import { standardKeys } from '@/features/standards/keys'
 
 export function EditStandardPage({ id }: { id: string }) {
   const { data: standard, isLoading } = useStandardDetailData(id)
@@ -96,7 +97,7 @@ function EditStandardForm({ standard }: { standard: StandardDetail }) {
         body: data,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['standards'] })
+      queryClient.invalidateQueries({ queryKey: standardKeys.all })
       toast.success('Padrão atualizado com sucesso.')
       navigate({ to: '/dashboard/standards' })
     },
@@ -112,7 +113,7 @@ function EditStandardForm({ standard }: { standard: StandardDetail }) {
         body: payload,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['standards'] })
+      queryClient.invalidateQueries({ queryKey: standardKeys.all })
       toast.success('Certificado renovado com sucesso.')
       setShowRenewDialog(false)
       navigate({ to: '/dashboard/standards' })

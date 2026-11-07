@@ -51,6 +51,8 @@ import type {
   RequestTechnician,
 } from '@/features/requests/types'
 import { formatCalendarDate, formatInstant } from '@calibra-facil/shared/format'
+import { requestKeys } from '@/features/requests/keys'
+import { jobKeys } from '@/features/jobs/keys'
 
 type ConversionDraft = {
   serviceId: string
@@ -588,13 +590,13 @@ export function CalibrationRequestDetailPage({ id }: { id: string }) {
   const invalidate = async () => {
     await Promise.all([
       queryClient.invalidateQueries({
-        queryKey: ['calibration-request', organizationQueryKey, id],
+        queryKey: requestKeys.detail(organizationQueryKey, id),
       }),
       queryClient.invalidateQueries({
-        queryKey: ['calibration-requests', organizationQueryKey],
+        queryKey: requestKeys.listScope(organizationQueryKey),
       }),
       queryClient.invalidateQueries({
-        queryKey: ['jobs', organizationQueryKey],
+        queryKey: jobKeys.listScope(organizationQueryKey),
       }),
     ])
   }

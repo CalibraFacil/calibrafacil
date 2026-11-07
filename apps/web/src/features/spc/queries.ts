@@ -23,6 +23,7 @@ import {
   type SpcChartListQueryInput,
   type SpcStandardOptionsData,
 } from './types'
+import { spcKeys } from '@/features/spc/keys'
 
 const SPC_LIST_LIMIT = 50
 
@@ -47,13 +48,7 @@ function spcChartListInputFromUrl(organizationId: string, url?: URL) {
 
 function spcChartListQueryOptions(input: SpcChartListQueryInput) {
   return queryOptions({
-    queryKey: [
-      'spc-charts',
-      input.organizationId,
-      input.page,
-      input.standardId ?? null,
-      input.statusFilter,
-    ],
+    queryKey: spcKeys.list(input),
     queryFn: () =>
       calibraApi.spc.listCharts({
         query: {
@@ -63,10 +58,9 @@ function spcChartListQueryOptions(input: SpcChartListQueryInput) {
           status: input.statusFilter || undefined,
         },
       }),
-    placeholderData: keepPreviousDataInScope([
-      'spc-charts',
-      input.organizationId,
-    ]),
+    placeholderData: keepPreviousDataInScope(
+      spcKeys.listScope(input.organizationId),
+    ),
   })
 }
 
@@ -76,7 +70,7 @@ function spcChartListQueryOptions(input: SpcChartListQueryInput) {
  */
 function spcChartStatusSummaryQueryOptions(organizationId: string) {
   return queryOptions({
-    queryKey: ['spc-charts-summary', organizationId],
+    queryKey: spcKeys.summary(organizationId),
     queryFn: () =>
       calibraApi.spc.listCharts({ query: { page: 1, limit: 100 } }),
   })
@@ -84,7 +78,7 @@ function spcChartStatusSummaryQueryOptions(organizationId: string) {
 
 function spcStandardChartsQueryOptions(standardId: number) {
   return queryOptions({
-    queryKey: ['spc-charts', 'by-standard', standardId],
+    queryKey: spcKeys.byStandard(standardId),
     queryFn: () =>
       calibraApi.spc.listCharts({
         query: { standardId, page: 1, limit: 50 },
@@ -94,14 +88,14 @@ function spcStandardChartsQueryOptions(standardId: number) {
 
 function spcChartDetailQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['spc-chart', id],
+    queryKey: spcKeys.chart(id),
     queryFn: () => calibraApi.spc.getChart({ params: { id } }),
   })
 }
 
 function spcStandardOptionsQueryOptions() {
   return queryOptions({
-    queryKey: ['spc-standard-options'],
+    queryKey: spcKeys.standardOptions,
     queryFn: (): Promise<SpcStandardOptionsData> =>
       calibraApi.standards.list({
         query: {
@@ -193,8 +187,8 @@ export function useSpcStandardOptionsData({ enabled }: { enabled: boolean }) {
 }
 
 function invalidateSpcCollections(queryClient: QueryClient) {
-  queryClient.invalidateQueries({ queryKey: ['spc-charts'] })
-  queryClient.invalidateQueries({ queryKey: ['spc-charts-summary'] })
+  queryClient.invalidateQueries({ queryKey: spcKeys.all })
+  queryClient.invalidateQueries({ queryKey: spcKeys.summaries })
 }
 
 export function useCreateSpcChart() {
@@ -214,7 +208,7 @@ export function useUpdateSpcChart(id: string) {
     mutationFn: (input: UpdateControlChartInput) =>
       calibraApi.spc.updateChart({ params: { id }, body: input }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['spc-chart', id] })
+      queryClient.invalidateQueries({ queryKey: spcKeys.chart(id) })
       invalidateSpcCollections(queryClient)
     },
   })
@@ -225,7 +219,7 @@ export function useRecalculateSpcChart(id: string) {
   return useMutation({
     mutationFn: () => calibraApi.spc.recalculateChart({ params: { id } }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['spc-chart', id] })
+      queryClient.invalidateQueries({ queryKey: spcKeys.chart(id) })
       invalidateSpcCollections(queryClient)
     },
   })
@@ -237,7 +231,7 @@ export function useEscalateSpcChart(id: string) {
     mutationFn: (input: { description?: string }) =>
       calibraApi.spc.escalateChart({ params: { id }, body: input }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['spc-chart', id] })
+      queryClient.invalidateQueries({ queryKey: spcKeys.chart(id) })
       invalidateSpcCollections(queryClient)
     },
   })
@@ -249,7 +243,7 @@ export function useCreateSpcReading(chartId: string) {
     mutationFn: (input: CreateCheckStandardReadingInput) =>
       calibraApi.spc.createReading({ body: input }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['spc-chart', chartId] })
+      queryClient.invalidateQueries({ queryKey: spcKeys.chart(chartId) })
       invalidateSpcCollections(queryClient)
     },
   })
@@ -261,7 +255,7 @@ export function useRemoveSpcReading(chartId: string) {
     mutationFn: (id: number) =>
       calibraApi.spc.removeReading({ params: { id } }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['spc-chart', chartId] })
+      queryClient.invalidateQueries({ queryKey: spcKeys.chart(chartId) })
       invalidateSpcCollections(queryClient)
     },
   })

@@ -16,6 +16,7 @@ import { formatFileSize } from '@calibra-facil/shared/format'
 import { useOperationAvailability } from '@/runtime/use-operation-availability'
 import { formatStandardDate } from '@/features/standards/dates'
 import type { StandardDetail } from '@/features/standards/types'
+import { standardKeys } from '@/features/standards/keys'
 
 function openSignedDownload(url: string, filename: string) {
   const link = document.createElement('a')
@@ -53,7 +54,7 @@ export function StandardCertificateDocumentPanel({
         fileName: file.name,
       }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['standards'] })
+      await queryClient.invalidateQueries({ queryKey: standardKeys.all })
       setSelectedFileName(null)
       if (inputRef.current) inputRef.current.value = ''
       toast.success('Certificado do padrão enviado.')

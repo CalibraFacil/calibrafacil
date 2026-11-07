@@ -55,6 +55,7 @@ import {
   ncAvailableActions,
 } from '@/features/quality/nc-model'
 import { formatCalendarDate, formatInstant } from '@calibra-facil/shared/format'
+import { nonConformanceKeys } from '@/features/quality/keys'
 
 export function NCDetailPage({ id }: { id: string }) {
   const queryClient = useQueryClient()
@@ -108,9 +109,10 @@ export function NCDetailPage({ id }: { id: string }) {
         },
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['non-conformance', id] })
-      queryClient.invalidateQueries({ queryKey: ['non-conformance-audit', id] })
-      queryClient.invalidateQueries({ queryKey: ['non-conformances'] })
+      queryClient.invalidateQueries({ queryKey: nonConformanceKeys.detail(id) })
+      queryClient.invalidateQueries({ queryKey: nonConformanceKeys.audit(id) })
+      queryClient.invalidateQueries({ queryKey: nonConformanceKeys.all })
+      queryClient.invalidateQueries({ queryKey: nonConformanceKeys.summaries })
       toast.success('Disposicao definida com sucesso')
       setDispositionDialogOpen(false)
     },
@@ -123,9 +125,10 @@ export function NCDetailPage({ id }: { id: string }) {
       return calibraApi.nonConformances.resolve({ params: { id }, body: data })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['non-conformance', id] })
-      queryClient.invalidateQueries({ queryKey: ['non-conformance-audit', id] })
-      queryClient.invalidateQueries({ queryKey: ['non-conformances'] })
+      queryClient.invalidateQueries({ queryKey: nonConformanceKeys.detail(id) })
+      queryClient.invalidateQueries({ queryKey: nonConformanceKeys.audit(id) })
+      queryClient.invalidateQueries({ queryKey: nonConformanceKeys.all })
+      queryClient.invalidateQueries({ queryKey: nonConformanceKeys.summaries })
       toast.success('NC resolvida com sucesso')
       setResolveDialogOpen(false)
     },
@@ -141,9 +144,9 @@ export function NCDetailPage({ id }: { id: string }) {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ['non-conformance-oot-notification', id],
+        queryKey: nonConformanceKeys.ootNotification(id),
       })
-      queryClient.invalidateQueries({ queryKey: ['non-conformance-audit', id] })
+      queryClient.invalidateQueries({ queryKey: nonConformanceKeys.audit(id) })
       toast.success('Confirmação de recebimento registrada')
       setOotAckDialogOpen(false)
     },
@@ -152,9 +155,9 @@ export function NCDetailPage({ id }: { id: string }) {
     // the first acknowledgement instead of the stale "pending" state.
     onError: (error) => {
       queryClient.invalidateQueries({
-        queryKey: ['non-conformance-oot-notification', id],
+        queryKey: nonConformanceKeys.ootNotification(id),
       })
-      queryClient.invalidateQueries({ queryKey: ['non-conformance-audit', id] })
+      queryClient.invalidateQueries({ queryKey: nonConformanceKeys.audit(id) })
       toast.error(error.message)
     },
   })
@@ -170,9 +173,10 @@ export function NCDetailPage({ id }: { id: string }) {
         body: data,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['non-conformance', id] })
-      queryClient.invalidateQueries({ queryKey: ['non-conformance-audit', id] })
-      queryClient.invalidateQueries({ queryKey: ['non-conformances'] })
+      queryClient.invalidateQueries({ queryKey: nonConformanceKeys.detail(id) })
+      queryClient.invalidateQueries({ queryKey: nonConformanceKeys.audit(id) })
+      queryClient.invalidateQueries({ queryKey: nonConformanceKeys.all })
+      queryClient.invalidateQueries({ queryKey: nonConformanceKeys.summaries })
       toast.success('CAPA criada com sucesso')
       setCapaDialogOpen(false)
     },

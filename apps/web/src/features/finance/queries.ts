@@ -8,6 +8,7 @@ import type {
   FinanceContractServiceOptionsData,
   FinanceSearchQueryInput,
 } from './types'
+import { financeKeys } from '@/features/finance/keys'
 
 function searchFromUrl(url?: URL) {
   return url?.searchParams.get('query') ?? ''
@@ -21,14 +22,14 @@ export function financeSearchInputFromUrl(url?: URL) {
 
 export function financeOverviewQueryOptions() {
   return queryOptions({
-    queryKey: ['finance', 'overview'],
+    queryKey: financeKeys.overview,
     queryFn: () => calibraApi.finance.getOverview(),
   })
 }
 
 export function financeDocumentsQueryOptions(input: FinanceSearchQueryInput) {
   return queryOptions({
-    queryKey: ['finance', 'documents', input.search],
+    queryKey: financeKeys.documentSearch(input.search),
     queryFn: () =>
       calibraApi.finance.listDocuments({
         query: { query: input.search || undefined },
@@ -38,7 +39,7 @@ export function financeDocumentsQueryOptions(input: FinanceSearchQueryInput) {
 
 export function financeContractsQueryOptions(input: FinanceSearchQueryInput) {
   return queryOptions({
-    queryKey: ['finance', 'contracts', input.search],
+    queryKey: financeKeys.contractSearch(input.search),
     queryFn: () =>
       calibraApi.finance.listContracts({
         query: { query: input.search || undefined },
@@ -48,35 +49,35 @@ export function financeContractsQueryOptions(input: FinanceSearchQueryInput) {
 
 export function financeDocumentDetailQueryOptions(id: string | number) {
   return queryOptions({
-    queryKey: ['finance', 'documents', String(id)],
+    queryKey: financeKeys.documentDetail(id),
     queryFn: () => calibraApi.finance.getDocument({ params: { id } }),
   })
 }
 
 export function financeContractDetailQueryOptions(id: string | number) {
   return queryOptions({
-    queryKey: ['finance', 'contracts', String(id)],
+    queryKey: financeKeys.contractDetail(id),
     queryFn: () => calibraApi.finance.getContract({ params: { id } }),
   })
 }
 
 export function financeReceiptsQueryOptions() {
   return queryOptions({
-    queryKey: ['finance', 'receipts'],
+    queryKey: financeKeys.receipts,
     queryFn: () => calibraApi.finance.listReceipts(),
   })
 }
 
 export function financeErpQueryOptions() {
   return queryOptions({
-    queryKey: ['finance', 'erp'],
+    queryKey: financeKeys.erp,
     queryFn: () => calibraApi.finance.listErpExports(),
   })
 }
 
 function financeBillingReadinessQueryOptions(input: { status?: string } = {}) {
   return queryOptions({
-    queryKey: ['finance', 'billing-readiness', input.status ?? 'all'],
+    queryKey: financeKeys.billingReadinessFor(input.status),
     queryFn: () =>
       calibraApi.finance.listBillingReadiness({
         query: { status: input.status || undefined },
@@ -92,7 +93,7 @@ export function financeEligibleJobsQueryOptions({
   search: string
 }) {
   return queryOptions({
-    queryKey: ['finance', 'documents', 'eligible-jobs', mode, search],
+    queryKey: financeKeys.eligibleJobs(mode, search),
     queryFn: () =>
       calibraApi.finance.listEligibleJobs({
         query: { mode, query: search || undefined, limit: 100 },
@@ -102,7 +103,7 @@ export function financeEligibleJobsQueryOptions({
 
 export function financeContractCustomerOptionsQueryOptions() {
   return queryOptions({
-    queryKey: ['finance', 'contract-form', 'customers'],
+    queryKey: financeKeys.contractFormCustomers,
     queryFn: async (): Promise<FinanceContractCustomerOptionsData> =>
       calibraApi.customers.list({
         query: {
@@ -115,7 +116,7 @@ export function financeContractCustomerOptionsQueryOptions() {
 
 export function financeContractServiceOptionsQueryOptions() {
   return queryOptions({
-    queryKey: ['finance', 'contract-form', 'services'],
+    queryKey: financeKeys.contractFormServices,
     queryFn: async (): Promise<FinanceContractServiceOptionsData> =>
       calibraApi.services.list({
         query: {

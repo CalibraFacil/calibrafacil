@@ -15,6 +15,7 @@ import {
 } from '@calibra-facil/ui/instrument-panel'
 import { Badge } from '@calibra-facil/ui/badge'
 import { Skeleton } from '@calibra-facil/ui/skeleton'
+import { financeKeys } from '@/features/finance/keys'
 
 type Stage =
   | 'READY_TO_BILL'
@@ -49,7 +50,7 @@ const STAGE_TONE: Record<Stage, SignalTone> = {
 
 function operationsToCashQueryOptions() {
   return queryOptions<OperationsToCashEnvelope>({
-    queryKey: ['finance', 'operations-to-cash'],
+    queryKey: financeKeys.operationsToCash,
     queryFn: () => calibraApi.finance.getOperationsToCash(),
   })
 }

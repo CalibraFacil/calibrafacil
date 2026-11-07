@@ -20,6 +20,7 @@ import {
   type MethodsListQueryInput,
   type MethodStatus,
 } from './types'
+import { methodKeys } from '@/features/methods/keys'
 
 export const METHODS_LIST_LIMIT = 20
 
@@ -42,13 +43,7 @@ export function methodsListQueryInputFromUrl(
 
 export function methodsListQueryOptions(input: MethodsListQueryInput) {
   return queryOptions({
-    queryKey: [
-      'methods',
-      input.organizationId,
-      input.page,
-      input.search,
-      input.statusFilter,
-    ],
+    queryKey: methodKeys.list(input),
     queryFn: () =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- method list DTOs need schema-backed normalization before this status-narrowing cast can be removed.
       calibraApi.methods.list({
@@ -59,13 +54,15 @@ export function methodsListQueryOptions(input: MethodsListQueryInput) {
           status: input.statusFilter || undefined,
         },
       }) as Promise<MethodsListData>,
-    placeholderData: keepPreviousDataInScope(['methods', input.organizationId]),
+    placeholderData: keepPreviousDataInScope(
+      methodKeys.listScope(input.organizationId),
+    ),
   })
 }
 
 export function methodDetailQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['methods', id],
+    queryKey: methodKeys.detail(id),
     queryFn: () =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- method detail DTOs need schema-backed normalization before this view-model cast can be removed.
       calibraApi.methods.get({ params: { id } }) as Promise<MethodDetail>,
@@ -74,7 +71,7 @@ export function methodDetailQueryOptions(id: string) {
 
 export function methodEditQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['methods', id],
+    queryKey: methodKeys.detail(id),
     queryFn: () =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- method edit DTOs need schema-backed normalization before this builder-model cast can be removed.
       calibraApi.methods.get({ params: { id } }) as Promise<MethodEditData>,
@@ -83,7 +80,7 @@ export function methodEditQueryOptions(id: string) {
 
 export function methodAuditLogQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['methods', id, 'audit'],
+    queryKey: methodKeys.audit(id),
     queryFn: async (): Promise<MethodAuditLogData> => {
       const log = await calibraApi.methods.audit({ params: { id } })
       return {
@@ -198,7 +195,7 @@ export function useMethodAuditLogData(id: string) {
 // card.
 function methodTemplatesQueryOptions() {
   return queryOptions({
-    queryKey: ['methods', 'templates'],
+    queryKey: methodKeys.templates,
     queryFn: (): Promise<MethodTemplateCatalogEntry[]> =>
       calibraApi.methods.listMethodTemplates(),
   })

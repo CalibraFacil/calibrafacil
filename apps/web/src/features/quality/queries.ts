@@ -20,6 +20,8 @@ import {
   type NewNonConformanceJobsData,
   type NonConformanceListQueryInput,
 } from './types'
+import { capaKeys, nonConformanceKeys } from '@/features/quality/keys'
+import { jobKeys } from '@/features/jobs/keys'
 
 const QUALITY_LIST_LIMIT = 20
 
@@ -66,14 +68,7 @@ export function nonConformanceListQueryOptions(
   input: NonConformanceListQueryInput,
 ) {
   return queryOptions({
-    queryKey: [
-      'non-conformances',
-      input.organizationId,
-      input.page,
-      input.search,
-      input.statusFilter,
-      input.typeFilter,
-    ],
+    queryKey: nonConformanceKeys.list(input),
     queryFn: () =>
       calibraApi.nonConformances.list({
         query: {
@@ -84,37 +79,36 @@ export function nonConformanceListQueryOptions(
           type: input.typeFilter || undefined,
         },
       }),
-    placeholderData: keepPreviousDataInScope([
-      'non-conformances',
-      input.organizationId,
-    ]),
+    placeholderData: keepPreviousDataInScope(
+      nonConformanceKeys.listScope(input.organizationId),
+    ),
   })
 }
 
 function nonConformanceSummaryQueryOptions(organizationId: string) {
   return queryOptions({
-    queryKey: ['non-conformances-summary', organizationId],
+    queryKey: nonConformanceKeys.summary(organizationId),
     queryFn: () => calibraApi.nonConformances.summary(),
   })
 }
 
 export function nonConformanceDetailQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['non-conformance', id],
+    queryKey: nonConformanceKeys.detail(id),
     queryFn: () => calibraApi.nonConformances.get({ params: { id } }),
   })
 }
 
 export function nonConformanceAuditLogQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['non-conformance-audit', id],
+    queryKey: nonConformanceKeys.audit(id),
     queryFn: () => calibraApi.nonConformances.auditLog({ params: { id } }),
   })
 }
 
 function ootNotificationQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['non-conformance-oot-notification', id],
+    queryKey: nonConformanceKeys.ootNotification(id),
     queryFn: () =>
       calibraApi.nonConformances.getOotNotification({ params: { id } }),
   })
@@ -122,7 +116,7 @@ function ootNotificationQueryOptions(id: string) {
 
 function ootImpactAssessmentQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['non-conformance-impact-assessment', id],
+    queryKey: nonConformanceKeys.impactAssessment(id),
     queryFn: () =>
       calibraApi.nonConformances.getImpactAssessment({ params: { id } }),
   })
@@ -130,7 +124,7 @@ function ootImpactAssessmentQueryOptions(id: string) {
 
 export function nonConformanceJobsQueryOptions() {
   return queryOptions({
-    queryKey: ['jobs-for-nc'],
+    queryKey: jobKeys.forNonConformance,
     queryFn: (): Promise<NewNonConformanceJobsData> =>
       calibraApi.jobs.list({
         query: {
@@ -143,15 +137,7 @@ export function nonConformanceJobsQueryOptions() {
 
 export function capaListQueryOptions(input: CapaListQueryInput) {
   return queryOptions({
-    queryKey: [
-      'capas',
-      input.organizationId,
-      input.page,
-      input.search,
-      input.statusFilter,
-      input.severityFilter,
-      input.categoryFilter,
-    ],
+    queryKey: capaKeys.list(input),
     queryFn: () =>
       calibraApi.capas.list({
         query: {
@@ -163,34 +149,36 @@ export function capaListQueryOptions(input: CapaListQueryInput) {
           category: input.categoryFilter || undefined,
         },
       }),
-    placeholderData: keepPreviousDataInScope(['capas', input.organizationId]),
+    placeholderData: keepPreviousDataInScope(
+      capaKeys.listScope(input.organizationId),
+    ),
   })
 }
 
 function capaSummaryQueryOptions(organizationId: string) {
   return queryOptions({
-    queryKey: ['capas-summary', organizationId],
+    queryKey: capaKeys.summary(organizationId),
     queryFn: () => calibraApi.capas.summary(),
   })
 }
 
 export function capaDetailQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['capa', id],
+    queryKey: capaKeys.detail(id),
     queryFn: () => calibraApi.capas.get({ params: { id } }),
   })
 }
 
 export function capaAuditLogQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['capa-audit-log', id],
+    queryKey: capaKeys.auditLog(id),
     queryFn: () => calibraApi.capas.auditLog({ params: { id } }),
   })
 }
 
 export function capaResponsibleMembersQueryOptions() {
   return queryOptions({
-    queryKey: ['jobs', 'technicians'],
+    queryKey: jobKeys.technicians,
     queryFn: (): Promise<CapaResponsibleMembersData> =>
       calibraApi.jobs.listTechnicians(),
   })

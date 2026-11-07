@@ -1,10 +1,11 @@
 import { queryOptions, useQuery } from '@tanstack/react-query'
 
 import { calibraApi } from '@/utils/api'
+import { syncKeys } from '@/features/sync/keys'
 
 export function openSyncConflictsQueryOptions() {
   return queryOptions({
-    queryKey: ['desktop-sync-conflicts', 'open'],
+    queryKey: syncKeys.openConflicts,
     queryFn: () => calibraApi.sync.listConflicts({ status: 'open' }),
   })
 }
@@ -18,7 +19,7 @@ export function useOpenSyncConflictsData({ enabled }: { enabled: boolean }) {
 
 function blockedSyncEventsQueryOptions() {
   return queryOptions({
-    queryKey: ['desktop-sync-blocked-events'],
+    queryKey: syncKeys.blockedEvents,
     queryFn: () => calibraApi.sync.listBlockedEvents(),
   })
 }
@@ -32,7 +33,7 @@ export function useBlockedSyncEventsData({ enabled }: { enabled: boolean }) {
 
 export function deadSyncEventsQueryOptions() {
   return queryOptions({
-    queryKey: ['desktop-sync-dead-events'],
+    queryKey: syncKeys.deadEvents,
     queryFn: () => calibraApi.sync.listDeadEvents(),
   })
 }

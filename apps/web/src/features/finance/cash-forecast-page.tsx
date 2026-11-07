@@ -16,6 +16,7 @@ import {
   StaggerItem,
 } from '@calibra-facil/ui/instrument-panel'
 import { Skeleton } from '@calibra-facil/ui/skeleton'
+import { financeKeys } from '@/features/finance/keys'
 
 type Bucket =
   | 'THIS_WEEK'
@@ -42,7 +43,7 @@ const BUCKET_LABEL: Record<Bucket, string> = {
 
 function cashForecastQueryOptions() {
   return queryOptions<CashForecastEnvelope>({
-    queryKey: ['finance', 'cash-forecast'],
+    queryKey: financeKeys.cashForecast,
     queryFn: () => calibraApi.finance.getCashForecast(),
   })
 }

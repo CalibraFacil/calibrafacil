@@ -118,7 +118,7 @@ describe('DashboardLayout bootstrap workflow', () => {
     routerMocks.pathname = '/dashboard'
     routerMocks.routeId = '/dashboard/'
     syncMocks.cloudOnlyUnavailable = false
-    authMocks.setActive.mockResolvedValue(undefined)
+    authMocks.setActive.mockResolvedValue({ data: {} })
     authMocks.useListOrganizations.mockReturnValue({
       data: [{ id: 'lab-1', type: 'LAB' }],
       isPending: false,
@@ -150,10 +150,10 @@ describe('DashboardLayout bootstrap workflow', () => {
 
     expect(screen.getByText('header suspended')).toBeTruthy()
     expect(screen.queryByText('dashboard outlet')).toBeNull()
-    expect(authMocks.setActive).toHaveBeenCalledWith({
-      organizationId: 'lab-2',
-    })
     await waitFor(() => {
+      expect(authMocks.setActive).toHaveBeenCalledWith({
+        organizationId: 'lab-2',
+      })
       expect(localStorage.getItem(DASHBOARD_ORG_KEY)).toBe('lab-2')
     })
   })

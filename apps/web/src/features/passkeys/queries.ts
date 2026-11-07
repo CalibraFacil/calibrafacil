@@ -7,8 +7,7 @@ import {
 import { labPasskey } from '@calibra-facil/auth/client'
 
 import { type UserPasskey } from './types'
-
-const PASSKEYS_QUERY_KEY = ['lab-passkeys']
+import { passkeyKeys } from './keys'
 
 function toIsoString(value: unknown): string | null {
   if (value instanceof Date) return value.toISOString()
@@ -37,7 +36,7 @@ async function fetchUserPasskeys(): Promise<UserPasskey[]> {
 
 export function passkeysQueryOptions() {
   return queryOptions({
-    queryKey: PASSKEYS_QUERY_KEY,
+    queryKey: passkeyKeys.list,
     queryFn: fetchUserPasskeys,
   })
 }
@@ -63,7 +62,7 @@ export function useAddPasskey() {
       return result?.data ?? null
     },
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: PASSKEYS_QUERY_KEY }),
+      queryClient.invalidateQueries({ queryKey: passkeyKeys.list }),
   })
 }
 
@@ -84,7 +83,7 @@ export function useRenamePasskey() {
       return result.data
     },
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: PASSKEYS_QUERY_KEY }),
+      queryClient.invalidateQueries({ queryKey: passkeyKeys.list }),
   })
 }
 
@@ -102,6 +101,6 @@ export function useDeletePasskey() {
       return result.data
     },
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: PASSKEYS_QUERY_KEY }),
+      queryClient.invalidateQueries({ queryKey: passkeyKeys.list }),
   })
 }

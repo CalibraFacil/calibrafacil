@@ -11,7 +11,6 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react'
 
 import {
-  organization,
   useActiveOrganization,
   useListOrganizations,
 } from '@calibra-facil/auth/client'
@@ -35,11 +34,8 @@ import {
   useSidebar,
 } from '@calibra-facil/ui/sidebar'
 import { Skeleton } from '@calibra-facil/ui/skeleton'
-import {
-  setStoredDashboardActiveUnitIdForOrganization,
-  setStoredDashboardOrganizationId,
-} from '@/lib/dashboard-scope-storage'
-import { switchScope } from '@/lib/switch-scope'
+import { setStoredDashboardActiveUnitIdForOrganization } from '@/lib/dashboard-scope-storage'
+import { switchActiveOrganization, switchScope } from '@/lib/switch-scope'
 
 export function OrganizationSwitcher() {
   const navigate = useNavigate()
@@ -61,10 +57,7 @@ export function OrganizationSwitcher() {
   }, [allOrganizations])
 
   const handleSetActiveOrganization = async (orgId: string) => {
-    await switchScope(queryClient, async () => {
-      await organization.setActive({ organizationId: orgId })
-      setStoredDashboardOrganizationId(orgId)
-    })
+    await switchActiveOrganization(queryClient, orgId)
   }
 
   const handleSetActiveUnit = async (value: string) => {

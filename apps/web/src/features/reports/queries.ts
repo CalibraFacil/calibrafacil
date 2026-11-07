@@ -2,17 +2,10 @@ import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query'
 
 import { prewarmRouteQueries } from '@/lib/route-data'
 import { calibraApi } from '@/utils/api'
+import { reportKeys } from './keys'
 import type { ReportsQueryInput } from './types'
 
 const DEFAULT_REPORT_PERIOD = '30d'
-
-function organizationKey(organizationId: string | null | undefined) {
-  return organizationId ?? 'no-org'
-}
-
-function unitIdsKey(unitIds: string | undefined) {
-  return unitIds ?? 'all'
-}
 
 export function defaultReportsQueryInput(
   organizationId: string | null | undefined,
@@ -26,13 +19,7 @@ export function defaultReportsQueryInput(
 
 export function executiveReportQueryOptions(input: ReportsQueryInput) {
   return queryOptions({
-    queryKey: [
-      'reports',
-      'executive-overview',
-      organizationKey(input.organizationId),
-      input.period,
-      unitIdsKey(input.unitIds),
-    ],
+    queryKey: reportKeys.executiveOverview(input),
     queryFn: () =>
       calibraApi.reports.getExecutiveOverview({
         query: { period: input.period, unitIds: input.unitIds },
@@ -42,13 +29,7 @@ export function executiveReportQueryOptions(input: ReportsQueryInput) {
 
 export function comparisonReportQueryOptions(input: ReportsQueryInput) {
   return queryOptions({
-    queryKey: [
-      'reports',
-      'comparison',
-      organizationKey(input.organizationId),
-      input.period,
-      unitIdsKey(input.unitIds),
-    ],
+    queryKey: reportKeys.comparison(input),
     queryFn: () =>
       calibraApi.reports.getComparison({
         query: { period: input.period, unitIds: input.unitIds },
@@ -58,13 +39,7 @@ export function comparisonReportQueryOptions(input: ReportsQueryInput) {
 
 export function trendReportQueryOptions(input: ReportsQueryInput) {
   return queryOptions({
-    queryKey: [
-      'reports',
-      'trend',
-      organizationKey(input.organizationId),
-      input.period,
-      unitIdsKey(input.unitIds),
-    ],
+    queryKey: reportKeys.trend(input),
     queryFn: () =>
       calibraApi.reports.getTrend({
         query: { period: input.period, unitIds: input.unitIds },

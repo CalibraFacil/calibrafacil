@@ -7,6 +7,7 @@ import { Button } from '@calibra-facil/ui/button'
 import { Card, CardContent, CardFooter } from '@calibra-facil/ui/card'
 import { Spinner } from '@calibra-facil/ui/spinner'
 import { getApiBaseURL } from '@/utils/api'
+import { authKeys } from '@/features/auth/keys'
 
 const previewSchema = z.discriminatedUnion('found', [
   z.object({ found: z.literal(false) }),
@@ -58,7 +59,7 @@ export function MagicLinkConfirmPage({
   const [entering, setEntering] = useState(false)
 
   const previewQuery = useQuery({
-    queryKey: ['magic-link-preview', token],
+    queryKey: authKeys.magicLinkPreview(token),
     queryFn: () => fetchMagicLinkPreview(token ?? ''),
     enabled: !!token,
     staleTime: Number.POSITIVE_INFINITY,

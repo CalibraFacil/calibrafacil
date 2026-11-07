@@ -2,6 +2,15 @@ import { queryOptions, useQuery } from '@tanstack/react-query'
 
 import { apiRouteParam } from '@/lib/route-identifiers'
 import { calibraApi } from '@/utils/api'
+import { customerKeys } from '@/features/customers/keys'
+import { assetKeys } from '@/features/assets/keys'
+import { methodKeys } from '@/features/methods/keys'
+import { jobKeys } from '@/features/jobs/keys'
+import { serviceKeys } from '@/features/services/keys'
+import { serviceOrderKeys } from '@/features/service-orders/keys'
+import { standardKeys } from '@/features/standards/keys'
+import { capaKeys, nonConformanceKeys } from '@/features/quality/keys'
+import { competenceKeys } from '@/features/personnel/keys'
 
 const LABEL_STALE_TIME = 5 * 60 * 1000
 
@@ -12,7 +21,7 @@ type LabelHookInput = {
 
 export function customerLabelQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['customers', id, 'label'],
+    queryKey: customerKeys.label(id),
     queryFn: async () => {
       try {
         const customer = await calibraApi.customers.get({ params: { id } })
@@ -27,7 +36,7 @@ export function customerLabelQueryOptions(id: string) {
 
 export function assetLabelQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['assets', id, 'label'],
+    queryKey: assetKeys.label(id),
     queryFn: async () => {
       try {
         const asset = await calibraApi.assets.get({ params: { id } })
@@ -42,7 +51,7 @@ export function assetLabelQueryOptions(id: string) {
 
 export function methodLabelQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['methods', id, 'label'],
+    queryKey: methodKeys.label(id),
     queryFn: async () => {
       try {
         const method = await calibraApi.methods.get({ params: { id } })
@@ -57,7 +66,7 @@ export function methodLabelQueryOptions(id: string) {
 
 export function jobLabelQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['jobs', id, 'label'],
+    queryKey: jobKeys.label(id),
     queryFn: async () => {
       try {
         const job = await calibraApi.jobs.get({
@@ -74,7 +83,7 @@ export function jobLabelQueryOptions(id: string) {
 
 export function serviceLabelQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['services', id, 'label'],
+    queryKey: serviceKeys.label(id),
     queryFn: async () => {
       try {
         const service = await calibraApi.services.get({ params: { id } })
@@ -89,7 +98,7 @@ export function serviceLabelQueryOptions(id: string) {
 
 export function serviceOrderLabelQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['service-orders', id, 'label'],
+    queryKey: serviceOrderKeys.label(id),
     queryFn: async () => {
       try {
         const serviceOrder = await calibraApi.serviceOrders.get({
@@ -106,7 +115,7 @@ export function serviceOrderLabelQueryOptions(id: string) {
 
 export function standardLabelQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['standards', id, 'label'],
+    queryKey: standardKeys.label(id),
     queryFn: async () => {
       try {
         const standard = await calibraApi.standards.get({ params: { id } })
@@ -121,7 +130,7 @@ export function standardLabelQueryOptions(id: string) {
 
 export function nonConformanceLabelQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['non-conformance', id, 'label'],
+    queryKey: nonConformanceKeys.label(id),
     queryFn: () =>
       calibraApi.entityLabels.getNonConformance({ params: { id } }),
     staleTime: LABEL_STALE_TIME,
@@ -130,7 +139,7 @@ export function nonConformanceLabelQueryOptions(id: string) {
 
 export function capaLabelQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['capa', id, 'label'],
+    queryKey: capaKeys.label(id),
     queryFn: () => calibraApi.entityLabels.getCapa({ params: { id } }),
     staleTime: LABEL_STALE_TIME,
   })
@@ -138,7 +147,7 @@ export function capaLabelQueryOptions(id: string) {
 
 export function competenceLabelQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['competence', id, 'label'],
+    queryKey: competenceKeys.label(id),
     queryFn: () => calibraApi.entityLabels.getCompetence({ params: { id } }),
     staleTime: LABEL_STALE_TIME,
   })

@@ -76,6 +76,7 @@ import {
   TableFrame,
 } from '@/features/customers/components/client-detail-ui'
 import { formatInstant } from '@calibra-facil/shared/format'
+import { customerKeys } from '@/features/customers/keys'
 
 export function ClientUsersTab({ id }: { id: string }) {
   const queryClient = useQueryClient()
@@ -97,7 +98,7 @@ export function ClientUsersTab({ id }: { id: string }) {
       })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['customer-invitations', id] })
+      queryClient.invalidateQueries({ queryKey: customerKeys.invitations(id) })
       toast.success('Convite enviado com sucesso!')
       setInviteOpen(false)
       setInviteEmail('')
@@ -112,7 +113,7 @@ export function ClientUsersTab({ id }: { id: string }) {
       return calibraApi.customers.resendInvitation({ params: { id, invId } })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['customer-invitations', id] })
+      queryClient.invalidateQueries({ queryKey: customerKeys.invitations(id) })
       toast.success('Convite reenviado!')
     },
     onError: (error) => {
@@ -125,7 +126,7 @@ export function ClientUsersTab({ id }: { id: string }) {
       return calibraApi.customers.cancelInvitation({ params: { id, invId } })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['customer-invitations', id] })
+      queryClient.invalidateQueries({ queryKey: customerKeys.invitations(id) })
       toast.success('Convite cancelado!')
     },
     onError: (error) => {
@@ -138,7 +139,7 @@ export function ClientUsersTab({ id }: { id: string }) {
       return calibraApi.customers.removeMember({ params: { id, memberId } })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['customer-members', id] })
+      queryClient.invalidateQueries({ queryKey: customerKeys.members(id) })
       toast.success('Usuário removido!')
     },
     onError: (error) => {

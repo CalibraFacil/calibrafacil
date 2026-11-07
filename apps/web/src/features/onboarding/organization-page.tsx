@@ -1,8 +1,8 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   authClient,
-  organization,
   useActiveOrganization,
   useListOrganizations,
 } from '@calibra-facil/auth/client'
@@ -26,6 +26,7 @@ import { Input } from '@calibra-facil/ui/input'
 import { MaskedInput } from '@/components/ui/masked-input'
 import { setStoredDashboardOrganizationId } from '@/lib/dashboard-scope-storage'
 import { brazilPhoneMask, cnpjMask } from '@/lib/input-masks'
+import { switchActiveOrganization } from '@/lib/switch-scope'
 import { calibraApi } from '@/utils/api'
 
 export function OrganizationOnboardingPage({
@@ -34,6 +35,7 @@ export function OrganizationOnboardingPage({
   redirectTo?: string
 }) {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { data: organizations, isPending: isLoadingOrganizations } =
     useListOrganizations()
   const { data: activeOrganization, isPending: isLoadingActiveOrganization } =
@@ -64,9 +66,10 @@ export function OrganizationOnboardingPage({
     setIsSubmitting(true)
 
     try {
-      const activeResult = await organization.setActive({
-        organizationId: labOrganization.id,
-      })
+      const activeResult = await switchActiveOrganization(
+        queryClient,
+        labOrganization.id,
+      )
 
       if (activeResult.error) {
         setError(

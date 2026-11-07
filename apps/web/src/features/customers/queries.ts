@@ -16,6 +16,9 @@ import type {
   CustomersListData,
   CustomersListQueryInput,
 } from './types'
+import { customerKeys } from '@/features/customers/keys'
+import { assetKeys } from '@/features/assets/keys'
+import { jobKeys } from '@/features/jobs/keys'
 
 export const CUSTOMERS_LIST_LIMIT = 20
 
@@ -33,13 +36,7 @@ export function customersListQueryInputFromUrl(
 
 export function customersListQueryOptions(input: CustomersListQueryInput) {
   return queryOptions({
-    queryKey: [
-      'customers',
-      input.organizationId,
-      input.page,
-      input.limit,
-      input.search,
-    ],
+    queryKey: customerKeys.list(input),
     queryFn: (): Promise<CustomersListData> =>
       calibraApi.customers.list({
         query: {
@@ -48,16 +45,15 @@ export function customersListQueryOptions(input: CustomersListQueryInput) {
           query: input.search || undefined,
         },
       }),
-    placeholderData: keepPreviousDataInScope([
-      'customers',
-      input.organizationId,
-    ]),
+    placeholderData: keepPreviousDataInScope(
+      customerKeys.listScope(input.organizationId),
+    ),
   })
 }
 
 function customersSearchQueryOptions(organizationId: string, search = '') {
   return queryOptions({
-    queryKey: ['customers', organizationId, 'search', search],
+    queryKey: customerKeys.search(organizationId, search),
     queryFn: (): Promise<CustomersListData> =>
       calibraApi.customers.list({
         query: { page: 1, limit: 50, query: search || undefined },
@@ -77,14 +73,14 @@ export async function prewarmCustomersSearch(
 
 export function customerDetailQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['customer', id],
+    queryKey: customerKeys.detail(id),
     queryFn: () => calibraApi.customers.get({ params: { id } }),
   })
 }
 
 export function customerFinancialTimelineQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['customer', id, 'financial-timeline'],
+    queryKey: customerKeys.financialTimeline(id),
     queryFn: () =>
       calibraApi.finance.getCustomerTimeline({ params: { customerId: id } }),
   })
@@ -102,7 +98,12 @@ export function customerAssetsQueryOptions({
   search: string
 }) {
   return queryOptions({
-    queryKey: ['assets', 'customer', customerId, page, limit, search],
+    queryKey: assetKeys.customerList({
+      customerId: customerId,
+      page: page,
+      limit: limit,
+      search: search,
+    }),
     queryFn: (): Promise<CustomerAssetsData> => {
       if (customerId === undefined) {
         return Promise.resolve({ data: [] } satisfies CustomerAssetsData)
@@ -117,11 +118,9 @@ export function customerAssetsQueryOptions({
         },
       })
     },
-    placeholderData: keepPreviousDataInScope([
-      'assets',
-      'customer',
-      customerId,
-    ]),
+    placeholderData: keepPreviousDataInScope(
+      assetKeys.customerListScope(customerId),
+    ),
   })
 }
 
@@ -139,7 +138,12 @@ export function customerJobsQueryOptions({
   statusFilter: JobStatus | ''
 }) {
   return queryOptions({
-    queryKey: ['jobs', 'customer', customerId, page, search, statusFilter],
+    queryKey: jobKeys.forCustomer({
+      customerId: customerId,
+      page: page,
+      search: search,
+      statusFilter: statusFilter,
+    }),
     queryFn: (): Promise<CustomerJobsData> => {
       if (customerId === undefined) {
         return Promise.resolve({
@@ -158,13 +162,15 @@ export function customerJobsQueryOptions({
         },
       })
     },
-    placeholderData: keepPreviousDataInScope(['jobs', 'customer', customerId]),
+    placeholderData: keepPreviousDataInScope(
+      jobKeys.forCustomerScope(customerId),
+    ),
   })
 }
 
 export function customerAuditLogQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['customer-audit-log', id],
+    queryKey: customerKeys.auditLog(id),
     queryFn: (): Promise<CustomerAuditLogData> =>
       calibraApi.customers.auditLog({
         params: { id },
@@ -175,14 +181,14 @@ export function customerAuditLogQueryOptions(id: string) {
 
 export function customerMembersQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['customer-members', id],
+    queryKey: customerKeys.members(id),
     queryFn: () => calibraApi.customers.listMembers({ params: { id } }),
   })
 }
 
 export function customerInvitationsQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['customer-invitations', id],
+    queryKey: customerKeys.invitations(id),
     queryFn: () => calibraApi.customers.listInvitations({ params: { id } }),
   })
 }

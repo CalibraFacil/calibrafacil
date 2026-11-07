@@ -39,6 +39,7 @@ import {
 } from '@/features/jobs/forms'
 import type { NewJobSearch } from '@/features/jobs/new-job-search'
 import { formatLocalDay, formatPrice } from '@calibra-facil/shared/format'
+import { jobKeys } from '@/features/jobs/keys'
 
 export function NewJobPage({ search = {} }: { search?: NewJobSearch }) {
   const navigate = useNavigate()
@@ -121,7 +122,7 @@ export function NewJobPage({ search = {} }: { search?: NewJobSearch }) {
     mutationFn: (data: CreateJobInput) =>
       calibraApi.jobs.create({ body: data }),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['jobs'] })
+      queryClient.invalidateQueries({ queryKey: jobKeys.all })
       toast.success(`Ordem ${data.jobId} criada com sucesso!`)
       navigate({ to: '/dashboard/jobs' })
     },

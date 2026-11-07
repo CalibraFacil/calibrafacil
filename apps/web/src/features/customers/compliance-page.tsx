@@ -76,6 +76,7 @@ import {
   TableFrame,
 } from '@/features/customers/components/client-detail-ui'
 import { formatCalendarDate, formatInstant } from '@calibra-facil/shared/format'
+import { customerKeys } from '@/features/customers/keys'
 
 export function ClientComplianceTab({ id }: { id: string }) {
   const { data: customer, isLoading: customerLoading } =
@@ -185,9 +186,11 @@ function ClientComplianceForm({
       })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['customer', customerId] })
       queryClient.invalidateQueries({
-        queryKey: ['customer-audit-log', customerId],
+        queryKey: customerKeys.detail(customerId),
+      })
+      queryClient.invalidateQueries({
+        queryKey: customerKeys.auditLog(customerId),
       })
       toast.success('Conformidade atualizada!')
       setSaveDialogOpen(false)

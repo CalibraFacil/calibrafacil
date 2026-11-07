@@ -97,6 +97,7 @@ a no-op gate.
 Recommended file roles:
 
 - `*-page.tsx` and `*-layout.tsx`: route-rendered feature UI.
+- `keys.ts`: the feature's query-key factory (see "Query Keys and Tenant Scope").
 - `queries.ts`: React Query options, loaders, and domain data hooks.
 - `forms.ts`: UI-to-payload parsing and schema-backed validation.
 - `types.ts`: feature DTO/view-model types.
@@ -127,6 +128,34 @@ When adding API behavior:
 5. Add client-runtime tests for success and error paths.
 
 See `docs/architecture/api-client-contract.md` for the package boundary rules.
+
+## Query Keys and Tenant Scope
+
+Every TanStack Query key comes from a factory, never from a literal array.
+Each feature owns `features/<domain>/keys.ts` (`assetKeys`, `customerKeys`, ...):
+`all` is the broadest prefix, `list(input)` / `detail(id)` / ... build full keys,
+and `listScope(organizationId)` is the leading part of `list` that
+`keepPreviousDataInScope` compares. The factory is the single source of the key
+shape: the query (`queryKey: customerKeys.detail(id)`), every invalidation
+(`invalidateQueries({ queryKey: customerKeys.all })`), `setQueryData` and
+`useIsFetching` use the same call, so a reshaped key moves them all together.
+A feature that must refresh another feature's data imports that feature's
+factory (`@/features/assets/keys`); it never retypes the array. Code in the low
+layers (`lib`, `hooks`) that must share a key puts it in `lib/query-keys.ts`.
+Cross-feature fan-out for one event lives in one map, for example
+`features/jobs/query-effects.ts` (job approved: jobs, dashboard, assets,
+service orders, notifications, finance).
+
+Tenant scope has one mechanism, a guaranteed cache reset. The API resolves the
+laboratory and unit from the session and from `x-active-unit-id`, so an
+organization id inside a key could not make a request answer for it. Every code
+path that changes the active organization or unit goes through
+`apps/web/src/lib/switch-scope.ts` (`switchActiveOrganization`, `switchScope`),
+which cancels in-flight requests, applies the switch and resets all queries;
+`organization.setActive` is called nowhere else (a test enforces it). Sign-out
+and organization deletion call `queryClient.clear()`. The portal, whose keys are
+built from `portalQueryKey(organizationId, ...)`, keeps the organization in the
+key as well.
 
 ## Runtime Config and Dashboard Scope
 

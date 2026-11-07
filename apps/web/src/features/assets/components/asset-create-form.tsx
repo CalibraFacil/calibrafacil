@@ -78,6 +78,7 @@ import {
 } from '@calibra-facil/shared/units'
 import type { CreateAssetInput } from '@calibra-facil/schemas'
 import { cn } from '@calibra-facil/ui/utils'
+import { assetKeys } from '@/features/assets/keys'
 
 /**
  * The asset `assets.create` stored (used to auto-select it), plus the name of
@@ -254,7 +255,7 @@ export function AssetCreateForm({
     mutationFn: (data: CreateAssetInput) =>
       calibraApi.assets.create({ body: data }),
     onSuccess: (created) => {
-      queryClient.invalidateQueries({ queryKey: ['assets'] })
+      queryClient.invalidateQueries({ queryKey: assetKeys.all })
       onSaved({ ...created, assetTypeName: selectedAssetType?.name ?? '' })
     },
     onError: (error) => {

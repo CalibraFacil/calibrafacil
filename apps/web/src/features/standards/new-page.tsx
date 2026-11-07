@@ -18,6 +18,7 @@ import {
 } from '@/features/standards/forms'
 import type { CreateReferenceStandardInput } from '@calibra-facil/schemas'
 import { cn } from '@calibra-facil/ui/utils'
+import { standardKeys } from '@/features/standards/keys'
 
 export function NewStandardPage() {
   const navigate = useNavigate()
@@ -33,7 +34,7 @@ export function NewStandardPage() {
     mutationFn: async (data: CreateReferenceStandardInput) =>
       calibraApi.standards.create({ body: data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['standards'] })
+      queryClient.invalidateQueries({ queryKey: standardKeys.all })
       toast.success('Padrão criado com sucesso.')
       navigate({ to: '/dashboard/standards' })
     },

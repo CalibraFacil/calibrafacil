@@ -1,6 +1,7 @@
 import { queryOptions, useQuery } from '@tanstack/react-query'
 
 import { calibraApi } from '@/utils/api'
+import { onboardingKeys } from '@/features/onboarding/keys'
 
 /**
  * The activation checklist is derived server-side on every call, so it is
@@ -9,7 +10,7 @@ import { calibraApi } from '@/utils/api'
  */
 function activationChecklistQueryOptions() {
   return queryOptions({
-    queryKey: ['onboarding', 'checklist'],
+    queryKey: onboardingKeys.checklist,
     queryFn: () => calibraApi.onboarding.getChecklist(),
     staleTime: 30_000,
   })

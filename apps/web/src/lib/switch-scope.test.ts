@@ -1,6 +1,8 @@
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { dirname, join, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it, vi } from 'vitest'
-import { JOB_EVENT_EFFECTS } from './query-effects'
 import { switchScope } from './switch-scope'
 
 describe('switchScope (roadmap 2 F2)', () => {
@@ -44,25 +46,41 @@ describe('switchScope (roadmap 2 F2)', () => {
   })
 })
 
-describe('job event effects (roadmap 2 F2)', () => {
-  it('every event refreshes the job views', () => {
-    for (const keys of Object.values(JOB_EVENT_EFFECTS)) {
-      expect(keys).toContainEqual(['jobs'])
-      expect(keys).toContainEqual(['dashboard'])
-    }
-  })
+describe('switchScope when the switch is refused', () => {
+  it('keeps the cache', async () => {
+    const queryClient = new QueryClient()
+    queryClient.setQueryData(['customers'], ['lab A customer'])
 
-  it('an approval also refreshes the asset, its out-of-tolerance events and the service order; an amendment the asset', () => {
-    expect(JOB_EVENT_EFFECTS.approved).toEqual(
-      expect.arrayContaining([
-        ['assets'],
-        ['asset'],
-        ['customer-oot-events'],
-        ['service-order'],
-      ]),
+    await switchScope(
+      queryClient,
+      () => ({ error: 'refused' }),
+      (result) => !result.error,
     )
-    expect(JOB_EVENT_EFFECTS.amended).toEqual(
-      expect.arrayContaining([['assets'], ['asset']]),
-    )
+
+    expect(queryClient.getQueryData(['customers'])).toEqual(['lab A customer'])
+  })
+})
+
+describe('the one tenant-scope mechanism', () => {
+  it('is the only place that changes the active organization', () => {
+    const srcDir = join(dirname(fileURLToPath(import.meta.url)), '..')
+    const offenders: string[] = []
+    const visit = (dir: string) => {
+      for (const entry of readdirSync(dir)) {
+        const path = join(dir, entry)
+        if (statSync(path).isDirectory()) {
+          visit(path)
+        } else if (
+          /\.(ts|tsx)$/.test(entry) &&
+          !/\.(test|spec)\./.test(entry) &&
+          readFileSync(path, 'utf8').includes('organization.setActive(')
+        ) {
+          offenders.push(relative(srcDir, path))
+        }
+      }
+    }
+    visit(srcDir)
+
+    expect(offenders).toEqual(['lib/switch-scope.ts'])
   })
 })

@@ -3,6 +3,7 @@ import type { NotificationSummary } from '@calibra-facil/client-runtime'
 
 import { calibraApi } from '@/utils/api'
 import { unreadNotificationsQueryOptions } from './queries'
+import { notificationKeys } from '@/features/notifications/keys'
 
 /** The host caps the array; sending a whole inbox would be pointless anyway. */
 const PUBLISHED_ENTRY_LIMIT = 20
@@ -27,7 +28,7 @@ export function useDesktopNotificationBridge({
   const queryClient = useQueryClient()
 
   return useQuery({
-    queryKey: ['notifications', organizationKey, 'desktop-bridge'],
+    queryKey: notificationKeys.desktopBridge(organizationKey),
     enabled,
     refetchInterval: 30_000,
     // Electron marks a minimized renderer as hidden, and TanStack Query stops

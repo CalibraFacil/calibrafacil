@@ -15,6 +15,9 @@ import {
   type RequestConversionService,
   type RequestTechnician,
 } from './types'
+import { requestKeys } from '@/features/requests/keys'
+import { serviceKeys } from '@/features/services/keys'
+import { jobKeys } from '@/features/jobs/keys'
 
 export const CALIBRATION_REQUESTS_LIST_LIMIT = 20
 
@@ -42,13 +45,7 @@ export function calibrationRequestsListQueryOptions(
   input: CalibrationRequestsListQueryInput,
 ) {
   return queryOptions({
-    queryKey: [
-      'calibration-requests',
-      input.organizationId,
-      input.page,
-      input.search,
-      input.statusFilter,
-    ],
+    queryKey: requestKeys.list(input),
     queryFn: () =>
       calibraApi.calibrationRequests.list({
         query: {
@@ -58,10 +55,9 @@ export function calibrationRequestsListQueryOptions(
           status: input.statusFilter || undefined,
         },
       }),
-    placeholderData: keepPreviousDataInScope([
-      'calibration-requests',
-      input.organizationId,
-    ]),
+    placeholderData: keepPreviousDataInScope(
+      requestKeys.listScope(input.organizationId),
+    ),
   })
 }
 
@@ -70,14 +66,14 @@ export function calibrationRequestDetailQueryOptions(
   id: string | number,
 ) {
   return queryOptions({
-    queryKey: ['calibration-request', organizationId, String(id)],
+    queryKey: requestKeys.detail(organizationId, String(id)),
     queryFn: () => calibraApi.calibrationRequests.get({ params: { id } }),
   })
 }
 
 export function requestConversionServicesQueryOptions(organizationId: string) {
   return queryOptions({
-    queryKey: ['services', organizationId, 'request-conversion'],
+    queryKey: serviceKeys.requestConversion(organizationId),
     queryFn: async (): Promise<{ data: RequestConversionService[] }> => {
       const firstPage = await calibraApi.services.list({
         query: {
@@ -119,7 +115,7 @@ export function requestConversionServicesQueryOptions(organizationId: string) {
 
 export function requestTechniciansQueryOptions(organizationId: string) {
   return queryOptions({
-    queryKey: ['jobs', organizationId, 'technicians'],
+    queryKey: jobKeys.organizationTechnicians(organizationId),
     queryFn: (): Promise<{
       data: Array<RequestTechnician>
     }> => calibraApi.jobs.listTechnicians(),

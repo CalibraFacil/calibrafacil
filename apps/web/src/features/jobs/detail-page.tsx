@@ -1,4 +1,4 @@
-import { jobEventQueryKeys } from '@/lib/query-effects'
+import { jobEventQueryKeys } from './query-effects'
 import { useJobDialogs } from './job-dialog-state'
 import {
   approvalBlockedMessage,
@@ -56,6 +56,7 @@ import {
   toFinancialStatus,
   toJobStatus,
 } from './job-detail-guards'
+import { jobKeys } from '@/features/jobs/keys'
 
 type JobDetailPageProps = {
   id: string
@@ -93,7 +94,7 @@ export function JobDetailPage({ id }: JobDetailPageProps) {
 
   // Stable callback for refreshing job data (used by ApprovedJobRecord for label polling)
   const refreshJob = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['jobs', id] })
+    queryClient.invalidateQueries({ queryKey: jobKeys.detail(id) })
   }, [queryClient, id])
 
   const {

@@ -43,6 +43,7 @@ import { Separator } from '@calibra-facil/ui/separator'
 import { Spinner } from '@calibra-facil/ui/spinner'
 import { calibraApi } from '@/utils/api'
 import { useDashboardContextState } from '@/contexts/dashboard-context'
+import { notificationKeys } from '@/features/notifications/keys'
 
 export function NotificationCenter() {
   const { activeOrganizationId, isContextSwitching } =
@@ -88,7 +89,7 @@ function ScopedNotificationCenter({
   const pagination = inbox.data?.pagination
   const refresh = () =>
     queryClient.invalidateQueries({
-      queryKey: ['notifications', organizationKey],
+      queryKey: notificationKeys.organization(organizationKey),
     })
   const markRead = useMutation({
     mutationFn: (ids: number[]) =>

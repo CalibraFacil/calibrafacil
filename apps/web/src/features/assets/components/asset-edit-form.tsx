@@ -48,6 +48,7 @@ import {
 import { isMassAssetTypeDefinition } from '@calibra-facil/shared'
 import type { UpdateAssetInput } from '@calibra-facil/schemas'
 import { cn } from '@calibra-facil/ui/utils'
+import { assetKeys } from '@/features/assets/keys'
 
 /** The asset record returned by `assets.update` (used to refresh selection). */
 export type UpdatedAsset = AssetDetail
@@ -156,8 +157,8 @@ export function AssetEditForm({
     mutationFn: (data: UpdateAssetInput) =>
       calibraApi.assets.update({ params: { id: assetId }, body: data }),
     onSuccess: (updated) => {
-      queryClient.invalidateQueries({ queryKey: ['assets'] })
-      queryClient.invalidateQueries({ queryKey: ['asset', assetId] })
+      queryClient.invalidateQueries({ queryKey: assetKeys.all })
+      queryClient.invalidateQueries({ queryKey: assetKeys.detail(assetId) })
       toast.success('Ativo atualizado com sucesso!')
       // The API answers with the bare stored row: keep the joined names the
       // form already has so callers can show the asset right away.

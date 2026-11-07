@@ -18,6 +18,12 @@ import {
   type NewJobCustomersData,
   type NewJobServicesData,
 } from './types'
+import { environmentalLimitKeys } from '@/features/settings/keys'
+import { jobKeys } from '@/features/jobs/keys'
+import { customerKeys } from '@/features/customers/keys'
+import { assetKeys } from '@/features/assets/keys'
+import { serviceKeys } from '@/features/services/keys'
+import { standardKeys } from '@/features/standards/keys'
 
 const JOBS_LIST_LIMIT = 20
 
@@ -34,15 +40,11 @@ async function fetchJobsList(input: JobsListQueryInput): Promise<JobsListData> {
 
 export function jobsListQueryOptions(input: JobsListQueryInput) {
   return queryOptions({
-    queryKey: [
-      'jobs',
-      input.organizationId,
-      input.page,
-      input.search,
-      input.statusFilter,
-    ],
+    queryKey: jobKeys.list(input),
     queryFn: () => fetchJobsList(input),
-    placeholderData: keepPreviousDataInScope(['jobs', input.organizationId]),
+    placeholderData: keepPreviousDataInScope(
+      jobKeys.listScope(input.organizationId),
+    ),
   })
 }
 
@@ -54,14 +56,14 @@ export function jobDetailQueryOptions({
   apiJobId?: string
 }) {
   return queryOptions({
-    queryKey: ['jobs', id],
+    queryKey: jobKeys.detail(id),
     queryFn: () => calibraApi.jobs.get({ params: { id: apiJobId } }),
   })
 }
 
 export function jobTechniciansQueryOptions() {
   return queryOptions({
-    queryKey: ['jobs', 'technicians'],
+    queryKey: jobKeys.technicians,
     queryFn: (): Promise<JobTechniciansData> =>
       calibraApi.jobs.listTechnicians(),
   })
@@ -69,7 +71,7 @@ export function jobTechniciansQueryOptions() {
 
 export function newJobCustomersQueryOptions(search = '') {
   return queryOptions({
-    queryKey: ['customers', 'search', search],
+    queryKey: customerKeys.pickerSearch(search),
     queryFn: (): Promise<NewJobCustomersData> =>
       calibraApi.customers.list({
         query: {
@@ -84,7 +86,7 @@ export function newJobCustomersQueryOptions(search = '') {
 
 export function newJobCustomerAssetsQueryOptions(customerId: number | null) {
   return queryOptions({
-    queryKey: ['assets', 'customer', customerId],
+    queryKey: assetKeys.forCustomer(customerId),
     queryFn: (): Promise<NewJobAssetsData> => {
       if (!customerId) {
         return Promise.resolve({ data: [] } satisfies NewJobAssetsData)
@@ -103,7 +105,7 @@ export function newJobCustomerAssetsQueryOptions(customerId: number | null) {
 
 export function newJobServicesQueryOptions(assetTypeId: number | null) {
   return queryOptions({
-    queryKey: ['services', 'for-job', assetTypeId],
+    queryKey: serviceKeys.forJob(assetTypeId),
     queryFn: (): Promise<NewJobServicesData> =>
       calibraApi.services.list({
         query: {
@@ -118,7 +120,7 @@ export function newJobServicesQueryOptions(assetTypeId: number | null) {
 
 export function activeReferenceStandardsQueryOptions() {
   return queryOptions({
-    queryKey: ['standards', 'active'],
+    queryKey: standardKeys.active,
     queryFn: () =>
       calibraApi.standards.list({ query: { status: 'ACTIVE', limit: 100 } }),
   })
@@ -126,7 +128,7 @@ export function activeReferenceStandardsQueryOptions() {
 
 function compositionProfilesQueryOptions() {
   return queryOptions({
-    queryKey: ['standards', 'composition-profiles'],
+    queryKey: standardKeys.compositionProfiles,
     queryFn: () => calibraApi.standards.listCompositionProfiles(),
   })
 }
@@ -139,7 +141,7 @@ export function effectiveEnvironmentalLimitsQueryOptions({
   unitId: number | null | undefined
 }) {
   return queryOptions({
-    queryKey: ['environmental-limits', 'effective', assetTypeId, unitId],
+    queryKey: environmentalLimitKeys.effective(assetTypeId, unitId),
     queryFn: () =>
       calibraApi.environmentalLimits.effective({
         params: { assetTypeId: assetTypeId! },
@@ -164,7 +166,7 @@ export function jobCertificateDownloadUrlQueryOptions({
   jobId: number | string
 }) {
   return queryOptions({
-    queryKey: ['jobs', jobId, 'certificate-download-url', certificateUrl],
+    queryKey: jobKeys.certificateDownloadUrl(jobId, certificateUrl),
     queryFn: () => getJobCertificateDownloadUrl(jobId),
     retry: false,
   })

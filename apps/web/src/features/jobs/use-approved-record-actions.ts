@@ -2,7 +2,7 @@ import { calibraApi } from '@/utils/api'
 import { toast } from 'sonner'
 import { useCallback, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { jobEventQueryKeys } from '@/lib/query-effects'
+import { jobEventQueryKeys } from './query-effects'
 import { serverAllows } from '@/features/jobs/allowed-actions'
 import {
   getJobCertificateDownloadUrl,
@@ -27,7 +27,7 @@ export function useApprovedRecordActions({
 }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  /** Refresh what a lifecycle event changed (lib/query-effects.ts). */
+  /** Refresh what a lifecycle event changed (query-effects.ts). */
   const refreshAfter = useCallback(
     async (event: 'amended' | 'withdrawn') => {
       await Promise.all(

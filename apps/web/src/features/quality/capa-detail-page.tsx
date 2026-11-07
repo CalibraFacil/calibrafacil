@@ -30,6 +30,7 @@ import {
 import { formatCalendarDate, formatInstant } from '@calibra-facil/shared/format'
 import { CapaStatusBadge } from '@/features/quality/components/capa-status-badge'
 import { isIndependenceWaiverOffered } from '@/features/quality/capa-verification'
+import { capaKeys } from '@/features/quality/keys'
 
 const severityLabels: Record<string, string> = {
   minor: 'Menor',
@@ -83,10 +84,10 @@ export function CAPADetailPage({ id }: { id: string }) {
   })
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['capa', id] })
-    queryClient.invalidateQueries({ queryKey: ['capa-audit-log', id] })
-    queryClient.invalidateQueries({ queryKey: ['capas'] })
-    queryClient.invalidateQueries({ queryKey: ['capas-summary'] })
+    queryClient.invalidateQueries({ queryKey: capaKeys.detail(id) })
+    queryClient.invalidateQueries({ queryKey: capaKeys.auditLog(id) })
+    queryClient.invalidateQueries({ queryKey: capaKeys.all })
+    queryClient.invalidateQueries({ queryKey: capaKeys.summaries })
   }
 
   const implementMutation = useMutation({

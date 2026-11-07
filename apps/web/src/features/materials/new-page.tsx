@@ -25,6 +25,7 @@ import {
 } from '@calibra-facil/ui/field'
 import { ACTION_BUTTON_CLASS, Panel } from '@calibra-facil/ui/instrument-panel'
 import { cn } from '@calibra-facil/ui/utils'
+import { materialKeys } from '@/features/materials/keys'
 
 const initialFormData: MaterialFormData = {
   name: '',
@@ -50,7 +51,7 @@ export function NewMaterialPage() {
     mutationFn: (data: CreateMaterialInput) =>
       calibraApi.materials.create({ body: data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['materials'] })
+      queryClient.invalidateQueries({ queryKey: materialKeys.all })
       toast.success('Material criado com sucesso!')
       navigate({ to: '/dashboard/materials' })
     },

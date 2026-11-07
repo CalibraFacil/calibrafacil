@@ -28,6 +28,8 @@ import {
   type AssetsListQueryInput,
   type NewAssetCustomersData,
 } from './types'
+import { assetKeys } from '@/features/assets/keys'
+import { customerKeys } from '@/features/customers/keys'
 
 export const ASSETS_LIST_LIMIT = 20
 
@@ -53,15 +55,7 @@ export function assetsListQueryInputFromUrl(organizationId: string, url?: URL) {
 
 export function assetsListQueryOptions(input: AssetsListQueryInput) {
   return queryOptions({
-    queryKey: [
-      'assets',
-      input.organizationId,
-      input.page,
-      input.limit,
-      input.search,
-      input.statusFilter,
-      input.customerId,
-    ],
+    queryKey: assetKeys.list(input),
     queryFn: (): Promise<AssetsListData> =>
       calibraApi.assets.list({
         query: {
@@ -72,7 +66,9 @@ export function assetsListQueryOptions(input: AssetsListQueryInput) {
           customerId: input.customerId ?? undefined,
         },
       }),
-    placeholderData: keepPreviousDataInScope(['assets', input.organizationId]),
+    placeholderData: keepPreviousDataInScope(
+      assetKeys.listScope(input.organizationId),
+    ),
   })
 }
 
@@ -96,7 +92,7 @@ function toAssetDetail(detail: ContractAssetDetail): AssetDetail {
 
 export function assetDetailQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['asset', id],
+    queryKey: assetKeys.detail(id),
     queryFn: async (): Promise<AssetDetail> =>
       toAssetDetail(await calibraApi.assets.get({ params: { id } })),
   })
@@ -104,7 +100,7 @@ export function assetDetailQueryOptions(id: string) {
 
 export function assetAuditLogQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['asset', id, 'audit-log'],
+    queryKey: assetKeys.auditLog(id),
     queryFn: async (): Promise<AssetAuditLogData> => {
       const log = await calibraApi.assets.auditLog({ params: { id } })
       return {
@@ -122,7 +118,7 @@ export function assetAuditLogQueryOptions(id: string) {
 
 export function assetTypesQueryOptions() {
   return queryOptions({
-    queryKey: ['asset-types'],
+    queryKey: assetKeys.types,
     queryFn: async (): Promise<AssetTypesData> => {
       const result = await calibraApi.assetTypes.list()
       return {
@@ -165,7 +161,7 @@ const LegalMetrologyRegulationListSchema = z.object({
 
 function legalMetrologyRegulationsQueryOptions() {
   return queryOptions({
-    queryKey: ['legal-metrology-regulations'],
+    queryKey: assetKeys.legalMetrologyRegulations,
     queryFn: async (): Promise<LegalMetrologyRegulationCatalogEntry[]> => {
       const response = await fetch(
         `${getApiBaseURL()}/api/legal-metrology-regulations`,
@@ -189,7 +185,7 @@ export function useLegalMetrologyRegulationsData(enabled = true) {
 
 export function newAssetCustomersQueryOptions(search = '') {
   return queryOptions({
-    queryKey: ['customers', 'search', search],
+    queryKey: customerKeys.pickerSearch(search),
     queryFn: (): Promise<NewAssetCustomersData> =>
       calibraApi.customers.list({
         query: {

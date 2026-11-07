@@ -40,6 +40,7 @@ import {
 } from '@calibra-facil/ui/select'
 import { Textarea } from '@calibra-facil/ui/textarea'
 import { formatCalendarDate, formatInstant } from '@calibra-facil/shared/format'
+import { nonConformanceKeys } from '@/features/quality/keys'
 
 const ITEM_DISPOSITION_LABELS: Record<string, string> = {
   no_impact: 'Sem impacto',
@@ -205,10 +206,10 @@ function ImpactAssessmentForm({
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ['non-conformance-impact-assessment', ncId],
+        queryKey: nonConformanceKeys.impactAssessment(ncId),
       })
       queryClient.invalidateQueries({
-        queryKey: ['non-conformance-audit', ncId],
+        queryKey: nonConformanceKeys.audit(ncId),
       })
       toast.success('Avaliação de impacto salva')
     },
@@ -440,10 +441,10 @@ function SignAssessmentSection({
       calibraApi.nonConformances.signImpactAssessment({ params: { id: ncId } }),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ['non-conformance-impact-assessment', ncId],
+        queryKey: nonConformanceKeys.impactAssessment(ncId),
       })
       queryClient.invalidateQueries({
-        queryKey: ['non-conformance-audit', ncId],
+        queryKey: nonConformanceKeys.audit(ncId),
       })
       toast.success('Avaliação de impacto assinada')
       setSignDialogOpen(false)

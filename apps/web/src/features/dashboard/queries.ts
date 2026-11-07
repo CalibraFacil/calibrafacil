@@ -11,12 +11,13 @@ import {
   prewarmRouteQueries,
 } from '@/lib/route-data'
 import { calibraApi } from '@/utils/api'
+import { dashboardKeys } from '@/features/dashboard/keys'
 
 export type { DashboardJob, DashboardJobStatus, DashboardStats }
 
 export function dashboardStatsQueryOptions(organizationId: string) {
   return queryOptions({
-    queryKey: ['dashboard', 'stats', organizationId],
+    queryKey: dashboardKeys.stats(organizationId),
     queryFn: () => calibraApi.dashboard.getStats(),
     refetchInterval: 60_000,
     staleTime: 30_000,

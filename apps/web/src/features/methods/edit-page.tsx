@@ -14,6 +14,7 @@ import {
   methodDataToDraft,
 } from '@/features/methods/builder/adapters'
 import type { MethodDraft } from '@/features/methods/builder/types'
+import { methodKeys } from '@/features/methods/keys'
 
 const MethodBuilder = lazy(() =>
   import('@/features/methods/builder/method-builder').then((module) => ({
@@ -36,7 +37,7 @@ export function EditMethodPage({ id }: { id: string }) {
       })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['methods'] })
+      queryClient.invalidateQueries({ queryKey: methodKeys.all })
       toast.success('Método salvo')
     },
     onError: (error) => {
@@ -96,7 +97,7 @@ export function EditMethodPage({ id }: { id: string }) {
             onSave={(data) => updateMutation.mutateAsync(data)}
             onCancel={() => navigate({ to: '/dashboard/methods' })}
             onPublished={() => {
-              queryClient.invalidateQueries({ queryKey: ['methods'] })
+              queryClient.invalidateQueries({ queryKey: methodKeys.all })
               navigate({ to: '/dashboard/methods' })
             }}
             isSaving={updateMutation.isPending}

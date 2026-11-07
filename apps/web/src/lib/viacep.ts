@@ -8,6 +8,7 @@ import {
   type ViaCepAddress,
 } from '@calibra-facil/shared/viacep'
 import { useMountEffect } from '@calibra-facil/ui/use-mount-effect'
+import { lookupKeys } from '@/lib/query-keys'
 
 export type ViaCepLookupStatus =
   | 'idle'
@@ -80,7 +81,7 @@ export function useViaCepLookup({
         try {
           // react-doctor-disable-next-line react-doctor/async-defer-await -- the post-await guard discards results aborted mid-fetch; it cannot run before the await
           const address = await queryClient.fetchQuery({
-            queryKey: ['viacep', cepDigits],
+            queryKey: lookupKeys.viaCep(cepDigits),
             queryFn: () => fetchViaCepAddress(cepDigits, controller.signal),
             staleTime: 24 * 60 * 60 * 1000,
           })

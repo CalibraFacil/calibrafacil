@@ -49,6 +49,7 @@ import {
 } from '@/features/methods/components/columns'
 import { ActionAvailabilityGate } from '@/components/availability/action-availability-gate'
 import { useOperationAvailability } from '@/runtime/use-operation-availability'
+import { methodKeys } from '@/features/methods/keys'
 
 // The from-template catalog is cloud-only (the route is cloud-gated); hide the
 // affordance entirely in the desktop/offline runtime.
@@ -95,7 +96,7 @@ export function MethodsListPage({
       return calibraApi.methods.archive({ params: { id } })
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['methods'] })
+      queryClient.invalidateQueries({ queryKey: methodKeys.all })
       toast.success('Método arquivado com sucesso')
     },
     onError: (error) => {
@@ -117,7 +118,7 @@ export function MethodsListPage({
       }
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['methods'] })
+      queryClient.invalidateQueries({ queryKey: methodKeys.all })
       toast.success('Nova versão criada')
       navigate({
         to: '/dashboard/methods/$id/edit',

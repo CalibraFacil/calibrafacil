@@ -24,6 +24,7 @@ import {
   type PtListQueryInput,
   type PtStandardOptionsData,
 } from './types'
+import { proficiencyTestKeys } from '@/features/proficiency-tests/keys'
 
 const PT_LIST_LIMIT = 20
 
@@ -45,14 +46,7 @@ function ptListInputFromUrl(organizationId: string, url?: URL) {
 
 function ptListQueryOptions(input: PtListQueryInput) {
   return queryOptions({
-    queryKey: [
-      'proficiency-tests',
-      input.organizationId,
-      input.page,
-      input.search,
-      input.statusFilter,
-      input.activityTypeFilter,
-    ],
+    queryKey: proficiencyTestKeys.list(input),
     queryFn: () =>
       calibraApi.proficiencyTests.list({
         query: {
@@ -63,44 +57,43 @@ function ptListQueryOptions(input: PtListQueryInput) {
           activityType: input.activityTypeFilter || undefined,
         },
       }),
-    placeholderData: keepPreviousDataInScope([
-      'proficiency-tests',
-      input.organizationId,
-    ]),
+    placeholderData: keepPreviousDataInScope(
+      proficiencyTestKeys.listScope(input.organizationId),
+    ),
   })
 }
 
 function ptSummaryQueryOptions(organizationId: string) {
   return queryOptions({
-    queryKey: ['proficiency-tests-summary', organizationId],
+    queryKey: proficiencyTestKeys.summary(organizationId),
     queryFn: () => calibraApi.proficiencyTests.summary(),
   })
 }
 
 function ptDetailQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['proficiency-test', id],
+    queryKey: proficiencyTestKeys.detail(id),
     queryFn: () => calibraApi.proficiencyTests.get({ params: { id } }),
   })
 }
 
 function ptAuditLogQueryOptions(id: string) {
   return queryOptions({
-    queryKey: ['proficiency-test-audit-log', id],
+    queryKey: proficiencyTestKeys.auditLog(id),
     queryFn: () => calibraApi.proficiencyTests.auditLog({ params: { id } }),
   })
 }
 
 function ptPlanQueryOptions(organizationId: string) {
   return queryOptions({
-    queryKey: ['proficiency-tests-plan', organizationId],
+    queryKey: proficiencyTestKeys.plan(organizationId),
     queryFn: () => calibraApi.proficiencyTests.listPlan(),
   })
 }
 
 function ptStandardOptionsQueryOptions() {
   return queryOptions({
-    queryKey: ['pt-standard-options'],
+    queryKey: proficiencyTestKeys.standardOptions,
     queryFn: (): Promise<PtStandardOptionsData> =>
       calibraApi.standards.list({
         query: {
@@ -207,8 +200,8 @@ export function usePtPlanData({
 }
 
 function invalidatePtCollections(queryClient: QueryClient) {
-  queryClient.invalidateQueries({ queryKey: ['proficiency-tests'] })
-  queryClient.invalidateQueries({ queryKey: ['proficiency-tests-summary'] })
+  queryClient.invalidateQueries({ queryKey: proficiencyTestKeys.all })
+  queryClient.invalidateQueries({ queryKey: proficiencyTestKeys.summaries })
 }
 
 export function useCreatePtRound() {
@@ -231,11 +224,13 @@ export function useRecordPtResults(id: string) {
         body: input,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['proficiency-test', id] })
       queryClient.invalidateQueries({
-        queryKey: ['proficiency-test-audit-log', id],
+        queryKey: proficiencyTestKeys.detail(id),
       })
-      queryClient.invalidateQueries({ queryKey: ['proficiency-tests-plan'] })
+      queryClient.invalidateQueries({
+        queryKey: proficiencyTestKeys.auditLog(id),
+      })
+      queryClient.invalidateQueries({ queryKey: proficiencyTestKeys.plans })
       invalidatePtCollections(queryClient)
     },
   })
@@ -247,9 +242,9 @@ export function useCreatePtPlanItem() {
     mutationFn: (input: CreatePtPlanItemInput) =>
       calibraApi.proficiencyTests.createPlanItem({ body: input }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['proficiency-tests-plan'] })
+      queryClient.invalidateQueries({ queryKey: proficiencyTestKeys.plans })
       queryClient.invalidateQueries({
-        queryKey: ['proficiency-tests-summary'],
+        queryKey: proficiencyTestKeys.summaries,
       })
     },
   })
@@ -261,9 +256,9 @@ export function useRemovePtPlanItem() {
     mutationFn: (id: number) =>
       calibraApi.proficiencyTests.removePlanItem({ params: { id } }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['proficiency-tests-plan'] })
+      queryClient.invalidateQueries({ queryKey: proficiencyTestKeys.plans })
       queryClient.invalidateQueries({
-        queryKey: ['proficiency-tests-summary'],
+        queryKey: proficiencyTestKeys.summaries,
       })
     },
   })

@@ -33,12 +33,11 @@ import {
   isWebUsbSupported,
   requestWebUsbPrinter,
 } from './web-usb'
-
-const PRINTER_PROFILES_KEY = ['printer-profiles']
+import { printingKeys } from './keys'
 
 export function usePrinterProfiles(enabled: boolean) {
   return useQuery({
-    queryKey: PRINTER_PROFILES_KEY,
+    queryKey: printingKeys.profiles,
     queryFn: fetchPrinterProfiles,
     enabled,
     staleTime: 30_000,
@@ -50,7 +49,7 @@ export function useSavePrinterProfile() {
   return useMutation({
     mutationFn: (input: SavePrinterProfileInput) => savePrinterProfile(input),
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: PRINTER_PROFILES_KEY }),
+      queryClient.invalidateQueries({ queryKey: printingKeys.profiles }),
   })
 }
 
@@ -63,7 +62,7 @@ export function useDeletePrinterProfile() {
   return useMutation({
     mutationFn: (id: string) => deletePrinterProfileById(id),
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: PRINTER_PROFILES_KEY }),
+      queryClient.invalidateQueries({ queryKey: printingKeys.profiles }),
   })
 }
 
@@ -92,12 +91,9 @@ export function usePrintJobLabel() {
 // Cloud runtime — Zebra Browser Print
 // ---------------------------------------------------------------------------
 
-const BROWSER_PRINT_AVAILABLE_KEY = ['browser-print-available']
-const BROWSER_PRINT_DEVICES_KEY = ['browser-print-devices']
-
 export function useBrowserPrintAvailable(enabled: boolean) {
   return useQuery({
-    queryKey: BROWSER_PRINT_AVAILABLE_KEY,
+    queryKey: printingKeys.browserPrintAvailable,
     queryFn: isBrowserPrintAvailable,
     enabled,
     staleTime: 30_000,
@@ -106,7 +102,7 @@ export function useBrowserPrintAvailable(enabled: boolean) {
 
 export function useBrowserPrintDevices(enabled: boolean) {
   return useQuery({
-    queryKey: BROWSER_PRINT_DEVICES_KEY,
+    queryKey: printingKeys.browserPrintDevices,
     queryFn: listBrowserPrintDevices,
     enabled,
     staleTime: 30_000,
@@ -132,12 +128,9 @@ export function useTestBrowserPrint() {
 // Cloud runtime — no-install WebUSB / Web Serial fallback
 // ---------------------------------------------------------------------------
 
-const WEB_USB_GRANTED_KEY = ['web-usb-granted']
-const WEB_SERIAL_GRANTED_KEY = ['web-serial-granted']
-
 export function useWebUsbGrantedDevice(enabled: boolean) {
   return useQuery({
-    queryKey: WEB_USB_GRANTED_KEY,
+    queryKey: printingKeys.webUsbGranted,
     queryFn: getGrantedWebUsbPrinter,
     enabled: enabled && isWebUsbSupported(),
     staleTime: 30_000,
@@ -149,7 +142,7 @@ export function useConnectWebUsb() {
   return useMutation({
     mutationFn: () => requestWebUsbPrinter(),
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: WEB_USB_GRANTED_KEY }),
+      queryClient.invalidateQueries({ queryKey: printingKeys.webUsbGranted }),
   })
 }
 
@@ -161,7 +154,7 @@ export function useTestWebUsb() {
 
 export function useWebSerialGrantedPort(enabled: boolean) {
   return useQuery({
-    queryKey: WEB_SERIAL_GRANTED_KEY,
+    queryKey: printingKeys.webSerialGranted,
     queryFn: getGrantedWebSerialPort,
     enabled: enabled && isWebSerialSupported(),
     staleTime: 30_000,
@@ -173,7 +166,9 @@ export function useConnectWebSerial() {
   return useMutation({
     mutationFn: () => requestWebSerialPort(),
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: WEB_SERIAL_GRANTED_KEY }),
+      queryClient.invalidateQueries({
+        queryKey: printingKeys.webSerialGranted,
+      }),
   })
 }
 

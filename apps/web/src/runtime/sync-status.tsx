@@ -27,6 +27,8 @@ import {
   TooltipTrigger,
 } from '@calibra-facil/ui/tooltip'
 import { cn } from '@calibra-facil/ui/utils'
+import { syncKeys } from '@/features/sync/keys'
+import { localPartitionKeys } from '@/runtime/local-partition-keys'
 import { getDeadEventsBannerLabel } from '@/runtime/sync-dead-events'
 import {
   getDataSourceIndicatorModel,
@@ -168,7 +170,7 @@ function useRefetchOnSyncCompletion(isDesktop: boolean) {
       void queryClient.invalidateQueries({
         predicate: (query) => {
           const root = query.queryKey[0]
-          return root !== 'desktop-sync-status' && root !== 'local-partition'
+          return root !== syncKeys.status[0] && root !== localPartitionKeys.root
         },
       })
     })
@@ -191,7 +193,7 @@ export function SyncStatusProvider({
     getBridgeSnapshot,
   )
   const { data, refetch } = useQuery({
-    queryKey: ['desktop-sync-status'],
+    queryKey: syncKeys.status,
     enabled: isDesktop,
     refetchInterval: 15_000,
     queryFn: async (): Promise<SyncStatusSnapshot> => {

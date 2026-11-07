@@ -40,6 +40,7 @@ import {
   type CnpjLookupResult,
 } from '@/lib/cnpj-lookup'
 import { cn } from '@calibra-facil/ui/utils'
+import { customerKeys } from '@/features/customers/keys'
 
 /** The customer record returned by `customers.create` (used to auto-select it). */
 export type CreatedCustomer = Awaited<
@@ -95,7 +96,7 @@ export function CustomerCreateForm({
     mutationFn: (data: CreateCustomerInput) =>
       calibraApi.customers.create({ body: data }),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['customers'] })
+      queryClient.invalidateQueries({ queryKey: customerKeys.all })
       onSaved(data)
     },
     onError: (error) => {
